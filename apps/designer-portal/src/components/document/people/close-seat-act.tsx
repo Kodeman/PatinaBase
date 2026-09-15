@@ -8,9 +8,20 @@
  *  delete."
  *
  * The Call Sheet row grew this act in W2; the person card's Seats region is the
- * other place direction names it, and it had none. Rather than a second copy of
- * the two-step confirm, the act lives here and both surfaces mount it, so the
- * wording, the dated write and the analytics can never drift apart.
+ * other place direction names it, and it had none. This component is that act
+ * for the PERSON CARD — `person-profile.tsx` is its only importer.
+ *
+ * IT IS NOT YET SHARED (r15 MAJOR-2). The Call Sheet keeps its own copy in
+ * `roster-row.tsx`'s `closing` block: the same confirm sentence, its own reason
+ * field, its own `closeSeat.mutateAsync` and its own `peopleEvents.seatClosed`.
+ * That surface carries the surviving hard delete ("Added by mistake", held
+ * behind `seatDeleteRefusal`) inside the same act row and routes its refusal
+ * into the sheet's `role="status"` announcer, so the two copies are hand-kept
+ * in step rather than one component. An earlier draft of the room report
+ * claimed the invariant; the code never had it. Repointing the Call Sheet here
+ * is the tidier end and is owed (w3-room-report §10 item 9) — until then, any
+ * change to the wording, the dated write or the analytics belongs in BOTH
+ * files.
  *
  * THE WORD "REMOVE" APPEARS NOWHERE. The surviving hard delete — a seat added
  * by mistake that carries nothing — stays on the Call Sheet row alone, behind

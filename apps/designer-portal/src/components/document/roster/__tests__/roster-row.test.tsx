@@ -376,6 +376,33 @@ describe('RosterRow — folded', () => {
     expect(container.querySelectorAll('[data-state-family="stage"]')).toHaveLength(1);
   });
 
+  /**
+   * r15 MAJOR-1 — a closed seat says so on the Client side too. The Client
+   * band is assembled before the window rule, so a `client_rep` seat the
+   * studio closed used to print its money authority with no closing date
+   * anywhere on the row.
+   */
+  it('prints the off-job clause on a closed client-side seat, beside its authority', () => {
+    ul(
+      <RosterRow
+        row={seatRow({
+          name: 'Dale Whitcomb',
+          partyKind: 'client_rep',
+          paper: null,
+          stage: 'off_job',
+          offJobAt: '2026-09-15',
+          offJobReason: 'Moved out of state.',
+        })}
+        band="clientSide"
+        expanded={false}
+        onToggle={jest.fn()}
+      />,
+    );
+    expect(
+      screen.getByText('Off the job 15 Sep 2026. Moved out of state.'),
+    ).toBeInTheDocument();
+  });
+
   it('pairs aria-expanded with aria-controls on the unfold (SPEC §7 #5)', () => {
     ul(<RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />);
     const toggle = screen.getByRole('button', { name: /Dana Kowalski/ });

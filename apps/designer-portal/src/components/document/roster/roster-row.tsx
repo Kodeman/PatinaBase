@@ -103,14 +103,23 @@ const BID_STAGES: readonly string[] = [
 ];
 
 /** The window clause a row prints beside its stage: the day the crew arrives on
- *  a later seat, the day it closed on a done one. */
+ *  a later seat, the day it closed on a closed one. */
 export function rosterWindowClause(row: CallSheetRow, band: CallSheetBand): string {
-  if (band === 'done') {
-    const when = rosterShortDate(row.offJobAt);
-    const reason = (row.offJobReason ?? '').trim();
-    if (!when && !reason) return '';
-    return [when ? `Off the job ${when}.` : '', reason].filter(Boolean).join(' ');
+  // r15 MAJOR-1 — THE OFF-JOB CLAUSE FOLLOWS THE RECORD, NOT THE BAND.
+  // `callSheetProjection()` bands every `client` / `client_rep` seat into
+  // `clientSide` BEFORE the window rule is consulted, so a closed client-side
+  // seat never reached the `done` leg and printed no closing date at all —
+  // while its authority line went on reading "Signs money to $2,500." A row
+  // carrying `off_job_at` says so wherever it is banded; a `done` row with no
+  // date behaves exactly as before.
+  const closedWhen = rosterShortDate(row.offJobAt);
+  const closedReason = (row.offJobReason ?? '').trim();
+  if (closedWhen || closedReason) {
+    return [closedWhen ? `Off the job ${closedWhen}.` : '', closedReason]
+      .filter(Boolean)
+      .join(' ');
   }
+  if (band === 'done') return '';
   if (band === 'later') {
     const from = rosterShortDate(row.onSiteFrom);
     return from ? `From ${from}` : '';
@@ -994,6 +1003,15 @@ export function RosterRow({
               </div>
             )}
 
+            {/* r15 MAJOR-2 — THE SECOND COPY, NAMED. `people/close-seat-act.tsx`
+                holds the same act for the person card and is NOT imported here:
+                this block keeps the confirm sentence, the reason field, the
+                dated write and `peopleEvents.seatClosed` of its own, because
+                the Call Sheet also carries the surviving hard delete in this
+                act row and announces its refusal through the sheet's
+                `role="status"` line. The two are hand-kept in step; a change to
+                the wording, the write or the analytics belongs in both files
+                until the repoint owed in w3-room-report §10 item 9 is made. */}
             {closing ? (
               <div className="mt-3 border-l-2 border-[var(--color-terracotta-ink)] bg-[rgba(196,131,111,0.07)] px-3 py-2.5">
                 <p className="text-[0.74rem] text-[var(--color-charcoal)]">
