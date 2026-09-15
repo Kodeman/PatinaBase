@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { test } from "../fixtures/auth";
 import { adminDb } from "../helpers/supabase-admin";
+import { psqlAsUserRow } from "../helpers/psql";
 
 /**
  * BRING FORWARD — Leah's fifth task (SPEC §5.7, CRM-24, PR-b).
@@ -222,19 +223,31 @@ test("task 5 — search the prior job, tick four, one confirm", async ({
     expect(seat.sms_consent_status).toBe("not_asked");
   }
 
-  // Pete's seat reads his refusal off the RECORD, with no consent write of
-  // this act's own.
+  /**
+   * Pete's seat reads his refusal off the RECORD, with no consent write of
+   * this act's own.
+   *
+   * QA-R14-1 — READ THIS VIEW AS A USER, NEVER AS THE SERVICE ROLE.
+   * `people_directory_seats` is `security_invoker = true` and its
+   * `consent_status` is gated on `is_active_studio_member(...)`, which
+   * resolves through `auth.uid()`. `adminDb` is a bare service-role client
+   * with no acting user, so `auth.uid()` is NULL for it and the view emits
+   * ZERO rows — for this project, for Okonkwo, for any project, always. The
+   * poll therefore read `null` forever and the test had never once passed.
+   * Measured on the local stack: the identical query as plain `postgres` with
+   * no claims returns no rows; wrapped in the designer's own claims it
+   * returns `opted_out`. `psqlAsUserRow` is the suite's existing
+   * impersonation door (`SET LOCAL ROLE authenticated` + `request.jwt.claims`).
+   */
   await expect
     .poll(
-      async () => {
-        const { data } = await adminDb
-          .from("people_directory_seats")
-          .select("consent_status")
-          .eq("project_id", projectId)
-          .eq("studio_contact_id", CARDS.pete)
-          .maybeSingle();
-        return data?.consent_status ?? null;
-      },
+      () =>
+        psqlAsUserRow(
+          DESIGNER,
+          `SELECT consent_status FROM public.people_directory_seats
+            WHERE project_id = '${projectId}'
+              AND studio_contact_id = '${CARDS.pete}';`,
+        )[0] ?? null,
       { timeout: 20_000 },
     )
     .toBe("opted_out");
@@ -257,7 +270,15 @@ test("Put back clears the pick and writes nothing", async ({
   await expect(
     page.getByRole("button", { name: "Add one to the roster" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Put back" }).click();
+  /**
+   * QA-R14-1 — TWO REAL CONTROLS, ONE OVERLAPPING NAME. The DocSheet header's
+   * universal dismiss reads "Put back · Esc" (it closes and discards the whole
+   * sheet); the act row's own control reads "Put back" (it clears the ticks
+   * and stays open). Playwright's default substring name-match hit both and
+   * failed on strict mode before this assertion could run. Neither is a
+   * product defect — the act row is addressed by the key SPEC §5.7 #6 gives it.
+   */
+  await page.locator('[data-action-key="bring-forward-put-back"]').click();
   await expect(
     page.getByRole("button", { name: "Add to the roster" }),
   ).toBeVisible();

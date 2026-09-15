@@ -175,6 +175,42 @@ test("the duplicate band merges two cards into one (PR-o)", async ({
   await expect(page.locator("[data-duplicate-band]")).toHaveCount(0, {
     timeout: 20_000,
   });
-  await expect(page.getByText(NEWER_NAME)).toHaveCount(0);
-  await expect(page.getByText(OLDER_NAME).first()).toBeVisible();
+  /**
+   * QA-R14-1 — SCOPE THE DISAPPEARANCE AWAY FROM THE ANNOUNCER.
+   * The room's own `role="status"` announcer, asserted three lines above,
+   * legitimately names the folded card in its confirmation sentence ("Two
+   * cards are now one. <survivor> carries what <merged> held…") — SPEC's own
+   * literal. The page-wide `toHaveCount(0)` this replaced therefore
+   * contradicted the room's designed text and could never pass.
+   *
+   * The act also opens the SURVIVOR'S CARD, so `[data-directory-list]` is off
+   * the page at this moment; the folded name is asked for everywhere the
+   * studio reads EXCEPT the announcement, by walking the DOM with the
+   * announcer removed.
+   */
+  await expect
+    .poll(
+      () =>
+        page.evaluate((name) => {
+          const copy = document.body.cloneNode(true) as HTMLElement;
+          copy
+            .querySelectorAll("[data-people-announcer]")
+            .forEach((node) => node.remove());
+          return (copy.textContent ?? "").includes(name);
+        }, NEWER_NAME),
+      { timeout: 20_000 },
+    )
+    .toBe(false);
+  await expect(
+    page.getByRole("heading", { name: OLDER_NAME, exact: true }),
+  ).toBeVisible();
+
+  // …and back on the Directory itself, one card stands where two did.
+  await page.goto("/people?role=all&scope=studio", {
+    waitUntil: "domcontentloaded",
+  });
+  const directory = page.locator("[data-directory-list]");
+  await expect(directory).toBeVisible({ timeout: 30_000 });
+  await expect(directory.getByText(OLDER_NAME).first()).toBeVisible();
+  await expect(directory.getByText(NEWER_NAME)).toHaveCount(0);
 });

@@ -2632,9 +2632,11 @@ END $$;
 --
 -- "A merge never deletes a typed fact." Every one of these was measured on
 -- the OLDER card surviving, which is PR-o's own pre-pick:
---   B-1  a duplicate channel row is an address plus six typed facts; the blind
---        dedupe DELETE destroyed a recorded unsubscribe and the room then
---        offered the address as live
+--   B-1  a duplicate channel row is an address plus SEVEN typed facts; the
+--        blind dedupe DELETE destroyed a recorded unsubscribe and the room
+--        then offered the address as live. r14 B-1 named the seventh the r6
+--        fix still left behind — sms_capable — and it is pinned here over a
+--        MOBILE row, because the r6 pin's own email row cannot carry it
 --   M-1  a rule routing at the other card of the pair aborted the merge with
 --        rule_route_is_self, and the repair the refusal named was itself
 --        refused — a closed loop
@@ -2680,6 +2682,28 @@ INSERT INTO public.studio_contact_channels
   (owner_type, owner_id, channel_kind, value, status, status_at, verified, verified_at, preferred, label) VALUES
   ('person','f9e00000-0000-4000-8000-000000000001','email','r6dana@example.invalid','active',      NULL,        false, NULL,        false, NULL),
   ('person','f9e00000-0000-4000-8000-000000000002','email','r6dana@example.invalid','unsubscribed','2025-12-03', true,'2025-11-01', true, 'Shop address');
+
+-- r14 B-1's pair, on MOBILE rows, where sms_capable can actually vary. The
+-- r6 pin above is an EMAIL collision, and an email row's sms_capable is false
+-- on both sides by construction — which is exactly why eleven rounds of this
+-- suite could pass over a column the fold was destroying.
+--
+--   …9941  the shape the studio meets: the survivor is the older, blanker
+--          card PR-o pre-picks and has NOT been told the line takes texts;
+--          the absorbed card HAS ("This line takes texts", W2 CR13-1).
+--   …9943  the same collision the other way round, so the OR is pinned in
+--          both directions and a straight copy of the absorbed value would
+--          fail here.
+--   …9942  the NEGATIVE CONTROL: an ordinary row on the survivor with no
+--          counterpart on the absorbed card, which the reduction must not
+--          touch at all.
+INSERT INTO public.studio_contact_channels
+  (owner_type, owner_id, channel_kind, value, sms_capable) VALUES
+  ('person','f9e00000-0000-4000-8000-000000000001','mobile','+16125559941', false),
+  ('person','f9e00000-0000-4000-8000-000000000002','mobile','+16125559941', true),
+  ('person','f9e00000-0000-4000-8000-000000000001','mobile','+16125559943', true),
+  ('person','f9e00000-0000-4000-8000-000000000002','mobile','+16125559943', false),
+  ('person','f9e00000-0000-4000-8000-000000000001','mobile','+16125559942', true);
 
 INSERT INTO public.studio_contact_rules
   (subject_type, subject_id, channels_forbidden, route_to_person_id, reason, set_by) VALUES
@@ -2732,6 +2756,37 @@ BEGIN
    WHERE owner_id = 'f9e00000-0000-4000-8000-000000000002';
   IF n <> 0 THEN
     RAISE EXCEPTION 'BLOCK 10 FAIL (r6 B-1): % rows left on the folded card', n;
+  END IF;
+
+  -- ── r14 B-1 · sms_capable is the seventh typed fact, and it survives ────
+  -- The absorbed card had been told the line takes texts; the survivor had
+  -- not. If the fold drops it, reach-access.tsx prints "Patina has not been
+  -- told this line takes texts…" over a line the studio confirmed, and
+  -- channelConsentAxis() returns null so the whole consent-recording band —
+  -- PR-m's manual opt-out included — goes with it.
+  SELECT * INTO c FROM public.studio_contact_channels
+   WHERE owner_id = 'f9e00000-0000-4000-8000-000000000001'
+     AND channel_kind = 'mobile' AND value = '+16125559941';
+  IF NOT c.sms_capable THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r14 B-1): the fold destroyed sms_capable — the survivor''s line now reads as never told it takes texts';
+  END IF;
+
+  -- the same collision the other way round: the survivor knew, the absorbed
+  -- card did not. An OR holds; a copy would not.
+  SELECT * INTO c FROM public.studio_contact_channels
+   WHERE owner_id = 'f9e00000-0000-4000-8000-000000000001'
+     AND channel_kind = 'mobile' AND value = '+16125559943';
+  IF NOT c.sms_capable THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r14 B-1): the fold overwrote the survivor''s own sms_capable with the absorbed card''s false';
+  END IF;
+
+  -- negative control: an ordinary row with no counterpart on the folded card
+  -- is untouched by the reduction.
+  SELECT * INTO c FROM public.studio_contact_channels
+   WHERE owner_id = 'f9e00000-0000-4000-8000-000000000001'
+     AND channel_kind = 'mobile' AND value = '+16125559942';
+  IF NOT c.sms_capable THEN
+    RAISE EXCEPTION 'BLOCK 10 FAIL (r14 B-1 control): the reduction touched an uncollided row';
   END IF;
 
   -- ── M-1 · a route at the other card of the pair merges, all three ways ──

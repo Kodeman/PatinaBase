@@ -88,8 +88,15 @@ COMMIT;
   return run(wrapped);
 }
 
-/** Same as {@link psqlAsUser}, returning the first row as `|`-split fields —
- *  for RPC calls whose return value the caller needs (e.g. offered slots). */
+/** Same as {@link psqlAsUser}, returning the LAST row as `|`-split fields —
+ *  for RPC calls and view reads whose return value the caller needs.
+ *
+ *  The last row, not the first: the impersonation preamble is itself a
+ *  `SELECT set_config(...)`, so in tuples-only mode psql prints the claims
+ *  JSON as line 1 and the caller's own result after it. Taking `[0]` handed
+ *  every caller the claims blob instead of the answer — measured against the
+ *  local stack (`{"sub" : "…", "role" : "authenticated"}` then `opted_out`).
+ *  The caller's statement is therefore expected to return at most one row. */
 export function psqlAsUserRow(userId: string, sql: string): string[] {
   const wrapped = `
 BEGIN;
@@ -98,6 +105,11 @@ SET LOCAL ROLE authenticated;
 ${sql}
 COMMIT;
 `;
-  const out = run(wrapped, ['-t', '-A', '-F', '|']).trim();
-  return out.length ? out.split('\n')[0]!.split('|') : [];
+  const lines = run(wrapped, ['-t', '-A', '-F', '|'])
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  // Only the preamble answered: the caller's statement returned no rows.
+  if (lines.length < 2) return [];
+  return lines[lines.length - 1]!.split('|');
 }
