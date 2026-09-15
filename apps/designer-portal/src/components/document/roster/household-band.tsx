@@ -22,8 +22,8 @@
 
 import { useMemo, useState } from "react";
 import {
-  HOUSEHOLD_GRANT_SOURCE_CLAUSE,
   HOUSEHOLD_MEMBER_ROLE_LABELS,
+  householdOwnsGrant,
   useAddHouseholdMember,
   useCreateClientHousehold,
   useOrganizations,
@@ -185,8 +185,19 @@ export function householdMemberConsequence(
    */
   standingGrant: Pick<
     ClientSideMoneyGrant,
-    "thresholdCents" | "sourceClause"
+    "thresholdCents" | "sourceClause" | "sourceHouseholdId"
   > | null = null,
+  /**
+   * r16 MAJOR-1 — WHICH household this band is speaking for.
+   *
+   * "The household's own grant" used to be a string match on `source_clause`,
+   * which names the TABLE: a card standing in two households (nothing refuses
+   * it, and the duplicate fold makes one) had this band read the OTHER
+   * household's figure as its own and promise to move it. 00632 stamps
+   * `source_household_id` on the row and both RPCs ask it; so does the
+   * sentence.
+   */
+  householdId: string | null = null,
 ): string {
   const job = (projectName ?? "").trim();
   const where = job ? ` on the ${job}` : "";
@@ -195,8 +206,7 @@ export function householdMemberConsequence(
   let grant = "";
   if (householdWouldGrant) {
     const foreign =
-      !!standingGrant &&
-      standingGrant.sourceClause !== HOUSEHOLD_GRANT_SOURCE_CLAUSE;
+      !!standingGrant && !householdOwnsGrant(standingGrant, householdId);
     if (foreign) {
       const standing = formatMoneyFromCents(standingGrant.thresholdCents);
       grant = standing
@@ -693,6 +703,7 @@ export function HouseholdBand({
               household.co_threshold_cents,
               !addHeld,
               standingGrantForChoice,
+              household.id,
             )}
           </p>
 

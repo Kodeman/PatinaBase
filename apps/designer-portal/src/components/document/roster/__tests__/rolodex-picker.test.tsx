@@ -799,7 +799,14 @@ describe('RolodexPicker — bring forward', () => {
     render(<RolodexPicker {...props} />);
     fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /Pete Rusk/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add two to the roster' }));
+    // r16 MAJOR-2: the count in front of the press is the count the press
+    // writes — Rosa is already on this sheet and `addPicked` drops her.
+    expect(
+      screen.getByText(
+        'Adds one seat. Rosa Martínez is already on the call sheet.',
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add one to the roster' }));
     await waitFor(() => expect(bringForwardMutate).toHaveBeenCalled());
     // only the pick that could go on was sent
     expect(bringForwardMutate.mock.calls[0][0].picks).toEqual([
@@ -841,7 +848,15 @@ describe('RolodexPicker — bring forward', () => {
     });
     render(<RolodexPicker {...props} />);
     fireEvent.click(screen.getByRole('checkbox', { name: /Rosa Martínez/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add one to the roster' }));
+    // r16 MAJOR-2: with every pick already seated the act says so before the
+    // press — it used to read "Add one to the roster" over a sentence
+    // promising "Adds one seat …" and then write nothing.
+    expect(
+      screen.getByText(
+        'Adds no seats. Rosa Martínez is already on the call sheet.',
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to the roster' }));
     expect(
       await screen.findByText('Rosa Martínez is already on the call sheet.'),
     ).toBeInTheDocument();

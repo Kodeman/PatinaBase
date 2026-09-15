@@ -16522,6 +16522,7 @@ export type Database = {
           prepares_only: boolean
           scope: string
           source_clause: string | null
+          source_household_id: string | null
           threshold_cents: number | null
           updated_at: string
         }
@@ -16536,6 +16537,7 @@ export type Database = {
           prepares_only?: boolean
           scope: string
           source_clause?: string | null
+          source_household_id?: string | null
           threshold_cents?: number | null
           updated_at?: string
         }
@@ -16550,6 +16552,7 @@ export type Database = {
           prepares_only?: boolean
           scope?: string
           source_clause?: string | null
+          source_household_id?: string | null
           threshold_cents?: number | null
           updated_at?: string
         }
@@ -16580,6 +16583,13 @@ export type Database = {
             columns: ["granted_by"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_party_authority_source_household_id_fkey"
+            columns: ["source_household_id"]
+            isOneToOne: false
+            referencedRelation: "client_households"
             referencedColumns: ["id"]
           },
         ]

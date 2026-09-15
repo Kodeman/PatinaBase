@@ -4572,6 +4572,224 @@ BEGIN
   RAISE NOTICE '12. r15 MAJOR-1 — a closed seat is left closed, a new seat is opened, and the grant standing on the closed one is ended rather than moved: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13. r16 MAJOR-1 — A GRANT NAMES THE HOUSEHOLD THAT WROTE IT
+--
+-- `source_clause = 'client_households.co_threshold_cents'` names a TABLE, and
+-- nothing refuses a person card standing in two households (the room's own
+-- duplicate fold makes one, 00629 §7). So the second household read the
+-- first's grant as its own: raising household ONE's figure raised the money
+-- authority on household TWO's seat, on a different job, while TWO's own
+-- record still read the old figure. `source_household_id` (00632 §2b) is the
+-- fact the string could not carry; the clause stays beside it so a grant the
+-- studio re-sourced by hand is still released (r9 M-1).
+--
+-- The negative control is probe-r16-b's: TWO JOBS, ONE MEMBER, and the figure
+-- moved on ONE household only. Its own f9d… id space.
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, created_by) VALUES
+  ('f9d00000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-00000000000a',
+   'person','client','R16 Nia Shared','a0000000-0000-0000-0000-000000000004'),
+  ('f9d00000-0000-4000-8000-000000000002','f9000000-0000-4000-8000-00000000000a',
+   'person','client','R16 Dana Early','a0000000-0000-0000-0000-000000000004'),
+  ('f9d00000-0000-4000-8000-000000000003','f9000000-0000-4000-8000-00000000000a',
+   'person','client','R16 Ada Decides','a0000000-0000-0000-0000-000000000004'),
+  ('f9d00000-0000-4000-8000-000000000004','f9000000-0000-4000-8000-00000000000a',
+   'person','client','R16 Paul Departed','a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.client_households
+  (id, organization_id, designer_id, display_name, co_threshold_cents, created_by) VALUES
+  ('f9d10000-0000-4000-8000-00000000000a','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','R16 household ONE', 1000000,
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9d10000-0000-4000-8000-00000000000b','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','R16 household TWO', 250000,
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9d10000-0000-4000-8000-00000000000c','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','R16 household THREE (no figure yet)', NULL,
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9d10000-0000-4000-8000-00000000000d','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','R16 household FOUR (no figure yet)', NULL,
+   'a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_seat1 uuid;   -- household ONE's seat, on the first job
+  v_seat2 uuid;   -- household TWO's seat, on the second job
+  v_thr1  integer;
+  v_thr2  integer;
+  v_src   uuid;
+  n       integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_seat1 := public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000a','f9d00000-0000-4000-8000-000000000001',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  v_seat2 := public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000b','f9d00000-0000-4000-8000-000000000001',
+    'client_rep','f9300000-0000-4000-8000-0000000000c1');
+  PERFORM pg_temp.reset_role();
+
+  -- The state this finding is about is REACHABLE: one card, two households.
+  SELECT count(*) INTO n FROM public.client_households
+   WHERE 'f9d00000-0000-4000-8000-000000000001' = ANY (member_person_ids);
+  IF n <> 2 THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (13-a): the fixture no longer reproduces — % household(s) name the card', n;
+  END IF;
+
+  -- Each household's grant carries ITS OWN household id.
+  SELECT threshold_cents, source_household_id INTO v_thr1, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_seat1 AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr1 <> 1000000 OR v_src <> 'f9d10000-0000-4000-8000-00000000000a' THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (13-b): household ONE''s grant reads % / %', v_thr1, v_src;
+  END IF;
+  SELECT threshold_cents, source_household_id INTO v_thr2, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_seat2 AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr2 <> 250000 OR v_src <> 'f9d10000-0000-4000-8000-00000000000b' THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (13-c): household TWO''s grant reads % / %', v_thr2, v_src;
+  END IF;
+
+  -- ── THE NEGATIVE CONTROL (probe-r16-b): move ONE household's figure ─────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9d10000-0000-4000-8000-00000000000a', 2500000);
+  PERFORM pg_temp.reset_role();
+
+  SELECT threshold_cents INTO v_thr1 FROM public.project_party_authority
+   WHERE engagement_id = v_seat1 AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr1 <> 2500000 THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (13-d): household ONE''s own grant did not move (%)', v_thr1;
+  END IF;
+  SELECT threshold_cents INTO v_thr2 FROM public.project_party_authority
+   WHERE engagement_id = v_seat2 AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr2 <> 250000 THEN
+    RAISE EXCEPTION
+      'BLOCK 13 FAIL (13-e): raising household ONE''s figure rewrote household TWO''s grant on another job (% cents)',
+      v_thr2;
+  END IF;
+  SELECT co_threshold_cents INTO v_thr2 FROM public.client_households
+   WHERE id = 'f9d10000-0000-4000-8000-00000000000b';
+  IF v_thr2 <> 250000 THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (13-f): household TWO''s own record moved (%)', v_thr2;
+  END IF;
+
+  -- ── AND ON ONE JOB: the second household may not rewrite the first's ────
+  -- (probe-r16-a: adding the same card to household TWO reuses the OPEN seat
+  -- household ONE's grant stands on.)
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000b','f9d00000-0000-4000-8000-000000000001',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+  SELECT threshold_cents, source_household_id INTO v_thr1, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_seat1 AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr1 <> 2500000 OR v_src <> 'f9d10000-0000-4000-8000-00000000000a' THEN
+    RAISE EXCEPTION
+      'BLOCK 13 FAIL (13-g): household TWO rewrote household ONE''s grant on its own seat (% / %)',
+      v_thr1, v_src;
+  END IF;
+
+  RAISE NOTICE '13. r16 MAJOR-1 — a grant names the household that wrote it, and neither household may move the other''s: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13b. r16 F1 — THE MEMBER ADDED BEFORE THE FIGURE EXISTED STILL GETS ONE
+--
+-- add_household_member() writes no money grant while the household names no
+-- figure (right: a NULL threshold reads "Signs money." with no cap), and
+-- set_household_threshold() only ever UPDATEd grants that already existed —
+-- so the ordinary order of work (members first, the dollar figure last) left
+-- every `client_rep` member of that first step with no authority for ever,
+-- their person card printing "No authority on this job" beside the band's own
+-- clause. The figure act now OPENS the missing grant: open seats only, the
+-- `client_rep` role only, and never where a grant already stands.
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_early  uuid;   -- the client_rep added before the figure
+  v_plain  uuid;   -- the plain client, who never carries the figure (PR-c)
+  v_closed uuid;   -- a client_rep seat the studio closed
+  v_thr    integer;
+  v_src    uuid;
+  n        integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_early := public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000c','f9d00000-0000-4000-8000-000000000002',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  v_plain := public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000c','f9d00000-0000-4000-8000-000000000003',
+    'client','f9300000-0000-4000-8000-00000000000a');
+  v_closed := public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000d','f9d00000-0000-4000-8000-000000000004',
+    'client_rep','f9300000-0000-4000-8000-0000000000c1');
+  PERFORM pg_temp.reset_role();
+
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = v_early;
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-a): a figureless household wrote % grant(s) at add time', n;
+  END IF;
+
+  -- the studio closes the fourth household's only seat before the figure is set
+  UPDATE public.project_parties
+     SET stage = 'off_job',
+         off_job_at = CURRENT_DATE - 10,
+         off_job_reason = 'Left the household before the figure was agreed.'
+   WHERE id = v_closed;
+
+  -- ── the figure is named, last ───────────────────────────────────────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9d10000-0000-4000-8000-00000000000c', 250000);
+  PERFORM public.set_household_threshold('f9d10000-0000-4000-8000-00000000000d', 300000);
+  PERFORM pg_temp.reset_role();
+
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = v_early AND scope = 'money' AND effective_to IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION
+      'BLOCK 13b FAIL (13b-b): the client_rep added before the figure carries % open money grant(s), expected 1',
+      n;
+  END IF;
+  SELECT threshold_cents, source_household_id INTO v_thr, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_early AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 250000 OR v_src <> 'f9d10000-0000-4000-8000-00000000000c' THEN
+    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-c): the opened grant reads % / %', v_thr, v_src;
+  END IF;
+
+  -- PR-c: the plain client seat never carries the figure
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = v_plain AND scope = 'money';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-d): the plain client seat carries % money grant(s)', n;
+  END IF;
+
+  -- r15 MAJOR-1 holds against the new opener: a CLOSED seat gets nothing
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = v_closed AND scope = 'money';
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'BLOCK 13b FAIL (13b-e): the figure opened % money grant(s) on a seat the studio closed', n;
+  END IF;
+
+  -- and raising it again MOVES that grant rather than opening a second one
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9d10000-0000-4000-8000-00000000000c', 500000);
+  PERFORM pg_temp.reset_role();
+  SELECT count(*), max(threshold_cents) INTO n, v_thr
+    FROM public.project_party_authority
+   WHERE engagement_id = v_early AND scope = 'money' AND effective_to IS NULL;
+  IF n <> 1 OR v_thr <> 500000 THEN
+    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-f): % open money grant(s) at %', n, v_thr;
+  END IF;
+
+  RAISE NOTICE '13b. r16 F1 — the member added before the figure gets the grant when the figure is named, and no closed seat does: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

@@ -43,6 +43,32 @@
 -- it. Both halves used to key on identity alone (the card and the role) and
 -- so wrote, or re-wrote, live money authority onto a row whose record says
 -- the person left the job. Stated at each site below.
+--
+-- ── AND ONE FACT BOTH HALVES NOW READ (r16 MAJOR-1) ──────────────────────
+-- A GRANT NAMES THE HOUSEHOLD THAT WROTE IT. Both halves used to ask a
+-- STRING — `source_clause = 'client_households.co_threshold_cents'` — which
+-- names a TABLE and not a row, and nothing anywhere refuses a person card
+-- membership in two households (the room's own duplicate fold creates one:
+-- 00629's seat/member repoint leaves the survivor standing in both). So the
+-- second household read the first household's grant as its own: measured,
+-- raising the Lindqvist household to $25,000 raised the Okonkwo residence
+-- client_rep seat's authority from $2,500 to $25,000 while the Okonkwo
+-- household's own record still read $2,500 — two contradictory facts about
+-- money on one Call Sheet, on a job the acting household has nothing to do
+-- with. `project_party_authority.source_household_id` (§2b) makes ownership
+-- a fact; the clause stays beside it so a grant the studio RE-SOURCED BY
+-- HAND is still released (r9 M-1), and both legs are asked together.
+--
+-- ── AND ONE SEAT set_household_threshold() NOW OPENS (r16 F1) ─────────────
+-- A `client_rep` MEMBER ADDED BEFORE THE FIGURE EXISTS IS NOT LEFT WITHOUT
+-- ONE. add_household_member() correctly writes no grant while the household
+-- names no figure, and the figure act only ever UPDATEd grants that already
+-- existed — so a household filled in the natural order (members first, the
+-- dollar figure last) left every one of those members permanently unable to
+-- sign, their person card printing "No authority on this job" beside the
+-- household's own clause. §4's loop now also OPENS the missing grant on an
+-- open `client_rep` seat, which is where every other grant-opening rule in
+-- this file already lives.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -295,6 +321,40 @@ COMMENT ON COLUMN public.designer_clients.household_id IS
   'F-05 are ONE client of the studio without a second invite (00632).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 2b. project_party_authority.source_household_id — WHICH household wrote it
+-- ═══════════════════════════════════════════════════════════════════════════
+-- r16 MAJOR-1. `source_clause` is prose: it names the TABLE this figure came
+-- from, so every household in the studio matched every other household's
+-- grant on the string. One person card may stand in two households (nothing
+-- refuses it, and the duplicate fold in 00629 §7 creates the state without
+-- anybody meaning to), and from that moment either household's figure act
+-- rewrote the other's money authority — on another job, under another
+-- principal, against a record that still read the old figure.
+--
+-- The column is the fact the string could not carry. ON DELETE SET NULL and
+-- never CASCADE: losing the household must not delete the money record it
+-- sourced — the row is a grant somebody signed under, and 00624's own shape
+-- for ending one is `effective_to`, not DELETE.
+ALTER TABLE public.project_party_authority
+  ADD COLUMN IF NOT EXISTS source_household_id uuid
+    REFERENCES public.client_households(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_project_party_authority_source_household
+  ON public.project_party_authority(source_household_id)
+  WHERE source_household_id IS NOT NULL;
+
+COMMENT ON COLUMN public.project_party_authority.source_household_id IS
+  'The client_households row whose co_threshold_cents wrote this grant, where '
+  'a household wrote it (r16 MAJOR-1). add_household_member() and '
+  'set_household_threshold() ask this column AND source_clause together: the '
+  'column says WHICH household owns the row — a string naming the table '
+  'matched every household in the studio, and a card standing in two '
+  'households then had either figure rewrite the other''s grants — while the '
+  'clause keeps r9 M-1''s rule that a grant the studio RE-SOURCED BY HAND is '
+  'no longer the household''s to move. NULL is every grant no household '
+  'sourced (00632).';
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 3. add_household_member — the membership, the seat, and the grant
 -- ═══════════════════════════════════════════════════════════════════════════
 -- PR-c's "both, split by job" as one act. p_role is `client` (F-04, who
@@ -445,6 +505,16 @@ BEGIN
     -- They agree now: the open row is read first, a foreign clause is left
     -- exactly as the studio wrote it, and only the household's own grant
     -- moves.
+    --
+    -- r16 MAJOR-1 — "THE HOUSEHOLD'S OWN GRANT" IS A ROW, NOT A STRING. The
+    -- clause alone named the table, so a SECOND household holding the same
+    -- card read the first household's grant as its own and rewrote it. Both
+    -- legs are asked here: the row must have been written BY THIS HOUSEHOLD
+    -- (source_household_id) and must still state the household as its source
+    -- (source_clause, r9 M-1's hand-re-source release). Either one absent and
+    -- the figure standing there is somebody else's, which is exactly what the
+    -- band prints before the press ("recorded outside the household, and that
+    -- figure stands").
     SELECT * INTO v_grant
       FROM public.project_party_authority
      WHERE engagement_id = v_seat_id
@@ -454,11 +524,13 @@ BEGIN
 
     IF NOT FOUND THEN
       INSERT INTO public.project_party_authority
-        (engagement_id, scope, threshold_cents, source_clause, granted_by)
+        (engagement_id, scope, threshold_cents, source_clause,
+         source_household_id, granted_by)
       VALUES
         (v_seat_id, 'money', v_h.co_threshold_cents,
-         'client_households.co_threshold_cents', auth.uid());
-    ELSIF v_grant.source_clause = 'client_households.co_threshold_cents' THEN
+         'client_households.co_threshold_cents', v_h.id, auth.uid());
+    ELSIF v_grant.source_clause = 'client_households.co_threshold_cents'
+          AND v_grant.source_household_id IS NOT DISTINCT FROM v_h.id THEN
       UPDATE public.project_party_authority
          SET threshold_cents = v_h.co_threshold_cents,
              granted_by      = COALESCE(auth.uid(), granted_by)
@@ -486,7 +558,8 @@ COMMENT ON FUNCTION public.add_household_member(uuid, uuid, text, uuid) IS
   'that seat''s `money` authority row — PR-c pairs the figure with the '
   'member who signs (F-05), never with the member who decides finishes '
   '(F-04). A seat already carrying an OPEN money grant the household did not '
-  'source (its own clause from the agreement) keeps it untouched, which is '
+  'source (its own clause from the agreement, or ANOTHER household''s figure '
+  '— source_household_id, r16 MAJOR-1) keeps it untouched, which is '
   'the rule set_household_threshold() makes on the same column (r9 M-1); '
   'only the household''s own grant moves. It refuses the whole act unless '
   'the caller is an owner or '
@@ -592,6 +665,11 @@ BEGIN
      WHERE pp.party_kind        = 'client_rep'
        AND pp.studio_contact_id = ANY (v_h.member_person_ids)
        AND pa.source_clause     = 'client_households.co_threshold_cents'
+       -- r16 MAJOR-1: and THIS household wrote it. The clause names the
+       -- table, so a member standing in two households had both figures
+       -- claiming the same grant; the member leg above stays because it
+       -- bounds the loop to this studio's own cards.
+       AND pa.source_household_id = v_h.id
      ORDER BY pp.id
   LOOP
     v_recorded := public.project_party_recorded_studio(v_seat.seat_id);
@@ -635,6 +713,65 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- ── r16 F1 — THE MEMBER WHO WAS ADDED BEFORE THE FIGURE EXISTED ────────
+  -- add_household_member() writes no grant while co_threshold_cents is NULL,
+  -- which is right: a money grant with a NULL threshold reads "Signs money."
+  -- with NO CAP (00624), so opening a placeholder row there would widen
+  -- unlimited signing authority out of a household that named no figure at
+  -- all. But the loop above only ever MOVED rows that already existed, so the
+  -- ordinary order of work — decide who is in the household, then decide what
+  -- figure needs a signature — left every `client_rep` member seated in that
+  -- first step with no grant for ever: their person card printing "No
+  -- authority on this job" beside the household band's own clause, on one
+  -- screen, with no act that repairs it. Measured twice on a fresh reset.
+  --
+  -- So the figure act is also where that grant is OPENED. Only a seat that is
+  -- still OPEN (r15 MAJOR-1's rule — live authority never lands on a row the
+  -- studio closed), only where the seat carries no open money grant at all (a
+  -- grant from the agreement is not this act's to replace, r9 M-1, and the
+  -- partial unique index would refuse a second one anyway), and only when the
+  -- household names a figure — erasing one opens nothing.
+  IF p_threshold_cents IS NOT NULL THEN
+    FOR v_seat IN
+      SELECT pp.id AS seat_id
+        FROM public.project_parties pp
+       WHERE pp.party_kind        = 'client_rep'
+         AND pp.studio_contact_id = ANY (v_h.member_person_ids)
+         AND pp.off_job_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM public.project_party_authority pa
+            WHERE pa.engagement_id = pp.id
+              AND pa.scope         = 'money'
+              AND pa.effective_to IS NULL)
+       ORDER BY pp.id
+    LOOP
+      -- PR-n per seat, on the studio the PROJECT records, refusing the whole
+      -- act rather than half-opening the grants — the same posture the loop
+      -- above takes for the same reason (00624's "a wrong grant silently
+      -- over- or under-authorises an approval").
+      v_recorded := public.project_party_recorded_studio(v_seat.seat_id);
+      IF v_recorded IS NULL THEN
+        RAISE EXCEPTION 'household_grant_project_has_no_studio'
+          USING HINT = 'One of this household''s seats is on a job that records '
+                       'no studio, so PR-n''s owner/admin narrowing on its money '
+                       'grant cannot be resolved. Give that job a studio first '
+                       '(R-BD).';
+      END IF;
+      IF NOT public.is_org_admin_or_owner(v_recorded) THEN
+        RAISE EXCEPTION 'household_grant_forbidden'
+          USING HINT = 'Only an owner or an admin of the studio may set a '
+                       'money authority (PR-n).';
+      END IF;
+
+      INSERT INTO public.project_party_authority
+        (engagement_id, scope, threshold_cents, source_clause,
+         source_household_id, granted_by)
+      VALUES
+        (v_seat.seat_id, 'money', p_threshold_cents,
+         'client_households.co_threshold_cents', v_h.id, auth.uid());
+    END LOOP;
+  END IF;
+
   UPDATE public.client_households
      SET co_threshold_cents = p_threshold_cents
    WHERE id = p_household_id
@@ -653,7 +790,14 @@ COMMENT ON FUNCTION public.set_household_threshold(uuid, integer) IS
   'Writes client_households.co_threshold_cents AND moves every open `money` '
   'grant the household is the stated source of — the `client_rep` seats of '
   'its own members carrying source_clause = '
-  '''client_households.co_threshold_cents'' (r5 M-1). Without it the figure '
+  '''client_households.co_threshold_cents'' AND source_household_id = this '
+  'household (r5 M-1; the id leg is r16 MAJOR-1, because the clause names a '
+  'TABLE and a card standing in two households then had either figure '
+  'rewrite the other''s grants, on another job, under another principal). '
+  'It also OPENS the missing grant on any OPEN `client_rep` seat of a member '
+  'that carries none — the member added before the household named a figure, '
+  'who was otherwise left unable to sign for ever while the band''s clause '
+  'said otherwise (r16 F1). Without it the figure '
   'and the seats it had already authorised drifted apart, and one Call Sheet '
   'screen printed "Change orders over $5,000 need a signature from the '
   'household." beside "Signs money to $2,500." with no act between them. A '
