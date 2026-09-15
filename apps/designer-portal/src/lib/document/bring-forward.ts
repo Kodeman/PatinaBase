@@ -122,12 +122,31 @@ export interface BringForwardRowFacts {
 export function bringForwardConsequence(
   projectName: string | null | undefined,
   picked: readonly BringForwardRowFacts[],
+  /**
+   * r16 MAJOR-2 — THE NAMES THE PRESS WILL REFUSE.
+   *
+   * `addPicked` drops every ticked card already seated here from the batch and
+   * writes only the rest (r11 QA MAJOR-1), so a sentence counting all of them
+   * promised seats the act would not add: Leah's task 5, performed on the
+   * seeded Okonkwo exactly as SPEC §5.7 draws it, read "Adds four seats to the
+   * Okonkwo residence." and added zero. Only the FRESH picks are counted here,
+   * and the ones already on the sheet are named in their own clause.
+   */
+  alreadySeatedNames: readonly string[] = [],
 ): string {
   const job = (projectName ?? "").trim();
   const n = picked.length;
   const head = `Adds ${countInWords(n)} ${n === 1 ? "seat" : "seats"}${
     job ? ` to the ${job}` : ""
   }.`;
+  const seated =
+    alreadySeatedNames.length > 0
+      ? [
+          `${alreadySeatedNames.join(", ")} ${
+            alreadySeatedNames.length === 1 ? "is" : "are"
+          } already on the call sheet.`,
+        ]
+      : [];
   const refusals = picked
     .filter((row) => row.consent === "opted_out")
     .map((row) => `${row.name} arrives opted out of texting.`);
@@ -138,7 +157,7 @@ export function bringForwardConsequence(
         .filter((clause): clause is string => !!clause),
     ),
   ];
-  return [head, ...refusals, ...papers].join(" ");
+  return [head, ...seated, ...refusals, ...papers].join(" ");
 }
 
 /**

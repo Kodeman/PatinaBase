@@ -133,6 +133,38 @@ describe("bringForwardConsequence (SPEC §5.7 #7)", () => {
     expect(sentence.match(/insurance lapsed/g)).toHaveLength(1);
   });
 
+  /**
+   * r16 MAJOR-2 — the sentence in front of the act counts what the act will
+   * write. `addPicked` drops every already-seated pick from the batch, so a
+   * head counting all of them promised seats nobody was going to get.
+   */
+  it("counts only the fresh picks and names who is already on the sheet", () => {
+    expect(
+      bringForwardConsequence(
+        "Okonkwo residence",
+        [
+          {
+            name: "Erin Sato",
+            consent: "granted",
+            firmName: null,
+            paperClause: null,
+          },
+        ],
+        ["Dana Kowalski", "Pete Rusk"],
+      ),
+    ).toBe(
+      "Adds one seat to the Okonkwo residence. Dana Kowalski, Pete Rusk are already on the call sheet.",
+    );
+  });
+
+  it("says the act adds nothing where every pick is already seated", () => {
+    expect(
+      bringForwardConsequence("Okonkwo residence", [], ["Dana Kowalski"]),
+    ).toBe(
+      "Adds no seats to the Okonkwo residence. Dana Kowalski is already on the call sheet.",
+    );
+  });
+
   it("speaks only for the rows still ticked", () => {
     expect(bringForwardConsequence("Okonkwo residence", [])).toBe(
       "Adds no seats to the Okonkwo residence.",

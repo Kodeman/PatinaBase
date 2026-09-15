@@ -564,11 +564,41 @@ export function RolodexPicker({
       COMPLIANCE_DOC_TYPE_LABELS,
     );
 
+  /**
+   * r16 MAJOR-2 — THE SEATED SPLIT, KNOWN BEFORE THE PRESS.
+   *
+   * `addPicked` drops every ticked card already on this call sheet from the
+   * batch and writes only the rest (r11 QA MAJOR-1), but the count, the act
+   * label and the consequence sentence were all built from every ticked card:
+   * Leah's task 5 on the seeded Okonkwo read "Adds four seats to the Okonkwo
+   * residence." and added zero. `rosterRows` is already in hand and
+   * `rosterHasIdentity` is pure, so the split the press will make is knowable
+   * here — one memo, read by the label, the sentence and the write alike.
+   */
+  const pickedSplit = useMemo(() => {
+    const rows = picked
+      .map((id) => cardById.get(id))
+      .filter((c): c is StudioContact => !!c);
+    const seated = rows.filter((c) =>
+      rosterHasIdentity(rosterRows ?? [], {
+        display_name: contactName(c),
+        email: c.email,
+        phone: c.phone,
+        profile_id: c.profile_id,
+        studio_contact_id: c.id,
+      }),
+    );
+    const seatedIds = new Set(seated.map((c) => c.id));
+    return {
+      rows,
+      seated,
+      fresh: rows.filter((c) => !seatedIds.has(c.id)),
+    };
+  }, [picked, cardById, rosterRows]);
+
   const pickedFacts: BringForwardRowFacts[] = useMemo(
     () =>
-      picked
-        .map((id) => cardById.get(id))
-        .filter((c): c is StudioContact => !!c)
+      pickedSplit.fresh
         .map((c) => {
           const firm =
             (wordsByCard.get(c.id)
@@ -591,7 +621,7 @@ export function RolodexPicker({
             ),
           };
         }),
-    [picked, cardById, wordsByCard, firmPaper, noticeIndex],
+    [pickedSplit.fresh, wordsByCard, firmPaper, noticeIndex],
   );
 
   const addParty = useAddProjectParty();
@@ -658,9 +688,6 @@ export function RolodexPicker({
   const addPicked = async () => {
     if (picked.length === 0) return;
     setError(null);
-    const rows = picked
-      .map((id) => cardById.get(id))
-      .filter((c): c is StudioContact => !!c);
     /**
      * r11 QA MAJOR-1 — ONE SEATED PICK COST THE WHOLE BATCH.
      *
@@ -675,23 +702,18 @@ export function RolodexPicker({
      * the others." The client-side check now reads the same way — the seated
      * rows drop out of the batch, the rest go on, and the sentence says which
      * did not.
+     *
+     * r16 MAJOR-2: the split is `pickedSplit`, the same one the act label and
+     * the consequence sentence read, so the count in front of the press and
+     * the write behind it name the same people.
      */
-    const seated = rows.filter((c) =>
-      rosterHasIdentity(rosterRows ?? [], {
-        display_name: contactName(c),
-        email: c.email,
-        phone: c.phone,
-        profile_id: c.profile_id,
-        studio_contact_id: c.id,
-      }),
-    );
+    const { seated, fresh } = pickedSplit;
     const seatedSentence =
       seated.length > 0
         ? `${seated.map((c) => contactName(c)).join(', ')} ${
             seated.length === 1 ? 'is' : 'are'
           } already on the call sheet.`
         : '';
-    const fresh = rows.filter((c) => !seated.includes(c));
     if (fresh.length === 0) {
       setError(seatedSentence);
       return;
@@ -996,7 +1018,7 @@ export function RolodexPicker({
               loading={bringForward.isPending}
               loadingLabel="Adding…"
             >
-              {bringForwardActLabel(picked.length)}
+              {bringForwardActLabel(pickedSplit.fresh.length)}
             </DocumentAction>
             <DocumentAction
               actionKey="bring-forward-put-back"
@@ -1011,7 +1033,11 @@ export function RolodexPicker({
             data-bring-forward-consequence
             className="mt-1.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]"
           >
-            {bringForwardConsequence(projectName, pickedFacts)}
+            {bringForwardConsequence(
+              projectName,
+              pickedFacts,
+              pickedSplit.seated.map((c) => contactName(c)),
+            )}
           </p>
         </>
       )}

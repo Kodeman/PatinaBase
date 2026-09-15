@@ -187,6 +187,36 @@ export interface ClientSideMoneyGrant {
   partyKind: string;
   thresholdCents: number | null;
   sourceClause: string | null;
+  /**
+   * WHICH household wrote it (00632 §2b, r16 MAJOR-1). The clause names the
+   * table, so every household in the studio matched every other household's
+   * grant on the string; the RPCs ask this column beside it, and so does the
+   * face.
+   */
+  sourceHouseholdId: string | null;
+}
+
+/**
+ * The rule both RPCs make, as one function (00632 §3/§4, r9 M-1 + r16
+ * MAJOR-1): a household moves a standing money grant only where IT wrote the
+ * row AND the row still names the household as its source. Anything else — the
+ * agreement's own clause, or another household's figure — stands exactly as it
+ * is, and the face says so before the press.
+ */
+export function householdOwnsGrant(
+  grant: Pick<
+    ClientSideMoneyGrant,
+    "sourceClause" | "sourceHouseholdId"
+  > | null,
+  householdId: string | null | undefined,
+): boolean {
+  if (!grant) return false;
+  if (grant.sourceClause !== HOUSEHOLD_GRANT_SOURCE_CLAUSE) return false;
+  // Where the caller names no household the clause is all there is to go on —
+  // the pre-00632-§2b reading, kept so a band with no household resolved yet
+  // does not call a household grant foreign.
+  if (!householdId) return true;
+  return grant.sourceHouseholdId === householdId;
 }
 
 /**
@@ -231,6 +261,10 @@ export function useProjectHousehold(projectId: string | null | undefined) {
        * household is on file … there is nowhere to record who else may sign"
        * stood on the same screen, unqualified, directly contradicting it. The
        * band says something else when this is true.
+       *
+       * Read over OPEN seats only (r16 MAJOR-1): authority belonging to
+       * somebody the studio took off the job is not a record this job still
+       * carries.
        */
       clientSideHasAuthority: boolean;
       /**
@@ -242,6 +276,10 @@ export function useProjectHousehold(projectId: string | null | undefined) {
        * promised $5,000 over a Call Sheet row two elements above still
        * printing "Signs money to $2,500." The face reads what the write will
        * really do.
+       *
+       * OPEN SEATS ONLY, and one grant per (card, kind) — the seat the RPC
+       * would actually reuse (r16 MAJOR-1). A grant hanging off a seat the
+       * studio CLOSED is a fact about a seat this act never touches.
        */
       clientSideMoneyGrants: ClientSideMoneyGrant[];
     }> => {
@@ -271,7 +309,7 @@ export function useProjectHousehold(projectId: string | null | undefined) {
 
       const { data: seats, error: seatsError } = await supabase
         .from("project_parties")
-        .select("id, studio_contact_id, party_kind, created_at")
+        .select("id, studio_contact_id, party_kind, created_at, off_job_at")
         .eq("project_id", projectId)
         .in("party_kind", ["client", "client_rep"]);
       if (seatsError) throw seatsError;
@@ -281,11 +319,14 @@ export function useProjectHousehold(projectId: string | null | undefined) {
           studio_contact_id: string | null;
           party_kind: string;
           created_at: string | null;
+          off_job_at: string | null;
         }>
       )
-        // `add_household_member()` reuses the EARLIEST seat for a
-        // (project, card, kind) — `ORDER BY pp.created_at LIMIT 1` (00632
-        // §4) — so the grant the band must read is that seat's.
+        // `add_household_member()` reuses the earliest OPEN seat for a
+        // (project, card, kind) — `AND pp.off_job_at IS NULL … ORDER BY
+        // pp.created_at LIMIT 1` (00632 §3, r15 MAJOR-1) — so the grant the
+        // band must read is that seat's, and a seat the studio CLOSED is a
+        // seat this act will never touch.
         .slice()
         .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
       const memberCardIds = [
@@ -298,7 +339,34 @@ export function useProjectHousehold(projectId: string | null | undefined) {
 
       let clientSideHasAuthority = false;
       const clientSideMoneyGrants: ClientSideMoneyGrant[] = [];
-      const seatIds = seatRows.map((seat) => seat.id).filter(Boolean);
+      /**
+       * r16 MAJOR-1 — ONLY OPEN SEATS SPEAK ABOUT LIVE AUTHORITY.
+       *
+       * This read had no `off_job_at` filter, so the band's money sentence
+       * could stand on a grant hanging off a seat the studio had CLOSED — a
+       * row `add_household_member()` will not reuse and will not touch. It
+       * printed "X already signs money to $2,500 … recorded outside the
+       * household, and that figure stands." while the write opened a NEW seat
+       * and minted the household's own figure on it. `clientSideHasAuthority`
+       * counted those rows too, so "this job already records who may sign"
+       * could stand on authority belonging to somebody who left the job.
+       */
+      const openSeatRows = seatRows.filter((seat) => !seat.off_job_at);
+      /**
+       * The FIRST OPEN seat per (card, kind) — the row the RPC reuses. The
+       * dedupe used to keep whichever grant the grant query returned first,
+       * an arbitrary order, so between two open seats the figure the face
+       * printed could change between refetches.
+       */
+      const chosenSeatIds = new Set<string>();
+      const takenPairs = new Set<string>();
+      for (const seat of openSeatRows) {
+        const pair = `${seat.studio_contact_id ?? ""}::${seat.party_kind}`;
+        if (takenPairs.has(pair)) continue;
+        takenPairs.add(pair);
+        chosenSeatIds.add(seat.id);
+      }
+      const seatIds = openSeatRows.map((seat) => seat.id).filter(Boolean);
       if (seatIds.length > 0) {
         // One read, two answers (r10 BLOCKING-1): whether the client side
         // carries ANY recorded authority — QA-1's sentence — and what each
@@ -307,7 +375,9 @@ export function useProjectHousehold(projectId: string | null | undefined) {
         // request, two more columns.
         const { data: grants, error: grantError } = await supabase
           .from("project_party_authority")
-          .select("id, engagement_id, scope, threshold_cents, source_clause")
+          .select(
+            "id, engagement_id, scope, threshold_cents, source_clause, source_household_id",
+          )
           .in("engagement_id", seatIds)
           .is("effective_to", null);
         if (grantError) throw grantError;
@@ -316,26 +386,28 @@ export function useProjectHousehold(projectId: string | null | undefined) {
           scope: string;
           threshold_cents: number | null;
           source_clause: string | null;
+          source_household_id: string | null;
         }>;
         clientSideHasAuthority = grantRows.length > 0;
-        const seatById = new Map(seatRows.map((seat) => [seat.id, seat]));
-        for (const grant of grantRows) {
-          if (grant.scope !== "money") continue;
-          const seat = seatById.get(grant.engagement_id);
-          if (!seat) continue;
-          // The earliest seat wins, because that is the one the RPC reuses.
-          const already = clientSideMoneyGrants.some(
-            (g) =>
-              g.personId === seat.studio_contact_id &&
-              g.partyKind === seat.party_kind,
-          );
-          if (already) continue;
+        const seatById = new Map(openSeatRows.map((seat) => [seat.id, seat]));
+        const moneyBySeat = new Map(
+          grantRows
+            .filter((grant) => grant.scope === "money")
+            .map((grant) => [grant.engagement_id, grant] as const),
+        );
+        // The seat the RPC would reuse is asked for its grant, rather than a
+        // grant being asked which seat it happens to sit on.
+        for (const seatId of chosenSeatIds) {
+          const seat = seatById.get(seatId);
+          const grant = moneyBySeat.get(seatId);
+          if (!seat || !grant) continue;
           clientSideMoneyGrants.push({
             engagementId: grant.engagement_id,
             personId: seat.studio_contact_id,
             partyKind: seat.party_kind,
             thresholdCents: grant.threshold_cents,
             sourceClause: grant.source_clause,
+            sourceHouseholdId: grant.source_household_id,
           });
         }
       }
@@ -381,10 +453,16 @@ export function useProjectHousehold(projectId: string | null | undefined) {
         };
       }
 
+      // One card may stand in two households — nothing refuses it and the
+      // duplicate fold creates the state (00629 §7) — so this last resort
+      // says WHICH one it is showing rather than taking whatever Postgres
+      // returned first (r16 MAJOR-1). The oldest household wins, every time.
       const { data: households, error: householdError } = await supabase
         .from("client_households")
         .select("*")
         .overlaps("member_person_ids", memberCardIds)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
         .limit(1);
       if (householdError) throw householdError;
       return {

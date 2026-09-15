@@ -35,6 +35,17 @@ jest.mock("@patina/supabase", () => ({
     client_rep: "signs for the household",
   },
   HOUSEHOLD_GRANT_SOURCE_CLAUSE: "client_households.co_threshold_cents",
+  /** 00632 §2b's rule, as the package exports it (r16 MAJOR-1). */
+  householdOwnsGrant: (
+    grant: {
+      sourceClause: string | null;
+      sourceHouseholdId?: string | null;
+    } | null,
+    householdId: string | null | undefined,
+  ) =>
+    !!grant &&
+    grant.sourceClause === "client_households.co_threshold_cents" &&
+    (!householdId || grant.sourceHouseholdId === householdId),
   useProjectHousehold: () => ({
     data: {
       household,
@@ -216,6 +227,55 @@ describe("householdMemberConsequence", () => {
           thresholdCents: 250000,
           sourceClause: "client_households.co_threshold_cents",
         },
+      ),
+    ).toBe(
+      "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. They may sign money to $5,000. Nothing is sent to them.",
+    );
+  });
+
+  /**
+   * r16 MAJOR-1 — ANOTHER HOUSEHOLD'S FIGURE IS NOT THIS HOUSEHOLD'S TO MOVE.
+   *
+   * One card may stand in two households (nothing refuses it, and the
+   * duplicate fold creates the state), and `source_clause` names the TABLE, so
+   * the clause alone read the other household's grant as this one's and
+   * promised to move it. 00632 stamps `source_household_id`; the sentence asks
+   * it.
+   */
+  it("says the standing figure stands where ANOTHER household sourced it", () => {
+    expect(
+      householdMemberConsequence(
+        "Chidi Okonkwo",
+        "client_rep",
+        "Okonkwo residence",
+        500000,
+        true,
+        {
+          thresholdCents: 250000,
+          sourceClause: "client_households.co_threshold_cents",
+          sourceHouseholdId: "household-lindqvist",
+        },
+        "household-okonkwo",
+      ),
+    ).toBe(
+      "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. Chidi Okonkwo already signs money to $2,500 on the Okonkwo residence, recorded outside the household, and that figure stands. Nothing is sent to them.",
+    );
+  });
+
+  it("promises the move where THIS household sourced the standing grant", () => {
+    expect(
+      householdMemberConsequence(
+        "Chidi Okonkwo",
+        "client_rep",
+        "Okonkwo residence",
+        500000,
+        true,
+        {
+          thresholdCents: 250000,
+          sourceClause: "client_households.co_threshold_cents",
+          sourceHouseholdId: "household-okonkwo",
+        },
+        "household-okonkwo",
       ),
     ).toBe(
       "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. They may sign money to $5,000. Nothing is sent to them.",

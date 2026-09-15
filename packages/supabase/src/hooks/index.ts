@@ -530,6 +530,7 @@ export {
   asHouseholdError,
   HOUSEHOLD_MEMBER_ROLE_LABELS,
   HOUSEHOLD_GRANT_SOURCE_CLAUSE,
+  householdOwnsGrant,
 } from "./use-households";
 export type {
   ClientHousehold,
