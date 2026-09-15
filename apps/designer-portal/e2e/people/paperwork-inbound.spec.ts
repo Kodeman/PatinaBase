@@ -217,6 +217,23 @@ test.describe("the paperwork door", () => {
       })
       .toBe(1);
 
+    /* ── The door the studio just opened is ON the card it opened it from ──
+       W4 r2 MAJOR W4R2-2. The Access grants list filtered on
+       `subject_type === "contact"`, written when `agreement_link` was the only
+       firm-scoped tier; `paperwork_link` stamps `subject_type = 'company'`
+       (00637 branch 12), so a LIVE grant never rendered and its Revoke was
+       reachable from no surface in the build. The list now filters by tier. */
+    const grants = page.locator("[data-access-grant-list]");
+    await expect(grants).toBeVisible();
+    const grantRow = grants.locator('[data-access-grant^="paperwork_link:"]');
+    await expect(grantRow).toHaveCount(1);
+    await expect(grantRow.getByText("Paperwork link")).toBeVisible();
+    await expect(page.getByText("No grant on file.")).toHaveCount(0);
+    // The act this tier exists to make reachable.
+    await expect(
+      grantRow.getByRole("button", { name: "Revoke" }),
+    ).toBeVisible();
+
     /* ── The firm sends its certificate through the door ─────────────────── */
     const number = `GL-E2E-${Date.now()}`;
     const path = await sendPaperworkAsTheFirm(token, {

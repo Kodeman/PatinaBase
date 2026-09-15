@@ -64,6 +64,14 @@ replaced.
   ADDRESS in `resend-webhook/channel-status.ts`, so an unattributable letter
   loses its log row, never its write-back.
 
+> **CORRECTION (round 2, W4 r2 MAJOR-3).** The last sentence was FALSE as
+> written. `writeChannelStatus` was reached only from inside the
+> `email.bounced` / `email.complained` case bodies, which sit *after*
+> `handleResendEvent`'s `if (!logEntry) return { matched: false }` early
+> return — so an unattributable letter lost its write-back as well as its log
+> row. Round 2 moves the address-keyed write ahead of that return; three Deno
+> cases in `resend-webhook/index.test.ts` pin it. The sentence is true as of r2.
+
 All five account-less senders now name their studio:
 `invoice-send` (`identity?.studioId ?? invoice.studio_id`), `po-send` and
 `quote-request-send` (`identity?.studioId`), `trade-rfq-send` (the studio id is
@@ -122,6 +130,14 @@ condition is `v_doc.expires_on < v_old_expires`.
 
 Both new tokens get their sentence in
 `packages/supabase/src/hooks/use-inbound-documents.ts`.
+
+> **CORRECTION (round 2, W4 r2 MAJOR-1 / R2-MAJOR-1).** They did NOT. The SQL
+> half landed; the portal half was never written, so
+> `compliance_confirm_already_lapsed` and `compliance_confirm_ends_sooner` fell
+> through `asInboundDocumentError` and were announced to the studio verbatim in
+> `inbound-queue-band`'s `role="alert"` region. Round 2 adds both sentences and
+> pins every one of the eight tokens 00637 can raise at the hook layer
+> (`people-crm-w4.test.ts`) and at the face (`inbound-queue-band.test.tsx`).
 
 **Proof.** New W4 SQL block 9c: a shorter-dated replacement COI and a dated w9
 replacing an undated one with a passed date are both refused as

@@ -390,6 +390,43 @@ describe("R-AD's window, read on the face", () => {
     expect(firmEngagementWindowEnd(seats, "firm-3")).toBeNull();
   });
 
+  // W4 r2 MAJOR-2. `mint_paperwork_link` keeps a window only while
+  // `v_window_end + interval '1 day' > now()`. Without the same test the band
+  // offered a day that had passed, pre-selected it, and met the RPC's refusal
+  // on its own default choice.
+  it("drops a window that has already closed, as the RPC does", () => {
+    const lapsed = [
+      { company_id: "firm-1", off_job_at: null, on_site_to: "2026-03-01",
+        warranty_until: null },
+    ];
+    expect(
+      firmEngagementWindowEnd(lapsed, "firm-1", new Date("2026-09-15T12:00:00Z")),
+    ).toBeNull();
+  });
+
+  it("keeps a window ending TODAY — the RPC's predicate runs to end of day", () => {
+    const endsToday = [
+      { company_id: "firm-1", off_job_at: null, on_site_to: "2026-09-15",
+        warranty_until: null },
+    ];
+    expect(
+      firmEngagementWindowEnd(endsToday, "firm-1", new Date("2026-09-15T12:00:00Z")),
+    ).toBe("2026-09-15");
+  });
+
+  it("takes the latest day still AHEAD, never the latest day outright", () => {
+    const mixed = [
+      { company_id: "firm-1", off_job_at: null, on_site_to: "2027-01-01",
+        warranty_until: null },
+      // A lapsed warranty on another open seat must not win the reduction.
+      { company_id: "firm-1", off_job_at: null, on_site_to: null,
+        warranty_until: "2026-01-01" },
+    ];
+    expect(
+      firmEngagementWindowEnd(mixed, "firm-1", new Date("2026-09-15T12:00:00Z")),
+    ).toBe("2027-01-01");
+  });
+
   it("offers thirty days as a DAY the studio picks, not a running clock", () => {
     expect(thirtyDaysOut(new Date("2026-09-15T12:00:00Z"))).toBe("2026-10-15");
   });
@@ -487,6 +524,25 @@ describe("the inbound queue (spec §6)", () => {
     expect(
       asInboundDocumentError(new Error("compliance_confirm_drops_a_gate")),
     ).toContain("blocks more than this one does");
+  });
+
+  // W4 r2 MAJOR-1: `inbound-queue-band` announces this answer in a role="alert"
+  // region, so any token 00637 can raise that is unmapped is read aloud to the
+  // studio verbatim. Every one of the six is pinned here.
+  it.each([
+    "compliance_confirm_needs_a_live_date",
+    "compliance_confirm_already_lapsed",
+    "compliance_confirm_ends_sooner",
+    "compliance_confirm_drops_a_gate",
+    "compliance_rejection_reason_required",
+    "compliance_document_not_found",
+    "compliance_document_already_verified",
+    "compliance_document_already_rejected",
+  ])("answers %s with a sentence, never the schema token", (token) => {
+    const said = asInboundDocumentError(new Error(token));
+    expect(said).not.toContain(token);
+    expect(said).not.toMatch(/compliance_/);
+    expect(said.endsWith(".")).toBe(true);
   });
 });
 

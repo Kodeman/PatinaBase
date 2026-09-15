@@ -12,6 +12,10 @@ import {
   NO_ENGAGEMENT_SENTENCE,
   paperworkReplaceSentence,
 } from "../paperwork-link-act";
+// The REAL derivation the company card feeds this band — W4 r2 MAJOR-2 is a
+// disagreement between it and `mint_paperwork_link`, so the seam is tested
+// with the real function rather than a hand-picked prop.
+const { firmEngagementWindowEnd } = jest.requireActual("@patina/supabase");
 
 const mintMutate = jest.fn();
 const links: { current: unknown[] } = { current: [] };
@@ -75,6 +79,48 @@ describe("the paperwork mint act", () => {
     // The window option is not offered where there is no window to offer.
     expect(screen.queryByLabelText(/Ends with the job/)).toBeNull();
     expect(screen.getByLabelText("Thirty days — 15 October 2026")).toBeChecked();
+  });
+
+  // W4 r2 MAJOR-2. An open seat whose `on_site_to` has passed — a crew nobody
+  // stamped off the job — is NOT a window. The band used to print it, pre-select
+  // it, and then meet `paperwork_link_window_required` on its own default.
+  it("offers no 'Ends with the job' choice for a firm whose window has passed", () => {
+    const lapsedSeats = [
+      {
+        company_id: "firm-twin-cities",
+        off_job_at: null,
+        on_site_to: "2026-03-01",
+        warranty_until: null,
+      },
+    ];
+    const windowEnd = firmEngagementWindowEnd(
+      lapsedSeats,
+      "firm-twin-cities",
+      NOW,
+    );
+    expect(windowEnd).toBeNull();
+    renderAct(windowEnd);
+    fireEvent.click(screen.getByText("Mint a paperwork link"));
+    expect(screen.queryByLabelText(/Ends with the job/)).toBeNull();
+    expect(screen.queryByText(/1 March 2026/)).toBeNull();
+    expect(screen.getByText(`– ${NO_ENGAGEMENT_SENTENCE}`)).toBeInTheDocument();
+    expect(screen.getByLabelText("Thirty days — 15 October 2026")).toBeChecked();
+  });
+
+  it("still offers a window that is still ahead", () => {
+    const openSeats = [
+      {
+        company_id: "firm-twin-cities",
+        off_job_at: null,
+        on_site_to: "2026-11-21",
+        warranty_until: null,
+      },
+    ];
+    renderAct(firmEngagementWindowEnd(openSeats, "firm-twin-cities", NOW));
+    fireEvent.click(screen.getByText("Mint a paperwork link"));
+    expect(
+      screen.getByLabelText("Ends with the job — 21 November 2026"),
+    ).toBeChecked();
   });
 
   it("hands the RPC no date when the firm's own window is chosen", async () => {

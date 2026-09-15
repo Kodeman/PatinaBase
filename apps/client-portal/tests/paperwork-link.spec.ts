@@ -186,12 +186,15 @@ test.describe("/paperwork/[token]", () => {
     await expect(page.getByRole("navigation")).toHaveCount(0);
   });
 
-  // NOTE on HTTP status: this app's App Router + streaming shell means
-  // notFound() lands the not-found UI while the status the server already
-  // flushed stays 200 — field-link.spec.ts records the same, for every
-  // notFound() caller in this portal. Content assertions only, as that suite
-  // and share-link.spec.ts both do; and staying 200 either way is itself the
+  // NOTE on HTTP status: content assertions only, as field-link.spec.ts and
+  // share-link.spec.ts both do. Staying 200 either way is itself the
   // non-enumerating posture, since a status that differed would be the oracle.
+  //
+  // W4 r2 MAJOR-4: the miss now renders this page's OWN calm dead sheet rather
+  // than the portal's homeowner 404, whose only act ("Go to home") pointed at a
+  // guarded route and bounced the firm's office manager into a sign-in wall.
+  // What the sheet may say is unchanged: the link is closed, and the studio can
+  // open another. Never the firm, the studio or the paper.
   test("an expired link is a dead link, and says no more than a stranger's", async ({
     page,
   }) => {
@@ -206,19 +209,24 @@ test.describe("/paperwork/[token]", () => {
     expect(error).toBeNull();
 
     await page.goto(`/paperwork/${door.token}`);
-    await expect(page.getByText(/page not found/i)).toBeVisible({ timeout: 20000 });
+    const dead = page.getByTestId("paperwork-dead-link");
+    await expect(dead).toBeVisible({ timeout: 20000 });
+    await expect(dead).toContainText("The studio that sent it can open a new one.");
     // Nothing about the firm, its paper or the studio leaks out of a dead door.
     await expect(page.getByText(door.companyName)).toHaveCount(0);
     await expect(page.getByText(STUDIO_NAME)).toHaveCount(0);
     await expect(page.getByText(/COI/)).toHaveCount(0);
+    // And no act at all: no homeowner destination behind a sign-in wall.
+    await expect(dead.getByRole("link")).toHaveCount(0);
+    await expect(dead.getByRole("button")).toHaveCount(0);
 
     // A token that was never minted dies into exactly the same page.
     await page.goto(`/paperwork/${"b".repeat(64)}`);
-    await expect(page.getByText(/page not found/i)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId("paperwork-dead-link")).toBeVisible({ timeout: 20000 });
 
     // So does a token that was never the right shape.
     await page.goto("/paperwork/not-a-real-token");
-    await expect(page.getByText(/page not found/i)).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId("paperwork-dead-link")).toBeVisible({ timeout: 20000 });
   });
 
   test("an upload lands unverified on the token's firm", async ({ page }) => {
@@ -236,9 +244,16 @@ test.describe("/paperwork/[token]", () => {
     await form.getByLabel("Issuer").fill("Twin Cities Drywall");
     await form.getByRole("button", { name: "Send W-9" }).click();
 
-    await expect(
-      page.getByText(`Received. ${STUDIO_NAME} will confirm it.`),
-    ).toBeVisible();
+    // W4 r2 MAJOR-5. The send unmounts the form and the focused submit button
+    // with it, so the outcome has to be ANNOUNCED and focus has to be put
+    // somewhere. The receipt is said twice on purpose: once into the sheet's
+    // one polite live region, once in the row the paper belongs to.
+    const receipt = `Received. ${STUDIO_NAME} will confirm it.`;
+    await expect(page.getByRole("status")).toHaveText(receipt);
+    const rowReceipt = page.locator('[data-paperwork-receipt="w9"]');
+    await expect(rowReceipt).toHaveText(receipt);
+    // The reader keeps her place: focus is on the receipt, not on the body.
+    await expect(rowReceipt).toBeFocused();
 
     await expect
       .poll(async () => (await documentsFor(door.companyId)).length, {

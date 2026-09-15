@@ -7,8 +7,9 @@
  * contact has no Patina account and never will: the 64-hex token minted by
  * `mint_paperwork_link` against the company card IS the authority, resolved
  * SERVER-SIDE through `resolve_paperwork_link` (service-only, 00637) with the
- * service client — force-dynamic, one RPC read, 404 on any miss (malformed,
- * unknown, revoked, expired) so a dead link never confirms it once existed.
+ * service client — force-dynamic, one RPC read, and ONE calm dead sheet on any
+ * miss (malformed, unknown, revoked, expired) so a dead link never confirms it
+ * once existed.
  *
  * The token is keyed to (organization_id, company_id), never to a project or a
  * seat, so it reaches exactly one firm's paper at exactly one studio. Nothing
@@ -27,7 +28,6 @@
  */
 
 import { headers } from 'next/headers';
-import { notFound } from 'next/navigation';
 import { createServiceClient } from '@patina/supabase/server';
 import { resolveClientIp } from '@/lib/utils/client-ip';
 import { PaperworkSheet } from '@/components/paperwork/paperwork-sheet';
@@ -38,6 +38,37 @@ export const dynamic = 'force-dynamic';
 
 const PAPERWORK_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 
+/**
+ * THE DEAD DOOR, WHICH IS NOT A HOMEOWNER'S 404 (W4 r2 MAJOR-4).
+ *
+ * Every miss used to render the portal's generic sheet, whose only act is "Go
+ * to home" pointing at `/` — a page the middleware guards, so it bounced a
+ * subcontractor's office manager with no Patina account into a sign-in wall in
+ * front of somebody's house. She was told neither that the link had closed nor
+ * that there is a way back.
+ *
+ * So: the house precedent instead (`/share`, `/plans`, `/field`, `/evidence`),
+ * one sentence saying the link is closed and one saying who can open another.
+ * It names no firm, no studio and no paper, and offers no destination at all,
+ * which is what keeps a revoked, an expired, an unknown and a malformed token
+ * indistinguishable from each other and from a guess.
+ */
+function DeadLink() {
+  return (
+    <main
+      className="mx-auto flex min-h-[70vh] max-w-md flex-col items-center justify-center px-6 text-center"
+      data-testid="paperwork-dead-link"
+    >
+      <p className="type-meta">Patina</p>
+      <h1 className="type-page-title mt-3">This link isn’t available</h1>
+      <p className="type-body-small mt-3 text-[var(--text-muted)]">
+        The paperwork link may have been turned off or has expired. The studio
+        that sent it can open a new one.
+      </p>
+    </main>
+  );
+}
+
 export default async function PaperworkPage({
   params,
 }: {
@@ -47,7 +78,7 @@ export default async function PaperworkPage({
 
   // Cheap format gate before any round-trip: a malformed token was never a
   // real link.
-  if (!PAPERWORK_TOKEN_PATTERN.test(token)) notFound();
+  if (!PAPERWORK_TOKEN_PATTERN.test(token)) return <DeadLink />;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createServiceClient() as any;
@@ -74,7 +105,7 @@ export default async function PaperworkPage({
   });
   const context = (Array.isArray(data) ? data[0] : data) as PaperworkContext | null;
 
-  if (error || !context) notFound();
+  if (error || !context) return <DeadLink />;
 
   const studioName = context.studio_name?.trim() || 'the studio';
 

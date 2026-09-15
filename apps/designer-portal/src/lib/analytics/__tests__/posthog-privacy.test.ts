@@ -229,4 +229,33 @@ describe('PostHog Field bearer privacy boundary', () => {
     expect(serialized).not.toContain(payToken);
     expect(serialized.match(/\/pay\/\[redacted\]/g)?.length).toBeGreaterThanOrEqual(3);
   });
+
+  // W4 r2 BLOCKING-1. This file was missing BOTH live-capability prefixes the
+  // client portal carries. The designer face renders each address raw, once, at
+  // the mint — the trade agreement link and the paperwork door — so an
+  // autocaptured anchor href or $el_text is the whole credential.
+  it.each(['trade', 'paperwork'])(
+    'redacts the /%s live-capability bearer the mint act renders raw',
+    (prefix) => {
+      const bearer = '9'.repeat(64);
+      const event = sanitizePostHogEvent({
+        event: '$autocapture',
+        properties: {
+          $current_url: `https://app.patina.cloud/doc/abc`,
+          $elements: [{
+            tag_name: 'a',
+            attributes: {
+              href: `https://client.patina.cloud/${prefix}/${bearer}`,
+              $el_text: `https://client.patina.cloud/${prefix}/${bearer}`,
+            },
+          }],
+        },
+      });
+      const serialized = JSON.stringify(event);
+      expect(serialized).not.toContain(bearer);
+      expect(
+        serialized.match(new RegExp(`/${prefix}/\\[redacted\\]`, 'g'))?.length,
+      ).toBeGreaterThanOrEqual(2);
+    },
+  );
 });

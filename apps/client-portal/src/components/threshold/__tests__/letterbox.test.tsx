@@ -593,15 +593,30 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(screen.queryByTestId('letterbox-receipt')).not.toBeInTheDocument();
   });
 
-  /* ── The letter's own address (00574 · K1) ───────────────────────────────
-     Additive: the settle-in-place and the print sheet both stay until W3b.
+  /* ── The terminal act (00574 · K1, rewritten by W4 r2 MAJOR-3) ───────────
+     00636 froze `invoice_links.token` at NULL, so the act's old href resolved
+     for NO invoice and both it and its consequence sentence vanished from the
+     household's own house page. This surface is a stable read and may not mint
+     (`ensure_invoice_link` revokes the address she already holds), so the act
+     opens the LETTER, where the settle-in-place till stands. The emailed
+     `/pay/<token>` sheet is untouched.
      ─────────────────────────────────────────────────────────────────────── */
 
-  it('offers the invoice its own address, above the settle-in-place', () => {
+  it('offers the terminal act with no live pay token anywhere in the system', async () => {
+    (useInvoiceLink as jest.Mock).mockReturnValue({ data: null });
+    const user = userEvent.setup();
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    const open = screen.getByRole('link', { name: 'Pay $9,125.00' });
-    expect(open).toHaveAttribute('href', `/pay/${LINK_TOKEN}`);
+    const pay = screen.getByRole('button', { name: 'Pay $9,125.00' });
+    // Never a link: there is no address this surface can honestly carry.
+    expect(screen.queryByRole('link', { name: /^Pay / })).not.toBeInTheDocument();
+    expect(pay).toHaveAttribute('aria-controls', 'letterbox-letter');
+
+    await act(async () => {
+      await user.click(pay);
+    });
+    // Pressing it opens the letter, where Settlement is.
+    expect(screen.getByRole('button', { name: 'Close the letterbox' })).toBeInTheDocument();
   });
 
   /* PP-2 · R139 — money moves here, so the act carries the figure it is for
@@ -609,7 +624,7 @@ describe('Letterbox — one letter, half out of the slot', () => {
   it('carries the amount in the label, under a sentence that says what it does', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    const pay = screen.getByRole('link', { name: 'Pay $9,125.00' });
+    const pay = screen.getByRole('button', { name: 'Pay $9,125.00' });
     const consequence = screen.getByTestId('letterbox-consequence');
     expect(consequence).toHaveTextContent(
       'This opens payment. Nothing is charged until you choose how to pay.',
@@ -617,11 +632,26 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(consequence.compareDocumentPosition(pay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('says nothing about payment when the letter has no address to open', () => {
-    (useInvoiceLink as jest.Mock).mockReturnValue({ data: null });
+  it('says nothing about payment where there is no balance to pay', () => {
+    render(
+      <Letterbox
+        invoice={invoice({ paidCents: 1_825_000, balanceCents: 0 })}
+        today={TODAY}
+      />,
+    );
 
+    expect(screen.queryByTestId('letterbox-consequence')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Pay / })).not.toBeInTheDocument();
+  });
+
+  it('drops the act once the letter is open, because the till is already showing', async () => {
+    const user = userEvent.setup();
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Open the letterbox' }));
+    });
+    expect(screen.queryByRole('button', { name: /^Pay / })).not.toBeInTheDocument();
     expect(screen.queryByTestId('letterbox-consequence')).not.toBeInTheDocument();
   });
 
@@ -650,24 +680,22 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(screen.getByTestId('letterbox')).toHaveAttribute('data-never-dim');
   });
 
-  /* F6: Next prefetches a `Link` as it scrolls into view, and the pay page
-     records a view and spends its rate-limit budget on every render. Scrolling
-     past the letterbox must therefore cost the link nothing, which `prefetch`
-     being explicitly false is the whole of. */
-  it('never warms the pay page by scrolling past it', () => {
+  /* F6's reason is gone with the href: nothing here warms the pay page,
+     because nothing here links to it. The guest sheet is reached from the
+     client's own email. */
+  it('never links to the pay page at all, so nothing can prefetch it', () => {
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    expect(screen.getByRole('link', { name: 'Pay $9,125.00' })).toHaveAttribute(
-      'data-prefetch',
-      'false',
-    );
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.getAttribute('href') ?? '').not.toMatch(/^\/pay\//);
+    }
   });
 
   it('keeps the letterbox, the print sheet and the settle-in-place beside it', async () => {
     const user = userEvent.setup();
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
-    expect(screen.getByRole('link', { name: 'Pay $9,125.00' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pay $9,125.00' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
 
     const toggle = screen.getByRole('button', { name: 'Open the letterbox' });
@@ -675,16 +703,5 @@ describe('Letterbox — one letter, half out of the slot', () => {
       await user.click(toggle);
     });
     expect(screen.getByRole('button', { name: 'Close the letterbox' })).toBeInTheDocument();
-  });
-
-  it('says nothing about an address the invoice does not have', () => {
-    (useInvoiceLink as jest.Mock).mockReturnValue({ data: null });
-
-    render(<Letterbox invoice={invoice()} today={TODAY} />);
-
-    expect(screen.queryByRole('link', { name: /^Pay / })).not.toBeInTheDocument();
-    // The existing acts are untouched by a missing link.
-    expect(screen.getByRole('link', { name: 'Print' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open the letterbox' })).toBeInTheDocument();
   });
 });

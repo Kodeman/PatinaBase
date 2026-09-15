@@ -56,6 +56,23 @@ export const ALL_ACCESS_GRANT_TIERS: readonly AccessGrantTier[] = [
   'paperwork_link',
 ] as const;
 
+/**
+ * The tiers a FIRM's card may list (direction §5.1's company variant: "firm-
+ * scoped tokens only").
+ *
+ * Named by TIER, never by `subject_type`. The company card used to filter on
+ * `subject_type === 'contact'`, which was written when `agreement_link` was the
+ * only firm-scoped tier; W4's `paperwork_link` stamps `subject_type = 'company'`
+ * by design (00637's branch 12), so a live paperwork door was filtered out
+ * before it reached the list and its Revoke was unreachable from every surface
+ * (W4 r2 MAJOR W4R2-2). A third firm-scoped tier with a third subject_type
+ * would have repeated it; this list cannot.
+ */
+export const FIRM_SCOPED_ACCESS_GRANT_TIERS: readonly AccessGrantTier[] = [
+  'agreement_link',
+  'paperwork_link',
+] as const;
+
 /** The words the studio reads. "Field link", not `field_link`. */
 export const ACCESS_GRANT_TIER_LABELS: Record<AccessGrantTier, string> = {
   studio_member: 'Studio member',

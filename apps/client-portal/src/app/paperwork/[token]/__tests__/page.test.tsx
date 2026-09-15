@@ -8,11 +8,6 @@ jest.mock('@patina/supabase/server', () => ({ createServiceClient: jest.fn() }))
 jest.mock('next/headers', () => ({
   headers: async () => new Headers({ 'cf-connecting-ip': '203.0.113.7' }),
 }));
-jest.mock('next/navigation', () => ({
-  notFound: () => {
-    throw new Error('NEXT_NOT_FOUND');
-  },
-}));
 jest.mock('@/components/paperwork/paperwork-sheet', () => ({
   PaperworkSheet: ({ studioName }: { studioName: string }) => (
     <div data-testid="paperwork-sheet">{studioName}</div>
@@ -39,11 +34,10 @@ function mockRpc(answers: Record<string, { data: unknown; error?: unknown }>) {
 }
 
 describe('/paperwork/[token]', () => {
-  it('404s a malformed token before any round-trip', async () => {
+  it('dies into the dead sheet for a malformed token, before any round-trip', async () => {
     mockRpc({});
-    await expect(
-      PaperworkPage({ params: Promise.resolve({ token: 'not-a-token' }) }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
+    render(await PaperworkPage({ params: Promise.resolve({ token: 'not-a-token' }) }));
+    expect(screen.getByTestId('paperwork-dead-link')).toBeInTheDocument();
     expect(createServiceClient).not.toHaveBeenCalled();
   });
 
@@ -74,18 +68,28 @@ describe('/paperwork/[token]', () => {
     expect(rpc).toHaveBeenCalledWith('resolve_paperwork_link', { p_token: TOKEN });
   });
 
+  // W4 r2 MAJOR-4: one calm sheet for every miss. It says the link is closed
+  // and who can open another, and it names no firm, no studio, no paper and no
+  // destination — so the four misses stay indistinguishable from each other.
   it.each([
     ['a revoked or expired link', { data: null }],
     ['an unknown link', { data: null }],
     ['a read that failed', { data: null, error: { message: 'boom' } }],
-  ])('404s %s, telling a guesser nothing', async (_name, answer) => {
+  ])('hands %s the same dead sheet, telling a guesser nothing', async (_name, answer) => {
     mockRpc({
       paperwork_link_rate_limit_hit: { data: true },
       resolve_paperwork_link: answer,
     });
-    await expect(
-      PaperworkPage({ params: Promise.resolve({ token: TOKEN }) }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
+    render(await PaperworkPage({ params: Promise.resolve({ token: TOKEN }) }));
+
+    const sheet = screen.getByTestId('paperwork-dead-link');
+    expect(sheet).toHaveTextContent('This link isn’t available');
+    expect(sheet).toHaveTextContent('The studio that sent it can open a new one.');
+    // No firm, no studio, no paper, and no act pointing anywhere.
+    expect(sheet).not.toHaveTextContent('Twin Cities');
+    expect(sheet).not.toHaveTextContent('Local Dev Studio');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('stops a caller over the shared bucket without resolving the token', async () => {

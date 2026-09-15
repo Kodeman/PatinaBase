@@ -70,24 +70,11 @@ jest.mock("@patina/supabase", () => ({
   useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
   paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
   thirtyDaysOut: () => '2026-10-15',
-  firmEngagementWindowEnd: (
-    seats: ReadonlyArray<{
-      company_id: string | null;
-      off_job_at?: string | null;
-      on_site_to: string | null;
-      warranty_until: string | null;
-    }>,
-    companyId: string,
-  ) => {
-    let latest: string | null = null;
-    for (const seat of seats) {
-      if (seat.company_id !== companyId || seat.off_job_at) continue;
-      for (const day of [seat.on_site_to, seat.warranty_until]) {
-        if (day && (!latest || day > latest)) latest = day;
-      }
-    }
-    return latest;
-  },
+  // The REAL derivation, not a copy. This double reproduced the function body
+  // WITHOUT its "is the day still ahead" test, so the card could go on offering
+  // a window that `mint_paperwork_link` refuses (W4 r2 MAJOR-2).
+  firmEngagementWindowEnd: jest.requireActual("@patina/supabase")
+    .firmEngagementWindowEnd,
   useStudioContact: () => ({ data: cardData.current }),
   // W3/P2 — 00630's nightly notices behind the Paper region's sentence.
   useComplianceNotices: () => ({ data: [] }),

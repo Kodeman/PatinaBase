@@ -6,6 +6,7 @@
  * `disabled`, and a refusal from 00637 reaches the face as a sentence.
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { asInboundDocumentError } from "@patina/supabase";
 import {
   InboundQueueBand,
   CONFIRM_CONSEQUENCE_SENTENCE,
@@ -17,6 +18,10 @@ const confirmMutate = jest.fn();
 const rejectMutate = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
+  // The real mapper, so a token 00637 raises that nobody gave a sentence is
+  // caught here rather than announced to the studio (W4 r2 MAJOR-1).
+  asInboundDocumentError: jest.requireActual("@patina/supabase")
+    .asInboundDocumentError,
   useInboundDocuments: () => ({ data: pending.current }),
   useConfirmInboundDocument: () => ({
     mutateAsync: confirmMutate,
@@ -145,5 +150,28 @@ describe("the inbound queue band", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("blocks more than this one does");
     expect(announce).not.toHaveBeenCalled();
+  });
+
+  // W4 r2 MAJOR-1: every token 00637's confirm/reject can raise, put through
+  // the SAME path the hook takes (`throw new Error(asInboundDocumentError(e))`),
+  // asserting the alert never carries the schema word.
+  it.each([
+    "compliance_confirm_needs_a_live_date",
+    "compliance_confirm_already_lapsed",
+    "compliance_confirm_ends_sooner",
+    "compliance_confirm_drops_a_gate",
+    "compliance_document_not_found",
+    "compliance_document_already_rejected",
+  ])("never lets %s reach the alert as a bare token", async (token) => {
+    confirmMutate.mockRejectedValue(
+      new Error(asInboundDocumentError(new Error(token))),
+    );
+    renderBand();
+    fireEvent.click(screen.getByText("Confirm"));
+    fireEvent.click(screen.getByText("Confirm the document"));
+    const alert = await screen.findByRole("alert");
+    expect(alert).not.toHaveTextContent(token);
+    expect(alert).not.toHaveTextContent(/compliance_/);
+    expect(alert.textContent?.trim().endsWith(".")).toBe(true);
   });
 });
