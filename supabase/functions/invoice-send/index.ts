@@ -312,6 +312,10 @@ Deno.serve(async (req: Request) => {
       category: 'operational',
       templateId: sendType === 'reminder' ? 'invoice-reminder-manual' : 'invoice-sent',
       ref: { type: 'invoice', id: invoice.id },
+      // The studio this letter is from, so an account-less recipient's out
+      // touch is filed in the sending studio's own book and nowhere else
+      // (W4 r1 B-2).
+      organizationId: identity?.studioId ?? invoice.studio_id ?? undefined,
       // subject/message/deep_link double as the in-app inbox rendering (the
       // client portal surfaces this notification_log row — see header note).
       metadata: {

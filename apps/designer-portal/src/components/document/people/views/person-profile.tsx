@@ -85,6 +85,7 @@ import {
   paperHeldClause,
 } from "../compliance-table";
 import { RecordDocumentSheet } from "../record-document-sheet";
+import { LastTouchLine } from "../touch-line";
 import { formatMoneyFromCents } from "../people-format";
 import { useViewerStudio } from "@/hooks/use-viewer-studio";
 import { openHoursForMember } from "@/lib/document/open-hours-scope";
@@ -292,6 +293,18 @@ export function PersonProfile({
       ).size,
     [seats],
   );
+
+  /**
+   * E13's subjects for THIS human: their rolodex card (a letter to a person's
+   * own address) and every seat they hold (a text to a seat on a job). Not
+   * their profile — `record_touch` resolves a studio from a card or a seat and
+   * knows nothing about a login.
+   */
+  const touchSubjectIds = useMemo(() => {
+    const ids = (seats ?? []).map((s) => s.seat_id).filter(Boolean);
+    if (person?.person_id) ids.push(person.person_id);
+    return ids;
+  }, [seats, person?.person_id]);
 
   /**
    * CR-2: the subjects `v_access_grants` keys on — this identity's SEATS
@@ -662,10 +675,24 @@ export function PersonProfile({
         <p className="t-body-sm text-[var(--ink)]">
           {`Worked ${projectCount} of the studio's ${
             projectCount === 1 ? "project" : "projects"
-          }.`}
-          {formatSeatDate(person.last_touch_at?.slice(0, 10))
-            ? ` Last touch ${formatSeatDate(person.last_touch_at?.slice(0, 10))}.`
-            : ""}
+          }.`}{" "}
+          {/* E13 / direction §7 P3 — the RECORD of the last contact, with its
+              channel, the decision it filed and whether the person who sent it
+              had the standing to (CRM-22). It outranks
+              `people_directory.last_touch_at`, which is the rolodex's own
+              `COALESCE(last_contacted_at, last_project_at, updated_at)`
+              (00626:1478) and answers a coarser question — two "last touch"
+              dates on one line would be the two-words-two-clicks-apart defect
+              this room keeps closing. The coarse date still prints for the
+              population E13 has no row for yet. */}
+          <LastTouchLine
+            subjectIds={touchSubjectIds}
+            fallback={
+              formatSeatDate(person.last_touch_at?.slice(0, 10))
+                ? `Last touch ${formatSeatDate(person.last_touch_at?.slice(0, 10))}.`
+                : null
+            }
+          />
         </p>
       </section>
 

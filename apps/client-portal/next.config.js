@@ -116,6 +116,33 @@ const nextConfig = {
   async headers() {
     const isDevelopment = process.env.NODE_ENV === 'development';
 
+    // THE SUPABASE ORIGIN THIS BUILD IS POINTED AT (W4 r1 QA-M1).
+    //
+    // The guest doors in this portal — /evidence/<token>, /paperwork/<token> —
+    // POST straight from the browser to
+    // `${NEXT_PUBLIC_SUPABASE_URL}/functions/v1/…` with the anon key. The
+    // production branch below names two hostnames as literals, so a build
+    // pointed anywhere else (a local stack, a second project, a repointed
+    // .env.local — which this repo has done before) has every one of those
+    // fetches refused by the page's own policy, with no CORS error, no CSP
+    // console message, and no network request: the form shows only "That did
+    // not go through. Try again." The designer portal has derived its origin
+    // from the env var since the SPLAT work; this is the same derivation. An
+    // unset or unparseable value degrades to nothing rather than widening the
+    // policy.
+    let supabaseConnectOrigins = '';
+    try {
+      const configuredSupabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL);
+      const httpOrigin = configuredSupabaseUrl.origin;
+      configuredSupabaseUrl.protocol =
+        configuredSupabaseUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+      supabaseConnectOrigins = `${httpOrigin} ${configuredSupabaseUrl.origin}`;
+    } catch {
+      supabaseConnectOrigins = '';
+    }
+    const withSupabase = (directive) =>
+      supabaseConnectOrigins ? `${directive} ${supabaseConnectOrigins}` : directive;
+
     // CSP directives - adapted for mobile and development vs production
     const cspDirectives = [
       "default-src 'self'",
@@ -129,8 +156,8 @@ const nextConfig = {
       // Development: localhost and local network IPs
       // Production: patina.cloud API gateway and WebSocket connections
       isDevelopment
-        ? "connect-src 'self' http://localhost:* ws://localhost:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org"
-        : "connect-src 'self' https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com",
+        ? withSupabase("connect-src 'self' http://localhost:* ws://localhost:* http://192.168.1.36:* ws://192.168.1.36:* http://192.168.1.18:* ws://192.168.1.18:* http://192.168.1.16:* ws://192.168.1.16:* http://127.0.0.1:* ws://127.0.0.1:* http://*.nordicheat.org ws://*.nordicheat.org")
+        : withSupabase("connect-src 'self' https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com"),
       "media-src 'self' blob:",
       "object-src 'none'",
       "base-uri 'self'",

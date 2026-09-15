@@ -609,6 +609,19 @@ export interface UpdateProjectPartyPatch {
   email?: string | null;
   showToClient?: boolean;
   studioContactId?: string | null;
+  /**
+   * THE ENGAGEMENT WINDOW (direction §7 P3) — the days this seat is on the
+   * job. `''` and `null` both clear the day; a window is two dates or none.
+   *
+   * Moving it moves what the studio has promised the crew, so direction §7 P3
+   * pairs it with a NOTICE: the surface that writes these two columns writes a
+   * `record_notice` beside them saying the fact changed and who was told
+   * (CRM-23). This hook writes the columns and nothing else — it cannot know
+   * who was told — so a caller that moves a window without recording a notice
+   * is the defect, not this signature.
+   */
+  onSiteFrom?: string | null;
+  onSiteTo?: string | null;
 }
 
 export interface UpdateProjectPartyInput {
@@ -732,6 +745,11 @@ export function useUpdateProjectParty() {
       if (patch.email !== undefined) dbPatch.email = patch.email?.trim() || null;
       if (patch.showToClient !== undefined) dbPatch.show_to_client = patch.showToClient;
       if (patch.studioContactId !== undefined) dbPatch.studio_contact_id = patch.studioContactId;
+      // DATE columns: an empty field is NO DAY, never the epoch.
+      if (patch.onSiteFrom !== undefined)
+        dbPatch.on_site_from = patch.onSiteFrom?.trim() || null;
+      if (patch.onSiteTo !== undefined)
+        dbPatch.on_site_to = patch.onSiteTo?.trim() || null;
 
       const { data, error } = await supabase
         .from('project_parties')

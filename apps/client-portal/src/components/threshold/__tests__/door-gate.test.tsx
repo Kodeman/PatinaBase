@@ -1163,6 +1163,24 @@ describe('DoorGate — the composed agreement', () => {
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
+    // W4 round-1 review B-1 / 00638: the bundle is a STABLE read and carries no
+    // pay address any more — the letter in her own letterbox is the act.
+    it('points at the letter in her letterbox when the bundle carries no address', () => {
+      signedBundle({
+        invoiceId: 'inv-deposit',
+        amountCents: 841340,
+        label: 'Deposit at signing',
+        payToken: null,
+      });
+      renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });
+
+      expect(screen.getByTestId('deposit-offer')).toHaveTextContent('$8,413.40');
+      expect(screen.getByRole('link', { name: 'Pay the deposit' })).toHaveAttribute(
+        'href',
+        '/?invoice=inv-deposit',
+      );
+    });
+
     it('offers nothing once the bundle says the deposit is settled', () => {
       signedBundle(null);
       renderGate({ proposal: { ...PROPOSAL, kind: 'design_build' } });

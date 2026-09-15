@@ -55,6 +55,26 @@ interface StoredLine {
   phone?: string | null;
 }
 
+/**
+ * CRM-23's `notice_of` for this card: the fact that changed, in words. The
+ * lockbox VERSION is named where the card holds one — never a code, which
+ * PR-r keeps off Patina entirely.
+ *
+ * The column carries the studio's OWN phrase ("Lockbox, version 3"), which is
+ * why `wayInSentence` prints it verbatim rather than wrapping it — and why
+ * this does too. An earlier draft prefixed "Lockbox, version " and the first
+ * notice it wrote read "Lockbox, version Lockbox, version 3."
+ */
+export function wayInFact(
+  changedAt: string | null | undefined,
+  lockboxVersion: string | null | undefined,
+): string {
+  const day = changedAt ? rosterShortDate(changedAt) : null;
+  const version = (lockboxVersion ?? '').trim();
+  const head = day ? `The way in changed ${day}.` : 'The way in changed.';
+  return version ? `${head} ${version}.` : head;
+}
+
 /** The seat this project says controls the gate — the `site_access` grant. */
 export function gateControllerName(
   rows: CallSheetRow[],
@@ -691,6 +711,11 @@ export function SiteAccessCard({
                   projectId={projectId}
                   panelId="site-access-notice-log"
                   told={told}
+                  /* CRM-23 — the record says what the face says. The stamp on
+                     the card IS the change being noticed, so the notice text
+                     is the card's own sentence rather than a second wording
+                     invented for the log. */
+                  fact={wayInFact(card.changed_at, card.lockbox_version)}
                   seats={rows
                     .filter((row): row is CallSheetRow & { seatId: string } => !!row.seatId)
                     .map((row) => ({ seatId: row.seatId, name: row.name }))}

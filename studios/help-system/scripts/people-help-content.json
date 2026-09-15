@@ -1,0 +1,278 @@
+[
+  {
+    "_id": "helpContent.designer-portal--document--people--intro",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people",
+    "persona": "all",
+    "contentType": "fieldHelper",
+    "tooltipContent": {
+      "body": "One list of everyone working this studio's jobs. Each row shows how to reach them, what they've agreed to, and what paper stands behind them."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--empty",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people",
+    "persona": "all",
+    "contentType": "emptyState",
+    "emptyStateContent": {
+      "icon": "◇",
+      "heading": "Nobody in the room yet",
+      "description": "Add the people and firms working this studio's jobs. Every card keeps how to reach them, what they've agreed to by text or email, and what paper stands behind them: client, crew, or maker alike.",
+      "primaryActionLabel": "Add someone"
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--word--reach",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/word/reach",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Reach",
+      "body": "Account, Field link, or On paper: the strongest way to reach them right now. Their own login, a link scoped to the job, or a number with no login at all."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--word--consent",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/word/consent",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Consent",
+      "body": "Texting, Invited, Opted out, or Not asked: has this person agreed to texts or email, or said no. Opted out sticks until they reply START or consent again."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--word--paper",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/word/paper",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Paper",
+      "body": "Current, Lapses in 30 days, Lapsed, or Not on file: the compliance paper behind this person's firm. A lapsed document can block access, payment, or a draw."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--contact-rule",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/contact-rule",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Contact rule",
+      "body": "A sentence beside the row when someone can only be reached one way, or not at all: text only, no email, or write someone else instead. Set on their own card."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--lens",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/lens",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "MINE · STUDIO",
+      "body": "STUDIO shows everyone the studio can reach. MINE narrows to your own projects. The lens only filters which rows show. It never hides a fact from a row."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--chips",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/chips",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Everyone · Clients · Crew · Makers · Studio · Firms",
+      "body": "Six groups replace the old eleven roles. Crew opens to trade: electrical, plumbing, cabinetry, and more. A narrower search is one chip away, not a room."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--person--editing-details",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/person",
+    "persona": "all",
+    "contentType": "helpArticle",
+    "helpArticleContent": {
+      "title": "Editing someone’s details",
+      "oneSentenceAnswer": "Open their card and choose Edit. People with a Patina account manage their own name, email, and phone; everything else on the card is yours to keep current.",
+      "body": [
+        {
+          "_type": "block",
+          "_key": "phb1",
+          "style": "normal",
+          "markDefs": [],
+          "children": [
+            {
+              "_type": "span",
+              "_key": "phb1s1",
+              "text": "It's the same door everywhere in People: open their card, choose Edit, change what changed, save. The one exception is a person with a Patina account: their name, email, and phone live in their own account, not on your card to change."
+            }
+          ]
+        },
+        {
+          "_type": "block",
+          "_key": "phb2",
+          "style": "normal",
+          "markDefs": [],
+          "children": [
+            {
+              "_type": "span",
+              "_key": "phb2s1",
+              "text": "Reach & access is the card's own record of how to reach this person and what they can open. Channels, the contact rule, and access grants live here, and read the same way everywhere else on the card shows them, never re-typed per project."
+            }
+          ]
+        },
+        {
+          "_type": "block",
+          "_key": "phb3",
+          "style": "normal",
+          "markDefs": [],
+          "children": [
+            {
+              "_type": "span",
+              "_key": "phb3s1",
+              "text": "Record consent whenever someone agrees to texts or email: how they agreed, and the evidence behind it: a form, a note from the site kickoff, a reply. One record per person and channel; an opt-out is kept, never erased, even after a fresh consent replaces it."
+            }
+          ]
+        },
+        {
+          "_type": "block",
+          "_key": "phb4",
+          "style": "normal",
+          "markDefs": [],
+          "children": [
+            {
+              "_type": "span",
+              "_key": "phb4s1",
+              "text": "Mint access to open a field link or a similar door. It names exactly what it opens and for how long, tied to the job's own window rather than a fixed clock. Revoke is a two-step act with an optional reason, and it closes the door immediately."
+            }
+          ]
+        },
+        {
+          "_type": "block",
+          "_key": "phb5",
+          "style": "normal",
+          "markDefs": [],
+          "children": [
+            {
+              "_type": "span",
+              "_key": "phb5s1",
+              "text": "A contact rule says how not to reach someone: text only, no email, or route every message to someone else instead. It answers a different question than the channels above it: a channel says how, a rule says how not, so the two are never merged into one line."
+            }
+          ]
+        },
+        {
+          "_type": "block",
+          "_key": "phb6",
+          "style": "normal",
+          "markDefs": [],
+          "children": [
+            {
+              "_type": "span",
+              "_key": "phb6s1",
+              "text": "Authority on a seat says what this person can approve on that job: signs money to a limit, selections, prepares only. It belongs to the seat, not the person, because the same name can carry a different authority on a different job."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--person--consent",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/person/consent",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Record consent",
+      "body": "How and when someone agreed to texts or email: the method, and the evidence behind it. One record per person and channel, kept even after they opt out."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--person--access-grant",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/person/access-grant",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Mint access",
+      "body": "Opens exactly what it says: the Call Sheet, the site access card, for as long as the job runs. Never billing or the agreement. Revoke closes it in two steps."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--person--authority",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/person/authority",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Authority on a seat",
+      "body": "What this person can approve on this job: signs money to a limit, selections, prepares only. Set per seat: the same person can differ on another job."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--firm--intro",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/firm",
+    "persona": "all",
+    "contentType": "fieldHelper",
+    "tooltipContent": {
+      "body": "The firm's own card: who's on the crew, who signs and receives deliveries, what paper is on file, and every job they're working with this studio."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--firm--designations",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/firm/designations",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Paperwork contact · Signer · Site contact",
+      "body": "Three seats on the crew, not three people: paperwork contact gets the compliance chase, signer executes for the firm, site contact is who the crew calls."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--people--firm--paper",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/people/firm/paper",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Paper",
+      "body": "Current, lapsing, lapsed, or not on file: the firm's own compliance documents. A lapsed document blocks site access, payment, or a draw until it's renewed."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--call-sheet--site-access--intro",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/call-sheet/site-access",
+    "persona": "all",
+    "contentType": "fieldHelper",
+    "tooltipContent": {
+      "body": "Who gets onto the job site, how, and who to call first. Studio-only. Nothing here is shown to the client, and no code is stored on Patina."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--call-sheet--site-access--told",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/call-sheet/site-access/told",
+    "persona": "all",
+    "contentType": "tooltip",
+    "tooltipContent": {
+      "eyebrow": "Who was told",
+      "body": "Every time the way in changes, a new lockbox version or a different key holder, this logs who was told, by whom, and when, so nothing changes silently."
+    }
+  },
+  {
+    "_id": "helpContent.designer-portal--document--call-sheet--bring-forward--intro",
+    "_type": "helpContent",
+    "surfaceKey": "designer-portal/document/call-sheet/bring-forward",
+    "persona": "all",
+    "contentType": "fieldHelper",
+    "tooltipContent": {
+      "body": "Bring people who worked a past job onto this one. Pick from the rolodex, and any consent or opt-out they already gave comes with them, never reset to blank."
+    }
+  }
+]

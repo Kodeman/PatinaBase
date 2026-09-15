@@ -84,6 +84,7 @@ describe('client middleware Universal Link exemption', () => {
     ['/evidence', `/evidence/${'a'.repeat(64)}`],
     ['/field', `/field/sr_abc123`],
     ['/pay', `/pay/${'a'.repeat(64)}`],
+    ['/paperwork', `/paperwork/${'a'.repeat(64)}`],
   ])('stamps no-store + noindex on the %s bearer surface too', async (_name, pathname) => {
     const response = (await middleware({
       headers: new Headers({ host: 'localhost:3002' }),
@@ -192,6 +193,32 @@ describe('client middleware Universal Link exemption', () => {
       nextUrl: {
         origin: 'http://localhost:3002',
         pathname: `/trade/${'a'.repeat(64)}`,
+        search: '',
+        searchParams: new URLSearchParams(),
+      },
+    } as never);
+    expect(NextResponse.redirect).not.toHaveBeenCalled();
+    expect(response).toBeDefined();
+    expect(
+      JSON.stringify((NextResponse.redirect as jest.Mock).mock.calls),
+    ).not.toContain('callbackUrl');
+    const headers = (response as unknown as { headers: Map<string, string> })
+      .headers;
+    for (const value of headers.values()) {
+      expect(value).not.toContain('a'.repeat(64));
+    }
+  });
+
+  // PR-a / VISION V10 — the firm's paperwork contact opens this link from an
+  // email on an office phone with no Patina account. A sign-in redirect is a
+  // dead end, and a token in a callbackUrl would park a live upload credential
+  // in a query string, in browser history, and in any log of the sign-in URL.
+  it('lets an unauthenticated guest through to /paperwork/[token] without a sign-in redirect', async () => {
+    const response = await middleware({
+      headers: new Headers({ host: 'localhost:3002' }),
+      nextUrl: {
+        origin: 'http://localhost:3002',
+        pathname: `/paperwork/${'a'.repeat(64)}`,
         search: '',
         searchParams: new URLSearchParams(),
       },

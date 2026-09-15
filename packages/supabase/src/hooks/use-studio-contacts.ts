@@ -1509,6 +1509,11 @@ export interface StudioComplianceDocument {
   superseded_by: string | null;
   source: 'studio' | 'field_link' | string;
   inbound: boolean;
+  /** Spec §6/§7 — the refusal, kept with the row. A rejected document is NEVER
+   *  deleted: it is the record of what was tried and refused (00637). */
+  rejected_by: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -1614,7 +1619,18 @@ export function retainedComplianceDocuments(
     return false;
   };
 
-  return rows.filter((doc) => !doc.superseded_by || !retired(doc));
+  // PAPER NOBODY CHECKED IS NOT PAPER THE STUDIO HOLDS (W4 r1 QA-B1 /
+  // MAJOR-2), the SQL's own predicate, here where the browser filters. An
+  // upload through the paperwork door (00637) lands `inbound, verified_at
+  // NULL` and a refused one keeps `rejected_at`; `compliance_state()` counts
+  // neither, so the card's Paper table may not list them beside verified paper
+  // as though the studio held them — the queue band above it is where a
+  // pending upload is read, and it asks a different question. A document the
+  // STUDIO recorded itself is held the moment it is typed.
+  const held = (doc: StudioComplianceDocument) =>
+    !doc.rejected_at && !(doc.inbound && !doc.verified_at);
+
+  return rows.filter((doc) => held(doc) && (!doc.superseded_by || !retired(doc)));
 }
 
 /**
@@ -1720,7 +1736,7 @@ export function useComplianceState(holderId: string | null | undefined) {
   });
 }
 
-function invalidateComplianceFanout(
+export function invalidateComplianceFanout(
   queryClient: ReturnType<typeof useQueryClient>,
   holderId: string,
 ) {

@@ -178,6 +178,9 @@ export interface DesignerIdentity {
   studioLogoUrl?: string;
   designerName: string;
   designerEmail: string | null;
+  /** The studio org the letter goes out from, when one resolved. It names the
+   *  book an out touch may be filed in, and nothing else (W4 r1 B-2). */
+  studioId?: string | null;
 }
 
 export type MintTokenResult = { token: string } | { error: string };
@@ -225,6 +228,8 @@ export interface TradeRfqSendDeps {
     html: string;
     replyTo?: string;
     metadata: Record<string, unknown>;
+    /** The sending studio, so the out touch lands in its own book (B-2). */
+    organizationId?: string | null;
   }) => Promise<SendEmailResult>;
   /**
    * Persist the send-time stamp: party_email always, sentAt if unset, and
@@ -387,6 +392,7 @@ export async function handleTradeRfqSend(
       html: rendered.html,
       replyTo: identity.designerEmail ?? undefined,
       metadata: { rfq_request_id: request.id, party_id: request.partyId },
+      organizationId: identity.studioId ?? null,
     });
   } catch (err) {
     // e.g. RESEND_API_KEY missing and EMAIL_DEV_MODE not set locally.

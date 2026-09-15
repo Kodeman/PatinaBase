@@ -27,6 +27,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { partyKindOwesPaper, getFieldTradeLabel } from "@patina/types";
 import {
   COMPLIANCE_DOC_TYPE_LABELS,
+  NO_TOUCH_SENTENCE,
+  firmEngagementWindowEnd,
   indexComplianceNotices,
   useAffiliations,
   useComplianceDocuments,
@@ -69,6 +71,9 @@ import {
   CHASE_ANY_PAPER_PHRASE,
 } from "./compliance-table";
 import { RecordDocumentSheet } from "./record-document-sheet";
+import { InboundQueueBand } from "./inbound-queue-band";
+import { PaperworkLinkAct } from "./paperwork-link-act";
+import { LastTouchLine } from "./touch-line";
 import {
   useChaseTheRenewal,
   chaseConsequenceSentence,
@@ -386,6 +391,19 @@ export function CompanyCard({
   const firmGrantSubjectIds = useMemo(
     () => (card?.id ? [card.id] : []),
     [card?.id],
+  );
+
+  /**
+   * R-AD — THE DATE THE MINT ACT NAMES, read off the same seats the card
+   * already holds. It is `mint_paperwork_link`'s own derivation (the latest
+   * `on_site_to` / `warranty_until` across the firm's OPEN seats at this
+   * studio), so the sentence on the face and the date the RPC writes are one
+   * reckoning rather than two. NULL is R-AD's whole case: there is nothing to
+   * borrow from and the studio says the day out loud.
+   */
+  const firmWindowEnd = useMemo(
+    () => firmEngagementWindowEnd(allSeats ?? [], firmId),
+    [allSeats, firmId],
   );
 
   /** SPEC §5.3 #8 / CR-10 — the first job and its year, off the same seats. */
@@ -812,6 +830,16 @@ export function CompanyCard({
       {/* R3 — Paper. Always printed; R-P fixes the order inside it. */}
       <section className={REGION} data-company-paper>
         <h3 className={REGION_HEAD}>Paper</h3>
+        {/* Spec §6 — paper the FIRM sent, waiting for the studio's check. It
+            prints ABOVE the table and OUTSIDE the `owesPaper` branch: a firm
+            the studio never asked paper of owes no paper WORD (R-A / C13), but
+            a document that has actually arrived through a door the studio
+            itself opened must never be invisible. */}
+        <InboundQueueBand
+          holderId={card.id}
+          firmName={name}
+          onAnnounce={announce}
+        />
         {!owesPaper ? (
           <p className="t-body-sm text-[var(--ink-subtle)]">
             {NO_PAPER_OWED_SENTENCE}
@@ -900,6 +928,15 @@ export function CompanyCard({
               >
                 Chase the renewal
               </DocumentAction>
+              {/* PR-a / V10 — the firm's own door onto its paper. R-AD's end
+                  date is chosen out loud inside the band this opens. */}
+              <PaperworkLinkAct
+                companyId={card.id}
+                firmName={name}
+                windowEnd={firmWindowEnd}
+                onAnnounce={announce}
+                now={today}
+              />
             </DocumentActionRow>
             {chased && (
               <p className="t-body-sm mt-1 text-[var(--ink-subtle)]">
@@ -1052,6 +1089,17 @@ export function CompanyCard({
             {historySentence}
           </p>
         )}
+        {/* E13 / direction §7 P3 — the last contact the rails actually made on
+            this FIRM's own lines (office, dispatch, AP), with the decision it
+            carried and whether the sender had the standing to carry it. A
+            firm's crew are touched on their own cards, not here. */}
+        <p className="t-body-sm text-[var(--ink)]">
+          <LastTouchLine
+            subjectIds={firmGrantSubjectIds}
+            subjectType="company"
+            fallback={NO_TOUCH_SENTENCE}
+          />
+        </p>
         <p className="t-body-sm text-[var(--ink)]">
           {card.studio_verdict ?? NO_VERDICT_SENTENCE}
         </p>

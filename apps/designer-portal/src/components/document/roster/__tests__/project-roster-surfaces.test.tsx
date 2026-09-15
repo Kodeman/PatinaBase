@@ -35,6 +35,52 @@ jest.mock('@patina/supabase', () => {
   const BID = ['prospect', 'invited', 'bidding', 'declined', 'no_response'];
   const DONE = ['closeout', 'warranty', 'off_job', 'retired'];
   return {
+  // ── W4/P3 — E13 touches, CRM-23 notices, the paperwork door, the queue ──
+  useTouches: () => ({ data: [] }),
+  useLastTouch: () => ({ data: null }),
+  useRecordNotice: () => ({
+    mutateAsync: async () => ({
+      id: 'touch-1',
+      what: 'x',
+      recorded_at: '2026-09-15T00:00:00Z',
+      recorded_by: null,
+      told_names: [],
+    }),
+    isPending: false,
+  }),
+  asNoticeError: (e: unknown) =>
+    e instanceof Error ? e.message : String(e ?? ''),
+  lastInboundDecision: (
+    rows: ReadonlyArray<{ direction: string; decision_class: string }> | null | undefined,
+  ) =>
+    (rows ?? []).find(
+      (r) => r.direction === 'in' && r.decision_class !== 'none',
+    ) ?? null,
+  inboundDecisionSentence: (t: { decision_class: string; authority_check: string } | null) =>
+    t
+      ? `A ${t.decision_class} decision came in.${
+          t.authority_check === 'failed_no_authority'
+            ? ' Received, not authority.'
+            : ''
+        }`
+      : null,
+  touchSentence: () => 'Last touch 12 Sep 2026, by text.',
+  NO_TOUCH_SENTENCE: 'No contact on the record yet.',
+  useInboundDocuments: () => ({ data: [] }),
+  useConfirmInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRejectInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  inboundQueueHeading: (n: number) =>
+    `${n} document${n === 1 ? '' : 's'} waiting for your check`,
+  inboundDocumentLine: (
+    d: { doc_type: string },
+    firm: string,
+  ) => `${d.doc_type}, uploaded by ${firm}.`,
+  usePaperworkLinks: () => ({ data: [] }),
+  useMintPaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
+  thirtyDaysOut: () => '2026-10-15',
+  firmEngagementWindowEnd: () => null,
     // r21 MAJOR-1 / major-2 (R-BS) — PR-n standing, read before the press.
     // 00634 refuses the close of a seat carrying an OPEN money or
     // draw-certify grant to anyone who is not an owner or an admin.

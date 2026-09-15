@@ -120,16 +120,24 @@ describe('query keys · one canonical prefix per entity', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('access grants · the revoke routing table', () => {
-  it('names all eleven tiers, so a new tier cannot be silently unrouted', () => {
+  it('names all twelve tiers, so a new tier cannot be silently unrouted', () => {
     expect(Object.keys(ACCESS_GRANT_REVOKE_ROUTES).sort()).toEqual(
       [...ALL_ACCESS_GRANT_TIERS].sort(),
     );
   });
 
-  it('routes only the four tiers that have a revoke RPC reachable from a grant row', () => {
+  it('routes only the five tiers that have a revoke RPC reachable from a grant row', () => {
     const routable = ALL_ACCESS_GRANT_TIERS.filter(isAccessGrantRevokable);
+    // W4/P3 — 00637's paperwork link is the fifth: `revoke_paperwork_link`
+    // takes the TOKEN id, which is exactly the grant row's natural key.
     expect([...routable].sort()).toEqual(
-      ['doc_share', 'field_link', 'plan_link', 'project_review'].sort(),
+      [
+        'doc_share',
+        'field_link',
+        'paperwork_link',
+        'plan_link',
+        'project_review',
+      ].sort(),
     );
   });
 

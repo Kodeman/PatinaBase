@@ -549,6 +549,9 @@ Deno.serve(async (req: Request) => {
         category: 'operational',
         notificationType: 'po_sent',
         templateId: 'po-sent',
+        // The sending studio (W4 r1 B-2): a vendor's address can sit on
+        // several studios' cards, and the out touch belongs to this one.
+        organizationId: identity?.studioId ?? undefined,
         attachments: [
           { filename: `${poNumber}.pdf`, content: encodeBase64(attachmentBytes) },
         ],

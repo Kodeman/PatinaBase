@@ -205,6 +205,8 @@ Deno.serve(async (req: Request) => {
       category: 'operational',
       notificationType: 'quote_request',
       templateId: 'quote-request',
+      // The sending studio (W4 r1 B-2).
+      organizationId: identity?.studioId ?? undefined,
       metadata: { quote_request_id: request.id, vendor_id: request.vendor_id },
     });
   } catch (err) {

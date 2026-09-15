@@ -274,7 +274,18 @@ export function DoorGate({
           invoiceId: bundleOffer.invoiceId,
           amountCents: bundleOffer.amountCents,
           label: bundleOffer.label,
-          payPath: `/pay/${encodeURIComponent(bundleOffer.payToken)}`,
+          // THE RELOAD PATH NAMES THE LETTER, NOT A TOKEN (W4 r1 B-1). Since
+          // 00636 the pay address is stored as a hash and only a producer can
+          // emit it; the bundle is a STABLE read and may not mint, so 00638
+          // stopped it carrying one. This is her own house page, and the
+          // deposit letter stands in the letterbox on it — `?invoice=<id>`
+          // folds the slot to that letter, which is where the door's own R50
+          // note already says the deposit lives after the visit it was signed
+          // in. The in-session offer above still carries the live
+          // `/pay/<token>` the sign route minted.
+          payPath: bundleOffer.payToken
+            ? `/pay/${encodeURIComponent(bundleOffer.payToken)}`
+            : `/?invoice=${encodeURIComponent(bundleOffer.invoiceId)}`,
         }
       : null);
 

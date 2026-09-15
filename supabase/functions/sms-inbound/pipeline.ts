@@ -712,10 +712,16 @@ async function authorityVerdictFor(
 }
 
 /** The class and the authority verdict for a message being FILED against an
- *  open item. A coordination item is a client_decisions row and carries its own
- *  court: a message filing it from a seat that is not the court is
- *  failed_unknown_sender — the approval arrived from someone the decision was
- *  never put to. */
+ *  open item. A coordination item is a client_decisions row and MAY carry a
+ *  court — `court_party_id` is an optional pointer at one seat, and every
+ *  coordination item on the seeded book has none. A message filing an item
+ *  whose court NAMES ANOTHER SEAT is failed_unknown_sender: the approval
+ *  arrived from someone the decision was never put to. An item with no named
+ *  court was never put to anyone in particular, so it is answered by the
+ *  sender's own authority instead — reading it as a wrong sender filled the
+ *  one index built to surface real failures
+ *  (idx_studio_touches_failed_authority) with false accusations, which is
+ *  CRM-22's harm turned around (W4 r1 M-1). */
 async function filedDecisionFacts(
   supabase: SupabaseClient,
   target: { kind: string; id: string } | undefined,
@@ -744,7 +750,13 @@ async function filedDecisionFacts(
     | null;
   const decisionClass = COORDINATION_CLASS[row?.coordination_kind ?? ""] ??
     "selection";
-  if (!row || (row.court_party_id ?? null) !== partyId) {
+  if (!row) {
+    // The item could not be read at all: fail closed on the identity, as
+    // before.
+    return { decisionClass, authorityCheck: "failed_unknown_sender" };
+  }
+  const court = row.court_party_id ?? null;
+  if (court !== null && court !== partyId) {
     return { decisionClass, authorityCheck: "failed_unknown_sender" };
   }
   return {
@@ -954,6 +966,18 @@ export async function processInbound(
         disposition: "opt_out_incomplete",
       };
     }
+    // AN INBOUND STOP IS A CONTACT AS WELL AS A CONSENT ACT (W4 r1 M-4).
+    // The refusal is written to the consent record above; this is the other
+    // question the room asks — who said what, when (CRM-23). It is the most
+    // consequential message a seat sends, and it was the one outcome that
+    // attributed a message to a seat and filed no touch.
+    await recordInboundTouch(
+      supabase,
+      conv.party_id,
+      messageId,
+      { decisionClass: "none", authorityCheck: "n/a" },
+      nowIso,
+    );
     // Twilio Advanced Opt-Out already auto-replied — do NOT reply.
     return { status: 200, twiml: twimlBody(), disposition: "opted_out" };
   }
@@ -1085,6 +1109,14 @@ export async function processInbound(
   if (upper === "HELP" || upper === "INFO") {
     const studio = parties[0] ? (await resolveStudioName(supabase, parties[0].project_id)) : null;
     const help = await renderSms(supabase, "sms_help", { studio_name: studio ?? "your design studio" });
+    // Attributed to a seat, so it is a touch (W4 r1 M-4).
+    await recordInboundTouch(
+      supabase,
+      conv.party_id,
+      messageId,
+      { decisionClass: "none", authorityCheck: "n/a" },
+      nowIso,
+    );
     return await reply(supabase, conv.id, help || "Patina relays project updates. Reply STOP to opt out.", conv.party_id, conv.active_project_id, "help");
   }
 
@@ -1171,6 +1203,15 @@ export async function processInbound(
       }
       if (!pendingText && pendingMedia.length === 0) {
         await stampMessage(supabase, effectiveMessageId, pick.party_id, pick.project_id, { path: "menu", disambiguated: true });
+        // The message is stamped with a seat and a project one statement
+        // above; the touch follows it (W4 r1 M-4).
+        await recordInboundTouch(
+          supabase,
+          pick.party_id,
+          effectiveMessageId,
+          { decisionClass: "none", authorityCheck: "n/a" },
+          nowIso,
+        );
         return await reply(supabase, conv.id,
           `Got it — working on ${projectNames[pick.project_id] ?? "that project"}. Text me your update.`,
           pick.party_id, pick.project_id, "project_chosen");

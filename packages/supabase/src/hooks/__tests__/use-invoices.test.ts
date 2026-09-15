@@ -19,10 +19,11 @@ vi.mock('@supabase/ssr', () => ({
 }));
 
 const invalidateQueries = vi.fn();
+const setQueryData = vi.fn();
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries }),
+  useQueryClient: () => ({ invalidateQueries, setQueryData }),
 }));
 
 // Import AFTER mocks.
@@ -43,6 +44,7 @@ import {
   useSendInvoice,
   useVoidInvoice,
   useInvoiceLink,
+  useRegenerateInvoiceLink,
   type CreateDraftInvoiceInput,
   type CreateDraftStudioInvoiceInput,
   type DraftLineInput,
@@ -1048,5 +1050,27 @@ describe("useInvoiceLink", () => {
     await expect(
       (useInvoiceLink("inv-1") as unknown as QueryConfig).queryFn(),
     ).resolves.toEqual({ token: TOKEN, status: "closed" });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// W4 round-1 review M-5 — the mint is the only authority on the address
+// ─────────────────────────────────────────────────────────────────────────────
+describe('useRegenerateInvoiceLink', () => {
+  it('writes the minted token to the cache and never invalidates it away', () => {
+    const config = useRegenerateInvoiceLink() as unknown as {
+      onSuccess: (
+        link: { token: string; status: string },
+        vars: { invoiceId: string },
+      ) => void;
+    };
+    const link = { token: 'a'.repeat(64), status: 'active' as const };
+    config.onSuccess(link, { invoiceId: 'inv-1' });
+
+    expect(setQueryData).toHaveBeenCalledWith(['invoice-link', 'inv-1'], link);
+    // 00636 froze invoice_links.token at NULL, so a refetch of get_invoice_link
+    // parses to null and the address the designer just minted would vanish from
+    // under the Copy control.
+    expect(invalidatedKeys()).not.toContainEqual(['invoice-link', 'inv-1']);
   });
 });

@@ -17159,6 +17159,18 @@ END $g$;
 
 -- 00637_paperwork_upload_door.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.compliance_state(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.compliance_state(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.assert_paperwork_token_company() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -17279,6 +17291,18 @@ END $g$;
 
 -- 00637_paperwork_upload_door.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.access_grants_invoice_links() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.access_grants_invoice_links() TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
   REVOKE ALL ON TABLE public.v_access_grants FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -17304,6 +17328,30 @@ END $g$;
 -- 00637_paperwork_upload_door.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.paperwork_link_storage_context(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00638_pay_link_readers_reheaded.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.issue_agreement_draw_invoice(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00638_pay_link_readers_reheaded.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.issue_agreement_draw_invoice(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00638_pay_link_readers_reheaded.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_client_commercial_document_bundle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00638_pay_link_readers_reheaded.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_client_commercial_document_bundle(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

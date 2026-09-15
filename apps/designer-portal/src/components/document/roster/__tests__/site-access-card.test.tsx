@@ -4,7 +4,12 @@
  */
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { SiteAccessCard, gateControllerName, keyHolderRow } from '../site-access-card';
+import {
+  SiteAccessCard,
+  gateControllerName,
+  keyHolderRow,
+  wayInFact,
+} from '../site-access-card';
 import type { CallSheetProjection, CallSheetRow } from '@/lib/document/roster-derivation';
 
 const updateMutate = jest.fn();
@@ -13,6 +18,52 @@ let card: unknown = null;
 let projectRow: unknown = null;
 
 jest.mock('@patina/supabase', () => ({
+  // ── W4/P3 — E13 touches, CRM-23 notices, the paperwork door, the queue ──
+  useTouches: () => ({ data: [] }),
+  useLastTouch: () => ({ data: null }),
+  useRecordNotice: () => ({
+    mutateAsync: async () => ({
+      id: 'touch-1',
+      what: 'x',
+      recorded_at: '2026-09-15T00:00:00Z',
+      recorded_by: null,
+      told_names: [],
+    }),
+    isPending: false,
+  }),
+  asNoticeError: (e: unknown) =>
+    e instanceof Error ? e.message : String(e ?? ''),
+  lastInboundDecision: (
+    rows: ReadonlyArray<{ direction: string; decision_class: string }> | null | undefined,
+  ) =>
+    (rows ?? []).find(
+      (r) => r.direction === 'in' && r.decision_class !== 'none',
+    ) ?? null,
+  inboundDecisionSentence: (t: { decision_class: string; authority_check: string } | null) =>
+    t
+      ? `A ${t.decision_class} decision came in.${
+          t.authority_check === 'failed_no_authority'
+            ? ' Received, not authority.'
+            : ''
+        }`
+      : null,
+  touchSentence: () => 'Last touch 12 Sep 2026, by text.',
+  NO_TOUCH_SENTENCE: 'No contact on the record yet.',
+  useInboundDocuments: () => ({ data: [] }),
+  useConfirmInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRejectInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  inboundQueueHeading: (n: number) =>
+    `${n} document${n === 1 ? '' : 's'} waiting for your check`,
+  inboundDocumentLine: (
+    d: { doc_type: string },
+    firm: string,
+  ) => `${d.doc_type}, uploaded by ${firm}.`,
+  usePaperworkLinks: () => ({ data: [] }),
+  useMintPaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
+  thirtyDaysOut: () => '2026-10-15',
+  firmEngagementWindowEnd: () => null,
   // QA-R13-2: the card reads the project's own street address.
   useProject: () => ({ data: projectRow }),
   useContactRules: () => ({ data: [] }),
@@ -434,5 +485,28 @@ describe('SiteAccessCard — who to call first', () => {
         { name: 'Sam Rowe', role: 'Architect', phone: '(612) 555-0110' },
       ],
     });
+  });
+});
+
+
+/* ── CRM-23 — the fact the notice records (direction §7 P3) ───────────────── */
+
+describe('wayInFact', () => {
+  it("prints the card's own lockbox phrase verbatim, never wrapped twice", () => {
+    // `lockbox_version` carries the studio's whole phrase — `wayInSentence`
+    // prints it as-is, and so must this.
+    expect(wayInFact('2026-10-16T14:00:00Z', 'Lockbox, version 3')).toBe(
+      'The way in changed 16 Oct 2026. Lockbox, version 3.',
+    );
+  });
+
+  it('says the change without a version where the card holds none', () => {
+    expect(wayInFact('2026-10-16T14:00:00Z', null)).toBe(
+      'The way in changed 16 Oct 2026.',
+    );
+  });
+
+  it('never claims a date the card has not stamped', () => {
+    expect(wayInFact(null, '  ')).toBe('The way in changed.');
   });
 });

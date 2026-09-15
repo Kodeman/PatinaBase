@@ -27,21 +27,82 @@ const affiliationData: { current: Record<string, unknown>[] } = { current: [] };
 const rulesData: { current: unknown[] } = { current: [] };
 /** QA-R9-1 — the studio's other cards, so a routed rule can name its door. */
 const rolodexData: { current: unknown[] } = { current: [] };
+/** W4/P3 — E13's record, which outranks the rolodex's coarse last-touch date. */
+const lastTouch: { current: unknown } = { current: null };
 
 /** The acting viewer's seat in her own studio — HT-8 gates the Hours door on it. */
 let viewerStudioRole: "owner" | "admin" | "member" = "owner";
 
 jest.mock("@patina/supabase", () => ({
+  // ── W4/P3 — E13 touches, CRM-23 notices, the paperwork door, the queue ──
+  useTouches: () => ({ data: [] }),
+  useLastTouch: () => ({ data: lastTouch.current }),
+  useRecordNotice: () => ({
+    mutateAsync: async () => ({
+      id: "touch-1",
+      what: "x",
+      recorded_at: "2026-09-15T00:00:00Z",
+      recorded_by: null,
+      told_names: [],
+    }),
+    isPending: false,
+  }),
+  asNoticeError: (e: unknown) =>
+    e instanceof Error ? e.message : String(e ?? ""),
+  lastInboundDecision: (
+    rows:
+      | ReadonlyArray<{ direction: string; decision_class: string }>
+      | null
+      | undefined,
+  ) =>
+    (rows ?? []).find(
+      (r) => r.direction === "in" && r.decision_class !== "none",
+    ) ?? null,
+  inboundDecisionSentence: (
+    t: { decision_class: string; authority_check: string } | null,
+  ) =>
+    t
+      ? `A ${t.decision_class} decision came in.${
+          t.authority_check === "failed_no_authority"
+            ? " Received, not authority."
+            : ""
+        }`
+      : null,
+  touchSentence: () => "Last touch 12 Sep 2026, by text.",
+  NO_TOUCH_SENTENCE: "No contact on the record yet.",
+  useInboundDocuments: () => ({ data: [] }),
+  useConfirmInboundDocument: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useRejectInboundDocument: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  inboundQueueHeading: (n: number) =>
+    `${n} document${n === 1 ? "" : "s"} waiting for your check`,
+  inboundDocumentLine: (d: { doc_type: string }, firm: string) =>
+    `${d.doc_type}, uploaded by ${firm}.`,
+  usePaperworkLinks: () => ({ data: [] }),
+  useMintPaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
+  thirtyDaysOut: () => "2026-10-15",
+  firmEngagementWindowEnd: () => null,
   // r21 MAJOR-1 / major-2 (R-BS) — PR-n standing, read before the press.
   // 00634 refuses the close of a seat carrying an OPEN money or
   // draw-certify grant to anyone who is not an owner or an admin.
   seatCloseIsHeldForMoney: (
-    authority: ReadonlyArray<{ scope: string; effective_to: string | null }> | null | undefined,
+    authority:
+      | ReadonlyArray<{ scope: string; effective_to: string | null }>
+      | null
+      | undefined,
     isPrincipal: boolean,
   ) =>
     !isPrincipal &&
     (authority ?? []).some(
-      (g) => g.effective_to == null && ['money', 'draw_certify'].includes(g.scope),
+      (g) =>
+        g.effective_to == null && ["money", "draw_certify"].includes(g.scope),
     ),
   SEAT_CLOSE_MONEY_HELD_REASON:
     "This seat signs for money. Closing it ends that, and ending it is the principal’s. An owner or an admin of the studio can close this seat.",
@@ -49,7 +110,10 @@ jest.mock("@patina/supabase", () => ({
   useOrganizations: () => ({ data: [] }),
   useArchiveStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useRestoreStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useCloseProjectPartySeat: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useCloseProjectPartySeat: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
   STUDIO_CONTACT_ARCHIVE_STANDING_SENTENCE:
     "Only an owner or an admin of the studio may put a card away, or bring one back.",
   AUTHORITY_SCOPE_LABELS: {
@@ -229,6 +293,7 @@ function renderCard(props: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  lastTouch.current = null;
   personData.current = person();
   affiliationData.current = [
     {
@@ -628,5 +693,23 @@ describe("the Hours door on a teammate (HT-8)", () => {
     expect(
       screen.queryByRole("button", { name: "Hours" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+/* ── W4/P3 — the History region reads E13 (direction §7 P3) ───────────────── */
+
+describe("the History region's last touch", () => {
+  it("keeps the rolodex's coarse date where E13 holds nothing for them", () => {
+    renderCard();
+    expect(screen.getByText(/Last touch 17 Oct 2026\./)).toBeInTheDocument();
+  });
+
+  it("prints the RECORD instead, once a touch exists — never both", () => {
+    lastTouch.current = { id: "t1" };
+    renderCard();
+    expect(
+      screen.getByText(/Last touch 12 Sep 2026, by text\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Last touch 17 Oct 2026/)).toBeNull();
   });
 });

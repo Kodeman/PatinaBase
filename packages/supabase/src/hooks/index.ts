@@ -636,6 +636,56 @@ export type {
   AccessGrantRevokeRoute,
   RevokeAccessGrantInput,
 } from "./use-access-grants";
+// People room CRM (W4/P3) — E13 touches, CRM-23 notices, the paperwork door
+// and the inbound queue it fills.
+export {
+  useTouches,
+  useLastTouch,
+  useRecordNotice,
+  asNoticeError,
+  touchKeys,
+  touchSentence,
+  lastInboundDecision,
+  inboundDecisionSentence,
+  NO_TOUCH_SENTENCE,
+  TOUCH_CHANNEL_PHRASES,
+  TOUCH_DECISION_CLASS_LABELS,
+  TOUCH_AUTHORITY_SENTENCES,
+} from "./use-touches";
+export type {
+  StudioTouch,
+  TouchFilters,
+  TouchSubjectType,
+  TouchChannelKind,
+  TouchDecisionClass,
+  TouchAuthorityCheck,
+  RecordNoticeInput,
+  RecordedNotice,
+} from "./use-touches";
+export {
+  usePaperworkLinks,
+  useMintPaperworkLink,
+  useRevokePaperworkLink,
+  asPaperworkLinkError,
+  paperworkLinkKeys,
+  paperworkLinkUrl,
+  thirtyDaysOut,
+  firmEngagementWindowEnd,
+} from "./use-paperwork-links";
+export type {
+  PaperworkLinkToken,
+  MintPaperworkLinkInput,
+  MintedPaperworkLink,
+} from "./use-paperwork-links";
+export {
+  useInboundDocuments,
+  useConfirmInboundDocument,
+  useRejectInboundDocument,
+  asInboundDocumentError,
+  inboundDocumentKeys,
+  inboundQueueHeading,
+  inboundDocumentLine,
+} from "./use-inbound-documents";
 export {
   // Client Reviews
   useClientReviews,

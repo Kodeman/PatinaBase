@@ -7,9 +7,10 @@ import { partySmsKeys } from './use-party-sms';
 // ═══════════════════════════════════════════════════════════════════════════
 // E9 — EVERY DOOR PATINA OPENS, IN ONE SHAPE
 //
-// `public.v_access_grants` (00627) is a security_invoker UNION over the eleven
-// token tables, normalised to twelve columns. It carries NO bearer credential:
-// four of the eleven sources are closed to `authenticated` at the GRANT level
+// `public.v_access_grants` (00627, twelfth branch 00637) is a security_invoker
+// UNION over the twelve token tables, normalised to twelve columns. It carries
+// NO bearer credential:
+// four of the twelve sources are closed to `authenticated` at the GRANT level
 // and reach the view through their own narrow SECURITY DEFINER readers, which
 // return the twelve columns and never a token or a hash.
 //
@@ -24,7 +25,8 @@ const getSupabase = () => createBrowserClient();
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** The eleven tiers `v_access_grants` unions. */
+/** The twelve tiers `v_access_grants` unions. The twelfth is 00637's
+ *  firm-scoped paperwork door (PR-a / VISION V10). */
 export type AccessGrantTier =
   | 'studio_member'
   | 'client_account'
@@ -36,7 +38,8 @@ export type AccessGrantTier =
   | 'site_request'
   | 'invoice_pay'
   | 'evidence_upload'
-  | 'project_review';
+  | 'project_review'
+  | 'paperwork_link';
 
 export const ALL_ACCESS_GRANT_TIERS: readonly AccessGrantTier[] = [
   'studio_member',
@@ -50,6 +53,7 @@ export const ALL_ACCESS_GRANT_TIERS: readonly AccessGrantTier[] = [
   'invoice_pay',
   'evidence_upload',
   'project_review',
+  'paperwork_link',
 ] as const;
 
 /** The words the studio reads. "Field link", not `field_link`. */
@@ -65,6 +69,7 @@ export const ACCESS_GRANT_TIER_LABELS: Record<AccessGrantTier, string> = {
   invoice_pay: 'Invoice pay link',
   evidence_upload: 'Evidence upload',
   project_review: 'Review access',
+  paperwork_link: 'Paperwork link',
 };
 
 /** What each tier opens, in words — direction §5.1's "what it opens" column. */
@@ -80,11 +85,12 @@ export const ACCESS_GRANT_TIER_OPENS: Record<AccessGrantTier, string> = {
   invoice_pay: 'one invoice, to pay it',
   evidence_upload: 'one exception, to upload evidence',
   project_review: 'one review edition',
+  paperwork_link: "one firm's paperwork, to send it in",
 };
 
 /** A row of `public.v_access_grants` (00627). */
 export interface AccessGrant {
-  /** `<tier>:<natural key>`. TEXT, because the eleven sources' keys are not
+  /** `<tier>:<natural key>`. TEXT, because the twelve sources' keys are not
    *  all uuids. Never a token and never a hash of one. */
   grant_id: string;
   tier: AccessGrantTier | string;
@@ -148,10 +154,10 @@ export interface AccessGrantRevokeRoute {
 }
 
 /**
- * Tier → the RPC that closes it. Six of the eleven tiers have no revoke RPC at
- * all (`null`): a studio membership and a client account are ended in their own
- * rooms, and the bid / agreement / invoice / evidence tokens carry no shipped
- * revoke door. `site_request` HAS one — `site_request_revoke_access(p_request_id)`
+ * Tier → the RPC that closes it. Seven of the twelve tiers have no revoke RPC
+ * at all (`null`): a studio membership and a client account are ended in their
+ * own rooms, and the bid / agreement / invoice / evidence tokens carry no
+ * shipped revoke door. `site_request` HAS one — `site_request_revoke_access(p_request_id)`
  * — but it takes the REQUEST id, which `v_access_grants` does not carry (the
  * row's natural key is the ACCESS id), so it cannot be routed from a grant row.
  *
@@ -183,6 +189,14 @@ export const ACCESS_GRANT_REVOKE_ROUTES: Record<
   site_request: null,
   invoice_pay: null,
   evidence_upload: null,
+  // 00637's own revoke. The row is kept (spec §7 audit) and the reason is
+  // optional, so the card's two-step confirm reads the same as every other.
+  paperwork_link: {
+    rpc: 'revoke_paperwork_link',
+    idArg: 'p_token_id',
+    reasonArg: 'p_reason',
+    keySegment: 1,
+  },
 };
 
 /** The sentence a surface prints where a tier has no door to close here. */
@@ -263,7 +277,7 @@ export interface RevokeAccessGrantInput {
 
 /**
  * Close one door, through the tier's OWN revoke RPC. Nothing here writes a
- * token table directly — `v_access_grants` is a read model and the eleven
+ * token table directly — `v_access_grants` is a read model and the twelve
  * sources each keep their own gate.
  */
 export function useRevokeAccessGrant() {
@@ -309,6 +323,14 @@ export function useRevokeAccessGrant() {
       // same token. `useRevokeFieldLink` tells the sheet's own field-link list;
       // this route must too, or the sheet keeps listing a door that is shut.
       void queryClient.invalidateQueries({ queryKey: partySmsKeys.all });
+      // W4 r1 MAJOR-3: the twelfth tier's subject IS the company card, and the
+      // company card mounts the grants list and the paperwork mint act
+      // together. `useMintPaperworkLink` invalidates both directions; the
+      // revoke told only its own list, so PaperworkLinkAct went on printing
+      // "<firm> already holds a live paperwork link" about a door just shut.
+      // The literal key, not `paperworkLinkKeys` — use-paperwork-links.ts
+      // imports `accessGrantKeys` from here, and importing back is a cycle.
+      void queryClient.invalidateQueries({ queryKey: ['paperwork-links'] });
     },
   });
 }
