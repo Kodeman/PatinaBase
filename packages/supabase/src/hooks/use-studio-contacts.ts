@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getPartyKindLabel } from '@patina/types';
 import { createBrowserClient } from '../client';
 import { partyBidKeys, type ProjectParty } from './use-coordination';
 import { clientHouseholdKeys } from './use-households';
@@ -1920,7 +1921,7 @@ export function useResolvedContactId(contactId: string | null | undefined) {
   });
 }
 
-/** `merge_studio_contacts()`'s thirteen named refusals, as sentences. */
+/** `merge_studio_contacts()`'s fourteen named refusals, as sentences. */
 const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   merge_contact_not_found: 'One of these cards is no longer in the book.',
   merge_same_card: 'That is one card, not two.',
@@ -1954,14 +1955,24 @@ const MERGE_REFUSAL_SENTENCES: Record<string, string> = {
   // job in `details`.
   merge_seat_card_other_studio:
     'One of these cards holds a seat on a job in another studio’s book, so the seat cannot be moved. Ask that studio to take the card off the seat, then merge.',
+  // r18 MAJOR-1 — both cards hold an OPEN seat of the same kind on one job.
+  // The fold would stamp one card on both rows, and each row can carry its
+  // own open money grant, so the Call Sheet would print the same person twice
+  // with two different signing figures. Which grant survives is the
+  // principal's ruling (PR-n), not a repoint's, so the merge refuses and
+  // names the repair the room already offers.
+  merge_seat_collision:
+    'Both cards hold an open seat of the same kind on the same job, and one person cannot hold the job twice. Close one of these two seats first, then merge.',
 };
 
 /**
  * Render a merge refusal as a sentence; anything else comes back as itself.
  *
- * `details` is read for the one refusal that can NAME the thing standing in
- * the way — the job with no studio — because "record that job's studio first"
- * is an act the studio cannot take without knowing which job (r11 MAJOR-2).
+ * `details` is read for the three refusals that can NAME the thing standing in
+ * the way — the job with no studio, the job in another studio's book, and the
+ * job where both cards hold an open seat of the same kind — because "record
+ * that job's studio first" / "close one of these two seats first" is an act
+ * the studio cannot take without knowing which job (r11 MAJOR-2, r18 MAJOR-1).
  */
 export function asMergeError(error: unknown): string {
   const message =
@@ -1976,6 +1987,16 @@ export function asMergeError(error: unknown): string {
     return (
       `One of these cards holds a seat on ${detail}, which records no studio, ` +
       `so the seat cannot be moved. Record that job’s studio first, then merge.`
+    );
+  }
+  // DETAIL is '<job> · <party_kind>', because "close one of these two seats"
+  // is an act the studio cannot take without knowing which job and which kind.
+  if (message.includes('merge_seat_collision') && detail) {
+    const [job, kind] = detail.split(' · ');
+    const seat = kind ? `${getPartyKindLabel(kind)} seat` : 'seat';
+    return (
+      `Both cards hold an open ${seat} on ${job}, and one person cannot hold ` +
+      `the job twice. Close one of these two seats first, then merge.`
     );
   }
   if (message.includes('merge_seat_card_other_studio') && detail) {

@@ -2583,7 +2583,7 @@ export function useSetPartyBid() {
         // the day the seat actually left the job alone.
         if (patch.bidOutcome === 'withdrawn' && written.moved) {
           dbPatch.off_job_at = new Date().toISOString().slice(0, 10);
-        } else if (written.stage) {
+        } else if (written.stage && previous.bidOutcome === 'withdrawn') {
           // R-BR (r17) — AND A SEAT BACK IN THE BIDDING IS NOT A SEAT THAT
           // LEFT THE JOB. The stamp above was one-way: nothing in the repo
           // ever cleared `off_job_at`, and `off_job` is not in
@@ -2595,8 +2595,23 @@ export function useSetPartyBid() {
           // `useProjectHousehold`'s open-seat filter went on counting the seat
           // CLOSED — three readers disagreeing about one seat, one of them
           // stating a false fact about whether the person is on the job.
-          // Guarded on a stage actually being written, so a correction that
-          // moves nothing leaves a genuine "Close this seat" date alone.
+          //
+          // GATED ON THE SEAT LEAVING `withdrawn`, WHICH IS R-BR'S OWN SCOPE
+          // ("Correcting a bid outcome away from 'withdrawn' clears
+          // off_job_at and off_job_reason"), NOT ON A STAGE BEING WRITTEN
+          // (r18 BLOCKING-1). `off_job` is deliberately absent from
+          // SEAT_STAGES_PAST_THE_BID, so the wider guard let a seat the
+          // studio closed BY HAND fall straight through it: "Close this
+          // seat" writes stage='off_job', off_job_at and the studio's own
+          // off_job_reason (useCloseProjectPartySeat), the bid editor is
+          // still offered on that row ("Change what came back"), and one
+          // press of "They declined" NULLed both columns — a sentence held
+          // nowhere else and carrying no audit row — and put the seat back on
+          // the job: the closing clause stopped printing, the row left Done
+          // for Bidding, and "Close this seat" was offered on it again. The
+          // consequence sentence beside the press promises only the move to
+          // Declined. Reopening a hand-closed seat, if the room wants it, is
+          // its own named act with its own consequence sentence.
           dbPatch.off_job_at = null;
           dbPatch.off_job_reason = null;
         }

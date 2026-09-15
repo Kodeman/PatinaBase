@@ -19,6 +19,7 @@ import {
   householdThresholdConsequence,
   householdThresholdSentence,
   HOUSEHOLD_AUTHORITY_HELD_REASON,
+  HOUSEHOLD_PICK_HELD_REASON,
   parseThresholdEntry,
 } from "../household-band";
 
@@ -796,9 +797,51 @@ describe("the change-order figure, as an act", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Add a household member" }),
     );
+    fireEvent.change(screen.getByLabelText("Who else is in this household"), {
+      target: { value: "card-chidi" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "decides the work" }));
     const act = screen.getByRole("button", { name: "Add to the household" });
     expect(act).not.toHaveAttribute("aria-disabled");
+  });
+
+  /**
+   * r18 MAJOR-1 — CR-26: a gated act is `aria-disabled` with a visible reason
+   * beside it, never `disabled`. The region's opening state carries no person,
+   * and the act used to be a native `disabled` button there: off the tab
+   * order, no `aria-disabled`, nothing on the face saying what was missing.
+   */
+  it("holds — never disables — the act before a person is chosen", () => {
+    render(<HouseholdBand {...props} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a household member" }),
+    );
+    const act = screen.getByRole("button", { name: "Add to the household" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act).not.toBeDisabled();
+    expect(act).toHaveAttribute("aria-describedby", "household-person-held");
+    expect(screen.getByText(HOUSEHOLD_PICK_HELD_REASON)).toBeInTheDocument();
+    fireEvent.click(act);
+    expect(addMemberMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      HOUSEHOLD_PICK_HELD_REASON,
+    );
+  });
+
+  it("lifts the hold, and the reason, the moment a person is chosen", () => {
+    render(<HouseholdBand {...props} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a household member" }),
+    );
+    fireEvent.change(screen.getByLabelText("Who else is in this household"), {
+      target: { value: "card-chidi" },
+    });
+    const act = screen.getByRole("button", { name: "Add to the household" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    expect(act).not.toHaveAttribute("aria-describedby");
+    expect(
+      screen.queryByText(HOUSEHOLD_PICK_HELD_REASON),
+    ).not.toBeInTheDocument();
   });
 
   it("PR-n — holds taking it away for a plain member too", () => {

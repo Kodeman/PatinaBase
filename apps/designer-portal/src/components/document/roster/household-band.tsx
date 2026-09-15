@@ -114,6 +114,18 @@ export const HOUSEHOLD_ADD_HELD_REASON =
 export const HOUSEHOLD_AUTHORITY_HELD_REASON =
   "Recording who signs for the household is the principal’s to do. An owner or an admin of the studio can write it.";
 
+/**
+ * Direction §5.5 (CR-26, roster-row.tsx:1220-1241): a gated act is
+ * `aria-disabled` with a VISIBLE reason beside it, never `disabled`. The
+ * region's opening state carries no person, and the act was natively
+ * `disabled` there — off the tab order, no `aria-disabled`, and nothing on the
+ * face saying what was missing, so a keyboard or screen-reader user reached
+ * the select, the two role buttons and "Not now" and never the act at all
+ * (r18 MAJOR-1). The consequence sentence beside it says what the press does,
+ * which is not the same as what is missing.
+ */
+export const HOUSEHOLD_PICK_HELD_REASON = "Choose someone from the book first.";
+
 /** The refusal, in the room's words rather than a validation token. */
 export const HOUSEHOLD_FIGURE_REFUSAL =
   "Write the change-order figure in dollars — 2500, or 2,500. To take the figure away, use “Take the figure away”.";
@@ -907,6 +919,14 @@ export function HouseholdBand({
               {HOUSEHOLD_ADD_HELD_REASON}
             </p>
           )}
+          {!addHeld && !personId && (
+            <p
+              id="household-person-held"
+              className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
+            >
+              {HOUSEHOLD_PICK_HELD_REASON}
+            </p>
+          )}
 
           <DocumentActionRow
             surfaceKey="call-sheet"
@@ -919,9 +939,21 @@ export function HouseholdBand({
               variant="primary"
               onClick={() => void save()}
               disabled={addHeld || !personId || addMember.isPending}
-              held={addHeld}
-              aria-describedby={addHeld ? "household-grant-held" : undefined}
-              onHeldActivate={() => setError(HOUSEHOLD_ADD_HELD_REASON)}
+              held={addHeld || !personId}
+              aria-describedby={
+                addHeld
+                  ? "household-grant-held"
+                  : !personId
+                    ? "household-person-held"
+                    : undefined
+              }
+              onHeldActivate={() =>
+                setError(
+                  addHeld
+                    ? HOUSEHOLD_ADD_HELD_REASON
+                    : HOUSEHOLD_PICK_HELD_REASON,
+                )
+              }
               loading={addMember.isPending}
               loadingLabel="Adding…"
             >

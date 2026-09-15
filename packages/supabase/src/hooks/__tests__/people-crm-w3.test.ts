@@ -208,6 +208,23 @@ describe("merge_studio_contacts (PR-o)", () => {
         "studio\u2019s book, so the seat cannot be moved. Ask that studio to take " +
         "the card off the seat, then merge.",
     );
+    // r18 MAJOR-1 — both cards hold an OPEN seat of the same kind on one job.
+    // The fold would stamp one card on both rows and each can carry its own
+    // open money grant, so the merge refuses by name and the sheet says which
+    // seat to close.
+    expect(asMergeError(new Error("merge_seat_collision"))).toMatch(
+      /Close one of these two seats first/,
+    );
+    expect(
+      asMergeError({
+        message: "merge_seat_collision",
+        details: "Okonkwo residence · client_rep",
+      }),
+    ).toBe(
+      "Both cards hold an open Client Rep seat on Okonkwo residence, and one " +
+        "person cannot hold the job twice. Close one of these two seats " +
+        "first, then merge.",
+    );
     // r13 MAJOR-1 — and no guard token reaches a face, named or not. Every
     // trigger the merge fires raises its own bare schema word, and they all
     // used to fall through to `return message` into the sheet's alert
@@ -342,6 +359,29 @@ describe("the Bidding band writes a stage with its outcome", () => {
     expect(patch.stage).toBe("bidding");
     expect(patch.off_job_at).toBeNull();
     expect(patch.off_job_reason).toBeNull();
+  });
+
+  /**
+   * r18 BLOCKING-1 — and ONLY a seat leaving `withdrawn`, which is R-BR's own
+   * scope. A seat the studio closed by hand ("Close this seat" writes
+   * stage='off_job' plus the dated reason, never a bid withdrawal) keeps that
+   * record when its bid outcome is corrected: the earlier guard asked only
+   * whether a stage was written, and `off_job` is deliberately absent from
+   * SEAT_STAGES_PAST_THE_BID, so one press of "They declined" NULLed the
+   * studio's own closing date and sentence and put the seat back on the job.
+   */
+  it("leaves a HAND-CLOSED seat's date and reason alone (r18 BLOCKING-1)", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "proj-1",
+      patch: { bidOutcome: "declined" },
+      previous: { bidOutcome: null, stage: "off_job" },
+    });
+    const patch = updated[0]?.payload ?? {};
+    expect(patch.bid_outcome).toBe("declined");
+    expect(patch.stage).toBe("declined");
+    expect(patch.off_job_at).toBeUndefined();
+    expect(patch.off_job_reason).toBeUndefined();
   });
 
   /**
