@@ -63,11 +63,47 @@
 -- row, and re-opening one is its own named act with its own consequence
 -- sentence, exactly as re-opening a hand-closed seat is.
 --
+-- ── AND ONLY THE HAND-CLOSE ACT (r21 MAJOR-2 / R-BS) ──────────────────────
+-- `off_job_at` has TWO writers in the room, not one. Beside "Close this seat"
+-- (useCloseProjectPartySeat), the Bidding band's "They withdrew" stamps
+-- `off_job_at = today` on the transition into `withdrawn`
+-- (use-coordination.ts) — which is this trigger's own WHEN clause. So the
+-- first draft made the Bidding band a second, undocumented door into this
+-- file, and measured (build/probe-r21-a, C2/C3/C4) it did two wrong things:
+--
+--   (a) a plain member RECORDING what a bidder did was refused
+--       `seat_close_money_authority_forbidden` — recording a withdrawal is not
+--       a money act, and PR-n says nothing about it; and
+--   (b) when a principal took it and then corrected it back, R-BR cleared
+--       `off_job_at` and `off_job_reason` while this file deliberately does
+--       NOT re-open the grant, so the seat came back to the job, banded live,
+--       with its money delegation closed and NO act anywhere in the room able
+--       to restore it — the Add sheet opens grants on new seats only, and
+--       add_household_member() is client / client_rep only (R-BQ).
+--
+-- R-BS rules the clamp: this trigger is the HAND-CLOSE act's, and a statement
+-- that records a withdrawal is not that act. The WHEN clause below excludes
+-- exactly the statement that moves `bid_outcome` INTO 'withdrawn'; every other
+-- path that dates a seat — the room's own Close this seat, a migration, a job,
+-- service_role — still fires it, so the invariant this file exists for holds
+-- on every close act.
+--
+-- WHAT THE CLAMP LEAVES STANDING, said plainly: a seat dated by a recorded
+-- withdrawal keeps its open grants until the principal closes the seat. A
+-- withdrawal is the BIDDER's act on the record, not the principal's act on a
+-- delegation, and PR-n reserves the second to an owner or an admin. The one
+-- reader that would otherwise print a present-tense figure over it —
+-- `useProjectAuthority` — already drops a grant whose `effective_to` was
+-- stamped by its seat leaving the job and deliberately keeps a grant still
+-- OPEN on a closed seat, "because that is a state the room should show rather
+-- than hide" (use-project-authority.ts:60-76).
+--
 -- LINEAGE: 00624 (project_party_authority, effective_to, CS5-24, and the
 -- tenant + PR-n legs on its UPDATE policy — w1b r5 MAJOR-3 / r8 BLOCKING-1) →
 -- 00629 (merge_seat_collision, r18 MAJOR-1) → 00632:713-716
 -- (set_household_threshold ending a closed seat's grant, r15 MAJOR-1) → 00634
--- → 00634 amended in place (r20 BLOCKING-1: the gate stated in the body).
+-- → 00634 amended in place (r20 BLOCKING-1: the gate stated in the body)
+-- → 00634 amended in place (r21 MAJOR-2 / R-BS: clamped to the hand-close act).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── the rule ──────────────────────────────────────────────────────────────
@@ -174,8 +210,12 @@ REVOKE ALL ON FUNCTION public.end_party_authority_at_seat_close()
   FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION public.end_party_authority_at_seat_close() IS
-  'AFTER UPDATE OF off_job_at on project_parties, on the close only (NULL -> a '
-  'date): every open grant the seat carried — every scope, not money alone — '
+  'AFTER UPDATE OF off_job_at on project_parties, on the HAND-CLOSE act only '
+  '(off_job_at NULL -> a date, and not the statement that moves bid_outcome '
+  'into ''withdrawn'' — r21 MAJOR-2 / R-BS: recording a withdrawal is the '
+  'bidder''s act on the record, not the principal''s act on a delegation, and '
+  'a seat dated that way keeps its open grants until the principal closes the '
+  'seat): every open grant the seat carried — every scope, not money alone — '
   'ends on the day the seat did, effective_to = GREATEST(effective_from, '
   'off_job_at) — 00632:713-716''s own shape, CS5-24. Makes 00629''s '
   'OPEN-SEATS-ONLY carve-out true: a closed seat really does state no second '
@@ -189,12 +229,20 @@ COMMENT ON FUNCTION public.end_party_authority_at_seat_close() IS
   '(seat_close_authority_forbidden / seat_close_money_authority_forbidden) so '
   'no closed seat can ever carry an open grant.';
 
+-- The WHEN clause is the whole of the clamp (r21 MAJOR-2 / R-BS): the close,
+-- and never the statement that records a withdrawal. Both legs are written
+-- COALESCE-first because a NULL `bid_outcome` in a bare `=` would make the
+-- whole predicate NULL, and a NULL WHEN does not fire — which would take the
+-- trigger off every seat that carries no bid at all.
 DROP TRIGGER IF EXISTS end_party_authority_at_seat_close_trg ON public.project_parties;
 CREATE TRIGGER end_party_authority_at_seat_close_trg
   AFTER UPDATE OF off_job_at
   ON public.project_parties
   FOR EACH ROW
-  WHEN (OLD.off_job_at IS NULL AND NEW.off_job_at IS NOT NULL)
+  WHEN (OLD.off_job_at IS NULL
+        AND NEW.off_job_at IS NOT NULL
+        AND NOT (COALESCE(NEW.bid_outcome, '') = 'withdrawn'
+                 AND COALESCE(OLD.bid_outcome, '') <> 'withdrawn'))
   EXECUTE FUNCTION public.end_party_authority_at_seat_close();
 
 -- ── the population already standing ───────────────────────────────────────

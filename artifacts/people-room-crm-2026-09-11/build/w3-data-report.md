@@ -6,10 +6,16 @@ Local Supabase only (`postgresql://postgres:postgres@127.0.0.1:54322/postgres`).
 
 ---
 
-## 0. The six migrations
+## 0. The seven migrations
 
 W1 ended at 00627. 00595–00620 stay reserved for the hour-tracking program and are untouched.
-W3 mints **00628–00633**.
+W3 mints **00628–00634**.
+
+> **Re-measured at HEAD, review round 21** (r21 MAJOR-3). Every count, date and list
+> in §0, §1, §2, §4, §8, §9 and §10 below was taken again against the freshly reset local
+> database on 2026-09-15 after the r21 fixes landed; the round is stated beside each
+> figure that a later round can move. Earlier rounds described this as a six-migration
+> wave and never named `00634` — the file that gates money on a seat close.
 
 | Migration | Intent |
 |---|---|
@@ -19,8 +25,9 @@ W3 mints **00628–00633**.
 | `00631_project_party_bids.sql` | direction §3.4 / R-R — the **eight** bid columns (r4 M-2; §3 has the list), the quoting-person guard, the `trade_rfq` backfill |
 | `00632_client_households.sql` | PR-c / CRM-19 — `client_households`, `designer_clients.household_id`, `add_household_member()` |
 | `00633_decision_court_widened.sql` | fixture §3 / G-13 — `client_decisions.court` gains architect, engineer, inspector, lender |
+| `00634_seat_close_ends_authority.sql` | r19 MAJOR-1 / r20 BLOCKING-1 / r21 MAJOR-2 (R-BS) — `end_party_authority_at_seat_close()` + its trigger: closing a seat BY HAND ends every open grant it carried (`effective_to = GREATEST(effective_from, off_job_at)`), the gate is stated in the definer's own body (a caller must be an active member of the recorded studio and a co-member of the designer, and an owner or admin where the seat carries an open `money` / `draw_certify` grant, else `seat_close_authority_forbidden` / `seat_close_money_authority_forbidden`), and the trigger is clamped to the hand-close act — never the statement that records a bid withdrawal. Plus the one-off backfill over seats already closed |
 
-New SQL suite: `supabase/tests/people/w3_merge_sweep_household_test.sql` (one transaction, ROLLBACKed). Grown by the review rounds: **12 blocks** as of r7 — block 10 pins r6's five merge findings (R-BN) and block 11 + its negative control pin r7's B-1 and M-1.
+New SQL suite: `supabase/tests/people/w3_merge_sweep_household_test.sql` (one transaction, ROLLBACKed). Grown by the review rounds: **21 numbered blocks as of r21** — `1 · 1b · 1c · 2 · 2b · 3 · 4 · 5 · 6 · 7 · 8 · 9 · 10 · 11 · 12 · 13 · 13b · 13c · 13d · 13e · 13f`, and **13f is the last**. Block 10 pins r6's five merge findings (R-BN); block 11 + its negative control pin r7's B-1 and M-1; 13d pins r18 MAJOR-1 / r19 MAJOR-1; 13e pins r20 BLOCKING-1 (who may fire 00634's trigger); 13f pins r21 MAJOR-2 / R-BS (a recorded withdrawal is not the hand-close act).
 
 ---
 
@@ -38,11 +45,11 @@ New SQL suite: `supabase/tests/people/w3_merge_sweep_household_test.sql` (one tr
 | `assert_party_card_not_merged()` + `assert_party_card_not_merged_trg` | BEFORE INSERT OR UPDATE OF `studio_contact_id, company_id` on `project_parties` |
 | `archive_studio_contact(uuid) → timestamptz` | SECURITY DEFINER, owner/admin only (00417's shipped rule), idempotent |
 | `restore_studio_contact(uuid) → timestamptz` | SECURITY DEFINER, owner/admin only |
-| `people_directory` | re-issued v5: 00626:1388-1909 **verbatim**, plus one line — `AND sc.merged_into IS NULL` on the CONTACTS branch |
+| `people_directory` | re-issued v5: 00626:1388-1909 plus **two** deltas, both enumerated in the file's own banner (`00629:2716-2718`) — (1) the CONTACTS branch's WHERE gains `AND sc.merged_into IS NULL`, so a folded card leaves the Directory; (2) the TEAM branch's WHERE gains the tenant leg every other branch already carried. §7 and §10.1 argue about whether the second shipped: it did (r21 MAJOR-3, re-measured at HEAD) |
 
 ### `merge_studio_contacts(p_survivor, p_merged, p_matched_on)` — what one transaction does
 
-Refusals, in order: `merge_contact_not_found` · `merge_same_card` · `merge_matched_on_invalid` · `merge_other_studio` · `merge_not_a_member` · `merge_already_merged` · `merge_survivor_already_merged` · `merge_survivor_archived` (r5 M-4, `00629:983`) · `merge_kind_mismatch` · `merge_two_logins` (r4 B-1, `00629:1011`) · `merge_contact_rule_conflict` (r4 B-2 / r5 M-2, `00629:1092`). Eleven, not eight: the last three were all review findings and all three are pinned by the SQL suite.
+Refusals, in order: `merge_contact_not_found` · `merge_same_card` · `merge_matched_on_invalid` · `merge_other_studio` · `merge_not_a_member` · `merge_already_merged` · `merge_survivor_already_merged` · `merge_survivor_archived` (r5 M-4, `00629:983`) · `merge_kind_mismatch` · `merge_two_logins` (r4 B-1, `00629:1011`) · `merge_contact_rule_conflict` (r4 B-2 / r5 M-2, `00629:1092`) · `merge_seat_on_studioless_project` · `merge_seat_card_other_studio` · `merge_seat_collision`. **Fourteen distinct tokens, not eight and not eleven** (re-measured at HEAD, r21: sixteen `RAISE EXCEPTION` sites over fourteen names — `merge_seat_collision` is raised from more than one branch). The last six were all review findings and all are pinned by the SQL suite.
 
 Both cards are locked `FOR UPDATE` in id order (`least`/`greatest`), so two members merging the same pair from opposite directions cannot deadlock.
 
@@ -127,9 +134,9 @@ The 30-day window is now stated in **two** places: `compliance_state()` (00623) 
 |---|---|---|---|
 | `d0e5…0006` `coi_gl` | Northgate Electric (F-11) | 2026-03-31 | `lapsed` |
 | `d0e5…0034` `coi_gl` | Ostrom Builders | 2025-12-31 | `lapsed` |
-| `d0e5…0015` `coi_gl` | Lakeshore Painting Co. | 2026-10-06 | `lapses_soon` |
+| `d0e5…0015` `coi_gl` | Lakeshore Painting Co. | **2026-10-08** | `lapses_soon` |
 
-33 papers in total: 9 `current`, 24 `held`, 2 `lapsed`, 1 `lapses_soon`. The seeded studio holds 1 owner + 1 admin, so the first nightly run there would write 3 notices and 6 in-app notifications. F-11's March lapse — the fixture's whole motivating case — is the first thing it says.
+**36** papers in total: 9 `current`, 24 `held`, 2 `lapsed`, 1 `lapses_soon` (re-measured at HEAD, r21 — `count(*) FROM studio_compliance_documents` = 36; the four-way breakdown was right and the total was not, and the seed's dates are relative, which is why Lakeshore reads 2026-10-08 today). The seeded studio holds 1 owner + 1 admin, so the nightly run there writes **3 notices and 6 in-app notifications** — measured, see §10.6. F-11's March lapse — the fixture's whole motivating case — is the first thing it says.
 
 ---
 
@@ -194,6 +201,7 @@ Guarded `WHERE pp.bid_outcome IS NULL`, so a rerun cannot overwrite an outcome a
 | Object | Shape |
 |---|---|
 | `client_households` | `id, organization_id, designer_id, display_name, member_person_ids uuid[], primary_member_person_id, co_threshold_cents, created_by, created_at, updated_at`; CHECKs on threshold `>= 0` and a non-blank name; three indexes (designer, org, GIN on members) |
+| `project_party_authority.source_household_id` | `uuid` → `client_households` ON DELETE SET NULL, partial index (`00632:333-353`). WHICH household wrote a grant, so `set_household_threshold()` moves only the grants that household is the stated source of and never a figure recorded from the agreement (r16 MAJOR-1). Added to this table at r21 — it had 0 hits in this report through twenty rounds |
 | `designer_clients.household_id` | `uuid` → `client_households` ON DELETE SET NULL, partial index |
 | `assert_client_household_members()` | BEFORE INSERT/UPDATE OF `member_person_ids, primary_member_person_id, organization_id` |
 | `add_household_member(uuid, uuid, text, uuid) → uuid` | SECURITY DEFINER; returns the seat id, or NULL when no project is named |
@@ -327,14 +335,20 @@ This section, §10.1 below, and 00629's own §6 banner each said the change had 
 
 | Gate | Result |
 |---|---|
-| `pnpm --dir … supabase:reset` (migrations + all seeds incl. `people_crm_dev.sql`) | clean; head = `00633` |
+All re-run at HEAD on 2026-09-15 (r21). Figures below are that round's.
+
+| Gate | Result |
+|---|---|
+| `pnpm --dir … supabase:reset` (migrations + all seeds incl. `people_crm_dev.sql`) | clean — "Finished supabase db reset on branch main." Ledger head `20260910152111`; the wave's highest hand number is **`00634`** |
 | `supabase/tests/people/w1a_identity_channels_consent_test.sql` | **All W1a assertions passed.** |
 | `supabase/tests/people/w1b_compliance_authority_directory_test.sql` | **All W1b assertions passed.** (26 blocks) |
-| `supabase/tests/people/w3_merge_sweep_household_test.sql` | **W3 SQL suite: all blocks passed** (12 blocks as of r7) |
-| `SUPABASE_DB_URL=… pnpm db:generate` | `packages/supabase/src/database.types.ts`: **301 insertions, 0 deletions** |
+| `supabase/tests/people/w3_merge_sweep_household_test.sql` | **W3 SQL suite: all blocks passed** — **21 numbered blocks, 13f last** |
+| 00634's trigger, from `pg_get_triggerdef` | `AFTER UPDATE OF off_job_at … WHEN ((old.off_job_at IS NULL) AND (new.off_job_at IS NOT NULL) AND (NOT ((COALESCE(new.bid_outcome,'') = 'withdrawn') AND (COALESCE(old.bid_outcome,'') <> 'withdrawn'))))` — the R-BS clamp, read back off the catalog |
+| `SUPABASE_DB_URL=… pnpm db:generate` | **no diff** in `packages/supabase/src/database.types.ts` (the 301-insertion figure was the wave's FIRST run; there is nothing left to add) |
 | `pnpm --filter @patina/supabase type-check` | clean |
 | `pnpm --filter designer-portal type-check` | clean |
-| `python3 scripts/generate-legacy-grants.py` | rewritten, +168 lines (2752 replayed statements) |
+| `pnpm --filter @patina/admin-portal build` | clean (shared-package edits) |
+| `python3 scripts/generate-legacy-grants.py` | **no diff** — "baseline + **2767** replayed statements" (the +168 / 2752 figures were the wave's first run) |
 
 ### The generated-types diff, in full
 
@@ -386,13 +400,29 @@ public.set_household_threshold(p_household_id uuid, p_threshold_cents integer)
   RETURNS public.client_households  -- r5 M-1: the figure AND the grants it sources
   SECURITY DEFINER · search_path=public · EXECUTE: authenticated, service_role
   REVOKE ALL FROM PUBLIC, anon
+
+public.contact_rule_blocks_contact(p_channels_forbidden text[],
+                                   p_route_to_person_id uuid)
+  RETURNS boolean                   -- 00629; R-BL's hard-block predicate
+  SECURITY INVOKER · search_path=public · EXECUTE: authenticated, service_role
+  REVOKE ALL FROM PUBLIC, anon
+  -- listed at r21 (r21 MAJOR-3). NOTE, carried from r21-n2: the function has no
+  -- caller on the branch, and 00629's COMMENT says the merge refuses on it while
+  -- the merge actually refuses on subsumption.
 ```
 
 Trigger functions (no grant to anyone; `REVOKE ALL FROM PUBLIC, anon, authenticated`):
 `assert_party_card_not_merged()`, `assert_party_bid_quoted_by()`,
 `assert_client_household_members()`, `assert_household_threshold_principal()`
 (r1 M-4, 00632), `clear_compliance_notices_on_date_change()` (r5 M-3, 00630),
-`sync_person_affiliation_from_pointer()` (00592, amended by r7 M-2).
+`sync_person_affiliation_from_pointer()` (00592, amended by r7 M-2),
+`project_parties_touch_updated_at()` (00631 — the `updated_at` trigger's real
+body; the file's own prose still names `update_updated_at_column`, r20-n3),
+and `end_party_authority_at_seat_close()` (00634 — **SECURITY DEFINER**,
+`search_path=public`, EXECUTE revoked from PUBLIC, `anon` and `authenticated`;
+it is the one trigger function in the wave that states an authorisation gate in
+its own body, because a definer bypasses the RLS of the table it writes).
+Both were absent from this list through twenty rounds (r21 MAJOR-3).
 
 ---
 
@@ -403,5 +433,5 @@ Trigger functions (no grant to anyone; `REVOKE ALL FROM PUBLIC, anon, authentica
 3. **`bid_due_at` and `bid_valid_until` are empty everywhere** after the backfill, by design (§3). The Bidding band's "Due 5 Oct 2026" only prints once a studio types it or a future RFQ rail records it.
 4. **No portal surface** was built *by this migration lane*. W3's data lane is migrations only: no hooks, no components, no `@patina/types` additions. Corrected (r4 M-2): the merge sheet (direction §8 P2 "Compare & merge") and the travel-list picker are **not** owed to W4 — R-BM rules the bring-forward travel list **W3 scope**, and both shipped in this wave's portal lane (`components/document/people/compare-merge-sheet.tsx`, `components/document/roster/travel-list-pane.tsx:44-56` beside `rolodex-picker.tsx`'s multi-select and "Put back"). The Bidding band's dates and the household editor shipped in the same lane. What is genuinely owed to W4 is what the wave's own build sheet names, not this list.
 5. **The Strata numbers for R-BD are unmeasured.** Locally 5 studio-less projects, all ambiguous, none carrying seats. 00628's NOTICE prints the real counts at deploy; the W7 preflight is owed them beside 00624's own preflight SELECT.
-6. **`sweep_compliance_expiries()` has never run against the seeded book outside a rolled-back transaction.** §2's table is what it *would* say, computed read-only through `compliance_document_state()`.
+6. **`sweep_compliance_expiries()` HAS now been run against the seeded book** (corrected r21 MAJOR-3 — this item claimed the opposite through twenty rounds). Review round 20's `probe-r20-c` ran it, and it was re-measured at HEAD on 2026-09-15: the first call answers `{"scanned":3,"notices":3,"notified":6}` and an immediate second call answers `{"scanned":3,"notices":0,"notified":0}`, leaving 3 notice rows — so §2's table is a MEASURED result, not a projection, and the sweep is idempotent within one run window. It has still never been left committed on a local book outside a review probe, which is the only part of this item that stands.
 7. **The cron registry COMMENT is the only exception-swallowing block in 00630**, exactly as in 00574: the `EXISTS` guard on `cron.unschedule` and the bare `SELECT cron.schedule(...)` are unwrapped, so a stack that cannot schedule the sweep fails the migration rather than applying it with the nightly job silently absent. The SQL test asserts `cron.job` carries `compliance-document-expiry-sweep` at `0 6 * * *`; the deploy should re-check it on Strata.

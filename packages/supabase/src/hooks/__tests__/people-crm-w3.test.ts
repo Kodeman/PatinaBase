@@ -95,6 +95,11 @@ import {
   useSetPartyBid,
   useUpdateProjectParty,
   bidStageOutcome,
+  seatClosedByHand,
+  asSeatCloseError,
+  seatCloseIsHeldForMoney,
+  SEAT_CLOSE_MONEY_HELD_REASON,
+  partyAuthorityKeys,
 } from "../use-coordination";
 import {
   asMergeError,
@@ -856,6 +861,10 @@ describe("every seat and authority write reaches the household band", () => {
     ["useRemoveProjectParty", useRemoveProjectParty],
     ["useSetPartyAuthority", useSetPartyAuthority],
     ["useBringForward", useBringForward],
+    // r21 major-1 / minor-5 (R-BS) — the seventh seat writer. "They withdrew"
+    // closes a seat and correcting it away from `withdrawn` re-opens one, so
+    // `useProjectHousehold`'s open-seat filter has to be told like the rest.
+    ["useSetPartyBid", useSetPartyBid],
   ];
 
   for (const [name, hook] of seatWriters) {
@@ -1042,5 +1051,199 @@ describe("SEAT_BID_OUTCOME_LABELS", () => {
     for (const label of Object.values(SEAT_BID_OUTCOME_LABELS)) {
       expect(label.startsWith("They ")).toBe(false);
     }
+  });
+});
+
+/**
+ * r21 major-1 / MAJOR-1 (R-BS) — CLOSING A SEAT ENDS ITS MONEY IN THE
+ * DATABASE, SO THE BROWSER HAS TO BE TOLD.
+ *
+ * 00634's trigger ends every open grant on the seat at the close. Neither
+ * close door invalidated `partyAuthorityKeys.all` — the root
+ * `projectAuthorityKeys.project` nests under — so with `staleTime` five
+ * minutes the Call Sheet went on printing "Signs money to $2,500." in the
+ * present tense over a grant the same transaction closed, while the household
+ * band two elements down refetched and dropped the clause.
+ */
+describe("the two doors that date a seat reach the authority root", () => {
+  const doors: Array<[string, () => unknown]> = [
+    ["useCloseProjectPartySeat", useCloseProjectPartySeat],
+    ["useSetPartyBid", useSetPartyBid],
+  ];
+  for (const [name, hook] of doors) {
+    it(`${name} invalidates partyAuthorityKeys.all`, () => {
+      onSuccessOf(hook())({ project_id: "p" }, { projectId: "p" });
+      const roots = invalidated.map((key: Any) => key[0]);
+      expect(roots).toContain(partyAuthorityKeys.all[0]);
+    });
+  }
+});
+
+/**
+ * r21 MAJOR-1 / major-2 (R-BS) — 00634's two refusals are SENTENCES on every
+ * face. They are raised as bare tokens with no SQLSTATE on an object whose
+ * prototype chain says `Error`, so every `e.message` catch printed the token.
+ */
+describe("asSeatCloseError", () => {
+  it("says the PR-n rule in the household band's own words", () => {
+    expect(
+      asSeatCloseError({ message: "seat_close_money_authority_forbidden" }),
+    ).toContain("principal");
+    expect(
+      asSeatCloseError({ message: "seat_close_money_authority_forbidden" }),
+    ).not.toContain("seat_close");
+  });
+
+  it("says whose book a cross-tenant grant sits in", () => {
+    const said = asSeatCloseError({
+      message: "seat_close_authority_forbidden",
+    });
+    expect(said).toContain("another studio");
+    expect(said).not.toContain("forbidden");
+  });
+
+  it("keeps a message it does not know, and falls back on an empty one", () => {
+    expect(asSeatCloseError({ message: "network down" })).toBe("network down");
+    expect(asSeatCloseError({ message: "" })).toBe("Could not close the seat.");
+  });
+});
+
+/**
+ * r21 MAJOR-1 / major-2 — AND THE ACT IS HELD BEFORE THE PRESS, with the
+ * reason on the face, exactly as `householdAddIsHeld` holds the figure.
+ */
+describe("seatCloseIsHeldForMoney", () => {
+  const open = (scope: string) => ({ scope, effective_to: null });
+
+  it("holds a money-bearing seat for a caller who is not the principal", () => {
+    expect(seatCloseIsHeldForMoney([open("money")], false)).toBe(true);
+    expect(seatCloseIsHeldForMoney([open("draw_certify")], false)).toBe(true);
+  });
+
+  it("never holds it for an owner or an admin", () => {
+    expect(seatCloseIsHeldForMoney([open("money")], true)).toBe(false);
+  });
+
+  it("stays as narrow as 00634's own gate", () => {
+    // a scope outside PR-n's two
+    expect(seatCloseIsHeldForMoney([open("schedule")], false)).toBe(false);
+    // a money grant already ENDED gates nothing (effective_to IS NULL is the
+    // trigger's own predicate)
+    expect(
+      seatCloseIsHeldForMoney(
+        [{ scope: "money", effective_to: "2026-01-01" }],
+        false,
+      ),
+    ).toBe(false);
+    expect(seatCloseIsHeldForMoney([], false)).toBe(false);
+    expect(seatCloseIsHeldForMoney(undefined, false)).toBe(false);
+  });
+
+  it("carries a reason a studio can act on", () => {
+    expect(SEAT_CLOSE_MONEY_HELD_REASON).toContain("owner or an admin");
+  });
+});
+
+/**
+ * r21 major-3 / major-4 — WHICH HAND DATED THIS SEAT.
+ *
+ * "Close this seat" writes the day AND the studio's own reason; "They
+ * withdrew" writes the day alone. Without that discrimination, recording any
+ * other outcome on a hand-closed seat put the person back in a crew band
+ * beside their own closing clause, and one more press NULLed the sentence.
+ */
+describe("seatClosedByHand", () => {
+  it("reads a seat with no date as open", () => {
+    expect(
+      seatClosedByHand({ bidOutcome: "quoted", offJobAt: null }),
+    ).toBe(false);
+  });
+
+  it("reads a dated seat whose outcome is not withdrawn as hand-closed", () => {
+    expect(
+      seatClosedByHand({ bidOutcome: "quoted", offJobAt: "2026-09-10" }),
+    ).toBe(true);
+  });
+
+  it("reads a withdrawal's own date as the withdrawal's, so R-BR still clears it", () => {
+    expect(
+      seatClosedByHand({ bidOutcome: "withdrawn", offJobAt: "2026-09-10" }),
+    ).toBe(false);
+  });
+
+  it("keeps a hand-written reason beside a withdrawal out of R-BR's reach", () => {
+    expect(
+      seatClosedByHand({
+        bidOutcome: "withdrawn",
+        offJobAt: "2026-09-10",
+        offJobReason: "Picked another electrician",
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("bidStageOutcome on a seat the studio closed by hand (r21 major-3)", () => {
+  const handClosed = {
+    bidOutcome: "quoted" as const,
+    stage: "off_job",
+    offJobAt: "2026-09-10",
+    offJobReason: "Picked another electrician",
+  };
+
+  it("records what came back and moves no band", () => {
+    const written = bidStageOutcome(handClosed, "selected");
+    expect(written.moved).toBe(true);
+    expect(written.pastTheBid).toBe(true);
+    expect(written.stage).toBeNull();
+  });
+
+  it("leaves the withdrawal's own record inside R-BR", () => {
+    const withdrawn = {
+      bidOutcome: "withdrawn" as const,
+      stage: "off_job",
+      offJobAt: "2026-09-10",
+      offJobReason: null,
+    };
+    const written = bidStageOutcome(withdrawn, "quoted");
+    expect(written.pastTheBid).toBe(false);
+    expect(written.stage).toBe("bidding");
+  });
+});
+
+describe("useSetPartyBid clears only what the withdrawal wrote (r21 major-4)", () => {
+  it("leaves a hand-written day and reason standing", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "p",
+      previous: {
+        bidOutcome: "withdrawn",
+        stage: "off_job",
+        offJobAt: "2026-09-10",
+        offJobReason: "Picked another electrician",
+      },
+      patch: { bidOutcome: "quoted" },
+    });
+    const patch = updated[updated.length - 1].payload;
+    expect(patch.bid_outcome).toBe("quoted");
+    expect("off_job_at" in patch).toBe(false);
+    expect("off_job_reason" in patch).toBe(false);
+  });
+
+  it("still clears the day the withdrawal itself wrote (R-BR)", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "p",
+      previous: {
+        bidOutcome: "withdrawn",
+        stage: "off_job",
+        offJobAt: "2026-09-10",
+        offJobReason: null,
+      },
+      patch: { bidOutcome: "quoted" },
+    });
+    const patch = updated[updated.length - 1].payload;
+    expect(patch.stage).toBe("bidding");
+    expect(patch.off_job_at).toBeNull();
+    expect(patch.off_job_reason).toBeNull();
   });
 });

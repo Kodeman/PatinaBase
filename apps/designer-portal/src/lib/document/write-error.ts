@@ -75,6 +75,20 @@ export function writeErrorMessage(err: unknown, fallback: string): string {
   if (/party_bid_quoted_by_merged_away/i.test(haystack)) {
     return "That card has been folded into another one. Name the card that survived.";
   }
+  // r21 MAJOR-1 / major-2 (R-BS) — 00634's two seat-close refusals, said in
+  // words, for the same reason as CR-3's three and M2R-4's two: they are BARE
+  // TOKENS with no SQLSTATE, so the schema-word guard below matches none of
+  // them and `return raw` printed `seat_close_money_authority_forbidden`
+  // verbatim. One press gets there — "They withdrew" in the Bidding band, or
+  // "Close the seat", taken by a studio member who is not an owner or admin on
+  // a seat that signs for money. The sentences are the ones
+  // `household-band.tsx` already prints for the identical PR-n rule.
+  if (/seat_close_money_authority_forbidden/i.test(haystack)) {
+    return "This seat signs for money, and ending that is the principal’s. Ask an owner or an admin of the studio to close it.";
+  }
+  if (/seat_close_authority_forbidden/i.test(haystack)) {
+    return "This seat’s standing grant is recorded in another studio’s book, so closing it is theirs to do. Ask that studio.";
+  }
   // Never a schema word on a face: a constraint or index name, a relation, a
   // column. Those sentences are for the log, not the studio.
   if (

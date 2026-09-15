@@ -5452,6 +5452,123 @@ BEGIN
   RAISE NOTICE '13e. r20 BLOCKING-1 — 00634''s trigger states its own gate: a plain member of the recorded studio and a member of the designer''s second studio are both REFUSED the close of a seat carrying an open money grant, by name, with the record untouched; a non-money grant still ends at a plain member''s close and the principal''s close still lands: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13f. r21 MAJOR-2 (R-BS) — A RECORDED WITHDRAWAL IS NOT THE HAND-CLOSE ACT
+-- ═══════════════════════════════════════════════════════════════════════════
+-- `off_job_at` has TWO writers in the room. Beside "Close this seat", the
+-- Bidding band's "They withdrew" stamps `off_job_at = today` on the transition
+-- into `withdrawn` — which was exactly 00634's WHEN clause, so the band became
+-- a second, undocumented door into the money gate. Measured before the clamp
+-- (build/probe-r21-a, C2/C3/C4): a plain member RECORDING what a bidder did
+-- was refused `seat_close_money_authority_forbidden`, and when a principal
+-- took it and then corrected it back (R-BR clears `off_job_at`), the seat
+-- returned to the job live with its money delegation closed and no act in the
+-- room able to re-open it.
+--
+-- 00634's WHEN clause now excludes exactly the statement that moves
+-- `bid_outcome` INTO 'withdrawn'. Four controls: the withdrawal lands for a
+-- plain member, the grant it carries is untouched, a seat ALREADY carrying
+-- 'withdrawn' that the studio then closes BY HAND still fires the gate, and
+-- the principal's hand-close on that same seat still ends the grant.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, phone, phone_e164, created_by) VALUES
+  ('f9100000-0000-4000-8000-0000000000f1','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R21 Withdrawing Bidder','(612) 555-0940','+16125550940','a0000000-0000-0000-0000-000000000004'),
+  ('f9100000-0000-4000-8000-0000000000f2','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R21 Already Withdrawn','(612) 555-0941','+16125550941','a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9500000-0000-4000-8000-0000000000f1','f9300000-0000-4000-8000-00000000000a',
+   'sub','R21 Withdrawing Bidder','f9100000-0000-4000-8000-0000000000f1',
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9500000-0000-4000-8000-0000000000f2','f9300000-0000-4000-8000-00000000000a',
+   'sub','R21 Already Withdrawn','f9100000-0000-4000-8000-0000000000f2',
+   'a0000000-0000-0000-0000-000000000004');
+INSERT INTO public.project_party_authority
+  (engagement_id, scope, threshold_cents, source_clause, granted_by) VALUES
+  ('f9500000-0000-4000-8000-0000000000f1','money',500000,'agreement §4',
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9500000-0000-4000-8000-0000000000f2','money',500000,'agreement §4',
+   'a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_msg      text;
+  v_ended_on date;
+  v_off      date;
+  n          integer;
+BEGIN
+  -- ── (a) a plain member records "They withdrew", and the press LANDS ─────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  UPDATE public.project_parties
+     SET bid_outcome = 'withdrawn', stage = 'off_job', off_job_at = CURRENT_DATE
+   WHERE id = 'f9500000-0000-4000-8000-0000000000f1';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN
+    RAISE EXCEPTION
+      'BLOCK 13f FAIL (13f-a): a plain member could not record a withdrawal on a money-bearing seat (% row(s))', n;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- ── (b) and the delegation the seat carries is UNTOUCHED: a withdrawal is
+  --        the bidder's act on the record, not the principal's on a grant ──
+  SELECT pa.effective_to, pp.off_job_at INTO v_ended_on, v_off
+    FROM public.project_party_authority pa
+    JOIN public.project_parties pp ON pp.id = pa.engagement_id
+   WHERE pa.engagement_id = 'f9500000-0000-4000-8000-0000000000f1' AND pa.scope = 'money';
+  IF v_ended_on IS NOT NULL THEN
+    RAISE EXCEPTION
+      'BLOCK 13f FAIL (13f-b): recording a withdrawal ended the seat''s money grant (effective_to %) — 00634 is still firing on the bid door', v_ended_on;
+  END IF;
+  IF v_off IS DISTINCT FROM CURRENT_DATE THEN
+    RAISE EXCEPTION
+      'BLOCK 13f FAIL (13f-c): the withdrawal did not date the seat (off_job_at %)', v_off;
+  END IF;
+
+  -- ── (c) A SEAT ALREADY CARRYING 'withdrawn', CLOSED BY HAND, STILL GATES.
+  --        The clamp excludes the statement that MOVES bid_outcome into
+  --        'withdrawn', never a seat that already stands there. ────────────
+  UPDATE public.project_parties
+     SET bid_outcome = 'withdrawn'
+   WHERE id = 'f9500000-0000-4000-8000-0000000000f2';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  BEGIN
+    UPDATE public.project_parties
+       SET stage = 'off_job', off_job_at = CURRENT_DATE,
+           off_job_reason = 'A plain member tried to close a withdrawn seat.'
+     WHERE id = 'f9500000-0000-4000-8000-0000000000f2';
+    RAISE EXCEPTION
+      'BLOCK 13f FAIL (13f-d): a plain member hand-closed a money-bearing seat that already read withdrawn — the clamp is wider than the statement it names';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+    IF v_msg LIKE 'BLOCK 13f FAIL%' THEN RAISE; END IF;
+    IF v_msg <> 'seat_close_money_authority_forbidden' THEN
+      RAISE EXCEPTION 'BLOCK 13f FAIL (13f-e): the hand-close was refused as %, not seat_close_money_authority_forbidden', v_msg;
+    END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- ── (d) and the principal's own hand-close on that seat still ends it ───
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  UPDATE public.project_parties
+     SET stage = 'off_job', off_job_at = CURRENT_DATE,
+         off_job_reason = 'The owner closed the withdrawn seat.'
+   WHERE id = 'f9500000-0000-4000-8000-0000000000f2';
+  PERFORM pg_temp.reset_role();
+  SELECT effective_to INTO v_ended_on FROM public.project_party_authority
+   WHERE engagement_id = 'f9500000-0000-4000-8000-0000000000f2' AND scope = 'money';
+  IF v_ended_on IS DISTINCT FROM CURRENT_DATE THEN
+    RAISE EXCEPTION
+      'BLOCK 13f FAIL (13f-f): the principal''s hand-close of a withdrawn seat left the grant ending %, not today', v_ended_on;
+  END IF;
+
+  RAISE NOTICE '13f. r21 MAJOR-2 / R-BS — 00634 is clamped to the hand-close act: a plain member records a withdrawal on a money-bearing seat with no refusal and the grant stands open; a seat already reading withdrawn still gates its HAND close, and the principal''s close still ends the grant: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

@@ -472,6 +472,10 @@ export type {
 // the seat, and the site access card.
 export {
   useCloseProjectPartySeat,
+  SEAT_CLOSE_REFUSAL_SENTENCES,
+  SEAT_CLOSE_MONEY_HELD_REASON,
+  asSeatCloseError,
+  seatCloseIsHeldForMoney,
   seatDeleteRefusal,
   SEAT_DELETE_REFUSAL_SENTENCES,
   ROSTER_BANDS,
@@ -502,6 +506,7 @@ export {
   SEAT_BID_COLUMNS,
   seatCarriesBid,
   bidStageOutcome,
+  seatClosedByHand,
   isSeatBidOutcome,
   asBidError,
   partyBidKeys,
