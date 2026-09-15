@@ -59,16 +59,25 @@
 -- a fact; the clause stays beside it so a grant the studio RE-SOURCED BY
 -- HAND is still released (r9 M-1), and both legs are asked together.
 --
--- ── AND ONE SEAT set_household_threshold() NOW OPENS (r16 F1) ─────────────
--- A `client_rep` MEMBER ADDED BEFORE THE FIGURE EXISTS IS NOT LEFT WITHOUT
--- ONE. add_household_member() correctly writes no grant while the household
--- names no figure, and the figure act only ever UPDATEd grants that already
--- existed — so a household filled in the natural order (members first, the
--- dollar figure last) left every one of those members permanently unable to
--- sign, their person card printing "No authority on this job" beside the
--- household's own clause. §4's loop now also OPENS the missing grant on an
--- open `client_rep` seat, which is where every other grant-opening rule in
--- this file already lives.
+-- ── AND ONE DOOR THAT OPENS AUTHORITY — ONLY ONE (R-BQ, r17 BLOCKING-1) ──
+-- "A household figure never opens a money grant by itself.
+--  add_household_member (project-scoped, PR-n gated) is the only door that
+--  opens authority; set_household_threshold only MOVES grants whose
+--  source_household_id is that household and refuses nothing else. Members
+--  added before a figure existed get authority through a named per-member act
+--  on the Client side band ('Record the authority', R-J shape,
+--  project-scoped)." (R-BQ, 2026-09-15)
+--
+-- A `client_rep` member added before the household names a figure correctly
+-- gets no grant: a money grant with a NULL threshold reads "Signs money."
+-- with no cap (00624). r16 F1 answered that by teaching §4 a second loop that
+-- OPENED the missing grant — and that loop could name no project, because
+-- nothing in the record says which jobs a household acts on, so one
+-- household's figure wrote money authority onto every open `client_rep` seat
+-- its members held anywhere in the studio's book, on jobs under another
+-- principal, stamped so that no household could move it again. That loop is
+-- gone. The member seated first is given authority by the band's own named
+-- act, which calls add_household_member() with the job named.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -550,7 +559,11 @@ GRANT EXECUTE ON FUNCTION public.add_household_member(uuid, uuid, text, uuid)
 COMMENT ON FUNCTION public.add_household_member(uuid, uuid, text, uuid) IS
   'PR-c in one act: adds a PERSON card to a household''s members and, when a '
   'project is named, opens (or finds) that member''s OPEN seat on the job as '
-  '`client` or `client_rep`, returning the seat id. A seat the studio CLOSED '
+  '`client` or `client_rep`, returning the seat id. It is the ONLY door that '
+  'OPENS a money authority (R-BQ), which is why it takes a project: the '
+  'Client side band''s named per-member act "Record the authority" calls it '
+  'again for a member who was seated before the household named a figure '
+  '(R-J''s shape), and the grant lands on that job and no other. A seat the studio CLOSED '
   '(off_job_at, the "Close this seat" act) is never reused: it stays closed '
   'and a new seat is opened, so no act of the household''s writes a live '
   'money authority onto a row that left the job (r15 MAJOR-1). When the household '
@@ -713,64 +726,37 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- ── r16 F1 — THE MEMBER WHO WAS ADDED BEFORE THE FIGURE EXISTED ────────
-  -- add_household_member() writes no grant while co_threshold_cents is NULL,
-  -- which is right: a money grant with a NULL threshold reads "Signs money."
-  -- with NO CAP (00624), so opening a placeholder row there would widen
-  -- unlimited signing authority out of a household that named no figure at
-  -- all. But the loop above only ever MOVED rows that already existed, so the
-  -- ordinary order of work — decide who is in the household, then decide what
-  -- figure needs a signature — left every `client_rep` member seated in that
-  -- first step with no grant for ever: their person card printing "No
-  -- authority on this job" beside the household band's own clause, on one
-  -- screen, with no act that repairs it. Measured twice on a fresh reset.
+  -- ── r17 BLOCKING-1, R-BQ — AND IT OPENS NOTHING ─────────────────────────
+  -- "A household figure never opens a money grant by itself.
+  --  add_household_member (project-scoped, PR-n gated) is the only door that
+  --  opens authority; set_household_threshold only MOVES grants whose
+  --  source_household_id is that household and refuses nothing else." (R-BQ)
   --
-  -- So the figure act is also where that grant is OPENED. Only a seat that is
-  -- still OPEN (r15 MAJOR-1's rule — live authority never lands on a row the
-  -- studio closed), only where the seat carries no open money grant at all (a
-  -- grant from the agreement is not this act's to replace, r9 M-1, and the
-  -- partial unique index would refuse a second one anyway), and only when the
-  -- household names a figure — erasing one opens nothing.
-  IF p_threshold_cents IS NOT NULL THEN
-    FOR v_seat IN
-      SELECT pp.id AS seat_id
-        FROM public.project_parties pp
-       WHERE pp.party_kind        = 'client_rep'
-         AND pp.studio_contact_id = ANY (v_h.member_person_ids)
-         AND pp.off_job_at IS NULL
-         AND NOT EXISTS (
-           SELECT 1 FROM public.project_party_authority pa
-            WHERE pa.engagement_id = pp.id
-              AND pa.scope         = 'money'
-              AND pa.effective_to IS NULL)
-       ORDER BY pp.id
-    LOOP
-      -- PR-n per seat, on the studio the PROJECT records, refusing the whole
-      -- act rather than half-opening the grants — the same posture the loop
-      -- above takes for the same reason (00624's "a wrong grant silently
-      -- over- or under-authorises an approval").
-      v_recorded := public.project_party_recorded_studio(v_seat.seat_id);
-      IF v_recorded IS NULL THEN
-        RAISE EXCEPTION 'household_grant_project_has_no_studio'
-          USING HINT = 'One of this household''s seats is on a job that records '
-                       'no studio, so PR-n''s owner/admin narrowing on its money '
-                       'grant cannot be resolved. Give that job a studio first '
-                       '(R-BD).';
-      END IF;
-      IF NOT public.is_org_admin_or_owner(v_recorded) THEN
-        RAISE EXCEPTION 'household_grant_forbidden'
-          USING HINT = 'Only an owner or an admin of the studio may set a '
-                       'money authority (PR-n).';
-      END IF;
-
-      INSERT INTO public.project_party_authority
-        (engagement_id, scope, threshold_cents, source_clause,
-         source_household_id, granted_by)
-      VALUES
-        (v_seat.seat_id, 'money', p_threshold_cents,
-         'client_households.co_threshold_cents', v_h.id, auth.uid());
-    END LOOP;
-  END IF;
+  -- r16 F1 — the `client_rep` added before the household named a figure, left
+  -- unable to sign for ever — was answered here, with a second loop that
+  -- OPENED the missing grant. That loop named the role, the members and the
+  -- seat's standing and NOTHING about the project, because no record anywhere
+  -- says which jobs a household acts on: add_household_member() takes the
+  -- project as an argument and keeps nothing. So naming one household's
+  -- figure wrote a money grant onto every open `client_rep` seat its members
+  -- held anywhere in the studio's book. Measured on a fresh database: the
+  -- Okonkwo household's $2,500 landed on the Lindqvist kitchen's client side,
+  -- stamped with the OKONKWO household — so the Lindqvist band printed "No
+  -- change-order figure is on file for this household." beside a client-side
+  -- row reading "Signs money to $2,500.", and no act in the room could take
+  -- it back, because both loops key on source_household_id and neither
+  -- matches a row the other household owns. One household, one press, no
+  -- fold. The same unbounded reach made a member's seat on an R-BI legacy
+  -- studio-less job refuse the WHOLE figure act, over a job the household has
+  -- nothing to do with and cannot repair from the People room.
+  --
+  -- The figure act is therefore back to what its own name says: it moves the
+  -- grants this household wrote and opens none. The member who was seated
+  -- first is given authority by a NAMED per-member act on the Client side
+  -- band — R-J's shape, "Nothing defaulted from the agreement." / "Record the
+  -- authority" — which calls add_household_member() with the job named, and
+  -- so is project-scoped and PR-n gated like every other grant this file
+  -- opens.
 
   UPDATE public.client_households
      SET co_threshold_cents = p_threshold_cents
@@ -794,10 +780,15 @@ COMMENT ON FUNCTION public.set_household_threshold(uuid, integer) IS
   'household (r5 M-1; the id leg is r16 MAJOR-1, because the clause names a '
   'TABLE and a card standing in two households then had either figure '
   'rewrite the other''s grants, on another job, under another principal). '
-  'It also OPENS the missing grant on any OPEN `client_rep` seat of a member '
-  'that carries none — the member added before the household named a figure, '
-  'who was otherwise left unable to sign for ever while the band''s clause '
-  'said otherwise (r16 F1). Without it the figure '
+  'It OPENS NOTHING (R-BQ): the act that opens a money grant has to name a '
+  'job and this one names none — unbounded, the grant-opening loop r16 F1 '
+  'added here wrote money authority onto every open `client_rep` seat its '
+  'members held anywhere in the studio''s book, on jobs the household never '
+  'named and could never take it back from, and made a member''s seat on a '
+  'studio-less job refuse the whole act (r17 BLOCKING-1 / MAJOR-1). A member '
+  'seated before the figure existed is given authority by the band''s named '
+  'per-member act, which calls add_household_member() with the job named. '
+  'Without the move the figure '
   'and the seats it had already authorised drifted apart, and one Call Sheet '
   'screen printed "Change orders over $5,000 need a signature from the '
   'household." beside "Signs money to $2,500." with no act between them. A '
