@@ -1,0 +1,13 @@
+TypeError: Failed to fetch
+    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165
+    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)
+    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)
+    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993
+    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)
+    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)
+    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618
+---
+Error logged: AppError: Not authenticated
+    at w (http://localhost:3000/_next/static/chunks/4734-58574c6d74dd6b0b.js:1:13299)
+    at Object.onError (http://localhost:3000/_next/static/chunks/4734-58574c6d74dd6b0b.js:1:1941)
+    at u.fetch (http://localhost:3000/_next/static/chunks/3077-530a2a57a0b7a863.js:1:35074) {queryKey: Array(1), meta: undefined}

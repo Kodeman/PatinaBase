@@ -1,0 +1,52 @@
+COMPARE · TWO CARDS
+
+One person, two cards
+
+Choose the card that stays. The other one folds into it and is kept as a record of the merge.
+
+R12 Duplicate Newer
+KEEP THIS ONE INSTEAD
+R12 Duplicate Older
+KEEPS THE CARD
+NAME
+R12 Duplicate Newer
+R12 Duplicate Older
+WHAT THEY ARE
+subcontractor
+subcontractor
+FIRM
+—
+—
+MOBILE
+(612) 555-9911
+(612) 555-9911
+EMAIL
+—
+—
+CONTACT RULE
+No contact rule on file.
+No contact rule on file.
+PAPERS ON FILE
+None
+None
+SEATS ON JOBS
+0
+0
+IN THE BOOK SINCE
+15 September 2026
+11 August 2025
+TRADES
+both kept
+plumbing
+electrical
+WHAT MAKES THESE THE SAME PERSON
+They sign in with the same account
+They share a phone number
+They share an email address
+Same firm, same name
+The studio says so
+
+R12 Duplicate Newer’s seats, channels, contact rule and firm designations move onto R12 Duplicate Older, and R12 Duplicate Newer’s own number and address travel with them. Everything else R12 Duplicate Newer holds — the verdict, the notes and the payee facts — travels the same way, and where both cards say something R12 Duplicate Older’s own words stand. The trades and specialties on both cards are kept together, and a card recorded as a sole proprietor keeps that either way. Consent stays with the number, not with the card, so nobody’s yes or no changes. R12 Duplicate Newer’s paper moves onto R12 Duplicate Older too; where R12 Duplicate Older already holds the same paper, still in force, the older one is marked superseded. R12 Duplicate Newer’s card is kept as a record of the merge, so an old link still opens this person.
+
+MERGE INTO R12 DUPLICATE OLDER
+NOT THE SAME PERSON
