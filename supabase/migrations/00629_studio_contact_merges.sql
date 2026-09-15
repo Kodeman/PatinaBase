@@ -1424,15 +1424,51 @@ BEGIN
   --
   -- Refused BY NAME and BEFORE the first write, the way merge_survivor_
   -- archived and merge_two_logins are, with the job named in DETAIL so the
-  -- sheet can say which one. Same resolver as the trigger, in the same
-  -- caller's session, so the pre-check and the guard cannot disagree.
+  -- sheet can say which one.
+  --
+  -- ONE PREDICATE PER COLUMN, BECAUSE THE GUARD RAISES FROM TWO LEGS
+  -- (r12 MAJOR-2). r11's pre-check asked project_tenant_org() alone, which is
+  -- only the FIRST of assert_project_party_cards()' two doors to
+  -- party_card_project_has_no_studio (00624):
+  --
+  --   leg 1  v_org      := project_tenant_org(NEW.project_id) IS NULL
+  --          — reached whenever ANY of the three card columns is non-NULL;
+  --   leg 2  v_recorded := project_recorded_studio(NEW.project_id) IS NULL
+  --          — reached whenever NEW.studio_contact_id IS NOT NULL ("THE
+  --            RECORD, NOT THE WRITER", w1b r11 MAJOR-3).
+  --
+  -- project_tenant_org() is COALESCE(p.studio_id, the CALLER's own shared-studio
+  -- membership); project_recorded_studio() is p.studio_id and nothing else. On
+  -- R-BI's legacy population the two disagree for every caller who shares an
+  -- active design studio with the job's designer_id / lead_designer_id /
+  -- created_by — the ordinary studio member folding duplicates in their own
+  -- room, which is the COMMONER half of the population. r11's pre-check found
+  -- no row there, the seat repoint at §"seats" fired the trigger, and leg 2
+  -- raised the raw schema token onto the merge sheet after all (measured twice
+  -- on a fresh reset, rolled back).
+  --
+  -- So each matched column asks the question the leg that will judge IT asks.
+  -- The trigger is BEFORE INSERT OR UPDATE OF company_id,
+  -- warranty_contact_person_id, studio_contact_id, project_id and its body
+  -- reads NEW.studio_contact_id regardless of which column moved — so a seat
+  -- repointed only on company_id / warranty_contact_person_id still takes leg 2
+  -- when it ALREADY carries a card in studio_contact_id. That is the third
+  -- conjunct below, not a widening: a studio-less seat with no card stamped on
+  -- it repoints its firm pointer perfectly well, and refusing it would cost the
+  -- room a fold it can make.
   SELECT pj.name INTO v_studioless
     FROM public.project_parties pp
     JOIN public.projects pj ON pj.id = pp.project_id
-   WHERE (pp.studio_contact_id           = p_merged
-          OR pp.company_id               = p_merged
-          OR pp.warranty_contact_person_id = p_merged)
-     AND public.project_tenant_org(pp.project_id) IS NULL
+   WHERE (
+           (pp.studio_contact_id = p_merged
+            AND (public.project_tenant_org(pp.project_id) IS NULL
+                 OR public.project_recorded_studio(pp.project_id) IS NULL))
+        OR ((pp.company_id = p_merged
+             OR pp.warranty_contact_person_id = p_merged)
+            AND (public.project_tenant_org(pp.project_id) IS NULL
+                 OR (pp.studio_contact_id IS NOT NULL
+                     AND public.project_recorded_studio(pp.project_id) IS NULL)))
+         )
    ORDER BY pj.name, pj.id
    LIMIT 1;
   IF v_studioless IS NOT NULL THEN

@@ -1555,9 +1555,9 @@ export const complianceKeys = {
  *
  * R-BF makes supersession TRANSITIVE with a depth cap, and a row leaves the
  * reckoning only while a reachable successor is still IN FORCE and still
- * carries at least the retired row's gates (00623: an honest supersede
- * followed by two edits to the successor left a lapsed gating certificate on
- * file while a one-hop reading said current). A flat
+ * carries at least the retired row's gates AND is still the same doc_type
+ * (00623: an honest supersede followed by two edits to the successor left a
+ * lapsed gating certificate on file while a one-hop reading said current). A flat
  * `.is('superseded_by', null)` disagrees with that in both directions: it
  * drops a row whose successor has since lapsed or lost its gates, and it keeps
  * one retired two links down. The company card's table, its held clause and
@@ -1577,6 +1577,20 @@ export function retainedComplianceDocuments(
     root: StudioComplianceDocument,
     successor: StudioComplianceDocument,
   ) => (root.blocks ?? []).every((gate) => (successor.blocks ?? []).includes(gate));
+  // W3 r8 B-1's third leg, which the SQL has and this reducer did not
+  // (r12 MAJOR-1). `compliance_state()`'s retired CTE reads
+  // `s.doc_type = c.root_doc_type` (00623): the supersede trigger judges a row
+  // against its OWN successor and never against the rows pointing at it, so
+  // retyping the successor is judged by nothing and any active studio member
+  // may do it in one PATCH. Without this test the browser retires a lapsed
+  // gating certificate the database still counts — the card prints `Lapsed`
+  // over a Paper table the certificate is missing from, `paperHeldClause`
+  // composes nothing and "Chase the renewal" has no document to chase.
+  // `doc_type` is NOT NULL in 00623, so `===` is the SQL's `=`.
+  const samePaper = (
+    root: StudioComplianceDocument,
+    successor: StudioComplianceDocument,
+  ) => successor.doc_type === root.doc_type;
 
   const retired = (root: StudioComplianceDocument): boolean => {
     const seen = new Set<string>([root.id]);
@@ -1590,7 +1604,9 @@ export function retainedComplianceDocuments(
       // A successor the caller cannot see is not a successor that retires
       // anything: the row stays in the reckoning.
       if (!successor) return false;
-      if (inForce(successor) && carriesGates(root, successor)) return true;
+      if (inForce(successor) && carriesGates(root, successor) && samePaper(root, successor)) {
+        return true;
+      }
       next = successor.superseded_by;
     }
     return false;
