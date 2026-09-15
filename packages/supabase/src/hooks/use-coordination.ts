@@ -2583,6 +2583,22 @@ export function useSetPartyBid() {
         // the day the seat actually left the job alone.
         if (patch.bidOutcome === 'withdrawn' && written.moved) {
           dbPatch.off_job_at = new Date().toISOString().slice(0, 10);
+        } else if (written.stage) {
+          // R-BR (r17) — AND A SEAT BACK IN THE BIDDING IS NOT A SEAT THAT
+          // LEFT THE JOB. The stamp above was one-way: nothing in the repo
+          // ever cleared `off_job_at`, and `off_job` is not in
+          // SEAT_STAGES_PAST_THE_BID, so correcting a withdrawal back to a
+          // live outcome ("They quoted") DID write the new stage and left the
+          // date standing. The row then banded into Bidding while
+          // `rosterWindowClause` printed "Off the job 15 Sep 2026." beside its
+          // bid note (r15 MAJOR-1 moved that leg ahead of the band test), and
+          // `useProjectHousehold`'s open-seat filter went on counting the seat
+          // CLOSED — three readers disagreeing about one seat, one of them
+          // stating a false fact about whether the person is on the job.
+          // Guarded on a stage actually being written, so a correction that
+          // moves nothing leaves a genuine "Close this seat" date alone.
+          dbPatch.off_job_at = null;
+          dbPatch.off_job_reason = null;
         }
       }
       const { data, error } = await supabase

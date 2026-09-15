@@ -323,6 +323,44 @@ describe("the Bidding band writes a stage with its outcome", () => {
     expect(patch.off_job_at).toBeUndefined();
   });
 
+  /**
+   * R-BR (r17) — correcting a withdrawal puts the seat back in the bidding,
+   * and a seat back in the bidding is not a seat that left the job. The stamp
+   * was one-way, so the row banded into Bidding while the window clause went
+   * on printing "Off the job 15 Sep 2026." and the household's open-seat
+   * filter went on counting it closed.
+   */
+  it("clears the off-the-job date when a withdrawal is corrected", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "proj-1",
+      patch: { bidOutcome: "quoted" },
+      previous: { bidOutcome: "withdrawn", stage: "off_job" },
+    });
+    const patch = updated[0]?.payload ?? {};
+    expect(patch.bid_outcome).toBe("quoted");
+    expect(patch.stage).toBe("bidding");
+    expect(patch.off_job_at).toBeNull();
+    expect(patch.off_job_reason).toBeNull();
+  });
+
+  /**
+   * And only when a stage is actually written: a correction that moves no
+   * stage leaves a genuine "Close this seat" date exactly where it is.
+   */
+  it("leaves a closed seat's own date alone when no stage moves", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "proj-1",
+      patch: { bidOutcome: "selected" },
+      previous: { bidOutcome: "quoted", stage: "active" },
+    });
+    const patch = updated[0]?.payload ?? {};
+    expect(patch.stage).toBeUndefined();
+    expect(patch.off_job_at).toBeUndefined();
+    expect(patch.off_job_reason).toBeUndefined();
+  });
+
   it("never regresses a seat that is already past the bid", async () => {
     await mutationFnOf(useSetPartyBid())({
       id: "seat-1",

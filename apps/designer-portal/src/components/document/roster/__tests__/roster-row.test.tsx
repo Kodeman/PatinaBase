@@ -403,6 +403,33 @@ describe('RosterRow — folded', () => {
     ).toBeInTheDocument();
   });
 
+  /**
+   * R-BR (r17) — THE STATE THE WRITE-SIDE FIX PREVENTS.
+   *
+   * Since r15 the closing date prints off the row's own record at every band,
+   * so a seat carrying a stale `offJobAt` while standing in the Bidding band
+   * states a false fact about whether the person is on the job. `useSetPartyBid`
+   * now clears `off_job_at` / `off_job_reason` when a correction moves the
+   * stage away from a withdrawal; this is what the row would say if it did
+   * not.
+   */
+  it('would print a closing date on a bidding row that kept a stale off-job date (R-BR)', () => {
+    ul(
+      <RosterRow
+        row={seatRow({
+          name: 'Northgate Electric',
+          stage: 'bidding',
+          offJobAt: '2026-09-15',
+          offJobReason: null,
+        })}
+        band="bidding"
+        expanded={false}
+        onToggle={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('Off the job 15 Sep 2026.')).toBeInTheDocument();
+  });
+
   it('pairs aria-expanded with aria-controls on the unfold (SPEC §7 #5)', () => {
     ul(<RosterRow row={seatRow()} band="this_week" expanded={false} onToggle={jest.fn()} />);
     const toggle = screen.getByRole('button', { name: /Dana Kowalski/ });

@@ -106,6 +106,14 @@ export function parseThresholdEntry(entry: string): number | null {
 export const HOUSEHOLD_ADD_HELD_REASON =
   "Adding someone who signs for the household is the principal’s to do while a change-order figure stands. An owner or an admin of the studio can write it — or add them as “decides the work” instead.";
 
+/**
+ * PR-n on R-BQ's named act: the same standing the database asks for, said
+ * beside the press rather than after the refusal (`household_grant_forbidden`
+ * rolls the whole act back).
+ */
+export const HOUSEHOLD_AUTHORITY_HELD_REASON =
+  "Recording who signs for the household is the principal’s to do. An owner or an admin of the studio can write it.";
+
 /** The refusal, in the room's words rather than a validation token. */
 export const HOUSEHOLD_FIGURE_REFUSAL =
   "Write the change-order figure in dollars — 2500, or 2,500. To take the figure away, use “Take the figure away”.";
@@ -115,6 +123,16 @@ export const HOUSEHOLD_FIGURE_REFUSAL =
  *
  * The figure editor was the one act in this wave with no consequence sentence
  * at all, and it is the act that moves other people's signing authority.
+ *
+ * r17 MAJOR-2 — AND IT SAYS ONLY WHAT THE WRITE DOES. For one round
+ * `set_household_threshold()` also OPENED a grant for any member who carried
+ * none, on every open `client_rep` seat they held anywhere in the studio's
+ * book, while this sentence went on describing moves alone. R-BQ settled it
+ * on the write side — "a household figure never opens a money grant by
+ * itself … The figure's consequence sentence names only the moves it makes"
+ * — so the sentence below is once again the whole truth about the press, and
+ * the grant a member does not yet have is opened by the band's own named act
+ * (`householdAuthorityConsequence`).
  */
 export function householdThresholdConsequence(cents: number | null): string {
   const money = formatMoneyFromCents(cents);
@@ -122,6 +140,47 @@ export function householdThresholdConsequence(cents: number | null): string {
     return "Nothing is written until this reads as a figure in dollars. The figure on file stands until then.";
   }
   return `Change orders over ${money} will need a signature from the household. Every household member who already signs money from this figure moves to ${money}, on every job. Nothing is sent to them.`;
+}
+
+/**
+ * WHAT "Record the authority" SAYS BEFORE IT IS PRESSED (R-BQ, R-J's shape).
+ *
+ * r16 F1 answered "the `client_rep` added before the figure existed never got
+ * a grant" inside `set_household_threshold()`, with a loop that OPENED one —
+ * and that loop could name no project, so naming one household's figure wrote
+ * money authority onto every open `client_rep` seat its members held anywhere
+ * in the studio's book, on another household's job, under another principal,
+ * where nothing could take it back (r17 BLOCKING-1). R-BQ: "A household
+ * figure never opens a money grant by itself … Members added before a figure
+ * existed get authority through a named per-member act on the Client side
+ * band ('Record the authority', R-J shape, project-scoped)."
+ *
+ * So the figure moves what the household already wrote — which is exactly
+ * what `householdThresholdConsequence` above has always said — and this is
+ * the act that opens the missing one, on the job the band is standing on and
+ * no other.
+ */
+export function householdAuthorityGapSentence(
+  name: string,
+  projectName: string | null | undefined,
+): string {
+  const job = (projectName ?? "").trim();
+  const where = job ? ` on the ${job}` : " on this job";
+  return `${name} signs for the household but has no figure of their own${where}. Nothing defaulted from the agreement.`;
+}
+
+/** What the press writes — the grant, its cap, and the one job it lands on. */
+export function householdAuthorityConsequence(
+  name: string,
+  cents: number | null | undefined,
+  projectName: string | null | undefined,
+): string {
+  const money = formatMoneyFromCents(cents);
+  const job = (projectName ?? "").trim();
+  const where = job ? ` on the ${job}` : " on this job";
+  return money
+    ? `${name} may sign money to ${money}${where}. No other job changes. Nothing is sent to them.`
+    : `${name} may sign money${where}. No other job changes. Nothing is sent to them.`;
 }
 
 /** And what taking it away will do — the two-step act's own sentence. */
@@ -315,6 +374,41 @@ export function HouseholdBand({
   );
 
   /**
+   * WHO IS STANDING ON THIS JOB SIGNING NOTHING (R-BQ).
+   *
+   * A household member holding the OPEN `client_rep` seat this job's client
+   * side would hand the figure to, with no open money grant on it. That is
+   * r16 F1's population, and since R-BQ took the grant-opening loop out of
+   * `set_household_threshold()` it is repaired by a named act per member
+   * rather than by a loop that could reach another household's job.
+   *
+   * Empty while the household names no figure: `add_household_member()`
+   * writes no grant there either, because a money grant with no cap reads
+   * "Signs money." with none (00624).
+   */
+  const membersOwedAuthority = useMemo(() => {
+    if (!household || household.co_threshold_cents == null) return [];
+    const withGrant = new Set(
+      (resolved?.clientSideMoneyGrants ?? [])
+        .filter((grant) => grant.partyKind === "client_rep" && grant.personId)
+        .map((grant) => grant.personId as string),
+    );
+    const seatedAsRep = new Set(resolved?.clientRepSeatCardIds ?? []);
+    return (household.member_person_ids ?? [])
+      .filter((id) => seatedAsRep.has(id) && !withGrant.has(id))
+      .map((id) => ({
+        id,
+        name:
+          (contacts ?? []).find((c) => c.id === id)?.full_name ?? "This person",
+      }));
+  }, [
+    household,
+    resolved?.clientSideMoneyGrants,
+    resolved?.clientRepSeatCardIds,
+    contacts,
+  ]);
+
+  /**
    * r7 MAJOR-3 — PR-n, stated before the press rather than after the refusal.
    */
   const addHeld = householdAddIsHeld(
@@ -414,6 +508,39 @@ export function HouseholdBand({
       onAnnounce?.(householdThresholdSentence(null));
     } catch (e) {
       setError(writeErrorMessage(e, "Could not take the figure away."));
+    }
+  };
+
+  /**
+   * R-BQ's named per-member act. It calls the one door that opens a money
+   * authority — `add_household_member()` with the job named — so the grant
+   * lands on this seat and no other, and PR-n is asked by the database the
+   * same way it is for every other grant in the file.
+   */
+  const recordAuthority = async (member: { id: string; name: string }) => {
+    if (!household) return;
+    setError(null);
+    try {
+      await addMember.mutateAsync({
+        householdId: household.id,
+        personId: member.id,
+        role: "client_rep",
+        projectId,
+      });
+      peopleEvents.householdMemberAdded({
+        role: "client_rep",
+        with_threshold: household.co_threshold_cents != null,
+        seated: true,
+      });
+      onAnnounce?.(
+        householdAuthorityConsequence(
+          member.name,
+          household.co_threshold_cents,
+          projectName,
+        ),
+      );
+    } catch (e) {
+      setError(writeErrorMessage(e, "Could not record the authority."));
     }
   };
 
@@ -647,6 +774,70 @@ export function HouseholdBand({
           admin of the studio can write it.
         </p>
       )}
+
+      {/*
+        R-BQ — THE ONE ACT THAT OPENS AUTHORITY, NAMED, PER MEMBER, ON THIS JOB.
+        The figure moves what the household already wrote and opens nothing; a
+        member standing on this job signing nothing is repaired here, by a
+        press that names them and the job, not by a loop that could reach
+        another household's Call Sheet (r17 BLOCKING-1).
+      */}
+      {!editingFigure &&
+        !clearing &&
+        membersOwedAuthority.map((member) => (
+          <div
+            key={member.id}
+            data-household-authority-gap
+            data-person-id={member.id}
+            className="mt-2 border-l-2 border-[var(--color-pearl)] bg-white/40 px-3 py-2.5"
+          >
+            <p className="text-[0.74rem] text-[var(--color-charcoal)]">
+              {householdAuthorityGapSentence(member.name, projectName)}
+            </p>
+            <p
+              data-household-authority-consequence
+              className="mt-1 text-[0.72rem] leading-relaxed text-[var(--color-aged-oak)]"
+            >
+              {householdAuthorityConsequence(
+                member.name,
+                household.co_threshold_cents,
+                projectName,
+              )}
+            </p>
+            {!isPrincipal && (
+              <p
+                id={`household-authority-held-${member.id}`}
+                className="mt-1 text-[0.7rem] text-[var(--color-aged-oak)]"
+              >
+                {HOUSEHOLD_AUTHORITY_HELD_REASON}
+              </p>
+            )}
+            <DocumentActionRow
+              surfaceKey="call-sheet"
+              regionKey="household-authority"
+              className="mt-2"
+              aria-label="Record who signs for the household"
+            >
+              <DocumentAction
+                actionKey="record-household-authority"
+                variant="primary"
+                onClick={() => void recordAuthority(member)}
+                disabled={!isPrincipal || addMember.isPending}
+                held={!isPrincipal}
+                aria-describedby={
+                  !isPrincipal
+                    ? `household-authority-held-${member.id}`
+                    : undefined
+                }
+                onHeldActivate={() => setError(HOUSEHOLD_AUTHORITY_HELD_REASON)}
+                loading={addMember.isPending}
+                loadingLabel="Recording…"
+              >
+                Record the authority
+              </DocumentAction>
+            </DocumentActionRow>
+          </div>
+        ))}
 
       {adding && (
         <div className="mt-2 border-l-2 border-[var(--color-pearl)] bg-white/40 px-3 py-2.5">

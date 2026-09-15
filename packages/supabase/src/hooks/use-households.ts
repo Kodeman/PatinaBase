@@ -282,6 +282,21 @@ export function useProjectHousehold(projectId: string | null | undefined) {
        * studio CLOSED is a fact about a seat this act never touches.
        */
       clientSideMoneyGrants: ClientSideMoneyGrant[];
+      /**
+       * The cards holding the OPEN `client_rep` seat this job's client side
+       * would hand a household grant to — the seat `add_household_member()`
+       * reuses, one per card (r17 BLOCKING-1, R-BQ).
+       *
+       * R-BQ took the grant-opening loop out of `set_household_threshold()`:
+       * a household figure never opens a money grant by itself, because the
+       * act that opens one has to name a job. So the member seated before the
+       * figure existed is given authority by a NAMED per-member act on the
+       * band, and the band needs to know which members are standing there
+       * signing nothing. `memberCardIds` cannot answer it: it holds every
+       * client-side card whatever its seat kind, and the plain `client` seat
+       * never carries the figure (PR-c).
+       */
+      clientRepSeatCardIds: string[];
     }> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -366,6 +381,20 @@ export function useProjectHousehold(projectId: string | null | undefined) {
         takenPairs.add(pair);
         chosenSeatIds.add(seat.id);
       }
+      // The open `client_rep` seats the RPC would reuse, by card (R-BQ): who
+      // the band may offer "Record the authority" for.
+      const clientRepSeatCardIds = [
+        ...new Set(
+          openSeatRows
+            .filter(
+              (seat) =>
+                chosenSeatIds.has(seat.id) &&
+                seat.party_kind === "client_rep" &&
+                !!seat.studio_contact_id,
+            )
+            .map((seat) => seat.studio_contact_id as string),
+        ),
+      ];
       const seatIds = openSeatRows.map((seat) => seat.id).filter(Boolean);
       if (seatIds.length > 0) {
         // One read, two answers (r10 BLOCKING-1): whether the client side
@@ -437,6 +466,7 @@ export function useProjectHousehold(projectId: string | null | undefined) {
               memberCardIds,
               clientSideHasAuthority,
               clientSideMoneyGrants,
+              clientRepSeatCardIds,
             };
           }
         }
@@ -450,6 +480,7 @@ export function useProjectHousehold(projectId: string | null | undefined) {
           memberCardIds,
           clientSideHasAuthority,
           clientSideMoneyGrants,
+          clientRepSeatCardIds,
         };
       }
 
@@ -472,6 +503,7 @@ export function useProjectHousehold(projectId: string | null | undefined) {
         memberCardIds,
         clientSideHasAuthority,
         clientSideMoneyGrants,
+        clientRepSeatCardIds,
       };
     },
   });
@@ -547,6 +579,15 @@ export function useCreateClientHousehold() {
  * figure and the grants it sourced in one transaction, refuses by name where
  * PR-n's standing is missing on either, and closes those grants where the
  * figure is taken away.
+ *
+ * IT OPENS NOTHING (R-BQ, r17 BLOCKING-1). For one round the same RPC also
+ * opened the grant a member seated before the figure never got — and the loop
+ * that did it could name no project, so one household's figure wrote money
+ * authority onto every open `client_rep` seat its members held anywhere in
+ * the studio's book, on jobs under another principal, where neither household
+ * could take it back. `add_household_member()` (project-scoped, PR-n gated)
+ * is the only door that opens authority; the band offers it per member as
+ * "Record the authority".
  */
 export function useSetHouseholdThreshold() {
   const queryClient = useQueryClient();

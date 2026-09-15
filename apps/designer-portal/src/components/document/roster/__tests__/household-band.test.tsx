@@ -13,8 +13,12 @@ import {
   householdEmptySentence,
   HOUSEHOLD_ADD_HELD_REASON,
   householdAddIsHeld,
+  householdAuthorityConsequence,
+  householdAuthorityGapSentence,
   householdMemberConsequence,
+  householdThresholdConsequence,
   householdThresholdSentence,
+  HOUSEHOLD_AUTHORITY_HELD_REASON,
   parseThresholdEntry,
 } from "../household-band";
 
@@ -28,6 +32,8 @@ let memberRole = "member";
 let clientSideHasAuthority = false;
 /** r10 BLOCKING-1 — the open money grants the client side already carries. */
 let clientSideMoneyGrants: Array<Record<string, unknown>> = [];
+/** R-BQ — the cards holding this job's open `client_rep` seat. */
+let clientRepSeatCardIds: string[] = [];
 
 jest.mock("@patina/supabase", () => ({
   HOUSEHOLD_MEMBER_ROLE_LABELS: {
@@ -54,6 +60,7 @@ jest.mock("@patina/supabase", () => ({
       memberCardIds: ["card-adaeze"],
       clientSideHasAuthority,
       clientSideMoneyGrants,
+      clientRepSeatCardIds,
     },
   }),
   useOrganizations: () => ({
@@ -94,6 +101,7 @@ const props = {
 beforeEach(() => {
   clientSideHasAuthority = false;
   clientSideMoneyGrants = [];
+  clientRepSeatCardIds = [];
   addMemberMutate.mockReset().mockResolvedValue("seat-1");
   setThresholdMutate.mockReset().mockResolvedValue({ id: "house-1" });
   createHouseholdMutate.mockReset().mockResolvedValue({ id: "house-1" });
@@ -295,6 +303,127 @@ describe("householdMemberConsequence", () => {
     ).toBe(
       "Chidi Okonkwo joins the household and takes a seat on the Okonkwo residence. They may sign money to $5,000. Nothing is sent to them.",
     );
+  });
+});
+
+/**
+ * R-BQ (r17 BLOCKING-1 / MAJOR-2) — "A household figure never opens a money
+ * grant by itself … Members added before a figure existed get authority
+ * through a named per-member act on the Client side band ('Record the
+ * authority', R-J shape, project-scoped)."
+ */
+describe("the named per-member authority act (R-BQ)", () => {
+  it("says who signs nothing here, in R-J's words", () => {
+    expect(
+      householdAuthorityGapSentence("Chidi Okonkwo", "Okonkwo residence"),
+    ).toBe(
+      "Chidi Okonkwo signs for the household but has no figure of their own on the Okonkwo residence. Nothing defaulted from the agreement.",
+    );
+  });
+
+  it("names the grant the press writes, and the one job it lands on", () => {
+    expect(
+      householdAuthorityConsequence(
+        "Chidi Okonkwo",
+        250000,
+        "Okonkwo residence",
+      ),
+    ).toBe(
+      "Chidi Okonkwo may sign money to $2,500 on the Okonkwo residence. No other job changes. Nothing is sent to them.",
+    );
+  });
+
+  /**
+   * MAJOR-2 — the figure act's sentence promised only moves while the write
+   * also OPENED authority nobody had. Under R-BQ the write is the one that
+   * changed: the figure opens nothing, so the sentence names only the moves
+   * it makes. Pinned here so a grant-opening loop cannot come back without
+   * this sentence coming back with it.
+   */
+  it("leaves the figure's own sentence about moves alone", () => {
+    const sentence = householdThresholdConsequence(250000);
+    expect(sentence).toBe(
+      "Change orders over $2,500 will need a signature from the household. Every household member who already signs money from this figure moves to $2,500, on every job. Nothing is sent to them.",
+    );
+    expect(sentence).not.toMatch(/given|opens|new/i);
+  });
+
+  it("offers the act for a member seated as client_rep with no grant", async () => {
+    household = {
+      ...(household as Record<string, unknown>),
+      member_person_ids: ["card-adaeze", "card-chidi"],
+    };
+    clientRepSeatCardIds = ["card-chidi"];
+    render(<HouseholdBand {...props} />);
+    expect(
+      screen.getByText(
+        /Chidi Okonkwo signs for the household but has no figure of their own/,
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    await waitFor(() => expect(addMemberMutate).toHaveBeenCalled());
+    // the one door that opens authority, with the job named (R-BQ)
+    expect(addMemberMutate).toHaveBeenCalledWith({
+      householdId: "house-1",
+      personId: "card-chidi",
+      role: "client_rep",
+      projectId: "proj-okonkwo",
+    });
+  });
+
+  it("offers nothing where the seat already carries a money grant", () => {
+    household = {
+      ...(household as Record<string, unknown>),
+      member_person_ids: ["card-adaeze", "card-chidi"],
+    };
+    clientRepSeatCardIds = ["card-chidi"];
+    clientSideMoneyGrants = [
+      {
+        engagementId: "seat-chidi",
+        personId: "card-chidi",
+        partyKind: "client_rep",
+        thresholdCents: 250000,
+        sourceClause: "client_households.co_threshold_cents",
+        sourceHouseholdId: "house-1",
+      },
+    ];
+    render(<HouseholdBand {...props} />);
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers nothing while the household names no figure", () => {
+    household = {
+      ...(household as Record<string, unknown>),
+      member_person_ids: ["card-adaeze", "card-chidi"],
+      co_threshold_cents: null,
+    };
+    clientRepSeatCardIds = ["card-chidi"];
+    render(<HouseholdBand {...props} />);
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+  });
+
+  /** PR-n: the database refuses the whole act for a plain member. */
+  it("holds the act for anyone who is not the principal", () => {
+    memberRole = "member";
+    household = {
+      ...(household as Record<string, unknown>),
+      member_person_ids: ["card-adaeze", "card-chidi"],
+    };
+    clientRepSeatCardIds = ["card-chidi"];
+    render(<HouseholdBand {...props} />);
+    expect(
+      screen.getByText(HOUSEHOLD_AUTHORITY_HELD_REASON),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Record the authority" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(addMemberMutate).not.toHaveBeenCalled();
   });
 });
 

@@ -4696,22 +4696,32 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- 13b. r16 F1 — THE MEMBER ADDED BEFORE THE FIGURE EXISTED STILL GETS ONE
+-- 13b. R-BQ — THE FIGURE OPENS NOTHING; THE NAMED ACT DOES
 --
 -- add_household_member() writes no money grant while the household names no
--- figure (right: a NULL threshold reads "Signs money." with no cap), and
--- set_household_threshold() only ever UPDATEd grants that already existed —
--- so the ordinary order of work (members first, the dollar figure last) left
--- every `client_rep` member of that first step with no authority for ever,
--- their person card printing "No authority on this job" beside the band's own
--- clause. The figure act now OPENS the missing grant: open seats only, the
--- `client_rep` role only, and never where a grant already stands.
+-- figure (right: a NULL threshold reads "Signs money." with no cap), so the
+-- ordinary order of work — members first, the dollar figure last — leaves
+-- that member with no authority until somebody records one. r16 F1 answered
+-- it inside set_household_threshold(), with a loop that could name no
+-- project and so wrote money authority onto every open `client_rep` seat its
+-- members held anywhere in the studio's book (block 13c). R-BQ:
+--
+--   "A household figure never opens a money grant by itself.
+--    add_household_member (project-scoped, PR-n gated) is the only door that
+--    opens authority … Members added before a figure existed get authority
+--    through a named per-member act on the Client side band ('Record the
+--    authority', R-J shape, project-scoped)."
+--
+-- So: the figure moves what this household wrote and opens nothing, and the
+-- band's named act — which is add_household_member() with the job named —
+-- opens the one grant, on the one job.
 -- ═══════════════════════════════════════════════════════════════════════════
 DO $$
 DECLARE
   v_early  uuid;   -- the client_rep added before the figure
   v_plain  uuid;   -- the plain client, who never carries the figure (PR-c)
   v_closed uuid;   -- a client_rep seat the studio closed
+  v_named  uuid;   -- what the named act returns for the same member
   v_thr    integer;
   v_src    uuid;
   n        integer;
@@ -4747,36 +4757,55 @@ BEGIN
   PERFORM public.set_household_threshold('f9d10000-0000-4000-8000-00000000000d', 300000);
   PERFORM pg_temp.reset_role();
 
+  -- R-BQ: the figure opened NOTHING, on this seat or any other
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = v_early AND scope = 'money';
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'BLOCK 13b FAIL (13b-b): naming the figure opened % money grant(s) by itself (R-BQ)', n;
+  END IF;
+
+  -- ── the named per-member act, R-J's shape, with the job named ───────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_named := public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000c','f9d00000-0000-4000-8000-000000000002',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+
+  IF v_named IS DISTINCT FROM v_early THEN
+    RAISE EXCEPTION
+      'BLOCK 13b FAIL (13b-c): the named act opened a second seat (% vs %)', v_named, v_early;
+  END IF;
   SELECT count(*) INTO n FROM public.project_party_authority
    WHERE engagement_id = v_early AND scope = 'money' AND effective_to IS NULL;
   IF n <> 1 THEN
     RAISE EXCEPTION
-      'BLOCK 13b FAIL (13b-b): the client_rep added before the figure carries % open money grant(s), expected 1',
+      'BLOCK 13b FAIL (13b-d): the member seated before the figure carries % open money grant(s) after the named act, expected 1',
       n;
   END IF;
   SELECT threshold_cents, source_household_id INTO v_thr, v_src
     FROM public.project_party_authority
    WHERE engagement_id = v_early AND scope = 'money' AND effective_to IS NULL;
   IF v_thr <> 250000 OR v_src <> 'f9d10000-0000-4000-8000-00000000000c' THEN
-    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-c): the opened grant reads % / %', v_thr, v_src;
+    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-e): the recorded grant reads % / %', v_thr, v_src;
   END IF;
 
   -- PR-c: the plain client seat never carries the figure
   SELECT count(*) INTO n FROM public.project_party_authority
    WHERE engagement_id = v_plain AND scope = 'money';
   IF n <> 0 THEN
-    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-d): the plain client seat carries % money grant(s)', n;
+    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-f): the plain client seat carries % money grant(s)', n;
   END IF;
 
-  -- r15 MAJOR-1 holds against the new opener: a CLOSED seat gets nothing
+  -- r15 MAJOR-1 holds: a CLOSED seat gets nothing, from either door
   SELECT count(*) INTO n FROM public.project_party_authority
    WHERE engagement_id = v_closed AND scope = 'money';
   IF n <> 0 THEN
     RAISE EXCEPTION
-      'BLOCK 13b FAIL (13b-e): the figure opened % money grant(s) on a seat the studio closed', n;
+      'BLOCK 13b FAIL (13b-g): a seat the studio closed carries % money grant(s)', n;
   END IF;
 
-  -- and raising it again MOVES that grant rather than opening a second one
+  -- and raising the figure now MOVES that grant rather than opening a second
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
   PERFORM public.set_household_threshold('f9d10000-0000-4000-8000-00000000000c', 500000);
   PERFORM pg_temp.reset_role();
@@ -4784,10 +4813,172 @@ BEGIN
     FROM public.project_party_authority
    WHERE engagement_id = v_early AND scope = 'money' AND effective_to IS NULL;
   IF n <> 1 OR v_thr <> 500000 THEN
-    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-f): % open money grant(s) at %', n, v_thr;
+    RAISE EXCEPTION 'BLOCK 13b FAIL (13b-h): % open money grant(s) at %', n, v_thr;
   END IF;
 
-  RAISE NOTICE '13b. r16 F1 — the member added before the figure gets the grant when the figure is named, and no closed seat does: passed';
+  RAISE NOTICE '13b. R-BQ — the figure opens no grant by itself, and the named per-member act opens the one it should: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13c. r17 BLOCKING-1 / r17 MAJOR-1 — THE FIGURE REACHES NO OTHER JOB, AND
+--      REFUSES NOTHING OVER ONE
+--
+-- r16 F1's grant-opening loop named the role, the members and the seat's
+-- standing and NOTHING about the project, so naming one household's figure
+-- opened a money grant on every open `client_rep` seat its members held
+-- anywhere in the studio's book — another household's job, another
+-- principal's Call Sheet — stamped with the household that pressed, which
+-- meant no household could ever move it again (both loops key on
+-- source_household_id). The same reach made one member's seat on an R-BI
+-- legacy studio-less job refuse the WHOLE figure act. Block 13b could not see
+-- either: it stages every member on ONE job.
+--
+-- So this block stages ONE member on THREE jobs — the household's own, an
+-- ordinary roster seat on another live job, and a seat on a studio-less
+-- legacy job — and names one figure. Under R-BQ the figure moves this
+-- household's grants and opens nothing anywhere.
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, created_by) VALUES
+  ('f9d00000-0000-4000-8000-000000000005','f9000000-0000-4000-8000-00000000000a',
+   'person','client','R17 Chidi Two-Jobs','a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.client_households
+  (id, organization_id, designer_id, display_name, co_threshold_cents, created_by) VALUES
+  ('f9d10000-0000-4000-8000-00000000000e','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','R17 household FIVE (this job)', NULL,
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9d10000-0000-4000-8000-00000000000f','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','R17 household SIX (the other job)', NULL,
+   'a0000000-0000-0000-0000-000000000004');
+
+-- the legacy studio-less job (R-BI's population), staged the way block 6 does
+-- and with 00624's card guard off, because the room cannot write this shape
+ALTER TABLE public.projects DISABLE TRIGGER set_project_studio_id;
+INSERT INTO public.projects
+  (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+  ('f9300000-0000-4000-8000-0000000000c2','W3 r17 studio-less legacy job',
+   'a0000000-0000-0000-0000-000000000004', NULL,'active',
+   'a0000000-0000-0000-0000-000000000004','full');
+ALTER TABLE public.projects ENABLE TRIGGER set_project_studio_id;
+
+ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9500000-0000-4000-8000-00000000091c','f9300000-0000-4000-8000-0000000000c2',
+   'client_rep','R17 Chidi Two-Jobs','f9d00000-0000-4000-8000-000000000005',
+   'a0000000-0000-0000-0000-000000000004');
+ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+
+-- and an ORDINARY roster seat on the studio's other live job — "Add to the
+-- roster", with no household anywhere near it
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9500000-0000-4000-8000-00000000091b','f9300000-0000-4000-8000-0000000000c1',
+   'client_rep','R17 Chidi Two-Jobs','f9d00000-0000-4000-8000-000000000005',
+   'a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_own    uuid;   -- the seat household FIVE opened on its own job
+  v_other  uuid := 'f9500000-0000-4000-8000-00000000091b';  -- the plain seat
+  v_less   uuid := 'f9500000-0000-4000-8000-00000000091c';  -- the studio-less seat
+  v_thr    integer;
+  v_src    uuid;
+  n        integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_own := public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000e','f9d00000-0000-4000-8000-000000000005',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+
+  -- the same card now holds THREE open client_rep seats on three jobs, one of
+  -- them on a job that records no studio
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE studio_contact_id = 'f9d00000-0000-4000-8000-000000000005'
+     AND party_kind = 'client_rep' AND off_job_at IS NULL;
+  IF n <> 3 THEN
+    RAISE EXCEPTION 'BLOCK 13c FAIL (13c-a): the fixture stages % open seat(s), expected 3', n;
+  END IF;
+
+  -- r17 MAJOR-1 — the studio-less seat the household never named does not
+  -- refuse the whole act
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9d10000-0000-4000-8000-00000000000e', 250000);
+  PERFORM pg_temp.reset_role();
+
+  -- r17 BLOCKING-1 / R-BQ — and it opened nothing, here or anywhere
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id IN (v_own, v_other, v_less) AND scope = 'money';
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'BLOCK 13c FAIL (13c-b): naming the figure opened % money grant(s) by itself', n;
+  END IF;
+
+  -- the named act on the household's OWN job, and only there
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000e','f9d00000-0000-4000-8000-000000000005',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+
+  SELECT threshold_cents, source_household_id INTO v_thr, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_own AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 250000 OR v_src <> 'f9d10000-0000-4000-8000-00000000000e' THEN
+    RAISE EXCEPTION 'BLOCK 13c FAIL (13c-c): the household''s own seat reads % / %', v_thr, v_src;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id IN (v_other, v_less) AND scope = 'money';
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'BLOCK 13c FAIL (13c-d): the act reached % seat(s) on jobs the household never named', n;
+  END IF;
+
+  -- raising the figure moves the household's own grant and still reaches no
+  -- other job
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9d10000-0000-4000-8000-00000000000e', 500000);
+  PERFORM pg_temp.reset_role();
+  SELECT threshold_cents INTO v_thr FROM public.project_party_authority
+   WHERE engagement_id = v_own AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 500000 THEN
+    RAISE EXCEPTION 'BLOCK 13c FAIL (13c-e): the household''s own grant did not move (%)', v_thr;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id IN (v_other, v_less) AND scope = 'money';
+  IF n <> 0 THEN
+    RAISE EXCEPTION
+      'BLOCK 13c FAIL (13c-f): raising the figure reached % seat(s) on other jobs', n;
+  END IF;
+
+  -- THE NEGATIVE CONTROL (probe-r17-a A-f): the household that DOES hold the
+  -- other job can still record and move its own figure there, and the first
+  -- household's grant is left exactly where it stands
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9d10000-0000-4000-8000-00000000000f', 900000);
+  PERFORM public.add_household_member(
+    'f9d10000-0000-4000-8000-00000000000f','f9d00000-0000-4000-8000-000000000005',
+    'client_rep','f9300000-0000-4000-8000-0000000000c1');
+  PERFORM pg_temp.reset_role();
+
+  SELECT threshold_cents, source_household_id INTO v_thr, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_other AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 900000 OR v_src <> 'f9d10000-0000-4000-8000-00000000000f' THEN
+    RAISE EXCEPTION
+      'BLOCK 13c FAIL (13c-g): the household that holds the other job could not record its own figure there (% / %)',
+      v_thr, v_src;
+  END IF;
+  SELECT threshold_cents, source_household_id INTO v_thr, v_src
+    FROM public.project_party_authority
+   WHERE engagement_id = v_own AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 500000 OR v_src <> 'f9d10000-0000-4000-8000-00000000000e' THEN
+    RAISE EXCEPTION 'BLOCK 13c FAIL (13c-h): the first household''s own grant moved (% / %)', v_thr, v_src;
+  END IF;
+
+  RAISE NOTICE '13c. r17 BLOCKING-1 / MAJOR-1 — one member on three jobs: the figure opens nothing and refuses nothing, the named act reaches only the job it names, and each household keeps its own: passed';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
