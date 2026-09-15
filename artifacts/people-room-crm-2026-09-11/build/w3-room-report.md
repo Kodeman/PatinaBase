@@ -62,6 +62,16 @@ relative to the seed rather than as a literal that drifts a day per day.
 
 ## 1. Files
 
+**Re-measured at HEAD in this round (r25 major-2, the tenth filing of the drift-enumeration
+defect after r7 M-4, r8 MAJOR-1, r15 MAJOR-3, r19 major-2, r20 major-2, r21 major-5, r23 major-1,
+r24 minor-9 and r25's own major-1 sibling).** `git diff --stat 3d65f81e4..HEAD -- apps/designer-portal/src
+packages/supabase/src` returns **50 files changed, 12804 insertions(+), 189 deletions(-)** at HEAD.
+This round adds the five files the r25 review named as missing: `database.types.ts` (now under
+`### Changed`), `use-households-r16.test.ts` (now under `### Tests`), and
+`people-directory-derivation.test.ts`, `people-room-address.test.tsx`,
+`people-room-nudge-scope.test.tsx` (now in the "Mock factories widened" list). **Count
+reconciliation: New (8) + Changed (19) + Tests (23) = 50.**
+
 ### New — `packages/supabase/src/hooks/`
 
 | File | What it is |
@@ -102,6 +112,7 @@ relative to the seed rather than as a literal that drifts a day per day.
 | `components/document/overlays/doc-sheet.tsx` | r19 MAJOR-1's page label at 390 — the eyebrow stops hiding below `sm` |
 | `components/document/roster/use-project-authority.ts` | r19 MAJOR-1's filter: a grant that ended WITH its seat is history on the day of the close too (00634) |
 | `lib/analytics/people-events.ts` | `cardsMerged`, `householdMemberAdded`, `bidRecorded` |
+| `packages/supabase/src/database.types.ts` | 00628–00634's generated types (`pnpm db:generate`) — the data layer every hook above reads through |
 
 ### Tests
 
@@ -112,7 +123,8 @@ each time because a fix round added tests to files an earlier round had counted:
 `people-crm-w3.test.ts` (**66**, vitest; re-run at r23) · `bring-forward.test.ts` (17) ·
 `compliance-notice.test.ts` (10) · `travel-list-pane.test.tsx` (5) ·
 `compare-merge-sheet.test.tsx` (17) · `household-band.test.tsx` (45) ·
-`close-seat-act.test.tsx` (**9**) · `archive-card-door.test.tsx` (8).
+`close-seat-act.test.tsx` (**9**) · `archive-card-door.test.tsx` (8) ·
+`use-households-r16.test.ts` (**4**, vitest; new this branch, named nowhere in earlier rounds — r25 major-2).
 
 Extended: `rolodex-picker.test.tsx` (15 → **40**, r23 major-2's two search pins), `roster-row.test.tsx` (26 → **56**),
 `write-error.test.ts` (**6**, r21's two 00634 refusal sentences), and
@@ -126,7 +138,8 @@ the fix rounds since, which take no port.
 
 Mock factories widened for the new hooks: `call-sheet.test.tsx`, `call-sheet-mount.test.tsx`,
 `project-roster-surfaces.test.tsx`, `company-card.test.tsx`, `person-profile.test.tsx`,
-`directory-scope.test.tsx`.
+`directory-scope.test.tsx`, `people-directory-derivation.test.ts`, `people-room-address.test.tsx`,
+`people-room-nudge-scope.test.tsx` (the last three named nowhere in earlier rounds — r25 major-2).
 
 ---
 
@@ -319,14 +332,17 @@ per row.
   household" — the string `client_rep` reaches no face, C5), a consequence sentence, and
   `add_household_member(household, person, role, project)`.
 
-**PR-n, twice.** "Set the figure" is `aria-disabled` for a plain member with
-`aria-describedby` pointing at a sentence that is **always on the face**, pressed or not — and that
-sentence is the BAND's own (`household-band.tsx:721-724`, the held act's click handler): "A
-change-order figure is the principal's to set. Ask an owner or an admin of the studio." The HOOK's
-refusal is its own, longer string (`use-households.ts:116-117`, `household_threshold_forbidden`):
-"A change-order figure is the principal's to set, and the principal's to take away. Ask an owner or
-an admin of the studio." A zero-row UPDATE the caller can still SELECT is the WITH CHECK refusing
-the figure, and is translated rather than swallowed.
+**PR-n, three sentences for one rule.** "Set the figure" is `aria-disabled` for a plain
+member with `aria-describedby` pointing at `#household-figure-held` (`household-band.tsx:780-788`),
+always on the face, pressed or not: "The change-order figure is the principal's to set. An owner
+or an admin of the studio can write it." A press on the held act raises a second, different
+sentence as an ALERT — the click handler's own string (`household-band.tsx:721-724`), reachable
+only after a press, in the band's `role="alert"` paragraph: "A change-order figure is the
+principal's to set. Ask an owner or an admin of the studio." The HOOK's refusal is a third,
+longer string (`use-households.ts:116-117`, `household_threshold_forbidden`): "A change-order
+figure is the principal's to set, and the principal's to take away. Ask an owner or an admin
+of the studio." A zero-row UPDATE the caller can still SELECT is the WITH CHECK refusing the
+figure, and is translated rather than swallowed.
 
 ### The resolver, and why it is not the one the brief implied
 
