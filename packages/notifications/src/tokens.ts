@@ -2,7 +2,12 @@ import { SignJWT, jwtVerify, errors } from 'jose';
 import type { NotificationType } from '@patina/shared/types';
 
 export interface UnsubscribeTokenPayload {
-  /** User ID */
+  /**
+   * The token's subject. A profile id for an account holder, or
+   * `channel:<studio_contact_channels.id>` for an address with no Patina
+   * account behind it — the only unsubscribe door such a recipient has
+   * (CRM-12, 00635). `parseUnsubscribeSubject` tells the two apart.
+   */
   sub: string;
   /** Notification type to unsubscribe from, or 'all_marketing' */
   type: NotificationType | 'all_marketing';
@@ -115,4 +120,17 @@ export async function generateUnsubscribeUrl(
 ): Promise<string> {
   const token = await generateUnsubscribeToken(userId, notificationType);
   return `${baseUrl}/preferences?token=${encodeURIComponent(token)}`;
+}
+
+
+/** `channel:<uuid>` vs a plain profile id — the two subjects a signed
+ *  unsubscribe token can carry (CRM-12). */
+export type UnsubscribeSubject =
+  | { kind: 'user'; id: string }
+  | { kind: 'channel'; id: string };
+
+export function parseUnsubscribeSubject(sub: string): UnsubscribeSubject {
+  return sub.startsWith('channel:')
+    ? { kind: 'channel', id: sub.slice('channel:'.length) }
+    : { kind: 'user', id: sub };
 }

@@ -8,7 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { NotificationType } from '@patina/shared/types';
 import { NOTIFICATION_TYPE_TO_PREFERENCE } from '@patina/shared/types';
-import { verifyUnsubscribeToken } from './tokens';
+import { parseUnsubscribeSubject, verifyUnsubscribeToken } from './tokens';
 
 export interface UnsubscribeOutcome {
   ok: boolean;
@@ -37,7 +37,19 @@ export async function applyUnsubscribeToken(
     };
   }
 
-  const { sub: userId, type } = result.payload;
+  const { sub, type } = result.payload;
+  const subject = parseUnsubscribeSubject(sub);
+
+  // CRM-12: a recipient with no Patina account has no notification_preferences
+  // row to clear. Her opt-out lands on the ADDRESS — every typed email channel
+  // carrying it, across every card, because one mailbox is one person saying
+  // stop. The studio's own send gate reads that status before every letter and
+  // the Directory row prints it.
+  if (subject.kind === 'channel') {
+    return applyChannelUnsubscribe(supabase, subject.id, type);
+  }
+
+  const userId = subject.id;
 
   // Look up the existing row; create if missing so we have a target to update.
   const { data: existing } = await supabase
@@ -103,4 +115,47 @@ export async function applyUnsubscribeToken(
     type,
     columnUpdated,
   };
+}
+
+
+/**
+ * Mark an address unsubscribed from its channel id.
+ *
+ * The id names ONE row; the opt-out is applied to every email-kind row sharing
+ * that row's value, which is the same rule resend-webhook's bounce write uses
+ * (a mailbox's verdict is the mailbox's, not one card's). A row already dead is
+ * left alone: 'dead' is the worse fact and this must not walk it back.
+ */
+async function applyChannelUnsubscribe(
+  supabase: SupabaseClient,
+  channelId: string,
+  type: NotificationType | 'all_marketing'
+): Promise<UnsubscribeOutcome> {
+  const { data: channel, error: readError } = await supabase
+    .from('studio_contact_channels')
+    .select('id, value')
+    .eq('id', channelId)
+    .maybeSingle();
+
+  if (readError) {
+    return { ok: false, status: 'error', message: readError.message, type };
+  }
+  if (!channel?.value) {
+    // An unknown or deleted channel is an invalid token, not an error: the
+    // one-click endpoint must not tell a guesser which it was.
+    return { ok: false, status: 'invalid', type };
+  }
+
+  const { error: updateError } = await supabase
+    .from('studio_contact_channels')
+    .update({ status: 'unsubscribed', status_at: new Date().toISOString() })
+    .eq('value', channel.value)
+    .in('channel_kind', ['email', 'ap_email'])
+    .in('status', ['active', 'bounced']);
+
+  if (updateError) {
+    return { ok: false, status: 'error', message: updateError.message, type };
+  }
+
+  return { ok: true, status: 'applied', type, columnUpdated: 'status' };
 }

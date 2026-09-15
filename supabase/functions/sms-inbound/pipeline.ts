@@ -628,6 +628,160 @@ async function loadCandidateItems(
   return out;
 }
 
+// ── E13: the inbound touch, and CRM-22's authority check ─────────────────────
+//
+// CRM-22: "an inbound approval is matched to a phone and never to an approver,
+// so a 'go ahead' from someone with no money authority reads the same as a
+// signature". The rail cannot refuse the message — a text is a text — but it
+// can record WHO it was from and whether that seat held the standing, so the
+// designer reading it later sees "received, not authority" rather than a
+// signature.
+//
+// WHAT IS NOT COVERED, stated so it is not mistaken for a gap nobody saw: a
+// message from a phone that resolves to NO seat at all writes no touch. There
+// is no subject to file it against and no studio to file it into, and
+// record_touch answers NULL for exactly that reason (00635). The rail already
+// marks such a message needs_review, which is where it is visible.
+
+type DecisionClass =
+  | "none"
+  | "logistics"
+  | "selection"
+  | "money"
+  | "schedule"
+  | "site_access";
+
+type AuthorityVerdict =
+  | "n/a"
+  | "passed"
+  | "failed_no_authority"
+  | "failed_unknown_sender";
+
+/** The authority scopes (00624) that answer for each decision class. */
+const AUTHORITY_SCOPES: Record<string, string[]> = {
+  money: ["money", "change_order"],
+  selection: ["selections"],
+  schedule: ["schedule"],
+  site_access: ["site_access", "key"],
+};
+
+/** client_decisions.coordination_kind → the class of decision it is. A signoff
+ *  is the one that spends money (a draw, a change order); the rest are the
+ *  job's own traffic. */
+const COORDINATION_CLASS: Record<string, DecisionClass> = {
+  selection: "selection",
+  signoff: "money",
+  rfi: "logistics",
+  submittal: "logistics",
+  punch: "logistics",
+};
+
+/** Does this seat hold an in-force grant for the class? PR-n's prepares_only
+ *  is decisive on money: F-03 and F-08 prepare the draw, they do not sign it. */
+async function authorityVerdictFor(
+  supabase: SupabaseClient,
+  partyId: string,
+  decisionClass: DecisionClass,
+  today: string,
+): Promise<AuthorityVerdict> {
+  const scopes = AUTHORITY_SCOPES[decisionClass];
+  if (!scopes) return "n/a";
+  const { data, error } = await supabase
+    .from("project_party_authority")
+    .select("scope, prepares_only, effective_from, effective_to")
+    .eq("engagement_id", partyId);
+  if (error) {
+    console.error("sms-inbound: authority read failed", error.message);
+    // A read that failed is not a grant. CRM-22's whole point is that silence
+    // must not read as a signature.
+    return "failed_no_authority";
+  }
+  const rows = (data ?? []) as Array<{
+    scope: string;
+    prepares_only: boolean | null;
+    effective_from: string | null;
+    effective_to: string | null;
+  }>;
+  const held = rows.some((row) =>
+    scopes.includes(row.scope) &&
+    (decisionClass !== "money" || !row.prepares_only) &&
+    (!row.effective_from || row.effective_from <= today) &&
+    (!row.effective_to || row.effective_to >= today)
+  );
+  return held ? "passed" : "failed_no_authority";
+}
+
+/** The class and the authority verdict for a message being FILED against an
+ *  open item. A coordination item is a client_decisions row and carries its own
+ *  court: a message filing it from a seat that is not the court is
+ *  failed_unknown_sender — the approval arrived from someone the decision was
+ *  never put to. */
+async function filedDecisionFacts(
+  supabase: SupabaseClient,
+  target: { kind: string; id: string } | undefined,
+  partyId: string,
+  intent: string,
+  today: string,
+): Promise<{ decisionClass: DecisionClass; authorityCheck: AuthorityVerdict }> {
+  if (!target) {
+    return { decisionClass: "none", authorityCheck: "n/a" };
+  }
+  if (target.kind !== "coordination") {
+    return {
+      decisionClass: intent === "report_delay" ? "schedule" : "logistics",
+      authorityCheck: intent === "report_delay"
+        ? await authorityVerdictFor(supabase, partyId, "schedule", today)
+        : "n/a",
+    };
+  }
+  const { data } = await supabase
+    .from("client_decisions")
+    .select("id, coordination_kind, court_party_id")
+    .eq("id", target.id)
+    .maybeSingle();
+  const row = data as
+    | { coordination_kind?: string; court_party_id?: string | null }
+    | null;
+  const decisionClass = COORDINATION_CLASS[row?.coordination_kind ?? ""] ??
+    "selection";
+  if (!row || (row.court_party_id ?? null) !== partyId) {
+    return { decisionClass, authorityCheck: "failed_unknown_sender" };
+  }
+  return {
+    decisionClass,
+    authorityCheck: await authorityVerdictFor(
+      supabase,
+      partyId,
+      decisionClass,
+      today,
+    ),
+  };
+}
+
+/** One inbound touch. Best effort — a record of the message, never a condition
+ *  of answering it. */
+async function recordInboundTouch(
+  supabase: SupabaseClient,
+  partyId: string | null,
+  messageId: string | null,
+  facts: { decisionClass: DecisionClass; authorityCheck: AuthorityVerdict },
+  occurredAt: string,
+): Promise<void> {
+  if (!partyId) return;
+  const { error } = await supabase.rpc("record_touch", {
+    p_subject_type: "engagement",
+    p_subject_id: partyId,
+    p_channel_kind: "sms",
+    p_direction: "in",
+    p_occurred_at: occurredAt,
+    p_actor_ref: "sms-inbound",
+    p_decision_class: facts.decisionClass,
+    p_authority_check: facts.authorityCheck,
+    p_message_ref: messageId,
+  });
+  if (error) console.error("sms-inbound: record_touch failed", error.message);
+}
+
 // ── designer notification (in-band) ──────────────────────────────────────────
 async function notifyDesigner(
   supabase: SupabaseClient,
@@ -1050,6 +1204,19 @@ export async function processInbound(
     const partyId = (conv.state_context?.pending_party_id as string | undefined) ?? conv.party_id;
     if (pending && partyId) {
       const applied = await applyEffect(supabase, partyId, pending, messageId);
+      // The parked effect is FILED here, not where it was parsed, so this is
+      // where CRM-22's check belongs.
+      await recordInboundTouch(
+        supabase, partyId, messageId,
+        await filedDecisionFacts(
+          supabase,
+          (pending as { target?: { kind: string; id: string } }).target,
+          partyId,
+          String((pending as { type?: string }).type ?? ""),
+          nowIso.slice(0, 10),
+        ),
+        nowIso,
+      );
       // Clear only this branch's own keys — a digest menu or project pin in
       // state_context must survive the confirmation.
       const clearedContext = { ...conv.state_context };
@@ -1079,6 +1246,14 @@ export async function processInbound(
           supabase, partyId,
           { type: "mark_done", target: { kind: target.kind, id: target.id } },
           messageId,
+        );
+        await recordInboundTouch(
+          supabase, partyId, messageId,
+          await filedDecisionFacts(
+            supabase, { kind: target.kind, id: target.id }, partyId,
+            "mark_done", nowIso.slice(0, 10),
+          ),
+          nowIso,
         );
         await captureServerEvent("sms-inbound", "sms_parse_outcome",
           { path: "menu", intent: "mark_done", confidence_bucket: "n/a", disposition: "applied" },
@@ -1145,6 +1320,15 @@ export async function processInbound(
   // (i) Confidence gate.
   if (parsed.confidence >= 0.8 && (targetItem || parsed.intent === "punch_report" || parsed.intent === "note")) {
     const applied = await applyEffect(supabase, effectParty, effect, effectiveMessageId);
+    await recordInboundTouch(
+      supabase, effectParty, effectiveMessageId,
+      await filedDecisionFacts(
+        supabase,
+        targetItem ? { kind: targetItem.kind, id: targetItem.id } : undefined,
+        effectParty, parsed.intent, nowIso.slice(0, 10),
+      ),
+      nowIso,
+    );
     await stampMessage(supabase, effectiveMessageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
     if (parsed.intent === "flag_blocker") {
       await notifyDesigner(supabase, effectProject, "field_blocker", { message_id: effectiveMessageId, note: parsed.note });
@@ -1166,6 +1350,12 @@ export async function processInbound(
       })
       .eq("id", conv.id);
     await stampMessage(supabase, effectiveMessageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
+    // Nothing is filed until she answers YES, so the touch records the contact
+    // and no decision.
+    await recordInboundTouch(
+      supabase, effectParty, effectiveMessageId,
+      { decisionClass: "none", authorityCheck: "n/a" }, nowIso,
+    );
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "llm", intent: parsed.intent, confidence_bucket: bucket, disposition: "clarify" },
       { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
@@ -1176,6 +1366,10 @@ export async function processInbound(
   await supabase.from("sms_messages")
     .update({ needs_review: true, confidence: parsed.confidence, parsed_intent: { path: "llm", ...parsed }, party_id: effectParty, project_id: effectProject })
     .eq("id", effectiveMessageId);
+  await recordInboundTouch(
+    supabase, effectParty, effectiveMessageId,
+    { decisionClass: "none", authorityCheck: "n/a" }, nowIso,
+  );
   await notifyDesigner(supabase, effectProject, "field_needs_review", { message_id: effectiveMessageId, body });
   const firstName = await designerFirstName(supabase, effectProject);
   await captureServerEvent("sms-inbound", "sms_parse_outcome",

@@ -373,22 +373,39 @@ END;
 $$;
 RESET ROLE;
 
+-- 00636 (CRM-29): only sha256 is stored, so the trigger's token cannot be read
+-- back by anyone. What the suite captures from here on is the address a LETTER
+-- carries — ensure_invoice_link's raw return — which is the only place a raw
+-- token exists at all now.
+SET LOCAL ROLE service_role;
 DO $$
 DECLARE v_token text;
 BEGIN
-  SELECT token INTO v_token FROM public.invoice_links
-  WHERE invoice_id = 'a5745000-0000-4000-8000-000000000031' AND status = 'active';
-  ASSERT v_token ~ '^[0-9a-f]{64}$', 'issue_invoice must mint one active 64-hex link';
+  ASSERT (SELECT token IS NULL AND token_hash ~ '^[0-9a-f]{64}$'
+                 AND expires_at > now()
+          FROM public.invoice_links
+          WHERE invoice_id = 'a5745000-0000-4000-8000-000000000031' AND status = 'active'),
+    'issue_invoice must mint one hashed, dated link and no plaintext';
+  v_token := public.ensure_invoice_link('a5745000-0000-4000-8000-000000000031');
+  ASSERT v_token ~ '^[0-9a-f]{64}$', 'the letter must carry a 64-hex address';
+  ASSERT (SELECT token_hash = public.invoice_link_token_hash(v_token)
+          FROM public.invoice_links
+          WHERE invoice_id = 'a5745000-0000-4000-8000-000000000031' AND status = 'active'),
+    'the stored hash must be sha256 of the emitted address';
+  -- Two rows now: the trigger's, revoked by the send, and the live one.
   ASSERT (SELECT count(*) = 1 FROM public.invoice_links
-          WHERE invoice_id = 'a5745000-0000-4000-8000-000000000031'),
-    'exactly one link per issue';
+          WHERE invoice_id = 'a5745000-0000-4000-8000-000000000031'
+            AND status = 'active'),
+    'exactly one ACTIVE link per invoice';
   ASSERT (SELECT created_by = 'a5740000-0000-4000-8000-000000000001'
           FROM public.invoice_links
-          WHERE invoice_id = 'a5745000-0000-4000-8000-000000000031'),
+          WHERE invoice_id = 'a5745000-0000-4000-8000-000000000031'
+            AND status = 'active'),
     'the minted link is attributed to the designer';
   INSERT INTO links_state VALUES ('token31', v_token);
 END;
 $$;
+RESET ROLE;
 
 -- The other fixtures issue through the same UPDATE the RPCs perform.
 UPDATE public.invoices
@@ -414,10 +431,15 @@ BEGIN
   ASSERT NOT EXISTS (SELECT 1 FROM public.invoice_links
                      WHERE invoice_id = 'a5745000-0000-4000-8000-000000000034'),
     'a draft must have no link';
+  -- 00636: captured from the mint, not from the row — there is no plaintext in
+  -- the row to capture.
   INSERT INTO links_state
-  SELECT 'token' || right(invoice_id::text, 2), token FROM public.invoice_links
-  WHERE invoice_id::text LIKE 'a5745000-%'
-    AND invoice_id <> 'a5745000-0000-4000-8000-000000000031';
+  SELECT 'token' || right(l.invoice_id::text, 2),
+         public.ensure_invoice_link(l.invoice_id)
+  FROM public.invoice_links l
+  WHERE l.invoice_id::text LIKE 'a5745000-%'
+    AND l.invoice_id <> 'a5745000-0000-4000-8000-000000000031'
+    AND l.status = 'active';
 END;
 $$;
 
@@ -461,11 +483,16 @@ DECLARE v_token text;
 BEGIN
   v_token := public.ensure_invoice_link('a5745000-0000-4000-8000-000000000043');
   ASSERT v_token ~ '^[0-9a-f]{64}$', 'ensure_invoice_link recovers the missing link';
-  ASSERT public.ensure_invoice_link('a5745000-0000-4000-8000-000000000043') = v_token,
-    'ensure_invoice_link is stable';
-  ASSERT public.ensure_invoice_link('a5745000-0000-4000-8000-000000000031')
-         = (SELECT value FROM links_state WHERE label = 'token31'),
-    'ensure_invoice_link returns the existing active token';
+  -- CRM-29 REVERSES 00574's "stable address" contract, deliberately: the store
+  -- is a hash, so no address can be re-emitted and every letter mints its own,
+  -- with a fresh 30-day clock. The previous address is revoked in the same call.
+  ASSERT public.ensure_invoice_link('a5745000-0000-4000-8000-000000000043') <> v_token,
+    'ensure_invoice_link regenerates on every send (CRM-29)';
+  ASSERT (SELECT count(*) = 1 FROM public.invoice_links
+          WHERE invoice_id = 'a5745000-0000-4000-8000-000000000043' AND status = 'active'),
+    'a regenerate leaves exactly one live address';
+  ASSERT public.resolve_invoice_link(v_token) IS NULL,
+    'the superseded address is dead the moment the next letter goes';
   ASSERT public.ensure_invoice_link('a5745000-0000-4000-8000-000000000034') IS NULL,
     'ensure_invoice_link is NULL for a draft';
   ASSERT public.ensure_invoice_link('00000000-0000-4000-8000-000000000000') IS NULL,
@@ -507,9 +534,10 @@ BEGIN
     'a direct INSERT at an issued status does not fire the AFTER UPDATE trigger';
 
   -- The migration's backfill statement, verbatim.
-  INSERT INTO public.invoice_links (invoice_id, token, created_by)
+  INSERT INTO public.invoice_links (invoice_id, token_hash, expires_at, created_by)
   SELECT i.id,
-         encode(extensions.gen_random_bytes(32), 'hex'),
+         encode(extensions.digest(encode(extensions.gen_random_bytes(32), 'hex'), 'sha256'), 'hex'),
+         now() + interval '30 days',
          (SELECT pr.id FROM public.profiles pr WHERE pr.id = i.designer_id)
   FROM public.invoices i
   WHERE i.status IN ('sent','partially_paid','paid')
@@ -527,9 +555,10 @@ BEGIN
                                           'a5745000-0000-4000-8000-000000000055')),
     'backfill must skip draft and void';
 
-  INSERT INTO public.invoice_links (invoice_id, token, created_by)
+  INSERT INTO public.invoice_links (invoice_id, token_hash, expires_at, created_by)
   SELECT i.id,
-         encode(extensions.gen_random_bytes(32), 'hex'),
+         encode(extensions.digest(encode(extensions.gen_random_bytes(32), 'hex'), 'sha256'), 'hex'),
+         now() + interval '30 days',
          (SELECT pr.id FROM public.profiles pr WHERE pr.id = i.designer_id)
   FROM public.invoices i
   WHERE i.status IN ('sent','partially_paid','paid')
@@ -560,7 +589,10 @@ BEGIN
       stripe_idempotency_key
     ) VALUES (
       'a5745000-0000-4000-8000-000000000045', 'a5740000-0000-4000-8000-000000000004',
-      (SELECT id FROM public.invoice_links WHERE invoice_id = 'a5745000-0000-4000-8000-000000000045'),
+      -- 00636: a regenerate leaves the superseded row standing, so the live
+      -- address has to be named by status, not by invoice alone.
+      (SELECT id FROM public.invoice_links
+        WHERE invoice_id = 'a5745000-0000-4000-8000-000000000045' AND status = 'active'),
       'cus_x', 100, 'usd', 'xor-both-set'
     );
   EXCEPTION WHEN check_violation THEN v_error := sqlerrm; END;
@@ -657,14 +689,14 @@ BEGIN
   END LOOP;
 
   -- View counting.
-  ASSERT (SELECT view_count = 1 FROM public.invoice_links WHERE token = v_token),
+  ASSERT (SELECT view_count = 1 FROM public.invoice_links WHERE token_hash = public.invoice_link_token_hash(v_token)),
     'the first resolve counted one view';
   PERFORM public.resolve_invoice_link(v_token, false);
-  ASSERT (SELECT view_count = 1 FROM public.invoice_links WHERE token = v_token),
+  ASSERT (SELECT view_count = 1 FROM public.invoice_links WHERE token_hash = public.invoice_link_token_hash(v_token)),
     'p_record_view=false leaves view_count alone';
   PERFORM public.resolve_invoice_link(v_token, true);
   ASSERT (SELECT view_count = 2 AND last_viewed_at IS NOT NULL
-          FROM public.invoice_links WHERE token = v_token),
+          FROM public.invoice_links WHERE token_hash = public.invoice_link_token_hash(v_token)),
     'p_record_view=true bumps view_count';
 
   -- Payer-less project invoice: the roster's single email-only row names her.
@@ -820,10 +852,12 @@ BEGIN
     'the household profile name is back';
 
   -- Draft: no link exists, but even a hand-planted one is NULL.
-  INSERT INTO public.invoice_links (invoice_id, token)
-  VALUES ('a5745000-0000-4000-8000-000000000034', repeat('d', 64));
+  INSERT INTO public.invoice_links (invoice_id, token_hash, expires_at)
+  VALUES ('a5745000-0000-4000-8000-000000000034',
+          public.invoice_link_token_hash(repeat('d', 64)), now() + interval '30 days');
   ASSERT public.resolve_invoice_link(repeat('d', 64)) IS NULL, 'draft → NULL';
-  DELETE FROM public.invoice_links WHERE token = repeat('d', 64);
+  DELETE FROM public.invoice_links
+   WHERE token_hash = public.invoice_link_token_hash(repeat('d', 64));
 
   -- Paid: resolves (a receipt) with no balance; the checkout resolver is empty.
   v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token45'));
@@ -902,10 +936,13 @@ BEGIN
       v := public.get_invoice_link('a5745000-0000-4000-8000-000000000031');
     EXCEPTION WHEN OTHERS THEN v_error := sqlerrm; END;
     IF v_expect_read THEN
+      -- 00636: an authorized reader learns the STATE and the end date, never
+      -- the address — there is no address stored to hand back.
       ASSERT v_error IS NULL
-         AND v->>'token' = (SELECT value FROM links_state WHERE label = 'token31')
-         AND v->>'status' = 'active',
-        format('%s must read the link, got %L / %s', v_actor, v_error, v);
+         AND v->>'token' IS NULL
+         AND v->>'status' = 'active'
+         AND (v->>'expires_at') IS NOT NULL,
+        format('%s must read the link state, got %L / %s', v_actor, v_error, v);
     ELSE
       ASSERT v_error = 'invoice_not_found',
         format('%s must not read the link, got %L', v_actor, v_error);
@@ -926,9 +963,11 @@ BEGIN
     RESET ROLE;
   END LOOP;
 
-  -- Two regenerations landed on 45: one active link, two revoked.
+  -- Two regenerations landed on 45, on top of the issue mint and the send.
+  -- Since 00636 every letter mints too, so the revoked count is a floor rather
+  -- than a fixed number; what must hold exactly is that ONE address is live.
   ASSERT (SELECT count(*) FILTER (WHERE status = 'active') = 1
-             AND count(*) FILTER (WHERE status = 'revoked') = 2
+             AND count(*) FILTER (WHERE status = 'revoked') >= 2
           FROM public.invoice_links
           WHERE invoice_id = 'a5745000-0000-4000-8000-000000000045'),
     'regenerate revokes the old link and mints one new one';
@@ -962,9 +1001,12 @@ DO $$
 BEGIN
   ASSERT public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token45')) IS NULL,
     'a revoked token → NULL';
-  ASSERT public.resolve_invoice_link((SELECT token FROM public.invoice_links
-    WHERE invoice_id = 'a5745000-0000-4000-8000-000000000045' AND status = 'active')) IS NOT NULL,
-    'the regenerated token resolves';
+  -- 00636: the regenerated address cannot be read out of the row. What is
+  -- provable here is the half that matters — the old address is dead — and a
+  -- fresh mint's own return is exercised directly.
+  ASSERT public.resolve_invoice_link(public.ensure_invoice_link(
+    'a5745000-0000-4000-8000-000000000045')) IS NOT NULL,
+    'a freshly minted address resolves';
 END;
 $$;
 
@@ -998,6 +1040,7 @@ DECLARE
   v_retry jsonb;
   v_error text;
   v_final jsonb;
+  v_rotated text;
 BEGIN
   SELECT id INTO v_link FROM public.invoice_links
   WHERE invoice_id = 'a5745000-0000-4000-8000-000000000032' AND status = 'active';
@@ -1051,10 +1094,21 @@ BEGIN
      AND v_retry->>'return_nonce' = v_claim->>'return_nonce',
     'a same-link retry returns the one attempt and its nonce';
 
-  -- The nonce resolves to the invoice's active token.
-  ASSERT public.resolve_invoice_return_nonce(v_claim->>'return_nonce')
-         = (SELECT value FROM links_state WHERE label = 'token32'),
-    'the return nonce resolves to the link token';
+  -- The nonce trades for a LIVE address on the same link row. Since 00636 the
+  -- store is a hash, so the trade ROTATES rather than reads: the row keeps its
+  -- id, its Stripe customer and its payer email (F2 — still never a later
+  -- mint), and the returning payer is handed a fresh address. The suite
+  -- follows the rotation, because the old address is now dead.
+  v_rotated := public.resolve_invoice_return_nonce(v_claim->>'return_nonce');
+  ASSERT v_rotated ~ '^[0-9a-f]{64}$'
+     AND v_rotated <> (SELECT value FROM links_state WHERE label = 'token32'),
+    'the return nonce trades for a fresh address on the same link';
+  ASSERT public.resolve_invoice_link(
+           (SELECT value FROM links_state WHERE label = 'token32'), false) IS NULL,
+    'the address the nonce replaced is dead';
+  ASSERT public.resolve_invoice_link(v_rotated, false) IS NOT NULL,
+    'the rotated address opens the sheet';
+  UPDATE links_state SET value = v_rotated WHERE label = 'token32';
   ASSERT public.resolve_invoice_return_nonce('garbage') IS NULL
      AND public.resolve_invoice_return_nonce(repeat('0', 64)) IS NULL,
     'a malformed or unknown nonce resolves to NULL';
@@ -1114,6 +1168,7 @@ DECLARE
   v_link uuid;
   v_guest jsonb;
   v_house jsonb;
+  v_rotated text;
 BEGIN
   SELECT id INTO v_link FROM public.invoice_links
   WHERE invoice_id = 'a5745000-0000-4000-8000-000000000037' AND status = 'active';
@@ -1142,10 +1197,12 @@ BEGIN
   ASSERT (SELECT stripe_checkout_session_id IS NULL
           FROM public.invoices WHERE id = 'a5745000-0000-4000-8000-000000000037'),
     'M3 A: the invoice pointer is cleared';
-  -- The household's own nonce resolves to the same token.
-  ASSERT public.resolve_invoice_return_nonce(v_house->>'return_nonce')
-         = (SELECT value FROM links_state WHERE label = 'token37'),
-    'the household nonce resolves to the invoice link';
+  -- The household's own nonce trades on the same link row (00636 rotates).
+  v_rotated := public.resolve_invoice_return_nonce(v_house->>'return_nonce');
+  ASSERT v_rotated ~ '^[0-9a-f]{64}$'
+     AND v_rotated <> (SELECT value FROM links_state WHERE label = 'token37'),
+    'the household nonce trades for a fresh address on the invoice link';
+  UPDATE links_state SET value = v_rotated WHERE label = 'token37';
 END;
 $$;
 
@@ -1260,9 +1317,9 @@ DECLARE
   v_claim jsonb;
   v jsonb;
   -- Invoice 42's link was minted by the partially_paid jump, after the token
-  -- snapshot above, so it is read from the table.
-  v_token text := (SELECT token FROM public.invoice_links
-                   WHERE invoice_id = 'a5745000-0000-4000-8000-000000000042' AND status = 'active');
+  -- snapshot above. Since 00636 the row holds only a hash, so the address is
+  -- taken from a mint, the way a letter takes it.
+  v_token text := public.ensure_invoice_link('a5745000-0000-4000-8000-000000000042');
   v_link uuid;
   v_error text;
 BEGIN
@@ -1477,9 +1534,12 @@ BEGIN
           WHERE id IN ((SELECT value::uuid FROM links_state WHERE label = 'attempt35'),
                        (SELECT value::uuid FROM links_state WHERE label = 'attempt40'))),
     'M10: the attempts are closed by the void';
+  -- Scoped past the rows an earlier regenerate revoked (00636 mints per send):
+  -- what the void must do is close the link that was STANDING.
   ASSERT (SELECT bool_and(status = 'closed' AND revoked_at IS NOT NULL)
           FROM public.invoice_links
-          WHERE invoice_id IN ('a5745000-0000-4000-8000-000000000035','a5745000-0000-4000-8000-000000000040')),
+          WHERE invoice_id IN ('a5745000-0000-4000-8000-000000000035','a5745000-0000-4000-8000-000000000040')
+            AND status <> 'revoked'),
     'M9: void closes the link';
 
   -- K5: the withdrawn sheet — letterhead, number, title, contact; nothing to pay.
@@ -1506,12 +1566,14 @@ BEGIN
     'a closed link cannot check out';
   ASSERT public.ensure_invoice_link('a5745000-0000-4000-8000-000000000035') IS NULL,
     'ensure_invoice_link is NULL for a void invoice';
-  -- A payer returning from Stripe after the void lands on the withdrawn sheet.
+  -- A payer returning from Stripe after the void lands on the withdrawn sheet:
+  -- the nonce still trades on the CLOSED link row (never a revoked one, never a
+  -- later mint), and the address it hands back is a fresh one (00636).
   ASSERT public.resolve_invoice_return_nonce(
            (SELECT return_nonce FROM public.invoice_checkout_attempts
             WHERE id = (SELECT value::uuid FROM links_state WHERE label = 'attempt40')))
-         = (SELECT value FROM links_state WHERE label = 'token40'),
-    'the nonce still resolves to the closed link''s token';
+         ~ '^[0-9a-f]{64}$',
+    'the nonce still trades on the closed link';
 END;
 $$;
 

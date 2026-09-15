@@ -16650,6 +16650,342 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00635_studio_touches_and_channel_refs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_touches FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00635_studio_touches_and_channel_refs.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.studio_touches TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00635_studio_touches_and_channel_refs.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.studio_touches TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00635_studio_touches_and_channel_refs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_touch(text, uuid, text, text, timestamptz, text, text, text, text, uuid[], text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00635_studio_touches_and_channel_refs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_touch(text, uuid, text, text, timestamptz, text, text, text, text, uuid[], text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00635_studio_touches_and_channel_refs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_notice(uuid, text, uuid[]) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00635_studio_touches_and_channel_refs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_notice(uuid, text, uuid[]) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.invoice_link_token_hash(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.invoice_link_token_hash(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mint_invoice_link_on_issue() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.invoice_link_is_live(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.invoice_link_is_live(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mint_invoice_link_on_issue() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ensure_invoice_link(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_invoice_link(text, boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_invoice_link_for_checkout(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_invoice_return_nonce(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.regenerate_invoice_link(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_invoice_link(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.invoice_link_is_live(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.invoice_link_token_hash(text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.ensure_invoice_link(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_invoice_link(text, boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_invoice_link_for_checkout(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_invoice_return_nonce(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.regenerate_invoice_link(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_invoice_link(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.invoice_link_is_live(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.invoice_link_token_hash(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.regenerate_invoice_link(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_invoice_link(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_paperwork_token_company() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.paperwork_link_tokens FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.paperwork_link_tokens TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.paperwork_link_tokens TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.paperwork_link_rate_limits FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.paperwork_link_rate_limits TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.paperwork_link_rate_limit_hit(inet, integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.paperwork_link_rate_limit_hit(inet, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mint_paperwork_link(uuid, timestamptz) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mint_paperwork_link(uuid, timestamptz) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revoke_paperwork_link(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revoke_paperwork_link(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_paperwork_link(text, boolean) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_paperwork_link(text, boolean) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_inbound_compliance_document( text, text, text, text, text, date, date, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_inbound_compliance_document( text, text, text, text, text, date, date, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.confirm_inbound_document(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.confirm_inbound_document(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reject_inbound_document(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reject_inbound_document(uuid, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.v_access_grants FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.v_access_grants TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.v_access_grants TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.paperwork_link_storage_context(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00637_paperwork_upload_door.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.paperwork_link_storage_context(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

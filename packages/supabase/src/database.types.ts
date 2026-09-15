@@ -8410,6 +8410,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          expires_at: string | null
           id: string
           invoice_id: string
           last_viewed_at: string | null
@@ -8417,12 +8418,14 @@ export type Database = {
           revoked_at: string | null
           status: string
           stripe_customer_id: string | null
-          token: string
+          token: string | null
+          token_hash: string
           view_count: number
         }
         Insert: {
           created_at?: string
           created_by?: string | null
+          expires_at?: string | null
           id?: string
           invoice_id: string
           last_viewed_at?: string | null
@@ -8430,12 +8433,14 @@ export type Database = {
           revoked_at?: string | null
           status?: string
           stripe_customer_id?: string | null
-          token: string
+          token?: string | null
+          token_hash: string
           view_count?: number
         }
         Update: {
           created_at?: string
           created_by?: string | null
+          expires_at?: string | null
           id?: string
           invoice_id?: string
           last_viewed_at?: string | null
@@ -8443,7 +8448,8 @@ export type Database = {
           revoked_at?: string | null
           status?: string
           stripe_customer_id?: string | null
-          token?: string
+          token?: string | null
+          token_hash?: string
           view_count?: number
         }
         Relationships: [
@@ -10582,6 +10588,132 @@ export type Database = {
             columns: ["palette_id"]
             isOneToOne: false
             referencedRelation: "proposal_palettes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paperwork_link_rate_limits: {
+        Row: {
+          attempt_count: number
+          ip_address: unknown
+          updated_at: string
+          window_started_at: string
+        }
+        Insert: {
+          attempt_count: number
+          ip_address: unknown
+          updated_at?: string
+          window_started_at: string
+        }
+        Update: {
+          attempt_count?: number
+          ip_address?: unknown
+          updated_at?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
+      paperwork_link_tokens: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          organization_id: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          status: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          last_used_at?: string | null
+          organization_id: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          organization_id?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paperwork_link_tokens_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paperwork_link_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paperwork_link_tokens_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paperwork_link_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paperwork_link_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paperwork_link_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paperwork_link_tokens_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paperwork_link_tokens_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -24927,6 +25059,9 @@ export type Database = {
           issuer: string | null
           number: string | null
           organization_id: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
           source: string
           superseded_by: string | null
           updated_at: string
@@ -24950,6 +25085,9 @@ export type Database = {
           issuer?: string | null
           number?: string | null
           organization_id: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
           source?: string
           superseded_by?: string | null
           updated_at?: string
@@ -24973,6 +25111,9 @@ export type Database = {
           issuer?: string | null
           number?: string | null
           organization_id?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
           source?: string
           superseded_by?: string | null
           updated_at?: string
@@ -25020,6 +25161,20 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_compliance_documents_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
           {
@@ -25709,6 +25864,79 @@ export type Database = {
             columns: ["person_id"]
             isOneToOne: false
             referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_touches: {
+        Row: {
+          actor_ref: string | null
+          authority_check: string
+          channel_kind: string | null
+          created_at: string
+          decision_class: string
+          direction: string
+          id: string
+          message_ref: string | null
+          notice_of: string | null
+          notified_refs: string[]
+          occurred_at: string
+          organization_id: string
+          subject_id: string
+          subject_type: string
+        }
+        Insert: {
+          actor_ref?: string | null
+          authority_check?: string
+          channel_kind?: string | null
+          created_at?: string
+          decision_class?: string
+          direction: string
+          id?: string
+          message_ref?: string | null
+          notice_of?: string | null
+          notified_refs?: string[]
+          occurred_at?: string
+          organization_id: string
+          subject_id: string
+          subject_type: string
+        }
+        Update: {
+          actor_ref?: string | null
+          authority_check?: string
+          channel_kind?: string | null
+          created_at?: string
+          decision_class?: string
+          direction?: string
+          id?: string
+          message_ref?: string | null
+          notice_of?: string | null
+          notified_refs?: string[]
+          occurred_at?: string
+          organization_id?: string
+          subject_id?: string
+          subject_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_touches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_touches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_touches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
             referencedColumns: ["id"]
           },
         ]
@@ -33309,6 +33537,10 @@ export type Database = {
       compute_house_taste_draft: { Args: never; Returns: string }
       concierge_checklist_template: { Args: { p_stage: string }; Returns: Json }
       concierge_damage_photo_checklist: { Args: never; Returns: Json }
+      confirm_inbound_document: {
+        Args: { p_document_id: string }
+        Returns: string
+      }
       confirm_install_window: {
         Args: { p_disclosed_impact?: Json; p_window_id: string }
         Returns: string
@@ -35065,6 +35297,8 @@ export type Database = {
         }
         Returns: Json
       }
+      invoice_link_is_live: { Args: { p_invoice_id: string }; Returns: boolean }
+      invoice_link_token_hash: { Args: { p_token: string }; Returns: string }
       invoice_payment_surcharge_cents: {
         Args: { p_amount_cents: number; p_card_bps: number; p_method: string }
         Returns: number
@@ -35500,6 +35734,14 @@ export type Database = {
         Returns: string
       }
       migrate_legacy_ffe_notes: { Args: never; Returns: number }
+      mint_paperwork_link: {
+        Args: { p_company_id: string; p_expires_at?: string }
+        Returns: {
+          expires_at: string
+          id: string
+          token: string
+        }[]
+      }
       mint_trade_agreement_token: {
         Args: { p_agreement_id: string }
         Returns: {
@@ -35586,6 +35828,17 @@ export type Database = {
       override_budget_checkpoint: {
         Args: { p_checkpoint_id: string; p_reason: string }
         Returns: Json
+      }
+      paperwork_link_rate_limit_hit: {
+        Args: { p_ip: unknown; p_limit?: number }
+        Returns: boolean
+      }
+      paperwork_link_storage_context: {
+        Args: { p_token: string }
+        Returns: {
+          company_id: string
+          organization_id: string
+        }[]
       }
       party_identity_key: {
         Args: {
@@ -36052,6 +36305,19 @@ export type Database = {
         Args: { p_decision_id: string }
         Returns: string
       }
+      record_inbound_compliance_document: {
+        Args: {
+          p_doc_label?: string
+          p_doc_type: string
+          p_expires_on?: string
+          p_file_path?: string
+          p_issued_on?: string
+          p_issuer?: string
+          p_number?: string
+          p_token: string
+        }
+        Returns: string
+      }
       record_invoice_payment: {
         Args: {
           p_amount_cents: number
@@ -36086,6 +36352,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      record_notice: {
+        Args: { p_project_id: string; p_told?: string[]; p_what: string }
+        Returns: {
+          id: string
+          recorded_at: string
+          recorded_by: string
+          told_names: string[]
+          what: string
+        }[]
       }
       record_offline_signature: {
         Args: {
@@ -36138,6 +36414,22 @@ export type Database = {
       record_project_review_feedback: {
         Args: { p_body?: string; p_review_item_id: string; p_verdict: string }
         Returns: Json
+      }
+      record_touch: {
+        Args: {
+          p_actor_ref?: string
+          p_authority_check?: string
+          p_channel_kind?: string
+          p_decision_class?: string
+          p_direction?: string
+          p_message_ref?: string
+          p_notice_of?: string
+          p_notified_refs?: string[]
+          p_occurred_at?: string
+          p_subject_id: string
+          p_subject_type: string
+        }
+        Returns: string
       }
       record_trade_scope_substantial_completion: {
         Args: { p_proposal_id: string }
@@ -36217,6 +36509,10 @@ export type Database = {
       reissue_plan_transmittal_link: {
         Args: { p_transmittal_id: string }
         Returns: Json
+      }
+      reject_inbound_document: {
+        Args: { p_document_id: string; p_reason: string }
+        Returns: string
       }
       release_due_client_pushes: { Args: { p_limit?: number }; Returns: number }
       release_install_window: {
@@ -36599,6 +36895,10 @@ export type Database = {
         Args: { p_contact_id: string }
         Returns: string
       }
+      resolve_paperwork_link: {
+        Args: { p_record_use?: boolean; p_token: string }
+        Returns: Json
+      }
       resolve_plan_transmittal: { Args: { p_token: string }; Returns: Json }
       resolve_spec_book_share: { Args: { p_token: string }; Returns: Json }
       resolve_studio_identity: {
@@ -36706,6 +37006,10 @@ export type Database = {
       }
       revoke_document_share: { Args: { p_share_id: string }; Returns: boolean }
       revoke_field_link: { Args: { p_token_id: string }; Returns: boolean }
+      revoke_paperwork_link: {
+        Args: { p_reason?: string; p_token_id: string }
+        Returns: boolean
+      }
       revoke_plan_transmittal_link: {
         Args: { p_transmittal_id: string }
         Returns: Json
@@ -38287,12 +38591,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -38316,11 +38620,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -38341,11 +38645,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -38366,11 +38670,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -38383,11 +38687,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

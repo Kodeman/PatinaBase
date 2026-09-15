@@ -2357,10 +2357,14 @@ BEGIN
   VALUES ('f1500000-0000-4000-8000-00000000000b','f1400000-0000-4000-8000-00000000000b',
           'd0e00000-0000-0000-0000-00000000000a',repeat('b',64),'active',
           'a0000000-0000-0000-0000-000000000004');
-  INSERT INTO public.invoice_links (id, invoice_id, token, status, created_by,
-                                    created_at, last_viewed_at)
+  -- 00636 froze the plaintext column: a link row carries sha256 and an end
+  -- date, and the raw token exists only in the letter that carried it.
+  INSERT INTO public.invoice_links (id, invoice_id, token_hash, expires_at, status,
+                                    created_by, created_at, last_viewed_at)
   VALUES ('f1300000-0000-4000-8000-00000000000b','b0000000-0000-0000-0000-00000000cc01',
-          repeat('a',64),'active','a0000000-0000-0000-0000-000000000004',now(),now());
+          encode(extensions.digest(repeat('a',64),'sha256'),'hex'),
+          now() + interval '30 days','active',
+          'a0000000-0000-0000-0000-000000000004',now(),now());
 
   PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000002');
 
@@ -3286,9 +3290,11 @@ BEGIN
           'b0000000-0000-0000-0000-0000000000d1',
           'a0000000-0000-0000-0000-000000000004','draft',0,0);
   INSERT INTO public.invoice_links
-    (id, invoice_id, token, status, created_by, created_at, last_viewed_at)
+    (id, invoice_id, token_hash, expires_at, status, created_by, created_at, last_viewed_at)
   VALUES ('f8800000-0000-4000-8000-00000000000e',
-          'f8700000-0000-4000-8000-00000000000e',repeat('5',64),'active',
+          'f8700000-0000-4000-8000-00000000000e',
+          encode(extensions.digest(repeat('5',64),'sha256'),'hex'),
+          now() + interval '30 days','active',
           'a0000000-0000-0000-0000-000000000004',now(),now());
 
   -- the premise: the RECORD names no studio on this job, and the invoice
