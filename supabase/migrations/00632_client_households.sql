@@ -35,6 +35,14 @@
 -- project_party_authority (00624) took the tenant leg for exactly this
 -- reason, and a household threshold is the same fact one level up. Named in
 -- w3-data-report.md §4 as a deliberate narrowing of the direction's line.
+--
+-- ── AND ONE RULE BOTH HALVES MAKE (r15 MAJOR-1) ──────────────────────────
+-- NEITHER RPC TOUCHES A SEAT THE STUDIO CLOSED. add_household_member() skips
+-- an `off_job_at` seat and opens a new one; set_household_threshold() ends a
+-- closed seat's grant with `effective_to` instead of moving the figure onto
+-- it. Both halves used to key on identity alone (the card and the role) and
+-- so wrote, or re-wrote, live money authority onto a row whose record says
+-- the person left the job. Stated at each site below.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -361,11 +369,25 @@ BEGIN
   END IF;
 
   -- ── the seat ────────────────────────────────────────────────────────────
+  -- r15 MAJOR-1 — A CLOSED SEAT IS NOT A SEAT THIS ACT MAY REUSE.
+  -- `off_job_at` is the room's own "Close this seat" act (00624: "Replaces the
+  -- hard delete (G-10, CS2-17). A seat that leaves the job keeps its row, its
+  -- lineage and its bid history"). Without the leg below this lookup took the
+  -- OLDEST matching row — which is exactly the closed one — so "add the member
+  -- to this job" opened no seat at all, and the grant two blocks down was then
+  -- written onto a row the studio had closed, with effective_to NULL. Measured:
+  -- one closed client_rep seat in, the same seat id out, seat count unchanged,
+  -- threshold 250000 standing open on a seat whose record says the person left
+  -- the job thirty days earlier. The Call Sheet's Client side bands `client` /
+  -- `client_rep` before the window rule is consulted, so that row printed
+  -- "Signs money to $2,500." as live. A closed seat is left closed and a new
+  -- one is opened, which is what this RPC's own COMMENT already promises.
   SELECT pp.id INTO v_seat_id
     FROM public.project_parties pp
    WHERE pp.project_id = p_project_id
      AND pp.studio_contact_id = p_person_id
      AND pp.party_kind = p_role
+     AND pp.off_job_at IS NULL
    ORDER BY pp.created_at
    LIMIT 1;
 
@@ -455,8 +477,11 @@ GRANT EXECUTE ON FUNCTION public.add_household_member(uuid, uuid, text, uuid)
 
 COMMENT ON FUNCTION public.add_household_member(uuid, uuid, text, uuid) IS
   'PR-c in one act: adds a PERSON card to a household''s members and, when a '
-  'project is named, opens (or finds) that member''s seat on the job as '
-  '`client` or `client_rep`, returning the seat id. When the household '
+  'project is named, opens (or finds) that member''s OPEN seat on the job as '
+  '`client` or `client_rep`, returning the seat id. A seat the studio CLOSED '
+  '(off_job_at, the "Close this seat" act) is never reused: it stays closed '
+  'and a new seat is opened, so no act of the household''s writes a live '
+  'money authority onto a row that left the job (r15 MAJOR-1). When the household '
   'carries co_threshold_cents AND the role is `client_rep`, it also opens '
   'that seat''s `money` authority row — PR-c pairs the figure with the '
   'member who signs (F-05), never with the member who decides finishes '
@@ -558,7 +583,7 @@ BEGIN
   -- BEFORE the figure moves, so the predicate is about the seats the OLD
   -- figure authorised.
   FOR v_seat IN
-    SELECT pa.id AS authority_id, pp.id AS seat_id
+    SELECT pa.id AS authority_id, pp.id AS seat_id, pp.off_job_at
       FROM public.project_parties pp
       JOIN public.project_party_authority pa
         ON pa.engagement_id = pp.id
@@ -583,7 +608,22 @@ BEGIN
                      'money authority (PR-n).';
     END IF;
 
-    IF p_threshold_cents IS NULL THEN
+    -- r15 MAJOR-1, the second half — A CLOSED SEAT'S GRANT IS ENDED, NEVER
+    -- MOVED. The loop's predicate names the household's own open grants and
+    -- said nothing about the seat's standing, so raising the figure re-wrote a
+    -- grant standing on a seat the studio had closed — the room then printing a
+    -- LARGER live authority on an OFF THE JOB row. Of the two answers the
+    -- finding left open (skip the row, or end it), this takes 00624's own shape
+    -- for ending a delegation: "Delegations end (CS5-24). A delegation during
+    -- travel is a row, not an edit." Skipping would leave the household named
+    -- as the source of an open grant the household may no longer move, which is
+    -- the same two-contradictory-facts harm one column over. The row keeps its
+    -- record and its dates; only its openness ends, on the day the seat did.
+    IF v_seat.off_job_at IS NOT NULL THEN
+      UPDATE public.project_party_authority
+         SET effective_to = GREATEST(effective_from, v_seat.off_job_at)
+       WHERE id = v_seat.authority_id;
+    ELSIF p_threshold_cents IS NULL THEN
       UPDATE public.project_party_authority
          SET effective_to = GREATEST(effective_from, CURRENT_DATE)
        WHERE id = v_seat.authority_id;
@@ -625,4 +665,7 @@ COMMENT ON FUNCTION public.set_household_threshold(uuid, integer) IS
   'Erasing the figure CLOSES those grants with effective_to (00624''s own '
   'shape for ending a delegation): a NULL threshold on a money grant reads '
   '"Signs money." with no cap, so mirroring the NULL would widen authority '
-  'out of an act that took a limit away. Returns the household row (00632).';
+  'out of an act that took a limit away. A grant standing on a seat the '
+  'studio CLOSED (off_job_at) is ENDED the same way rather than moved — the '
+  'figure never grows on a row that left the job (r15 MAJOR-1). Returns the '
+  'household row (00632).';

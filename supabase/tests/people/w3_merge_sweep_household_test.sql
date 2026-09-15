@@ -4449,6 +4449,129 @@ BEGIN
   RAISE NOTICE '11m-f. the stand-down is narrow: an ordinary seat edit still stamps updated_at: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 12. r15 MAJOR-1 — NEITHER HALF OF THE HOUSEHOLD TOUCHES A CLOSED SEAT
+--
+-- add_household_member() matched a seat on (project, card, role) alone and
+-- took the OLDEST row, so the seat the studio had CLOSED ("Close this seat",
+-- 00624's dated off_job_at) was the row it found: "add the member to this job"
+-- opened no seat, and then wrote the household's money grant onto that closed
+-- row with effective_to NULL. The Call Sheet bands `client` / `client_rep`
+-- before the window rule is consulted, so the row printed "Signs money to
+-- $2,500." as live over a record saying the person left the job.
+-- set_household_threshold()'s loop had the same omission, so raising the
+-- figure GREW a live authority on a closed seat.
+--
+-- The rule both halves now make: a closed seat is left closed and a new one is
+-- opened; a grant standing on a closed seat is ENDED with effective_to rather
+-- than moved. Its own f9c… id space; block 3's project and its owner.
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, created_by) VALUES
+  ('f9c00000-0000-4000-8000-000000000001','f9000000-0000-4000-8000-00000000000a',
+   'person','client','R15 Dale Closed','a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.client_households
+  (id, organization_id, designer_id, display_name, co_threshold_cents, created_by) VALUES
+  ('f9c10000-0000-4000-8000-00000000000a','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','R15 closed-seat household', 250000,
+   'a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_seat1 uuid;
+  v_seat2 uuid;
+  v_thr   integer;
+  v_to    date;
+  v_off   date;
+  n       integer;
+BEGIN
+  -- ── the seat, and its grant ─────────────────────────────────────────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_seat1 := public.add_household_member(
+    'f9c10000-0000-4000-8000-00000000000a','f9c00000-0000-4000-8000-000000000001',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+  SELECT threshold_cents INTO v_thr FROM public.project_party_authority
+   WHERE engagement_id = v_seat1 AND scope = 'money' AND effective_to IS NULL;
+  IF v_seat1 IS NULL OR v_thr <> 250000 THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (12-a): the fixture no longer reproduces — seat % grant %',
+      v_seat1, v_thr;
+  END IF;
+
+  -- ── the studio closes it, thirty days ago, the way the room does ────────
+  UPDATE public.project_parties
+     SET stage = 'off_job',
+         off_job_at = CURRENT_DATE - 30,
+         off_job_reason = 'Moved out of state; no longer acting for the household.'
+   WHERE id = v_seat1;
+
+  -- ── adding the member again OPENS A NEW SEAT, and leaves the closed one
+  --    exactly as the studio left it ─────────────────────────────────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_seat2 := public.add_household_member(
+    'f9c10000-0000-4000-8000-00000000000a','f9c00000-0000-4000-8000-000000000001',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+
+  IF v_seat2 IS NULL OR v_seat2 = v_seat1 THEN
+    RAISE EXCEPTION
+      'BLOCK 12 FAIL (12-b): add_household_member reused the CLOSED seat (%) instead of opening one',
+      v_seat1;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE project_id        = 'f9300000-0000-4000-8000-00000000000a'
+     AND studio_contact_id = 'f9c00000-0000-4000-8000-000000000001'
+     AND party_kind        = 'client_rep';
+  IF n <> 2 THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (12-c): the card holds % client_rep seats on this job, expected 2', n;
+  END IF;
+  SELECT off_job_at INTO v_off FROM public.project_parties WHERE id = v_seat1;
+  IF v_off IS DISTINCT FROM CURRENT_DATE - 30 THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (12-d): the closed seat''s own date moved (%)', v_off;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = v_seat1 AND scope = 'money';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (12-e): the closed seat carries % money grants, expected its original 1', n;
+  END IF;
+  SELECT threshold_cents INTO v_thr FROM public.project_party_authority
+   WHERE engagement_id = v_seat2 AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 250000 THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (12-f): the NEW seat''s money grant reads %', v_thr;
+  END IF;
+
+  -- ── the figure moves on the live seat and ENDS on the closed one ────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  PERFORM public.set_household_threshold('f9c10000-0000-4000-8000-00000000000a', 500000);
+  PERFORM pg_temp.reset_role();
+
+  SELECT threshold_cents INTO v_thr FROM public.project_party_authority
+   WHERE engagement_id = v_seat2 AND scope = 'money' AND effective_to IS NULL;
+  IF v_thr <> 500000 THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (12-g): the live seat''s grant did not move (%)', v_thr;
+  END IF;
+
+  SELECT threshold_cents, effective_to INTO v_thr, v_to
+    FROM public.project_party_authority
+   WHERE engagement_id = v_seat1 AND scope = 'money';
+  IF v_to IS NULL THEN
+    RAISE EXCEPTION
+      'BLOCK 12 FAIL (12-h): the CLOSED seat''s grant is still open — the room prints it as live authority';
+  END IF;
+  IF v_thr <> 250000 THEN
+    RAISE EXCEPTION
+      'BLOCK 12 FAIL (12-i): the figure GREW on a closed seat (% cents) instead of ending there', v_thr;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = v_seat1 AND scope = 'money' AND effective_to IS NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (12-j): % open money grant(s) survive on the closed seat', n;
+  END IF;
+
+  RAISE NOTICE '12. r15 MAJOR-1 — a closed seat is left closed, a new seat is opened, and the grant standing on the closed one is ended rather than moved: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

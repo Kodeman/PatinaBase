@@ -11,11 +11,13 @@ repeat pick arrives carrying its consent and its paper, a bid answer moves the b
 crew bands, the household's change-order figure has a home, and closing a seat is a dated act on
 every surface that offers one.
 
-**Carried forward against the shipped files after the r8 round (code review r8 MAJOR-1).** This
-report was first written before the r2–r7 review rounds and described faces the code no longer had:
-§2's merge consequence sentence and refusal count, §4's field list and stage rule, §5's household
-door, §7's notice clause, and §1/§9's test and gate numbers. Every one of them now names what the
-files print, measured this round; the same carry-forward r7 M-4 asked of `w3-data-report.md`.
+**Carried forward against the shipped files after the r15 round (code review r15 MAJOR-3; the same
+defect r7 M-4 and r8 MAJOR-1 filed before it).** This report was first written before the review
+rounds and then went stale twice over, describing faces the code no longer had. Re-measured against
+HEAD in the r15 fix round: §1's export list and every test count, §2's quoted consequence sentence
+and refusal count, §6's CloseSeatAct claim, §7's Lakeshore date, §9's gate numbers and §10 item 1.
+Where a number comes from a seed whose dates are relative to `current_date`, it is now stated
+relative to the seed rather than as a literal that drifts a day per day.
 
 ---
 
@@ -32,11 +34,11 @@ files print, measured this round; the same carry-forward r7 M-4 asked of `w3-dat
 | File | What it is |
 |---|---|
 | `components/document/people/compare-merge-sheet.tsx` | PR-o's own DocSheet: two columns field by field, the flippable survivor pick, the consequence sentence, the terminal act. Plus `mergeCardName`, `preferredSurvivorId`, `mergeConsequenceSentence` |
-| `components/document/people/close-seat-act.tsx` | `CloseSeatAct` — the two-step dated close, one component, two surfaces. Plus `closeSeatConfirmSentence` |
+| `components/document/people/close-seat-act.tsx` | `CloseSeatAct` — the two-step dated close **as the person card mounts it** (`person-profile.tsx` is its only importer). The Call Sheet row keeps the original copy it grew in W2 (`roster-row.tsx`'s `closing` block), because that surface carries the surviving hard delete in the same act row; the two are hand-kept in step, not one component (r15 MAJOR-2). Plus `closeSeatConfirmSentence` |
 | `components/document/people/archive-card-door.tsx` | The standing archive/restore door with its reason line always visible. Plus `archivedSentence` |
 | `components/document/roster/travel-list-pane.tsx` | SPEC §5.7 #5: `TRAVELS` / `STAYS_BEHIND`, the fixed contract |
 | `components/document/roster/household-band.tsx` | The Client side band's household: the figure as a sentence, PR-n's gate, "Add a household member". Plus `householdThresholdSentence`, `householdMemberConsequence` |
-| `lib/document/bring-forward.ts` | The picker's sentences: `pickerHistoryLine` (moved), `bringForwardSelectionLine`, `bringForwardActLabel`, `bringForwardConsequence`, `carriedConsentNotice`, `countInWords` |
+| `lib/document/bring-forward.ts` | The picker's sentences: `countInWords`, `pickerHistoryLine` (moved), `bringForwardSelectionLine`, `bringForwardActLabel`, `BringForwardRowFacts`, `bringForwardConsequence`. (`carriedConsentNotice` was deleted by r4 MAJOR-1 in favour of the one composer in `consent-sentence.ts`; the file's own comment records it) |
 | `lib/document/compliance-notice.ts` | 00630's sentence, one formula for three surfaces: `expiryNoticeClause`, `noticedPaperClause`, `noticePaperNoun` |
 
 ### Changed
@@ -44,7 +46,7 @@ files print, measured this round; the same carry-forward r7 M-4 asked of `w3-dat
 | File | Change in one line |
 |---|---|
 | `packages/supabase/src/hooks/use-studio-contacts.ts` | The merge record (`useMergeStudioContacts`, `useStudioContactMerges`, `asMergeError`, `MERGE_MATCHED_ON_LABELS`); archive/restore repointed at 00629's RPCs with `asArchiveError`; `useComplianceNotices` + `indexComplianceNotices`; `useComplianceDocumentsFor`; `StudioContactHistory` gains `lastClosedYear` |
-| `packages/supabase/src/hooks/use-coordination.ts` | `ProjectParty` gains the five bid columns; `SeatBidOutcome` + `SEAT_BID_OUTCOME_STAGE`/`_LABELS`/`_ACTS`; `useProjectPartyBids`, `useSetPartyBid`, `asBidError`, `partyBidKeys`; `useBringForward` |
+| `packages/supabase/src/hooks/use-coordination.ts` | `ProjectParty` gains the five bid columns; `SeatBidOutcome` + `SEAT_BID_OUTCOME_STAGE`/`_LABELS`/`_ACTS`; `useProjectPartyBids`, `useSetPartyBid`, `asBidError`, `partyBidKeys`; `useBringForward`; `invalidateClientHouseholds` in the six seat/authority mutations (r15) |
 | `packages/supabase/src/hooks/index.ts` | The four new export blocks |
 | `people/views/directory-view.tsx` | The duplicate band gains "Compare these two" and mounts `CompareMergeSheet`; `onAnnounce` prop |
 | `people/people-room.tsx` | Wires the Room's notice + announcer to the Directory's `onAnnounce` |
@@ -52,7 +54,7 @@ files print, measured this round; the same carry-forward r7 M-4 asked of `w3-dat
 | `people/company-card.tsx` | The Paper region prints the expiry notice's sentence |
 | `roster/rolodex-picker.tsx` | Multi-select, the travel-list pane, the act row + consequence sentence, the carried-consent notice, the expiry notice, and a search that reads the prior job |
 | `roster/party-mini-row.tsx` | `multi` — a square checkbox mark and checkbox semantics beside the existing radio |
-| `roster/roster-row.tsx` | The Bidding band's editor and its note; the expiry notice clause |
+| `roster/roster-row.tsx` | The Bidding band's editor and its note; the expiry notice clause; `rosterWindowClause` prints the off-job clause from the row's own record rather than from its band (r15) |
 | `roster/roster-groups.tsx` | One bid read for the sheet; the household band under Client side |
 | `roster/call-sheet.tsx` | Passes `projectId` to the bands and `projectName` to the picker |
 | `lib/document/roster-derivation.ts` | `bidNote` |
@@ -60,16 +62,18 @@ files print, measured this round; the same carry-forward r7 M-4 asked of `w3-dat
 
 ### Tests
 
-New, as they stand after the r2–r8 review rounds (measured this round):
-`people-crm-w3.test.ts` (29, vitest) · `bring-forward.test.ts` (15) ·
-`compliance-notice.test.ts` (9) · `travel-list-pane.test.tsx` (5) ·
-`compare-merge-sheet.test.tsx` (15) · `household-band.test.tsx` (29) ·
+New, as they stand after the r2–r15 review rounds (each count re-measured file by file in the
+r15 fix round):
+`people-crm-w3.test.ts` (40, vitest) · `bring-forward.test.ts` (15) ·
+`compliance-notice.test.ts` (10) · `travel-list-pane.test.tsx` (5) ·
+`compare-merge-sheet.test.tsx` (17) · `household-band.test.tsx` (34) ·
 `close-seat-act.test.tsx` (6) · `archive-card-door.test.tsx` (8).
 
-Extended: `rolodex-picker.test.tsx` (15 → 35), `roster-row.test.tsx` (26 → 40).
+Extended: `rolodex-picker.test.tsx` (15 → 37), `roster-row.test.tsx` (26 → 49).
 
 Playwright, chromium-pinned, under `e2e/people/`: `bring-forward.spec.ts`, `merge.spec.ts`.
-**Not run** (the brief's own instruction; no dev server, no port taken).
+**Run green in the r14 round** — 3 passed in 15.6 s, chromium (`w3-fix-log-r14.md`); not re-run in
+the fix rounds since, which take no port.
 
 Mock factories widened for the new hooks: `call-sheet.test.tsx`, `call-sheet-mount.test.tsx`,
 `project-roster-surfaces.test.tsx`, `company-card.test.tsx`, `person-profile.test.tsx`,
@@ -108,12 +112,17 @@ job is still naming the collision.
   on the survivor it reads (`mergeConsequenceSentence`, `compare-merge-sheet.tsx`):
   > "Chidi Okonkwo's seats, channels, contact rule and firm designations move onto Adaeze Okonkwo,
   > and Chidi Okonkwo's own number and address travel with them. Everything else Chidi Okonkwo
-  > holds — the verdict, the trades, the notes and the payee facts — travels the same way, and
-  > where both cards say something Adaeze Okonkwo's own words stand. Consent stays with the number,
-  > not with the card, so nobody's yes or no changes. Chidi Okonkwo's paper moves onto Adaeze
-  > Okonkwo too; where Adaeze Okonkwo already holds the same paper, still in force, the older one
-  > is marked superseded. Chidi Okonkwo's card is kept as a record of the merge, so an old link
-  > still opens this person."
+  > holds — the verdict, the notes and the payee facts — travels the same way, and where both cards
+  > say something Adaeze Okonkwo's own words stand. The trades and specialties on both cards are
+  > kept together, and a card recorded as a sole proprietor keeps that either way. Consent stays
+  > with the number, not with the card, so nobody's yes or no changes. Chidi Okonkwo's paper moves
+  > onto Adaeze Okonkwo too; where Adaeze Okonkwo already holds the same paper, still in force, the
+  > older one is marked superseded. Chidi Okonkwo's card is kept as a record of the merge, so an old
+  > link still opens this person."
+
+  The trades/specialties/sole-proprietor clause is its own sentence because 00629 UNIONs those two
+  arrays and ORs that flag rather than picking a column (r11 BLOCKING-1) — the survivor flip does
+  not decide them.
 
   Where the survivor has a rule, "contact rule" drops out of the first clause and a sixth clause is
   inserted: "Adaeze Okonkwo's own contact rule stands, and Chidi Okonkwo's stays on the folded card
@@ -122,10 +131,11 @@ job is still naming the collision.
   (00629's `people_directory` v5 skips `merged_into IS NOT NULL`), the survivor's card opens, and
   the Room's `role="status"` line says "Two cards are now one. &lt;survivor&gt; carries everything
   &lt;merged&gt; held."
-- Each of `merge_studio_contacts()`'s **eleven** refusals renders as a sentence (`asMergeError`),
+- Each of `merge_studio_contacts()`'s **thirteen** refusals renders as a sentence (`asMergeError`),
   never a Postgres string (`MERGE_REFUSAL_SENTENCES`, `use-studio-contacts.ts`): the original eight
-  plus `merge_two_logins` and `merge_contact_rule_conflict` (r4 B-1 / B-2) and
-  `merge_survivor_archived` (r5 M-4).
+  plus `merge_two_logins` and `merge_contact_rule_conflict` (r4 B-1 / B-2),
+  `merge_survivor_archived` (r5 M-4), and `merge_seat_on_studioless_project` +
+  `merge_seat_card_other_studio`, the two that name the job through `details`.
 
 **`useMergeStudioContacts` invalidates** `studio-contacts`, `studio-contact-merges`,
 `people-directory`, `people-directory-seats`, `studio-contact-channels`, `studio-contact-rules`,
@@ -262,8 +272,29 @@ carries neither a card nor a `designer_clients` row, `Open a household` renders 
 first, then open the household." — because a household minted with no member the overlap read can
 reach would be invisible the moment the sheet closed. Probed end to end in a
 rolled-back transaction: creating the household, `add_household_member` for Chidi's card reuses his
-existing seat and writes `money` and `change_order` grants at `250000`, and the overlap read finds
-the household afterwards.
+existing OPEN seat and writes `money` and `change_order` grants at `250000`, and the overlap read
+finds the household afterwards.
+
+**Neither half of the household touches a seat the studio CLOSED (r15 MAJOR-1, 00632).**
+`add_household_member()` matched on (project, card, role) alone and took the oldest row, so a seat
+closed by "Close this seat" was the row it found: the act opened no seat and wrote the household's
+money grant onto a closed one with `effective_to` NULL, which the Client side band — assembled
+before the window rule — printed as live authority. The lookup now carries `off_job_at IS NULL`, so
+a closed seat stays closed and a new one is opened, and `set_household_threshold()` **ends** a grant
+standing on a closed seat with `effective_to` (00624's own shape for ending a delegation) instead of
+growing the figure on it. Pinned by block 12 of the SQL suite. On the face,
+`rosterWindowClause` now prints "Off the job &lt;date&gt;." from the row's own record rather than
+only in the `done` band, so a closed client-side row carries its closing date beside whatever
+authority it still prints.
+
+**The band refetches when the seats under it move (r15 MAJOR, code).** `useProjectHousehold` reads
+`project_parties` and `project_party_authority`, and no seat or authority mutation invalidated its
+key — so with `staleTime` at five minutes the door could stay held over a client row two elements
+above, and the add sentence could promise the household's figure over a foreign grant
+`add_household_member()` deliberately leaves standing. All six writers
+(`useAddProjectParty`, `useUpdateProjectParty`, `useCloseProjectPartySeat`, `useRemoveProjectParty`,
+`useSetPartyAuthority`, `useBringForward`) now call one `invalidateClientHouseholds` helper, pinned
+by test.
 
 ---
 
@@ -275,9 +306,16 @@ one call site: `roster-row.tsx`'s **Added by mistake**, already held behind `sea
 
 What was missing was the opposite: direction §3.2 R4 names **Close this seat** on the person card's
 Seats region and the card had none — a seat could only be closed from the Call Sheet. `CloseSeatAct`
-is that act, extracted so the wording, the dated write and `peopleEvents.seatClosed` cannot drift
-between the two surfaces. The surviving hard delete stays on the Call Sheet row alone, which is
-where a mistaken add happens minutes after it is made.
+is that act **for the person card**, and `person-profile.tsx` is its only importer. The Call Sheet
+row keeps the copy it grew in W2 (`roster-row.tsx`'s `closing` block): the same confirm sentence,
+its own "Why it closed" field, its own `closeSeat.mutateAsync` and its own `peopleEvents.seatClosed`
+— because that surface carries the surviving hard delete ("Added by mistake", held behind
+`seatDeleteRefusal`) inside the same act row, and routes its refusal into the sheet's `role="status"`
+announcer rather than a local one. **So the two copies are hand-kept in step, not one component**
+(r15 MAJOR-2 — an earlier draft of this report claimed the invariant and the code never had it).
+Repointing the Call Sheet at `CloseSeatAct` is the standing option and is owed (§10 item 9).
+The surviving hard delete stays on the Call Sheet row alone, which is where a mistaken add happens
+minutes after it is made.
 
 **The archive door** (`ArchiveCardDoor`) is on the person card's R1, as a standing act: "Put this
 card away" / "Bring this card back", `aria-disabled` for a plain member with the reason line on the
@@ -315,8 +353,11 @@ the same certificate is never named two ways on one screen.
 `sweep_compliance_expiries()` was run once against the local database (`{"notices": 3, "scanned": 3,
 "notified": 6}`), which is what W3's data report §10 item 6 said was owed: it had never run outside a
 rolled-back transaction. The three notices it wrote are Ostrom Builders (lapsed 2025-12-31),
-Northgate Electric (lapsed 2026-03-31) and Lakeshore Painting Co. (lapses_soon 2026-10-06) —
-exactly the table w3-data-report §2 predicted.
+Northgate Electric (lapsed 2026-03-31) and Lakeshore Painting Co. (`lapses_soon`, whose expiry the
+seed writes **relative to `current_date`** — `CURRENT_DATE + 23` — so the literal date moves a day
+per day and is not quoted here; it read 2026-10-08 on the r15 reset). The two lapsed dates are
+fixed in the seed; only Lakeshore's is relative. Otherwise exactly the table w3-data-report §2
+predicted.
 
 ---
 
@@ -342,10 +383,11 @@ Three acts added to `people-events.ts`, each the shape of one act, none an engag
 | `pnpm --filter @patina/designer-portal type-check` | clean |
 | `pnpm --filter @patina/admin-portal build` | **exit 0**, full route table printed (the strictest gate, after the shared `@patina/supabase` edits) |
 | `npx turbo build --filter=@patina/types --filter=@patina/supabase` | 2 successful (`@patina/supabase` ships source, not a dist — nothing to stale) |
-| `cd apps/designer-portal && npx jest` | **593 suites, 7656 tests, 1 snapshot, all green** (re-measured after the r8 round) |
-| `cd packages/supabase && npx vitest run` | **105 files, 1335 passed, 12 skipped** (re-measured after the r8 round) |
-| `cd packages/supabase && npx vitest run src/hooks/__tests__/people-crm-w3.test.ts` | **29 passed** |
-| `psql … supabase/tests/people/w3_merge_sweep_household_test.sql` | rc=0 — "W3 SQL suite: all blocks passed" (block 11c added in the r8 round) |
+| `cd apps/designer-portal && npx jest` | **593 suites, 7675 tests, 1 snapshot, all green** (re-measured in the r15 fix round) |
+| `cd packages/supabase && npx vitest run` | **105 files, 1346 passed, 12 skipped** (re-measured in the r15 fix round) |
+| `cd packages/supabase && npx vitest run src/hooks/__tests__/people-crm-w3.test.ts` | **40 passed** |
+| `psql … supabase/tests/people/w3_merge_sweep_household_test.sql` | rc=0 — "W3 SQL suite: all blocks passed" (block 12, the r15 closed-seat pin, is the last) |
+| `e2e/people` (chromium, r14 round) | `bring-forward.spec.ts` + `merge.spec.ts` — **3 passed in 15.6 s**; the wider `e2e/people` run in the r15 QA round read 14 passed / 8 failed, the eight pre-existing and carried to the orchestrator |
 | `npx eslint src/components/document/{roster,people} src/lib/document/{bring-forward,compliance-notice}.ts src/lib/analytics/people-events.ts` | **0 errors**, 4 warnings, all pre-existing kinds in files this wave did not touch |
 | e2e type-check (`tsc` over `e2e/**`) | 0 errors in `bring-forward.spec.ts` and `merge.spec.ts` (the rest of `e2e/` carries pre-existing missing-`@types/node` noise) |
 
@@ -367,7 +409,8 @@ Pre-existing and named in CLAUDE.md ("only designer-portal has a working ESLint 
 
 ## 10. Not done, and owed
 
-1. **Neither Playwright spec has been run.** The brief forbids an e2e run in this wave. Both are
+1. **The two Playwright specs ran green in the r14 round** (3 passed, chromium,
+   `w3-fix-log-r14.md`); the fix rounds since take no port and have not re-run them. Both are
    written against the real seed, chromium-pinned, and assert through `adminDb` with `expect.poll`.
    `bring-forward.spec.ts` opens its **own** project rather than Okonkwo, because the seed already
    seats Dana, Pete, Ingrid and Claire there — bringing them forward onto Okonkwo can only ever
@@ -397,3 +440,8 @@ Pre-existing and named in CLAUDE.md ("only designer-portal has a working ESLint 
    dozen rows, hoist it into `RosterGroups` beside the bid read.
 8. **The TEAM-branch tenant leg** (w3-data-report §7) is still a ruling owed to Fable, untouched
    here.
+9. **The Call Sheet's close block is a second copy of `CloseSeatAct`** (§6, r15 MAJOR-2). Repointing
+   `roster-row.tsx`'s `closing` block at the component is the tidier end, and needs the component to
+   carry the extra act ("Added by mistake" with its held refusal), the Call Sheet's own
+   surface/region analytics keys, and an error path into the sheet's announcer. Named rather than
+   done in the r15 fix round, which was scoped to the findings' own fixes.

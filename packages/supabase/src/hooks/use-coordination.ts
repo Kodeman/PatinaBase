@@ -1,14 +1,38 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
 import type { ProductConfigurationSelection, PartyKind as SharedPartyKind } from '@patina/types';
 import type { ClientDecisionOption, DecisionType } from './use-decisions';
 import { peopleKeys, peopleSeatKeys, usePeopleSeats } from './use-people';
+import { clientHouseholdKeys } from './use-households';
 import { asWrittenConsentError, consentKeys } from './use-consent';
 import { invalidateProjectWorkflow } from './use-project-workflow';
+
+/**
+ * r15 MAJOR (code) — THE HOUSEHOLD BAND SITS OVER THE SEATS THIS FILE WRITES.
+ *
+ * `useProjectHousehold` is keyed `['client-households', 'project', projectId]`
+ * and its queryFn reads `project_parties` and `project_party_authority` to
+ * compose `memberCardIds`, `clientSideHasAuthority` and `clientSideMoneyGrants`.
+ * No seat or authority mutation invalidated it, and the portal's QueryClient
+ * runs `staleTime` five minutes with `refetchOnWindowFocus: false` while the
+ * band stays mounted under the Client side for the whole visit. So the band
+ * answered a question the studio had just changed on the same screen: the door
+ * stayed held ("Seat the client on this job first, then open the household.")
+ * over a client row two elements above, and the add sentence promised the
+ * household's figure while a foreign money grant — which `add_household_member()`
+ * deliberately leaves standing — went on holding the seat.
+ *
+ * One helper rather than six literals, so the six stay in step (r13 MAJOR-3 was
+ * the same shape one wave over, and was closed the same way).
+ */
+function invalidateClientHouseholds(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: clientHouseholdKeys.all });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Track 5 — Project Coordination data layer (the ball-in-court).
@@ -561,6 +585,7 @@ export function useAddProjectParty() {
       // rolodex picker (the Call Sheet's own add door) never appears.
       void queryClient.invalidateQueries({ queryKey: ['project-roster', data.project_id] });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      invalidateClientHouseholds(queryClient);
       // CR-6: this hook calls `record_channel_invite`, so it MOVES THE CONSENT
       // LEDGER — and the Directory is mounted when the Add sheet is used. Its
       // clause (`useChannelConsentRecords`, keyed under `consentKeys.all`) and
@@ -727,6 +752,7 @@ export function useUpdateProjectParty() {
       void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      invalidateClientHouseholds(queryClient);
     },
   });
 }
@@ -851,6 +877,7 @@ export function useCloseProjectPartySeat() {
       void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      invalidateClientHouseholds(queryClient);
     },
   });
 }
@@ -998,6 +1025,7 @@ export function useRemoveProjectParty() {
       void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      invalidateClientHouseholds(queryClient);
     },
   });
 }
@@ -1972,6 +2000,7 @@ export function useSetPartyAuthority() {
       void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: ['project-roster', input.projectId] });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      invalidateClientHouseholds(queryClient);
     },
   });
 }
@@ -2681,6 +2710,7 @@ export function useBringForward() {
       void queryClient.invalidateQueries({ queryKey: partyBidKeys.list(input.projectId) });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
       void queryClient.invalidateQueries({ queryKey: peopleSeatKeys.all });
+      invalidateClientHouseholds(queryClient);
     },
   });
 }

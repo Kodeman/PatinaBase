@@ -84,8 +84,13 @@ import {
   asBidError,
   partyBidKeys,
   seatCarriesBid,
+  useAddProjectParty,
   useBringForward,
+  useCloseProjectPartySeat,
+  useRemoveProjectParty,
+  useSetPartyAuthority,
   useSetPartyBid,
+  useUpdateProjectParty,
   bidStageOutcome,
 } from "../use-coordination";
 import {
@@ -712,6 +717,33 @@ describe("useComplianceDocumentsFor applies the retirement rule (M2R-7)", () => 
     // hook returns the reducer's output rather than the raw payload.
     expect(Array.isArray(out)).toBe(true);
   });
+});
+
+/**
+ * r15 MAJOR (code) — the household band reads `project_parties` and
+ * `project_party_authority` under its own root, and nothing that writes those
+ * two tables told it. With `staleTime` five minutes and the band mounted for
+ * the whole visit, the door stayed held over a client row two elements above,
+ * and the add sentence promised the household's figure over a foreign grant
+ * `add_household_member()` leaves standing.
+ */
+describe("every seat and authority write reaches the household band", () => {
+  const seatWriters: Array<[string, () => unknown]> = [
+    ["useAddProjectParty", useAddProjectParty],
+    ["useUpdateProjectParty", useUpdateProjectParty],
+    ["useCloseProjectPartySeat", useCloseProjectPartySeat],
+    ["useRemoveProjectParty", useRemoveProjectParty],
+    ["useSetPartyAuthority", useSetPartyAuthority],
+    ["useBringForward", useBringForward],
+  ];
+
+  for (const [name, hook] of seatWriters) {
+    it(`${name} invalidates the client-households root`, () => {
+      onSuccessOf(hook())({ project_id: "p" }, { projectId: "p" });
+      const roots = invalidated.map((key: Any) => key[0]);
+      expect(roots).toContain(clientHouseholdKeys.all[0]);
+    });
+  }
 });
 
 describe("the keys", () => {
