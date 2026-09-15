@@ -1,0 +1,4 @@
+As designer@patina.dev (org owner): "Set the figure" aria-disabled=false.
+As studio_manager@patina.dev temporarily demoted org role admin->member: "Set the figure" aria-disabled=true,
+aria-describedby="household-figure-held" -> "The change-order figure is the principal's to set. An owner or an admin of the studio can write it."
+Role reverted to admin after the check; confirmed in DB.

@@ -1,0 +1,3 @@
+Claire Bissett, Okonkwo residence, Call Sheet row -> "Close this seat" -> "Why it closed" filled
+"QA r14 manual close — round 14 verification." -> "Close the seat".
+DB: off_job_at=2026-09-15, off_job_reason verbatim, stage=off_job. Reverted to NULL/NULL/active.

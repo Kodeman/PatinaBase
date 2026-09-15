@@ -1,0 +1,3 @@
+Nadia Brooks (Kestrel Staging), /people studio-wide card. "Put this card away" -> single press, no confirm dialog
+(standing act, R-AB) -> "This card was put away 15 September 2026. It stays out of the book until it is brought back."
+"Bring this card back" -> card restored, archived_at NULL confirmed in DB. Directory count round-tripped 42->41->42.
