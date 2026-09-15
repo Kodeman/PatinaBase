@@ -1,0 +1,70 @@
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+INSERT 0 2
+INSERT 0 0
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+=== A: a PLAIN member of the RECORDED studio closes the seat ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+psql:artifacts/people-room-crm-2026-09-11/build/probe-r20-e-fix-negative-controls.sql:46: NOTICE:  A the close was refused: seat_close_money_authority_forbidden
+DO
+ reset_role 
+------------
+ 
+(1 row)
+
+  step   | scope | threshold_cents | effective_to | off_job_at | off_job_reason 
+---------+-------+-----------------+--------------+------------+----------------
+ A after | money |         1000000 |              |            | 
+(1 row)
+
+=== B: a PLAIN member of the designer's SECOND studio closes the seat ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+ step | member_of_recorded | comember_of_designer | authority_rows_visible 
+------+--------------------+----------------------+------------------------
+ B0   | f                  | t                    |                      0
+(1 row)
+
+psql:artifacts/people-room-crm-2026-09-11/build/probe-r20-e-fix-negative-controls.sql:68: NOTICE:  B the close was refused: seat_close_authority_forbidden
+DO
+ reset_role 
+------------
+ 
+(1 row)
+
+  step   | scope | threshold_cents | effective_to | off_job_at | off_job_reason 
+---------+-------+-----------------+--------------+------------+----------------
+ B after | money |         1000000 |              |            | 
+(1 row)
+
+=== C: the PRINCIPAL (owner of the recorded studio) closes it ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+ reset_role 
+------------
+ 
+(1 row)
+
+  step   | scope | threshold_cents | effective_to | off_job_at 
+---------+-------+-----------------+--------------+------------
+ C after | money |         1000000 | 2026-09-15   | 2026-09-15
+(1 row)
+
+ROLLBACK

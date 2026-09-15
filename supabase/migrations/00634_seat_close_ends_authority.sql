@@ -63,9 +63,11 @@
 -- row, and re-opening one is its own named act with its own consequence
 -- sentence, exactly as re-opening a hand-closed seat is.
 --
--- LINEAGE: 00624 (project_party_authority, effective_to, CS5-24) → 00629
--- (merge_seat_collision, r18 MAJOR-1) → 00632:713-716 (set_household_threshold
--- ending a closed seat's grant, r15 MAJOR-1) → 00634.
+-- LINEAGE: 00624 (project_party_authority, effective_to, CS5-24, and the
+-- tenant + PR-n legs on its UPDATE policy — w1b r5 MAJOR-3 / r8 BLOCKING-1) →
+-- 00629 (merge_seat_collision, r18 MAJOR-1) → 00632:713-716
+-- (set_household_threshold ending a closed seat's grant, r15 MAJOR-1) → 00634
+-- → 00634 amended in place (r20 BLOCKING-1: the gate stated in the body).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── the rule ──────────────────────────────────────────────────────────────
@@ -73,13 +75,92 @@
 -- member's "Close this seat" and the grant rows it ends sit behind
 -- project_party_authority's own RLS (00624). `search_path` pinned, every
 -- relation schema-qualified.
+--
+-- ── AND THE GATE IS STATED IN THE BODY (r20 BLOCKING-1) ───────────────────
+-- SECURITY DEFINER bypasses the RLS of the table it writes, so the gate is
+-- stated here or it is not stated at all — the posture every other definer in
+-- this wave takes (add_household_member 00632:410-416, set_household_threshold
+-- 00632:655-666, archive_studio_contact 00629:3300-3307).
+--
+-- The first draft of this file stated none, and the table that FIRES it is not
+-- gated like the table it WRITES:
+--
+--   project_parties_studio_update (00584:895-903)
+--     is_studio_comember(project.designer_id) — no tenant leg, no PR-n leg
+--   project_party_authority_studio_update (00624:1017-1041)
+--     is_active_studio_member(project_party_recorded_studio(engagement_id))
+--     AND is_studio_comember(project_party_designer(engagement_id))
+--     AND (scope NOT IN ('money','draw_certify')
+--          OR is_org_admin_or_owner(project_party_recorded_studio(...)))
+--
+-- That second predicate is w1b r5 MAJOR-3 and r8 BLOCKING-1 in policy text:
+-- the tenant leg exists because is_studio_comember(designer) is true for a
+-- SECOND studio the same designer works for. Measured twice on a freshly reset
+-- database, rolled back, with room acts only (build/probe-r20-a-… and
+-- build/probe-r20-b-…): a plain `member` who cannot UPDATE a money grant ended
+-- it by closing the seat, and so did a plain `member` of the designer's other
+-- studio who could not even SELECT the row — a cross-tenant write to another
+-- studio's money record.
+--
+-- THE SHAPE TAKEN IS REFUSAL, not silence. The two alternatives the review
+-- left open both break the sentence this file exists to make true: leaving a
+-- money grant standing while the seat closes is exactly r19 MAJOR-1's state,
+-- and narrowing 00584's own seat policy is far wider than W3. So a caller who
+-- may not end what the seat carries may not close the seat either, and hears
+-- why. The invariant holds absolutely in every path: NO closed seat carries an
+-- open grant.
+--
+--   * no open grant on the seat            -> nothing to gate, the close lands
+--   * auth.uid() IS NULL                   -> a migration, a job, service_role;
+--                                             00632:235's own internal-caller
+--                                             carve-out, never RLS-gated here
+--   * not a member of the recorded studio, or not a co-member of the designer
+--                                          -> seat_close_authority_forbidden
+--   * an open money / draw_certify grant and the caller is not an owner or an
+--     admin of the recorded studio         -> seat_close_money_authority_forbidden
+--                                             (PR-n: the principal's to set,
+--                                             and the principal's to take away)
 CREATE OR REPLACE FUNCTION public.end_party_authority_at_seat_close()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
+DECLARE
+  v_open      integer;
+  v_principal integer;
+  v_recorded  uuid;
 BEGIN
+  SELECT count(*),
+         count(*) FILTER (WHERE scope IN ('money', 'draw_certify'))
+    INTO v_open, v_principal
+    FROM public.project_party_authority
+   WHERE engagement_id = NEW.id
+     AND effective_to IS NULL;
+
+  -- A seat carrying no open delegation ends nothing, so it gates nothing.
+  IF v_open = 0 THEN
+    RETURN NULL;
+  END IF;
+
+  IF auth.uid() IS NOT NULL THEN
+    v_recorded := public.project_party_recorded_studio(NEW.id);
+
+    IF NOT (public.is_active_studio_member(v_recorded)
+            AND public.is_studio_comember(public.project_party_designer(NEW.id))) THEN
+      RAISE EXCEPTION 'seat_close_authority_forbidden'
+        USING HINT = 'This seat carries a standing grant recorded in another '
+                     'studio''s book. Ask that studio to close the seat.';
+    END IF;
+
+    IF v_principal > 0 AND NOT public.is_org_admin_or_owner(v_recorded) THEN
+      RAISE EXCEPTION 'seat_close_money_authority_forbidden'
+        USING HINT = 'This seat signs for money, and ending that is the '
+                     'principal''s to do (PR-n). Ask an owner or an admin of '
+                     'the studio to close the seat.';
+    END IF;
+  END IF;
+
   UPDATE public.project_party_authority
      SET effective_to = GREATEST(effective_from, NEW.off_job_at),
          updated_at   = now()
@@ -94,12 +175,19 @@ REVOKE ALL ON FUNCTION public.end_party_authority_at_seat_close()
 
 COMMENT ON FUNCTION public.end_party_authority_at_seat_close() IS
   'AFTER UPDATE OF off_job_at on project_parties, on the close only (NULL -> a '
-  'date): every open grant the seat carried ends on the day the seat did, '
-  'effective_to = GREATEST(effective_from, off_job_at) — 00632:713-716''s own '
-  'shape, CS5-24. Makes 00629''s OPEN-SEATS-ONLY carve-out true: a closed seat '
-  'really does state no second live money fact, so the repair '
-  'merge_seat_collision''s HINT names can no longer leave one human holding '
-  'two open money grants on one job (r19 MAJOR-1).';
+  'date): every open grant the seat carried — every scope, not money alone — '
+  'ends on the day the seat did, effective_to = GREATEST(effective_from, '
+  'off_job_at) — 00632:713-716''s own shape, CS5-24. Makes 00629''s '
+  'OPEN-SEATS-ONLY carve-out true: a closed seat really does state no second '
+  'live money fact, so the repair merge_seat_collision''s HINT names can no '
+  'longer leave one human holding two open money grants on one job (r19 '
+  'MAJOR-1). The gate is stated in the body because SECURITY DEFINER bypasses '
+  'project_party_authority''s RLS (r20 BLOCKING-1): a signed-in caller must be '
+  'an active member of project_party_recorded_studio() and a co-member of the '
+  'designer, and an owner or admin of that studio where the seat carries an '
+  'open money or draw_certify grant; otherwise the CLOSE ITSELF is refused '
+  '(seat_close_authority_forbidden / seat_close_money_authority_forbidden) so '
+  'no closed seat can ever carry an open grant.';
 
 DROP TRIGGER IF EXISTS end_party_authority_at_seat_close_trg ON public.project_parties;
 CREATE TRIGGER end_party_authority_at_seat_close_trg

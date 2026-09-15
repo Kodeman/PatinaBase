@@ -88,6 +88,11 @@ Mock factories widened for the new hooks: `call-sheet.test.tsx`, `call-sheet-mou
 
 ## 2. Compare & merge (scope 1)
 
+**Re-measured against HEAD in the r20 fix round** (r20 major-2, the fifth filing of the
+report-drift defect after r7 M-4, r8 MAJOR-1, r15 MAJOR-3 and r19 major-2, whose fix log
+re-measured §1 and §9 only): the refusal count and list, the `role="status"` announcement, both
+contact-rule branches of the consequence sentence, and §5's principal sentence.
+
 **The band now offers the act.** R-Y held it back in P1 because the sheet did not exist; it does
 now (direction §8 P2), so the band reads "These two cards share a phone." + both names as live
 open-person controls + **Compare these two** as the secondary word after them. The band's first
@@ -113,8 +118,13 @@ job is still naming the collision.
   survivor already carries a contact rule (r4 B-2: one rule row per subject, so the survivor's own
   rule wins and the folded card keeps its own as history), and its closing clause is about the ID,
   which is what the merge record actually guarantees — "both ways of reaching this person still
-  work" was a promise about NUMBERS the RPC did not keep, and r3/MAJOR-4 replaced it. With no rule
-  on the survivor it reads (`mergeConsequenceSentence`, `compare-merge-sheet.tsx`):
+  work" was a promise about NUMBERS the RPC did not keep, and r3/MAJOR-4 replaced it. The contact
+  rule is a PAIR branch, not a survivor branch (r13 MAJOR-2, `compare-merge-sheet.tsx:131-138`):
+  `ruleMoves = mergedHasRule && !survivorHasRule`, so the clause below — which names the contact
+  rule among the things that move — prints only where the FOLDED card holds a rule and the survivor
+  does not. Where neither card holds one, "contact rule" drops out of the first clause and no sixth
+  clause is inserted. With a rule on the folded card and none on the survivor it reads
+  (`mergeConsequenceSentence`, `compare-merge-sheet.tsx`):
   > "Chidi Okonkwo's seats, channels, contact rule and firm designations move onto Adaeze Okonkwo,
   > and Chidi Okonkwo's own number and address travel with them. Everything else Chidi Okonkwo
   > holds — the verdict, the notes and the payee facts — travels the same way, and where both cards
@@ -129,18 +139,25 @@ job is still naming the collision.
   arrays and ORs that flag rather than picking a column (r11 BLOCKING-1) — the survivor flip does
   not decide them.
 
-  Where the survivor has a rule, "contact rule" drops out of the first clause and a sixth clause is
-  inserted: "Adaeze Okonkwo's own contact rule stands, and Chidi Okonkwo's stays on the folded card
-  as a record."
+  Where BOTH cards hold a rule (`ruleStays = survivorHasRule && mergedHasRule`, r13 MAJOR-2 — the
+  pre-r13 text branched on the survivor alone), "contact rule" drops out of the first clause and a
+  sixth is inserted: "Adaeze Okonkwo's own contact rule stands, and Chidi Okonkwo's stays on the
+  folded card as a record."
 - Terminal act: "Merge into &lt;survivor&gt;". Afterwards the Directory folds the merged card away
   (00629's `people_directory` v5 skips `merged_into IS NOT NULL`), the survivor's card opens, and
-  the Room's `role="status"` line says "Two cards are now one. &lt;survivor&gt; carries everything
-  &lt;merged&gt; held."
-- Each of `merge_studio_contacts()`'s **thirteen** refusals renders as a sentence (`asMergeError`),
+  the Room's `role="status"` line says (`compare-merge-sheet.tsx:461-465`) "Two cards are now one.
+  &lt;survivor&gt; carries what &lt;merged&gt; held, and where both cards said something,
+  &lt;survivor&gt;'s own words stand — except the trades and specialties, which are kept together."
+  ("carries EVERYTHING &lt;merged&gt; held" is the wording r5 B-1 / r11 BLOCKING-1 took OUT as a
+  wrong fact; the announcement carries the same split the consequence sentence does.)
+- Each of `merge_studio_contacts()`'s **fourteen** refusals renders as a sentence (`asMergeError`),
   never a Postgres string (`MERGE_REFUSAL_SENTENCES`, `use-studio-contacts.ts`): the original eight
   plus `merge_two_logins` and `merge_contact_rule_conflict` (r4 B-1 / B-2),
-  `merge_survivor_archived` (r5 M-4), and `merge_seat_on_studioless_project` +
-  `merge_seat_card_other_studio`, the two that name the job through `details`.
+  `merge_survivor_archived` (r5 M-4), `merge_seat_on_studioless_project` +
+  `merge_seat_card_other_studio`, the two that name the job through `details`, and
+  `merge_seat_collision` (r18 MAJOR-1) — both cards hold an open seat of the same kind on one job,
+  which `details` also names, and which 00634 is the rule behind ("Close one of these two seats
+  first, then merge." ends the money that seat carried).
 
 **`useMergeStudioContacts` invalidates** `studio-contacts`, `studio-contact-merges`,
 `people-directory`, `people-directory-seats`, `studio-contact-channels`, `studio-contact-rules`,
@@ -250,10 +267,13 @@ per row.
   `add_household_member(household, person, role, project)`.
 
 **PR-n, twice.** "Set the figure" is `aria-disabled` for a plain member with
-`aria-describedby` pointing at a sentence that is **always on the face**, pressed or not; and
-`useSetHouseholdThreshold` renders the RLS refusal as "A change-order figure is the principal's to
-set. Ask an owner or an admin of the studio." A zero-row UPDATE the caller can still SELECT is the
-WITH CHECK refusing the figure, and is translated rather than swallowed.
+`aria-describedby` pointing at a sentence that is **always on the face**, pressed or not — and that
+sentence is the BAND's own (`household-band.tsx:721-724`, the held act's click handler): "A
+change-order figure is the principal's to set. Ask an owner or an admin of the studio." The HOOK's
+refusal is its own, longer string (`use-households.ts:116-117`, `household_threshold_forbidden`):
+"A change-order figure is the principal's to set, and the principal's to take away. Ask an owner or
+an admin of the studio." A zero-row UPDATE the caller can still SELECT is the WITH CHECK refusing
+the figure, and is translated rather than swallowed.
 
 ### The resolver, and why it is not the one the brief implied
 
@@ -327,7 +347,16 @@ its own "Why it closed" field, its own `closeSeat.mutateAsync` and its own `peop
 `seatDeleteRefusal`) inside the same act row, and routes its refusal into the sheet's `role="status"`
 announcer rather than a local one. **So the two copies are hand-kept in step, not one component**
 (r15 MAJOR-2 — an earlier draft of this report claimed the invariant and the code never had it).
-Repointing the Call Sheet at `CloseSeatAct` is the standing option and is owed (§10 item 9).
+**And they were not in step: r20 major-1 / QA blocking-2.** The person card only ever renders
+`CloseSeatAct` over `liveSeats` (`person-profile.tsx:255-258`, `DONE_STAGES`), while the Call Sheet
+gated its copy on `isSeat` alone — so a Done-band seat still offered the act, and taking it moved
+the recorded `off_job_at` to today and nulled the recorded `off_job_reason`, with no second copy
+anywhere. The Call Sheet act is now `held` with a visible reason once the seat carries `off_job_at`
+(or reads `off_job`), its "Why it closed" field opens on the recorded sentence, and
+`useCloseProjectPartySeat` itself keeps the day a seat left the job written once — so every future
+caller is covered, not only these two faces. Putting a seat back on the job stays its own act
+(00634:59-64). Repointing the Call Sheet at `CloseSeatAct` is the standing option and is owed
+(§10 item 9).
 The surviving hard delete stays on the Call Sheet row alone, which is where a mistaken add happens
 minutes after it is made.
 

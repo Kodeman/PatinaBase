@@ -859,12 +859,34 @@ export function useCloseProjectPartySeat() {
     mutationFn: async (input: CloseProjectPartySeatInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+      // r20 major-1 / QA blocking-2 — A SECOND CLOSE NEVER WRITES OVER THE FIRST.
+      //
+      // The act used to write `off_job_at: today` and `off_job_reason: reason
+      // || null` unconditionally, so closing a seat that had ALREADY left the
+      // job moved the recorded day to today and blanked the studio's own
+      // sentence. Nothing holds a second copy of either. The Call Sheet and
+      // the person card now both keep the act off a closed seat, and this is
+      // the same rule where every future caller reaches it: the day a seat
+      // left the job is written once, and a recorded reason is restated or
+      // kept, never nulled. Re-opening a seat stays its own act (00634:59-64).
+      const { data: standing, error: readError } = await supabase
+        .from('project_parties')
+        .select('off_job_at, off_job_reason')
+        .eq('id', input.id)
+        .maybeSingle();
+      if (readError) throw readError;
+      const alreadyClosed = !!standing?.off_job_at;
+      const writtenReason = input.reason?.trim() || null;
       const { data, error } = await supabase
         .from('project_parties')
         .update({
           stage: 'off_job',
-          off_job_at: input.offJobAt ?? new Date().toISOString().slice(0, 10),
-          off_job_reason: input.reason?.trim() || null,
+          off_job_at: alreadyClosed
+            ? standing.off_job_at
+            : (input.offJobAt ?? new Date().toISOString().slice(0, 10)),
+          off_job_reason: alreadyClosed
+            ? (writtenReason ?? standing.off_job_reason ?? null)
+            : writtenReason,
         })
         .eq('id', input.id)
         .select()
