@@ -977,6 +977,85 @@ describe('RolodexPicker — searching a prior job', () => {
     expect(screen.queryByText('Nobody Relevant')).not.toBeInTheDocument();
   });
 
+  /**
+   * r23 major-2 — THE SEARCH READS WHAT THE ROW PRINTS, and until this round
+   * it read `company_name` (NULL on all 22 carded humans with a firm on the
+   * local book) and no trade at all. Dana carries no e-mail, so nothing masked
+   * it: her row printed "· Northgate Electric · Electrical" while typing
+   * either word returned "– No one by that name in the rolodex."
+   */
+  it('finds a card by the firm and the trade its own row prints', () => {
+    const DANA: StudioContact = {
+      ...ROSA,
+      id: 'contact-dana',
+      full_name: 'Dana Kowalski',
+      company_name: null,
+      company_id: 'firm-northgate',
+      email: null,
+      specialties: [],
+    };
+    const NORTHGATE = {
+      ...ROSA,
+      id: 'firm-northgate',
+      entity_kind: 'company' as const,
+      contact_kind: 'sub',
+      full_name: null,
+      company_name: 'Northgate Electric',
+      company_id: null,
+      email: null,
+      specialties: [],
+      trades: ['electrical'],
+    } as unknown as StudioContact;
+    useStudioContacts.mockReturnValue({
+      data: [DANA, NORTHGATE, ELSEWHERE],
+      isLoading: false,
+    });
+    directoryRows = [
+      {
+        person_id: 'contact-dana',
+        reach_state: 'on_paper',
+        consent_status: 'not_asked',
+        paper_state: 'not_on_file',
+        contact_rule_summary: null,
+        meta: {
+          company_id: 'firm-northgate',
+          company_name: 'Northgate Electric',
+        },
+      },
+    ];
+    render(<RolodexPicker {...props} />);
+    const field = screen.getByLabelText('Search the rolodex');
+
+    // the firm the row resolves, which her own card does not carry
+    fireEvent.change(field, { target: { value: 'Northgate' } });
+    expect(screen.getByText('Dana Kowalski')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody Relevant')).not.toBeInTheDocument();
+
+    // and the trade, which lives on the FIRM's card — the input's own
+    // placeholder promises "a name, a company, a trade…"
+    fireEvent.change(field, { target: { value: 'electrical' } });
+    expect(screen.getByText('Dana Kowalski')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody Relevant')).not.toBeInTheDocument();
+  });
+
+  /**
+   * r23 major-2 — and the legacy typed-by-hand column stays a term, for a book
+   * that really did type a firm name onto the person's own card.
+   */
+  it('still matches a firm name typed onto the card itself', () => {
+    useStudioContacts.mockReturnValue({
+      data: [ROSA, ELSEWHERE],
+      isLoading: false,
+    });
+    directoryRows = [];
+    render(<RolodexPicker {...props} />);
+    fireEvent.change(screen.getByLabelText('Search the rolodex'), {
+      target: { value: 'Martínez Tile' },
+    });
+    expect(screen.getByText('Rosa Martínez')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody Relevant')).not.toBeInTheDocument();
+  });
+
   /** MAJOR-5 — a PRIOR job is one that is not the job being added to. */
   it('leaves the OPEN job out of the history rollup', () => {
     render(<RolodexPicker {...props} />);

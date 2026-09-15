@@ -28,7 +28,11 @@
 -- file's OPEN-SEATS-ONLY carve-out true for the hand close, and R-BS clamps it
 -- off the withdrawal path — so 00629 is amended in place with a fourth seat
 -- pre-check that asks about the GRANT (merge_seat_authority_collision,
--- r22 MAJOR-1).
+-- r22 MAJOR-1), and amended in place again so that refusal names the repair
+-- the state actually has — the seat that LEFT the job goes back in the bidding
+-- and is then closed by hand — rather than the close of the live seat, which
+-- was measured to lift the gate while leaving the standing grant standing
+-- (r23 MAJOR-1).
 --
 -- ── TWO GUARDS THIS FILE STANDS IN FRONT OF, AND ONE IT STANDS DOWN (r13) ─
 -- §5's pre-checks refuse BY NAME and before the first write on BOTH shapes of
@@ -1313,9 +1317,13 @@ DECLARE
   v_collision_kind text;
   -- The job where the two seats of one kind would BOTH still state a live
   -- grant after the fold, though at least one of them has left the job
-  -- (r22 MAJOR-1). Same two columns, same reason.
+  -- (r22 MAJOR-1). Same two columns, same reason — plus WHICH of the two
+  -- cards holds the seat that left, because r23 MAJOR-1 measured that the
+  -- repair is that seat's and no other, so a sentence that cannot point at it
+  -- sends the studio to the wrong one.
   v_money_job      text;
   v_money_kind     text;
+  v_money_side     text;
 BEGIN
   IF p_survivor IS NULL OR p_merged IS NULL THEN
     RAISE EXCEPTION 'merge_contact_not_found'
@@ -1699,9 +1707,13 @@ BEGIN
   -- here because choosing which of the two money grants survives is the
   -- principal's ruling (PR-n), not a repoint's, and R-BN forbids dropping the
   -- other. The repair is already in the room and is named in the HINT —
-  -- "Close this seat" on one of the two (useCloseProjectPartySeat), or Revoke
-  -- on its grant — and closing one lifts this gate, because the predicate
-  -- asks only about OPEN seats.
+  -- "Close this seat" on one of the two (useCloseProjectPartySeat) — and
+  -- closing one lifts this gate, because the predicate asks only about OPEN
+  -- seats. It is the ONE act the room has: r23 MAJOR-1 measured that ending a
+  -- grant by hand has no door at all (useSetPartyAuthority is called only from
+  -- add-person-sheet.tsx and nothing passes effectiveTo; the People room's
+  -- Revoke is the field-link rail, a different table), so no sentence here may
+  -- name one.
   --
   -- OPEN SEATS ONLY (off_job_at IS NULL, 00632's own open-seat filter, the
   -- room's "Close this seat" record). A closed seat beside a live one of the
@@ -1787,13 +1799,39 @@ BEGIN
   -- alone (name the collision on the face after the fold) — R-BN forbids
   -- dropping a typed fact and the fold would already have happened.
   --
-  -- THE REPAIR IS STILL THE ROOM'S OWN, and is named in the HINT: closing the
-  -- seat that is still open ends what it carried (00634), which leaves one
-  -- live grant on the job and lifts this gate. Where BOTH seats have already
-  -- left the job, the Bidding band's own correction puts one back
-  -- (R-BR clears `off_job_at`) and "Close this seat" then ends its grant.
-  SELECT pj.name, pm.party_kind
-    INTO v_money_job, v_money_kind
+  -- THE REPAIR IS STILL THE ROOM'S OWN, AND IT IS THE SEAT THAT LEFT THE JOB
+  -- (r23 MAJOR-1). The first draft of this refusal named the other one —
+  -- "Close the seat that is still open" — and that sentence was measured, end
+  -- to end on a freshly reset database with room acts only, to be both
+  -- destructive and ineffective for the shape this gate actually catches.
+  -- That shape is ASYMMETRIC: the pair reaching here can never be two OPEN
+  -- seats, because the gate above (`merge_seat_collision`) is that same join
+  -- with `off_job_at IS NULL` on both legs and it raises FIRST. So at least
+  -- one of the two has left the job, and a seat that has left qualifies here
+  -- only through an OPEN GRANT — which is the standing grant the refusal is
+  -- about. Closing the live crew seat ends what THAT seat carried (00634),
+  -- lifts the gate, takes a working sub off the job, and leaves the survivor
+  -- holding no live seat while still signing on the seat that left.
+  --
+  -- The act that repairs the state named is the one the HINT's second sentence
+  -- used to scope to "where both seats have already left the job": the Bidding
+  -- band's own correction puts the DATED seat back (R-BR clears `off_job_at`
+  -- and `off_job_reason`), and "Close this seat" then fires 00634 and ends
+  -- what it carried. It is the same act whether one seat has left or both —
+  -- repairing either one leaves a single live delegation on the job — so the
+  -- sentence names it once, and names WHICH card holds the seat to take it on
+  -- (`v_money_side`, carried in the DETAIL), because the studio is looking at
+  -- two cards and cannot otherwise tell them apart.
+  --
+  -- A dated seat here always carries the open grant (it qualifies no other
+  -- way), so 'merged' / 'survivor' / 'both' is a complete answer.
+  SELECT pj.name, pm.party_kind,
+         CASE
+           WHEN pm.off_job_at IS NOT NULL AND ps.off_job_at IS NOT NULL THEN 'both'
+           WHEN pm.off_job_at IS NOT NULL THEN 'merged'
+           ELSE 'survivor'
+         END
+    INTO v_money_job, v_money_kind, v_money_side
     FROM public.project_parties pm
     JOIN public.project_parties ps
       ON ps.project_id = pm.project_id
@@ -1813,14 +1851,23 @@ BEGIN
    LIMIT 1;
   IF v_money_job IS NOT NULL THEN
     RAISE EXCEPTION 'merge_seat_authority_collision'
-      USING DETAIL = v_money_job || ' · ' || v_money_kind,
-            HINT   = 'One of these two seats has left the job but still '
-                     'carries a standing grant, so the fold would leave one '
-                     'person holding two of them on the same job. Close the '
-                     'seat that is still open — closing a seat ends what it '
-                     'carried — then merge. Where both seats have already '
-                     'left the job, put one back in the bidding first and '
-                     'close it by hand.';
+      USING DETAIL = v_money_job || ' · ' || v_money_kind || ' · ' || v_money_side,
+            HINT   = CASE WHEN v_money_side = 'both'
+                     THEN 'Both of these two seats have left the job and both '
+                          'still carry a standing grant, so the fold would '
+                          'leave one person holding two of them on the same '
+                          'job. Put one of them back in the bidding, then '
+                          'close it by hand — closing a seat ends what it '
+                          'carried — and merge.'
+                     ELSE 'One of these two seats has left the job but still '
+                          'carries a standing grant, so the fold would leave '
+                          'one person holding two of them on the same job. '
+                          'Put THAT seat back in the bidding, then close it by '
+                          'hand — closing a seat ends what it carried — and '
+                          'merge. Closing the seat that is still open ends '
+                          'only what that one carried and leaves the standing '
+                          'grant standing.'
+                     END;
   END IF;
 
   -- ── channels: union, duplicates by kind + value REDUCED then dropped ────
@@ -2802,7 +2849,13 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'path, so a seat dated by a recorded withdrawal keeps its open grants and '
   'the third pre-check cannot see it — a seat counts as live here where it '
   'has not left the job OR still carries a grant with effective_to NULL, any '
-  'scope. Neither card is deleted or archived: the merged one '
+  'scope. Its DETAIL names the job, the kind and WHICH card holds the seat '
+  'that left (merged / survivor / both), and its repair is that seat''s and '
+  'not the live one''s: put it back in the bidding (R-BR clears off_job_at), '
+  'then close it by hand so 00634 ends what it carried. Closing the seat that '
+  'is still open would lift the gate while leaving the standing grant standing '
+  '(r23 MAJOR-1, measured). Neither card is deleted or archived: the merged '
+  'one '
   'takes merged_into and stays resolvable through resolve_merged_contact() '
   '(00629).';
 

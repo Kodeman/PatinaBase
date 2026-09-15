@@ -11,6 +11,15 @@ repeat pick arrives carrying its consent and its paper, a bid answer moves the b
 crew bands, the household's change-order figure has a home, and closing a seat is a dated act on
 every surface that offers one.
 
+**Re-measured at HEAD in the r23 fix round** (code review r23 major-1, the SEVENTH filing of this
+defect after r7 M-4, r8 MAJOR-1, r15 MAJOR-3, r19 major-2, r20 major-2 and r21 major-5). What r23
+took again: §2's refusal count and enumeration, and §1's `### Changed` table, which was short by
+four files this branch changes (`people-derivation.ts`, `write-error.ts`, `doc-sheet.tsx`,
+`use-project-authority.ts` — all four listed by
+`git diff --stat 3d65f81e4..HEAD -- apps/designer-portal/src packages/supabase/src`). The test
+counts below still carry their **r21** measurement, stated there; r22 and r23 added tests to
+`people-crm-w3.test.ts` and `rolodex-picker.test.tsx` and those two lines are re-measured here.
+
 **Carried forward against the shipped files after the r15 round (code review r15 MAJOR-3; the same
 defect r7 M-4 and r8 MAJOR-1 filed before it).** This report was first written before the review
 rounds and then went stale twice over, describing faces the code no longer had. Re-measured against
@@ -58,6 +67,10 @@ relative to the seed rather than as a literal that drifts a day per day.
 | `roster/roster-groups.tsx` | One bid read for the sheet; the household band under Client side |
 | `roster/call-sheet.tsx` | Passes `projectId` to the bands and `projectName` to the picker |
 | `lib/document/roster-derivation.ts` | `bidNote` |
+| `lib/document/people-derivation.ts` | M2R-6 — the duplicate-band predicate that decides whether "Compare these two" is offered at all |
+| `lib/document/write-error.ts` | r21's two 00634 refusal sentences (`seat_close_authority_forbidden`, `seat_close_money_authority_forbidden`) |
+| `components/document/overlays/doc-sheet.tsx` | r19 MAJOR-1's page label at 390 — the eyebrow stops hiding below `sm` |
+| `components/document/roster/use-project-authority.ts` | r19 MAJOR-1's filter: a grant that ended WITH its seat is history on the day of the close too (00634) |
 | `lib/analytics/people-events.ts` | `cardsMerged`, `householdMemberAdded`, `bidRecorded` |
 
 ### Tests
@@ -66,12 +79,12 @@ New, as they stand after the r2–r21 review rounds. **Every count below was re-
 file at HEAD in the r21 fix round** (2026-09-15), each file run alone. The drift itself has now
 been filed six times — r7 M-4, r8 MAJOR-1, r15 MAJOR-3, r19 major-2, r20 major-2, r21 major-5 —
 each time because a fix round added tests to files an earlier round had counted:
-`people-crm-w3.test.ts` (**66**, vitest) · `bring-forward.test.ts` (17) ·
+`people-crm-w3.test.ts` (**66**, vitest; re-run at r23) · `bring-forward.test.ts` (17) ·
 `compliance-notice.test.ts` (10) · `travel-list-pane.test.tsx` (5) ·
 `compare-merge-sheet.test.tsx` (17) · `household-band.test.tsx` (45) ·
 `close-seat-act.test.tsx` (**9**) · `archive-card-door.test.tsx` (8).
 
-Extended: `rolodex-picker.test.tsx` (15 → 38), `roster-row.test.tsx` (26 → **56**),
+Extended: `rolodex-picker.test.tsx` (15 → **40**, r23 major-2's two search pins), `roster-row.test.tsx` (26 → **56**),
 `write-error.test.ts` (**6**, r21's two 00634 refusal sentences), and
 `overlays/doc-sheet.test.tsx` (10) — the shared sheet head, whose page-name pin r19 rewrote when
 the eyebrow stopped hiding below `sm`. New in r19: `use-project-authority.test.tsx` (3) — a grant
@@ -151,14 +164,23 @@ job is still naming the collision.
   &lt;survivor&gt;'s own words stand — except the trades and specialties, which are kept together."
   ("carries EVERYTHING &lt;merged&gt; held" is the wording r5 B-1 / r11 BLOCKING-1 took OUT as a
   wrong fact; the announcement carries the same split the consequence sentence does.)
-- Each of `merge_studio_contacts()`'s **fourteen** refusals renders as a sentence (`asMergeError`),
+- Each of `merge_studio_contacts()`'s **fifteen** refusals renders as a sentence (`asMergeError`),
   never a Postgres string (`MERGE_REFUSAL_SENTENCES`, `use-studio-contacts.ts`): the original eight
   plus `merge_two_logins` and `merge_contact_rule_conflict` (r4 B-1 / B-2),
   `merge_survivor_archived` (r5 M-4), `merge_seat_on_studioless_project` +
-  `merge_seat_card_other_studio`, the two that name the job through `details`, and
+  `merge_seat_card_other_studio`, the two that name the job through `details`,
   `merge_seat_collision` (r18 MAJOR-1) — both cards hold an open seat of the same kind on one job,
   which `details` also names, and which 00634 is the rule behind ("Close one of these two seats
-  first, then merge." ends the money that seat carried).
+  first, then merge." ends the money that seat carried) — and **`merge_seat_authority_collision`**
+  (r22 MAJOR-1), the same question asked of the GRANT: R-BS clamps 00634 off the withdrawal path,
+  so a seat dated by "They withdrew" keeps its open grant and the open-seats-only gate cannot see
+  it. Its `details` carries a third word naming WHICH card holds the seat that left, because the
+  repair is that seat's alone — put it back in the bidding, then close it by hand — and the
+  sentence that named the other act ("Close the seat that is still open") was measured to lift the
+  gate while leaving the standing grant standing (r23 MAJOR-1). Fifteen is the map's own length
+  (`use-studio-contacts.ts:1925-1974`) and the migration's own token count
+  (`grep -oE "RAISE EXCEPTION 'merge_[a-z_]+'" 00629 | sort -u | wc -l`), re-measured at HEAD in
+  the **r23** fix round.
 
 **`useMergeStudioContacts` invalidates** `studio-contacts`, `studio-contact-merges`,
 `people-directory`, `people-directory-seats`, `studio-contact-channels`, `studio-contact-rules`,
