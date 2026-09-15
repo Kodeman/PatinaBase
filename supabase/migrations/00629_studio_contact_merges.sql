@@ -25,6 +25,16 @@
 -- (studio_trade_agreements / _tokens.contact_id) are repointed here too, the
 -- three FK columns into studio_contacts no other repoint reaches (r4 M-3).
 --
+-- ── TWO GUARDS THIS FILE STANDS IN FRONT OF, AND ONE IT STANDS DOWN (r13) ─
+-- §5's pre-checks refuse BY NAME and before the first write on BOTH shapes of
+-- assert_project_party_cards() (00624) a seat repoint can land on: a job that
+-- records no studio (merge_seat_on_studioless_project, r11/r12) and a seat
+-- carrying a card of ANOTHER studio (merge_seat_card_other_studio, r13), so
+-- neither guard's raw schema token can reach the merge sheet. And §4g stands
+-- the project_parties updated_at stamp down across the seat block, because a
+-- fold is not a touch on anybody's job and the stamp is what the Directory
+-- ranks an uncarded identity's seats by (r13 MAJOR-2).
+--
 -- ── WHAT CONSENT DOES, AND DOES NOT, DO HERE ──────────────────────────────
 -- Nothing. studio_channel_consent is keyed on (organization_id, channel_kind,
 -- channel_value) — never on a card id — so a number's consent follows the
@@ -1188,6 +1198,69 @@ COMMENT ON FUNCTION public.identity_paper_state(uuid, uuid) IS
   'back to itself rather than dropping out of the reduction.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- 4g. A MERGE IS NOT A TOUCH ON THE JOB (r13 MAJOR-2)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- project_parties.updated_at is not bookkeeping on this table. It is the
+-- tie-break people_directory's PARTY branch ranks one uncarded identity's
+-- seats by (§6 below, ORDER BY pp.updated_at DESC), the same order
+-- people_directory_seats' first_value(pp.id) window names person_id from
+-- (00626, R-BG), and the column last_touch_at prints on a Directory row.
+--
+-- §"seats" in the RPC below repoints three columns across every seat naming
+-- the folded card, and set_updated_at_project_parties (00212) is armed for
+-- all of them. On an ORDINARY firm-duplicate fold — crm-model §4 rule 4's
+-- "saved twice, one firm", the act direction §3.1's duplicate band exists
+-- for — that moved an UNCARDED human's Directory row off her live job onto a
+-- closed one and printed the merge instant as the day the studio last touched
+-- her (measured on a fresh reset, rolled back, with the trigger DISABLED as
+-- the negative control: r13 probe D / D2).
+--
+-- 00624, 00626 and 00631 each bracket their ONE backfill statement with
+-- ALTER TABLE … DISABLE TRIGGER. The RPC may not: ALTER TABLE takes ACCESS
+-- EXCLUSIVE on project_parties and holds it to COMMIT, so a studio folding
+-- two cards would lock the table against every other reader and writer for
+-- the whole merge — a worse trade than the defect. So the trigger learns to
+-- stand down instead, exactly as sync_studio_contact_company_pointer() stands
+-- down under patina.suppress_affiliation_sync (00592, the idiom this file
+-- already uses twice): a transaction-local GUC the RPC sets around its seat
+-- block and clears immediately after.
+--
+-- The TRIGGER NAME is unchanged, so 00624:806/819, 00626:580/591 and
+-- 00631:335/404's bracketing still names the same object.
+CREATE OR REPLACE FUNCTION public.project_parties_touch_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF COALESCE(current_setting('patina.suppress_party_touch', true), '') = '1' THEN
+    RETURN NEW;
+  END IF;
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.project_parties_touch_updated_at()
+  FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION public.project_parties_touch_updated_at() IS
+  'BEFORE UPDATE on project_parties: stamps updated_at, the column '
+  'people_directory and people_directory_seats rank one identity''s seats by '
+  'and last_touch_at prints. Stands down while patina.suppress_party_touch is '
+  '''1'' — set transaction-locally by merge_studio_contacts() around its seat '
+  'repoints, because folding two duplicate cards is not a touch on anybody''s '
+  'job and moved an uncarded human''s Directory row onto a closed one '
+  '(00629 r13 MAJOR-2). Replaces update_updated_at_column() on this table '
+  'only; the trigger keeps its 00212 name so the three backfills that bracket '
+  'it by name still do.';
+
+DROP TRIGGER IF EXISTS set_updated_at_project_parties ON public.project_parties;
+CREATE TRIGGER set_updated_at_project_parties
+  BEFORE UPDATE ON public.project_parties
+  FOR EACH ROW EXECUTE FUNCTION public.project_parties_touch_updated_at();
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- 5. merge_studio_contacts — one transaction, one act
 -- ═══════════════════════════════════════════════════════════════════════════
 CREATE OR REPLACE FUNCTION public.merge_studio_contacts(
@@ -1216,6 +1289,8 @@ DECLARE
   v_merged_rule   public.studio_contact_rules%ROWTYPE;
   -- The job a seat repoint cannot be checked against (r11 MAJOR-2).
   v_studioless    text;
+  -- The job whose seat carries a card of ANOTHER studio (r13 MAJOR-1).
+  v_other_studio  text;
 BEGIN
   IF p_survivor IS NULL OR p_merged IS NULL THEN
     RAISE EXCEPTION 'merge_contact_not_found'
@@ -1477,6 +1552,93 @@ BEGIN
             HINT   = 'One of these cards holds a seat on a job that records '
                      'no studio, so the seat cannot be moved. Record that '
                      'job''s studio first, then merge.';
+  END IF;
+
+  -- ── A SEAT STAMPED WITH A CARD OF ANOTHER STUDIO (r13 MAJOR-1) ──────────
+  -- assert_project_party_cards() has a THIRD door, and the pre-check above
+  -- reaches neither of the shapes behind it. Both resolvers answer non-NULL
+  -- and simply name a studio the card is not in:
+  --
+  --   party_studio_contact_other_studio    the identity key's card is not in
+  --                                        BOTH project_tenant_org() and
+  --                                        project_recorded_studio()
+  --   party_company_other_studio           the firm pointer's card is not in
+  --                                        project_tenant_org()
+  --   party_warranty_contact_other_studio  the warranty pointer's, likewise
+  --
+  -- The population is the legacy shape §8's own comment records as existing on
+  -- the table and unmeasured on Strata (00624:724-739's preflight): a seat
+  -- carrying a card of another studio, which 00624's guard refuses on every
+  -- write from this wave onward but cannot undo on rows already there.
+  -- Folding that card's duplicate re-writes the seat, the guard judges the
+  -- WHOLE row, and the merge aborted mid-transaction with the raw token in the
+  -- merge sheet's role="alert" paragraph — a schema word on a face (SPEC §7,
+  -- §5.7 #8) naming no act, over a pair the room could then never fold.
+  -- Measured on a fresh reset and rolled back (r13 probe A).
+  --
+  -- ONLY THE SEATS THE MERGE ACTUALLY WRITES, which is 11k's rule: the three
+  -- repoints at §"seats" are branch-dependent — a person survivor never moves
+  -- a seat's company_id, a company survivor never moves its warranty pointer —
+  -- and a row nothing writes fires no trigger. Refusing over a row the merge
+  -- would leave alone costs the room a fold it can make.
+  --
+  -- THE EFFECTIVE POINTERS, not today's: the trigger reads all three card
+  -- columns of NEW whichever one moved, so a seat repointed on its firm alone
+  -- is still refused over the foreign card already stamped in
+  -- studio_contact_id. The three legs below are the guard's own three tests,
+  -- stated in the same order and against the same resolvers.
+  SELECT pj.name INTO v_other_studio
+    FROM public.project_parties pp
+    JOIN public.projects pj ON pj.id = pp.project_id
+    CROSS JOIN LATERAL (
+      SELECT public.project_tenant_org(pp.project_id)      AS tenant,
+             public.project_recorded_studio(pp.project_id) AS recorded
+    ) r
+    CROSS JOIN LATERAL (
+      SELECT
+        CASE WHEN pp.studio_contact_id = p_merged
+             THEN p_survivor ELSE pp.studio_contact_id END AS card,
+        CASE WHEN pp.company_id = p_merged AND v_cross THEN NULL
+             WHEN pp.company_id = p_merged
+                  AND v_survivor.entity_kind = 'company' THEN p_survivor
+             ELSE pp.company_id END AS firm,
+        CASE WHEN pp.warranty_contact_person_id = p_merged
+                  AND (v_cross OR v_survivor.entity_kind = 'person')
+             THEN p_survivor
+             ELSE pp.warranty_contact_person_id END AS warranty
+    ) e
+   WHERE (
+           pp.studio_contact_id = p_merged
+        OR (pp.company_id = p_merged
+            AND (v_cross OR v_survivor.entity_kind = 'company'))
+        OR (pp.warranty_contact_person_id = p_merged
+            AND (v_cross OR v_survivor.entity_kind = 'person'))
+         )
+     -- the NULL-resolver doors are the pre-check above's job, by name
+     AND r.tenant IS NOT NULL
+     AND (
+          (e.card IS NOT NULL AND r.recorded IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM public.studio_contacts sc
+                            WHERE sc.id = e.card
+                              AND sc.organization_id = r.tenant
+                              AND sc.organization_id = r.recorded))
+       OR (e.firm IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM public.studio_contacts sc
+                            WHERE sc.id = e.firm
+                              AND sc.organization_id = r.tenant))
+       OR (e.warranty IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM public.studio_contacts sc
+                            WHERE sc.id = e.warranty
+                              AND sc.organization_id = r.tenant))
+         )
+   ORDER BY pj.name, pj.id
+   LIMIT 1;
+  IF v_other_studio IS NOT NULL THEN
+    RAISE EXCEPTION 'merge_seat_card_other_studio'
+      USING DETAIL = v_other_studio,
+            HINT   = 'One of these cards holds a seat on a job in another '
+                     'studio''s book, so the seat cannot be moved. Ask that '
+                     'studio to take the card off the seat, then merge.';
   END IF;
 
   -- ── channels: union, duplicates by kind + value REDUCED then dropped ────
@@ -2203,6 +2365,20 @@ BEGIN
   END IF;
 
   -- ── seats ───────────────────────────────────────────────────────────────
+  --
+  -- A MERGE IS NOT A TOUCH ON THE JOB (r13 MAJOR-2). Every statement in this
+  -- block matches rows on a card pointer, INCLUDING UNCARDED seats
+  -- (studio_contact_id IS NULL) whose firm or warranty pointer names the
+  -- folded card — and those are exactly the rows people_directory's PARTY
+  -- branch ranks by pp.updated_at DESC and people_directory_seats' first_value
+  -- window names person_id from. With set_updated_at_project_parties armed,
+  -- an ordinary firm-duplicate fold moved an uncarded human's Directory row
+  -- off her live job onto a closed one and printed the merge instant as
+  -- last_touch_at. §4g's GUC makes the stamp stand down for this block and
+  -- nothing else; it is transaction-local and cleared the moment the block
+  -- ends, the way app.contact_merge_in_progress is below.
+  PERFORM set_config('patina.suppress_party_touch', '1', true);
+
   -- The identity key itself (party_identity_key()'s first leg).
   UPDATE public.project_parties
      SET studio_contact_id = p_survivor WHERE studio_contact_id = p_merged;
@@ -2255,6 +2431,9 @@ BEGIN
        SET bid_quoted_by_person_id = p_survivor
      WHERE bid_quoted_by_person_id = p_merged;
   END IF;
+
+  -- The seat block ends here, and so does §4g's stand-down.
+  PERFORM set_config('patina.suppress_party_touch', '', true);
 
   -- ── the trade agreement's own card pointers (r4 M-3) ────────────────────
   -- Three FK columns into studio_contacts that no repoint above reaches, and
@@ -2406,7 +2585,12 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'hard block (merge_contact_rule_conflict, widened r5 M-2); and refuses a '
   'survivor the studio has PUT AWAY, because a merge onto an archived card '
   'takes the whole identity out of the rolodex read '
-  '(merge_survivor_archived, r5 M-4). Neither card is deleted or archived: the merged one '
+  '(merge_survivor_archived, r5 M-4). It also refuses, BY NAME and before the '
+  'first write, both shapes assert_project_party_cards() (00624) would abort a '
+  'seat repoint over with a raw schema token: a seat on a job that records no '
+  'studio (merge_seat_on_studioless_project, r11 MAJOR-2 / r12 MAJOR-2) and a '
+  'seat carrying a card of another studio (merge_seat_card_other_studio, r13 '
+  'MAJOR-1), each naming the job in DETAIL. Neither card is deleted or archived: the merged one '
   'takes merged_into and stays resolvable through resolve_merged_contact() '
   '(00629).';
 

@@ -968,6 +968,13 @@ export function bidNote(bid: {
   selectedAt?: string | null;
   validUntil?: string | null;
   quotedByName?: string | null;
+  /**
+   * r13 MAJOR-1 — the estimator's card has been PUT AWAY. The record still
+   * names them, so the clause still prints; it says where the card went rather
+   * than going quiet, which is what the archived-excluded rolodex used to make
+   * it do.
+   */
+  quotedByArchived?: boolean;
 }): string {
   const parts: string[] = [];
   // Chronological, which is also the order the two acceptance strings are
@@ -985,7 +992,13 @@ export function bidNote(bid: {
   const holds = rosterLongDate(bid.validUntil);
   if (holds) parts.push(`Holds until ${holds}.`);
   const by = (bid.quotedByName ?? '').trim();
-  if (by) parts.push(`Priced by ${by}.`);
+  if (by) {
+    parts.push(
+      bid.quotedByArchived
+        ? `Priced by ${by}, whose card is put away.`
+        : `Priced by ${by}.`,
+    );
+  }
   return parts.join(' ');
 }
 

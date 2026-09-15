@@ -4083,6 +4083,317 @@ BEGIN
   RAISE NOTICE '11k. r12 MAJOR-2 — a card-less studio-less seat''s FIRM pointer still folds: the pre-check widened one column, not all three: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11l — r13 MAJOR-1: a seat carrying a card of ANOTHER studio is
+--                          refused by name, not by the guard's raw token
+-- ═══════════════════════════════════════════════════════════════════════════
+-- assert_project_party_cards() has a THIRD door, and 11i/11j stage neither of
+-- the shapes behind it. Both resolvers answer non-NULL here and simply name a
+-- studio the cards are not in:
+--
+--   party_studio_contact_other_studio    the identity key's card
+--   party_company_other_studio           the firm pointer's card
+--
+-- The population is the legacy row 00624's guard refuses on every write from
+-- this wave onward but cannot undo: a seat stamped with another studio's card
+-- (00624:724-739's preflight, unmeasured on Strata). Folding that card's
+-- duplicate re-writes the seat, the guard judges the whole row, and the merge
+-- aborted mid-transaction with the raw token in the merge sheet's alert
+-- paragraph — a schema word on a face naming no act.
+--
+-- Studio B (f9…000b) records the job; both duplicate cards live in studio A.
+ALTER TABLE public.projects DISABLE TRIGGER set_project_studio_id;
+INSERT INTO public.projects
+  (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+  ('f9300000-0000-4000-8000-0000000000b6','W3 other-studio job',
+   'a0000000-0000-0000-0000-000000000007','f9000000-0000-4000-8000-00000000000b','active',
+   'a0000000-0000-0000-0000-000000000007','full');
+ALTER TABLE public.projects ENABLE TRIGGER set_project_studio_id;
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, phone, created_by, created_at) VALUES
+  ('f9f50000-0000-4000-8000-00000000008a','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R13 Other Studio Human','(612) 555-0941','a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  ('f9f50000-0000-4000-8000-00000000008b','f9000000-0000-4000-8000-00000000000a','person','sub',
+   'R13 Other Studio Human','(612) 555-0941','a0000000-0000-0000-0000-000000000004','2026-01-01');
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by, created_at) VALUES
+  ('f9f50000-0000-4000-8000-00000000008c','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R13 Other Studio Co','sub','a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  ('f9f50000-0000-4000-8000-00000000008d','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R13 Other Studio Co','sub','a0000000-0000-0000-0000-000000000004','2026-01-01');
+
+ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9f50000-0000-4000-8000-00000000008e','f9300000-0000-4000-8000-0000000000b6','sub',
+   'R13 Other Studio Human','f9f50000-0000-4000-8000-00000000008b',
+   'a0000000-0000-0000-0000-000000000004');
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, company_id, created_by) VALUES
+  ('f9f50000-0000-4000-8000-00000000008f','f9300000-0000-4000-8000-0000000000b6','sub',
+   'R13 Other Studio Crew','f9f50000-0000-4000-8000-00000000008d',
+   'a0000000-0000-0000-0000-000000000004');
+ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+
+DO $$
+DECLARE
+  v_detail   text;
+  v_tenant   uuid;
+  v_recorded uuid;
+  n          integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the fixture reproduces ONLY while BOTH resolvers answer non-NULL — the
+  -- shape 11i's and 11j's pre-check conjuncts cannot see
+  v_tenant   := public.project_tenant_org('f9300000-0000-4000-8000-0000000000b6');
+  v_recorded := public.project_recorded_studio('f9300000-0000-4000-8000-0000000000b6');
+  IF v_tenant IS NULL OR v_recorded IS NULL THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION
+      'BLOCK 11l FAIL (r13 MAJOR-1): the fixture no longer reproduces — tenant=% recorded=%, which is 11i/11j''s shape, not this one',
+      v_tenant, v_recorded;
+  END IF;
+
+  -- (a) the IDENTITY KEY leg — party_studio_contact_other_studio
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9f50000-0000-4000-8000-00000000008a','f9f50000-0000-4000-8000-00000000008b','phone');
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11l FAIL (r13 MAJOR-1): the merge went through over an other-studio seat';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+    IF SQLERRM LIKE '%party_studio_contact_other_studio%' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION
+        'BLOCK 11l FAIL (r13 MAJOR-1): the guard''s THIRD leg still reaches the caller as a raw token: %',
+        SQLERRM;
+    END IF;
+    IF SQLERRM NOT LIKE '%merge_seat_card_other_studio%' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION 'BLOCK 11l FAIL (r13 MAJOR-1): expected merge_seat_card_other_studio, got %', SQLERRM;
+    END IF;
+    IF v_detail IS DISTINCT FROM 'W3 other-studio job' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION 'BLOCK 11l FAIL (r13 MAJOR-1): the refusal names the job as %', v_detail;
+    END IF;
+  END;
+
+  -- (b) the FIRM POINTER leg — party_company_other_studio, the same defect
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9f50000-0000-4000-8000-00000000008c','f9f50000-0000-4000-8000-00000000008d','company_name');
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11l FAIL (r13 MAJOR-1b): the firm merge went through over an other-studio seat';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL;
+    IF SQLERRM LIKE '%party_company_other_studio%' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION
+        'BLOCK 11l FAIL (r13 MAJOR-1b): the firm leg''s raw token still reaches the caller: %', SQLERRM;
+    END IF;
+    IF SQLERRM NOT LIKE '%merge_seat_card_other_studio%' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION 'BLOCK 11l FAIL (r13 MAJOR-1b): expected merge_seat_card_other_studio, got %', SQLERRM;
+    END IF;
+    IF v_detail IS DISTINCT FROM 'W3 other-studio job' THEN
+      PERFORM pg_temp.reset_role();
+      RAISE EXCEPTION 'BLOCK 11l FAIL (r13 MAJOR-1b): the refusal names the job as %', v_detail;
+    END IF;
+  END;
+
+  -- nothing moved: both refusals are BEFORE the first write
+  SELECT count(*) INTO n FROM public.studio_contacts
+   WHERE id IN ('f9f50000-0000-4000-8000-00000000008b','f9f50000-0000-4000-8000-00000000008d')
+     AND merged_into IS NULL;
+  IF n <> 2 THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11l FAIL (r13 MAJOR-1): a card was folded anyway (% still live)', n;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+END $$;
+
+-- CONTROL — the same two folds go through the moment the foreign seat stops
+-- naming the cards, and a seat in the cards' OWN studio is never refused by
+-- the widened pre-check.
+ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
+UPDATE public.project_parties SET studio_contact_id = NULL
+ WHERE id = 'f9f50000-0000-4000-8000-00000000008e';
+UPDATE public.project_parties SET company_id = NULL
+ WHERE id = 'f9f50000-0000-4000-8000-00000000008f';
+ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+
+DO $$
+DECLARE v_id uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_id := public.merge_studio_contacts(
+    'f9f50000-0000-4000-8000-00000000008a','f9f50000-0000-4000-8000-00000000008b','phone');
+  IF v_id IS DISTINCT FROM 'f9f50000-0000-4000-8000-00000000008a' THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11l FAIL (r13 MAJOR-1 control): the merge returned %', v_id;
+  END IF;
+  v_id := public.merge_studio_contacts(
+    'f9f50000-0000-4000-8000-00000000008c','f9f50000-0000-4000-8000-00000000008d','company_name');
+  IF v_id IS DISTINCT FROM 'f9f50000-0000-4000-8000-00000000008c' THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11l FAIL (r13 MAJOR-1b control): the firm merge returned %', v_id;
+  END IF;
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '11l. r13 MAJOR-1 — a seat carrying ANOTHER studio''s card is refused by name on both the identity-key and firm legs, and the repair unblocks both folds: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- BLOCK 11m — r13 MAJOR-2: an ordinary firm-duplicate fold does not move
+--                          project_parties.updated_at, and does not flip an
+--                          uncarded identity's Directory row onto an old job
+-- ═══════════════════════════════════════════════════════════════════════════
+-- r12 MAJOR-1's mechanism reached through a LIVE STUDIO ACT instead of a
+-- one-time deploy statement. The merge's seat repoints match UNCARDED seats
+-- too, and those are exactly the rows people_directory's PARTY branch ranks by
+-- pp.updated_at DESC and people_directory_seats' first_value(pp.id) window
+-- names person_id from. Block 7d's shape, over the merge instead of the
+-- backfill: a negative control that proves the fixture still reproduces, then
+-- the real act.
+ALTER TABLE public.projects DISABLE TRIGGER set_project_studio_id;
+INSERT INTO public.projects
+  (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+  ('f9300000-0000-4000-8000-0000000000b7','W3 old closed job',
+   'a0000000-0000-0000-0000-000000000004','f9000000-0000-4000-8000-00000000000a','active',
+   'a0000000-0000-0000-0000-000000000004','full'),
+  ('f9300000-0000-4000-8000-0000000000b8','W3 live job',
+   'a0000000-0000-0000-0000-000000000004','f9000000-0000-4000-8000-00000000000a','active',
+   'a0000000-0000-0000-0000-000000000004','full');
+ALTER TABLE public.projects ENABLE TRIGGER set_project_studio_id;
+
+-- "Saved twice, one firm" (crm-model §4 rule 4, SPEC §5.7 #4d).
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by, created_at) VALUES
+  ('f9f50000-0000-4000-8000-000000000090','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R13 Stonehaven Tile','sub','a0000000-0000-0000-0000-000000000004','2025-01-01'),
+  ('f9f50000-0000-4000-8000-000000000091','f9000000-0000-4000-8000-00000000000a','company','sub',
+   'R13 Stonehaven Tile Gallery','sub','a0000000-0000-0000-0000-000000000004','2026-01-01');
+
+-- ONE UNCARDED human (a phone identity), two seats: the OLD one names the
+-- duplicate firm and is 400 days quiet; the LIVE one names no firm and is 10
+-- days quiet, so it is today's Directory winner.
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, phone, phone_e164, company_id, company_name, created_by) VALUES
+  ('f9f50000-0000-4000-8000-000000000092','f9300000-0000-4000-8000-0000000000b7','sub',
+   'R13 Marta Uncarded','(612) 555-0951','+16125550951',
+   'f9f50000-0000-4000-8000-000000000091','R13 Stonehaven Tile Gallery',
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9f50000-0000-4000-8000-000000000093','f9300000-0000-4000-8000-0000000000b8','sub',
+   'R13 Marta Uncarded','(612) 555-0951','+16125550951',NULL,NULL,
+   'a0000000-0000-0000-0000-000000000004');
+
+ALTER TABLE public.project_parties DISABLE TRIGGER set_updated_at_project_parties;
+UPDATE public.project_parties SET updated_at = now() - interval '400 days'
+ WHERE id = 'f9f50000-0000-4000-8000-000000000092';
+UPDATE public.project_parties SET updated_at = now() - interval '10 days'
+ WHERE id = 'f9f50000-0000-4000-8000-000000000093';
+ALTER TABLE public.project_parties ENABLE TRIGGER set_updated_at_project_parties;
+
+-- 11m-a. the LIVE seat is the Directory winner before anything moves
+DO $$
+DECLARE r record;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT person_id, meta->>'project_name' AS job INTO r
+    FROM public.people_directory WHERE display_name = 'R13 Marta Uncarded';
+  PERFORM pg_temp.reset_role();
+  IF r.person_id IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000093'::uuid
+     OR r.job IS DISTINCT FROM 'W3 live job' THEN
+    RAISE EXCEPTION
+      'BLOCK 11m FAIL (11m-a): the LIVE seat should be the Directory winner before the fold, got % / %',
+      r.person_id, r.job;
+  END IF;
+END $$;
+
+-- 11m-b. NEGATIVE CONTROL — the same row touched with the stamp ARMED does
+-- flip the Directory onto the closed job, so the fixture reproduces the
+-- mechanism and the assertion below is not vacuous.
+SAVEPOINT r13_touch_control;
+UPDATE public.project_parties SET company_id = company_id
+ WHERE id = 'f9f50000-0000-4000-8000-000000000092';
+DO $$
+DECLARE r record;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT person_id, meta->>'project_name' AS job INTO r
+    FROM public.people_directory WHERE display_name = 'R13 Marta Uncarded';
+  PERFORM pg_temp.reset_role();
+  IF r.person_id IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000092'::uuid THEN
+    RAISE EXCEPTION
+      'BLOCK 11m FAIL (11m-b): an ARMED touch on the old seat no longer flips the Directory winner (got % / %) — the fixture no longer reproduces r13 MAJOR-2',
+      r.person_id, r.job;
+  END IF;
+END $$;
+ROLLBACK TO SAVEPOINT r13_touch_control;
+
+-- 11m-c. the real act: fold the duplicate firm, the way §3.1's duplicate band
+-- offers it.
+DO $$
+DECLARE
+  v_id       uuid;
+  v_before   timestamptz;
+  v_after    timestamptz;
+  v_firm     uuid;
+  r          record;
+BEGIN
+  SELECT updated_at INTO v_before FROM public.project_parties
+   WHERE id = 'f9f50000-0000-4000-8000-000000000092';
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_id := public.merge_studio_contacts(
+    'f9f50000-0000-4000-8000-000000000090','f9f50000-0000-4000-8000-000000000091','company_name');
+  IF v_id IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000090' THEN
+    PERFORM pg_temp.reset_role();
+    RAISE EXCEPTION 'BLOCK 11m FAIL (11m-c): the merge returned %', v_id;
+  END IF;
+
+  SELECT person_id, meta->>'project_name' AS job INTO r
+    FROM public.people_directory WHERE display_name = 'R13 Marta Uncarded';
+  PERFORM pg_temp.reset_role();
+
+  -- the repoint still happened: this is a fix about the STAMP, not the fold
+  SELECT company_id, updated_at INTO v_firm, v_after FROM public.project_parties
+   WHERE id = 'f9f50000-0000-4000-8000-000000000092';
+  IF v_firm IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000090'::uuid THEN
+    RAISE EXCEPTION 'BLOCK 11m FAIL (11m-c): the seat''s firm pointer reads % after the fold', v_firm;
+  END IF;
+  IF v_after IS DISTINCT FROM v_before THEN
+    RAISE EXCEPTION
+      'BLOCK 11m FAIL (11m-d): the fold stamped the seat''s updated_at (% -> %)', v_before, v_after;
+  END IF;
+  IF r.person_id IS DISTINCT FROM 'f9f50000-0000-4000-8000-000000000093'::uuid
+     OR r.job IS DISTINCT FROM 'W3 live job' THEN
+    RAISE EXCEPTION
+      'BLOCK 11m FAIL (11m-e): the fold moved the Directory row onto % / %', r.person_id, r.job;
+  END IF;
+  RAISE NOTICE '11m. r13 MAJOR-2 — folding a duplicate firm leaves an uncarded identity''s Directory row, its job and its last touch exactly where they were: passed';
+END $$;
+
+-- 11m-f. and the stand-down is NARROW: an ordinary seat edit after the merge
+-- still stamps updated_at, because the GUC is transaction-local and cleared.
+DO $$
+DECLARE v_before timestamptz; v_after timestamptz;
+BEGIN
+  SELECT updated_at INTO v_before FROM public.project_parties
+   WHERE id = 'f9f50000-0000-4000-8000-000000000093';
+  UPDATE public.project_parties SET display_name = 'R13 Marta Uncarded'
+   WHERE id = 'f9f50000-0000-4000-8000-000000000093';
+  SELECT updated_at INTO v_after FROM public.project_parties
+   WHERE id = 'f9f50000-0000-4000-8000-000000000093';
+  IF v_after IS NOT DISTINCT FROM v_before THEN
+    RAISE EXCEPTION
+      'BLOCK 11m FAIL (11m-f): the updated_at stamp no longer fires on an ordinary seat edit — §4g''s stand-down leaked past the merge';
+  END IF;
+  RAISE NOTICE '11m-f. the stand-down is narrow: an ordinary seat edit still stamps updated_at: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

@@ -782,6 +782,87 @@ describe('RosterRow — the Bidding band', () => {
   };
 
   const PEOPLE = [{ id: 'card-tom', name: 'Tom Marrow' }];
+  /** The same book after the studio pressed "Put this card away" on Tom. */
+  const PEOPLE_TOM_PUT_AWAY = [
+    // RosterGroups hands the row this book sorted by name, archived included.
+    { id: 'card-rosa', name: 'Rosa Delgado' },
+    { id: 'card-tom', name: 'Tom Marrow', archived: true },
+  ];
+
+  /**
+   * r13 MAJOR-1 — AN ARCHIVED ESTIMATOR ERASED A RECORDED FACT FROM TWO FACES.
+   *
+   * W3 shipped 00631's estimator field and the standing "Put this card away"
+   * door in one wave. Resolved against the archived-excluded rolodex, pressing
+   * that door dropped "Priced by Tom Marrow." off every Call Sheet row whose
+   * seat records him, with nothing said, while
+   * `project_parties.bid_quoted_by_person_id` still names him.
+   */
+  it('keeps the estimator on the face after their card is put away', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded={false}
+        onToggle={jest.fn()}
+        bid={BID}
+        bidPeople={PEOPLE_TOM_PUT_AWAY}
+      />,
+    );
+    expect(document.querySelector('[data-bid-note]')?.textContent).toBe(
+      'Due 5 October 2026. Holds until 4 November 2026. ' +
+        'Priced by Tom Marrow, whose card is put away.',
+    );
+  });
+
+  /**
+   * r13 MAJOR-1, the second face: a controlled <select> whose value names no
+   * <option> renders at `selectedIndex = -1` — blank, over a record that names
+   * somebody. The archived card is offered as the STANDING value and marked;
+   * it is not offered as a fresh pick to anyone else.
+   */
+  it('renders the put-away estimator as the standing pick, marked', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded
+        onToggle={jest.fn()}
+        bid={BID}
+        bidPeople={PEOPLE_TOM_PUT_AWAY}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    );
+    const select = screen.getByLabelText('Who priced it') as HTMLSelectElement;
+    expect(select.value).toBe('card-tom');
+    expect(select.selectedIndex).toBeGreaterThan(-1);
+    expect(
+      Array.from(select.options).map((o) => o.textContent),
+    ).toEqual(['Nobody named', 'Rosa Delgado', 'Tom Marrow (card put away)']);
+  });
+
+  /** The negative control: a put-away card nobody recorded is not offered. */
+  it('does not offer a put-away card as a fresh pick', () => {
+    render(
+      <RosterRow
+        row={bidSeat()}
+        band="bidding"
+        expanded
+        onToggle={jest.fn()}
+        bid={{ ...BID, bidQuotedByPersonId: null }}
+        bidPeople={PEOPLE_TOM_PUT_AWAY}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Change what came back' }),
+    );
+    const select = screen.getByLabelText('Who priced it') as HTMLSelectElement;
+    expect(
+      Array.from(select.options).map((o) => o.textContent),
+    ).toEqual(['Nobody named', 'Rosa Delgado']);
+  });
 
   it('prints the bid note on the COLLAPSED row (R-R / C28)', () => {
     render(
