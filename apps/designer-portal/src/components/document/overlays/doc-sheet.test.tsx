@@ -318,10 +318,13 @@ describe('DocSheet', () => {
     expect(document.getElementById(titleId ?? '')).toHaveTextContent(
       'Order review',
     );
-    expect(dialog.querySelector('[data-doc-sheet-page-label]')).toHaveClass(
-      'hidden',
-      'sm:inline',
-    );
+    // QA r19 MAJOR-1 — the page segment prints at BOTH widths. It was
+    // `hidden sm:inline`, so a sheet's page name vanished at 390 while SPEC
+    // §5.7 #9 requires the two widths to carry identical facts.
+    const pageLabel = dialog.querySelector('[data-doc-sheet-page-label]');
+    expect(pageLabel).toHaveTextContent('Ledger');
+    expect(pageLabel).not.toHaveClass('hidden');
+    expect(pageLabel).not.toHaveClass('sm:inline');
     expect(
       dialog.querySelector('[data-doc-sheet-title-line]'),
     ).toHaveTextContent('Order review');

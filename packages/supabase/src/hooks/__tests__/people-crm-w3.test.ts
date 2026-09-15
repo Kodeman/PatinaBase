@@ -415,6 +415,45 @@ describe("the Bidding band writes a stage with its outcome", () => {
     expect(patch.stage).toBeUndefined();
   });
 
+  /**
+   * r19 major-1 — AND THE OTHER BRANCH OF THE SAME `if`. r18 narrowed the
+   * CLEARING leg to a seat leaving `withdrawn` and left the STAMPING leg
+   * ungated, on the same population: a seat the studio closed by hand still
+   * carries its bid, so the editor stays on the row, and recording "They
+   * withdrew" a week later rewrote `off_job_at` to today — the window clause
+   * then printing a closing date a week later than the record, beside the
+   * studio's own untouched reason, with nothing anywhere holding the original.
+   */
+  it("never moves a date the seat already carries (r19 major-1)", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "proj-1",
+      patch: { bidOutcome: "withdrawn" },
+      previous: {
+        bidOutcome: "quoted",
+        stage: "off_job",
+        offJobAt: "2026-09-10",
+      },
+    });
+    const patch = updated[0]?.payload ?? {};
+    expect(patch.bid_outcome).toBe("withdrawn");
+    expect(patch.stage).toBe("off_job");
+    expect(patch.off_job_at).toBeUndefined();
+    expect(patch.off_job_reason).toBeUndefined();
+  });
+
+  it("still dates a withdrawal on a seat carrying no date (r19 major-1)", async () => {
+    await mutationFnOf(useSetPartyBid())({
+      id: "seat-1",
+      projectId: "proj-1",
+      patch: { bidOutcome: "withdrawn" },
+      previous: { bidOutcome: "quoted", stage: "bidding", offJobAt: null },
+    });
+    const patch = updated[0]?.payload ?? {};
+    expect(patch.stage).toBe("off_job");
+    expect(patch.off_job_at).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
   it("still takes a crew off the job when they withdraw", async () => {
     await mutationFnOf(useSetPartyBid())({
       id: "seat-1",

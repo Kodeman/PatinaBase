@@ -62,14 +62,19 @@ relative to the seed rather than as a literal that drifts a day per day.
 
 ### Tests
 
-New, as they stand after the r2–r15 review rounds (each count re-measured file by file in the
-r15 fix round):
-`people-crm-w3.test.ts` (40, vitest) · `bring-forward.test.ts` (15) ·
+New, as they stand after the r2–r19 review rounds. **Every count below was re-measured file by
+file at HEAD in the r19 fix round**, each file run alone — the r15 measurement stood while r16,
+r17, r18 and r19 all added tests to these same files, which is the defect r19 major-2 filed
+(and r7 M-4, r8 MAJOR-1 and r15 MAJOR-3 before it):
+`people-crm-w3.test.ts` (45, vitest) · `bring-forward.test.ts` (17) ·
 `compliance-notice.test.ts` (10) · `travel-list-pane.test.tsx` (5) ·
-`compare-merge-sheet.test.tsx` (17) · `household-band.test.tsx` (34) ·
+`compare-merge-sheet.test.tsx` (17) · `household-band.test.tsx` (45) ·
 `close-seat-act.test.tsx` (6) · `archive-card-door.test.tsx` (8).
 
-Extended: `rolodex-picker.test.tsx` (15 → 37), `roster-row.test.tsx` (26 → 49).
+Extended: `rolodex-picker.test.tsx` (15 → 38), `roster-row.test.tsx` (26 → 50), and
+`overlays/doc-sheet.test.tsx` (10) — the shared sheet head, whose page-name pin r19 rewrote when
+the eyebrow stopped hiding below `sm`. New in r19: `use-project-authority.test.tsx` (3) — a grant
+that ended with its seat is history on the day of the close too (00634).
 
 Playwright, chromium-pinned, under `e2e/people/`: `bring-forward.spec.ts`, `merge.spec.ts`.
 **Run green in the r14 round** — 3 passed in 15.6 s, chromium (`w3-fix-log-r14.md`); not re-run in
@@ -392,10 +397,10 @@ Three acts added to `people-events.ts`, each the shape of one act, none an engag
 | `pnpm --filter @patina/designer-portal type-check` | clean |
 | `pnpm --filter @patina/admin-portal build` | **exit 0**, full route table printed (the strictest gate, after the shared `@patina/supabase` edits) |
 | `npx turbo build --filter=@patina/types --filter=@patina/supabase` | 2 successful (`@patina/supabase` ships source, not a dist — nothing to stale) |
-| `cd apps/designer-portal && npx jest` | **593 suites, 7675 tests, 1 snapshot, all green** (re-measured in the r15 fix round) |
-| `cd packages/supabase && npx vitest run` | **105 files, 1346 passed, 12 skipped** (re-measured in the r15 fix round) |
-| `cd packages/supabase && npx vitest run src/hooks/__tests__/people-crm-w3.test.ts` | **40 passed** |
-| `psql … supabase/tests/people/w3_merge_sweep_household_test.sql` | rc=0 — "W3 SQL suite: all blocks passed" (block 12, the r15 closed-seat pin, is the last) |
+| `cd apps/designer-portal && npx jest` | **594 suites, 7693 tests, 1 snapshot, all green** (re-measured file by file and whole in the **r19** fix round) |
+| `cd packages/supabase && npx vitest run` | **106 files, 1355 passed, 12 skipped** (re-measured in the **r19** fix round) |
+| `cd packages/supabase && npx vitest run src/hooks/__tests__/people-crm-w3.test.ts` | **45 passed** (r19) |
+| `psql … supabase/tests/people/w3_merge_sweep_household_test.sql` | rc=0 — "W3 SQL suite: all blocks passed". **Block 13d is the last** — r18/r19 MAJOR-1's seat-collision block, after 13, 13b and 13c; block 12 is the r15 closed-seat household pin, eight blocks from the end |
 | `e2e/people` (chromium, r14 round) | `bring-forward.spec.ts` + `merge.spec.ts` — **3 passed in 15.6 s**; the wider `e2e/people` run in the r15 QA round read 14 passed / 8 failed, the eight pre-existing and carried to the orchestrator |
 | `npx eslint src/components/document/{roster,people} src/lib/document/{bring-forward,compliance-notice}.ts src/lib/analytics/people-events.ts` | **0 errors**, 4 warnings, all pre-existing kinds in files this wave did not touch |
 | e2e type-check (`tsc` over `e2e/**`) | 0 errors in `bring-forward.spec.ts` and `merge.spec.ts` (the rest of `e2e/` carries pre-existing missing-`@types/node` noise) |

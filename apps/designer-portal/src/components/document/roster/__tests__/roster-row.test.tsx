@@ -1094,7 +1094,9 @@ describe('RosterRow — the Bidding band', () => {
       projectId: 'okonkwo',
       // r7 BLOCKING-1: the seat as it stood, so the hook can tell recording an
       // outcome from correcting a field on a seat whose outcome has not moved.
-      previous: { bidOutcome: null, stage: 'no_response' },
+      // r19 major-1: and the date it already carries, so "They withdrew" can
+      // write one where none stands without moving one that does.
+      previous: { bidOutcome: null, stage: 'no_response', offJobAt: null },
       patch: {
         bidAskedAt: '2026-09-28',
         bidDueAt: '2026-10-05',
@@ -1289,9 +1291,13 @@ describe('RosterRow — the Bidding band', () => {
     );
     await waitFor(() => expect(setBidMutate).toHaveBeenCalled());
     expect(setBidMutate.mock.calls[0][0].patch.bidOutcome).toBeNull();
+    // r19 major-1 — the seat as it stands now carries its own off-the-job
+    // date, so the hook can date a withdrawal without moving one the studio
+    // already wrote.
     expect(setBidMutate.mock.calls[0][0].previous).toEqual({
       bidOutcome: 'selected',
       stage: 'awarded',
+      offJobAt: null,
     });
   });
 
