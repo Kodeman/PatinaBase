@@ -30,7 +30,12 @@
 -- assert_project_party_cards() (00624) a seat repoint can land on: a job that
 -- records no studio (merge_seat_on_studioless_project, r11/r12) and a seat
 -- carrying a card of ANOTHER studio (merge_seat_card_other_studio, r13), so
--- neither guard's raw schema token can reach the merge sheet. And §4g stands
+-- neither guard's raw schema token can reach the merge sheet. A THIRD seat
+-- pre-check stands in front of no guard at all, because there is none: a fold
+-- that would leave one human holding two OPEN seats of the same party_kind on
+-- one job is refused as merge_seat_collision (r18 MAJOR-1), since each of the
+-- two seats can carry its own open money grant and the Call Sheet would then
+-- print the same person twice with two different signing figures. And §4g stands
 -- the project_parties updated_at stamp down across the seat block, because a
 -- fold is not a touch on anybody's job and the stamp is what the Directory
 -- ranks an uncarded identity's seats by (r13 MAJOR-2).
@@ -1291,6 +1296,12 @@ DECLARE
   v_studioless    text;
   -- The job whose seat carries a card of ANOTHER studio (r13 MAJOR-1).
   v_other_studio  text;
+  -- The job where BOTH cards already hold an open seat of the same kind
+  -- (r18 MAJOR-1). Two columns, because the refusal names the job AND the
+  -- kind: "sub on the Okonkwo residence" is the whole of what the studio has
+  -- to go and close.
+  v_collision_job  text;
+  v_collision_kind text;
 BEGIN
   IF p_survivor IS NULL OR p_merged IS NULL THEN
     RAISE EXCEPTION 'merge_contact_not_found'
@@ -1639,6 +1650,70 @@ BEGIN
             HINT   = 'One of these cards holds a seat on a job in another '
                      'studio''s book, so the seat cannot be moved. Ask that '
                      'studio to take the card off the seat, then merge.';
+  END IF;
+
+  -- ── BOTH CARDS ALREADY SEATED, SAME KIND, SAME JOB (r18 MAJOR-1) ────────
+  -- The seat repoint at §"seats" below is one unconditional statement, and
+  -- project_parties carries no uniqueness on
+  -- (project_id, studio_contact_id, party_kind) — read from pg_constraint.
+  -- So where the same human was seated on ONE job under BOTH cards, the fold
+  -- did not converge them: it produced two live seats of the same kind
+  -- stamped with one card. identity_seat_count() then said 2 and
+  -- people_directory_seats nested two lines for one job and one party_kind.
+  --
+  -- A DUPLICATED ROW WOULD BE COSMETIC. THE COLUMN 00632 WRITES ONTO IT IS
+  -- NOT. Each seat carries its own project_party_authority grant, and the two
+  -- doors that open one write different figures from different sources:
+  -- R-J's "Confirm from the agreement" (source_clause 'agreement §4') and
+  -- add_household_member()'s household figure
+  -- (source_clause 'client_households.co_threshold_cents'). Measured on a
+  -- fresh reset and rolled back (probe-r18-e): $10,000 on one seat, $2,500 on
+  -- the other, both open after the fold, and the Call Sheet's Client side
+  -- bands client / client_rep BEFORE the window rule is consulted (00632's
+  -- own note), so it prints the same human twice — "Signs money to $2,500."
+  -- beside "Signs money to $10,000." — one screen, two contradictory facts
+  -- about money, over a record that had just told the studio these are ONE
+  -- human. It does not converge afterwards either: set_household_threshold()
+  -- correctly moves only the grant it sourced (R-BQ), so raising the figure
+  -- widens the gap.
+  --
+  -- REFUSED BY NAME AND BEFORE THE FIRST WRITE, the sixth refusal in this
+  -- file's own posture (merge_survivor_archived, merge_two_logins,
+  -- merge_contact_rule_conflict, merge_seat_on_studioless_project,
+  -- merge_seat_card_other_studio) and for the same reason as all five: a
+  -- state the merge cannot resolve FOR the studio. It cannot be resolved
+  -- here because choosing which of the two money grants survives is the
+  -- principal's ruling (PR-n), not a repoint's, and R-BN forbids dropping the
+  -- other. The repair is already in the room and is named in the HINT —
+  -- "Close this seat" on one of the two (useCloseProjectPartySeat), or Revoke
+  -- on its grant — and closing one lifts this gate, because the predicate
+  -- asks only about OPEN seats.
+  --
+  -- OPEN SEATS ONLY (off_job_at IS NULL, 00632's own open-seat filter, the
+  -- room's "Close this seat" record). A closed seat beside a live one of the
+  -- same kind states no second money fact — its grant was ended at the close
+  -- — and refusing over a row the studio has already retired would cost the
+  -- room a fold it can make, and would name a repair that had already been
+  -- taken.
+  SELECT pj.name, pm.party_kind
+    INTO v_collision_job, v_collision_kind
+    FROM public.project_parties pm
+    JOIN public.project_parties ps
+      ON ps.project_id = pm.project_id
+     AND ps.party_kind = pm.party_kind
+     AND ps.studio_contact_id = p_survivor
+     AND ps.off_job_at IS NULL
+    JOIN public.projects pj ON pj.id = pm.project_id
+   WHERE pm.studio_contact_id = p_merged
+     AND pm.off_job_at IS NULL
+   ORDER BY pj.name, pj.id, pm.party_kind
+   LIMIT 1;
+  IF v_collision_job IS NOT NULL THEN
+    RAISE EXCEPTION 'merge_seat_collision'
+      USING DETAIL = v_collision_job || ' · ' || v_collision_kind,
+            HINT   = 'Both cards hold an open seat of the same kind on the '
+                     'same job, and one person cannot hold the job twice. '
+                     'Close one of these two seats first, then merge.';
   END IF;
 
   -- ── channels: union, duplicates by kind + value REDUCED then dropped ────
@@ -2607,7 +2682,14 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'seat repoint over with a raw schema token: a seat on a job that records no '
   'studio (merge_seat_on_studioless_project, r11 MAJOR-2 / r12 MAJOR-2) and a '
   'seat carrying a card of another studio (merge_seat_card_other_studio, r13 '
-  'MAJOR-1), each naming the job in DETAIL. Neither card is deleted or archived: the merged one '
+  'MAJOR-1), each naming the job in DETAIL. And it refuses, by name and before '
+  'the first write, a fold that would leave ONE human holding two OPEN seats '
+  'of the same party_kind on ONE job — each able to carry its own open money '
+  'grant, so the Call Sheet would print the same person twice with two '
+  'different signing figures (merge_seat_collision, r18 MAJOR-1). DETAIL names '
+  'the job and the kind; the repair is the room''s own "Close this seat" on '
+  'one of the two, and closing it lifts the gate, because the predicate reads '
+  'open seats only. Neither card is deleted or archived: the merged one '
   'takes merged_into and stays resolvable through resolve_merged_contact() '
   '(00629).';
 

@@ -272,8 +272,17 @@ carries neither a card nor a `designer_clients` row, `Open a household` renders 
 first, then open the household." — because a household minted with no member the overlap read can
 reach would be invisible the moment the sheet closed. Probed end to end in a
 rolled-back transaction: creating the household, `add_household_member` for Chidi's card reuses his
-existing OPEN seat and writes `money` and `change_order` grants at `250000`, and the overlap read
-finds the household afterwards.
+existing OPEN seat and writes **no authority row at all**, because that seat already carries an open
+`money` grant the household did not source and such a grant stands (r9 M-1, R-BQ); the overlap read
+finds the household afterwards. **Re-measured r18 (MAJOR-2).** The earlier wording — "writes `money`
+and `change_order` grants at `250000`" — was wrong twice over: `00632` carries exactly ONE
+`INSERT INTO public.project_party_authority`, scope `'money'` (`00632:535-540`), and the string
+`change_order` appears nowhere in the file (not at HEAD, not in its first commit), which
+`household-band.tsx:196-204` already says at the site; and the two 250000 rows the probe saw were
+the SEED's, `source_clause = 'Owner agreement, Exhibit B §4.2'`, standing on Chidi's seat before
+the RPC ran and with `source_household_id` NULL after it. Where the seat carries no standing money
+grant the RPC writes exactly one row, scope `money`,
+`source_clause = 'client_households.co_threshold_cents'` (probe-r18-g).
 
 **Neither half of the household touches a seat the studio CLOSED (r15 MAJOR-1, 00632).**
 `add_household_member()` matched on (project, card, role) alone and took the oldest row, so a seat
@@ -398,7 +407,7 @@ transaction that was ROLLBACKed, verified zero residue afterwards):
 |---|---|
 | Every new select shape (`studio_compliance_notices`, `studio_contact_merges`, `client_households` with `member_person_ids=ov.{…}`, the five bid columns, `projects(designer_id, client_profile_id)`, `designer_clients.household_id`, `studio_contacts.merged_into`, the history embed with `projects(name, completed_at)`, `studio_compliance_documents?holder_id=in.(…)`) | 200, all |
 | `merge_studio_contacts()` round trip as the seeded designer | survivor returned; `resolve_merged_contact(newer)` → survivor; `merged_into` set; `studio_contact_merges.matched_on = 'phone'` |
-| `add_household_member()` round trip | reused Chidi's existing seat; `money` + `change_order` grants at 250000; the band's overlap read finds the household |
+| `add_household_member()` round trip | reused Chidi's existing seat and wrote NO authority row — the seat already carries an open `money` grant the household did not source, and such a grant stands (r9 M-1, R-BQ). The `money` + `change_order` rows at 250000 on that seat are the SEED's (`source_clause = 'Owner agreement, Exhibit B §4.2'`, `source_household_id` NULL), not the RPC's: `00632` writes one authority row, scope `'money'`, and the string `change_order` is not in the file. Re-measured r18 MAJOR-2. The band's overlap read finds the household |
 | The bid UPDATE and the bring-forward INSERT as `authenticated` | stage moved to `declined`; the new seat born `show_to_client=false`, `sms_consent_status='not_asked'`, card stamped |
 | `sweep_compliance_expiries()` | `{"notices": 3, "scanned": 3, "notified": 6}` |
 

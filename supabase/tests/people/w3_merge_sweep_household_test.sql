@@ -4981,6 +4981,216 @@ BEGIN
   RAISE NOTICE '13c. r17 BLOCKING-1 / MAJOR-1 — one member on three jobs: the figure opens nothing and refuses nothing, the named act reaches only the job it names, and each household keeps its own: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13d. r18 MAJOR-1 — ONE HUMAN MAY NOT HOLD ONE JOB TWICE
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The seat repoint inside merge_studio_contacts() is one unconditional
+-- statement and project_parties carries no uniqueness on
+-- (project_id, studio_contact_id, party_kind), so a human seated on ONE job
+-- under BOTH duplicate cards did not converge at the fold: the survivor came
+-- out holding two live seats of the same kind, each carrying its own open
+-- money grant from a different door — R-J's "Confirm from the agreement" and
+-- add_household_member()'s household figure. The Call Sheet's Client side
+-- bands client / client_rep before the window rule is consulted, so it printed
+-- the same person twice, "Signs money to $2,500." beside "Signs money to
+-- $10,000." — two simultaneously live, contradictory facts about money, over a
+-- record that had just said these are one human. Raising the figure widened
+-- the gap rather than closing it, because set_household_threshold() correctly
+-- moves only the grant it sourced (R-BQ, block 13).
+--
+-- 00629 now refuses BY NAME and before the first write (merge_seat_collision),
+-- the sixth refusal in that file's own posture, because choosing which of the
+-- two money grants survives is the principal's ruling (PR-n) and R-BN forbids
+-- dropping the other. Four assertions: the refusal writes nothing; the repair
+-- the HINT names lifts it; the shape is reachable with no household in it; and
+-- a seat the studio already CLOSED does not refuse a fold the room can make.
+-- ═══════════════════════════════════════════════════════════════════════════
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, phone, phone_e164, created_by) VALUES
+  ('f9100000-0000-4000-8000-0000000000d1','f9000000-0000-4000-8000-00000000000a','person','client',
+   'R18 Twin One','(612) 555-0918','+16125550918','a0000000-0000-0000-0000-000000000004'),
+  ('f9100000-0000-4000-8000-0000000000d2','f9000000-0000-4000-8000-00000000000a','person','client',
+   'R18 Twin One','(612) 555-0918','+16125550918','a0000000-0000-0000-0000-000000000004'),
+  ('f9100000-0000-4000-8000-0000000000d3','f9000000-0000-4000-8000-00000000000a','person','trade',
+   'R18 Trade Twin A','(612) 555-0919','+16125550919','a0000000-0000-0000-0000-000000000004'),
+  ('f9100000-0000-4000-8000-0000000000d4','f9000000-0000-4000-8000-00000000000a','person','trade',
+   'R18 Trade Twin B','(612) 555-0919','+16125550919','a0000000-0000-0000-0000-000000000004'),
+  ('f9100000-0000-4000-8000-0000000000d5','f9000000-0000-4000-8000-00000000000a','person','trade',
+   'R18 Closed Twin A','(612) 555-0920','+16125550920','a0000000-0000-0000-0000-000000000004'),
+  ('f9100000-0000-4000-8000-0000000000d6','f9000000-0000-4000-8000-00000000000a','person','trade',
+   'R18 Closed Twin B','(612) 555-0920','+16125550920','a0000000-0000-0000-0000-000000000004');
+
+-- card ONE: seated from the agreement, $10,000 (R-J's "Confirm from the agreement")
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9500000-0000-4000-8000-0000000000d1','f9300000-0000-4000-8000-00000000000a',
+   'client_rep','R18 Twin One','f9100000-0000-4000-8000-0000000000d1',
+   'a0000000-0000-0000-0000-000000000004');
+INSERT INTO public.project_party_authority
+  (engagement_id, scope, threshold_cents, source_clause, granted_by) VALUES
+  ('f9500000-0000-4000-8000-0000000000d1','money',1000000,'agreement §4',
+   'a0000000-0000-0000-0000-000000000004');
+
+-- the household names card TWO and seats it on the SAME job at $2,500
+INSERT INTO public.client_households
+  (id, organization_id, designer_id, display_name, co_threshold_cents, created_by) VALUES
+  ('f9d10000-0000-4000-8000-0000000000d1','f9000000-0000-4000-8000-00000000000a',
+   'a0000000-0000-0000-0000-000000000004','R18 collision household',250000,
+   'a0000000-0000-0000-0000-000000000004');
+
+-- the two ordinary trade cards, both seated `sub` on the one job (no household)
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9500000-0000-4000-8000-0000000000d3','f9300000-0000-4000-8000-00000000000a',
+   'sub','R18 Trade Twin A','f9100000-0000-4000-8000-0000000000d3',
+   'a0000000-0000-0000-0000-000000000004'),
+  ('f9500000-0000-4000-8000-0000000000d4','f9300000-0000-4000-8000-00000000000a',
+   'sub','R18 Trade Twin B','f9100000-0000-4000-8000-0000000000d4',
+   'a0000000-0000-0000-0000-000000000004');
+
+-- the control pair: the survivor's seat of that kind is one the studio CLOSED
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by,
+   stage, off_job_at, off_job_reason) VALUES
+  ('f9500000-0000-4000-8000-0000000000d5','f9300000-0000-4000-8000-00000000000a',
+   'installer','R18 Closed Twin A','f9100000-0000-4000-8000-0000000000d5',
+   'a0000000-0000-0000-0000-000000000004','off_job', CURRENT_DATE - 30,
+   'Finished last spring.');
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, studio_contact_id, created_by) VALUES
+  ('f9500000-0000-4000-8000-0000000000d6','f9300000-0000-4000-8000-00000000000a',
+   'installer','R18 Closed Twin B','f9100000-0000-4000-8000-0000000000d6',
+   'a0000000-0000-0000-0000-000000000004');
+
+DO $$
+DECLARE
+  v_seat_two uuid;
+  v_msg      text;
+  v_detail   text;
+  v_hint     text;
+  v_survivor uuid;
+  n          integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_seat_two := public.add_household_member(
+    'f9d10000-0000-4000-8000-0000000000d1','f9100000-0000-4000-8000-0000000000d2',
+    'client_rep','f9300000-0000-4000-8000-00000000000a');
+  PERFORM pg_temp.reset_role();
+
+  -- the shape the duplicate band is looking at: two cards, two open seats of
+  -- one kind on one job, two open money grants at two different figures
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id IN ('f9500000-0000-4000-8000-0000000000d1', v_seat_two)
+     AND scope = 'money' AND effective_to IS NULL;
+  IF n <> 2 THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-a): the fixture staged % open money grant(s), not 2', n;
+  END IF;
+
+  -- ── the duplicate band's own act, refused by name and before any write ──
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9100000-0000-4000-8000-0000000000d1','f9100000-0000-4000-8000-0000000000d2','phone');
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-b): the fold went through and left one card holding two open client_rep seats on one job';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT, v_detail = PG_EXCEPTION_DETAIL,
+                            v_hint = PG_EXCEPTION_HINT;
+    IF v_msg LIKE 'BLOCK 13d FAIL%' THEN RAISE; END IF;
+    IF v_msg <> 'merge_seat_collision' THEN
+      RAISE EXCEPTION 'BLOCK 13d FAIL (13d-c): the fold was refused as %, not merge_seat_collision', v_msg;
+    END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- DETAIL names the job AND the kind, because "close one of these two seats"
+  -- is an act the studio cannot take without both
+  IF v_detail <> 'W3 test job · client_rep' THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-d): DETAIL read "%", not the job and the kind', v_detail;
+  END IF;
+  IF v_hint NOT LIKE '%Close one of these two seats first%' THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-e): the HINT names no repair ("%")', v_hint;
+  END IF;
+
+  -- NOTHING WAS WRITTEN: both cards still live, no merge row, no seat moved
+  SELECT count(*) INTO n FROM public.studio_contacts
+   WHERE id IN ('f9100000-0000-4000-8000-0000000000d1','f9100000-0000-4000-8000-0000000000d2')
+     AND merged_into IS NULL;
+  IF n <> 2 THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-f): the refusal still folded a card (% of 2 live)', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.studio_contact_merges
+   WHERE merged_id = 'f9100000-0000-4000-8000-0000000000d2';
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-g): the refusal wrote % merge row(s)', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE studio_contact_id = 'f9100000-0000-4000-8000-0000000000d1';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-h): the seat repoint ran anyway (% seats on the survivor)', n;
+  END IF;
+
+  -- ── the milder shape, no household anywhere near it (probe-r18-c) ───────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  BEGIN
+    PERFORM public.merge_studio_contacts(
+      'f9100000-0000-4000-8000-0000000000d3','f9100000-0000-4000-8000-0000000000d4','phone');
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-i): two ordinary trade cards seated `sub` on one job folded into one card holding both seats';
+  EXCEPTION WHEN OTHERS THEN
+    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT, v_detail = PG_EXCEPTION_DETAIL;
+    IF v_msg LIKE 'BLOCK 13d FAIL%' THEN RAISE; END IF;
+    IF v_msg <> 'merge_seat_collision' OR v_detail <> 'W3 test job · sub' THEN
+      RAISE EXCEPTION 'BLOCK 13d FAIL (13d-j): the trade fold was refused as % / %', v_msg, v_detail;
+    END IF;
+  END;
+  PERFORM pg_temp.reset_role();
+
+  -- ── THE CONTROL: a seat the studio already CLOSED refuses nothing ───────
+  -- The predicate reads open seats only (00632's own open-seat filter). A
+  -- closed seat states no second live money fact — rosterWindowClause prints
+  -- "Off the job …" beside it wherever it is banded (r15 MAJOR-1) — and
+  -- refusing over it would name a repair the studio had already taken.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_survivor := public.merge_studio_contacts(
+    'f9100000-0000-4000-8000-0000000000d5','f9100000-0000-4000-8000-0000000000d6','phone');
+  PERFORM pg_temp.reset_role();
+  IF v_survivor <> 'f9100000-0000-4000-8000-0000000000d5' THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-k): the control fold returned %', v_survivor;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE studio_contact_id = 'f9100000-0000-4000-8000-0000000000d5'
+     AND off_job_at IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-l): the control fold left % open seat(s), not 1', n;
+  END IF;
+
+  -- ── and the repair the HINT names lifts the gate on the first pair ──────
+  UPDATE public.project_parties
+     SET stage = 'off_job', off_job_at = CURRENT_DATE,
+         off_job_reason = 'The same person was already seated under the other card.'
+   WHERE id = v_seat_two;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  v_survivor := public.merge_studio_contacts(
+    'f9100000-0000-4000-8000-0000000000d1','f9100000-0000-4000-8000-0000000000d2','phone');
+  PERFORM pg_temp.reset_role();
+  IF v_survivor <> 'f9100000-0000-4000-8000-0000000000d1' THEN
+    RAISE EXCEPTION 'BLOCK 13d FAIL (13d-m): the fold after the repair returned %', v_survivor;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_parties pp
+    JOIN public.project_party_authority pa
+      ON pa.engagement_id = pp.id AND pa.scope = 'money' AND pa.effective_to IS NULL
+   WHERE pp.studio_contact_id = 'f9100000-0000-4000-8000-0000000000d1'
+     AND pp.off_job_at IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION
+      'BLOCK 13d FAIL (13d-n): the survivor holds % open money grant(s) on an OPEN seat, not 1', n;
+  END IF;
+
+  RAISE NOTICE '13d. r18 MAJOR-1 — a fold that would leave one human holding two open seats of one kind on one job is refused by name, writes nothing, and the room''s own "Close this seat" lifts it; a closed seat refuses nothing: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W3 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;
