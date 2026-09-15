@@ -983,6 +983,23 @@ export async function sendPartySms(
     site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ?? null,
   });
 
+  // E13: one out touch per text that actually went. Best effort and never a
+  // condition of the send — a record of the contact, not a gate on it. A
+  // phone-only send (no seat) has no subject to file against and writes none;
+  // record_touch answers NULL for a seat whose job records no studio (00635).
+  if (sent && recipient.partyId) {
+    const { error: touchError } = await supabase.rpc("record_touch", {
+      p_subject_type: "engagement",
+      p_subject_id: recipient.partyId,
+      p_channel_kind: "sms",
+      p_direction: "out",
+      p_occurred_at: now.toISOString(),
+      p_actor_ref: "sms-dispatch",
+      p_message_ref: messageId ?? null,
+    });
+    if (touchError) console.error("sendPartySms: record_touch failed", touchError.message);
+  }
+
   if (sent && convId) {
     await supabase
       .from("sms_conversations")

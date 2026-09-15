@@ -14,6 +14,11 @@ import {
   resolveBounceReason,
   resolveBounceType,
 } from "./status-map.ts";
+import {
+  applyChannelStatus,
+  channelStatusForEvent,
+  type ChannelStatusClient,
+} from "./channel-status.ts";
 
 
 const corsHeaders = {
@@ -390,11 +395,12 @@ export async function handleResendEvent(
       });
 
       // Increment bounce count and check suppression threshold. A row with no
-      // user_id has no profile to suppress — the bounce is recorded and that
-      // is all there is to do.
+      // user_id has no profile to suppress — but it still has an ADDRESS, and
+      // since CRM-12 the address's own typed channel rows carry the verdict.
       if (logEntry.user_id) {
         await handleBounce(supabase, logEntry.user_id, bounceType ?? undefined);
       }
+      await writeChannelStatus(supabase, event, logEntry.recipient, now);
       break;
     }
 
@@ -430,6 +436,10 @@ export async function handleResendEvent(
         );
       }
 
+      // The same complaint, written onto the address itself (CRM-12) — the
+      // only record there is when nobody holds an account behind it.
+      await writeChannelStatus(supabase, event, logEntry.recipient, now);
+
       await emitPostHogEvent(distinctId, "email_unsubscribed", {
         campaign_id: campaignId,
         template_id: templateId,
@@ -452,6 +462,38 @@ export async function handleResendEvent(
   });
 
   return { matched: true };
+}
+
+/**
+ * Write the provider's verdict onto every typed email channel carrying the
+ * address (CRM-12). The address is notification_log.recipient — what
+ * sendCompliantEmail recorded it actually sent to (00591) — falling back to the
+ * event's own `to`. Never throws: the log row for this event is already written
+ * and a failure here must not make Resend retry the whole delivery.
+ */
+async function writeChannelStatus(
+  supabase: SupabaseClient,
+  event: ResendWebhookEvent,
+  recipient: unknown,
+  now: string,
+): Promise<void> {
+  const status = channelStatusForEvent(
+    event.type,
+    isHardBounce(resolveBounceType(event.data) ?? undefined),
+  );
+  if (!status) return;
+  const address = (typeof recipient === "string" && recipient) ||
+    event.data.to?.[0] || null;
+  try {
+    await applyChannelStatus(
+      supabase as unknown as ChannelStatusClient,
+      address,
+      status,
+      now,
+    );
+  } catch (err) {
+    console.warn("resend-webhook: channel status write threw", err);
+  }
 }
 
 /**

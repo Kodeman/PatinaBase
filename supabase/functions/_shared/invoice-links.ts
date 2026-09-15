@@ -5,9 +5,16 @@
  * The 64-hex token IS the credential (256 bits of entropy is the control; the
  * portal's rate limiter is friction). It therefore never appears in a log
  * line, a Stripe return URL, or an analytics event — only the link's row id
- * does. Every producer (invoice-send, invoice-reminders, stripe-webhook,
- * create-checkout-session) asks `ensure_invoice_link` per letter and never
- * caches the answer, so a Regenerate is honored by the next send.
+ * does.
+ *
+ * SINCE 00636 (CRM-29) only sha256(token) is stored, so the address cannot be
+ * re-emitted by anyone, Patina included: `ensure_invoice_link` MINTS a fresh
+ * token per call and returns it once, which is "regenerate on send". Every
+ * caller of `letterPortalUrl`/`ensureInvoiceLinkUrl` is a letter, and each
+ * letter now carries its own live address with a 30-day clock; the previous
+ * letter's address dies. A caller that only needs to know WHETHER a live link
+ * exists must ask `hasLiveInvoiceLink` instead — minting one for a boolean
+ * would revoke the address a payer is standing on.
  */
 
 export const INVOICE_LINK_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
@@ -83,4 +90,34 @@ export async function letterPortalUrl(
 ): Promise<string> {
   const link = await ensureInvoiceLinkUrl(admin, baseUrl, invoiceId);
   return link ?? `${baseUrl.replace(/\/$/, '')}/invoices/${invoiceId}`;
+}
+
+/**
+ * Does this invoice have an active, unexpired link?
+ *
+ * create-checkout-session needs exactly this and nothing more: it decides
+ * whether a Checkout return may ride the `/pay/return/<nonce>` form. It used to
+ * ask `ensureInvoiceLinkUrl`, which under 00636 would mint a token nobody would
+ * ever read AND revoke the link the payer is mid-payment on. Failure answers
+ * false, which keeps today's `/invoices/<id>` return address (M7).
+ */
+export async function hasLiveInvoiceLink(
+  admin: InvoiceLinkRpcClient,
+  invoiceId: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await admin.rpc('invoice_link_is_live', { p_invoice_id: invoiceId });
+    if (error) {
+      console.error('hasLiveInvoiceLink: invoice_link_is_live failed', invoiceId, error.message);
+      return false;
+    }
+    return data === true;
+  } catch (err) {
+    console.error(
+      'hasLiveInvoiceLink: threw',
+      invoiceId,
+      err instanceof Error ? err.message : 'unknown error'
+    );
+    return false;
+  }
 }

@@ -554,6 +554,16 @@ verify_jwt = true
 [functions.fulfillment-evidence]
 verify_jwt = false
 
+# The trade-side compliance upload door (PR-a / VISION V10, 00637). The firm's
+# paperwork contact has no Patina account and carries no JWT: the 64-hex token
+# minted by mint_paperwork_link IS the credential, and it is verified in-code
+# against paperwork_link_tokens inside resolve_paperwork_link /
+# paperwork_link_storage_context / record_inbound_compliance_document, all
+# SECURITY DEFINER and granted to service_role only. Browser-called, so CORS is
+# wired in the function — fulfillment-evidence's posture exactly.
+[functions.paperwork-upload]
+verify_jwt = false
+
 # BOH daily Stripe balance-transaction reconciliation (S6, R2.3, spec §8).
 # Cron-invoked once a day via pg_cron -> invoke_edge_function (00362,
 # service-role Bearer) — pulls balance transactions since the cursor into the
