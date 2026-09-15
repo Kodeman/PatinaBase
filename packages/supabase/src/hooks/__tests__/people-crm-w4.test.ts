@@ -83,6 +83,8 @@ import {
   asNoticeError,
   inboundDecisionSentence,
   lastInboundDecision,
+  touchDay,
+  touchInstantDay,
   touchKeys,
   touchSentence,
   useRecordNotice,
@@ -186,6 +188,34 @@ describe("E13 · the touch, in words (CRM-22)", () => {
     expect(TOUCH_AUTHORITY_SENTENCES.failed_no_authority).toBe(
       "Received, not authority.",
     );
+  });
+
+  // ── W4 r3 MAJOR-4: the day is the STUDIO's, not UTC's ────────────────────
+  it("dates an evening text on the day the studio sent it, not the next one", () => {
+    // 9:30pm CDT on 11 Sep 2026 is 02:30Z on the 12th. The UTC slice read
+    // "12 Sep" — the room telling the studio it reached someone tomorrow.
+    expect(touchInstantDay("2026-09-12T02:30:00Z")).toBe("11 Sep 2026");
+    expect(
+      touchSentence({ ...TOUCH, occurred_at: "2026-09-12T02:30:00Z" }),
+    ).toBe(
+      "Last touch 11 Sep 2026, by text. A money decision. Received, not authority.",
+    );
+  });
+
+  it("leaves a morning instant where it is, and a zoneless `date` column alone", () => {
+    // Mid-morning CDT: same day either way.
+    expect(touchInstantDay("2026-09-12T15:00:00Z")).toBe("12 Sep 2026");
+    // A `date` column carries no zone. Converting it would invent the very
+    // off-by-one this exists to remove, so it goes straight to touchDay.
+    expect(touchInstantDay("2026-09-12")).toBe("12 Sep 2026");
+    expect(touchDay("2026-09-12")).toBe("12 Sep 2026");
+    expect(touchInstantDay(null)).toBe("");
+    expect(touchInstantDay("not a date")).toBe("");
+  });
+
+  it("reckons a winter instant on CST, not on a frozen offset", () => {
+    // 6:30pm CST on 3 Jan 2027 is 00:30Z on the 4th.
+    expect(touchInstantDay("2027-01-04T00:30:00Z")).toBe("3 Jan 2027");
   });
 });
 
@@ -464,6 +494,44 @@ describe("the inbound queue (spec §6)", () => {
     ).toBe(
       "COI, general liability, uploaded 12 Sep 2026 by Twin Cities Drywall.",
     );
+  });
+
+  // ── W4 r3 MAJOR-1: `other_named` is the firm's own name for its paper ────
+  it("prints an other_named document's own name, not 'Other'", () => {
+    expect(
+      inboundDocumentLine(
+        {
+          doc_type: "other_named",
+          doc_label: "Master service agreement",
+          created_at: "2026-09-12T15:00:00Z",
+        },
+        "Twin Cities Drywall",
+      ),
+    ).toBe(
+      "Master service agreement, uploaded 12 Sep 2026 by Twin Cities Drywall.",
+    );
+  });
+
+  it("falls back to 'Other' only when the firm named nothing", () => {
+    for (const label of [null, "   "]) {
+      expect(
+        inboundDocumentLine(
+          { doc_type: "other_named", doc_label: label,
+            created_at: "2026-09-12T15:00:00Z" },
+          "Twin Cities Drywall",
+        ),
+      ).toBe("Other, uploaded 12 Sep 2026 by Twin Cities Drywall.");
+    }
+  });
+
+  it("dates an evening upload on the studio's day (W4 r3 MAJOR-4)", () => {
+    expect(
+      inboundDocumentLine(
+        { doc_type: "w9", doc_label: null,
+          created_at: "2026-09-12T02:30:00Z" },
+        "Twin Cities Drywall",
+      ),
+    ).toContain("uploaded 11 Sep 2026");
   });
 
   it("confirms through the RPC and fans out to every paper reader", async () => {

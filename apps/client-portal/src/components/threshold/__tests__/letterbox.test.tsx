@@ -644,15 +644,45 @@ describe('Letterbox — one letter, half out of the slot', () => {
     expect(screen.queryByRole('button', { name: /^Pay / })).not.toBeInTheDocument();
   });
 
-  it('drops the act once the letter is open, because the till is already showing', async () => {
+  // W4 r3 MAJOR-3 — the act KEEPS its place. It used to unmount itself on
+  // press (`payHere` carried `&& !open`), so the terminal money act destroyed
+  // the focus of the person who pressed it and announced nothing. The
+  // consequence sentence still goes: once the till is open it has become the
+  // thing it described.
+  it('keeps the act once the letter is open, and drops only its consequence', async () => {
     const user = userEvent.setup();
     render(<Letterbox invoice={invoice()} today={TODAY} />);
 
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'Open the letterbox' }));
     });
-    expect(screen.queryByRole('button', { name: /^Pay / })).not.toBeInTheDocument();
+    const pay = screen.getByRole('button', { name: /^Pay / });
+    expect(pay).toBeInTheDocument();
+    expect(pay).toHaveAttribute('aria-expanded', 'true');
     expect(screen.queryByTestId('letterbox-consequence')).not.toBeInTheDocument();
+  });
+
+  it('never destroys the focus of the person who pressed the money act, and says what it did', async () => {
+    const user = userEvent.setup();
+    render(<Letterbox invoice={invoice()} today={TODAY} />);
+
+    const pay = screen.getByRole('button', { name: /^Pay / });
+    expect(pay).toHaveAttribute('aria-expanded', 'false');
+    expect(pay).toHaveAttribute('aria-controls', 'letterbox-letter');
+
+    await act(async () => {
+      await user.click(pay);
+    });
+
+    // The act is still mounted, and focus is inside the till it opened —
+    // never on document.body.
+    expect(screen.getByRole('button', { name: /^Pay / })).toBe(pay);
+    expect(document.activeElement).not.toBe(document.body);
+    const till = screen.getByRole('group', { name: 'Settle this invoice' });
+    expect(document.activeElement).toBe(till);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /Payment for .* is open\. Nothing is charged until you choose how to pay\./,
+    );
   });
 
   it('glosses the drawing plainly, and leaves an empty slot unglossed', () => {

@@ -1036,6 +1036,10 @@ const DEFERRED_TTL_MS = 24 * 3600 * 1000;
  * closed for good (>24h stale): a defer is a promise to try later, not a
  * guarantee to send at all.
  *
+ * And a flushed row writes the SAME out touch sendPartySms writes (E13, W4 r3
+ * MAJOR-5): this path puts real texts on the wire, and a record of contact
+ * that skips the rail's most ordinary send is a record the room reads wrong.
+ *
  * The re-check is the SAME gate sendPartySms uses, in the same order (R-AH):
  * the studio's own consent record (channelConsentVerdict, keyed off the
  * deferred row's own party) first, then the legacy party-row reduction. A
@@ -1203,6 +1207,37 @@ export async function flushDeferredMessages(
         body: sendBody,
       })
       .eq("id", row.id);
+
+    // E13: one out touch per text that actually went — and this path sends
+    // real texts (W4 r3 MAJOR-5). sendPartySms writes its touch; the flush
+    // wrote none, so a digest deferred past 8pm by quiet hours — the normal
+    // shape of the field rail — went out next morning and never appeared in
+    // studio_touches. The card's derived "Last touch" then showed the
+    // PREVIOUS contact: the room saying the studio has not reached someone it
+    // reached this morning, against studio_touches' own table comment ("one
+    // row per contact a rail actually made, in either direction").
+    //
+    // Same posture as sendPartySms's: best effort, never a condition of the
+    // send; a row with no party_id has no subject to file against and writes
+    // none; record_touch answers NULL for a seat whose job records no studio
+    // (00635, R-BD).
+    if (row.party_id) {
+      const { error: touchError } = await supabase.rpc("record_touch", {
+        p_subject_type: "engagement",
+        p_subject_id: row.party_id,
+        p_channel_kind: "sms",
+        p_direction: "out",
+        p_occurred_at: now.toISOString(),
+        p_actor_ref: "sms-dispatch-flush",
+        p_message_ref: row.id,
+      });
+      if (touchError) {
+        console.error(
+          "flushDeferredMessages: record_touch failed",
+          touchError.message,
+        );
+      }
+    }
     flushed++;
   }
   return { flushed, skipped, suppressed, expired };

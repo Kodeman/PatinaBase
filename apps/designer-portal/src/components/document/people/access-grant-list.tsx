@@ -31,7 +31,7 @@ import {
 import { peopleEvents } from "@/lib/analytics/people-events";
 import { DocumentAction } from "../document-action";
 import { formatSeatDate } from "./seat-line";
-import { formatLongDate } from "./people-format";
+import { formatLongDate, lastOpenDay } from "./people-format";
 
 export const NO_GRANT_SENTENCE = "No grant on file.";
 export const REVOKE_REASON_PROMPT =
@@ -111,31 +111,20 @@ function daysLeftClause(expiresAt: string, now: Date): string {
 }
 
 /**
- * QA-R8-1 — THE LAST DAY THE DOOR IS OPEN, not the first day it is shut.
+ * The tiers whose `expires_at` is an EXCLUSIVE whole-day boundary, and whose
+ * end date therefore has to be backed off an instant before it is printed:
+ * the field link (`create_field_link`, 00627:578-585) and the firm's paperwork
+ * door (`mint_paperwork_link`, 00637:470-475). `lastOpenDay` carries the whole
+ * reckoning; `people-format.ts` states it once so the mint band's before- and
+ * after-sentences cannot disagree by a day again (W4 r3 MAJOR-1).
  *
- * `create_field_link` stores a field link's `expires_at` as an EXCLUSIVE
- * boundary — for a seat with a window, `max(on_site_to, warranty_until) +
- * interval '1 day'`, i.e. midnight at the head of the following day
- * (`00627_access_grants_and_field_link_window.sql:578-585`), so the token
- * works "through the end of that day". Printing `expires_at.slice(0, 10)`
- * therefore named the day AFTER the job: Dana Kowalski's card said the grant
- * ends 25 May 2027 while the same card's Seats-on-projects line and its Mint
- * Access consequence sentence both said 24 May 2027, off the seat's own
- * `on_site_to`. One card, one seat, three regions, two dates.
- *
- * Backing the boundary off by an instant answers all three branches of the
- * RPC with one rule rather than a blanket minus-one-day: the window branch's
- * midnight lands back on the window's last day; the caller-supplied branch's
- * `…T23:59:59Z` and the ninety-day fallback's mid-afternoon stamp both stay on
- * their own day. It is scoped to the field link, because no other tier stores
- * an inclusive-through-end-of-day boundary — a document share or an invoice
- * pay link simply dies at the instant it carries.
+ * No other tier stores one — a document share or an invoice pay link simply
+ * dies at the instant it carries.
  */
-function lastOpenDay(expiresAt: string): string | null {
-  const at = Date.parse(expiresAt);
-  if (!Number.isFinite(at)) return expiresAt.slice(0, 10) || null;
-  return new Date(at - 1000).toISOString().slice(0, 10);
-}
+const WHOLE_DAY_BOUNDARY_TIERS: ReadonlySet<string> = new Set([
+  "field_link",
+  "paperwork_link",
+]);
 
 /**
  * "Ends with the job, 13 August 2027. Renews when they use it." — the end date
@@ -150,8 +139,11 @@ export function grantEndsSentence(
     return "No end date. Revoked by removing the account.";
   }
   const fieldLink = !tier || tier === "field_link";
+  // The WORDING is the field link's ("renews when they use it"); the DATE
+  // rule is every whole-day boundary tier's.
+  const wholeDayBoundary = fieldLink || WHOLE_DAY_BOUNDARY_TIERS.has(tier ?? "");
   const endsOn = expiresAt
-    ? fieldLink
+    ? wholeDayBoundary
       ? lastOpenDay(expiresAt)
       : expiresAt.slice(0, 10)
     : null;

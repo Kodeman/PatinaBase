@@ -38,6 +38,32 @@ export function formatLongDate(
   return `${Number(day)} ${monthName} ${year}`;
 }
 
+/**
+ * THE LAST DAY A DOOR IS OPEN, from the instant it carries (QA-R8-1, W4 r3
+ * MAJOR-1).
+ *
+ * Two RPCs store a whole-day window as an EXCLUSIVE boundary — midnight at the
+ * head of the following day, so the token works "through the end of that day":
+ * `create_field_link` (`max(on_site_to, warranty_until) + interval '1 day'`,
+ * 00627:578-585) and `mint_paperwork_link` (`v_window_end::timestamptz +
+ * interval '1 day'`, 00637:470-475). Printing `expires_at.slice(0, 10)` for
+ * either therefore named the day AFTER the job — the mint band offered "Ends
+ * with the job — 8 February 2027" and the very next sentence, plus the durable
+ * Access grants row, said "Ends 9 February 2027" for the same press.
+ *
+ * Backing the boundary off by an instant answers every branch with one rule
+ * rather than a blanket minus-one-day: an exclusive midnight lands back on the
+ * window's last day, while a caller-supplied `…T23:59:59Z` and a mid-afternoon
+ * stamp both stay on their own day. Scoped to the two tiers that store such a
+ * boundary — a document share or an invoice pay link simply dies at the
+ * instant it carries.
+ */
+export function lastOpenDay(expiresAt: string): string | null {
+  const at = Date.parse(expiresAt);
+  if (!Number.isFinite(at)) return expiresAt.slice(0, 10) || null;
+  return new Date(at - 1000).toISOString().slice(0, 10);
+}
+
 /** Dollars from integer cents, whole where whole: `250000` → `$2,500`. */
 export function formatMoneyFromCents(
   cents: number | null | undefined,

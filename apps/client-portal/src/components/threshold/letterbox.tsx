@@ -142,9 +142,19 @@ export function Letterbox({
    * move `door-gate.tsx` took for the deposit offer in W4 r1 B-1: name the
    * letter, not a token. The emailed `/pay/<token>` sheet is untouched and
    * still the ruled pay surface (K1).
+   *
+   * AND IT DOES NOT REMOVE ITSELF ON PRESS (W4 r3 MAJOR-3). `payHere` carried
+   * `&& !open`, so pressing "Pay $X" set `open`, which unmounted the very
+   * button under the caret: `ScoredAction` with no `href` renders a
+   * `<button>`, `revealReturnAnchor` only scrolls, and this surface had no
+   * live region — so focus fell to `document.body` and nothing was announced,
+   * on the terminal MONEY act. The act now keeps its place, says it is a
+   * disclosure (`aria-expanded`), moves the reader into the till it opened,
+   * and announces it — the shape `paperwork-sheet.tsx` took for the same
+   * defect class one round earlier.
    */
   const balanceCents = invoice?.balanceCents ?? 0;
-  const payHere = invoice !== null && balanceCents > 0 && !open;
+  const payHere = invoice !== null && balanceCents > 0;
 
   // The return from the till. A return that names an order belongs to the road,
   // not to the letterbox — and a return naming a letter this house is not
@@ -195,12 +205,25 @@ export function Letterbox({
   }, [confirm, settlement]);
 
   const slot = useRef<HTMLDivElement | null>(null);
+  // The till the money act opens. Focus lands here so the reader is where the
+  // act took her, and one polite region says so out loud.
+  const settlementRegion = useRef<HTMLDivElement | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const moveToSettlement = useRef(false);
   const revealed = useRef(false);
   useEffect(() => {
     if (!settlement || revealed.current) return;
     revealed.current = true;
     revealReturnAnchor(slot.current);
   }, [settlement]);
+
+  // The till mounts with `open`, so the focus move waits a render rather than
+  // reaching for a node that is not there yet.
+  useEffect(() => {
+    if (!open || !moveToSettlement.current) return;
+    moveToSettlement.current = false;
+    settlementRegion.current?.focus();
+  }, [open]);
 
   // The letter the address named is unfolded and brought into view: she asked
   // for this one by following a link about it, and the letterbox sits well
@@ -238,6 +261,12 @@ export function Letterbox({
     >
       <p className="mb-2 font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
         The letterbox
+      </p>
+
+      {/* One polite region for the surface: an act that opens the till says so
+          out loud rather than only scrolling (W4 r3 MAJOR-3). */}
+      <p aria-live="polite" role="status" className="sr-only">
+        {announcement}
       </p>
 
       {settlement && (
@@ -303,7 +332,9 @@ export function Letterbox({
             {due ? `, due ${due}` : ''}.
           </p>
 
-          {payHere && (
+          {/* The consequence belongs to the UNPRESSED act: once the till is
+              open the sentence has become the thing it described. */}
+          {payHere && !open && (
             <p data-testid="letterbox-consequence" className="consequence mt-3.5">
               This opens payment. Nothing is charged until you choose how to pay.
             </p>
@@ -318,9 +349,15 @@ export function Letterbox({
                 // Money moves here, so the act takes the terminal tier and
                 // carries the figure it is for. H4 defines the variant.
                 variant="terminal"
+                aria-expanded={open}
                 aria-controls="letterbox-letter"
                 onClick={() => {
-                  setOpen(true);
+                  moveToSettlement.current = true;
+                  setAnnouncement(
+                    `Payment for ${invoice.number ?? 'this invoice'} is open. Nothing is charged until you choose how to pay.`,
+                  );
+                  if (open) settlementRegion.current?.focus();
+                  else setOpen(true);
                   revealReturnAnchor(slot.current);
                 }}
               >
@@ -364,7 +401,13 @@ export function Letterbox({
               open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
             }`}
           >
-            <div className="min-h-0">
+            <div
+              className="min-h-0"
+              ref={settlementRegion}
+              tabIndex={-1}
+              role="group"
+              aria-label="Settle this invoice"
+            >
               {open && (
                 <Settlement
                   invoice={invoice}

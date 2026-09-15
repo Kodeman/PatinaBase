@@ -24,6 +24,10 @@
 -- 00629. Sideways: 00578 (agreement_draw_lien_waivers.contact_id) and 00579
 -- (studio_trade_agreements / _tokens.contact_id) are repointed here too, the
 -- three FK columns into studio_contacts no other repoint reaches (r4 M-3).
+-- FORWARD, and amended in place for it: 00637 (paperwork_link_tokens.
+-- company_id) is the firm's upload door, minted after this file, and a merge
+-- that left it on the absorbed card emptied the trade's own page, dropped its
+-- next upload where the studio never looks, and broke R-AF (W4 r3 MAJOR-3).
 -- Onwards: 00634 (end_party_authority_at_seat_close, r19 MAJOR-1) makes this
 -- file's OPEN-SEATS-ONLY carve-out true for the hand close, and R-BS clamps it
 -- off the withdrawal path — so 00629 is amended in place with a fourth seat
@@ -2711,6 +2715,71 @@ BEGIN
      SET contact_id = p_survivor
    WHERE contact_id = p_merged AND state = 'draft';
 
+  -- ── the firm's PAPERWORK DOOR (00637, W4 r3 MAJOR-3) ────────────────────
+  --
+  -- The sixth card pointer, and the second one that keys a LIVE DOOR.
+  -- `paperwork_link_tokens.company_id` is 00637's table, minted two files
+  -- after this one, so nothing above reached it and a firm merge stranded the
+  -- door three ways at once (measured, probe608):
+  --
+  --   1. THE FIRM IS TOLD THE STUDIO HOLDS NONE OF ITS PAPER.
+  --      resolve_paperwork_link reads `doc.holder_id = v_row.company_id`,
+  --      which stayed the ABSORBED card while §4e moved every document to the
+  --      survivor. The trade's live page went from "COI, current" to an empty
+  --      table — a reader flatly disagreeing with the record, on the one page
+  --      spec §3 exists to tell a firm what is owed.
+  --   2. INBOUND PAPER IS LOST. record_inbound_compliance_document takes the
+  --      holder from the token row, so the next upload through that same live
+  --      link landed on the absorbed card: the survivor's inbound queue band
+  --      showed nothing, compliance_state(survivor) counted nothing, and
+  --      acceptance 8 failed silently.
+  --   3. R-AF BREAKS. uniq_paperwork_link_tokens_active_company keys on
+  --      company_id, so minting the survivor's own door afterwards left ONE
+  --      firm identity holding TWO live doors.
+  --
+  -- NAMING A LATER FILE'S TABLE, for the reason the bid_quoted_by_person_id
+  -- repoint states three hundred lines above: plpgsql resolves relations at
+  -- first EXECUTION, nothing calls this RPC between 00629 and 00637, and two
+  -- bodies is how the repoint list went stale in the first place.
+  --
+  -- REVOKE FIRST, THEN REPOINT. The partial unique index is on an ACTIVE row
+  -- per company, so moving the absorbed card's live token onto a survivor that
+  -- already has one would abort the whole fold on a schema token; R-AF wants
+  -- the survivor's own door to stand, so the absorbed one is CLOSED with a
+  -- reason the Access grants list can print rather than deleted (spec §7 keeps
+  -- every row).
+  IF v_survivor.entity_kind = 'company' THEN
+    UPDATE public.paperwork_link_tokens t
+       SET status = 'revoked', revoked_at = now(), revoked_by = auth.uid(),
+           revoke_reason = 'The firm was merged into another card.',
+           updated_at = now()
+     WHERE t.company_id = p_merged
+       AND t.status = 'active'
+       AND EXISTS (SELECT 1 FROM public.paperwork_link_tokens s
+                    WHERE s.company_id = p_survivor AND s.status = 'active');
+
+    -- assert_paperwork_token_company() fires on UPDATE OF company_id,
+    -- organization_id and holds the survivor to a company card in the same
+    -- studio — which is the check this repoint wants, so it is left to run.
+    UPDATE public.paperwork_link_tokens t
+       SET company_id = p_survivor,
+           organization_id = v_survivor.organization_id,
+           updated_at = now()
+     WHERE t.company_id = p_merged;
+  ELSE
+    -- The survivor is a PERSON card — the sole-proprietor fold (§4e), where
+    -- the firm IS the person. A paperwork link is a firm's door and never a
+    -- person's (paperwork_token_company_required), so there is no card left to
+    -- hold this one and repointing it would abort the fold with a schema token
+    -- naming nothing the studio did. The door is CLOSED, with the same
+    -- sentence, and the row stays where the audit trail can read it.
+    UPDATE public.paperwork_link_tokens t
+       SET status = 'revoked', revoked_at = now(), revoked_by = auth.uid(),
+           revoke_reason = 'The firm was merged into another card.',
+           updated_at = now()
+     WHERE t.company_id = p_merged AND t.status = 'active';
+  END IF;
+
   -- ── the household (00632) ───────────────────────────────────────────────
   -- A household is an ARRAY of person cards plus a primary pointer, held by
   -- assert_client_household_members() to live, unmerged cards. Unrepointed,
@@ -2792,6 +2861,11 @@ COMMENT ON FUNCTION public.merge_studio_contacts(uuid, uuid, text) IS
   'household''s member array and primary pointer (00632), the trade '
   'agreement''s live link token and lien-waiver card pointers (a SENT '
   'agreement''s own contact_id stays frozen where 00579 froze it — r4 M-3), '
+  'the firm''s PAPERWORK DOOR (paperwork_link_tokens.company_id, 00637: the '
+  'absorbed card''s live token is revoked where the survivor already holds '
+  'one so R-AF''s one-live-door-per-firm survives the fold, and closed '
+  'outright where the survivor is a person card, since a paperwork link is a '
+  'firm''s door and never a person''s — W4 r3 MAJOR-3), '
   'and the absorbed card''s LOGIN and email address onto the survivor where '
   'the survivor has none, because people_directory reads both off the '
   'survivor''s own columns and PR-o pre-picks the older card (r4 B-1). '

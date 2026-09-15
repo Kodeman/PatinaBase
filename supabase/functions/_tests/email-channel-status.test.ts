@@ -306,7 +306,7 @@ Deno.test("a channel letter carries List-Unsubscribe with a channel subject, in 
   assertEquals(claims.purpose, "unsubscribe");
 });
 
-Deno.test("an account holder's letter is untouched by the channel path", async () => {
+Deno.test("an account holder's letter files no channel RECORD — no ref, no channel unsubscribe door", async () => {
   const recorded = blank();
   const client = emailClient([liveRow], recorded);
   const prepared = await prepareCompliantEmail(client, {
@@ -317,11 +317,52 @@ Deno.test("an account holder's letter is untouched by the channel path", async (
     userId: "a0000000-0000-0000-0000-000000000004",
   });
   assert(prepared.state === "ready");
+  // The record is the account's: no deliverability ref, no out touch, and the
+  // account's own /preferences door rather than the channel's.
   assertEquals(prepared.channel, undefined);
   const body = JSON.parse(prepared.request.body) as {
     headers: Record<string, string>;
   };
   assertEquals(body.headers["List-Unsubscribe"], undefined);
+});
+
+// ── W4 r3 MAJOR-1: the GATE asks the address, account or no account ─────────
+
+Deno.test("a dead address does NOT send to an account holder whose profile is unsuppressed", async () => {
+  for (const status of ["dead", "unsubscribed"]) {
+    const recorded = blank();
+    // The fake's profiles read answers { email_suppressed: false } — exactly
+    // the state handleBounce leaves behind when the bounce arrived on an
+    // account-less letter (notification_log.user_id NULL).
+    const client = emailClient([{ ...liveRow, status }], recorded);
+    const prepared = await prepareCompliantEmail(client, {
+      to: "dana@kowalskitile.test",
+      subject: "Invoice 0002",
+      html: "<p>h</p>",
+      category: "transactional",
+      userId: "a0000000-0000-0000-0000-000000000004",
+      organizationId: STUDIO_A,
+    });
+    assertEquals(prepared.state, "suppressed");
+    if (prepared.state === "suppressed") {
+      assertEquals(prepared.reason, `channel_${status}`);
+    }
+  }
+});
+
+Deno.test("the widened gate still asks the address ONCE per letter, and still address-wide", async () => {
+  const recorded = blank();
+  const client = emailClient([liveRow], recorded);
+  await prepareCompliantEmail(client, {
+    to: "dana@kowalskitile.test",
+    subject: "s",
+    html: "<p>h</p>",
+    category: "transactional",
+    userId: "a0000000-0000-0000-0000-000000000004",
+    organizationId: STUDIO_A,
+  });
+  assertEquals(recorded.lookups.length, 1);
+  assertEquals(recorded.lookups[0].organization_id, undefined);
 });
 
 Deno.test("the channel letter's log row carries the deliverability ref, and the send writes one out touch", async () => {
