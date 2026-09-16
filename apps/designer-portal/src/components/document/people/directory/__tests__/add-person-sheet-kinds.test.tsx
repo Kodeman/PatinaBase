@@ -13,6 +13,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import type { StudioContact } from "@patina/supabase";
 import { AddPersonSheet } from "../add-person-sheet";
 
 const addParty = jest.fn();
@@ -193,6 +194,31 @@ function openSheet() {
   render(<AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />);
 }
 
+/** Reused verbatim from add-person-sheet-edit.test.tsx's `contact()` fixture. */
+function editContact(over: Partial<StudioContact> = {}): StudioContact {
+  return {
+    id: "contact-1",
+    organization_id: "org-1",
+    entity_kind: "person",
+    company_id: null,
+    contact_kind: "sub",
+    full_name: "Sal Moretti",
+    company_name: "Moretti Plumbing",
+    email: "sal@morettiplumbing.com",
+    phone: "5551234567",
+    phone_e164: "+15551234567",
+    specialties: ["plumbing"],
+    vendor_id: null,
+    profile_id: null,
+    created_by: "designer-1",
+    notes: null,
+    archived_at: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...over,
+  };
+}
+
 beforeEach(() => {
   addParty.mockReset().mockResolvedValue({
     id: "seat-new",
@@ -255,7 +281,13 @@ describe("the kind switch", () => {
     expect(document.body).toHaveTextContent("Add · a client");
     fireEvent.click(screen.getByRole("button", { name: "a sub" }));
     expect(document.body).toHaveTextContent("Add · a sub");
-    expect(document.body).not.toHaveTextContent("Add · to your roster");
+  });
+
+  it("pins the eyebrow to 'Edit · your rolodex' in edit mode", () => {
+    render(
+      <AddPersonSheet open onClose={jest.fn()} contact={editContact()} />,
+    );
+    expect(document.body).toHaveTextContent("Edit · your rolodex");
   });
 });
 

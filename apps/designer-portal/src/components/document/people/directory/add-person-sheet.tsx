@@ -165,7 +165,11 @@ const KIND_CHOICES: Array<[AddedPersonKind, string]> = [
   ["other_named", "someone else"],
 ];
 
-/** The kind choice — the specimen's `.pick` boxes (SPEC §5.5 item 2): bordered, filled when pressed. Not R28 page links — choosing what you add is a form control, not book navigation. */
+/**
+ * The kind choice — bordered chips per SPEC §2.3 (Chips): paper ground and a
+ * hairline at rest, rail ground + ink-faint border when pressed. Not R28 page
+ * links: choosing what you add is a form control, not book navigation.
+ */
 function KindChoice({
   kind,
   onKind,
@@ -177,7 +181,7 @@ function KindChoice({
     <div
       role="group"
       aria-label="What kind of person"
-      className="mb-5 flex flex-wrap gap-x-3 gap-y-2 border-b border-[var(--color-pearl)] pb-2.5"
+      className="mb-5 flex flex-wrap gap-3 border-b border-[var(--color-pearl)] pb-2.5"
     >
       {KIND_CHOICES.map(([k, label]) => (
         <button
@@ -185,7 +189,7 @@ function KindChoice({
           type="button"
           onClick={() => onKind(k)}
           aria-pressed={kind === k}
-          className={`min-h-11 px-3.5 py-2.5 rounded-[3px] border font-mono text-[12px] tracking-[0.04em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+          className={`min-h-11 px-3.5 py-2.5 rounded-[3px] border font-mono text-[12px] tracking-[0.04em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)] ${
             kind === k
               ? "border-[var(--ink-faint)] bg-[var(--rail)] text-[var(--ink)]"
               : "border-[var(--hairline-strong)] bg-[var(--paper)] text-[var(--ink-subtle)] hover:text-[var(--ink)]"
