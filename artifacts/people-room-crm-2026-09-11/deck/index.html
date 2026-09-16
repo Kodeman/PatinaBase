@@ -2110,7 +2110,11 @@ const CARRY = [
     note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
   { id: 'F-13', trade: 'cabinetry',           history: PRIOR_JOB, on: true,  consent: true, rule: true },
   { id: 'F-20', trade: 'tile &amp; stone',        history: 'Saved twice, one firm.', on: true },
-  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false }
+  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false },
+  // R-BP (W3 r10 F1): the book holds SIX people who worked the Lindqvist
+  // kitchen — Erin Sato, Marrow &amp; Sons' PM, worked the closed job too. She
+  // is listed and left unticked; no rule is invented to hide her.
+  { id: 'F-08', trade: 'project management', history: PRIOR_JOB, on: false }
 ];
 const TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value',
   'Document expiries', 'One history line'];
@@ -2158,7 +2162,7 @@ function renderPick() {
 
   H.push('&lt;div class=&quot;field&quot;&gt;&lt;label class=&quot;t-head field-label&quot; for=&quot;f-rolodex&quot;&gt;SEARCH THE ROLODEX&lt;/label&gt;' +
     '&lt;input class=&quot;control&quot; id=&quot;f-rolodex&quot; type=&quot;text&quot; value=&quot;Lindqvist&quot;&gt;&lt;/div&gt;');
-  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;');
 
   H.push('&lt;div class=&quot;pick-grid&quot;&gt;');
   H.push('&lt;div class=&quot;pick-list&quot;&gt;' + CARRY.map(pickRow).join('') + '&lt;/div&gt;');
@@ -2263,7 +2267,7 @@ function renderAdd() {
   const H = [];
   H.push('&lt;div class=&quot;crm-card&quot;&gt;');
 
-  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · ' + esc(a.kind.toUpperCase()) + '&lt;/p&gt;');
   H.push('&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;');
   H.push('&lt;p class=&quot;t-meta&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;');
 
@@ -3834,7 +3838,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
   function renderAdd() {
     const a = FIXTURE.addSheet;
     const sheet = addSheetFor(addKind);
-    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;';
+    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · ' + esc(sheet.kind.toUpperCase()) + '&lt;/p&gt;';
     out += '&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;';
     out += '&lt;p class=&quot;t-meta&quot; style=&quot;margin-top:12px&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;';
     out += '&lt;div class=&quot;narrows&quot; data-narrow=&quot;add-kind&quot; role=&quot;group&quot; aria-label=&quot;What kind of person you are adding&quot;&gt;';
@@ -3889,7 +3893,10 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
       note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
     { id: 'F-13', firm: 'halvorsen',  trade: 'cabinetry',           picked: true,  line: PICK_PRIOR, consent: true, rule: true },
     { id: 'F-20', firm: 'stonehaven', trade: 'tile &amp; stone',        picked: true,  line: 'Saved twice, one firm.' },
-    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR }
+    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR },
+    // R-BP (W3 r10 F1): six people worked the Lindqvist kitchen. Erin Sato,
+    // Marrow &amp; Sons' PM, is listed and left unticked.
+    { id: 'F-08', firm: 'marrow',     trade: 'project management',  picked: false, line: PICK_PRIOR }
   ];
   const PICK_TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value', 'Document expiries', 'One history line'];
   const PICK_STAYS = ['2025 pricing', '2025 project notes', 'Show to client'];
@@ -3923,7 +3930,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
     out += '&lt;p class=&quot;t-head eyebrow&quot;&gt;OKONKWO RESIDENCE&lt;/p&gt;';
     out += '&lt;h3 class=&quot;t-d3&quot;&gt;From the rolodex&lt;/h3&gt;';
     out += field('f-pick-search', 'SEARCH THE ROLODEX', 'Lindqvist');
-    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;';
+    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;';
     out += '&lt;ul class=&quot;crm-list stack&quot;&gt;' + PICK_ROWS.map(pickRow).join('') + '&lt;/ul&gt;';
     out += '&lt;h3 class=&quot;t-head&quot; style=&quot;margin-top:48px&quot;&gt;What travels&lt;/h3&gt;&lt;ul&gt;';
     PICK_TRAVELS.forEach(function (t) { out += '&lt;li class=&quot;stack-row&quot;&gt;&lt;p class=&quot;t-body&quot;&gt;' + esc(t) + '&lt;/p&gt;&lt;/li&gt;'; });
@@ -5408,7 +5415,11 @@ const CARRY = [
     note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
   { id: 'F-13', trade: 'cabinetry',           history: PRIOR_JOB, on: true,  consent: true, rule: true },
   { id: 'F-20', trade: 'tile &amp; stone',        history: 'Saved twice, one firm.', on: true },
-  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false }
+  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false },
+  // R-BP (W3 r10 F1): the book holds SIX people who worked the Lindqvist
+  // kitchen — Erin Sato, Marrow &amp; Sons' PM, worked the closed job too. She
+  // is listed and left unticked; no rule is invented to hide her.
+  { id: 'F-08', trade: 'project management', history: PRIOR_JOB, on: false }
 ];
 const TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value',
   'Document expiries', 'One history line'];
@@ -5456,7 +5467,7 @@ function renderPick() {
 
   H.push('&lt;div class=&quot;field&quot;&gt;&lt;label class=&quot;t-head field-label&quot; for=&quot;f-rolodex&quot;&gt;SEARCH THE ROLODEX&lt;/label&gt;' +
     '&lt;input class=&quot;control&quot; id=&quot;f-rolodex&quot; type=&quot;text&quot; value=&quot;Lindqvist&quot;&gt;&lt;/div&gt;');
-  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;');
 
   H.push('&lt;div class=&quot;pick-grid&quot;&gt;');
   H.push('&lt;div class=&quot;pick-list&quot;&gt;' + CARRY.map(pickRow).join('') + '&lt;/div&gt;');
@@ -5561,7 +5572,7 @@ function renderAdd() {
   const H = [];
   H.push('&lt;div class=&quot;crm-card&quot;&gt;');
 
-  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · ' + esc(a.kind.toUpperCase()) + '&lt;/p&gt;');
   H.push('&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;');
   H.push('&lt;p class=&quot;t-meta&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;');
 
@@ -7132,7 +7143,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
   function renderAdd() {
     const a = FIXTURE.addSheet;
     const sheet = addSheetFor(addKind);
-    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;';
+    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · ' + esc(sheet.kind.toUpperCase()) + '&lt;/p&gt;';
     out += '&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;';
     out += '&lt;p class=&quot;t-meta&quot; style=&quot;margin-top:12px&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;';
     out += '&lt;div class=&quot;narrows&quot; data-narrow=&quot;add-kind&quot; role=&quot;group&quot; aria-label=&quot;What kind of person you are adding&quot;&gt;';
@@ -7187,7 +7198,10 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
       note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
     { id: 'F-13', firm: 'halvorsen',  trade: 'cabinetry',           picked: true,  line: PICK_PRIOR, consent: true, rule: true },
     { id: 'F-20', firm: 'stonehaven', trade: 'tile &amp; stone',        picked: true,  line: 'Saved twice, one firm.' },
-    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR }
+    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR },
+    // R-BP (W3 r10 F1): six people worked the Lindqvist kitchen. Erin Sato,
+    // Marrow &amp; Sons' PM, is listed and left unticked.
+    { id: 'F-08', firm: 'marrow',     trade: 'project management',  picked: false, line: PICK_PRIOR }
   ];
   const PICK_TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value', 'Document expiries', 'One history line'];
   const PICK_STAYS = ['2025 pricing', '2025 project notes', 'Show to client'];
@@ -7221,7 +7235,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
     out += '&lt;p class=&quot;t-head eyebrow&quot;&gt;OKONKWO RESIDENCE&lt;/p&gt;';
     out += '&lt;h3 class=&quot;t-d3&quot;&gt;From the rolodex&lt;/h3&gt;';
     out += field('f-pick-search', 'SEARCH THE ROLODEX', 'Lindqvist');
-    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;';
+    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;';
     out += '&lt;ul class=&quot;crm-list stack&quot;&gt;' + PICK_ROWS.map(pickRow).join('') + '&lt;/ul&gt;';
     out += '&lt;h3 class=&quot;t-head&quot; style=&quot;margin-top:48px&quot;&gt;What travels&lt;/h3&gt;&lt;ul&gt;';
     PICK_TRAVELS.forEach(function (t) { out += '&lt;li class=&quot;stack-row&quot;&gt;&lt;p class=&quot;t-body&quot;&gt;' + esc(t) + '&lt;/p&gt;&lt;/li&gt;'; });
@@ -8706,7 +8720,11 @@ const CARRY = [
     note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
   { id: 'F-13', trade: 'cabinetry',           history: PRIOR_JOB, on: true,  consent: true, rule: true },
   { id: 'F-20', trade: 'tile &amp; stone',        history: 'Saved twice, one firm.', on: true },
-  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false }
+  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false },
+  // R-BP (W3 r10 F1): the book holds SIX people who worked the Lindqvist
+  // kitchen — Erin Sato, Marrow &amp; Sons' PM, worked the closed job too. She
+  // is listed and left unticked; no rule is invented to hide her.
+  { id: 'F-08', trade: 'project management', history: PRIOR_JOB, on: false }
 ];
 const TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value',
   'Document expiries', 'One history line'];
@@ -8754,7 +8772,7 @@ function renderPick() {
 
   H.push('&lt;div class=&quot;field&quot;&gt;&lt;label class=&quot;t-head field-label&quot; for=&quot;f-rolodex&quot;&gt;SEARCH THE ROLODEX&lt;/label&gt;' +
     '&lt;input class=&quot;control&quot; id=&quot;f-rolodex&quot; type=&quot;text&quot; value=&quot;Lindqvist&quot;&gt;&lt;/div&gt;');
-  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;');
 
   H.push('&lt;div class=&quot;pick-grid&quot;&gt;');
   H.push('&lt;div class=&quot;pick-list&quot;&gt;' + CARRY.map(pickRow).join('') + '&lt;/div&gt;');
@@ -8859,7 +8877,7 @@ function renderAdd() {
   const H = [];
   H.push('&lt;div class=&quot;crm-card&quot;&gt;');
 
-  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · ' + esc(a.kind.toUpperCase()) + '&lt;/p&gt;');
   H.push('&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;');
   H.push('&lt;p class=&quot;t-meta&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;');
 
@@ -10430,7 +10448,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
   function renderAdd() {
     const a = FIXTURE.addSheet;
     const sheet = addSheetFor(addKind);
-    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;';
+    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · ' + esc(sheet.kind.toUpperCase()) + '&lt;/p&gt;';
     out += '&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;';
     out += '&lt;p class=&quot;t-meta&quot; style=&quot;margin-top:12px&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;';
     out += '&lt;div class=&quot;narrows&quot; data-narrow=&quot;add-kind&quot; role=&quot;group&quot; aria-label=&quot;What kind of person you are adding&quot;&gt;';
@@ -10485,7 +10503,10 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
       note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
     { id: 'F-13', firm: 'halvorsen',  trade: 'cabinetry',           picked: true,  line: PICK_PRIOR, consent: true, rule: true },
     { id: 'F-20', firm: 'stonehaven', trade: 'tile &amp; stone',        picked: true,  line: 'Saved twice, one firm.' },
-    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR }
+    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR },
+    // R-BP (W3 r10 F1): six people worked the Lindqvist kitchen. Erin Sato,
+    // Marrow &amp; Sons' PM, is listed and left unticked.
+    { id: 'F-08', firm: 'marrow',     trade: 'project management',  picked: false, line: PICK_PRIOR }
   ];
   const PICK_TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value', 'Document expiries', 'One history line'];
   const PICK_STAYS = ['2025 pricing', '2025 project notes', 'Show to client'];
@@ -10519,7 +10540,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
     out += '&lt;p class=&quot;t-head eyebrow&quot;&gt;OKONKWO RESIDENCE&lt;/p&gt;';
     out += '&lt;h3 class=&quot;t-d3&quot;&gt;From the rolodex&lt;/h3&gt;';
     out += field('f-pick-search', 'SEARCH THE ROLODEX', 'Lindqvist');
-    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;';
+    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;';
     out += '&lt;ul class=&quot;crm-list stack&quot;&gt;' + PICK_ROWS.map(pickRow).join('') + '&lt;/ul&gt;';
     out += '&lt;h3 class=&quot;t-head&quot; style=&quot;margin-top:48px&quot;&gt;What travels&lt;/h3&gt;&lt;ul&gt;';
     PICK_TRAVELS.forEach(function (t) { out += '&lt;li class=&quot;stack-row&quot;&gt;&lt;p class=&quot;t-body&quot;&gt;' + esc(t) + '&lt;/p&gt;&lt;/li&gt;'; });
@@ -12004,7 +12025,11 @@ const CARRY = [
     note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
   { id: 'F-13', trade: 'cabinetry',           history: PRIOR_JOB, on: true,  consent: true, rule: true },
   { id: 'F-20', trade: 'tile &amp; stone',        history: 'Saved twice, one firm.', on: true },
-  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false }
+  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false },
+  // R-BP (W3 r10 F1): the book holds SIX people who worked the Lindqvist
+  // kitchen — Erin Sato, Marrow &amp; Sons' PM, worked the closed job too. She
+  // is listed and left unticked; no rule is invented to hide her.
+  { id: 'F-08', trade: 'project management', history: PRIOR_JOB, on: false }
 ];
 const TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value',
   'Document expiries', 'One history line'];
@@ -12052,7 +12077,7 @@ function renderPick() {
 
   H.push('&lt;div class=&quot;field&quot;&gt;&lt;label class=&quot;t-head field-label&quot; for=&quot;f-rolodex&quot;&gt;SEARCH THE ROLODEX&lt;/label&gt;' +
     '&lt;input class=&quot;control&quot; id=&quot;f-rolodex&quot; type=&quot;text&quot; value=&quot;Lindqvist&quot;&gt;&lt;/div&gt;');
-  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;');
 
   H.push('&lt;div class=&quot;pick-grid&quot;&gt;');
   H.push('&lt;div class=&quot;pick-list&quot;&gt;' + CARRY.map(pickRow).join('') + '&lt;/div&gt;');
@@ -12157,7 +12182,7 @@ function renderAdd() {
   const H = [];
   H.push('&lt;div class=&quot;crm-card&quot;&gt;');
 
-  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · ' + esc(a.kind.toUpperCase()) + '&lt;/p&gt;');
   H.push('&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;');
   H.push('&lt;p class=&quot;t-meta&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;');
 
@@ -13728,7 +13753,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
   function renderAdd() {
     const a = FIXTURE.addSheet;
     const sheet = addSheetFor(addKind);
-    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;';
+    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · ' + esc(sheet.kind.toUpperCase()) + '&lt;/p&gt;';
     out += '&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;';
     out += '&lt;p class=&quot;t-meta&quot; style=&quot;margin-top:12px&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;';
     out += '&lt;div class=&quot;narrows&quot; data-narrow=&quot;add-kind&quot; role=&quot;group&quot; aria-label=&quot;What kind of person you are adding&quot;&gt;';
@@ -13783,7 +13808,10 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
       note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
     { id: 'F-13', firm: 'halvorsen',  trade: 'cabinetry',           picked: true,  line: PICK_PRIOR, consent: true, rule: true },
     { id: 'F-20', firm: 'stonehaven', trade: 'tile &amp; stone',        picked: true,  line: 'Saved twice, one firm.' },
-    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR }
+    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR },
+    // R-BP (W3 r10 F1): six people worked the Lindqvist kitchen. Erin Sato,
+    // Marrow &amp; Sons' PM, is listed and left unticked.
+    { id: 'F-08', firm: 'marrow',     trade: 'project management',  picked: false, line: PICK_PRIOR }
   ];
   const PICK_TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value', 'Document expiries', 'One history line'];
   const PICK_STAYS = ['2025 pricing', '2025 project notes', 'Show to client'];
@@ -13817,7 +13845,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
     out += '&lt;p class=&quot;t-head eyebrow&quot;&gt;OKONKWO RESIDENCE&lt;/p&gt;';
     out += '&lt;h3 class=&quot;t-d3&quot;&gt;From the rolodex&lt;/h3&gt;';
     out += field('f-pick-search', 'SEARCH THE ROLODEX', 'Lindqvist');
-    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;';
+    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;';
     out += '&lt;ul class=&quot;crm-list stack&quot;&gt;' + PICK_ROWS.map(pickRow).join('') + '&lt;/ul&gt;';
     out += '&lt;h3 class=&quot;t-head&quot; style=&quot;margin-top:48px&quot;&gt;What travels&lt;/h3&gt;&lt;ul&gt;';
     PICK_TRAVELS.forEach(function (t) { out += '&lt;li class=&quot;stack-row&quot;&gt;&lt;p class=&quot;t-body&quot;&gt;' + esc(t) + '&lt;/p&gt;&lt;/li&gt;'; });
@@ -15302,7 +15330,11 @@ const CARRY = [
     note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
   { id: 'F-13', trade: 'cabinetry',           history: PRIOR_JOB, on: true,  consent: true, rule: true },
   { id: 'F-20', trade: 'tile &amp; stone',        history: 'Saved twice, one firm.', on: true },
-  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false }
+  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false },
+  // R-BP (W3 r10 F1): the book holds SIX people who worked the Lindqvist
+  // kitchen — Erin Sato, Marrow &amp; Sons' PM, worked the closed job too. She
+  // is listed and left unticked; no rule is invented to hide her.
+  { id: 'F-08', trade: 'project management', history: PRIOR_JOB, on: false }
 ];
 const TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value',
   'Document expiries', 'One history line'];
@@ -15350,7 +15382,7 @@ function renderPick() {
 
   H.push('&lt;div class=&quot;field&quot;&gt;&lt;label class=&quot;t-head field-label&quot; for=&quot;f-rolodex&quot;&gt;SEARCH THE ROLODEX&lt;/label&gt;' +
     '&lt;input class=&quot;control&quot; id=&quot;f-rolodex&quot; type=&quot;text&quot; value=&quot;Lindqvist&quot;&gt;&lt;/div&gt;');
-  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;');
 
   H.push('&lt;div class=&quot;pick-grid&quot;&gt;');
   H.push('&lt;div class=&quot;pick-list&quot;&gt;' + CARRY.map(pickRow).join('') + '&lt;/div&gt;');
@@ -15455,7 +15487,7 @@ function renderAdd() {
   const H = [];
   H.push('&lt;div class=&quot;crm-card&quot;&gt;');
 
-  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · ' + esc(a.kind.toUpperCase()) + '&lt;/p&gt;');
   H.push('&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;');
   H.push('&lt;p class=&quot;t-meta&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;');
 
@@ -17026,7 +17058,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
   function renderAdd() {
     const a = FIXTURE.addSheet;
     const sheet = addSheetFor(addKind);
-    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;';
+    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · ' + esc(sheet.kind.toUpperCase()) + '&lt;/p&gt;';
     out += '&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;';
     out += '&lt;p class=&quot;t-meta&quot; style=&quot;margin-top:12px&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;';
     out += '&lt;div class=&quot;narrows&quot; data-narrow=&quot;add-kind&quot; role=&quot;group&quot; aria-label=&quot;What kind of person you are adding&quot;&gt;';
@@ -17081,7 +17113,10 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
       note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
     { id: 'F-13', firm: 'halvorsen',  trade: 'cabinetry',           picked: true,  line: PICK_PRIOR, consent: true, rule: true },
     { id: 'F-20', firm: 'stonehaven', trade: 'tile &amp; stone',        picked: true,  line: 'Saved twice, one firm.' },
-    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR }
+    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR },
+    // R-BP (W3 r10 F1): six people worked the Lindqvist kitchen. Erin Sato,
+    // Marrow &amp; Sons' PM, is listed and left unticked.
+    { id: 'F-08', firm: 'marrow',     trade: 'project management',  picked: false, line: PICK_PRIOR }
   ];
   const PICK_TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value', 'Document expiries', 'One history line'];
   const PICK_STAYS = ['2025 pricing', '2025 project notes', 'Show to client'];
@@ -17115,7 +17150,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
     out += '&lt;p class=&quot;t-head eyebrow&quot;&gt;OKONKWO RESIDENCE&lt;/p&gt;';
     out += '&lt;h3 class=&quot;t-d3&quot;&gt;From the rolodex&lt;/h3&gt;';
     out += field('f-pick-search', 'SEARCH THE ROLODEX', 'Lindqvist');
-    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;';
+    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;';
     out += '&lt;ul class=&quot;crm-list stack&quot;&gt;' + PICK_ROWS.map(pickRow).join('') + '&lt;/ul&gt;';
     out += '&lt;h3 class=&quot;t-head&quot; style=&quot;margin-top:48px&quot;&gt;What travels&lt;/h3&gt;&lt;ul&gt;';
     PICK_TRAVELS.forEach(function (t) { out += '&lt;li class=&quot;stack-row&quot;&gt;&lt;p class=&quot;t-body&quot;&gt;' + esc(t) + '&lt;/p&gt;&lt;/li&gt;'; });
@@ -18600,7 +18635,11 @@ const CARRY = [
     note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
   { id: 'F-13', trade: 'cabinetry',           history: PRIOR_JOB, on: true,  consent: true, rule: true },
   { id: 'F-20', trade: 'tile &amp; stone',        history: 'Saved twice, one firm.', on: true },
-  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false }
+  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false },
+  // R-BP (W3 r10 F1): the book holds SIX people who worked the Lindqvist
+  // kitchen — Erin Sato, Marrow &amp; Sons' PM, worked the closed job too. She
+  // is listed and left unticked; no rule is invented to hide her.
+  { id: 'F-08', trade: 'project management', history: PRIOR_JOB, on: false }
 ];
 const TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value',
   'Document expiries', 'One history line'];
@@ -18648,7 +18687,7 @@ function renderPick() {
 
   H.push('&lt;div class=&quot;field&quot;&gt;&lt;label class=&quot;t-head field-label&quot; for=&quot;f-rolodex&quot;&gt;SEARCH THE ROLODEX&lt;/label&gt;' +
     '&lt;input class=&quot;control&quot; id=&quot;f-rolodex&quot; type=&quot;text&quot; value=&quot;Lindqvist&quot;&gt;&lt;/div&gt;');
-  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;');
 
   H.push('&lt;div class=&quot;pick-grid&quot;&gt;');
   H.push('&lt;div class=&quot;pick-list&quot;&gt;' + CARRY.map(pickRow).join('') + '&lt;/div&gt;');
@@ -18753,7 +18792,7 @@ function renderAdd() {
   const H = [];
   H.push('&lt;div class=&quot;crm-card&quot;&gt;');
 
-  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · ' + esc(a.kind.toUpperCase()) + '&lt;/p&gt;');
   H.push('&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;');
   H.push('&lt;p class=&quot;t-meta&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;');
 
@@ -20324,7 +20363,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
   function renderAdd() {
     const a = FIXTURE.addSheet;
     const sheet = addSheetFor(addKind);
-    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;';
+    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · ' + esc(sheet.kind.toUpperCase()) + '&lt;/p&gt;';
     out += '&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;';
     out += '&lt;p class=&quot;t-meta&quot; style=&quot;margin-top:12px&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;';
     out += '&lt;div class=&quot;narrows&quot; data-narrow=&quot;add-kind&quot; role=&quot;group&quot; aria-label=&quot;What kind of person you are adding&quot;&gt;';
@@ -20379,7 +20418,10 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
       note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
     { id: 'F-13', firm: 'halvorsen',  trade: 'cabinetry',           picked: true,  line: PICK_PRIOR, consent: true, rule: true },
     { id: 'F-20', firm: 'stonehaven', trade: 'tile &amp; stone',        picked: true,  line: 'Saved twice, one firm.' },
-    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR }
+    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR },
+    // R-BP (W3 r10 F1): six people worked the Lindqvist kitchen. Erin Sato,
+    // Marrow &amp; Sons' PM, is listed and left unticked.
+    { id: 'F-08', firm: 'marrow',     trade: 'project management',  picked: false, line: PICK_PRIOR }
   ];
   const PICK_TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value', 'Document expiries', 'One history line'];
   const PICK_STAYS = ['2025 pricing', '2025 project notes', 'Show to client'];
@@ -20413,7 +20455,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
     out += '&lt;p class=&quot;t-head eyebrow&quot;&gt;OKONKWO RESIDENCE&lt;/p&gt;';
     out += '&lt;h3 class=&quot;t-d3&quot;&gt;From the rolodex&lt;/h3&gt;';
     out += field('f-pick-search', 'SEARCH THE ROLODEX', 'Lindqvist');
-    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;';
+    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;';
     out += '&lt;ul class=&quot;crm-list stack&quot;&gt;' + PICK_ROWS.map(pickRow).join('') + '&lt;/ul&gt;';
     out += '&lt;h3 class=&quot;t-head&quot; style=&quot;margin-top:48px&quot;&gt;What travels&lt;/h3&gt;&lt;ul&gt;';
     PICK_TRAVELS.forEach(function (t) { out += '&lt;li class=&quot;stack-row&quot;&gt;&lt;p class=&quot;t-body&quot;&gt;' + esc(t) + '&lt;/p&gt;&lt;/li&gt;'; });
@@ -21898,7 +21940,11 @@ const CARRY = [
     note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
   { id: 'F-13', trade: 'cabinetry',           history: PRIOR_JOB, on: true,  consent: true, rule: true },
   { id: 'F-20', trade: 'tile &amp; stone',        history: 'Saved twice, one firm.', on: true },
-  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false }
+  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false },
+  // R-BP (W3 r10 F1): the book holds SIX people who worked the Lindqvist
+  // kitchen — Erin Sato, Marrow &amp; Sons' PM, worked the closed job too. She
+  // is listed and left unticked; no rule is invented to hide her.
+  { id: 'F-08', trade: 'project management', history: PRIOR_JOB, on: false }
 ];
 const TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value',
   'Document expiries', 'One history line'];
@@ -21946,7 +21992,7 @@ function renderPick() {
 
   H.push('&lt;div class=&quot;field&quot;&gt;&lt;label class=&quot;t-head field-label&quot; for=&quot;f-rolodex&quot;&gt;SEARCH THE ROLODEX&lt;/label&gt;' +
     '&lt;input class=&quot;control&quot; id=&quot;f-rolodex&quot; type=&quot;text&quot; value=&quot;Lindqvist&quot;&gt;&lt;/div&gt;');
-  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-meta&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;');
 
   H.push('&lt;div class=&quot;pick-grid&quot;&gt;');
   H.push('&lt;div class=&quot;pick-list&quot;&gt;' + CARRY.map(pickRow).join('') + '&lt;/div&gt;');
@@ -22051,7 +22097,7 @@ function renderAdd() {
   const H = [];
   H.push('&lt;div class=&quot;crm-card&quot;&gt;');
 
-  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;');
+  H.push('&lt;p class=&quot;t-head&quot;&gt;ADD · ' + esc(a.kind.toUpperCase()) + '&lt;/p&gt;');
   H.push('&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;');
   H.push('&lt;p class=&quot;t-meta&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;');
 
@@ -23622,7 +23668,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
   function renderAdd() {
     const a = FIXTURE.addSheet;
     const sheet = addSheetFor(addKind);
-    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · TO YOUR ROSTER&lt;/p&gt;';
+    let out = '&lt;p class=&quot;t-head eyebrow&quot;&gt;ADD · ' + esc(sheet.kind.toUpperCase()) + '&lt;/p&gt;';
     out += '&lt;h2 class=&quot;t-d2&quot;&gt;Bring someone in&lt;/h2&gt;';
     out += '&lt;p class=&quot;t-meta&quot; style=&quot;margin-top:12px&quot;&gt;' + esc(a.dateline) + '&lt;/p&gt;';
     out += '&lt;div class=&quot;narrows&quot; data-narrow=&quot;add-kind&quot; role=&quot;group&quot; aria-label=&quot;What kind of person you are adding&quot;&gt;';
@@ -23677,7 +23723,10 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
       note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
     { id: 'F-13', firm: 'halvorsen',  trade: 'cabinetry',           picked: true,  line: PICK_PRIOR, consent: true, rule: true },
     { id: 'F-20', firm: 'stonehaven', trade: 'tile &amp; stone',        picked: true,  line: 'Saved twice, one firm.' },
-    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR }
+    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR },
+    // R-BP (W3 r10 F1): six people worked the Lindqvist kitchen. Erin Sato,
+    // Marrow &amp; Sons' PM, is listed and left unticked.
+    { id: 'F-08', firm: 'marrow',     trade: 'project management',  picked: false, line: PICK_PRIOR }
   ];
   const PICK_TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value', 'Document expiries', 'One history line'];
   const PICK_STAYS = ['2025 pricing', '2025 project notes', 'Show to client'];
@@ -23711,7 +23760,7 @@ if (document.readyState !== 'loading') { paint(); fromHash(); }
     out += '&lt;p class=&quot;t-head eyebrow&quot;&gt;OKONKWO RESIDENCE&lt;/p&gt;';
     out += '&lt;h3 class=&quot;t-d3&quot;&gt;From the rolodex&lt;/h3&gt;';
     out += field('f-pick-search', 'SEARCH THE ROLODEX', 'Lindqvist');
-    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 5 from the Lindqvist kitchen selected&lt;/p&gt;';
+    out += '&lt;p class=&quot;t-body-sm note prose vitals&quot; id=&quot;pick-count&quot;&gt;4 of 6 from the Lindqvist kitchen selected&lt;/p&gt;';
     out += '&lt;ul class=&quot;crm-list stack&quot;&gt;' + PICK_ROWS.map(pickRow).join('') + '&lt;/ul&gt;';
     out += '&lt;h3 class=&quot;t-head&quot; style=&quot;margin-top:48px&quot;&gt;What travels&lt;/h3&gt;&lt;ul&gt;';
     PICK_TRAVELS.forEach(function (t) { out += '&lt;li class=&quot;stack-row&quot;&gt;&lt;p class=&quot;t-body&quot;&gt;' + esc(t) + '&lt;/p&gt;&lt;/li&gt;'; });
