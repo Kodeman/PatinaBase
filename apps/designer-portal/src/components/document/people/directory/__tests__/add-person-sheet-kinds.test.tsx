@@ -1108,7 +1108,16 @@ describe("the recorded studio, while it is still resolving", () => {
       screen.queryByLabelText("Up to, in dollars"),
     ).not.toBeInTheDocument();
 
-    // The seat itself is unaffected — it is the GRANT a guest cannot record.
+    // F-2 — WHAT THIS ASSERTS IS THE SHEET, NOT THE OUTCOME. The sheet holds
+    // nothing back on the seat: it drops the grant and writes the seat as it
+    // would for anyone. In production that seat is refused too —
+    // `project_parties_studio_insert` gates on `is_studio_comember`
+    // (00584:884-893), which admits no guest on either side of the shared
+    // membership (00315:44-48), so a guest on the studio that keeps this job's
+    // book is refused the SEAT as well as the grant, and the refusal comes
+    // back as the generic "Could not add them just now. Try again.". The
+    // point here is only that the guest's standing takes the GRANT off the
+    // press and does not turn the press itself into a client-side refusal.
     const act = screen.getByRole("button", { name: "Add to the roster" });
     expect(act).not.toHaveAttribute("aria-disabled");
     fireEvent.click(act);
@@ -1181,6 +1190,50 @@ describe("the recorded studio, while it is still resolving", () => {
     await waitFor(() => expect(addParty).toHaveBeenCalled());
     expect(setAuthority).not.toHaveBeenCalled();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  /**
+   * R1 — THE BAND'S SECOND UNMOUNT PATH CLEARS LIKE THE FIRST. F-B1 draws
+   * nothing at all before a job is chosen, which gave the band a way off the
+   * page that the standing never changes for: clearing the project select
+   * back to "Which project…" took the band away with the standing still
+   * reading the old job's. A phrase and a figure typed under that job stayed
+   * in state where nobody could see them and reattached to the NEXT job
+   * picked — one client's authority carried onto another's work. Both paths
+   * clear alike.
+   */
+  it("clears a grant stranded by clearing the project select", () => {
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+    fireEvent.change(screen.getByLabelText("Up to, in dollars"), {
+      target: { value: "2500" },
+    });
+
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: "" },
+    });
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Up to, in dollars"),
+    ).not.toBeInTheDocument();
+
+    // The same job again — the band is back, closed, and holding nothing.
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    expect(
+      screen.getByRole("button", { name: "Record the authority" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByLabelText("Authority")).toHaveValue("");
+    expect(screen.getByLabelText("Up to, in dollars")).toHaveValue("");
   });
 
   /**

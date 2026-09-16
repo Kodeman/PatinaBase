@@ -702,9 +702,17 @@ export function AddPersonSheet({
    * phrase typed while it was still offered stayed in state: the writer's
    * guard then refused the whole add on a grant with no field to clear it in.
    * The grant comes off the page with the band.
+   *
+   * R1 — AND THE BAND HAS TWO UNMOUNT PATHS, not one. F-B1 added the second:
+   * the render gate below draws nothing at all while `projectId` is "", so
+   * clearing the project select back to "Which project…" took the band off
+   * the page with the standing still reading whatever the last job said. A
+   * phrase and a figure typed under the old job then sat invisibly in state
+   * and reattached to the next job picked — someone else's authority, carried
+   * across on a field nobody could see. Both paths clear alike.
    */
   useEffect(() => {
-    if (authorityStanding !== "none") return;
+    if (authorityStanding !== "none" && projectId) return;
     if (!authorityOpen && authorityPhrase === "" && authorityThreshold === "") {
       return;
     }
@@ -714,6 +722,7 @@ export function AddPersonSheet({
     setAuthorityScope(defaultAuthorityScope);
   }, [
     authorityStanding,
+    projectId,
     authorityOpen,
     authorityPhrase,
     authorityThreshold,
@@ -957,6 +966,27 @@ export function AddPersonSheet({
         recordedStudioId === null
           ? NO_STUDIO_AUTHORITY_SENTENCE
           : NO_STUDIO_MEMBERSHIP_AUTHORITY_SENTENCE,
+      );
+      return;
+    }
+    /**
+     * R3 — THE FOURTH GUARD, HOISTED OUT OF THE TRY. PR-n's money and
+     * draw_certify refusal was the one refusal in this cluster still sitting
+     * inside the write chain, after the seat, the card, the channels, the rule
+     * and the affiliation were already written — a `throw` caught below as the
+     * generic "Could not add them just now. Try again." with five rows down
+     * and `chainRef` resuming into the same refused grant on every retry. It
+     * stands with its three siblings now: before `setError(null)` and before
+     * any write. The copy inside the try stays as defence in depth for a
+     * future caller that reaches the chain another way.
+     */
+    if (
+      grantRequested &&
+      isAdminOnlyAuthorityScope(authorityScope) &&
+      authorityStanding !== "admin"
+    ) {
+      setError(
+        "Signing money and certifying draws are the studio owner's or an admin's to grant.",
       );
       return;
     }
