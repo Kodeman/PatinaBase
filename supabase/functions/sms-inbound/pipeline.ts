@@ -794,6 +794,47 @@ async function recordInboundTouch(
   if (error) console.error("sms-inbound: record_touch failed", error.message);
 }
 
+/**
+ * ONE TOUCH PER ANSWERING SEAT, for the keywords that move a consent record
+ * (W4 r5 F3 / MAJOR-2).
+ *
+ * `sms_conversations` is keyed on (twilio_number, phone_e164) and the rail
+ * sends from one platform-wide TWILIO_FROM_NUMBER (_shared/sms.ts), so there
+ * is exactly ONE conversation row per phone across every studio, and
+ * `conv.party_id` is whichever seat the first outbound send stamped — not the
+ * seat the message answered. Filing the touch there left, on a number two
+ * studios hold, the studio whose consent record actually moved with no touch
+ * at all: its person card, seat line, roster row and `touchSentence` kept
+ * printing the PREVIOUS contact while its Directory row — which reads the
+ * record — already showed the new verdict. Two readers on one card
+ * disagreeing, which is the defect r1 M-4 and r4 MAJOR-3 opened to close.
+ *
+ * So each branch files over its own target set. The conversation's seat is the
+ * fallback only when that set holds no seat — a record-only studio has none by
+ * construction, and `record_touch` already answers NULL for a studio-less seat.
+ */
+async function recordConsentTouches(
+  supabase: SupabaseClient,
+  targets: StudioTarget[],
+  fallbackPartyId: string | null,
+  messageId: string | null,
+  occurredAt: string,
+): Promise<void> {
+  const seatIds = [...new Set(targets.flatMap((t) => t.partyIds))];
+  const ids = seatIds.length > 0
+    ? seatIds
+    : (fallbackPartyId ? [fallbackPartyId] : []);
+  for (const partyId of ids) {
+    await recordInboundTouch(
+      supabase,
+      partyId,
+      messageId,
+      { decisionClass: "none", authorityCheck: "n/a" },
+      occurredAt,
+    );
+  }
+}
+
 // ── designer notification (in-band) ──────────────────────────────────────────
 async function notifyDesigner(
   supabase: SupabaseClient,
@@ -971,11 +1012,11 @@ export async function processInbound(
     // question the room asks — who said what, when (CRM-23). It is the most
     // consequential message a seat sends, and it was the one outcome that
     // attributed a message to a seat and filed no touch.
-    await recordInboundTouch(
+    await recordConsentTouches(
       supabase,
+      stopTargets,
       conv.party_id,
       messageId,
-      { decisionClass: "none", authorityCheck: "n/a" },
       nowIso,
     );
     // Twilio Advanced Opt-Out already auto-replied — do NOT reply.
@@ -1029,11 +1070,11 @@ export async function processInbound(
     // the seat line, the roster row and `touchSentence` all went on printing
     // the PREVIOUS contact after it. Best effort, as everywhere else:
     // `record_touch` answers NULL for a studio-less seat.
-    await recordInboundTouch(
+    await recordConsentTouches(
       supabase,
+      startTargets,
       conv.party_id,
       messageId,
-      { decisionClass: "none", authorityCheck: "n/a" },
       nowIso,
     );
     return { status: 200, twiml: twimlBody(), disposition: "resubscribed" };
@@ -1111,11 +1152,11 @@ export async function processInbound(
       // the message is attributed twice over — and filed no touch, leaving the
       // room to print the older contact after the most consequential inbound
       // message after STOP.
-      await recordInboundTouch(
+      await recordConsentTouches(
         supabase,
+        yesTargets,
         conv.party_id,
         messageId,
-        { decisionClass: "none", authorityCheck: "n/a" },
         nowIso,
       );
       return await reply(

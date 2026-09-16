@@ -352,6 +352,47 @@ BEGIN
   RAISE NOTICE '4b. get_invoice_link reports status and end date and no address, because there is none to report: passed';
 END $$;
 
+-- ── a closed link is a receipt, and an expiry may not silence it (W4 r5 F1) ──
+-- 00636's backfill dates every already-dead row from revoked_at, which is in
+-- the past. If resolve_invoice_link tested expiry above its dead-link branch,
+-- every client holding a /pay address for an invoice she has already paid (or
+-- that was withdrawn) would get the generic DeadLink page on deploy day
+-- instead of the K5/M10 withdrawn/settling sheet.
+DO $$
+DECLARE
+  v_invoice uuid := 'b0000000-0000-0000-0000-00000000e142';
+  v_token   text;
+  v_sheet   jsonb;
+BEGIN
+  v_token := public.ensure_invoice_link(v_invoice);   -- revokes the expired one
+  IF v_token IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 4c FAIL (a): no address to close';
+  END IF;
+
+  -- the shape _void_invoice_authorized leaves behind (00574:1004), dated the
+  -- way 00636's backfill dates a row that was already dead when it ran
+  UPDATE public.invoice_links
+     SET status = 'closed',
+         revoked_at = now() - interval '90 days',
+         expires_at = now() - interval '90 days'
+   WHERE invoice_id = v_invoice AND status = 'active';
+
+  v_sheet := public.resolve_invoice_link(v_token, false);
+  IF v_sheet IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 4c FAIL (b): a closed link with a backfill-shaped past expiry answered nothing — the client holding it reads DeadLink, not her receipt';
+  END IF;
+  IF (v_sheet->>'kind') <> 'withdrawn' THEN
+    RAISE EXCEPTION 'BLOCK 4c FAIL (c): the closed link answered kind %, not withdrawn', v_sheet->>'kind';
+  END IF;
+
+  -- and the receipt is still not a pay door
+  IF EXISTS (SELECT 1 FROM public.resolve_invoice_link_for_checkout(v_token)) THEN
+    RAISE EXCEPTION 'BLOCK 4c FAIL (d): checkout resolved a closed link';
+  END IF;
+
+  RAISE NOTICE '4c. a closed link past its backfilled expiry still answers the withdrawn sheet, and still buys nothing: passed';
+END $$;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 5. The paperwork door — the window rule (R-AD), the token, the never-overwrite
 -- ═══════════════════════════════════════════════════════════════════════════
