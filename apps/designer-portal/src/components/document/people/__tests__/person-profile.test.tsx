@@ -682,6 +682,42 @@ describe("the Hours door on a teammate (HT-8)", () => {
     ).not.toBeInTheDocument();
   });
 
+  /**
+   * W6 QA F2 — the shape a REAL carded teammate arrives in.
+   *
+   * 00626 (v4) emits every carded human from the contacts branch as
+   * `role: 'contact'` with `meta.contact_kind = 'studio'`; only an uncarded
+   * seat still carries its own party kind. The gate above was written against
+   * `role === 'team'` alone, so the door was absent on the only kind of person
+   * R-CC asks it to appear on — Priya Natarajan and Leah Hartwell in the dev
+   * seed both return `role: 'contact', contact_kind: 'studio'`.
+   */
+  it("opens on a CARDED studio member, who arrives as role 'contact'", () => {
+    viewerStudioRole = "owner";
+    personData.current = person({
+      person_id: "card-leah",
+      role: "contact",
+      display_name: "Leah Hartwell",
+      profile_id: "leah-auth-id",
+      meta: { entity_kind: "person", contact_kind: "studio" },
+    });
+    cardData.current = null;
+    seatData.current = [];
+    renderCard({ personId: "card-leah", role: "contact" });
+    expect(screen.getByRole("button", { name: "Hours" })).toBeInTheDocument();
+  });
+
+  it("is absent on a CARDED crew member with an account — 'contact' alone is not the studio", () => {
+    viewerStudioRole = "owner";
+    personData.current = person({ profile_id: "dana-auth-id" });
+    cardData.current = null;
+    seatData.current = [];
+    renderCard();
+    expect(
+      screen.queryByRole("button", { name: "Hours" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("is absent on a client card with an account — the member scope is the studio’s, not the house’s", () => {
     viewerStudioRole = "owner";
     personData.current = person({

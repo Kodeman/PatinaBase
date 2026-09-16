@@ -51,7 +51,9 @@ import {
 } from "@patina/supabase";
 import { partyKindOwesPaper } from "@patina/types";
 import {
+  directoryBandOf,
   directoryContactKind,
+  directoryEntryKind,
   isClientSideKind,
 } from "@/lib/document/people-derivation";
 import {
@@ -198,6 +200,24 @@ export function PersonProfile({
   // for two studios must not be keyed on whichever membership row came back
   // first.
   const { isOwnerOrAdmin: viewerIsOwnerOrAdmin } = useViewerStudio();
+  /**
+   * W6 QA F2 — the studio-member test, asked the way the Directory asks it.
+   *
+   * R-CC names the gate "the card's role is the studio-member role (the
+   * literal the test's renderTeammate uses: role 'team')", but v4 (00626)
+   * emits every CARDED human from the contacts branch as `role: 'contact'`
+   * with `meta.contact_kind = 'studio'`; only an UNCARDED seat still arrives
+   * under its own party kind. A gate on `role === 'team'` therefore never
+   * fires on a real carded teammate — Priya Natarajan returns
+   * `role: 'contact', profile_id: null`. `directoryBandOf` is the SAME
+   * predicate the six Directory chips already use, and STUDIO_KINDS holds
+   * both 'studio' (a card) and 'team' (an uncarded seat), so R-CC's literal
+   * and the shipped view agree through one function.
+   */
+  const viewerSeesStudioMember =
+    !!person &&
+    directoryEntryKind(person) === "person" &&
+    directoryBandOf(person) === "studio";
   const [recordOpen, setRecordOpen] = useState(false);
   const now = useMemo(() => new Date(), []);
 
@@ -471,7 +491,7 @@ export function PersonProfile({
         {/* HT-8 — the one door into the Hours sheet's member scope, which is
             studio-wide and so belongs to a studio member, never to a client
             who merely holds a portal account. */}
-        {person.role === "team" &&
+        {viewerSeesStudioMember &&
           person.profile_id &&
           viewerIsOwnerOrAdmin && (
             <div className="ml-auto shrink-0">

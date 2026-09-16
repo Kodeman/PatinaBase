@@ -1,0 +1,27 @@
+[
+  {
+    "check": "Directory head count text (PR-g)",
+    "pass": true,
+    "detail": 1
+  },
+  {
+    "check": "Directory keyboard tab walk — visible focus ring",
+    "pass": true,
+    "detail": "0 of 15 stops with no visible focus indicator"
+  },
+  {
+    "check": "Call Sheet — site access line at head (task 3)",
+    "pass": true,
+    "detail": 1
+  },
+  {
+    "check": "R-CC — Hours act present on teammate card head (Priya, owner viewer)",
+    "pass": false,
+    "detail": 0
+  },
+  {
+    "check": "R-CC — Hours act ABSENT on client card (Adaeze, linked account)",
+    "pass": true,
+    "detail": 0
+  }
+]

@@ -106,8 +106,14 @@ test('task 3 — who has site access right now, one click from the sheet', async
     page.getByText('Studio only. This card never reaches a client page.'),
   ).toBeVisible();
 
-  // Who to call first — each line its own tel: target.
-  const firstCall = page.locator('a[data-tel-link]').first();
+  // Who to call first — each line its own tel: target, read INSIDE the site
+  // access card. The Call Sheet stays mounted behind this second sheet and its
+  // own roster rows carry tel: links of their own (the Client side band leads
+  // with Adaeze Okonkwo, the studio side carries no number at all), so a
+  // page-wide `.first()` asked the roster, not the card (W6 QA F3).
+  const firstCall = page
+    .locator('[data-site-access-card] a[data-tel-link]')
+    .first();
   await expect(firstCall).toContainText('Luis Ochoa');
   await expect(firstCall).toHaveAttribute('href', /^tel:\+/);
 

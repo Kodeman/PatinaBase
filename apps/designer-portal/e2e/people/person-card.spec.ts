@@ -35,7 +35,12 @@ async function addSub(
   await page.getByRole("button", { name: "a sub" }).click();
   await page.getByLabel("Project").selectOption({ index: 1 });
   await page.getByLabel("Full name").fill(name);
-  await page.getByLabel("Trade").selectOption(trade);
+  // The Add sheet stands OVER the Directory, whose trade filter is a
+  // `role="group"` named "Narrow by trade". `getByLabel` matches a substring by
+  // default, so the bare word matched the filter group as well as this select
+  // and the call died on strict mode. The select's own name is exactly "Trade"
+  // (W6 QA F4).
+  await page.getByLabel("Trade", { exact: true }).selectOption(trade);
   await page.getByLabel("Mobile").fill("(612) 555-0115");
   await page
     .getByLabel("Email")

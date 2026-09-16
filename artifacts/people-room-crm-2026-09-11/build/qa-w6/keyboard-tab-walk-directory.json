@@ -1,0 +1,107 @@
+[
+  {
+    "tag": "A",
+    "role": null,
+    "text": "Skip to the paper",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "← the DeskBack",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "+Add person",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "INPUT",
+    "role": null,
+    "text": "",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Directory72",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Threads",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Nurture",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Reviews",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Portfolio",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Outreach",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Your Eye",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "The Engine · 6 people driftingKarin Lind",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Everyone",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Clients",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  },
+  {
+    "tag": "BUTTON",
+    "role": null,
+    "text": "Crew",
+    "outline": "solid",
+    "hasVisibleFocus": true
+  }
+]
