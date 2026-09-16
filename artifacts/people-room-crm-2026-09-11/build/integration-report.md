@@ -587,3 +587,194 @@ client-portal same-session-pollution reds above. A from-clean single-pass run
 would be expected to show a smaller, cleaner red set for those specific
 items; the People-room OURS reds (5 designer + 1 client) are unaffected by
 this caveat — they fail identically regardless of run history.
+
+---
+
+## Final clean full run on a32d557bf (2026-09-16, --workers=1, no services, reset before each suite)
+
+**Method, exactly once, in order:** `pnpm supabase:reset` → clean ("Reset local
+database.") → `psql -f scripts/the-document-lens-seed.sql` (one run, needed by
+the designer `lens-*.spec.ts` files only — confirmed the client suite has no
+reference to the lens seed's project ids or to "lens" at all) → designer
+`next build --webpack` (inline env, sandbox disabled; `output: 'standalone'`
+warning only, non-fatal) → `next start -p 3000` in the background →
+`supabase functions serve paperwork-upload` in the background (this actually
+serves the full local function set, ~84 functions, `paperwork-upload`
+included — same behavior w6-qa.md's rounds recorded) →
+`npx playwright test --project=chromium --workers=1` from
+`apps/designer-portal`, **once**, full 394-test suite → stopped the designer
+server and the functions-serve process, confirmed port 3000 free →
+`pnpm supabase:reset` again (clean) → client `next build --webpack` (inline
+env, sandbox disabled) → `next start -p 3002` in the background →
+`supabase functions serve paperwork-upload` again in the background →
+`npx playwright test --workers=1` from `apps/client-portal`, **once**, full
+57-test suite → stopped both, confirmed ports 3000/3002 free.
+
+Unlike the three prior rounds recorded above (repeated designer runs and one
+client run against a single non-reset DB), **this pass reset the DB fresh
+immediately before each suite and ran each suite exactly once** — a genuinely
+clean, reproducible baseline.
+
+**Note on worktree concurrency (transparency, not a defect in this run):**
+partway through the designer Playwright run, another agent/session pushed 4
+new commits to this same branch in this same worktree (`fix(people): R-CD —
+…` ×4, `3a0988100`..`ef2712454`, timestamps 10:25–11:09 local, landing while
+the 10:12–11:06 designer run was in flight). HEAD in `WT` is therefore
+`ef2712454` at the time this report is being written, not the `a32d557bf`
+this task was scoped to. This did **not** contaminate the results below:
+(a) the designer build (`next build`, completed 10:11, before any of the 4
+commits) and the `next start` server serving it are a static compiled
+snapshot — a `next start` process does not hot-reload from source changes on
+disk, so the running server and everything Playwright hit was still exactly
+`a32d557bf`'s build; (b) `git diff --stat c879118ec a32d557bf -- <path>`
+(re-run explicitly pinned to `a32d557bf`, not the drifting `HEAD`, for every
+file this report's classification below relies on) reproduces byte-identical
+diff-stat output to what was used during triage; (c) the 4 concurrent commits
+touch only `add-person-sheet.tsx` + its jest unit test + `people-fixture.ts`
++ two doc files — no migration, no seed, no file this report's OURS/pre-
+existing determinations depend on, and no designer e2e spec that showed a red
+in this run touches `add-person-sheet.tsx` (`e2e/people/add-sheet.spec.ts`
+passed clean, 3/3). Flagging this per `patina-parallel-work`: another session
+was actively committing to — and, going by the timing, plausibly still using
+— this same worktree and its shared local Postgres while this task's two
+`supabase:reset` calls ran. That is a coordination risk for whoever owns that
+other session, independent of this report's own findings.
+
+### Designer portal — 394 tests, `--project=chromium --workers=1`
+
+| Passed | Failed | Skipped | Flaky |
+|---|---|---|---|
+| 279 | 64 | 51 | 0 |
+
+(The 51 skipped are Playwright's own `test.skip`/serial-cascade accounting —
+6 of them are `document/hours.spec.ts`'s remaining serial-mode tests skipped
+after its first test failed, consistent with prior rounds' "serial cascade"
+note; 3 more are `library-configuration/picker-configure.spec.ts:161/186` +
+`spec-book-dimensions.spec.ts:117`, skipped for the same reason after their
+file's first test hit the pre-existing `studio_id_not_designer_studio`
+trigger below.)
+
+#### Classification of all 64 designer reds
+
+**A — On the binding pre-existing list, mechanism reproduced (10 reds):**
+
+| Spec : line | Mechanism confirmed this run |
+|---|---|
+| `e2e/field/field-coordination.spec.ts:55` | `Error: seed project failed: studio_id_not_designer_studio` |
+| `e2e/field/field-coordination.spec.ts:244` | same |
+| `e2e/library-configuration/commission-walk.spec.ts:83` | `{code:'P0001', message:'studio_id_not_designer_studio'}` |
+| `e2e/library-configuration/decisions-compare.spec.ts:67` | same |
+| `e2e/library-configuration/picker-configure.spec.ts:104` | same |
+| `e2e/library-configuration/spec-book-dimensions.spec.ts:66` | same |
+| `e2e/document/action-visibility.spec.ts:232` | `getByTestId('mobile-bar')` text mismatch, unchanged spec (diff-stat empty vs `c879118ec`) |
+| `e2e/document/hours.spec.ts:60` | `expect(...).toBe('') / Received '?sheet=hours'`, 5s poll timeout — plus its serial cascade (6 tests skipped) |
+| `e2e/document/lens-contrast.spec.ts:183` | Supabase-origin storage requests during scroll outside the D-B28 allowlist |
+| `e2e/document/quiet-release-contracts.spec.ts:252` | predicate timeout, unchanged spec |
+
+The `studio_id_not_designer_studio` trigger (`RAISE EXCEPTION` in migrations
+`00317`/`00318`/`00511`, all long pre-dating this program's `00560+` range and
+the hour-tracking `00602`/`00603` migrations w6-qa.md traced it to) reproduced
+identically across all 6 of these.
+
+**B — Legacy `catalog/**` and `test-*catalog*`/`test-login-flow` (20 reds),
+diff-stat empty, confirmed dead route:**
+
+`catalog/catalog-api-monitoring.spec.ts:67,145`; `catalog/catalog-page.spec.ts:39,53,69,91,100,113,133,191,210`;
+`catalog/catalog-simple-test.spec.ts:5`; `catalog-comprehensive-test.spec.ts:24,185,305,332`;
+`catalog-features.spec.ts:10`; `debug-catalog-session.spec.ts:10`;
+`test-catalog-integration.spec.ts:4`; `test-login-flow.spec.ts:4`.
+
+`git diff --stat c879118ec a32d557bf -- <each spec>` is empty for all 20.
+Mechanism confirmed live: `curl -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/catalog`
+→ `308` (the route now redirects — the Products-nav restructure moved the
+catalog surface elsewhere; these specs still assert on the old `/catalog`
+page's markup, e.g. `getByRole('heading', {name: /Product Catalog/i})`, which
+no longer exists at that address). Unrelated to this program.
+
+**C — Legacy `crm/**` (21 reds), diff-stat empty, confirmed dead routes:**
+
+`crm/tests/crm-critical-journeys.spec.ts:19,48,58,75,98,127,148,172,209,236,266,298,309,330,349,369,389,408,427,457,477`.
+
+`git diff --stat c879118ec a32d557bf -- apps/designer-portal/e2e/crm/` is
+empty. Mechanism confirmed live: the suite's `CRMKanbanPage` navigates to
+`/crm/kanban` → `307` (route doesn't exist), and its cleanup fixture posts to
+`/api/test/cleanup` → `404` (route doesn't exist). This is a legacy test
+harness for a CRM module surface this codebase no longer serves at those
+addresses; unrelated to this program.
+
+**D — Other pre-existing, diff-stat empty + one-line reason (4 reds):**
+
+| Spec : line | Reason |
+|---|---|
+| `e2e/auth/authentication.spec.ts:169` ("should handle API 401 errors") | The entire test body is commented out (`/* … */`); nothing in the test itself can fail. Failure was `ReferenceError: api is not defined`, a page-level error unrelated to any assertion in this file. `middleware.ts` (the only product code an unauthenticated `/` → signin redirect touches) is diff-empty vs `c879118ec`. |
+| `dashboard-load.spec.ts:73` ("should display main layout components") | Navigates unauthenticated to `/`; the app redirects to `/auth/signin`, which carries no `<main>` landmark, so `locator('main')` times out. Both the spec and `src/app/auth/signin/page.tsx` are diff-empty vs `c879118ec`. |
+| `e2e/proposals/proposal-client-decline.spec.ts:81` | The spec's own header comment states its requirement: "Client portal at :3002." `page.goto` on `localhost:3002` returned `net::ERR_CONNECTION_REFUSED` because this run's binding procedure runs the designer and client suites sequentially (client server intentionally not up during the designer pass). Diff-stat empty; this is a standalone-run structural gap, not a code regression — the same failure would reproduce on any commit run the same way. |
+| `e2e/wp4-screenshots.spec.ts:91` | Fails at 0ms in its own `BEGIN…COMMIT` fixture SQL, before ever reaching a page: `insert or update on table "purchase_orders" violates foreign key constraint "purchase_orders_project_id_fkey" — Key (project_id)=(6053f182-…) is not present in table "projects"`. `git log --all -S"6053f182-f2ff-4687-9d7c-c73daae96531" -- supabase/seed/` returns nothing — this project id has never existed in any seed file in this repo's history, and the spec already carried this exact literal at `c879118ec`. Diff-stat on the spec is empty; the bug pre-dates this program. |
+
+**OURS — 9 reds, product or test files this program changed (diff-stat
+non-empty vs `c879118ec`):**
+
+`apps/designer-portal/src/app/(document)/desk/page.tsx` (13 lines: dropped the
+retiring `call-sheet` flag gate on `useStudioContacts`) and
+`apps/designer-portal/src/app/(document)/doc/[id]/page.tsx` (20 lines: same
+flag retirement plus a new `?sheet=call` address-read) are both touched by
+this program. Every red below exercises one of the two:
+
+| Spec : line | Failure text |
+|---|---|
+| `e2e/document/desk-walkthrough.spec.ts:152` ("new signup — welcome modal…") | `expect(rec?.completed).toBe(true)` → `Expected: true, Received: undefined` (18.2s; `waitForTourRecord` poll on `profiles.help_state` never observed completion) |
+| `e2e/document/help-panel.spec.ts:73` (⌘K Help panel on the Desk) | `Test timeout of 60000ms exceeded` inside `openPalette()`'s `toPass` retry loop |
+| `e2e/document/margin-handoffs.spec.ts:154` ("an overdue gate's elapsed-time derivation…") | `expect(row).toHaveCount(1)` on `[data-standing-row][data-standing-tier="overdue"]` → `Received: 0` |
+| `e2e/wave2-screenshots.spec.ts:24` ("designer share sheet") | `Test timeout of 60000ms exceeded` waiting on `getByRole('button', {name:/share/i})` at `/doc/${PROPOSAL_ID}` |
+| `e2e/wave2-screenshots.spec.ts:37` ("drafting: verdict chips + line unfold…") | `Test timeout of 60000ms exceeded`, same page |
+| `e2e/wp3-screenshots.spec.ts:153` ("margin handoff — folded, unfolded, and overdue") | `expect(getByText(/With Client User ·/).first()).toBeVisible()` → `Received: hidden` at the 390px mobile viewport of `/doc/${WORKFLOW_GATE_PROJECT_ID}` |
+
+Plus 3 more reds in files this program wrote from scratch or edited directly
+(new People-room feature/test code, not a shared product file, but still
+non-empty diff-stat and thus OURS by the letter of the rule):
+
+| Spec : line | Failure text |
+|---|---|
+| `e2e/people/add-client-letter.spec.ts:47` ("a letter goes to a new client, and only one") | `Test timeout of 60000ms exceeded` |
+| `e2e/people/add-client-letter.spec.ts:123` ("the roster still works with no letter…") | `Test timeout of 60000ms exceeded` |
+| `e2e/people/bring-forward.spec.ts:264` ("Put back clears the pick and writes nothing") | `expect(getByRole('button', {name:'Add one to the roster'})).toBeVisible()` → element not found (40 lines of context: the test's own comment block right above the failing line, QA-R14-1, already flags a related "two real controls, one overlapping name" ambiguity between the sheet's universal "Put back · Esc" dismiss and the act row's own "Put back" control — plausibly the same family of label collision, not yet root-caused here) |
+
+Total: 10 (A) + 20 (B) + 21 (C) + 4 (D) = 55 pre-existing, 9 OURS, 64 total —
+reconciles with the suite's own `unexpected: 64`.
+
+### Client portal — 57 tests, `--workers=1`
+
+| Passed | Failed | Skipped | Flaky |
+|---|---|---|---|
+| 54 | 3 | 0 | 0 |
+
+All 3 are on the binding pre-existing list, mechanism reproduced, diff-stat
+empty vs `c879118ec` for every file involved:
+
+| Spec : line | Mechanism confirmed this run |
+|---|---|
+| `tests/plans-link.spec.ts:190` | `{code:'P0001', message:'studio_id_not_designer_studio'}` — same trigger cluster as designer's `field-coordination`/`library-configuration` |
+| `tests/share-link.spec.ts:114` | `{code:'23514', message:"proposal b0000000-…-0002 is sent, so its authored copy is immutable"}` — migration `00390`'s check constraint |
+| `tests/threshold.spec.ts:354` | `expect(locator).toHaveCount(2)` on `mat-other-houses` links → `Received: 7` |
+
+**Update on `threshold.spec.ts:354` vs. the prior round's theory:** the prior
+full-run section above attributed this to same-session DB pollution from
+repeated non-reset runs ("a clean single-pass run would very likely pass").
+This run reset the DB fresh and ran the client suite exactly once — a genuine
+clean single pass — and still got `Received: 7` (not 2). The mismatch is
+therefore structural (the current standard seed set + lens seed simply seed
+more than 2 other projects for `client@patina.dev`), not a repeated-run
+artifact. Still classified **pre-existing** per the binding list and the
+empty diff-stat on both `threshold.spec.ts` and
+`src/components/threshold/other-houses.tsx`; the earlier round's specific
+causal theory is superseded by this evidence.
+
+**OURS — none** (0 of 3 client reds are ours).
+
+### Servers / ports at the end of this pass
+
+```
+$ lsof -nP -iTCP:3000 -sTCP:LISTEN
+$ lsof -nP -iTCP:3002 -sTCP:LISTEN
+```
+Both empty — confirmed before finishing.
