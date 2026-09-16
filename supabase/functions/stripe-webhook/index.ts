@@ -98,7 +98,7 @@ import {
   clientProjectDeepLink,
   clientProjectLink,
 } from '../_shared/client-portal-links.ts';
-import { ensureInvoiceLinkUrl } from '../_shared/invoice-links.ts';
+import { ensureInvoiceLinkUrl, letterFallbackUrl } from '../_shared/invoice-links.ts';
 // Direct-order settle side effects (00540 / W5): the earnings credit + project
 // notice, and the intake enqueue that gives the client a "where is it".
 import {
@@ -464,11 +464,13 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     // The in-app inbox row below keeps its `/invoices/<id>` deep_link because
     // it routes the iOS inbox by id (I2): the emailed link and the inbox link
     // for the same event land on different surfaces on purpose — do not
-    // "fix" it. `/invoices/<id>` remains the fallback only when no link can be
-    // ensured (draft, void, or an RPC failure).
+    // "fix" it. The FALLBACK, for when no link can be ensured (draft, void, an
+    // RPC failure), is `letterFallbackUrl`'s `/?invoice=<id>` letterbox form:
+    // the client portal has no `/invoices/<id>` page for a browser to open
+    // (W4 r6 MAJOR-1), whatever the iOS applink claims about the same path.
     const portalUrl =
       (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
-      `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
+      letterFallbackUrl(CLIENT_PORTAL_URL, invoice.id);
     // Two amounts, deliberately: the client is told what their card/bank was
     // actually charged (balance + rail fee), the designer is told what landed
     // on the invoice (net). A legacy payment has no fee and the two coincide.
@@ -567,11 +569,11 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
     const projectName = invoiceSubjectName(invoice, null);
     const deskName = invoiceDeskName(invoice);
     const designerName = designerDisplayName(invoice);
-    // /pay/<token> (00574), with today's `/invoices/<id>` as the fallback —
-    // see the receipt letter above for the ruling this records.
+    // /pay/<token> (00574), with the `/?invoice=<id>` letterbox form as the
+    // fallback — see the receipt letter above for the ruling this records.
     const portalUrl =
       (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
-      `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
+      letterFallbackUrl(CLIENT_PORTAL_URL, invoice.id);
     const amountLabel = formatInvoiceCurrency(row.amount_cents, invoice.currency);
 
     const recipient = await resolveRecipient(admin, invoice);

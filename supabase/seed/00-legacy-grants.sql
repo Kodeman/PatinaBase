@@ -17157,6 +17157,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.expire_stale_invoice_checkout_attempts(interval) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.expire_stale_invoice_checkout_attempts(interval) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00637_paperwork_upload_door.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.compliance_state(uuid) FROM PUBLIC, anon;

@@ -36,8 +36,11 @@
 --    token to return. The folio's copy-the-address act is therefore fed by
 --    regenerate_invoice_link, which mints and returns one; the hook already
 --    writes that answer straight into its cache. A folio opened on an invoice
---    it has not just regenerated shows its existing "no link yet — resend the
---    invoice" copy, which is now the literal truth.
+--    it has not just regenerated therefore has no address to show, and says
+--    so in those words — "Patina cannot show you its address again" — rather
+--    than "no link yet", which would be false about an invoice whose link the
+--    send itself minted (W4 r6 M-1). status and expires_at ride back for
+--    exactly that sentence.
 --  · resolve_invoice_return_nonce ROTATES. The Stripe return trades a nonce
 --    for an address, and there is no stored address left to trade. It mints a
 --    fresh token ON THE SAME LINK ROW the attempt was claimed against — the
@@ -45,6 +48,16 @@
 --    nonce is not an alias for a regenerated token") still holds: it is the
 --    same grant, re-addressed for the holder who just proved they came back
 --    from Checkout. The function is VOLATILE now, not STABLE.
+--  · THE MINT GUARD HAS A SWEEP BEHIND IT (§6). ensure_invoice_link refuses
+--    to rotate while a Checkout attempt is claimed / session_created /
+--    processing; a `processing` row is ACH money in flight, which 00574's
+--    hourly sweep never touches, so a lost Stripe result would hold that
+--    refusal open on an invoice forever. expire_stale_invoice_checkout_
+--    attempts is re-headed here to close processing attempts older than 10
+--    days — beyond any honest ACH window — on the same entry, at the same
+--    hour, with the same signature (R-BY). The letters do not take the
+--    fallback address while the guard stands: they hold (invoice-reminders,
+--    invoice-send).
 --    KNOWN HAZARD: two GETs of /pay/return/<nonce> rotate twice and the first
 --    redirect's address is then dead. The route is a 303 with
 --    Cache-Control: private, no-store and is fetched once by the returning
@@ -65,6 +78,10 @@
 --                                     verbatim, one predicate changed)
 --   invoice_link_token_hash           NEW
 --   invoice_link_is_live              NEW
+--   expire_stale_invoice_checkout_attempts
+--                                     00574 → this file (00574's body verbatim
+--                                     except the candidate set, the re-judge,
+--                                     and the two reason strings; §6)
 --
 -- Adds GRANT/REVOKE → regenerate seed/00-legacy-grants.sql after this
 -- migration (python3 scripts/generate-legacy-grants.py).
@@ -123,12 +140,30 @@ UPDATE public.invoice_links
        END
  WHERE expires_at IS NULL;
 
+-- THE COLUMN IS WIDENED BEFORE IT IS EMPTIED, NEVER AFTER (W4 r6 BLOCKING-1).
+-- 00574:73 declared `token text NOT NULL`. Nulling the column while that
+-- constraint still stands raises 23502 (not_null_violation) on the first row,
+-- rolls this whole migration back, and takes 00637/00638 with it. It is invisible on a local
+-- box however many times the gate is re-run — `supabase db reset` replays
+-- migrations BEFORE seeds, so invoice_links is empty here and the UPDATE
+-- touches 0 rows — and fatal on Strata, which holds one row per issued
+-- invoice (22 at the 00574 ceremony, one more per invoice since). Nothing
+-- below depends on the old order: token_hash is written at :106 and
+-- expires_at backfilled at :119, both before the plaintext goes.
+-- W7 PREFLIGHT, because a green reset is exactly what this defect produces:
+-- before `supabase db push`, assert `select count(*) from public.invoice_links`
+-- is > 0 on Strata and dry-run this section inside a transaction that is
+-- rolled back. An empty table proves nothing about these three statements.
+-- The order is held by supabase/tests/people/w4_invoice_link_freeze_order_test.sql,
+-- which replays this section on a probe table that HAS a row, with the old
+-- order as its negative control (R-BX).
+ALTER TABLE public.invoice_links ALTER COLUMN token DROP NOT NULL;
+ALTER TABLE public.invoice_links DROP CONSTRAINT IF EXISTS chk_invoice_links_token;
+
 -- The plaintext goes. Nothing reads it after this statement; the CHECK below
 -- is what keeps it gone.
 UPDATE public.invoice_links SET token = NULL WHERE token IS NOT NULL;
 
-ALTER TABLE public.invoice_links ALTER COLUMN token DROP NOT NULL;
-ALTER TABLE public.invoice_links DROP CONSTRAINT IF EXISTS chk_invoice_links_token;
 ALTER TABLE public.invoice_links
   DROP CONSTRAINT IF EXISTS chk_invoice_links_token_frozen;
 ALTER TABLE public.invoice_links
@@ -222,7 +257,11 @@ BEGIN
   -- under it would kill the payer's own page mid-payment, which is exactly
   -- what regenerate_invoice_link refuses (M11). The live link keeps answering;
   -- this letter has no fresh address to carry and its caller falls back to the
-  -- signed-in /invoices/<id> form (M7).
+  -- signed-in /?invoice=<id> letterbox (M7, letterFallbackUrl) — NOT
+  -- /invoices/<id>, which the client portal has no page for (W4 r6 MAJOR-1).
+  -- The automated dunning letter does not take that fallback at all: an
+  -- invoice with an attempt in these three states is held out of the
+  -- invoice-reminders scan, because an invoice being paid is not one to chase.
   IF EXISTS (
     SELECT 1 FROM invoice_checkout_attempts
     WHERE invoice_id = p_invoice_id
@@ -903,3 +942,200 @@ GRANT EXECUTE ON FUNCTION
   public.regenerate_invoice_link(uuid),
   public.get_invoice_link(uuid)
 TO authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 6. The sweep — a stuck ACH row must not hold the new guard open forever
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- ensure_invoice_link (§3) now refuses to rotate while a Checkout attempt is
+-- claimed / session_created / processing, because minting mid-payment would
+-- kill the address the payer is standing on. That guard is right and it has a
+-- cost: while it is held, a letter has no fresh address to carry (the callers
+-- hold the letter instead — invoice-reminders / invoice-send, W4 r6 MAJOR-1).
+--
+-- 00574's sweep closes claimed/session_created after 24h and NEVER touches
+-- processing — deliberately, because processing is ACH money in flight. But an
+-- ACH debit settles in 3–5 business days, and nothing else ever moves that row:
+-- a `processing` attempt whose Stripe result never arrives (a webhook lost
+-- before 00591's rail, a session Stripe abandoned) stays processing forever and
+-- holds the mint guard open on that invoice forever with it.
+--
+-- So processing gets a BACKSTOP, not a sweep: 10 days, beyond any honest ACH
+-- window, on the same hourly job. Nothing else changes — same signature, same
+-- 24h default for the two pre-bank states, same cron entry at 17 past
+-- (R-BY: the entry is untouched; only the body is re-headed).
+--
+-- A LATE SUCCESS IS STILL RECOVERABLE, which is why 10 days is safe: the sweep
+-- fails the pending invoice_payments row, and settle_invoice_checkout_payment
+-- (00428:687) updates `WHERE status IN ('pending','failed')` — it short-circuits
+-- only on succeeded/requires_refund/refunded. A Stripe result arriving on day
+-- 12 still lands the money on the invoice; the swept row is not a grave.
+--
+-- Lineage: expire_stale_invoice_checkout_attempts 00574 → this file. 00574's
+-- body verbatim except the candidate set, the re-judge, and the two reason
+-- strings.
+
+CREATE OR REPLACE FUNCTION public.expire_stale_invoice_checkout_attempts(
+  p_stale interval DEFAULT '24 hours'
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  -- Not a parameter: the cron entry calls this with no arguments, and a second
+  -- defaulted argument would make that call ambiguous between two overloads.
+  v_processing_stale  CONSTANT interval := '10 days';
+  v_run_id            bigint;
+  v_expired           int := 0;
+  v_processing_closed int := 0;
+  v_payments_failed   int := 0;
+  v_pointers_cleared  int := 0;
+  v_count             int;
+  v_candidate         record;
+  v_attempt           public.invoice_checkout_attempts%ROWTYPE;
+  v_is_processing     boolean;
+  v_detail            jsonb;
+BEGIN
+  IF NOT pg_try_advisory_xact_lock(hashtext('job:invoice-checkout-attempts-expire')) THEN
+    INSERT INTO public.job_runs (job_name, status, finished_at)
+    VALUES ('invoice-checkout-attempts-expire', 'skipped', now());
+    RETURN jsonb_build_object('skipped', true);
+  END IF;
+
+  PERFORM set_config('app.actor', 'job:invoice-checkout-attempts-expire', true);
+
+  INSERT INTO public.job_runs (job_name, status)
+  VALUES ('invoice-checkout-attempts-expire', 'running')
+  RETURNING id INTO v_run_id;
+
+  BEGIN
+    FOR v_candidate IN
+      SELECT a.id, a.invoice_id
+      FROM public.invoice_checkout_attempts a
+      WHERE (a.state IN ('claimed','session_created') AND a.created_at < now() - p_stale)
+         OR (a.state = 'processing' AND a.created_at < now() - v_processing_stale)
+      ORDER BY a.created_at
+    LOOP
+      -- Re-judge under the invoice lock: a claim may have advanced or
+      -- superseded the attempt since the candidate list was read — and an ACH
+      -- row may have settled between the read and this lock, which is exactly
+      -- the case this re-judge exists to refuse.
+      PERFORM 1 FROM public.invoices WHERE id = v_candidate.invoice_id FOR UPDATE;
+      SELECT * INTO v_attempt
+      FROM public.invoice_checkout_attempts
+      WHERE id = v_candidate.id
+      FOR UPDATE;
+      CONTINUE WHEN NOT FOUND;
+      v_is_processing := v_attempt.state = 'processing';
+      CONTINUE WHEN NOT (
+        (v_attempt.state IN ('claimed','session_created')
+           AND v_attempt.created_at < now() - p_stale)
+        OR (v_is_processing AND v_attempt.created_at < now() - v_processing_stale)
+      );
+
+      -- Payment first, attempt second — fail_invoice_checkout_attempt's
+      -- order: the 00397 sync trigger marks the attempt failed when its
+      -- payment fails, and the unconditional write below then names the
+      -- real reason.
+      UPDATE public.invoice_payments
+      SET status = 'failed',
+          note = concat_ws(
+            ' ', note,
+            CASE WHEN v_is_processing
+              THEN 'Expired: no result from the bank after 10 days.'
+              ELSE 'Expired: Checkout was abandoned.'
+            END
+          )
+      WHERE checkout_attempt_id = v_attempt.id
+        AND status = 'pending';
+      GET DIAGNOSTICS v_count = ROW_COUNT;
+      v_payments_failed := v_payments_failed + v_count;
+
+      UPDATE public.invoice_checkout_attempts
+      SET state = 'expired',
+          failure_reason = CASE WHEN v_is_processing
+            THEN 'stale_processing_attempt'
+            ELSE 'stale_checkout_attempt'
+          END,
+          finalized_at = coalesce(finalized_at, now())
+      WHERE id = v_attempt.id;
+      v_expired := v_expired + 1;
+      IF v_is_processing THEN
+        v_processing_closed := v_processing_closed + 1;
+      END IF;
+
+      UPDATE public.invoices
+      SET stripe_checkout_session_id = NULL, updated_at = now()
+      WHERE id = v_attempt.invoice_id
+        AND v_attempt.stripe_checkout_session_id IS NOT NULL
+        AND stripe_checkout_session_id = v_attempt.stripe_checkout_session_id;
+      GET DIAGNOSTICS v_count = ROW_COUNT;
+      v_pointers_cleared := v_pointers_cleared + v_count;
+    END LOOP;
+  EXCEPTION WHEN OTHERS THEN
+    -- No re-RAISE (00300 idiom): the failed row must persist as the
+    -- authoritative failure record; the guarded block's changes roll back to
+    -- its savepoint and every pass is idempotent.
+    UPDATE public.job_runs
+       SET status = 'failed', finished_at = now(), error = SQLERRM,
+           detail = jsonb_build_object(
+             'expired', v_expired,
+             'processing_closed', v_processing_closed,
+             'payments_failed', v_payments_failed,
+             'pointers_cleared', v_pointers_cleared
+           )
+     WHERE id = v_run_id;
+    RETURN jsonb_build_object(
+      'error', SQLERRM,
+      'expired', v_expired,
+      'processing_closed', v_processing_closed,
+      'payments_failed', v_payments_failed,
+      'pointers_cleared', v_pointers_cleared
+    );
+  END;
+
+  v_detail := jsonb_build_object(
+    'expired', v_expired,
+    'processing_closed', v_processing_closed,
+    'payments_failed', v_payments_failed,
+    'pointers_cleared', v_pointers_cleared
+  );
+
+  UPDATE public.job_runs
+     SET status = 'succeeded', finished_at = now(), detail = v_detail
+   WHERE id = v_run_id;
+
+  RETURN v_detail;
+END;
+$$;
+
+COMMENT ON FUNCTION public.expire_stale_invoice_checkout_attempts(interval) IS
+  'Hourly pg_cron sweep (00574 M3, re-headed 00636): claimed/session_created '
+  'Checkout attempts older than p_stale (24h) become expired, and — since '
+  '00636 — processing attempts older than 10 days do too, so a stuck ACH row '
+  'cannot hold ensure_invoice_link''s mint guard open forever (failure_reason '
+  'stale_processing_attempt). In both cases the pending payment row fails and '
+  'the invoice''s session pointer is cleared; a late Stripe success still '
+  'settles, because settle_invoice_checkout_payment accepts a failed row. One '
+  'job_runs row per invocation.';
+
+-- 00574's posture, restated — replacing a function keeps its ACL, and the seed
+-- generator replays TEXT.
+REVOKE ALL ON FUNCTION public.expire_stale_invoice_checkout_attempts(interval)
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.expire_stale_invoice_checkout_attempts(interval)
+  TO service_role;
+
+-- Registry comment carried forward from 00630 and corrected: the entry, its
+-- schedule and its SQL are untouched (R-BY) — only the sentence describing
+-- what the sweep closes, which 00630 still states as "never processing".
+-- The comment is documentation; a stack without pg_cron must not fail the
+-- migration over a sentence.
+DO $$ BEGIN
+  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the authoritative registry. Everyone on the Job (00630): compliance-document-expiry-sweep nightly at 06:00 UTC -> public.sweep_compliance_expiries(), writing one studio_compliance_notices row per (document, state, expires_on) as a gating compliance paper enters lapses_soon or lapses, plus one in_app notification_log row per owner/admin of the holding studio; history in job_runs. The Invoice, Standing Alone (00574): invoice-checkout-attempts-expire at 17 past every hour -> public.expire_stale_invoice_checkout_attempts(), expiring claimed/session_created Checkout attempts older than 24h and, since 00636, processing attempts older than 10 days so a stuck ACH row cannot hold ensure_invoice_link''s mint guard open forever, history in job_runs. The Decision, Delivered (00572): decision-reminders-hourly on the hour -> the decision-reminders edge function, replacing 00092''s decision-reminders-daily at 09:00 UTC so the per-recipient not-before-8am-local gate has an hour to release into; notification-digest-hourly at 20 past -> the notification-digest edge function, replacing 00278''s notification-digest-daily at 15:00 UTC for the same reason (the summary owes the same 8am-local, never-Sunday promise as the letter); client-push-window-release every 15 minutes -> public.release_due_client_pushes(200), dispatching push envelopes held outside 8am-8pm local; decision-first-notice-retry-sweep every 30 minutes -> public.sweep_decision_first_notices(100), re-inviting decision-first-notice for a published approval that never got its letter. Studio onboarding (00553): expire-stale-workspace-invites-daily at 07:40 UTC. Rendered Room v2 (00491): dispatch-scan-modal-sweep every 5 minutes. Rendered Room v2 (00501): expire-stale-upload-intents-daily at 07:15 UTC. Room View, Agent OS, BOH, Field Site Request, Mood Board, invoice/decision reminders, and earlier schedules are unchanged (see prior registry text / cron.job).'$C$;
+EXCEPTION
+  WHEN insufficient_privilege THEN NULL;
+  WHEN undefined_object THEN NULL;
+END $$;

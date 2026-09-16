@@ -4,6 +4,7 @@ import {
   INVOICE_LINK_TOKEN_PATTERN,
   invoiceLinkPath,
   invoiceLinkUrl,
+  letterFallbackUrl,
   letterPortalUrl,
 } from './invoice-links.ts';
 
@@ -93,8 +94,26 @@ Deno.test('invoice links: the letters address /pay/<token> when the link mints',
   assertEquals(calls, [{ name: 'ensure_invoice_link', args: { p_invoice_id: 'inv-1' } }]);
 });
 
-Deno.test('invoice links: the letters fall back to /invoices/<id>, never a broken address', async () => {
-  // A draft/void (null token), an RPC failure, and a throw all fall back (M7).
+Deno.test('invoice links: the fallback is a page the portal actually has (W4 r6 MAJOR-1)', () => {
+  // `/invoices/<id>` is not a route in apps/client-portal/src/app — only
+  // `/invoices/[invoiceId]/print` is — and the middleware neither rewrites nor
+  // exempts it, so that address was a sign-in bounce into not-found. The
+  // letterbox form is the one the Threshold reads (`useNamedInvoice`).
+  assertEquals(
+    letterFallbackUrl(CLIENT_PORTAL_URL, 'inv-1'),
+    'https://client.patina.cloud/?invoice=inv-1'
+  );
+  assertEquals(letterFallbackUrl('https://client.test/', 'inv-1'), 'https://client.test/?invoice=inv-1');
+  // An id is a uuid in production, but the query value is escaped regardless.
+  assertEquals(
+    letterFallbackUrl(CLIENT_PORTAL_URL, 'inv 1&x=2'),
+    'https://client.patina.cloud/?invoice=inv%201%26x%3D2'
+  );
+});
+
+Deno.test('invoice links: the letters fall back to the letterbox, never a broken address', async () => {
+  // A draft/void (null token), a Checkout standing on the address (00636's
+  // guard, also a null), an RPC failure, and a throw all fall back (M7).
   for (const result of [
     { data: null, error: null },
     { data: null, error: { message: 'boom' } } as const,
@@ -102,7 +121,7 @@ Deno.test('invoice links: the letters fall back to /invoices/<id>, never a broke
   ]) {
     assertEquals(
       await letterPortalUrl(rpcClient(result).client, CLIENT_PORTAL_URL, 'inv-1'),
-      'https://client.patina.cloud/invoices/inv-1'
+      'https://client.patina.cloud/?invoice=inv-1'
     );
   }
 });
@@ -110,6 +129,6 @@ Deno.test('invoice links: the letters fall back to /invoices/<id>, never a broke
 Deno.test('invoice links: the fallback normalizes a trailing slash on the base', async () => {
   assertEquals(
     await letterPortalUrl(rpcClient({ data: null, error: null }).client, 'https://client.test/', 'inv-1'),
-    'https://client.test/invoices/inv-1'
+    'https://client.test/?invoice=inv-1'
   );
 });

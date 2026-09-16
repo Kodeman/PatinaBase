@@ -43,6 +43,7 @@ import {
   useRecordPayment,
   useSendInvoice,
   useVoidInvoice,
+  invoiceLinkIsLive,
   useInvoiceLink,
   useRegenerateInvoiceLink,
   type CreateDraftInvoiceInput,
@@ -1014,10 +1015,39 @@ describe("useInvoiceLink", () => {
   });
 
   it("reads get_invoice_link and returns the link", async () => {
-    supabaseClient.rpc.mockResolvedValue({ data: { token: TOKEN, status: "active" }, error: null });
+    supabaseClient.rpc.mockResolvedValue({
+      data: { token: TOKEN, status: "active", expires_at: "2026-10-15T00:00:00.000Z" },
+      error: null,
+    });
     const config = useInvoiceLink("inv-1") as unknown as QueryConfig;
-    await expect(config.queryFn()).resolves.toEqual({ token: TOKEN, status: "active" });
+    await expect(config.queryFn()).resolves.toEqual({
+      token: TOKEN,
+      status: "active",
+      expiresAt: "2026-10-15T00:00:00.000Z",
+    });
     expect(supabaseClient.rpc).toHaveBeenCalledWith("get_invoice_link", { p_invoice_id: "inv-1" });
+  });
+
+  // W4 r6 M-1: the shape every real production row has — the link EXISTS and
+  // its address cannot be read back. A reader that folds this to null tells
+  // the designer the invoice has no link, which is how the folio's recovery
+  // band came to say "this invoice has no link yet" about a link the send had
+  // just minted.
+  it("keeps the row when the token is null, because that is the link's existence", async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { token: null, status: "active", expires_at: "2026-10-15T00:00:00.000Z" },
+      error: null,
+    });
+    await expect(
+      (useInvoiceLink("inv-1") as unknown as QueryConfig).queryFn(),
+    ).resolves.toEqual({ token: null, status: "active", expiresAt: "2026-10-15T00:00:00.000Z" });
+  });
+
+  it("answers null only when the invoice has no link at all", async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: null });
+    await expect(
+      (useInvoiceLink("inv-1") as unknown as QueryConfig).queryFn(),
+    ).resolves.toBeNull();
   });
 
   it("resolves null on a refusal rather than throwing into the global toast (F2)", async () => {
@@ -1033,10 +1063,16 @@ describe("useInvoiceLink", () => {
   });
 
   it("refuses a malformed token rather than handing one on (F4)", async () => {
+    // The row survives — a bad token is "no address to show", not "no link" —
+    // but the malformed value never reaches a clipboard or an href.
     for (const token of ["not-a-token", TOKEN.toUpperCase(), TOKEN.slice(1), 42, null]) {
       supabaseClient.rpc.mockResolvedValue({ data: { token, status: "active" }, error: null });
       const config = useInvoiceLink("inv-1") as unknown as QueryConfig;
-      await expect(config.queryFn()).resolves.toBeNull();
+      await expect(config.queryFn()).resolves.toEqual({
+        token: null,
+        status: "active",
+        expiresAt: null,
+      });
     }
   });
 
@@ -1049,7 +1085,41 @@ describe("useInvoiceLink", () => {
     supabaseClient.rpc.mockResolvedValue({ data: { token: TOKEN, status: "closed" }, error: null });
     await expect(
       (useInvoiceLink("inv-1") as unknown as QueryConfig).queryFn(),
-    ).resolves.toEqual({ token: TOKEN, status: "closed" });
+    ).resolves.toEqual({ token: TOKEN, status: "closed", expiresAt: null });
+  });
+});
+
+// W4 r6 M-1 — the question the recovery band asks: is there a live link,
+// whatever can or cannot be shown of it.
+describe("invoiceLinkIsLive", () => {
+  const NOW = new Date("2026-09-15T12:00:00.000Z");
+
+  it("reads status first, then the clock — resolve_invoice_link's own order", () => {
+    expect(invoiceLinkIsLive(null, NOW)).toBe(false);
+    expect(invoiceLinkIsLive(undefined, NOW)).toBe(false);
+    expect(
+      invoiceLinkIsLive({ token: null, status: "closed", expiresAt: null }, NOW),
+    ).toBe(false);
+    // The production shape: a link with no readable address is still live.
+    expect(
+      invoiceLinkIsLive(
+        { token: null, status: "active", expiresAt: "2026-10-15T00:00:00.000Z" },
+        NOW,
+      ),
+    ).toBe(true);
+    expect(
+      invoiceLinkIsLive(
+        { token: null, status: "active", expiresAt: "2026-09-14T00:00:00.000Z" },
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it("treats a missing or unreadable clock as live, never as expired", () => {
+    expect(invoiceLinkIsLive({ token: null, status: "active", expiresAt: null }, NOW)).toBe(true);
+    expect(
+      invoiceLinkIsLive({ token: null, status: "active", expiresAt: "not a date" }, NOW),
+    ).toBe(true);
   });
 });
 

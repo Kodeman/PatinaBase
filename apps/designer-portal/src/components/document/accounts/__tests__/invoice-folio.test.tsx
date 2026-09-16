@@ -25,7 +25,11 @@ const PAY_URL = `http://localhost:3002/pay/${LINK_TOKEN}`;
  * on every invoice in production. A test that wants an address mints one, the
  * way the folio does.
  */
-let mockInvoiceLink: { token: string; status: 'active' | 'closed' } | null = null;
+let mockInvoiceLink: {
+  token: string | null;
+  status: 'active' | 'closed';
+  expiresAt?: string | null;
+} | null = null;
 
 const invoice: Invoice = {
   id: 'invoice-1',
@@ -90,6 +94,18 @@ jest.mock('@patina/supabase', () => ({
   }),
   useVoidInvoice: () => ({ mutateAsync: mockVoid, isPending: false }),
   useInvoiceLink: () => ({ data: mockInvoiceLink }),
+  // The real rule, restated: status first, then the clock (packages/supabase
+  // use-invoices.ts `invoiceLinkIsLive`, covered by its own suite). The band
+  // asks THIS, not whether an address can be read — which is the whole of
+  // W4 r6 M-1.
+  invoiceLinkIsLive: (
+    link: { status?: string; expiresAt?: string | null } | null | undefined,
+  ) => {
+    if (!link || link.status !== 'active') return false;
+    if (!link.expiresAt) return true;
+    const expires = new Date(link.expiresAt).getTime();
+    return Number.isNaN(expires) ? true : expires > Date.now();
+  },
   useRegenerateInvoiceLink: () => ({
     mutateAsync: mockRegenerateLink,
     isPending: false,
@@ -638,6 +654,81 @@ describe('InvoiceFolio delivery recovery', () => {
     // Not the "no link yet" else-branch.
     expect(await screen.findByRole('link', { name: PAY_URL })).toBeInTheDocument();
     expect(screen.queryByText(/this invoice has no link yet/i)).not.toBeInTheDocument();
+  });
+
+  /* ── W4 r6 M-1: the band says which of three things is TRUE ────────────
+     The band mounts only from `doIssueAndSend`, and `invoice-send` mints a
+     link (via ensure_invoice_link) before it attempts the send — so on every
+     invoice this band can appear on, a link EXISTS. "This invoice has no link
+     yet" was false there, and it sent the designer to Regenerate, which kills
+     the address the household may already hold. These three cases pin the
+     sentence to the link's existence and its clock, never to whether the
+     address can be read back. */
+
+  const mountBandOnFailedSend = async () => {
+    mockIssue.mockImplementation(async () => ({
+      ...invoice,
+      status: 'sent',
+      invoice_number: 'INV-1063',
+    }));
+    mockSend.mockRejectedValue(new Error('provider unavailable'));
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+  };
+
+  it('tells the truth about a live link whose address cannot be shown again', async () => {
+    // The shape every production row has after 00636: the link is alive, the
+    // token is frozen NULL, so there is nothing to copy.
+    mockInvoiceLink = { token: null, status: 'active', expiresAt: '2099-01-01T00:00:00.000Z' };
+
+    await mountBandOnFailedSend();
+
+    expect(
+      await screen.findByText(/Patina cannot show you its address again/i),
+    ).toBeInTheDocument();
+    // The consequence of the act it recommends, said on the same surface as
+    // the act — the Regenerate panel already says the old link dies.
+    expect(screen.getByText(/the address already sent stops working/i)).toBeInTheDocument();
+    expect(screen.queryByText(/has no link yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/has no live link/i)).not.toBeInTheDocument();
+  });
+
+  it('says no live link only when there is none', async () => {
+    mockInvoiceLink = null;
+
+    await mountBandOnFailedSend();
+
+    expect(await screen.findByText(/this invoice has no live link/i)).toBeInTheDocument();
+    expect(screen.queryByText(/cannot show you its address again/i)).not.toBeInTheDocument();
+  });
+
+  it('names an expired link as expired rather than as a link that never existed', async () => {
+    mockInvoiceLink = { token: null, status: 'active', expiresAt: '2020-01-01T00:00:00.000Z' };
+
+    await mountBandOnFailedSend();
+
+    expect(await screen.findByText(/link has expired/i)).toBeInTheDocument();
+    expect(screen.queryByText(/has no live link/i)).not.toBeInTheDocument();
+  });
+
+  it('prints the shown-once sentence beside Copy link at the mint, and only there', async () => {
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1064' };
+    mockRegenerateLink.mockImplementation(async () => {
+      mockInvoiceLink = { token: LINK_TOKEN, status: 'active', expiresAt: null };
+      return mockInvoiceLink;
+    });
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    // Before the mint there is no address, so no promise about one.
+    expect(screen.queryByText(/This address is shown once/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the link' }));
+
+    expect(await screen.findByRole('button', { name: 'Copy link' })).toBeEnabled();
+    expect(screen.getByText(/This address is shown once\. Copy it now/i)).toBeInTheDocument();
   });
 
   /* ── F7: two copy sites, two statuses ─────────────────────────────────── */

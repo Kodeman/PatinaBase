@@ -287,12 +287,59 @@ Deno.serve(async (_req: Request) => {
   }
 
   const invoices = (data ?? []) as unknown as InvoiceRow[];
+
+  // AN INVOICE MID-PAYMENT IS NOT DUNNED (W4 r6 MAJOR-1).
+  //
+  // Since 00636 `ensure_invoice_link` answers NULL while a Checkout attempt is
+  // claimed / session_created / processing, rather than pulling the address out
+  // from under the payer. A reminder built on that NULL carries the fallback
+  // instead of a pay address — and `processing` is an ACH debit, which sits
+  // there for 3–5 business days and is never swept (that sweep must not fail
+  // money in flight). Holding the letter is the honest answer: someone who is
+  // paying this invoice right now is not someone to chase. They re-enter the
+  // scan the moment the attempt succeeds, fails or expires.
+  const heldInvoiceIds = new Set<string>();
+  for (let i = 0; i < invoices.length; i += 200) {
+    const ids = invoices.slice(i, i + 200).map((row) => row.id);
+    const { data: attempts, error: attemptsError } = await admin
+      .from('invoice_checkout_attempts')
+      .select('invoice_id')
+      .in('invoice_id', ids)
+      .in('state', ['claimed', 'session_created', 'processing']);
+    if (attemptsError) {
+      // Fail closed for the whole pass: an unread attempt table cannot tell us
+      // which invoices are mid-payment, and the cron comes back in an hour.
+      console.error('invoice-reminders: checkout-attempt scan failed', attemptsError);
+      return new Response(
+        JSON.stringify({ error: 'checkout_attempt_scan_failed' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    for (const row of (attempts ?? []) as { invoice_id: string }[]) {
+      heldInvoiceIds.add(row.invoice_id);
+    }
+  }
+
+  if (heldInvoiceIds.size > 0) {
+    // One line, naming why: these ids are not "skipped", they are being paid.
+    console.log(
+      'invoice-reminders: holding — mid-payment (checkout attempt claimed/session_created/processing)',
+      [...heldInvoiceIds].join(','),
+    );
+  }
+
   let sent = 0;
   let escalated = 0;
   let notDue = 0;
   let skipped = 0;
+  let heldMidPayment = 0;
 
   for (const invoice of invoices) {
+    if (heldInvoiceIds.has(invoice.id)) {
+      heldMidPayment++;
+      continue;
+    }
+
     const stage = invoice.reminder_count;
     const overdueDays = daysPastDue(invoice.due_date, now);
 
@@ -349,10 +396,13 @@ Deno.serve(async (_req: Request) => {
 
     // K1: the reminder carries the invoice's own address — `/pay/<token>`
     // opens for anyone holding it, signed in or not. A null (draft, void, or a
-    // failed mint) falls back to today's signed-in form rather than a broken
-    // address. The link is re-asked per letter and never cached, so a
-    // Regenerate is honored by the next reminder. metadata.deep_link below
-    // stays `/invoices/<id>`: it routes the iOS inbox by id (I2).
+    // failed mint) falls back to the signed-in `/?invoice=<id>` letterbox — a
+    // page that exists, which `/invoices/<id>` is not (W4 r6 MAJOR-1). The one
+    // null this scan would otherwise meet routinely, a Checkout standing on
+    // the address, is held above instead of written to. The link is re-asked
+    // per letter and never cached, so a Regenerate is honored by the next
+    // reminder. metadata.deep_link below stays `/invoices/<id>`: it routes the
+    // iOS inbox by id (I2).
     const portalUrl = await letterPortalUrl(admin, CLIENT_PORTAL_URL, invoice.id);
 
     const rendered = STAGE_BUILDERS[stage]({
@@ -478,7 +528,7 @@ Deno.serve(async (_req: Request) => {
   }
 
   return new Response(
-    JSON.stringify({ scanned: invoices.length, sent, escalated, notDue, skipped }),
+    JSON.stringify({ scanned: invoices.length, sent, escalated, notDue, skipped, heldMidPayment }),
     { headers: { 'Content-Type': 'application/json' } },
   );
 });

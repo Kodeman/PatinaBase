@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
+  invoiceLinkIsLive,
   useEmailDelivery,
   useInvoice,
   useInvoiceLink,
@@ -292,8 +293,14 @@ export function InvoiceFolio({
   // The invoice's own address — `/pay/<token>` opens for whoever holds it,
   // signed in or not (00574 · K1). The current origin preserves localhost →
   // :3002 routing when no env override is configured; production still uses
-  // the explicit portal var. Null until the invoice is issued and minted.
-  const clientInvoiceUrl = invoiceLink
+  // the explicit portal var.
+  //
+  // A TOKEN ONLY EVER ARRIVES FROM A MINT (00636): `get_invoice_link` answers
+  // `token: NULL`, so this is null on every folio the designer has not just
+  // regenerated on — including one whose link the send itself minted. Whether
+  // a link EXISTS is a separate question, and `linkExists`/`linkIsLive` below
+  // are what the recovery band asks (W4 r6 M-1).
+  const clientInvoiceUrl = invoiceLink?.token
     ? invoiceLinkUrl(
         resolveClientPortalOrigin(
           typeof window === 'undefined' ? undefined : window.location.origin,
@@ -301,6 +308,11 @@ export function InvoiceFolio({
         invoiceLink.token,
       )
     : null;
+  const linkIsLive = invoiceLinkIsLive(invoiceLink);
+  // An active row whose clock has run out. A `closed` row is a voided
+  // invoice's receipt link (K5), not an expiry, so it reads as no live link
+  // rather than as "expired".
+  const linkHasExpired = !linkIsLive && invoiceLink?.status === 'active';
 
   const copyClientInvoiceUrl = async (site: 'toolbar' | 'band') => {
     if (!clientInvoiceUrl) return;
@@ -720,6 +732,17 @@ export function InvoiceFolio({
           )}
         </DocumentActionGroup>
 
+        {/* THE ADDRESS IS SHOWN ONCE — the paperwork mint's own sentence
+            (`paperworkMintedSentence`), because this is the same bargain:
+            00636 stores only sha256, so the moment this folio closes nobody,
+            Patina included, can read the address back. It stands only while
+            there IS one, which is only after a mint. */}
+        {canShareLink && clientInvoiceUrl && (
+          <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+            This address is shown once. Copy it now — reopening this folio will not show it again.
+          </p>
+        )}
+
         {/* Quiet confirmation / R83 inline failure — at the act site. */}
         {note && (
           <p
@@ -779,9 +802,22 @@ export function InvoiceFolio({
                 )}
               </>
             ) : (
+              /* THE BAND SAYS WHICH OF THREE THINGS IS TRUE (W4 r6 M-1).
+                 It used to say "this invoice has no link yet" on every
+                 invoice it could ever appear on: the band is mounted from
+                 `doIssueAndSend`, and `invoice-send` mints a link before it
+                 attempts the send — so a link always existed, and the branch
+                 was taken only because 00636 leaves the ADDRESS unreadable.
+                 The sentence then sent the designer to Regenerate, whose own
+                 confirm panel says the old link dies — two contradicting
+                 statements about one record, one paragraph apart, with the
+                 household's emailed address the thing that pays for it. */
               <p className="text-[11px] text-[var(--color-charcoal)]">
-                Email did not reach the client, and this invoice has no link yet. Regenerate link,
-                above, mints one you can send them.
+                {linkIsLive
+                  ? 'Email did not reach the client. This invoice has a live link, but Patina cannot show you its address again — an address is shown once, at the mint. Regenerate link, above, mints a fresh one you can send them, and the address already sent stops working.'
+                  : linkHasExpired
+                    ? 'Email did not reach the client, and this invoice’s link has expired. Regenerate link, above, mints one you can send them.'
+                    : 'Email did not reach the client, and this invoice has no live link. Regenerate link, above, mints one you can send them.'}
               </p>
             )}
           </div>

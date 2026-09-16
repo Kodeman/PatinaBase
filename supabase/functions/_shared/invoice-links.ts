@@ -15,6 +15,10 @@
  * letter's address dies. A caller that only needs to know WHETHER a live link
  * exists must ask `hasLiveInvoiceLink` instead — minting one for a boolean
  * would revoke the address a payer is standing on.
+ *
+ * When there is no fresh address to carry, a letter falls back to
+ * `letterFallbackUrl` — the client portal's own `/?invoice=<id>` shape, NOT
+ * `/invoices/<id>`, which is not a page (W4 r6 MAJOR-1).
  */
 
 export const INVOICE_LINK_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
@@ -44,9 +48,10 @@ export interface InvoiceLinkRpcClient {
 /**
  * The invoice's live link as an absolute URL, minting one for an issued
  * invoice that somehow has none. `null` is the safety valve — for a draft, a
- * void, a missing invoice, or any failure — so a letter or a Checkout return
- * address falls back to today's `/invoices/<id>` form rather than shipping a
- * broken address (M7). Logs the invoice id, never the token.
+ * void, a missing invoice, a Checkout already standing on the address, or any
+ * failure — so a letter or a Checkout return address falls back to the
+ * letterbox form (`letterFallbackUrl`) rather than shipping a broken address
+ * (M7). Logs the invoice id, never the token.
  */
 export async function ensureInvoiceLinkUrl(
   admin: InvoiceLinkRpcClient,
@@ -74,11 +79,34 @@ export async function ensureInvoiceLinkUrl(
 }
 
 /**
+ * Where a letter points when it has no `/pay/<token>` to carry.
+ *
+ * `/invoices/<id>` IS NOT A PAGE (W4 r6 MAJOR-1). The client portal holds
+ * exactly one route under that prefix — `/invoices/[invoiceId]/print` — the
+ * middleware neither rewrites nor exempts the path, so a holder of that
+ * address was bounced to `/auth/signin?callbackUrl=/invoices/<id>` and then to
+ * not-found. Under 00574 the branch was effectively unreachable (a NULL meant
+ * draft/void/missing, and no letter is sent for those); 00636's
+ * Checkout-in-flight guard made NULL a routine answer, so the dead address
+ * became reachable for as long as an attempt stands.
+ *
+ * `/?invoice=<id>` is the shape that exists: the Threshold's letterbox folds
+ * to the named letter (`useNamedInvoice`), which is the move `door-gate.tsx`
+ * already took for the deposit offer (W4 r1 B-1). It is a signed-in surface —
+ * the account-less payer is served by holding the letter instead, which is why
+ * `invoice-reminders` no longer writes to an invoice mid-payment.
+ */
+export function letterFallbackUrl(baseUrl: string, invoiceId: string): string {
+  return `${baseUrl.replace(/\/$/, '')}/?invoice=${encodeURIComponent(invoiceId)}`;
+}
+
+/**
  * The address a LETTER puts in front of a client: the invoice's own
  * `/pay/<token>`, or — when there is no link to be had (a draft, a void, a
- * failed mint) — today's signed-in `/invoices/<id>` form. The fallback lives
- * here, beside the helper it guards, so both producers share one definition of
- * "never ship a broken address" (M7) and a test can exercise the real thing.
+ * Checkout standing on the current address, a failed mint) — the letterbox
+ * form above. The fallback lives here, beside the helper it guards, so both
+ * producers share one definition of "never ship a broken address" (M7) and a
+ * test can exercise the real thing.
  *
  * Asked per letter and never cached, so a Regenerate is honored by the next
  * send.
@@ -89,7 +117,7 @@ export async function letterPortalUrl(
   invoiceId: string
 ): Promise<string> {
   const link = await ensureInvoiceLinkUrl(admin, baseUrl, invoiceId);
-  return link ?? `${baseUrl.replace(/\/$/, '')}/invoices/${invoiceId}`;
+  return link ?? letterFallbackUrl(baseUrl, invoiceId);
 }
 
 /**
@@ -99,7 +127,7 @@ export async function letterPortalUrl(
  * whether a Checkout return may ride the `/pay/return/<nonce>` form. It used to
  * ask `ensureInvoiceLinkUrl`, which under 00636 would mint a token nobody would
  * ever read AND revoke the link the payer is mid-payment on. Failure answers
- * false, which keeps today's `/invoices/<id>` return address (M7).
+ * false, which keeps the driver's own non-token return address (M7).
  */
 export async function hasLiveInvoiceLink(
   admin: InvoiceLinkRpcClient,

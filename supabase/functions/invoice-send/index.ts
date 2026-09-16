@@ -8,6 +8,10 @@
 //   1. Auth: resolve the caller from the Authorization header.
 //   2. Prove can_manage_invoice through a caller-JWT Supabase client, then load
 //      the invoice (service role) + joins and require issued (not draft/void).
+//   2b. Hold the letter if a Checkout attempt is in flight (claimed /
+//      session_created / processing): 00636 will not mint a fresh address
+//      under a payer, and a letter with no address is not worth sending
+//      (409 checkout_in_flight, W4 r6 MAJOR-1).
 //   3. Resolve the recipient: invoice.client_id → project.client_id profile,
 //      falling back to designer_clients.client_email for not-yet-signed-up
 //      clients (mirrors decision-reminders).
@@ -205,6 +209,51 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // ── A letter is not sent into a payment in flight (W4 r6 MAJOR-1) ──────
+  //
+  // Since 00636, `ensure_invoice_link` refuses to rotate while a Checkout
+  // attempt is claimed / session_created / processing — minting would kill the
+  // address the payer is standing on. `letterPortalUrl` then falls back to the
+  // signed-in letterbox, which is no use to the account-less payer this rail
+  // exists for. So the letter HOLDS rather than shipping a second-best
+  // address: someone who is paying this invoice right now is not someone to
+  // write to. `processing` is an ACH debit; 00636 §6's sweep closes one that
+  // never resolves after 10 days, so this can never hold forever.
+  const { data: liveAttempt, error: liveAttemptError } = await admin
+    .from('invoice_checkout_attempts')
+    .select('id, state')
+    .eq('invoice_id', invoiceId)
+    .in('state', ['claimed', 'session_created', 'processing'])
+    .limit(1)
+    .maybeSingle();
+  if (liveAttemptError) {
+    // Fail closed: an unreadable attempt table cannot tell us the client is
+    // mid-payment, and sending anyway is the outcome this guard exists to stop.
+    console.error('invoice-send: checkout-attempt check failed', invoiceId, liveAttemptError);
+    return json(
+      {
+        error: 'checkout_attempt_check_failed',
+        detail: 'Patina could not check whether this invoice is being paid right now. Try again.',
+      },
+      503
+    );
+  }
+  if (liveAttempt) {
+    console.log(
+      'invoice-send: held — invoice is mid-payment',
+      invoiceId,
+      (liveAttempt as any).state
+    );
+    return json(
+      {
+        error: 'checkout_in_flight',
+        detail:
+          'the client is paying this invoice right now, so Patina held the letter rather than replace the address they are standing on. Send it once the payment lands or falls through.',
+      },
+      409
+    );
+  }
+
   // ── Resolve recipient ──────────────────────────────────────────────────
   // Prefer the signed-up client profile (enables suppression / preferences /
   // in-app inbox); fall back to designer_clients.client_email for clients who
@@ -259,8 +308,10 @@ Deno.serve(async (req: Request) => {
   const studioInvoice = !invoice.project_id;
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   // K1: the letter carries the invoice's own address — `/pay/<token>` opens
-  // for anyone holding it, signed in or not. A null (draft, void, or a failed
-  // mint) falls back to today's signed-in form rather than a broken address.
+  // for anyone holding it, signed in or not. A null (draft, void, a Checkout
+  // standing on the current address, or a failed mint) falls back to the
+  // signed-in `/?invoice=<id>` letterbox — a page that exists, which
+  // `/invoices/<id>` is not (W4 r6 MAJOR-1).
   // metadata.deep_link below stays `/invoices/<id>`: it routes the iOS inbox
   // by id (I2), so the emailed link and the in-app row land differently.
   const portalUrl = await letterPortalUrl(admin, CLIENT_PORTAL_URL, invoice.id);

@@ -1855,6 +1855,7 @@ export {
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
   useInvoiceLink,
+  invoiceLinkIsLive,
   useRegenerateInvoiceLink,
   RegenerateInvoiceLinkError,
   useVoidInvoice,
