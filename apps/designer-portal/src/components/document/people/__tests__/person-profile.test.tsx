@@ -707,6 +707,34 @@ describe("the Hours door on a teammate (HT-8)", () => {
     expect(screen.getByRole("button", { name: "Hours" })).toBeInTheDocument();
   });
 
+  /**
+   * R-CC amended 2026-09-16 (patina-merged-73, W6 QA F2 + review) — the
+   * door is withheld on an archived card, the same `archived_at` signal
+   * ArchiveCardDoor already reads.
+   */
+  it("is absent on an archived studio member with a linked account, viewer owner", () => {
+    viewerStudioRole = "owner";
+    personData.current = person({
+      person_id: "card-leah",
+      role: "contact",
+      display_name: "Leah Hartwell",
+      profile_id: "leah-auth-id",
+      meta: { entity_kind: "person", contact_kind: "studio" },
+    });
+    cardData.current = {
+      id: "card-leah",
+      is_sole_proprietor: false,
+      organization_id: "org-1",
+      warranty_until: null,
+      archived_at: "2026-09-15T00:00:00Z",
+    };
+    seatData.current = [];
+    renderCard({ personId: "card-leah", role: "contact" });
+    expect(
+      screen.queryByRole("button", { name: "Hours" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("is absent on a CARDED crew member with an account — 'contact' alone is not the studio", () => {
     viewerStudioRole = "owner";
     personData.current = person({ profile_id: "dana-auth-id" });

@@ -46,7 +46,7 @@ test.describe("the add sheet writes the studio’s book", () => {
       const project = page.getByLabel("Project");
       await project.selectOption({ index: 1 });
       await page.getByLabel("Full name").fill(name);
-      await page.getByLabel("Trade").selectOption("electrical");
+      await page.getByLabel("Trade", { exact: true }).selectOption("electrical");
       await page.getByLabel("Mobile").fill("(612) 555-0111");
       await page
         .getByLabel("How to reach them")

@@ -66,7 +66,7 @@ test.describe('Field Coordination · People Room add a sub', () => {
     // Project (required) + name + trade + phone.
     await page.getByLabel('Project').selectOption({ label: PROJECT_NAME });
     await page.getByLabel('Full name').fill('Sal Moretti (e2e)');
-    await page.getByLabel('Trade').selectOption('plumbing');
+    await page.getByLabel('Trade', { exact: true }).selectOption('plumbing');
     await page.getByLabel('Mobile').fill('555-123-9876');
 
     // CR3-10(a): the opt-in is NEVER preselected, and it is not what it was.

@@ -146,8 +146,10 @@ surfaced any defect beyond F2/F3.
 | F3 | Minor | `/desk`/`/people` console `Failed to fetch` bursts post-nav | Open — recommend re-run against Strata-backed local-prod to see if it's a local-timing artifact; not blocking |
 | F4 | Major | `getByLabel('Trade')` strict-mode collision (substring match, not an a11y-contract duplicate name) | **FIXED** (`c83e119c4`), re-verified round 2 — but see F4-new |
 | F4-new | Major | (surfaced only once F4's mask was removed) `person-card.spec.ts`'s `addSub()` hard-coded one phone number for every synthetic sub, colliding with the seed's own Frank Bauer and with itself; product phone-collision-merge behavior (intentional) then merged every submission onto that one contact | **FIXED** (`30e06ab9f`), re-verified round 3, 2/2 at `--workers=1` |
-| F5 | Minor | `pay-link.spec.ts:571` letterbox assertion, not fully root-caused | **Open**, no evidence of live-user impact found |
-| — | Minor, ours, open | `e2e/document/hours.spec.ts:60/72` (`?sheet=hours` query-scrub) — round 1's triage first read this as F2 evidence; round-1 fix-log investigation disproved that (it's the Desk doorway's own address cleanup, unrelated to the person card) and **left it unfixed and unre-triaged** | **Open**, ours, not part of F1–F5, owed a fresh root-cause pass |
+| F5 | Minor | `pay-link.spec.ts:571` letterbox assertion, not fully root-caused | **FIXED** at `0f29187f3` — a stale fixture, not a product bug: the `<a>` named "open the invoice" it looked for was renamed to the `Pay $X` button by `b287bac26` (2026-09-08, an ancestor of this branch's own base), so the assertion predates this program by a week. Retargeted to the `Pay $X` button (`role: 'button'`, matching `letterbox.test.tsx`'s own literal). See `w6-fix-log-r2.md` "W6 follow-up triage" Item B. |
+| F6 | Minor | `pay-link.spec.ts:470` ("the return hop 303s...") — flagged out-of-scope by `w6-fix-log-r2.md` Item B as a full-file due-diligence side finding: the return hop landed on `/pay/used` (the `spent` branch) instead of rotating, because the test never called `stamp_invoice_checkout_return_origin` before the hop | **FIXED in this commit** (`fix(people): pre-deploy minors`) — the test now stamps the return origin the same way the real driver does (`_shared/invoice-checkout-driver.ts`'s `startInvoiceCheckout`, same two arguments) before requesting `/pay/return/<nonce>`; the location assertion was also corrected to expect the ROTATED token 00636/R-BT mints on a successful return, not the original `minted.token`. `tests/pay-link.spec.ts` 7/7 chromium. |
+| F7 | Minor | `apps/client-portal/next.config.js`'s PWA `NetworkOnly` bearer-URL exclusion regex omitted `paperwork`, though `/paperwork/[token]` is a bearer-token guest route in the same family (named `F4` in `w6-qa.md` §4 round 1 — **not** this report's own `F4`, the Trade-locator finding; the two tables use independent numbering, see the disambiguation note below) | **FIXED in this commit** — `paperwork` added to the regex alongside `pay\|plans\|share\|rfq\|trade\|evidence\|field`; verified in the built `public/sw.js` after `pnpm build` with the inline local env. |
+| — | Minor, ours, reclassified | `e2e/document/hours.spec.ts:60/72` (`?sheet=hours` query-scrub) — round 1's triage first read this as F2 evidence; round-1 fix-log investigation disproved that (it's the Desk doorway's own address cleanup, unrelated to the person card) and left it unre-triaged at the time this report was first written | **Reclassified pre-existing, environment-flaky, NOT ours** by `w6-fix-log-r2.md` "W6 follow-up triage" Item A: the spec and the only product code on its path (`desk-doorway.tsx`) are byte-identical to `c879118ec`/`origin/main`; live instrumentation proved the doorway's effect and `router.replace('/desk')` fire correctly, but the RSC flight fetch behind the URL commit is aborted (`net::ERR_ABORTED`) alongside unrelated same-origin, Supabase and third-party requests in the same headless-Chromium run — a local browser/network-layer symptom, not a reachable app defect. Owed: a re-run against a non-sandboxed browser environment to see whether it reproduces there. |
 | — | Minor, ours, open, stress-test only | A `--repeat-each=2` parallel stress run of `person-card.spec.ts` (beyond round 3's requested single-worker scope) surfaced a *different* name-collision: `uniqueName()`'s millisecond-granularity suffix can coincide under true concurrent workers → `PGRST116` "multiple rows". No stray DB rows left behind (`removePerson()` cleanup held). Not filed as a tracked finding — outside scope, file's documented execution mode is `--workers=1` | **Not filed**, noted for the record |
 
 ## 7. Pre-existing reds (not gating this program) — with evidence
@@ -261,8 +263,9 @@ send-email importers at inventory.md's time or are captured via a different
   `./infra/deploy-portal.sh designer-portal`.
 - **client-portal** — required. Owns `apps/client-portal/**` changes
   (`/paperwork/[token]`, `/pay/return/[nonce]` hardening, PWA runtime-caching —
-  see F4 in `w6-qa.md`'s finding list re: the `paperwork` route missing from the
-  `NetworkOnly` bearer-URL exclusion regex). `./infra/deploy-portal.sh client-portal`.
+  see `w6-qa.md` §4's own `F4` re: the `paperwork` route missing from the
+  `NetworkOnly` bearer-URL exclusion regex, **now FIXED** — see this report's F7
+  above). `./infra/deploy-portal.sh client-portal`.
 - **edge-api** — **not required by this program's own scope.** The
   email-deliverability checklist (`email-deliverability-checklist.md`), the only
   document in this build folder that specifies a deploy chain in this level of
@@ -293,16 +296,30 @@ a token with create rights, then re-run
 
 ## 9. Summary — is this branch ready for W7?
 
-**Not yet, cleanly:**
-- Two open findings this program owns and hasn't closed: F3 (console fetch
-  errors, minor) and F5 (`pay-link.spec.ts:571`, minor, not root-caused), plus
-  the still-mis-triaged `hours.spec.ts:60/72` red.
+**Updated 2026-09-16 (patina-merged-73, pre-deploy minors commit).** Status
+since this report was first written:
+
+- **F5** (`pay-link.spec.ts:571`) — **FIXED at `0f29187f3`** (`w6-fix-log-r2.md`
+  Item B, stale fixture).
+- **F6** (`pay-link.spec.ts:470`, the return-hop test's missing
+  `stamp_invoice_checkout_return_origin` call, flagged out-of-scope by that
+  same pass) — **FIXED in this commit**.
+- **F7** (PWA `NetworkOnly` regex missing `paperwork`, `w6-qa.md` §4's own
+  `F4`) — **FIXED in this commit**.
+- `e2e/document/hours.spec.ts:60/72` — **reclassified pre-existing,
+  environment-flaky, not ours** (`w6-fix-log-r2.md` "W6 follow-up triage" Item
+  A); no longer an open finding this program owns.
+- **One open finding remains**: F3 (console `Failed to fetch` races on
+  `/desk`/`/people` in the local-prod build, minor) — still open, recommended
+  re-check against a Strata-backed local-prod build or prod itself.
 - The full 394-test designer e2e suite has not been re-run end-to-end since
-  the F1–F4/F4-new fixes landed — only the specific specs behind each finding
-  were re-verified in isolation.
+  the F1–F4/F4-new fixes (nor since F6/F7 above) landed — only the specific
+  specs behind each finding were re-verified in isolation. **A full re-run is
+  planned as a separate pass following this commit.**
 - All pre-existing reds (§7) are genuinely origin/main's, proven by diff and
   by baseline reproduction, and do not block this program.
 - Sanity push and iOS tester distribution are both external-input-blocked
   (token, Kody's manual ASC steps), not defects in this branch.
 
-No prod mutation of any kind occurred while producing this report.
+No prod mutation of any kind occurred while producing this report or this
+update.

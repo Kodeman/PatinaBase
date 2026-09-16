@@ -213,11 +213,18 @@ export function PersonProfile({
    * predicate the six Directory chips already use, and STUDIO_KINDS holds
    * both 'studio' (a card) and 'team' (an uncarded seat), so R-CC's literal
    * and the shipped view agree through one function.
+   *
+   * R-CC amended 2026-09-16 (patina-merged-73, W6 QA F2 + review): the door
+   * is also withheld on an archived card — the same `card.archived_at`
+   * signal ArchiveCardDoor already reads below — so a studio member whose
+   * card has been archived does not keep an open door into her own Hours
+   * scope.
    */
   const viewerSeesStudioMember =
     !!person &&
     directoryEntryKind(person) === "person" &&
-    directoryBandOf(person) === "studio";
+    directoryBandOf(person) === "studio" &&
+    !card?.archived_at;
   const [recordOpen, setRecordOpen] = useState(false);
   const now = useMemo(() => new Date(), []);
 
