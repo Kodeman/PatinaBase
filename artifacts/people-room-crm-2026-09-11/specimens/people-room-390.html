@@ -1255,7 +1255,7 @@
   function renderAdd() {
     const a = FIXTURE.addSheet;
     const sheet = addSheetFor(addKind);
-    let out = '<p class="t-head eyebrow">ADD · TO YOUR ROSTER</p>';
+    let out = '<p class="t-head eyebrow">ADD · ' + esc(sheet.kind.toUpperCase()) + '</p>';
     out += '<h2 class="t-d2">Bring someone in</h2>';
     out += '<p class="t-meta" style="margin-top:12px">' + esc(a.dateline) + '</p>';
     out += '<div class="narrows" data-narrow="add-kind" role="group" aria-label="What kind of person you are adding">';

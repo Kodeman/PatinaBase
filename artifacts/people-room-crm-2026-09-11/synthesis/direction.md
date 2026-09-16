@@ -152,8 +152,8 @@ Fixture names throughout. Specimen date 2026-10-20. State words are the four fam
 
 | Region | Content (fixture-named) | Control | State words | Source entity/field |
 |---|---|---|---|---|
-| Eyebrow + title | "ADD · TO YOUR ROSTER" / "Bring someone in" | none | none | n/a |
-| Kind switch | a client · a household member · a maker · a GC · a sub · an installer · a receiver · someone else | `role="group"`, `aria-pressed` | none | E5.party_kind (widened, CRM-10) |
+| Eyebrow + title | "ADD · {kind word}" (e.g. ADD · A HOUSEHOLD MEMBER) / "Bring someone in" | none | none | n/a |
+| Kind switch | a client · a household member · a maker · a GC · a sub · an installer · a receiver · someone else | `role="group"`, `aria-pressed`; rendered as .pick boxes, filled when pressed | none | E5.party_kind (widened, CRM-10) |
 | Project | "Okonkwo residence" | select | none | E5.project_id |
 | Identity | "Joe Wozniak" | field | none | E1.full_name |
 | Firm | "Cedar & Iron Framing" (create or match) | field + match list | none | E2, E4 |

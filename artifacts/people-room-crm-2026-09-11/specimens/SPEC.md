@@ -551,8 +551,8 @@ Every string below must appear on the face, spelled exactly. Every state word li
 
 | # | Must be visible |
 |---|---|
-| 1 | Eyebrow "ADD · TO YOUR ROSTER", title "Bring someone in", dateline "Add sheet, mid-flow, 13 October 2026" (dateline in the state bar only if the page has no room; otherwise under the title in `.t-meta`) |
-| 2 | Kind switch, `role="group"`, eight words: a client, a household member, a maker, a GC, a sub, an installer, a receiver, someone else. "a sub" pressed |
+| 1 | Eyebrow "ADD · A SUB", title "Bring someone in", dateline "Add sheet, mid-flow, 13 October 2026" (dateline in the state bar only if the page has no room; otherwise under the title in `.t-meta`) |
+| 2 | Kind switch, `role="group"`, eight words: a client, a household member, a maker, a GC, a sub, an installer, a receiver, someone else. "a sub" pressed. Rendered as .pick boxes (bordered; pressed = --rail ground, --ink text). |
 | 3 | Field "PROJECT" with the value "Okonkwo residence" |
 | 4 | Field "FULL NAME" with the value "Joe Wozniak" |
 | 5 | Field "COMPANY" with the value "Cedar & Iron Framing" |

@@ -1331,7 +1331,7 @@ function renderAdd() {
   const H = [];
   H.push('<div class="crm-card">');
 
-  H.push('<p class="t-head">ADD · TO YOUR ROSTER</p>');
+  H.push('<p class="t-head">ADD · ' + esc(a.kind.toUpperCase()) + '</p>');
   H.push('<h2 class="t-d2">Bring someone in</h2>');
   H.push('<p class="t-meta">' + esc(a.dateline) + '</p>');
 
