@@ -18,6 +18,10 @@ import {
   applyChannelStatus,
   channelStatusForEvent,
   type ChannelStatusClient,
+  isSuppressingStatus,
+  normalizeChannelAddress,
+  type ProfileSuppressionClient,
+  suppressProfilesForAddress,
 } from "./channel-status.ts";
 
 
@@ -479,10 +483,22 @@ export async function handleResendEvent(
 
 /**
  * Write the provider's verdict onto every typed email channel carrying the
- * address (CRM-12). The address is notification_log.recipient — what
- * sendCompliantEmail recorded it actually sent to (00591) — falling back to the
- * event's own `to`. Never throws: the log row for this event is already written
- * and a failure here must not make Resend retry the whole delivery.
+ * address (CRM-12), and — when the verdict kills the mailbox — onto every
+ * profile carrying it too (W4 r13 MAJOR-1). The address is
+ * notification_log.recipient — what sendCompliantEmail recorded it actually
+ * sent to (00591) — falling back to the event's own `to`.
+ *
+ * BOTH LEDGERS, FROM ONE EVENT. The bounce and complaint branches above write
+ * `profiles` only when the log row carries a `user_id`; the orphan branch has
+ * no log row to carry one. `campaign-dispatch` reads `profiles.email_suppressed`
+ * and never asks the channel gate, so a verdict that lands only on the channel
+ * row leaves that rail mailing a dead address. Writing by ADDRESS here covers
+ * every path this function has — the orphan branch, and a log row whose
+ * `user_id` is null (00591) — and is a harmless repeat of the by-id write when
+ * there is a user.
+ *
+ * Never throws: the log row for this event is already written and a failure
+ * here must not make Resend retry the whole delivery.
  */
 async function writeChannelStatus(
   supabase: SupabaseClient,
@@ -495,8 +511,10 @@ async function writeChannelStatus(
     isHardBounce(resolveBounceType(event.data) ?? undefined),
   );
   if (!status) return;
-  const address = (typeof recipient === "string" && recipient) ||
-    event.data.to?.[0] || null;
+  const address = normalizeChannelAddress(
+    (typeof recipient === "string" && recipient) ||
+      event.data.to?.[0] || null,
+  );
   try {
     await applyChannelStatus(
       supabase as unknown as ChannelStatusClient,
@@ -506,6 +524,19 @@ async function writeChannelStatus(
     );
   } catch (err) {
     console.warn("resend-webhook: channel status write threw", err);
+  }
+
+  // A soft bounce is not a verdict — 'bounced' is recorded and nothing is
+  // suppressed, exactly as one soft bounce does not suppress a profile.
+  if (!isSuppressingStatus(status)) return;
+  try {
+    await suppressProfilesForAddress(
+      supabase as unknown as ProfileSuppressionClient,
+      address,
+      now,
+    );
+  } catch (err) {
+    console.warn("resend-webhook: profile suppression threw", err);
   }
 }
 

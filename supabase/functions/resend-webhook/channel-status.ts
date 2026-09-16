@@ -80,7 +80,7 @@ export async function applyChannelStatus(
   status: ChannelStatus,
   now: string = new Date().toISOString(),
 ): Promise<number> {
-  const value = (address ?? "").trim().toLowerCase();
+  const value = normalizeChannelAddress(address);
   if (!value) return 0;
 
   const { data, error } = await supabase
@@ -110,4 +110,75 @@ export async function applyChannelStatus(
     return 0;
   }
   return ids.length;
+}
+
+/**
+ * The address as BOTH ledgers hold it. 00593 normalises an email channel's
+ * `value` to `lower(btrim(...))` on write, so the channel lookup and the
+ * profile mirror below must key on the same string or they part company on a
+ * mixed-case recipient.
+ */
+export function normalizeChannelAddress(
+  address: string | null | undefined,
+): string {
+  return (address ?? "").trim().toLowerCase();
+}
+
+/** The two verdicts that mean "no letter goes to this mailbox again". */
+export function isSuppressingStatus(status: ChannelStatus): boolean {
+  return status === "dead" || status === "unsubscribed";
+}
+
+/** The narrow client surface the profile mirror needs. */
+export interface ProfileSuppressionClient {
+  from(table: string): {
+    update(values: Record<string, unknown>): {
+      eq(col: string, val: unknown): PromiseLike<
+        { data: unknown; error: { message: string } | null }
+      >;
+    };
+  };
+}
+
+/**
+ * THE SECOND LEDGER (W4 r13 MAJOR-1).
+ *
+ * `campaign-dispatch` is the one branch of the email rail that never asks the
+ * channel gate: it posts straight to Resend's batch endpoint and picks its
+ * audience from `profiles` on a single column, `email_suppressed`. The bounce
+ * and complaint branches of this webhook keep the two ledgers in step only
+ * when the event carries a `notification_log` row WITH a `user_id` — and the
+ * orphan branch (a letter from po-send / quote-request-send / trade-rfq-send /
+ * trade-agreement-send that wrote no log row at all) reaches neither
+ * `handleBounce` nor the complaint suppression. So an address could be `dead`
+ * on every card in the channel ledger and still be mailed by the next
+ * campaign, which is the thing D-6 says must not happen.
+ *
+ * This is the symmetric move to r12 MAJOR-2, which made the unsubscribe click
+ * write both ledgers: a killing verdict on an address suppresses every profile
+ * carrying it, whatever told us.
+ *
+ * Best effort, like the channel write itself: the notification_log side of the
+ * same event is already recorded, and a failure here must not make Resend
+ * retry the whole delivery. `eq`, not `ilike` — a perfectly ordinary address
+ * carries `_` and `%`, and a wildcard read would suppress strangers.
+ */
+export async function suppressProfilesForAddress(
+  supabase: ProfileSuppressionClient,
+  address: string | null | undefined,
+  now: string = new Date().toISOString(),
+): Promise<boolean> {
+  const value = normalizeChannelAddress(address);
+  if (!value) return false;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ email_suppressed: true, email_suppressed_at: now })
+    .eq("email", value);
+
+  if (error) {
+    console.warn("resend-webhook: profile suppression failed", error.message);
+    return false;
+  }
+  return true;
 }

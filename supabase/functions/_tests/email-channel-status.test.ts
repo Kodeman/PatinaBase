@@ -25,6 +25,9 @@ import {
   applyChannelStatus,
   channelStatusForEvent,
   type ChannelStatusClient,
+  isSuppressingStatus,
+  type ProfileSuppressionClient,
+  suppressProfilesForAddress,
 } from "../resend-webhook/channel-status.ts";
 
 Deno.env.set("UNSUBSCRIBE_TOKEN_SECRET", "test-secret-for-channel-tokens");
@@ -581,4 +584,79 @@ Deno.test("no address means no write at all", async () => {
   const client = webhookClient([{ id: "a", status: "active" }], writes);
   assertEquals(await applyChannelStatus(client, null, "dead"), 0);
   assertEquals(await applyChannelStatus(client, "   ", "dead"), 0);
+});
+
+// ---------------------------------------------------------------------------
+// THE SECOND LEDGER (W4 r13 MAJOR-1).
+//
+// campaign-dispatch posts straight to Resend's batch endpoint and picks its
+// audience from profiles.email_suppressed alone — it never asks the channel
+// gate. A killing verdict must therefore land on BOTH books from the one
+// event, or that rail keeps mailing a mailbox the channel ledger calls dead.
+// ---------------------------------------------------------------------------
+
+function profileClient(
+  writes: { values?: Record<string, unknown>; match?: [string, unknown] },
+  error: { message: string } | null = null,
+) {
+  return {
+    from(_table: string) {
+      return {
+        update(values: Record<string, unknown>) {
+          writes.values = values;
+          return {
+            eq(col: string, val: unknown) {
+              writes.match = [col, val];
+              return Promise.resolve({ data: null, error });
+            },
+          };
+        },
+      };
+    },
+  } as unknown as ProfileSuppressionClient;
+}
+
+Deno.test("a killing verdict suppresses the profile on the address, normalised", async () => {
+  const writes: { values?: Record<string, unknown>; match?: [string, unknown] } = {};
+  assertEquals(
+    await suppressProfilesForAddress(
+      profileClient(writes),
+      "  Dana@KowalskiTile.test ",
+      "2026-09-15T00:00:00.000Z",
+    ),
+    true,
+  );
+  assertEquals(writes.values, {
+    email_suppressed: true,
+    email_suppressed_at: "2026-09-15T00:00:00.000Z",
+  });
+  // `eq` on the 00593-normalised value — never `ilike`, which would read the
+  // `_` and `%` an ordinary address carries as wildcards.
+  assertEquals(writes.match, ["email", "dana@kowalskitile.test"]);
+});
+
+Deno.test("only 'dead' and 'unsubscribed' are killing verdicts", () => {
+  assertEquals(isSuppressingStatus("dead"), true);
+  assertEquals(isSuppressingStatus("unsubscribed"), true);
+  assertEquals(isSuppressingStatus("bounced"), false);
+  assertEquals(isSuppressingStatus("active"), false);
+});
+
+Deno.test("no address means no profile write at all", async () => {
+  const writes: { values?: Record<string, unknown>; match?: [string, unknown] } = {};
+  assertEquals(await suppressProfilesForAddress(profileClient(writes), null), false);
+  assertEquals(await suppressProfilesForAddress(profileClient(writes), "   "), false);
+  assertEquals(writes.values, undefined);
+});
+
+Deno.test("a failed profile write is warned about, never thrown", async () => {
+  const writes: { values?: Record<string, unknown>; match?: [string, unknown] } = {};
+  assertEquals(
+    await suppressProfilesForAddress(
+      profileClient(writes, { message: "permission denied" }),
+      "dana@kowalskitile.test",
+    ),
+    false,
+  );
+  assertEquals(writes.match, ["email", "dana@kowalskitile.test"]);
 });

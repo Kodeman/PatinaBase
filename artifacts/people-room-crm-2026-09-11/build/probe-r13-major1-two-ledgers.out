@@ -1,0 +1,22 @@
+  probe  |     column_name     |        data_type         
+---------+---------------------+--------------------------
+ columns | email               | text
+ columns | email_suppressed    | boolean
+ columns | email_suppressed_at | timestamp with time zone
+(3 rows)
+
+         probe         | total | not_normalised 
+-----------------------+-------+----------------
+ profiles email casing |    16 |              0
+(1 row)
+
+        probe         | total | not_normalised 
+----------------------+-------+----------------
+ channel email casing |    46 |              0
+(1 row)
+
+  probe  | addresses 
+---------+-----------
+ overlap |         1
+(1 row)
+
