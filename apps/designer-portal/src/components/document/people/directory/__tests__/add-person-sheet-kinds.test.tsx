@@ -23,8 +23,15 @@ const setAuthority = jest.fn();
 const setAffiliation = jest.fn();
 /** CR8-4 — the company card the sheet files for a firm typed by hand. */
 const addFirmCard = jest.fn(async () => ({ id: "firm-minted" }));
-/** CR5-1 — what `project_recorded_studio()` answers for the picked project. */
-const recordedStudio = { current: "org-1" as string | null };
+/**
+ * CR5-1 — what `project_recorded_studio()` answers for the picked project.
+ * R-CD: `loading` is the third state the guard used to be blind to — the
+ * query has not answered yet, so `data` is `undefined`, not `null`.
+ */
+const recordedStudio = {
+  current: "org-1" as string | null,
+  loading: false,
+};
 
 jest.mock("@patina/supabase", () => ({
   useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -39,7 +46,10 @@ jest.mock("@patina/supabase", () => ({
   // CR5-1: the card is minted into the studio the seat's PROJECT records —
   // the resolver `assert_project_party_cards()` checks against — never the one
   // holding the book. `recordedStudio` lets a case say the job records none.
-  useProjectRecordedStudio: () => ({ data: recordedStudio.current }),
+  useProjectRecordedStudio: () => ({
+    data: recordedStudio.loading ? undefined : recordedStudio.current,
+    isLoading: recordedStudio.loading,
+  }),
   useSaveVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetContactRule: () => ({ mutateAsync: setRule, isPending: false }),
   // CR-3: the front door now records the person-to-firm tie too.
@@ -150,6 +160,7 @@ beforeEach(() => {
   addFirmCard.mockReset().mockResolvedValue({ id: "firm-minted" });
   onAdded.mockReset();
   recordedStudio.current = "org-1";
+  recordedStudio.loading = false;
 });
 
 describe("the kind switch", () => {
@@ -667,6 +678,89 @@ describe("someone else (PR-f)", () => {
     await waitFor(() => expect(addParty).toHaveBeenCalled());
     expect(addParty).toHaveBeenCalledWith(
       expect.objectContaining({ partyKind: "other", trade: "city inspector" }),
+    );
+  });
+});
+
+/**
+ * R-CD — THE ACT IS HELD WHILE THE JOB'S STUDIO IS STILL UNKNOWN.
+ *
+ * `recordedStudioId` is `undefined` until the query answers and `null` once it
+ * answers "this job records no studio". The card-mint guard read both as
+ * falsey, so a press landed during the first render wrote the seat, minted no
+ * card, and printed the no-card sentence about a job that in fact keeps a
+ * book. The act is held until the query resolves; only a resolved `null` takes
+ * the no-card path.
+ */
+describe("the recorded studio, while it is still resolving", () => {
+  function openSub() {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a sub" }));
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Hector Salas" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0119" },
+    });
+  }
+
+  it("holds the act while the query is still out, and writes nothing", async () => {
+    recordedStudio.loading = true;
+    openSub();
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-recorded-studio-held",
+    );
+    expect(
+      screen.getByText("Checking which studio keeps this job’s book."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(act).toHaveAttribute("aria-disabled", "true"));
+    expect(addParty).not.toHaveBeenCalled();
+    expect(promote).not.toHaveBeenCalled();
+  });
+
+  it("takes the no-card path on a resolved none, and says what was not kept", async () => {
+    recordedStudio.current = null;
+    openSub();
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(act);
+
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(promote).not.toHaveBeenCalled();
+    expect(onAdded.mock.calls[0][0]).toBe(
+      "Hector Salas added to Okonkwo residence. This job isn’t attached to a studio yet, so the number and the note ride on the seat, not on a card in the book.",
+    );
+  });
+
+  it("mints the card into the studio the job records once it resolves", async () => {
+    openSub();
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(promote).toHaveBeenCalled());
+    expect(promote).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-1" }),
+    );
+    await waitFor(() =>
+      expect(addChannel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ownerId: "card-new",
+          channelKind: "mobile",
+          value: "(612) 555-0119",
+        }),
+      ),
+    );
+    expect(onAdded.mock.calls[0][0]).not.toContain(
+      "isn’t attached to a studio yet",
     );
   });
 });

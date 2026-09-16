@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import { test } from "../fixtures/auth";
 import {
   cardByName,
+  mobileFor,
   removePerson,
   ruleForSubject,
   uniqueName,
@@ -25,24 +26,6 @@ test.skip(
   ({ browserName }) => browserName !== "chromium",
   "single seeded actor",
 );
-
-/**
- * A mobile number nobody else in the book holds.
- *
- * The room merges on a shared phone by design (b4c1ff290), so a fixed number
- * attached every synthetic sub to whichever card already held it — the seed's
- * permanent Frank Bauer on (612) 555-0115 — and the distinctly-named card the
- * test then reads back never existed. The digits are hashed off the full name,
- * which already carries uniqueName()'s per-run suffix, so the two subs added
- * inside one test differ from each other as well as from the run before. The
- * 4000–9999 band sits clear of every seeded number (the seed's highest is
- * 555-0308) (W6 QA F4-new).
- */
-function mobileFor(name: string): string {
-  let hash = 0;
-  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) % 6000;
-  return `(612) 555-${4000 + hash}`;
-}
 
 async function addSub(
   page: import("@playwright/test").Page,

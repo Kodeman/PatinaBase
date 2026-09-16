@@ -215,6 +215,15 @@ const DOOR_NOUN: Record<SeatAddKind, string> = {
 };
 
 /** "a sub", "an installer" — the article the noun actually takes. */
+/**
+ * R-CD — the act's held sentence while the job's recorded studio is still
+ * resolving. `undefined` from that query means "not known yet"; only a
+ * resolved `null` means the job records no studio.
+ */
+const RECORDED_STUDIO_HELD_ID = "add-person-recorded-studio-held";
+const RECORDED_STUDIO_HELD_SENTENCE =
+  "Checking which studio keeps this job’s book.";
+
 function withArticle(noun: string): string {
   return `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`;
 }
@@ -470,9 +479,8 @@ export function AddPersonSheet({
    * may live in, so none is minted at all (party-profile-sheet.tsx:257-260
    * reads it the same way for the same reason).
    */
-  const { data: recordedStudioId } = useProjectRecordedStudio(
-    open && projectId ? projectId : null,
-  );
+  const { data: recordedStudioId, isLoading: recordedStudioLoading } =
+    useProjectRecordedStudio(open && projectId ? projectId : null);
   /**
    * CR-12 — THE SCOPE AND THE FIGURE ARE THE STUDIO'S TO RECORD.
    *
@@ -824,7 +832,7 @@ export function AddPersonSheet({
       }
       /** CR5-1 — what could not be kept, said rather than dropped in silence. */
       const noBookClause =
-        wantsCard && !chain.cardId && !recordedStudioId
+        wantsCard && !chain.cardId && recordedStudioId === null
           ? " This job isn’t attached to a studio yet, so the number and the note ride on the seat, not on a card in the book."
           : "";
       const cardId = chain.cardId;
@@ -1752,14 +1760,20 @@ export function AddPersonSheet({
               : "terminal"
           }
           aria-describedby={
-            isSeatKind(kind)
-              ? phoneCollisionName
-                ? "add-party-phone-on-file add-party-consequence"
-                : "add-party-consequence"
-              : undefined
+            [
+              isSeatKind(kind) && phoneCollisionName
+                ? "add-party-phone-on-file"
+                : null,
+              isSeatKind(kind) ? "add-party-consequence" : null,
+              recordedStudioLoading ? RECORDED_STUDIO_HELD_ID : null,
+            ]
+              .filter(Boolean)
+              .join(" ") || undefined
           }
           loading={pending}
           loadingLabel={isEditMode ? "Saving…" : "Adding…"}
+          held={recordedStudioLoading}
+          disabled={recordedStudioLoading}
           onClick={() => void submit()}
         >
           {isEditMode
@@ -1776,6 +1790,17 @@ export function AddPersonSheet({
           Cancel
         </DocumentAction>
       </DocumentActionGroup>
+
+      {/* R-CD: a held act carries a VISIBLE reason beside it (direction §5.5),
+          the shape close-seat-act.tsx already ships. */}
+      {recordedStudioLoading && (
+        <p
+          id={RECORDED_STUDIO_HELD_ID}
+          className="mt-1 text-[0.7rem] text-[var(--ink-subtle)]"
+        >
+          {RECORDED_STUDIO_HELD_SENTENCE}
+        </p>
+      )}
 
       {/* Clearance for the fixed Studio drawer (D8, ≥980px, ~60px tall at the
           viewport bottom): keep the action row above it so the tall field-party

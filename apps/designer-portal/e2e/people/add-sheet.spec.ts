@@ -4,6 +4,7 @@ import {
   authorityForSeat,
   cardByName,
   channelsFor,
+  mobileFor,
   removePerson,
   ruleForSubject,
   seatByName,
@@ -47,7 +48,7 @@ test.describe("the add sheet writes the studio’s book", () => {
       await project.selectOption({ index: 1 });
       await page.getByLabel("Full name").fill(name);
       await page.getByLabel("Trade", { exact: true }).selectOption("electrical");
-      await page.getByLabel("Mobile").fill("(612) 555-0111");
+      await page.getByLabel("Mobile").fill(mobileFor(name));
       await page
         .getByLabel("How to reach them")
         .fill("Text only. The email on file bounces.");

@@ -449,3 +449,5 @@ solves for its own names.
 | Targeted e2e, designer | 3 spec files, `--project=chromium`, prod build on :3000, after `supabase:reset` | **6 passed / 1 failed** — the failure is `add-sheet.spec.ts:37`, out of scope above |
 | Targeted e2e, client | `tests/design-build-door.spec.ts`, prod build on :3002 | **2 passed** |
 | Port hygiene | `lsof -nP -iTCP:3000 -sTCP:LISTEN` / `-iTCP:3002` after the pass | both empty |
+
+R-CD — Add sheet studio-loading race

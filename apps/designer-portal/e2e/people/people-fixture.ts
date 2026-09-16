@@ -14,6 +14,24 @@ export function uniqueName(prefix: string): string {
   return `${prefix} ${Date.now().toString(36).slice(-5)}`;
 }
 
+/**
+ * A mobile number nobody else in the book holds.
+ *
+ * The room merges on a shared phone by design (b4c1ff290), so a fixed number
+ * attached every synthetic sub to whichever card already held it — the seed's
+ * permanent Frank Bauer on (612) 555-0115, or Dana Kowalski on (612) 555-0111
+ * — and the distinctly-named card the test then reads back never existed. The
+ * digits are hashed off the full name, which already carries uniqueName()'s
+ * per-run suffix, so two people added inside one test differ from each other
+ * as well as from the run before. The 4000–9999 band sits clear of every
+ * seeded number (the seed's highest is 555-0308) (W6 QA F4-new).
+ */
+export function mobileFor(name: string): string {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) % 6000;
+  return `(612) 555-${4000 + hash}`;
+}
+
 export async function cardByName(name: string) {
   const { data, error } = await adminDb
     .from("studio_contacts")
