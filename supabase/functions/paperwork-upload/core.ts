@@ -72,6 +72,18 @@ export const ALLOWED_MIME = [
  *  50 MB — compliance paper is a scan, not project media. */
 export const MAX_FILE_BYTES = 15 * 1024 * 1024;
 
+/** An ISO calendar date, which is what both date inputs on the firm's page
+ *  send and the only shape two dates may be compared in as strings. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 00623's `studio_compliance_documents_dates_check` is
+ *  `expires_on IS NULL OR issued_on IS NULL OR expires_on >= issued_on`, so
+ *  the same day is allowed and only a reversed pair is refused. The firm reads
+ *  this sentence instead of the constraint's name — or, worse, instead of a
+ *  sentence about its token, which is what it used to read (W4 r8 MAJOR-1). */
+export const REVERSED_DATES_MESSAGE =
+  "the date it expires cannot come before the date it was issued";
+
 export interface PaperworkRpcResult<T = unknown> {
   data: T | null;
   error: { message: string } | null;
@@ -85,6 +97,9 @@ export interface PaperworkSupabaseLike {
         path: string,
         body: Blob | ArrayBuffer | Uint8Array | File,
         opts?: { contentType?: string; upsert?: boolean },
+      ): Promise<{ data: unknown; error: { message: string } | null }>;
+      remove(
+        paths: string[],
       ): Promise<{ data: unknown; error: { message: string } | null }>;
     };
   };
@@ -118,6 +133,36 @@ export function sanitizeFilename(name: string): string {
     .replace(/^[.-]+/, "")
     .slice(0, 120);
   return clean || "document";
+}
+
+/**
+ * THE FILE LANDED AND THE ROW DID NOT, SO THE FILE GOES (W4 r8 MAJOR-1/F3).
+ *
+ * The spec's order puts the object in the bucket before the row is written
+ * (§5.2 → §5.3), so every failure of the write leaves an object no row points
+ * at, under a fresh upload id each retry. QA found one sitting in
+ * `compliance-documents` from a single reversed date, with no row anywhere
+ * pointing at it. Nothing but this call can collect them: the firm has no
+ * delete door and the studio's queue reads rows.
+ *
+ * A removal that itself fails is logged and swallowed — the firm is owed the
+ * true answer about its document, not a second failure about housekeeping.
+ */
+async function discardUpload(deps: PaperworkDeps, key: string): Promise<void> {
+  try {
+    const { error } = await deps.supabase.storage
+      .from("compliance-documents")
+      .remove([key]);
+    if (error) {
+      console.error("paperwork-upload: orphan left in the bucket", key, error.message);
+    }
+  } catch (err) {
+    console.error(
+      "paperwork-upload: orphan left in the bucket",
+      key,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
 }
 
 /** One rolling-minute bucket per IP, shared by BOTH calls so volume cannot be
@@ -191,6 +236,19 @@ export async function uploadPaperwork(
   ) {
     return { status: 400, body: { error: "give the date it expires" } };
   }
+  // TWO DATES THE WRONG WAY ROUND ARE A TYPO, AND THE FIRM IS TOLD SO HERE
+  // (W4 r8 MAJOR-1/F3). Both are bare date inputs on the firm's page: reversing
+  // them raised 00623's dates CHECK inside the write, after the file had
+  // already landed, and the door answered with a sentence about the token. The
+  // common case now never reaches the bucket at all.
+  const issuedOn = (fields.issued_on ?? "").trim();
+  const expiresOn = (fields.expires_on ?? "").trim();
+  if (
+    ISO_DATE.test(issuedOn) && ISO_DATE.test(expiresOn) && expiresOn < issuedOn
+  ) {
+    return { status: 400, body: { error: REVERSED_DATES_MESSAGE } };
+  }
+
   const contentType = file.type || "application/octet-stream";
   if (!(ALLOWED_MIME as readonly string[]).includes(contentType)) {
     return { status: 400, body: { error: "send a PDF, a JPEG or a PNG" } };
@@ -243,10 +301,31 @@ export async function uploadPaperwork(
     },
   );
   if (error) {
+    // NOTHING WAS RECORDED, SO NOTHING IS KEPT: the object is an orphan on
+    // every arm below, and this is the only call that can collect it.
+    await discardUpload(deps, key);
+
     // The token can die between the context read and this call — a narrow
-    // TOCTOU window the RPC closes by re-verifying. That is a 4xx, not a 500.
-    const status = /paperwork_token_invalid/i.test(error.message) ? 403 : 400;
-    return { status, body: { error: "invalid or expired token" } };
+    // TOCTOU window the RPC closes by re-verifying. That is a 4xx, not a 500,
+    // and it is the ONLY error that may be answered with a sentence about the
+    // token (W4 r8 MAJOR-1/F3). Every other error used to be answered with the
+    // same sentence: a firm that reversed two dates was told the one thing it
+    // could not fix about the one thing that was fine, and the act was
+    // unreachable for good — a second link would fail identically.
+    if (/paperwork_token_invalid/i.test(error.message)) {
+      return { status: 403, body: { error: "invalid or expired token" } };
+    }
+    if (/studio_compliance_documents_dates_check/i.test(error.message)) {
+      return { status: 400, body: { error: REVERSED_DATES_MESSAGE } };
+    }
+    // A malformed date (22007), an over-length label (22001), any other
+    // constraint: the firm is told plainly that Patina failed, because that is
+    // what happened, and the studio's log carries the reason.
+    console.error("paperwork-upload: record failed", error.message);
+    return {
+      status: 500,
+      body: { error: "we could not record that — try again" },
+    };
   }
 
   return { status: 200, body: { success: true, document_id: data } };

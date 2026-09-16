@@ -15,7 +15,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@patina/design-system';
-import { buildPaperworkRows, type PaperworkContext } from './paperwork-model';
+import {
+  buildPaperworkRows,
+  receivedReading,
+  type PaperworkContext,
+} from './paperwork-model';
 import { PaperworkUploadForm } from './paperwork-upload-form';
 
 export interface PaperworkSheetProps {
@@ -76,11 +80,18 @@ export function PaperworkSheet({ token, studioName, context }: PaperworkSheetPro
       <p aria-live="polite" role="status" className="sr-only">
         {announcement}
       </p>
-      {rows.map((row) => {
+      {rows.map((source) => {
+        // THE ROW SAYS WHAT THE SEND MADE TRUE (W4 r8 MAJOR-1 / QA F1). Nothing
+        // on this page re-reads the server, so a row sent in THIS visit is
+        // re-read here instead: `receivedReading` moves it to the reading R-BU
+        // gives it on the next load, which is how "W-9 is not on file." stopped
+        // standing one line above its own receipt.
+        const sentThisVisit = received[source.key] === true;
+        const row = sentThisVisit ? receivedReading(source) : source;
         // A refused row has nothing waiting, so it never prints the receipt —
         // it prints the refusal and opens its form (W4 r7 M-4).
         const isReceived =
-          row.state !== 'refused' && (received[row.key] === true || row.awaitingCheck);
+          row.state !== 'refused' && (sentThisVisit || row.awaitingCheck);
         const isOpen = opened[row.key] === true || (row.openByDefault && !isReceived);
 
         return (

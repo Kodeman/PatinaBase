@@ -419,6 +419,31 @@ function invalidateInvoiceEffects(
   queryClient.invalidateQueries({ queryKey: ['monthly-earnings'] });
 }
 
+/**
+ * THE LINK'S EXISTENCE, RE-READ BY THE TWO ACTS THAT MINT ONE (R-BW × R-BV,
+ * W4 r8 MAJOR-2).
+ *
+ * R-BV took `['invoice-link', id]` out of `invalidateInvoiceEffects` because
+ * the ADDRESS lived there and four acts a click apart destroyed it. R-BW then
+ * made the ROW load-bearing: the folio's bounce band branches on whether a
+ * live link exists and on its clock, both read from this key. With no
+ * invalidation anywhere, a 5-minute staleTime and `refetchOnWindowFocus:
+ * false`, the band read the cache as it stood BEFORE the send — and since
+ * `issue_invoice` and `invoice-send` both mint a link, a bounced send of a
+ * draft printed "this invoice has no live link" about an invoice that had just
+ * been given one.
+ *
+ * Both rulings hold here: 00636 froze `invoices.token`, so `get_invoice_link`
+ * answers `token: NULL` forever and this refetch cannot carry an address home.
+ * The minted address is in the folio's own component state, where R-BV put it,
+ * and no invalidation can reach it. Only the two link-minting acts call this —
+ * record-payment and void move money, not the link.
+ */
+function invalidateInvoiceLinkFact(queryClient: QueryClient, invoiceId?: string | null) {
+  if (!invoiceId) return;
+  queryClient.invalidateQueries({ queryKey: ['invoice-link', invoiceId] });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // QUERY HOOKS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1018,6 +1043,9 @@ export function useIssueInvoice(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (invoice, { projectId, invoiceId }) => {
       invalidateInvoiceEffects(queryClient, projectId ?? invoice?.project_id, invoiceId);
+      // Issuing mints the invoice's first link (00574), so the fact the bounce
+      // band reads has moved (R-BW).
+      invalidateInvoiceLinkFact(queryClient, invoiceId);
       queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
@@ -1125,6 +1153,13 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
     onSuccess: (_data, { projectId, invoiceId }) => {
       invalidateInvoiceEffects(queryClient, projectId, invoiceId);
       queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
+    },
+    // `invoice-send` mints a link BEFORE it attempts the email, so the link
+    // fact moves whether or not the email landed — and the failed send is
+    // exactly the moment the folio's bounce band is mounted to describe it
+    // (R-BW, W4 r8 MAJOR-2). Hence onSettled, not onSuccess.
+    onSettled: (_data, _error, { invoiceId }) => {
+      invalidateInvoiceLinkFact(queryClient, invoiceId);
     },
   });
 }

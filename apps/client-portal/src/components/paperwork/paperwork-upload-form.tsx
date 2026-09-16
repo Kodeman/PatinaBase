@@ -148,7 +148,22 @@ export function PaperworkUploadForm({
   }
 
   return (
-    <form className="mt-3 space-y-3" onSubmit={handleSubmit} aria-label={`Add ${title}`}>
+    /* THE FORM DESCRIBES ITS OWN SUBMISSION, FOR THE CLICK THAT BEATS REACT
+       (W4 r8 QA F2). With no `method` and no `encType` a submit that lands
+       before hydration is a native GET to this same page: the fields ride up
+       onto the URL and the file — which cannot serialize into one — is
+       silently dropped, so the firm watches the page reload empty and believes
+       it sent its licence. QA caught it happening on some runs of the same
+       real click and not others. There is no `action`: nothing here is meant
+       to submit natively, and a POST that reaches the route rather than this
+       handler is refused loudly instead of swallowing the document. */
+    <form
+      className="mt-3 space-y-3"
+      method="post"
+      encType="multipart/form-data"
+      onSubmit={handleSubmit}
+      aria-label={`Add ${title}`}
+    >
       <div>
         <label className="type-label block" htmlFor={fieldId('file')}>
           File

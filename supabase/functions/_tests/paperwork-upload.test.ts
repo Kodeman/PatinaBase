@@ -16,6 +16,7 @@ import {
 import {
   handlePaperwork,
   type PaperworkDeps,
+  REVERSED_DATES_MESSAGE,
   sanitizeFilename,
   uploadPaperwork,
 } from "../paperwork-upload/core.ts";
@@ -39,13 +40,16 @@ function fake(options: {
   recordError?: string;
   calls?: Call[];
   uploads?: string[];
+  removed?: string[];
 } = {}) {
   const live = new Set(options.liveTokens ?? [LIVE_TOKEN]);
   const calls = options.calls ?? [];
   const uploads = options.uploads ?? [];
+  const removed = options.removed ?? [];
   return {
     calls,
     uploads,
+    removed,
     client: {
       // deno-lint-ignore require-await
       async rpc(name: string, args: Record<string, unknown> = {}) {
@@ -94,6 +98,11 @@ function fake(options: {
               }
               uploads.push(path);
               return { data: { path }, error: null };
+            },
+            // deno-lint-ignore require-await
+            async remove(paths: string[]) {
+              removed.push(...paths);
+              return { data: paths.map((path) => ({ path })), error: null };
             },
           };
         },
@@ -233,6 +242,79 @@ Deno.test("a token that dies between the context read and the write is a 4xx, no
   );
   assertEquals(res.status, 403);
   assertEquals((await res.json()).error, "invalid or expired token");
+  // No row was written, so the object that landed first does not stay.
+  assertEquals(f.removed, f.uploads);
+});
+
+// W4 r8 MAJOR-1 / F3 — THE DOOR SAYS WHAT ACTUALLY WENT WRONG.
+//
+// Every write failure used to be answered "invalid or expired token", about a
+// token the same request had verified twice, with the uploaded object left
+// behind. A firm that typed its two dates the wrong way round was told the one
+// thing it could not fix about the one thing that was fine.
+Deno.test("two dates the wrong way round are refused before the bucket", async () => {
+  const f = fake();
+  const result = await uploadPaperwork(
+    { supabase: f.client },
+    {
+      token: LIVE_TOKEN,
+      doc_type: "license",
+      issued_on: "2099-06-01",
+      expires_on: "2020-01-01",
+    },
+    pdf("license.pdf"),
+  );
+  assertEquals(result.status, 400);
+  assertEquals(result.body.error, REVERSED_DATES_MESSAGE);
+  assertEquals(f.uploads.length, 0);
+  assertEquals(
+    f.calls.filter((c) => c.name === "record_inbound_compliance_document").length,
+    0,
+  );
+
+  // 00623 allows the same day, so the same day is not refused here either.
+  const sameDay = await uploadPaperwork(
+    { supabase: f.client },
+    {
+      token: LIVE_TOKEN,
+      doc_type: "license",
+      issued_on: "2027-03-31",
+      expires_on: "2027-03-31",
+    },
+    pdf("license.pdf"),
+  );
+  assertEquals(sameDay.status, 200);
+});
+
+Deno.test("the dates CHECK reaching the write is named, not blamed on the token", async () => {
+  const f = fake({
+    recordError:
+      'new row for relation "studio_compliance_documents" violates check ' +
+      'constraint "studio_compliance_documents_dates_check"',
+  });
+  const result = await uploadPaperwork(
+    { supabase: f.client },
+    { token: LIVE_TOKEN, doc_type: "license", expires_on: "2027-03-31" },
+    pdf("license.pdf"),
+  );
+  assertEquals(result.status, 400);
+  assertEquals(result.body.error, REVERSED_DATES_MESSAGE);
+  // And the object that landed first is gone — no orphan under a row that
+  // was never written.
+  assertEquals(f.uploads.length, 1);
+  assertEquals(f.removed, f.uploads);
+});
+
+Deno.test("any other write failure is Patina's, said so, and leaves no orphan", async () => {
+  const f = fake({ recordError: 'invalid input syntax for type date: "31/03/2027"' });
+  const result = await uploadPaperwork(
+    { supabase: f.client },
+    { token: LIVE_TOKEN, doc_type: "w9" },
+    pdf("w9.pdf"),
+  );
+  assertEquals(result.status, 500);
+  assertEquals(result.body.error, "we could not record that — try again");
+  assertEquals(f.removed, f.uploads);
 });
 
 Deno.test("a file outside the mime allowlist or over 15 MB never uploads", async () => {

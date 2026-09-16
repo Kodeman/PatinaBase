@@ -263,4 +263,16 @@ describe('PaperworkUploadForm', () => {
 
     release({ ok: true, json: async () => ({ success: true }) });
   });
+
+  // W4 r8 QA F2 — a click that beats hydration must not become a GET that
+  // drops the file onto the URL. The form says what it is: a POST carrying a
+  // file, with no `action`, so nothing about a native submit is lossy or
+  // silent.
+  it('declares its own submission so a pre-hydration click cannot lose the file', () => {
+    renderForm();
+    const form = screen.getByRole('form', { name: 'Add COI, general liability' });
+    expect(form).toHaveAttribute('method', 'post');
+    expect(form).toHaveAttribute('enctype', 'multipart/form-data');
+    expect(form).not.toHaveAttribute('action');
+  });
 });

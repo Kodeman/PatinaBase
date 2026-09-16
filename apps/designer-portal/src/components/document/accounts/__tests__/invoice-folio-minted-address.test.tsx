@@ -10,13 +10,20 @@
  *
  *   get_invoice_link answers `token: NULL` (00636's frozen column)
  *     → mint: regenerate_invoice_link returns the raw token once
- *       → Resend: useSendInvoice.onSuccess runs invalidateInvoiceEffects
+ *       → Resend: useSendInvoice runs invalidateInvoiceEffects AND re-reads
+ *         the link fact the bounce band branches on (R-BW, W4 r8 MAJOR-2)
  *         → the address is STILL on screen and still copyable.
  *
  * Before R-BV the last step failed: the address lived in
  * `['invoice-link', invoiceId]`, the invalidation refetched it, and the refetch
  * could only come back address-less — so Copy unmounted one click after the
  * folio printed "This address is shown once."
+ *
+ * The second case here is the other half of the same bargain: a bounced send
+ * must leave the band saying what the record says. R-BV's answer to the first
+ * problem was to stop re-reading the key at all, which left the band reading
+ * the cache as it stood BEFORE the send — so a send that minted a link was
+ * described as "this invoice has no live link" (W4 r8 MAJOR-2).
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -170,11 +177,65 @@ describe('the minted invoice address (R-BV)', () => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(PAY_URL),
     );
 
-    // And the link key is no longer invalidated at all (R-BV): the send fired
-    // no fresh get_invoice_link read.
-    const readsAfterSend = rpc.mock.calls.filter(
-      ([name]) => name === 'get_invoice_link',
-    ).length;
-    expect(readsAfterSend).toBe(readsBeforeSend);
+    // The send DOES re-read the link fact (R-BW) — and the address survived it
+    // anyway, because it never lived in that key (R-BV).
+    await waitFor(() => {
+      const readsAfterSend = rpc.mock.calls.filter(
+        ([name]) => name === 'get_invoice_link',
+      ).length;
+      expect(readsAfterSend).toBeGreaterThan(readsBeforeSend);
+    });
+    // (the act now reads "Link copied" — it is the same control, still standing
+    // with an address behind it.)
+    expect(screen.getByRole('button', { name: 'Link copied' })).toBeEnabled();
+  });
+
+  // W4 r8 MAJOR-2 — the band describes the record, not the cache as it stood
+  // before the act that changed it.
+  it('tells the designer a live link exists after a send that bounced', async () => {
+    let linkExists = false;
+    rpc.mockImplementation(async (name: string) => {
+      if (name === 'get_invoice_link') {
+        return linkExists
+          ? { data: { token: null, status: 'active', expires_at: null }, error: null }
+          : { data: null, error: null };
+      }
+      return { data: null, error: null };
+    });
+    // invoice-send mints the link before it attempts the email, then reports
+    // that the email did not reach the household.
+    invoke.mockImplementation(async () => {
+      linkExists = true;
+      return {
+        data: {
+          ok: true,
+          invoiceId: 'invoice-1',
+          recipient: 'client@example.com',
+          emailSent: false,
+          suppressed: true,
+        },
+        error: null,
+      };
+    });
+
+    renderFolio();
+
+    // The read at mount: no link at all.
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith('get_invoice_link', { p_invoice_id: 'invoice-1' }),
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Resend' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Resend email' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('invoice-send', expect.anything()));
+
+    expect(
+      await screen.findByText(
+        /This invoice has a live link, but Patina cannot show you its address again/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/this invoice has no live link/i),
+    ).not.toBeInTheDocument();
   });
 });

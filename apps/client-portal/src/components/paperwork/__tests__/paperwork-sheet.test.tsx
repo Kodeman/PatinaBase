@@ -163,19 +163,45 @@ describe('PaperworkSheet', () => {
     expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
-  it('swaps a sent form for the receipt sentence', async () => {
+  it('swaps a sent form for the receipt sentence, and the row stops saying not on file', async () => {
     const user = userEvent.setup();
     const { container } = renderSheet([]);
 
     expect(screen.getByTestId('form-W-9')).toBeInTheDocument();
+    expect(screen.getByText('W-9 is not on file.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Send W-9' }));
 
     expect(screen.queryByTestId('form-W-9')).not.toBeInTheDocument();
     expect(
       container.querySelector('[data-paperwork-receipt="w9"]'),
     ).toHaveTextContent('Received. Local Dev Studio will confirm it.');
-    // The other two owed papers are untouched by one send.
+    // W4 r8 MAJOR-1 / QA F1: the row's OWN sentence moved with the send. It
+    // used to read "W-9 is not on file." one line above that receipt.
+    expect(screen.getByText('W-9, not yet checked.')).toBeInTheDocument();
+    expect(screen.queryByText('W-9 is not on file.')).not.toBeInTheDocument();
+    // The other two owed papers are untouched by one send — sentence included.
     expect(screen.getByTestId('form-Licence')).toBeInTheDocument();
+    expect(screen.getByText('Licence is not on file.')).toBeInTheDocument();
+  });
+
+  // R-BU: the verified row is the row, and `awaiting_check` is its flag. A
+  // renewal sent against paper the studio already holds does not erase what
+  // that paper says or what its lapse holds up — both are still true until a
+  // member opens the new one.
+  it('keeps a lapsed row lapsed, and keeps its block, when a renewal is sent', async () => {
+    const user = userEvent.setup();
+    const { container } = renderSheet([
+      doc({ doc_type: 'license', state: 'lapsed', expires_on: '2026-05-01' }),
+    ]);
+
+    await user.click(screen.getByRole('button', { name: 'Add Licence' }));
+    await user.click(screen.getByRole('button', { name: 'Send Licence' }));
+
+    expect(
+      container.querySelector('[data-paperwork-receipt="license"]'),
+    ).toHaveTextContent('Received. Local Dev Studio will confirm it.');
+    expect(screen.getByText('Licence, lapsed 1 May 2026.')).toBeInTheDocument();
+    expect(screen.getByText('Blocks site access.')).toBeInTheDocument();
   });
 
   // W4 r2 MAJOR-5. The send unmounts the form and the focused submit button

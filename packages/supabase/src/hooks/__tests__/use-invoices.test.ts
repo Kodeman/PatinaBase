@@ -965,7 +965,7 @@ describe('useNotifyCheckIntent', () => {
 // Invoice links (00574) — the link key, and the quiet read
 // ─────────────────────────────────────────────────────────────────────────────
 
-// R-BV — THE INVOICE-LINK KEY IS NOT INVALIDATED BY THE ACTS AROUND IT.
+// R-BV — THE INVOICE-LINK KEY IS NOT INVALIDATED BY THE MONEY ACTS AROUND IT.
 //
 // F1 (an earlier round) had invalidateInvoiceEffects invalidate
 // ["invoice-link", invoiceId], which was right while get_invoice_link could
@@ -975,29 +975,63 @@ describe('useNotifyCheckIntent', () => {
 // each of these four acts EVICTED the token the designer had just been told
 // to copy — Issue, Record payment, Resend and Void all did it, one click
 // after the folio printed "This address is shown once."
-describe("invoice-link invalidation (R-BV)", () => {
+//
+// R-BW then made the link ROW load-bearing: the folio's bounce band branches
+// on whether a live link exists and on its clock. So the two acts that MINT a
+// link — issue, and send, which mints one before it attempts the email — do
+// re-read that key, and the two that only move money still do not (W4 r8
+// MAJOR-2). The address is safe either way: it lives in the folio's own state,
+// and 00636 guarantees the refetch cannot bring one home.
+describe("invoice-link invalidation (R-BV × R-BW)", () => {
   type OnSuccess = (
     result: unknown,
     vars: { invoiceId: string; projectId?: string },
   ) => void;
+  type OnSettled = (
+    result: unknown,
+    error: unknown,
+    vars: { invoiceId: string; projectId?: string },
+  ) => void;
 
-  const cases: Array<[string, () => unknown]> = [
-    ["useIssueInvoice", useIssueInvoice],
-    ["useSendInvoice", useSendInvoice],
+  const moneyActs: Array<[string, () => unknown]> = [
     ["useRecordPayment", useRecordPayment],
     ["useVoidInvoice", useVoidInvoice],
   ];
 
-  for (const [name, hook] of cases) {
+  for (const [name, hook] of moneyActs) {
     it(`${name} onSuccess leaves ["invoice-link", invoiceId] alone`, () => {
-      const config = hook() as unknown as { onSuccess: OnSuccess };
+      const config = hook() as unknown as { onSuccess: OnSuccess; onSettled?: OnSettled };
       config.onSuccess({ project_id: "proj-1" }, { invoiceId: "inv-1", projectId: "proj-1" });
+      config.onSettled?.({}, null, { invoiceId: "inv-1", projectId: "proj-1" });
       expect(invalidatedKeys()).not.toContainEqual(["invoice-link", "inv-1"]);
       // and the rest of the fan-out is untouched — this is one key, not a
       // narrowing of what an act refreshes.
       expect(invalidatedKeys()).toContainEqual(["invoices"]);
     });
   }
+
+  it("useIssueInvoice re-reads the link it just minted", () => {
+    const config = useIssueInvoice() as unknown as { onSuccess: OnSuccess };
+    config.onSuccess({ project_id: "proj-1" }, { invoiceId: "inv-1", projectId: "proj-1" });
+    expect(invalidatedKeys()).toContainEqual(["invoice-link", "inv-1"]);
+    expect(invalidatedKeys()).toContainEqual(["invoices"]);
+  });
+
+  // The band is mounted by the send that FAILED, so a failed send is the one
+  // that most needs the fresh read.
+  it("useSendInvoice re-reads the link fact whether the email landed or not", () => {
+    const sent = useSendInvoice() as unknown as { onSettled: OnSettled };
+    sent.onSettled({ emailSent: true }, null, { invoiceId: "inv-1", projectId: "proj-1" });
+    expect(invalidatedKeys()).toContainEqual(["invoice-link", "inv-1"]);
+
+    invalidateQueries.mockClear();
+    const bounced = useSendInvoice() as unknown as { onSettled: OnSettled };
+    bounced.onSettled(undefined, new Error("no_recipient"), {
+      invoiceId: "inv-1",
+      projectId: "proj-1",
+    });
+    expect(invalidatedKeys()).toContainEqual(["invoice-link", "inv-1"]);
+  });
 
   it("never invalidates a link key at all, with or without an invoiceId in hand", () => {
     const config = useUpsertLineItems() as unknown as {

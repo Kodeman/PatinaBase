@@ -9,6 +9,7 @@ import {
   formatPaperDate,
   isUploadOnly,
   joinWords,
+  receivedReading,
   rowSentence,
   type PaperworkContext,
   type PaperworkDocument,
@@ -354,5 +355,54 @@ describe('buildPaperworkRows', () => {
       context([doc({ doc_type: '' as unknown as string })]),
     );
     expect(rows.every((row) => row.docType !== '')).toBe(true);
+  });
+});
+
+// W4 r8 MAJOR-1 / QA F1 — THE SEND MOVES THE ROW, NOT JUST A RECEIPT FLAG.
+describe('receivedReading', () => {
+  const rowFor = (documents: PaperworkDocument[], docType: string) =>
+    buildPaperworkRows(context(documents)).find((row) => row.docType === docType)!;
+
+  it('moves a row with nothing on file to the reading the next load will give it', () => {
+    const before = rowFor([], 'w9');
+    expect(before.sentence).toBe('W-9 is not on file.');
+
+    const after = receivedReading(before);
+    expect(after.state).toBe('awaiting_check');
+    expect(after.sentence).toBe('W-9, not yet checked.');
+    expect(after.awaitingCheck).toBe(true);
+    expect(after.blocksSentence).toBeNull();
+    expect(after.openByDefault).toBe(false);
+  });
+
+  // R-BU: the verified row is the row; the send is a flag on it. What that
+  // paper says, and what its lapse holds up, are both still true.
+  it('leaves paper the studio already holds saying what it says', () => {
+    const lapsed = rowFor(
+      [doc({ doc_type: 'license', state: 'lapsed', expires_on: '2026-05-01' })],
+      'license',
+    );
+    const after = receivedReading(lapsed);
+    expect(after.state).toBe('lapsed');
+    expect(after.sentence).toBe('Licence, lapsed 1 May 2026.');
+    expect(after.blocksSentence).toBe('Blocks site access.');
+    expect(after.awaitingCheck).toBe(true);
+  });
+
+  // W4 r7 M-4: a refusal is the whole word on its row, and its form stays open.
+  it('leaves a refused row exactly as it stands', () => {
+    const refused = rowFor(
+      [
+        doc({
+          doc_type: 'w9',
+          state: 'refused',
+          blocks: [],
+          expires_on: null,
+          refusal_reason: 'The name does not match the W-9 on the contract',
+        }),
+      ],
+      'w9',
+    );
+    expect(receivedReading(refused)).toBe(refused);
   });
 });

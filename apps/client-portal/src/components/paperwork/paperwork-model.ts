@@ -264,6 +264,42 @@ function groupKey(doc: { doc_type: string; doc_label: string | null }): string {
  * the document came back and why, in the studio's words, instead of watching
  * its receipt silently revert to "is not on file".
  */
+/**
+ * THE ROW THE FIRM JUST SENT PAPER FOR, READ AS THE STUDIO WILL READ IT (R-BU,
+ * W4 r8 MAJOR-1 / QA F1).
+ *
+ * `buildPaperworkRows` reads the server's answer, and nothing on this page
+ * re-reads it: the visit in which the firm actually acts is the visit the page
+ * never refreshes. So a successful send printed its receipt under the row's
+ * pre-send sentence — "W-9 is not on file." over "Received. {Studio} will
+ * confirm it." — two sentences about one document, one line apart, disagreeing.
+ *
+ * This is R-BU applied to that visit, so the page says now exactly what the
+ * next load will say:
+ *   nothing on file  -> the row becomes `awaiting_check`, "W-9, not yet
+ *                       checked.", and the block it used to name goes with the
+ *                       sentence that named it;
+ *   paper on file    -> the confirmed paper is still the row (R-BU: the
+ *                       verified row is the row, `awaiting_check` is its flag),
+ *                       so "Licence, lapsed 1 May." and what it blocks both
+ *                       stand — they are still true until a member opens the
+ *                       new paper;
+ *   refused          -> untouched. The refusal is the whole word on that row
+ *                       (W4 r7 M-4) and the form stays open.
+ */
+export function receivedReading(row: PaperworkRow): PaperworkRow {
+  if (row.state === 'refused') return row;
+  if (row.state !== 'not_on_file') return { ...row, awaitingCheck: true };
+  return {
+    ...row,
+    state: 'awaiting_check',
+    awaitingCheck: true,
+    sentence: rowSentence('awaiting_check', row.title, null),
+    blocksSentence: null,
+    openByDefault: false,
+  };
+}
+
 export function buildPaperworkRows(context: PaperworkContext): PaperworkRow[] {
   const groups = new Map<string, PaperworkRow>();
 
