@@ -48,9 +48,12 @@ export interface InvoiceCheckoutTarget {
   invoiceId: string;
   lineItemName: string;
   /**
-   * Today's letterbox / front-door return addresses. The M7 safety valve: used
-   * whenever a nonce address cannot be built — no `nonceReturnOrigin`, or a
-   * reused attempt claimed before 00574 that carries no nonce.
+   * Today's letterbox / front-door return addresses. `successUrl` is the M7
+   * safety valve, used whenever a nonce address cannot be built — no
+   * `nonceReturnOrigin`, or a reused attempt claimed before 00574 that carries
+   * no nonce. `cancelUrl` is not a valve at all: it is ALWAYS where a cancelled
+   * Checkout lands (R-BT), so a rail that holds the payer's own address — the
+   * link rail holds the /pay/<token> the request carried — must put it here.
    */
   successUrl: string;
   cancelUrl: string;
@@ -192,16 +195,54 @@ export function invoiceSessionMetadata(attempt: InvoiceCheckoutAttempt): Record<
   };
 }
 
-/** Where Stripe sends the payer back: the nonce address when it can be built, else the fallback. */
+/**
+ * Where Stripe sends the payer back.
+ *
+ * A SUCCESS rides the nonce: /pay/return/<nonce> trades it for a fresh
+ * address, because since 00636 there is no stored address left to hand back.
+ *
+ * A CANCEL NEVER DOES (R-BT). The return hop rotates the link, so routing a
+ * cancel through it killed the /pay/<token> in the client's inbox the moment
+ * she pressed Back at Stripe — she had abandoned a payment and lost the way
+ * back to the invoice in the same click. `target.cancelUrl` is the address she
+ * came from: the link rail sets it to the very /pay/<token> the request
+ * carried, and the signed-in rail to the house the payer is standing in.
+ */
 export function invoiceCheckoutReturnBase(
   attempt: InvoiceCheckoutAttempt,
   target: InvoiceCheckoutTarget,
   checkout: 'success' | 'cancelled'
 ): string {
-  if (attempt.returnNonce && target.nonceReturnOrigin) {
-    return invoiceLinkReturnAddress(target.nonceReturnOrigin, attempt.returnNonce, checkout);
+  if (checkout === 'cancelled') {
+    return target.cancelUrl;
   }
-  return checkout === 'success' ? target.successUrl : target.cancelUrl;
+  if (ridesReturnNonce(attempt, target)) {
+    return invoiceLinkReturnAddress(
+      target.nonceReturnOrigin as string,
+      attempt.returnNonce as string,
+      checkout
+    );
+  }
+  return target.successUrl;
+}
+
+/**
+ * THE ONE FACT (R-BZ): is a live invoice link load-bearing for this attempt?
+ *
+ * It is exactly when Stripe is handed `/pay/return/<nonce>` as the way back —
+ * never the actor column. `create-checkout-session` claims with `payer_id`
+ * (so `invoice_link_id` is NULL) and still rides the nonce whenever the
+ * invoice has a live link, which is why a guard written as "link-borne" left
+ * the signed-in rail rotating the token under the client (W4 r10 BLOCKING-1).
+ *
+ * The same predicate decides the return address above and the stamp below, so
+ * what the database records and what Stripe was told cannot disagree.
+ */
+export function ridesReturnNonce(
+  attempt: InvoiceCheckoutAttempt,
+  target: InvoiceCheckoutTarget
+): boolean {
+  return Boolean(attempt.returnNonce && target.nonceReturnOrigin);
 }
 
 /** The claim-error table, shared by both rails. */
@@ -295,6 +336,23 @@ export async function startInvoiceCheckout(input: StartInvoiceCheckoutInput): Pr
         if (error) throw error;
         const claimed = mapInvoiceAttempt(data);
         lastAttempt = claimed;
+        // RECORD THE FACT BEFORE STRIPE IS TOLD IT (R-BZ). Nothing downstream
+        // can recompute whether this attempt's return rides the nonce: by the
+        // time a receipt letter asks, the link may have been minted, revoked
+        // or rotated. Stamped here, before any session exists, so no Stripe
+        // event can arrive ahead of it — and a stamp that does not land is a
+        // failed checkout, not a session whose success address the mint guard
+        // does not know about.
+        if (ridesReturnNonce(claimed, target)) {
+          const { error: stampError } = await admin.rpc(
+            'stamp_invoice_checkout_return_origin',
+            { p_attempt_id: claimed.attemptId, p_origin: target.nonceReturnOrigin }
+          );
+          if (stampError) {
+            console.error(`${logTag}: return-origin stamp failed`, stampError);
+            throw new Error('checkout_return_origin_unrecorded');
+          }
+        }
         // The claim superseded a live session — the other rail, the old fee, a
         // changed balance, or (00574) a different actor. Close it so nobody
         // wanders back and pays the wrong amount. Best-effort only — the DB

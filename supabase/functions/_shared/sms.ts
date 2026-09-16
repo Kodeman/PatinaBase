@@ -2,10 +2,17 @@
 //
 // sendPartySms() is used by sms-dispatch (assignment/invite jobs), sms-inbound
 // (out-of-band replies), and field-daily (digest + delivery confirms). It:
-//   · resolves the recipient phone + SMS consent from project_parties,
-//   · enforces the consent gate (granted only — EXCEPT sms_optin_invite, the
-//     double-opt-in invite, which is the sole send allowed to a 'pending' party;
-//     an 'opted_out' phone is NEVER texted),
+//   · resolves the recipient phone, project and display name from
+//     project_parties — never a consent word (R-AY),
+//   · asks the STUDIO'S consent record for the number, and nothing else
+//     (studio_channel_consent, 00594): consent is per studio per channel value,
+//     so one studio's STOP no longer silences another's job, and the frozen
+//     project_parties.sms_consent_* columns are read by no gate on this path —
+//     PR-x's fail-closed second check is retired (R-AY, final-run MAJOR-1/2),
+//   · enforces that gate (the record must say granted — EXCEPT sms_optin_invite,
+//     the double-opt-in invite, which is the sole send allowed while the record
+//     reads 'pending', and which still proves its recorded evidence off the
+//     seat; a recorded refusal is NEVER texted),
 //   · renders a templateKey against email_templates ({{var}} via interpolate),
 //     enriching studio_name / party_first_name / a fresh field link on demand,
 //   · honors quiet hours (8am–8pm FIELD_TZ) — off-hours sends are stored as
@@ -64,7 +71,6 @@ export interface SendPartySmsResult {
   body?: string;
 }
 
-type ConsentStatus = "not_asked" | "pending" | "granted" | "opted_out";
 type DevMode = "dry_run" | "redirect" | "off";
 
 function env(deps: SmsDeps, key: string): string | undefined {
@@ -163,25 +169,404 @@ async function sendViaTwilio(
 }
 
 // ── Consent resolution ──────────────────────────────────────────────────────
+/**
+ * A recipient carries NO consent word (R-AY, final-run MAJOR-1). It used to
+ * carry `consent`, reduced across the party rows on the number, and
+ * reduceConsent() is gone with it: the verdict is asked of
+ * studio_channel_consent through channelConsentVerdict() and of nothing else.
+ * The seat's evidence columns are still read for the double-opt-in invite's
+ * proof — evidence, not a verdict, and it can only refuse more.
+ */
 interface Recipient {
   phone: string | null;
   projectId: string | null;
   partyId: string | null;
   displayName: string | null;
-  consent: ConsentStatus;
 }
 
-/** Consent precedence across all party rows on a phone: opted_out wins, then
- * granted, then pending, then not_asked. Keeps opt-out phone-global. */
-function reduceConsent(
-  rows: { sms_consent_status: ConsentStatus }[],
-): ConsentStatus {
-  if (rows.some((r) => r.sms_consent_status === "opted_out")) {
-    return "opted_out";
+/**
+ * A resolution that can fail. `failed` is never folded into a null org: a
+ * lookup that errored is NOT the same fact as "this project has no studio", and
+ * every caller here treats the first as a logged refusal (R-AM).
+ */
+export interface OrgResolution {
+  org: string | null;
+  failed: boolean;
+}
+
+/**
+ * The designer's primary design_studio, resolved the way
+ * `_primary_studio_for()` (00315:64-79) resolves it — owner role first, then
+ * earliest joined_at, then created_at — but over the TABLES, not the function.
+ *
+ * NEVER THE RPC. `_primary_studio_for` is revoked from every PostgREST role
+ * (00483's allowlist: proacl `{postgres=X/postgres}`), so calling it from the
+ * rail returns 42501 "permission denied for function" — and a caller that
+ * destructures only `data` reads that as a NULL org, silently. It is an
+ * internal helper for other SECURITY DEFINER bodies, and this is the same shape
+ * resolveStudioName() already reads below.
+ */
+async function primaryStudioFor(
+  supabase: SupabaseClient,
+  designerId: string,
+): Promise<OrgResolution> {
+  const { data: memberships, error: mErr } = await supabase
+    .from("organization_members")
+    .select("organization_id, role, joined_at, created_at")
+    .eq("user_id", designerId)
+    .eq("status", "active");
+  if (mErr) {
+    console.error("primaryStudioFor: organization_members read failed", mErr);
+    return { org: null, failed: true };
   }
-  if (rows.some((r) => r.sms_consent_status === "granted")) return "granted";
-  if (rows.some((r) => r.sms_consent_status === "pending")) return "pending";
-  return "not_asked";
+  const rows = (memberships ?? []) as Array<{
+    organization_id: string;
+    role?: string | null;
+    joined_at?: string | null;
+    created_at?: string | null;
+  }>;
+  if (rows.length === 0) return { org: null, failed: false };
+
+  const { data: orgs, error: oErr } = await supabase
+    .from("organizations")
+    .select("id")
+    .in("id", rows.map((r) => r.organization_id))
+    .eq("type", "design_studio");
+  if (oErr) {
+    console.error("primaryStudioFor: organizations read failed", oErr);
+    return { org: null, failed: true };
+  }
+  const studios = new Set(
+    ((orgs ?? []) as Array<{ id: string }>).map((o) => o.id),
+  );
+
+  // 00315's ORDER BY, in the same order: owner first, then joined_at with
+  // NULLs last, then created_at.
+  const ranked = rows
+    .filter((r) => studios.has(r.organization_id))
+    .sort((a, b) => {
+      const owner = Number(b.role === "owner") - Number(a.role === "owner");
+      if (owner !== 0) return owner;
+      const aj = a.joined_at ?? "￿";
+      const bj = b.joined_at ?? "￿";
+      if (aj !== bj) return aj < bj ? -1 : 1;
+      const ac = a.created_at ?? "";
+      const bc = b.created_at ?? "";
+      if (ac !== bc) return ac < bc ? -1 : 1;
+      return 0;
+    });
+  return { org: ranked[0]?.organization_id ?? null, failed: false };
+}
+
+/**
+ * The organization a project belongs to, resolved exactly the way the SQL side
+ * resolves it (00594:141 and :221):
+ * `COALESCE(projects.studio_id, _primary_studio_for(projects.designer_id))`.
+ *
+ * The fallback matters: a project with a NULL studio_id still gets a consent
+ * record written under its designer's primary studio by the backfill and the
+ * mirror, so any reader that keys on studio_id alone silently disagrees with
+ * the table — the room would print "Texting" for a number that has STOPped.
+ */
+export async function resolveProjectOrg(
+  supabase: SupabaseClient,
+  projectId: string | null,
+): Promise<OrgResolution> {
+  if (!projectId) return { org: null, failed: false };
+  const { data: proj, error } = await supabase
+    .from("projects")
+    .select("studio_id, designer_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error) {
+    console.error("resolveProjectOrg: projects read failed", error);
+    return { org: null, failed: true };
+  }
+  const row = proj as
+    | { studio_id?: string | null; designer_id?: string | null }
+    | null;
+  if (!row) return { org: null, failed: false };
+  if (row.studio_id) return { org: row.studio_id, failed: false };
+  if (!row.designer_id) return { org: null, failed: false };
+  return await primaryStudioFor(supabase, row.designer_id);
+}
+
+/**
+ * The same resolution as resolveProjectOrg(), for many projects at once and
+ * returning a project-id → org map. Exported because sms-inbound's pipeline
+ * derives its STOP/START targets the same way: the two sides of the rail must
+ * never disagree about which studio a project belongs to.
+ *
+ * `failed` says a lookup errored, so a caller can refuse rather than act on a
+ * map that is short some entries (R-AM).
+ */
+export async function orgsOfProjects(
+  supabase: SupabaseClient,
+  projectIds: string[],
+): Promise<{ orgs: Map<string, string>; failed: boolean }> {
+  const out = new Map<string, string>();
+  if (projectIds.length === 0) return { orgs: out, failed: false };
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, studio_id, designer_id")
+    .in("id", projectIds);
+  if (error) {
+    console.error("orgsOfProjects: projects read failed", error);
+    return { orgs: out, failed: true };
+  }
+  const rows = (data ?? []) as Array<
+    { id: string; studio_id?: string | null; designer_id?: string | null }
+  >;
+  const primary = new Map<string, string | null>();
+  let failed = false;
+  for (const row of rows) {
+    if (row.studio_id) {
+      out.set(row.id, row.studio_id);
+      continue;
+    }
+    if (!row.designer_id) continue;
+    if (!primary.has(row.designer_id)) {
+      const resolved = await primaryStudioFor(supabase, row.designer_id);
+      if (resolved.failed) failed = true;
+      primary.set(row.designer_id, resolved.org);
+    }
+    const fallback = primary.get(row.designer_id) ?? null;
+    if (fallback) out.set(row.id, fallback);
+  }
+  return { orgs: out, failed };
+}
+
+/** What the studio's own consent record says about this number. */
+export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
+
+/**
+ * THE ONLY consent gate (migration 00594, ruling R-AW). Consent is a fact about
+ * a (studio, channel value) pair, held in studio_channel_consent — and that
+ * record is the only ledger this function reads. project_parties.sms_consent_*
+ * is frozen legacy: 00594's own backfill folded every seat into a record in the
+ * same migration (opted_out winning per org), and the freeze trigger means no
+ * seat has carried news since. A seat therefore holds no fact the record does
+ * not already hold, and reading one could only ever contradict the record.
+ *
+ *   · "refuse" — the studio's record says opted_out, or carries an unanswered
+ *     refusal, or THERE IS NO RECORD AT ALL. A missing record is `not_asked`,
+ *     and `not_asked` is a refusal: nobody asked this person, so nobody may
+ *     text them. Before R-AW a missing record fell through to the party row,
+ *     and a pre-fold seat reading `granted` then carried the send — the one leg
+ *     by which a frozen column could still authorise a text.
+ *   · "allow" — the studio's record says granted with no refusal standing
+ *     behind it. This is the half of G-3 a per-party ledger cannot do: a seat
+ *     created today for a number the studio recorded a grant for in 2025 is
+ *     sendable because the STUDIO holds the grant (fixture F-11).
+ *   · "unknown" — the record says `pending`: the invite has gone out and the
+ *     recipient has not answered. The double opt-in's first half lives there,
+ *     so sendPartySms's own invite gate decides that one.
+ *   · "refuse", logged — the owning studio could not be RESOLVED at all (a
+ *     failed read, not an absent studio). A failure is not a fact about the
+ *     number, and the no-studio branch below would answer this send out of
+ *     every tenant's rows, so it refuses instead (R-AM).
+ *
+ * AND `status` IS NOT THE WHOLE VERDICT (r6 M6-3). refusal_unanswered is the
+ * stored fact the WRITE door treats as load-bearing — a refusal the person who
+ * made it has not answered — and it was invisible to the rail that actually
+ * sends. An unanswered refusal can stand at ANY status: the first prod fold
+ * mints `granted` records for legacy seats whose stale opt-out no later consent
+ * answered (r7 M7-1), and the inbound rail writes this table directly. What
+ * answers a refusal is the recipient's own YES or START, which that rail
+ * writes — lowering the flag and stamping a fresh consented_at; nothing the
+ * studio can type reopens this door (00594's RPCs never lower the flag).
+ * public.channel_consent_status() folds status and the flag exactly this way,
+ * so the room and the rail agree by construction.
+ *
+ * EXPORTED so a caller that PRE-FILTERS recipients asks this question rather
+ * than inventing its own (close-out r3 MAJOR-2). field-daily used to select its
+ * digest recipients with `.eq("sms_consent_status", "granted")` on
+ * project_parties — the column 00594 froze — so the cron's recipient set could
+ * only ever contain pre-fold rows and the whole daily digest went dead for
+ * every consent recorded after the freeze. A pre-filter that asks the same
+ * function the send gate asks cannot drift from it.
+ */
+export async function channelConsentVerdict(
+  supabase: SupabaseClient,
+  phone: string,
+  projectId: string | null,
+): Promise<ChannelConsentVerdict> {
+  const { org, failed } = await resolveProjectOrg(supabase, projectId);
+
+  // A studio that could not be resolved is not a studio that does not exist
+  // (R-AM). Taking the no-studio branch here would read another tenant's
+  // ledger for this send, so the failure refuses instead — logged, never
+  // silent.
+  if (failed) {
+    console.error(
+      "channelConsentVerdict: refusing, the owning studio could not be resolved",
+      { projectId },
+    );
+    return "refuse";
+  }
+
+  if (org) {
+    const { data: record, error: recordError } = await supabase
+      .from("studio_channel_consent")
+      .select("status, refusal_unanswered")
+      .eq("organization_id", org)
+      .eq("channel_kind", "sms")
+      .eq("channel_value", phone)
+      .maybeSingle();
+    if (recordError) {
+      console.error(
+        "channelConsentVerdict: refusing, the consent record could not be read",
+        recordError,
+      );
+      return "refuse";
+    }
+    if (!record) {
+      // No record is `not_asked`, and `not_asked` refuses (R-AW). The fold ran
+      // inside 00594, so every seat that ever carried a verdict has a record
+      // behind it; a pair with none was never asked by this studio.
+      return "refuse";
+    }
+    const row = record as {
+      status: string;
+      refusal_unanswered?: boolean | null;
+    };
+    // A refusal the recipient has not answered still stands, whatever the
+    // status now says (r6 M6-3), so it is read before the status is.
+    if (row.refusal_unanswered === true) return "refuse";
+    if (row.status === "granted") return "allow";
+    // `pending` is the invite in flight — sendPartySms's invite gate owns it.
+    if (row.status === "pending") return "unknown";
+    // `opted_out`, and `not_asked` recorded by the fold: both refuse.
+    return "refuse";
+  }
+
+  // No studio resolves at all — nothing to scope to, so the reduction stays
+  // phone-global here and only here. This is the last line between an
+  // unattributable send and a STOP, so it obeys R-AM: a read that ERRORED comes
+  // back as an empty row set, and an empty row set read as "nobody has refused"
+  // would lift the primary gate on exactly the send that has no other check
+  // (r7 R7-M2).
+  //
+  // IT IS THE RECORDS THAT ARE ASKED, HERE TOO (R-AW). The inbound STOP used to
+  // write project_parties phone-globally, and that write was this branch's
+  // backstop for a seat whose studio cannot be resolved. The seats are frozen
+  // and the rail writes the record only, so the phone-global question is asked
+  // of the records: any studio's recorded refusal on this number refuses a send
+  // that belongs to no studio at all. Scoped sends never reach here — the
+  // branch above answered them off the owning studio's own record (R-AK).
+  //
+  // The send itself is NOT refused when nothing on the number has refused: a
+  // studio-less project has no ledger to hold a verdict, so there is no record
+  // to require. That fail-open is named in the W1a report §5.2 and §8 and is a
+  // policy ruling owed, not a defect this function can close.
+  const { data: recordRows, error: recordScanError } = await supabase
+    .from("studio_channel_consent")
+    .select("status, refusal_unanswered")
+    .eq("channel_kind", "sms")
+    .eq("channel_value", phone);
+  if (recordScanError) {
+    console.error(
+      "channelConsentVerdict: refusing, the phone-global record scan failed",
+      recordScanError,
+    );
+    return "refuse";
+  }
+  const anyRecordRefuses = (recordRows ?? []).some((r) => {
+    const row = r as { status: string; refusal_unanswered?: boolean | null };
+    return row.status === "opted_out" || row.refusal_unanswered === true;
+  });
+  return anyRecordRefuses ? "refuse" : "unknown";
+}
+
+/**
+ * CR3-9 — THE RULE IS A SEND GATE, NOT DECORATION.
+ *
+ * `studio_contact_rules.channels_forbidden` containing `sms` is the studio's
+ * own written instruction that this person is never texted, and C7 rules that
+ * the rule OUTRANKS the designation. Until this, `grep -rl channels_forbidden
+ * supabase/functions/` returned nothing: the whole rail gated on the consent
+ * record alone, so a person carrying BOTH a recorded grant and a "Never text"
+ * rule — exactly what PR-m's manual path and the Add sheet's free-text rule can
+ * produce together — was sendable from every surface and from the crons.
+ *
+ * Asked of the ENGAGEMENT first (a per-job override is the same table with
+ * `subject_type = 'engagement'`), then of the person's CARD, then — for a
+ * phone-only send with no seat — of every card holding that number.
+ *
+ * Fail-closed, like `channelConsentVerdict`: a rule that cannot be READ is not
+ * a rule that does not exist, and this is a recipient-protection fact.
+ */
+export async function contactRuleForbidsSms(
+  supabase: SupabaseClient,
+  partyId: string | null,
+  phone: string,
+): Promise<boolean> {
+  const subjects: Array<{ type: string; id: string }> = [];
+
+  if (partyId) {
+    subjects.push({ type: "engagement", id: partyId });
+    const { data: party, error: partyError } = await supabase
+      .from("project_parties")
+      .select("studio_contact_id")
+      .eq("id", partyId)
+      .maybeSingle();
+    if (partyError) {
+      console.error(
+        "contactRuleForbidsSms: refusing, the seat's card could not be read",
+        partyError,
+      );
+      return true;
+    }
+    const cardId = (party as { studio_contact_id?: string | null } | null)
+      ?.studio_contact_id;
+    if (cardId) subjects.push({ type: "person", id: cardId });
+  }
+
+  if (subjects.length === 0 || !partyId) {
+    // No seat: the number is the only handle there is. Any card in any studio
+    // holding it answers, exactly as the phone-global consent scan does.
+    const { data: channels, error: channelError } = await supabase
+      .from("studio_contact_channels")
+      .select("owner_id")
+      .eq("value", phone);
+    if (channelError) {
+      console.error(
+        "contactRuleForbidsSms: refusing, the channel scan failed",
+        channelError,
+      );
+      return true;
+    }
+    for (const row of (channels ?? []) as Array<{ owner_id: string }>) {
+      subjects.push({ type: "person", id: row.owner_id });
+    }
+  }
+
+  if (subjects.length === 0) return false;
+
+  const { data: rules, error: ruleError } = await supabase
+    .from("studio_contact_rules")
+    .select("subject_type, subject_id, channels_forbidden")
+    .in("subject_id", subjects.map((s) => s.id));
+  if (ruleError) {
+    console.error(
+      "contactRuleForbidsSms: refusing, the rule could not be read",
+      ruleError,
+    );
+    return true;
+  }
+
+  const rows = (rules ?? []) as Array<{
+    subject_type: string;
+    subject_id: string;
+    channels_forbidden: string[] | null;
+  }>;
+  return subjects.some((subject) =>
+    rows.some((row) =>
+      row.subject_type === subject.type &&
+      row.subject_id === subject.id &&
+      (row.channels_forbidden ?? []).includes("sms")
+    )
+  );
 }
 
 async function resolveRecipient(
@@ -191,7 +576,7 @@ async function resolveRecipient(
   if (input.partyId) {
     const { data: party } = await supabase
       .from("project_parties")
-      .select("id, phone_e164, project_id, display_name, sms_consent_status")
+      .select("id, phone_e164, project_id, display_name")
       .eq("id", input.partyId)
       .maybeSingle();
     return {
@@ -199,20 +584,17 @@ async function resolveRecipient(
       projectId: party?.project_id ?? input.projectId ?? null,
       partyId: input.partyId,
       displayName: party?.display_name ?? null,
-      consent: (party?.sms_consent_status as ConsentStatus) ?? "not_asked",
     };
   }
-  // Phone-only path: consent is the reduction across all party rows on the phone.
+  // Phone-only path: the seat supplies a name for the body and nothing else.
   const phone = input.phone ?? null;
-  let consent: ConsentStatus = "not_asked";
   let displayName: string | null = null;
   if (phone) {
     const { data: rows } = await supabase
       .from("project_parties")
-      .select("display_name, sms_consent_status")
+      .select("display_name")
       .eq("phone_e164", phone);
     if (rows && rows.length > 0) {
-      consent = reduceConsent(rows as { sms_consent_status: ConsentStatus }[]);
       displayName = (rows[0] as { display_name: string | null }).display_name ??
         null;
     }
@@ -222,7 +604,6 @@ async function resolveRecipient(
     projectId: input.projectId ?? null,
     partyId: null,
     displayName,
-    consent,
   };
 }
 
@@ -431,19 +812,47 @@ export async function sendPartySms(
   if (!recipient.phone) {
     return { sent: false, reason: "no_phone_number" };
   }
-  if (recipient.consent === "opted_out") {
+  // FIRST: the studio's own consent record for this number (00594).
+  const verdict = await channelConsentVerdict(
+    supabase,
+    recipient.phone,
+    recipient.projectId,
+  );
+  if (verdict === "refuse") {
     return { sent: false, reason: "opted_out" };
   }
-  if (!isInvite && recipient.consent !== "granted") {
-    // Only the double-opt-in invite may reach a non-granted party.
-    return { sent: false, reason: "not_consented" };
+  // AND THAT IS THE WHOLE GATE (R-AY, final-run MAJOR-1 / MAJOR-2). There was a
+  // SECOND check here until this pass: PR-x's fail-closed legacy reduction over
+  // project_parties.sms_consent_status, kept "until the backfill is proven".
+  // It is deleted, in both directions, and the two directions are two defects:
+  //   · it REFUSED what the record allows. A number whose record says granted
+  //     over a frozen seat still reading opted_out — the design's own recovery
+  //     path, fold → reconsent → the recipient's own START — printed "Texting"
+  //     on the Call Sheet row, in the Call Sheet vitals, on the Directory row
+  //     and in field_activity_summary while every send came back
+  //     {sent:false, reason:"opted_out"} off this leg;
+  //   · it AUTHORISED what no record allows. On the no-studio branch the
+  //     verdict is `unknown` whenever nothing on the number has refused, and
+  //     this leg then let a frozen `granted` seat send while a frozen
+  //     `not_asked` seat on the same population did not — a frozen column
+  //     deciding a live text, which is exactly what the freeze denies.
+  // A seat carries no fact the record does not (00594 folded every seat in the
+  // same migration; the freeze means none has carried news since), so the
+  // record answers alone: a non-invite needs `allow`, and the invite keeps its
+  // own door below (`unknown` is the invite in flight).
+  // CR3-9: AND THE STUDIO'S OWN RULE. A recorded grant is not permission when
+  // the studio has written down that this person is never texted, and the rule
+  // binds the double-opt-in invite too: "never text" is not "never text except
+  // once, to ask".
+  if (await contactRuleForbidsSms(supabase, recipient.partyId, recipient.phone)) {
+    return { sent: false, reason: "contact_rule_forbids_sms" };
   }
-  if (
-    isInvite && recipient.consent !== "pending" &&
-    recipient.consent !== "granted"
-  ) {
-    // The invite is meaningful only for a pending (or already-granted) party.
-    return { sent: false, reason: "not_invitable" };
+  const studioGranted = verdict === "allow";
+  if (!isInvite && !studioGranted) {
+    // Only the double-opt-in invite may reach a number the record has not
+    // granted — an unresolvable studio included, which now refuses uniformly
+    // instead of asking the seat.
+    return { sent: false, reason: "not_consented" };
   }
   if (isInvite) {
     if (!input.partyId) {
@@ -574,6 +983,23 @@ export async function sendPartySms(
     site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ?? null,
   });
 
+  // E13: one out touch per text that actually went. Best effort and never a
+  // condition of the send — a record of the contact, not a gate on it. A
+  // phone-only send (no seat) has no subject to file against and writes none;
+  // record_touch answers NULL for a seat whose job records no studio (00635).
+  if (sent && recipient.partyId) {
+    const { error: touchError } = await supabase.rpc("record_touch", {
+      p_subject_type: "engagement",
+      p_subject_id: recipient.partyId,
+      p_channel_kind: "sms",
+      p_direction: "out",
+      p_occurred_at: now.toISOString(),
+      p_actor_ref: "sms-dispatch",
+      p_message_ref: messageId ?? null,
+    });
+    if (touchError) console.error("sendPartySms: record_touch failed", touchError.message);
+  }
+
   if (sent && convId) {
     await supabase
       .from("sms_conversations")
@@ -609,6 +1035,17 @@ const DEFERRED_TTL_MS = 24 * 3600 * 1000;
  * during which the recipient may have opted out or the send window may have
  * closed for good (>24h stale): a defer is a promise to try later, not a
  * guarantee to send at all.
+ *
+ * And a flushed row writes the SAME out touch sendPartySms writes (E13, W4 r3
+ * MAJOR-5): this path puts real texts on the wire, and a record of contact
+ * that skips the rail's most ordinary send is a record the room reads wrong.
+ *
+ * The re-check is the SAME gate sendPartySms uses, in the same order (R-AH):
+ * the studio's own consent record (channelConsentVerdict, keyed off the
+ * deferred row's own party) first, then the legacy party-row reduction. A
+ * second send path with a second consent gate is two answers to one question —
+ * it let a studio's `granted` record die at quiet hours, and let a studio's
+ * `opted_out` record be overruled by another studio's granted party row.
  */
 export async function flushDeferredMessages(
   supabase: SupabaseClient,
@@ -677,15 +1114,28 @@ export async function flushDeferredMessages(
     }
 
     // Re-check consent — it may have changed since the row was deferred.
-    const { data: partyRows } = await supabase
-      .from("project_parties")
-      .select("sms_consent_status")
-      .eq("phone_e164", phone);
-    const consent = reduceConsent(
-      (partyRows ?? []) as { sms_consent_status: ConsentStatus }[],
+    // The studio's own record for this number, resolved through the deferred
+    // row's party, exactly as sendPartySms does. The seat is read for the
+    // PROJECT only: its consent column was this path's second check until this
+    // pass and is deleted with sendPartySms's (R-AY, final-run MAJOR-1).
+    let deferredProjectId: string | null = null;
+    if (row.party_id) {
+      const { data: deferredParty } = await supabase
+        .from("project_parties")
+        .select("project_id")
+        .eq("id", row.party_id)
+        .maybeSingle();
+      const party = deferredParty as
+        | { project_id?: string | null }
+        | null;
+      deferredProjectId = party?.project_id ?? null;
+    }
+    const verdict = await channelConsentVerdict(
+      supabase,
+      phone,
+      deferredProjectId,
     );
-    const isInvite = row.template_key === "sms_optin_invite";
-    if (consent === "opted_out") {
+    if (verdict === "refuse") {
       await supabase
         .from("sms_messages")
         .update({ twilio_status: "suppressed", error_message: "opted_out" })
@@ -693,21 +1143,15 @@ export async function flushDeferredMessages(
       suppressed++;
       continue;
     }
-    if (isInvite) {
-      // The invite is meaningful only for a pending (or already-granted)
-      // party — including the no-party-rows case (reduces to 'not_asked').
-      if (consent !== "pending" && consent !== "granted") {
-        await supabase
-          .from("sms_messages")
-          .update({
-            twilio_status: "suppressed",
-            error_message: "not_invitable",
-          })
-          .eq("id", row.id);
-        suppressed++;
-        continue;
-      }
-    } else if (consent !== "granted") {
+    // The studio's own record says granted: that carries the deferred send
+    // (F-11), and it is the whole answer. The legacy party-row check that stood
+    // here — PR-x's fail-closed second check, narrowed to the deferred row's
+    // own seat — is deleted with sendPartySms's (R-AY, final-run MAJOR-1): a
+    // frozen column cannot refuse what the live record grants, and it cannot
+    // carry what no record grants either.
+    const studioGranted = verdict === "allow";
+    const isInvite = row.template_key === "sms_optin_invite";
+    if (!isInvite && !studioGranted) {
       await supabase
         .from("sms_messages")
         .update({ twilio_status: "suppressed", error_message: "not_consented" })
@@ -763,6 +1207,37 @@ export async function flushDeferredMessages(
         body: sendBody,
       })
       .eq("id", row.id);
+
+    // E13: one out touch per text that actually went — and this path sends
+    // real texts (W4 r3 MAJOR-5). sendPartySms writes its touch; the flush
+    // wrote none, so a digest deferred past 8pm by quiet hours — the normal
+    // shape of the field rail — went out next morning and never appeared in
+    // studio_touches. The card's derived "Last touch" then showed the
+    // PREVIOUS contact: the room saying the studio has not reached someone it
+    // reached this morning, against studio_touches' own table comment ("one
+    // row per contact a rail actually made, in either direction").
+    //
+    // Same posture as sendPartySms's: best effort, never a condition of the
+    // send; a row with no party_id has no subject to file against and writes
+    // none; record_touch answers NULL for a seat whose job records no studio
+    // (00635, R-BD).
+    if (row.party_id) {
+      const { error: touchError } = await supabase.rpc("record_touch", {
+        p_subject_type: "engagement",
+        p_subject_id: row.party_id,
+        p_channel_kind: "sms",
+        p_direction: "out",
+        p_occurred_at: now.toISOString(),
+        p_actor_ref: "sms-dispatch-flush",
+        p_message_ref: row.id,
+      });
+      if (touchError) {
+        console.error(
+          "flushDeferredMessages: record_touch failed",
+          touchError.message,
+        );
+      }
+    }
     flushed++;
   }
   return { flushed, skipped, suppressed, expired };

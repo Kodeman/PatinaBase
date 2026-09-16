@@ -2,7 +2,12 @@ import Link from "next/link";
 import type { UnsubscribeOutcome } from "@patina/notifications";
 
 interface PageProps {
-  searchParams: Promise<{ token?: string; status?: string; type?: string }>;
+  searchParams: Promise<{
+    token?: string;
+    status?: string;
+    type?: string;
+    scope?: string;
+  }>;
 }
 
 export const dynamic = "force-dynamic";
@@ -36,6 +41,12 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
         ok: params.status === "applied",
         status: params.status as UnsubscribeOutcome["status"],
         type: params.type as UnsubscribeOutcome["type"],
+        // The POST applies the token and redirects here, so the scope has to
+        // survive the hop or this page reads the narrow type again (W4 r5 F2).
+        scope:
+          params.scope === "address" || params.scope === "account"
+            ? params.scope
+            : undefined,
       }
     : { ok: false, status: "malformed" };
 
@@ -54,22 +65,30 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
                 You&apos;ve been unsubscribed
               </h1>
               <p className="text-[#4A453F] text-[15px] leading-6 mb-4">
-                {outcome.type === "all_marketing"
-                  ? "We've turned off all marketing emails. You'll still receive essential account notifications."
-                  : `We've unsubscribed you from ${humanizeType(outcome.type)} emails.`}
+                {appliedCopy(outcome)}
               </p>
-              <p className="text-[#4A453F] text-[15px] leading-6 mb-6">
-                Change your mind? Manage all preferences in your account.
-              </p>
-              {/* `/preferences` is retired: preferences live on the mat of
-                  the client's project page now. Linking the old address would
-                  cost a fold (and a sign-in hop) to reach the same place. */}
-              <Link
-                href="/#mat"
-                className="inline-block bg-[#A3927C] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
-              >
-                Manage Preferences
-              </Link>
+              {outcome.scope === "address" ? (
+                <p className="text-[#4A453F] text-[15px] leading-6 mb-6">
+                  Changed your mind? Ask the studio to send again and they can
+                  turn it back on.
+                </p>
+              ) : (
+                <>
+                  <p className="text-[#4A453F] text-[15px] leading-6 mb-6">
+                    Change your mind? Manage all preferences in your account.
+                  </p>
+                  {/* `/preferences` is retired: preferences live on the mat of
+                      the client's project page now. Linking the old address
+                      would cost a fold (and a sign-in hop) to reach the same
+                      place. */}
+                  <Link
+                    href="/#mat"
+                    className="inline-block bg-[#A3927C] text-white px-9 py-3.5 rounded-full font-semibold text-sm"
+                  >
+                    Manage Preferences
+                  </Link>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -137,6 +156,27 @@ function ConfirmUnsubscribe({ token }: { token: string }) {
       </div>
     </main>
   );
+}
+
+/**
+ * WHAT THE CLICK ACTUALLY DID (W4 r5 F2, the admin portal's W4 r4 MAJOR-2
+ * copy in this portal's voice).
+ *
+ * An account-less recipient's click lands on the ADDRESS: every email-kind
+ * channel carrying it, across every card and every studio, and the send gate
+ * then refuses every category to it — invoices and purchase orders included.
+ * Reading the token's own narrow type here would print "We've unsubscribed
+ * you from po sent emails", which the record contradicts on the one act whose
+ * whole purpose is telling her what she just did.
+ */
+function appliedCopy(outcome: UnsubscribeOutcome): string {
+  if (outcome.scope === "address") {
+    return "We've stopped all email from this studio to this address, including invoices and purchase orders.";
+  }
+  if (outcome.type === "all_marketing") {
+    return "We've turned off all marketing emails. You'll still receive essential account notifications.";
+  }
+  return `We've unsubscribed you from ${humanizeType(outcome.type)} emails.`;
 }
 
 function humanizeType(type: string | undefined): string {

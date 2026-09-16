@@ -242,16 +242,22 @@ export interface DesignBuildSubIdentity {
  * remembered from the sign response.
  *
  * `get_client_commercial_document_bundle` (00578) reads the deposit draw's own
- * live invoice and its active link token, and answers null the moment that
- * invoice is settled or voided: a paid deposit is not an offer. Null is also
- * what a bundle from a database this build is ahead of answers, and the door
- * renders nothing for it — the same silence a failed mint has always had.
+ * live invoice, and answers null the moment that invoice is settled or voided:
+ * a paid deposit is not an offer. Null is also what a bundle from a database
+ * this build is ahead of answers, and the door renders nothing for it — the
+ * same silence a failed mint has always had.
+ *
+ * IT CARRIES NO PAY ADDRESS SINCE 00638 (W4 r1 B-1). invoice_links stores a
+ * hash, and the bundle is a STABLE read that may not call the revoking minter,
+ * so `payToken` is always null here: the sign route's in-session offer is the
+ * one that carries a live `/pay/<token>`, and the reload path names the letter
+ * in the homeowner's own letterbox instead.
  */
 export interface DesignBuildDepositOffer {
   invoiceId: string;
   amountCents: number;
   label: string;
-  payToken: string;
+  payToken: string | null;
 }
 
 export interface DesignBuildLedger {
@@ -663,8 +669,11 @@ function adaptTradeScopeProgress(value: unknown): TradeScopeProgress {
   };
 }
 
-/** R50 — every field or nothing: a half-read offer would print a link that
- *  goes nowhere, or a figure with no way to pay it. */
+/** R50 — every field or nothing: a half-read offer would print a figure with
+ *  no way to pay it. The invoice and the figure are that rule; the pay ADDRESS
+ *  left this payload in 00638 (B-1), so requiring it here nulled every offer
+ *  the bundle carried and took the door's whole reload receipt with it. A null
+ *  token means "no address on this read", not "no offer". */
 function adaptDesignBuildDepositOffer(
   value: unknown,
 ): DesignBuildDepositOffer | null {
@@ -672,12 +681,12 @@ function adaptDesignBuildDepositOffer(
   const invoiceId = text(first(row, 'invoiceId', 'invoice_id'));
   const payToken = text(first(row, 'payToken', 'pay_token'));
   const amountCents = number(first(row, 'amountCents', 'amount_cents'));
-  if (!invoiceId || !payToken || amountCents <= 0) return null;
+  if (!invoiceId || amountCents <= 0) return null;
   return {
     invoiceId,
     amountCents,
     label: text(first(row, 'label'), 'Deposit'),
-    payToken,
+    payToken: payToken || null,
   };
 }
 

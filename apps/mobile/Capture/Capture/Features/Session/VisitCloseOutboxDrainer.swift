@@ -23,12 +23,15 @@ final class VisitCloseOutboxDrainer {
     /// authenticated surface reads them — an unscoped fetch would name a room
     /// from another account's visit in this designer's Hours entry.
     private let session: any SessionProviding
+    private let analytics: any CaptureAnalytics
     private var isDraining = false
 
-    init(store: CaptureStore, gateway: any TimeEntryGateway, session: any SessionProviding) {
+    init(store: CaptureStore, gateway: any TimeEntryGateway,
+         session: any SessionProviding, analytics: any CaptureAnalytics) {
         self.store = store
         self.gateway = gateway
         self.session = session
+        self.analytics = analytics
     }
 
     func resume(now: Date = Date(),
@@ -85,6 +88,9 @@ final class VisitCloseOutboxDrainer {
             userID: userID,
             startedAt: record.startedAt,
             durationMinutes: record.durationMinutes,
+            // HT-11: the close offer states it now, so the record carries the
+            // answer and this passes it on. `log_time` raises on a missing one.
+            billable: record.billable,
             notes: VisitCloseOrchestrator.notes(for: record, captures: captures(for: record)))
 
         record.state = .writing
@@ -97,6 +103,20 @@ final class VisitCloseOutboxDrainer {
             } else {
                 try await gateway.insertTimeEntry(request)
                 record.markDelivered()
+                // HT-27 — fired where the hour LANDS, not where she taps. The
+                // widget/intent decision rests on whether capture actually
+                // works, and a queued row that never drained is not capture
+                // working. The one event, two surfaces (W6): this is
+                // `field_visit`, LogTimeSheet's drainer is `field_sheet`.
+                analytics.event("time_entry_logged", [
+                    "surface": "field_visit",
+                    "source": FieldTimeSource.fieldVisit,
+                    "activity": "site_visit",
+                    "billable": String(record.billable),
+                    "rate_role": "unset",
+                    "duration_minutes": String(record.durationMinutes),
+                    "latency_ms": String(Int(max(0, now.timeIntervalSince(record.endedAt)) * 1000))
+                ])
             }
         } catch {
             // Cancellation first: it is the app being stopped, not the write

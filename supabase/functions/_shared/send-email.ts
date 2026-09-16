@@ -43,6 +43,20 @@ export interface ComplianceSendOptions {
   /** Fail closed when suppression/rate policy storage cannot be read. Durable
    * sends should enable this; legacy direct callers retain prior behavior. */
   failClosedPolicyReads?: boolean;
+  /**
+   * THE STUDIO THIS LETTER IS FROM (W4 r1 B-2).
+   *
+   * The same address sits on several studios' cards — that is normal, and the
+   * uniqueness index is per owner, not per tenant. Without a tenant here the
+   * out touch was filed against whichever studio happened to hold the
+   * worst-status copy of the address, so studio A's letter wrote a
+   * studio_touches row into studio B's room, readable by B's members. A caller
+   * that cannot name its studio writes NO touch and NO channel ref — the
+   * R-AW posture for an unattributable record. The address's STATUS verdict is
+   * unchanged and stays address-wide (D-6): a dead mailbox is dead for
+   * everyone.
+   */
+  organizationId?: string | null;
 }
 
 export interface ComplianceSendResult {
@@ -65,12 +79,144 @@ export interface PreparedResendRequest {
 }
 
 export type CompliancePreparationResult =
-  | { state: "ready"; request: PreparedResendRequest }
-  | { state: "suppressed"; reason: string };
+  | {
+    state: "ready";
+    request: PreparedResendRequest;
+    /** Set when the recipient is an account-less typed channel (CRM-12). */
+    channel?: ContactChannelResolution;
+  }
+  | { state: "suppressed"; reason: string; channel?: ContactChannelResolution };
 
 export type EmailSuppressionCheckResult =
   | { state: "clear" }
   | { state: "suppressed"; reason: "email_suppressed" };
+
+/**
+ * A typed reach channel (studio_contact_channels, 00593) the recipient address
+ * belongs to. CRM-12: a letter to a person with NO Patina account has no
+ * profile to carry a suppression flag, so the address's own row is the record —
+ * it is what the email rail writes a bounce back onto, what the send gate asks
+ * before it sends, and what the Directory row prints.
+ */
+export interface ContactChannelResolution {
+  /** The row whose status decided the verdict. The recipient's unsubscribe
+   *  door hangs off it, because unsubscribing is about the ADDRESS. */
+  id: string;
+  ownerType: "person" | "company";
+  ownerId: string;
+  value: string;
+  /** Worst status across every card carrying the address, any studio (D-6). */
+  status: "active" | "bounced" | "unsubscribed" | "dead";
+  /**
+   * The SENDING studio's own row for this address, when the caller named a
+   * studio (`organizationId`) and that studio carries the address. NULL
+   * otherwise — and NULL is a refusal to file: no out touch, no deliverability
+   * ref. It is the only row a record may name, because a touch is a claim
+   * about who wrote to whom, made inside one studio's book (W4 r1 B-2).
+   */
+  studioRow: {
+    id: string;
+    ownerType: "person" | "company";
+    ownerId: string;
+  } | null;
+}
+
+/** Worst-first, the paper-word discipline: one dead row settles the address. */
+const CHANNEL_STATUS_RANK: Record<string, number> = {
+  active: 0,
+  bounced: 1,
+  unsubscribed: 2,
+  dead: 3,
+};
+
+/** Statuses that refuse a send outright. A soft `bounced` does not: the address
+ *  may still be good, exactly as a single soft bounce does not suppress a
+ *  profile (resend-webhook's rolling threshold). */
+export function channelRefusesSend(status: string): boolean {
+  return status === "dead" || status === "unsubscribed";
+}
+
+/**
+ * The studio_contact_channels row an address belongs to, worst status first.
+ *
+ * The same address can be on several cards across several studios; the rails
+ * hold ONE verdict for it, because a dead mailbox is dead for everyone. A
+ * lookup failure resolves to null — the letter then behaves exactly as it did
+ * before this existed rather than failing closed on a table many recipients
+ * have no row in at all.
+ */
+export async function resolveContactChannel(
+  supabase: SupabaseClient,
+  to: string,
+  organizationId?: string | null,
+): Promise<ContactChannelResolution | null> {
+  const value = to.trim().toLowerCase();
+  if (!value) return null;
+  // The studio is NOT a column here: `studio_contact_channels` hangs off the
+  // owning card and 00593's RLS reads the org through `studio_contact_org(
+  // owner_id)`. Selecting a flat `organization_id` raised 42703 on every call,
+  // the catch below swallowed it, and the whole suppression gate answered
+  // "no channel on file" for every recipient (W4 r2 BLOCKING W4R2-1). The
+  // embed walks `studio_contact_channels_owner_id_fkey` to the card instead.
+  const { data, error } = await supabase
+    .from("studio_contact_channels")
+    .select(
+      "id, owner_type, owner_id, value, status, studio_contacts!inner(organization_id)",
+    )
+    .eq("value", value)
+    .in("channel_kind", ["email", "ap_email"]);
+  if (error) {
+    console.error("send-email: contact-channel lookup unavailable", error);
+    return null;
+  }
+  const rows = ((data ?? []) as Array<{
+    id: string;
+    owner_type: string;
+    owner_id: string;
+    value: string;
+    status: string;
+    // PostgREST answers a many-to-one embed with an object; a hand-rolled test
+    // double or an older PostgREST may hand back a one-element array.
+    studio_contacts?:
+      | { organization_id: string | null }
+      | Array<{ organization_id: string | null }>
+      | null;
+  }>).map((row) => {
+    const card = Array.isArray(row.studio_contacts)
+      ? row.studio_contacts[0] ?? null
+      : row.studio_contacts ?? null;
+    return { ...row, organization_id: card?.organization_id ?? null };
+  });
+  if (rows.length === 0) return null;
+  const worstOf = (candidates: typeof rows) =>
+    candidates.reduce((a, b) =>
+      (CHANNEL_STATUS_RANK[b.status] ?? 0) > (CHANNEL_STATUS_RANK[a.status] ?? 0)
+        ? b
+        : a
+    );
+  // The verdict is address-wide (D-6) …
+  const worst = worstOf(rows);
+  // … the SUBJECT of any record is not. Only the sending studio's own row may
+  // be written about, and only when the caller named that studio (B-2).
+  const ownRows = organizationId
+    ? rows.filter((row) => row.organization_id === organizationId)
+    : [];
+  const own = ownRows.length > 0 ? worstOf(ownRows) : null;
+  return {
+    id: worst.id,
+    ownerType: worst.owner_type === "company" ? "company" : "person",
+    ownerId: worst.owner_id,
+    value: worst.value,
+    status: worst.status as ContactChannelResolution["status"],
+    studioRow: own
+      ? {
+        id: own.id,
+        ownerType: own.owner_type === "company" ? "company" : "person",
+        ownerId: own.owner_id,
+      }
+      : null,
+  };
+}
 
 export type PreparedResendResult =
   | { state: "delivered"; id?: string }
@@ -166,7 +312,9 @@ export function buildResendTags(
 }
 
 export async function generateUnsubscribeToken(
-  userId: string,
+  /** The token's subject: a profile id, or `channel:<id>` for an address with
+   *  no account behind it (00635/CRM-12). */
+  subject: string,
   notificationType: string,
 ): Promise<string> {
   return await new SignJWT({
@@ -174,7 +322,7 @@ export async function generateUnsubscribeToken(
     purpose: "unsubscribe",
   })
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(userId)
+    .setSubject(subject)
     .setIssuedAt()
     .setExpirationTime("72h")
     .setIssuer("patina:notifications")
@@ -196,6 +344,30 @@ export async function generateUnsubscribeUrl(
   baseUrl = DEFAULT_BASE_URL,
 ): Promise<string> {
   const token = await generateUnsubscribeToken(userId, notificationType);
+  return `${baseUrl}/api/unsubscribe?token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * The same signed one-click token, with a CHANNEL as its subject
+ * (`channel:<studio_contact_channels.id>`) instead of a user id.
+ *
+ * A person with no Patina account has no preferences page and no profile to
+ * opt out on, so this header is her only door out — which is why it is added
+ * to EVERY category here and not only to marketing, as the account-holder path
+ * does. The landing (packages/notifications applyUnsubscribeToken) marks the
+ * address's channel rows unsubscribed, and the send gate refuses them from
+ * then on. The consequence is deliberate: one click stops the studio emailing
+ * that address at all, including invoices, and the Directory row says so.
+ */
+export async function generateChannelUnsubscribeUrl(
+  channelId: string,
+  notificationType: string,
+  baseUrl = DEFAULT_BASE_URL,
+): Promise<string> {
+  const token = await generateUnsubscribeToken(
+    `channel:${channelId}`,
+    notificationType,
+  );
   return `${baseUrl}/api/unsubscribe?token=${encodeURIComponent(token)}`;
 }
 
@@ -243,6 +415,44 @@ export async function prepareCompliantEmail(
 ): Promise<CompliancePreparationResult> {
   const devMode = getDevMode();
   const effectiveTo = effectiveRecipient(options.to);
+
+  // CRM-12. A recipient with no Patina account is not "unsuppressible": the
+  // typed channel the address sits on carries the verdict, and a dead or
+  // unsubscribed one refuses the send exactly as profiles.email_suppressed
+  // does for an account holder.
+  //
+  // THE GATE ASKS THE ADDRESS, ACCOUNT OR NO ACCOUNT (W4 r3 MAJOR-1). This
+  // used to be `options.userId ? undefined : await resolveContactChannel(…)`,
+  // so the whole D-4/D-6 verdict was skipped on every userId-bearing rail
+  // (invoice-send, client-invite, notification-dispatch). The reachable
+  // sequence is the one D-6 exists for: an account-less letter hard-bounces,
+  // writeChannelStatus marks EVERY row on the address `dead` while
+  // handleBounce leaves profiles.email_suppressed alone (the log row's
+  // user_id is NULL), and the next letter to the same mailbox — this time
+  // carrying a userId — read email_suppressed=false and sent to a dead
+  // mailbox. Same for `unsubscribed`: the Directory row said stopped while
+  // D-4's own sentence ("one click stops the studio emailing that address at
+  // all, invoices included") was false on that branch. Measured on the clean
+  // seed: designer@patina.dev is both a studio_contact_channels value and a
+  // profiles.email.
+  const channel = (await resolveContactChannel(
+    supabase,
+    options.to,
+    options.organizationId,
+  )) ?? undefined;
+  // …but the RECORD stays where it was. An account holder's letter is about a
+  // person the rolodex may not carry at all, so the deliverability ref, the
+  // out touch and the channel unsubscribe door remain the account-less path's
+  // (B-2, E13). Widening the gate is not a licence to file a studio touch
+  // about every account holder whose address happens to sit on a card.
+  const recordChannel = options.userId ? undefined : channel;
+  if (channel && channelRefusesSend(channel.status)) {
+    return {
+      state: "suppressed",
+      reason: `channel_${channel.status}`,
+      channel: recordChannel,
+    };
+  }
 
   if (options.userId) {
     const suppression = await checkEmailSuppression(
@@ -297,6 +507,15 @@ export async function prepareCompliantEmail(
       options.unsubscribeBaseUrl || DEFAULT_BASE_URL,
     );
     Object.assign(headers, buildUnsubscribeHeaders(unsubscribeUrl));
+  } else if (recordChannel) {
+    // Every category, for the reason generateChannelUnsubscribeUrl states: it
+    // is the only door this recipient has.
+    const unsubscribeUrl = await generateChannelUnsubscribeUrl(
+      recordChannel.id,
+      options.notificationType ?? "all_studio_mail",
+      options.unsubscribeBaseUrl || DEFAULT_BASE_URL,
+    );
+    Object.assign(headers, buildUnsubscribeHeaders(unsubscribeUrl));
   }
 
   const from = options.from || resolveFromAddress(options.category);
@@ -324,6 +543,7 @@ export async function prepareCompliantEmail(
 
   return {
     state: "ready",
+    channel: recordChannel,
     request: {
       body: JSON.stringify(payload),
       from,
@@ -429,9 +649,20 @@ export async function sendCompliantEmail(
   const prepared = await prepareCompliantEmail(supabase, options);
   // A letter to someone with no Patina account still has a business record
   // behind it; a `ref` is enough to earn a log row (notification_log.user_id is
-  // nullable, 00591).
+  // nullable, 00591). CRM-12 supplies the missing case: an account-less
+  // recipient whose letter names no other record is identified by the CHANNEL
+  // it was addressed to — the deliverability ref. Without it the row was never
+  // written, so the provider_id never landed, so resend-webhook could never
+  // match the bounce back to the address that bounced.
+  // The ref names a row in the SENDING studio's own book or it names nothing
+  // (B-2): a bounce is written back by ADDRESS (resend-webhook/channel-status),
+  // so an unattributable letter loses its log row, never its write-back.
+  const ref = options.ref ??
+    (prepared.channel?.studioRow
+      ? { type: "studio_contact_channel", id: prepared.channel.studioRow.id }
+      : undefined);
   const shouldLog = !options.skipLog &&
-    Boolean(options.userId || options.ref);
+    Boolean(options.userId || ref);
 
   if (prepared.state === "suppressed") {
     if (shouldLog) {
@@ -441,8 +672,8 @@ export async function sendCompliantEmail(
         channel: "email",
         status: "suppressed",
         template_id: options.templateId,
-        ref_type: options.ref?.type,
-        ref_id: options.ref?.id,
+        ref_type: ref?.type,
+        ref_id: ref?.id,
         recipient: effectiveRecipient(options.to),
         metadata: { reason: prepared.reason, ...options.metadata },
       });
@@ -463,8 +694,8 @@ export async function sendCompliantEmail(
         channel: "email",
         status: "sending",
         template_id: options.templateId,
-        ref_type: options.ref?.type,
-        ref_id: options.ref?.id,
+        ref_type: ref?.type,
+        ref_id: ref?.id,
         recipient: prepared.request.to[0],
         metadata: options.metadata ?? {},
       })
@@ -500,6 +731,24 @@ export async function sendCompliantEmail(
         status: "failed",
         error: result.error,
       }).eq("id", logId);
+    }
+  }
+
+  // E13: one out touch per letter that actually went, for a subject the room
+  // can read it on. Only the account-less channel path has one — an account
+  // holder's letter is about a person the rolodex may not carry at all.
+  // Best-effort: a touch is a record of the send, never a condition of it.
+  // The subject is the sending studio's own card, or there is no touch (B-2).
+  if (result.state === "delivered" && prepared.channel?.studioRow) {
+    const { error: touchError } = await supabase.rpc("record_touch", {
+      p_subject_type: prepared.channel.studioRow.ownerType,
+      p_subject_id: prepared.channel.studioRow.ownerId,
+      p_channel_kind: "email",
+      p_direction: "out",
+      p_message_ref: logId ?? null,
+    });
+    if (touchError) {
+      console.error("[send-email] record_touch failed", touchError.message);
     }
   }
 

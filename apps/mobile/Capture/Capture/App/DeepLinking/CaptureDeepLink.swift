@@ -94,6 +94,9 @@ enum CaptureDeepLink {
         // V0 is a SHEET, not a route: without this the sweep would file a PNG
         // of C1 under `screen.V0.visit`.
         case .v0Visit:          coordinator.present(.visit)
+        // H1 is a SHEET too, for the same reason: without this the sweep would
+        // file a PNG of whatever the realm was showing under `screen.H1.log-time`.
+        case .h1LogTime:        coordinator.present(.logTime)
         case .c5SpecimenSheet:  withSample { coordinator.present(.specimenSheet($0)) }
         case .n1TagOCR:         withSample { coordinator.present(.ocr($0)) }
         case .n2Scan:           withSample { coordinator.present(.code($0)) }
@@ -124,16 +127,15 @@ enum CaptureDeepLink {
              .q1QRScan, .q2QRApprove,
              .f1ScanSetup, .f1Context, .f2SiteScan, .f3ScanReview, .f4ScanUpload:
             routeWorkScreen(id, coordinator: coordinator)
+        case .pr1Roster, .pr2Person, .pr3SiteAccess:
+            routePeopleScreen(id, coordinator: coordinator)
         case .sr01SiteHub, .sr02Composer, .sr03ItemConfig, .sr04AssignSend,
              .sr05Tracker, .sr06ReviewInbox, .sr07MeasureReview, .sr08PhotoReview,
              .sr09Approval, .sr10BinderRooms, .sr11BinderDetail, .sr12BinderHistory,
              .sr13GuestLanding, .sr14GuestChecklist, .sr15GuestMeasure,
              .sr16GuestPhoto, .sr17GuestQueue, .sr18GuestReceipt,
              .sr19GuestDone, .sr20GuestReturned:
-            coordinator.navigate(to: .site(
-                screen: id,
-                projectID: SiteRequestFixtures.projectID,
-                requestID: SiteRequestFixtures.requestID))
+            routeSiteRequestScreen(id, coordinator: coordinator)
         case .o1Welcome:       coordinator.onboardingStep = 0
         case .o2Connect:       coordinator.onboardingStep = 1
         case .o3CameraPriming: coordinator.onboardingStep = 2
@@ -186,6 +188,31 @@ enum CaptureDeepLink {
             identity: CaptureSessionIdentity(userID: session.userID,
                                              workspaceID: session.workspaceID)
         ).context?.visitID ?? UUID()
+    }
+
+    /// W5's three People-room screens, all on one route: the screen id inside
+    /// picks the face, so the harness drives PR1/PR2/PR3 through one case.
+    @MainActor
+    private static func routePeopleScreen(
+        _ id: CaptureScreenID,
+        coordinator: CaptureCoordinator
+    ) {
+        coordinator.navigate(to: .people(
+            screen: id,
+            projectID: PeopleRoomFixtures.projectID,
+            personID: PeopleRoomFixtures.personID))
+    }
+
+    /// The twenty Site Request screens, likewise on one route.
+    @MainActor
+    private static func routeSiteRequestScreen(
+        _ id: CaptureScreenID,
+        coordinator: CaptureCoordinator
+    ) {
+        coordinator.navigate(to: .site(
+            screen: id,
+            projectID: SiteRequestFixtures.projectID,
+            requestID: SiteRequestFixtures.requestID))
     }
 
     /// Phase 2 designer/pro harness routes. Detail screens resolve the stable
@@ -244,7 +271,12 @@ enum CaptureDeepLink {
              .sr09Approval, .sr10BinderRooms, .sr11BinderDetail, .sr12BinderHistory,
              .sr13GuestLanding, .sr14GuestChecklist, .sr15GuestMeasure,
              .sr16GuestPhoto, .sr17GuestQueue, .sr18GuestReceipt,
-             .sr19GuestDone, .sr20GuestReturned:
+             .sr19GuestDone, .sr20GuestReturned,
+             // H1 is reached from the Work realm's Browse grid and from the
+             // companion; a sweep that opened it over the viewfinder would
+             // photograph it in a place it never appears.
+             .h1LogTime,
+             .pr1Roster, .pr2Person, .pr3SiteAccess:
             .work
         default:
             .camera

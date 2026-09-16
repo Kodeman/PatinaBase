@@ -98,7 +98,7 @@ import {
   clientProjectDeepLink,
   clientProjectLink,
 } from '../_shared/client-portal-links.ts';
-import { ensureInvoiceLinkUrl } from '../_shared/invoice-links.ts';
+import { ensureInvoiceLinkUrl, letterFallbackUrl } from '../_shared/invoice-links.ts';
 // Direct-order settle side effects (00540 / W5): the earnings credit + project
 // notice, and the intake enqueue that gives the client a "where is it".
 import {
@@ -455,20 +455,6 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     const deskName = invoiceDeskName(invoice);
     const designerName = designerDisplayName(invoice);
     const balanceCents = invoice.total_cents - invoice.amount_paid_cents;
-    // The receipt links to the invoice's standing page, /pay/<token> (00574,
-    // K1): it opens for anyone holding the letter, signed in or not, with or
-    // without a Patina account. This REVERSES the earlier ruling recorded here
-    // — that `/invoices/<id>` stays so the Patina iOS app's `/invoices/*`
-    // applinks claim opens the native invoice. A signed-in iOS client's
-    // receipt link now opens Safari, by decision (T3 I1, recorded as R137).
-    // The in-app inbox row below keeps its `/invoices/<id>` deep_link because
-    // it routes the iOS inbox by id (I2): the emailed link and the inbox link
-    // for the same event land on different surfaces on purpose — do not
-    // "fix" it. `/invoices/<id>` remains the fallback only when no link can be
-    // ensured (draft, void, or an RPC failure).
-    const portalUrl =
-      (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
-      `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
     // Two amounts, deliberately: the client is told what their card/bank was
     // actually charged (balance + rail fee), the designer is told what landed
     // on the invoice (net). A legacy payment has no fee and the two coincide.
@@ -480,6 +466,31 @@ async function sendSuccessSideEffects(admin: SupabaseClient, row: PaymentRow): P
     // notification_log row that doubles as their in-app inbox entry).
     const recipient = await resolveRecipient(admin, invoice);
     if (recipient.email) {
+      // The receipt links to the invoice's standing page, /pay/<token> (00574,
+      // K1): it opens for anyone holding the letter, signed in or not, with or
+      // without a Patina account. This REVERSES the earlier ruling recorded
+      // here — that `/invoices/<id>` stays so the Patina iOS app's
+      // `/invoices/*` applinks claim opens the native invoice. A signed-in iOS
+      // client's receipt link now opens Safari, by decision (T3 I1, recorded
+      // as R137). The in-app inbox row below keeps its `/invoices/<id>`
+      // deep_link because it routes the iOS inbox by id (I2): the emailed link
+      // and the inbox link for the same event land on different surfaces on
+      // purpose — do not "fix" it. The FALLBACK, for when no link can be
+      // ensured (draft, void, a payer still standing on the address, an RPC
+      // failure), is `letterFallbackUrl`'s `/?invoice=<id>` letterbox form:
+      // the client portal has no `/invoices/<id>` page for a browser to open
+      // (W4 r6 MAJOR-1), whatever the iOS applink claims about the same path.
+      //
+      // ASKED ONLY WHEN A LETTER IS ACTUALLY GOING OUT (W4 r9 BLOCKING-1).
+      // This sat above `resolveRecipient`, so an invoice with no reachable
+      // recipient still had its address rotated and the fresh token thrown
+      // away — a mint nobody could ever read, and a dead address for whoever
+      // held the last letter. 00636's guard now also holds the address through
+      // the Stripe return window; this call moved behind the recipient so
+      // nothing rotates for a letter that is never sent.
+      const portalUrl =
+        (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
+        letterFallbackUrl(CLIENT_PORTAL_URL, invoice.id);
       // Studio co-brand (Designer Studios): the invoice's own studio resolves the
       // brand — a studio invoice has no project to read it from, and a
       // two-studio designer's primary studio would be the wrong letterhead.
@@ -567,15 +578,20 @@ async function sendFailureSideEffects(admin: SupabaseClient, row: PaymentRow): P
     const projectName = invoiceSubjectName(invoice, null);
     const deskName = invoiceDeskName(invoice);
     const designerName = designerDisplayName(invoice);
-    // /pay/<token> (00574), with today's `/invoices/<id>` as the fallback —
-    // see the receipt letter above for the ruling this records.
-    const portalUrl =
-      (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
-      `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
     const amountLabel = formatInvoiceCurrency(row.amount_cents, invoice.currency);
 
     const recipient = await resolveRecipient(admin, invoice);
     if (recipient.email) {
+      // /pay/<token> (00574), with the `/?invoice=<id>` letterbox form as the
+      // fallback — see the receipt letter above for the ruling this records,
+      // and for why the ask happens here rather than before the recipient is
+      // known (W4 r9 BLOCKING-1). On this path the fallback is the ordinary
+      // answer for a card that has just been declined: 00636 holds the
+      // address the client is about to retry from rather than revoking it
+      // under her.
+      const portalUrl =
+        (await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoice.id)) ??
+        letterFallbackUrl(CLIENT_PORTAL_URL, invoice.id);
       // Studio co-brand (Designer Studios): the invoice's own studio resolves the
       // brand — a studio invoice has no project to read it from, and a
       // two-studio designer's primary studio would be the wrong letterhead.

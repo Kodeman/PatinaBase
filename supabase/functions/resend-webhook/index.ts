@@ -14,6 +14,15 @@ import {
   resolveBounceReason,
   resolveBounceType,
 } from "./status-map.ts";
+import {
+  applyChannelStatus,
+  channelStatusForEvent,
+  type ChannelStatusClient,
+  isSuppressingStatus,
+  normalizeChannelAddress,
+  type ProfileSuppressionClient,
+  suppressProfilesForAddress,
+} from "./channel-status.ts";
 
 
 const corsHeaders = {
@@ -207,8 +216,21 @@ export async function handleResendEvent(
     .single();
 
   if (!logEntry) {
-    // Not found — might be a non-tracked email (e.g. auth emails)
+    // Not found — might be a non-tracked email (e.g. auth emails).
+    //
+    // A LETTER'S ATTRIBUTION AND AN ADDRESS'S DELIVERABILITY ARE TWO DIFFERENT
+    // QUESTIONS (W4 r2 MAJOR-3). W4 r1's B-2 narrowed the notification_log ref
+    // to the SENDING studio's own card, which is right for the touch — a record
+    // is one studio's claim — but it means a letter from a sender that passes
+    // no explicit ref (po-send, quote-request-send, trade-rfq-send,
+    // trade-agreement-send) writes no log row at all when the sending studio's
+    // book does not carry the address. Returning here without asking would drop
+    // that letter's bounce or complaint on the floor, leaving the address
+    // `active` on EVERY studio's card — and that first bounce, arriving on
+    // studio A's letter, is exactly the one that was going to tell studio B.
+    // D-6: a dead mailbox is dead for everyone, whoever's letter found out.
     console.warn(`No notification_log entry for email_id: ${emailId}`);
+    await writeChannelStatus(supabase, event, null, new Date().toISOString());
     return { matched: false };
   }
 
@@ -390,11 +412,12 @@ export async function handleResendEvent(
       });
 
       // Increment bounce count and check suppression threshold. A row with no
-      // user_id has no profile to suppress — the bounce is recorded and that
-      // is all there is to do.
+      // user_id has no profile to suppress — but it still has an ADDRESS, and
+      // since CRM-12 the address's own typed channel rows carry the verdict.
       if (logEntry.user_id) {
         await handleBounce(supabase, logEntry.user_id, bounceType ?? undefined);
       }
+      await writeChannelStatus(supabase, event, logEntry.recipient, now);
       break;
     }
 
@@ -430,6 +453,10 @@ export async function handleResendEvent(
         );
       }
 
+      // The same complaint, written onto the address itself (CRM-12) — the
+      // only record there is when nobody holds an account behind it.
+      await writeChannelStatus(supabase, event, logEntry.recipient, now);
+
       await emitPostHogEvent(distinctId, "email_unsubscribed", {
         campaign_id: campaignId,
         template_id: templateId,
@@ -452,6 +479,65 @@ export async function handleResendEvent(
   });
 
   return { matched: true };
+}
+
+/**
+ * Write the provider's verdict onto every typed email channel carrying the
+ * address (CRM-12), and — when the verdict kills the mailbox — onto every
+ * profile carrying it too (W4 r13 MAJOR-1). The address is
+ * notification_log.recipient — what sendCompliantEmail recorded it actually
+ * sent to (00591) — falling back to the event's own `to`.
+ *
+ * BOTH LEDGERS, FROM ONE EVENT. The bounce and complaint branches above write
+ * `profiles` only when the log row carries a `user_id`; the orphan branch has
+ * no log row to carry one. `campaign-dispatch` reads `profiles.email_suppressed`
+ * and never asks the channel gate, so a verdict that lands only on the channel
+ * row leaves that rail mailing a dead address. Writing by ADDRESS here covers
+ * every path this function has — the orphan branch, and a log row whose
+ * `user_id` is null (00591) — and is a harmless repeat of the by-id write when
+ * there is a user.
+ *
+ * Never throws: the log row for this event is already written and a failure
+ * here must not make Resend retry the whole delivery.
+ */
+async function writeChannelStatus(
+  supabase: SupabaseClient,
+  event: ResendWebhookEvent,
+  recipient: unknown,
+  now: string,
+): Promise<void> {
+  const status = channelStatusForEvent(
+    event.type,
+    isHardBounce(resolveBounceType(event.data) ?? undefined),
+  );
+  if (!status) return;
+  const address = normalizeChannelAddress(
+    (typeof recipient === "string" && recipient) ||
+      event.data.to?.[0] || null,
+  );
+  try {
+    await applyChannelStatus(
+      supabase as unknown as ChannelStatusClient,
+      address,
+      status,
+      now,
+    );
+  } catch (err) {
+    console.warn("resend-webhook: channel status write threw", err);
+  }
+
+  // A soft bounce is not a verdict — 'bounced' is recorded and nothing is
+  // suppressed, exactly as one soft bounce does not suppress a profile.
+  if (!isSuppressingStatus(status)) return;
+  try {
+    await suppressProfilesForAddress(
+      supabase as unknown as ProfileSuppressionClient,
+      address,
+      now,
+    );
+  } catch (err) {
+    console.warn("resend-webhook: profile suppression threw", err);
+  }
 }
 
 /**

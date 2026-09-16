@@ -20,6 +20,10 @@ const PUBLIC_PREFIXES = [
   '/plans',
   '/pay',
   '/evidence',
+  // '/paperwork' is the firm's compliance upload door (PR-a, VISION V10): the
+  // paperwork contact of a subcontractor opens it from a link with no session,
+  // and it is a trade surface, not a homeowner one.
+  '/paperwork',
   '/quiz',
   '/preferences/unsubscribe',
   '/wrong-portal',

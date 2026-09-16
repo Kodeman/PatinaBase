@@ -166,11 +166,24 @@ function csvResponse(csv: string, dateStart: string, stats: PreviewStats): Respo
   });
 }
 
-/** RFC-4180 field: double-quote, escape embedded ", flatten newlines to spaces. */
+/** RFC-4180 field: double-quote, escape embedded ", flatten newlines to spaces,
+ *  and neutralize a leading `=`, `+`, `-`, `@` or tab with an apostrophe.
+ *
+ *  MS-04 — RFC 4180 quoting does not stop Excel or Google Sheets reading a cell
+ *  that starts with one of those characters as a FORMULA, and this export's free
+ *  text (vendor and project names, memos) is written by people. The apostrophe
+ *  is the standard neutralizer: the rest of the cell is then literal text and
+ *  the apostrophe itself is not displayed. Kept identical to the designer
+ *  portal's `time-export.ts` so both exports behave the same way. */
 function csvField(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '""';
   const s = String(value).replace(/[\r\n]+/g, " ");
-  return `"${s.replace(/"/g, '""')}"`;
+  // A plain signed number is left alone — `-145.00` is a money cell a
+  // bookkeeper imports, not a formula; anything else leading with one of the
+  // five characters is quoted as text.
+  const guarded =
+    /^[=+\-@\t]/.test(s) && !/^[+-]?\d+(\.\d+)?$/.test(s) ? `'${s}` : s;
+  return `"${guarded.replace(/"/g, '""')}"`;
 }
 
 /** Render the payment_pattern enum as a human-readable label for the CSV. */
