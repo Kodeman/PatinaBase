@@ -638,6 +638,12 @@ describe("a household member (PR-c / C5)", () => {
     fireEvent.change(screen.getByLabelText("Full name"), {
       target: { value: "Chidi Okonkwo" },
     });
+    // F-6: the grant is written under the same three conjuncts that hold the
+    // act — `authorityOpen` among them — so the band is OPENED here rather
+    // than typed into while it is still hidden, which is what a studio does.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
     fireEvent.change(screen.getByLabelText("Authority"), {
       target: { value: "Signs money to $2,500" },
     });
@@ -951,13 +957,90 @@ describe("the recorded studio, while it is still resolving", () => {
   });
 
   /**
-   * F1 — WITH NO RECORDED STUDIO THERE IS NO STANDING TO READ, so an
-   * unreadable list is not a reason to hold. `isOrgAdmin` answers `false`
-   * there whatever the list says (CR11-11), and holding the act suppressed the
-   * one notice that IS true on such a job.
+   * F-1 — WITH NO RECORDED STUDIO THERE IS NO AUTHORITY TO RECORD, so the
+   * band is not offered at all. Every `project_party_authority` policy
+   * (00624:989,1003,1019,1045) gates on
+   * `is_active_studio_member(project_party_recorded_studio())`, false for a
+   * NULL studio (00417:47): EVERY scope is refused on such a job, and the
+   * refusal landed after the seat, the channels, the rule and the affiliation
+   * were written — as the generic "Could not add them just now. Try again."
+   *
+   * This replaces the F1 case that asserted the owner/admin notice and the
+   * disabled money scope on a no-studio job: with no band there is no notice
+   * to suppress and no scope on offer to disable, which is what CR11-11's
+   * "the band closes" always claimed.
    */
-  it("does not hold on standing where the job records no studio", () => {
+  it("offers no authority band at all where the job records no studio", () => {
     recordedStudio.current = null;
+    orgsState.isError = true;
+    openSub();
+
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Confirm from the agreement" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("What they may decide"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Up to, in dollars"),
+    ).not.toBeInTheDocument();
+    // The seat itself is unaffected — it is the GRANT that has nowhere to go.
+    expect(
+      screen.getByRole("button", { name: "Add to the roster" }),
+    ).not.toHaveAttribute("aria-disabled");
+  });
+
+  /**
+   * F-1, the structural half. A phrase typed while the job still recorded a
+   * studio survives a change to one that records none (the band closes, the
+   * state does not), and the writer refuses it before the first row rather
+   * than after four.
+   */
+  it("refuses a grant carried onto a no-studio job before anything is written", async () => {
+    const view = render(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    fillSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    recordedStudio.current = null;
+    view.rerender(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This job isn’t attached to a studio yet, so there is nowhere to record the authority.",
+    );
+    expect(setAuthority).not.toHaveBeenCalled();
+    expect(addParty).not.toHaveBeenCalled();
+    expect(addChannel).not.toHaveBeenCalled();
+    expect(setRule).not.toHaveBeenCalled();
+    expect(setAffiliation).not.toHaveBeenCalled();
+  });
+
+  /**
+   * F-2 — AN UNRESOLVED BOOK IS NOT A RESOLVED NONE. `!!recordedStudioId`
+   * read the `undefined` of a book still out or unreadable as the resolved
+   * NULL, so `authorityStandingUnread` answered `false` there: the owner/admin
+   * notice asserted a refusal against an `isOrgAdmin` that had read nothing,
+   * and the money and draw scopes rendered disabled — for a caller who may be
+   * the owner. The F-A defect by the other road.
+   */
+  it("asserts no standing while the job’s own book is unresolved", () => {
+    recordedStudio.loading = true;
     orgsState.isError = true;
     openSub();
     fireEvent.click(
@@ -968,20 +1051,88 @@ describe("the recorded studio, while it is still resolving", () => {
     });
 
     const act = screen.getByRole("button", { name: "Add to the roster" });
-    expect(act).not.toHaveAttribute("aria-disabled");
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-recorded-studio-held",
+    );
+    expect(
+      screen.getByText("Checking which studio keeps this job’s book."),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText(
-        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
-      ),
-    ).not.toBeInTheDocument();
-    // The true notice, no longer suppressed: money and draws are ungrantable
-    // on a job that records no studio.
-    expect(
-      screen.getByText(
         "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
       ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Signs money" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("option", { name: "Certifies draws" }),
+    ).not.toBeDisabled();
+  });
+
+  it("asserts no standing when the job’s own book could not be read", () => {
+    recordedStudio.isError = true;
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-recorded-studio-held",
+    );
+    expect(
+      screen.getByText(
+        "Couldn’t read which studio keeps this job’s book. Press again to try once more.",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Signs money" })).toBeDisabled();
+    expect(
+      screen.queryByText(
+        "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Signs money" }),
+    ).not.toBeDisabled();
+  });
+
+  /**
+   * F2's other disjunct — a FIGURE with no phrase is a grant too, and the
+   * write runs under `phrase || threshold`. A hold that read the phrase alone
+   * would release the act on this one and meet the refusal after the writes.
+   */
+  it("holds the act on an unread standing where only the figure was typed", async () => {
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Up to, in dollars"), {
+      target: { value: "2500" },
+    });
+    expect(screen.getByLabelText("Authority")).toHaveValue("");
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-authority-standing-held",
+    );
+    expect(
+      screen.getByText(
+        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(orgsRefetch).toHaveBeenCalled());
+    expect(addParty).not.toHaveBeenCalled();
+    expect(setAuthority).not.toHaveBeenCalled();
   });
 
   /**

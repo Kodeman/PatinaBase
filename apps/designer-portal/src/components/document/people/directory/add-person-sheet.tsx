@@ -248,6 +248,20 @@ const AUTHORITY_STANDING_HELD_SENTENCE =
   "Checking your standing in this job’s studio.";
 const AUTHORITY_STANDING_UNREAD_SENTENCE =
   "Couldn’t read your standing in this job’s studio. Press again to try once more.";
+/**
+ * F-1 — A JOB THAT KEEPS NO BOOK CAN RECORD NO AUTHORITY. All four
+ * `project_party_authority_studio_*` policies
+ * (00624_project_party_window_and_authority.sql:989,1003,1019,1045) gate on
+ * `is_active_studio_member(project_party_recorded_studio(engagement_id))`,
+ * which is false for a NULL studio (00417:47), so every scope is refused on
+ * such a job. The band is not offered there (the render below); this is what
+ * `submitParty` says to any caller that reaches it with a grant typed anyway.
+ * Composed from the two sentences the room already prints for the same fact —
+ * this sheet's `noBookClause` opening and the Reach & access sentence
+ * (reach-access.tsx:396) — so that the thing that cannot be recorded is named.
+ */
+const NO_STUDIO_AUTHORITY_SENTENCE =
+  "This job isn’t attached to a studio yet, so there is nowhere to record the authority.";
 
 /** "a sub", "an installer" — the article the noun actually takes. */
 function withArticle(noun: string): string {
@@ -546,9 +560,19 @@ export function AddPersonSheet({
    * there held the act on a question this sheet does not ask, offered money
    * and draw_certify that are ungrantable on that job, and suppressed the
    * notice that is the true one there.
+   *
+   * F-2 — AND UNRESOLVED IS NOT THAT NULL. `!!recordedStudioId` read the
+   * `undefined` of a book still out, errored or paused offline as if it were
+   * the resolved NULL, so this predicate answered `false` there: the notice
+   * below asserted "the studio owner's or an admin's to grant" and the money
+   * and draw scopes rendered disabled against an `isOrgAdmin` that had read
+   * neither the book nor the list — the F-A defect by the other road. Only a
+   * RESOLVED null is excluded, and it is excluded because the band is not
+   * rendered at all on such a job (F-1): nothing this predicate gates exists
+   * there to gate.
    */
   const authorityStandingUnread =
-    authorityOpen && !!recordedStudioId && orgs === undefined;
+    authorityOpen && recordedStudioId !== null && orgs === undefined;
   /**
    * F2 — THE ACT IS HELD ONLY WHERE A GRANT IS ACTUALLY ASKED FOR. The write
    * below runs under `authorityPhrase || authorityThreshold` alone, and the
@@ -604,7 +628,9 @@ export function AddPersonSheet({
    * `project_party_recorded_studio()`, so an admin of the book's studio who is
    * a plain member of the job's studio was offered a live money scope and met
    * a refusal at the write. With no recorded studio there is no standing to
-   * read, and the band closes — the same fail-closed answer the DB gives.
+   * read, and the band does not open at all (F-1, the render below) — the same
+   * fail-closed answer the DB gives, said before the press rather than after
+   * the seat, the card, the channels and the rule are already written.
    */
   const isOrgAdmin = useMemo(() => {
     if (!recordedStudioId) return false;
@@ -856,6 +882,23 @@ export function AddPersonSheet({
       );
       return;
     }
+    /**
+     * F-1 — THE THIRD GUARD, AND THE ONE THE DB WAS ANSWERING. On a job whose
+     * book resolved to NULL every `project_party_authority` policy refuses,
+     * so a press with a phrase or a figure typed ran seat → channels → rule →
+     * affiliation and THEN met the refusal, caught below as the generic "Could
+     * not add them just now. Try again." with four rows already written and
+     * `chainRef` resuming into the same doomed grant on every retry. The band
+     * is not rendered on such a job; this refuses the grant before the first
+     * write for any caller that arrives with one typed regardless.
+     */
+    if (
+      recordedStudioId === null &&
+      (authorityPhrase.trim() !== "" || authorityThreshold.trim() !== "")
+    ) {
+      setError(NO_STUDIO_AUTHORITY_SENTENCE);
+      return;
+    }
     setError(null);
     const trimmedName = partyName.trim();
     const partyKind = SEAT_PARTY_KIND[kind];
@@ -1049,7 +1092,13 @@ export function AddPersonSheet({
           chain.affiliationWritten = true;
         }
       }
-      if (authorityPhrase.trim() || authorityThreshold.trim()) {
+      // F-6: the same three conjuncts the hold carries (`authorityOpen` and a
+      // typed phrase or figure), so the act's predicate and the writer's
+      // cannot drift apart if a collapse control is ever added to the band.
+      if (
+        authorityOpen &&
+        (authorityPhrase.trim() || authorityThreshold.trim())
+      ) {
         // CR-12: PR-n's client half. The DB policy reserves `money` and
         // `draw_certify` to an owner or an admin; the sheet refuses them before
         // the write rather than letting Postgres answer.
@@ -1672,120 +1721,143 @@ export function AddPersonSheet({
             email.&rdquo;
           </p>
 
-          {/* R-J / C20 / SPEC §5.5 #16 — TWO branches, two exact wordings,
+          {/* F-1 — THE BAND DOES NOT OPEN ON A JOB THAT KEEPS NO BOOK.
+              Every `project_party_authority` policy (00624:989,1003,1019,1045)
+              gates on `is_active_studio_member(project_party_recorded_studio())`,
+              false for a NULL studio (00417:47), so no scope can be recorded
+              there at all — and offering the field wrote the seat, the
+              channels, the rule and the affiliation before the refusal came
+              back as "Could not add them just now". This is CR11-11's "the
+              band closes", made true. An UNRESOLVED book is not a resolved
+              none: the band stays offered while the query is out and the act
+              is held instead (R-CD). */}
+          {recordedStudioId !== null && (
+            <>
+              {/* R-J / C20 / SPEC §5.5 #16 — TWO branches, two exact wordings,
               each with its own act. The field never sits there looking
               pre-filled: it opens from the act, prefilled from the agreement
               where the agreement says something, and empty where it does not. */}
-          {agreementClause ? (
-            <>
-              <p className="text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
-                Defaulted from the agreement. Confirm it, or write a different
-                one.
-              </p>
-              <DocumentAction
-                actionKey="confirm-authority-from-agreement"
-                surfaceKey="people"
-                regionKey="add-person-sheet"
-                variant="tertiary"
-                aria-expanded={authorityOpen}
-                aria-controls={authorityFieldId}
-                onClick={() => {
-                  setAuthorityPhrase((current) => current || agreementClause);
-                  setAuthorityOpen(true);
-                }}
+              {agreementClause ? (
+                <>
+                  <p className="text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+                    Defaulted from the agreement. Confirm it, or write a
+                    different one.
+                  </p>
+                  <DocumentAction
+                    actionKey="confirm-authority-from-agreement"
+                    surfaceKey="people"
+                    regionKey="add-person-sheet"
+                    variant="tertiary"
+                    aria-expanded={authorityOpen}
+                    aria-controls={authorityFieldId}
+                    onClick={() => {
+                      setAuthorityPhrase(
+                        (current) => current || agreementClause,
+                      );
+                      setAuthorityOpen(true);
+                    }}
+                  >
+                    Confirm from the agreement
+                  </DocumentAction>
+                </>
+              ) : (
+                <>
+                  <p className="text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+                    Nothing defaulted from the agreement.
+                  </p>
+                  <DocumentAction
+                    actionKey="record-the-authority"
+                    surfaceKey="people"
+                    regionKey="add-person-sheet"
+                    variant="tertiary"
+                    aria-expanded={authorityOpen}
+                    aria-controls={authorityFieldId}
+                    onClick={() => setAuthorityOpen(true)}
+                  >
+                    Record the authority
+                  </DocumentAction>
+                </>
+              )}
+              <div
+                id={authorityFieldId}
+                hidden={!authorityOpen}
+                className="mb-4"
               >
-                Confirm from the agreement
-              </DocumentAction>
-            </>
-          ) : (
-            <>
-              <p className="text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
-                Nothing defaulted from the agreement.
-              </p>
-              <DocumentAction
-                actionKey="record-the-authority"
-                surfaceKey="people"
-                regionKey="add-person-sheet"
-                variant="tertiary"
-                aria-expanded={authorityOpen}
-                aria-controls={authorityFieldId}
-                onClick={() => setAuthorityOpen(true)}
-              >
-                Record the authority
-              </DocumentAction>
-            </>
-          )}
-          <div id={authorityFieldId} hidden={!authorityOpen} className="mb-4">
-            {/* CR-12 — the grant is a RECORDED FACT with a scope and, where the
+                {/* CR-12 — the grant is a RECORDED FACT with a scope and, where the
                 scope carries money, a figure. Both are written here. */}
-            <label className={FIELD_LABEL} htmlFor="add-party-authority-scope">
-              What they may decide
-            </label>
-            <select
-              id="add-party-authority-scope"
-              value={authorityScope}
-              onChange={(e) =>
-                setAuthorityScope(e.target.value as AuthorityScope)
-              }
-              className={`${FIELD_INPUT} mt-1`}
-            >
-              {ALL_AUTHORITY_SCOPES.map((scope) => (
-                <option
-                  key={scope}
-                  value={scope}
-                  disabled={
-                    !authorityStandingUnread &&
-                    !isOrgAdmin &&
-                    isAdminOnlyAuthorityScope(scope)
-                  }
+                <label
+                  className={FIELD_LABEL}
+                  htmlFor="add-party-authority-scope"
                 >
-                  {AUTHORITY_SCOPE_LABELS[scope]}
-                </option>
-              ))}
-            </select>
-            {/* F-A: an unread list is not a refusal. While it is out, the
+                  What they may decide
+                </label>
+                <select
+                  id="add-party-authority-scope"
+                  value={authorityScope}
+                  onChange={(e) =>
+                    setAuthorityScope(e.target.value as AuthorityScope)
+                  }
+                  className={`${FIELD_INPUT} mt-1`}
+                >
+                  {ALL_AUTHORITY_SCOPES.map((scope) => (
+                    <option
+                      key={scope}
+                      value={scope}
+                      disabled={
+                        !authorityStandingUnread &&
+                        !isOrgAdmin &&
+                        isAdminOnlyAuthorityScope(scope)
+                      }
+                    >
+                      {AUTHORITY_SCOPE_LABELS[scope]}
+                    </option>
+                  ))}
+                </select>
+                {/* F-A: an unread list is not a refusal. While it is out, the
                 scopes stay offered and this notice stays silent — the act
                 carries the reason instead. */}
-            {!authorityStandingUnread && !isOrgAdmin && (
-              <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
-                Signing money and certifying draws are the studio owner&rsquo;s
-                or an admin&rsquo;s to grant.
-              </p>
-            )}
+                {!authorityStandingUnread && !isOrgAdmin && (
+                  <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+                    Signing money and certifying draws are the studio
+                    owner&rsquo;s or an admin&rsquo;s to grant.
+                  </p>
+                )}
 
-            <label
-              className={`${FIELD_LABEL} mt-3`}
-              htmlFor="add-party-authority-threshold"
-            >
-              Up to, in dollars
-            </label>
-            <input
-              id="add-party-authority-threshold"
-              type="text"
-              inputMode="decimal"
-              value={authorityThreshold}
-              onChange={(e) => setAuthorityThreshold(e.target.value)}
-              className={`${FIELD_INPUT} mt-1`}
-            />
-            <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
-              Leave it empty where no figure applies. 2500 reads as &ldquo;Signs
-              money to $2,500.&rdquo;
-            </p>
+                <label
+                  className={`${FIELD_LABEL} mt-3`}
+                  htmlFor="add-party-authority-threshold"
+                >
+                  Up to, in dollars
+                </label>
+                <input
+                  id="add-party-authority-threshold"
+                  type="text"
+                  inputMode="decimal"
+                  value={authorityThreshold}
+                  onChange={(e) => setAuthorityThreshold(e.target.value)}
+                  className={`${FIELD_INPUT} mt-1`}
+                />
+                <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+                  Leave it empty where no figure applies. 2500 reads as
+                  &ldquo;Signs money to $2,500.&rdquo;
+                </p>
 
-            <label
-              className={`${FIELD_LABEL} mt-3`}
-              htmlFor="add-party-authority"
-            >
-              Authority
-            </label>
-            <input
-              id="add-party-authority"
-              type="text"
-              value={authorityPhrase}
-              onChange={(e) => setAuthorityPhrase(e.target.value)}
-              className={`${FIELD_INPUT} mt-1`}
-            />
-          </div>
+                <label
+                  className={`${FIELD_LABEL} mt-3`}
+                  htmlFor="add-party-authority"
+                >
+                  Authority
+                </label>
+                <input
+                  id="add-party-authority"
+                  type="text"
+                  value={authorityPhrase}
+                  onChange={(e) => setAuthorityPhrase(e.target.value)}
+                  className={`${FIELD_INPUT} mt-1`}
+                />
+              </div>
+            </>
+          )}
 
           {/* QA-R2-5 / C32 — the checkbox's ACCESSIBLE NAME is the short
               sentence; the disclosure is its DESCRIPTION, outside the label.
