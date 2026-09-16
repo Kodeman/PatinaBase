@@ -389,8 +389,10 @@ describe('receivedReading', () => {
     expect(after.awaitingCheck).toBe(true);
   });
 
-  // W4 r7 M-4: a refusal is the whole word on its row, and its form stays open.
-  it('leaves a refused row exactly as it stands', () => {
+  // W4 r9 M-1: the firm answered the refusal by sending the paper again. The
+  // refusal used to stand through that send, so the page said the document was
+  // still refused while the record already said awaiting_check with no reason.
+  it('moves a refused row the firm has just re-sent to the reading the record gives it', () => {
     const refused = rowFor(
       [
         doc({
@@ -403,6 +405,16 @@ describe('receivedReading', () => {
       ],
       'w9',
     );
-    expect(receivedReading(refused)).toBe(refused);
+    expect(refused.reasonSentence).toBe(
+      'The name does not match the W-9 on the contract.',
+    );
+
+    const after = receivedReading(refused);
+    expect(after.state).toBe('awaiting_check');
+    expect(after.sentence).toBe('W-9, not yet checked.');
+    expect(after.awaitingCheck).toBe(true);
+    expect(after.reasonSentence).toBeNull();
+    expect(after.blocksSentence).toBeNull();
+    expect(after.openByDefault).toBe(false);
   });
 });

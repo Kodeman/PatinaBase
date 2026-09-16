@@ -33,6 +33,13 @@
 -- supersede happens on CONFIRM (§5.5), never on upload, and no row is ever
 -- deleted by this door (§7 retention).
 --
+-- AND THE PAPER IT SUPERSEDES IS THE PAPER OF THE SAME NAME (W4 r9 MAJOR-1).
+-- For every type but `other_named` the doc_type IS the identity; for
+-- `other_named` the identity is the label, which is what resolve_paperwork_link
+-- groups on ('other_named:' || lower(doc_label)). The confirm and the gate
+-- inheritance both carry that label leg now, so a Safety plan can no longer
+-- retire a Resale certificate — nor be refused for failing to carry its gates.
+--
 -- TWO DEVIATIONS FROM THE SPEC, named so they can be overruled in one line:
 --
 --  1. §2's rate limit is specified as "a BEFORE INSERT trigger" in the shape of
@@ -787,11 +794,24 @@ BEGIN
   -- successor guard (00623: a successor must carry at least the gates of the
   -- paper it retires) refuses the confirm outright — the door would accept
   -- every renewal and the studio could never verify one.
+  --
+  -- AND IT INHERITS THEM FROM THE PAPER OF THE SAME NAME (W4 r9 MAJOR-1). An
+  -- `other_named` paper is identified by its LABEL — resolve_paperwork_link
+  -- groups it as 'other_named:' || lower(doc_label), and the firm's page owes
+  -- a Safety plan and a Resale certificate separately. Reading the gates off
+  -- the type alone crossed the two: a Safety plan arrived carrying the gates
+  -- of an unrelated certificate, and the confirm then retired that
+  -- certificate (see confirm_inbound_document §9).
   SELECT d.blocks INTO v_blocks
     FROM public.studio_compliance_documents d
    WHERE d.holder_id = v_row.company_id
      AND d.organization_id = v_row.organization_id
      AND d.doc_type = p_doc_type
+     AND (
+       p_doc_type <> 'other_named'
+       OR lower(btrim(COALESCE(d.doc_label, '')))
+            = lower(btrim(COALESCE(p_doc_label, '')))
+     )
      AND d.superseded_by IS NULL
      AND d.rejected_at IS NULL
    ORDER BY (d.verified_at IS NOT NULL) DESC, d.created_at DESC
@@ -866,7 +886,9 @@ COMMENT ON FUNCTION public.record_inbound_compliance_document(
   'itself and takes the holder FROM THE TOKEN ROW, never from client input, so '
   'a forged company_id in the form body reaches nothing (acceptance 3). Always '
   'INSERTs, source field_link, inbound true, unverified — a currently verified '
-  'document of the same type is never touched (acceptance 5). Notifies the '
+  'document of the same type is never touched (acceptance 5). Inherits the '
+  'studio''s gates from the paper of the same type, and of the same '
+  'case-folded label when the type is other_named (W4 r9 MAJOR-1). Notifies the '
   'studio''s owners and admins plus the link''s minter, R-AC (00637).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -896,12 +918,32 @@ BEGIN
   END IF;
 
   -- Spec §5.5: the supersede happens HERE, and only onto a currently verified
-  -- paper of the SAME type on the SAME holder.
+  -- paper of the SAME type on the SAME holder — and, for an `other_named`
+  -- paper, of the SAME NAME (W4 r9 MAJOR-1). The type alone is not the
+  -- paper's identity: resolve_paperwork_link keys an other_named document by
+  -- 'other_named:' || lower(doc_label), so the firm's page owes a Safety plan
+  -- and a Resale certificate separately, while this predicate treated them as
+  -- one thing and picked whichever was verified last. Two faces, both proven:
+  -- confirming a Safety plan silently stamped superseded_by on the firm's
+  -- unrelated verified Resale certificate — the studio's book and the firm's
+  -- page then disagreed, and every gate the retired paper held dropped out of
+  -- compliance_state, which reads superseded_by IS NULL; and when the
+  -- mis-picked predecessor held a gate the new paper did not, R-AZ's
+  -- pre-check below raised compliance_confirm_drops_a_gate against a document
+  -- with nothing to do with it, so the firm's paper could never be confirmed,
+  -- only refused — the inert act D-8 says the pre-check exists to prevent.
+  -- The label is compared case-folded and trimmed, exactly as the grouping
+  -- folds it, so "Safety Plan" and "safety plan" are one paper.
   SELECT d.id, d.expires_on, d.blocks INTO v_old, v_old_expires, v_old_blocks
     FROM public.studio_compliance_documents d
    WHERE d.holder_id = v_doc.holder_id
      AND d.organization_id = v_doc.organization_id
      AND d.doc_type = v_doc.doc_type
+     AND (
+       v_doc.doc_type <> 'other_named'
+       OR lower(btrim(COALESCE(d.doc_label, '')))
+            = lower(btrim(COALESCE(v_doc.doc_label, '')))
+     )
      AND d.id <> v_doc.id
      AND d.verified_at IS NOT NULL
      AND d.superseded_by IS NULL
@@ -978,7 +1020,8 @@ GRANT EXECUTE ON FUNCTION public.confirm_inbound_document(uuid)
 COMMENT ON FUNCTION public.confirm_inbound_document(uuid) IS
   'Spec §6 Confirm: stamps verified_by/verified_at on a pending inbound '
   'document and, only then, points the previously verified paper of the same '
-  'type at it (spec §5.5). Nothing is deleted. Studio members only; '
+  'type — and, for an other_named paper, the same case-folded label (W4 r9 '
+  'MAJOR-1) — at it (spec §5.5). Nothing is deleted. Studio members only; '
   'idempotent; refuses a document already rejected. ALL FOUR of R-AZ''s '
   'time-varying legs are checked BEFORE the stamp — undated, lapsed, '
   'shorter-dated, or carrying fewer gates than the paper it would retire — so '

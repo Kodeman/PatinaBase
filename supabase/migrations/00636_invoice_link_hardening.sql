@@ -64,6 +64,23 @@
 --      nothing and answers {"state":"spent"}. The route lands that on
 --      /pay/used, which is readable; it can no longer kill the address the
 --      first redirect handed the browser (W4 r7 MAJOR-1).
+--  · THE MINT GUARD COVERS THE RETURN WINDOW, NOT ONLY THE FLIGHT (W4 r9
+--    BLOCKING-1). A settlement lifts the in-flight leg one statement before
+--    the receipt letter asks for an address — 00428's sync trigger mirrors
+--    invoice_payments.status onto the attempt — so the letter used to revoke
+--    the very address the payer was returning to: the return nonce then
+--    resolved to nothing and a client who had just paid was 303'd to
+--    /pay/dead (and, when the browser won the race instead, watched her open
+--    page die on the next refresh). The guard now also holds for 24 hours
+--    after a LINK-BORNE attempt finalizes succeeded / failed /
+--    requires_refund, so the letter falls back to the letterbox rather than
+--    rotating under the payer, and the failure letter no longer kills the
+--    /pay address a declined card is about to retry from. Behind that,
+--    resolve_invoice_return_nonce resolves by the attempt's own
+--    invoice_link_id rather than by the date heuristic alone, so the attempt
+--    and the link it was claimed against can never be read apart. A revoked
+--    link still answers NULL: F2 forbids a nonce becoming an alias for a later
+--    mint, so the letter is what had to stop revoking.
 --  · THE MINT GUARD HAS A SWEEP BEHIND IT (§6). ensure_invoice_link refuses
 --    to rotate while a Checkout attempt is claimed / session_created /
 --    processing; a `processing` row is ACH money in flight, which 00574's
@@ -292,10 +309,45 @@ BEGIN
   -- The automated dunning letter does not take that fallback at all: an
   -- invoice with an attempt in these three states is held out of the
   -- invoice-reminders scan, because an invoice being paid is not one to chase.
+  --
+  -- AND A CHECKOUT THAT HAS JUST FINISHED OWNS IT TOO (W4 r9 BLOCKING-1). The
+  -- in-flight leg alone is lifted by the very event that sends the letter:
+  -- settle_invoice_checkout_payment stamps invoice_payments.status =
+  -- 'succeeded', 00428's sync_invoice_checkout_attempt trigger mirrors that
+  -- onto the attempt as state = 'succeeded' in the same statement, and only
+  -- THEN does stripe-webhook's sendSuccessSideEffects ask for the receipt's
+  -- address. So the guard was down at the one moment the payer most needs the
+  -- address to hold — and both orderings ended on the dead sheet:
+  --   · the webhook first — the old link is revoked and a new one minted, so
+  --     resolve_invoice_return_nonce (which will not follow a revoked link nor
+  --     a later mint) answers NULL and /pay/return/<nonce> 303s a client who
+  --     has just paid to /pay/dead, the nonce already spent by the claim;
+  --   · the browser first — the payer's freshly rotated address opens, and the
+  --     receipt letter revokes it seconds later, so the next refresh is dead.
+  -- The same statement sat on the FAILURE path too, killing the /pay/<token> a
+  -- declined card was about to retry from.
+  --
+  -- So a finalized attempt that was claimed against a LINK (invoice_link_id,
+  -- i.e. somebody standing on a /pay/<token> address rather than a signed-in
+  -- payer) holds the address for a day after it finalized. The letter falls
+  -- back to the letterbox rather than rotating under the payer — R-BY's rule
+  -- that a letter never carries a dead address, read from the other side: a
+  -- letter may not make the address in somebody's browser dead either. A
+  -- signed-in payer's attempt carries no link and rotates as before, and the
+  -- folio's own Regenerate act is untouched: it is a member's deliberate press
+  -- with the consequence written beside it (R-BW).
   IF EXISTS (
     SELECT 1 FROM invoice_checkout_attempts
     WHERE invoice_id = p_invoice_id
-      AND state IN ('claimed','session_created','processing')
+      AND (
+        state IN ('claimed','session_created','processing')
+        OR (
+          invoice_link_id IS NOT NULL
+          AND state IN ('succeeded','failed','requires_refund')
+          AND COALESCE(finalized_at, updated_at, created_at)
+                > now() - interval '24 hours'
+        )
+      )
   ) THEN
     RETURN NULL;
   END IF;
@@ -332,8 +384,12 @@ COMMENT ON FUNCTION public.ensure_invoice_link(uuid) IS
   'be re-emitted). Revokes the prior active link: CRM-29''s "regenerate on '
   'send", and every caller is a letter. NULL for a draft/void/missing '
   'invoice, while a Checkout attempt is live (the payer''s address may not be '
-  'pulled out from under them, M11), or on a lost mint race — the M7 safety '
-  'valve the callers already fall back from.';
+  'pulled out from under them, M11), for 24 hours after a LINK-borne attempt '
+  'finalized succeeded/failed/requires_refund (W4 r9 BLOCKING-1 — the receipt '
+  'letter used to revoke the address the payer was returning to, so the return '
+  'nonce resolved to nothing and a client who had just paid landed on '
+  '/pay/dead), or on a lost mint race — the M7 safety valve the callers '
+  'already fall back from.';
 
 -- Regenerate (00574 §9). Unchanged in gate and refusals; mints the hash.
 CREATE OR REPLACE FUNCTION public.regenerate_invoice_link(p_invoice_id uuid)
@@ -551,17 +607,29 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  -- 00574's own selection rule, unchanged: the link in force when the attempt
-  -- was claimed (active or closed, never revoked, never a later mint) — F2.
+  -- 00574's selection rule, now asking the attempt itself first (W4 r9
+  -- BLOCKING-1). The attempt records the link it was claimed against in
+  -- invoice_link_id, so that row is the answer whenever it is still standing;
+  -- the date leg stays behind it for a signed-in payer's attempt, which
+  -- carries no link at all (chk_invoice_attempt_actor). Never a revoked link:
+  -- the invoice already has a live one and only one may be active (F2).
   SELECT l.id INTO v_link_id
   FROM public.invoice_checkout_attempts a
   JOIN public.invoice_links l ON l.invoice_id = a.invoice_id
   WHERE a.id = v_attempt_id
     AND l.status <> 'revoked'
-    AND l.created_at <= a.created_at
-  ORDER BY (l.status = 'active') DESC, l.created_at DESC
+    AND (l.id = a.invoice_link_id OR l.created_at <= a.created_at)
+  ORDER BY (l.id = a.invoice_link_id) DESC, (l.status = 'active') DESC,
+           l.created_at DESC
   LIMIT 1;
 
+  -- NULL WHEN THE CLAIMED LINK IS GONE, AND THAT IS THE RULE, NOT A GAP. F2:
+  -- a nonce sitting in Stripe's retained logs may never become an alias for a
+  -- token minted after its attempt, because Regenerate is the designer's
+  -- revocation act (billing/invoice_links_test.sql asserts exactly this). The
+  -- answer to the payer standing on a revoked address is therefore upstream:
+  -- ensure_invoice_link no longer rotates under a link-borne Checkout for a
+  -- day after it finalizes, so the receipt letter cannot put her here.
   IF v_link_id IS NULL THEN
     RETURN NULL;
   END IF;
@@ -581,7 +649,8 @@ COMMENT ON FUNCTION public.resolve_invoice_return_nonce(text) IS
   'Service-only: the address behind a SUCCESSFUL Checkout return '
   '(/pay/return/<nonce> → /pay/<token>). Since 00636 it ROTATES rather than '
   'reads: the stored value is a hash, so the SAME link row the attempt was '
-  'claimed against (F2 — never a later mint, never a revoked one) is '
+  'claimed against — by invoice_link_id when it names one, else 00574''s date '
+  'rule, and never a revoked one (F2, W4 r9) — is '
   're-addressed with a fresh token and a fresh 30 days, and the raw value is '
   'returned once to the holder who just proved they came back from Checkout. '
   'SINGLE USE (R-BT): the first resolution stamps return_nonce_consumed_at in '
@@ -589,7 +658,9 @@ COMMENT ON FUNCTION public.resolve_invoice_return_nonce(text) IS
   '{"state":"spent"} and rotates nothing — the address the first redirect '
   'handed the browser stays live. A cancelled Checkout never reaches this '
   'function at all; its cancel_url is the /pay/<token> the client opened. '
-  'NULL for malformed, unknown, or a nonce whose link has been revoked.';
+  'NULL for malformed, unknown, or a nonce whose link has been revoked — a '
+  'nonce never aliases a later mint (F2), which is why the receipt letter is '
+  'the thing that had to stop revoking (W4 r9 BLOCKING-1).';
 
 CREATE OR REPLACE FUNCTION public.resolve_invoice_link(
   p_token text,

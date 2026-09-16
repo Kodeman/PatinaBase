@@ -284,18 +284,32 @@ function groupKey(doc: { doc_type: string; doc_label: string | null }): string {
  *                       so "Licence, lapsed 1 May." and what it blocks both
  *                       stand — they are still true until a member opens the
  *                       new paper;
- *   refused          -> untouched. The refusal is the whole word on that row
- *                       (W4 r7 M-4) and the form stays open.
+ *   refused          -> the refusal is over: the firm has just sent the paper
+ *                       back. It reads like nothing on file, because on the
+ *                       record that is what it now is (W4 r9 M-1, below).
+ *
+ * A REFUSED ROW THE FIRM HAS JUST RE-SENT IS NOT STILL REFUSED (W4 r9 M-1).
+ * The refusal used to stand through the send: no receipt, the reason still on
+ * the page, the form still open — the firm's most likely reading being that
+ * the upload failed, so it sends again or telephones the studio. The record
+ * disagreed within seconds, because 00637's `grouped` speaks with a refusal
+ * only for a type with nothing else standing: the inbound row the send just
+ * wrote makes the next load read `awaiting_check` with no reason at all. This
+ * is that next load, said now. A refused row the firm has NOT acted on keeps
+ * its refusal and its reason and keeps its form open — r7 M-4 is right until
+ * the firm acts.
  */
 export function receivedReading(row: PaperworkRow): PaperworkRow {
-  if (row.state === 'refused') return row;
-  if (row.state !== 'not_on_file') return { ...row, awaitingCheck: true };
+  if (row.state !== 'not_on_file' && row.state !== 'refused') {
+    return { ...row, awaitingCheck: true };
+  }
   return {
     ...row,
     state: 'awaiting_check',
     awaitingCheck: true,
     sentence: rowSentence('awaiting_check', row.title, null),
     blocksSentence: null,
+    reasonSentence: null,
     openByDefault: false,
   };
 }

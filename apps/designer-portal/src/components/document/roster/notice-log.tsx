@@ -108,9 +108,18 @@ export function NoticeLog({
                       onClick={() => toggle(seat.seatId)}
                       className="flex min-h-11 w-full items-center gap-2.5 text-left text-[0.8rem] text-[var(--color-charcoal)]"
                     >
+                      {/* THE PICK IS A MARK, NOT A HUE (W4 r9 W4R9-1). The
+                          box used to say "picked" with a sage border and a
+                          15%-opacity tint and nothing else — WCAG 1.4.1, and
+                          in the room it was near-invisible: a studio could
+                          not tell which names it was about to file. The check
+                          is the rolodex picker's own stamp (square, 2px
+                          radius, a check), drawn in the row's ink so it
+                          carries at 13px. */}
                       <span
                         aria-hidden
-                        className="inline-flex h-[13px] w-[13px] shrink-0 rounded-[2px] border-[1.5px]"
+                        data-picked={picked.includes(seat.seatId) ? 'true' : 'false'}
+                        className="inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-[2px] border-[1.5px] text-[9px] font-bold leading-none"
                         style={{
                           borderColor: picked.includes(seat.seatId)
                             ? 'var(--color-sage)'
@@ -118,8 +127,11 @@ export function NoticeLog({
                           background: picked.includes(seat.seatId)
                             ? 'rgba(168,181,160,0.15)'
                             : 'transparent',
+                          color: 'var(--color-charcoal)',
                         }}
-                      />
+                      >
+                        {picked.includes(seat.seatId) ? '✓' : ''}
+                      </span>
                       {seat.name}
                     </button>
                   </li>

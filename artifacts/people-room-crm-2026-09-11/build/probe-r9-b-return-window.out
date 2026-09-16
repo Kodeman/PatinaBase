@@ -1,0 +1,33 @@
+BEGIN
+INSERT 0 1
+ old_guard_holds | fixed_guard_holds 
+-----------------+-------------------
+ f               | t
+(1 row)
+
+ letter_falls_back_rather_than_rotating 
+----------------------------------------
+ t
+(1 row)
+
+ status | still_the_payers_address 
+--------+--------------------------
+ active | t
+(1 row)
+
+ pay_address_opens 
+-------------------
+ t
+(1 row)
+
+ return_state 
+--------------
+ rotated
+(1 row)
+
+ replayed_state 
+----------------
+ spent
+(1 row)
+
+ROLLBACK

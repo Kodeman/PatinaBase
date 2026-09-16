@@ -101,6 +101,47 @@ describe('PaperworkSheet', () => {
     expect(screen.getByTestId('form-COI, general liability')).toBeInTheDocument();
   });
 
+  // W4 r9 M-1: the firm did what the refusal asked and sent the paper again.
+  // The page kept printing the refusal and its reason, with no receipt and the
+  // form still open, while the record already read awaiting_check with no
+  // reason — so the firm's most likely reading was that its upload failed.
+  it('gives a re-sent refused paper the same receipt every other paper gets', async () => {
+    const user = userEvent.setup();
+    const { container } = renderSheet([
+      doc({
+        doc_type: 'coi_gl',
+        state: 'refused',
+        expires_on: null,
+        blocks: [],
+        awaiting_check: false,
+        refusal_reason: 'The certificate names the wrong job address',
+      }),
+    ]);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Send COI, general liability' }),
+    );
+
+    expect(
+      container.querySelector('[data-paperwork-receipt="coi_gl"]'),
+    ).toHaveTextContent('Received. Local Dev Studio will confirm it.');
+    expect(
+      screen.getByText('COI, general liability, not yet checked.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('COI, general liability was not accepted.'),
+    ).not.toBeInTheDocument();
+    expect(
+      container.querySelector('[data-paperwork-refusal="coi_gl"]'),
+    ).toBeNull();
+    // The form closes and the reader is moved to the receipt, as on every
+    // other row that has just been sent.
+    expect(screen.queryByTestId('form-COI, general liability')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(
+      container.querySelector('[data-paperwork-receipt="coi_gl"]'),
+    );
+  });
+
   it('opens a form for every expected paper the studio does not hold', () => {
     renderSheet([]);
     expect(screen.getByText('COI, general liability is not on file.')).toBeInTheDocument();

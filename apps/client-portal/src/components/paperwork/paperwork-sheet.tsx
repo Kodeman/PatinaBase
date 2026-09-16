@@ -88,10 +88,13 @@ export function PaperworkSheet({ token, studioName, context }: PaperworkSheetPro
         // standing one line above its own receipt.
         const sentThisVisit = received[source.key] === true;
         const row = sentThisVisit ? receivedReading(source) : source;
-        // A refused row has nothing waiting, so it never prints the receipt —
-        // it prints the refusal and opens its form (W4 r7 M-4).
-        const isReceived =
-          row.state !== 'refused' && (sentThisVisit || row.awaitingCheck);
+        // A refused row the firm has not acted on prints the refusal and opens
+        // its form, and nothing is waiting, so no receipt (W4 r7 M-4) — it
+        // arrives here as `refused` with no awaitingCheck flag. One the firm
+        // HAS just re-sent is a send like any other: `receivedReading` has
+        // already moved it to awaiting_check, so it prints the receipt, takes
+        // the focus and closes its form (W4 r9 M-1).
+        const isReceived = sentThisVisit || row.awaitingCheck;
         const isOpen = opened[row.key] === true || (row.openByDefault && !isReceived);
 
         return (

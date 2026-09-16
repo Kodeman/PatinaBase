@@ -78,6 +78,28 @@ describe('NoticeLog', () => {
     await screen.findByText('2 more names are on the notice.');
   });
 
+  // W4 r9 W4R9-1: which names are picked said nothing but colour — a sage
+  // border and a 15%-opacity tint — so a sighted studio could not read its own
+  // selection before pressing Save (WCAG 1.4.1).
+  it('marks a picked name with a check, not only with a colour', () => {
+    const { container } = render(
+      <NoticeLog projectId="okonkwo" seats={SEATS} told={[]} panelId="notice-panel" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Log who was told/ }));
+
+    const box = container.querySelector('[data-picked]') as HTMLElement;
+    expect(box).toHaveAttribute('data-picked', 'false');
+    expect(box.textContent).toBe('');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Luis Ochoa' }));
+    expect(box).toHaveAttribute('data-picked', 'true');
+    expect(box.textContent).toBe('✓');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Luis Ochoa' }));
+    expect(box).toHaveAttribute('data-picked', 'false');
+    expect(box.textContent).toBe('');
+  });
+
   /* ── CRM-23 — the durable record beside the card's own list ──────────── */
 
   it('writes the notice with the fact the card passed and the names picked', async () => {

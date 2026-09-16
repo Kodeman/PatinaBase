@@ -1203,6 +1203,203 @@ BEGIN
   RAISE NOTICE '10b. R-AF across a fold — the survivor keeps exactly one live door with the absorbed one closed by reason, and a sole-proprietor fold closes the firm''s door rather than aborting: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 11. AN other_named PAPER IS ITS NAME, NOT ITS TYPE (W4 r9 MAJOR-1)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- resolve_paperwork_link keys an other_named document by
+-- 'other_named:' || lower(doc_label), so the firm's page owes a Safety plan
+-- and a Resale certificate separately. confirm_inbound_document picked its
+-- predecessor by (holder, org, doc_type) alone, so confirming the one retired
+-- the other — and when the mis-picked predecessor held a gate the new paper
+-- did not, R-AZ's pre-check refused the confirm outright, leaving the firm's
+-- paper confirmable by nobody. record_inbound_compliance_document inherited
+-- the studio's gates the same doc_type-only way.
+DO $$
+DECLARE
+  v_firm     uuid := 'fa2c0000-0000-4000-8000-000000000001';
+  v_resale   uuid := 'fa7c0000-0000-4000-8000-000000000001';
+  v_safety   uuid := 'fa7c0000-0000-4000-8000-000000000002';
+  v_token    text;
+  v_new_safe uuid;
+  v_new_res  uuid;
+  v_blocks   text[];
+  v_page     jsonb;
+BEGIN
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES (v_firm, 'fa000000-0000-4000-8000-00000000000a', 'company', 'sub',
+          'Named Paper Test Co', 'sub', 'a0000000-0000-0000-0000-000000000004');
+
+  -- two DIFFERENT named papers the studio has confirmed, with different gates
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, doc_label, blocks,
+     issued_on, expires_on, verified_by, verified_at)
+  VALUES
+    (v_resale, 'fa000000-0000-4000-8000-00000000000a', 'company', v_firm,
+     'other_named', 'Resale certificate', ARRAY['payment']::text[],
+     CURRENT_DATE - 100, CURRENT_DATE + 200,
+     'a0000000-0000-0000-0000-000000000004', now() - interval '20 days'),
+    (v_safety, 'fa000000-0000-4000-8000-00000000000a', 'company', v_firm,
+     'other_named', 'Safety plan', ARRAY['site_access']::text[],
+     CURRENT_DATE - 100, CURRENT_DATE + 100,
+     'a0000000-0000-0000-0000-000000000004', now() - interval '10 days');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT m.token INTO v_token
+    FROM public.mint_paperwork_link(v_firm, now() + interval '60 days') m;
+  PERFORM pg_temp.reset_role();
+
+  -- (a) the gates a renewal inherits come from the paper of the SAME NAME,
+  --     case-folded exactly as the page folds it
+  v_new_safe := public.record_inbound_compliance_document(
+    v_token, 'other_named', 'SAFETY PLAN', NULL, NULL,
+    CURRENT_DATE, CURRENT_DATE + 400, NULL);
+  SELECT blocks INTO v_blocks FROM public.studio_compliance_documents WHERE id = v_new_safe;
+  IF v_blocks IS DISTINCT FROM ARRAY['site_access']::text[] THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (a): the new Safety plan inherited % — the gates of another named paper', v_blocks;
+  END IF;
+
+  v_new_res := public.record_inbound_compliance_document(
+    v_token, 'other_named', 'resale certificate', NULL, NULL,
+    CURRENT_DATE, CURRENT_DATE + 400, NULL);
+  SELECT blocks INTO v_blocks FROM public.studio_compliance_documents WHERE id = v_new_res;
+  IF v_blocks IS DISTINCT FROM ARRAY['payment']::text[] THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (b): the new Resale certificate inherited %', v_blocks;
+  END IF;
+
+  -- (b) the confirm lands rather than being refused against a paper that has
+  --     nothing to do with it (the face-2 inert act), and retires ONLY the
+  --     paper of the same name
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  PERFORM public.confirm_inbound_document(v_new_safe);
+  PERFORM pg_temp.reset_role();
+
+  IF NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                  WHERE id = v_safety AND superseded_by = v_new_safe) THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (c): the Safety plan on file was not retired by its own renewal';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.studio_compliance_documents
+              WHERE id = v_resale AND superseded_by IS NOT NULL) THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (d): confirming a Safety plan retired the firm''s Resale certificate';
+  END IF;
+
+  -- (c) and the other named paper still confirms on its own account
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  PERFORM public.confirm_inbound_document(v_new_res);
+  PERFORM pg_temp.reset_role();
+
+  IF NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                  WHERE id = v_resale AND superseded_by = v_new_res) THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (e): the Resale certificate was not retired by its own renewal';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.studio_compliance_documents
+              WHERE id = v_new_safe AND superseded_by IS NOT NULL) THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (f): confirming a Resale certificate retired the Safety plan';
+  END IF;
+
+  -- (d) the firm's page and the studio's book agree: two named papers, both
+  --     standing, neither awaiting a check
+  v_page := public.resolve_paperwork_link(v_token, false);
+  IF (SELECT count(*) FROM jsonb_array_elements(v_page->'documents') d
+       WHERE (d->>'state') = 'current') <> 2 THEN
+    RAISE EXCEPTION 'BLOCK 11 FAIL (g): the firm''s page reads % — not two current named papers', v_page->'documents';
+  END IF;
+
+  RAISE NOTICE '11. W4 r9 MAJOR-1 — an other_named paper supersedes and inherits gates by its own case-folded name: a Safety plan no longer retires a Resale certificate, and no longer has to be refused for failing to carry its gates: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 12. THE RECEIPT LETTER MAY NOT REVOKE THE ADDRESS THE PAYER IS RETURNING TO
+--     (W4 r9 BLOCKING-1)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- settle_invoice_checkout_payment stamps the payment succeeded and 00428's
+-- sync trigger mirrors that onto the attempt in the same statement, so by the
+-- time stripe-webhook asks for the receipt's address the in-flight guard is
+-- already down. It used to revoke the link the payer was standing on and mint
+-- a replacement: the return nonce then resolved to nothing and a client who
+-- had just paid was sent to /pay/dead.
+DO $$
+DECLARE
+  v_invoice uuid := 'b0000000-0000-0000-0000-00000000e142';
+  v_token   text;
+  v_link    uuid;
+  v_hash    text;
+  v_nonce   text := repeat('a', 64);
+  v_nonce2  text := repeat('b', 64);
+  v_answer  jsonb;
+  v_after   text;
+  v_link2   uuid;
+BEGIN
+  v_token := public.ensure_invoice_link(v_invoice);
+  SELECT id, token_hash INTO v_link, v_hash
+    FROM public.invoice_links WHERE invoice_id = v_invoice AND status = 'active';
+
+  -- the payer came through the /pay door, paid, and Stripe has settled
+  INSERT INTO public.invoice_checkout_attempts
+    (invoice_id, payer_id, invoice_link_id, stripe_customer_id, amount_cents,
+     currency, state, stripe_idempotency_key, stripe_checkout_session_id,
+     return_nonce, finalized_at)
+  VALUES (v_invoice, NULL, v_link, 'cus_w4r9_test', 12345, 'usd', 'succeeded',
+          'idem_w4r9_test_1', 'cs_w4r9_test_1', v_nonce, now());
+
+  -- the receipt letter asks for an address and is told there is none to carry
+  IF public.ensure_invoice_link(v_invoice) IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (a): the receipt letter minted a fresh address inside the return window';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.invoice_links
+                  WHERE id = v_link AND status = 'active' AND token_hash = v_hash) THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (b): the address the payer is standing on was revoked under her';
+  END IF;
+  IF public.resolve_invoice_link(v_token, false) IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (c): the payer''s own /pay address stopped opening';
+  END IF;
+
+  -- and the return still lands on her sheet, re-addressed once
+  v_answer := public.resolve_invoice_return_nonce(v_nonce);
+  IF v_answer IS NULL OR (v_answer->>'state') <> 'rotated' THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (d): the return nonce answered % — the payer lands on /pay/dead', COALESCE(v_answer::text, '<null>');
+  END IF;
+  v_after := v_answer->>'token';
+  IF public.resolve_invoice_link(v_after, false) IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (e): the address the return handed the payer does not open';
+  END IF;
+  IF (public.resolve_invoice_return_nonce(v_nonce)->>'state') <> 'spent' THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (f): a replayed nonce rotated something (R-BT)';
+  END IF;
+
+  -- NEGATIVE CONTROL: a day later the letter rotates as it always did
+  UPDATE public.invoice_checkout_attempts
+     SET finalized_at = now() - interval '48 hours',
+         updated_at   = now() - interval '48 hours'
+   WHERE stripe_idempotency_key = 'idem_w4r9_test_1';
+  IF public.ensure_invoice_link(v_invoice) IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (g): the guard never lifts, so no later letter can carry an address';
+  END IF;
+
+  -- AND F2 IS UNTOUCHED: a nonce whose link a Regenerate revoked is still
+  -- dead, because a nonce may never alias a token minted after its attempt.
+  -- That is why the LETTER had to stop revoking rather than the return
+  -- learning to follow a later mint.
+  SELECT id INTO v_link2 FROM public.invoice_links
+   WHERE invoice_id = v_invoice AND status = 'active';
+  INSERT INTO public.invoice_checkout_attempts
+    (invoice_id, payer_id, invoice_link_id, stripe_customer_id, amount_cents,
+     currency, state, stripe_idempotency_key, stripe_checkout_session_id,
+     return_nonce, created_at, finalized_at)
+  VALUES (v_invoice, NULL, v_link2, 'cus_w4r9_test', 12345, 'usd', 'expired',
+          'idem_w4r9_test_2', 'cs_w4r9_test_2', v_nonce2,
+          now() - interval '49 hours', now() - interval '48 hours');
+  PERFORM public.ensure_invoice_link(v_invoice);   -- a later letter revokes v_link2
+  IF EXISTS (SELECT 1 FROM public.invoice_links WHERE id = v_link2 AND status = 'active') THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (h): the fixture did not revoke the claimed link';
+  END IF;
+  IF public.resolve_invoice_return_nonce(v_nonce2) IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 12 FAIL (i): a nonce became an alias for a token minted after its attempt (F2)';
+  END IF;
+
+  RAISE NOTICE '12. W4 r9 BLOCKING-1 — a link-borne Checkout owns its address through the return window: the receipt letter holds rather than revoking, the return nonce still lands on the payer''s sheet, a day later the letter rotates again, and F2''s revoked-link silence is untouched: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W4 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;
