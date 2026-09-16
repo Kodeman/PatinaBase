@@ -165,7 +165,7 @@ const KIND_CHOICES: Array<[AddedPersonKind, string]> = [
   ["other_named", "someone else"],
 ];
 
-/** The quiet kind choice — DM-mono page links, never tabs (R28 grammar). */
+/** The kind choice — the specimen's `.pick` boxes (SPEC §5.5 item 2): bordered, filled when pressed. Not R28 page links — choosing what you add is a form control, not book navigation. */
 function KindChoice({
   kind,
   onKind,
@@ -177,7 +177,7 @@ function KindChoice({
     <div
       role="group"
       aria-label="What kind of person"
-      className="mb-5 flex flex-wrap items-baseline gap-x-3 gap-y-1.5 border-b border-[var(--color-pearl)] pb-2.5"
+      className="mb-5 flex flex-wrap gap-x-3 gap-y-2 border-b border-[var(--color-pearl)] pb-2.5"
     >
       {KIND_CHOICES.map(([k, label]) => (
         <button
@@ -185,10 +185,10 @@ function KindChoice({
           type="button"
           onClick={() => onKind(k)}
           aria-pressed={kind === k}
-          className={`min-h-11 rounded-[3px] font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
+          className={`min-h-11 px-3.5 py-2.5 rounded-[3px] border font-mono text-[12px] tracking-[0.04em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${
             kind === k
-              ? "text-[var(--color-clay-ink)]"
-              : "text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
+              ? "border-[var(--ink-faint)] bg-[var(--rail)] text-[var(--ink)]"
+              : "border-[var(--hairline-strong)] bg-[var(--paper)] text-[var(--ink-subtle)] hover:text-[var(--ink)]"
           }`}
         >
           {label}
@@ -1383,6 +1383,8 @@ export function AddPersonSheet({
         ? "Add a maker — a shop you order through. They join your roster and the Orders book can route POs to them."
         : `Add ${withArticle(DOOR_NOUN[kind as SeatAddKind])} to a project. With a phone and a text opt-in, you can coordinate them over SMS — and they land on your People roster.`;
 
+  const kindLabel = KIND_CHOICES.find(([k]) => k === kind)?.[1] ?? "someone";
+
   return (
     <RoomSheet
       open={open}
@@ -1392,7 +1394,7 @@ export function AddPersonSheet({
       }
     >
       <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-clay-ink)]">
-        {isEditMode ? "Edit · your rolodex" : "Add · to your roster"}
+        {isEditMode ? "Edit · your rolodex" : `Add · ${kindLabel}`}
       </div>
       <h2 className="mt-1 font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
         {isEditMode ? `Edit ${contactDisplayName}` : "Bring someone in"}

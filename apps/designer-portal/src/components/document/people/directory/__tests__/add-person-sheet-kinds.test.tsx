@@ -242,10 +242,20 @@ describe("the kind switch", () => {
   it("marks the chosen word pressed", () => {
     openSheet();
     fireEvent.click(screen.getByRole("button", { name: "a sub" }));
-    expect(screen.getByRole("button", { name: "a sub" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    const pressed = screen.getByRole("button", { name: "a sub" });
+    expect(pressed).toHaveAttribute("aria-pressed", "true");
+    expect(pressed.className).toContain("bg-[var(--rail)]");
+    expect(
+      screen.getByRole("button", { name: "a client" }).className,
+    ).not.toContain("bg-[var(--rail)]");
+  });
+
+  it("names the chosen kind in the eyebrow", () => {
+    openSheet();
+    expect(document.body).toHaveTextContent("Add · a client");
+    fireEvent.click(screen.getByRole("button", { name: "a sub" }));
+    expect(document.body).toHaveTextContent("Add · a sub");
+    expect(document.body).not.toHaveTextContent("Add · to your roster");
   });
 });
 
