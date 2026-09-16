@@ -393,3 +393,48 @@ Both programs' ranges are present and disjoint: ours `00592`–`00594` and
   pre-rebase tree; its F1 finding is what produced R-CC. Re-run W6 from the top
   on this HEAD.
 - Nothing was deployed. No Strata migration, no edge function, no portal.
+
+---
+
+## Fresh W6 run — sync/reconciliation check, 2026-09-16
+
+**HEAD at this check: `f1f556260317dabd9f091fdd014ebe7865d7cb1d`**
+(`fix(scripts): raise git ls-files maxBuffer in pre-push reference checks`),
+two commits past this file's own §"Resumed" HEAD
+(`12ca2c014169b5d5d30a1cecf41108b22baf9492`) — the intervening commit,
+`27f0aeba0` (`chore(people): finish the origin/main rebase — R-CC Hours door,
+regen types and Capture project`), closed out the rebase work recorded above;
+`f1f556260` is an unrelated pre-push-hook fix. `git log --oneline
+origin/main..HEAD | wc -l` → 162 (160 replayed + these 2).
+
+**1. Sync.** `git fetch origin` (first attempt blocked by the sandbox proxy —
+"This proxy requires authentication" — retried with the sandbox disabled per
+the task's binding instruction, which succeeded). `origin/main` is still
+`c879118ec` (`docs(time): ship report — hour tracking in production
+2026-09-15`), unchanged since the rebase recorded above. `git merge-base
+--is-ancestor origin/main HEAD` → **UP-TO-DATE**. No rebase needed; nothing
+pushed.
+
+**2. Migration numbers.** `ls supabase/migrations | tail -50` matches §4
+above exactly: this program's `00592`–`00594` and `00621`–`00638`, plus
+hour-tracking's `00595`–`00620` (already on Strata), plus the standing
+`20260910152111_create_contact_messages.sql` and `_pending`. `ls
+supabase/migrations | grep -oE '^[0-9]{5}' | sort | uniq -d` → empty — no
+duplicate numbers on the branch. §6/§4's finding still stands: `supabase db
+push` for this branch needs **`--include-all`**, since `00592`–`00594` sit
+below Strata's already-applied head.
+
+**3. Ledgers.** `docs/design/the-document/DECISIONS.md`: R151 (ours, "People
+room as a construction CRM") and R152 (hour-tracking, "The studio's own
+clock") both present, each with the other's renumbering note intact, trailing
+marker `*Entries add: R152 · last id = R152*` — correct, R152 is the true
+max. `docs/vision/VISION-DECISIONS.md`: V10 (ours, "Trade-side compliance
+upload door") and V11 (hour-tracking, "A ledger is not a dashboard") both
+present with reciprocal renumbering notes, trailing marker `*Entries add: …
+V10 · V11 · last id = V11*` — correct, V11 is the true max. No new collision
+since the rebase; nothing to renumber.
+
+**Outcome: no action needed.** Branch was already up to date with
+`origin/main`, migration numbers were already unique and reconciled, and both
+ledgers were already coexisting cleanly with correct trailing counters. This
+was a confirmation pass, not a repair.
