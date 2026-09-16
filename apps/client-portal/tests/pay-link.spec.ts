@@ -598,10 +598,19 @@ test.describe("the standing invoice (00574)", () => {
       timeout: 90_000,
     });
 
-    // Not a vacuous assertion: the action is on the page, at this token.
-    const openInvoice = page.getByRole("link", { name: /open the invoice/i });
-    await expect(openInvoice).toBeVisible();
-    await expect(openInvoice).toHaveAttribute("href", `/pay/${minted.token}`);
+    // The terminal act stopped being a link to `/pay/<token>` on this program
+    // (letterbox.tsx, "THE TERMINAL ACT OPENS THE LETTER, NOT AN ADDRESS" —
+    // W4 r2 MAJOR-3): 00636 froze `invoice_links.token` at NULL, so
+    // `useInvoiceLink` answers nothing and a page-load mint would revoke the
+    // client's own emailed link. `Pay $X` now opens the settle-in-place till
+    // on THIS page via `onClick`, never by navigating to `/pay/`; the emailed
+    // `/pay/<token>` sheet is untouched (see the "the sheet reflows" test
+    // below, which still drives it directly). Not a vacuous assertion: the
+    // literal amount ties it to this fixture's own balance, matching
+    // letterbox.test.tsx's `'Pay $9,125.00'` for the same $7,605-paid fixture.
+    const pay = page.getByRole("button", { name: "Pay $9,125.00" });
+    await expect(pay).toBeVisible();
+    await expect(pay).toHaveAttribute("aria-expanded", "false");
 
     expect(
       payRequests,
