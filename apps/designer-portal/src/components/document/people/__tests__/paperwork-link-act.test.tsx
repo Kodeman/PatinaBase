@@ -25,6 +25,9 @@ jest.mock("@patina/supabase", () => ({
   usePaperworkLinks: () => ({ data: links.current }),
   paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
   thirtyDaysOut: () => "2026-10-15",
+  // W4 r10 M-1 (R-CB) — `lastOpenDay` names the backed-off instant on the
+  // studio's calendar, so the band and the grant row need the REAL resolver.
+  touchInstantIsoDay: jest.requireActual("@patina/supabase").touchInstantIsoDay,
 }));
 
 const grantMinted = jest.fn();

@@ -64,6 +64,7 @@ describe('/paperwork/[token]', () => {
 
     expect(rpc).toHaveBeenCalledWith('paperwork_link_rate_limit_hit', {
       p_ip: '203.0.113.7',
+      p_token: TOKEN,
     });
     expect(rpc).toHaveBeenCalledWith('resolve_paperwork_link', { p_token: TOKEN });
   });
@@ -105,13 +106,21 @@ describe('/paperwork/[token]', () => {
     expect(rpc).not.toHaveBeenCalledWith('resolve_paperwork_link', expect.anything());
   });
 
-  it('lets the request through when the limiter itself cannot be read', async () => {
-    mockRpc({
+  // R-CA (W4 r10 MAJOR-2): THE DOOR FAILS CLOSED. This used to let the request
+  // through, which made the limiter optional for anyone who could make it
+  // fail — and on a door whose caller writes `cf-connecting-ip`, that was
+  // everyone: one malformed header raised 22P02 inside the old `inet`
+  // parameter and the error read as "within limit".
+  it('refuses the request when the limiter itself cannot be read', async () => {
+    const rpc = mockRpc({
       paperwork_link_rate_limit_hit: { data: null, error: { message: 'down' } },
       resolve_paperwork_link: { data: CONTEXT },
     });
     render(await PaperworkPage({ params: Promise.resolve({ token: TOKEN }) }));
-    expect(screen.getByTestId('paperwork-sheet')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Too many tries just now.' }),
+    ).toBeInTheDocument();
+    expect(rpc).not.toHaveBeenCalledWith('resolve_paperwork_link', expect.anything());
   });
 
   it('unwraps a single-row answer and names the studio when the row does not', async () => {

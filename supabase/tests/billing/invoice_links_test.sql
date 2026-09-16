@@ -310,11 +310,17 @@ DECLARE
     'public.claim_invoice_checkout_attempt(uuid,uuid,text,boolean,text)',
     'public.finalize_invoice_checkout_attempt(uuid,uuid,text,text,uuid)',
     'public.recover_invoice_checkout_session_evidence(uuid,uuid,text,text,uuid)',
-    'public.expire_stale_invoice_checkout_attempts(interval)'
+    'public.expire_stale_invoice_checkout_attempts(interval)',
+    'public.invoice_letters_must_hold(uuid[])',
+    'public.stamp_invoice_checkout_return_origin(uuid,text)'
   ];
   v_browser text[] := ARRAY[
     'public.regenerate_invoice_link(uuid)',
-    'public.get_invoice_link(uuid)'
+    'public.get_invoice_link(uuid)',
+    -- R-BZ: the one predicate the letters ask. Granted to authenticated
+    -- alongside the two folio RPCs; it answers a boolean about an invoice id
+    -- the caller already holds and writes nothing.
+    'public.invoice_letter_must_hold(uuid)'
   ];
 BEGIN
   FOREACH v_sig IN ARRAY v_service_only || v_browser LOOP
@@ -1106,6 +1112,14 @@ BEGIN
      AND v_claim->>'stripe_customer_id' = 'cus_guest_32'
      AND v_claim->>'state' = 'claimed',
     format('link claim shape: %s', v_claim);
+  -- THE DRIVER'S OWN STAMP (R-BZ). invoiceCheckoutReturnBase hands Stripe
+  -- /pay/return/<nonce> and startInvoiceCheckout records that on the attempt
+  -- in the same breath; the RPCs below read nonce_return_origin, never the
+  -- actor column, so a SQL-only rehearsal has to stamp it the way the edge
+  -- does or it is rehearsing a checkout Stripe was never told about.
+  PERFORM public.stamp_invoice_checkout_return_origin(
+    (v_claim->>'attempt_id')::uuid, 'https://client.patina.cloud');
+
   -- M8: the link payment is recorded by nobody, and the attempt names the link.
   ASSERT (SELECT p.recorded_by IS NULL AND a.invoice_link_id IS NOT NULL AND a.payer_id IS NULL
           FROM public.invoice_payments p
@@ -1232,6 +1246,14 @@ BEGIN
      AND v_house->'invoice_link_id' = 'null'::jsonb
      AND v_house->>'return_nonce' ~ '^[0-9a-f]{64}$',
     format('M3 A: the household must supersede the guest and get the session to expire: %s', v_house);
+  -- THE DRIVER'S OWN STAMP (R-BZ). invoiceCheckoutReturnBase hands Stripe
+  -- /pay/return/<nonce> and startInvoiceCheckout records that on the attempt
+  -- in the same breath; the RPCs below read nonce_return_origin, never the
+  -- actor column, so a SQL-only rehearsal has to stamp it the way the edge
+  -- does or it is rehearsing a checkout Stripe was never told about.
+  PERFORM public.stamp_invoice_checkout_return_origin(
+    (v_house->>'attempt_id')::uuid, 'https://client.patina.cloud');
+
   ASSERT (SELECT state = 'superseded' AND failure_reason = 'actor_changed'
           FROM public.invoice_checkout_attempts WHERE id = (v_guest->>'attempt_id')::uuid),
     'M3 A: the guest attempt is superseded for actor_changed';
@@ -1546,6 +1568,13 @@ BEGIN
   v_claim := public.claim_invoice_checkout_attempt(
     'a5745000-0000-4000-8000-000000000040', 'a5740000-0000-4000-8000-000000000004',
     'cus_links_client', false, 'card');
+  -- THE DRIVER'S OWN STAMP (R-BZ). invoiceCheckoutReturnBase hands Stripe
+  -- /pay/return/<nonce> and startInvoiceCheckout records that on the attempt
+  -- in the same breath; the RPCs below read nonce_return_origin, never the
+  -- actor column, so a SQL-only rehearsal has to stamp it the way the edge
+  -- does or it is rehearsing a checkout Stripe was never told about.
+  PERFORM public.stamp_invoice_checkout_return_origin(
+    (v_claim->>'attempt_id')::uuid, 'https://client.patina.cloud');
   PERFORM public.finalize_invoice_checkout_attempt(
     (v_claim->>'attempt_id')::uuid, 'a5740000-0000-4000-8000-000000000004',
     'cus_links_client', 'cs_40');
@@ -1699,6 +1728,13 @@ BEGIN
   PERFORM public.set_invoice_link_stripe_customer(v_link, 'cus_guest_46');
   v_claim := public.claim_invoice_link_checkout_attempt(
     'a5745000-0000-4000-8000-000000000046', v_link, 'cus_guest_46', 'card');
+  -- THE DRIVER'S OWN STAMP (R-BZ). invoiceCheckoutReturnBase hands Stripe
+  -- /pay/return/<nonce> and startInvoiceCheckout records that on the attempt
+  -- in the same breath; the RPCs below read nonce_return_origin, never the
+  -- actor column, so a SQL-only rehearsal has to stamp it the way the edge
+  -- does or it is rehearsing a checkout Stripe was never told about.
+  PERFORM public.stamp_invoice_checkout_return_origin(
+    (v_claim->>'attempt_id')::uuid, 'https://client.patina.cloud');
   PERFORM public.finalize_invoice_checkout_attempt(
     (v_claim->>'attempt_id')::uuid, NULL, 'cus_guest_46', 'cs_46_stale', v_link);
   INSERT INTO links_state VALUES ('attempt46', v_claim->>'attempt_id');

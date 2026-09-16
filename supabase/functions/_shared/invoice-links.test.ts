@@ -4,6 +4,8 @@ import {
   INVOICE_LINK_TOKEN_PATTERN,
   invoiceLinkPath,
   invoiceLinkUrl,
+  invoiceLetterMustHold,
+  invoiceLettersMustHold,
   letterFallbackUrl,
   letterPortalUrl,
 } from './invoice-links.ts';
@@ -131,4 +133,69 @@ Deno.test('invoice links: the fallback normalizes a trailing slash on the base',
     await letterPortalUrl(rpcClient({ data: null, error: null }).client, 'https://client.test/', 'inv-1'),
     'https://client.test/?invoice=inv-1'
   );
+});
+
+// ── One predicate, asked by both rails (R-BZ, W4 r10 MAJOR-1) ──────────────
+//
+// The rails used to re-list three of the mint guard's states in TypeScript and
+// never learned the fourth, so inside a day of a declined card they shipped a
+// letter carrying the SIGNED-IN address to an account-less payer. These prove
+// the rails now ask the guard's own predicate and fail closed on it.
+
+Deno.test('invoice links: the hold is whatever invoice_letter_must_hold says', async () => {
+  const held = rpcClient({ data: true, error: null });
+  assertEquals(await invoiceLetterMustHold(held.client, 'inv-1'), {
+    hold: true,
+    readable: true,
+  });
+  assertEquals(held.calls, [
+    { name: 'invoice_letter_must_hold', args: { p_invoice_id: 'inv-1' } },
+  ]);
+
+  const free = rpcClient({ data: false, error: null });
+  assertEquals(await invoiceLetterMustHold(free.client, 'inv-2'), {
+    hold: false,
+    readable: true,
+  });
+});
+
+Deno.test('invoice links: an unreadable predicate holds the letter, never releases it', async () => {
+  assertEquals(
+    await invoiceLetterMustHold(rpcClient({ data: null, error: { message: 'boom' } }).client, 'inv-1'),
+    { hold: true, readable: false }
+  );
+  assertEquals(
+    await invoiceLetterMustHold(rpcClient(new Error('network')).client, 'inv-1'),
+    { hold: true, readable: false }
+  );
+});
+
+Deno.test('invoice links: the batched predicate returns the held ids and fails closed', async () => {
+  const batch = rpcClient({ data: ['inv-1', 'inv-3'], error: null });
+  const answer = await invoiceLettersMustHold(batch.client, ['inv-1', 'inv-2', 'inv-3']);
+  assertEquals(answer.readable, true);
+  assertEquals([...answer.held].sort(), ['inv-1', 'inv-3']);
+  assertEquals(batch.calls, [
+    {
+      name: 'invoice_letters_must_hold',
+      args: { p_invoice_ids: ['inv-1', 'inv-2', 'inv-3'] },
+    },
+  ]);
+
+  // A row-shaped answer reads the same way rather than silently emptying.
+  const rows = rpcClient({ data: [{ candidate: 'inv-9' }], error: null });
+  assertEquals([...(await invoiceLettersMustHold(rows.client, ['inv-9'])).held], ['inv-9']);
+
+  // Unreadable: every candidate holds, and the caller is told the scan failed.
+  const broken = await invoiceLettersMustHold(
+    rpcClient({ data: null, error: { message: 'boom' } }).client,
+    ['inv-1', 'inv-2']
+  );
+  assertEquals(broken.readable, false);
+  assertEquals([...broken.held].sort(), ['inv-1', 'inv-2']);
+
+  // Nothing to ask about is not a round trip.
+  const empty = rpcClient({ data: [], error: null });
+  assertEquals((await invoiceLettersMustHold(empty.client, [])).held.size, 0);
+  assertEquals(empty.calls.length, 0);
 });

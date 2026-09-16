@@ -17015,6 +17015,42 @@ END $g$;
 
 -- 00636_invoice_link_hardening.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.invoice_letter_must_hold(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.invoice_letter_must_hold(uuid) TO service_role, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.invoice_letters_must_hold(uuid[]) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.invoice_letters_must_hold(uuid[]) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stamp_invoice_checkout_return_origin(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stamp_invoice_checkout_return_origin(uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00636_invoice_link_hardening.sql
+DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.mint_invoice_link_on_issue() FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -17207,13 +17243,13 @@ END $g$;
 
 -- 00637_paperwork_upload_door.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.paperwork_link_rate_limit_hit(inet, integer) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.paperwork_link_rate_limit_hit(text, text, integer) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00637_paperwork_upload_door.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.paperwork_link_rate_limit_hit(inet, integer) TO service_role;
+  GRANT EXECUTE ON FUNCTION public.paperwork_link_rate_limit_hit(text, text, integer) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

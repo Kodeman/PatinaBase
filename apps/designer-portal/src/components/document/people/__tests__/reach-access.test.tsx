@@ -72,6 +72,9 @@ jest.mock("@patina/supabase", () => ({
   // W4 r4 F1 — the REAL studio-timezone converter, so the day a grant row
   // prints is measured against the shipped one rather than a stub.
   touchInstantDay: jest.requireActual("@patina/supabase").touchInstantDay,
+  // W4 r10 M-1 (R-CB) — the REAL timestamptz day resolver, so a bounce
+  // recorded late in the studio evening prints the studio's day here too.
+  touchInstantIsoDay: jest.requireActual("@patina/supabase").touchInstantIsoDay,
   isAccessGrantRevokable: (tier: string) =>
     tier === "field_link" || tier === "project_review" ||
     tier === "paperwork_link",
@@ -251,7 +254,10 @@ describe("a channel row", () => {
     };
     renderReach();
     expect(
-      screen.getByText("Mobile · preferred · verified 12 Oct 2026"),
+      // `verified_at` is a timestamptz; midnight UTC on the 12th is the
+      // evening of the 11th in the studio, and the studio's day is the one
+      // that prints (R-CB, W4 r10 M-1).
+      screen.getByText("Mobile · preferred · verified 11 Oct 2026"),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "(612) 555-0111" }),
@@ -377,7 +383,9 @@ describe("a channel row", () => {
     ) as HTMLElement;
     expect(row).toBeInTheDocument();
     expect(
-      within(row).getByText(/This address bounced back, 12 March 2026\./),
+      // status_at is midnight UTC on the 12th = 7pm on the 11th in the
+      // studio; the studio's calendar names the day (R-CB).
+      within(row).getByText(/This address bounced back, 11 March 2026\./),
     ).toBeInTheDocument();
   });
 
@@ -643,7 +651,8 @@ describe("the rule's provenance", () => {
     renderReach();
     expect(
       screen.getByText(
-        "Never email. Text only. The email on file bounces. Set by Priya Natarajan, 13 Sep 2026.",
+        // `set_at` midnight UTC on the 13th is the 12th in the studio (R-CB).
+        "Never email. Text only. The email on file bounces. Set by Priya Natarajan, 12 Sep 2026.",
       ),
     ).toBeInTheDocument();
   });
@@ -661,7 +670,7 @@ describe("the rule's provenance", () => {
     renderReach();
     expect(
       screen.getByText(
-        "Never email. Text only. The email on file bounces. Set 13 Sep 2026.",
+        "Never email. Text only. The email on file bounces. Set 12 Sep 2026.",
       ),
     ).toBeInTheDocument();
   });
@@ -923,7 +932,7 @@ describe("the pure parts", () => {
         status_at: "2026-03-12T00:00:00Z",
       } as never),
     ).toBe(
-      "This address bounced back, 12 March 2026. Texts and calls still reach them.",
+      "This address bounced back, 11 March 2026. Texts and calls still reach them.",
     );
   });
 
@@ -941,8 +950,44 @@ describe("the pure parts", () => {
         status_at: "2026-03-12T00:00:00Z",
       } as never),
     ).toBe(
-      "Texts to this number bounced back, 12 March 2026. Calls still reach them.",
+      "Texts to this number bounced back, 11 March 2026. Calls still reach them.",
     );
+  });
+
+  /**
+   * W4 r10 M-1 (R-CB) — THE DAY IS THE STUDIO'S, NOT UTC'S. `status_at` is a
+   * timestamptz; the old `.slice(0, 10)` read the UTC day off the wire, so a
+   * bounce recorded at 8pm in the studio printed tomorrow's date on the card.
+   */
+  it("reads a held channel's day on the studio's calendar, not UTC's", () => {
+    // 2026-03-11 20:00 America/Chicago — already the 12th in UTC.
+    expect(
+      heldChannelReason({
+        channel_kind: "email",
+        status: "dead",
+        status_at: "2026-03-12T01:00:00Z",
+      } as never),
+    ).toBe("This line is dead, 11 March 2026.");
+    // 2026-03-12 09:00 America/Chicago — the same UTC day, and the same
+    // studio day, so the two only ever part at the edges.
+    expect(
+      heldChannelReason({
+        channel_kind: "email",
+        status: "dead",
+        status_at: "2026-03-12T14:00:00Z",
+      } as never),
+    ).toBe("This line is dead, 12 March 2026.");
+  });
+
+  it("stamps a verified marker on the studio's day too", () => {
+    expect(
+      channelRowParts({
+        channel_kind: "mobile",
+        preferred: false,
+        verified: true,
+        verified_at: "2026-10-12T02:00:00Z",
+      } as never),
+    ).toEqual(["Mobile", "verified 11 Oct 2026"]);
   });
 
   it("a grant with no end date still ends with the job", () => {
@@ -978,8 +1023,15 @@ describe("the pure parts", () => {
     expect(
       grantEndsSentence("2027-05-24T14:33:21Z", NOW, "field_link"),
     ).toContain("24 May 2027");
-    // A tier that stores a plain instant is untouched.
+    // A tier that stores a plain instant keeps the instant it carries — but
+    // the DAY it prints is still the studio's. Midnight UTC on the 25th is
+    // 7pm on the 24th in the studio, and the door is dead all day on the 25th
+    // (R-CB, W4 r10 M-1).
     expect(grantEndsSentence("2027-05-25T00:00:00Z", NOW, "doc_share")).toBe(
+      "Ends 24 May 2027.",
+    );
+    // A mid-afternoon instant reads the same day on either calendar.
+    expect(grantEndsSentence("2027-05-25T18:00:00Z", NOW, "doc_share")).toBe(
       "Ends 25 May 2027.",
     );
   });

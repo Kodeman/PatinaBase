@@ -648,6 +648,7 @@ export {
   touchSentence,
   touchDay,
   touchInstantDay,
+  touchInstantIsoDay,
   STUDIO_TIME_ZONE,
   lastInboundDecision,
   inboundDecisionSentence,

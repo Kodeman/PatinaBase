@@ -14,11 +14,14 @@ import {
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  callerIp,
   handlePaperwork,
+  normalizeCallerIp,
   type PaperworkDeps,
   REVERSED_DATES_MESSAGE,
   sanitizeFilename,
   uploadPaperwork,
+  withinRateLimit,
 } from "../paperwork-upload/core.ts";
 
 const LIVE_TOKEN = "a".repeat(64);
@@ -36,6 +39,7 @@ interface Call {
 function fake(options: {
   liveTokens?: string[];
   rateLimited?: boolean;
+  rateLimitError?: string;
   uploadError?: string;
   recordError?: string;
   calls?: Call[];
@@ -57,6 +61,9 @@ function fake(options: {
         const token = String(args.p_token ?? "");
         switch (name) {
           case "paperwork_link_rate_limit_hit":
+            if (options.rateLimitError) {
+              return { data: null, error: { message: options.rateLimitError } };
+            }
             return { data: !options.rateLimited, error: null };
           case "resolve_paperwork_link":
             return live.has(token)
@@ -390,4 +397,72 @@ Deno.test("dated paper may not be recorded without the date it runs out", async 
     pdf("w9.pdf"),
   );
   assertEquals(w9.status, 200);
+});
+
+// ── The anonymous door fails closed (R-CA, W4 r10 MAJOR-2) ─────────────────
+//
+// `cf-connecting-ip` and `x-forwarded-for` are writable by anyone on a
+// verify_jwt=false door. Passed through raw they reached an `inet` parameter:
+// `not-an-ip` and the ordinary proxy value `1.2.3.4:5678` both raised 22P02,
+// which the limiter swallowed as "within limit" — one header switched the
+// door's only abuse control off. These four tests are the four ways that
+// happened.
+
+Deno.test("a malformed forwarded address is not an address (R-CA)", () => {
+  assertEquals(normalizeCallerIp("not-an-ip"), null);
+  assertEquals(normalizeCallerIp("1.2.3.4; drop"), null);
+  assertEquals(normalizeCallerIp("999.1.1.1"), null);
+  assertEquals(normalizeCallerIp(""), null);
+  assertEquals(normalizeCallerIp(null), null);
+
+  const headers = new Headers({ "cf-connecting-ip": "not-an-ip" });
+  assertEquals(callerIp(headers), null);
+});
+
+Deno.test("an ip:port forwarded value keeps the address and drops the port", () => {
+  assertEquals(normalizeCallerIp("1.2.3.4:5678"), "1.2.3.4");
+  assertEquals(normalizeCallerIp("[2001:db8::1]:443"), "2001:db8::1");
+  assertEquals(normalizeCallerIp("2001:db8::1"), "2001:db8::1");
+  assertEquals(normalizeCallerIp("203.0.113.9"), "203.0.113.9");
+
+  const chain = new Headers({ "x-forwarded-for": "198.51.100.7:9000, 10.0.0.1" });
+  assertEquals(callerIp(chain), "198.51.100.7");
+});
+
+Deno.test("a caller with no usable address is bucketed by the token, not waved through", async () => {
+  const f = fake();
+  const res = await handlePaperwork(
+    { supabase: f.client, ip: callerIp(new Headers()) },
+    new Request("http://x", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "context", token: LIVE_TOKEN }),
+    }),
+  );
+  assertEquals(res.status, 200);
+  const bucket = f.calls.find((c) => c.name === "paperwork_link_rate_limit_hit");
+  assert(bucket, "the bucket is always claimed");
+  assertEquals(bucket!.args.p_ip, null);
+  // The RPC resolves the link row id from this; the token itself never lands
+  // in the bucket table.
+  assertEquals(bucket!.args.p_token, LIVE_TOKEN);
+});
+
+Deno.test("an unreadable limiter refuses the request rather than passing it", async () => {
+  const f = fake({ rateLimitError: 'invalid input syntax for type inet: "not-an-ip"' });
+  assertEquals(
+    await withinRateLimit({ supabase: f.client, ip: "203.0.113.9" }, LIVE_TOKEN),
+    false,
+  );
+
+  const res = await handlePaperwork(
+    { supabase: f.client, ip: "203.0.113.9" },
+    new Request("http://x", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "context", token: LIVE_TOKEN }),
+    }),
+  );
+  assertEquals(res.status, 429);
+  assertEquals(f.calls.filter((c) => c.name === "resolve_paperwork_link").length, 0);
 });

@@ -10,6 +10,8 @@
  * parsed as a timestamp lands a day early west of UTC.
  */
 
+import { touchInstantIsoDay } from "@patina/supabase";
+
 const MONTHS_LONG = [
   "January",
   "February",
@@ -61,7 +63,10 @@ export function formatLongDate(
 export function lastOpenDay(expiresAt: string): string | null {
   const at = Date.parse(expiresAt);
   if (!Number.isFinite(at)) return expiresAt.slice(0, 10) || null;
-  return new Date(at - 1000).toISOString().slice(0, 10);
+  // `expires_at` is a timestamptz; the backed-off instant is then named on the
+  // STUDIO's calendar, not UTC's, so a boundary that lands in the studio's
+  // evening cannot print tomorrow's date (R-CB, W4 r10 M-1).
+  return touchInstantIsoDay(new Date(at - 1000).toISOString());
 }
 
 /** Dollars from integer cents, whole where whole: `250000` → `$2,500`. */

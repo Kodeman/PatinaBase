@@ -72,25 +72,32 @@
 --    resolved to nothing and a client who had just paid was 303'd to
 --    /pay/dead (and, when the browser won the race instead, watched her open
 --    page die on the next refresh). The guard now also holds for 24 hours
---    after a LINK-BORNE attempt finalizes succeeded / failed /
---    requires_refund, so the letter falls back to the letterbox rather than
---    rotating under the payer, and the failure letter no longer kills the
---    /pay address a declined card is about to retry from. Behind that,
+--    after an attempt WHOSE RETURN RODE THE NONCE finalizes succeeded /
+--    failed / requires_refund, so the letter falls back to the letterbox
+--    rather than rotating under the payer, and the failure letter no longer
+--    kills the /pay address a declined card is about to retry from. THE TEST
+--    IS THE RETURN ORIGIN, NOT THE ACTOR COLUMN (R-BZ, W4 r10 BLOCKING-1):
+--    written as invoice_link_id IS NOT NULL the leg never fired on the
+--    signed-in payer rail, which claims with payer_id and still rides
+--    /pay/return/<nonce> whenever the invoice has a live link. §2c records
+--    the fact on the attempt; §2d asks it in exactly one place. Behind that,
 --    resolve_invoice_return_nonce resolves by the attempt's own
 --    invoice_link_id rather than by the date heuristic alone, so the attempt
 --    and the link it was claimed against can never be read apart. A revoked
 --    link still answers NULL: F2 forbids a nonce becoming an alias for a later
 --    mint, so the letter is what had to stop revoking.
 --  · THE MINT GUARD HAS A SWEEP BEHIND IT (§6). ensure_invoice_link refuses
---    to rotate while a Checkout attempt is claimed / session_created /
---    processing; a `processing` row is ACH money in flight, which 00574's
+--    to rotate while invoice_letter_must_hold (§2d) says so; a `processing`
+--    row is ACH money in flight, which 00574's
 --    hourly sweep never touches, so a lost Stripe result would hold that
 --    refusal open on an invoice forever. expire_stale_invoice_checkout_
 --    attempts is re-headed here to close processing attempts older than 10
 --    days — beyond any honest ACH window — on the same entry, at the same
 --    hour, with the same signature (R-BY). The letters do not take the
---    fallback address while the guard stands: they hold (invoice-reminders,
---    invoice-send).
+--    fallback address while the guard stands: they hold — and since W4 r10
+--    they hold on THE GUARD, by calling invoice_letter_must_hold, not on a
+--    copy of three of its four legs re-listed in TypeScript in two files
+--    (invoice-reminders, invoice-send).
 --
 -- Lineage (grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" supabase/migrations/*.sql
 -- | sort | tail -1, run 2026-09-15):
@@ -106,6 +113,10 @@
 --                                     verbatim, one predicate changed)
 --   invoice_link_token_hash           NEW
 --   invoice_link_is_live              NEW
+--   invoice_letter_must_hold          NEW (§2d — R-BZ's single predicate)
+--   invoice_letters_must_hold         NEW (§2d — the same predicate, batched)
+--   stamp_invoice_checkout_return_origin
+--                                     NEW (§2d — records the one fact)
 --   expire_stale_invoice_checkout_attempts
 --                                     00574 → this file (00574's body verbatim
 --                                     except the candidate set, the re-judge,
@@ -243,6 +254,200 @@ COMMENT ON COLUMN public.invoice_checkout_attempts.return_nonce_consumed_at IS
   '{"state":"spent"} and the payer lands on /pay/used rather than on a dead '
   'address (00636, R-BT).';
 
+-- ── 2c. THE ONE FACT: does this attempt's return ride the nonce? (R-BZ) ────
+--
+-- W4 r10 BLOCKING-1. The post-finalize mint guard below was written as "a
+-- LINK-borne attempt" — invoice_link_id IS NOT NULL — and chk_invoice_attempt_
+-- actor makes an attempt either link-borne or payer-borne, never both. But
+-- create-checkout-session claims with payer_id (so invoice_link_id is NULL)
+-- and STILL hands Stripe a nonce return whenever the invoice has a live link
+-- (hasLiveInvoiceLink → nonceReturnOrigin). So the guard never fired on the
+-- rail that actually carries a signed-in client through Checkout: the moment
+-- the webhook wrote 'succeeded', the next letter rotated the token the client
+-- was holding, resolve_invoice_return_nonce answered NULL, and /pay/return/
+-- <nonce> 303'd a client who had just paid to /pay/dead — then to /pay/used,
+-- whose sentence ("this link was already used") was not true.
+--
+-- The actor column was never the right question. The question is whether a
+-- LIVE LINK IS LOAD-BEARING FOR THIS ATTEMPT, and exactly one thing decides
+-- that: whether Stripe was handed /pay/return/<nonce> as the way back. That is
+-- a fact the driver knows and nothing else can recompute afterwards (the link
+-- may have been minted, revoked or expired since), so it is recorded here, on
+-- the attempt, by stamp_invoice_checkout_return_origin (§4) at claim time —
+-- before any session exists, so no Stripe event can arrive ahead of it.
+--
+-- Every reader of that fact is named in one place: ensure_invoice_link's
+-- post-finalize guard, resolve_invoice_return_nonce's rotation, and the two
+-- letter rails — all through public.invoice_letter_must_hold (§4). No
+-- TypeScript file lists attempt states any more.
+ALTER TABLE public.invoice_checkout_attempts
+  ADD COLUMN IF NOT EXISTS nonce_return_origin text;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chk_invoice_attempt_nonce_origin'
+      AND conrelid = 'public.invoice_checkout_attempts'::regclass
+  ) THEN
+    -- An origin without a nonce is a contradiction: the return address it
+    -- describes cannot be built (invoiceCheckoutReturnBase needs both).
+    ALTER TABLE public.invoice_checkout_attempts
+      ADD CONSTRAINT chk_invoice_attempt_nonce_origin
+      CHECK (nonce_return_origin IS NULL OR return_nonce IS NOT NULL);
+  END IF;
+END $$;
+
+-- EVERY ATTEMPT THAT EXISTS BEFORE THIS MIGRATION IS TREATED AS RIDING THE
+-- NONCE. Its success_url is already sitting in Stripe and this file cannot
+-- read it; under 00574 both rails minted a nonce and both were addressed
+-- through it whenever a link existed. Assuming it rode is the conservative
+-- half of the guess in both directions — the guard holds a letter it might
+-- not have had to, and the rotation keeps answering for a nonce already in
+-- flight — so no address a client is holding dies at deploy. The marker is
+-- not a URL because no URL is known; only NULL vs NOT NULL is ever read.
+UPDATE public.invoice_checkout_attempts
+   SET nonce_return_origin = 'legacy:pre-00636'
+ WHERE return_nonce IS NOT NULL
+   AND nonce_return_origin IS NULL;
+
+COMMENT ON COLUMN public.invoice_checkout_attempts.nonce_return_origin IS
+  'The origin Stripe was handed the /pay/return/<nonce> address on, stamped '
+  'at claim time by stamp_invoice_checkout_return_origin, or NULL when this '
+  'attempt''s return does not ride the nonce at all. THE ONE FACT that decides '
+  'whether a live invoice link is load-bearing for an attempt (R-BZ) — read '
+  'by invoice_letter_must_hold and by resolve_invoice_return_nonce, never the '
+  'actor columns. ''legacy:pre-00636'' marks attempts that predate the column '
+  '(00636).';
+
+-- ── 2d. THE PREDICATE, STATED ONCE (R-BZ) ──────────────────────────────────
+--
+-- "Will ensure_invoice_link refuse for this invoice right now?" had three
+-- answers on the branch: the guard's own EXISTS, invoice-send's state list and
+-- invoice-reminders' state list. Two of them were written against the guard's
+-- first three legs and never learned the fourth (W4 r10 MAJOR-1), so inside 24
+-- hours of a declined card the letters shipped anyway, ensure_invoice_link
+-- answered NULL under its own guard, and letterPortalUrl fell back to
+-- ${baseUrl}/?invoice=<id> — a SIGNED-IN door, mailed to the account-less
+-- payer the /pay/<token> rail exists for. R-BY says a letter never carries a
+-- dead address; that letter carried one to the one population that cannot open
+-- it.
+--
+-- So there is one predicate and the letters ask it. No TypeScript file lists
+-- attempt states.
+--
+-- Two legs, and only two:
+--   IN FLIGHT — claimed / session_created / processing. The payer is standing
+--   on the address; minting would pull it out from under them (M11).
+--   JUST FINISHED, AND THE RETURN RODE THE NONCE — 24 hours after succeeded /
+--   failed / requires_refund on an attempt carrying nonce_return_origin (§2c).
+--   The settlement lifts the in-flight leg one statement before the receipt
+--   letter asks for an address, so without this leg the letter revoked the
+--   very address the payer was returning to.
+-- The 24 hours is bounded from behind by §6's sweep: a processing row that
+-- never resolves is closed at 10 days, so nothing holds the guard open forever.
+CREATE OR REPLACE FUNCTION public.invoice_letter_must_hold(p_invoice_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.invoice_checkout_attempts a
+    WHERE a.invoice_id = p_invoice_id
+      AND (
+        a.state IN ('claimed','session_created','processing')
+        OR (
+          a.nonce_return_origin IS NOT NULL
+          AND a.state IN ('succeeded','failed','requires_refund')
+          AND COALESCE(a.finalized_at, a.updated_at, a.created_at)
+                > now() - interval '24 hours'
+        )
+      )
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.invoice_letter_must_hold(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.invoice_letter_must_hold(uuid)
+  TO service_role, authenticated;
+
+COMMENT ON FUNCTION public.invoice_letter_must_hold(uuid) IS
+  'THE one source of "ensure_invoice_link will refuse for this invoice right '
+  'now" (R-BZ). True while a Checkout attempt is claimed/session_created/'
+  'processing, and for 24 hours after an attempt whose return rode the nonce '
+  '(nonce_return_origin set) finalized succeeded/failed/requires_refund. '
+  'ensure_invoice_link asks it, and so do invoice-send and invoice-reminders, '
+  'which hold the letter rather than mail the signed-in letterbox address to '
+  'an account-less payer (00636, W4 r10 BLOCKING-1/MAJOR-1).';
+
+-- The same predicate over a batch, so invoice-reminders' hourly scan asks it
+-- once per pass instead of once per invoice. It is a wrapper, never a second
+-- definition: the WHERE below is the function above.
+CREATE OR REPLACE FUNCTION public.invoice_letters_must_hold(p_invoice_ids uuid[])
+RETURNS SETOF uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT candidate
+  FROM unnest(COALESCE(p_invoice_ids, ARRAY[]::uuid[])) AS candidate
+  WHERE public.invoice_letter_must_hold(candidate);
+$$;
+
+REVOKE ALL ON FUNCTION public.invoice_letters_must_hold(uuid[])
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.invoice_letters_must_hold(uuid[]) TO service_role;
+
+COMMENT ON FUNCTION public.invoice_letters_must_hold(uuid[]) IS
+  'invoice_letter_must_hold over a batch: the subset of these invoices whose '
+  'letters must hold. A wrapper, not a second rule (00636, R-BZ).';
+
+-- The stamp. The driver knows, at claim time, whether Stripe is about to be
+-- handed /pay/return/<nonce> as the way back; nothing downstream can recompute
+-- it, because by the time a letter runs the link may have been minted, revoked
+-- or rotated. Called before the Checkout session exists, so no Stripe event can
+-- arrive ahead of the fact. Idempotent, and never applied to a finalized
+-- attempt: the answer belongs to the flight it was decided in.
+CREATE OR REPLACE FUNCTION public.stamp_invoice_checkout_return_origin(
+  p_attempt_id uuid,
+  p_origin     text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_stamped uuid;
+BEGIN
+  IF p_attempt_id IS NULL OR p_origin IS NULL OR btrim(p_origin) = '' THEN
+    RETURN false;
+  END IF;
+
+  UPDATE public.invoice_checkout_attempts a
+     SET nonce_return_origin = btrim(p_origin)
+   WHERE a.id = p_attempt_id
+     AND a.return_nonce IS NOT NULL
+     AND a.state IN ('claimed','session_created','processing')
+  RETURNING a.id INTO v_stamped;
+
+  RETURN v_stamped IS NOT NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.stamp_invoice_checkout_return_origin(uuid, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.stamp_invoice_checkout_return_origin(uuid, text)
+  TO service_role;
+
+COMMENT ON FUNCTION public.stamp_invoice_checkout_return_origin(uuid, text) IS
+  'Service-only: record that this attempt''s Stripe return rides '
+  '/pay/return/<nonce> from the given origin — the one fact R-BZ turns on. '
+  'False when the attempt has no nonce or has already finalized, so a stamp '
+  'can never be back-dated onto a closed flight (00636).';
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. The producers — mint the hash, emit the raw once
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -327,28 +532,23 @@ BEGIN
   -- The same statement sat on the FAILURE path too, killing the /pay/<token> a
   -- declined card was about to retry from.
   --
-  -- So a finalized attempt that was claimed against a LINK (invoice_link_id,
-  -- i.e. somebody standing on a /pay/<token> address rather than a signed-in
-  -- payer) holds the address for a day after it finalized. The letter falls
-  -- back to the letterbox rather than rotating under the payer — R-BY's rule
-  -- that a letter never carries a dead address, read from the other side: a
-  -- letter may not make the address in somebody's browser dead either. A
-  -- signed-in payer's attempt carries no link and rotates as before, and the
-  -- folio's own Regenerate act is untouched: it is a member's deliberate press
-  -- with the consequence written beside it (R-BW).
-  IF EXISTS (
-    SELECT 1 FROM invoice_checkout_attempts
-    WHERE invoice_id = p_invoice_id
-      AND (
-        state IN ('claimed','session_created','processing')
-        OR (
-          invoice_link_id IS NOT NULL
-          AND state IN ('succeeded','failed','requires_refund')
-          AND COALESCE(finalized_at, updated_at, created_at)
-                > now() - interval '24 hours'
-        )
-      )
-  ) THEN
+  -- So a finalized attempt WHOSE RETURN RODE THE NONCE holds the address for a
+  -- day after it finalized. The letter falls back to the letterbox rather than
+  -- rotating under the payer — R-BY's rule that a letter never carries a dead
+  -- address, read from the other side: a letter may not make the address in
+  -- somebody's browser dead either. The folio's own Regenerate act is
+  -- untouched: it is a member's deliberate press with the consequence written
+  -- beside it (R-BW).
+  --
+  -- THE TEST IS THE RETURN ORIGIN, NOT THE ACTOR COLUMN (R-BZ, W4 r10
+  -- BLOCKING-1). Read as `invoice_link_id IS NOT NULL` this leg missed the
+  -- signed-in payer rail entirely — create-checkout-session claims with
+  -- payer_id and still rides /pay/return/<nonce> whenever the invoice has a
+  -- live link — so the receipt letter went on killing the address that payer
+  -- was returning to. §2c records the fact itself; this is the only question
+  -- asked about it, and invoice_letter_must_hold (§4) is the only place it is
+  -- asked, so the two letter rails cannot drift from the guard again.
+  IF public.invoice_letter_must_hold(p_invoice_id) THEN
     RETURN NULL;
   END IF;
 
@@ -383,9 +583,9 @@ COMMENT ON FUNCTION public.ensure_invoice_link(uuid) IS
   'the raw value once (00636 — the stored value is a hash, so no address can '
   'be re-emitted). Revokes the prior active link: CRM-29''s "regenerate on '
   'send", and every caller is a letter. NULL for a draft/void/missing '
-  'invoice, while a Checkout attempt is live (the payer''s address may not be '
-  'pulled out from under them, M11), for 24 hours after a LINK-borne attempt '
-  'finalized succeeded/failed/requires_refund (W4 r9 BLOCKING-1 — the receipt '
+  'invoice, whenever invoice_letter_must_hold says so (a Checkout in flight, '
+  'or 24 hours after an attempt WHOSE RETURN RODE THE NONCE finalized '
+  'succeeded/failed/requires_refund — R-BZ, W4 r9/r10 BLOCKING-1: the receipt '
   'letter used to revoke the address the payer was returning to, so the return '
   'nonce resolved to nothing and a client who had just paid landed on '
   '/pay/dead), or on a lost mint race — the M7 safety valve the callers '
@@ -589,10 +789,18 @@ BEGIN
   -- The claim. `return_nonce_consumed_at IS NULL` in the WHERE makes this the
   -- single-use gate: the row is stamped and returned in one statement, so a
   -- second caller reads no row and rotates nothing.
+  --
+  -- `nonce_return_origin IS NOT NULL` is the same one fact the mint guard
+  -- reads (R-BZ): a nonce on an attempt whose return never rode it was never
+  -- handed to Stripe as an address, so no browser can arrive here holding it
+  -- and nothing may be rotated for it. It falls to the branch below and reads
+  -- as spent — the readable page — rather than rotating a link on the strength
+  -- of a value that only ever sat in a database row.
   UPDATE public.invoice_checkout_attempts a
      SET return_nonce_consumed_at = now()
    WHERE a.return_nonce = p_nonce
      AND a.return_nonce_consumed_at IS NULL
+     AND a.nonce_return_origin IS NOT NULL
   RETURNING a.id INTO v_attempt_id;
 
   IF v_attempt_id IS NULL THEN

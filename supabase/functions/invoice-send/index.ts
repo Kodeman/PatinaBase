@@ -8,10 +8,11 @@
 //   1. Auth: resolve the caller from the Authorization header.
 //   2. Prove can_manage_invoice through a caller-JWT Supabase client, then load
 //      the invoice (service role) + joins and require issued (not draft/void).
-//   2b. Hold the letter if a Checkout attempt is in flight (claimed /
-//      session_created / processing): 00636 will not mint a fresh address
-//      under a payer, and a letter with no address is not worth sending
-//      (409 checkout_in_flight, W4 r6 MAJOR-1).
+//   2b. Hold the letter whenever invoice_letter_must_hold says so (a Checkout
+//      in flight, or the 24h return window after one whose return rode the
+//      nonce): 00636 will not mint a fresh address under a payer, and a letter
+//      with no address is not worth sending (409 checkout_in_flight, W4 r6
+//      MAJOR-1 / r10 MAJOR-1, R-BZ).
 //   3. Resolve the recipient: invoice.client_id → project.client_id profile,
 //      falling back to designer_clients.client_email for not-yet-signed-up
 //      clients (mirrors decision-reminders).
@@ -55,7 +56,7 @@ import {
   invoiceForClause,
   invoiceSubjectName,
 } from '../_shared/invoice-subject.ts';
-import { letterPortalUrl } from '../_shared/invoice-links.ts';
+import { invoiceLetterMustHold, letterPortalUrl } from '../_shared/invoice-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -211,25 +212,26 @@ Deno.serve(async (req: Request) => {
 
   // ── A letter is not sent into a payment in flight (W4 r6 MAJOR-1) ──────
   //
-  // Since 00636, `ensure_invoice_link` refuses to rotate while a Checkout
-  // attempt is claimed / session_created / processing — minting would kill the
-  // address the payer is standing on. `letterPortalUrl` then falls back to the
-  // signed-in letterbox, which is no use to the account-less payer this rail
-  // exists for. So the letter HOLDS rather than shipping a second-best
-  // address: someone who is paying this invoice right now is not someone to
-  // write to. `processing` is an ACH debit; 00636 §6's sweep closes one that
-  // never resolves after 10 days, so this can never hold forever.
-  const { data: liveAttempt, error: liveAttemptError } = await admin
-    .from('invoice_checkout_attempts')
-    .select('id, state')
-    .eq('invoice_id', invoiceId)
-    .in('state', ['claimed', 'session_created', 'processing'])
-    .limit(1)
-    .maybeSingle();
-  if (liveAttemptError) {
-    // Fail closed: an unreadable attempt table cannot tell us the client is
+  // `ensure_invoice_link` refuses to mint while a Checkout is in flight, and
+  // for 24 hours after an attempt whose return rode `/pay/return/<nonce>`
+  // finalized — minting would kill the address the payer is standing on or
+  // returning to. `letterPortalUrl` then falls back to the signed-in
+  // letterbox, which is no use to the account-less payer this rail exists for.
+  // So the letter HOLDS rather than shipping a second-best address: someone
+  // who is paying this invoice right now is not someone to write to.
+  //
+  // THE QUESTION IS ASKED OF THE GUARD ITSELF (R-BZ, W4 r10 MAJOR-1). This
+  // used to re-list three of the guard's states here, which is how the rail
+  // came to disagree with it the moment a fourth leg was added: a declined
+  // card let the letter through, carrying the signed-in address.
+  // `invoice_letter_must_hold` IS the guard's own predicate, so the two cannot
+  // drift again. 00636 §6's sweep closes a `processing` row that never
+  // resolves after 10 days, so this can never hold forever.
+  const letterHold = await invoiceLetterMustHold(admin, invoiceId);
+  if (!letterHold.readable) {
+    // Fail closed: an unreadable predicate cannot tell us the client is
     // mid-payment, and sending anyway is the outcome this guard exists to stop.
-    console.error('invoice-send: checkout-attempt check failed', invoiceId, liveAttemptError);
+    console.error('invoice-send: checkout-attempt check failed', invoiceId);
     return json(
       {
         error: 'checkout_attempt_check_failed',
@@ -238,12 +240,8 @@ Deno.serve(async (req: Request) => {
       503
     );
   }
-  if (liveAttempt) {
-    console.log(
-      'invoice-send: held — invoice is mid-payment',
-      invoiceId,
-      (liveAttempt as any).state
-    );
+  if (letterHold.hold) {
+    console.log('invoice-send: held — invoice is mid-payment or just settled', invoiceId);
     return json(
       {
         error: 'checkout_in_flight',

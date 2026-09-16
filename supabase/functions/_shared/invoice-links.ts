@@ -149,3 +149,88 @@ export async function hasLiveInvoiceLink(
     return false;
   }
 }
+
+/** What a letter rail learned when it asked whether it may write. */
+export interface InvoiceLetterHold {
+  /** True when `ensure_invoice_link` will refuse for this invoice right now. */
+  hold: boolean;
+  /** False when the question could not be asked — the rails fail closed on it. */
+  readable: boolean;
+}
+
+/**
+ * MAY THIS LETTER GO OUT? ONE PREDICATE, ASKED BY EVERYONE (R-BZ).
+ *
+ * `ensure_invoice_link` refuses on two legs: a Checkout in flight, and 24
+ * hours after an attempt whose return rode `/pay/return/<nonce>` finalized.
+ * The rails used to re-list the first leg's three states in TypeScript, in two
+ * files, and never learned the second — so inside a day of a declined card
+ * they shipped anyway, `ensure_invoice_link` answered NULL under its own
+ * guard, and `letterPortalUrl` fell back to `letterFallbackUrl`: a SIGNED-IN
+ * door, mailed to the account-less payer the `/pay/<token>` rail exists for
+ * (W4 r10 MAJOR-1). No TypeScript file lists attempt states any more; this
+ * asks `public.invoice_letter_must_hold`, which is the guard itself.
+ *
+ * Unreadable is not "no": a letter that cannot check whether the client is
+ * mid-payment is exactly the letter that must not go.
+ */
+export async function invoiceLetterMustHold(
+  admin: InvoiceLinkRpcClient,
+  invoiceId: string
+): Promise<InvoiceLetterHold> {
+  try {
+    const { data, error } = await admin.rpc('invoice_letter_must_hold', {
+      p_invoice_id: invoiceId,
+    });
+    if (error) {
+      console.error('invoiceLetterMustHold: rpc failed', invoiceId, error.message);
+      return { hold: true, readable: false };
+    }
+    return { hold: data === true, readable: true };
+  } catch (err) {
+    console.error(
+      'invoiceLetterMustHold: threw',
+      invoiceId,
+      err instanceof Error ? err.message : 'unknown error'
+    );
+    return { hold: true, readable: false };
+  }
+}
+
+/**
+ * The same predicate over a scan's whole candidate set — one round trip per
+ * pass rather than one per invoice. Returns the ids whose letters must hold.
+ */
+export async function invoiceLettersMustHold(
+  admin: InvoiceLinkRpcClient,
+  invoiceIds: string[]
+): Promise<{ held: Set<string>; readable: boolean }> {
+  if (invoiceIds.length === 0) return { held: new Set(), readable: true };
+  try {
+    const { data, error } = await admin.rpc('invoice_letters_must_hold', {
+      p_invoice_ids: invoiceIds,
+    });
+    if (error) {
+      console.error('invoiceLettersMustHold: rpc failed', error.message);
+      return { held: new Set(invoiceIds), readable: false };
+    }
+    const held = new Set<string>();
+    for (const row of Array.isArray(data) ? data : []) {
+      // PostgREST answers a `RETURNS SETOF uuid` as bare strings; a future
+      // shape change (rows of one column) is read here too rather than
+      // silently emptying the hold set.
+      if (typeof row === 'string') held.add(row);
+      else if (row && typeof row === 'object') {
+        const only = Object.values(row as Record<string, unknown>)[0];
+        if (typeof only === 'string') held.add(only);
+      }
+    }
+    return { held, readable: true };
+  } catch (err) {
+    console.error(
+      'invoiceLettersMustHold: threw',
+      err instanceof Error ? err.message : 'unknown error'
+    );
+    return { held: new Set(invoiceIds), readable: false };
+  }
+}

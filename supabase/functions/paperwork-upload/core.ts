@@ -107,7 +107,9 @@ export interface PaperworkSupabaseLike {
 
 export interface PaperworkDeps {
   supabase: PaperworkSupabaseLike;
-  /** The caller's address, for the shared per-IP bucket (spec §2). */
+  /** The caller's address, VALIDATED (callerIp), for the shared bucket
+   *  (spec §2). Null when no header carried a usable one — the bucket then
+   *  falls to the link token, never to nothing (R-CA). */
   ip?: string | null;
 }
 
@@ -165,18 +167,80 @@ async function discardUpload(deps: PaperworkDeps, key: string): Promise<void> {
   }
 }
 
-/** One rolling-minute bucket per IP, shared by BOTH calls so volume cannot be
- *  split across them (spec §2). A limiter that cannot be read lets the request
- *  through: this is friction on guessing, not the credential. */
-export async function withinRateLimit(deps: PaperworkDeps): Promise<boolean> {
-  if (!deps.ip) return true;
+const IPV4_PATTERN =
+  /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+const IPV6_PATTERN = /^[0-9a-fA-F:]{2,45}$/;
+
+/**
+ * THE ADDRESS IS CALLER-SUPPLIED, SO IT IS VALIDATED BEFORE IT IS BELIEVED
+ * (R-CA, W4 r10 MAJOR-2).
+ *
+ * `cf-connecting-ip` and `x-forwarded-for` are both writable by anyone on a
+ * `verify_jwt = false` door. Passed through raw, `not-an-ip` reached
+ * `paperwork_link_rate_limit_hit(p_ip inet)` and raised 22P02; the limiter
+ * swallowed the error and answered "within limit", so one header switched the
+ * door's only abuse control off. `1.2.3.4:5678` did the same by accident — an
+ * `ip:port` forwarded-for value is what some proxies emit.
+ *
+ * So: the port is stripped from an `ip:port` or `[v6]:port` value and the rest
+ * must read as a v4 or v6 address. Anything else is not an address, and the
+ * caller is bucketed by the link it is knocking on instead (see below) — never
+ * waved through.
+ */
+export function normalizeCallerIp(raw: string | null | undefined): string | null {
+  const value = (raw ?? "").trim();
+  if (!value) return null;
+
+  // [2001:db8::1]:443 → 2001:db8::1
+  const bracketed = /^\[([0-9a-fA-F:.]+)\](?::\d{1,5})?$/.exec(value);
+  const candidate = bracketed
+    ? bracketed[1]
+    // 1.2.3.4:5678 → 1.2.3.4. A bare v6 address has many colons and no port.
+    : /^[0-9.]+:\d{1,5}$/.test(value)
+      ? value.slice(0, value.lastIndexOf(":"))
+      : value;
+
+  if (IPV4_PATTERN.test(candidate)) return candidate;
+  // A v6 address: hex groups and colons, at least one colon, never two dots
+  // (a v4-mapped tail is allowed and Postgres parses it).
+  if (candidate.includes(":") && IPV6_PATTERN.test(candidate.replace(/\./g, ""))) {
+    return candidate;
+  }
+  return null;
+}
+
+/** Cloudflare's own header first; the proxy chain's first hop otherwise. Both
+ *  are validated — a header that is not an address yields null, and the bucket
+ *  falls to the link token instead. */
+export function callerIp(headers: Headers): string | null {
+  const direct = normalizeCallerIp(headers.get("cf-connecting-ip"));
+  if (direct) return direct;
+  return normalizeCallerIp(headers.get("x-forwarded-for")?.split(",")[0]);
+}
+
+/**
+ * One rolling-minute bucket, shared by BOTH calls so volume cannot be split
+ * across them (spec §2).
+ *
+ * THE DOOR FAILS CLOSED (R-CA). The old rule — "a limiter that cannot be read
+ * lets the request through" — made the limiter optional for anyone who could
+ * make it fail, which on this door is everyone: an `inet` parameter and a
+ * caller-written header is all it took. An unreadable limiter is now a
+ * refusal, and a caller with no usable address is bucketed by the link's row
+ * id (the RPC resolves it from the token; the token itself never lands in a
+ * table) rather than left unbucketed.
+ */
+export async function withinRateLimit(
+  deps: PaperworkDeps,
+  token: string | null,
+): Promise<boolean> {
   const { data, error } = await deps.supabase.rpc(
     "paperwork_link_rate_limit_hit",
-    { p_ip: deps.ip },
+    { p_ip: deps.ip ?? null, p_token: token && TOKEN_PATTERN.test(token) ? token : null },
   );
   if (error) {
     console.error("paperwork-upload: rate limit unavailable", error.message);
-    return true;
+    return false;
   }
   return data !== false;
 }
@@ -337,10 +401,6 @@ export async function handlePaperwork(
   deps: PaperworkDeps,
   req: Request,
 ): Promise<Response> {
-  if (!(await withinRateLimit(deps))) {
-    return jsonResponse({ error: "too many attempts" }, 429);
-  }
-
   const contentType = req.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
@@ -350,23 +410,34 @@ export async function handlePaperwork(
     } catch {
       return jsonResponse({ valid: false });
     }
+    // THE PAYLOAD IS READ BEFORE THE BUCKET IS CLAIMED, and nothing else is.
+    // The token is what a caller with no usable address is bucketed by
+    // (R-CA), so the bucket cannot be claimed until it is known. No row is
+    // read and no object is written above this line.
+    const token = typeof body.token === "string" ? body.token : "";
+    if (!(await withinRateLimit(deps, token))) {
+      return jsonResponse({ error: "too many attempts" }, 429);
+    }
     if (body.action !== "context") {
       return jsonResponse({ error: "unknown action" }, 400);
     }
-    const token = typeof body.token === "string" ? body.token : "";
     return jsonResponse(await getPaperworkContext(deps, token));
   }
 
   if (contentType.includes("multipart/form-data")) {
     const form = await req.formData();
+    const str = (key: string): string =>
+      typeof form.get(key) === "string" ? String(form.get(key)) : "";
+    const token = str("token");
+    if (!(await withinRateLimit(deps, token))) {
+      return jsonResponse({ error: "too many attempts" }, 429);
+    }
     const file = form.get("file");
     if (!(file instanceof File)) {
       return jsonResponse({ error: "no file provided" }, 400);
     }
-    const str = (key: string): string =>
-      typeof form.get(key) === "string" ? String(form.get(key)) : "";
     const result = await uploadPaperwork(deps, {
-      token: str("token"),
+      token,
       doc_type: str("doc_type"),
       doc_label: str("doc_label") || null,
       number: str("number") || null,
@@ -377,5 +448,8 @@ export async function handlePaperwork(
     return jsonResponse(result.body, result.status);
   }
 
+  // Neither shape carries a token, so there is nothing to bucket by but the
+  // address; the claim still happens, so a flood of junk content types counts.
+  await withinRateLimit(deps, null);
   return jsonResponse({ error: "unsupported content type" }, 400);
 }

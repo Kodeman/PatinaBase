@@ -1338,9 +1338,10 @@ BEGIN
   INSERT INTO public.invoice_checkout_attempts
     (invoice_id, payer_id, invoice_link_id, stripe_customer_id, amount_cents,
      currency, state, stripe_idempotency_key, stripe_checkout_session_id,
-     return_nonce, finalized_at)
+     return_nonce, nonce_return_origin, finalized_at)
   VALUES (v_invoice, NULL, v_link, 'cus_w4r9_test', 12345, 'usd', 'succeeded',
-          'idem_w4r9_test_1', 'cs_w4r9_test_1', v_nonce, now());
+          'idem_w4r9_test_1', 'cs_w4r9_test_1', v_nonce,
+          'https://client.patina.cloud', now());
 
   -- the receipt letter asks for an address and is told there is none to carry
   IF public.ensure_invoice_link(v_invoice) IS NOT NULL THEN
@@ -1385,9 +1386,10 @@ BEGIN
   INSERT INTO public.invoice_checkout_attempts
     (invoice_id, payer_id, invoice_link_id, stripe_customer_id, amount_cents,
      currency, state, stripe_idempotency_key, stripe_checkout_session_id,
-     return_nonce, created_at, finalized_at)
+     return_nonce, nonce_return_origin, created_at, finalized_at)
   VALUES (v_invoice, NULL, v_link2, 'cus_w4r9_test', 12345, 'usd', 'expired',
           'idem_w4r9_test_2', 'cs_w4r9_test_2', v_nonce2,
+          'https://client.patina.cloud',
           now() - interval '49 hours', now() - interval '48 hours');
   PERFORM public.ensure_invoice_link(v_invoice);   -- a later letter revokes v_link2
   IF EXISTS (SELECT 1 FROM public.invoice_links WHERE id = v_link2 AND status = 'active') THEN
@@ -1398,6 +1400,224 @@ BEGIN
   END IF;
 
   RAISE NOTICE '12. W4 r9 BLOCKING-1 — a link-borne Checkout owns its address through the return window: the receipt letter holds rather than revoking, the return nonce still lands on the payer''s sheet, a day later the letter rotates again, and F2''s revoked-link silence is untouched: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13. W4 r10 BLOCKING-1 / MAJOR-1 — THE GUARD READS THE RETURN ORIGIN, NOT
+--     THE ACTOR COLUMN (R-BZ)
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- Block 12 proved the LINK-borne rail. The r9 fix was written as
+-- `invoice_link_id IS NOT NULL`, and chk_invoice_attempt_actor makes an
+-- attempt either link-borne or payer-borne and never both — so the guard never
+-- fired on the rail that actually carries a signed-in client through Stripe.
+-- create-checkout-session claims with payer_id and STILL rides
+-- /pay/return/<nonce> whenever the invoice has a live link. The moment the
+-- webhook wrote 'succeeded' the next letter rotated the token the client was
+-- holding: the nonce resolved to nothing, /pay/return/<nonce> 303'd to
+-- /pay/dead, and the retry read "this link was already used", which was false.
+--
+-- One fact decides it now: nonce_return_origin, read in exactly one place —
+-- public.invoice_letter_must_hold, which is what ensure_invoice_link asks and
+-- what invoice-send and invoice-reminders ask.
+DO $$
+DECLARE
+  v_invoice uuid := 'b0000000-0000-0000-0000-00000000e142';
+  v_payer   uuid;
+  v_token   text;
+  v_link    uuid;
+  v_hash    text;
+  v_nonce   text := repeat('c', 64);
+  v_nonce2  text := repeat('d', 64);
+  v_answer  jsonb;
+BEGIN
+  -- Clear block 12's attempts so this block reasons about its own rows only.
+  DELETE FROM public.invoice_checkout_attempts WHERE invoice_id = v_invoice;
+
+  SELECT COALESCE(i.client_id, p.client_id) INTO v_payer
+    FROM public.invoices i
+    LEFT JOIN public.projects p ON p.id = i.project_id
+   WHERE i.id = v_invoice;
+  IF v_payer IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (setup): the fixture invoice has no payer';
+  END IF;
+
+  v_token := public.ensure_invoice_link(v_invoice);
+  SELECT id, token_hash INTO v_link, v_hash
+    FROM public.invoice_links WHERE invoice_id = v_invoice AND status = 'active';
+
+  -- A SIGNED-IN payer paid, and her return rode the nonce because the invoice
+  -- had a live link when she started (create-checkout-session stamps the
+  -- origin at claim time). invoice_link_id is NULL — the actor column says
+  -- "payer", the fact says "the link is load-bearing".
+  INSERT INTO public.invoice_checkout_attempts
+    (invoice_id, payer_id, invoice_link_id, stripe_customer_id, amount_cents,
+     currency, state, stripe_idempotency_key, stripe_checkout_session_id,
+     return_nonce, nonce_return_origin, finalized_at)
+  VALUES (v_invoice, v_payer, NULL, 'cus_w4r10_test', 12345, 'usd', 'succeeded',
+          'idem_w4r10_test_1', 'cs_w4r10_test_1', v_nonce,
+          'https://client.patina.cloud', now());
+
+  IF NOT public.invoice_letter_must_hold(v_invoice) THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (a): the predicate does not hold for a payer-borne attempt that rode the nonce';
+  END IF;
+  IF public.ensure_invoice_link(v_invoice) IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (b): the receipt letter rotated the token the payer is holding';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.invoice_links
+                  WHERE id = v_link AND status = 'active' AND token_hash = v_hash) THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (c): the payer''s address was revoked under her';
+  END IF;
+  IF public.resolve_invoice_link(v_token, false) IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (d): the payer''s own /pay address stopped opening';
+  END IF;
+
+  v_answer := public.resolve_invoice_return_nonce(v_nonce);
+  IF v_answer IS NULL OR (v_answer->>'state') <> 'rotated' THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (e): the payer''s return answered % — she lands on /pay/dead', COALESCE(v_answer::text, '<null>');
+  END IF;
+  IF public.resolve_invoice_link(v_answer->>'token', false) IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (f): the address the return handed the payer does not open';
+  END IF;
+
+  -- THE BATCHED PREDICATE IS THE SAME PREDICATE (invoice-reminders' scan).
+  IF NOT EXISTS (
+    SELECT 1 FROM public.invoice_letters_must_hold(ARRAY[v_invoice]) AS held
+     WHERE held = v_invoice
+  ) THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (g): the batched predicate disagrees with the scalar one';
+  END IF;
+
+  -- NEGATIVE CONTROL 1: a payer-borne attempt whose return NEVER rode the
+  -- nonce (no live link when she started) holds nothing — the letters are free
+  -- to mint, which is the behaviour the actor-column reading got right.
+  DELETE FROM public.invoice_checkout_attempts WHERE invoice_id = v_invoice;
+  INSERT INTO public.invoice_checkout_attempts
+    (invoice_id, payer_id, invoice_link_id, stripe_customer_id, amount_cents,
+     currency, state, stripe_idempotency_key, stripe_checkout_session_id,
+     return_nonce, nonce_return_origin, finalized_at)
+  VALUES (v_invoice, v_payer, NULL, 'cus_w4r10_test', 12345, 'usd', 'succeeded',
+          'idem_w4r10_test_2', 'cs_w4r10_test_2', v_nonce2, NULL, now());
+
+  IF public.invoice_letter_must_hold(v_invoice) THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (h): a return that never rode the nonce still holds the letter';
+  END IF;
+  IF public.ensure_invoice_link(v_invoice) IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (i): the letter has no address although nothing is load-bearing';
+  END IF;
+  -- And its nonce rotates nothing, because Stripe was never given it as an
+  -- address: the replay is readable ('spent'), never a rotation.
+  IF public.resolve_invoice_return_nonce(v_nonce2) IS NOT NULL
+     AND (public.resolve_invoice_return_nonce(v_nonce2)->>'state') = 'rotated' THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (j): a nonce that never addressed anything rotated a link';
+  END IF;
+
+  -- NEGATIVE CONTROL 2: the in-flight leg is untouched by any of this.
+  DELETE FROM public.invoice_checkout_attempts WHERE invoice_id = v_invoice;
+  INSERT INTO public.invoice_checkout_attempts
+    (invoice_id, payer_id, invoice_link_id, stripe_customer_id, amount_cents,
+     currency, state, stripe_idempotency_key, return_nonce, nonce_return_origin)
+  VALUES (v_invoice, v_payer, NULL, 'cus_w4r10_test', 12345, 'usd', 'claimed',
+          'idem_w4r10_test_3', repeat('e', 64), NULL);
+  IF NOT public.invoice_letter_must_hold(v_invoice) THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (k): a Checkout in flight no longer holds the letter';
+  END IF;
+
+  -- THE STAMP IS THE ONLY DOOR ONTO THE FACT, and it is closed to a finalized
+  -- attempt: an origin can never be back-dated onto a flight that is over.
+  IF NOT public.stamp_invoice_checkout_return_origin(
+       (SELECT id FROM public.invoice_checkout_attempts
+         WHERE stripe_idempotency_key = 'idem_w4r10_test_3'),
+       'https://client.patina.cloud') THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (l): the driver could not stamp a live attempt';
+  END IF;
+  UPDATE public.invoice_checkout_attempts
+     SET state = 'failed', finalized_at = now(), nonce_return_origin = NULL
+   WHERE stripe_idempotency_key = 'idem_w4r10_test_3';
+  IF public.stamp_invoice_checkout_return_origin(
+       (SELECT id FROM public.invoice_checkout_attempts
+         WHERE stripe_idempotency_key = 'idem_w4r10_test_3'),
+       'https://client.patina.cloud') THEN
+    RAISE EXCEPTION 'BLOCK 13 FAIL (m): a closed flight accepted a return-origin stamp';
+  END IF;
+
+  RAISE NOTICE '13. W4 r10 BLOCKING-1/MAJOR-1 — the mint guard reads nonce_return_origin, not the actor column: a signed-in payer''s address survives her own receipt, her return still lands, the batched predicate agrees, and neither a nonce-less return nor a closed flight can move it: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 14. W4 r10 MAJOR-2 — THE ANONYMOUS DOOR'S BUCKET CANNOT BE SWITCHED OFF
+--     BY A HEADER (R-CA)
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- paperwork_link_rate_limit_hit took `p_ip inet` on a door whose caller writes
+-- the address. `not-an-ip` and the ordinary proxy value `1.2.3.4:5678` both
+-- raised 22P02; PostgREST returned it as an error; the edge function's
+-- `if (error) return true` read that as "within limit". One header disabled
+-- upload-door-spec §2's bucket. The parameter is text now, every unparsable
+-- value falls to the next key rather than raising, and a caller with NO
+-- address is bucketed by the link's own row id — never left unbucketed.
+DO $$
+DECLARE
+  v_token  text;
+  v_id     uuid;
+  v_key    text;
+  v_hits   integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT m.id, m.token INTO v_id, v_token
+    FROM public.mint_paperwork_link('fa200000-0000-4000-8000-00000000000a') m;
+  PERFORM pg_temp.reset_role();
+
+  DELETE FROM public.paperwork_link_rate_limits;
+
+  -- (a) A malformed address does not raise, and does not vanish either.
+  IF NOT public.paperwork_link_rate_limit_hit('not-an-ip', v_token) THEN
+    RAISE EXCEPTION 'BLOCK 14 FAIL (a): a first attempt was refused';
+  END IF;
+  SELECT bucket_key INTO v_key FROM public.paperwork_link_rate_limits;
+  IF v_key <> 'link:' || v_id::text THEN
+    RAISE EXCEPTION 'BLOCK 14 FAIL (b): a malformed address bucketed as %, not by the link', v_key;
+  END IF;
+
+  -- (c) An ip:port value is an address with a port, and the edge strips it;
+  --     even if one reached here it buckets rather than raising.
+  DELETE FROM public.paperwork_link_rate_limits;
+  PERFORM public.paperwork_link_rate_limit_hit('1.2.3.4:5678', v_token);
+  IF NOT EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits) THEN
+    RAISE EXCEPTION 'BLOCK 14 FAIL (c): an ip:port value bucketed nothing';
+  END IF;
+
+  -- (d) No address and no token at all still lands in a bucket.
+  DELETE FROM public.paperwork_link_rate_limits;
+  PERFORM public.paperwork_link_rate_limit_hit(NULL, NULL);
+  IF NOT EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits WHERE bucket_key = 'anon') THEN
+    RAISE EXCEPTION 'BLOCK 14 FAIL (d): a caller with nothing to key on was left unbucketed';
+  END IF;
+
+  -- (e) A real address buckets by address, and the limit still bites — one
+  --     bucket across both the resolve and the upload (spec §2).
+  DELETE FROM public.paperwork_link_rate_limits;
+  FOR v_hits IN 1..20 LOOP
+    IF NOT public.paperwork_link_rate_limit_hit('203.0.113.9', v_token) THEN
+      RAISE EXCEPTION 'BLOCK 14 FAIL (e): attempt % of 20 was refused', v_hits;
+    END IF;
+  END LOOP;
+  IF public.paperwork_link_rate_limit_hit('203.0.113.9', v_token) THEN
+    RAISE EXCEPTION 'BLOCK 14 FAIL (f): the 21st attempt in the minute was allowed';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits
+                  WHERE bucket_key = 'ip:203.0.113.9') THEN
+    RAISE EXCEPTION 'BLOCK 14 FAIL (g): a valid address did not bucket by address';
+  END IF;
+
+  -- (h) An unknown token with no address is the SAME answer as a real one —
+  --     the fallback is not an oracle for whether a token exists.
+  DELETE FROM public.paperwork_link_rate_limits;
+  IF NOT public.paperwork_link_rate_limit_hit(NULL, repeat('9', 64)) THEN
+    RAISE EXCEPTION 'BLOCK 14 FAIL (h): an unknown token read differently from a real one';
+  END IF;
+
+  RAISE NOTICE '14. W4 r10 MAJOR-2 — the paperwork bucket is keyed by text and never raises on a caller-written address: a malformed header buckets by the link, an ip:port value buckets, a caller with nothing to key on lands in the shared bucket, and the limit still bites at 20: passed';
 END $$;
 
 DO $$ BEGIN RAISE NOTICE 'W4 SQL suite: all blocks passed'; END $$;

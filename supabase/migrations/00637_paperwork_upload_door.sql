@@ -46,9 +46,13 @@
 --     qr_auth_rate_limits (00427). There is no per-attempt table here to hang a
 --     trigger on — the resolve and the upload are RPC calls, not inserts — so
 --     the same atomic ON CONFLICT bucket lives in a function,
---     paperwork_link_rate_limit_hit(inet), which the edge function calls before
---     it does anything else. One bucket per IP covers BOTH calls, which is the
---     §2 requirement a script must not be able to dodge by splitting volume.
+--     paperwork_link_rate_limit_hit(text, text, integer), which the edge
+--     function calls before it does any work. One bucket covers BOTH calls,
+--     which is the §2 requirement a script must not be able to dodge by
+--     splitting volume. The key is the caller's address where there is a valid
+--     one, the LINK's row id where there is not, and one shared bucket where
+--     there is neither: an inet parameter on a door whose caller writes the
+--     address was itself the bypass (R-CA, W4 r10 MAJOR-2, §3).
 --  2. The notification recipients (R-AC: owners and admins, plus the minter)
 --     are written as notification_log in_app rows by the RPC itself rather than
 --     through notification-dispatch, because the writer here is a DEFINER RPC
@@ -331,8 +335,30 @@ COMMENT ON TABLE public.paperwork_link_tokens IS
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. paperwork_link_rate_limits (spec §2) — one bucket, both calls
 -- ═══════════════════════════════════════════════════════════════════════════
+--
+-- THE BUCKET IS KEYED BY TEXT, NOT BY inet (R-CA, W4 r10 MAJOR-2). An `inet`
+-- parameter on a door whose caller supplies the address was the whole defect:
+-- `cf-connecting-ip: not-an-ip` and the perfectly ordinary proxy value
+-- `1.2.3.4:5678` both raised 22P02 (invalid input syntax for type inet),
+-- PostgREST returned it as an error, and the edge function's `if (error)
+-- return true` turned one header into a switch that disabled the door's only
+-- abuse control. Two things close it, and both are needed:
+--   · the callers validate the address to a v4/v6 shape before it is sent, and
+--     treat ANY error from this function as a refusal (paperwork-upload/
+--     core.ts, apps/client-portal /paperwork/[token]);
+--   · the key is text and every caller-derived value is normalized here, so
+--     there is no cast left to fail on.
+--
+-- AND NOBODY IS UNBUCKETED. A caller with no usable address used to be waved
+-- through by construction (`if (!deps.ip) return true`), which is the same
+-- bypass wearing different clothes. When there is no address the bucket falls
+-- to the LINK the caller is knocking on — the token's row id, never the token
+-- — and when there is neither, to one shared bucket. A no-address caller
+-- therefore cannot learn whether a token is real by watching which answer it
+-- gets: both land in a bucket.
 CREATE TABLE IF NOT EXISTS public.paperwork_link_rate_limits (
-  ip_address        inet PRIMARY KEY,
+  bucket_key        text PRIMARY KEY
+                      CHECK (length(bucket_key) BETWEEN 1 AND 200),
   window_started_at timestamptz NOT NULL,
   attempt_count     integer NOT NULL CHECK (attempt_count > 0),
   updated_at        timestamptz NOT NULL DEFAULT now()
@@ -343,34 +369,61 @@ REVOKE ALL ON TABLE public.paperwork_link_rate_limits FROM PUBLIC, anon, authent
 GRANT ALL ON TABLE public.paperwork_link_rate_limits TO service_role;
 
 COMMENT ON TABLE public.paperwork_link_rate_limits IS
-  'Service-only atomic per-IP buckets for the anonymous paperwork door. One '
-  'bucket covers BOTH the resolve and the upload so volume cannot be split '
-  'across the two calls to dodge the limit (spec §2). qr_auth_rate_limits'' '
-  'shape (00427).';
+  'Service-only atomic buckets for the anonymous paperwork door. One bucket '
+  'covers BOTH the resolve and the upload so volume cannot be split across the '
+  'two calls to dodge the limit (spec §2). bucket_key is ''ip:<address>'' for a '
+  'caller with a valid address, ''link:<token row id>'' for one without, and '
+  '''anon'' when neither is known — nobody is unbucketed (R-CA). '
+  'qr_auth_rate_limits'' shape (00427), keyed by text rather than inet because '
+  'the address is caller-supplied.';
+
+-- The (inet, integer) form is gone: it is this file's own object, never
+-- deployed, and leaving it standing would let a caller reach the version with
+-- the cast in it.
+DROP FUNCTION IF EXISTS public.paperwork_link_rate_limit_hit(inet, integer);
 
 CREATE OR REPLACE FUNCTION public.paperwork_link_rate_limit_hit(
-  p_ip    inet,
+  p_ip    text,
+  p_token text DEFAULT NULL,
   p_limit integer DEFAULT 20
 )
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'public'
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
   v_now   timestamptz := clock_timestamp();
+  v_key   text;
   v_count integer;
 BEGIN
-  -- No trusted proxy address (local dev, an internal caller): nothing to
-  -- bucket. The edge function refuses a missing address in production.
-  IF p_ip IS NULL THEN
-    RETURN true;
+  -- The address, if it is one. The callers validate before sending; this is
+  -- the second gate, so a value that is not an address buckets as one of the
+  -- other two kinds rather than raising (R-CA).
+  IF p_ip IS NOT NULL AND btrim(p_ip) <> '' THEN
+    BEGIN
+      v_key := 'ip:' || host(btrim(p_ip)::inet);
+    EXCEPTION WHEN OTHERS THEN
+      v_key := NULL;
+    END;
   END IF;
 
+  -- No address: the link the caller is knocking on. The id, never the token
+  -- (the token is the credential and never lands in a table in the clear).
+  IF v_key IS NULL AND p_token IS NOT NULL AND p_token ~ '^[0-9a-f]{64}$' THEN
+    SELECT 'link:' || t.id::text INTO v_key
+    FROM public.paperwork_link_tokens t
+    WHERE t.token_hash = encode(extensions.digest(p_token, 'sha256'), 'hex');
+  END IF;
+
+  -- Neither. One shared bucket rather than a free pass — and the same answer
+  -- for a real token and a guessed one, so this branch is not an oracle.
+  v_key := COALESCE(v_key, 'anon');
+
   INSERT INTO public.paperwork_link_rate_limits AS limits
-    (ip_address, window_started_at, attempt_count, updated_at)
-  VALUES (p_ip, v_now, 1, v_now)
-  ON CONFLICT (ip_address) DO UPDATE
+    (bucket_key, window_started_at, attempt_count, updated_at)
+  VALUES (v_key, v_now, 1, v_now)
+  ON CONFLICT (bucket_key) DO UPDATE
   SET attempt_count = CASE
         WHEN limits.window_started_at <= v_now - interval '1 minute' THEN 1
         ELSE limits.attempt_count + 1
@@ -386,17 +439,21 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.paperwork_link_rate_limit_hit(inet, integer)
+REVOKE ALL ON FUNCTION public.paperwork_link_rate_limit_hit(text, text, integer)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.paperwork_link_rate_limit_hit(inet, integer)
+GRANT EXECUTE ON FUNCTION public.paperwork_link_rate_limit_hit(text, text, integer)
   TO service_role;
 
-COMMENT ON FUNCTION public.paperwork_link_rate_limit_hit(inet, integer) IS
-  'One atomic rolling-minute bucket per IP for the paperwork door; true when '
-  'the attempt is within the limit. Count-then-insert races; this does not '
-  '(00427''s idiom). Deviation from spec §2, named in this file''s banner: the '
-  'bucket is a function rather than a BEFORE INSERT trigger because the door '
-  'has no per-attempt table to hang one on (00637).';
+COMMENT ON FUNCTION public.paperwork_link_rate_limit_hit(text, text, integer) IS
+  'One atomic rolling-minute bucket for the paperwork door; true when the '
+  'attempt is within the limit. Count-then-insert races; this does not '
+  '(00427''s idiom). Keyed ip:<address> → link:<token row id> → anon, so a '
+  'caller with no forwardable address is bucketed rather than waved through '
+  '(R-CA, W4 r10 MAJOR-2). Never raises on a caller-supplied address: an '
+  'unparsable one falls to the next key instead of 22P02, which the door used '
+  'to swallow as a pass. Deviation from spec §2, named in this file''s banner: '
+  'the bucket is a function rather than a BEFORE INSERT trigger because the '
+  'door has no per-attempt table to hang one on (00637).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 4. compliance-documents bucket (spec §4)

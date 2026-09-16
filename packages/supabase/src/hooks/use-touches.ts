@@ -221,6 +221,31 @@ export function touchInstantDay(value: string | null | undefined): string {
   return `${Number(day)} ${name} ${year}`;
 }
 
+/**
+ * The same instant as a bare `YYYY-MM-DD`, ON THE STUDIO'S CALENDAR.
+ *
+ * For the one shape `touchInstantDay` cannot serve: a reader that already
+ * spells the day its own way — `formatLongDate`'s "12 March 2026" on a held
+ * channel's sentence — and needs only the DAY resolved out of the instant
+ * before it does. The alternative was `status_at.slice(0, 10)`, which is the
+ * UTC day again (R-CB, W4 r10 M-1). Empty string when there is nothing to
+ * resolve, so a caller's own "no date" branch still fires.
+ */
+export function touchInstantIsoDay(value: string | null | undefined): string {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value.slice(0, 10);
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return '';
+  const formatter = studioDayFormatter();
+  if (!formatter) return value.slice(0, 10);
+  const parts = formatter.formatToParts(at);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  if (!year || !month || !day) return value.slice(0, 10);
+  return `${year}-${month}-${day}`;
+}
+
 function touchDate(occurredAt: string | null | undefined): string {
   return touchInstantDay(occurredAt);
 }

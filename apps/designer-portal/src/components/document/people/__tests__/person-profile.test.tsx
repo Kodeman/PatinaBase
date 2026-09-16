@@ -88,6 +88,9 @@ jest.mock("@patina/supabase", () => ({
   useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
   paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
   thirtyDaysOut: () => "2026-10-15",
+  // W4 r10 M-1 (R-CB) — the REAL studio-timezone day resolver for
+  // `last_touch_at`, a timestamptz, so the seat line prints the studio's day.
+  touchInstantDay: jest.requireActual("@patina/supabase").touchInstantDay,
   firmEngagementWindowEnd: () => null,
   // r21 MAJOR-1 / major-2 (R-BS) — PR-n standing, read before the press.
   // 00634 refuses the close of a seat carrying an OPEN money or

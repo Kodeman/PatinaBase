@@ -4,6 +4,7 @@ import { InvoiceCheckoutIntegrityError } from './invoice-checkout-core.ts';
 import {
   invoiceCheckoutErrorResponse,
   invoiceCheckoutReturnBase,
+  ridesReturnNonce,
   invoiceSessionMetadata,
   mapInvoiceAttempt,
   type InvoiceCheckoutTarget,
@@ -151,6 +152,30 @@ Deno.test('driver return: falls back to today\'s address when the nonce or the o
     invoiceCheckoutReturnBase(attempt({ returnNonce: NONCE }), { ...target, nonceReturnOrigin: null }, 'cancelled'),
     target.cancelUrl
   );
+});
+
+// THE ONE FACT (R-BZ, W4 r10 BLOCKING-1). The guard that holds a letter off a
+// live link used to read the ACTOR column, so it missed the signed-in payer
+// rail entirely — which claims with payer_id and still rides the nonce
+// whenever the invoice has a live link. `ridesReturnNonce` is the fact itself,
+// and the same call decides the address Stripe is given and the value stamped
+// on the attempt, so the two cannot disagree.
+Deno.test('driver return: the nonce fact is the actor-blind one, and it drives the stamp', () => {
+  const payerBorne = attempt({ returnNonce: NONCE, payerId: 'client-1', invoiceLinkId: null });
+  assertEquals(ridesReturnNonce(payerBorne, target), true);
+  assertEquals(
+    invoiceCheckoutReturnBase(payerBorne, target, 'success').startsWith(`https://client.test/pay/return/`),
+    true
+  );
+
+  const linkBorne = attempt({ returnNonce: NONCE, payerId: null, invoiceLinkId: 'link-1' });
+  assertEquals(ridesReturnNonce(linkBorne, target), true);
+
+  // No live link at claim time: the return is today's address, and nothing is
+  // stamped, so a later letter is free to mint.
+  assertEquals(ridesReturnNonce(payerBorne, { ...target, nonceReturnOrigin: null }), false);
+  // A pre-00574 reused attempt carries no nonce at all.
+  assertEquals(ridesReturnNonce(attempt({ returnNonce: null }), target), false);
 });
 
 // ── invoiceCheckoutErrorResponse — the shared error table ────────────────────

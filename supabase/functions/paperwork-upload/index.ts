@@ -14,7 +14,7 @@
 // reads the caller's address for the shared rate bucket, and layers CORS on.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { handlePaperwork, type PaperworkDeps } from './core.ts';
+import { callerIp, handlePaperwork, type PaperworkDeps } from './core.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -36,15 +36,6 @@ function json(body: unknown, status = 200): Response {
   );
 }
 
-/** Cloudflare's own header first; the proxy chain's first hop otherwise. A
- *  request with neither is unbucketed rather than refused — see core.ts. */
-function callerIp(req: Request): string | null {
-  const direct = req.headers.get('cf-connecting-ip');
-  if (direct) return direct.trim();
-  const forwarded = req.headers.get('x-forwarded-for');
-  return forwarded ? (forwarded.split(',')[0] ?? '').trim() || null : null;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -52,7 +43,7 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const deps: PaperworkDeps = {
     supabase: supabase as unknown as PaperworkDeps['supabase'],
-    ip: callerIp(req),
+    ip: callerIp(req.headers),
   };
 
   try {

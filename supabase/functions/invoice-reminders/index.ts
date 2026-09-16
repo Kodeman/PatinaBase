@@ -65,7 +65,7 @@ import {
   invoiceForClause,
   invoiceSubjectName,
 } from '../_shared/invoice-subject.ts';
-import { letterPortalUrl } from '../_shared/invoice-links.ts';
+import { invoiceLettersMustHold, letterPortalUrl } from '../_shared/invoice-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -290,40 +290,39 @@ Deno.serve(async (_req: Request) => {
 
   // AN INVOICE MID-PAYMENT IS NOT DUNNED (W4 r6 MAJOR-1).
   //
-  // Since 00636 `ensure_invoice_link` answers NULL while a Checkout attempt is
-  // claimed / session_created / processing, rather than pulling the address out
-  // from under the payer. A reminder built on that NULL carries the fallback
-  // instead of a pay address — and `processing` is an ACH debit, which sits
-  // there for 3–5 business days and is never swept (that sweep must not fail
-  // money in flight). Holding the letter is the honest answer: someone who is
-  // paying this invoice right now is not someone to chase. They re-enter the
-  // scan the moment the attempt succeeds, fails or expires.
+  // `ensure_invoice_link` answers NULL while a Checkout is in flight, and for
+  // 24 hours after an attempt whose return rode `/pay/return/<nonce>`
+  // finalized, rather than pulling the address out from under the payer. A
+  // reminder built on that NULL carries the signed-in fallback instead of a
+  // pay address. Holding the letter is the honest answer: someone who is
+  // paying this invoice right now — or who just watched a card decline and is
+  // about to retry from the address in their inbox — is not someone to chase.
+  // They re-enter the scan when the window closes.
+  //
+  // THE SCAN ASKS THE GUARD ITSELF (R-BZ, W4 r10 MAJOR-1). Re-listing three of
+  // its states here is how this rail came to disagree with it: a declined card
+  // was dunned inside the day, with the letterbox address, to an account-less
+  // payer. `invoice_letters_must_hold` is that one predicate, batched.
   const heldInvoiceIds = new Set<string>();
   for (let i = 0; i < invoices.length; i += 200) {
     const ids = invoices.slice(i, i + 200).map((row) => row.id);
-    const { data: attempts, error: attemptsError } = await admin
-      .from('invoice_checkout_attempts')
-      .select('invoice_id')
-      .in('invoice_id', ids)
-      .in('state', ['claimed', 'session_created', 'processing']);
-    if (attemptsError) {
-      // Fail closed for the whole pass: an unread attempt table cannot tell us
+    const { held, readable } = await invoiceLettersMustHold(admin, ids);
+    if (!readable) {
+      // Fail closed for the whole pass: an unread predicate cannot tell us
       // which invoices are mid-payment, and the cron comes back in an hour.
-      console.error('invoice-reminders: checkout-attempt scan failed', attemptsError);
+      console.error('invoice-reminders: checkout-attempt scan failed');
       return new Response(
         JSON.stringify({ error: 'checkout_attempt_scan_failed' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } },
       );
     }
-    for (const row of (attempts ?? []) as { invoice_id: string }[]) {
-      heldInvoiceIds.add(row.invoice_id);
-    }
+    for (const id of held) heldInvoiceIds.add(id);
   }
 
   if (heldInvoiceIds.size > 0) {
     // One line, naming why: these ids are not "skipped", they are being paid.
     console.log(
-      'invoice-reminders: holding — mid-payment (checkout attempt claimed/session_created/processing)',
+      'invoice-reminders: holding — mid-payment or inside the return window (invoice_letter_must_hold)',
       [...heldInvoiceIds].join(','),
     );
   }

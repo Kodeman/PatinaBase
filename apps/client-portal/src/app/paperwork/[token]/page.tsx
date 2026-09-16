@@ -16,10 +16,10 @@
  * on this page carries an id, a file path or another party's name.
  *
  * The rate bucket is shared with the upload function (spec §2): one rolling
- * minute per address covers BOTH this resolve and every POST to
- * `paperwork-upload`, so volume cannot be split across the two to dodge it. An
- * unreadable limiter lets the request through — this is friction on guessing,
- * not the credential.
+ * minute covers BOTH this resolve and every POST to `paperwork-upload`, so
+ * volume cannot be split across the two to dodge it. It is keyed by the
+ * caller's address where there is a valid one and by the link's row id where
+ * there is not, and an unreadable limiter refuses rather than passes (R-CA).
  *
  * The upload itself happens client-side in
  * src/components/paperwork/paperwork-upload-form.tsx, which posts to the
@@ -29,7 +29,7 @@
 
 import { headers } from 'next/headers';
 import { createServiceClient } from '@patina/supabase/server';
-import { resolveClientIp } from '@/lib/utils/client-ip';
+import { normalizeCallerIp, resolveClientIp } from '@/lib/utils/client-ip';
 import { PaperworkSheet } from '@/components/paperwork/paperwork-sheet';
 import type { PaperworkContext } from '@/components/paperwork/paperwork-model';
 
@@ -83,13 +83,19 @@ export default async function PaperworkPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createServiceClient() as any;
 
-  const callerIp = resolveClientIp(await headers());
+  // THE DOOR FAILS CLOSED, AND NOBODY IS UNBUCKETED (R-CA, W4 r10 MAJOR-2).
+  // The address is validated before it is believed — a caller-written
+  // `cf-connecting-ip` used to reach an `inet` parameter and raise 22P02,
+  // which this branch then read as "within limit". A caller with no usable
+  // address is bucketed by the link's own row id, which the RPC resolves from
+  // the token; an unreadable limiter is a refusal, not a pass.
+  const callerIp = normalizeCallerIp(resolveClientIp(await headers()));
   const { data: withinLimit, error: limitError } = await admin.rpc(
     'paperwork_link_rate_limit_hit',
-    { p_ip: callerIp },
+    { p_ip: callerIp, p_token: token },
   );
 
-  if (!limitError && withinLimit === false) {
+  if (limitError || withinLimit === false) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5 py-10">
         <h1 className="type-page-title">Too many tries just now.</h1>

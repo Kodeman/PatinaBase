@@ -26,6 +26,7 @@ import {
   accessGrantRevokeRoute,
   isAccessGrantRevokable,
   touchInstantDay,
+  touchInstantIsoDay,
   useRevokeAccessGrant,
   type AccessGrant,
 } from "@patina/supabase";
@@ -145,7 +146,10 @@ export function grantEndsSentence(
   const endsOn = expiresAt
     ? wholeDayBoundary
       ? lastOpenDay(expiresAt)
-      : expiresAt.slice(0, 10)
+      // A tier that dies at the instant it carries still names its day on the
+      // studio's calendar: `expires_at` is a timestamptz, and midnight UTC is
+      // the previous evening in the studio (R-CB, W4 r10 M-1).
+      : touchInstantIsoDay(expiresAt)
     : null;
   const long = endsOn ? formatLongDate(endsOn) : null;
   if (!long) {

@@ -8227,6 +8227,7 @@ export type Database = {
           id: string
           invoice_id: string
           invoice_link_id: string | null
+          nonce_return_origin: string | null
           payer_id: string | null
           payment_method: string | null
           return_nonce: string | null
@@ -8248,6 +8249,7 @@ export type Database = {
           id?: string
           invoice_id: string
           invoice_link_id?: string | null
+          nonce_return_origin?: string | null
           payer_id?: string | null
           payment_method?: string | null
           return_nonce?: string | null
@@ -8269,6 +8271,7 @@ export type Database = {
           id?: string
           invoice_id?: string
           invoice_link_id?: string | null
+          nonce_return_origin?: string | null
           payer_id?: string | null
           payment_method?: string | null
           return_nonce?: string | null
@@ -10598,19 +10601,19 @@ export type Database = {
       paperwork_link_rate_limits: {
         Row: {
           attempt_count: number
-          ip_address: unknown
+          bucket_key: string
           updated_at: string
           window_started_at: string
         }
         Insert: {
           attempt_count: number
-          ip_address: unknown
+          bucket_key: string
           updated_at?: string
           window_started_at: string
         }
         Update: {
           attempt_count?: number
-          ip_address?: unknown
+          bucket_key?: string
           updated_at?: string
           window_started_at?: string
         }
@@ -35300,6 +35303,14 @@ export type Database = {
         }
         Returns: Json
       }
+      invoice_letter_must_hold: {
+        Args: { p_invoice_id: string }
+        Returns: boolean
+      }
+      invoice_letters_must_hold: {
+        Args: { p_invoice_ids: string[] }
+        Returns: string[]
+      }
       invoice_link_is_live: { Args: { p_invoice_id: string }; Returns: boolean }
       invoice_link_token_hash: { Args: { p_token: string }; Returns: string }
       invoice_payment_surcharge_cents: {
@@ -35833,7 +35844,7 @@ export type Database = {
         Returns: Json
       }
       paperwork_link_rate_limit_hit: {
-        Args: { p_ip: unknown; p_limit?: number }
+        Args: { p_ip: string; p_limit?: number; p_token?: string }
         Returns: boolean
       }
       paperwork_link_storage_context: {
@@ -37901,6 +37912,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      stamp_invoice_checkout_return_origin: {
+        Args: { p_attempt_id: string; p_origin: string }
+        Returns: boolean
       }
       stamp_project_approval_reminder_delivery: {
         Args: { p_decision_id: string; p_decision_lead_id: string }

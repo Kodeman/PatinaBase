@@ -45,6 +45,8 @@ import {
   useStudioContactChannels,
   useUpdateStudioContactChannel,
   fieldLinkUrl,
+  touchInstantDay,
+  touchInstantIsoDay,
   type AccessGrantTier,
   type ContactChannelKind,
   type ContactChannelStatus,
@@ -76,7 +78,6 @@ import {
   consentSentenceForRecord,
 } from "./consent-sentence";
 import { formatLongDate } from "./people-format";
-import { formatSeatDate } from "./seat-line";
 
 export const REACH_EMPTY_SENTENCE =
   "Nothing on file yet. Add a phone or email to reach them.";
@@ -178,7 +179,11 @@ export function channelConsentReadAxis(
  * still reach the very line it had just declared held.
  */
 export function heldChannelReason(channel: StudioContactChannel): string {
-  const when = formatLongDate(channel.status_at?.slice(0, 10));
+  // `status_at` is a timestamptz (00593:88) and PostgREST answers it in UTC,
+  // so the old `.slice(0, 10)` printed the UTC day — a bounce recorded at
+  // 21:00 CDT read as the next day. The wording here stays long-form; only the
+  // DAY is resolved on the studio's calendar first (R-CB, W4 r10 M-1).
+  const when = formatLongDate(touchInstantIsoDay(channel.status_at));
   const dated = when ? `, ${when}` : "";
   const phone = isPhoneChannel(String(channel.channel_kind));
   switch (channel.status) {
@@ -202,7 +207,9 @@ export function channelRowParts(channel: StudioContactChannel): string[] {
       String(channel.channel_kind),
   ];
   if (channel.preferred) parts.push("preferred");
-  const verified = formatSeatDate(channel.verified_at?.slice(0, 10));
+  // `verified_at` is a timestamptz (00593:83); `formatSeatDate` is for DATE
+  // columns only and never receives a sliced instant (R-CB).
+  const verified = touchInstantDay(channel.verified_at);
   if (channel.verified && verified) parts.push(`verified ${verified}`);
   return parts;
 }
@@ -868,7 +875,9 @@ export function ReachAccess({
     // set the rule and when (CR-8, SPEC §5.2 #5). The name is the studio's own
     // roster read back; with no name to give, the date still stands alone
     // rather than inventing one.
-    const setOn = formatSeatDate(rule?.set_at?.slice(0, 10));
+    // `set_at` is a timestamptz (00592:734); the studio's own calendar decides
+    // the day, not UTC's (R-CB).
+    const setOn = touchInstantDay(rule?.set_at);
     if (!setOn) return clause;
     const setter = rule?.set_by
       ? ((studioMembers ?? []).find((m) => m.user_id === rule.set_by)?.profiles

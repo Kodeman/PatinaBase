@@ -45,6 +45,7 @@ import {
   useOrganizations,
   useStudioContacts,
   useStudioContactChannelsFor,
+  touchInstantDay,
   type AuthorityScope,
   type PeopleDirectorySeat,
 } from "@patina/supabase";
@@ -685,11 +686,22 @@ export function PersonProfile({
               dates on one line would be the two-words-two-clicks-apart defect
               this room keeps closing. The coarse date still prints for the
               population E13 has no row for yet. */}
+          {/* THE STUDIO'S OWN CALENDAR, NOT UTC'S (R-CB, W4 r10 M-1).
+              `people_directory.last_touch_at` is a timestamptz —
+              COALESCE(last_contacted_at, last_project_at, updated_at),
+              00626:1478 — and PostgREST answers it in UTC, so slicing it to
+              ten characters and handing that to `formatSeatDate` (a DATE-only
+              parser) printed the UTC day: a contact at 21:30 CDT on 11 Sep
+              read "12 Sep 2026". This is the FALLBACK branch, so it is what
+              every person with no `studio_touches` row reads, and the only
+              absolute print of `last_touch_at` in the room — nothing else
+              could contradict it. `touchInstantDay` is the function that
+              already exists for exactly this. */}
           <LastTouchLine
             subjectIds={touchSubjectIds}
             fallback={
-              formatSeatDate(person.last_touch_at?.slice(0, 10))
-                ? `Last touch ${formatSeatDate(person.last_touch_at?.slice(0, 10))}.`
+              touchInstantDay(person.last_touch_at)
+                ? `Last touch ${touchInstantDay(person.last_touch_at)}.`
                 : null
             }
           />
