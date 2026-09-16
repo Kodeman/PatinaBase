@@ -1,0 +1,1616 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Field Line — Patina</title>
+<style>
+/* ============================================================
+   THE FIELD LINE — field contacts and homeowners by text
+   Self-contained. No external fonts, scripts, or images.
+   Palette: drafting ink / bone paper / verdigris (oxidized copper,
+   literally patina) / brass / oxblood. Type: bookish serif display,
+   system sans body, mono for spec-sheet labels.
+   House style shared with docs/design/studio-rosters/,
+   and docs/design/library-variance/.
+   ============================================================ */
+
+:root{
+  --paper:#E7E9E3;
+  --paper-2:#F3F4F0;
+  --card:#FBFBF8;
+  --ink:#16202B;
+  --ink-2:#33404E;
+  --slate:#5D6773;
+  --rule:rgba(22,32,43,.14);
+  --rule-2:rgba(22,32,43,.28);
+  --verdigris:#2F6F63;
+  --verdigris-soft:rgba(47,111,99,.10);
+  --brass:#9A6B1F;
+  --brass-soft:rgba(154,107,31,.10);
+  --oxblood:#8A3A32;
+  --oxblood-soft:rgba(138,58,50,.09);
+  --grid:rgba(22,32,43,.045);
+  --dotc:rgba(22,32,43,.10);
+  --lift:0 2px 10px -6px rgba(22,32,43,.5);
+  --lift-2:0 12px 30px -16px rgba(22,32,43,.65);
+  --shadow:0 1px 0 rgba(22,32,43,.05), 0 10px 30px -22px rgba(22,32,43,.5);
+
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+
+@media (prefers-color-scheme: dark){
+  :root[data-theme="auto"]{
+    --paper:#111820;
+    --paper-2:#161E27;
+    --card:#1B252F;
+    --ink:#E6E9E5;
+    --ink-2:#C3CBD2;
+    --slate:#8C98A4;
+    --rule:rgba(230,233,229,.14);
+    --rule-2:rgba(230,233,229,.3);
+    --verdigris:#7CC7B6;
+    --verdigris-soft:rgba(124,199,182,.12);
+    --brass:#D5A24C;
+    --brass-soft:rgba(213,162,76,.12);
+    --oxblood:#DE8478;
+    --oxblood-soft:rgba(222,132,120,.12);
+    --grid:rgba(230,233,229,.04);
+    --dotc:rgba(230,233,229,.09);
+    --lift:0 2px 10px -6px rgba(0,0,0,.8);
+    --lift-2:0 12px 30px -16px rgba(0,0,0,.95);
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+  }
+}
+
+:root[data-theme="dark"]{
+  --paper:#111820;
+  --paper-2:#161E27;
+  --card:#1B252F;
+  --ink:#E6E9E5;
+  --ink-2:#C3CBD2;
+  --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14);
+  --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6;
+  --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C;
+  --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478;
+  --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+  --dotc:rgba(230,233,229,.09);
+  --lift:0 2px 10px -6px rgba(0,0,0,.8);
+  --lift-2:0 12px 30px -16px rgba(0,0,0,.95);
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.55;
+  overflow-x:hidden;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- deck shell ---------- */
+#deck{
+  height:100dvh;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scroll-snap-type:y proximity;
+  /* NB: no `scroll-behavior:smooth` — it cancels programmatic scrolls in
+     Chrome on a snapping container and breaks keyboard navigation. */
+}
+
+.slide{
+  min-height:100dvh;
+  scroll-snap-align:start;
+  display:flex;
+  align-items:center;
+  padding:clamp(24px,4.5vh,60px) clamp(20px,5vw,80px);
+  border-bottom:1px solid var(--rule);
+  position:relative;
+}
+.inner{
+  width:100%;
+  max-width:1180px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:132px minmax(0,1fr);
+  gap:clamp(18px,3vw,44px);
+  align-items:start;
+}
+@media (max-width:860px){
+  .inner{grid-template-columns:minmax(0,1fr);gap:14px}
+}
+.gutter{position:sticky;top:0;padding-top:.5rem}
+.main{min-width:0}
+
+/* wide variant — the mock slides get the whole measure */
+.slide.wide .inner{grid-template-columns:minmax(0,1fr);max-width:1320px;gap:0}
+.slide.wide .gutter{position:static;padding:0;display:flex;align-items:center;gap:12px;margin-bottom:.3rem}
+.slide.wide .gutter .num{margin-top:0}
+.slide.wide .gutter .tick{display:none}
+
+/* ---------- ink slides (locally dark in every theme) ---------- */
+.slide.ink{
+  --paper:#111820;
+  --paper-2:#161E27;
+  --card:#1B252F;
+  --ink:#E6E9E5;
+  --ink-2:#C3CBD2;
+  --slate:#8C98A4;
+  --rule:rgba(230,233,229,.14);
+  --rule-2:rgba(230,233,229,.3);
+  --verdigris:#7CC7B6;
+  --verdigris-soft:rgba(124,199,182,.12);
+  --brass:#D5A24C;
+  --brass-soft:rgba(213,162,76,.12);
+  --oxblood:#DE8478;
+  --oxblood-soft:rgba(222,132,120,.12);
+  --grid:rgba(230,233,229,.04);
+  --dotc:rgba(230,233,229,.09);
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+  background:#111820;
+  color:#E6E9E5;
+  background-image:
+    linear-gradient(rgba(230,233,229,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(230,233,229,.04) 1px, transparent 1px);
+  background-size:28px 28px, 28px 28px;
+}
+
+/* ---------- type ---------- */
+.eyebrow{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--slate);
+  display:block;
+}
+.gutter .num{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.1em;
+  color:var(--verdigris);
+  display:block;
+  margin-top:6px;
+}
+.gutter .tick{
+  display:block;width:34px;height:2px;background:var(--verdigris);
+  margin-top:12px;opacity:.55;
+}
+@media (max-width:860px){ .gutter .tick{display:none} .gutter{position:static} }
+
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;margin:0}
+h1{font-size:clamp(2.4rem,6.2vw,4.4rem);line-height:1.03}
+h2{font-size:clamp(1.6rem,3.3vw,2.7rem);line-height:1.1;margin-bottom:.5rem}
+h3{font-size:clamp(1.02rem,1.6vw,1.26rem);line-height:1.25}
+.lede{
+  font-size:clamp(1rem,1.45vw,1.18rem);
+  color:var(--ink-2);
+  max-width:66ch;
+  margin:.85rem 0 0;
+}
+p{margin:.7rem 0;max-width:70ch}
+.small{font-size:.85rem;color:var(--slate);line-height:1.5}
+strong{font-weight:650;color:var(--ink)}
+em{font-style:italic}
+.vd{color:var(--verdigris)}
+.br{color:var(--brass)}
+.ox{color:var(--oxblood)}
+
+code,.mono{font-family:var(--mono);font-size:.82em}
+code{
+  background:var(--verdigris-soft);
+  color:var(--verdigris);
+  padding:.08em .38em;
+  border-radius:3px;
+  word-break:break-word;
+}
+
+/* ---------- cover ---------- */
+.cover .inner{grid-template-columns:minmax(0,1fr)}
+.wordmark{display:flex;align-items:center;gap:10px;margin-bottom:clamp(20px,5vh,48px)}
+.wordmark svg{display:block}
+.wordmark span{
+  font-family:var(--mono);font-size:11px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--slate);
+}
+.cover-quote{
+  font-family:var(--display);
+  font-size:clamp(1.4rem,2.8vw,2rem);
+  line-height:1.25;
+  color:var(--ink-2);
+  font-style:italic;
+  border-left:3px solid var(--verdigris);
+  padding-left:clamp(14px,2vw,24px);
+  margin:clamp(22px,4vh,40px) 0 0;
+  max-width:32ch;
+}
+.cover-meta{
+  margin-top:clamp(26px,5vh,52px);
+  display:flex;flex-wrap:wrap;gap:10px 28px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);
+  border-top:1px solid var(--rule);padding-top:16px;
+}
+.cover-meta b{color:var(--ink);font-weight:500}
+
+/* ---------- cards & grids ---------- */
+.grid{display:grid;gap:13px;margin-top:1.05rem}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .g2,.g3,.g4{grid-template-columns:minmax(0,1fr)} }
+
+.card{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:6px;
+  padding:15px 17px;
+  box-shadow:var(--shadow);
+  min-width:0;
+}
+.card h3{margin-bottom:.3rem}
+.card p{margin:.35rem 0}
+.card .small{margin-top:.4rem}
+.card.accent{border-left:3px solid var(--verdigris)}
+.card.warn{border-left:3px solid var(--brass)}
+.card.bad{border-left:3px solid var(--oxblood)}
+.card.tight{padding:10px 12px}
+.card.tight p{font-size:.83rem;color:var(--slate);line-height:1.45;margin:.2rem 0 0}
+
+.kicker{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--slate);display:block;margin-bottom:.35rem;
+}
+
+/* ---------- pull quotes ---------- */
+.quote{
+  border-left:3px solid var(--verdigris);
+  padding:2px 0 2px 16px;
+  margin:14px 0;
+}
+.quote p{
+  font-family:var(--display);
+  font-style:italic;
+  font-size:clamp(1rem,1.45vw,1.16rem);
+  line-height:1.4;
+  color:var(--ink);
+  margin:0;
+}
+.quote .attr{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--slate);margin-top:8px;display:block;
+}
+.quote.ox{border-left-color:var(--oxblood)}
+
+.badge-flag{
+  display:inline-block;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--brass);background:var(--brass-soft);
+  border:1px solid rgba(154,107,31,.3);
+  padding:1px 6px;border-radius:3px;margin-left:8px;vertical-align:1px;
+}
+.badge-flag.live{color:var(--verdigris);background:var(--verdigris-soft);border-color:rgba(47,111,99,.3)}
+.badge-flag.new{color:var(--oxblood);background:var(--oxblood-soft);border-color:rgba(138,58,50,.3)}
+:root[data-theme="dark"] .badge-flag{border-color:rgba(213,162,76,.35)}
+@media (prefers-color-scheme: dark){
+  :root[data-theme="auto"] .badge-flag{border-color:rgba(213,162,76,.35)}
+}
+
+/* ---------- evidence panels ---------- */
+.evidence{
+  background:var(--paper-2);
+  border:1px solid var(--rule);
+  border-left:3px solid var(--brass);
+  border-radius:5px;
+  padding:12px 14px;
+  min-width:0;
+}
+.evidence .where{
+  font-family:var(--mono);font-size:10.5px;color:var(--brass);
+  letter-spacing:.04em;display:block;margin-bottom:6px;word-break:break-word;
+}
+.evidence .what{
+  font-family:var(--mono);font-size:.79rem;color:var(--ink);
+  background:var(--card);border:1px dashed var(--rule-2);
+  border-radius:4px;padding:7px 9px;display:block;margin-bottom:7px;
+  white-space:normal;word-break:break-word;line-height:1.5;
+}
+.evidence .read{font-size:.82rem;color:var(--slate);line-height:1.45;margin:0}
+.evidence.on{border-left-color:var(--verdigris)}
+.evidence.on .where{color:var(--verdigris)}
+
+/* ---------- rails ---------- */
+.rail{
+  background:var(--card);
+  border:1px solid var(--rule);
+  border-radius:6px;
+  padding:12px 15px;
+  margin:9px 0;
+  min-width:0;
+}
+.rail-head{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  margin-bottom:6px;flex-wrap:wrap;
+}
+.rail-name{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+.rail-kind{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--slate)}
+.rail p{margin:0;font-size:.87rem;color:var(--ink-2);max-width:80ch}
+
+/* ---------- chip clouds ---------- */
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:.7rem}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  border:1px solid var(--rule-2);
+  border-radius:999px;
+  padding:3px 11px;
+  background:var(--paper-2);
+  font-size:.82rem;color:var(--ink-2);
+  min-width:0;
+}
+.chip.on{border-color:var(--verdigris);background:var(--verdigris-soft);color:var(--verdigris)}
+.chip.add{border-style:dashed;border-color:var(--brass);color:var(--brass);background:var(--brass-soft)}
+.chip.ghost{opacity:.6;border-style:dashed}
+.chip .mono{font-size:9px;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+
+/* ---------- flow chain ---------- */
+.chain{
+  display:flex;align-items:stretch;gap:2px;flex-wrap:nowrap;
+  overflow-x:auto;padding-bottom:8px;margin-top:1rem;
+}
+.chain .step{
+  flex:0 0 auto;min-width:128px;max-width:190px;
+  border:1px solid var(--rule);border-radius:5px;background:var(--card);
+  padding:9px 11px;
+}
+.chain .step .kicker{margin-bottom:.2rem}
+.chain .step .t{font-size:.86rem;color:var(--ink);line-height:1.3;display:block}
+.chain .step .s{font-size:.74rem;color:var(--slate);margin-top:3px;line-height:1.35;display:block}
+.chain .arr{
+  flex:0 0 auto;align-self:center;color:var(--verdigris);
+  font-family:var(--mono);font-size:13px;padding:0 6px;opacity:.7;
+}
+.chain .step.end{border-color:var(--oxblood);background:var(--oxblood-soft)}
+.chain .step.new{border-color:var(--verdigris);background:var(--verdigris-soft)}
+.chain .step.have{border-style:dashed;opacity:.85}
+
+/* ---------- journey steps (numbered checklist) ---------- */
+.journey{display:grid;gap:10px;margin-top:1rem}
+.jstep{
+  display:grid;grid-template-columns:34px minmax(0,1fr);gap:14px;align-items:start;
+  border:1px solid var(--rule);border-left:3px solid var(--verdigris);
+  border-radius:6px;background:var(--card);padding:12px 15px;box-shadow:var(--shadow);
+}
+.jstep .n{
+  font-family:var(--mono);font-size:13px;color:var(--verdigris);
+  border:1px solid var(--rule-2);border-radius:50%;
+  width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  background:var(--verdigris-soft);
+}
+.jstep h3{font-size:1.02rem;margin-bottom:.15rem}
+.jstep p{margin:.2rem 0 0;font-size:.87rem;color:var(--ink-2);max-width:78ch}
+.jstep .tag{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--slate);border:1px solid var(--rule);border-radius:3px;padding:1px 6px;
+  margin-left:8px;vertical-align:2px;white-space:nowrap;
+}
+.jstep .tag.have{color:var(--verdigris);border-color:var(--verdigris)}
+.jstep .tag.newer{color:var(--oxblood);border-color:var(--oxblood)}
+.jstep.have{border-left-color:var(--slate)}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:.77rem}
+th,td{text-align:left;padding:6px 11px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.34}
+th{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);font-weight:500;background:var(--paper-2);
+}
+tr:last-child td{border-bottom:none}
+td code{white-space:nowrap}
+th.me,td.me{background:var(--verdigris-soft)}
+th.me{color:var(--verdigris)}
+td.cy{color:var(--verdigris);font-weight:600}
+td.cn{color:var(--oxblood)}
+td.cp{color:var(--brass)}
+td.cu{color:var(--slate)}
+td.lead{color:var(--ink);font-weight:600;font-family:var(--display);font-size:.92rem}
+td.tier{font-family:var(--mono);font-size:.72rem;letter-spacing:.05em;color:var(--brass);white-space:nowrap}
+.legend{
+  display:flex;gap:16px;flex-wrap:wrap;margin-top:9px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);
+}
+.legend b{font-weight:500}
+.legend .sw{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+
+/* ---------- lists ---------- */
+ul.plain{list-style:none;padding:0;margin:.6rem 0}
+ul.plain li{
+  padding-left:20px;position:relative;margin:.4rem 0;max-width:72ch;
+  font-size:.91rem;color:var(--ink-2);
+}
+ul.plain li::before{
+  content:"";position:absolute;left:2px;top:.62em;
+  width:7px;height:1.5px;background:var(--verdigris);
+}
+ul.plain li strong{color:var(--ink)}
+ul.plain.ox li::before{background:var(--oxblood)}
+ul.plain.tight li{font-size:.83rem;margin:.28rem 0}
+
+/* ---------- roadmap phases ---------- */
+.phase{
+  border:1px solid var(--rule);border-radius:6px;background:var(--card);
+  padding:14px 16px;border-top:3px solid var(--verdigris);min-width:0;
+}
+.phase.p2{border-top-color:#4E8F7F}
+.phase.p3{border-top-color:var(--brass)}
+.phase.p4{border-top-color:var(--oxblood)}
+.phase .when{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate)}
+.phase h3{margin:.3rem 0 .35rem;font-size:1.08rem}
+.phase .val{
+  margin-top:9px;padding-top:9px;border-top:1px dashed var(--rule);
+  font-size:.79rem;color:var(--verdigris);line-height:1.45;
+}
+.phase.p4 .val{color:var(--oxblood)}
+
+/* ---------- callout / note ---------- */
+.callout{
+  border:1px solid var(--verdigris);
+  background:var(--verdigris-soft);
+  border-radius:6px;padding:13px 16px;margin-top:1.05rem;
+}
+.callout p{margin:0;font-size:.93rem;color:var(--ink);max-width:none}
+.callout .kicker{color:var(--verdigris)}
+
+.note{
+  border:1px dashed var(--rule-2);border-radius:6px;padding:12px 15px;margin-top:1rem;
+  background:var(--paper-2);
+}
+.note p{margin:.3rem 0;font-size:.85rem;color:var(--slate);max-width:82ch}
+.note .kicker{color:var(--brass)}
+
+/* ---------- spec / blueprint blocks ---------- */
+.spec{
+  border:1px solid var(--rule);border-radius:6px;background:var(--card);
+  padding:12px 14px;min-width:0;box-shadow:var(--shadow);
+  border-top:3px solid var(--verdigris);
+}
+.spec.alter{border-top-color:var(--brass)}
+.spec.newt{border-top-color:var(--oxblood)}
+.spec .tname{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--ink);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px;
+}
+.spec .op{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;
+  border-radius:3px;padding:1px 6px;border:1px solid var(--verdigris);color:var(--verdigris);
+  background:var(--verdigris-soft);white-space:nowrap;
+}
+.spec.alter .op{border-color:var(--brass);color:var(--brass);background:var(--brass-soft)}
+.spec.newt .op{border-color:var(--oxblood);color:var(--oxblood);background:var(--oxblood-soft)}
+.spec ul{list-style:none;margin:0;padding:0}
+.spec li{
+  font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--ink-2);
+  padding-left:13px;position:relative;word-break:break-word;
+}
+.spec li::before{content:"·";position:absolute;left:2px;color:var(--slate)}
+.spec li b{color:var(--ink);font-weight:600}
+.spec li i{font-style:normal;color:var(--slate)}
+.spec .why{
+  margin-top:8px;padding-top:8px;border-top:1px dashed var(--rule);
+  font-size:.79rem;color:var(--slate);line-height:1.45;font-family:var(--body);
+}
+
+/* ============================================================
+   MOCKUPS — miniature portal UI, pure CSS
+   ============================================================ */
+.mock{
+  position:relative;
+  border:1px solid var(--rule-2);
+  border-radius:8px;
+  background:var(--card);
+  box-shadow:var(--lift-2);
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  width:100%;
+  margin-top:13px;
+}
+.mock-roster{min-height:clamp(430px,58vh,600px)}
+.mock-invite{min-height:clamp(320px,44vh,430px)}
+
+.mk-note{
+  position:absolute;z-index:8;
+  font-family:var(--mono);font-size:8.5px;line-height:1.5;letter-spacing:.04em;
+  background:var(--card);border:1px solid var(--verdigris);color:var(--verdigris);
+  border-radius:3px;padding:1.5px 6px;white-space:nowrap;
+  box-shadow:var(--lift);
+}
+.mk-note.ox{border-color:var(--oxblood);color:var(--oxblood)}
+
+/* browser + portal chrome */
+.mk-bar{
+  display:flex;align-items:center;gap:9px;
+  padding:6px 10px;background:var(--paper-2);
+  border-bottom:1px solid var(--rule);flex:0 0 auto;
+}
+.mk-dots{display:flex;gap:4px;flex:0 0 auto}
+.mk-dots i{width:7px;height:7px;border-radius:50%;background:var(--rule-2);display:block}
+.mk-url{
+  font-family:var(--mono);font-size:9.5px;color:var(--slate);
+  background:var(--card);border:1px solid var(--rule);border-radius:999px;
+  padding:2px 11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.mk-url b{color:var(--verdigris);font-weight:500}
+
+.mk-nav{display:flex;align-items:center;gap:11px;padding:6px 12px;border-bottom:1px solid var(--rule);flex:0 0 auto;background:var(--card)}
+.mk-mark{font-family:var(--display);font-size:12px;color:var(--ink);flex:0 0 auto}
+.mk-crumb{font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:var(--slate);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk-av{margin-left:auto;width:15px;height:15px;border-radius:50%;background:var(--brass-soft);border:1px solid var(--rule-2);flex:0 0 auto}
+
+.mk-page{flex:1;min-height:0;padding:10px 12px 14px;display:flex;flex-direction:column;gap:9px;background:var(--paper)}
+.mk-band{display:flex;gap:5px;flex-wrap:wrap;flex:0 0 auto}
+.mk-band span{
+  font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--slate);border:1px solid var(--rule);border-radius:999px;padding:1.5px 8px;background:var(--card);
+}
+.mk-band span.on{color:var(--verdigris);border-color:var(--verdigris);background:var(--verdigris-soft)}
+
+/* ---------- the call sheet ---------- */
+.cs-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;flex:0 0 auto}
+.cs-head .t{font-family:var(--display);font-size:clamp(13px,1.5vw,18px);color:var(--ink)}
+.cs-head .c{font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--slate)}
+.cs-head .acts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.cs-head .acts span{
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;
+  border-radius:4px;padding:3px 10px;border:1px solid var(--rule-2);color:var(--slate);white-space:nowrap;
+}
+.cs-head .acts .solid{background:var(--verdigris);border-color:var(--verdigris);color:var(--card)}
+
+.cs-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;flex:1;min-height:0}
+@media (max-width:900px){ .cs-cols{grid-template-columns:minmax(0,1fr)} }
+.cs-col{
+  border:1px solid var(--rule);border-radius:6px;background:var(--card);
+  display:flex;flex-direction:column;min-width:0;overflow:hidden;
+}
+.cs-ch{
+  padding:6px 10px;border-bottom:1px solid var(--rule);background:var(--paper-2);
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+}
+.cs-ch b{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);font-weight:600}
+.cs-ch i{font-family:var(--mono);font-size:8.5px;color:var(--slate);font-style:normal}
+.cs-body{padding:7px;display:flex;flex-direction:column;gap:5px;min-height:0}
+
+.pr{
+  display:grid;grid-template-columns:20px minmax(0,1fr);gap:7px;align-items:start;
+  border:1px solid var(--rule);border-radius:5px;background:var(--paper-2);padding:6px 8px;min-width:0;
+}
+.pr .ini{
+  width:20px;height:20px;border-radius:50%;background:var(--card);
+  border:1px solid var(--rule-2);display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:8px;color:var(--slate);
+}
+.pr .nm{
+  font-size:10.5px;color:var(--ink);line-height:1.3;display:flex;align-items:center;gap:5px;flex-wrap:wrap;
+}
+.pr .nm b{font-weight:600}
+.pr .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.pr .tg{
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.07em;text-transform:uppercase;
+  border:1px solid var(--rule-2);border-radius:999px;padding:1px 6px;color:var(--slate);white-space:nowrap;
+}
+.pr .tg.role{color:var(--ink-2);border-color:var(--rule-2);background:var(--card)}
+.pr .tg.trade{color:var(--brass);border-color:var(--brass);background:var(--brass-soft)}
+.pr .tg.spec{color:var(--oxblood);border-color:var(--oxblood);background:var(--oxblood-soft)}
+.pr .tg.acct{color:var(--verdigris);border-color:var(--verdigris);background:var(--verdigris-soft)}
+.pr .tg.link{color:var(--verdigris);border-style:dashed;border-color:var(--verdigris)}
+.pr .tg.only{color:var(--slate);border-style:dashed}
+.pr .sms{
+  width:6px;height:6px;border-radius:50%;background:var(--verdigris);
+  display:inline-block;flex:0 0 auto;box-shadow:0 0 0 2px var(--verdigris-soft);
+}
+.pr .sms.off{background:transparent;border:1px solid var(--rule-2);box-shadow:none}
+.pr.lead{border-color:var(--verdigris);background:var(--verdigris-soft)}
+.cs-add{
+  border:1px dashed var(--rule-2);border-radius:5px;padding:5px 8px;
+  font-family:var(--mono);font-size:8px;letter-spacing:.09em;text-transform:uppercase;color:var(--slate);
+  text-align:center;
+}
+.cs-legend{
+  display:flex;gap:14px;flex-wrap:wrap;flex:0 0 auto;
+  font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);
+  border-top:1px solid var(--rule);padding-top:7px;
+}
+.cs-legend i{font-style:normal;color:var(--ink-2)}
+
+/* ---------- invite sheet ---------- */
+.iv{
+  max-width:430px;margin:0 auto;width:100%;
+  border:1px solid var(--rule-2);border-radius:7px;background:var(--card);
+  box-shadow:var(--lift-2);padding:13px 15px;position:relative;
+}
+.iv .ivh{font-family:var(--display);font-size:14px;color:var(--ink);margin-bottom:2px}
+.iv .ivs{font-size:9.5px;color:var(--slate);margin-bottom:11px;display:block;line-height:1.45}
+.iv .lbl{font-family:var(--mono);font-size:8px;letter-spacing:.11em;text-transform:uppercase;color:var(--slate);display:block;margin:9px 0 3px}
+.iv .fld{
+  border:1px solid var(--rule);border-radius:4px;background:var(--paper-2);
+  padding:5px 9px;font-size:10.5px;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.iv .fld.ph{color:var(--slate)}
+.iv .fld .car{font-family:var(--mono);font-size:9px;color:var(--slate)}
+.iv .fld.sel{border-color:var(--verdigris);background:var(--verdigris-soft);color:var(--verdigris)}
+.iv .seg{display:flex;gap:4px}
+.iv .seg span{
+  flex:1;text-align:center;font-family:var(--mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--rule);border-radius:4px;padding:4px 0;color:var(--slate);
+}
+.iv .seg span.on{border-color:var(--verdigris);color:var(--verdigris);background:var(--verdigris-soft);font-weight:600}
+.iv .hintline{font-size:8.5px;color:var(--brass);margin-top:5px;line-height:1.45;font-family:var(--body)}
+.iv .btn{
+  margin-top:13px;background:var(--verdigris);color:var(--card);border-radius:5px;
+  text-align:center;padding:6px 0;font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+}
+.iv .drop{
+  position:absolute;right:15px;top:96px;width:190px;z-index:9;
+  border:1px solid var(--rule-2);border-radius:5px;background:var(--card);box-shadow:var(--lift-2);
+  padding:4px;display:flex;flex-direction:column;gap:1px;
+}
+@media (max-width:720px){ .iv .drop{position:static;width:auto;margin-top:6px} }
+.iv .drop span{
+  font-size:9.5px;color:var(--ink-2);padding:3px 7px;border-radius:3px;
+  display:flex;justify-content:space-between;gap:8px;align-items:center;
+}
+.iv .drop span i{font-family:var(--mono);font-size:7.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);font-style:normal}
+.iv .drop span.on{background:var(--verdigris-soft);color:var(--verdigris)}
+.iv .drop span.on i{color:var(--verdigris)}
+.iv .drop .hd{
+  font-family:var(--mono);font-size:7.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--slate);
+  padding:3px 7px;border-bottom:1px solid var(--rule);margin-bottom:2px;display:block;
+}
+
+/* ---------- flywheel ---------- */
+.wheel{margin-top:1rem;border:1px solid var(--rule);border-radius:6px;background:var(--card);padding:12px;overflow-x:auto}
+.wheel svg{display:block;width:100%;min-width:640px;height:auto}
+.wheel .bx{fill:var(--paper-2);stroke:var(--rule-2);stroke-width:1}
+.wheel .bx.hot{fill:var(--verdigris-soft);stroke:var(--verdigris)}
+.wheel .ttl{font-family:var(--display);font-size:15px;fill:var(--ink)}
+.wheel .sub{font-family:var(--mono);font-size:9px;letter-spacing:.06em;fill:var(--slate)}
+.wheel .arrw{stroke:var(--verdigris);stroke-width:1.4;fill:none}
+.wheel .arrh{fill:var(--verdigris)}
+.wheel .loop{stroke:var(--brass);stroke-width:1.4;fill:none;stroke-dasharray:5 4}
+.wheel .looph{fill:var(--brass)}
+.wheel .loopt{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;fill:var(--brass)}
+
+/* ---------- caption row ---------- */
+.caps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:13px}
+.caps .cap{border-top:1px solid var(--rule);padding-top:7px;min-width:0}
+.caps .cap b{
+  font-family:var(--mono);font-size:9px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--verdigris);display:block;font-weight:500;
+}
+.caps .cap.was b{color:var(--oxblood)}
+.caps .cap p{font-size:.76rem;color:var(--slate);margin:.25rem 0 0;line-height:1.42;max-width:none}
+
+/* ---------- chrome ---------- */
+#progress{
+  position:fixed;top:0;left:0;height:2px;background:var(--verdigris);
+  width:0;z-index:60;transition:width .18s linear;
+}
+@media (prefers-reduced-motion: reduce){ #progress{transition:none} }
+
+#chrome{
+  position:fixed;right:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);
+  z-index:60;display:flex;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--rule);border-radius:999px;
+  padding:5px 6px 5px 13px;box-shadow:var(--shadow);
+}
+#counter{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--slate);min-width:52px}
+#counter b{color:var(--ink);font-weight:600}
+.navbtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+  width:28px;height:28px;border-radius:999px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;font-size:13px;line-height:1;
+  font-family:var(--mono);padding:0;
+}
+.navbtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+.navbtn:focus-visible,#themebtn:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+#themebtn{
+  appearance:none;border:1px solid var(--rule);background:var(--paper-2);color:var(--slate);
+  height:28px;border-radius:999px;cursor:pointer;padding:0 11px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+}
+#themebtn:hover{border-color:var(--verdigris);color:var(--verdigris)}
+
+#hint{
+  position:fixed;left:clamp(12px,2.4vw,26px);bottom:clamp(12px,2.4vh,24px);z-index:60;
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);opacity:.75;
+}
+@media (max-width:700px){ #hint{display:none} }
+
+/* reveal */
+.slide .main > *, .slide .gutter > *{opacity:0;transform:translateY(8px);transition:opacity .5s ease, transform .5s ease}
+.slide.seen .main > *, .slide.seen .gutter > *{opacity:1;transform:none}
+.slide.seen .main > *:nth-child(2){transition-delay:.06s}
+.slide.seen .main > *:nth-child(3){transition-delay:.12s}
+.slide.seen .main > *:nth-child(4){transition-delay:.17s}
+.slide.seen .main > *:nth-child(5){transition-delay:.21s}
+@media (prefers-reduced-motion: reduce){
+  .slide .main > *, .slide .gutter > *{opacity:1;transform:none;transition:none}
+}
+
+/* ---------- print ---------- */
+@media print{
+  html,body{height:auto;background:#fff;color:#000;background-image:none}
+  #deck{height:auto;overflow:visible}
+  #chrome,#hint,#progress{display:none !important}
+  .slide{
+    min-height:auto;height:auto;page-break-after:always;break-after:page;
+    padding:14mm 12mm;border-bottom:none;display:block;
+  }
+  .slide.ink{background:#fff;background-image:none}
+  .slide:last-child{page-break-after:auto;break-after:auto}
+  .slide .main > *,.slide .gutter > *{opacity:1 !important;transform:none !important}
+  .card,.evidence,.rail,.phase,.spec,.tablewrap,.mock,.jstep,.wheel{break-inside:avoid;box-shadow:none}
+  .mock-roster{min-height:130mm}
+  .mock-invite{min-height:100mm}
+  h1{font-size:30pt}h2{font-size:19pt}
+  .inner{max-width:none}
+  .slide.wide .inner{max-width:none}
+}
+
+/* ---------- The Field Line additions: phone strips, owners, checklists ---------- */
+.phone{background:var(--paper-2);border:1px solid var(--rule);border-radius:14px;padding:12px 12px 10px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.phone .who{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);text-align:center;margin-bottom:2px}
+.bub{max-width:88%;background:var(--card);border:1px solid var(--rule);border-radius:14px 14px 14px 4px;padding:8px 11px;font-size:.82rem;line-height:1.4;color:var(--ink);align-self:flex-start;word-break:break-word}
+.bub.me{background:var(--verdigris);color:var(--paper);border-color:transparent;border-radius:14px 14px 4px 14px;align-self:flex-end;font-weight:600}
+.bub .t{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);margin-top:5px}
+.bub a{color:var(--verdigris);text-decoration:underline;cursor:default}
+.owner{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass);white-space:nowrap}
+.checklist{list-style:none;margin:.6rem 0 0;padding:0}
+.checklist li{position:relative;padding:7px 0 7px 26px;border-bottom:1px dashed var(--rule);font-size:.86rem;color:var(--ink-2);line-height:1.4}
+.checklist li::before{content:"";position:absolute;left:2px;top:11px;width:12px;height:12px;border:1.5px solid var(--verdigris);border-radius:3px}
+.checklist li:last-child{border-bottom:none}
+.checklist li b{color:var(--ink);font-weight:600}
+.rail-kind.ox{color:var(--oxblood)}
+@media print{.phone,.bub{break-inside:avoid;box-shadow:none}}
+</style>
+</head>
+<body>
+
+<div id="progress" role="presentation"></div>
+
+<div id="deck" tabindex="-1">
+
+<!-- ============ 01 · COVER ============ -->
+<section class="slide cover ink" data-label="Cover">
+  <div class="inner">
+    <div class="main">
+      <div class="wordmark">
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".35"/>
+          <path d="M5 16.5 L11 5.5 L17 16.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="7.6" y1="12" x2="14.4" y2="12" stroke="currentColor" stroke-width="1.1" opacity=".55"/>
+        </svg>
+        <span>Patina · Field &amp; Client</span>
+      </div>
+
+      <h1>The Field<br>Line</h1>
+      <p class="lede">Getting project work done with the people who will never log in. Trades, receivers, and homeowners, by text, with no app and no password.</p>
+
+      <div class="cover-meta">
+        <span>Deck <b>docs/design/field-text/</b></span>
+        <span>Planning duo <b>GPT-6 Astra + Fable</b></span>
+        <span>Scope <b>field trades and homeowner clients</b></span>
+        <span>Status <b>rail built, dormant until Twilio · flows proposed · 2026-09-16</b></span>
+      </div>
+
+      <div class="cover-quote">
+        <p>Two reviews of the same code, made separately. One mapped what exists. The other sat on the phone's side of the conversation and found eight ways it lies to the person holding it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 · THESIS ============ -->
+<section class="slide" data-label="Thesis">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · The thesis</span><span class="num">02</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>A tool the trades have to sign up for is a tool the trades ignore.</h2>
+      <p class="lede">The Call Sheet ruled that a sub is reached by a field link, never by an account. This deck takes the next step: the text message is the whole interface for most of the people on a job, and it has to be dependable enough to finish work with.</p>
+
+      <div class="grid g3">
+        <div class="card accent">
+          <span class="kicker">The text is the reminder</span>
+          <h3>One request, one answer, one receipt</h3>
+          <p class="small">A recognizable prompt, an obvious reply, and a receipt that tells the truth. Numbers over words. Never two clarifying questions in a row.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">The link is the form</span>
+          <h3>Anything longer becomes a page</h3>
+          <p class="small">Past two text segments, the message carries one patina.cloud link that is complete without a login. The link is the form; the text says why to open it.</p>
+        </div>
+        <div class="card accent">
+          <span class="kicker">The record is elsewhere</span>
+          <h3>Text is a rail, not a ledger</h3>
+          <p class="small">Every effect lands through the same chokepoints the portal uses. A reply by text and a tap on the field page write the same row.</p>
+        </div>
+      </div>
+
+      <div class="quote">
+        <p>Make texting a dependable way to finish work, not a funnel into software.</p>
+        <span class="attr">The proposal in one line</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · WHO WE REACH TODAY ============ -->
+<section class="slide wide" data-label="Reach today">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Who we reach today</span><span class="num">03</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Reach is a precedence, not a ladder.</h2>
+      <p class="lede">The roster says how a person <em>can</em> be reached: account, field link, or on paper. It does not say whether they answer. A consented contractor who replies to texts is more reachable than a client with an unused account.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:20%">Person</th>
+              <th style="width:18%">Reach today</th>
+              <th style="width:27%">Observed outcome</th>
+              <th>The one job they need done by text</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="lead">GC, superintendent</td><td class="cy">field link</td><td>Replies when texted. Never opens a portal.</td><td>Know what is on me today. Say done, or say there is a problem.</td></tr>
+            <tr><td class="lead">Sub, installer</td><td class="cy">field link</td><td>Same.</td><td>Address, code, time. Confirm I am coming. Send a photo.</td></tr>
+            <tr><td class="lead">Receiver, freight</td><td class="cy">field link</td><td>Same.</td><td>Confirm a window. Report damage with a photo.</td></tr>
+            <tr><td class="lead">Homeowner client</td><td class="cp">account, after an email invite</td><td>A generic invite that expires in an hour, often unopened. No resend.</td><td>Say yes to a piece. Pick a delivery window. Pay a deposit. No login.</td></tr>
+            <tr><td class="lead">Spouse, assistant, property manager</td><td class="cn">not on the roster</td><td>Cannot be added without an email.</td><td>Be reachable at all.</td></tr>
+            <tr><td class="lead">Architect, stager, photographer</td><td class="cu">on paper</td><td>A name and a number.</td><td>Nothing automated yet. That is fine.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid g2" style="margin-top:1rem">
+        <div class="evidence on">
+          <span class="where">apps/designer-portal/src/lib/document/roster-derivation.ts · reachState()</span>
+          <span class="what">account → field_link → on_paper. Precedence when a person has a profile and a token; never a measure of whether they reply.</span>
+          <p class="read">The deck shows capability and observed outcome as separate columns for that reason.</p>
+        </div>
+        <div class="evidence">
+          <span class="where">apps/designer-portal/src/app/api/clients/invite/route.ts · supabase/functions/client-invite/index.ts</span>
+          <span class="what">Client invite is inviteUserByEmail: generic GoTrue mail, 60-minute expiry. The co-branded letter function exists but nothing calls its send leg.</span>
+          <p class="read">The homeowner's first touch is the weakest link in the chain today.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · WHAT EXISTS ============ -->
+<section class="slide wide" data-label="Inventory">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act I · Honest inventory</span><span class="num">04</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The rail is built. It is waiting on a phone number.</h2>
+      <p class="lede">Field Coordination shipped a complete Twilio SMS and MMS loop across seven migrations, four edge functions, one shared sender, and one mutation chokepoint. Nothing in this deck asks for a second rail.</p>
+
+      <div class="chain">
+        <div class="step have"><span class="kicker">1</span><span class="t">Consent on the party</span><span class="s">per engagement · evidence required</span></div>
+        <span class="arr">→</span>
+        <div class="step have"><span class="kicker">2</span><span class="t">sendPartySms</span><span class="s">gate · quiet hours · six templates</span></div>
+        <span class="arr">→</span>
+        <div class="step have"><span class="kicker">3</span><span class="t">Twilio, both ways</span><span class="s">signed inbound · status · MMS</span></div>
+        <span class="arr">→</span>
+        <div class="step have"><span class="kicker">4</span><span class="t">apply_field_effect</span><span class="s">menus · parse · confidence gates</span></div>
+        <span class="arr">=</span>
+        <div class="step end"><span class="kicker">Result</span><span class="t">A Post, a task, a flag</span><span class="s">the same rows the portal writes</span></div>
+      </div>
+
+      <div class="grid g2" style="margin-top:1.1rem">
+        <div>
+          <div class="rail">
+            <div class="rail-head"><span class="rail-name">Also shipped</span><span class="rail-kind">on main</span></div>
+            <p>Eight login-less bearer-token pages (pay, field, site request, trade agreement, RFQ, plans, evidence, share). A designer-side SMS thread with a consent chip and a needs-review queue. Tests for the sender, the signature check, inbound, status, and RLS.</p>
+          </div>
+          <div class="rail">
+            <div class="rail-head"><span class="rail-name">Not shipped</span><span class="rail-kind">gaps</span></div>
+            <p>No text to homeowners. No resend. No SMS admin view. Phone sign-in off by design. The Threads PRD (RCS, seven journeys) is prose only. Production Twilio status is contradictory across three documents.</p>
+          </div>
+        </div>
+        <div>
+          <div class="evidence on">
+            <span class="where">supabase/functions/_shared/sms.ts · sms-inbound/pipeline.ts · sms-status/handler.ts · field-daily/core.ts</span>
+            <span class="what">sendPartySms() → consent gate → template → isQuietHours() → Twilio. Inbound: X-Twilio-Signature, idempotent on twilio_sid, STOP/START/YES/HELP first, then menus, then a parsed intent at 0.8 / 0.5 confidence.</span>
+            <p class="read">Migrations 00281–00284, 00374, 00432, 00458. Runbook at docs/field/sms-10dlc-runbook.md.</p>
+          </div>
+          <div class="evidence" style="margin-top:9px">
+            <span class="where">apps/client-portal/src/middleware.ts</span>
+            <span class="what">/pay · /field · /field/sr_* · /trade · /rfq · /plans · /evidence · /share — sha256 at rest, SECURITY DEFINER resolvers, indistinguishable 404 on miss, noindex.</span>
+            <p class="read">Every link in this deck reuses one of these. No new token family.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 · WHAT BREAKS (1) ============ -->
+<section class="slide wide" data-label="What breaks 1">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · What breaks, in the person's words</span><span class="num">05</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>"I replied YES. What did I just agree to?"</h2>
+      <p class="lede">GPT-6 Astra read the shipped pipeline from the phone's side. Eight defects, each verified against source. The first four are about trust: the system says things that are not true.</p>
+
+      <div class="grid g2">
+        <div class="card bad">
+          <span class="kicker">Consent</span>
+          <h3>YES grants every pending job on my phone</h3>
+          <p class="small">Consent is meant to be per engagement. The inbound handler updates every pending party row for the number, and START grants rows that were never asked. "Stop texting me" in plain words has no deterministic revocation path, despite the runbook.</p>
+          <div class="evidence" style="margin-top:8px"><span class="where">sms-inbound/pipeline.ts:339–354 · grantConsent(onlyPending) keyed by phone</span></div>
+        </div>
+        <div class="card bad">
+          <span class="kicker">Receipts</span>
+          <h3>"Got it, logged." But it was not.</h3>
+          <p class="small">When the database call fails, the person still receives a success receipt. The designer's composer clears on a send the endpoint reported as not sent, because the HTTP status is 200 either way.</p>
+          <div class="evidence" style="margin-top:8px"><span class="where">sms-inbound/pipeline.ts:666–668 · sms-dispatch returns 200 with success:false</span></div>
+        </div>
+        <div class="card bad">
+          <span class="kicker">Links</span>
+          <h3>"The link worked yesterday."</h3>
+          <p class="small">Every message with a link mints a fresh token and revokes the old one, before the quiet-hours check runs. A deferred send kills yesterday's link before the new one arrives in the morning. Rendered bodies with bearer links are stored in full.</p>
+          <div class="evidence" style="margin-top:8px"><span class="where">_shared/sms.ts:275 create_field_link before :494 isQuietHours</span></div>
+        </div>
+        <div class="card bad">
+          <span class="kicker">References</span>
+          <h3>"Which job is DONE 1 for?"</h3>
+          <p class="small">Digest menus are stored per phone conversation, so two projects texting the same contractor overwrite each other's numbered menu. A reply that comes a day late can close the wrong item on the wrong job.</p>
+          <div class="evidence" style="margin-top:8px"><span class="where">field-daily/core.ts · menu state on sms_conversations keyed by phone</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 · WHAT BREAKS (2) ============ -->
+<section class="slide wide" data-label="What breaks 2">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · What breaks, continued</span><span class="num">06</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>"Someone will follow up." Nobody was told.</h2>
+      <p class="lede">The second four are about ownership and meaning: a handoff with no owner, a word that means three things, half the texts missing their opt-out line, and a homeowner who needs an account to answer one question.</p>
+
+      <div class="grid g2">
+        <div class="card bad">
+          <span class="kicker">Handoff</span>
+          <h3>The handoff has no owner</h3>
+          <p class="small">An unknown number is told "your designer will follow up." The review row is created with no assignee and no designer is notified. The promise is made by nobody.</p>
+          <div class="evidence" style="margin-top:8px"><span class="where">sms-inbound/pipeline.ts · unknown-sender branch · needs_review without owner</span></div>
+        </div>
+        <div class="card bad">
+          <span class="kicker">Meaning</span>
+          <h3>"I said OK to Thursday, not that it arrived."</h3>
+          <p class="small">The delivery template asks OK for a window. The parser maps OK to goods received and can close a receiving task. Availability, arrival, and condition are three different answers.</p>
+          <div class="evidence" style="margin-top:8px"><span class="where">_shared/field-parse.ts confirm_delivery · sms_delivery_confirm template (00284)</span></div>
+        </div>
+        <div class="card bad">
+          <span class="kicker">Compliance</span>
+          <h3>Half the texts skip the opt-out line</h3>
+          <p class="small">Only the invite, the confirmation, and HELP carry "Msg&amp;data rates may apply. Reply HELP for help, STOP to opt out." Assignment, digest, and delivery do not. Inbound replies also bypass the quiet-hours window that outbound respects.</p>
+          <div class="evidence" style="margin-top:8px"><span class="where">supabase/migrations/00284 email_templates sms_* bodies · TwiML replies in pipeline.ts</span></div>
+        </div>
+        <div class="card bad">
+          <span class="kicker">Homeowner</span>
+          <h3>"Why do I need an account to answer Leah?"</h3>
+          <p class="small">A client cannot be added without an email, receives a generic invite that expires in an hour, and cannot be re-invited. Passwordless sign-in exists. Phone-first onboarding is what is missing, not the transport: the client_rep party kind already reaches the rail.</p>
+          <div class="evidence" style="margin-top:8px"><span class="where">people/directory/add-person-sheet.tsx · supabase/templates/invite.html · household-sheet.tsx (nullable email)</span></div>
+        </div>
+      </div>
+
+      <div class="note">
+        <span class="kicker">Corrections the review made to the first map</span>
+        <p>Migration 00432 does move the daily digest to 14:00 UTC (lines 83–89); the runbook and the function header are stale, not the schedule. "Single chokepoint" and "a client without email cannot be modeled" were both overstated. "Every template carries STOP" was false. All accepted.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 · PRINCIPLES ============ -->
+<section class="slide ink" data-label="Principles">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act II · Six principles</span><span class="num">07</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Make texting a dependable way to finish work, not a funnel into software.</h2>
+      <div class="grid g3" style="margin-top:1.2rem">
+        <div class="card tight"><span class="kicker">1</span><h3>Consent in one word</h3><p>The designer records the agreement in twenty seconds. The person confirms one named job with one reply. Nothing else sends first.</p></div>
+        <div class="card tight"><span class="kicker">2</span><h3>Stable references</h3><p>Every prompt carries a short code that stays valid for the life of that decision. A late answer still lands on the right thing.</p></div>
+        <div class="card tight"><span class="kicker">3</span><h3>A person, always</h3><p>Every menu reserves a way out to a named human. One clarifying question at most. No dead ends, no loops.</p></div>
+        <div class="card tight"><span class="kicker">4</span><h3>Truthful receipts</h3><p>Sent, queued, deferred, saved, and failed are different words. Say the one that happened. Keep the draft when it did not.</p></div>
+        <div class="card tight"><span class="kicker">5</span><h3>Links that survive</h3><p>One link per message, on our domain, no login. A link that expired is replaced by replying, not by calling the studio.</p></div>
+        <div class="card tight"><span class="kicker">6</span><h3>Operational only</h3><p>Approvals, windows, deposits, day-of logistics. Never marketing. Client texting gets its own plainly worded consent at kickoff.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 · PHASE 0 FIX THE LOOP ============ -->
+<section class="slide wide" data-label="Fix the loop">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Phase 0 · Fix the loop before adding anything</span><span class="num">08</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Ten repairs, all inside code that already exists.</h2>
+      <p class="lede">None of these is a feature. Each one turns a defect from the previous two slides into a behavior a person can rely on. They ship together, before the pilot, behind the same flag.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:26%">Repair</th><th>What changes</th><th style="width:24%">Where</th></tr></thead>
+          <tbody>
+            <tr><td class="lead">YES confirms one job</td><td>The invite carries an engagement code and the reply must echo it (<code>YES 24</code>). START never grants; it re-asks the jobs that were pending. Plain "stop texting me" revokes.</td><td><code>sms-inbound/pipeline.ts</code></td></tr>
+            <tr><td class="lead">Truthful receipts</td><td>No success text on RPC failure. Dispatch returns distinct sent, queued, deferred, failed. The composer keeps the draft on anything but sent or queued.</td><td><code>pipeline.ts</code> · <code>sms-dispatch</code> · <code>party-profile-sheet.tsx</code></td></tr>
+            <tr><td class="lead">Links survive routine sends</td><td>Mint only after the quiet-hours gate; reuse the active token when one exists. Store redacted bodies the way the Site Request path already does.</td><td><code>_shared/sms.ts</code></td></tr>
+            <tr><td class="lead">Stable reply references</td><td>Ref codes bound to project, prompt, and version. Digest menus keyed per project, not per phone.</td><td><code>field-daily/core.ts</code> · conversation state</td></tr>
+            <tr><td class="lead">Owned handoff</td><td>PERSON and unknown senders create an assigned review card and notify the designer. Automated prompts pause on that thread until it is resolved.</td><td><code>pipeline.ts</code> · <code>field-desk.tsx</code></td></tr>
+            <tr><td class="lead">Opt-out line everywhere</td><td>Rates, HELP, STOP on all six templates, within the segment budget.</td><td><code>00284</code> seed, new migration</td></tr>
+            <tr><td class="lead">Three delivery answers</td><td>Availability, arrival, and condition become separate effects. OK on a window never closes a receiving task.</td><td><code>field-parse.ts</code> · <code>apply_field_effect</code></td></tr>
+            <tr><td class="lead">Quiet hours on replies</td><td>TwiML replies pass the same window check as outbound; a reply outside the window is queued, and the keyword confirmations Twilio requires stay immediate.</td><td><code>pipeline.ts</code></td></tr>
+            <tr><td class="lead">Two-studio isolation test</td><td>Prove the shared-phone RLS fallback never shows one studio another studio's messages.</td><td><code>supabase/tests/rls</code></td></tr>
+            <tr><td class="lead">Idempotent triggers</td><td>One key per trigger, template, and contact so a retried cron or webhook never double-sends.</td><td><code>sendPartySms</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 · ACTIVATION CHECKLIST ============ -->
+<section class="slide wide" data-label="Activation">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Phase 0 · Activation checklist</span><span class="num">09</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Nothing text-first works until the rail is verified live.</h2>
+      <p class="lede">Seven blockers. Three are checks against production, not code. Two live in the website repository. Each has an owner and the evidence that made it a blocker.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:38%">Blocker</th><th>Evidence</th><th style="width:12%">Owner</th></tr></thead>
+          <tbody>
+            <tr><td class="lead">Verify Twilio secrets and 10DLC campaign status in Strata</td><td>Three documents disagree: the prod-ops skill says dormant, the backend-reality note says live on 2026-08-12, the runbook says inert until secrets exist.</td><td><span class="owner">Kody</span></td></tr>
+            <tr><td class="lead">Confirm migration 00432 is deployed</td><td>It moves the daily digest to 14:00 UTC and adds the TCPA audit columns. Runbook §5.7 and the field-daily header still describe the old schedule.</td><td><span class="owner">Kody</span></td></tr>
+            <tr><td class="lead">Apply the waitlist SMS consent migration; verify one real signup row</td><td>The website route falls back and drops consent when the columns are missing. The migration is written and uncommitted in patina-merged.</td><td><span class="owner">Kody</span></td></tr>
+            <tr><td class="lead">Restore the /signup footer link and sitemap entry</td><td>Both were added for Twilio reviewers in commit 890fdcd and are deleted in the Living Study working tree.</td><td><span class="owner">Website</span></td></tr>
+            <tr><td class="lead">Resubmit the A2P campaign; widen the description before any client send</td><td>Rejected with 30909 earlier; the call to action now exists on the site. The description covers contractor coordination only.</td><td><span class="owner">Kody</span></td></tr>
+            <tr><td class="lead">Ship the Call Sheet flag to production</td><td>Waves 1 to 5 on main since 2026-08-04. The roster is the consent ledger this deck depends on.</td><td><span class="owner">Portal</span></td></tr>
+            <tr><td class="lead">Wire the co-branded client invite send leg; add resend for client and SMS invites</td><td>The First Letter plan is specced and unbuilt. No resend exists for either invite today.</td><td><span class="owner">Portal</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="evidence" style="margin-top:1rem">
+        <span class="where">docs/field/sms-10dlc-runbook.md · supabase/migrations/00432 · PatinaWebsite src/app/api/founding/route.ts · docs/superpowers/plans/2026-09-08-first-letter-build.md</span>
+        <p class="read">The two website items are the only work in this deck that touches PatinaWebsite. Everything else lives in patina-merged.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · FLOW A · TRADE ONBOARDING ============ -->
+<section class="slide wide" data-label="Flow A · Trade">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Flow A · A trade, from add-person to first useful reply</span><span class="num">10</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Twenty seconds for the designer. One word for Sal.</h2>
+      <div class="grid g2" style="align-items:start">
+        <div class="journey">
+          <div class="jstep">
+            <span class="n">1</span>
+            <div>
+              <h3>Record the agreement <span class="tag newer">new control</span></h3>
+              <p>Leah adds Sal with a phone and taps "They said yes on the phone." Source, evidence, recorder, and disclosure version are filled in. Status becomes pending. The invite refuses to fire without all four, as it does today.</p>
+            </div>
+          </div>
+          <div class="jstep have">
+            <span class="n">2</span>
+            <div>
+              <h3>One confirmation, one job <span class="tag have">exists · repaired</span></h3>
+              <p>The reply code names this engagement only. No reply in 24 hours shows "Invited, no reply" on the chip and offers one resend, with a 24-hour floor.</p>
+            </div>
+          </div>
+          <div class="jstep have">
+            <span class="n">3</span>
+            <div>
+              <h3>First real assignment <span class="tag have">exists · repaired</span></h3>
+              <p>Not a tutorial. A stable ref, the two answers that matter, and the link. The effect lands through apply_field_effect and Leah sees a Post in the project record.</p>
+            </div>
+          </div>
+          <div class="evidence on" style="margin-top:10px">
+            <span class="where">useRecordPartySmsConsent · fc_dispatch_optin_invite · sms_optin_invite (00432 wording) · sendPartySms · apply_field_effect</span>
+            <p class="read">Reuses every piece. The new work is one control in add-person-sheet and party-profile-sheet, one resend RPC, and the reference code.</p>
+          </div>
+        </div>
+        <div class="phone">
+          <span class="who">Sal · installer · +1 608 555 0187</span>
+          <div class="bub">Hi Sal - you asked Middlewest Studio to send Maple St updates through Patina. Reply YES 24 to confirm (~1 msg/day). Msg&amp;data rates may apply. Reply HELP for help, STOP to opt out.</div>
+          <div class="bub me">YES 24</div>
+          <div class="bub">Middlewest Studio / Maple St: texts confirmed. No app needed. Reply PERSON for a person. STOP ends Patina texts.<span class="t">chip flips to Texting</span></div>
+          <div class="bub">Middlewest Studio / Maple St: Install vanity. Ref 24. Reply DONE 24 when finished, or PROBLEM 24 with a note. Details: <a>patina.cloud/f/…</a></div>
+          <div class="bub me">done 24</div>
+          <div class="bub">Maple St: vanity install marked done. Thanks Sal.<span class="t">only sent after the RPC succeeds</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · FLOW B · UPDATE, AMBIGUITY, PERSON ============ -->
+<section class="slide wide" data-label="Flow B · Update">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Flow B · A field update, an ambiguity, and a person</span><span class="num">11</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Resolve the reference before interpreting the words.</h2>
+      <div class="grid g2" style="align-items:start">
+        <div class="phone">
+          <span class="who">Sal · two active jobs on this phone</span>
+          <div class="bub me">cant get the valve till tuesday</div>
+          <div class="bub">Which job is this for? 1 Maple St, 2 Oak Ave. Reply 1 or 2.<span class="t">the original message is kept</span></div>
+          <div class="bub me">1</div>
+          <div class="bub">Maple St: valve delay noted until Tue. Leah will see it this morning.<span class="t">flag_blocker · Post created</span></div>
+          <div class="bub me">can I talk to someone</div>
+          <div class="bub">Handing this to Leah at Middlewest Studio. You'll hear back today.<span class="t">owned review card · automation paused</span></div>
+        </div>
+        <div>
+          <div class="card">
+            <span class="kicker">Keep the original</span>
+            <h3>The chooser carries the message through</h3>
+            <p class="small">The first text and any photo ride along with the project chooser. Nobody is asked to resend. This is how the pipeline's pending_body already works; the repair is to key it per project.</p>
+          </div>
+          <div class="card" style="margin-top:9px">
+            <span class="kicker">Confirm the exact saved result</span>
+            <h3>No receipt for a write that failed</h3>
+            <p class="small">A database failure produces no completion text. The message is preserved, the action is flagged, and the next step is stated: "Couldn't save that yet. Leah has it; you don't need to resend."</p>
+          </div>
+          <div class="card" style="margin-top:9px">
+            <span class="kicker">The person is a real person</span>
+            <h3>PERSON, confusion, frustration, or low confidence</h3>
+            <p class="small">Any of them creates a review card owned by the lead designer, with the transcript and an Apply, Reply, Resolve set. Automated reminders pause on that thread. The "today" promise is made only when staffing supports it.</p>
+          </div>
+          <div class="evidence on" style="margin-top:10px">
+            <span class="where">sms-inbound/pipeline.ts project chooser · needs_review · field-desk.tsx · sms-review-card.tsx</span>
+            <p class="read">The Desk card exists. Ownership, notification, and the pause are the new parts.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · FLOW C · INSTALL DAY ============ -->
+<section class="slide wide" data-label="Flow C · Install day">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Flow C · Install day</span><span class="num">12</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Evening before, morning of, mid-day, wrap.</h2>
+      <p class="lede">Four moments, each with at most three answers. The client's thread hears about the first one. The photo path already works.</p>
+      <div class="grid g4">
+        <div class="card">
+          <span class="kicker">Evening before · Site Card</span>
+          <div class="phone" style="margin:8px 0"><div class="bub" style="max-width:100%">Tomorrow 8am, 412 Maple St. Gate code 4471, park in the alley. Staging in the garage. Leah 608-555-0140. Ref 31.</div></div>
+          <p class="small">Address, access, time, and a human number. Nothing to reply to.</p>
+        </div>
+        <div class="card">
+          <span class="kicker">Morning of · three answers</span>
+          <div class="phone" style="margin:8px 0"><div class="bub" style="max-width:100%">Maple St today. Reply 1 On my way, 2 Running late, 3 Problem. Ref 31.</div><div class="bub me">1</div></div>
+          <p class="small">"1" timestamps departure and tells the client's thread the crew is on the way. "2" asks exactly one question: how many minutes.</p>
+        </div>
+        <div class="card">
+          <span class="kicker">Mid-day · photos</span>
+          <div class="phone" style="margin:8px 0"><div class="bub me">[photo] short one bracket</div><div class="bub" style="max-width:100%">Got the photo, filed to Maple St. Flagged "short one bracket" for Leah.</div></div>
+          <p class="small">Any picture lands in the project record with sender and time. Damage, short, missing, broken open a punch item.</p>
+        </div>
+        <div class="card">
+          <span class="kicker">Wrap · one word</span>
+          <div class="phone" style="margin:8px 0"><div class="bub" style="max-width:100%">Reply DONE 31 when you're wrapped. Anything left, PROBLEM 31.</div><div class="bub me">DONE 31</div></div>
+          <p class="small">Closes the visit and prompts the client walkthrough. The receiver's delivery confirmation stays a separate answer.</p>
+        </div>
+      </div>
+      <div class="evidence" style="margin-top:1rem">
+        <span class="where">new templates sms_site_card, sms_day_of · new effects arrival, delay · MMS ingest and flag words already in sms-inbound/pipeline.ts · scheduling via field-daily</span>
+        <p class="read">Threads PRD journey J6, translated to SMS. The RCS card version waits for Phase 3.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 · FLOW D · SOMETHING WENT WRONG ============ -->
+<section class="slide wide" data-label="Flow D · Wrong">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Flow D · Something went wrong</span><span class="num">13</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Every failure has a next step the person can take from the phone.</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:20%">What happened</th><th style="width:36%">What the person sees</th><th>What the system does</th></tr></thead>
+          <tbody>
+            <tr><td class="lead">STOP, or "stop texting me"</td><td>You're opted out of Patina project texts. Reply START to rejoin.</td><td>Phone-global suppression across every party row. Portal and email continue. START is a new consent event for the jobs that were asked, never a grant to the rest.</td></tr>
+            <tr><td class="lead">Link expired or revoked</td><td>Here's a fresh link for Maple St: patina.cloud/f/… (no login)</td><td>Any inbound from a consented party with no active link mints one and replies. Nobody calls the studio.</td></tr>
+            <tr><td class="lead">Wrong number</td><td>Sorry about that. No more texts to this number.</td><td>Reply WRONG, or an unknown number quoting a project, holds a review card. Never auto-consents. The designer fixes the number and resends once.</td></tr>
+            <tr><td class="lead">Angry or confused reply</td><td>Handing this to Leah at Middlewest Studio. You'll hear back today.</td><td>Automation pauses on the thread. Owned card with transcript. The promise is only made when staffing supports it.</td></tr>
+            <tr><td class="lead">Carrier filtered or failed</td><td>Nothing. The text never arrived.</td><td>The delivery callback records the error code. The designer's sheet says so in plain words and suggests a call.</td></tr>
+            <tr><td class="lead">Database failed on an effect</td><td>Couldn't save that yet. Leah has it; you don't need to resend.</td><td>No success receipt. Message preserved, action flagged, review card created and owned.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid g2" style="margin-top:1rem">
+        <div class="evidence on">
+          <span class="where">reduceConsent and STOP_WORDS in _shared/sms.ts and sms-inbound/pipeline.ts · create_field_link (00283) · sms-status/handler.ts error_code</span>
+          <p class="read">Opt-out, link minting, and error capture exist. Reply-to-renew and the WRONG hold are one pipeline branch each.</p>
+        </div>
+        <div class="evidence">
+          <span class="where">docs/field/sms-10dlc-runbook.md §3 · Advanced Opt-Out</span>
+          <p class="read">The runbook promises plain-language opt-out. The pipeline only honors the keyword list. The repair makes the runbook true.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 · FLOW E · HOMEOWNER FIRST LETTER ============ -->
+<section class="slide wide" data-label="Flow E · Homeowner">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Flow E · The homeowner's first letter, by text</span><span class="num">14</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>One page, no password, and it names the designer.</h2>
+      <div class="grid g2" style="align-items:start">
+        <div class="phone">
+          <span class="who">Priya · homeowner · Maple St</span>
+          <div class="bub">Leah at Middlewest Studio set up your Maple St page on Patina. Tap to see it, no password needed: <a>patina.cloud/h/…</a> Reply STOP to opt out, PERSON for a person.<span class="t">kickoff consent recorded first</span></div>
+          <div class="bub">Maple St: the delivery plan for the living room is ready. Can someone receive the sofa Thu 9 to 12? Reply 1 for yes, 2 for another time, or PERSON.</div>
+          <div class="bub me">1</div>
+          <div class="bub">Thu 9 to 12 it is. Sal's crew will text the morning of. Leah can see this too.</div>
+        </div>
+        <div>
+          <div class="card">
+            <span class="kicker">Phone or email, either is enough</span>
+            <h3>The client is added with whichever they gave</h3>
+            <p class="small">Consent for operational texts is its own plainly worded checkbox at kickoff, with a disclosure version stored. Email carries the co-branded letter when there is one. A text-only client still gets the full page.</p>
+          </div>
+          <div class="card" style="margin-top:9px">
+            <span class="kicker">The link signs them in</span>
+            <h3>Minted server-side, opens the client's one page</h3>
+            <p class="small">A full account stays optional. Nobody types a password to answer one question. The First Letter plan's ruling R6 already chose this; the text is a second carrier for the same link.</p>
+          </div>
+          <div class="card" style="margin-top:9px">
+            <span class="kicker">Vocabulary</span>
+            <h3>Words a homeowner never sees</h3>
+            <p class="small">No gate, task, dashboard, welcome, accept, collaborate, workspace, platform. Never the word AI. Escalation says "a person." The studio's name leads; "on Patina" follows.</p>
+          </div>
+          <div class="evidence on" style="margin-top:10px">
+            <span class="where">supabase/functions/client-invite (send leg unwired) · generateLink magiclink per first-letter ruling R6 · client_rep party kind · lens-4-voice.md blacklist</span>
+            <p class="read">The rail reaches a homeowner today through the client_rep kind. Identity, consent, copy, and authority are the missing pieces, not transport.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 · FLOW F · APPROVALS AND WINDOWS ============ -->
+<section class="slide wide" data-label="Flow F · Approvals">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · Flow F · Approvals and delivery windows by reply</span><span class="num">15</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>A casual yes approves a piece. It never signs a contract or spends money.</h2>
+      <div class="grid g2" style="align-items:start">
+        <div>
+          <span class="kicker vd">Selection ready</span>
+          <div class="phone" style="margin-top:8px">
+            <div class="bub">2 pieces ready for your yes: 1 Walnut credenza $4,200 · 2 Linen sofa $6,800. Reply 1, 2, or BOTH to approve; 0 to ask Leah. Photos and notes: <a>patina.cloud/h/…</a></div>
+            <div class="bub me">BOTH</div>
+            <div class="bub">2 of 2 approved. Leah will see it this morning.<span class="t">decision written with actor, time, and the version shown</span></div>
+          </div>
+          <p class="small" style="margin-top:8px">One batch per client per day. One gentle reminder after 72 hours, never two. A reply to an older batch answers that batch, not today's.</p>
+        </div>
+        <div>
+          <span class="kicker vd">Delivery window</span>
+          <div class="phone" style="margin-top:8px">
+            <div class="bub">The sofa reached the hub. Pick a window: 1 Thu 9 to 12 · 2 Thu 1 to 4 · 3 Fri 9 to 12 · 0 none of these work.</div>
+            <div class="bub me">3</div>
+            <div class="bub">Fri 9 to 12, locked in. We'll text the day before.<span class="t">availability only · receiver gets the existing confirmation</span></div>
+          </div>
+          <p class="small" style="margin-top:8px">Records availability only. Arrival and condition are separate answers on the day. Payments stay on the existing pay link; a text never moves money.</p>
+        </div>
+      </div>
+      <div class="evidence" style="margin-top:1rem">
+        <span class="where">new templates sms_selection_ready, sms_window_pick · new apply_client_effect RPC · reuses client_decisions, project schedule, sms_delivery_confirm · /pay/[token] unchanged</span>
+        <p class="read">Threads PRD journeys J3 and J4 as SMS twins. J5, the payment webview, is dropped in favor of the link that already works.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 · DIAGNOSTIC ============ -->
+<section class="slide wide" data-label="Diagnostic">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act III · The designer's side</span><span class="num">16</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>"Why didn't Sal get my text?" answered in one sentence.</h2>
+      <div class="grid g2" style="align-items:start">
+        <div class="mock">
+          <div class="mk-bar"><span class="mk-dots"><i></i><i></i><i></i></span><span class="mk-url">app.patina.cloud/projects/maple-st/people &nbsp;<b>› Sal Ortiz</b></span></div>
+          <div class="mk-page" style="padding:14px 16px">
+            <div class="rail" style="margin:0 0 8px"><div class="rail-head"><span class="rail-name">Consent</span><span class="rail-kind">granted</span></div><p>Texting since 12 Sep. Verbal, recorded by Leah, disclosure v2.</p></div>
+            <div class="rail" style="margin:0 0 8px"><div class="rail-head"><span class="rail-name">Last text</span><span class="rail-kind">deferred</span></div><p>Quiet hours. Sends at 8:00 am.</p></div>
+            <div class="rail" style="margin:0 0 8px"><div class="rail-head"><span class="rail-name">Before that</span><span class="rail-kind">delivered</span></div><p>9:12 am yesterday. No reply yet.</p></div>
+            <div class="rail" style="margin:0 0 8px"><div class="rail-head"><span class="rail-name">Link</span><span class="rail-kind">active</span></div><p>Expires 11 Dec. Opened twice.</p></div>
+            <div class="rail" style="margin:0"><div class="rail-head"><span class="rail-name">If it failed</span><span class="rail-kind ox">30007</span></div><p class="ox">Carrier blocked it. Try a call.</p></div>
+            <div style="display:flex;gap:8px;margin-top:12px"><span class="chip on">Resend once</span><span class="chip">Copy current link</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="card"><span class="kicker">Reads what already exists</span><h3>No new table</h3><p class="small">Consent columns, the last outbound row with its Twilio status and error code, the deferred flag, the active field link, and the shared notification ledger.</p></div>
+          <div class="card" style="margin-top:9px"><span class="kicker">Plain words, not codes</span><h3>30007 becomes "carrier blocked it"</h3><p class="small">A deferred row says when it will go. "Delivered" never claims "read." The sentence is generated from a small view, not composed in the component.</p></div>
+          <div class="card" style="margin-top:9px"><span class="kicker">Two buttons</span><h3>Resend once. Copy the link.</h3><p class="small">Nothing else on this card. Resend respects the 24-hour floor and the per-party send budget.</p></div>
+          <div class="evidence on" style="margin-top:10px">
+            <span class="where">sms_messages.twilio_status, error_code (00458) · notification_log provider_id · field_link_tokens · party-profile-sheet.tsx · new explain_sms_delivery view</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 · CONSENT ============ -->
+<section class="slide ink" data-label="Consent">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Consent, stated plainly</span><span class="num">17</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Permission is per job. Suppression is per phone.</h2>
+      <div class="grid g2" style="margin-top:1.2rem">
+        <div class="card tight"><span class="kicker">Scope</span><h3>Per engagement, never per rolodex card</h3><p>A sub who said yes on the Adams job has not agreed to texts about the Bell job. The studio rolodex deliberately carries no consent columns.</p></div>
+        <div class="card tight"><span class="kicker">Opt-out</span><h3>STOP wins across every row</h3><p>Opt-out suppresses the number everywhere. START is a fresh consent event for the jobs that were actually asked, never a grant to the rest.</p></div>
+        <div class="card tight"><span class="kicker">Evidence</span><h3>Four facts before the invite</h3><p>Source, verbatim disclosure version, who recorded it, and when. The invite refuses to fire without all four. Then the person confirms with one reply.</p></div>
+        <div class="card tight"><span class="kicker">Campaign</span><h3>Scope is a fact to check</h3><p>The registered campaign describes contractor coordination. Homeowner logistics need the description widened and resubmitted once, before the first client text. Marketing never rides this channel.</p></div>
+      </div>
+      <div class="evidence" style="margin-top:1rem">
+        <span class="where">supabase/migrations/00281 sms_consent_status · 00432 sms_consent_source, evidence, recorded_at, recorded_by, disclosure_version · 00417 studio_contacts comment · docs/field/sms-10dlc-runbook.md §2, §6</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 18 · ROBUSTNESS ============ -->
+<section class="slide wide" data-label="Robustness">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Robustness and the pilot's evidence</span><span class="num">18</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>The pilot passes when these eleven things are seen to happen, not assumed.</h2>
+      <div class="grid g2" style="align-items:start">
+        <div class="card">
+          <span class="kicker">Minimum pilot evidence</span>
+          <ul class="checklist">
+            <li><b>Two projects and two studios</b> sharing one contractor's phone</li>
+            <li><b>STOP</b>, then a new engagement is added</li>
+            <li><b>START</b> from a number with no prior consent</li>
+            <li>A reply with an <b>old ref code</b>, days late</li>
+            <li>A <b>database failure</b> mid-effect</li>
+            <li>A <b>duplicate inbound</b> message id from Twilio</li>
+            <li>A <b>stale or forwarded link</b></li>
+            <li>A <b>provider failure</b> with an error code</li>
+            <li>A <b>daylight-saving boundary</b> against quiet hours</li>
+            <li>An <b>unknown sender</b> and a wrong number</li>
+            <li>A <b>photo upload that drops</b> mid-way, on a flip phone and on mobile Safari</li>
+          </ul>
+        </div>
+        <div>
+          <div class="card"><span class="kicker">Already enforced in code</span><p class="small">Idempotency on the Twilio message id. Quiet hours with deferral. Phone-global opt-out. Media size and type limits. Parse confidence gates at 0.8 and 0.5.</p></div>
+          <div class="card" style="margin-top:9px"><span class="kicker">To add</span><p class="small">Idempotency per trigger and template. A per-party send budget of one recurring and three event texts a day; excess folds into the next digest. A dead-end detector: two unanswered prompts escalate to a person.</p></div>
+          <div class="card" style="margin-top:9px"><span class="kicker">Events to watch</span><p class="small"><code>sms_outbound_sent</code> exists. Add prompt answered, escalated, link renewed, consent recorded by source, delivery failed by error code.</p></div>
+          <div class="evidence" style="margin-top:10px">
+            <span class="where">docs/field/sms-10dlc-runbook.md §5 go-live smoke with SMS_DEV_MODE=redirect</span>
+            <p class="read">The smoke test is the harness. The eleven items are what it must show before the flag opens to a second project.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 19 · PHASING ============ -->
+<section class="slide wide" data-label="Phasing">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Phasing and gates</span><span class="num">19</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>SMS and one scoped page first. RCS only after the plain loop proves out.</h2>
+      <div class="grid g4" style="margin-top:1rem">
+        <div class="phase p4">
+          <span class="when">Phase 0</span>
+          <h3>Activate and repair</h3>
+          <p class="small">The ten repairs and the activation checklist. No new features.</p>
+          <p class="val">Gate: synthetic evidence, no live pilot; the two-studio isolation test is green.</p>
+        </div>
+        <div class="phase">
+          <span class="when">Phase 1</span>
+          <h3>Trades, robust</h3>
+          <p class="small">Quick consent capture, resend, reply-to-renew, day-of chips, the diagnostic, the cadence guard.</p>
+          <p class="val">Gate: synthetic evidence, no live pilot.</p>
+        </div>
+        <div class="phase p3">
+          <span class="when">Phase 2</span>
+          <h3>Homeowners by text</h3>
+          <p class="small">First letter by text, approvals and windows by reply, kickoff consent with a disclosure version.</p>
+          <p class="val">Gate: campaign description widened and approved; synthetic evidence, no live pilot.</p>
+        </div>
+        <div class="phase p2">
+          <span class="when">Phase 3</span>
+          <h3>Later</h3>
+          <p class="small">Contractor work reports by text, behind a flag, as proposals never payroll. RCS sizing only.</p>
+          <p class="val">Gate: RCS sizing only.</p>
+        </div>
+      </div>
+      <div class="note">
+        <span class="kicker">Dropped from the Threads PRD for now</span>
+        <p>RCS agent verification as a Phase 0 gate. A payment webview inside the thread, when the existing pay link already works. A separate ML sidecar, when the parser with confidence gates already exists. Its stable codes and human escape hatch stay.</p>
+      </div>
+      <div class="evidence" style="margin-top:10px"><span class="where">docs/prds/Threads/Patina-Threads-PRD-v1.md §5 phases · §6.5 tiers · §6.6 SMS twins</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 20 · DECISIONS ============ -->
+<section class="slide wide" data-label="Decisions">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Five decisions for the owner</span><span class="num">20</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>Each one has a recommendation. None blocks Phase 0.</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:28%">Decision</th><th style="width:36%">Choice</th><th>Recommendation</th></tr></thead>
+          <tbody>
+            <tr><td class="lead">Whose name is on the text to a trade</td><td>"Patina" or the studio's name</td><td class="cy">Studio first, "through Patina" second, as the templates already do</td></tr>
+            <tr><td class="lead">How a client consents</td><td>Its own checkbox at kickoff, or folded into the engagement letter</td><td class="cy">Its own checkbox, with the disclosure version stored</td></tr>
+            <tr><td class="lead">Campaign shape</td><td>Widen the existing Low-Volume Mixed campaign, or register a second</td><td class="cy">Widen the description and resubmit once</td></tr>
+            <tr><td class="lead">Pilot project</td><td>Which live project, which studio</td><td class="cy">One with a contractor who already texts the designer daily</td></tr>
+            <tr><td class="lead">Text-only clients</td><td>Allow a client with a phone and no email, or keep email required</td><td class="cy">Allow it; email becomes optional on the client branch of add-person</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="evidence" style="margin-top:1rem"><span class="where">Carries Threads PRD open questions OQ7, OQ8 and Call Sheet ruling R3 (GC reach ceiling)</span><p class="read">R3 resolves as: field link forever for trades. GC accounts are not on this roadmap.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 21 · NOT BUILDING ============ -->
+<section class="slide ink" data-label="Boundaries">
+  <div class="inner">
+    <div class="gutter"><span class="eyebrow">Act IV · Boundaries</span><span class="num">21</span><span class="tick"></span></div>
+    <div class="main">
+      <h2>What we are not building.</h2>
+      <div class="grid g2" style="margin-top:1.2rem">
+        <div class="card tight"><h3>A vendor portal or trade accounts</h3><p>Field links and texts already reach the people who need reaching. Asking a sub to adopt our software is the failure we are designing around.</p></div>
+        <div class="card tight"><h3>A marketing channel</h3><p>The campaign is operational. Referrals, promotions, and re-engagement would need separate consent and put the registration at risk.</p></div>
+        <div class="card tight"><h3>A second inbox for the designer</h3><p>Outcomes land in the party sheet, the Desk, and the project record that already exist. No new place to check.</p></div>
+        <div class="card tight"><h3>A conversationalist</h3><p>The thread never argues, negotiates, or offers taste. Structured first, interpreted second, a person always.</p></div>
+      </div>
+      <div class="quote" style="margin-top:1.4rem">
+        <p>The ask: approve Phase 0 as the next ticket set, use synthetic evidence with no live pilot, and limit RCS to sizing only.</p>
+        <span class="attr">Where this lands</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /#deck -->
+
+<div id="chrome">
+  <span id="counter"><b>01</b> / 21</span>
+  <button class="navbtn" id="prev" type="button" aria-label="Previous slide">&#8592;</button>
+  <button class="navbtn" id="next" type="button" aria-label="Next slide">&#8594;</button>
+  <button id="themebtn" type="button" aria-label="Toggle colour theme">Theme</button>
+</div>
+<div id="hint">← → or space · P to print</div>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var current = 0;
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+  function setCurrent(i){
+    current = Math.max(0, Math.min(slides.length - 1, i));
+    counter.innerHTML = '<b>' + pad(current + 1) + '</b> / ' + slides.length;
+    progress.style.width = (((current + 1) / slides.length) * 100) + '%';
+  }
+
+  function go(i){
+    var t = Math.max(0, Math.min(slides.length - 1, i));
+    /* measured against the container, so it holds whatever the offsetParent is */
+    deck.scrollTop = deck.scrollTop + slides[t].getBoundingClientRect().top;
+    slides[t].classList.add('seen');
+    setCurrent(t);
+  }
+
+  /* which slide is showing */
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){
+          e.target.classList.add('seen');
+          if (e.intersectionRatio > 0.5) setCurrent(slides.indexOf(e.target));
+        }
+      });
+    }, { threshold: [0.12, 0.55] });
+    slides.forEach(function(s){ io.observe(s); });
+  } else {
+    slides.forEach(function(s){ s.classList.add('seen'); });
+  }
+
+  deck.addEventListener('scroll', function(){
+    /* fallback tracking for browsers where ratios are coarse */
+    var mid = deck.scrollTop + deck.clientHeight * 0.4;
+    for (var i = 0; i < slides.length; i++){
+      if (slides[i].offsetTop <= mid) setCurrent(i);
+    }
+  }, { passive: true });
+
+  document.getElementById('prev').addEventListener('click', function(){ go(current - 1); });
+  document.getElementById('next').addEventListener('click', function(){ go(current + 1); });
+
+  document.addEventListener('keydown', function(e){
+    var tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    switch (e.key){
+      case 'ArrowRight': case 'PageDown': go(current + 1); e.preventDefault(); break;
+      case 'ArrowLeft':  case 'PageUp':   go(current - 1); e.preventDefault(); break;
+      case ' ': go(current + (e.shiftKey ? -1 : 1)); e.preventDefault(); break;
+      case 'Home': go(0); e.preventDefault(); break;
+      case 'End': go(slides.length - 1); e.preventDefault(); break;
+      case 'p': case 'P': window.print(); break;
+    }
+  });
+
+  /* theme: auto → light → dark → auto */
+  var root = document.documentElement;
+  var btn = document.getElementById('themebtn');
+  var order = ['auto','light','dark'];
+  var label = { auto: 'Theme', light: 'Light', dark: 'Dark' };
+  var stored = null;
+  try { stored = window.localStorage.getItem('patina-callsheet-theme'); } catch (err) {}
+  if (stored && order.indexOf(stored) > -1){ root.setAttribute('data-theme', stored); btn.textContent = label[stored]; }
+  btn.addEventListener('click', function(){
+    var now = root.getAttribute('data-theme') || 'auto';
+    var nextTheme = order[(order.indexOf(now) + 1) % order.length];
+    root.setAttribute('data-theme', nextTheme);
+    btn.textContent = label[nextTheme];
+    try { window.localStorage.setItem('patina-callsheet-theme', nextTheme); } catch (err) {}
+  });
+
+  setCurrent(0);
+})();
+</script>
+
+</body>
+</html>
