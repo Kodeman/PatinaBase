@@ -146,6 +146,24 @@ export async function applyUnsubscribeToken(
  * here: an address has no per-category preference to set, so the stop is the
  * whole mailbox. The outcome says so through `scope: 'address'` rather than
  * letting the narrow type stand as a description of the write.
+ *
+ * AND THE STOP REACHES THE OTHER LEDGER (W4 r12 MAJOR-2). `campaign-dispatch`
+ * is a branch of the email rail that never asks the channel gate: it posts
+ * straight to Resend's batch endpoint and picks its audience from `profiles`
+ * on one column, `email_suppressed`. For a bounce or a complaint the two
+ * ledgers stay in step because `resend-webhook` writes both from the same
+ * event. The unsubscribe rail was where they parted: an address that is BOTH a
+ * typed channel and a Patina account — a trade who later signed up, a studio
+ * member who is also a firm's AP contact — could click the List-Unsubscribe
+ * link in an account-less letter, be recorded `unsubscribed` address-wide, and
+ * still be mailed by the next campaign. So the same click suppresses the
+ * profile carrying that address, exactly as a hard bounce does.
+ *
+ * The match is `eq`, not `ilike`: 00593 normalises an email channel's `value`
+ * to `lower(btrim(...))` on write, and `ilike` would read `_` and `%` in a
+ * perfectly ordinary address as wildcards and stop mailboxes nobody clicked
+ * from. A profile whose stored email is not lower-cased is therefore missed
+ * rather than a stranger's suppressed.
  */
 async function applyChannelUnsubscribe(
   supabase: SupabaseClient,
@@ -176,6 +194,25 @@ async function applyChannelUnsubscribe(
 
   if (updateError) {
     return { ok: false, status: 'error', message: updateError.message, type, scope: 'address' };
+  }
+
+  // The second ledger. A failure here is reported as an error rather than
+  // swallowed: the channel write is idempotent, the one-click endpoint answers
+  // 500, and a retry finishes the stop — which is the honest outcome when one
+  // rail can still send to a mailbox that said stop.
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update({ email_suppressed: true, email_suppressed_at: new Date().toISOString() })
+    .eq('email', channel.value);
+
+  if (profileError) {
+    return {
+      ok: false,
+      status: 'error',
+      message: profileError.message,
+      type,
+      scope: 'address',
+    };
   }
 
   // `type` rides along for the log and for the caller that wants to know which

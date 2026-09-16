@@ -62,6 +62,10 @@
 --     called from an anonymous edge request and has no session to dispatch on.
 --     The row shape is 00572's, verbatim.
 --
+-- AND THE BUCKETS ARE SWEPT (W4 r12 MAJOR-1). 00427's table shape came with a
+-- cron broom and this file took only the table; §3b schedules the broom, since
+-- the key space is caller-chosen and the door is anonymous.
+--
 -- Lineage: paperwork_link_tokens, paperwork_link_rate_limits,
 -- mint_paperwork_link, revoke_paperwork_link, resolve_paperwork_link,
 -- record_inbound_compliance_document, confirm_inbound_document,
@@ -505,6 +509,54 @@ COMMENT ON FUNCTION public.paperwork_link_rate_limit_hit(text, text, integer) IS
   'to swallow as a pass. Deviation from spec §2, named in this file''s banner: '
   'the bucket is a function rather than a BEFORE INSERT trigger because the '
   'door has no per-attempt table to hang one on (00637).';
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- 3b. The broom (W4 r12 MAJOR-1)
+-- ───────────────────────────────────────────────────────────────────────────
+-- 00427's OTHER half, which this file took the table shape from and left
+-- behind. The key space stopped being bounded when the bucket stopped being an
+-- existence oracle (§3, W4 r11 MAJOR-2): every well-formed token that resolves
+-- to nothing live now gets its OWN permanent row, keyed by its hash, and none
+-- of those knocks is refused because the limit is per bucket. `ip:` is the same
+-- shape — the address is caller-written. The door is anonymous by design
+-- (verify_jwt = false, anon key, an unauthenticated /paperwork/[token]), so the
+-- writer here is the internet and the table grows with every stranger's guess.
+--
+-- One day is 00427's own horizon and far longer than the rolling minute the
+-- limiter reads (§3's ON CONFLICT), so no live bucket is ever swept out from
+-- under a caller: a row older than a day can only start a fresh window anyway.
+-- 23 past the hour keeps it clear of the QR broom at 17 past and the invoice
+-- attempt sweep at 17 past (00574/00636).
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+
+-- 00630:546-556's idiom: the unschedule is guarded by EXISTS, the schedule is
+-- NOT wrapped in an exception handler. A stack that cannot schedule the broom
+-- must fail the migration rather than apply the door with its only bound on an
+-- anonymously-written table silently absent.
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM cron.job WHERE jobname = 'paperwork-link-rate-limit-cleanup'
+  ) THEN
+    PERFORM cron.unschedule('paperwork-link-rate-limit-cleanup');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'paperwork-link-rate-limit-cleanup',
+  '23 * * * *',
+  $$DELETE FROM public.paperwork_link_rate_limits
+     WHERE updated_at < now() - interval '1 day';$$
+);
+
+-- The registry comment, carried forward from 00636 with this file's entry
+-- added. Documentation only: a stack without pg_cron must not fail the
+-- migration over a sentence.
+DO $$ BEGIN
+  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the authoritative registry. Everyone on the Job (00637): paperwork-link-rate-limit-cleanup at 23 past every hour -> DELETE FROM public.paperwork_link_rate_limits WHERE updated_at < now() - interval ''1 day'', 00427''s broom for the anonymous paperwork door''s buckets, whose key space is caller-chosen (ip: / tok:) and therefore unbounded without it (W4 r12 MAJOR-1); no job_runs row, the same as qr-auth-rate-limit-cleanup. Everyone on the Job (00630): compliance-document-expiry-sweep nightly at 06:00 UTC -> public.sweep_compliance_expiries(), writing one studio_compliance_notices row per (document, state, expires_on) as a gating compliance paper enters lapses_soon or lapses, plus one in_app notification_log row per owner/admin of the holding studio; history in job_runs. The Invoice, Standing Alone (00574): invoice-checkout-attempts-expire at 17 past every hour -> public.expire_stale_invoice_checkout_attempts(), expiring claimed/session_created Checkout attempts older than 24h and, since 00636, processing attempts older than 10 days so a stuck ACH row cannot hold ensure_invoice_link''s mint guard open forever, history in job_runs. The Decision, Delivered (00572): decision-reminders-hourly on the hour -> the decision-reminders edge function, replacing 00092''s decision-reminders-daily at 09:00 UTC so the per-recipient not-before-8am-local gate has an hour to release into; notification-digest-hourly at 20 past -> the notification-digest edge function, replacing 00278''s notification-digest-daily at 15:00 UTC for the same reason (the summary owes the same 8am-local, never-Sunday promise as the letter); client-push-window-release every 15 minutes -> public.release_due_client_pushes(200), dispatching push envelopes held outside 8am-8pm local; decision-first-notice-retry-sweep every 30 minutes -> public.sweep_decision_first_notices(100), re-inviting decision-first-notice for a published approval that never got its letter. Studio onboarding (00553): expire-stale-workspace-invites-daily at 07:40 UTC. Rendered Room v2 (00491): dispatch-scan-modal-sweep every 5 minutes. Rendered Room v2 (00501): expire-stale-upload-intents-daily at 07:15 UTC. QR auth (00427): qr-auth-rate-limit-cleanup at 17 past every hour. Room View, Agent OS, BOH, Field Site Request, Mood Board, invoice/decision reminders, and earlier schedules are unchanged (see prior registry text / cron.job).'$C$;
+EXCEPTION
+  WHEN insufficient_privilege THEN NULL;
+  WHEN undefined_object THEN NULL;
+END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 4. compliance-documents bucket (spec §4)

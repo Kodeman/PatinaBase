@@ -190,6 +190,15 @@ Nothing outside `apps/client-portal/**` was modified.
   production build.
 
 
+- **The field-link "Paperwork" section** (spec §1, acceptance 1) — **deferred to W6, owner W6**
+  (W4 r12 MAJOR-3). The spec puts the door's primary entrance on the firm's own field link
+  (`apps/client-portal/src/app/field/[token]`): "A firm's paperwork contact, and only the
+  paperwork contact, sees the Paperwork section on their field link." It is not built —
+  `grep -rn "paperwork\|Paperwork" apps/client-portal/src/app/field/` returns zero hits, and
+  `resolve_field_link` is re-headed by none of 00635–00638. The door is still reachable
+  (a studio member mints on the company card and sends the link by hand), so the gap is the
+  arrival path that needs no studio member in the loop. Named in `build-sheet.md`'s
+  Owed / Blocked so the W6 brief carries it.
 - **The company card's inbound-queue band** (spec §6) — the studio side of the
   door: the "{N} document{s} waiting for your check" band, Confirm and Reject.
   Designer-portal work, outside this scope. `confirm_inbound_document` and

@@ -33,10 +33,20 @@ export function paperworkReceiptSentence(studioName: string): string {
   return `Received. ${studioName} will confirm it.`;
 }
 
+/** The open transition, said out loud (W4 r12 M-1). */
+export function paperworkOpenedSentence(title: string): string {
+  return `The ${title} form is open.`;
+}
+
 export function PaperworkSheet({ token, studioName, context }: PaperworkSheetProps) {
   const rows = useMemo(() => buildPaperworkRows(context), [context]);
   const [received, setReceived] = useState<Record<string, true>>({});
-  const [opened, setOpened] = useState<Record<string, true>>({});
+  /**
+   * Tri-state on purpose: absent means "whatever the row asks for" (a refused
+   * row and an expected paper with nothing on file open themselves), `false`
+   * means the firm closed one that had opened itself.
+   */
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
   /**
    * W4 r2 MAJOR-5 — THE OUTCOME OF THIS PAGE'S ONE ACT, SAID OUT LOUD.
    *
@@ -58,6 +68,32 @@ export function PaperworkSheet({ token, studioName, context }: PaperworkSheetPro
     receiptRefs.current[focusKey]?.focus();
     setFocusKey(null);
   }, [focusKey]);
+
+  /**
+   * W4 r12 M-1 — THE ACT THAT OPENS THE FORM KEEPS ITS PLACE.
+   *
+   * "Add {paper}" used to be the collapsed half of a ternary: pressing it
+   * unmounted the focused button, so focus fell to `document.body` and a
+   * keyboard reader was returned to the top of the page — on precisely the
+   * rows that matter, since a lapsed or refused paper is the one this page
+   * exists for. It carried no `aria-expanded` and no `aria-controls` either,
+   * and nothing was announced. The room already ruled this class twice in
+   * this wave (`roster/seat-window-band.tsx`, `threshold/letterbox.tsx`): the
+   * trigger keeps its place with `aria-expanded`, the panel is an
+   * always-present `<div id hidden={!open}>`, the reader is moved into what
+   * opened, and one polite sentence says so.
+   */
+  const [focusFormKey, setFocusFormKey] = useState<string | null>(null);
+  const formPanels = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (!focusFormKey) return;
+    const panel = formPanels.current[focusFormKey];
+    panel
+      ?.querySelector<HTMLElement>('input, select, textarea, button, [href]')
+      ?.focus();
+    setFocusFormKey(null);
+  }, [focusFormKey]);
 
   const receiptSentence = paperworkReceiptSentence(studioName);
 
@@ -95,7 +131,10 @@ export function PaperworkSheet({ token, studioName, context }: PaperworkSheetPro
         // already moved it to awaiting_check, so it prints the receipt, takes
         // the focus and closes its form (W4 r9 M-1).
         const isReceived = sentThisVisit || row.awaitingCheck;
-        const isOpen = opened[row.key] === true || (row.openByDefault && !isReceived);
+        const isOpen = opened[row.key] ?? (row.openByDefault && !isReceived);
+        // `other_named:roof warranty` is a row key and not an id, so the panel
+        // slugs it the way the form slugs its field ids.
+        const formId = `paperwork-form-${row.key.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
 
         return (
           <article
@@ -138,30 +177,47 @@ export function PaperworkSheet({ token, studioName, context }: PaperworkSheetPro
               </p>
             )}
 
-            {isOpen ? (
-              <PaperworkUploadForm
-                token={token}
-                // The row's own key, not its doc type: two `other_named` rows
-                // share a type and must not share their field ids (W4 r4).
-                fieldPrefix={row.key}
-                docType={row.docType}
-                docLabel={row.docLabel}
-                title={row.title}
-                uploadOnly={row.uploadOnly}
-                expiryRequired={row.expiryRequired}
-                onReceived={() => markReceived(row.key)}
-              />
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="mt-2 min-h-[44px]"
-                onClick={() => setOpened((prior) => ({ ...prior, [row.key]: true }))}
-              >
-                Add {row.title}
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2 min-h-[44px]"
+              aria-expanded={isOpen}
+              aria-controls={formId}
+              onClick={() => {
+                const next = !isOpen;
+                setOpened((prior) => ({ ...prior, [row.key]: next }));
+                setAnnouncement(next ? paperworkOpenedSentence(row.title) : '');
+                // The close needs no focus move: the trigger the firm pressed
+                // is still under its finger.
+                if (next) setFocusFormKey(row.key);
+              }}
+            >
+              Add {row.title}
+            </Button>
+
+            <div
+              id={formId}
+              hidden={!isOpen}
+              ref={(node) => {
+                formPanels.current[row.key] = node;
+              }}
+            >
+              {isOpen && (
+                <PaperworkUploadForm
+                  token={token}
+                  // The row's own key, not its doc type: two `other_named` rows
+                  // share a type and must not share their field ids (W4 r4).
+                  fieldPrefix={row.key}
+                  docType={row.docType}
+                  docLabel={row.docLabel}
+                  title={row.title}
+                  uploadOnly={row.uploadOnly}
+                  expiryRequired={row.expiryRequired}
+                  onReceived={() => markReceived(row.key)}
+                />
+              )}
+            </div>
           </article>
         );
       })}

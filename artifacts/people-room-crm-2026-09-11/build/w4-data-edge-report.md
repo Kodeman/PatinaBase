@@ -218,6 +218,14 @@ decision-resolved-notify  invoice-check-intent      proposal-nudge            st
   round-1 finding named it, so it is left standing and recorded.
 - **The `/paperwork/[token]` page** (spec §3) and the company card's inbound-queue band
   (spec §6) — portal work, W6.
+- **The field-link "Paperwork" section** (spec §1, acceptance 1) — **deferred to W6, owner W6**
+  (W4 r12 MAJOR-3). The spec's primary entrance is a Paperwork section on the firm's own field
+  link, gated on the seat's `is_paperwork_contact`. Nothing in W4 builds it: the route carries
+  no hit for "paperwork" across its eleven files, `resolve_field_link` is re-headed by none of
+  00635–00638, and `is_paperwork_contact` reaches no field-link reader. A studio member can
+  still mint a link on the company card and send it by hand, so the door works; the
+  studio-member-free arrival path is what is owed. Also recorded in `w4-paperwork-report.md` §7
+  and `build-sheet.md`'s Owed / Blocked.
 - **`flushDeferredMessages` writes no out touch.** The brief named `sendPartySms`; the flush is a
   second send path and was left alone rather than widened unasked.
 - **`proposal-send` writes no out touch either.** It calls `prepareCompliantEmail` +

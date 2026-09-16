@@ -1760,6 +1760,63 @@ BEGIN
   RAISE NOTICE '15. W4 r11 MAJOR-2 — the paperwork bucket tells no one whether a token was ever minted: a dead token reaches no link bucket, a dead and an unminted token share one key shape and one answer, junk knocks cannot spend a shared bucket, and the per-token limit still bites at 20: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 16. W4 r12 MAJOR-1 — THE BUCKETS ARE SWEPT
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- Block 15's fix bought the door its silence by giving the key space to the
+-- caller: every well-formed token that resolves to nothing live gets its own
+-- permanent row, and none of those knocks is refused. 00637 took 00427's table
+-- and left 00427's broom behind, so nothing on the books ever removed them and
+-- the writer is the internet (verify_jwt = false, anon key).
+--
+-- This block asserts the broom exists, is scheduled, and — by running the
+-- scheduled command text itself rather than a copy of it — removes exactly the
+-- rows older than a day and no live bucket.
+DO $$
+DECLARE
+  v_command text;
+  v_schedule text;
+BEGIN
+  SELECT j.command, j.schedule INTO v_command, v_schedule
+  FROM cron.job j
+  WHERE j.jobname = 'paperwork-link-rate-limit-cleanup';
+
+  IF v_command IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 16 FAIL (a): no paperwork-link-rate-limit-cleanup job is scheduled';
+  END IF;
+  IF v_schedule <> '23 * * * *' THEN
+    RAISE EXCEPTION 'BLOCK 16 FAIL (b): the broom runs on % rather than 23 past the hour', v_schedule;
+  END IF;
+  IF v_command NOT ILIKE '%paperwork_link_rate_limits%' THEN
+    RAISE EXCEPTION 'BLOCK 16 FAIL (c): the broom does not name the table it exists to sweep: %', v_command;
+  END IF;
+
+  -- One bucket a caller is spending right now, one a stranger left yesterday.
+  DELETE FROM public.paperwork_link_rate_limits;
+  INSERT INTO public.paperwork_link_rate_limits
+    (bucket_key, window_started_at, attempt_count, updated_at)
+  VALUES
+    ('tok:live', now(), 3, now()),
+    ('tok:stale', now() - interval '2 days', 1, now() - interval '2 days');
+
+  EXECUTE v_command;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.paperwork_link_rate_limits WHERE bucket_key = 'tok:live'
+  ) THEN
+    RAISE EXCEPTION 'BLOCK 16 FAIL (d): the broom swept a live bucket out from under its caller';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.paperwork_link_rate_limits WHERE bucket_key = 'tok:stale'
+  ) THEN
+    RAISE EXCEPTION 'BLOCK 16 FAIL (e): a day-old bucket survived the broom';
+  END IF;
+
+  DELETE FROM public.paperwork_link_rate_limits;
+  RAISE NOTICE '16. W4 r12 MAJOR-1 — the anonymous door''s buckets are swept: the broom is scheduled at 23 past, it names its own table, and running its own command text removes the day-old row while the live one stands: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W4 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

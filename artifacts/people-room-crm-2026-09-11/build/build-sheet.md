@@ -65,6 +65,20 @@ Bootstrap date: 2026-09-11
 
 ## Owed / Blocked
 
+- **DEFERRED TO W6 — the field-link "Paperwork" section (upload-door-spec §1 / acceptance 1).**
+  `upload-door-spec.md` §1 puts the door's primary entrance on the firm's own field link
+  (`apps/client-portal/src/app/field/[token]`), and §9 acceptance 1 reads "A firm's paperwork
+  contact, and only the paperwork contact, sees the Paperwork section on their field link."
+  W4 did not build it: `grep -rn "paperwork\|Paperwork" apps/client-portal/src/app/field/`
+  returns zero hits across all eleven files of that route, `resolve_field_link` is re-headed by
+  none of 00635–00638, and `is_paperwork_contact` reaches no field-link reader. The door is
+  still reachable — a studio member mints a link on the company card (`paperwork-link-act.tsx`)
+  and sends it by hand — so what is missing is the studio-member-free arrival path, not the
+  feature. **Owner: W6.** Build a Paperwork section on `/field/[token]` gated on the seat's
+  `is_paperwork_contact`, deep-linking to a token the RPC mints or resolves — or bring the
+  deferral to Kody as a ruling. Recorded here, in `w4-paperwork-report.md` §7 and in
+  `w4-data-edge-report.md` §9 so it is in somebody's head (W4 r12 MAJOR-3; eleven review rounds
+  passed with it in nobody's).
 - **Env file writes blocked at the tool-permission layer**, not the sandbox: `Write`, `cat > ...heredoc`, and `cp` all targeting any `.env*` path under `/Users/kody/Code/patina-merged/**` (including inside this worktree) were refused with "denied by your permission settings" / "Permission ... has been denied" even with `dangerouslyDisableSandbox: true`. This is a policy-level deny that a subagent cannot escalate past. Kody or an interactive session needs to either place the two `.env.local` files by hand or grant a one-time write exception for this worktree's `apps/{designer,client}-portal/.env.local`.
   - Designer-portal: copy `/Users/kody/Code/patina-merged/apps/designer-portal/.env.local` verbatim (its active `NEXT_PUBLIC_SUPABASE_URL` line already reads `http://127.0.0.1:54321`).
   - Client-portal: do **not** copy `/Users/kody/Code/patina-merged/apps/client-portal/.env.local` (its active line is Strata prod, `https://bkvcixdmuyejfzcijpdg.supabase.co`). Instead build a local-pointing file from the worktree's `apps/client-portal/.env.example` with:

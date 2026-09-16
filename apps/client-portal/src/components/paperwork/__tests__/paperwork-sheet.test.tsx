@@ -278,6 +278,73 @@ describe('PaperworkSheet', () => {
     expect(container.querySelector('[data-paperwork-receipt="w9"]')).toBeNull();
   });
 
+  /**
+   * W4 r12 M-1. "Add {paper}" was the collapsed half of a ternary: the press
+   * unmounted the focused button, focus fell to document.body, and nothing said
+   * a form had opened. The rows that carry the act are exactly the rows that
+   * matter — a lapsed COI always presents it.
+   */
+  it('keeps the Add act in place as a disclosure, and moves the reader into the form it opened', async () => {
+    const user = userEvent.setup();
+    renderSheet([
+      doc({ doc_type: 'coi_gl', state: 'lapsed', expires_on: '2026-03-31', blocks: [] }),
+      doc({ doc_type: 'w9', state: 'current', blocks: [], expires_on: null }),
+      doc({ doc_type: 'license', state: 'current', blocks: [], expires_on: '2028-01-01' }),
+    ]);
+
+    const add = screen.getByRole('button', { name: 'Add COI, general liability' });
+    expect(add).toHaveAttribute('aria-expanded', 'false');
+    const panelId = add.getAttribute('aria-controls');
+    expect(panelId).toBeTruthy();
+    // The panel the trigger names is in the document before it is opened: no
+    // dangling IDREF.
+    const panel = document.getElementById(panelId as string);
+    expect(panel).not.toBeNull();
+    expect(panel).toHaveAttribute('hidden');
+
+    await user.click(add);
+
+    // The trigger SURVIVED its own press.
+    expect(
+      screen.getByRole('button', { name: 'Add COI, general liability' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById(panelId as string)).not.toHaveAttribute('hidden');
+    expect(document.activeElement).not.toBe(document.body);
+    expect(
+      document.getElementById(panelId as string)?.contains(document.activeElement),
+    ).toBe(true);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'The COI, general liability form is open.',
+    );
+
+    // And it is a real disclosure: pressing it again closes the form it opened.
+    await user.click(screen.getByRole('button', { name: 'Add COI, general liability' }));
+    expect(
+      screen.getByRole('button', { name: 'Add COI, general liability' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('form-COI, general liability')).not.toBeInTheDocument();
+  });
+
+  it('gives a row that opens itself the same disclosure state, and lets the firm close it', async () => {
+    const user = userEvent.setup();
+    renderSheet([]);
+
+    const add = screen.getByRole('button', { name: 'Add W-9' });
+    expect(add).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('form-W-9')).toBeInTheDocument();
+    // Nothing happened yet, so nothing is announced.
+    expect(screen.getByRole('status')).toHaveTextContent('');
+
+    await user.click(add);
+    expect(screen.getByRole('button', { name: 'Add W-9' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.queryByTestId('form-W-9')).not.toBeInTheDocument();
+    // The other owed papers are untouched by one row's close.
+    expect(screen.getByTestId('form-Licence')).toBeInTheDocument();
+  });
+
   it('marks a waiver upload only', async () => {
     const user = userEvent.setup();
     renderSheet([

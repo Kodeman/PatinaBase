@@ -45,10 +45,18 @@ interface Recorded {
   }>;
   prefInserts: Array<Record<string, unknown>>;
   prefUpdates: Array<{ values: Record<string, unknown>; userId: string | null }>;
+  /** The second ledger campaign-dispatch reads (W4 r12 MAJOR-2). */
+  profileUpdates: Array<{ values: Record<string, unknown>; email: string | null }>;
 }
 
 function blank(): Recorded {
-  return { tables: [], channelUpdates: [], prefInserts: [], prefUpdates: [] };
+  return {
+    tables: [],
+    channelUpdates: [],
+    prefInserts: [],
+    prefUpdates: [],
+    profileUpdates: [],
+  };
 }
 
 /**
@@ -59,7 +67,11 @@ function blank(): Recorded {
 function fakeClient(
   channels: ChannelRow[],
   recorded: Recorded,
-  opts: { prefRowExists?: boolean; channelReadError?: string } = {},
+  opts: {
+    prefRowExists?: boolean;
+    channelReadError?: string;
+    profileUpdateError?: string;
+  } = {},
 ): SupabaseClient {
   return {
     from(table: string) {
@@ -120,6 +132,28 @@ function fakeClient(
               },
             };
             return q;
+          },
+        } as never;
+      }
+      if (table === 'profiles') {
+        return {
+          update(values: Record<string, unknown>) {
+            return {
+              // Recorded by column, like every other filter here: a write that
+              // moved to another predicate fails by name rather than passing.
+              eq: (col: string, v: string) => {
+                recorded.profileUpdates.push({
+                  values,
+                  email: col === 'email' ? v : null,
+                });
+                return Promise.resolve({
+                  data: null,
+                  error: opts.profileUpdateError
+                    ? { message: opts.profileUpdateError }
+                    : null,
+                });
+              },
+            };
           },
         } as never;
       }
@@ -247,9 +281,57 @@ describe('applyUnsubscribeToken — the channel branch (CRM-12 / D-4)', () => {
 
     await applyUnsubscribeToken(fakeClient(channels, recorded), token);
 
-    expect(recorded.tables).toEqual(['studio_contact_channels', 'studio_contact_channels']);
+    expect(recorded.tables).toEqual([
+      'studio_contact_channels',
+      'studio_contact_channels',
+      // The address ledger, not an account preference (W4 r12 MAJOR-2).
+      'profiles',
+    ]);
     expect(recorded.prefInserts).toHaveLength(0);
     expect(recorded.prefUpdates).toHaveLength(0);
+  });
+
+  /**
+   * W4 r12 MAJOR-2 — `campaign-dispatch` never asks the channel gate: it posts
+   * to Resend's batch endpoint and picks its audience from `profiles`
+   * .eq('email_suppressed', false). An address that is both a typed channel and
+   * a Patina account said stop here and was still mailed there.
+   */
+  it('suppresses the profile carrying the address, so the campaign rail stops too', async () => {
+    const channels: ChannelRow[] = [
+      { id: CHANNEL_ID, value: 'rosa@tcdrywall.test', channel_kind: 'email', status: 'active' },
+    ];
+    const recorded = blank();
+    const token = await generateUnsubscribeToken(`channel:${CHANNEL_ID}`, 'po_sent');
+
+    const outcome = await applyUnsubscribeToken(fakeClient(channels, recorded), token);
+
+    expect(outcome).toMatchObject({ ok: true, status: 'applied', scope: 'address' });
+    expect(recorded.profileUpdates).toHaveLength(1);
+    const write = recorded.profileUpdates[0];
+    expect(write.email).toBe('rosa@tcdrywall.test');
+    expect(write.values).toMatchObject({ email_suppressed: true });
+    expect(typeof write.values.email_suppressed_at).toBe('string');
+  });
+
+  it('answers error when the profile ledger cannot be written, rather than reporting a stop it did not finish', async () => {
+    const channels: ChannelRow[] = [
+      { id: CHANNEL_ID, value: 'rosa@tcdrywall.test', channel_kind: 'email', status: 'active' },
+    ];
+    const recorded = blank();
+    const token = await generateUnsubscribeToken(`channel:${CHANNEL_ID}`, 'all_marketing');
+
+    const outcome = await applyUnsubscribeToken(
+      fakeClient(channels, recorded, { profileUpdateError: 'connection refused' }),
+      token,
+    );
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.status).toBe('error');
+    expect(outcome.message).toBe('connection refused');
+    // The channel write still landed: this rail is idempotent and a retry
+    // finishes the stop.
+    expect(channels[0].status).toBe('unsubscribed');
   });
 
   it("answers 'invalid' for an unknown channel id, never 'error'", async () => {
