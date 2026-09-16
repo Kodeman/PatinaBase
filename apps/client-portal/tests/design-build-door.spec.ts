@@ -364,7 +364,20 @@ test.afterAll(async () => {
   }
 });
 
-test.describe('P13 — the deposit is offered after the signature, never before', () => {
+/**
+ * SERIAL, because the second test reads the first one's signature.
+ *
+ * `beforeAll` above mints a THROWAWAY household per worker (a fresh
+ * `randomUUID` account and its own agreement), and this config sets
+ * `fullyParallel: true` — so with more than one worker Playwright put these two
+ * tests in two workers, each ran `beforeAll`, and the second test signed in as a
+ * household that had never signed anything. No signature meant no deposit draw,
+ * no project-less invoice, and therefore no letterbox at all on the door
+ * (`letterbox-door.tsx` renders `Letterbox` only when `standing.length > 0`) —
+ * the `getByTestId('letterbox')` timeout. Serial pins them to one worker in
+ * order, which is what the second test's own opening sentence already assumed.
+ */
+test.describe.serial('P13 — the deposit is offered after the signature, never before', () => {
   test('signs through the turnkey arm, then offers the deposit', async ({ page }) => {
     await signIn(page, household.email);
     await page.goto('/#door', { waitUntil: 'domcontentloaded' });
@@ -500,16 +513,21 @@ test.describe('P13 — the deposit is offered after the signature, never before'
     await expect(page.getByText(/unavailable/i)).toHaveCount(0);
 
     // AND THE MONEY IS STILL REACHABLE. The deposit invoice is project-less
-    // exactly as the prime is, so it stands in this door's own letterbox with
-    // its own pay link — the persistent half of walk step 13. She is asked
-    // for nothing: it is a letter she may open, beside a record that is
-    // already complete.
+    // exactly as the prime is, so it stands in this door's own letterbox — the
+    // persistent half of walk step 13. She is asked for nothing: it is a
+    // letter she may open, beside a record that is already complete.
+    //
+    // THE TERMINAL ACT OPENS THE LETTER, NOT AN ADDRESS (W4 r2 MAJOR-3,
+    // `letterbox.tsx`): the act is an in-place disclosure `<button>` named for
+    // the balance, with `aria-expanded`/`aria-controls`, and no href at all.
+    // The `Open the invoice` link this asserted was retired by b287bac26 on
+    // 2026-09-08 — an ancestor of this branch's base — and the string appears
+    // nowhere in `apps/client-portal/src`, so the assertion could only ever
+    // fail. Same class as the F5 finding already ruled on `pay-link.spec.ts`.
     const letterbox = page.getByTestId('letterbox');
     await expect(letterbox).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole('link', { name: 'Open the invoice' })).toHaveAttribute(
-      'href',
-      /^\/pay\/[0-9a-f]{64}$/,
-    );
+    await expect(letterbox).toContainText('$8,413.40');
+    await expect(letterbox.getByRole('button', { name: 'Pay $8,413.40' })).toBeVisible();
 
     const { data: paper } = await service()
       .from('proposals')

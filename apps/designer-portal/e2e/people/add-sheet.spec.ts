@@ -114,12 +114,21 @@ test.describe("the add sheet writes the studio’s book", () => {
 
       await page.getByLabel("Project").selectOption({ index: 1 });
       await page.getByLabel("Full name").fill(name);
-      await page.getByLabel("Authority").fill("Signs money to $2,500");
 
-      // R-J — the sheet says plainly that nothing defaulted.
+      // R-J — the sheet says plainly that nothing defaulted, and the authority
+      // field OPENS FROM THE ACT beside that sentence (C20 / SPEC §5.5 #16):
+      // `add-person-sheet.tsx` keeps it inside `hidden={!authorityOpen}` so it
+      // never sits there looking pre-filled. The field is in the DOM the whole
+      // time, so reaching for it without pressing the act resolves the input
+      // and then waits out the timeout on visibility.
       await expect(
         page.getByText("Nothing defaulted from the agreement."),
       ).toBeVisible();
+      await page
+        .getByRole("button", { name: "Record the authority" })
+        .click();
+
+      await page.getByLabel("Authority").fill("Signs money to $2,500");
 
       await page.getByRole("button", { name: "Add to the roster" }).click();
 
@@ -151,7 +160,12 @@ test.describe("the add sheet writes the studio’s book", () => {
     await page.getByLabel("Project").selectOption({ index: 1 });
     await page.getByLabel("Full name").fill(uniqueName("No Trade"));
     await page.getByRole("button", { name: "Add to the roster" }).click();
-    await expect(page.getByRole("alert")).toHaveText(
+    // Scoped to the SHEET. Next's own `__next-route-announcer__` is a
+    // `<div role="alert">` living at the end of <body>, so an unscoped
+    // `getByRole('alert')` resolves to two elements and dies on strict mode.
+    // The sheet is `RoomSheet`'s `role="dialog"` panel, and the refusal this
+    // asserts is the `<p role="alert">` inside it.
+    await expect(page.getByRole("dialog").getByRole("alert")).toHaveText(
       "A sub or an installer needs the trade they work in.",
     );
   });

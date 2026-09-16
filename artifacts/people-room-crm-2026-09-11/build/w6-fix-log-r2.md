@@ -277,3 +277,175 @@ and the hours doorway) and **not touched** — flagged for whoever owns F5/the
 root-cause pass; both rebuilds were discarded along with the instrumentation
 before this log was written; nothing from either rebuild is committed. No
 migrations were touched by this pass.
+
+---
+
+# Six OURS reds — root causes
+
+Scope: the six Playwright failures classified OURS in
+`build/integration-report.md` §10. Every fix below is TEST-SIDE. No product
+source was changed: each ruled face these six reach for is present and
+correct, and the evidence for that is a green run of the same assertion
+against a clean stack.
+
+Environment for every run below: local prod builds (`next start`) on :3000 and
+:3002 against the local Supabase stack, after `pnpm supabase:reset`. The edge
+runtime was served from THIS checkout's `supabase/functions` with
+`EMAIL_DEV_MODE=dry_run` (`infra/runbooks/email-local-dev.md:10`), passed
+through `supabase functions serve --env-file` from a path outside the repo — no
+`.env` file was created anywhere in the tree.
+
+## 1 · `add-client-letter.spec.ts:47` — `getByLabel('A line for Dave')` timeout
+
+**Two layers, neither of them product.**
+
+*(a) The reported timeout was an env gap.* The whole letter block — the
+checkbox, `LetterLineField`, and the `ADD AND SEND THE LETTER` button label —
+lives behind `useFeatureFlag("client-invite-letter")`
+(`add-person-sheet.tsx:342-344`, consumed at `:1235-1274` and `:1767`).
+`use-feature-flag.ts` reads the static `process.env.NEXT_PUBLIC_FLAG_OVERRIDES`,
+which Next inlines AT BUILD TIME. `playwright.config.ts` declares that override
+in its own `webServer.env` (`:103-123`), and that block is not applied when a
+server is already running — so the re-run's hand-built bundle never carried the
+flag, the letter line never rendered, and the label could not resolve. Build
+with the flag and the field is there. Not a product or spec defect.
+
+*(b) With the flag on, a real spec defect surfaced underneath.* The confirmation
+sentence is printed TWICE by design — the Directory's paper notice
+(`directory-view.tsx:386`, `[data-directory-notice]`) and the Room's sr-only
+`role="status"` announcer beside it (`people-room.tsx:700-707`,
+`[data-people-announcer]`) — and the refusal THREE times (the sheet's own
+`<p role="alert">` at `add-person-sheet.tsx:1733-1740`, the toaster, and the
+toaster's announcer). Matched by text, `success.or(failure)` resolved to three
+elements and died on strict mode instead of reporting the send. Each assertion
+now names one element.
+
+**Fixed:** spec. Both assertions target a single element.
+
+*Note on the send itself.* Once the strict-mode death was removed, the spec did
+its job and reported the truth: `Letter send failed: "send_failed"` —
+`client-invite/index.ts:406`, the letter's Resend leg. The local edge runtime
+carries neither `RESEND_API_KEY` nor `EMAIL_DEV_MODE`, so `getResendKey()`
+(`_shared/send-email.ts:243-244`) throws. That is a local-stack gap, not a
+defect: with `EMAIL_DEV_MODE=dry_run` the test passes, and every assertion stays
+meaningful because the `client_invitations` snapshot row is written BEFORE the
+send (`:394`) and Mailpit is asserted empty either way.
+
+## 2 · `add-client-letter.spec.ts:115` — 'Send them the letter' uncheck timeout
+
+Same env gap as item 1(a) — the checkbox is inside the same flagged block — and
+the same duplicated-sentence problem on the assertion that follows: the
+confirmation matched both the paper notice and the sr-only announcer.
+
+**Fixed:** spec. The assertion names `[data-directory-notice]`.
+
+## 3 · `add-sheet.spec.ts:103` — `getByLabel('Authority')` timeout
+
+**Test-authoring, exactly as W6 QA F7 judged it.** R-J / SPEC §5.5 #16: the
+authority field OPENS FROM THE ACT beside "Nothing defaulted from the
+agreement.", so it never sits there looking pre-filled. `add-person-sheet.tsx`
+keeps it inside `<div id={authorityFieldId} hidden={!authorityOpen}>` (`:1556`).
+The input is in the DOM the whole time, so the locator resolved and then waited
+out the timeout on visibility. The spec skipped the act.
+
+**Fixed:** spec. It now asserts the sentence, clicks "Record the authority"
+(`:1538-1555`), then fills the field.
+
+## 4 · `add-sheet.spec.ts:145` — `getByRole('alert')` strict-mode collision
+
+Next's own `__next-route-announcer__` is a `<div role="alert">` at the end of
+`<body>`, so an unscoped `getByRole('alert')` resolves to two elements.
+
+**Fixed:** spec. Scoped to the sheet — `RoomSheet`'s `role="dialog"` panel —
+whose `<p role="alert">` is the refusal being asserted.
+
+## 5 · `person-card.spec.ts:74` — Frank's row lacks the mailto to Rosa
+
+**THE RULED FACE IS PRESENT. Neither the row nor the spec's expectation is
+wrong.** R-L / SPEC §5.1 #10 is implemented: `contact-rule-line.tsx` renders
+`<a data-contact-rule-route-email href="mailto:…">` whenever
+`contactRouteTarget()` (`lib/document/contact-rule.ts`) resolves an email, plus
+the `TelLink` for the office phone. The assertion at `:74` goes green against a
+clean stack — verified serially and again in the 7-worker run below.
+
+What made it red is upstream of the assertion, in the spec's own `addSub`
+helper, and it is a **product finding worth recording even though it is not
+fixed here**:
+
+> Choosing the project fires `useProjectRecordedStudio`
+> (`use-coordination.ts:2332`, the `project_recorded_studio` RPC). CR5-1 mints
+> the person card only into the studio the job records —
+> `add-person-sheet.tsx:818`, `if (!chain.cardId && wantsCard &&
+> recordedStudioId)`. **That guard cannot tell "this job records no studio" from
+> "we have not heard back yet"**: `useQuery` gives `undefined` while loading and
+> `null` when resolved-none, and both are falsy. A submit that outruns the RPC
+> therefore writes the seat with NO CARD, NO CHANNELS and NO RULE, while the
+> sheet reports success and prints the CR5-1 `noBookClause` sentence (`:827`)
+> that was written for a settled fact.
+>
+> Measured, mid-run, against the DB: the seat lands as
+> `Rosa Delgado 7vjud | Okonkwo residence | studio_contact_id = NULL`, on a
+> project whose `project_recorded_studio()` **is** `b0000000-…-0001`. So the
+> project was right and the answer simply had not arrived. Precedent for the
+> missing discipline is in the same file: the letter block renders blank while
+> `letterLoading` is true (`:342-344`) rather than letting a still-loading read
+> decide the face.
+
+Also corrected while here: `addSub` picked its project with
+`selectOption({ index: 1 })`, and `useProjects` orders that list
+`updated_at DESC` (`use-projects.ts:130`) — so index 1 is "whichever project
+moved last", which changes under `fullyParallel` whenever another spec in the
+room writes. Only three of the eight seeded projects record a studio at all.
+
+**Fixed:** spec. The project is named, not indexed, and `addSub` waits for the
+in-flight resolver before filling the rest of the sheet.
+
+## 6 · `design-build-door.spec.ts:490` — `getByTestId('letterbox')` not visible
+
+**Two independent test defects; the product is correct under the rulings.**
+
+*(a) The file was order-dependent but not serial.* `beforeAll` (`:332`) mints a
+throwaway household per worker via `mintTurnkeyAgreement()` (`:355`), and the
+config sets `fullyParallel: true`. With more than one worker the two tests split
+across workers, each ran `beforeAll`, and the second test signed in as a
+household that had never signed anything — no signature, no deposit draw, no
+project-less invoice, and so no letterbox at all, because `letterbox-door.tsx:532`
+renders `Letterbox` only when `standing.length > 0`. Reproduced exactly:
+`Running 2 tests using 2 workers` → `getByTestId('letterbox')` element(s) not
+found; at `--workers=1` the same test cleared `:508` and failed one line later.
+
+*(b) The next line asserted a link name that no longer exists.* Under W4 r2
+MAJOR-3 the letterbox's terminal act is an in-place disclosure `<button>` named
+for the balance, with `aria-expanded`/`aria-controls` and no `href` at all
+(`letterbox.tsx`). `'Open the invoice'` was retired by `b287bac26` (2026-09-08,
+an ancestor of this branch's base) and appears nowhere in
+`apps/client-portal/src` — the same F5 class already ruled on `pay-link.spec.ts`.
+
+**Fixed:** spec, both halves — `test.describe.serial`, and the assertion
+retargeted to the letterbox's own `Pay $8,413.40` button, the literal shape
+`letterbox.test.tsx` already uses.
+
+## Out of scope — reported, not fixed
+
+`add-sheet.spec.ts:37` (task 1) fails on a clean reset and is NOT one of the
+six. Its `cardByName` is null for a different reason: the number it types,
+`(612) 555-0111`, is already on the SEEDED `studio_contacts` row
+`Dana Kowalski | dana@northgate-electric.com`, so 00626's
+`apply_party_rolodex_link_trg` auto-links the new seat to that seeded card
+rather than minting one — confirmed mid-run as
+`SEAT|Dana Kowalski 7mo1y|(612) 555-0111|d0e10000-…-011`, and confirmed to leak
+by `select sc.full_name, r.reason …` returning
+`Dana Kowalski | Text only. The email on file bounces. | {}` on the seeded card.
+Same F4-new class that `person-card.spec.ts`'s `mobileFor()` helper already
+solves for its own names.
+
+## Gates
+
+| Gate | Command | Result |
+|---|---|---|
+| Designer types | `pnpm --dir WT --filter @patina/designer-portal type-check` | **clean** |
+| Client types | `pnpm --dir WT --filter @patina/client-portal type-check` | **1 pre-existing error**, `.next/types/app/page.ts(37,29)` — generated, gitignored build output over `src/app/page.tsx`'s optional `props?`, authored 2026-09-07 in `7ff6c085d`; unrelated to this pass |
+| Edited specs | `tsc --noEmit` over `e2e/people/**` and `tests/design-build-door.spec.ts` | **clean** — both portals' `tsconfig.json` `exclude` `**/*.spec.ts`, so the portal type-check does not cover these files at all |
+| Targeted e2e, designer | 3 spec files, `--project=chromium`, prod build on :3000, after `supabase:reset` | **6 passed / 1 failed** — the failure is `add-sheet.spec.ts:37`, out of scope above |
+| Targeted e2e, client | `tests/design-build-door.spec.ts`, prod build on :3002 | **2 passed** |
+| Port hygiene | `lsof -nP -iTCP:3000 -sTCP:LISTEN` / `-iTCP:3002` after the pass | both empty |

@@ -51,7 +51,29 @@ async function addSub(
 ) {
   await page.getByRole("button", { name: "Add person" }).click();
   await page.getByRole("button", { name: "a sub" }).click();
-  await page.getByLabel("Project").selectOption({ index: 1 });
+  // NAMED, NEVER POSITIONAL. `useProjects` orders the option list
+  // `updated_at DESC` (use-projects.ts:130), so index 1 is "whichever project
+  // moved last" — it changes the moment any other spec in this room writes a
+  // seat, which under `fullyParallel` is constantly. Only three of the eight
+  // seeded projects record a studio at all, and a card can only be minted into
+  // the studio the job records (the next note), so the project this spec adds
+  // to has to be said out loud. The People fixture's own project records one
+  // and holds the seats these assertions live beside.
+  await page.getByLabel("Project").selectOption({ label: "Okonkwo residence" });
+  // AND THEN WAIT FOR THE STUDIO TO COME BACK, BEFORE TOUCHING ANYTHING ELSE.
+  // Choosing the project fires `useProjectRecordedStudio` (the
+  // `project_recorded_studio` RPC), and CR5-1 mints the person card ONLY into
+  // the studio the job records: `add-person-sheet.tsx:818` reads
+  // `if (!chain.cardId && wantsCard && recordedStudioId)`. That guard cannot
+  // tell "this job records no studio" from "we have not heard back yet" — both
+  // are falsy — so a submit that outruns the RPC writes the seat with NO CARD,
+  // NO CHANNELS and NO RULE, and `cardByName` below then polls against nothing.
+  // Measured: serially this spec passes, and under the three-worker parallel
+  // run the seat lands on "Okonkwo residence" (which DOES record studio
+  // b0000000-…-0001) carrying `studio_contact_id = NULL`. Reported as a product
+  // finding; the wait is what keeps this spec honest about the row it is here
+  // to assert.
+  await page.waitForLoadState("networkidle");
   await page.getByLabel("Full name").fill(name);
   // The Add sheet stands OVER the Directory, whose trade filter is a
   // `role="group"` named "Narrow by trade". `getByLabel` matches a substring by

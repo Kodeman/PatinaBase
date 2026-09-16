@@ -57,15 +57,23 @@ test('a letter goes to a new client, and only one', async ({ authenticatedPage: 
   await page.getByLabel('A line for Dave').fill('Dave — the drawings are in.');
   await page.getByRole('button', { name: 'ADD AND SEND THE LETTER' }).click();
 
-  const success = page.getByText(
-    `Dave Okonkwo is on your roster. Your letter is on its way to ${email}.`,
-  );
-  const failure = page.getByText(/could not send the letter/i);
+  // EVERY SENTENCE HERE IS PRINTED MORE THAN ONCE, BY DESIGN, so each assertion
+  // names one element rather than matching text across the page. The
+  // confirmation is the Directory's paper notice (directory-view.tsx
+  // `data-directory-notice`) AND the Room's one sr-only `role="status"`
+  // announcer beside it (people-room.tsx `data-people-announcer`); the refusal
+  // is the Add sheet's own `role="alert"`, the toaster, and the toaster's
+  // announcer — three. Matched by text, `success.or(failure)` died on strict
+  // mode instead of reporting the send.
+  const success = page.locator('[data-directory-notice]');
+  const failure = page.getByRole('dialog').getByRole('alert');
   await expect(success.or(failure)).toBeVisible({ timeout: 20_000 });
   if (await failure.isVisible()) {
     throw new Error(`Letter send failed: "${await failure.textContent()}"`);
   }
-  await expect(success).toBeVisible();
+  await expect(success).toHaveText(
+    `Dave Okonkwo is on your roster. Your letter is on its way to ${email}.`,
+  );
 
   // The row lands via the client-invite edge function before the fetch inside
   // sendTheLetter resolves and the UI paints its success line — poll rather
@@ -126,7 +134,11 @@ test('the roster still works with no letter, and nothing is sent', async ({
   await page.getByLabel('Send them the letter').uncheck();
   await page.getByRole('button', { name: 'ADD TO YOUR PEOPLE' }).click();
 
-  await expect(page.getByText(`${email} is on your roster. Nothing was sent.`)).toBeVisible();
+  // The Directory's paper notice, not the sentence — the Room's sr-only
+  // announcer carries the identical string (see the note in the test above).
+  await expect(page.locator('[data-directory-notice]')).toHaveText(
+    `${email} is on your roster. Nothing was sent.`,
+  );
   await expect.poll(async () => (await listMessagesTo(email)).length, { timeout: 8_000 }).toBe(0);
 
   const { count, error } = await adminDb
