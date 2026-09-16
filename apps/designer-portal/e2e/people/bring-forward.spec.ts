@@ -266,7 +266,20 @@ test("Put back clears the pick and writes nothing", async ({
 }) => {
   await openThePicker(page);
   await page.getByLabel("Search the rolodex").fill("Lindqvist");
-  await page.getByRole("checkbox", { name: /Dana Kowalski/ }).click();
+  /**
+   * ERIN SATO, NOT DANA KOWALSKI — THE ACT ROW COUNTS *FRESH* PICKS.
+   *
+   * Both tests in this file share one `beforeAll` project, and Playwright runs
+   * a file's tests in order inside one worker at `--workers=1`. Task 5 above
+   * seats Dana on that project, so a second pick of her is `pickedSplit.seated`
+   * and `bringForwardActLabel(pickedSplit.fresh.length)` (rolodex-picker.tsx,
+   * `bring-forward.ts:96`) correctly reads "Add to the roster" — with the
+   * consequence sentence "Dana Kowalski is already on the call sheet." beneath
+   * it. The product is right; the pick simply has to be someone task 5 left
+   * behind. Erin Sato is exactly that: she shares the Lindqvist history (R-BP,
+   * seed F-28) and task 5 asserts she is NOT ticked.
+   */
+  await page.getByRole("checkbox", { name: /Erin Sato/ }).click();
   await expect(
     page.getByRole("button", { name: "Add one to the roster" }),
   ).toBeVisible();
