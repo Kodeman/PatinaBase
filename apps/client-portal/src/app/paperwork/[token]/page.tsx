@@ -88,7 +88,10 @@ export default async function PaperworkPage({
   // `cf-connecting-ip` used to reach an `inet` parameter and raise 22P02,
   // which this branch then read as "within limit". A caller with no usable
   // address is bucketed by the link's own row id, which the RPC resolves from
-  // the token; an unreadable limiter is a refusal, not a pass.
+  // the token; an unreadable limiter is a refusal, not a pass. A token that
+  // resolves to no LIVE link — revoked, expired, or never minted — is bucketed
+  // by its own hash instead, so the limiter cannot be read as an answer to
+  // "was this token ever real?" (W4 r11 MAJOR-2).
   const callerIp = normalizeCallerIp(resolveClientIp(await headers()));
   const { data: withinLimit, error: limitError } = await admin.rpc(
     'paperwork_link_rate_limit_hit',

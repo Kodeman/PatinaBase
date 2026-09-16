@@ -1620,6 +1620,146 @@ BEGIN
   RAISE NOTICE '14. W4 r10 MAJOR-2 — the paperwork bucket is keyed by text and never raises on a caller-written address: a malformed header buckets by the link, an ip:port value buckets, a caller with nothing to key on lands in the shared bucket, and the limit still bites at 20: passed';
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 15. W4 r11 MAJOR-2 — THE BUCKET IS NOT AN EXISTENCE ORACLE FOR THE TOKEN
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- The first shape of the ladder was ip → link → one shared `anon` key, and the
+-- `link:` lookup carried NO liveness predicate. A revoked or expired token
+-- therefore still resolved to its own private bucket while everything
+-- unresolved shared `anon`. Probe P9: an address-less caller (which
+-- `cf-connecting-ip` and `x-forwarded-for` both allow, being caller-written)
+-- spent `anon` with twenty junk knocks, after which a 64-hex value that had
+-- never been minted answered 429 while a 64-hex value that had been minted and
+-- since died answered "within limit". That is precisely what upload-door-spec
+-- acceptance 4 forbids the door to say: "neither path reveals whether the
+-- token once existed."
+--
+-- Now: the `link:` branch carries the resolvers' own liveness predicate, and a
+-- well-formed token that resolves to no live link is bucketed by its OWN
+-- sha256 — the value already stored at rest. A dead token and a never-minted
+-- one get identical private buckets and identical answers, and no well-formed
+-- token can spend a bucket another caller depends on.
+DO $$
+DECLARE
+  v_live_id uuid;  v_live text;
+  v_dead_id uuid;  v_dead text;
+  v_exp_id  uuid;  v_exp  text;
+  v_unknown text := repeat('a', 64);
+  v_i       integer;
+  v_a       boolean;
+  v_b       boolean;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  -- One firm holds ONE live door (R-AF), so a re-mint revokes the first
+  -- address: that is how a genuinely revoked token is made here.
+  SELECT m.id, m.token INTO v_dead_id, v_dead
+    FROM public.mint_paperwork_link('fa200000-0000-4000-8000-00000000000a') m;
+  SELECT m.id, m.token INTO v_live_id, v_live
+    FROM public.mint_paperwork_link('fa200000-0000-4000-8000-00000000000a') m;
+  -- The second firm has no engagement window, so the studio names the date
+  -- (R-AD); it is then time-travelled past, the one state a mint refuses.
+  SELECT m.id, m.token INTO v_exp_id, v_exp
+    FROM public.mint_paperwork_link('fa200000-0000-4000-8000-00000000000b',
+                                    now() + interval '30 days') m;
+  PERFORM pg_temp.reset_role();
+
+  UPDATE public.paperwork_link_tokens
+     SET expires_at = now() - interval '1 day'
+   WHERE id = v_exp_id;
+
+  IF (SELECT status FROM public.paperwork_link_tokens WHERE id = v_dead_id) <> 'revoked' THEN
+    RAISE EXCEPTION 'BLOCK 15 SETUP: the re-mint did not revoke the first address';
+  END IF;
+
+  -- (a) A LIVE token with no address still buckets by the link's own row id,
+  --     which is R-CA's requirement and is unchanged.
+  DELETE FROM public.paperwork_link_rate_limits;
+  PERFORM public.paperwork_link_rate_limit_hit(NULL, v_live);
+  IF NOT EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits
+                  WHERE bucket_key = 'link:' || v_live_id::text) THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (a): a live token did not bucket by its link';
+  END IF;
+
+  -- (b) A REVOKED token reaches no link bucket at all …
+  DELETE FROM public.paperwork_link_rate_limits;
+  PERFORM public.paperwork_link_rate_limit_hit(NULL, v_dead);
+  IF EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits
+              WHERE bucket_key = 'link:' || v_dead_id::text) THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (b): a revoked token still resolved to its own link bucket';
+  END IF;
+  -- … and lands in a bucket of its own hash instead.
+  IF NOT EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits
+                  WHERE bucket_key = 'tok:' || encode(extensions.digest(v_dead, 'sha256'), 'hex')) THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (c): a revoked token was not bucketed by its own hash';
+  END IF;
+
+  -- (d) An EXPIRED token reads exactly the same way.
+  DELETE FROM public.paperwork_link_rate_limits;
+  PERFORM public.paperwork_link_rate_limit_hit(NULL, v_exp);
+  IF EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits
+              WHERE bucket_key = 'link:' || v_exp_id::text) THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (d): an expired token still resolved to its own link bucket';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits
+                  WHERE bucket_key = 'tok:' || encode(extensions.digest(v_exp, 'sha256'), 'hex')) THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (e): an expired token was not bucketed by its own hash';
+  END IF;
+
+  -- (f) A never-minted token takes the same key shape — the two are one
+  --     population now, which is the whole point.
+  DELETE FROM public.paperwork_link_rate_limits;
+  PERFORM public.paperwork_link_rate_limit_hit(NULL, v_unknown);
+  IF NOT EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits
+                  WHERE bucket_key = 'tok:' || encode(extensions.digest(v_unknown, 'sha256'), 'hex')) THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (f): an unminted token was not bucketed by its own hash';
+  END IF;
+
+  -- (g) PROBE P9, REPLAYED. Twenty-one junk knocks from twenty-one distinct
+  --     never-minted tokens no longer saturate anything shared: each one has
+  --     its own bucket, so none is refused and `anon` is never touched.
+  DELETE FROM public.paperwork_link_rate_limits;
+  FOR v_i IN 1..21 LOOP
+    IF NOT public.paperwork_link_rate_limit_hit(NULL, lpad(to_hex(v_i), 64, '0')) THEN
+      RAISE EXCEPTION 'BLOCK 15 FAIL (g): junk knock % was refused — a shared bucket is back', v_i;
+    END IF;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits WHERE bucket_key = 'anon') THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (h): a well-formed token fell into the shared anon bucket';
+  END IF;
+
+  -- (i) And after all that noise the two answers a watcher would compare are
+  --     the same answer. Under the old ladder this pair read false / true.
+  v_a := public.paperwork_link_rate_limit_hit(NULL, v_unknown);
+  v_b := public.paperwork_link_rate_limit_hit(NULL, v_dead);
+  IF v_a IS DISTINCT FROM v_b THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (i): an unminted token answered %, a dead one % — the door is an oracle', v_a, v_b;
+  END IF;
+
+  -- (j) The hash bucket is a real limiter, not a way around one: twenty knocks
+  --     on the dead token pass and the twenty-first is refused.
+  DELETE FROM public.paperwork_link_rate_limits;
+  FOR v_i IN 1..20 LOOP
+    IF NOT public.paperwork_link_rate_limit_hit(NULL, v_dead) THEN
+      RAISE EXCEPTION 'BLOCK 15 FAIL (j): attempt % of 20 on a hash bucket was refused', v_i;
+    END IF;
+  END LOOP;
+  IF public.paperwork_link_rate_limit_hit(NULL, v_dead) THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (k): the 21st attempt in the minute was allowed';
+  END IF;
+
+  -- (l) A caller presenting NO token at all still lands in the shared bucket —
+  --     a caller who can open nothing, and so can deny nothing to one who can.
+  DELETE FROM public.paperwork_link_rate_limits;
+  PERFORM public.paperwork_link_rate_limit_hit(NULL, NULL);
+  IF NOT EXISTS (SELECT 1 FROM public.paperwork_link_rate_limits WHERE bucket_key = 'anon') THEN
+    RAISE EXCEPTION 'BLOCK 15 FAIL (l): a caller with nothing to key on was left unbucketed';
+  END IF;
+
+  DELETE FROM public.paperwork_link_rate_limits;
+  RAISE NOTICE '15. W4 r11 MAJOR-2 — the paperwork bucket tells no one whether a token was ever minted: a dead token reaches no link bucket, a dead and an unminted token share one key shape and one answer, junk knocks cannot spend a shared bucket, and the per-token limit still bites at 20: passed';
+END $$;
+
 DO $$ BEGIN RAISE NOTICE 'W4 SQL suite: all blocks passed'; END $$;
 
 ROLLBACK;

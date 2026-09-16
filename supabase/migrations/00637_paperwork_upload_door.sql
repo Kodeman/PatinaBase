@@ -50,9 +50,12 @@
 --     function calls before it does any work. One bucket covers BOTH calls,
 --     which is the §2 requirement a script must not be able to dodge by
 --     splitting volume. The key is the caller's address where there is a valid
---     one, the LINK's row id where there is not, and one shared bucket where
---     there is neither: an inet parameter on a door whose caller writes the
---     address was itself the bypass (R-CA, W4 r10 MAJOR-2, §3).
+--     one, the LIVE link's row id where there is not, the token's own sha256
+--     where the token resolves to nothing live, and one shared bucket only for
+--     a caller presenting no token at all: an inet parameter on a door whose
+--     caller writes the address was itself the bypass (R-CA, W4 r10 MAJOR-2),
+--     and a bucket that told a dead token from an unminted one was the next
+--     one (W4 r11 MAJOR-2, §3).
 --  2. The notification recipients (R-AC: owners and admins, plus the minter)
 --     are written as notification_log in_app rows by the RPC itself rather than
 --     through notification-dispatch, because the writer here is a DEFINER RPC
@@ -353,9 +356,33 @@ COMMENT ON TABLE public.paperwork_link_tokens IS
 -- through by construction (`if (!deps.ip) return true`), which is the same
 -- bypass wearing different clothes. When there is no address the bucket falls
 -- to the LINK the caller is knocking on — the token's row id, never the token
--- — and when there is neither, to one shared bucket. A no-address caller
--- therefore cannot learn whether a token is real by watching which answer it
--- gets: both land in a bucket.
+-- — and when the token resolves to nothing live, to a bucket of the token's
+-- OWN hash. A no-address caller therefore cannot learn whether a token is real
+-- by watching which answer it gets: every knock lands in a bucket of its own.
+--
+-- AND THE BUCKET IS NOT AN EXISTENCE ORACLE (W4 r11 MAJOR-2). The first shape
+-- of this ladder was ip → link → one shared `anon` key, and the `link:` lookup
+-- carried NO liveness predicate. So a revoked or expired token still resolved
+-- to its own private bucket while everything unresolved shared `anon`: an
+-- address-less caller saturated `anon` with twenty junk knocks, and from then
+-- on a 64-hex value that had NEVER been minted answered 429 while a 64-hex
+-- value that had been minted and since died answered "within limit". That is
+-- the question upload-door-spec acceptance 4 forbids the door to answer —
+-- "neither path reveals whether the token once existed" — reachable by anyone,
+-- because `cf-connecting-ip` and `x-forwarded-for` are caller-written and a
+-- caller may simply present neither.
+--
+-- Two changes close it, and both are needed:
+--   · the `link:` branch carries the SAME liveness predicate the resolvers use
+--     (status = 'active' AND expires_at > now()), so a dead token resolves to
+--     no link at all, exactly as an unminted one does;
+--   · the unresolved case is keyed by the token's own sha256 rather than by a
+--     shared string, so a dead token and a never-minted token each get a fresh
+--     private bucket and answer identically. `anon` is left for a caller who
+--     presents no token to key on at all — a caller who can open nothing, and
+--     so can deny nothing to anyone who can.
+-- The hash is what is stored at rest anyway (§2): keying by it puts no new
+-- secret in the table.
 CREATE TABLE IF NOT EXISTS public.paperwork_link_rate_limits (
   bucket_key        text PRIMARY KEY
                       CHECK (length(bucket_key) BETWEEN 1 AND 200),
@@ -372,10 +399,13 @@ COMMENT ON TABLE public.paperwork_link_rate_limits IS
   'Service-only atomic buckets for the anonymous paperwork door. One bucket '
   'covers BOTH the resolve and the upload so volume cannot be split across the '
   'two calls to dodge the limit (spec §2). bucket_key is ''ip:<address>'' for a '
-  'caller with a valid address, ''link:<token row id>'' for one without, and '
-  '''anon'' when neither is known — nobody is unbucketed (R-CA). '
-  'qr_auth_rate_limits'' shape (00427), keyed by text rather than inet because '
-  'the address is caller-supplied.';
+  'caller with a valid address; ''link:<token row id>'' for one without, when '
+  'the token is LIVE; ''tok:<sha256 of the token>'' for one without, when the '
+  'token resolves to nothing live — so a dead token and a never-minted token '
+  'get identical private buckets and identical answers (spec acceptance 4, W4 '
+  'r11 MAJOR-2); and ''anon'' only when no token was presented at all. Nobody '
+  'is unbucketed (R-CA). qr_auth_rate_limits'' shape (00427), keyed by text '
+  'rather than inet because the address is caller-supplied.';
 
 -- The (inet, integer) form is gone: it is this file's own object, never
 -- deployed, and leaving it standing would let a caller reach the version with
@@ -410,14 +440,32 @@ BEGIN
 
   -- No address: the link the caller is knocking on. The id, never the token
   -- (the token is the credential and never lands in a table in the clear).
+  --
+  -- THE LIVENESS PREDICATE IS THE RESOLVERS' OWN (W4 r11 MAJOR-2). Without it
+  -- a revoked or expired token still resolved to its own private bucket while
+  -- unknown tokens shared one, which made the limiter answer "was this ever
+  -- minted?". A dead token resolves to no link here, exactly as an unminted
+  -- one does, and falls to the hash branch below with it.
   IF v_key IS NULL AND p_token IS NOT NULL AND p_token ~ '^[0-9a-f]{64}$' THEN
     SELECT 'link:' || t.id::text INTO v_key
     FROM public.paperwork_link_tokens t
-    WHERE t.token_hash = encode(extensions.digest(p_token, 'sha256'), 'hex');
+    WHERE t.token_hash = encode(extensions.digest(p_token, 'sha256'), 'hex')
+      AND t.status = 'active'
+      AND t.expires_at > now();
+
+    -- No live link for a well-formed token — dead, or never minted. The two
+    -- are the same answer here: a fresh private bucket keyed by the token's
+    -- own hash, which is the value already stored at rest (§2). Never the raw
+    -- token, and never a shared key that one caller could spend on another's
+    -- behalf.
+    IF v_key IS NULL THEN
+      v_key := 'tok:' || encode(extensions.digest(p_token, 'sha256'), 'hex');
+    END IF;
   END IF;
 
-  -- Neither. One shared bucket rather than a free pass — and the same answer
-  -- for a real token and a guessed one, so this branch is not an oracle.
+  -- No address and no token to key on: one shared bucket rather than a free
+  -- pass. A caller in this branch can open nothing, so it can deny nothing to
+  -- a caller who can.
   v_key := COALESCE(v_key, 'anon');
 
   INSERT INTO public.paperwork_link_rate_limits AS limits
@@ -447,9 +495,12 @@ GRANT EXECUTE ON FUNCTION public.paperwork_link_rate_limit_hit(text, text, integ
 COMMENT ON FUNCTION public.paperwork_link_rate_limit_hit(text, text, integer) IS
   'One atomic rolling-minute bucket for the paperwork door; true when the '
   'attempt is within the limit. Count-then-insert races; this does not '
-  '(00427''s idiom). Keyed ip:<address> → link:<token row id> → anon, so a '
-  'caller with no forwardable address is bucketed rather than waved through '
-  '(R-CA, W4 r10 MAJOR-2). Never raises on a caller-supplied address: an '
+  '(00427''s idiom). Keyed ip:<address> → link:<live token row id> → '
+  'tok:<sha256 of the token> → anon, so a caller with no forwardable address '
+  'is bucketed rather than waved through (R-CA, W4 r10 MAJOR-2), and a dead '
+  'token is indistinguishable from a never-minted one because neither '
+  'resolves to a link and both get a private hash bucket (spec acceptance 4, '
+  'W4 r11 MAJOR-2). Never raises on a caller-supplied address: an '
   'unparsable one falls to the next key instead of 22P02, which the door used '
   'to swallow as a pass. Deviation from spec §2, named in this file''s banner: '
   'the bucket is a function rather than a BEFORE INSERT trigger because the '

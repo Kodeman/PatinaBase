@@ -229,6 +229,12 @@ export function callerIp(headers: Headers): string | null {
  * refusal, and a caller with no usable address is bucketed by the link's row
  * id (the RPC resolves it from the token; the token itself never lands in a
  * table) rather than left unbucketed.
+ *
+ * And the bucket tells that caller nothing (W4 r11 MAJOR-2). The link branch
+ * carries the resolvers' own liveness predicate, so a token that is revoked,
+ * expired or was never minted alike resolves to no link and is bucketed by its
+ * own sha256 instead. Whatever this door is asked about a token, the limiter's
+ * answer is the same one — upload-door-spec acceptance 4.
  */
 export async function withinRateLimit(
   deps: PaperworkDeps,

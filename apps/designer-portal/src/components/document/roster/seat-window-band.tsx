@@ -62,8 +62,19 @@ export function windowWrittenSentence(
     : `${name}’s window is cleared.`;
 }
 
+// W4 r11 M-1: this used to read "and dates the doors it holds", which told the
+// studio that moving a window moves the expiry of the doors the seat ALREADY
+// has. It does not. create_field_link (00627) derives expires_at AT MINT —
+// max(on_site_to, warranty_until) + 1 day, else the date the caller named,
+// else 90 days — and no trigger, rule or later UPDATE re-dates
+// project_field_links. A studio that shortened a window because a trade left
+// the job read the old sentence as "their way in now ends then" and left a
+// live field link standing. The sentence says what the record says; re-dating
+// issued doors would be a behaviour change and belongs to a ruling.
 export const WINDOW_CONSEQUENCE_SENTENCE =
-  'The window bands this seat on the Call Sheet and dates the doors it holds. ' +
+  'The window bands this seat on the Call Sheet and dates the doors minted from here on. ' +
+  'A door already open keeps the dates it was given — close it under Access grants ' +
+  'if the window moved under it. ' +
   'The change is recorded with whoever you say was told.';
 
 export function SeatWindowBand({

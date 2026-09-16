@@ -28,8 +28,18 @@ import { randomUUID } from "node:crypto";
 //
 //   supabase functions serve --no-verify-jwt
 //
-// Cleanup: rows are left in place under throwaway company cards. This is the
-// LOCAL stack and `supabase db reset` is the broom.
+// CLEANUP IS THIS FILE'S OWN JOB (W4 r11 MAJOR-1). The company cards are
+// throwaway but the STUDIO is not: `mint_paperwork_link` gates on
+// `is_active_studio_member`, so the door has to be minted inside the seeded
+// dev studio — the same studio every W1/W3 count assertion is written against.
+// Leaving three `Paperwork E2E …` firm cards behind per run made
+// `supabase/tests/people/w1b_compliance_authority_directory_test.sql` fail
+// ("3m expected 21 firm cards, got 24") and stay failed until somebody reset
+// the database; on the shared local Postgres, and in `integration.yml` where
+// the portal e2e and the SQL suites share one job, the ORDER of the two
+// decided whether the gate was green. `supabase db reset` is not a broom a
+// test may lean on. Every row and object minted here is removed in `afterAll`,
+// by the ids it minted.
 
 const LOCAL_URL = "http://127.0.0.1:54321";
 
@@ -92,6 +102,9 @@ interface MintedDoor {
   token: string;
 }
 
+/** Every door this worker minted, in mint order — the afterAll's whole list. */
+const mintedDoors: MintedDoor[] = [];
+
 async function mintDoor(): Promise<MintedDoor> {
   const companyId = randomUUID();
   const companyName = `Paperwork E2E ${randomUUID().slice(0, 8)}`;
@@ -120,7 +133,50 @@ async function mintDoor(): Promise<MintedDoor> {
   expect(row?.token, "the mint returns the raw token exactly once").toMatch(
     /^[0-9a-f]{64}$/,
   );
-  return { companyId, companyName, tokenId: row.id, token: row.token };
+  const door = { companyId, companyName, tokenId: row.id, token: row.token };
+  mintedDoors.push(door);
+  return door;
+}
+
+/**
+ * Put the seeded studio back exactly as it was found.
+ *
+ * Order matters for the storage leg only: the file paths live on the document
+ * rows, so they are read before those rows go. The table legs are written out
+ * one by one rather than leaned on `ON DELETE CASCADE` from `studio_contacts`,
+ * so that a change to a cascade cannot quietly turn this into a no-op.
+ */
+async function removeDoor(door: MintedDoor): Promise<void> {
+  const { data: docs } = await admin()
+    .from("studio_compliance_documents")
+    .select("file_path")
+    .eq("holder_id", door.companyId);
+
+  const paths = (docs ?? [])
+    .map((d: { file_path: string | null }) => d.file_path)
+    .filter((path): path is string => Boolean(path));
+  if (paths.length > 0) {
+    await admin().storage.from("compliance-documents").remove(paths);
+  }
+
+  // The in-app notices R-AC writes to the studio's owners and admins when an
+  // upload lands name the firm in their metadata; they are this spec's rows
+  // too, and they outlive the card without them.
+  await admin()
+    .from("notification_log")
+    .delete()
+    .eq("type", "compliance_document_inbound")
+    .filter("metadata->>company_id", "eq", door.companyId);
+
+  await admin()
+    .from("studio_compliance_documents")
+    .delete()
+    .eq("holder_id", door.companyId);
+  await admin()
+    .from("paperwork_link_tokens")
+    .delete()
+    .eq("company_id", door.companyId);
+  await admin().from("studio_contacts").delete().eq("id", door.companyId);
 }
 
 /** A gating paper the studio already holds for the firm, lapsed long ago. */
@@ -150,6 +206,52 @@ async function documentsFor(companyId: string) {
 }
 
 test.describe("/paperwork/[token]", () => {
+  test.afterAll(async () => {
+    const mine = mintedDoors.splice(0);
+    for (const door of mine) {
+      await removeDoor(door);
+    }
+
+    // A worker killed mid-test leaves rows this list never saw. Sweep those
+    // too — but only ones older than an hour, so a sibling worker's in-flight
+    // card can never be swept out from under it under `fullyParallel`.
+    const { data: stale } = await admin()
+      .from("studio_contacts")
+      .select("id, company_name")
+      .eq("organization_id", STUDIO_ORG_ID)
+      .eq("entity_kind", "company")
+      .like("company_name", "Paperwork E2E %")
+      .lt("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
+
+    for (const row of (stale ?? []) as Array<{ id: string; company_name: string }>) {
+      await removeDoor({
+        companyId: row.id,
+        companyName: row.company_name,
+        tokenId: "",
+        token: "",
+      });
+    }
+
+    // The gate this file used to break, asserted here rather than left to the
+    // next suite to discover. Scoped to THIS worker's own ids: under
+    // `fullyParallel` a sibling worker may still be mid-test, so a count over
+    // the whole studio would be a race, which is the shape of defect this
+    // afterAll exists to remove.
+    if (mine.length > 0) {
+      const { count } = await admin()
+        .from("studio_contacts")
+        .select("id", { count: "exact", head: true })
+        .in(
+          "id",
+          mine.map((door) => door.companyId),
+        );
+      expect(
+        count ?? 0,
+        "the spec must leave none of its own firm cards in the seeded studio",
+      ).toBe(0);
+    }
+  });
+
   test("shows the firm what the studio holds, what it blocks, and what is owed", async ({
     page,
   }) => {
