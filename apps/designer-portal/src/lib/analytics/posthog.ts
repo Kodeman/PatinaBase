@@ -83,9 +83,15 @@ const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
 // that stays live for the invoice's life — a raw autocapture would leave a
 // standing payment capability sitting in an analytics store. The optional
 // `return/` segment covers `/pay/return/<64-hex nonce>`.
+//
+// /trade and /paperwork are the two live-CAPABILITY prefixes: the trade link
+// IS the signing credential, and the paperwork link can read a firm's whole
+// compliance position and POST documents into the studio's bucket. The designer
+// portal renders both raw — the mint acts show the address once — so an
+// autocaptured href must never carry either off the machine (W4 r2 BLOCKING-1).
 // Ported from apps/client-portal/src/lib/analytics/posthog.ts — keep in sync.
 const HEX_BEARER_IN_URL =
-  /\/(share|rfq|evidence|plans|pay)\/(?:return\/)?[0-9a-f]{64}(?![0-9a-f])/gi;
+  /\/(share|rfq|evidence|plans|pay|trade|paperwork)\/(?:return\/)?[0-9a-f]{64}(?![0-9a-f])/gi;
 
 function redactBearerPaths(value: string): string {
   return value

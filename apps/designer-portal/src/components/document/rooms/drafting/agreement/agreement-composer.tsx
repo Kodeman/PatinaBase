@@ -1338,9 +1338,9 @@ export function AgreementComposer({
                 : "Design services agreement"}
               {` · V${document.version}`}
             </p>
-            <h1 className="t-d2">
+            <h2 className="t-d2">
               {recipientName ?? recipientEmail ?? "A draft with no client yet"}
-            </h1>
+            </h2>
             <p className="t-head g-eyebrow">
               {document.state === "draft" ? "Draft" : document.state}
             </p>

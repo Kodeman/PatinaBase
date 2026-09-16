@@ -1,15 +1,20 @@
 'use client';
 
 /**
- * Shared People-Room primitives: the role-tinted avatar, the role badge, and
- * the status dot. One source of truth so the directory, the profile, the
- * nurture queue, and the threads list all read identically. Zero shadows (D4);
- * colours come from the brand tokens (globals.css).
+ * Shared People-Room primitives: the role-tinted avatar and the role badge.
+ * One source of truth so the directory, the profile, the nurture queue, and
+ * the threads list all read identically. Zero shadows (D4); colours come from
+ * the brand tokens (globals.css).
+ *
+ * `StatusDot` IS RETIRED (direction §4, SPEC §5.1 #16). A bare `aria-hidden`
+ * colour circle carries a state in colour alone, which SPEC §7 #9 forbids
+ * outright: every state now carries a visible WORD, and `StateWord`
+ * (`state-word.tsx`) is the one primitive that prints it.
  */
 
 import type { PartyRole } from '@patina/supabase';
-import { SMS_CONSENT_DISPLAY, type SmsConsentStatus } from '@patina/types';
-import { roleLabel, type PartyStatus } from '@/lib/document/people-derivation';
+import { StateWord } from './state-word';
+import { roleLabel } from '@/lib/document/people-derivation';
 
 /** The avatar's shape (slide 9, "Circles + squares"): a person is a circle, a
  *  company is a rounded square — the ONE visual difference between them.
@@ -53,24 +58,40 @@ const AVATAR_BG: Record<string, string> = {
   supplier: 'var(--color-aged-oak)',
 };
 
+/**
+ * IDENTITY HUES, HELD OFF THE FOUR STATE TOKENS (direction §4).
+ *
+ * A role badge says WHO somebody is; a state word says HOW THINGS STAND. When
+ * the two share a pigment the reader has to guess which question a colour is
+ * answering — a `lead` badge in terracotta reads as a blocked state, and a
+ * `client` badge in sage reads as current. So none of these is sage,
+ * golden-hour, terracotta or the dormant hairline: the identity palette is oak,
+ * mocha, clay, dusty blue, quiet ink and charcoal, and the state palette is the
+ * other four.
+ *
+ * Every `color` here is a text-grade ink — `--color-dusty-blue-ink` is the one
+ * PR-v added, because base dusty blue reads 1.9:1 on paper and was never
+ * legible as a word.
+ */
 const BADGE: Record<PartyRole, { color: string; border: string }> = {
-  client: { color: '#6f8268', border: 'var(--color-sage)' },
+  client: { color: 'var(--color-charcoal)', border: 'var(--color-clay)' },
   maker: { color: 'var(--color-aged-oak)', border: '#cbb48f' },
-  gc: { color: 'var(--color-dusty-blue)', border: 'var(--color-dusty-blue)' },
+  gc: { color: 'var(--color-dusty-blue-ink)', border: 'var(--color-dusty-blue)' },
   team: { color: 'var(--color-clay-ink)', border: 'var(--color-clay)' },
-  lead: { color: 'var(--color-terracotta-ink)', border: 'var(--color-terracotta)' },
+  lead: { color: 'var(--color-quiet-ink)', border: 'var(--color-pearl)' },
   sub: { color: 'var(--color-mocha)', border: 'var(--color-mocha)' },
-  installer: { color: 'var(--color-golden-hour-ink)', border: 'var(--color-golden-hour)' },
-  receiver: { color: 'var(--color-terracotta-ink)', border: 'var(--color-terracotta)' },
-  // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — same tints as
-  // AVATAR_BG above (architect beside the GC's dusty-blue; photographer/
-  // stager quiet-ink, neither trade nor firm).
-  architect: { color: 'var(--color-dusty-blue)', border: 'var(--color-dusty-blue)' },
+  installer: { color: 'var(--color-mocha)', border: 'var(--color-clay)' },
+  receiver: { color: 'var(--color-aged-oak)', border: 'var(--color-pearl)' },
+  // Call Sheet Wave 3/4 (00419/00420) roster-widening kinds — architect beside
+  // the GC's dusty blue; photographer/stager quiet ink, neither trade nor firm.
+  architect: {
+    color: 'var(--color-dusty-blue-ink)',
+    border: 'var(--color-dusty-blue)',
+  },
   photographer: { color: 'var(--color-quiet-ink)', border: 'var(--color-quiet-ink)' },
   stager: { color: 'var(--color-quiet-ink)', border: 'var(--color-quiet-ink)' },
-  // The studio rolodex branch (people_directory role='contact', 00420) —
-  // shares the maker tint (a rolodex entry is vendor/maker-adjacent by
-  // default, same family AVATAR_FALLBACK_BG/COMPANY_KIND_BADGE lean on).
+  // The studio rolodex branch (people_directory role='contact', 00420) — and
+  // since 00626's v4 rebuild, EVERY carded human. Shares the maker tint.
   contact: { color: 'var(--color-aged-oak)', border: '#cbb48f' },
 };
 
@@ -97,13 +118,6 @@ export function companyKindBadgeStyle(
 ): { color: string; border: string } {
   return (kind ? COMPANY_KIND_BADGE[kind] : undefined) ?? BADGE.maker;
 }
-
-const DOT_BG: Record<PartyStatus, string> = {
-  active: 'var(--color-golden-hour)',
-  warm: 'var(--color-sage)',
-  due: 'var(--color-terracotta)',
-  cool: 'var(--color-pearl)',
-};
 
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -147,11 +161,18 @@ export function Avatar({
   );
 }
 
+/**
+ * The role badge, at the 12px `.t-meta` floor (direction §4, house sheet §A3).
+ * It shipped at `text-[0.44rem]` — a hair over 7px — which is below every step
+ * the type scale has and below what a studio reads at arm's length on a
+ * ledger row.
+ */
 export function RoleBadge({ role }: { role: PartyRole }) {
   const { color, border } = BADGE[role];
   return (
     <span
-      className="rounded-[3px] border-[1.5px] px-2 py-[2px] font-mono text-[0.44rem] font-semibold uppercase tracking-[0.06em]"
+      data-role-badge={role}
+      className="t-meta shrink-0 rounded-[3px] border px-2 py-[2px] font-medium uppercase"
       style={{ color, borderColor: border }}
     >
       {roleLabel(role)}
@@ -160,55 +181,27 @@ export function RoleBadge({ role }: { role: PartyRole }) {
 }
 
 /**
- * The SMS-consent chip a field party's row wears (00281 sms_consent_status) —
- * Not asked / Invited / Texting / Opted out, in the field-config vocab.
- * Extracted here from person-row.tsx (Call Sheet Wave 3) so the directory row
- * and the call sheet's roster row can never drift apart.
+ * The consent word a field party's row wears — the studio's own RECORD
+ * (`studio_channel_consent`) through `channel_consent_status()`, which already
+ * folds an unanswered refusal into `opted_out`.
  *
- * `dotOnly` renders JUST the tinted dot with the label carried as an
- * accessible name — the compact roster row (slide 12) sits the dot beside the
- * name and saves the words for the unfold, where the full chip renders.
+ * Rebound to `StateWord`'s consent family (direction §4): one primitive, one
+ * pigment table, one label map, so the Directory row, the roster row and the
+ * party sheet cannot drift apart.
+ *
+ * A NULL status prints NOTHING. "No record" is its own fact — the readers that
+ * feed this chip return NULL when the caller cannot read the record that
+ * decides the word — and "Not asked" over a studio's dated `opted_out` is the
+ * fail-open word this program exists to remove (R-BB, w1b r8 MAJOR-1). The
+ * sentence that names the absence belongs to the card, not to a chip.
  */
 export function ConsentChip({
   status,
-  dotOnly = false,
+  plain = false,
 }: {
   status: string | null | undefined;
-  dotOnly?: boolean;
+  /** At 390 the row's words print plain and middle-dot separated (R-M). */
+  plain?: boolean;
 }) {
-  const key = (status ?? 'not_asked') as SmsConsentStatus;
-  const cfg = SMS_CONSENT_DISPLAY[key] ?? SMS_CONSENT_DISPLAY.not_asked;
-
-  if (dotOnly) {
-    return (
-      <span
-        role="img"
-        aria-label={cfg.label}
-        title={cfg.label}
-        data-consent-dot={key}
-        className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dotClass}`}
-      />
-    );
-  }
-
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
-      <span
-        aria-hidden
-        data-consent-dot={key}
-        className={`inline-block h-1.5 w-1.5 rounded-full ${cfg.dotClass}`}
-      />
-      {cfg.label}
-    </span>
-  );
-}
-
-export function StatusDot({ status }: { status: PartyStatus }) {
-  return (
-    <span
-      aria-hidden
-      className="inline-block h-2 w-2 shrink-0 rounded-full"
-      style={{ background: DOT_BG[status] }}
-    />
-  );
+  return <StateWord family="consent" value={status} plain={plain} />;
 }

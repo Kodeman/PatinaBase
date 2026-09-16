@@ -2001,6 +2001,35 @@ html:has([data-document-shell]) {
   --clay-ink: #7C5E30;
   --terracotta-ink: #9C5340;
 
+  /* — PR-v · the state pigments, by their house-sheet names —
+
+     The People room prints every state as ONE BORDERED WORD in one of four
+     pigments (direction §3.8, SPEC §2.2's `.word--*` rules): sage for what is
+     current, golden for what is pending, terracotta for what is blocked, and
+     the hairline + faint ink for what is dormant. The four pairs live in
+     @patina/types' STATE_WORD_PIGMENTS as `var(--sage)` / `var(--sage-ink)`
+     and so on, so these names must resolve here or the word prints unpigmented.
+
+     Base pigments alias the shipped `--color-*` values. The two inks are
+     LITERALS for the same reason --clay-ink above is one. --golden is aliased
+     rather than named `--golden-hour`, because the house sheet and the
+     specimens both spend the short name. */
+  --sage: var(--color-sage);
+  --golden: var(--color-golden-hour);
+  --terracotta: var(--color-terracotta);
+  --sage-ink: #5F6B57;
+  --golden-ink: #79651E;
+
+  /* PR-v — the missing companion. --color-dusty-blue (#8B9CAD, hue 210°) is a
+     material pigment: it paints the GC's avatar and role badge and reads 1.9:1
+     on paper, so it was never legible AS TEXT and every site that wanted a
+     dusty-blue word had nothing to spend. Same hue (210.7°), dark enough to
+     clear AA on every light ground the surface paints:
+     5.28:1 paper · 5.16:1 off-white · 5.51:1 white · 5.01:1 red-letter band ·
+     4.89:1 note band. Like every other -ink, it is a PAPER ink: on the
+     charcoal grounds the base pigment stays. */
+  --color-dusty-blue-ink: #556B82;
+
   /* — rhythm — */
   --module: 24px;
   --radius-hair: 2px;

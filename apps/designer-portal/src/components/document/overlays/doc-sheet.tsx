@@ -161,9 +161,16 @@ export function DocSheetHead({
           <span id={titleId} data-doc-sheet-title>
             {title}
           </span>
+          {/* QA r19 MAJOR-1 — THE PAGE PRINTS AT BOTH WIDTHS. The segment was
+              `hidden … sm:inline`, so every sheet that names a page (Orders,
+              Accounts, Post, the trade scopes, and the People room's
+              bring-forward picker) lost that name at 390 — and SPEC §5.7 #9's
+              rule is that the two widths carry identical facts. The title line
+              is `min-w-0 truncate`, so a long pair ellipses rather than pushing
+              the put-back hint off the sheet. */}
           {pageLabel ? (
             <span
-              className="hidden font-normal text-[var(--color-quiet-ink)] sm:inline"
+              className="font-normal text-[var(--color-quiet-ink)]"
               data-doc-sheet-page-label
             >
               {' '}

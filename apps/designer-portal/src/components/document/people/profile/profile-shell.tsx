@@ -52,9 +52,9 @@ export function ProfileHead({
     <div className="flex items-start gap-5 border-b border-[var(--doc-ink-border)] pb-5">
       <Avatar name={name} role={role} size={64} />
       <div className="flex-1">
-        <h1 className="font-heading text-[1.7rem] font-medium leading-tight text-[var(--color-charcoal)]">
+        <h2 className="font-heading text-[1.7rem] font-medium leading-tight text-[var(--color-charcoal)]">
           {name}
-        </h1>
+        </h2>
         <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
           <RoleBadge role={role} />
           {contact && (

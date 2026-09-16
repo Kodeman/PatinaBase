@@ -97,7 +97,6 @@ export function MobileBar() {
     useDocumentTime();
   const { data: unreadInbox = 0 } = useUnreadInboxCount();
   const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const unread = unreadInbox + unreadProcurement;
 
   const [moreOpen, setMoreOpen] = useState(false);
@@ -162,9 +161,7 @@ export function MobileBar() {
             label: 'Boards',
             href: boardsRoutePath(documentProjectId),
           },
-          ...(callSheetOn
-            ? [{ key: 'callsheet', label: 'Call sheet', open: openCallSheet }]
-            : []),
+          { key: 'callsheet', label: 'Call sheet', open: openCallSheet },
         ]
       : []),
   ];

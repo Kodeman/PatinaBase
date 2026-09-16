@@ -29,9 +29,13 @@ export function LibrarianBar({
 
   return (
     <div className="border-b border-[var(--doc-ink-border)] px-6 pb-8 pt-10 text-center sm:px-9">
-      <h1 className="font-heading text-[2.1rem] font-normal leading-[1.08] text-[var(--color-charcoal)] min-[700px]:text-[2.5rem]">
+      {/* CR11-1: <h2>, not <h1>. RoomShell's band now carries the page's one
+          heading ("The Library"), and this line sits inside that Room — two
+          <h1>s on one page is the structure SPEC §7 #11 forbids. The type is
+          untouched; only the element changed. */}
+      <h2 className="m-0 font-heading text-[2.1rem] font-normal leading-[1.08] text-[var(--color-charcoal)] min-[700px]:text-[2.5rem]">
         Find a piece—or <em className="italic text-[var(--color-charcoal)]">ask about one.</em>
-      </h1>
+      </h2>
       <p className="mx-auto mt-3 max-w-[52ch] text-[14px] leading-relaxed text-[var(--color-charcoal)]">
         Known pieces surface immediately. Ask reads the same words across all three shelves.
       </p>

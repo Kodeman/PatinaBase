@@ -276,11 +276,6 @@ export function LetterheadInstruments({
   const [noteBody, setNoteBody] = useState('');
   const sendNote = useSendDocumentNote(projectId, clientProfileId);
   const { data: scans } = useClientScans(clientProfileId, projectId);
-  // Call Sheet instrument — flag-gated at this consumer (never in the
-  // registry, per registry.tsx's canon). When off, CallSheetInstrument never
-  // mounts, so this row of the letterhead instruments stays byte-identical
-  // to before the flag existed.
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
 
   // Ruling 4-B: the client's scan stays the door's first choice, so unioning
   // the designer's own scans never silently retargets an existing document.
@@ -373,7 +368,7 @@ export function LetterheadInstruments({
           </DocumentAction>
         )}
         {projectId && <SharingTierInstrument projectId={projectId} />}
-        {projectId && callSheetOn && <CallSheetInstrument projectId={projectId} />}
+        {projectId && <CallSheetInstrument projectId={projectId} />}
       </DocumentActionGroup>
 
       {composing && (
