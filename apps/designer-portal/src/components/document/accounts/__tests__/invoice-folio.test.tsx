@@ -15,10 +15,17 @@ const mockRegenerateLink = jest.fn();
 /** The 64-hex shape ensure_invoice_link (00574) emits. */
 const LINK_TOKEN = 'a'.repeat(64);
 const PAY_URL = `http://localhost:3002/pay/${LINK_TOKEN}`;
-let mockInvoiceLink: { token: string; status: 'active' | 'closed' } | null = {
-  token: LINK_TOKEN,
-  status: 'active',
-};
+/**
+ * THE DEFAULT IS NULL, BECAUSE THE DATABASE'S IS (W4 r4 MAJOR-1).
+ *
+ * 00636 froze `invoices.token`: `get_invoice_link` answers `token: NULL` for
+ * every invoice, and `parseInvoiceLink` reads that as no link. A suite whose
+ * default mock hands back a live token models 00574's world, not this one —
+ * which is why eleven cases stayed green while both link acts were unreachable
+ * on every invoice in production. A test that wants an address mints one, the
+ * way the folio does.
+ */
+let mockInvoiceLink: { token: string; status: 'active' | 'closed' } | null = null;
 
 const invoice: Invoice = {
   id: 'invoice-1',
@@ -119,7 +126,7 @@ describe('InvoiceFolio delivery recovery', () => {
   beforeEach(() => {
     mockInvoice = invoice;
     mockEmailDeliveryByRef = {};
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
+    mockInvoiceLink = null;
     jest.clearAllMocks();
     mockRefetch.mockResolvedValue({ data: invoice });
   });
@@ -219,6 +226,9 @@ describe('InvoiceFolio delivery recovery', () => {
   });
 
   it('keeps the issued invoice reachable when email delivery fails', async () => {
+    // An address already minted on this invoice (the only way one exists:
+    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     mockIssue.mockResolvedValue({
       ...invoice,
       status: 'sent',
@@ -246,6 +256,9 @@ describe('InvoiceFolio delivery recovery', () => {
   });
 
   it('offers the pay link to an unlinked household, and says where the receipt goes', async () => {
+    // An address already minted on this invoice (the only way one exists:
+    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     // Reverses the pre-00574 behaviour: an account-less household was told to
     // go get an account. The link needs none — but with no profile on either
     // side there is no address on file, which is what M5 makes the folio say.
@@ -270,6 +283,9 @@ describe('InvoiceFolio delivery recovery', () => {
   });
 
   it('omits the receipt-at-checkout line when the household has an account', async () => {
+    // An address already minted on this invoice (the only way one exists:
+    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     mockIssue.mockResolvedValue({ ...invoice, status: 'sent', invoice_number: 'INV-1044' });
     mockSend.mockRejectedValue(new Error('provider unavailable'));
 
@@ -285,6 +301,9 @@ describe('InvoiceFolio delivery recovery', () => {
   });
 
   it('uses the authoritative project client for a legacy nullable-client invoice', async () => {
+    // An address already minted on this invoice (the only way one exists:
+    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     mockInvoice = {
       ...invoice,
       client_id: null,
@@ -424,6 +443,9 @@ describe('InvoiceFolio delivery recovery', () => {
   });
 
   it('announces clipboard failure instead of silently resetting the button', async () => {
+    // An address already minted on this invoice (the only way one exists:
+    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: jest.fn().mockRejectedValue(new Error('denied')) },
@@ -449,8 +471,9 @@ describe('InvoiceFolio delivery recovery', () => {
 
   // ── The link acts, standing in the folio's own row (00574 · K1) ────────
 
-  it('offers Copy link and Regenerate link on an issued invoice', () => {
+  it('offers Copy link and Regenerate link on an issued invoice that has an address', () => {
     mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1050' };
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     render(<InvoiceFolio invoiceId="invoice-1" />);
 
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeEnabled();
@@ -477,6 +500,7 @@ describe('InvoiceFolio delivery recovery', () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1050' };
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
@@ -526,39 +550,60 @@ describe('InvoiceFolio delivery recovery', () => {
     ).toBeInTheDocument();
   });
 
-  /* ── F1: the link exists the moment the invoice is issued ──────────────
-     useIssueInvoice invalidates ['invoice-link', id], so the folio's acts
-     and its recovery band see the minted link rather than a five-minute
-     stale null. Modelled by a mock that has no link until issue resolves. */
+  /* ── W4 r4 MAJOR-1: the mint is the only door, so it may not be behind
+     the door ─────────────────────────────────────────────────────────────
+     Since 00636 froze `invoices.token`, issuing mints an address the studio
+     cannot READ: `get_invoice_link` answers NULL and `useInvoiceLink` parses
+     it as no link. The folio's job is therefore to keep Regenerate standing
+     on the invoice's own status, so the designer has a way to mint one she
+     can copy. These cases model the real chain: issue → Regenerate visible,
+     Copy absent → press → setQueryData lands the token → Copy appears. */
 
-  it('shows a live Copy link as soon as the invoice is issued', async () => {
-    mockInvoiceLink = null;
-    // What the real acts do: issue_invoice mints the link, and invalidating
-    // ['invoices'] + ['invoice-link', id] refetches both reads together.
+  it('offers Regenerate on a freshly issued invoice the database answers no token for', async () => {
+    // The real read: 00636 nulls the column, so a load after issue parses to
+    // null however the send went.
     mockIssue.mockImplementation(async () => {
       mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1060' };
-      mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
       return mockInvoice;
     });
     mockSend.mockResolvedValue({ emailSent: true, recipient: 'client@example.com' });
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
-    expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Regenerate link' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
     const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
     fireEvent.click(confirmations[confirmations.length - 1]);
 
-    const copy = await screen.findByRole('button', { name: 'Copy link' });
-    expect(copy).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Regenerate link' })).toBeEnabled();
+    const regenerate = await screen.findByRole('button', { name: 'Regenerate link' });
+    expect(regenerate).toBeEnabled();
+    // No address to copy yet — and no greyed act standing in for one (R51/R83).
+    expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
   });
 
-  it('gives the recovery band the minted link when the send fails on issue', async () => {
-    mockInvoiceLink = null;
-    mockIssue.mockImplementation(async () => {
+  it('brings Copy link up once Regenerate has minted an address', async () => {
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1060' };
+    // What `useRegenerateInvoiceLink.onSuccess` does: setQueryData puts the
+    // freshly minted token into ['invoice-link', id]. Nothing else can.
+    mockRegenerateLink.mockImplementation(async () => {
       mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
-      return { ...invoice, status: 'sent', invoice_number: 'INV-1061' };
+      return mockInvoiceLink;
+    });
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Replace the link' }));
+
+    const copy = await screen.findByRole('button', { name: 'Copy link' });
+    expect(copy).toBeEnabled();
+  });
+
+  it('points the recovery band at Regenerate, never at a resend that cannot mint', async () => {
+    mockIssue.mockImplementation(async () => {
+      mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1061' };
+      return mockInvoice;
     });
     mockSend.mockRejectedValue(new Error('provider unavailable'));
 
@@ -567,7 +612,30 @@ describe('InvoiceFolio delivery recovery', () => {
     const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
     fireEvent.click(confirmations[confirmations.length - 1]);
 
-    // Not the "no link yet · resend to try again" else-branch.
+    // The instruction has to be one the designer can carry out: resending
+    // mints a token only the letter ever sees.
+    expect(
+      await screen.findByText(/Regenerate link, above, mints one you can send them\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Resend the invoice to try again/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Regenerate link' })).toBeEnabled();
+  });
+
+  it('gives the recovery band the address once the invoice has one', async () => {
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
+    mockIssue.mockImplementation(async () => ({
+      ...invoice,
+      status: 'sent',
+      invoice_number: 'INV-1061',
+    }));
+    mockSend.mockRejectedValue(new Error('provider unavailable'));
+
+    render(<InvoiceFolio invoiceId="invoice-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
+    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
+    fireEvent.click(confirmations[confirmations.length - 1]);
+
+    // Not the "no link yet" else-branch.
     expect(await screen.findByRole('link', { name: PAY_URL })).toBeInTheDocument();
     expect(screen.queryByText(/this invoice has no link yet/i)).not.toBeInTheDocument();
   });
@@ -577,6 +645,7 @@ describe('InvoiceFolio delivery recovery', () => {
   it('keeps the two copy sites\u2019 statuses apart', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     mockIssue.mockImplementation(async () => {
       mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1062' };
       return mockInvoice;
@@ -598,14 +667,16 @@ describe('InvoiceFolio delivery recovery', () => {
 
   /* ── F8: no greyed-out act without a reason ───────────────────────────── */
 
-  it('omits both link acts entirely while the invoice has no link', () => {
+  it('withholds Copy while the invoice has no address, and keeps Regenerate standing', () => {
     mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1063' };
     mockInvoiceLink = null;
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
 
+    // Copy has nothing to copy, so it is absent rather than greyed (R51/R83).
     expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Regenerate link' })).not.toBeInTheDocument();
+    // Regenerate is the act that ENDS this state, so it may not depend on it.
+    expect(screen.getByRole('button', { name: 'Regenerate link' })).toBeEnabled();
     // Print still stands — it does not depend on the link. It is a link now,
     // not a button: it opens the print route in a new tab.
     expect(screen.getByRole('link', { name: /^Print \/ Save PDF/ })).toBeInTheDocument();

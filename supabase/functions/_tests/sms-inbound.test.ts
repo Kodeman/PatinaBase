@@ -350,6 +350,80 @@ Deno.test("an inbound STOP files an in touch against the seat that sent it", asy
   assertEquals(touches[0].p_authority_check, "n/a");
 });
 
+// W4 r4 MAJOR-3. The same defect class, twice more: START and YES each write a
+// consent grant and attribute the message to a seat, and neither filed a touch
+// — so after the two most consequential inbound messages after STOP, the seat
+// line, the roster row and `touchSentence` all went on printing the PREVIOUS
+// contact.
+Deno.test("an inbound START files an in touch against the seat that sent it", async () => {
+  const touches: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase(
+    baseSeed({
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110094", project_id: "proj1", party_kind: "sub", sms_consent_status: "opted_out" },
+      ],
+      studio_channel_consent: [{
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: "+15551110094",
+        status: "opted_out",
+        opt_out_at: "2026-01-04T00:00:00Z",
+      }],
+      sms_conversations: [
+        {
+          id: "convStart", twilio_number: TO, phone_e164: "+15551110094", state: "idle",
+          active_project_id: "proj1", party_id: "p1", state_context: {},
+        },
+      ],
+    }),
+    { record_touch: (args) => { touches.push(args); return { data: "touch1", error: null }; } },
+  );
+  const res = await processInbound(
+    params({ From: "+15551110094", Body: "START", MessageSid: "SMstarttouch" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "resubscribed");
+  assertEquals(touches.length, 1);
+  assertEquals(touches[0].p_subject_type, "engagement");
+  assertEquals(touches[0].p_subject_id, "p1");
+  assertEquals(touches[0].p_channel_kind, "sms");
+  assertEquals(touches[0].p_direction, "in");
+  assertEquals(touches[0].p_authority_check, "n/a");
+});
+
+Deno.test("an inbound YES files an in touch against the seat it is attributed to", async () => {
+  const touches: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase(
+    baseSeed({
+      project_parties: [
+        { id: "p1", phone_e164: "+15551110093", project_id: "proj1", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+      ],
+      studio_channel_consent: [{
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: "+15551110093",
+        status: "pending",
+      }],
+      sms_conversations: [
+        {
+          id: "convYes", twilio_number: TO, phone_e164: "+15551110093", state: "idle",
+          active_project_id: "proj1", party_id: "p1", state_context: {},
+        },
+      ],
+    }),
+    { record_touch: (args) => { touches.push(args); return { data: "touch1", error: null }; } },
+  );
+  const res = await processInbound(
+    params({ From: "+15551110093", Body: "YES", MessageSid: "SMyestouch" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "granted");
+  assertEquals(touches.length, 1);
+  assertEquals(touches[0].p_subject_id, "p1");
+  assertEquals(touches[0].p_direction, "in");
+  assertEquals(touches[0].p_decision_class, "none");
+});
+
 Deno.test("HELP files an in touch, and so does a project-chooser pick", async () => {
   const helpTouches: Array<Record<string, unknown>> = [];
   const helpFake = createFakeSupabase(

@@ -69,6 +69,9 @@ jest.mock("@patina/supabase", () => ({
   // cannot be added to the package and silently dropped at this render again.
   FIRM_SCOPED_ACCESS_GRANT_TIERS: jest.requireActual("@patina/supabase")
     .FIRM_SCOPED_ACCESS_GRANT_TIERS,
+  // W4 r4 F1 — the REAL studio-timezone converter, so the day a grant row
+  // prints is measured against the shipped one rather than a stub.
+  touchInstantDay: jest.requireActual("@patina/supabase").touchInstantDay,
   isAccessGrantRevokable: (tier: string) =>
     tier === "field_link" || tier === "project_review" ||
     tier === "paperwork_link",
@@ -772,6 +775,11 @@ describe("a grant row", () => {
         scope_type: "project",
         scope_id: "proj-okonkwo",
         granted_by: null,
+        // W4 r4 F1: a timestamptz, and midnight UTC is 7pm the PREVIOUS day in
+        // the studio's own zone — the ordinary evening a link is minted. The
+        // row must print the studio's calendar day (11 Oct), the way the
+        // inbound-document line on the same card already does; this fixture
+        // asserted the UTC day and so held the defect in place.
         granted_at: "2026-10-12T00:00:00Z",
         // QA-R8-1: what `create_field_link` actually stores for R-D's window
         // (13 Aug 2027) — the window's last day PLUS one, an EXCLUSIVE
@@ -786,7 +794,7 @@ describe("a grant row", () => {
     renderReach();
     expect(
       screen.getByText(
-        "Field link · the Call Sheet and the site access card · minted 12 Oct 2026 · used 17 Oct 2026",
+        "Field link · the Call Sheet and the site access card · minted 11 Oct 2026 · used 16 Oct 2026",
       ),
     ).toBeInTheDocument();
     expect(
@@ -801,6 +809,38 @@ describe("a grant row", () => {
     expect(
       screen.getByRole("button", { name: "Close this door" }),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * W4 r4 F1 — THE EVENING HOURS, WHICH IS WHEN DOORS ARE MINTED.
+   *
+   * Reproduced live: a paperwork link minted at 19:09 CDT on 15 Sep read
+   * "minted 16 Sep 2026" while the inbound-document line three rows below it
+   * on the same card, for the same evening, correctly read "15 Sep 2026".
+   */
+  it("prints the studio's own calendar day for an evening mint, not UTC's", () => {
+    grantsData.current = [
+      {
+        grant_id: "paperwork_link:tok-2",
+        tier: "paperwork_link",
+        subject_type: "contact",
+        subject_id: "card-dana",
+        scope_type: "company",
+        scope_id: "card-dana",
+        granted_by: null,
+        // 19:09:24 CDT, 15 September 2026.
+        granted_at: "2026-09-16T00:09:24.000Z",
+        expires_at: null,
+        // 14:00 CDT the same day — a daytime instant is unmoved.
+        last_used_at: "2026-09-15T19:00:00.000Z",
+        revoked_at: null,
+        revoke_reason: null,
+      },
+    ];
+    renderReach();
+    const row = screen.getByText(/minted 15 Sep 2026/);
+    expect(row).toHaveTextContent("used 15 Sep 2026");
+    expect(screen.queryByText(/16 Sep 2026/)).not.toBeInTheDocument();
   });
 });
 

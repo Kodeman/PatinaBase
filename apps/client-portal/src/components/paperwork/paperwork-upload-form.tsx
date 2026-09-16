@@ -28,6 +28,19 @@ export interface PaperworkUploadFormProps {
   token: string;
   docType: string;
   docLabel: string | null;
+  /**
+   * THE ROW THIS FORM BELONGS TO, WHICH IS NOT ITS DOCUMENT TYPE (W4 r4).
+   *
+   * `paperwork-model.ts` deliberately keeps two differently-named
+   * `other_named` papers as two rows (P-3: a roof warranty must not retire an
+   * asbestos permit), and both carry `docType === 'other_named'`. Field ids
+   * keyed on the type therefore collided: with both forms open, five ids
+   * appeared twice and ten `label[for]` attributes all resolved to the FIRST
+   * form's controls, so the second form's fields had no accessible name and
+   * its labels focused the wrong inputs. The sheet's `row.key` is already
+   * unique per row, so it is what the ids are built from.
+   */
+  fieldPrefix: string;
   title: string;
   /** A waiver asks for the file alone. */
   uploadOnly: boolean;
@@ -45,6 +58,7 @@ export function PaperworkUploadForm({
   token,
   docType,
   docLabel,
+  fieldPrefix,
   title,
   uploadOnly,
   expiryRequired,
@@ -59,7 +73,10 @@ export function PaperworkUploadForm({
   const [expiresOn, setExpiresOn] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const fieldId = (name: string) => `paperwork-${docType}-${name}`;
+  // `other_named:roof warranty` is a legitimate row key and not a legitimate
+  // id, so the key is slugged rather than trusted whole.
+  const idPrefix = fieldPrefix.replace(/[^a-zA-Z0-9_-]+/g, '-');
+  const fieldId = (name: string) => `paperwork-${idPrefix}-${name}`;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();

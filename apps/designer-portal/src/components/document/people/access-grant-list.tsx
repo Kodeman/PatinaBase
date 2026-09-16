@@ -25,12 +25,12 @@ import {
   ACCESS_GRANT_TIER_OPENS,
   accessGrantRevokeRoute,
   isAccessGrantRevokable,
+  touchInstantDay,
   useRevokeAccessGrant,
   type AccessGrant,
 } from "@patina/supabase";
 import { peopleEvents } from "@/lib/analytics/people-events";
 import { DocumentAction } from "../document-action";
-import { formatSeatDate } from "./seat-line";
 import { formatLongDate, lastOpenDay } from "./people-format";
 
 export const NO_GRANT_SENTENCE = "No grant on file.";
@@ -164,9 +164,16 @@ export function grantRowParts(grant: AccessGrant): string[] {
   const parts: string[] = [tierLabel(String(grant.tier))];
   const opens = tierOpens(String(grant.tier));
   if (opens) parts.push(opens);
-  const minted = formatSeatDate(grant.granted_at?.slice(0, 10));
+  // THE STUDIO'S OWN CALENDAR, NOT UTC'S (W4 r4 F1). `granted_at` and
+  // `last_used_at` are timestamptz; PostgREST answers them as a UTC instant,
+  // and slicing that string printed the UTC day — so a link minted at 19:09
+  // CDT on 15 September read "minted 16 Sep 2026" three rows above an inbound
+  // document from the same evening that correctly read "15 Sep". `touchDate`
+  // and `inboundDocumentLine` were fixed for exactly this in r3; the grant row
+  // was not. `formatSeatDate` stays where it belongs — a zoneless DATE column.
+  const minted = touchInstantDay(grant.granted_at);
   if (minted) parts.push(`minted ${minted}`);
-  const used = formatSeatDate(grant.last_used_at?.slice(0, 10));
+  const used = touchInstantDay(grant.last_used_at);
   if (used) parts.push(`used ${used}`);
   return parts;
 }

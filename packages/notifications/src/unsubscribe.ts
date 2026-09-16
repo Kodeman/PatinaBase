@@ -15,6 +15,21 @@ export interface UnsubscribeOutcome {
   status: 'applied' | 'invalid' | 'expired' | 'malformed' | 'error';
   userId?: string;
   type?: NotificationType | 'all_marketing';
+  /**
+   * WHAT THE STOP ACTUALLY COVERS (W4 r4 MAJOR-2).
+   *
+   * 'account' — one preference column on one Patina account, the kind of stop
+   * the token's own `type` describes.
+   * 'address' — the whole mailbox. An account-less recipient has no
+   * preferences row, so her click marks every email-kind channel carrying her
+   * address `unsubscribed`, across every card and every studio, and the send
+   * gate then refuses EVERY category to it, invoices and purchase orders
+   * included (D-4/D-6). The token still carries the letter's own narrow type
+   * — `po_sent`, `invoice_sent` — and a reader that prints that type is
+   * telling her something the record does not say, so the scope is what the
+   * landing must speak from.
+   */
+  scope?: 'account' | 'address';
   columnUpdated?: string;
   message?: string;
 }
@@ -113,6 +128,7 @@ export async function applyUnsubscribeToken(
     status: 'applied',
     userId,
     type,
+    scope: 'account',
     columnUpdated,
   };
 }
@@ -125,6 +141,11 @@ export async function applyUnsubscribeToken(
  * that row's value, which is the same rule resend-webhook's bounce write uses
  * (a mailbox's verdict is the mailbox's, not one card's). A row already dead is
  * left alone: 'dead' is the worse fact and this must not walk it back.
+ *
+ * The token's `type` names the letter that carried the link and is NOT read
+ * here: an address has no per-category preference to set, so the stop is the
+ * whole mailbox. The outcome says so through `scope: 'address'` rather than
+ * letting the narrow type stand as a description of the write.
  */
 async function applyChannelUnsubscribe(
   supabase: SupabaseClient,
@@ -138,12 +159,12 @@ async function applyChannelUnsubscribe(
     .maybeSingle();
 
   if (readError) {
-    return { ok: false, status: 'error', message: readError.message, type };
+    return { ok: false, status: 'error', message: readError.message, type, scope: 'address' };
   }
   if (!channel?.value) {
     // An unknown or deleted channel is an invalid token, not an error: the
     // one-click endpoint must not tell a guesser which it was.
-    return { ok: false, status: 'invalid', type };
+    return { ok: false, status: 'invalid', type, scope: 'address' };
   }
 
   const { error: updateError } = await supabase
@@ -154,8 +175,11 @@ async function applyChannelUnsubscribe(
     .in('status', ['active', 'bounced']);
 
   if (updateError) {
-    return { ok: false, status: 'error', message: updateError.message, type };
+    return { ok: false, status: 'error', message: updateError.message, type, scope: 'address' };
   }
 
-  return { ok: true, status: 'applied', type, columnUpdated: 'status' };
+  // `type` rides along for the log and for the caller that wants to know which
+  // letter was clicked; `scope` is what the write did, and the landing speaks
+  // from the scope (W4 r4 MAJOR-2).
+  return { ok: true, status: 'applied', type, scope: 'address', columnUpdated: 'status' };
 }
