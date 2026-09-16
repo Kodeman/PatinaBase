@@ -231,6 +231,13 @@ const RECORDED_STUDIO_HELD_SENTENCE =
 const RECORDED_STUDIO_UNREAD_SENTENCE =
   "Couldn’t read which studio keeps this job’s book. Press again to try once more.";
 /**
+ * R-CD, fifth amendment — THE ONE VALUE THE AUTHORITY BAND STANDS ON. Read
+ * once (`authorityStanding` below) and read by the band's render, the scopes
+ * it offers, the owner/admin notice, the scope snap-back, the act's hold, the
+ * writer's guards and the grant write itself.
+ */
+type AuthorityStanding = "unread" | "none" | "member" | "admin";
+/**
  * F3, amended (F-A) — the standing an authority grant is refused against is
  * read off the membership list, so a grant asked for while that list is
  * UNRESOLVED meets a refusal about standing nobody has read yet. Unresolved is
@@ -262,6 +269,20 @@ const AUTHORITY_STANDING_UNREAD_SENTENCE =
  */
 const NO_STUDIO_AUTHORITY_SENTENCE =
   "This job isn’t attached to a studio yet, so there is nowhere to record the authority.";
+/**
+ * F-A3 — THE OTHER HALF OF THE SAME REFUSAL, AND IT WAS SILENT. The book may
+ * be kept by a studio the caller holds no ACTIVE membership in:
+ * `useOrganizations` returns active memberships only
+ * (use-organizations.ts:167-169) and every authority policy gates on
+ * `is_active_studio_member(project_party_recorded_studio())`, so every scope
+ * is refused — after four rows were written. Said in the band's place, as the
+ * NULL-book case is.
+ *
+ * ⚠ WORDING OWED A RULING (Kody): composed in the sheet's voice from
+ * NO_STUDIO_AUTHORITY_SENTENCE, not ruled.
+ */
+const NO_STUDIO_MEMBERSHIP_AUTHORITY_SENTENCE =
+  "You’re not on the studio that keeps this job’s book, so there is nowhere to record the authority.";
 
 /** "a sub", "an installer" — the article the noun actually takes. */
 function withArticle(noun: string): string {
@@ -547,53 +568,56 @@ export function AddPersonSheet({
   const recordedStudioUnresolved =
     !!projectId && recordedStudioId === undefined;
   /**
-   * F-A — THE SAME STATE ON THE STANDING SIDE. `orgsLoading` alone left the
-   * errored and the offline-paused reads looking resolved, and `isOrgAdmin`
-   * below then read `false` for a real owner: the money and draw scopes
-   * rendered disabled and the notice asserted a standing nobody had read. The
-   * state every read of the list below stands on is `undefined`.
-   *
-   * F1 — AND ONLY WHERE THERE IS STANDING TO READ. `isOrgAdmin` below answers
-   * `false` unconditionally while `recordedStudioId` is falsey (CR11-11: no
-   * recorded studio, no standing), so on a job whose book resolved to NULL the
-   * list is never consulted and an unreadable list changes no answer. Holding
-   * there held the act on a question this sheet does not ask, offered money
-   * and draw_certify that are ungrantable on that job, and suppressed the
-   * notice that is the true one there.
-   *
-   * F-2 — AND UNRESOLVED IS NOT THAT NULL. `!!recordedStudioId` read the
-   * `undefined` of a book still out, errored or paused offline as if it were
-   * the resolved NULL, so this predicate answered `false` there: the notice
-   * below asserted "the studio owner's or an admin's to grant" and the money
-   * and draw scopes rendered disabled against an `isOrgAdmin` that had read
-   * neither the book nor the list — the F-A defect by the other road. Only a
-   * RESOLVED null is excluded, and it is excluded because the band is not
-   * rendered at all on such a job (F-1): nothing this predicate gates exists
-   * there to gate.
+   * F-A2 — IS A GRANT BEING ASKED FOR? The write runs under an open band with
+   * a phrase or a figure in it; the hold, the guards and the clearing effect
+   * all read this same object, so the act's predicate and the writer's cannot
+   * drift apart.
    */
-  const authorityStandingUnread =
-    authorityOpen && recordedStudioId !== null && orgs === undefined;
-  /**
-   * F2 — THE ACT IS HELD ONLY WHERE A GRANT IS ACTUALLY ASKED FOR. The write
-   * below runs under `authorityPhrase || authorityThreshold` alone, and the
-   * band has no collapse control — `setAuthorityOpen(true)` from either act,
-   * `false` only in `reset()`. An open, empty band over an unreadable list
-   * therefore held the add for a grant that would never be written, with no
-   * way back. What the band OFFERS still reads `authorityStandingUnread` — the
-   * scopes on offer do not depend on what has been typed — while the ACT is
-   * held only once a grant is on the page to be refused.
-   */
-  const authorityStandingUnresolved =
-    authorityStandingUnread &&
+  const grantRequested =
+    authorityOpen &&
     (authorityPhrase.trim() !== "" || authorityThreshold.trim() !== "");
   /**
-   * R-CD, amended — WHAT HOLDS THE ACT, AND THE SENTENCE BESIDE IT.
+   * R-CD, fifth amendment — ONE STANDING VALUE, READ BY EVERY READER.
    *
-   * Only a seat kind is held by either read (F4): a client or a maker writes
-   * no seat and no grant, so neither query stands on their path. The second
-   * branch is F3 — `isOrgAdmin` reads the membership list, and a grant asked
-   * for while that list is still out met the owner/admin refusal AFTER the
-   * seat, the card, the channels and the rule had been written.
+   * Four predicates used to answer "may this caller record an authority on
+   * this job", each patched separately, each disagreeing with the next about
+   * an `undefined`. They are one value now:
+   *
+   *  · 'unread'  — either query is still `undefined`, for ANY reason (first
+   *    fetch, a non-retried RPC error, a fetch paused offline, a query not
+   *    enabled). A successful `useOrganizations` read is always an array, so
+   *    `undefined` there never means "no memberships".
+   *  · 'none'    — the job records no studio (a RESOLVED null), or the caller
+   *    holds no ACTIVE membership in the studio that keeps this job's book.
+   *    `useOrganizations` selects `status = 'active'` only
+   *    (packages/supabase/src/hooks/use-organizations.ts:167-169) and all four
+   *    `project_party_authority_studio_*` policies gate on
+   *    `is_active_studio_member(project_party_recorded_studio())`
+   *    (00624:989,1003,1019,1045) — so an absent row and a NULL book are the
+   *    same refusal, said in the same place.
+   *  · 'member' / 'admin' — the caller's role in that studio. Money and
+   *    draw_certify are the owner's or an admin's (PR-n).
+   */
+  const authorityStanding: AuthorityStanding = useMemo(() => {
+    // F-1: a resolved NULL book answers the question on its own — no scope is
+    // grantable on a job that keeps none, whatever the membership list says or
+    // fails to say. An unreadable list must not re-offer the band there.
+    if (recordedStudioId === null) return "none";
+    if (recordedStudioId === undefined || orgs === undefined) return "unread";
+    const org = orgs.find((o) => o.id === recordedStudioId);
+    if (!org) return "none";
+    const role = org.membership?.role;
+    return role === "owner" || role === "admin" ? "admin" : "member";
+  }, [orgs, recordedStudioId]);
+  /**
+   * R-CD — WHAT HOLDS THE ACT, AND THE SENTENCE BESIDE IT.
+   *
+   * Only a seat kind is held (F4): a client or a maker writes no seat and no
+   * grant. The second branch is the standing one — a grant asked for against a
+   * standing nobody has read yet met the owner/admin refusal AFTER the seat,
+   * the card, the channels and the rule had been written. A 'none' standing is
+   * not held: the band is gone there and the clearing effect below has already
+   * taken the grant off the page.
    */
   const heldReason: { id: string; sentence: string } | null =
     isEditMode || !isSeatKind(kind)
@@ -605,12 +629,13 @@ export function AddPersonSheet({
               ? RECORDED_STUDIO_HELD_SENTENCE
               : RECORDED_STUDIO_UNREAD_SENTENCE,
           }
-        : authorityStandingUnresolved
+        : authorityStanding === "unread" && grantRequested
           ? {
               id: AUTHORITY_STANDING_HELD_ID,
-              sentence: orgsLoading
-                ? AUTHORITY_STANDING_HELD_SENTENCE
-                : AUTHORITY_STANDING_UNREAD_SENTENCE,
+              sentence:
+                orgsLoading || recordedStudioLoading
+                  ? AUTHORITY_STANDING_HELD_SENTENCE
+                  : AUTHORITY_STANDING_UNREAD_SENTENCE,
             }
           : null;
   /**
@@ -623,21 +648,15 @@ export function AddPersonSheet({
    * policy was the only half that existed.
    *
    * CR11-11: the standing this band prints is standing in the studio the JOB
-   * records, not the one holding the book. The four
-   * `project_party_authority_studio_*` policies gate on
-   * `project_party_recorded_studio()`, so an admin of the book's studio who is
-   * a plain member of the job's studio was offered a live money scope and met
-   * a refusal at the write. With no recorded studio there is no standing to
-   * read, and the band does not open at all (F-1, the render below) — the same
-   * fail-closed answer the DB gives, said before the press rather than after
-   * the seat, the card, the channels and the rule are already written.
+   * records, not the one holding the book — `authorityStanding` above reads
+   * the membership list at `project_party_recorded_studio()`, so an admin of
+   * the book's studio who is a plain member of the job's studio is offered no
+   * live money scope. Where that standing is 'none' the band is not rendered
+   * at all (the render below) — the same fail-closed answer the DB gives, said
+   * before the press rather than after the seat, the card, the channels and
+   * the rule are already written.
    */
-  const isOrgAdmin = useMemo(() => {
-    if (!recordedStudioId) return false;
-    const role = (orgs ?? []).find((o) => o.id === recordedStudioId)?.membership
-      ?.role;
-    return role === "owner" || role === "admin";
-  }, [orgs, recordedStudioId]);
+  const isOrgAdmin = authorityStanding === "admin";
   const defaultAuthorityScope: AuthorityScope =
     kind === "household" ? "change_order" : "selections";
   const [authorityScope, setAuthorityScope] = useState<AuthorityScope>(
@@ -649,21 +668,40 @@ export function AddPersonSheet({
     setAuthorityScope(defaultAuthorityScope);
   }, [defaultAuthorityScope]);
   // PR-n: money and draw certification are an owner's or an admin's to grant.
-  // The DB refuses them either way; the face says so before the press.
-  // F-A: while the list is unread `isOrgAdmin` is not an answer, so the scope
-  // is not snapped back on it — the act is held instead.
+  // The DB refuses them either way; the face says so before the press. Only a
+  // read 'member' standing is an answer — while it is 'unread' nothing has
+  // been read to snap a chosen scope back on, and at 'none' the band is gone.
   useEffect(() => {
     if (
-      !authorityStandingUnread &&
-      !isOrgAdmin &&
+      authorityStanding === "member" &&
       isAdminOnlyAuthorityScope(authorityScope)
     ) {
       setAuthorityScope(defaultAuthorityScope);
     }
+  }, [authorityStanding, authorityScope, defaultAuthorityScope]);
+  /**
+   * F-A1 — NOTHING TYPED IS STRANDED BEHIND A BAND THAT IS NO LONGER THERE.
+   *
+   * The band unmounts the moment the standing reads 'none' (a book that
+   * resolved to NULL, or one kept by a studio the caller is not on), and a
+   * phrase typed while it was still offered stayed in state: the writer's
+   * guard then refused the whole add on a grant with no field to clear it in.
+   * The grant comes off the page with the band.
+   */
+  useEffect(() => {
+    if (authorityStanding !== "none") return;
+    if (!authorityOpen && authorityPhrase === "" && authorityThreshold === "") {
+      return;
+    }
+    setAuthorityOpen(false);
+    setAuthorityPhrase("");
+    setAuthorityThreshold("");
+    setAuthorityScope(defaultAuthorityScope);
   }, [
-    authorityStandingUnread,
-    isOrgAdmin,
-    authorityScope,
+    authorityStanding,
+    authorityOpen,
+    authorityPhrase,
+    authorityThreshold,
     defaultAuthorityScope,
   ]);
   const { data: projectGrants } = useProjectAuthority(
@@ -870,33 +908,35 @@ export function AddPersonSheet({
     }
     /**
      * F3 — THE SAME DEFENCE ON THE STANDING SIDE. The grant below is refused
-     * against `isOrgAdmin`, which is read off a list that may not have come
-     * back; the act already holds there, and a future caller reaching this
-     * function directly meets the same refusal with the same sentence.
+     * against a standing read off two queries that may not have come back; the
+     * act already holds there, and a future caller reaching this function
+     * directly meets the same refusal with the same sentence.
      */
-    if (authorityStandingUnresolved) {
+    if (authorityStanding === "unread" && grantRequested) {
       setError(
-        orgsLoading
+        orgsLoading || recordedStudioLoading
           ? AUTHORITY_STANDING_HELD_SENTENCE
           : AUTHORITY_STANDING_UNREAD_SENTENCE,
       );
       return;
     }
     /**
-     * F-1 — THE THIRD GUARD, AND THE ONE THE DB WAS ANSWERING. On a job whose
-     * book resolved to NULL every `project_party_authority` policy refuses,
-     * so a press with a phrase or a figure typed ran seat → channels → rule →
+     * F-1 / F-A3 — THE THIRD GUARD, AND THE ONE THE DB WAS ANSWERING. Where
+     * the standing is 'none' — a NULL book, or a book kept by a studio this
+     * caller is not on — every `project_party_authority` policy refuses, so a
+     * press with a phrase or a figure typed ran seat → channels → rule →
      * affiliation and THEN met the refusal, caught below as the generic "Could
      * not add them just now. Try again." with four rows already written and
-     * `chainRef` resuming into the same doomed grant on every retry. The band
-     * is not rendered on such a job; this refuses the grant before the first
-     * write for any caller that arrives with one typed regardless.
+     * `chainRef` resuming into the same doomed grant on every retry. DEFENCE
+     * IN DEPTH only: the clearing effect takes the grant off the page as the
+     * band goes, so no press from this sheet reaches here with one.
      */
-    if (
-      recordedStudioId === null &&
-      (authorityPhrase.trim() !== "" || authorityThreshold.trim() !== "")
-    ) {
-      setError(NO_STUDIO_AUTHORITY_SENTENCE);
+    if (authorityStanding === "none" && grantRequested) {
+      setError(
+        recordedStudioId === null
+          ? NO_STUDIO_AUTHORITY_SENTENCE
+          : NO_STUDIO_MEMBERSHIP_AUTHORITY_SENTENCE,
+      );
       return;
     }
     setError(null);
@@ -1092,13 +1132,9 @@ export function AddPersonSheet({
           chain.affiliationWritten = true;
         }
       }
-      // F-6: the same three conjuncts the hold carries (`authorityOpen` and a
-      // typed phrase or figure), so the act's predicate and the writer's
-      // cannot drift apart if a collapse control is ever added to the band.
-      if (
-        authorityOpen &&
-        (authorityPhrase.trim() || authorityThreshold.trim())
-      ) {
+      // F-6: the same predicate object the hold and the guards read, so the
+      // act's answer and the writer's cannot drift apart.
+      if (grantRequested) {
         // CR-12: PR-n's client half. The DB policy reserves `money` and
         // `draw_certify` to an owner or an admin; the sheet refuses them before
         // the write rather than letting Postgres answer.
@@ -1721,17 +1757,25 @@ export function AddPersonSheet({
             email.&rdquo;
           </p>
 
-          {/* F-1 — THE BAND DOES NOT OPEN ON A JOB THAT KEEPS NO BOOK.
-              Every `project_party_authority` policy (00624:989,1003,1019,1045)
-              gates on `is_active_studio_member(project_party_recorded_studio())`,
-              false for a NULL studio (00417:47), so no scope can be recorded
-              there at all — and offering the field wrote the seat, the
-              channels, the rule and the affiliation before the refusal came
-              back as "Could not add them just now". This is CR11-11's "the
-              band closes", made true. An UNRESOLVED book is not a resolved
-              none: the band stays offered while the query is out and the act
-              is held instead (R-CD). */}
-          {recordedStudioId !== null && (
+          {/* F-1 / F-A3 / F-A5 — THE BAND IS OFFERED ONLY WHERE AN AUTHORITY
+              COULD BE RECORDED, and where it is not, ONE SENTENCE stands in
+              its place rather than nothing at all. Every
+              `project_party_authority` policy (00624:989,1003,1019,1045) gates
+              on `is_active_studio_member(project_party_recorded_studio())`,
+              false both for a NULL studio (00417:47) and for a caller with no
+              active membership in the studio that keeps the book — and
+              offering the field wrote the seat, the channels, the rule and the
+              affiliation before the refusal came back as "Could not add them
+              just now". An UNRESOLVED standing is neither: the band stays
+              offered while a query is out and the act is held instead
+              (R-CD). */}
+          {authorityStanding === "none" ? (
+            <p className="mb-4 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
+              {recordedStudioId === null
+                ? NO_STUDIO_AUTHORITY_SENTENCE
+                : NO_STUDIO_MEMBERSHIP_AUTHORITY_SENTENCE}
+            </p>
+          ) : (
             <>
               {/* R-J / C20 / SPEC §5.5 #16 — TWO branches, two exact wordings,
               each with its own act. The field never sits there looking
@@ -1804,8 +1848,7 @@ export function AddPersonSheet({
                       key={scope}
                       value={scope}
                       disabled={
-                        !authorityStandingUnread &&
-                        !isOrgAdmin &&
+                        authorityStanding === "member" &&
                         isAdminOnlyAuthorityScope(scope)
                       }
                     >
@@ -1813,10 +1856,11 @@ export function AddPersonSheet({
                     </option>
                   ))}
                 </select>
-                {/* F-A: an unread list is not a refusal. While it is out, the
-                scopes stay offered and this notice stays silent — the act
-                carries the reason instead. */}
-                {!authorityStandingUnread && !isOrgAdmin && (
+                {/* F-A/F-A2: an unread standing is not a refusal. While either
+                query is out the scopes stay offered and this notice stays
+                silent — the act carries the reason instead. It asserts only
+                against a standing that was actually read as a member's. */}
+                {authorityStanding === "member" && (
                   <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
                     Signing money and certifying draws are the studio
                     owner&rsquo;s or an admin&rsquo;s to grant.
@@ -2008,11 +2052,15 @@ export function AddPersonSheet({
           held={!!heldReason}
           disabled={!!heldReason}
           onHeldActivate={
-            recordedStudioUnresolved
-              ? () => void refetchRecordedStudio()
-              : authorityStandingUnresolved
-                ? () => void refetchOrganizations()
-                : undefined
+            heldReason
+              ? () => {
+                  // Either query can be the unresolved one, and both can be.
+                  if (recordedStudioId === undefined) {
+                    void refetchRecordedStudio();
+                  }
+                  if (orgs === undefined) void refetchOrganizations();
+                }
+              : undefined
           }
           onClick={() => void submit()}
         >
