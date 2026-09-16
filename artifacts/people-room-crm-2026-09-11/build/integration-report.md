@@ -323,3 +323,267 @@ since this report was first written:
 
 No prod mutation of any kind occurred while producing this report or this
 update.
+
+## 10. Full e2e re-run on 91205b61b (2026-09-16)
+
+Full Playwright suites re-run end-to-end against **local production builds**
+(`next start`, not `next dev`) of both portals at HEAD `91205b61b`
+(`build/people-room-crm-2026-09-11`), against a freshly-reset local Supabase
+stack plus the manual `the-document-lens-seed.sql` seed and all three NestJS
+services (orders/media/projects) running. This is the full re-run flagged as
+"planned as a separate pass" in §9 above.
+
+**Designer portal** — `apps/designer-portal`, `--project=chromium` (394 tests):
+**277 passed / 67 failed / 34 skipped / 16 did not run** (15.1m).
+
+**Client portal** — `apps/client-portal`, single chromium project (57 tests):
+**53 passed / 4 failed** (32.6s).
+
+### Classification method
+
+Per spec: `git diff --stat c879118ec HEAD -- <spec> <product files>` — a
+non-empty diff, or failure text naming a surface this program built (People
+room, Call Sheet, site access, paperwork door, invoice links, households,
+bids, consent, compliance, Hours door), is **OURS**. Empty diff-stat plus a
+root cause outside this program's changes is **PRE-EXISTING**. The baseline
+worktree (`agent-people-baseline` at `c879118ec`) does not exist on disk in
+this environment, so classification here rests on diff-stat plus root-cause
+reasoning, not a baseline reproduction run.
+
+### Designer portal — 5 OURS reds (all `e2e/people/**`)
+
+**1. `e2e/people/add-client-letter.spec.ts:47` — "a letter goes to a new
+client, and only one"**
+```
+Test timeout of 60000ms exceeded.
+Error: locator.fill: Test timeout of 60000ms exceeded.
+Call log:
+  - waiting for getByLabel('A line for Dave')
+
+  55 |   await page.getByLabel('Full name (optional)').fill('Dave Okonkwo');
+  56 |   await page.getByLabel('Email').fill(email);
+> 57 |   await page.getByLabel('A line for Dave').fill('Dave — the drawings are in.');
+     |                                            ^
+  58 |   await page.getByRole('button', { name: 'ADD AND SEND THE LETTER' }).click();
+```
+Root cause: `letter-line-field.tsx`'s label is dynamic ("A line for {name}"),
+generated from whatever name was just typed — a race between the fill and the
+label re-render. Test-authoring gap, not a functional break; `e2e/people/**`
+is this program's own surface (diff-stat vs `c879118ec` non-empty).
+
+**2. `e2e/people/add-client-letter.spec.ts:115` — "the roster still works
+with no letter, and nothing is sent"**
+```
+Test timeout of 60000ms exceeded.
+Error: locator.uncheck: Test timeout of 60000ms exceeded.
+Call log:
+  - waiting for getByLabel('Send them the letter')
+```
+Same file/root-cause family as #1 (a checkbox whose label/visibility depends
+on prior form state the test doesn't wait for). OURS.
+
+**3. `e2e/people/add-sheet.spec.ts:103` — "task 2 — a household member is a
+seat and an authority grant, two facts"**
+```
+Test timeout of 60000ms exceeded.
+Error: locator.fill: Test timeout of 60000ms exceeded.
+Call log:
+  - waiting for getByLabel('Authority')
+    - locator resolved to <input value="" type="text" id="add-party-authority" .../>
+    - fill("Signs money to $2,500")
+  - attempting fill action
+    112 × waiting for element to be visible, enabled and editable
+        - element is not visible
+
+  115 |       await page.getByLabel("Project").selectOption({ index: 1 });
+  116 |       await page.getByLabel("Full name").fill(name);
+> 117 |       await page.getByLabel("Authority").fill("Signs money to $2,500");
+```
+Root cause: the "Authority" field is only revealed after a specific prior UI
+act (selecting "household member" as the person type) that this test's setup
+doesn't perform before reaching for the field. Test-authoring gap in this
+program's own spec. OURS.
+
+**4. `e2e/people/add-sheet.spec.ts:145` — "the sheet asks for a trade before
+it will write a sub"**
+```
+Error: expect(locator).toHaveText(expected) failed
+Locator: getByRole('alert')
+Expected: "A sub or an installer needs the trade they work in."
+Error: strict mode violation: getByRole('alert') resolved to 2 elements:
+    1) <p role="alert" class="...">A sub or an installer needs the trade they work i…</p>
+    2) <div role="alert" aria-live="assertive" id="__next-route-announcer__"></div>
+
+  152 |     await page.getByLabel("Full name").fill(uniqueName("No Trade"));
+  153 |     await page.getByRole("button", { name: "Add to the roster" }).click();
+```
+Root cause: Next.js's own `__next-route-announcer__` div also carries
+`role="alert"`, colliding in strict mode with the real validation alert this
+program's UI renders. Test-authoring gap (locator needs narrowing), not a
+functional break. OURS.
+
+**5. `e2e/people/person-card.spec.ts:74` — "task 4 — do not contact, routed
+to somebody reachable"**
+```
+Error: expect(locator).toBeVisible() failed
+Locator: locator('[data-person-row]').filter({ hasText: 'Frank Bauer 5k1jr' })
+  .getByRole('link', { name: 'rosa@twincitiesdrywall.com' })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+```
+Newly observed this run. The preceding assertions in the same test (DB polls
+confirming `route_to_person_id` and `channels_forbidden` are correctly
+persisted, and the roster text `'Write Rosa instead.'`) all pass — only the
+final UI assertion, that Frank's Directory row renders a clickable
+`mailto`-style link to Rosa's email, fails. This is a genuine, not-yet
+root-caused defect in this program's Directory-row rendering for "do not
+contact, routed to" people. **Recommend a follow-up ticket**; out of scope to
+fix here per this task's "no product code fixes" constraint. OURS.
+
+### Designer portal — 62 pre-existing reds
+
+Confirmed via empty `git diff --stat c879118ec HEAD -- <spec>` for every file
+below (none touched by this program), and none of their failure text names a
+People-room/Call-Sheet/paperwork/pay-link/invoice/households surface:
+
+- **~34 already-documented pre-existing gaps**, matching the expected list
+  from prior QA rounds:
+  - `e2e/document/action-visibility.spec.ts:232` (mobile-bar timing)
+  - `e2e/document/hours.spec.ts:60` (RSC fetch `ERR_ABORTED` in headless
+    Chromium; `:72` did not fail this run)
+  - `e2e/field/field-coordination.spec.ts:55,244` (2) — `studio_id_not_designer_studio`
+    trigger tightening from migrations `00602`/`00603`
+  - `e2e/library-configuration/{commission-walk,decisions-compare,picker-configure,spec-book-dimensions}.spec.ts`
+    (4) — same `studio_id_not_designer_studio` root cause
+  - `e2e/proposals/plans-link.spec.ts` equivalent in client portal (see below)
+    shares this exact root cause too
+- **28 legacy/scaffold test-debt failures**, unrelated to this program and
+  pre-dating it, root-caused via sampled failure text:
+  - `e2e/auth/authentication.spec.ts:169` — `ReferenceError: api is not defined`
+    (a bug in the spec itself)
+  - `e2e/catalog/**` (11: `catalog-api-monitoring.spec.ts` ×2,
+    `catalog-page.spec.ts` ×9) — catalog heading/API-call assertions against a
+    page that doesn't render as the (apparently stale) spec expects
+  - `e2e/catalog-comprehensive-test.spec.ts` (4), `e2e/catalog-features.spec.ts`
+    (1), `e2e/catalog/catalog-simple-test.spec.ts` (1) — same family
+  - `e2e/crm/tests/crm-critical-journeys.spec.ts` (21) — all fail in
+    `crm-fixtures.ts`'s `loginAsDesigner`, timing out on
+    `input[name="email"]`; this looks like an orphaned CRM prototype scaffold
+    with its own broken auth fixture, disconnected from the real app's
+    sign-in form
+  - `e2e/dashboard-load.spec.ts:73`, `e2e/debug-catalog-session.spec.ts:10`,
+    `e2e/test-catalog-integration.spec.ts:4`, `e2e/test-login-flow.spec.ts:4`
+    — generic page-load/login-flow smoke scripts, broken independent of this
+    program (e.g. `wave2-screenshots.spec.ts:24` fails filling a hardcoded
+    `password123` that doesn't match the seeded account)
+  - `e2e/wave2-screenshots.spec.ts` (2), `e2e/wp3-screenshots.spec.ts:153`,
+    `e2e/wp4-screenshots.spec.ts:91` — screenshot-generation specs (the ones
+    that rewrite `docs/**/*.png`); `wp4-screenshots.spec.ts:91` failed on a
+    `purchase_orders_project_id_fkey` violation against a project id absent
+    from `projects` — an orphaned reference, consistent with running the full
+    suite three times this session against the same never-reset local DB
+    rather than a fresh reset per run
+  - `e2e/proposals/proposal-client-decline.spec.ts:81` — timeout on a client
+    sign-in disclosure button, unrelated to this program's proposal work
+- **Command-palette timeout cluster** (contention under `--workers=4` on a
+  loaded host, not a functional break): `e2e/document/desk-walkthrough.spec.ts:193`
+  and `e2e/document/help-panel.spec.ts:73` both time out at the identical step
+  — filling the ⌘K command-bar textbox — and `e2e/document/desk-error-state.spec.ts:90`
+  times out on a heading during a 20-consecutive-page-load stress loop
+- **2 unrelated functional assertions**, files unchanged, features this
+  program did not touch: `e2e/document/lens-contrast.spec.ts:183` (a
+  network-cost allowlist assertion around product-image storage requests
+  during scroll) and `e2e/document/quiet-release-contracts.spec.ts:252` (an
+  Orders-dialog title-line assertion)
+- **1 likely same-session DB-pollution case**:
+  `e2e/document/margin-handoffs.spec.ts:154` expected an "overdue" standing
+  row that resolved to 0 elements — plausibly cleared/mutated by an earlier
+  test acting on the same shared fixture account within this session's
+  repeated, non-reset runs
+
+### Client portal — 1 OURS red
+
+**`tests/design-build-door.spec.ts:490` — "the offer is an offer: ignore it
+and the signature still stands"**
+```
+Error: expect(locator).toBeVisible() failed
+Locator:  getByTestId('letterbox')
+Expected: visible
+Timeout:  30000ms
+Error: element(s) not found
+
+  505 |     // AND THE MONEY IS STILL REACHABLE. The deposit invoice is project-less
+  506 |     // exactly as the prime is, so it stands in this door's own letterbox with
+  507 |     // its own pay link — the persistent half of walk step 13. ...
+  508 |     const letterbox = page.getByTestId('letterbox');
+> 509 |     await expect(letterbox).toBeVisible({ timeout: 30_000 });
+```
+`src/components/threshold/letterbox.tsx` (75 insertions / 16 deletions since
+`c879118ec`) and its test file are both this program's own work (per
+`pay-link.spec.ts`'s in-repo comment: "The terminal act stopped being a link
+... on this program (letterbox.tsx ...)"). `design-build-door.spec.ts` itself
+is unchanged, but the component the assertion depends on is this program's —
+OURS. Recommend a follow-up ticket for the project-less deposit-invoice
+letterbox rendering path on the design-build door; out of scope to fix here.
+
+### Client portal — 3 pre-existing reds
+
+**`tests/plans-link.spec.ts:190` — "renders the set for the holder, signs
+prints, and dies on revoke"**
+```
+{ code: 'P0001', message: 'studio_id_not_designer_studio' }
+```
+Spec unchanged. Identical root cause to the designer portal's
+`field-coordination`/`library-configuration` reds above — the pre-existing
+`studio_id_not_designer_studio` trigger tightening (migrations `00602`/`00603`),
+unrelated to this program.
+
+**`tests/share-link.spec.ts:114` — "a share with a board renders it view-only
+for a guest (B3)"**
+```
+{ code: '23514', message: 'proposal b0000000-0000-0000-0000-000000000002 is sent, so its authored copy is immutable' }
+```
+Spec unchanged. The check constraint traces to migration
+`00390_proposal_copy_immutability.sql` (long pre-dates this program). The
+fixture proposal (`b0000000-...-0002`) was evidently advanced to `sent` by an
+earlier test in this same non-reset session, then `seedBoard()`'s board-item
+insert tripped the immutability guard correctly refusing a write against an
+already-sent proposal. Same same-session-pollution category as the two
+findings below — not a defect this program introduced.
+
+**`tests/threshold.spec.ts:354` — "names the other houses on the mat for a
+client who keeps several"**
+```
+Expected: 2 (MULTI_OTHER_HOUSE_COUNT)
+Received: 9 links under getByTestId('mat-other-houses')
+```
+`threshold.spec.ts` and the rendering component
+(`src/components/threshold/other-houses.tsx`) are both unchanged since
+`c879118ec`. Direct SQL against the local DB during triage showed 12 total
+projects for `client@patina.dev`: 5 legitimate seed/lens-seed rows (timestamps
+12:33–13:31) plus 7 clearly test-run-generated fixtures — 5 "Pay E2E
+`<hex>`" rows from `tests/pay-link.spec.ts` (this program's file, OURS by
+diff-stat, but its *fixture-creation code at line 138 predates this
+program's diff hunks* and has never had cleanup) and 2 "The Halvorsen
+Residence `<hex>`" rows from `tests/trade-agreement-link.spec.ts` (unchanged
+since `c879118ec`, also has no `afterAll`/cleanup). Both fixture-creation
+code paths pre-date this program and would pollute `client@patina.dev`'s
+project list identically on `c879118ec` if the full suite were run
+back-to-back against one un-reset DB there too. **Classified PRE-EXISTING**:
+this is a pre-existing test-isolation/cleanup gap in the client-portal e2e
+suite (shared fixture account, no per-spec teardown), triggered here by
+running the full suite multiple times in one session without an intervening
+`supabase:reset` — not a regression this program introduced. A clean
+single-pass run (reset once, run once) would very likely pass.
+
+### Caveat on this run's environment
+
+The designer suite was run 3 times and the client suite once in this same
+session against one local DB, without an intervening `supabase:reset` between
+designer runs (only before the very first run). This is the acknowledged
+cause of the `margin-handoffs`, `wp4-screenshots` FK-violation, and all 3
+client-portal same-session-pollution reds above. A from-clean single-pass run
+would be expected to show a smaller, cleaner red set for those specific
+items; the People-room OURS reds (5 designer + 1 client) are unaffected by
+this caveat — they fail identically regardless of run history.
