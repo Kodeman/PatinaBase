@@ -283,6 +283,16 @@ const NO_STUDIO_AUTHORITY_SENTENCE =
  */
 const NO_STUDIO_MEMBERSHIP_AUTHORITY_SENTENCE =
   "You’re not on the studio that keeps this job’s book, so there is nowhere to record the authority.";
+/**
+ * PR-n / CR-12 — money and draw_certify are the owner's or an admin's to
+ * grant (00624:989,1003,1019,1045). One sentence, said in the three places
+ * that can refuse an admin-only scope on a non-admin standing: guard 4 in
+ * `submitParty` (the pre-write refusal), the in-chain `throw` (defence in
+ * depth for a caller that reaches the write another way), and the notice
+ * rendered beside the scope select at 'member' standing.
+ */
+const ADMIN_ONLY_AUTHORITY_SCOPE_SENTENCE =
+  "Signing money and certifying draws are the studio owner’s or an admin’s to grant.";
 
 /** "a sub", "an installer" — the article the noun actually takes. */
 function withArticle(noun: string): string {
@@ -697,19 +707,26 @@ export function AddPersonSheet({
   /**
    * F-A1 — NOTHING TYPED IS STRANDED BEHIND A BAND THAT IS NO LONGER THERE.
    *
-   * The band unmounts the moment the standing reads 'none' (a book that
-   * resolved to NULL, or one kept by a studio the caller is not on), and a
-   * phrase typed while it was still offered stayed in state: the writer's
-   * guard then refused the whole add on a grant with no field to clear it in.
-   * The grant comes off the page with the band.
+   * This effect clears the grant on exactly the two paths that unmount the
+   * band: the standing reading 'none' (a book that resolved to NULL, or one
+   * kept by a studio the caller is not on), and the project select cleared
+   * back to "Which project…" (F-B1's render gate below draws nothing while
+   * `projectId` is ""). Off either path, a phrase typed while the band was
+   * offered would otherwise sit in state with no field to clear it, and the
+   * writer's guard would refuse the whole add on a grant nobody can see.
    *
-   * R1 — AND THE BAND HAS TWO UNMOUNT PATHS, not one. F-B1 added the second:
-   * the render gate below draws nothing at all while `projectId` is "", so
-   * clearing the project select back to "Which project…" took the band off
-   * the page with the standing still reading whatever the last job said. A
-   * phrase and a figure typed under the old job then sat invisibly in state
-   * and reattached to the next job picked — someone else's authority, carried
-   * across on a field nobody could see. Both paths clear alike.
+   * R1, corrected — A DIRECT PROJECT SWITCH DOES NOT UNMOUNT THE BAND, and
+   * this effect does not clear it there. `authorityPhrase`/`authorityThreshold`
+   * are state on THIS component, not the band's own: switching the project
+   * select from job A to job B (`projectId` staying truthy, standing staying
+   * something other than 'none') carries whatever was typed under A straight
+   * into B — VISIBLY, in the still-rendered band — and `agreementClause`
+   * below recomputes against B's grants. The same is true when the kind or
+   * edit-mode branch (~:1400,1503,1606) hides this whole section and shows it
+   * again: the band's JSX unmounts and remounts, but the state it reads does
+   * not, so a grant typed before the toggle reappears with it. Whether a
+   * project change (A → B) should clear the grant, the way the two paths
+   * above do, is a ruling owed to Kody — undecided here.
    */
   useEffect(() => {
     if (authorityStanding !== "none" && projectId) return;
@@ -981,13 +998,12 @@ export function AddPersonSheet({
      * future caller that reaches the chain another way.
      */
     if (
+      !!projectId &&
       grantRequested &&
       isAdminOnlyAuthorityScope(authorityScope) &&
       authorityStanding !== "admin"
     ) {
-      setError(
-        "Signing money and certifying draws are the studio owner's or an admin's to grant.",
-      );
+      setError(ADMIN_ONLY_AUTHORITY_SCOPE_SENTENCE);
       return;
     }
     setError(null);
@@ -1190,9 +1206,7 @@ export function AddPersonSheet({
         // `draw_certify` to an owner or an admin; the sheet refuses them before
         // the write rather than letting Postgres answer.
         if (!isOrgAdmin && isAdminOnlyAuthorityScope(authorityScope)) {
-          throw new Error(
-            "Signing money and certifying draws are the studio owner's or an admin's to grant.",
-          );
+          throw new Error(ADMIN_ONLY_AUTHORITY_SCOPE_SENTENCE);
         }
         const dollars = authorityThreshold.trim();
         const amount =
@@ -1922,8 +1936,7 @@ export function AddPersonSheet({
                 against a standing that was actually read as a member's. */}
                 {authorityStanding === "member" && (
                   <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
-                    Signing money and certifying draws are the studio
-                    owner&rsquo;s or an admin&rsquo;s to grant.
+                    {ADMIN_ONLY_AUTHORITY_SCOPE_SENTENCE}
                   </p>
                 )}
 
