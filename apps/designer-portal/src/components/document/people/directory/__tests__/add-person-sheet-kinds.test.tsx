@@ -39,8 +39,15 @@ const recordedStudio = {
 };
 /** R-CD, amended: the held act's retry — pressing it asks the book again. */
 const recordedStudioRefetch = jest.fn();
-/** F3 — the membership list the authority band's refusal is read against. */
-const orgsState = { loading: false };
+/**
+ * F3 — the membership list the authority band's refusal is read against.
+ * F-A: `undefined` there is three states too — still out, errored (react-query
+ * does not retry a non-network error), or a fetch paused offline. Only a
+ * resolved read is an answer about standing.
+ */
+const orgsState = { loading: false, isError: false };
+/** F-A — the held act's retry on the standing side. */
+const orgsRefetch = jest.fn();
 
 jest.mock("@patina/supabase", () => ({
   useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -94,18 +101,21 @@ jest.mock("@patina/supabase", () => ({
   useStudioIdentity: () => ({ data: { name: "Middle West Studio" } }),
   useUpdateStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useOrganizations: () => ({
-    data: orgsState.loading
-      ? undefined
-      : [
-          {
-            id: "org-1",
-            type: "design_studio",
-            // CR-12: the money scopes are an owner's or an admin's to grant,
-            // and the sheet reads that off the caller's own membership.
-            membership: { role: "owner" },
-          },
-        ],
+    data:
+      orgsState.loading || orgsState.isError
+        ? undefined
+        : [
+            {
+              id: "org-1",
+              type: "design_studio",
+              // CR-12: the money scopes are an owner's or an admin's to grant,
+              // and the sheet reads that off the caller's own membership.
+              membership: { role: "owner" },
+            },
+          ],
     isLoading: orgsState.loading,
+    isError: orgsState.isError,
+    refetch: orgsRefetch,
   }),
   peopleKeys: { all: ["people-directory"] },
   peopleSeatKeys: { all: ["people-directory-seats"] },
@@ -186,6 +196,8 @@ beforeEach(() => {
   recordedStudio.fetchStatus = "idle";
   recordedStudioRefetch.mockReset().mockResolvedValue({});
   orgsState.loading = false;
+  orgsState.isError = false;
+  orgsRefetch.mockReset().mockResolvedValue({});
 });
 
 describe("the kind switch", () => {
@@ -492,7 +504,9 @@ describe("a sub", () => {
     fireEvent.change(screen.getByLabelText("Mobile"), {
       target: { value: "(612) 555-0111" },
     });
-    const line = document.getElementById("add-party-phone-on-file") as HTMLElement;
+    const line = document.getElementById(
+      "add-party-phone-on-file",
+    ) as HTMLElement;
     expect(line).toHaveTextContent(
       "This number is already on file for Dana Kowalski.",
     );
@@ -590,9 +604,7 @@ describe("a sub", () => {
     expect(
       screen.getByText(/Patina has not sent them anything yet\./),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/until they reply YES/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/until they reply YES/)).not.toBeInTheDocument();
   });
 
   /**
@@ -652,7 +664,9 @@ describe("a household member (PR-c / C5)", () => {
   it("says the same noun in its intro and its refusal as on its door", async () => {
     openSheet();
     fireEvent.click(screen.getByRole("button", { name: "a household member" }));
-    expect(document.body.textContent).toContain("Add a household member to a project");
+    expect(document.body.textContent).toContain(
+      "Add a household member to a project",
+    );
     expect(document.body.textContent).not.toContain("client rep");
     fireEvent.change(screen.getByLabelText("Project"), {
       target: { value: PROJECT },
@@ -666,7 +680,9 @@ describe("a household member (PR-c / C5)", () => {
   it("takes the article its own noun takes", async () => {
     openSheet();
     fireEvent.click(screen.getByRole("button", { name: "an installer" }));
-    expect(document.body.textContent).toContain("Add an installer to a project");
+    expect(document.body.textContent).toContain(
+      "Add an installer to a project",
+    );
   });
 });
 
@@ -718,8 +734,8 @@ describe("someone else (PR-f)", () => {
  * the no-card path.
  */
 describe("the recorded studio, while it is still resolving", () => {
-  function openSub() {
-    openSheet();
+  /** The seat's fields, on a sheet that is already rendered. */
+  function fillSub() {
     fireEvent.click(screen.getByRole("button", { name: "a sub" }));
     fireEvent.change(screen.getByLabelText("Project"), {
       target: { value: PROJECT },
@@ -733,6 +749,11 @@ describe("the recorded studio, while it is still resolving", () => {
     fireEvent.change(screen.getByLabelText("Mobile"), {
       target: { value: "(612) 555-0119" },
     });
+  }
+
+  function openSub() {
+    openSheet();
+    fillSub();
   }
 
   it("holds the act while the query is still out, and writes nothing", async () => {
@@ -865,6 +886,11 @@ describe("the recorded studio, while it is still resolving", () => {
     fireEvent.change(screen.getByLabelText("What they may decide"), {
       target: { value: "selections" },
     });
+    // A grant is only WRITTEN when a phrase or a figure was typed; without one
+    // `setAuthority` is never reached and the assertion below says nothing.
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
 
     const act = screen.getByRole("button", { name: "Add to the roster" });
     expect(act).toHaveAttribute("aria-disabled", "true");
@@ -879,6 +905,79 @@ describe("the recorded studio, while it is still resolving", () => {
     await waitFor(() => expect(act).toHaveAttribute("aria-disabled", "true"));
     expect(addParty).not.toHaveBeenCalled();
     expect(setAuthority).not.toHaveBeenCalled();
+  });
+
+  /**
+   * F-A — an errored membership read is not an answer about standing. On
+   * `isLoading` alone the act released and `isOrgAdmin` read false for a real
+   * owner: the money and draw scopes rendered disabled under a notice
+   * asserting a refusal nobody had read.
+   */
+  it("holds the act when the standing could not be read, and asserts no refusal", async () => {
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-authority-standing-held",
+    );
+    expect(
+      screen.getByText(
+        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+    // No standing was read, so none is asserted: the scopes stay offered and
+    // the owner/admin notice stays silent.
+    expect(
+      screen.queryByText(
+        "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Signs money" }),
+    ).not.toBeDisabled();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(orgsRefetch).toHaveBeenCalled());
+    expect(addParty).not.toHaveBeenCalled();
+    expect(setAuthority).not.toHaveBeenCalled();
+  });
+
+  /** And the retry releases it: the list reads back, the owner may press. */
+  it("releases the act once the standing reads back as the owner’s", async () => {
+    orgsState.isError = true;
+    const view = render(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    fillSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    await waitFor(() => expect(orgsRefetch).toHaveBeenCalled());
+
+    orgsState.isError = false;
+    view.rerender(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    await waitFor(() => expect(act).not.toHaveAttribute("aria-disabled"));
+    expect(
+      screen.queryByText(
+        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Signs money" }),
+    ).not.toBeDisabled();
   });
 });
 

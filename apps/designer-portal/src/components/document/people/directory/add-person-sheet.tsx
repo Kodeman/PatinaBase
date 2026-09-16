@@ -102,7 +102,10 @@ export type AddedPersonKind =
 
 /** Two written names for the same human, as a studio would read them — case
  *  and surrounding space are not a different person. */
-function sameWrittenName(a: string | null | undefined, b: string | null | undefined): boolean {
+function sameWrittenName(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
   return (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
 }
 
@@ -228,13 +231,21 @@ const RECORDED_STUDIO_HELD_SENTENCE =
 const RECORDED_STUDIO_UNREAD_SENTENCE =
   "Couldn’t read which studio keeps this job’s book. Press again to try once more.";
 /**
- * F3 — the standing an authority grant is refused against is read off the
- * membership list, so a grant asked for while that list is out meets a refusal
- * about standing nobody has read yet.
+ * F3, amended (F-A) — the standing an authority grant is refused against is
+ * read off the membership list, so a grant asked for while that list is
+ * UNRESOLVED meets a refusal about standing nobody has read yet. Unresolved is
+ * `data === undefined`, not `isLoading` — `useOrganizations`
+ * (packages/supabase/src/hooks/use-organizations.ts:150-182) has no `enabled`
+ * gate here and THROWS `Not authenticated` with no session, so an error or an
+ * offline-paused fetch reads `isLoading === false` with `data` still
+ * undefined; every resolved fetch returns an array, never undefined, so the
+ * hold cannot latch for a signed-in owner.
  */
 const AUTHORITY_STANDING_HELD_ID = "add-person-authority-standing-held";
 const AUTHORITY_STANDING_HELD_SENTENCE =
   "Checking your standing in this job’s studio.";
+const AUTHORITY_STANDING_UNREAD_SENTENCE =
+  "Couldn’t read your standing in this job’s studio. Press again to try once more.";
 
 /** "a sub", "an installer" — the article the noun actually takes. */
 function withArticle(noun: string): string {
@@ -316,7 +327,11 @@ export function AddPersonSheet({
   const contactRuleWrite = useSetContactRule();
   const setAuthority = useSetPartyAuthority();
   const setAffiliation = useSetAffiliation();
-  const { data: orgs, isLoading: orgsLoading } = useOrganizations();
+  const {
+    data: orgs,
+    isLoading: orgsLoading,
+    refetch: refetchOrganizations,
+  } = useOrganizations();
   // QA-R3-1: the caller's answer wins. The fallback is the membership list
   // SORTED by id — never `.find()` over an unordered read, which is the defect
   // itself: a designer in two design studios got a different answer between
@@ -513,6 +528,14 @@ export function AddPersonSheet({
   const recordedStudioUnresolved =
     !!projectId && recordedStudioId === undefined;
   /**
+   * F-A — THE SAME STATE ON THE STANDING SIDE. `orgsLoading` alone left the
+   * errored and the offline-paused reads looking resolved, and `isOrgAdmin`
+   * below then read `false` for a real owner: the money and draw scopes
+   * rendered disabled and the notice asserted a standing nobody had read. The
+   * state every read of the list below stands on is `undefined`.
+   */
+  const authorityStandingUnresolved = authorityOpen && orgs === undefined;
+  /**
    * R-CD, amended — WHAT HOLDS THE ACT, AND THE SENTENCE BESIDE IT.
    *
    * Only a seat kind is held by either read (F4): a client or a maker writes
@@ -531,10 +554,12 @@ export function AddPersonSheet({
               ? RECORDED_STUDIO_HELD_SENTENCE
               : RECORDED_STUDIO_UNREAD_SENTENCE,
           }
-        : authorityOpen && orgsLoading
+        : authorityStandingUnresolved
           ? {
               id: AUTHORITY_STANDING_HELD_ID,
-              sentence: AUTHORITY_STANDING_HELD_SENTENCE,
+              sentence: orgsLoading
+                ? AUTHORITY_STANDING_HELD_SENTENCE
+                : AUTHORITY_STANDING_UNREAD_SENTENCE,
             }
           : null;
   /**
@@ -573,18 +598,30 @@ export function AddPersonSheet({
   }, [defaultAuthorityScope]);
   // PR-n: money and draw certification are an owner's or an admin's to grant.
   // The DB refuses them either way; the face says so before the press.
+  // F-A: while the list is unresolved `isOrgAdmin` is not an answer, so the
+  // scope is not snapped back on it — the act is held instead.
   useEffect(() => {
-    if (!isOrgAdmin && isAdminOnlyAuthorityScope(authorityScope)) {
+    if (
+      !authorityStandingUnresolved &&
+      !isOrgAdmin &&
+      isAdminOnlyAuthorityScope(authorityScope)
+    ) {
       setAuthorityScope(defaultAuthorityScope);
     }
-  }, [isOrgAdmin, authorityScope, defaultAuthorityScope]);
+  }, [
+    authorityStandingUnresolved,
+    isOrgAdmin,
+    authorityScope,
+    defaultAuthorityScope,
+  ]);
   const { data: projectGrants } = useProjectAuthority(
     open && projectId ? projectId : null,
   );
   const agreementClause = useMemo(() => {
     for (const grants of Object.values(projectGrants ?? {})) {
       for (const grant of grants) {
-        const clause = grant.scope === authorityScope ? grant.source_clause : null;
+        const clause =
+          grant.scope === authorityScope ? grant.source_clause : null;
         if (clause?.trim()) return clause.trim();
       }
     }
@@ -758,14 +795,27 @@ export function AddPersonSheet({
   const submitParty = async () => {
     if (!isSeatKind(kind)) return;
     /**
-     * R-CD, amended (F5) — the invariant holds by construction, not by one
-     * button. Enter in the email, the website and the client email fields all
-     * call `submit()` straight past the act, so the writer itself refuses
-     * while the job's recorded studio is unresolved — the state every write
-     * below reads. `projectId` is checked a few lines down and prints its own
-     * refusal; with none picked there is no job whose studio could resolve.
+     * R-CD, amended twice (F5, then F-C) — the invariant holds by
+     * construction, not by one button. No Enter-key path reaches here today:
+     * the three `onKeyDown` handlers in this sheet call `submitEditContact`,
+     * `submitClient` and `submitMaker`, the seat branch has none, and there is
+     * no `<form>` — so this is DEFENCE IN DEPTH for any future caller, not a
+     * bypass that is open now. The writer itself refuses while the job's
+     * recorded studio is unresolved — the state every write below reads.
+     * `projectId` is checked a few lines down and prints its own refusal; with
+     * none picked there is no job whose studio could resolve.
+     *
+     * F-G: a silent `return` left a press with no answer at all, so the held
+     * sentence the act carries is printed here too.
      */
-    if (recordedStudioUnresolved) return;
+    if (recordedStudioUnresolved) {
+      setError(
+        recordedStudioLoading
+          ? RECORDED_STUDIO_HELD_SENTENCE
+          : RECORDED_STUDIO_UNREAD_SENTENCE,
+      );
+      return;
+    }
     setError(null);
     const trimmedName = partyName.trim();
     const partyKind = SEAT_PARTY_KIND[kind];
@@ -774,9 +824,7 @@ export function AddPersonSheet({
       return;
     }
     if (!trimmedName) {
-      setError(
-        `${capitalise(withArticle(DOOR_NOUN[kind]))} needs a name.`,
-      );
+      setError(`${capitalise(withArticle(DOOR_NOUN[kind]))} needs a name.`);
       return;
     }
     // PR-f: an unnamed other is the row that goes dark.
@@ -971,7 +1019,8 @@ export function AddPersonSheet({
           );
         }
         const dollars = authorityThreshold.trim();
-        const amount = dollars === "" ? null : Number(dollars.replace(/,/g, ""));
+        const amount =
+          dollars === "" ? null : Number(dollars.replace(/,/g, ""));
         if (amount != null && (!Number.isFinite(amount) || amount < 0)) {
           throw new Error("Write the figure in dollars — 2500, not $2.5k.");
         }
@@ -1644,13 +1693,20 @@ export function AddPersonSheet({
                 <option
                   key={scope}
                   value={scope}
-                  disabled={!isOrgAdmin && isAdminOnlyAuthorityScope(scope)}
+                  disabled={
+                    !authorityStandingUnresolved &&
+                    !isOrgAdmin &&
+                    isAdminOnlyAuthorityScope(scope)
+                  }
                 >
                   {AUTHORITY_SCOPE_LABELS[scope]}
                 </option>
               ))}
             </select>
-            {!isOrgAdmin && (
+            {/* F-A: an unresolved list is not a refusal. While it is out, the
+                scopes stay offered and this notice stays silent — the act
+                carries the reason instead. */}
+            {!authorityStandingUnresolved && !isOrgAdmin && (
               <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
                 Signing money and certifying draws are the studio owner&rsquo;s
                 or an admin&rsquo;s to grant.
@@ -1672,8 +1728,8 @@ export function AddPersonSheet({
               className={`${FIELD_INPUT} mt-1`}
             />
             <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
-              Leave it empty where no figure applies. 2500 reads as
-              &ldquo;Signs money to $2,500.&rdquo;
+              Leave it empty where no figure applies. 2500 reads as &ldquo;Signs
+              money to $2,500.&rdquo;
             </p>
 
             <label
@@ -1842,7 +1898,9 @@ export function AddPersonSheet({
           onHeldActivate={
             recordedStudioUnresolved
               ? () => void refetchRecordedStudio()
-              : undefined
+              : authorityStandingUnresolved
+                ? () => void refetchOrganizations()
+                : undefined
           }
           onClick={() => void submit()}
         >

@@ -510,3 +510,5 @@ while the membership behind an authority grant is still out, with neither the
 seat nor the grant written. No server, database or Playwright command was run
 for this pass — the full e2e suites were running on this worktree under another
 agent.
+
+**Second amendment (this commit, closing the re-review’s F-A / F-C / F-G).** The standing side now holds on `orgs === undefined` rather than `orgsLoading`, so an errored or offline-paused membership read no longer lets `isOrgAdmin` answer “no standing” for a real owner: while unresolved the money and draw scopes stay offered, the owner/admin notice stays silent, the act carries a fetching or a could-not-read sentence, and `onHeldActivate` refetches the membership list (F-A). The R-CD row’s Enter-key claim was wrong — no `onKeyDown` handler in this sheet reaches `submitParty` and there is no `<form>` — so the row and the guard’s docstring now call the structural guard defence in depth for a future caller, not a closed bypass (F-C). That guard also sets the sheet’s error state with the same held sentence instead of returning silently (F-G).
