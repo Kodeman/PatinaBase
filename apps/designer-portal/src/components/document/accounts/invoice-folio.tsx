@@ -665,10 +665,12 @@ export function InvoiceFolio({
               Void
             </DocumentAction>
           )}
-          {/* R51/R83: say why, or do not offer the act. `canShareLink` reads
-              the invoice's status and the link reads its own query, so the two
-              disagree on first load and after a failed mint — a greyed act
-              with no reason given is the one thing the folio must not draw. */}
+          {/* R51/R83: say why, or do not offer the act. Copy stands only where
+              there is an address to copy — a greyed act with no reason given is
+              the one thing the folio must not draw — so it waits on the mint.
+              Since 00636 froze `invoices.token`, `get_invoice_link` answers
+              `token: NULL` for every invoice, so this address arrives from one
+              place only: `useRegenerateInvoiceLink`'s own `setQueryData`. */}
           {canShareLink && clientInvoiceUrl && (
             <DocumentAction
               actionKey="copy-invoice-link"
@@ -683,7 +685,13 @@ export function InvoiceFolio({
                   : 'Copy link'}
             </DocumentAction>
           )}
-          {canShareLink && clientInvoiceUrl && (
+          {/* REGENERATE STANDS ON THE INVOICE'S STATUS ALONE (W4 r4 MAJOR-1).
+              It was gated on `clientInvoiceUrl` too, and it is the only act
+              that can put an address there: the one door to a copyable /pay
+              address was locked behind the door itself, so neither act ever
+              rendered on any issued invoice. Minting is what this act is for;
+              Copy appears the moment it lands. */}
+          {canShareLink && (
             <DocumentAction
               actionKey="regenerate-invoice-link"
               variant="tertiary"
@@ -772,8 +780,8 @@ export function InvoiceFolio({
               </>
             ) : (
               <p className="text-[11px] text-[var(--color-charcoal)]">
-                Email did not reach the client, and this invoice has no link yet. Resend the
-                invoice to try again.
+                Email did not reach the client, and this invoice has no link yet. Regenerate link,
+                above, mints one you can send them.
               </p>
             )}
           </div>

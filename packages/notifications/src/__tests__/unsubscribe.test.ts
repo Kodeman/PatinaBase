@@ -201,6 +201,7 @@ describe('applyUnsubscribeToken — the channel branch (CRM-12 / D-4)', () => {
     expect(outcome).toMatchObject({
       ok: true,
       status: 'applied',
+      scope: 'address',
       columnUpdated: 'status',
     });
     expect(recorded.channelUpdates).toHaveLength(1);
@@ -266,6 +267,30 @@ describe('applyUnsubscribeToken — the channel branch (CRM-12 / D-4)', () => {
     expect(recorded.channelUpdates).toHaveLength(0);
   });
 
+  /**
+   * W4 r4 MAJOR-2 — the token's `type` is the LETTER's type (`po_sent`,
+   * `invoice_sent`, `trade_rfq`), and the write ignores it: the whole address
+   * stops. The outcome must therefore say what it did, or the landing prints
+   * the narrow type as though the stop were scoped to it.
+   */
+  it("reports an address-wide scope whatever narrow type the letter carried", async () => {
+    for (const type of ['po_sent', 'invoice_sent', 'trade_rfq'] as const) {
+      const channels: ChannelRow[] = [
+        { id: CHANNEL_ID, value: 'rosa@tcdrywall.test', channel_kind: 'email', status: 'active' },
+        { id: 'ap-1', value: 'rosa@tcdrywall.test', channel_kind: 'ap_email', status: 'active' },
+      ];
+      const recorded = blank();
+      const token = await generateUnsubscribeToken(`channel:${CHANNEL_ID}`, type as never);
+
+      const outcome = await applyUnsubscribeToken(fakeClient(channels, recorded), token);
+
+      expect(outcome.scope).toBe('address');
+      expect(outcome.type).toBe(type);
+      // The record backing the sentence: every email-kind row on the address.
+      expect(channels.every((c) => c.status === 'unsubscribed')).toBe(true);
+    }
+  });
+
   it("answers 'error' when the read itself fails, so a broken table is not read as a bad link", async () => {
     const recorded = blank();
     const token = await generateUnsubscribeToken(
@@ -301,6 +326,7 @@ describe('applyUnsubscribeToken — the account branch, and the line between the
       ok: true,
       status: 'applied',
       userId: USER_ID,
+      scope: 'account',
       columnUpdated: 'type_price_drop',
     });
     expect(recorded.tables).not.toContain('studio_contact_channels');

@@ -7,13 +7,19 @@ jest.mock('../paperwork-upload-form', () => ({
   PaperworkUploadForm: ({
     title,
     uploadOnly,
+    fieldPrefix,
     onReceived,
   }: {
     title: string;
     uploadOnly: boolean;
+    fieldPrefix: string;
     onReceived: () => void;
   }) => (
-    <div data-testid={`form-${title}`} data-upload-only={String(uploadOnly)}>
+    <div
+      data-testid={`form-${title}`}
+      data-upload-only={String(uploadOnly)}
+      data-field-prefix={fieldPrefix}
+    >
       <button type="button" onClick={onReceived}>{`Send ${title}`}</button>
     </div>
   ),
@@ -177,6 +183,45 @@ describe('PaperworkSheet', () => {
     expect(
       screen.getByTestId('form-Lien waiver, conditional'),
     ).toHaveAttribute('data-upload-only', 'true');
+  });
+
+  /**
+   * W4 r4 — P-3 keeps two differently-named `other_named` papers as two rows,
+   * and the form's field ids were keyed on the doc type both rows share. The
+   * sheet owns the unique key, so it is the sheet that must hand it down.
+   */
+  it('gives two other_named rows their own field prefix', async () => {
+    const user = userEvent.setup();
+    renderSheet([
+      doc({
+        doc_type: 'other_named',
+        doc_label: 'MN asbestos permit',
+        state: 'lapsed',
+        expires_on: '2026-03-31',
+        blocks: [],
+      }),
+      doc({
+        doc_type: 'other_named',
+        doc_label: 'Roof warranty',
+        state: 'current',
+        expires_on: '2028-01-01',
+        blocks: [],
+      }),
+    ]);
+
+    await user.click(screen.getByRole('button', { name: 'Add MN asbestos permit' }));
+    await user.click(screen.getByRole('button', { name: 'Add Roof warranty' }));
+
+    const prefixes = Array.from(
+      document.querySelectorAll('[data-field-prefix]'),
+    ).map((el) => el.getAttribute('data-field-prefix'));
+    // Five rows are on the sheet (the three expected papers open by default);
+    // what matters is that no two forms share a prefix, and that the two
+    // `other_named` rows are not both keyed on the type they share.
+    expect(prefixes).toHaveLength(5);
+    expect(new Set(prefixes).size).toBe(5);
+    expect(prefixes.filter((p) => p?.startsWith('other_named'))).toHaveLength(2);
+    expect(prefixes).not.toContain('other_named');
   });
 
   it('carries no ids, no file paths and no other party on its face', () => {

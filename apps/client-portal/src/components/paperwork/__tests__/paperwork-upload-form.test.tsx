@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PaperworkUploadForm } from '../paperwork-upload-form';
 
@@ -10,6 +10,7 @@ function renderForm(overrides: Partial<Parameters<typeof PaperworkUploadForm>[0]
     <PaperworkUploadForm
       token={'a'.repeat(64)}
       docType="coi_gl"
+      fieldPrefix="coi_gl"
       docLabel={null}
       title="COI, general liability"
       uploadOnly={false}
@@ -136,6 +137,62 @@ describe('PaperworkUploadForm', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     const body = (global.fetch as jest.Mock).mock.calls[0][1].body as FormData;
     expect(body.get('doc_label')).toBe('MN asbestos permit');
+  });
+
+  /**
+   * W4 r4 — TWO `other_named` PAPERS ARE TWO ROWS (P-3), AND TWO FORMS.
+   *
+   * The ids were keyed on `docType`, which both rows share, so with both forms
+   * open five ids appeared twice and every `label[for]` resolved to the FIRST
+   * form's controls: the second form's five fields had no accessible name, and
+   * clicking a label focused the wrong form's input.
+   */
+  it('gives two other_named forms their own field ids and their own labels', () => {
+    const onReceived = jest.fn();
+    const { container } = render(
+      <>
+        <PaperworkUploadForm
+          token={'a'.repeat(64)}
+          docType="other_named"
+          fieldPrefix="other_named:mn asbestos permit"
+          docLabel="MN asbestos permit"
+          title="MN asbestos permit"
+          uploadOnly={false}
+          expiryRequired={false}
+          onReceived={onReceived}
+        />
+        <PaperworkUploadForm
+          token={'a'.repeat(64)}
+          docType="other_named"
+          fieldPrefix="other_named:roof warranty"
+          docLabel="Roof warranty"
+          title="Roof warranty"
+          uploadOnly={false}
+          expiryRequired={false}
+          onReceived={onReceived}
+        />
+      </>,
+    );
+
+    const ids = Array.from(container.querySelectorAll('input')).map((el) => el.id);
+    expect(ids).toHaveLength(10);
+    expect(new Set(ids).size).toBe(10);
+
+    // Every label resolves to a control inside its OWN form.
+    const labels = Array.from(container.querySelectorAll('label'));
+    expect(labels).toHaveLength(10);
+    for (const label of labels) {
+      const target = document.getElementById(label.htmlFor);
+      expect(target).not.toBeNull();
+      expect(label.closest('form')).toBe(target!.closest('form'));
+    }
+
+    // And the fields are reachable by name, one form at a time.
+    const permit = screen.getByRole('form', { name: 'Add MN asbestos permit' });
+    const warranty = screen.getByRole('form', { name: 'Add Roof warranty' });
+    expect(within(permit).getByLabelText('Number')).not.toBe(
+      within(warranty).getByLabelText('Number'),
+    );
   });
 
   it("prints the door's own refusal rather than re-wording it", async () => {

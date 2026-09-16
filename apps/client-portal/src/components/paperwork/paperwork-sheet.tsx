@@ -110,6 +110,9 @@ export function PaperworkSheet({ token, studioName, context }: PaperworkSheetPro
             {isOpen ? (
               <PaperworkUploadForm
                 token={token}
+                // The row's own key, not its doc type: two `other_named` rows
+                // share a type and must not share their field ids (W4 r4).
+                fieldPrefix={row.key}
                 docType={row.docType}
                 docLabel={row.docLabel}
                 title={row.title}

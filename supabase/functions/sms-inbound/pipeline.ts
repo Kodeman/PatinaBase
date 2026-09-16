@@ -1023,6 +1023,19 @@ export async function processInbound(
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "keyword", intent: "start", confidence_bucket: "n/a", disposition: "resubscribed" },
       { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
+    // A START IS A CONTACT AS WELL AS A CONSENT ACT (W4 r4 MAJOR-3, the rule
+    // r1 M-4 set for STOP). It is the answer to a standing refusal, and it was
+    // attributed to a seat by the rail's own reckoning and filed no touch — so
+    // the seat line, the roster row and `touchSentence` all went on printing
+    // the PREVIOUS contact after it. Best effort, as everywhere else:
+    // `record_touch` answers NULL for a studio-less seat.
+    await recordInboundTouch(
+      supabase,
+      conv.party_id,
+      messageId,
+      { decisionClass: "none", authorityCheck: "n/a" },
+      nowIso,
+    );
     return { status: 200, twiml: twimlBody(), disposition: "resubscribed" };
   }
 
@@ -1093,6 +1106,18 @@ export async function processInbound(
       await captureServerEvent("sms-inbound", "sms_parse_outcome",
         { path: "keyword", intent: "opt_in", confidence_bucket: "n/a", disposition: "granted" },
         { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
+      // A YES IS A CONTACT AS WELL AS A CONSENT ACT (W4 r4 MAJOR-3). This
+      // branch names the project and the studio and hands `reply()` a seat, so
+      // the message is attributed twice over — and filed no touch, leaving the
+      // room to print the older contact after the most consequential inbound
+      // message after STOP.
+      await recordInboundTouch(
+        supabase,
+        conv.party_id,
+        messageId,
+        { decisionClass: "none", authorityCheck: "n/a" },
+        nowIso,
+      );
       return await reply(
         supabase,
         conv.id,

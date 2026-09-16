@@ -41,6 +41,9 @@ export async function GET(req: NextRequest) {
   const redirect = new URL('/preferences/unsubscribe', req.url);
   redirect.searchParams.set('status', outcome.status);
   if (outcome.type) redirect.searchParams.set('type', String(outcome.type));
+  // The scope is what the write covered — an address stop is not the narrow
+  // type the token carries (W4 r4 MAJOR-2) — so it has to cross the redirect.
+  if (outcome.scope) redirect.searchParams.set('scope', outcome.scope);
   if (token) redirect.searchParams.set('token', token);
   return NextResponse.redirect(redirect);
 }

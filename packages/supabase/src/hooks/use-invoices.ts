@@ -1301,9 +1301,12 @@ function parseInvoiceLink(data: unknown): InvoiceLink | null {
  * The invoice's live link, via get_invoice_link (00574, SECURITY DEFINER —
  * can_manage_invoice or the household payer only; every denial, including a
  * draft read by the household, raises `invoice_not_found`). Returns null when
- * the invoice has no link yet — a draft has none until it is issued, and the
- * folio shows no Copy/Regenerate act for one. A revoked token is never
- * returned, so a Regenerate's old address cannot be re-copied.
+ * the invoice has no link the caller can READ — which, since 00636 froze
+ * `invoices.token`, is every invoice: the RPC answers `token: NULL` and only a
+ * producer emits a raw one. So this hook answers "no address to copy", never
+ * "no link exists", and the folio hangs COPY on it alone. REGENERATE hangs on
+ * the invoice's own status instead (W4 r4 MAJOR-1): it is the act that mints an
+ * address, so gating it on having one locked the only door from the inside.
  */
 export function useInvoiceLink(invoiceId: string | null | undefined) {
   return useQuery({
