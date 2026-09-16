@@ -101,6 +101,7 @@ function trackedFiles(root) {
   const output = execFileSync("git", ["-C", root, "ls-files", "-z"], {
     encoding: "buffer",
     stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: 64 * 1024 * 1024,
   });
   return output
     .toString("utf8")

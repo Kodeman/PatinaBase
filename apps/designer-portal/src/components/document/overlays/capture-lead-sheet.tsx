@@ -7,7 +7,12 @@
  * be the one who starts it.
  *
  * "Just enough to begin. The Brief fills in as you go." (prototype §captureScrim)
- * Name · Contact (email or phone) · The project (one line) · Where from.
+ * Name · Email · Phone · The project (one line) · Where from — the approved
+ * field order. Email and phone each have a column of their own (00583); before
+ * that a single "Contact" field guessed at the value and dropped a phone into
+ * the Brief one-liner as "Contact: <value>" prose. The form is `noValidate`:
+ * every check, including the optional email's shape, reports in the sheet's own
+ * error channel rather than a native bubble.
  *
  * Built on the DocSheet frame (R3 / I5): charcoal D8 overlay, hairline top
  * border, ZERO shadows (D4). An overlay while open — the Desk beneath does not
@@ -38,13 +43,6 @@ const SOURCE_CHIPS = [
   'Past client',
 ] as const;
 
-/** Cheap email vs phone discrimination. The table carries `contact_email` only
- *  (no phone column); a phone is preserved in the Brief one-liner instead of
- *  being written to a column that doesn't exist. */
-function looksLikeEmail(v: string): boolean {
-  return /\S+@\S+\.\S+/.test(v.trim());
-}
-
 export function CaptureLeadSheet({
   open,
   onClose,
@@ -57,20 +55,24 @@ export function CaptureLeadSheet({
   const queryClient = useQueryClient();
 
   const [name, setName] = useState('');
-  const [contact, setContact] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [project, setProject] = useState('');
   const [source, setSource] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [touched, setTouched] = useState({ name: false, project: false });
 
   // Fresh form every open; clear any prior error.
   useEffect(() => {
     if (open) {
       setName('');
-      setContact('');
+      setEmail('');
+      setPhone('');
       setProject('');
       setSource('');
       setError(null);
+      setEmailError(null);
       setTouched({ name: false, project: false });
     }
   }, [open]);
@@ -82,6 +84,7 @@ export function CaptureLeadSheet({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setEmailError(null);
 
     if (!canSubmit) {
       setTouched({ name: true, project: true });
@@ -89,19 +92,16 @@ export function CaptureLeadSheet({
       return;
     }
 
-    const trimmedContact = contact.trim();
-    const contactIsEmail =
-      trimmedContact !== '' && looksLikeEmail(trimmedContact);
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone.trim();
 
-    // The Brief one-liner carries the project line and any non-email contact
-    // (phone) — the table has no `phone` column, so it lives honestly in the
-    // description. The source now has its own column (R65), so it's no longer
-    // folded into the one-liner.
-    const descParts: string[] = [];
-    if (project.trim()) descParts.push(project.trim());
-    if (trimmedContact && !contactIsEmail)
-      descParts.push(`Contact: ${trimmedContact}`);
-    const description = descParts.join(' · ');
+    // The form is `noValidate`, so the optional email field is checked here and
+    // reported in the sheet's own error channel — a native browser bubble would
+    // block the submit with a tooltip the Document does not style (D4).
+    if (trimmedEmail !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setEmailError('Check the email address — it needs an @ and a domain.');
+      return;
+    }
 
     createLead.mutate(
       {
@@ -109,9 +109,10 @@ export function CaptureLeadSheet({
         // lead has no type chosen yet — 'consultation' is the honest default
         // for "someone just came in"; the Brief refines it as the work begins.
         project_type: 'consultation',
-        project_description: description || undefined,
+        project_description: project.trim() || undefined,
         contact_name: name.trim() || undefined,
-        contact_email: contactIsEmail ? trimmedContact : undefined,
+        contact_email: trimmedEmail || undefined,
+        contact_phone: trimmedPhone || undefined,
         // R62 — +1 day so the lead rises as a `new_lead` need on the Desk.
         response_deadline: new Date(Date.now() + 86_400_000).toISOString(),
         // R65 — "Where from" in its own column (00223), not the one-liner.
@@ -139,6 +140,7 @@ export function CaptureLeadSheet({
     <DocSheet open={open} onClose={onClose} title="Capture a lead">
       <form
         onSubmit={submit}
+        noValidate
         data-overlay-capture-lead
         className="mx-auto w-full max-w-[34rem]"
       >
@@ -149,8 +151,8 @@ export function CaptureLeadSheet({
           Who just came in?
         </h2>
         <p className="mt-1.5 text-[14px] leading-relaxed text-[var(--color-charcoal)]">
-          A name and one-line project note are enough to begin. Contact and
-          source can come later.
+          A name and one-line project note are enough to begin. Email, phone,
+          and source can come later.
         </p>
 
         <div className="mt-7 space-y-5">
@@ -177,12 +179,29 @@ export function CaptureLeadSheet({
             data-testid="lead-contact-project-fields"
             className="grid grid-cols-1 gap-5"
           >
-            <Field id="capture-lead-contact" label="Contact">
+            <Field id="capture-lead-email" label="Email" error={emailError ?? undefined}>
               <Input
-                id="capture-lead-contact"
-                value={contact}
-                onChange={setContact}
-                placeholder="email or phone"
+                id="capture-lead-email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(v) => {
+                  setEmail(v);
+                  setEmailError(null);
+                }}
+                placeholder="okafors@example.com"
+                invalid={emailError !== null}
+                describedBy={emailError ? 'capture-lead-email-error' : undefined}
+              />
+            </Field>
+            <Field id="capture-lead-phone" label="Phone">
+              <Input
+                id="capture-lead-phone"
+                type="tel"
+                autoComplete="tel"
+                value={phone}
+                onChange={setPhone}
+                placeholder="(555) 014-2200"
               />
             </Field>
             <Field
@@ -340,6 +359,8 @@ function Input({
   required = false,
   invalid = false,
   describedBy,
+  type = 'text',
+  autoComplete,
 }: {
   id: string;
   value: string;
@@ -350,11 +371,14 @@ function Input({
   required?: boolean;
   invalid?: boolean;
   describedBy?: string;
+  type?: 'text' | 'email' | 'tel';
+  autoComplete?: string;
 }) {
   return (
     <input
       id={id}
-      type="text"
+      type={type}
+      autoComplete={autoComplete}
       autoFocus={autoFocus}
       value={value}
       onChange={(e) => onChange(e.target.value)}

@@ -18,6 +18,7 @@ import {
   studioCobrand,
   type StudioIdentity,
 } from "../_shared/studio-identity.ts";
+import { toEmailAssetUrl } from "../_shared/email-assets.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -326,7 +327,7 @@ function buildInAppMessageHtml(
 ): string {
   const senderName = (data.senderName as string) || "Someone";
   const senderInitial = senderName.slice(0, 1).toUpperCase();
-  const senderAvatarUrl = data.senderAvatarUrl as string | null;
+  const senderAvatarUrl = toEmailAssetUrl(data.senderAvatarUrl as string | null);
   const previewBody = (data.previewBody as string) || "";
   const threadKind = (data.threadKind as string) || "direct";
   const projectTitle = data.projectTitle as string | null;

@@ -1,0 +1,119 @@
+{
+  "base": 437,
+  "trail": [
+    {
+      "depth": 0,
+      "dropsTo": 390,
+      "tag": "DIV",
+      "cls": "flex flex-wrap items-center gap-x-3 gap-y-2 ",
+      "text": "Brief · 5Full RoomMarcus Wright · New lead — respond by Sep ",
+      "rect": {
+        "l": 27,
+        "r": 363,
+        "w": 336
+      },
+      "scrollW": 410,
+      "clientW": 336,
+      "minWidth": "0px",
+      "display": "flex",
+      "flexShrink": "1",
+      "whiteSpace": "normal",
+      "overflowWrap": "normal"
+    },
+    {
+      "depth": 1,
+      "dropsTo": 390,
+      "tag": "DIV",
+      "cls": "w-full",
+      "text": "Brief · 5Full RoomMarcus Wright · New lead — respond by Sep ",
+      "rect": {
+        "l": 27,
+        "r": 363,
+        "w": 336
+      },
+      "scrollW": 410,
+      "clientW": 336,
+      "minWidth": "auto",
+      "display": "block",
+      "flexShrink": "1",
+      "whiteSpace": "normal",
+      "overflowWrap": "normal"
+    },
+    {
+      "depth": 2,
+      "dropsTo": 396,
+      "tag": "DIV",
+      "cls": "mb-8 last:mb-0",
+      "text": "Direction · 3Elena Marlowe — Living Room DirectionElena Marl",
+      "rect": {
+        "l": 27,
+        "r": 363,
+        "w": 336
+      },
+      "scrollW": 410,
+      "clientW": 336,
+      "minWidth": "0px",
+      "display": "block",
+      "flexShrink": "1",
+      "whiteSpace": "normal",
+      "overflowWrap": "normal"
+    },
+    {
+      "depth": 3,
+      "dropsTo": 396,
+      "tag": "UL",
+      "cls": "",
+      "text": "Elena Marlowe — Living Room DirectionElena Marlowe (no-login",
+      "rect": {
+        "l": 27,
+        "r": 363,
+        "w": 336
+      },
+      "scrollW": 410,
+      "clientW": 336,
+      "minWidth": "0px",
+      "display": "block",
+      "flexShrink": "1",
+      "whiteSpace": "normal",
+      "overflowWrap": "normal"
+    },
+    {
+      "depth": 4,
+      "dropsTo": 396,
+      "tag": "LI",
+      "cls": "has-wash doc-rule-hair flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2.5 last:border-b-0 desk-settle",
+      "text": "Elena Marlowe — Living Room DirectionElena Marlowe (no-login",
+      "rect": {
+        "l": 27,
+        "r": 363,
+        "w": 336
+      },
+      "scrollW": 410,
+      "clientW": 336,
+      "minWidth": "0px",
+      "display": "flex",
+      "flexShrink": "1",
+      "whiteSpace": "normal",
+      "overflowWrap": "normal"
+    },
+    {
+      "depth": 5,
+      "dropsTo": 417,
+      "tag": "SPAN",
+      "cls": "inline-block h-[7px] w-[7px] shrink-0 rounded-full",
+      "text": "",
+      "rect": {
+        "l": 27,
+        "r": 34,
+        "w": 7
+      },
+      "scrollW": 7,
+      "clientW": 7,
+      "minWidth": "auto",
+      "display": "block",
+      "flexShrink": "0",
+      "whiteSpace": "normal",
+      "overflowWrap": "normal"
+    }
+  ]
+}

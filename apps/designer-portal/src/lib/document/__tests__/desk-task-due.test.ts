@@ -71,7 +71,7 @@ describe('task_due need (R23/R22)', () => {
       NOW,
     );
     expect(need?.kind).toBe('task_due');
-    expect(need?.text).toMatch(/^3 tasks due — oldest Jun/);
+    expect(need?.text).toMatch(/^3 tasks due — oldest 10 June/);
   });
 
   it('no dued tasks → no nag (undated tasks never surface)', () => {

@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tansta
 import { createBrowserClient } from '../client';
 import type { OnlinePaymentMethod } from '@patina/shared/invoice';
 import { isLikelyInvoiceLinkToken } from '@patina/utils';
+import { emailDeliveryKeys } from './use-email-delivery';
 
 export type { OnlinePaymentMethod };
 
@@ -374,23 +375,32 @@ async function recomputeDraftTotals(supabase: any, invoiceId: string): Promise<v
  * ['project-financials', id]) and the earnings caches.
  */
 /**
- * `invoiceId` is passed by the acts that move an invoice's LINK state (00574):
- * issue mints one, send/record-payment/void change what it resolves to. The
- * folio's recovery band and its two link acts read `['invoice-link', id]`, and
- * the designer portal's staleTime is five minutes — without this the band tells
- * the designer the invoice has no link at the one moment it just got one.
- * Voiding invalidates too: the link survives as `closed` and still resolves,
- * to K5's withdrawn sheet rather than to a dead page.
+ * THE INVOICE-LINK KEY IS NOT INVALIDATED HERE, AND THAT IS THE POINT (R-BV).
+ *
+ * It used to be: `invoiceId` is passed by the acts that move an invoice's LINK
+ * state (00574) — issue mints one, send / record-payment / void change what it
+ * resolves to — and refetching kept the folio's recovery band honest while
+ * `get_invoice_link` could still answer with an address.
+ *
+ * Since 00636 it cannot. `get_invoice_link` returns `token: NULL` for every
+ * invoice, by a CHECK, so that refetch can only ever parse to an address-less
+ * row — and it landed on top of the one address the designer had just minted,
+ * unmounting Copy under the sentence "This address is shown once." Four acts
+ * one click away in the same folio (issue, record payment, send, void) made
+ * that deterministic. The address now lives in the folio's own component state
+ * for the folio's lifetime, and the status/expiry the band branches on are not
+ * money-moving facts: `useInvoiceLink` re-reads them on its own schedule.
+ *
+ * `invoiceId` is still taken, because the callers pass it and it names which
+ * invoice moved; it simply buys no invalidation any more.
  */
 function invalidateInvoiceEffects(
   queryClient: QueryClient,
   projectId?: string | null,
   invoiceId?: string | null,
 ) {
+  void invoiceId;
   queryClient.invalidateQueries({ queryKey: ['invoices'] });
-  if (invoiceId) {
-    queryClient.invalidateQueries({ queryKey: ['invoice-link', invoiceId] });
-  }
   if (projectId) {
     queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
     queryClient.invalidateQueries({ queryKey: ['project-payment-milestones', projectId] });
@@ -407,6 +417,31 @@ function invalidateInvoiceEffects(
   queryClient.invalidateQueries({ queryKey: ['earnings'] });
   queryClient.invalidateQueries({ queryKey: ['earnings-stats'] });
   queryClient.invalidateQueries({ queryKey: ['monthly-earnings'] });
+}
+
+/**
+ * THE LINK'S EXISTENCE, RE-READ BY THE TWO ACTS THAT MINT ONE (R-BW × R-BV,
+ * W4 r8 MAJOR-2).
+ *
+ * R-BV took `['invoice-link', id]` out of `invalidateInvoiceEffects` because
+ * the ADDRESS lived there and four acts a click apart destroyed it. R-BW then
+ * made the ROW load-bearing: the folio's bounce band branches on whether a
+ * live link exists and on its clock, both read from this key. With no
+ * invalidation anywhere, a 5-minute staleTime and `refetchOnWindowFocus:
+ * false`, the band read the cache as it stood BEFORE the send — and since
+ * `issue_invoice` and `invoice-send` both mint a link, a bounced send of a
+ * draft printed "this invoice has no live link" about an invoice that had just
+ * been given one.
+ *
+ * Both rulings hold here: 00636 froze `invoices.token`, so `get_invoice_link`
+ * answers `token: NULL` forever and this refetch cannot carry an address home.
+ * The minted address is in the folio's own component state, where R-BV put it,
+ * and no invalidation can reach it. Only the two link-minting acts call this —
+ * record-payment and void move money, not the link.
+ */
+function invalidateInvoiceLinkFact(queryClient: QueryClient, invoiceId?: string | null) {
+  if (!invoiceId) return;
+  queryClient.invalidateQueries({ queryKey: ['invoice-link', invoiceId] });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1008,6 +1043,10 @@ export function useIssueInvoice(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (invoice, { projectId, invoiceId }) => {
       invalidateInvoiceEffects(queryClient, projectId ?? invoice?.project_id, invoiceId);
+      // Issuing mints the invoice's first link (00574), so the fact the bounce
+      // band reads has moved (R-BW).
+      invalidateInvoiceLinkFact(queryClient, invoiceId);
+      queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
 }
@@ -1113,6 +1152,14 @@ export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
     },
     onSuccess: (_data, { projectId, invoiceId }) => {
       invalidateInvoiceEffects(queryClient, projectId, invoiceId);
+      queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
+    },
+    // `invoice-send` mints a link BEFORE it attempts the email, so the link
+    // fact moves whether or not the email landed — and the failed send is
+    // exactly the moment the folio's bounce band is mounted to describe it
+    // (R-BW, W4 r8 MAJOR-2). Hence onSettled, not onSuccess.
+    onSettled: (_data, _error, { invoiceId }) => {
+      invalidateInvoiceLinkFact(queryClient, invoiceId);
     },
   });
 }
@@ -1151,6 +1198,7 @@ export function useChaseInvoice(options?: { errorSurface?: 'inline' }) {
       // need to clear immediately must ALSO invalidate ['document-state'] — the
       // Receivables page's doChase does exactly that.
       invalidateInvoiceEffects(queryClient, projectId);
+      queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
 }
@@ -1275,31 +1323,72 @@ export function useInvoicePaymentOptions(invoiceId: string | null | undefined) {
 // INVOICE LINKS (migration 00574 — The Invoice, Standing Alone)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** An invoice's current link. `status` is 'active', or 'closed' once voided. */
+/**
+ * An invoice's current link.
+ *
+ * `token` IS THE ADDRESS AND IS ALMOST ALWAYS NULL (00636). `get_invoice_link`
+ * answers `{token: NULL, status, expires_at}` for every invoice — the column is
+ * frozen and only a producer emits a raw value — so a non-null token here means
+ * one thing: this object came back from `useRegenerateInvoiceLink`'s mint.
+ *
+ * The rest of the row is not a secret and is the answer to a different
+ * question: does a link EXIST, and is it live? A reader that needs "can I show
+ * an address" asks `token`; a reader that needs "does this invoice have a live
+ * link" asks `status`/`expiresAt` (W4 r6 M-1 / R-BW). Collapsing the two is
+ * what made the folio's recovery band say "this invoice has no link yet" about
+ * an invoice whose link had just been minted by the send.
+ */
 export interface InvoiceLink {
-  token: string;
+  token: string | null;
   status: 'active' | 'closed';
+  /** Exclusive expiry boundary (00636). Null on a row minted before the clock. */
+  expiresAt: string | null;
 }
 
 function parseInvoiceLink(data: unknown): InvoiceLink | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
   const row = data as Record<string, unknown>;
+  // NULL is the row's existence, not its absence: `get_invoice_link` returns
+  // SQL NULL when the invoice has no link at all, and that arrives here as
+  // `data === null` above, never as an object with a null token.
+  if (row.status !== 'active' && row.status !== 'closed') return null;
   // The token shape is gated here, as the edge-function twin gates it
   // (`_shared/invoice-links.ts`): a malformed value is still a secret-shaped
-  // one, and must never reach a clipboard or an href. "No link" is a state
-  // every consumer already draws, so a bad row reads as none.
-  if (!isLikelyInvoiceLinkToken(row.token as string | null | undefined)) return null;
-  if (row.status !== 'active' && row.status !== 'closed') return null;
-  return { token: row.token as string, status: row.status };
+  // one, and must never reach a clipboard or an href. A bad token reads as no
+  // address to show — it does not delete the link it belongs to.
+  const token = isLikelyInvoiceLinkToken(row.token as string | null | undefined)
+    ? (row.token as string)
+    : null;
+  return {
+    token,
+    status: row.status,
+    expiresAt: typeof row.expires_at === 'string' ? row.expires_at : null,
+  };
+}
+
+/**
+ * Does this link still open the pay page? `status` first, then the clock —
+ * the same order `resolve_invoice_link` tests them in (W4 r5 F1).
+ */
+export function invoiceLinkIsLive(link: InvoiceLink | null | undefined, now = new Date()): boolean {
+  if (!link || link.status !== 'active') return false;
+  if (!link.expiresAt) return true;
+  const expires = new Date(link.expiresAt).getTime();
+  return Number.isNaN(expires) ? true : expires > now.getTime();
 }
 
 /**
  * The invoice's live link, via get_invoice_link (00574, SECURITY DEFINER —
  * can_manage_invoice or the household payer only; every denial, including a
- * draft read by the household, raises `invoice_not_found`). Returns null when
- * the invoice has no link yet — a draft has none until it is issued, and the
- * folio shows no Copy/Regenerate act for one. A revoked token is never
- * returned, so a Regenerate's old address cannot be re-copied.
+ * draft read by the household, raises `invoice_not_found`).
+ *
+ * Null means THE INVOICE HAS NO LINK. A non-null answer with a null `token`
+ * means the link exists and its address cannot be shown again — which, since
+ * 00636 froze `invoices.token`, is every link the RPC reports. Both readings
+ * are load-bearing: COPY hangs on the token, the recovery band's sentence
+ * hangs on existence and the clock (W4 r6 M-1). REGENERATE hangs on the
+ * invoice's own status instead (W4 r4 MAJOR-1): it is the act that mints an
+ * address, so gating it on having one locked the only door from the inside.
  */
 export function useInvoiceLink(invoiceId: string | null | undefined) {
   return useQuery({
@@ -1355,7 +1444,6 @@ export class RegenerateInvoiceLinkError extends Error {
  * (M11), for a draft or void invoice, and for a caller without authority.
  */
 export function useRegenerateInvoiceLink(options?: { errorSurface?: 'inline' }) {
-  const queryClient = useQueryClient();
   return useMutation({
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({ invoiceId }: { invoiceId: string }): Promise<InvoiceLink> => {
@@ -1385,17 +1473,20 @@ export function useRegenerateInvoiceLink(options?: { errorSurface?: 'inline' }) 
       if (typeof data !== 'string') {
         throw new Error('Failed to regenerate the invoice link');
       }
-      return { token: data, status: 'active' };
+      // The RPC returns the raw token alone. `expiresAt` is unknown from here —
+      // 00636 mints a 30-day clock server-side — and null reads as "live with
+      // no stated end", which is what a just-minted link is.
+      return { token: data, status: 'active', expiresAt: null };
     },
-    onSuccess: (link, { invoiceId }) => {
-      // Both writes are deliberate: setQueryData echoes the new token at once,
-      // so the folio cannot copy the dead one during the refetch (React Query
-      // serves the previous value while a query is invalidated but in flight);
-      // the invalidate then re-reads get_invoice_link, which stays the
-      // authority on status.
-      queryClient.setQueryData(['invoice-link', invoiceId], link);
-      void queryClient.invalidateQueries({ queryKey: ['invoice-link', invoiceId] });
-    },
+    // NOTHING IS WRITTEN TO THE CACHE (R-BV).
+    //
+    // The minted address used to be echoed into `['invoice-link', invoiceId]`
+    // so the folio could read it back. A query key is the wrong home for a
+    // value that is shown once: anything that invalidated that key — and four
+    // invoice acts did — destroyed the address, and any other mount of the
+    // same key would read it. The caller holds the returned token in its own
+    // component state for as long as it means to offer Copy, and the address
+    // leaves with the folio, which is exactly what 00636 promises the studio.
   });
 }
 

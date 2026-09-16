@@ -1,0 +1,60 @@
+Pager usage is off.
+BEGIN
+SET
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev : contact rows losing a recorded refusal on the CARD number: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev : seat lines disagreeing with the record: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev : paper words disagreeing with identity_paper_state: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev : rows claiming a seat_count they cannot nest: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev : contacts rows where the CTE and identity_seat_count() disagree: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev   compliance=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev   authority=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev   site_cards=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev   seats=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev   directory=1
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  admin@patina.dev   access_grants=1
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev : contact rows losing a recorded refusal on the CARD number: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev : seat lines disagreeing with the record: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev : paper words disagreeing with identity_paper_state: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev : rows claiming a seat_count they cannot nest: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev : contacts rows where the CTE and identity_seat_count() disagree: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev   compliance=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev   authority=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev   site_cards=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev   seats=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev   directory=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  client@patina.dev   access_grants=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev : contact rows losing a recorded refusal on the CARD number: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev : seat lines disagreeing with the record: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev : paper words disagreeing with identity_paper_state: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev : rows claiming a seat_count they cannot nest: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev : contacts rows where the CTE and identity_seat_count() disagree: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev   compliance=36
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev   authority=11
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev   site_cards=1
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev   seats=31
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev   directory=62
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  studio_manager@patina.dev   access_grants=13
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev : contact rows losing a recorded refusal on the CARD number: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev : seat lines disagreeing with the record: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev : paper words disagreeing with identity_paper_state: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev : rows claiming a seat_count they cannot nest: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev : contacts rows where the CTE and identity_seat_count() disagree: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev   compliance=36
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev   authority=11
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev   site_cards=1
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev   seats=31
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev   directory=62
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  designer@patina.dev   access_grants=13
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid : contact rows losing a recorded refusal on the CARD number: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid : seat lines disagreeing with the record: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid : paper words disagreeing with identity_paper_state: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid : rows claiming a seat_count they cannot nest: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid : contacts rows where the CTE and identity_seat_count() disagree: 0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid   compliance=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid   authority=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid   site_cards=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid   seats=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid   directory=0
+psql:probe196-w1b-final-r12-reader-vs-record.sql:66: NOTICE:  cf-phase1-alice@patina.invalid   access_grants=1
+DO
+ROLLBACK

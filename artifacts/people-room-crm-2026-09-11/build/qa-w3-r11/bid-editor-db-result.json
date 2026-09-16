@@ -1,0 +1,13 @@
+{
+  "before": {
+    "id": "d0e30000-0000-0000-0000-000000000091",
+    "bid_outcome": "no_response",
+    "stage": "no_response"
+  },
+  "after": {
+    "id": "d0e30000-0000-0000-0000-000000000091",
+    "display_name": "Rivera Finishes",
+    "bid_outcome": "selected",
+    "stage": "awarded"
+  }
+}

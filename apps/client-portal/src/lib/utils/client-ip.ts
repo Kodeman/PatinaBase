@@ -30,3 +30,40 @@ export function resolveClientIp(headers: Headers): string | null {
 
   return null;
 }
+
+const IPV4_PATTERN =
+  /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+const IPV6_PATTERN = /^[0-9a-fA-F:]{2,45}$/;
+
+/**
+ * THE ADDRESS, ONLY IF IT IS ONE (R-CA, W4 r10 MAJOR-2).
+ *
+ * `resolveClientIp` above answers what the headers SAY, which is right for an
+ * audit trail — `proposals.signed_ip` records the claim, whatever it is. It is
+ * wrong for a rate bucket: `paperwork_link_rate_limit_hit` used to take an
+ * `inet`, so `cf-connecting-ip: not-an-ip` (and the perfectly ordinary proxy
+ * value `1.2.3.4:5678`) raised 22P02, and a door that treated an unreadable
+ * limiter as a pass had its only abuse control switched off by one header.
+ *
+ * So the bucket's address goes through here first: the port is stripped from
+ * an `ip:port` or `[v6]:port` value and the rest must read as a v4 or v6
+ * address. Anything else is null, and the paperwork door then buckets by the
+ * link's own row id instead of by nothing.
+ */
+export function normalizeCallerIp(raw: string | null | undefined): string | null {
+  const value = (raw ?? '').trim();
+  if (!value) return null;
+
+  const bracketed = /^\[([0-9a-fA-F:.]+)\](?::\d{1,5})?$/.exec(value);
+  const candidate = bracketed
+    ? bracketed[1]
+    : /^[0-9.]+:\d{1,5}$/.test(value)
+      ? value.slice(0, value.lastIndexOf(':'))
+      : value;
+
+  if (IPV4_PATTERN.test(candidate)) return candidate;
+  if (candidate.includes(':') && IPV6_PATTERN.test(candidate.replace(/\./g, ''))) {
+    return candidate;
+  }
+  return null;
+}

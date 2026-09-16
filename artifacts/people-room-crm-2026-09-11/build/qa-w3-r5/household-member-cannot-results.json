@@ -1,0 +1,20 @@
+{
+  "userId": "b07a5721-a644-4e8b-9638-2f6dd1bba7ce",
+  "profileErr": null,
+  "rolesGranted": [
+    "app_user",
+    "independent_designer"
+  ],
+  "signedInAsMemberUrl": "http://localhost:3000/desk",
+  "docPageUrl": "http://localhost:3000/doc/d0e00000-0000-0000-0000-00000000000a",
+  "docPageBody": "Skip to the paper\n←\nPUT DOWN\n\nClient\n\nPROJECT\nACTIVE\n\nClient approvals\nNOTHING YET\nSchedule\nNOT KNOWN YET\nPieces\nNOTHING YET\nMoney\nNOTHING YET\nClosing the book\n0 OF 6 CLOSED OUT\nThe record\nNOTHING YET\n\nFILED WITH THIS JOB\n\nPlan room\nSpec book\nBoards\nCall sheet\nOkonkwo residence\nNo client linked — attach one↗\nSTART\n12 October\n×\nTARGET\n13 August\n×\nSET A BUDGET BAND\n$1,400,000\nNEEDS SETUP · 1\n→\nMESSAGE\nPREVIEW\nSHARING\nCALL SHEET · 27\n· 19 ON PAPER\n\nName the phases for this project\nOPEN THE SCHEDULE\n\nEXACT ARTIFACT · NAMED AUTHORITY\n\nClient approvals\n\n0 decided · no decision lead\n\nFOLD ↑\n\nBind each request to one issued plan, client-ready specification, or published budget checkpoint. Discussion stays in the project thread; only the recorded outcome settles an approval.\n\nAdd the project client before assigning decision authority.\n\nAPPROVAL RECORD\n\nNo exact-artifact approvals have been authored.\n\nSchedule dates\nUNFOLD ↓\n\nNo active phase handoffs need attention.\n\nWorkflow stage\n\nBAND\n\nSchedule\n\n0 phases · nothing active · next milestone —\n\nFOLD ↑\nCOMPOSE A SCHEDULE · THREE STARTING POINTS\nTYPOGRAPHIC · NO WIZARDS\ni\nThe Patina Six\nConsultation · Schematic Design · Design Development · Procurement & Orders · Installation & Styling · Completion — the studio’s standard six, pre-chained. Delete what the project doesn’t need.\nDEFAULT\nii\nFrom a past project\nPull the phase chain from a finished project — with the durations that actually happened, not the ones that were hoped for. Your hist",
+  "editBtnExists": 1,
+  "ariaDisabled": "true",
+  "ariaDescribedBy": "household-figure-held",
+  "reasonText": "The change-order figure is the principal’s to set. An owner or an admin of the studio can write it.",
+  "figureInputAppearedAfterClick": 0,
+  "directSignInErr": null,
+  "directWriteAttemptError": "household_threshold_forbidden",
+  "directWriteAttemptData": null,
+  "cleanedUp": true
+}

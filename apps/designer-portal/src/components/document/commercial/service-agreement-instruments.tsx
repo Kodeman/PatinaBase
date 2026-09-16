@@ -382,6 +382,7 @@ export function ServiceAgreementInstruments({
             rates={rates}
             recipientEmail={clientEmail}
             recipientName={clientName}
+            parts={parts}
             readinessOverride={
               composedReadiness
                 ? {

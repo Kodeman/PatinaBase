@@ -90,8 +90,10 @@ describe('RoadOrders — the pieces she bought herself', () => {
     render(<RoadOrders orders={[LAMP, RUG]} />);
 
     expect(screen.getByText(/Brass floor lamp/)).toBeInTheDocument();
-    expect(screen.getByText('Agreed · bought direct · $420')).toBeInTheDocument();
-    expect(screen.getByText('In transit · bought direct · 2 of them · $1,800')).toBeInTheDocument();
+    expect(screen.getByText('Agreed · bought direct · $420.00')).toBeInTheDocument();
+    expect(
+      screen.getByText('In transit · bought direct · 2 of them · $1,800.00'),
+    ).toBeInTheDocument();
 
     expect(screen.getAllByRole('button', { name: /pay for this piece/i })).toHaveLength(1);
   });
@@ -186,7 +188,7 @@ describe('RoadOrders — the pieces she bought herself', () => {
     render(<RoadOrders orders={[]} closed={[REFUNDED]} today={new Date(2026, 8, 4)} />);
 
     expect(screen.getByTestId('road-orders-closed')).toHaveTextContent(
-      'Ceramic table lamp · Refunded · bought 2 July · $260',
+      'Ceramic table lamp · Refunded · bought 2 July · $260.00',
     );
   });
 

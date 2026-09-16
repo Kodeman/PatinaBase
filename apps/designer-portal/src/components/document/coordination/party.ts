@@ -12,6 +12,7 @@
  * `partyFor`, which falls back to these generic court tokens when no row exists.
  */
 
+import type { PartyKind } from '@patina/types';
 import type { Court } from '@/lib/document/coordination-derivation';
 
 export interface CourtToken {
@@ -101,18 +102,11 @@ export function courtToken(court: Court): CourtToken {
 export interface PartyLike {
   display_name: string | null;
   company_name: string | null;
+  /** The shared vocabulary, not a local copy — PR-f widened it (inspector,
+   *  lender, engineer, other_named) and a second list here would silently
+   *  reject the new kinds at every call site. */
   party_kind?:
-    | 'gc'
-    | 'vendor'
-    | 'client_rep'
-    | 'other'
-    | 'sub'
-    | 'installer'
-    | 'receiver'
-    | 'architect'
-    | 'photographer'
-    | 'stager'
-    | 'client'
+    | PartyKind
     | null;
 }
 

@@ -79,6 +79,49 @@ describe('StandingSheet (OD-6 / L-11)', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  // ── W3-F8 — with nothing standing there is no list to rule off ──────────
+  it('renders no exceptions list, and no rule over the inputs, when none stand', () => {
+    const { container } = render(
+      <StandingSheet
+        open
+        onClose={jest.fn()}
+        items={[]}
+        inputs={[
+          {
+            key: '0:Working budget',
+            eyebrow: 'BUDGET',
+            sentence: 'Working budget \u00b7 Client \u00b7 blocks Direction',
+            act: null,
+          },
+        ]}
+      />,
+    );
+    expect(container.querySelectorAll('[data-standing-row]')).toHaveLength(0);
+    const heading = screen.getByText('INPUT NEEDED · 1');
+    expect(heading.className).not.toMatch(/border-t|mt-4|pt-3/);
+    // Exactly one list: the inputs'.
+    expect(screen.getAllByRole('list')).toHaveLength(1);
+  });
+
+  it('keeps the rule over the inputs while something stands', () => {
+    render(
+      <StandingSheet
+        open
+        onClose={jest.fn()}
+        items={FOUR}
+        inputs={[
+          {
+            key: '0:Working budget',
+            eyebrow: 'BUDGET',
+            sentence: 'Working budget \u00b7 Client \u00b7 blocks Direction',
+            act: null,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('INPUT NEEDED · 1').className).toMatch(/border-t/);
+  });
+
   it('mounts nothing while closed', () => {
     const triggerRef = createRef<HTMLElement>();
     render(

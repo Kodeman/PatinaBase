@@ -1,0 +1,34 @@
+BEGIN
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+        which        |     doc_label      |  blocks   
+---------------------+--------------------+-----------
+ old predicate picks | Resale certificate | {payment}
+(1 row)
+
+ which | doc_label | blocks 
+-------+-----------+--------
+(0 rows)
+
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+SET
+ confirm_landed 
+----------------
+ t
+(1 row)
+
+RESET
+     doc_label      | verified | retired 
+--------------------+----------+---------
+ Resale certificate | t        | f
+ Safety plan        | t        | f
+(2 rows)
+
+ROLLBACK

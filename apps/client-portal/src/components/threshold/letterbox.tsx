@@ -2,12 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { useInvoiceLink, type Invoice } from '@patina/supabase';
-import { invoiceBalanceCents } from '@patina/shared';
-import { invoiceLinkPath } from '@patina/utils';
+import { type Invoice } from '@patina/supabase';
+import { formatCurrency, invoiceBalanceCents } from '@patina/shared';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
-import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+
 import { clientEvents } from '@/lib/analytics/events';
 import {
   revealReturnAnchor,
@@ -15,7 +14,7 @@ import {
   useCheckoutReturn,
   useNamedInvoice,
 } from '@/lib/threshold/checkout-return';
-import { dayMonth, legalDate } from '@/lib/threshold/dates';
+import { legalDate } from '@/lib/threshold/dates';
 import {
   parseSourceDate,
   toInvoiceModel,
@@ -34,9 +33,10 @@ import { Settlement } from './settlement';
    accountant's order and the same act to settle them — rather than a second
    invoice grammar invented here. The letterbox is the envelope; the toll is
    the letter, and there is only ever one of it on this surface. The toll does
-   its own date formatting; `today` is threaded through so it can spell the
-   year out on an invoice that falls in another one, and the summary line above
-   it keeps exactly the same rule so the two cannot disagree.
+   its own date formatting; `today` is threaded through for the sentences that
+   still reckon against it. Both the toll and the summary line above it print
+   a due date in full — day, month and year — so the two cannot disagree and
+   neither leaves a client to guess the year off her own invoice.
 
    An empty letterbox is drawn as an empty letterbox. It is not hidden, and it
    carries no "no invoices" card: the slot with nothing in it IS the state.
@@ -58,19 +58,17 @@ export interface LetterboxProps {
    * standing fact rather than a session.
    */
   onRefetch?: () => void | Promise<unknown>;
-  /**
-   * Today, for deciding whether the due date needs its year spelled out — the
-   * rule `SpineToll` applies. Omitted during SSR and the first client paint,
-   * which simply drops the year.
-   */
+  /** Today, for the toll's own reckoning. Omitted during SSR and the first
+   * client paint. The due date does not depend on it: it spells its year
+   * every time. */
   today?: Date;
 }
 
-/** "15 August", and the year too, once it is not this year. */
-function formatDue(dueDate: string | null, today?: Date): string | null {
-  const due = parseSourceDate(dueDate);
-  if (!due) return null;
-  return today && today.getFullYear() !== due.getFullYear() ? legalDate(due) : dayMonth(due);
+/** "15 September 2026". A due date is a term of the letter, so it spells its
+ * year every time — a client reading "due 15 September" on an invoice she is
+ * looking at in January has to guess which September. */
+function formatDue(dueDate: string | null): string | null {
+  return legalDate(parseSourceDate(dueDate));
 }
 
 function Drawing({ full }: { full: boolean }) {
@@ -122,14 +120,41 @@ export function Letterbox({
   const namedId = useNamedInvoice();
   const namedRow = namedId ? (invoices.find((row) => row.id === namedId) ?? null) : null;
   const invoice = namedRow ? toInvoiceModel(namedRow) : soonestDue;
-  const due = invoice ? formatDue(invoice.dueDate, today) : null;
+  const due = invoice ? formatDue(invoice.dueDate) : null;
 
-  // The letter's own address (00574 · K1) — the whole invoice on one page, and
-  // the till on it. Additive here: the settle-in-place below stays until W3b.
-  // `/pay/[token]` is a route of this very portal, so the root-relative path is
-  // the whole address: correct on the server and the client alike, with no
-  // origin to read and nothing to reconcile at hydration.
-  const { data: invoiceLink } = useInvoiceLink(invoice?.id ?? null);
+  /**
+   * THE TERMINAL ACT OPENS THE LETTER, NOT AN ADDRESS (W4 r2 MAJOR-3).
+   *
+   * This read `useInvoiceLink(invoice.id)` and gated both the consequence
+   * sentence and the terminal `Pay $X` act on the answer. Since 00636 froze
+   * `invoice_links.token` at NULL and `get_invoice_link` returns NULL for it
+   * unconditionally, `parseInvoiceLink` rejected every answer — so the act and
+   * its sentence were gone from the household's own house page for EVERY
+   * invoice, with nothing said. A shipped, ruled act cannot disappear quietly.
+   *
+   * The address itself may not be re-emitted: only a producer can mint one, and
+   * `ensure_invoice_link` REVOKES the standing link on the way, so a page-load
+   * mint would silently kill the `/pay/<token>` address the client already has
+   * in her email. This surface is a stable read, so it does not mint.
+   *
+   * So the act does what this surface can honestly do: it opens the letter,
+   * where `Settlement` — the settle-in-place till — already stands. The same
+   * move `door-gate.tsx` took for the deposit offer in W4 r1 B-1: name the
+   * letter, not a token. The emailed `/pay/<token>` sheet is untouched and
+   * still the ruled pay surface (K1).
+   *
+   * AND IT DOES NOT REMOVE ITSELF ON PRESS (W4 r3 MAJOR-3). `payHere` carried
+   * `&& !open`, so pressing "Pay $X" set `open`, which unmounted the very
+   * button under the caret: `ScoredAction` with no `href` renders a
+   * `<button>`, `revealReturnAnchor` only scrolls, and this surface had no
+   * live region — so focus fell to `document.body` and nothing was announced,
+   * on the terminal MONEY act. The act now keeps its place, says it is a
+   * disclosure (`aria-expanded`), moves the reader into the till it opened,
+   * and announces it — the shape `paperwork-sheet.tsx` took for the same
+   * defect class one round earlier.
+   */
+  const balanceCents = invoice?.balanceCents ?? 0;
+  const payHere = invoice !== null && balanceCents > 0;
 
   // The return from the till. A return that names an order belongs to the road,
   // not to the letterbox — and a return naming a letter this house is not
@@ -180,12 +205,25 @@ export function Letterbox({
   }, [confirm, settlement]);
 
   const slot = useRef<HTMLDivElement | null>(null);
+  // The till the money act opens. Focus lands here so the reader is where the
+  // act took her, and one polite region says so out loud.
+  const settlementRegion = useRef<HTMLDivElement | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const moveToSettlement = useRef(false);
   const revealed = useRef(false);
   useEffect(() => {
     if (!settlement || revealed.current) return;
     revealed.current = true;
     revealReturnAnchor(slot.current);
   }, [settlement]);
+
+  // The till mounts with `open`, so the focus move waits a render rather than
+  // reaching for a node that is not there yet.
+  useEffect(() => {
+    if (!open || !moveToSettlement.current) return;
+    moveToSettlement.current = false;
+    settlementRegion.current?.focus();
+  }, [open]);
 
   // The letter the address named is unfolded and brought into view: she asked
   // for this one by following a link about it, and the letterbox sits well
@@ -223,6 +261,12 @@ export function Letterbox({
     >
       <p className="mb-2 font-mono text-[11px] uppercase leading-[1.5] tracking-[0.14em] text-[var(--text-muted)]">
         The letterbox
+      </p>
+
+      {/* One polite region for the surface: an act that opens the till says so
+          out loud rather than only scrolling (W4 r3 MAJOR-3). */}
+      <p aria-live="polite" role="status" className="sr-only">
+        {announcement}
       </p>
 
       {settlement && (
@@ -280,22 +324,24 @@ export function Letterbox({
             className="max-w-[46ch] text-[15px] leading-[1.62] text-[var(--text-body)]"
           >
             {`${invoice.number ?? 'Invoice'} · `}
-            <span className="t-money">{moneyInWords(invoice.totalCents)}</span>
+            <span className="t-money">{formatCurrency(invoice.totalCents)}</span>
             {' total · '}
-            <span className="t-money">{moneyInWords(invoice.paidCents)}</span>
+            <span className="t-money">{formatCurrency(invoice.paidCents)}</span>
             {' paid. Balance '}
-            <span className="t-money">{moneyInWords(invoice.balanceCents)}</span>
+            <span className="t-money">{formatCurrency(invoice.balanceCents)}</span>
             {due ? `, due ${due}` : ''}.
           </p>
 
-          {invoiceLink && (
+          {/* The consequence belongs to the UNPRESSED act: once the till is
+              open the sentence has become the thing it described. */}
+          {payHere && !open && (
             <p data-testid="letterbox-consequence" className="consequence mt-3.5">
               This opens payment. Nothing is charged until you choose how to pay.
             </p>
           )}
 
           <div className="mt-3 flex flex-wrap items-baseline gap-x-4">
-            {invoiceLink && (
+            {payHere && (
               <ScoredAction
                 actionKey="invoice_open_link"
                 regionKey="letterbox"
@@ -303,13 +349,19 @@ export function Letterbox({
                 // Money moves here, so the act takes the terminal tier and
                 // carries the figure it is for. H4 defines the variant.
                 variant="terminal"
-                href={invoiceLinkPath(invoiceLink.token)}
-                // Never warmed by scrolling past: a prefetch that ever renders
-                // would record a view and spend the pay page's rate-limit
-                // budget on a letter nobody opened.
-                prefetch={false}
+                aria-expanded={open}
+                aria-controls="letterbox-letter"
+                onClick={() => {
+                  moveToSettlement.current = true;
+                  setAnnouncement(
+                    `Payment for ${invoice.number ?? 'this invoice'} is open. Nothing is charged until you choose how to pay.`,
+                  );
+                  if (open) settlementRegion.current?.focus();
+                  else setOpen(true);
+                  revealReturnAnchor(slot.current);
+                }}
               >
-                {`Pay ${moneyInWords(invoice.balanceCents)}`}
+                {`Pay ${formatCurrency(invoice.balanceCents)}`}
               </ScoredAction>
             )}
             <ScoredAction
@@ -349,7 +401,13 @@ export function Letterbox({
               open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
             }`}
           >
-            <div className="min-h-0">
+            <div
+              className="min-h-0"
+              ref={settlementRegion}
+              tabIndex={-1}
+              role="group"
+              aria-label="Settle this invoice"
+            >
               {open && (
                 <Settlement
                   invoice={invoice}

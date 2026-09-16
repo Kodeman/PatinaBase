@@ -1,0 +1,51 @@
+BEGIN
+--- 1. the record: Dana Kowalski, Northgate Electric, COI lapsed 2026-03-31 ---
+   full_name   |              company_id              | her_own_paper | her_firm_paper | identity_paper 
+---------------+--------------------------------------+---------------+----------------+----------------
+ Dana Kowalski | d0e20000-0000-0000-0000-000000000003 | not_on_file   | lapsed         | lapsed
+(1 row)
+
+SET
+SET
+--- 2. the shipped inline add on her own number, no rolodex pick ---
+                  id                  |          studio_contact_id           | company_id |    company_name    
+--------------------------------------+--------------------------------------+------------+--------------------
+ 6ea292ef-982e-4275-a13f-b2efaf257112 | d0e10000-0000-0000-0000-000000000011 |            | Northgate Electric
+(1 row)
+
+INSERT 0 1
+--- 3. the identity row, and every seat line beneath it (AFTER the fix) ---
+ display_name  | seat_count | row_paper 
+---------------+------------+-----------
+ Dana Kowalski |          3 | lapsed
+(1 row)
+
+   project_name    | stamped | seat_has_company | seat_paper 
+-------------------+---------+------------------+------------
+ Lindqvist kitchen | t       | t                | lapsed
+ Okonkwo residence | t       | f                | lapsed
+ Okonkwo residence | t       | t                | lapsed
+(3 rows)
+
+--- 4. NEGATIVE CONTROL: the OLD expression on the same rows ---
+   project_name    | seat_has_company |  old_word   | shipped_word 
+-------------------+------------------+-------------+--------------
+ Lindqvist kitchen | t                | lapsed      | lapsed
+ Okonkwo residence | f                | not_on_file | lapsed
+ Okonkwo residence | t                | lapsed      | lapsed
+(3 rows)
+
+--- 5. crm-model §5: a seat that names its OWN firm keeps that firm's word ---
+RESET
+INSERT 0 1
+UPDATE 1
+SET
+SET
+   project_name    | seat_has_company | seat_paper  | row_paper 
+-------------------+------------------+-------------+-----------
+ Lindqvist kitchen | t                | lapsed      | lapsed
+ Okonkwo residence | t                | not_on_file | lapsed
+ Okonkwo residence | t                | lapsed      | lapsed
+(3 rows)
+
+ROLLBACK

@@ -1,0 +1,15 @@
+Pager usage is off.
+BEGIN
+SET
+INSERT 0 600
+INSERT 0 600
+ANALYZE
+ANALYZE
+NOTICE:  contacts branch skeleton:              649 rows in 00:00:00.007846
+NOTICE:    the identity_seats CTE, whole:       626 identities in 00:00:00.020693  <-- ONCE, not per row
+NOTICE:    + identity_consent_status only:      49 rows in 00:00:00.172578
+NOTICE:    + identity_paper_state only:         649 rows in 00:00:00.115799
+NOTICE:    + reach_state_for only:              649 rows in 00:00:00.28096
+NOTICE:  the whole view, SELECT * :             1262 rows in 00:00:03.199528
+DO
+ROLLBACK

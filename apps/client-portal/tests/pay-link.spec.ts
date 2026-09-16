@@ -509,13 +509,31 @@ test.describe("the standing invoice (00574)", () => {
 
     const { data: attempt, error: attemptErr } = await admin()
       .from("invoice_checkout_attempts")
-      .select("return_nonce")
+      .select("id, return_nonce")
       .eq("invoice_id", minted.invoiceId)
       .not("return_nonce", "is", null)
       .single();
     expect(attemptErr).toBeNull();
-    const nonce = (attempt as { return_nonce: string }).return_nonce;
+    const { id: attemptId, return_nonce: nonce } = attempt as {
+      id: string;
+      return_nonce: string;
+    };
     expect(nonce).toMatch(/^[0-9a-f]{64}$/);
+
+    // R-BZ / 00636: `resolve_invoice_return_nonce` only rotates an attempt
+    // whose `nonce_return_origin` is set — the one fact that says this
+    // attempt's Stripe return really does ride /pay/return/<nonce>. The real
+    // driver (`_shared/invoice-checkout-driver.ts`'s `startInvoiceCheckout`)
+    // stamps it at claim time via `stamp_invoice_checkout_return_origin`,
+    // same two arguments, before Stripe is ever told the nonce; without that
+    // stamp this attempt legitimately reads as `spent`, not `rotated`, and the
+    // hop below would 303 to /pay/used instead of the sheet.
+    const { data: stamped, error: stampErr } = await admin().rpc(
+      "stamp_invoice_checkout_return_origin",
+      { p_attempt_id: attemptId, p_origin: "https://client.patina.cloud" },
+    );
+    expect(stampErr).toBeNull();
+    expect(stamped).toBe(true);
 
     const hop = await page.request.get(
       `/pay/return/${nonce}?checkout=success&session_id=cs_1`,
@@ -524,7 +542,12 @@ test.describe("the standing invoice (00574)", () => {
       },
     );
     expect(hop.status()).toBe(303);
-    expect(hop.headers()["location"]).toContain(`/pay/${minted.token}`);
+    // 00636 / R-BT: a successful return ROTATES the link's token rather than
+    // reading it back, so the address this hop lands on is a freshly minted
+    // 64-hex token bound to the SAME link (`minted.linkId`) — never the one
+    // the guest originally opened (`minted.token`, now dead).
+    expect(hop.headers()["location"]).toMatch(/\/pay\/[0-9a-f]{64}\?/);
+    expect(hop.headers()["location"]).not.toContain(`/pay/${minted.token}`);
     expect(hop.headers()["location"]).toContain("checkout=success");
     expect(hop.headers()["cache-control"]).toBe("private, no-store, max-age=0");
 
@@ -598,10 +621,19 @@ test.describe("the standing invoice (00574)", () => {
       timeout: 90_000,
     });
 
-    // Not a vacuous assertion: the action is on the page, at this token.
-    const openInvoice = page.getByRole("link", { name: /open the invoice/i });
-    await expect(openInvoice).toBeVisible();
-    await expect(openInvoice).toHaveAttribute("href", `/pay/${minted.token}`);
+    // The terminal act stopped being a link to `/pay/<token>` on this program
+    // (letterbox.tsx, "THE TERMINAL ACT OPENS THE LETTER, NOT AN ADDRESS" —
+    // W4 r2 MAJOR-3): 00636 froze `invoice_links.token` at NULL, so
+    // `useInvoiceLink` answers nothing and a page-load mint would revoke the
+    // client's own emailed link. `Pay $X` now opens the settle-in-place till
+    // on THIS page via `onClick`, never by navigating to `/pay/`; the emailed
+    // `/pay/<token>` sheet is untouched (see the "the sheet reflows" test
+    // below, which still drives it directly). Not a vacuous assertion: the
+    // literal amount ties it to this fixture's own balance, matching
+    // letterbox.test.tsx's `'Pay $9,125.00'` for the same $7,605-paid fixture.
+    const pay = page.getByRole("button", { name: "Pay $9,125.00" });
+    await expect(pay).toBeVisible();
+    await expect(pay).toHaveAttribute("aria-expanded", "false");
 
     expect(
       payRequests,

@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  useEmailDelivery,
   useProposalSendDispatchStatus,
   useRetryProposalSend,
 } from "@patina/supabase";
@@ -29,6 +30,7 @@ import {
   type ProjectInstrumentItemView,
   type ProjectInstrumentView,
 } from "@/lib/document/project-commerce";
+import { DeliveryWord } from "../delivery-word";
 import { DocSheet } from "../overlays/doc-sheet";
 import {
   RECORD_ON_PAPER_ACT_LABEL,
@@ -106,12 +108,23 @@ function DispatchRetryBand({
     enabled: instrument.state !== "draft" && hasCommittedDelivery,
   });
   const retryDelivery = useRetryProposalSend({ errorSurface: "inline" });
+  // 00591 — the provider's own verdict, beside the dispatch-instance status.
+  const emailDelivery = useEmailDelivery(
+    "proposal",
+    instrument.state === "draft" ? [] : [instrument.proposalId],
+  );
   const delivery = deliveryStatus.data;
+  const sentEmail = emailDelivery.byRef[instrument.proposalId] ?? null;
 
   if (instrument.state === "draft") return null;
 
   return (
     <>
+      {sentEmail && (
+        <p className="mt-2">
+          <DeliveryWord delivery={sentEmail} mode="all" />
+        </p>
+      )}
       {hasCommittedDelivery && deliveryStatus.isLoading && (
         <p role="status" className="mt-2 text-[11px] text-[var(--text-muted)]">
           Checking email delivery…

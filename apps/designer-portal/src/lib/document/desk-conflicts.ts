@@ -21,6 +21,7 @@ import {
   detectInstallCollisions,
   type DeliveryConflict,
 } from '@/lib/procurement/delivery-conflicts';
+import { dayMonth } from './dates';
 
 export interface DeskConflictInput {
   /** Collision tier — becomes the folder's need line when it ranks. */
@@ -29,12 +30,9 @@ export interface DeskConflictInput {
   drift: string | null;
 }
 
-const fmtDay = (iso: string) =>
-  new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+// The day is read off the ISO string's own date part, so a delivery date is
+// the day it was written, not the day the reader's zone makes of it.
+const fmtDay = (iso: string) => dayMonth(iso.slice(0, 10)) ?? '';
 
 const daysBetween = (a: string, b: string): number =>
   Math.round(Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000);

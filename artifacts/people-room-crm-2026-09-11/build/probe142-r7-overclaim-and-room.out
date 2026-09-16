@@ -1,0 +1,92 @@
+BEGIN
+CREATE FUNCTION
+GRANT
+ assume_user 
+-------------
+ 
+(1 row)
+
+=== MINOR-42: does any Directory row claim more seats than it can nest? ===
+ rows_overclaiming 
+-------------------
+                 0
+(1 row)
+
+=== the room, as the studio admin (not the designer) ===
+  role   | count 
+---------+-------
+ client  |     7
+ contact |    49
+ lead    |     5
+ sub     |     1
+(4 rows)
+
+ seat_rows 
+-----------
+        31
+(1 row)
+
+=== the four paper words and the consent words, as the admin ===
+      display_name      | paper_state 
+------------------------+-------------
+ Great Northern Bank    | not_on_file
+ Lakeshore Painting Co. | lapses_soon
+ Marrow & Sons          | current
+ Northgate Electric     | lapsed
+(4 rows)
+
+             display_name              | consent_status 
+---------------------------------------+----------------
+ Amara Osei                            | granted
+ Dana Kowalski                         | granted
+ Erin Sato                             | granted
+ Luis Ochoa                            | granted
+ Ngozi Eze                             | granted
+ Adaeze Okonkwo                        | not_asked
+ Ashgrove Millwork                     | not_asked
+ Beck + Rowe Architects                | not_asked
+ Ben Ostrom                            | not_asked
+ Boreal HVAC                           | not_asked
+ Carol Nyström                         | not_asked
+ Cedar & Iron Framing                  | not_asked
+ Chidi Okonkwo                         | not_asked
+ City of Minneapolis, CPED Inspections | not_asked
+ Claire Bissett                        | not_asked
+ Dale Whitcomb                         | not_asked
+ Frank Bauer                           | not_asked
+ Granite North                         | not_asked
+ Great Northern Bank                   | not_asked
+ Halvorsen Cabinet Works               | not_asked
+ Ingrid Halvorsen                      | not_asked
+ Jim Lindgren                          | not_asked
+ Jonah Feld                            | not_asked
+ Jonah Feld Photography                | not_asked
+ Kelly Marsh                           | not_asked
+ Kestrel Staging                       | not_asked
+ Lakeshore Painting Co.                | not_asked
+ Leah Hartwell                         | not_asked
+ Lumen & Co.                           | not_asked
+ Marcus Hale                           | not_asked
+ Marrow & Sons                         | not_asked
+ Nadia Brooks                          | not_asked
+ Northgate Electric                    | not_asked
+ Ostrom Builders                       | not_asked
+ Owen Ashby                            | not_asked
+ Priya Natarajan                       | not_asked
+ Radon Solutions North                 | not_asked
+ Ray Thao                              | not_asked
+ Rivera Finishes                       | not_asked
+ Rivera Finishes                       | not_asked
+ Rosa Delgado                          | not_asked
+ Rusk Mechanical                       | not_asked
+ Sam Rowe                              | not_asked
+ Sofia Ferraro                         | not_asked
+ Stonehaven Tile Gallery               | not_asked
+ Tom Marrow                            | not_asked
+ Twin Cities Drywall & Plaster         | not_asked
+ Waterline Supply                      | not_asked
+ Pete Rusk                             | opted_out
+ Joe Wozniak                           | pending
+(50 rows)
+
+ROLLBACK

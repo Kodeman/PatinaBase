@@ -27,17 +27,23 @@ import {
   useState,
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
 import {
+  createBrowserClient,
   useCreateTimeEntry,
   useDiscardTimer,
   useDeleteTimeEntry,
+  fetchTimeAutostartPreference,
+  timeAutostartKeys,
+  useMarkTimeAutostartDisclosed,
   useRunningTimer,
   useStartTimer,
   useStopTimer,
+  useTimeAutostartPreference,
   useUpdateTimeEntry,
+  type ProjectTimeEntry,
   type RunningTimer,
-} from '@/hooks/use-time-tracking';
+  type TimeRateRole,
+} from '@patina/supabase';
 import {
   closeOutTimer,
   idleSecondsFromPings,
@@ -54,6 +60,7 @@ import {
   fetchProjectBillingAuthority,
 } from '@/hooks/use-commercial-documents';
 import { automaticTimeBillingIntent } from '@/lib/document/authority-hours';
+import { documentEvents } from '@/lib/analytics/document-events';
 import { queryKeys } from '@/lib/react-query';
 
 // R64 — grace added past the last activity ping when bounding an abandoned
@@ -95,9 +102,46 @@ interface DocumentTimeValue {
   release: () => void;
   pause: () => void;
   resume: () => void;
-  manualLog: (minutes: number, activity: string) => Promise<void>;
-  logOffer: (minutes: number, activity: string | null) => Promise<void>;
+  /**
+   * HT-14 — a typed entry that does NOT require a document in hand. The
+   * project is named by the caller (the phone's sheet picks one when nothing
+   * is held); `billable` is stated, never defaulted (HT-11). Returns the row
+   * the server wrote so the caller can report the server's answer, not the
+   * form's.
+   */
+  manualLog: (input: ManualLogInput) => Promise<ProjectTimeEntry>;
+  logOffer: (
+    minutes: number,
+    activity: string | null,
+    billable: boolean,
+  ) => Promise<void>;
   discardOffer: () => Promise<void>;
+  /**
+   * HT-35 — this member declined the automatic timer. `false` until the
+   * preference is read, which is the shipped behaviour (R19/D11): a member's
+   * clock is never taken away for the width of a fetch, and an unreadable
+   * preference leaves auto-start exactly as it ships.
+   */
+  autostartOptedOut: boolean;
+  /**
+   * HT-35 — the one-tap manual start the opt-out falls back to. "Off" is never
+   * "no timer": it is the same clock, started by her hand. A no-op when a timer
+   * already runs on the held document or nothing is held.
+   */
+  startManually: () => void;
+}
+
+export interface ManualLogInput {
+  projectId: string;
+  minutes: number;
+  activity: string | null;
+  /** HT-11 — stated by the surface, seeded from the resolved answer. */
+  billable: boolean;
+  /** HT-13 — any date. Omitted = now. */
+  startedAt?: string;
+  phaseKey?: string | null;
+  /** HT-41 — only where the member holds more than one live roster role. */
+  rateRole?: TimeRateRole | null;
 }
 
 /**
@@ -138,6 +182,11 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
   const createEntry = useCreateTimeEntry();
   const updateEntry = useUpdateTimeEntry();
   const deleteEntry = useDeleteTimeEntry();
+
+  // HT-35 — the automatic timer is hers to decline.
+  const autostart = useTimeAutostartPreference();
+  const markDisclosed = useMarkTimeAutostartDisclosed();
+  const autostartOptedOut = autostart.optedOut;
 
   const [held, setHeld] = useState<HeldDocument | null>(null);
   const heldRef = useRef<HeldDocument | null>(null);
@@ -201,6 +250,34 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
   const invalidateTimeSurfaces = useCallback(() => {
     void qc.invalidateQueries({ queryKey: ['document-time-today'] });
     void qc.invalidateQueries({ queryKey: ['margin-items'] });
+  }, [qc]);
+
+  /**
+   * HT-35 — has this member declined the automatic timer? Read through the same
+   * cache entry the hook fills, so a document opened before the hook settles
+   * gets the ANSWER rather than the default. Fails to `false`: an unreadable
+   * preference leaves auto-start exactly as it ships (R19/D11), because the
+   * failure that takes a member's clock away silently is worse than the one
+   * that gives her the clock she had yesterday.
+   */
+  const autostartDeclined = useCallback(async (): Promise<boolean> => {
+    try {
+      const pref = await qc.fetchQuery({
+        queryKey: timeAutostartKeys.preference,
+        queryFn: fetchTimeAutostartPreference,
+        staleTime: 5 * 60_000,
+        // W7-R4-11 — no retry ladder in front of the clock. The portal's
+        // QueryClient defaults to 3 retries at 1-2-4s; on a preference that
+        // fails closed to "she did not decline" those seven seconds buy
+        // nothing and are spent before the first hour of the session is
+        // recorded. The five-minute staleTime means the answer is read once
+        // per session and every hold after that is a cache hit.
+        retry: false,
+      });
+      return pref?.optedOut === true;
+    } catch {
+      return false;
+    }
   }, [qc]);
 
   /** Resolve billable intent from the server-owned authority summary. Any
@@ -280,11 +357,20 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         ? undefined
         : (opts.phaseKey ?? timer.project?.current_phase ?? null);
 
-      await api.current.stopTimer.mutateAsync({
+      // HT-24 — `activity` is RECORDED, never required: the close-out says
+      // "not set" out loud instead of leaving the column to mean two things.
+      // HT-11 — `billable` is restated from the row the timer opened with, so
+      // the stop payload carries both facts explicitly rather than one of them
+      // implicitly. It is NOT re-resolved here: an authority read that hiccups
+      // at stop would fail closed and silently un-bill an hour that started
+      // billable. Neither is a required field (§0.22 — the zero-tap path).
+      const stored = await api.current.stopTimer.mutateAsync({
         entryId: timer.id,
         durationMinutesOverride: proposedMinutes,
         rawSeconds: Math.round(elapsed),
         idleSeconds,
+        activity: null,
+        billable: timer.billable,
         ...(autoPhase !== undefined ? { phaseKey: autoPhase } : {}),
       });
       // useStopTimer's own onSuccess fires invalidateQueries without
@@ -298,6 +384,19 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
       invalidateTimeSurfaces();
 
+      // HT-17 — INSTRUMENT ONLY. `idle_ratio` is CUMULATIVE idle over raw
+      // elapsed, which is the hole R64 has: the bound fires on the single
+      // longest gap (`longestGap`), so a day of many short gaps summing to
+      // hours proposes the full raw elapsed. The 30-minute number is NOT
+      // touched here; it is watched, exactly as the ruling says.
+      documentEvents.time.timerStopped({
+        surface: 'document',
+        duration_minutes: proposedMinutes,
+        adjusted: proposedMinutes * 60 !== Math.round(elapsed),
+        idle_minutes: Math.round(idleSeconds / 60),
+        idle_ratio: elapsed > 0 ? Math.round((idleSeconds / elapsed) * 100) / 100 : null,
+      });
+
       if (opts.offerStrip) {
         setOffer({
           entryId: timer.id,
@@ -308,11 +407,45 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
           phaseKey: timer.phase_key ?? autoPhase ?? null,
           source,
           idleSeconds,
+          // The strip prints the SERVER's answers, not the browser's: the row
+          // has been through the classifier by the time this resolves.
+          billable: stored.billable,
+          hourlyRateCents: stored.hourly_rate_cents ?? null,
+          rateSource: stored.rate_source ?? null,
+          rateRole: stored.rate_role ?? null,
+          ratedAmountCents: stored.rated_amount_cents ?? null,
         });
       }
     },
     [invalidateTimeSurfaces, qc],
   );
+
+  /**
+   * 00608 — `start_timer` stops any incumbent the portal did not already close
+   * out (another tab opened one in the gap) and hands the row back. That hour
+   * still gets its strip: the entry is written and would otherwise stand at
+   * whatever wall-clock duration the server computed, with nobody told.
+   *
+   * No ping data exists for a row this session never watched, so idle is 0 and
+   * the suggestion is the stored duration — the truth the server saw.
+   */
+  const offerFromServerStop = useCallback((row: ProjectTimeEntry) => {
+    setOffer({
+      entryId: row.id,
+      projectId: row.project_id,
+      projectName: 'that document',
+      rawSeconds: row.duration_minutes * 60,
+      suggestedMinutes: Math.max(1, row.duration_minutes),
+      phaseKey: row.phase_key ?? null,
+      source: ((row as { source?: string }).source ?? 'timer_auto') as TimeSource,
+      idleSeconds: 0,
+      billable: row.billable,
+      hourlyRateCents: row.hourly_rate_cents ?? null,
+      rateSource: row.rate_source ?? null,
+      rateRole: row.rate_role ?? null,
+      ratedAmountCents: row.rated_amount_cents ?? null,
+    });
+  }, []);
 
   /** Pick up a document: chain out whatever runs, then start (D11,
    *  ratified R19 — auto-start is no longer provisional). */
@@ -320,6 +453,11 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
     (doc: HeldDocument) => {
       heldRef.current = doc;
       setHeld(doc);
+      // W7-R4-11 — the preference read STARTS here, outside the serialised
+      // lane, so its round trip overlaps the queue drain instead of standing
+      // in front of D11's pick-up-is-start. It never rejects (it fails closed
+      // to `false`), so holding the promise across the enqueue is safe.
+      const declined = autostartDeclined();
       enqueue(async () => {
         if (heldRef.current?.projectId !== doc.projectId) return; // superseded
         const timer = await fetchRunning();
@@ -328,17 +466,35 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
           await closeOut(timer, { offerStrip: true });
         }
         if (pausedRef.current === doc.projectId) return;
+        // HT-35 — a member who declined the automatic timer gets no timer HERE.
+        // She is not left without one: `startManually` below is the same clock
+        // under her thumb. Awaited rather than read off a render, so the first
+        // document of a session cannot open a timer she has already turned off
+        // while the preference is still in flight.
+        if (await declined) return;
+        if (heldRef.current?.projectId !== doc.projectId) return;
         const billable = await automaticBillableIntent(doc.projectId);
         if (heldRef.current?.projectId !== doc.projectId) return;
-        await api.current.startTimer
+        const taken = await api.current.startTimer
           .mutateAsync({
             projectId: doc.projectId,
             phaseKey: doc.phaseKey,
             source: 'timer_auto',
             billable,
-            quiet: true,
           })
-          .catch(() => {});
+          .catch(() => null);
+        // A row this session never saw — another tab's — that the RPC had to
+        // stop to take the slot. It is written; raise its strip (R20).
+        if (taken?.stopped && taken.stopped.id !== timer?.id) {
+          offerFromServerStop(taken.stopped);
+        }
+        if (taken?.started) {
+          documentEvents.time.timerStarted({
+            surface: 'document',
+            source: 'timer_auto',
+            billable,
+          });
+        }
         // Same gap as closeOut's stopTimer above: useStartTimer's onSuccess
         // doesn't await its own invalidateQueries either, so without this
         // the cache can still read the PREVIOUS document's (or no) timer
@@ -346,7 +502,15 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
       });
     },
-    [enqueue, fetchRunning, closeOut, automaticBillableIntent, qc],
+    [
+      enqueue,
+      fetchRunning,
+      closeOut,
+      automaticBillableIntent,
+      autostartDeclined,
+      offerFromServerStop,
+      qc,
+    ],
   );
 
   /** Put down: close out the held document's timer through the strip. */
@@ -388,49 +552,123 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
     if (!doc) return;
     pausedRef.current = null;
     setPausedFor(null);
+    // Same read, same place, for the same reason as `hold` (W7-R4-11).
+    const declined = autostartDeclined();
     enqueue(async () => {
       const timer = await fetchRunning();
       if (timer) return;
+      // HT-35 (W7-R4-10) — resume opens a `timer_auto` row exactly as hold
+      // does, so it owes the same question. Reachable without it: a member who
+      // declined auto-start starts the clock by hand, holds it with the
+      // colophon's pause act, and resume hands her back the automatic timer
+      // she turned off. Her way back is the fallback band's one tap.
+      if (await declined) return;
       const billable = await automaticBillableIntent(doc.projectId);
       if (heldRef.current?.projectId !== doc.projectId) return;
-      await api.current.startTimer
+      const taken = await api.current.startTimer
         .mutateAsync({
           projectId: doc.projectId,
           phaseKey: doc.phaseKey,
           source: 'timer_auto',
           billable,
-          quiet: true,
         })
-        .catch(() => {});
+        .catch(() => null);
+      if (taken?.stopped) offerFromServerStop(taken.stopped);
+      if (taken?.started) {
+        documentEvents.time.timerStarted({
+          surface: 'document',
+          source: 'timer_auto',
+          billable,
+        });
+      }
       await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
     });
-  }, [enqueue, fetchRunning, automaticBillableIntent, qc]);
+  }, [
+    enqueue,
+    fetchRunning,
+    automaticBillableIntent,
+    autostartDeclined,
+    offerFromServerStop,
+    qc,
+  ]);
 
-  /** "+ Log" — a typed entry against the held document (source manual_entry). */
+  /**
+   * HT-35 — the one-tap manual start the opt-out falls back to. The SAME clock
+   * the automatic path opens, with `source: 'timer_manual'` so R4's sub-60s
+   * rule rounds up rather than discarding: a timer she started by hand is a
+   * deliberate act and must not vanish under a minute.
+   */
+  const startManually = useCallback(() => {
+    const doc = heldRef.current;
+    if (!doc) return;
+    pausedRef.current = null;
+    setPausedFor(null);
+    enqueue(async () => {
+      const timer = await fetchRunning();
+      if (timer?.project_id === doc.projectId) return;
+      if (timer) await closeOut(timer, { offerStrip: true });
+      if (heldRef.current?.projectId !== doc.projectId) return;
+      const billable = await automaticBillableIntent(doc.projectId);
+      if (heldRef.current?.projectId !== doc.projectId) return;
+      const taken = await api.current.startTimer
+        .mutateAsync({
+          projectId: doc.projectId,
+          phaseKey: doc.phaseKey,
+          source: 'timer_manual',
+          billable,
+        })
+        .catch(() => null);
+      if (taken?.stopped) offerFromServerStop(taken.stopped);
+      if (taken?.started) {
+        documentEvents.time.timerStarted({
+          surface: 'document',
+          source: 'timer_manual',
+          billable,
+        });
+      }
+      await qc.invalidateQueries({ queryKey: queryKeys.time.runningTimer() });
+    });
+  }, [enqueue, fetchRunning, closeOut, automaticBillableIntent, offerFromServerStop, qc]);
+
+  /**
+   * "+ Log" — a typed entry. HT-14: it no longer early-returns when nothing is
+   * held. That early return is the whole bug the phone had — the sheet took
+   * minutes, an activity and a tap, cleared itself, and wrote NOTHING. The
+   * project is named by the caller now; the held document only supplies the
+   * phase when it happens to be the same one.
+   */
   const manualLog = useCallback(
-    async (minutes: number, activity: string) => {
+    async (input: ManualLogInput) => {
+      if (!input.projectId) throw new Error('Pick a document for this hour.');
+      if (!(input.minutes >= 1)) throw new Error('An hour needs a length.');
       const doc = heldRef.current;
-      if (!doc || minutes < 1) return;
-      await api.current.createEntry.mutateAsync({
-        projectId: doc.projectId,
-        durationMinutes: Math.round(minutes),
-        phaseKey: doc.phaseKey,
-        activity,
+      const written = await api.current.createEntry.mutateAsync({
+        projectId: input.projectId,
+        durationMinutes: Math.round(input.minutes),
+        startedAt: input.startedAt,
+        phaseKey:
+          input.phaseKey ??
+          (doc?.projectId === input.projectId ? doc.phaseKey : null),
+        activity: input.activity,
+        billable: input.billable,
+        rateRole: input.rateRole ?? null,
         source: 'manual_entry',
       });
       invalidateTimeSurfaces();
+      return written;
     },
     [invalidateTimeSurfaces],
   );
 
-  /** Strip "Log": persist the (possibly adjusted) duration + activity. */
+  /** Strip "Log": persist the (possibly adjusted) duration, activity and the
+   *  billable answer the pill carries (HT-11). */
   const logOffer = useCallback(
-    async (minutes: number, activity: string | null) => {
+    async (minutes: number, activity: string | null, billable: boolean) => {
       if (!offer || minutes < 1) return;
       await api.current.updateEntry.mutateAsync({
         id: offer.entryId,
         projectId: offer.projectId,
-        updates: { duration_minutes: Math.round(minutes), activity },
+        updates: { duration_minutes: Math.round(minutes), activity, billable },
       });
       invalidateTimeSurfaces();
       setOffer(null);
@@ -505,6 +743,8 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       manualLog,
       logOffer,
       discardOffer,
+      autostartOptedOut,
+      startManually,
     }),
     [
       held,
@@ -520,12 +760,156 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       manualLog,
       logOffer,
       discardOffer,
+      autostartOptedOut,
+      startManually,
     ],
   );
 
   return (
-    <DocumentTimeContext.Provider value={value}>{children}</DocumentTimeContext.Provider>
+    <DocumentTimeContext.Provider value={value}>
+      {/* HT-35 — the disclosure, and the act the opt-out falls back to. Both
+          ride above the page rather than in the thumb-edge chrome: the strip's
+          edge belongs to a stopped timer's offer (D-B54), and a sentence that
+          displaces an offer would cost the zero-tap path §0.22 protects. */}
+      <AutostartBand
+        held={Boolean(held)}
+        running={Boolean(heldTimer)}
+        optedOut={autostartOptedOut}
+        disclosedAt={autostart.disclosedAt}
+        settled={autostart.isSettled}
+        stampKnown={autostart.disclosureRead}
+        onDisclose={() => markDisclosed.mutate()}
+        onStart={startManually}
+      />
+      {children}
+    </DocumentTimeContext.Provider>
   );
+}
+
+/**
+ * HT-35's two sentences, in the R83 inline-band shape — one line of ink on the
+ * page, dismissible, never a modal and never a toast.
+ *
+ *   1. THE DISCLOSURE. Shown on a member's first document open and never again:
+ *      the stamp is written when it RENDERS, which is the ruling's own test
+ *      ("appears once and never again"), so a member who navigates past it
+ *      without dismissing has still been told.
+ *   2. THE FALLBACK. A member who declined the automatic timer is never left
+ *      without one — while she holds a document and no clock runs, the band is
+ *      the one tap that starts it.
+ *
+ * Neither is a nudge: they appear where the thing they describe is happening,
+ * and the first one appears once in a working life.
+ */
+function AutostartBand({
+  held,
+  running,
+  optedOut,
+  disclosedAt,
+  settled,
+  stampKnown,
+  onDisclose,
+  onStart,
+}: {
+  held: boolean;
+  running: boolean;
+  optedOut: boolean;
+  disclosedAt: string | null;
+  settled: boolean;
+  /** W7-R4-09 — the preference read ANSWERED, rather than settling by failing. */
+  stampKnown: boolean;
+  onDisclose: () => void;
+  onStart: () => void;
+}) {
+  const [dismissed, setDismissed] = useState(false);
+  const stamped = useRef(false);
+  /**
+   * Latched the instant the sentence goes up, and let go only by her own hand,
+   * by her leaving the document, or by her doing the very thing the sentence
+   * invites. The stamp is written on render (above), and the mutation
+   * invalidates the preference query, so `disclosedAt` turns non-null one
+   * round trip later — without this latch the single showing HT-35 allows
+   * would be spent on a flash nobody could read, and `Understood` would never
+   * be reachable.
+   */
+  const [latched, setLatched] = useState(false);
+  /**
+   * W7-R4-09 — `stampKnown`, not `settled`. A failed read settles too, and
+   * falls back to `disclosedAt: null`, which reads identically to a member who
+   * has genuinely never been told. HT-35 spends the sentence once in a working
+   * life; a read that learned nothing may not spend it, and may not stamp a
+   * profile it could not read either. The fallback band below keeps `settled`,
+   * because it is gated on `optedOut` — which fails closed to false — and a
+   * member who cannot be read is simply left on the shipped auto-start.
+   */
+  const undisclosed = held && stampKnown && !optedOut && disclosedAt === null;
+  /**
+   * `!optedOut` is load-bearing, not belt-and-braces. The profile is an
+   * always-mounted overlay in this layout, not a route, so she unticks the box
+   * with the document still held and the band still latched: without this the
+   * sentence would go on asserting the behaviour she just declined, and —
+   * because this branch returns before the fallback below — it would also
+   * swallow the one-tap start HT-35 makes the opt-out fall back to.
+   */
+  const showDisclosure =
+    held && !dismissed && !optedOut && (latched || (undisclosed && !stamped.current));
+
+  useEffect(() => {
+    if (!undisclosed || stamped.current) return;
+    stamped.current = true;
+    setLatched(true);
+    onDisclose();
+    documentEvents.time.autostartDisclosed({ surface: 'document' });
+  }, [undisclosed, onDisclose]);
+
+  /** She closed the document without dismissing, or she declined the clock the
+   *  sentence describes: she has been told, and the sentence does not follow
+   *  her onto the next document — nor back onto this one if she changes her
+   *  mind, since the stamp is already on her profile. */
+  useEffect(() => {
+    if (latched && (!held || optedOut)) setLatched(false);
+  }, [latched, held, optedOut]);
+
+  if (showDisclosure) {
+    return (
+      <div className="border-b border-[var(--color-pearl)] bg-[var(--doc-paper)] px-4 py-2">
+        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <p className="t-body-sm text-[var(--color-charcoal)]">
+            While a document is open, Patina keeps the time for you. You can turn
+            that off on your profile — the clock is then yours to start.
+          </p>
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            className="min-h-11 shrink-0 t-head text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+          >
+            Understood
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (held && settled && optedOut && !running) {
+    return (
+      <div className="border-b border-[var(--color-pearl)] bg-[var(--doc-paper)] px-4 py-2">
+        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <p className="t-body-sm text-[var(--color-aged-oak)]">
+            The clock is yours to start on this document.
+          </p>
+          <button
+            type="button"
+            onClick={onStart}
+            className="min-h-11 shrink-0 t-head text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+          >
+            Start the clock
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 /** Page-side hook: hold the document while mounted (D11 pick-up = start). */

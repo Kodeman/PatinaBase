@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { formatCurrency } from "@patina/shared";
 import {
   useMyPendingReviewRequests,
   useMySubmittedReviews,
@@ -12,7 +13,6 @@ import {
 } from "@patina/supabase";
 
 import { ScoredAction } from "@/components/threshold/instruments/scored-action";
-import { moneyInWords } from "@/components/threshold/instruments/standing-sentence";
 import {
   useClientProjectReviewBundle,
   useRecordProjectReviewFeedback,
@@ -511,7 +511,7 @@ export function SelectionEditionAsk({ projectId }: { projectId: string }) {
                 {item.name}
                 {` · ${item.roomName}`}
                 {item.clientPriceCents
-                  ? ` · ${moneyInWords(item.clientPriceCents, item.currency)}`
+                  ? ` · ${formatCurrency(item.clientPriceCents, item.currency)}`
                   : ""}
               </p>
               {item.verdict && (

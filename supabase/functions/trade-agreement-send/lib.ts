@@ -262,6 +262,8 @@ export interface TradeAgreementSendDeps {
     html: string;
     replyTo?: string;
     metadata: Record<string, unknown>;
+    /** The sending studio, so the out touch lands in its own book (B-2). */
+    organizationId?: string | null;
   }) => Promise<SendEmailResult>;
   /**
    * public.send_trade_agreement(p_agreement_id), evaluated as the CALLER (it
@@ -465,6 +467,7 @@ export async function handleTradeAgreementSend(
         trade_agreement_id: agreement.id,
         contact_id: agreement.contactId,
       },
+      organizationId: agreement.studioId,
     });
   } catch (err) {
     // e.g. RESEND_API_KEY missing and EMAIL_DEV_MODE not set locally.

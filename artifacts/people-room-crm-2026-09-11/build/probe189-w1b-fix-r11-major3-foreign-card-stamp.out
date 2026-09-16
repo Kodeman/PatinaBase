@@ -1,0 +1,15 @@
+Pager usage is off.
+BEGIN
+SET
+INSERT 0 1
+NOTICE:  Z member of Local Dev Studio? f   of Leah Hartwell? t   project_tenant_org(Aspen Loft, as Z) = 4f65641c-1f95-44f2-ad6a-153ce23ad34f (Leah Hartwell)
+NOTICE:  project_recorded_studio(Aspen Loft) = NULL  <-- the record names none
+NOTICE:  Z filed a card in Leah Hartwell, the studio the old guard would have checked against: 97eec520-6d49-4d40-a339-75953ebfb499
+NOTICE:  the foreign stamp on Local Dev Studio's job was REFUSED: party_card_project_has_no_studio  <-- assert_project_party_cards
+NOTICE:  CONTROL 1 — the same foreign card on a job that RECORDS the working studio is refused by the r9 leg: party_studio_contact_other_studio
+NOTICE:  CONTROL 2 — the working studio's OWN card on its own studio-less job is refused too: party_card_project_has_no_studio
+NOTICE:  CONTROL 3 — its own card on a job that RECORDS its studio LANDED: 088eb9e4-4a99-4438-b145-0ca9fe4474f0  (r7 BLOCKING-1 not inverted)
+NOTICE:  CONTROL 4 — company_id + warranty_contact_person_id on the studio-less job still LAND: e32b023a-e99a-415a-9dd5-b2365c10711c  (block 14's posture, r7 BLOCKING-1)
+NOTICE:  and the working studio still reads 0 row(s) of the foreign card — unchanged
+DO
+ROLLBACK

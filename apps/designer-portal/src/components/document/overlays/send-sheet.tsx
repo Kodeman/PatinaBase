@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsMutating, useQueryClient } from '@tanstack/react-query';
-import { PROPOSAL_CLIENT_MUTATION_KEY } from '@patina/supabase';
+import { PROPOSAL_CLIENT_MUTATION_KEY, useEmailDelivery } from '@patina/supabase';
 import {
   useProposal,
   useRetryProposalSend,
@@ -29,6 +29,7 @@ import {
 import { ClientPicker } from '@/components/portal/client-picker';
 import { useClient, useInviteAndLinkClient } from '@/hooks/use-clients';
 import { useAttachDocumentClient } from '@/hooks/use-attach-client';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { useToast } from '@/components/portal/toast-provider';
 import { proposalEvents } from '@/lib/analytics';
 import { DocSheet } from './doc-sheet';
@@ -36,7 +37,12 @@ import {
   CapturedHouseholdInvite,
   inviteAndAttachCapturedHousehold,
 } from './captured-household-invite';
+import {
+  LETTER_NOTE_MAX,
+  counterCopy,
+} from '../people/directory/letter-line-field';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { DeliveryWord } from '../delivery-word';
 import { useProposalMirrorData } from '../drafting/proposal-mirror';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { assessProposalSendReadiness } from '@/lib/document/proposal-send-validation';
@@ -167,6 +173,12 @@ export function SendSheet({
   const retryProposalSend = useRetryProposalSend({ errorSurface: 'inline' });
   const attachClient = useAttachDocumentClient();
   const inviteAndLinkClient = useInviteAndLinkClient();
+  const { value: letterOn, isLoading: letterLoading } = useFeatureFlag(
+    'client-invite-letter',
+  );
+  // Fail-closed, matching add-person-sheet.tsx and client-picker.tsx: nothing
+  // letter-shaped renders until the flag has actually resolved.
+  const letterReady = letterOn && !letterLoading;
   const { toast } = useToast();
 
   // A sibling version already accepted? Sending this one won't affect it.
@@ -211,6 +223,12 @@ export function SendSheet({
     sentAt: committedSentAt,
     enabled: shouldReadDeliveryStatus,
   });
+  // 00591 — what the provider did with the mail, alongside (not instead of)
+  // the dispatch-instance status above.
+  const emailDelivery = useEmailDelivery(
+    'proposal',
+    open && proposal && proposal.status !== 'draft' ? [proposalId] : [],
+  );
 
   useEffect(() => {
     setDeliveryRecovery(null);
@@ -586,6 +604,9 @@ export function SendSheet({
         designerClientId: proposal.designer_client_id,
         clientEmail: capturedHousehold.client_email,
         clientName: capturedHousehold.client_name ?? undefined,
+        letter: letterReady,
+        note: personalMessage,
+        projectId: proposal.project_id ?? undefined,
         invite: inviteAndLinkClient.mutateAsync,
         attach: attachClient.mutateAsync,
       });
@@ -599,6 +620,26 @@ export function SendSheet({
   };
 
   const total = ((proposal?.total_amount || 0) / 100).toLocaleString();
+
+  // R4's three-layer enforcement (composer, route, DB CHECK) applies to this
+  // textarea's content only on the path where it becomes the letter's `note`
+  // — the captured-household invite-and-attach above, gated on the same
+  // condition CapturedHouseholdInvite itself renders under. The ordinary
+  // sendProposal personal message has no such limit.
+  const noteFeedsLetter =
+    letterReady && !proposal?.client_id && !!capturedHousehold?.client_email;
+
+  // `maxLength` only stops a keystroke — it can't retroactively shorten text
+  // already typed before `noteFeedsLetter` turned true (the brief window
+  // while the flag or the captured household is still loading). Once it
+  // does turn true, the composer layer of R4's cap has to apply to whatever
+  // is already there, not just what's typed next.
+  useEffect(() => {
+    if (!noteFeedsLetter) return;
+    setPersonalMessage((prev) =>
+      prev.length > LETTER_NOTE_MAX ? prev.slice(0, LETTER_NOTE_MAX) : prev,
+    );
+  }, [noteFeedsLetter]);
 
   return (
     <DocSheet open={open} onClose={onClose} title="Send proposal">
@@ -650,6 +691,7 @@ export function SendSheet({
                       inviteAndLinkClient.isPending || attachClient.isPending
                     }
                     onInvite={handleInviteCapturedHousehold}
+                    letterOn={letterReady}
                   />
                 ) : (
                   <>
@@ -809,7 +851,16 @@ export function SendSheet({
                 placeholder="Write a personal note to your client…"
                 className={`${fieldCls} resize-y`}
                 style={{ minHeight: 110 }}
+                maxLength={noteFeedsLetter ? LETTER_NOTE_MAX : undefined}
               />
+              {noteFeedsLetter && (
+                <p
+                  data-testid="send-sheet-message-counter"
+                  className="font-mono text-[11px] text-[var(--color-aged-oak)]"
+                >
+                  {counterCopy(personalMessage.length)}
+                </p>
+              )}
             </div>
 
             {/* Canonical client-copy validation */}
@@ -927,6 +978,16 @@ export function SendSheet({
                   </p>
                 )}
               </div>
+            )}
+
+            {emailDelivery.byRef[proposalId] && (
+              <p className="text-[12.5px]">
+                <DeliveryWord
+                  delivery={emailDelivery.byRef[proposalId]}
+                  recipient={clientEmail ?? null}
+                  mode="all"
+                />
+              </p>
             )}
 
             {sendError && (

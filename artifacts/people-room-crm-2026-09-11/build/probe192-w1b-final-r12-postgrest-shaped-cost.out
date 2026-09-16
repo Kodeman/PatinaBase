@@ -1,0 +1,11 @@
+Pager usage is off.
+BEGIN
+SET
+psql:probe192-w1b-final-r12-postgrest-shaped-cost.sql:46: NOTICE:  cards=49 seats=31 -> SELECT * LIMIT 1000 : 62 rows in 00:00:00.13288
+psql:probe192-w1b-final-r12-postgrest-shaped-cost.sql:46: NOTICE:     usePerson (person_id filter above the view) in 00:00:00.010788
+psql:probe192-w1b-final-r12-postgrest-shaped-cost.sql:46: NOTICE:  cards=1649 seats=1631 -> SELECT * LIMIT 1000 : 1000 rows in 00:00:04.204377
+psql:probe192-w1b-final-r12-postgrest-shaped-cost.sql:46: NOTICE:     usePerson (person_id filter above the view) in 00:00:00.090509
+psql:probe192-w1b-final-r12-postgrest-shaped-cost.sql:46: NOTICE:  cards=3249 seats=3231 -> SELECT * LIMIT 1000 : 1000 rows in 00:00:04.265283
+psql:probe192-w1b-final-r12-postgrest-shaped-cost.sql:46: NOTICE:     usePerson (person_id filter above the view) in 00:00:00.173741
+DO
+ROLLBACK

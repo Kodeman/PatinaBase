@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { formatCurrency, onlineSurchargeCents } from "@patina/shared";
+import { formatCurrency, formatMinutesAsHours, onlineSurchargeCents } from "@patina/shared";
 
 import { Colophon } from "@/components/threshold/instruments/colophon";
 import { payLinkEvents } from "@/lib/analytics/events";
@@ -68,25 +68,10 @@ function checkoutRefusalSentence(
    prints the charged figure on the payment row, because that is a fact.
    ───────────────────────────────────────────────────────────────────────── */
 
+/* The Pay act's own inks are gone: R139's terminal tier (globals.css, the
+   Scored Ink block) is what paints it now, and --pay-act-bg / --pay-act-fg /
+   --pay-act-bg-hover had no reader left. What remains here is print. */
 const SHEET_RULES = `
-/* D-1 — the act's inks, as tokens rather than a literal. The mockup's
-   --btn-bg-hover is #1F1D1A in light and #FFFAF0 in dark; the hardcoded
-   literal was the light value, which would have gone dark-on-dark the moment
-   dark mode was exercised on the page's only payment control. Keyed on the
-   portal's own darkMode strategy (tailwind.config.ts: darkMode: ['class']),
-   NOT on prefers-color-scheme — nothing in this portal defines dark values for
-   --text-primary and friends yet, so flipping the button alone on a system
-   preference would be the regression, not the fix. */
-[data-pay-sheet] {
-  --pay-act-bg: var(--color-charcoal);
-  --pay-act-fg: var(--color-off-white);
-  --pay-act-bg-hover: #1F1D1A;
-}
-.dark [data-pay-sheet] {
-  --pay-act-bg: #F0E9DD;
-  --pay-act-fg: #1D1914;
-  --pay-act-bg-hover: #FFFAF0;
-}
 [data-pay-print="only"] { display: none; }
 @media print {
   @page { size: letter; margin: 0.5in; }
@@ -125,6 +110,54 @@ function formatShortDate(value: string): string {
   const parsed = Date.parse(value.length <= 10 ? `${value}T00:00:00Z` : value);
   if (!Number.isFinite(parsed)) return value;
   return shortDate.format(new Date(parsed));
+}
+
+/* ── HT-21 (W5): a time line's dated sub-table ───────────────────────────────
+   `resolve_invoice_link` (00588) reads `metadata.attribution` for a
+   furnishings line's maker name and hands it back as a plain string — the
+   ONE sub-slot every line already renders beneath its description. A time
+   line's composer (`invoice-composer.ts`) writes a JSON-encoded payload into
+   that SAME field instead of a name, so no migration was needed to grow it:
+   this is that field's second shape, discriminated by the `kind` marker
+   below rather than by a second sub-slot. Every other line kind's
+   `attribution` still fails to parse as JSON (or parses to something without
+   this marker) and falls through to the plain-text render unchanged.
+
+   Carries date · minutes · rate ONLY — never a name (LEAH-15, REP-15: the
+   homeowner gets no staffing detail), so there is nothing to scrub here. */
+const TIME_ATTRIBUTION_KIND = "patina_time_subtable";
+
+interface TimeSubtableRow {
+  date: string;
+  minutes: number;
+  rateCents: number;
+}
+
+function parseTimeSubtable(attribution: string | null): TimeSubtableRow[] | null {
+  if (!attribution) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(attribution);
+  } catch {
+    return null;
+  }
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    (parsed as { kind?: unknown }).kind !== TIME_ATTRIBUTION_KIND ||
+    !Array.isArray((parsed as { rows?: unknown }).rows)
+  ) {
+    return null;
+  }
+  const rows = (parsed as { rows: unknown[] }).rows.filter(
+    (r): r is TimeSubtableRow =>
+      !!r &&
+      typeof r === "object" &&
+      typeof (r as TimeSubtableRow).date === "string" &&
+      typeof (r as TimeSubtableRow).minutes === "number" &&
+      typeof (r as TimeSubtableRow).rateCents === "number",
+  );
+  return rows.length > 0 ? rows : null;
 }
 
 /** Whole days since the due date passed, or null while it has not. */
@@ -826,28 +859,49 @@ export function InvoiceSheet({ token, payload }: InvoiceSheetProps) {
                 What&rsquo;s included
               </h2>
               <div className="flex flex-col">
-                {payload.line_items.map((line, index) => (
-                  <div
-                    key={`${line.description ?? "line"}-${index}`}
-                    data-pay-line
-                    className="grid grid-cols-[minmax(0,1fr)_3rem_6.5rem] items-baseline gap-x-3 gap-y-1 border-b border-[var(--border-subtle)] py-3.5"
-                  >
-                    <span className="break-words text-[15.5px] text-[var(--text-primary)]">
-                      {line.description ?? "—"}
-                      {line.attribution && (
-                        <span className="mt-0.5 block font-mono text-[11.5px] text-[var(--color-quiet-ink)]">
-                          {line.attribution}
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-right font-mono text-[12px] text-[var(--color-quiet-ink)]">
-                      {line.quantity ?? ""}
-                    </span>
-                    <span className="text-right font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
-                      {formatCurrency(line.amount_cents, currency)}
-                    </span>
-                  </div>
-                ))}
+                {payload.line_items.map((line, index) => {
+                  // HT-21 — a time line's attribution is a dated sub-table,
+                  // not a name; every other kind's stays plain text.
+                  const timeSubtable =
+                    line.kind === "time" ? parseTimeSubtable(line.attribution) : null;
+                  return (
+                    <div
+                      key={`${line.description ?? "line"}-${index}`}
+                      data-pay-line
+                      className="grid grid-cols-[minmax(0,1fr)_3rem_6.5rem] items-baseline gap-x-3 gap-y-1 border-b border-[var(--border-subtle)] py-3.5"
+                    >
+                      <span className="break-words text-[15.5px] text-[var(--text-primary)]">
+                        {line.description ?? "—"}
+                        {timeSubtable ? (
+                          <span
+                            data-pay-line-time-subtable
+                            className="mt-1 block font-mono text-[11.5px] text-[var(--color-quiet-ink)]"
+                          >
+                            {timeSubtable.map((row, rowIndex) => (
+                              <span key={`${row.date}-${rowIndex}`} className="block">
+                                {formatShortDate(row.date)} ·{" "}
+                                {formatMinutesAsHours(row.minutes)} ·{" "}
+                                {formatCurrency(row.rateCents, currency)}/hr
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          line.attribution && (
+                            <span className="mt-0.5 block font-mono text-[11.5px] text-[var(--color-quiet-ink)]">
+                              {line.attribution}
+                            </span>
+                          )
+                        )}
+                      </span>
+                      <span className="text-right font-mono text-[12px] text-[var(--color-quiet-ink)]">
+                        {line.quantity ?? ""}
+                      </span>
+                      <span className="text-right font-mono text-[14px] tabular-nums text-[var(--text-primary)]">
+                        {formatCurrency(line.amount_cents, currency)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 

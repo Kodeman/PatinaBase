@@ -1,0 +1,66 @@
+BEGIN
+CREATE FUNCTION
+GRANT
+ assume_user 
+-------------
+ 
+(1 row)
+
+=== 0. premise: Northgate reads lapsed, the gating COI expired 2026-03-31 ===
+  word  
+--------
+ lapsed
+(1 row)
+
+=== 1. an ordinary member records the renewal WITH its gates, and retires the lapse ===
+INSERT 0 1
+UPDATE 1
+ word_after_a_legitimate_renewal 
+---------------------------------
+ current
+(1 row)
+
+=== 2. the SAME member now empties the successor's gates — one UPDATE ===
+UPDATE 1
+ blocks | expires_on 
+--------+------------
+ {}     | 2027-09-12
+(1 row)
+
+ word_after_the_gates_were_dropped 
+-----------------------------------
+ current
+(1 row)
+
+=== 3. and moves the successor's own expiry into the past ===
+UPDATE 1
+ word_with_a_lapsed_gateless_successor 
+---------------------------------------
+ current
+(1 row)
+
+=== 4. what the record actually holds: no in-force gating general-liability paper ===
+                  id                  | doc_type | expires_on |       blocks       | retired 
+--------------------------------------+----------+------------+--------------------+---------
+ d0e50000-0000-0000-0000-000000000006 | coi_gl   | 2026-03-31 | {site_access,draw} | t
+ e7000000-0000-4000-8000-0000000000b1 | coi_gl   | 2026-09-11 | {}                 | f
+ d0e50000-0000-0000-0000-000000000008 | license  | 2027-12-31 | {}                 | f
+ d0e50000-0000-0000-0000-000000000007 | w9       |            | {payment}          | f
+(4 rows)
+
+=== 5. and what the room prints for Northgate and for a person who carries it ===
+    display_name    | paper_state 
+--------------------+-------------
+ Dana Kowalski      | current
+ Northgate Electric | current
+(2 rows)
+
+=== 6. control: the same two edits attempted BEFORE the supersede are refused ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+psql:probe136-r7-supersede-successor-edit.sql:66: NOTICE:  control: a gateless successor is refused up front: compliance_successor_wrong_type
+DO
+ROLLBACK

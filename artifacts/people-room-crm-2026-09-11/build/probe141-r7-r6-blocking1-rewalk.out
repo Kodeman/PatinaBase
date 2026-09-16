@@ -1,0 +1,51 @@
+BEGIN
+CREATE FUNCTION
+GRANT
+INSERT 0 1
+INSERT 0 1
+INSERT 0 0
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+ assume_user 
+-------------
+ 
+(1 row)
+
+=== premise: co-member of the designer through ANY org, but not a design-studio co-member, not in the owning studio ===
+ comember_any_org | design_studio_comember | member_of_the_owning_studio 
+------------------+------------------------+-----------------------------
+ t                | f                      | f
+(1 row)
+
+=== the four definer readers, and the ledger ===
+ rfq | agreement | plan | invoice | through_the_ledger 
+-----+-----------+------+---------+--------------------
+   0 |         0 |    0 |       0 |                  0
+(1 row)
+
+=== and the wave's tenant-scoped objects ===
+ seats | site_cards | authority | docs 
+-------+------------+-----------+------
+     0 |          0 |         0 |    0
+(1 row)
+
+  role  | count 
+--------+-------
+ client |     6
+ lead   |     5
+(2 rows)
+
+=== positive control: the owning studio's admin still reads the plan grant ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+ rfq_grants_for_the_owning_admin 
+---------------------------------
+                               1
+(1 row)
+
+ROLLBACK

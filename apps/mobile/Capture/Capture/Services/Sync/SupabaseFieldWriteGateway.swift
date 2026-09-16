@@ -58,16 +58,30 @@ final class SupabaseFieldWriteGateway: MarginNoteGateway, PunchTaskGateway,
 
     // MARK: - TimeEntryGateway
 
-    /// The visit close's Hours entry (FC-R3). Always a COMPLETED entry:
-    /// duration_minutes IS NULL is reserved for the designer's one running desk
-    /// timer (uniq_project_time_entries_running_timer, 00177:39-41), and
-    /// TimeEntryWriteRequest cannot express a nil duration.
+    /// Both hour lanes — the visit close's entry (FC-R3) and LogTimeSheet's
+    /// drive. Always a COMPLETED entry: duration_minutes IS NULL is reserved
+    /// for the designer's one running desk timer
+    /// (uniq_project_time_entries_running_timer, 00177:39-41), it stays with
+    /// the desk in v1 (HT-7), and neither TimeEntryWriteRequest nor `log_time`
+    /// can express a nil duration.
     func existingTimeEntry(id: UUID) async throws -> Bool {
         try await rowExists(table: "project_time_entries", id: id)
     }
 
+    /// `log_time` (00608), not a table insert — the third write on this phone
+    /// that is an RPC rather than a `from(...).insert(...)`, and the first with
+    /// a reason the other two do not have.
+    ///
+    /// The id is client-minted, and the RPC is `ON CONFLICT (id) DO NOTHING`
+    /// followed by a read-back of the row already standing under it. A plain
+    /// insert has neither half: a replayed drain either logs her hour twice or
+    /// returns 23505, which the classifier can only read as a failure. It also
+    /// carries the two things the table write could not — `p_billable`, which
+    /// 00608 RAISES on when absent (HT-11), and `p_rate_role` (HT-41) — and
+    /// deliberately carries no rate: the server has owned `hourly_rate_cents`
+    /// on every branch since W1 (00601).
     func insertTimeEntry(_ request: TimeEntryWriteRequest) async throws {
-        try await client.from("project_time_entries").insert(request).execute()
+        try await client.rpc("log_time", params: request).execute()
     }
 
     // MARK: -

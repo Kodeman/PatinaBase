@@ -1,0 +1,70 @@
+BEGIN
+               leg               |            working_studio            |             other_studio             |  other_name   
+---------------------------------+--------------------------------------+--------------------------------------+---------------
+ the two studios of one designer | b0000000-0000-0000-0000-000000000001 | ff212803-5ede-4a74-8c86-7cf439e76386 | Leah Hartwell
+(1 row)
+
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"c8000000-0000-4000-8000-0000000000a1","role":"authenticated"}
+(1 row)
+
+                  leg                   | in_working_studio | in_other_studio |        tenant_org_x_resolves         | gate_passes 
+----------------------------------------+-------------------+-----------------+--------------------------------------+-------------
+ PREMISE: X is in the OTHER studio only | f                 | t               | ff212803-5ede-4a74-8c86-7cf439e76386 | t
+(1 row)
+
+              leg               |      lockbox_version       |    alarm_ref     |      site_hours      |                          emergency_lines                           
+--------------------------------+----------------------------+------------------+----------------------+--------------------------------------------------------------------
+ A. site access card READ, as X | third code, changed 16 Oct | ALARM-ACCT-99812 | 07:00-17:00 weekdays | [{"name": "CenterPoint", "label": "gas", "phone": "+16125550911"}]
+(1 row)
+
+UPDATE 1
+               leg               |       lockbox_version       
+---------------------------------+-----------------------------
+ B. site access card WRITE, as X | CHANGED BY THE OTHER STUDIO
+(1 row)
+
+              leg               | scope | threshold_cents 
+--------------------------------+-------+-----------------
+ C. money authority grant, as X | money |          250000
+(1 row)
+
+                 leg                 | seat_rows | directory_rows 
+-------------------------------------+-----------+----------------
+ D. seats view + directory row, as X |         1 |              1
+(1 row)
+
+                     leg                      |   number_set   
+----------------------------------------------+----------------
+ E. identity_phone_numbers naming X's OWN org | {+16125557001}
+(1 row)
+
+                                    leg                                     | site_cards | seats 
+----------------------------------------------------------------------------+------------+-------
+ F. CONTROL — the same objects on a project that RECORDS the working studio |          0 |     0
+(1 row)
+
+                              leg                               | display_name | sms_consent_status 
+----------------------------------------------------------------+--------------+--------------------
+ G. v_project_roster consent word on the RECORDED project, as X | Joe Wozniak  | not_asked
+ G. v_project_roster consent word on the RECORDED project, as X | Ngozi Eze    | not_asked
+ G. v_project_roster consent word on the RECORDED project, as X | Pete Rusk    | not_asked
+(3 rows)
+
+RESET
+                          leg                           | channel_value |  status   |       opt_out_at       
+--------------------------------------------------------+---------------+-----------+------------------------
+ H. what the record at the working studio actually says | +16125550106  | granted   | 
+ H. what the record at the working studio actually says | +16125550112  | opted_out | 2025-12-03 21:00:00+00
+ H. what the record at the working studio actually says | +16125550118  | pending   | 
+(3 rows)
+
+ROLLBACK

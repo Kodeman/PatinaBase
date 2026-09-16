@@ -1,0 +1,19 @@
+Pager usage is off.
+BEGIN
+SET
+INSERT 0 2
+psql:artifacts/people-room-crm-2026-09-11/build/probe203-w1b-fix-r12-m1-backfill-updated-at.sql:31: NOTICE:  seat on the COMPLETED job = ...0001 (Lindqvist)   seat on the ACTIVE job = ...0002 (Okonkwo)
+psql:artifacts/people-room-crm-2026-09-11/build/probe203-w1b-fix-r12-m1-backfill-updated-at.sql:31: NOTICE:  BEFORE any backfill: person_id=0b0b0b0b-0000-4000-8000-000000000002 project=Okonkwo residence last_touch_at=2026-09-02 23:12:16.201948+00
+DO
+SAVEPOINT
+UPDATE 1
+psql:artifacts/people-room-crm-2026-09-11/build/probe203-w1b-fix-r12-m1-backfill-updated-at.sql:55: NOTICE:  CONTROL (unbracketed, what r12 walked): person_id=0b0b0b0b-0000-4000-8000-000000000001 project=Lindqvist kitchen last_touch_at=2026-09-12 23:12:16.201948+00
+DO
+ROLLBACK
+ALTER TABLE
+UPDATE 1
+ALTER TABLE
+psql:artifacts/people-room-crm-2026-09-11/build/probe203-w1b-fix-r12-m1-backfill-updated-at.sql:85: NOTICE:  shipped backfill: the completed-job seat stage is now warranty (the stage DID move)
+psql:artifacts/people-room-crm-2026-09-11/build/probe203-w1b-fix-r12-m1-backfill-updated-at.sql:85: NOTICE:  AFTER the shipped backfill: person_id=0b0b0b0b-0000-4000-8000-000000000002 project=Okonkwo residence last_touch_at=2026-09-02 23:12:16.201948+00
+DO
+ROLLBACK

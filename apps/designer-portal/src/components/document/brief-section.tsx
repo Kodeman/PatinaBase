@@ -2,8 +2,9 @@
 
 /**
  * Brief section (active for lead-shaped engagements, R1). The lead's stats,
- * ask, and match reasons, plus — Track 6 / R61 / R65 — the captured contact, the
- * source, and the inline Accept / Nurture / Pass triage. The triage shows while
+ * ask, and match reasons, plus — Track 6 / R61 / R65 — the captured contact
+ * (name · email · phone, 00583), the source, and the inline Accept / Nurture /
+ * Pass triage. The triage shows while
  * a lead is actionable: new / viewed AND nurtured ('contacted'), so a
  * reconnect-due lead can convert / re-date / pass instead of dead-ending. Only
  * accepted or declined leads read as a terminal record.
@@ -71,6 +72,14 @@ export function BriefSection({
     lead.homeowner?.full_name ?? lead.contact_name ?? null;
   const contactEmail: string | null =
     lead.homeowner?.email ?? lead.contact_email ?? null;
+  // Phone resolves profile-first, the order the name and email above already
+  // use, so one printed line never pairs a profile name with a captured number
+  // (00583). `homeowner.phone` is selected by useLead. people_directory's lead
+  // branch now reads the PHONE profile-first too (00589), while its name and
+  // email stay captured-first — so the directory row can pair a captured name
+  // with this same number, and this line is the one both surfaces agree on.
+  const contactPhone: string | null =
+    lead.homeowner?.phone ?? lead.contact_phone ?? null;
 
   // The source — the captured "Where from" (R65, `leads.source`) when present;
   // otherwise derived honestly from what the row carries (a joined homeowner
@@ -88,14 +97,18 @@ export function BriefSection({
   return (
     <section>
       {/* The captured contact — who reached out, and how they came in. */}
-      {(contactName || contactEmail) && (
+      {(contactName || contactEmail || contactPhone) && (
         <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-[var(--color-pearl)] pb-3">
           <p className="text-[13px] text-[var(--color-charcoal)]">
             {contactName && <span className="font-medium">{contactName}</span>}
-            {contactName && contactEmail && (
+            {contactName && (contactEmail || contactPhone) && (
               <span className="text-[var(--text-muted)]"> · </span>
             )}
             {contactEmail && <span className="text-[var(--text-muted)]">{contactEmail}</span>}
+            {contactEmail && contactPhone && (
+              <span className="text-[var(--text-muted)]"> · </span>
+            )}
+            {contactPhone && <span className="text-[var(--text-muted)]">{contactPhone}</span>}
           </p>
           <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
             {source}

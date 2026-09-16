@@ -1,0 +1,11 @@
+✔ build
+2026-09-13 00:55:53.377 xcodebuild[18631:179270103] [MT] IDETestOperationsObserverDebug: 4.330 elapsed -- Testing started completed.
+2026-09-13 00:55:53.378 xcodebuild[18631:179270103] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-13 00:55:53.378 xcodebuild[18631:179270103] [MT] IDETestOperationsObserverDebug: 4.330 sec, +4.330 sec -- end
+Testing started
+✔ tests
+✔ lint
+✔ fc-r3 sweep (inbox)
+✔ fc-r3 sweep (ai)
+✔ principle-4 sweep
+GATE EXIT: 0

@@ -12,8 +12,14 @@ interface ReconciliationResult {
   status: ReconciliationStatus;
 }
 
-export function useReconcileInvoiceCheckout() {
+/**
+ * Error unwrap mirrors useSendInvoice (R83): a FunctionsHttpError's JSON body
+ * carries the stable `detail`/`error` code, preferred over the generic
+ * transport message ("Edge Function returned a non-2xx status code").
+ */
+export function useReconcileInvoiceCheckout(options?: { errorSurface?: 'inline' }) {
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
       sessionId,
@@ -25,7 +31,16 @@ export function useReconcileInvoiceCheckout() {
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: { invoiceId, reconcile_session_id: sessionId },
       });
-      if (error) throw error;
+      if (error) {
+        let detail: string | undefined;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.detail ?? body?.error;
+        } catch {
+          /* fall through to the generic message */
+        }
+        throw new Error(detail ?? error.message ?? 'Checkout reconciliation failed.');
+      }
       if (data?.error) {
         throw new Error(
           typeof data.detail === 'string' ? data.detail : 'Checkout reconciliation failed.',

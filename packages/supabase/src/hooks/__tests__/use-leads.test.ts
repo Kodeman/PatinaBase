@@ -113,18 +113,28 @@ vi.mock('@supabase/ssr', () => ({
 }));
 
 const invalidateQueries = vi.fn();
+const removeQueries = vi.fn();
+const setQueryData = vi.fn();
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries }),
+  useQueryClient: () => ({ invalidateQueries, removeQueries, setQueryData }),
 }));
 
 // Import AFTER the mocks are wired up.
-import { useAcceptLead, useBeginDiscovery } from '../use-leads';
+import {
+  useAcceptLead,
+  useBeginDiscovery,
+  useCreateLead,
+  useReturnToLead,
+  useReturnToLeadCheck,
+} from '../use-leads';
 
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
   invalidateQueries.mockReset();
+  removeQueries.mockReset();
+  setQueryData.mockReset();
   supabaseClient.rpc.mockReset();
   supabaseClient.from.mockClear();
 });
@@ -139,6 +149,7 @@ const MANUAL_LEAD = {
   designer_id: 'designer-1',
   contact_name: 'James Chen',
   contact_email: 'james@example.com',
+  contact_phone: '(555) 014-2200',
 };
 
 function getAcceptFn() {
@@ -178,6 +189,7 @@ describe('useAcceptLead — manual lead, idempotent on idx_designer_clients_uniq
     expect(updateCall?.args[0]).toEqual({
       client_name: 'James Chen',
       client_email: 'james@example.com',
+      client_phone: '(555) 014-2200',
       source: 'lead',
       lead_id: 'lead-1',
       status: 'active',
@@ -191,6 +203,61 @@ describe('useAcceptLead — manual lead, idempotent on idx_designer_clients_uniq
     // The email lookup used the partial-index predicate columns.
     expect(dc.__chain.some((c) => c.method === 'eq' && c.args[0] === 'client_email')).toBe(true);
     expect(dc.__chain.some((c) => c.method === 'is' && c.args[0] === 'client_id' && c.args[1] === null)).toBe(true);
+  });
+
+  it('omits client_phone from the update when the lead carries no phone (never clears one typed on the household)', async () => {
+    setTableQueue('leads', [
+      { data: { ...MANUAL_LEAD, contact_phone: null }, error: null },
+      { data: null, error: null },
+    ]);
+
+    const dc = setTableQueue('designer_clients', [
+      { data: null, error: null },
+      { data: { id: 'client-existing' }, error: null },
+      { data: null, error: null },
+    ]);
+
+    const mutationFn = getAcceptFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    const updateCall = dc.__chain.find((c) => c.method === 'update');
+    expect(updateCall?.args[0]).toEqual({
+      client_name: 'James Chen',
+      client_email: 'james@example.com',
+      source: 'lead',
+      lead_id: 'lead-1',
+      status: 'active',
+    });
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        updateCall?.args[0] as Record<string, unknown>,
+        'client_phone',
+      ),
+    ).toBe(false);
+  });
+
+  it('leaves a phone already on the household alone (the row\'s number outranks the lead\'s)', async () => {
+    setTableQueue('leads', [
+      { data: MANUAL_LEAD, error: null },
+      { data: null, error: null },
+    ]);
+
+    const dc = setTableQueue('designer_clients', [
+      { data: null, error: null },
+      { data: { id: 'client-existing', client_phone: '(555) 990-0001' }, error: null },
+      { data: null, error: null },
+    ]);
+
+    const mutationFn = getAcceptFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    const updateCall = dc.__chain.find((c) => c.method === 'update');
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        updateCall?.args[0] as Record<string, unknown>,
+        'client_phone',
+      ),
+    ).toBe(false);
   });
 
   it('INSERTS a new profile-less client when no existing row matches', async () => {
@@ -222,6 +289,7 @@ describe('useAcceptLead — manual lead, idempotent on idx_designer_clients_uniq
       client_id: null,
       client_name: 'James Chen',
       client_email: 'james@example.com',
+      client_phone: '(555) 014-2200',
       source: 'lead',
       lead_id: 'lead-1',
       status: 'active',
@@ -327,6 +395,52 @@ describe('useAcceptLead — homeowner pair, ordered-limit(1) selection (I65 bug 
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// useCreateLead — the capture insert shape (00583: contact_phone)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useCreateLead — capture insert shape', () => {
+  function getCreateFn() {
+    return (useCreateLead() as unknown as {
+      mutationFn: (input: Record<string, unknown>) => Promise<unknown>;
+    }).mutationFn;
+  }
+
+  it('writes both contact_email and contact_phone to their own columns', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'designer-1' } },
+    });
+    const leads = setTableQueue('leads', [{ data: { id: 'lead-new' }, error: null }]);
+
+    await getCreateFn()({
+      project_type: 'consultation',
+      project_description: 'Downtown loft refresh',
+      contact_name: 'The Okafors',
+      contact_email: 'okafors@example.com',
+      contact_phone: '(555) 014-2200',
+    });
+
+    const insertCall = leads.__chain.find((c) => c.method === 'insert');
+    expect(insertCall?.args[0]).toMatchObject({
+      contact_name: 'The Okafors',
+      contact_email: 'okafors@example.com',
+      contact_phone: '(555) 014-2200',
+    });
+  });
+
+  it('nulls an omitted phone rather than dropping the column', async () => {
+    supabaseClient.auth.getUser.mockResolvedValue({
+      data: { user: { id: 'designer-1' } },
+    });
+    const leads = setTableQueue('leads', [{ data: { id: 'lead-new' }, error: null }]);
+
+    await getCreateFn()({ project_type: 'consultation', contact_name: 'No Phone' });
+
+    const insertCall = leads.__chain.find((c) => c.method === 'insert');
+    expect((insertCall?.args[0] as Record<string, unknown>).contact_phone).toBeNull();
+  });
+});
+
 describe('useBeginDiscovery — atomic authority boundary', () => {
   it('uses one RPC and returns its canonical post-accept destination', async () => {
     const acceptedLead = { ...HOMEOWNER_LEAD, status: 'accepted' };
@@ -367,5 +481,212 @@ describe('useBeginDiscovery — atomic authority boundary', () => {
       'Discovery transition did not return its canonical identity',
     );
     expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useReturnToLeadCheck / useReturnToLead — the undo of Accept · begin (00585)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getCheckFn() {
+  return (useReturnToLeadCheck('dc-discovery') as unknown as {
+    queryFn: () => Promise<unknown>;
+  }).queryFn;
+}
+
+function getReturnFn() {
+  return (useReturnToLead() as unknown as {
+    mutationFn: (designerClientId: string) => Promise<unknown>;
+  }).mutationFn;
+}
+
+function getReturnOnSuccess() {
+  return (useReturnToLead() as unknown as {
+    onSuccess: (result: { lead_id: string }, designerClientId: string) => void;
+  }).onSuccess;
+}
+
+describe('useReturnToLeadCheck — the door and its reason', () => {
+  it('asks the server, keyed on the relationship, and never touches a table', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { allowed: true, reason: null, lead_id: 'lead-1' },
+      error: null,
+    });
+
+    await expect(getCheckFn()()).resolves.toEqual({
+      allowed: true,
+      reason: null,
+      lead_id: 'lead-1',
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('return_to_lead_check', {
+      p_designer_client_id: 'dc-discovery',
+    });
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+
+  it('carries the server\u2019s refusal sentence through unchanged', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: {
+        allowed: false,
+        reason: 'This client was matched through the app and has already been written to.',
+        lead_id: 'lead-1',
+      },
+      error: null,
+    });
+
+    await expect(getCheckFn()()).resolves.toEqual({
+      allowed: false,
+      reason: 'This client was matched through the app and has already been written to.',
+      lead_id: 'lead-1',
+    });
+  });
+
+  it('is disabled without a relationship id', () => {
+    const config = useReturnToLeadCheck(null) as unknown as {
+      enabled: boolean;
+      queryKey: unknown[];
+    };
+    expect(config.enabled).toBe(false);
+    expect(config.queryKey).toEqual(['return-to-lead-check', null]);
+  });
+
+  it('fails closed when the RPC returns no verdict', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { lead_id: 'lead-1' }, error: null });
+
+    await expect(getCheckFn()()).rejects.toThrow(
+      'Return-to-lead check did not return a verdict',
+    );
+  });
+});
+
+describe('useReturnToLead — one RPC, no browser fallback', () => {
+  it('uses one RPC and returns the restored lead', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { lead_id: 'lead-1' },
+      error: null,
+    });
+
+    await expect(getReturnFn()('dc-discovery')).resolves.toEqual({ lead_id: 'lead-1' });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('return_to_lead', {
+      p_designer_client_id: 'dc-discovery',
+    });
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+
+  it('propagates the RPC refusal without attempting a browser fallback', async () => {
+    const rpcError = new Error('A proposal has already been started for this client.');
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: rpcError });
+
+    await expect(getReturnFn()('dc-discovery')).rejects.toBe(rpcError);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the RPC omits the restored lead id', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: {}, error: null });
+
+    await expect(getReturnFn()('dc-discovery')).rejects.toThrow(
+      'Return to lead did not return the restored lead',
+    );
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+
+  it('invalidates every key useBeginDiscovery does, plus the list and desk keys', () => {
+    getReturnOnSuccess()({ lead_id: 'lead-1' }, 'dc-discovery');
+
+    const keys = invalidateQueries.mock.calls.map(
+      (c) => (c[0] as { queryKey: unknown[] }).queryKey,
+    );
+    // useBeginDiscovery's own set, keyed by the lead this act restores.
+    expect(keys).toContainEqual(['leads']);
+    expect(keys).toContainEqual(['lead', 'lead-1']);
+    expect(keys).toContainEqual(['lead-stats']);
+    expect(keys).toContainEqual(['designer-clients']);
+    // Then the rest.
+    expect(keys).toContainEqual(['designer-client', 'dc-discovery']);
+    expect(keys).toContainEqual(['client-stats']);
+    expect(keys).toContainEqual(['discovery', 'dc-discovery']);
+    // ['document-state'] is the key that re-derives the DESK: useDeskEngagements
+    // keys on ['document-state', 'desk']. Nothing in the tree reads
+    // ['desk-engagements'], so asserting that one would prove nothing — it is
+    // invalidated only to match use-clients.ts and use-proposals.ts.
+    expect(keys).toContainEqual(['document-state']);
+  });
+
+  // React Query runs the mutation-level onSuccess before the call-site one, and
+  // it is the call site that navigates — so a broad document_state invalidation
+  // reaches the departing page while it is still mounted, and it refetches a
+  // relationship this act has just deleted.
+  it('spares the departing engagement its own document_state refetch', () => {
+    getReturnOnSuccess()({ lead_id: 'lead-1' }, 'dc-discovery');
+
+    const documentState = invalidateQueries.mock.calls
+      .map(
+        (c) =>
+          c[0] as {
+            queryKey: unknown[];
+            predicate?: (query: { queryKey: unknown[] }) => boolean;
+          },
+      )
+      .find(
+        (filters) =>
+          filters.queryKey.length === 1 && filters.queryKey[0] === 'document-state',
+      );
+
+    expect(documentState?.predicate).toBeTypeOf('function');
+    expect(documentState?.predicate?.({ queryKey: ['document-state', 'desk'] })).toBe(
+      true,
+    );
+    expect(
+      documentState?.predicate?.({
+        queryKey: ['document-state', 'engagement', 'dc-discovery'],
+      }),
+    ).toBe(false);
+    expect(
+      documentState?.predicate?.({
+        queryKey: ['document-state', 'engagement', 'another-engagement'],
+      }),
+    ).toBe(true);
+  });
+
+  it('answers the check rather than refetching OR removing it — its subject is gone', () => {
+    // Removing is not silencing: `DiscoverySection` is still mounted while the
+    // router replaces the URL, and React Query re-creates a removed query the
+    // moment its live observer renders again — which fetches it. That second
+    // `return_to_lead_check` 403s on the relationship this act just deleted and
+    // logs `client relationship <id> not found or access denied` seconds after
+    // a success. Writing the closed-door answer leaves a fresh entry nothing
+    // needs to fetch, and the action it gates reads `lead_id: null` as gone.
+    getReturnOnSuccess()({ lead_id: 'lead-1' }, 'dc-discovery');
+
+    expect(setQueryData).toHaveBeenCalledWith(
+      ['return-to-lead-check', 'dc-discovery'],
+      { allowed: false, reason: null, lead_id: null },
+    );
+    expect(
+      removeQueries.mock.calls.map(
+        (c) => (c[0] as { queryKey: unknown[] }).queryKey,
+      ),
+    ).not.toContainEqual(['return-to-lead-check', 'dc-discovery']);
+    expect(
+      invalidateQueries.mock.calls.map(
+        (c) => (c[0] as { queryKey: unknown[] }).queryKey,
+      ),
+    ).not.toContainEqual(['return-to-lead-check', 'dc-discovery']);
+  });
+
+  it('declares its error surface so R83 does not double-report a refusal', () => {
+    const mutation = useReturnToLead() as unknown as {
+      meta?: { errorSurface?: string };
+    };
+    expect(mutation.meta?.errorSurface).toBe('inline');
+
+    const query = useReturnToLeadCheck('dc-discovery') as unknown as {
+      meta?: { errorSurface?: string };
+    };
+    expect(query.meta?.errorSurface).toBe('silent');
   });
 });

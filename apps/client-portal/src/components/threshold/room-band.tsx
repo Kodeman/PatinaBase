@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { formatCurrency } from '@patina/shared';
 import { ROOM_RENDERS_BUCKET, createBrowserClient } from '@patina/supabase';
 
 import {
@@ -12,7 +13,6 @@ import {
 import {
   countInWords,
   joinClauses,
-  moneyInWords,
 } from '@/components/threshold/instruments/standing-sentence';
 import { TrackingRow } from '@/components/threshold/instruments/tracking-row';
 import {
@@ -23,7 +23,6 @@ import {
 import type { ClientSelection } from '@/lib/commercial-documents';
 import { legalDate } from '@/lib/threshold/dates';
 import {
-  DAY_MONTH,
   parseSourceDate,
   type RoomBandModel,
   type RoomConceptRender,
@@ -367,7 +366,7 @@ function ConceptRenderPlate({
           alt={`Concept render of ${roomName}`}
           onError={() => setBrokenSrc(src)}
           data-testid="room-band-concept-image"
-          className="block aspect-[3/2] w-full rounded-[3px] border border-[var(--border-default)] object-cover"
+          className="block aspect-[3/2] w-full rounded-[3px] border border-[var(--hairline)] object-cover"
         />
         <span
           data-testid="room-band-concept-label"
@@ -400,12 +399,12 @@ function lintelLedger(band: RoomBandModel): string | null {
   const parts: string[] = [];
   if (band.agreedCents > 0 && band.targetCents !== null) {
     parts.push(
-      `${moneyInWords(band.agreedCents)} agreed against ${moneyInWords(
+      `${formatCurrency(band.agreedCents)} agreed against ${formatCurrency(
         band.targetCents,
       )} planned${band.varianceLine ? ` — ${band.varianceLine}` : ''}`,
     );
   } else if (band.agreedCents > 0) {
-    parts.push(`${moneyInWords(band.agreedCents)} agreed`);
+    parts.push(`${formatCurrency(band.agreedCents)} agreed`);
   }
   if (band.pieces.length > 0) {
     parts.push(
@@ -441,7 +440,7 @@ function stampDetail(piece: ClientSelection): string | null {
   const executed = parseSourceDate(piece.instrument?.executedAt);
   const parts = [
     piece.instrument?.name ?? null,
-    executed ? `agreed ${DAY_MONTH.format(executed)}` : null,
+    executed ? `agreed ${legalDate(executed)}` : null,
   ].filter((part): part is string => !!part);
   return parts.length > 0 ? parts.join(' · ') : null;
 }
@@ -496,7 +495,7 @@ function PieceRecord({ piece }: { piece: ClientSelection }) {
       <p>
         {piece.name}
         {piece.clientLineTotalCents > 0
-          ? ` · ${moneyInWords(piece.clientLineTotalCents)}`
+          ? ` · ${formatCurrency(piece.clientLineTotalCents)}`
           : ''}
         {piece.quantity > 1 ? ` · ${countInWords(piece.quantity)} of them` : ''}
       </p>

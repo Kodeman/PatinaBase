@@ -15,7 +15,7 @@ import { useStudioContacts } from "@patina/supabase";
 import { Input } from "@/components/ui/controls";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 export interface SubChoice {
   contactId: string;
@@ -117,7 +117,7 @@ export function SubPicker({
                 >
                   {displayName}
                   {contact.specialties.length > 0 && (
-                    <span className="ml-2 text-[11px] text-[var(--color-aged-oak)]">
+                    <span className="ml-2 text-[11px] text-[var(--ink-subtle)]">
                       {contact.specialties.join(" · ")}
                     </span>
                   )}

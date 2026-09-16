@@ -1,0 +1,110 @@
+BEGIN
+=== premise: the project records no studio, and the two resolvers disagree ===
+        name        | studio_id | consent_resolver_names |             designer_id              
+--------------------+-----------+------------------------+--------------------------------------
+ Aspen Loft Refresh |           | Leah Hartwell          | a0000000-0000-0000-0000-000000000004
+(1 row)
+
+=== how many local projects record no studio at all ===
+ studio_id_is_null | all_projects 
+-------------------+--------------
+                 5 |            8
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 1
+=== a seat, a site access card and an authority grant on that project, written by service_role ===
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+   ok    
+---------
+ written
+(1 row)
+
+=== AS THE ADMIN of Local Dev Studio (the studio doing the work) ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000003", "role" : "authenticated"}
+(1 row)
+
+SET
+ member_of_local_dev | member_of_the_guessed_org | gate_resolver_names 
+---------------------+---------------------------+---------------------
+ t                   | f                         | Local Dev Studio
+(1 row)
+
+ seats_seen | directory_rows | cards_seen | grants_seen | raw_seats_seen 
+------------+----------------+------------+-------------+----------------
+          1 |              1 |          1 |           1 |              1
+(1 row)
+
+-- and may the admin RECORD a card on such a project now?
+psql:artifacts/people-room-crm-2026-09-11/build/probe129-w1b-fix-r6-major1-studioless.sql:77: NOTICE:  admin INSERT on a studio-less project LANDED
+DO
+-- PR-n: the admin may set a MONEY grant, resolved at the studio they administer
+psql:artifacts/people-room-crm-2026-09-11/build/probe129-w1b-fix-r6-major1-studioless.sql:88: NOTICE:  admin money grant LANDED
+DO
+RESET
+=== AS THE OWNER (member of both orgs) — the carried control ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+SET
+ seats_seen | cards_seen | grants_seen 
+------------+------------+-------------
+          1 |          1 |           2
+(1 row)
+
+RESET
+=== AS A MANUFACTURER-ORG CO-MEMBER of the designer — must read nothing ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "ac900000-0000-4000-8000-000000000001", "role" : "authenticated"}
+(1 row)
+
+SET
+ comember_any_org | design_studio_comember | gate_resolves_to 
+------------------+------------------------+------------------
+ t                | f                      | 
+(1 row)
+
+ seats_seen | cards_seen | grants_seen 
+------------+------------+-------------
+          0 |          0 |           0
+(1 row)
+
+psql:artifacts/people-room-crm-2026-09-11/build/probe129-w1b-fix-r6-major1-studioless.sql:117: NOTICE:  manufacturer-org co-member INSERT refused: new row violates row-level security policy for table "project_site_access_cards"
+DO
+RESET
+=== AS A MEMBER OF A FOREIGN DESIGN STUDIO — must read nothing ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "ac900000-0000-4000-8000-000000000002", "role" : "authenticated"}
+(1 row)
+
+SET
+ seats_seen | cards_seen | grants_seen 
+------------+------------+-------------
+          0 |          0 |           0
+(1 row)
+
+RESET
+=== and the studio-SET project is unchanged: the block-13 shape still refused ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "ac900000-0000-4000-8000-000000000001", "role" : "authenticated"}
+(1 row)
+
+SET
+ seats_on_the_seeded_job | cards_on_the_seeded_job 
+-------------------------+-------------------------
+                       0 |                       0
+(1 row)
+
+RESET
+ROLLBACK

@@ -104,7 +104,7 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
         coveragePercentage={0.92}
       />,
     );
-    expect(screen.getByText(/Jul 15/)).toBeInTheDocument();
+    expect(screen.getByText(/15 July/)).toBeInTheDocument();
     expect(screen.getByText(/quality high/)).toBeInTheDocument();
     expect(screen.getByText(/0\.92/)).toBeInTheDocument();
   });

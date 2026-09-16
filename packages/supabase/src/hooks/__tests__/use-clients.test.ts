@@ -15,9 +15,11 @@ interface MockBuilder {
   eq: any;
   order: any;
   limit: any;
+  update: any;
   /* eslint-enable @typescript-eslint/no-explicit-any */
   // terminal calls — return a Promise of the result
   maybeSingle: () => Promise<BuilderResult>;
+  single: () => Promise<BuilderResult>;
   // thenable so awaiting the chain itself resolves to result (the `.order()`
   // tail on the projects query never calls a terminal method explicitly)
   then: (resolve: (value: BuilderResult) => unknown) => Promise<unknown>;
@@ -41,9 +43,15 @@ function makeBuilder(initial: BuilderResult = { data: null, error: null }): Mock
   builder.eq = record('eq');
   builder.order = record('order');
   builder.limit = record('limit');
+  builder.update = record('update');
 
   builder.maybeSingle = vi.fn(() => {
     builder.__chain.push({ method: 'maybeSingle', args: [] });
+    return Promise.resolve(builder.__result);
+  });
+
+  builder.single = vi.fn(() => {
+    builder.__chain.push({ method: 'single', args: [] });
     return Promise.resolve(builder.__result);
   });
 
@@ -91,6 +99,7 @@ vi.mock('@tanstack/react-query', () => ({
 import {
   useClientProjects,
   useDesignerClientForClientUser,
+  useUpdateClientContact,
 } from '../use-clients';
 
 beforeEach(() => {
@@ -208,5 +217,62 @@ describe('useClientProjects — no-login household guard (I63)', () => {
     expect(
       projectEqs.some((c) => c.args[0] === 'client_id' && c.args[1] === 'profile-1'),
     ).toBe(true);
+  });
+});
+
+// R3-05 — the household sheet trims at the call site, but a lead-capture path
+// or a hand write does not. A whitespace-only number stored on the captured
+// column reads as "has a phone" to anything testing `!= null` and renders an
+// empty directory cell.
+describe('useUpdateClientContact — a blank phone is no phone', () => {
+  it('trims the captured phone and stores a whitespace-only one as null', async () => {
+    const b = setTableResult('designer_clients', { data: { id: 'dc-1' }, error: null });
+
+    const config = useUpdateClientContact() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      clientId: 'dc-1',
+      updates: { client_phone: '   ', client_name: 'The Ellsworths' },
+    });
+
+    expect(b.__chain).toContainEqual({
+      method: 'update',
+      args: [{ client_phone: null, client_name: 'The Ellsworths' }],
+    });
+  });
+
+  it('keeps a real number, trimmed', async () => {
+    const b = setTableResult('designer_clients', { data: { id: 'dc-1' }, error: null });
+
+    const config = useUpdateClientContact() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      clientId: 'dc-1',
+      updates: { client_phone: ' (555) 010-2020 ' },
+    });
+
+    expect(b.__chain).toContainEqual({
+      method: 'update',
+      args: [{ client_phone: '(555) 010-2020' }],
+    });
+  });
+
+  it('leaves a patch that never mentions the phone alone', async () => {
+    const b = setTableResult('designer_clients', { data: { id: 'dc-1' }, error: null });
+
+    const config = useUpdateClientContact() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await config.mutationFn({
+      clientId: 'dc-1',
+      updates: { notes: 'Prefers Tuesdays' },
+    });
+
+    expect(b.__chain).toContainEqual({
+      method: 'update',
+      args: [{ notes: 'Prefers Tuesdays' }],
+    });
   });
 });

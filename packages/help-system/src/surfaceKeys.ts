@@ -629,12 +629,46 @@ export const SurfaceKeys = {
       // the field rollup on the Desk.
       LibraryPiece:    'designer-portal/document/library/piece',
       PeoplePerson:    'designer-portal/document/people/person',
+      // W4 (People room CRM, 2026-09-11) — the company card. Its own key,
+      // distinct from People and PeoplePerson: the firm's card carries crew
+      // designations, paper, and payee facts a person card does not.
+      PeopleFirm:      'designer-portal/document/people/firm',
+      // W4 round 1 (review MAJOR-5) — the twelve keys the People room's help
+      // documents were authored against. They were written and seeded (dry) at
+      // keys that existed in neither registry, which the Sanity schema's own
+      // field description forbids ("Must match a key from
+      // @patina/help-system/surfaceKeys") and no test could see: the parity
+      // gate checks registry-vs-mirror, never content-vs-registry. Additive:
+      // no document _id changes and nothing is reseeded.
+      //
+      // The three WORDS a Directory row prints, each its own moment: a
+      // designer asking "what does Lapsed mean here" is not asking about the
+      // room.
+      PeopleWordReach:      'designer-portal/document/people/word/reach',
+      PeopleWordConsent:    'designer-portal/document/people/word/consent',
+      PeopleWordPaper:      'designer-portal/document/people/word/paper',
+      PeopleContactRule:    'designer-portal/document/people/contact-rule',
+      PeopleLens:           'designer-portal/document/people/lens',
+      PeopleChips:          'designer-portal/document/people/chips',
+      PeoplePersonConsent:     'designer-portal/document/people/person/consent',
+      PeoplePersonAccessGrant: 'designer-portal/document/people/person/access-grant',
+      PeoplePersonAuthority:   'designer-portal/document/people/person/authority',
+      PeopleFirmDesignations:  'designer-portal/document/people/firm/designations',
+      PeopleFirmPaper:         'designer-portal/document/people/firm/paper',
       DeskField:       'designer-portal/document/desk/field',
       // Wave 3 — the Call Sheet. Its own key, distinct from Coordination
       // (which is the ball-in-court help panel court-bar.tsx already owns):
       // reusing that key would have made the call sheet's registry blurb
       // show up as the intro on the ball-in-court panel too.
       CallSheet:       'designer-portal/document/call-sheet',
+      // W4 (People room CRM) — the site access card and the bring-forward
+      // picker, each its own key so their help copy doesn't inherit the
+      // Call Sheet's own registry blurb.
+      CallSheetSiteAccess:    'designer-portal/document/call-sheet/site-access',
+      CallSheetBringForward:  'designer-portal/document/call-sheet/bring-forward',
+      // "Log who was told" — the notice, not the card it sits on (W4 r1
+      // MAJOR-5).
+      CallSheetSiteAccessTold: 'designer-portal/document/call-sheet/site-access/told',
       // The Plan Room — /doc/[id]/plans. Its own key: the drawings are their
       // own room, and the help copy there is about sets and revisions, not
       // about the document the band sits on.

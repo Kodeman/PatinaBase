@@ -35,20 +35,20 @@ describe('HouseLedger — the house in figures, with its words', () => {
     render(<HouseLedger ledger={ledger()} />);
 
     expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
-      'The house stands at $61,400 agreed of $85,000 planned.',
+      'The house stands at $61,400.00 agreed of $85,000.00 planned.',
     );
   });
 
   it('stands on whichever half it knows, and says nothing with neither', () => {
     const { unmount } = render(<HouseLedger ledger={ledger({ plannedCents: null })} />);
     expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
-      'The house stands at $61,400 agreed.',
+      'The house stands at $61,400.00 agreed.',
     );
     unmount();
 
     const planned = render(<HouseLedger ledger={ledger({ agreedCents: null })} />);
     expect(screen.getByTestId('house-ledger-top')).toHaveTextContent(
-      'The house stands at $85,000 planned.',
+      'The house stands at $85,000.00 planned.',
     );
     planned.unmount();
 
@@ -75,7 +75,7 @@ describe('HouseLedger — the house in figures, with its words', () => {
     render(<HouseLedger ledger={ledger({ owedDueDate: '2026-08-15' })} today={new Date(2026, 7, 5)} />);
 
     const owed = screen.getByTestId('house-ledger-owed');
-    expect(owed).toHaveTextContent('$9,125');
+    expect(owed).toHaveTextContent('$9,125.00');
     expect(owed).toHaveClass('t-d2');
     expect(screen.getByTestId('house-ledger-owed-due')).toHaveTextContent('due 15 August');
 
@@ -96,11 +96,11 @@ describe('HouseLedger — the house in figures, with its words', () => {
 
     const sentence = screen.getByTestId('house-ledger-reconcile');
     expect(sentence).toHaveTextContent(
-      '$11,100 agreed · $0 paid · $4,060 owed on INV-2026-0301.',
+      '$11,100.00 agreed · $0.00 paid · $4,060.00 owed on INV-2026-0301.',
     );
     expect(
       [...sentence.querySelectorAll('.t-money')].map((node) => node.textContent),
-    ).toEqual(['$11,100', '$0', '$4,060']);
+    ).toEqual(['$11,100.00', '$0.00', '$4,060.00']);
   });
 
   it('says nothing to reconcile when nothing is owed', () => {
@@ -115,8 +115,8 @@ describe('HouseLedger — the house in figures, with its words', () => {
 
     const sentence = screen.getByTestId('house-ledger-reconcile');
     expect(sentence).not.toHaveTextContent('agreed');
-    expect(sentence).toHaveTextContent('$0 paid');
-    expect(sentence).toHaveTextContent('$9,125 owed');
+    expect(sentence).toHaveTextContent('$0.00 paid');
+    expect(sentence).toHaveTextContent('$9,125.00 owed');
   });
 
   it('notes the room standing past its target, and the one absorbing it', () => {
@@ -142,12 +142,12 @@ describe('HouseLedger — the house in figures, with its words', () => {
   it('gives owed, held and awaiting each a figure and a sentence', () => {
     render(<HouseLedger ledger={ledger()} />);
 
-    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125');
+    expect(screen.getByTestId('house-ledger-owed')).toHaveTextContent('$9,125.00');
     expect(screen.getByTestId('house-ledger-reconcile')).toHaveTextContent(
       'owed on the open invoice',
     );
-    expect(screen.getByTestId('house-ledger-held')).toHaveTextContent('$1,440');
-    expect(screen.getByTestId('house-ledger-awaiting')).toHaveTextContent('$6,890');
+    expect(screen.getByTestId('house-ledger-held')).toHaveTextContent('$1,440.00');
+    expect(screen.getByTestId('house-ledger-awaiting')).toHaveTextContent('$6,890.00');
     expect(screen.getByTestId('house-ledger-awaiting')).toHaveTextContent('Awaiting your name');
   });
 

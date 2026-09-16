@@ -87,9 +87,9 @@ const ASPEN: MilestoneDetail[] = [
 ];
 
 const SECTIONS = [
-  { id: 'doorstep', label: 'You stand at the doorstep' },
-  { id: 'key', label: 'You are reading the key' },
-  { id: 'mat', label: 'You stand on the mat' },
+  { id: 'doorstep', label: 'You stand at the doorstep', short: 'the doorstep' },
+  { id: 'key', label: 'You are reading the key', short: 'the whole house' },
+  { id: 'mat', label: 'You stand on the mat', short: 'the mat' },
 ];
 
 function pole(sections = SECTIONS) {
@@ -265,13 +265,13 @@ describe('StoryPole — six graduations, and one caret that moves', () => {
 
 describe('StoryPole — the pole navigates', () => {
   const HOUSE = [
-    { id: 'doorstep', label: 'You stand at the doorstep' },
-    { id: 'letterbox', label: 'The letterbox' },
-    { id: 'wall', label: 'What needs you' },
-    { id: 'key', label: 'The whole house' },
-    { id: 'study', label: 'The study' },
-    { id: 'road', label: 'The road' },
-    { id: 'mat', label: 'You stand on the mat' },
+    { id: 'doorstep', label: 'You stand at the doorstep', short: 'the doorstep' },
+    { id: 'letterbox', label: 'The letterbox', short: 'the letterbox' },
+    { id: 'wall', label: 'What needs you', short: 'the wall' },
+    { id: 'key', label: 'The whole house', short: 'the whole house' },
+    { id: 'study', label: 'The study', short: 'The study' },
+    { id: 'road', label: 'The road', short: 'the road' },
+    { id: 'mat', label: 'You stand on the mat', short: 'the mat' },
   ];
 
   /** The house draws its first band as the study — installation's place (SF-03). */
@@ -351,12 +351,33 @@ describe('StoryPole — the pole navigates', () => {
     expect(caret.closest('button')).toBeNull();
   });
 
+  it('strikes the held mark into the same column as every other graduation', () => {
+    render(house());
+
+    const marks = screen
+      .getAllByTestId(/^story-pole-graduation-/)
+      .map((li) => li.querySelector('span[aria-hidden="true"]')!)
+      .filter(Boolean);
+    expect(marks.length).toBeGreaterThan(1);
+
+    // Same left offset and same width on every mark, so every label starts at
+    // the same gap off the rail and the held one cannot run into its own word.
+    for (const mark of marks) {
+      expect(mark.className).toContain('-left-4');
+      expect(mark.className).toContain('w-[9px]');
+      expect(mark.className).not.toContain('w-5');
+    }
+  });
+
   it('offers a one-line bar that says where she is and opens the same list', async () => {
     const user = userEvent.setup();
     render(house());
 
     const toggle = screen.getByTestId('story-pole-toggle');
-    expect(toggle).toHaveTextContent('You are in: You stand at the doorstep');
+    // The bar supplies the verb, so the section gives it a noun and nothing
+    // more — never "You are in: You stand at the doorstep".
+    expect(toggle).toHaveTextContent('You are in: the doorstep');
+    expect(toggle).not.toHaveTextContent('You are in: You stand');
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveAttribute('aria-controls', 'story-pole-rail');
     expect(screen.getByTestId('story-pole-rail')).toHaveAttribute('id', 'story-pole-rail');
@@ -395,8 +416,10 @@ describe('StoryPole — the pole navigates', () => {
       });
 
       expect(screen.getByTestId('story-pole-toggle')).toHaveTextContent(
-        'You are in: What needs you',
+        'You are in: the wall',
       );
+      // The desktop rail keeps the whole sentence: it prints on its own line
+      // with no "You are in:" ahead of it.
       expect(screen.getByTestId('story-pole-here')).toHaveTextContent('What needs you');
     } finally {
       io.restore();

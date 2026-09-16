@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { SendSheet } from '../send-sheet';
 import { useBufferedAutosave } from '@/hooks/use-buffered-autosave';
 import {
   registerProposalAutosave,
   resetProposalAutosaveRegistryForTests,
 } from '@/lib/proposal-autosave-registry';
+import { LETTER_NOTE_MAX } from '../../people/directory/letter-line-field';
 
 const mockSend = jest.fn();
 const mockRetry = jest.fn();
@@ -21,6 +23,34 @@ let mockPendingProposalMutation: {
 } | null = null;
 let mockProposal: Record<string, unknown>;
 let mockProposalLoadError: Error | null = null;
+// The captured-household letter path (client-invite-letter) — a designer
+// client not yet linked to a Patina account, and whether the flag has
+// resolved. Both default to the pre-letter state so every existing test in
+// this file is unaffected; the letter describe block below overrides them.
+let mockCapturedHousehold: {
+  client_email: string;
+  client_name?: string | null;
+} | null = null;
+let mockCapturedHouseholdLoading = false;
+let mockLetterFlag: { value: boolean; isLoading: boolean } = {
+  value: false,
+  isLoading: false,
+};
+const mockInviteAndLinkClient = jest.fn();
+const mockAttachDocumentClient = jest.fn();
+
+// 00591 — what the provider did with the proposal email. Mocked like the other
+// four delivery-word suites, so the real hook never reaches React Query.
+let mockEmailDeliveryByRef: Record<string, unknown> = {};
+
+jest.mock('@patina/supabase', () => ({
+  ...jest.requireActual('@patina/supabase'),
+  useEmailDelivery: () => ({
+    byRef: mockEmailDeliveryByRef,
+    isLoading: false,
+    isError: false,
+  }),
+}));
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
@@ -52,18 +82,25 @@ jest.mock('@/hooks/use-drafting-state', () => ({
 }));
 
 jest.mock('@/hooks/use-clients', () => ({
-  useClient: () => ({ data: null, isLoading: false }),
+  useClient: () => ({
+    data: mockCapturedHousehold,
+    isLoading: mockCapturedHouseholdLoading,
+  }),
   useInviteAndLinkClient: () => ({
-    mutateAsync: jest.fn(),
+    mutateAsync: mockInviteAndLinkClient,
     isPending: false,
   }),
 }));
 
 jest.mock('@/hooks/use-attach-client', () => ({
   useAttachDocumentClient: () => ({
-    mutateAsync: jest.fn(),
+    mutateAsync: mockAttachDocumentClient,
     isPending: false,
   }),
+}));
+
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: () => mockLetterFlag,
 }));
 
 jest.mock('@/components/document/drafting/proposal-mirror', () => ({
@@ -221,6 +258,7 @@ beforeEach(() => {
     gaps: [],
   });
   mockPendingProposalMutation = null;
+  mockEmailDeliveryByRef = {};
   mockUseDraftingState.mockReturnValue({
     gaps: [],
     isLoading: false,
@@ -228,6 +266,13 @@ beforeEach(() => {
     refresh: mockRefreshDrafting,
   });
   mockUseProposalMirrorData.mockReset();
+  mockCapturedHousehold = null;
+  mockCapturedHouseholdLoading = false;
+  mockLetterFlag = { value: false, isLoading: false };
+  mockInviteAndLinkClient.mockReset();
+  mockInviteAndLinkClient.mockResolvedValue({ profileId: 'captured-profile-1' });
+  mockAttachDocumentClient.mockReset();
+  mockAttachDocumentClient.mockResolvedValue(undefined);
 });
 
 afterEach(() => resetProposalAutosaveRegistryForTests());
@@ -984,5 +1029,151 @@ describe('SendSheet canonical client-copy validation', () => {
       screen.getByText(/proposal could not be loaded/i),
     ).toBeInTheDocument();
     expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+  });
+});
+
+function readyMirror() {
+  return mirror([
+    {
+      id: 'deposit',
+      label: 'Project deposit',
+      percentage: 100,
+      amount_cents: 1_320_000,
+    },
+  ]);
+}
+
+// The First Letter, on this sheet: an unlinked captured household, with the
+// proposal's own personal-message textarea feeding the letter's note once
+// the flag and the household have both resolved (R4, R12).
+describe('SendSheet — the letter for an unlinked captured household', () => {
+  beforeEach(() => {
+    mockProposal = {
+      ...mockProposal,
+      client_id: null,
+      client: null,
+      designer_client_id: 'dc-1',
+      project_id: 'proj-1',
+    };
+    mockCapturedHousehold = {
+      client_email: 'dave@okonkwo.net',
+      client_name: 'Dave Okonkwo',
+    };
+    mockUseProposalMirrorData.mockReturnValue(readyMirror());
+  });
+
+  it('caps the personal message at 280 and shows the counter once the flag resolves true', async () => {
+    mockLetterFlag = { value: true, isLoading: false };
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    const textarea = screen.getByLabelText('Personal message') as HTMLTextAreaElement;
+    expect(textarea.maxLength).toBe(LETTER_NOTE_MAX);
+
+    await userEvent.type(textarea, 'x'.repeat(LETTER_NOTE_MAX + 20));
+    expect(textarea.value).toHaveLength(LETTER_NOTE_MAX);
+    expect(screen.getByTestId('send-sheet-message-counter')).toHaveTextContent(
+      `That's the whole ${LETTER_NOTE_MAX}.`,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Write to Dave Okonkwo/ }));
+
+    await waitFor(() => expect(mockInviteAndLinkClient).toHaveBeenCalled());
+    const call = mockInviteAndLinkClient.mock.calls[0][0];
+    expect(call.letter).toBe(true);
+    expect(call.note).toHaveLength(LETTER_NOTE_MAX);
+    // 300 real keystrokes: races jest's 5s default under the full parallel run.
+  }, 20000);
+
+  it('flag off — legacy invite copy, no counter, no letter key', async () => {
+    mockLetterFlag = { value: false, isLoading: false };
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    expect(screen.queryByTestId('send-sheet-message-counter')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Personal message'), {
+      target: { value: 'A note that stays under the ordinary field.' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Invite Dave Okonkwo/ }));
+
+    await waitFor(() => expect(mockInviteAndLinkClient).toHaveBeenCalled());
+    expect(mockInviteAndLinkClient.mock.calls[0][0]).not.toHaveProperty('letter');
+  });
+
+  it('flag still resolving — no counter renders and no letter key is sent', async () => {
+    mockLetterFlag = { value: true, isLoading: true };
+
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+
+    expect(screen.queryByTestId('send-sheet-message-counter')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Invite Dave Okonkwo/ }));
+
+    await waitFor(() => expect(mockInviteAndLinkClient).toHaveBeenCalled());
+    expect(mockInviteAndLinkClient.mock.calls[0][0]).not.toHaveProperty('letter');
+  });
+});
+
+/**
+ * 00591 — the provider's own verdict, printed beside the dispatch status the
+ * sheet already shows. `mode="all"`, so a healthy send speaks too.
+ */
+describe('the send sheet prints what became of the mail', () => {
+  beforeEach(() => {
+    mockUseProposalMirrorData.mockReturnValue(readyMirror());
+  });
+
+  const log = (over: Record<string, unknown> = {}) => ({
+    logId: 'log-1',
+    refId: 'proposal-1',
+    recipient: 'harper@example.com',
+    state: 'bounced',
+    status: 'bounced',
+    sentAt: '2026-09-08T14:00:00.000Z',
+    deliveredAt: null,
+    bouncedAt: '2026-09-09T09:00:00.000Z',
+    bounceType: 'permanent',
+    bounceReason: 'no such mailbox',
+    delayedAt: null,
+    lastEvent: 'email.bounced',
+    lastEventAt: '2026-09-09T09:00:00.000Z',
+    createdAt: '2026-09-08T14:00:00.000Z',
+    ...over,
+  });
+
+  it('says nothing while the log has no row for this proposal', () => {
+    mockProposal = { ...mockProposal, status: 'sent' };
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+    expect(screen.queryByTestId('delivery-word')).toBeNull();
+  });
+
+  it('names the bounce, dated, against the address it was sent to', () => {
+    mockProposal = { ...mockProposal, status: 'sent' };
+    mockEmailDeliveryByRef = { 'proposal-1': log() };
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+    expect(screen.getByTestId('delivery-word')).toHaveTextContent(
+      "Bounced 9 Sept — didn't reach harper@example.com",
+    );
+  });
+
+  it('speaks in the quiet register when the mail landed', () => {
+    mockProposal = { ...mockProposal, status: 'sent' };
+    mockEmailDeliveryByRef = {
+      'proposal-1': log({
+        state: 'delivered',
+        status: 'delivered',
+        bouncedAt: null,
+        bounceType: null,
+        bounceReason: null,
+        deliveredAt: '2026-09-08T15:00:00.000Z',
+        lastEvent: 'email.delivered',
+        lastEventAt: '2026-09-08T15:00:00.000Z',
+      }),
+    };
+    render(<SendSheet proposalId="proposal-1" open onClose={jest.fn()} />);
+    const word = screen.getByTestId('delivery-word');
+    expect(word).toHaveTextContent('Delivered 8 Sept');
+    expect(word).not.toHaveAttribute('role');
   });
 });

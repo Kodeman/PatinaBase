@@ -46,6 +46,19 @@
   --color-terracotta: #D4A090;
   --color-golden-hour: #E8C547;
 
+  /* D4 / R144 — the one boundary grey, and the only exception to "no new
+     token". A Claim card is a component boundary where a roster row is not,
+     so WCAG 1.4.11's 3:1 attaches to it; nothing in the palette reached it
+     (hairline 1.20:1, hairline-strong 1.30:1, paper-doc on paper 1.025:1)
+     and D4 forbids the shadow that would rescue it. 3.21:1 on --doc-paper,
+     3.13:1 on --color-off-white. Claim cards ONLY (D4a) — the at-rest
+     ledger rows keep the existing hairline. Never a word, only an edge.
+     This portal paints no dark paper set (no prefers-color-scheme block
+     anywhere in this file; the .dark class carries shadcn tokens only), so
+     the dark companion #77736E is recorded in docs/design/house-sheet/SPEC.md
+     rather than written here as dead code. */
+  --color-card-edge: #8F8C88;
+
   /* — The Document (spec v1.1 §10) — paper-object surfaces. D4: depth comes
      from these values + flat stacked edges, never from shadows. */
   --doc-paper: #FCFAF6;
@@ -400,8 +413,11 @@
   transition: none;
 }
 
-/* The score under the row's name turns clay as the wash opens. Lanes put
-   .row-wash-score on the name; the wash and the score are one gesture. */
+/* The score under the row's name is DRAWN AT REST (§F-O) and turns clay as the
+   wash opens. A rule that only exists on hover is not an affordance — the name
+   has to read as a link before the pointer arrives, and a touch screen has no
+   hover at all. Lanes put .row-wash-score on the name; the wash and the score
+   are one gesture. */
 .row-wash-score {
   position: relative;
 }
@@ -413,18 +429,13 @@
   bottom: -2px;
   left: 0;
   height: 1px;
-  background: var(--color-pearl);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition:
-    transform var(--duration-fast) var(--ease-editorial),
-    background-color var(--duration-fast) var(--ease-editorial);
+  background: var(--color-aged-oak);
+  transition: background-color var(--duration-fast) var(--ease-editorial);
 }
 
 .has-wash:hover .row-wash-score::after,
 .has-wash:focus-within .row-wash-score::after {
   background: var(--color-clay);
-  transform: scaleX(1);
 }
 
 /* The one orchestrated moment: the roster settles in, once per page load.
@@ -555,6 +566,175 @@
   }
 }
 
+/* ── R143 · The Claim card and the at-rest ledger ────────────────────────────
+   A card is a treatment for NEED, not a container for a job. Structure lives
+   here rather than in arbitrary Tailwind because four of these rules cannot be
+   written as utilities: the :has() focus wrap, the 899px collapse (a container
+   query, which Tailwind 3 cannot write), the forced-colors block, and pointer-events on the
+   link zone. Colour and spacing stay on the components as classes. ────────── */
+
+.desk-claims-grid {
+  display: grid;
+  gap: 24px;
+  align-items: start;             /* a quiet card IS shorter, and says so */
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 640px) {
+  .desk-claims-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .desk-claims-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.desk-claim-card {
+  position: relative;
+  background: var(--doc-paper);
+  /* D4/R144 — the one boundary grey, 3.21:1 on this face. D4a: cards only. */
+  border: 1px solid var(--color-card-edge);
+  border-radius: 2px;
+  /* 4px at the bottom, not 0 — the act's own 2px outline + 2px offset needs
+     that room, or `overflow: hidden` below clips its focus ring on every
+     card. `overflow: hidden` itself stays: the wash still needs it. */
+  padding: 20px 20px 4px;
+  overflow: hidden;               /* clips the wash's circle to the card */
+}
+.desk-claim-card > *:not(.row-wash) { position: relative; }
+
+/* D10 — the WHOLE upper block is the link, not the name inside it: the
+   roster's name link was the Desk's one sub-44px target. The overlay is the
+   name link's own ::before; an absolutely positioned pseudo-element's
+   containing block is its nearest POSITIONED ancestor, so the link itself
+   must stay `position: static` (never `.row-wash-score`, which sets
+   `position: relative`) — otherwise the overlay is the WORD's own box, not
+   this 88px block. `.row-wash-score` rides a nested span instead (see the
+   name register below), which keeps the underline visual without touching
+   the link's own containing-block chain. `display: block` keeps the link's
+   own box a single rectangle rather than one line box per wrapped line.
+
+   The stage plate, the custody row and the person line take pointer-events:
+   none, so a click anywhere in the block reaches that overlay. They are
+   therefore NOT selectable — the deliberate cost recorded in R143. Raising
+   them with z-index instead would make the middle of a single target dead,
+   which is a failure a user can neither see nor explain. The need sentence
+   below the block keeps pointer events and stays selectable, as does every
+   word of the at-rest ledger row. */
+.desk-claim-upper { position: relative; min-height: 88px; }
+.desk-claim-upper [data-claim-inert] { pointer-events: none; }
+.desk-claim-upper [data-roster-name] {
+  position: static;
+  display: block;
+}
+.desk-claim-upper [data-roster-name]::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 2px;
+}
+
+.desk-claim-sentence,
+.desk-claim-band { position: relative; z-index: 2; }
+.desk-claim-band {
+  margin-top: 16px;
+  /* The LIGHTER rule (the specimen's --hairline). --rule-hair is a full
+     shorthand value, so it is spent whole, never `1px solid var(--rule-hair)`. */
+  border-top: var(--rule-hair);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.desk-claim-band .da-act { width: 100%; justify-content: flex-start; }
+/* Phone: no hover, so the act's own box carries the whole affordance. */
+@media (max-width: 639px) {
+  .desk-claim-band { min-height: 48px; }
+}
+
+/* The ring is drawn around the whole zone, so focus REVEALS the click area
+   rather than outlining a word inside it. */
+@supports selector(:has(*)) {
+  .desk-claim-upper:has([data-roster-name]:focus-visible) {
+    outline: 2px solid var(--color-clay-ink);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  .desk-claim-upper:has([data-roster-name]:focus-visible)
+    [data-roster-name]:focus-visible { outline: none; }
+  /* .row-wash-score fires on CARD hover, so hovering the act would also light
+     the name. Two lit targets is a lie about where the click will land. */
+  .desk-claim-card:has(.da-act:hover) .row-wash-score::after {
+    background: var(--color-aged-oak);
+  }
+}
+
+/* The ledger measures ITSELF, not the window. The roster is not always the
+   width of the page — it has sat in a page-level column before — and a
+   viewport media query let a 662px roster keep asking for the five-track grid,
+   which resolved the sentence track to 0px and broke the sentence one
+   character to a line. The list is the query container, so the collapse below
+   fires on the width the row actually has. */
+.desk-ledger-list {
+  container-type: inline-size;
+}
+.desk-ledger-row {
+  position: relative;
+  display: grid;
+  /* The sentence track has a floor rather than minmax(0,1fr): below it the row
+     collapses (the @container rule) instead of degrading into a column of
+     single characters. The act track is a flat 120px — "Open the job" is
+     113px, and the old fixed 96px clipped it to "OPEN THE J" under this row's
+     own overflow:hidden. Flat, not max-content: a max-content act track is
+     as wide as the longest label in ITS OWN row, so the value column would
+     stop lining up the moment two rows carried different acts, and a value
+     column that does not line up is not a ledger.
+     Minimum width = 24+320+200+132+120 + 4×24 gaps = 892px, which is under
+     the 899px container threshold below — so the row always has room for the
+     five tracks before the collapse takes over, and never clips. */
+  grid-template-columns: 24px 320px minmax(200px, 1fr) 132px 120px;
+  align-items: baseline;
+  column-gap: 24px;
+  padding: 24px 0;
+  border-top: 1px solid var(--doc-ink-border);
+  background: transparent;   /* D4a — a row is not a component boundary */
+  overflow: hidden;          /* clips the wash's circle to the row */
+}
+/* The wash sits at z-index:-1 inside the row's own stacking context; giving
+   the cells a position keeps them painting above it at every browser, and is
+   what the specimen does. */
+.desk-ledger-row > *:not(.row-wash) { position: relative; }
+.desk-ledger-row [data-ledger-cell='sentence'] { max-width: 44ch; }
+.desk-ledger-row [data-ledger-cell='value'],
+.desk-ledger-row [data-ledger-cell='act'] { text-align: right; }
+.desk-ledger-row [data-ledger-cell='mark'] { align-self: start; margin-top: 9px; }
+
+/* The ledger degrades back into the roster row it came from — measured on the
+   list's own inline size (see .desk-ledger-list), never on the viewport. */
+@container (max-width: 899px) {
+  .desk-ledger-row {
+    grid-template-columns: 16px minmax(0, 1fr);
+    row-gap: 12px;
+    column-gap: 12px;
+  }
+  .desk-ledger-row > *:not(.row-wash) { grid-column: 2; }
+  .desk-ledger-row [data-ledger-cell='mark'] { grid-column: 1; }
+  .desk-ledger-row [data-ledger-cell='sentence'] { max-width: none; }
+  .desk-ledger-row [data-ledger-cell='value'] { text-align: left; }
+}
+
+/* F9 — the portal's first forced-colors block. In High Contrast a mark drawn
+   as a background on an empty span vanishes entirely, and the wash repaints as
+   a solid fill over the words. */
+@media (forced-colors: active) {
+  [data-roster-mark] {
+    forced-color-adjust: none;
+    background: transparent !important;
+    border: 3.5px solid currentColor;
+  }
+  .row-wash { display: none; }
+  .desk-claim-card, .desk-ledger-row { border-color: CanvasText; }
+  .desk-claim-upper:has([data-roster-name]:focus-visible) {
+    outline-color: Highlight;
+  }
+}
+
 /* The Scored Ink (I107) — DocumentAction grammar. Proof Sheet No 001 Proof VI.
    Interaction-triggered only (R15); no shadows (D4); .da-act owns the honest
    44px target while .da-hit remains its invisible contract witness.
@@ -676,23 +856,24 @@
 }
 .da-secondary .da-label::before {
   height: 1px;
-  background-color: rgba(44, 41, 38, 0.28);
+  background-color: var(--color-aged-oak);
 }
 .da-secondary .da-label::after {
   content: none;
 }
 
-/* ── TERTIARY · unscored until asked, and never inked at all ──────────────
-   it carries no .da-pool in the markup; a whisper does not flood. */
+/* ── TERTIARY · scored at rest, and never inked at all ────────────────────
+   it carries no .da-pool in the markup; a whisper does not flood. The rule is
+   unconditional (§F-D): scaleX(0) made the whole tier invisible to a touch
+   screen, which has no hover to reveal it. */
 .da-tertiary {
   color: var(--color-quiet-ink);
 }
 .da-tertiary .da-label::before {
   height: 1px;
-  background-color: var(--color-quiet-ink);
-  transform: scaleX(0);
+  background-color: var(--color-aged-oak);
   transition:
-    transform 300ms var(--ease-editorial),
+    height 150ms var(--ease-editorial),
     background-color 150ms linear;
 }
 .da-tertiary .da-label::after {
@@ -736,6 +917,46 @@
   color: var(--color-off-white);
 }
 
+/* ── TERMINAL · the one filled tier (R139, house sheet §A5 as amended by §F-C).
+   Money moves or a paper is signed, and nothing else in either portal takes a
+   fill — so the fill itself is the meaning, and the two portals share one
+   grammar for it. The label leaves the mono caption behind for Inter 500 16px
+   sentence case with tabular figures, because the amount lives INSIDE the label
+   ("Pay $4,060.00"), never beside a bare verb. ─────────────────────────────── */
+.da-terminal {
+  min-height: 48px;
+  padding: 13px 22px;
+  border-radius: 3px;
+  background-color: var(--color-charcoal);
+  color: var(--color-off-white);
+}
+.da-terminal .da-pool {
+  inset: 0;
+  border-radius: 3px;
+  /* the sheet's terminal hover value; charcoal has no deeper token */
+  background-color: #1f1d1a;
+}
+.da-terminal .da-label {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.da-terminal .da-label::before,
+.da-terminal .da-label::after {
+  content: none;
+}
+.da-terminal .da-leading,
+.da-terminal .da-trailing {
+  color: var(--color-off-white);
+}
+.da-terminal:hover {
+  background-color: #1f1d1a;
+}
+
 /* ── hover · the scoring answers, and a 3.5px bead gathers under the finger ─ */
 .da-act:hover .da-pool {
   clip-path: circle(3.5px at var(--ink-x, 50%) var(--ink-y, 50%));
@@ -752,13 +973,14 @@
   color: var(--color-charcoal);
 }
 .da-secondary:hover .da-label::before {
-  background-color: var(--color-aged-oak);
+  background-color: var(--color-charcoal);
 }
 .da-tertiary:hover {
   color: var(--color-charcoal);
 }
 .da-tertiary:hover .da-label::before {
-  transform: scaleX(1);
+  height: 1.5px;
+  background-color: var(--color-quiet-ink);
 }
 .da-danger:hover {
   color: var(--color-error);
@@ -830,15 +1052,50 @@
   transition-timing-function: linear;
 }
 .da-tertiary:active .da-label::before {
-  transform: scaleX(1);
+  height: 1.5px;
+  background-color: var(--color-charcoal);
   transition-duration: var(--press-in);
   transition-timing-function: linear;
 }
 
-/* ── focus · the proofreader's caret in the margin, and the scores turn clay.
-   No ring: the mark that says "here" is the mark a proofreader would make. ── */
+/* ── unavailable · never opacity. Quiet ink at opacity-50 measures 2.21:1
+   (B07), so an unavailable act keeps FULL opacity: it drops to faint ink and
+   its scores fall to hairline stock, still legible as the act it is beside the
+   reason it names. The filled tier keeps a fill — rail stock, not charcoal —
+   because a terminal act that stops looking terminal has lost its role. ───── */
+.da-act:disabled,
+.da-act[aria-disabled='true'] {
+  color: var(--text-faint);
+}
+.da-act:disabled .da-pool,
+.da-act[aria-disabled='true'] .da-pool {
+  background-color: transparent;
+}
+.da-act:disabled .da-label::before,
+.da-act:disabled .da-label::after,
+.da-act[aria-disabled='true'] .da-label::before,
+.da-act[aria-disabled='true'] .da-label::after {
+  background-color: var(--color-pearl);
+}
+.da-terminal:disabled,
+.da-terminal[aria-disabled='true'] {
+  background-color: var(--doc-rail-stock);
+  /* §A5: the fill retreats to rail stock, so the silhouette has to be drawn
+     back in — an unavailable terminal act still reads as the terminal act.
+     --doc-ink-border is this portal's stock for the sheet's --hairline-strong;
+     --color-pearl is lighter than rail stock and would draw nothing. */
+  border: 1px solid var(--doc-ink-border);
+}
+
+/* ── focus · a 2px clay outline AND the proofreader's caret in the margin, and
+   the scores turn clay. The caret alone was the mark a proofreader would make,
+   but a 14px glyph at 1px from the edge is not a focus indicator anyone can
+   follow across a keyboard pass (§A5 Focus) — so the ring carries the position
+   and the caret keeps the voice. `outline` and not `border`: it takes no
+   layout, so a focused act never resizes its neighbours (VC-22). ─────────── */
 .da-act:focus-visible {
-  outline: none;
+  outline: 2px solid var(--color-clay-ink);
+  outline-offset: 2px;
 }
 .da-act::before {
   /* A caret is a mark, not a word. The `/ ''` alt text keeps the glyph out of
@@ -873,7 +1130,8 @@
    off-white on the pool (≈13.6:1); the clay score already rides the ink at
    ≈6.2:1 and keeps its colour, so the mark stays the proofreader's, not a
    ring. Value only — no shadow (D4). ────────────────────────────────────── */
-.da-inked:focus-visible::before {
+.da-inked:focus-visible::before,
+.da-terminal:focus-visible::before {
   color: var(--color-off-white);
 }
 .da-inked:focus-visible .da-label::before {
@@ -932,15 +1190,6 @@
   .da-primary:hover .da-trailing {
     transform: none;
   }
-  .da-tertiary .da-label::before {
-    transform: none;
-    opacity: 0;
-  }
-  .da-tertiary:hover .da-label::before,
-  .da-tertiary:active .da-label::before {
-    transform: none;
-    opacity: 1;
-  }
 }
 
 /* Scored Ink ad-hoc kit (I107 sweep) — score mechanics for non-DocumentAction controls.
@@ -951,10 +1200,13 @@
    glyph state, nothing else. Ad-hoc controls take the standard 2px clay
    focus-visible outline; the proofreader caret above stays DocumentAction-only. */
 
-/* ── da-score-hover · a hairline that draws in under a hover or a keyboard focus ──
-   the same underline the tertiary variant keeps above, on the same clock: unscored
-   until asked, scaleX(0) to scaleX(1), left-anchored so it opens like a rule drawn
-   under a word. ::after never touches layout — it's absolute, out of flow. ────── */
+/* ── da-score-hover · a hairline the control wears at rest, darkening when asked ──
+   PP-3 / R139: an action whose rule only appears on hover is not an affordance —
+   a touch screen has no hover, so a control drawn at scaleX(0) read as plain text
+   on the device Leah actually carries. The rule now RESTS in aged oak and raises
+   to clay on hover or keyboard focus, exactly as .row-wash-score does above; the
+   name is kept because ~30 files wear it. ::after never touches layout — it's
+   absolute, out of flow. `transform-origin` stays for .da-score-on below. ────── */
 .da-score-hover {
   position: relative;
 }
@@ -967,20 +1219,31 @@
   height: 1px;
   background-color: var(--color-aged-oak);
   transform-origin: left center;
-  transform: scaleX(0);
-  transition: transform 300ms var(--ease-editorial);
+  transition: background-color var(--duration-fast) var(--ease-editorial);
 }
 .da-score-hover:hover::after,
 .da-score-hover:focus-visible::after {
-  transform: scaleX(1);
+  background-color: var(--color-clay);
 }
 
 /* ── da-score-on · the same rule held down, in charcoal — for a picker or toggle
-   that's already selected. Same specificity as the hover state above, declared
-   after it, so a selected control reads scored even with the pointer elsewhere;
-   combine as className="da-score-hover da-score-on". ───────────────────────── */
+   that's already selected. Combine as className="da-score-hover da-score-on".
+   ────────────────────────────────────────────────────────────────────────── */
 .da-score-on::after {
   transform: scaleX(1);
+  background-color: var(--color-charcoal);
+}
+
+/* Selected beats hovered. On its own `.da-score-on::after` (0,1,1) loses to
+   `.da-score-hover:hover::after` (0,2,1), so the SELECTED tab went clay while
+   the pointer sat on it — the page told the studio the tab it was already
+   standing in was merely available. Naming both classes raises the rest rule
+   to the hover rule's weight (declared after it, so it wins) and the hovered
+   and focused pair above it. A specificity bump only: same token, no new
+   colour, no depth. ───────────────────────────────────────────────────────── */
+.da-score-hover.da-score-on::after,
+.da-score-hover.da-score-on:hover::after,
+.da-score-hover.da-score-on:focus-visible::after {
   background-color: var(--color-charcoal);
 }
 
@@ -1688,3 +1951,265 @@ html:has([data-document-shell]) {
     margin: 0.5in;
   }
 }
+
+/* ═══ THE HOUSE SHEET, LANDED (docs/design/house-sheet/SPEC.md §A, as amended
+   by §F) ══════════════════════════════════════════════════════════════════
+
+   Additive only: every name below is new to this file (nothing is renamed,
+   nothing is removed, and no existing declaration changes), so no surface
+   that does not spell one of these class names renders differently.
+
+   It sits at :root and not inside a room because the "Read the whole paper"
+   overlay renders through a portal, outside the room's own root.
+
+   The tokens are ALIASES onto the portal's palette — the house sheet's names
+   for pigments this file already declares — so a retune stays a one-place
+   edit. Two exceptions are written as literals and say why below.
+
+   No dark twin is written here. This portal paints no dark paper set (the
+   `.dark` class carries shadcn tokens only), and `src/lib/document/__tests__/
+   contrast.test.ts` parses this file for `--*-ink` hexes with no notion of
+   which block they sit in — a dark `--ink`/`--clay-ink`/`--terracotta-ink`
+   would be measured against the LIGHT grounds and fail. The dark companions
+   are recorded in the house sheet, the same way `--color-card-edge`'s is. */
+:root {
+  /* — paper, three stocks — */
+  --paper: var(--color-off-white);
+  --paper-doc: var(--doc-paper);
+  --rail: var(--doc-rail-stock);
+
+  /* — ink — */
+  --ink: var(--color-charcoal);
+  --ink-muted: var(--text-body);
+  --ink-subtle: var(--text-muted);
+  --ink-faint: var(--color-quiet-ink); /* 5.32:1 on the rail — N-6's held pair */
+  --ink-paper: var(--color-off-white);
+
+  /* — the rest-rule pigment. NON-TEXT ONLY (N-14): background and
+       border-color, never `color` — 4.20:1 on paper, 3.51:1 on rail. — */
+  --oak: var(--color-aged-oak);
+
+  /* The house sheet's hairline over paper, flattened to its composite so a
+     rule drawn on the rail does not double. */
+  --hairline-strong: #D8CCB8;
+
+  /* The two paper inks the sheet spends by their short names. Written as
+     literals, not as `var(--color-clay-ink)`: contrast.test.ts refuses an
+     alias-form `--*-ink` token outright (an alias parses to no hex and would
+     ship unmeasured), so the value is repeated here and measured. Same hue,
+     same value as the `--color-` twins above. */
+  --clay-ink: #7C5E30;
+  --terracotta-ink: #9C5340;
+
+  /* — PR-v · the state pigments, by their house-sheet names —
+
+     The People room prints every state as ONE BORDERED WORD in one of four
+     pigments (direction §3.8, SPEC §2.2's `.word--*` rules): sage for what is
+     current, golden for what is pending, terracotta for what is blocked, and
+     the hairline + faint ink for what is dormant. The four pairs live in
+     @patina/types' STATE_WORD_PIGMENTS as `var(--sage)` / `var(--sage-ink)`
+     and so on, so these names must resolve here or the word prints unpigmented.
+
+     Base pigments alias the shipped `--color-*` values. The two inks are
+     LITERALS for the same reason --clay-ink above is one. --golden is aliased
+     rather than named `--golden-hour`, because the house sheet and the
+     specimens both spend the short name. */
+  --sage: var(--color-sage);
+  --golden: var(--color-golden-hour);
+  --terracotta: var(--color-terracotta);
+  --sage-ink: #5F6B57;
+  --golden-ink: #79651E;
+
+  /* PR-v — the missing companion. --color-dusty-blue (#8B9CAD, hue 210°) is a
+     material pigment: it paints the GC's avatar and role badge and reads 1.9:1
+     on paper, so it was never legible AS TEXT and every site that wanted a
+     dusty-blue word had nothing to spend. Same hue (210.7°), dark enough to
+     clear AA on every light ground the surface paints:
+     5.28:1 paper · 5.16:1 off-white · 5.51:1 white · 5.01:1 red-letter band ·
+     4.89:1 note band. Like every other -ink, it is a PAPER ink: on the
+     charcoal grounds the base pigment stays. */
+  --color-dusty-blue-ink: #556B82;
+
+  /* — rhythm — */
+  --module: 24px;
+  --radius-hair: 2px;
+}
+
+/* ——— §A3 · the type scale ——— */
+.t-d1      { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.t-d2      { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; letter-spacing: 0; }
+.t-d3      { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; }
+.t-meta    { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.t-head    { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.t-money   { font-family: var(--font-meta); font-size: 15px; line-height: 1.50; font-weight: 400; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-style: italic; font-weight: 400; }
+.t-d1 .t-authorship { font-size: inherit; line-height: inherit; }
+
+/* §A14 · Fields on paper ─────────────────────────────────────────────── */
+
+/* The group. One module between groups, a half-module inside one. */
+.field           { display: block; margin: 0 0 var(--module); }
+.field:last-child{ margin-bottom: 0; }
+
+/* The label — .t-head, exactly. 11px is the floor and there is nothing below
+   it. The label is always present and always above the field. A placeholder
+   is not a label: no field carries a `placeholder` attribute (A13). */
+.field > .label {
+  display: block;
+  margin: 0 0 12px;
+  font-family: var(--font-meta);
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+/* The box. A sheet laid on the page: --paper-doc ground, a 1px
+   --hairline-strong box, 2px radius, and a 1px --ink-faint BASELINE rule —
+   the ruled line of a form on paper, and the one edge a reader can actually
+   see. No shadow, ever (A4/D4). */
+.field-control {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 12px;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--ink-faint);
+  border-radius: var(--radius-hair);
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 16px;          /* .t-body */
+  line-height: 1.55;
+  letter-spacing: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Prose — the clause body. Inherits the paper's body metrics exactly, caps at
+   the paper's own measure, and grows with its content: a paper has no
+   scrollbar and no resize grip. */
+.field-control--prose {
+  max-width: 65ch;
+  min-height: calc(var(--module) * 3);
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
+}
+/* Auto-grow where field-sizing is unsupported: the control and a hidden
+   mirror of its value share one grid cell, so the cell is always as tall as
+   the text. */
+.field-grow { display: grid; max-width: 65ch;
+              font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.field-grow::after {
+  content: attr(data-value) ' ';
+  visibility: hidden;
+  white-space: pre-wrap;
+}
+.field-grow > .field-control--prose,
+.field-grow::after {
+  grid-area: 1 / 1 / 2 / 2;
+  font: inherit;
+  padding: 12px;
+  border: 1px solid transparent;
+}
+
+/* Select. Same box, same metrics. The mark is drawn from two 1px --ink-faint
+   edges — never a glyph font, never an image (an image cannot read a token).
+   The longest option must still fit: a clipped option is truncation (A4). */
+.field-select { position: relative; }
+.field-select .field-control { padding-right: 36px; }
+.field-select::after {
+  content: '';
+  position: absolute; right: 14px; top: 50%;
+  width: 7px; height: 7px; margin-top: -6px;
+  border-right: 1px solid var(--ink-faint);
+  border-bottom: 1px solid var(--ink-faint);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* Money — .t-money in the field exactly as on the paper, so a figure never
+   changes family between being typed and being printed (A3: one family per
+   figure). Right-aligned to the block's own rule, never to the page edge
+   (F-I). The currency mark is furniture printed by the field: never typed,
+   never stored, never part of the value. */
+.field-money { position: relative; display: inline-block; }
+.field-money .field-control {
+  max-width: 13ch;
+  padding-left: 30px;
+  text-align: right;
+  font-family: var(--font-meta);
+  font-size: 15px;          /* .t-money */
+  line-height: 1.5;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.field-money::before {
+  content: '$';
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-meta);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+/* Focus — §A5's focus, unchanged, for every field. `outline` and not `border`,
+   so a focused field never resizes its neighbours (A5, VC-22). */
+.field-control:focus-visible {
+  outline: 2px solid var(--clay-ink);
+  outline-offset: 2px;
+}
+
+/* Held — a field that may not be written, or is written wrong. The ink stays
+   at full strength: never opacity, ever (A5). The ground moves to --rail, a
+   2px --terracotta-ink rule takes the leading edge, and the reason prints
+   directly beneath in words. The rule is the second channel, so the state
+   survives forced colors (A11); the ground change alone is 1.23:1 and carries
+   nothing. */
+.field-control[aria-invalid="true"],
+.field-control[aria-disabled="true"] {
+  background: var(--rail);
+  color: var(--ink);
+  border-left: 2px solid var(--terracotta-ink);
+  padding-left: 11px;       /* 12 − 1, so the text does not move */
+  cursor: not-allowed;
+}
+.field .reason {
+  display: block;
+  margin: 12px 0 0;
+  max-width: 56ch;
+  font-family: var(--font-body);
+  font-size: 14px;          /* .t-body-sm */
+  line-height: 1.50;
+  color: var(--ink);
+}
+
+/* A money row: label on the line, figure right-aligned to the block's own rule
+   (F-I). Stacks below 520px — no container queries exist in the portal (FS-1),
+   so this is a viewport rule. */
+.money-row { display: flex; align-items: baseline; justify-content: space-between;
+             gap: 12px; margin: 0 0 12px; }
+.money-row > .label { margin: 0; }
+.money-rows { border-top: 1px solid var(--hairline-strong); padding-top: 12px; }
+@media (max-width: 519px) {
+  .money-row { display: block; }
+  .money-row > .label { margin: 0 0 12px; }
+}
+
+/* Studio chrome. Readiness sentences and marginal notes are the studio's, not
+   the paper's: --rail ground, a 2px --clay-ink leading rule (5.61:1 on paper,
+   4.70:1 on rail), a .t-head running head. NO-4's binding treatment, at 1440,
+   1024 and 390 alike. */
+.studio-note { background: var(--rail); border-left: 2px solid var(--clay-ink);
+               padding: 12px; margin: 0 0 var(--module); color: var(--ink); }
+.studio-note > .head { display: block; margin: 0 0 12px; color: var(--ink-subtle); }
+.studio-note > p { max-width: 56ch; }

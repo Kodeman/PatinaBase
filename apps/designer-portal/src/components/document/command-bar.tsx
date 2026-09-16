@@ -47,6 +47,7 @@ import {
 } from './overlays/active-dialog';
 import { openFeedbackSheet } from './feedback/open-feedback';
 import { openHelp } from '@/lib/help-system/open-help';
+import { openLogTime } from './log-time-sheet';
 import { openKeys } from './overlays/keys-sheet';
 import { THE_WORDS_HREF } from '@/lib/help-system/keys-reference';
 import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
@@ -238,6 +239,19 @@ export function openCommandBar(query?: string) {
  *  clears it on mount. */
 export const callSheetPending = { value: false };
 
+/* B03 — the palette a screen reader can drive. The input is not inside the
+   list it moves through, so the active row has to be NAMED (aria-activedescendant
+   against these ids) rather than merely tinted; the arrow keys below are
+   unchanged, and focus never leaves the input. */
+const optionId = (index: number) => `command-bar-option-${index}`;
+
+/* The list is a DOM sibling of the input, so the active option is not a
+   descendant of the element that holds focus. ARIA's containment rule for
+   aria-activedescendant is satisfied the two ways it allows from a combobox:
+   the input OWNS this listbox, and it CONTROLS it. One listbox with a group
+   per section — not a listbox per section — so there is one thing to own. */
+const RESULTS_ID = 'command-bar-results';
+
 export function CommandBar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -257,7 +271,6 @@ export function CommandBar() {
   // D1 registry precedent (drafting-room-here): document-scoped surfaces only
   // ever appear as a "This surface" row, gated on both a project in hand and
   // the surface's own flag — never in the unfiltered doorway lists.
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   // "Leave a note" is the Tester Notes doorway; without the flag the widget is
   // not mounted and the row would dispatch its open event into nothing.
   const { value: testerNotesOn } = useFeatureFlag('tester-notes');
@@ -469,6 +482,12 @@ export function CommandBar() {
           return () => openDraftProposalPicker();
         case 'draw-invoice':
           return () => openInvoiceComposer();
+        // W3 — the one verb that is NOT gated on a document in hand. The
+        // "Draw an invoice · <household>" row above appears only with one
+        // open, which is exactly when the auto-timer is already running and
+        // no form is wanted.
+        case 'log-time':
+          return () => openLogTime();
         case 'add-maker':
           return () => router.push('/people?add=maker');
         case 'the-post':
@@ -732,9 +751,9 @@ export function CommandBar() {
         .find((r): r is DocumentStateRow => Boolean(r?.project_id)) ??
       liveRows.find((r) => Boolean(r.project_id)) ??
       null;
-    const documentSurfaces = DOCUMENT_SCOPED_SURFACES.filter(
-      (surface) => surface.key !== 'call-sheet' || callSheetOn,
-    );
+    // The `call-sheet` flag is retired (rulings §6) — every document-scoped
+    // surface, the Call Sheet included, is live for every studio.
+    const documentSurfaces = DOCUMENT_SCOPED_SURFACES;
 
     // D4' — the creation front door, pre-addressed with the same current/
     // most-recent project every other document-scoped surface pairs to
@@ -964,7 +983,6 @@ export function CommandBar() {
     pathname,
     user?.email,
     signOut,
-    callSheetOn,
     testerNotesOn,
   ]);
 
@@ -978,6 +996,13 @@ export function CommandBar() {
     }, 300);
     return () => window.clearTimeout(t);
   }, [query, matchCount]);
+
+  /* What the status line counts is what the QUERY found — the No-match
+     recovery row and the Engine's ask are offered, not matched, so counting
+     the rendered rows would announce "2 results" over the word "No match".
+     With no query the palette is the populated set of doorways, and the rows
+     ARE the count. */
+  const resultCount = query.trim() ? matchCount : flatRows.length;
 
   // Keep the active row in range as the list changes.
   useEffect(() => {
@@ -1072,6 +1097,7 @@ export function CommandBar() {
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label="Command bar"
       className="fixed inset-0 z-[70] flex items-start justify-center pt-[12vh]"
     >
@@ -1082,9 +1108,23 @@ export function CommandBar() {
         onClick={() => setOpen(false)}
       />
       <div className="relative w-[min(560px,92vw)] overflow-hidden rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)]">
+        {/* B03 — the pattern completed. A textbox that names an active option
+            in a list it controls IS a combobox; without the role, expanded
+            state and autocomplete behaviour, a screen reader announces a plain
+            field and never says the list is there. Keyboard behaviour is
+            unchanged — ArrowUp/Down/Enter below own it, and focus never leaves
+            the input. */}
         <input
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded={!asking}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            !asking && flatRows[active] ? optionId(active) : undefined
+          }
+          aria-controls={asking ? undefined : RESULTS_ID}
+          aria-owns={asking ? undefined : RESULTS_ID}
           aria-label="Find anything"
           placeholder="Find a document or a ledger…"
           className="w-full border-b border-[var(--color-pearl)] bg-transparent px-4 py-3 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:outline-none"
@@ -1133,40 +1173,54 @@ export function CommandBar() {
           </div>
         ) : (
           <div className="max-h-[52vh] overflow-y-auto py-1">
-            {rendered.map((section) => (
-              <div key={section.eyebrow ?? 'results'}>
-                {section.eyebrow && (
-                  <div className="px-4 pb-1 pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                    {section.eyebrow}
-                  </div>
-                )}
-                <ul>
-                  {section.items.map(({ row, index }) => (
-                    <li key={row.key}>
-                      <button
-                        type="button"
-                        onMouseEnter={() => setActive(index)}
-                        onClick={() => choose(row, index)}
-                        className={`flex w-full items-center gap-3 px-4 py-2 text-left ${
-                          index === active ? 'bg-[rgba(196,165,123,0.12)]' : ''
-                        }`}
-                      >
-                        {renderGlyph(row)}
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
-                            {row.label}
+            <p role="status" className="sr-only">
+              {resultCount === 0
+                ? 'Nothing matches.'
+                : `${resultCount} ${resultCount === 1 ? 'result' : 'results'}`}
+            </p>
+            <div role="listbox" id={RESULTS_ID} aria-label="Results">
+              {rendered.map((section) => (
+                <div
+                  key={section.eyebrow ?? 'results'}
+                  role="group"
+                  aria-label={section.eyebrow ?? 'Results'}
+                >
+                  {section.eyebrow && (
+                    <div className="px-4 pb-1 pt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                      {section.eyebrow}
+                    </div>
+                  )}
+                  <ul role="presentation">
+                    {section.items.map(({ row, index }) => (
+                      <li key={row.key} role="presentation">
+                        <button
+                          type="button"
+                          id={optionId(index)}
+                          role="option"
+                          aria-selected={index === active}
+                          onMouseEnter={() => setActive(index)}
+                          onClick={() => choose(row, index)}
+                          className={`flex w-full items-center gap-3 px-4 py-2 text-left ${
+                            index === active ? 'bg-[rgba(196,165,123,0.12)]' : ''
+                          }`}
+                        >
+                          {renderGlyph(row)}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
+                              {row.label}
+                            </span>
+                            <span className="block truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                              {row.sub}
+                            </span>
                           </span>
-                          <span className="block truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                            {row.sub}
-                          </span>
-                        </span>
-                        {renderTrailing(row)}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+                          {renderTrailing(row)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

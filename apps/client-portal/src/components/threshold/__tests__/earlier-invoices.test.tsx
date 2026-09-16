@@ -113,7 +113,7 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
 
-    expect(screen.getByText('Invoice No. 3 · $9,125 · paid 12 June')).toBeInTheDocument();
+    expect(screen.getByText('Invoice No. 3 · $9,125.00 · paid 12 June 2026')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close earlier invoices' })).toHaveAttribute(
       'aria-expanded',
       'true',
@@ -139,9 +139,9 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
 
-    expect(screen.getByText('Invoice No. 5 · $9,125 · due 15 June')).toBeInTheDocument();
+    expect(screen.getByText('Invoice No. 5 · $9,125.00 · due 15 June 2026')).toBeInTheDocument();
     expect(
-      screen.getByText('Invoice No. 6 · $9,125 · $5,000 outstanding, due 15 June'),
+      screen.getByText('Invoice No. 6 · $9,125.00 · $5,000.00 outstanding, due 15 June 2026'),
     ).toBeInTheDocument();
   });
 
@@ -285,7 +285,7 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
 
     expect(
       screen.getByText(
-        'Invoice No. 31 · $450 · due 20 August · from the studio · not for a house',
+        'Invoice No. 31 · $450.00 · due 20 August 2026 · from the studio · not for a house',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Settle this balance' })).toBeInTheDocument();
@@ -302,7 +302,7 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
 
     const line = screen.getByText(/^Invoice No\. 3 ·/);
-    expect(line).toHaveTextContent('Invoice No. 3 · $9,125 · paid 12 June');
+    expect(line).toHaveTextContent('Invoice No. 3 · $9,125.00 · paid 12 June 2026');
     expect(line).not.toHaveTextContent('from the studio');
   });
 
@@ -333,7 +333,7 @@ describe('EarlierInvoices — what is kept behind the one letter', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Earlier invoices' }));
 
-    expect(screen.getByText('Invoice No. 1 · $9,125 · paid 2 November 2025')).toBeInTheDocument();
+    expect(screen.getByText('Invoice No. 1 · $9,125.00 · paid 2 November 2025')).toBeInTheDocument();
 
     const lines = screen.getAllByText(/^Invoice No\./);
     expect(lines[0]).toHaveTextContent('Invoice No. 3');

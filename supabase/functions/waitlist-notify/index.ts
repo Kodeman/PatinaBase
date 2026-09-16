@@ -2,13 +2,18 @@
 //
 // Fired by the AFTER INSERT trigger on public.waitlist (migration 00259) via
 // invoke_edge_function, which passes `{ record: <the waitlist row> }`. Sends a
-// plain admin notification email through Resend to LEAD_NOTIFY_TO. This is an
-// internal alert (not a user-facing/compliance email), so it sends directly
-// rather than through the compliance mailer.
+// plain admin notification email to LEAD_NOTIFY_TO through the one send
+// chokepoint. There is no Patina user on the receiving end, so no userId is
+// passed: the send skips the suppression/rate policy and writes no
+// notification_log row, exactly as the old direct call did.
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { renderBrandedShell, heading } from '../_shared/branded-email.ts';
+import { sendCompliantEmail } from '../_shared/send-email.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const FROM_ADDRESS =
   Deno.env.get('RESEND_FROM_TRANSACTIONAL') ||
   Deno.env.get('RESEND_FROM') ||
@@ -37,6 +42,16 @@ Deno.serve(async (req: Request) => {
     if (!RESEND_API_KEY) {
       console.warn('[waitlist-notify] RESEND_API_KEY not set — skipping send for', email);
       return new Response(JSON.stringify({ skipped: 'no RESEND_API_KEY' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // createClient throws on an empty key, which would turn a missing secret
+    // into a 500 on a path that has no user to check anything against anyway.
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn('[waitlist-notify] service-role client unavailable — skipping send for', email);
+      return new Response(JSON.stringify({ skipped: 'no service-role client' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -72,25 +87,26 @@ Deno.serve(async (req: Request) => {
         `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; margin:4px 0 8px;">${tableRows}</table>`,
     });
 
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const result = await sendCompliantEmail(admin, {
+      to: NOTIFY_TO,
+      subject: `New waitlist signup: ${email}`,
+      html,
+      from: FROM_ADDRESS,
+      replyTo: email,
+      category: 'transactional',
+      notificationType: 'waitlist_lead_alert',
+      templateId: 'waitlist-lead-alert',
+      metadata: {
+        waitlist_email: email,
+        role: row.role ?? null,
+        source: row.source ?? null,
       },
-      body: JSON.stringify({
-        from: FROM_ADDRESS,
-        to: NOTIFY_TO,
-        reply_to: email,
-        subject: `New waitlist signup: ${email}`,
-        html,
-      }),
     });
 
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      console.error('[waitlist-notify] Resend error', res.status, detail);
-      return new Response(JSON.stringify({ error: 'resend failed', status: res.status }), {
+    if (!result.success) {
+      console.error('[waitlist-notify] send failed', result.error);
+      return new Response(JSON.stringify({ error: 'resend failed', detail: result.error }), {
         status: 502,
         headers: { 'Content-Type': 'application/json' },
       });

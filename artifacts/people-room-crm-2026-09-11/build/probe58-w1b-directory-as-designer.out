@@ -1,0 +1,112 @@
+Pager usage is off.
+BEGIN
+SET
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+=== people_directory rows by role ===
+  role   | count 
+---------+-------
+ client  |     7
+ contact |    49
+ lead    |     5
+ sub     |     1
+(4 rows)
+
+=== the contact branch, split by entity_kind (PR-g mixed list) ===
+ entity_kind | count 
+-------------+-------
+ company     |    21
+ person      |    28
+(2 rows)
+
+=== Dana Kowalski: ONE row, two seats, four words ===
+ display_name  |  role   | seat_count | reach_state | consent_status | paper_state |       rule        
+---------------+---------+------------+-------------+----------------+-------------+-------------------
+ Dana Kowalski | contact |          2 | field_link  | granted        | lapsed      | (no rule on file)
+(1 row)
+
+   project_name    | party_kind |   trade    |  stage   | on_site_from | on_site_to | consent_status | reach_state | paper_state 
+-------------------+------------+------------+----------+--------------+------------+----------------+-------------+-------------
+ Lindqvist kitchen | sub        | electrical | warranty | 2025-05-05   | 2025-10-15 | granted        | on_paper    | lapsed
+ Okonkwo residence | sub        | electrical | active   | 2026-10-19   | 2027-06-30 | granted        | field_link  | lapsed
+(2 rows)
+
+=== the four paper words, on real firms ===
+      display_name      | paper_state 
+------------------------+-------------
+ Marrow & Sons          | current
+ Northgate Electric     | lapsed
+ Lakeshore Painting Co. | lapses_soon
+ Great Northern Bank    | not_on_file
+(4 rows)
+
+=== every recorded rule, as one line of words ===
+   display_name   |                                            contact_rule_summary                                             
+------------------+-------------------------------------------------------------------------------------------------------------
+ Carol Nyström    | Never text. Use: email, mobile.
+ Chidi Okonkwo    | Use: email, mobile.
+ Frank Bauer      | Never text. Do not use: after_hours, ap_email, dispatch, email, mobile, office. Write Rosa Delgado instead.
+ Ingrid Halvorsen | Never text. Do not use: mobile. Use: email, office.
+ Ray Thao         | Never text. Use: email, office, portal_311. Hours: Weekdays 08:00 to 16:00.
+ Sam Rowe         | Never text. Use: email, mobile.
+(6 rows)
+
+=== consent, from the record only (R-AY) ===
+ display_name  | consent_status 
+---------------+----------------
+ Amara Osei    | granted
+ Dana Kowalski | granted
+ Erin Sato     | granted
+ Luis Ochoa    | granted
+ Ngozi Eze     | granted
+ Pete Rusk     | opted_out
+ Joe Wozniak   | pending
+(7 rows)
+
+=== v_access_grants, by tier ===
+      tier      | count | open 
+----------------+-------+------
+ client_account |     3 |    3
+ field_link     |     6 |    6
+ studio_member  |     3 |    3
+(3 rows)
+
+ grant_ids_that_look_like_a_bearer_token 
+-----------------------------------------
+                                       0
+(1 row)
+
+=== F-08 Erin Sato: the field link ends with the engagement (PR-d/PR-l) ===
+       name        | link_ends  | on_site_to | warranty_until 
+-------------------+------------+------------+----------------
+ Lindqvist kitchen | 2026-11-22 | 2025-10-15 | 2026-11-21
+ Okonkwo residence | 2027-08-14 | 2027-08-13 | 
+(2 rows)
+
+ROLLBACK
+BEGIN
+SET
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000001", "role" : "authenticated"}
+(1 row)
+
+=== what a CLIENT account reads (PR-w) ===
+        object        | count 
+----------------------+-------
+ authority_grants     |     0
+ compliance_documents |     0
+ directory_seats      |     0
+ site_access_cards    |     0
+(4 rows)
+
+ROLLBACK
+BEGIN
+SET
+=== what anon reads: refused at the GRANT, before any policy runs ===
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe58-w1b-directory-as-designer.sql:74: ERROR:  permission denied for table project_site_access_cards
+HINT:  Grant the required privileges to the current role with: GRANT SELECT ON public.project_site_access_cards TO anon;
+ROLLBACK

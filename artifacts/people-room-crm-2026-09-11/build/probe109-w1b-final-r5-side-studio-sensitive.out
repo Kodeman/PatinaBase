@@ -1,0 +1,53 @@
+Pager usage is off.
+BEGIN
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+SET
+SET
+ comember_of_the_designer | member_of_local_dev_studio 
+--------------------------+----------------------------
+ t                        | f
+(1 row)
+
+=== org-scoped tables: correctly closed ===
+                o                 | count 
+----------------------------------+-------
+ studio_compliance_documents      |     0
+ people_directory contacts branch |     0
+(2 rows)
+
+=== designer-scoped (is_studio_comember) tables: open ===
+             o             | count 
+---------------------------+-------
+ project_party_authority   |    11
+ people_directory_seats    |    31
+ project_site_access_cards |     1
+(3 rows)
+
+=== the site access card itself ===
+              project_id              |  lockbox_version   |           alarm_ref           |                       site_hours                        |       key_holder_engagement_id       | emergency_lines | told 
+--------------------------------------+--------------------+-------------------------------+---------------------------------------------------------+--------------------------------------+-----------------+------
+ d0e00000-0000-0000-0000-00000000000a | Lockbox, version 3 | Sentry Alarm, account 88-4412 | Weekdays 07:00 to 17:00. No Saturday work before 09:00. | d0e30000-0000-0000-0000-000000000006 |               6 |    4
+(1 row)
+
+=== and the authority grants, with their money thresholds ===
+    scope     | threshold_cents | prepares_only 
+--------------+-----------------+---------------
+ change_order |          250000 | f
+ change_order |                 | f
+ change_order |                 | f
+ change_order |                 | t
+ draw_certify |                 | f
+ draw_certify |                 | f
+ key          |                 | f
+ money        |          250000 | f
+ money        |                 | f
+ selections   |                 | f
+ site_access  |                 | f
+(11 rows)
+
+=== can they WRITE, too? ===
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe109-w1b-final-r5-side-studio-sensitive.sql:50: NOTICE:  UPDATE landed on 1 row(s) — write is open as well
+DO
+ROLLBACK

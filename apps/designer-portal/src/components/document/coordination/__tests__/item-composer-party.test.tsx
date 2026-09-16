@@ -58,9 +58,8 @@ jest.mock('@/components/document/roster/rolodex-picker', () => ({
   ),
 }));
 
-let mockCallSheetOn = false;
 jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: () => ({ value: mockCallSheetOn, isLoading: false }),
+  useFeatureFlag: () => ({ value: true, isLoading: false }),
 }));
 
 // ── fixture ──────────────────────────────────────────────────────────────────
@@ -128,40 +127,24 @@ function writeAndPublish() {
 }
 
 beforeEach(() => {
-  mockCallSheetOn = false;
   createMutate.mockReset().mockResolvedValue({ id: 'item-1' });
 });
 
 // ── the frozen contract ──────────────────────────────────────────────────────
 
-describe('ItemComposer court party — payload parity across the flag', () => {
-  it('the mini-row pick and the <select> pick submit byte-identical payloads', async () => {
-    // FLAG OFF — the shipped <select>.
-    mockCallSheetOn = false;
-    const off = render(<ItemComposer {...baseProps(TWO_GCS)} />);
-    pickGcCourt();
-    fireEvent.change(screen.getByRole('combobox'), {
-      target: { value: 'party-nolan' },
-    });
-    writeAndPublish();
-    await waitFor(() => expect(createMutate).toHaveBeenCalledTimes(1));
-    const offPayload = createMutate.mock.calls[0][0];
-    off.unmount();
-
-    createMutate.mockReset().mockResolvedValue({ id: 'item-1' });
-
-    // FLAG ON — the PartyMiniRow radio list over the same array.
-    mockCallSheetOn = true;
+describe('ItemComposer court party — the payload the court writes', () => {
+  it('the mini-row pick submits the court and the party it names', async () => {
+    // The `call-sheet` flag is retired (rulings §6): the <select> that stood
+    // behind it is gone, and the radio list is the only court picker. What the
+    // payload carries is unchanged, and that is what this pins.
     render(<ItemComposer {...baseProps(TWO_GCS)} />);
     pickGcCourt();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: /Nolan Brothers/ }));
     writeAndPublish();
     await waitFor(() => expect(createMutate).toHaveBeenCalledTimes(1));
-    const onPayload = createMutate.mock.calls[0][0];
 
-    expect(onPayload).toEqual(offPayload);
-    expect(onPayload).toEqual(
+    expect(createMutate.mock.calls[0][0]).toEqual(
       expect.objectContaining({
         projectId: 'proj-1',
         designerClientId: 'dc-1',
@@ -172,29 +155,15 @@ describe('ItemComposer court party — payload parity across the flag', () => {
     );
   });
 
-  it('carries the same payload when nothing is picked (the Unassigned path)', async () => {
-    mockCallSheetOn = false;
-    const off = render(<ItemComposer {...baseProps(TWO_GCS)} />);
-    pickGcCourt();
-    writeAndPublish();
-    await waitFor(() => expect(createMutate).toHaveBeenCalledTimes(1));
-    const offPayload = createMutate.mock.calls[0][0];
-    off.unmount();
-
-    createMutate.mockReset().mockResolvedValue({ id: 'item-1' });
-
-    mockCallSheetOn = true;
+  it('carries a null party when nothing is picked (the Unassigned path)', async () => {
     render(<ItemComposer {...baseProps(TWO_GCS)} />);
     pickGcCourt();
     writeAndPublish();
     await waitFor(() => expect(createMutate).toHaveBeenCalledTimes(1));
-
-    expect(createMutate.mock.calls[0][0]).toEqual(offPayload);
-    expect(offPayload.courtPartyId).toBeNull();
+    expect(createMutate.mock.calls[0][0].courtPartyId).toBeNull();
   });
 
   it('re-picking the chosen mini-row clears it, the way Unassigned did', async () => {
-    mockCallSheetOn = true;
     render(<ItemComposer {...baseProps(TWO_GCS)} />);
     pickGcCourt();
     const row = () => screen.getByRole('radio', { name: /Nolan Brothers/ });
@@ -254,14 +223,7 @@ describe('ItemComposer court party — the rules that did not move', () => {
     expect(deleteMutate).not.toHaveBeenCalled();
   });
 
-  it('auto-selects the sole match in BOTH modes', async () => {
-    mockCallSheetOn = false;
-    const off = render(<ItemComposer {...baseProps([NOLAN])} />);
-    pickGcCourt();
-    expect(screen.getByRole('combobox')).toHaveValue('party-nolan');
-    off.unmount();
-
-    mockCallSheetOn = true;
+  it('auto-selects the sole match', async () => {
     render(<ItemComposer {...baseProps([NOLAN])} />);
     pickGcCourt();
     expect(screen.getByRole('radio', { name: /Nolan Brothers/ })).toHaveAttribute(
@@ -270,38 +232,26 @@ describe('ItemComposer court party — the rules that did not move', () => {
     );
   });
 
-  it('renders the same empty-court sentence in BOTH modes', () => {
+  it('renders the empty-court sentence', () => {
     // Verbatim, including the missing space after the kind — a pre-existing JSX
-    // whitespace quirk in this sentence. Pinning the exact string is the point:
-    // the two modes read from ONE copy path, so they cannot drift apart, and a
-    // deliberate fix has to move both at once.
+    // whitespace quirk in this sentence.
     const copy = 'No GCon this project yet — it’ll wait in the GC court.';
-
-    mockCallSheetOn = false;
-    const off = render(<ItemComposer {...baseProps([])} />);
-    pickGcCourt();
-    expect(screen.getByText(copy)).toBeInTheDocument();
-    off.unmount();
-
-    mockCallSheetOn = true;
     render(<ItemComposer {...baseProps([])} />);
     pickGcCourt();
     expect(screen.getByText(copy)).toBeInTheDocument();
   });
 
-  it('leaves the flag-off court block a plain <select> — no radios, no rolodex', () => {
-    mockCallSheetOn = false;
+  it('leaves no <select> behind — the court block is radios and a way out', () => {
     render(<ItemComposer {...baseProps(TWO_GCS)} />);
     pickGcCourt();
-    expect(screen.getByRole('combobox')).toBeInTheDocument();
-    expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: 'Someone new' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('radio').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Someone new' })).toBeInTheDocument();
   });
 });
 
 describe('ItemComposer court party — the way out to the rolodex', () => {
   it('opens the picker pre-scoped to the court, and adopts the party it adds', async () => {
-    mockCallSheetOn = true;
     const props = baseProps(TWO_GCS);
     const { rerender } = render(<ItemComposer {...props} />);
     pickGcCourt();
@@ -331,7 +281,6 @@ describe('ItemComposer court party — the way out to the rolodex', () => {
   });
 
   it('scopes the picker to the vendor court when the vendor court is picked', () => {
-    mockCallSheetOn = true;
     render(
       <ItemComposer
         {...baseProps([party({ id: 'v1', party_kind: 'vendor', display_name: 'Ainsley Textiles' })])}

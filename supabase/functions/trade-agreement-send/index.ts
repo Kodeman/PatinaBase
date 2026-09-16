@@ -256,6 +256,7 @@ const deps: TradeAgreementSendDeps = {
       notificationType: "trade_agreement",
       templateId: "trade-agreement",
       metadata: opts.metadata,
+      organizationId: opts.organizationId ?? undefined,
     });
     return {
       success: result.success,

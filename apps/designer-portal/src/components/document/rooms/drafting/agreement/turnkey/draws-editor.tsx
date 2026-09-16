@@ -37,7 +37,7 @@ import { bpsToPercent, percentToBps, turnkeyMoney } from "./money";
 import type { TurnkeyEditorProps } from "./pricing-basis-editor";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 const CELL = "font-mono text-[11px] text-[var(--color-charcoal)]";
 
 /**

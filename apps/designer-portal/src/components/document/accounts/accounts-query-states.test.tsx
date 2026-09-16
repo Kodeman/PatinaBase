@@ -12,6 +12,7 @@ import { AccountsBook } from './accounts-book';
 import { InvoiceFolio } from './invoice-folio';
 
 jest.mock('@patina/supabase', () => ({
+  useEmailDelivery: () => ({ byRef: {}, isLoading: false, isError: false }),
   useArAging: jest.fn(),
   useDesignerTeachingStats: jest.fn(),
   useEarnings: jest.fn(),

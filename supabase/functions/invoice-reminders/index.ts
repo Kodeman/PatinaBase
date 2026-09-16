@@ -65,7 +65,7 @@ import {
   invoiceForClause,
   invoiceSubjectName,
 } from '../_shared/invoice-subject.ts';
-import { letterPortalUrl } from '../_shared/invoice-links.ts';
+import { invoiceLettersMustHold, letterPortalUrl } from '../_shared/invoice-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -236,6 +236,9 @@ async function escalateToDesigner(
         notificationType: 'invoice_ar_flagged',
         category: 'operational',
         templateId: 'invoice-ar-escalation',
+        // No `ref`: this is a notice TO the studio about the invoice, not the
+        // invoice's delivery record. The A/R page reads the latest row per
+        // invoice, so a delivered escalation would mask a bounced client copy.
         metadata: {
           invoice_id: invoice.id,
           project_id: invoice.project_id,
@@ -284,12 +287,58 @@ Deno.serve(async (_req: Request) => {
   }
 
   const invoices = (data ?? []) as unknown as InvoiceRow[];
+
+  // AN INVOICE MID-PAYMENT IS NOT DUNNED (W4 r6 MAJOR-1).
+  //
+  // `ensure_invoice_link` answers NULL while a Checkout is in flight, and for
+  // 24 hours after an attempt whose return rode `/pay/return/<nonce>`
+  // finalized, rather than pulling the address out from under the payer. A
+  // reminder built on that NULL carries the signed-in fallback instead of a
+  // pay address. Holding the letter is the honest answer: someone who is
+  // paying this invoice right now — or who just watched a card decline and is
+  // about to retry from the address in their inbox — is not someone to chase.
+  // They re-enter the scan when the window closes.
+  //
+  // THE SCAN ASKS THE GUARD ITSELF (R-BZ, W4 r10 MAJOR-1). Re-listing three of
+  // its states here is how this rail came to disagree with it: a declined card
+  // was dunned inside the day, with the letterbox address, to an account-less
+  // payer. `invoice_letters_must_hold` is that one predicate, batched.
+  const heldInvoiceIds = new Set<string>();
+  for (let i = 0; i < invoices.length; i += 200) {
+    const ids = invoices.slice(i, i + 200).map((row) => row.id);
+    const { held, readable } = await invoiceLettersMustHold(admin, ids);
+    if (!readable) {
+      // Fail closed for the whole pass: an unread predicate cannot tell us
+      // which invoices are mid-payment, and the cron comes back in an hour.
+      console.error('invoice-reminders: checkout-attempt scan failed');
+      return new Response(
+        JSON.stringify({ error: 'checkout_attempt_scan_failed' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    for (const id of held) heldInvoiceIds.add(id);
+  }
+
+  if (heldInvoiceIds.size > 0) {
+    // One line, naming why: these ids are not "skipped", they are being paid.
+    console.log(
+      'invoice-reminders: holding — mid-payment or inside the return window (invoice_letter_must_hold)',
+      [...heldInvoiceIds].join(','),
+    );
+  }
+
   let sent = 0;
   let escalated = 0;
   let notDue = 0;
   let skipped = 0;
+  let heldMidPayment = 0;
 
   for (const invoice of invoices) {
+    if (heldInvoiceIds.has(invoice.id)) {
+      heldMidPayment++;
+      continue;
+    }
+
     const stage = invoice.reminder_count;
     const overdueDays = daysPastDue(invoice.due_date, now);
 
@@ -346,10 +395,13 @@ Deno.serve(async (_req: Request) => {
 
     // K1: the reminder carries the invoice's own address — `/pay/<token>`
     // opens for anyone holding it, signed in or not. A null (draft, void, or a
-    // failed mint) falls back to today's signed-in form rather than a broken
-    // address. The link is re-asked per letter and never cached, so a
-    // Regenerate is honored by the next reminder. metadata.deep_link below
-    // stays `/invoices/<id>`: it routes the iOS inbox by id (I2).
+    // failed mint) falls back to the signed-in `/?invoice=<id>` letterbox — a
+    // page that exists, which `/invoices/<id>` is not (W4 r6 MAJOR-1). The one
+    // null this scan would otherwise meet routinely, a Checkout standing on
+    // the address, is held above instead of written to. The link is re-asked
+    // per letter and never cached, so a Regenerate is honored by the next
+    // reminder. metadata.deep_link below stays `/invoices/<id>`: it routes the
+    // iOS inbox by id (I2).
     const portalUrl = await letterPortalUrl(admin, CLIENT_PORTAL_URL, invoice.id);
 
     const rendered = STAGE_BUILDERS[stage]({
@@ -376,6 +428,9 @@ Deno.serve(async (_req: Request) => {
         notificationType: 'invoice_reminder',
         category: 'operational',
         templateId: STAGE_TEMPLATE_IDS[stage],
+        ref: { type: 'invoice', id: invoice.id },
+        // R1 — a homeowner replying to a reminder reaches her designer.
+        replyTo: invoice.designer?.email ?? undefined,
         metadata: {
           invoice_id: invoice.id,
           project_id: invoice.project_id,
@@ -472,7 +527,7 @@ Deno.serve(async (_req: Request) => {
   }
 
   return new Response(
-    JSON.stringify({ scanned: invoices.length, sent, escalated, notDue, skipped }),
+    JSON.stringify({ scanned: invoices.length, sent, escalated, notDue, skipped, heldMidPayment }),
     { headers: { 'Content-Type': 'application/json' } },
   );
 });

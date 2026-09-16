@@ -12,6 +12,8 @@
  * R7 — Agreement · Part · Library · Template · Addendum.
  */
 
+import type { AgreementPart } from "./agreement";
+
 export const AGREEMENT_PART_COPY = {
   /** A ceiling part kept with no figure. NULL means uncapped (F-2), never $0. */
   ceilingUncapped: "No ceiling — professional time is billed as it is worked.",
@@ -38,21 +40,6 @@ export const AGREEMENT_PART_COPY = {
   notYetSet: "Not yet set",
   /** Attachment acknowledgment — display only in Wave 1. */
   attachmentAcknowledgment: "I received this",
-  /**
-   * R24 — the act that takes a composed draft back to the seven facets. It is
-   * the studio's own word for un-composing, and it is offered only inside the
-   * Contract Room, only on a draft.
-   */
-  returnToFacets: "Return to the seven facets",
-  /**
-   * R17(b) / R24 — what the seven-facet room says to a co-member the
-   * `agreement-parts` flag has not reached, standing over an agreement someone
-   * else composed. Her Save cannot land (00575 refuses it, and the write grant
-   * on the money row is gone), so the room says so BEFORE she retypes seven
-   * facets, and names the way back.
-   */
-  composedElsewhere:
-    "This agreement is composed from parts. It is edited in the Contract Room with parts on, where it can also be returned to the seven facets.",
 } as const;
 
 /** The retainer's activation sentence, by policy. */
@@ -218,4 +205,176 @@ export function designBuildAllowanceRule(
       ? " Anything under it stays with the studio."
       : " Anything under it comes back to you.";
   return `${over}${under}`;
+}
+
+/* ── THE CONSEQUENCE SENTENCE (synthesis §5) ──────────────────────────────
+   What the client receives, said in one sentence, composed from the parts
+   that are actually written. It sits above the terminal act in every state —
+   on the agreement's own page and again in the send sheet — and a later wave
+   prints it on the homeowner's door, which is why it lives here and not in
+   either renderer (FS-22). ─────────────────────────────────────────────── */
+
+const COUNT_WORDS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+  "twenty",
+] as const;
+
+/** A count as a sentence says it. Past twenty a paper writes the figure. */
+export function agreementCountWord(n: number): string {
+  const whole = Math.trunc(n);
+  return whole >= 1 && whole <= 20 ? COUNT_WORDS[whole]! : String(whole);
+}
+
+/** Money in a sentence carries its cents — `$5,000.00`, not `$5,000` — because
+ *  the same figure is read against an invoice. */
+function sentenceMoney(cents: number, currency: string): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(
+    cents / 100,
+  );
+}
+
+function writtenCents(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  const cents = Math.round(parsed);
+  // R21 — a figure nobody typed is not a figure.
+  return cents > 0 ? cents : null;
+}
+
+function hasText(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function rows(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (row): row is Record<string, unknown> => !!row && typeof row === "object",
+  );
+}
+
+/**
+ * What one part is CALLED inside the sentence — `the services`, `the $5,000.00
+ * retainer`, `the monthly billing cadence`, `the Concept fee of $2,400.00`.
+ *
+ * `null` when the part is unwritten, and an unwritten part is never named: the
+ * sentence says what the client receives, and a part with nothing in it is not
+ * something received.
+ */
+export function agreementPartNounPhrase(
+  part: AgreementPart,
+  currency: string,
+): string | null {
+  const payload = part.payload ?? {};
+  const title = part.title.trim();
+  if (!title) return null;
+  const named = title.toLowerCase();
+
+  if (part.kind === "clause" || part.kind === "attachment") {
+    return hasText(payload.body) ? `the ${named}` : null;
+  }
+  if (part.kind === "list") {
+    return rows(payload.items).some((item) => hasText(item.text)) ||
+      (Array.isArray(payload.items) && payload.items.some(hasText))
+      ? `the ${named}`
+      : null;
+  }
+  if (part.kind !== "schedule") return null;
+
+  switch (part.variant) {
+    case "rate_card":
+      return rows(payload.roles).some(
+        (role) => hasText(role.roleName) && writtenCents(role.hourlyRateCents),
+      )
+        ? `the ${named}`
+        : null;
+    case "ceiling":
+    case "retainer": {
+      const cents = writtenCents(payload.cents);
+      return cents === null
+        ? null
+        : `the ${sentenceMoney(cents, currency)} ${named}`;
+    }
+    case "flat": {
+      const cents = writtenCents(payload.cents);
+      // A fee keeps its authored title — "the Concept fee of $2,400.00" —
+      // because the fee's name is what the phase is called, not a category.
+      return cents === null
+        ? null
+        : `the ${title} of ${sentenceMoney(cents, currency)}`;
+    }
+    case "cadence":
+      return hasText(payload.cadence)
+        ? `the ${agreementCadenceText(String(payload.cadence))} ${named}`
+        : null;
+    case "per_phase":
+      return rows(payload.phases).some((phase) => hasText(phase.label))
+        ? `the ${named}`
+        : null;
+    case "procurement":
+      return writtenCents(payload.depositPercent) === null
+        ? null
+        : `the ${named}`;
+    default:
+      return null;
+  }
+}
+
+/** `a`, `a and b`, `a, b and c` — no serial comma, as the sentence is written. */
+function joinPhrases(phrases: string[]): string {
+  if (phrases.length <= 1) return phrases[0] ?? "";
+  return `${phrases.slice(0, -1).join(", ")} and ${phrases[phrases.length - 1]}`;
+}
+
+/**
+ * Synthesis §5's consequence sentence, composed from the composition itself.
+ *
+ * The pronoun is `their` in every case: a name carries no gender, and the
+ * unnamed case was ruled `their` already, so one sentence covers both.
+ */
+export function agreementConsequenceSentence(input: {
+  recipientName?: string;
+  parts: AgreementPart[];
+  currency: string;
+}): string {
+  const who = input.recipientName?.trim()
+    ? input.recipientName.trim()
+    : "The client";
+  const closing =
+    "nothing is billed and no work is authorized until the studio countersigns.";
+  const phrases = input.parts
+    // R10 — an attestation is the studio's credential, never the client's
+    // reading, and a hidden part is not received.
+    .filter(
+      (part) => part.clientVisible !== false && part.kind !== "attestation",
+    )
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((part) => agreementPartNounPhrase(part, input.currency))
+    .filter((phrase): phrase is string => phrase !== null);
+
+  if (phrases.length === 0) {
+    return `${who} receives nothing this agreement has written yet; ${closing}`;
+  }
+  const parts = phrases.length === 1 ? "part" : "parts";
+  return `${who} receives the ${agreementCountWord(phrases.length)} ${parts} this agreement has written — ${joinPhrases(phrases)} — and their signature preserves consent; ${closing}`;
 }

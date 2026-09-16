@@ -12,7 +12,7 @@ import { readPercent, usePercentField } from "./percent-field";
 import type { ScheduleEditorProps } from "./index";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 export function CostPlusEditor({
   payload,

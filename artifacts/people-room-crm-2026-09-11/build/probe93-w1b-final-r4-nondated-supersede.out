@@ -1,0 +1,40 @@
+BEGIN
+INSERT 0 1
+INSERT 0 1
+=== word BEFORE, on the record the studio holds ===
+ word_before 
+-------------
+ lapsed
+(1 row)
+
+SET
+                              set_config                               
+-----------------------------------------------------------------------
+ {"sub":"a0000000-0000-0000-0000-000000000003","role":"authenticated"}
+(1 row)
+
+              acting_as               | is_member | is_admin 
+--------------------------------------+-----------+----------
+ a0000000-0000-0000-0000-000000000003 | t         | t
+(1 row)
+
+=== ACT 1: record an UNDATED successor of the same non-dated type, gates carried ===
+INSERT 0 1
+=== ACT 2: retire the expired gating waiver with it ===
+UPDATE 1
+=== word AFTER, and the record that is still on file ===
+ word_after 
+------------
+ current
+(1 row)
+
+                  id                  |        doc_type         | expires_on |     blocks     | retired 
+--------------------------------------+-------------------------+------------+----------------+---------
+ dd000000-0000-4000-8000-0000000000a1 | lien_waiver_conditional | 2026-08-03 | {draw,payment} | t
+ dd000000-0000-4000-8000-0000000000a2 | lien_waiver_conditional |            | {draw,payment} | f
+(2 rows)
+
+=== the same act with a coi_gl is REFUSED (the dated-type control) ===
+psql:probe93-w1b-final-r4-nondated-supersede.sql:50: NOTICE:  control: undated coi_gl refused -> new row for relation "studio_compliance_documents" violates check constraint "studio_compliance_documents_dated_expiry_check"
+DO
+ROLLBACK

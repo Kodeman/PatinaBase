@@ -1,0 +1,10 @@
+{
+  "claireAfterArchive": {
+    "id": "d0e10000-0000-0000-0000-000000000020",
+    "archived_at": "2026-09-14T07:34:31.412593+00:00"
+  },
+  "claireAfterRestore": {
+    "id": "d0e10000-0000-0000-0000-000000000020",
+    "archived_at": null
+  }
+}

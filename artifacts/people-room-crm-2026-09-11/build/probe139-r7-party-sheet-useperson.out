@@ -1,0 +1,46 @@
+BEGIN
+CREATE FUNCTION
+GRANT
+ assume_user 
+-------------
+ 
+(1 row)
+
+=== the seats the Call Sheet chevron passes as partyId (stamped seats on the live job) ===
+               party_id               | party_kind |   display_name   | carded | the_record_says 
+--------------------------------------+------------+------------------+--------+-----------------
+ d0e30000-0000-0000-0000-000000000016 | sub        | Amara Osei       | t      | granted
+ d0e30000-0000-0000-0000-000000000011 | sub        | Dana Kowalski    | t      | granted
+ d0e30000-0000-0000-0000-000000000008 | gc         | Erin Sato        | t      | granted
+ d0e30000-0000-0000-0000-000000000015 | sub        | Frank Bauer      | t      | 
+ d0e30000-0000-0000-0000-000000000013 | sub        | Ingrid Halvorsen | t      | 
+ d0e30000-0000-0000-0000-000000000017 | sub        | Jim Lindgren     | t      | 
+(6 rows)
+
+=== usePerson(seat_id, role): does people_directory hold a row at that person_id? ===
+   display_name   |  party_kind  | rows_useperson_would_get 
+------------------+--------------+--------------------------
+ Amara Osei       | sub          |                        0
+ Dana Kowalski    | sub          |                        0
+ Erin Sato        | gc           |                        0
+ Frank Bauer      | sub          |                        0
+ Ingrid Halvorsen | sub          |                        0
+ Jim Lindgren     | sub          |                        0
+ Joe Wozniak      | sub          |                        0
+ Jonah Feld       | photographer |                        0
+(8 rows)
+
+=== the worst case: Pete Rusk, whose record says opted_out ===
+               seat_id                | display_name |  phone_e164  | record_word | sheet_finds_a_row 
+--------------------------------------+--------------+--------------+-------------+-------------------
+ d0e40000-0000-0000-0000-000000000012 | Pete Rusk    | +16125550112 | opted_out   |                 0
+ d0e30000-0000-0000-0000-000000000012 | Pete Rusk    | +16125550112 | opted_out   |                 0
+(2 rows)
+
+=== and what the card row (the one the view DOES return) carries in status_raw ===
+              person_id               |  role   | display_name | status_raw | consent_status 
+--------------------------------------+---------+--------------+------------+----------------
+ d0e10000-0000-0000-0000-000000000012 | contact | Pete Rusk    | active     | opted_out
+(1 row)
+
+ROLLBACK

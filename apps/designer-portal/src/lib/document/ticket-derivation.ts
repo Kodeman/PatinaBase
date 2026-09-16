@@ -27,6 +27,7 @@
  */
 
 import type { SectionKey } from './desk-derivation';
+import { DAY_MONTH_FORMAT, WEEKDAY_FORMAT } from './dates';
 import { paperRegionsForSection, type DocumentIndexKey } from './document-index';
 import type { MoneyLadder } from './money-ladder';
 import { money } from './project-commerce';
@@ -338,12 +339,10 @@ function calendarDaysUntil(iso: string, now: Date): number | null {
   return Math.round((thenMidnight - nowMidnight) / DAY_MS);
 }
 
-const fmtWeekdayDate = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  }).format(asLocalDate(iso));
+const fmtWeekdayDate = (iso: string) => {
+  const day = asLocalDate(iso);
+  return `${WEEKDAY_FORMAT.format(day)}, ${DAY_MONTH_FORMAT.format(day)}`;
+};
 
 interface PieceCounts {
   ordered: number;

@@ -1,0 +1,48 @@
+Pager usage is off.
+BEGIN
+SELECT 1
+GRANT
+SET
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+--- 1. a real, recorded opt-out for a fresh number ---
+ recorded 
+----------
+ f
+(1 row)
+
+--- 2. an UNCARDED seat carrying that number ---
+INSERT 0 1
+                  id                  |  phone_e164  | legacy_column | the_record 
+--------------------------------------+--------------+---------------+------------
+ e329d308-59b2-430a-b6d5-a6fc901d3ebb | +15005550001 | not_asked     | opted_out
+(1 row)
+
+--- 3. BEFORE: what the room says ---
+   display_name    |     phone      | consent_status | reach_state 
+-------------------+----------------+----------------+-------------
+ P214 Uncarded Sub | (500) 555-0001 | opted_out      | on_paper
+(1 row)
+
+--- 4. move the number (the exploit shape: phone only) ---
+psql:artifacts/people-room-crm-2026-09-11/build/probe214-w1b-r14-optout-phone-freeze.sql:49: NOTICE:  REFUSED: consent_opted_out_phone_frozen
+DO
+--- 5. AFTER: what the room says now ---
+   display_name    |     phone      | consent_status | reach_state 
+-------------------+----------------+----------------+-------------
+ P214 Uncarded Sub | (500) 555-0001 | opted_out      | on_paper
+(1 row)
+
+--- 6. the record for the old number is still on the books ---
+ channel_value |  status   
+---------------+-----------
+ +15005550001  | opted_out
+(1 row)
+
+--- 7. control: a CARDED, granted seat's number still moves freely ---
+psql:artifacts/people-room-crm-2026-09-11/build/probe214-w1b-r14-optout-phone-freeze.sql:73: NOTICE:  CONTROL: an unrefused seat's number still moves
+DO
+ROLLBACK

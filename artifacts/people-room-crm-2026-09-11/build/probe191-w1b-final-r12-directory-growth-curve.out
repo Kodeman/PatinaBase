@@ -1,0 +1,12 @@
+Pager usage is off.
+BEGIN
+SET
+psql:probe191-w1b-final-r12-directory-growth-curve.sql:38: NOTICE:  cards=49 seats=31 -> SELECT * : 62 rows in 00:00:00.114716
+psql:probe191-w1b-final-r12-directory-growth-curve.sql:38: NOTICE:  cards=249 seats=231 -> SELECT * : 462 rows in 00:00:01.116432
+psql:probe191-w1b-final-r12-directory-growth-curve.sql:38: NOTICE:  cards=449 seats=431 -> SELECT * : 862 rows in 00:00:02.131564
+psql:probe191-w1b-final-r12-directory-growth-curve.sql:38: NOTICE:  cards=649 seats=631 -> SELECT * : 1262 rows in 00:00:03.164708
+psql:probe191-w1b-final-r12-directory-growth-curve.sql:38: NOTICE:  cards=849 seats=831 -> SELECT * : 1662 rows in 00:00:04.200466
+psql:probe191-w1b-final-r12-directory-growth-curve.sql:38: NOTICE:  cards=1249 seats=1231 -> SELECT * : 2462 rows in 00:00:06.200243
+psql:probe191-w1b-final-r12-directory-growth-curve.sql:38: NOTICE:  cards=1649 seats=1631 -> SELECT * : 3262 rows in 00:00:08.183446
+DO
+ROLLBACK

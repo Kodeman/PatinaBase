@@ -10846,3 +10846,392 @@ The sheet also carries the exact CSS for R139's four action tiers (§A5), the co
 Never re-edited by a build lane: a lane that needs the sheet changed reports it and it is amended here, in the open, the way R126 and I107 were.
 
 *Entries add: I153 · last id = I153*
+
+### R143 · The Desk is a hybrid — a claim takes a card, a quiet job takes a line — 2026-09-09
+
+**Ruled by Kody, 2026-09-09** (**D1**, **D2**, **D5**, **R5**; against the panel proposal
+*Three Cards for the Desk*, `artifacts/desk-cards-2026-09-09/three-cards-for-the-desk.html`). This
+**amends I150** (`Wave B2 — the ticket everywhere, and the Desk roster`, 2026-08-26), which ruled the
+four-up folio grid into one stage-grouped roster, *one line per live job … never a card*.
+
+The amended rule, in full: **one line per job in the at-rest ledger; a job with a claim on the studio's
+hand takes a Claim card.** The predicate is the one the roster already computes — `mark !== null` in
+`desk-roster-derivation.ts`, which is every job carrying a need, urgent or quiet. In-motion chips and
+quiet jobs stay lines. Nothing folds on first paint; the headings still never fold; the ledger half is
+still grouped under the seven stage plates in the paper's own order.
+
+What did **not** change, and why the amendment is narrow rather than a reversal: the density rule that
+made I150 right is still the rule for the body of the list. At 16 jobs the Desk is about five cards over
+eleven rows; at 45, about six over thirty-nine. The card is the *emphasis* granted to a job with a claim,
+not a container granted to every job — fifteen equal cards was the shape I150 correctly refused, and this
+ruling does not bring it back. Two things the row could not give are what buy the card: a need sentence
+that wants two lines, and a name that wants an honest 44px target (the roster's name link was the Desk's
+one sub-44px hit area).
+
+**One rendering, not a third facet** (**D2**). No view switcher — a switcher is one step from the dashboard
+the vision refuses. The two facets stand and now compose over both halves: *Only what needs me* hides the
+ledger entirely (the cards already are what needs her); *By person* regroups **both** halves by assigned
+designer. Labels never change with state; `aria-pressed` carries it (IX18).
+
+**The Desk ranks, and prints its reason** (**D3**). Cards are ordered by custody band — the studio's own pen
+and overdue, then the studio's own pen, then with the client, then with the maker — oldest need date first
+within a band, ties broken on **name**, never on a UUID. This inverts the shipped stage-first sort for the
+card half only; the ledger half keeps stage-first. Ranking is a real claim on a surface that promises the
+studio won't notice Patina, so the reason is printed plainly on the card ("Overdue 6 days — …", the
+`overdueElapsedPhrase` form) — a wrong
+rank has to be legible and correctable, never mysterious.
+
+**Custody is stated, never inferred at render** (**D6**). Ten need kinds carried no `owner` — `damage_claim`,
+`proposal_declined`, `proposal_expired`, `lines_flagged`, `awaiting_inspection`, `schedule_conflict` (all
+three branches), `schedule_proposal`, `schedule_unconfigured`. All ten are filled as `'designer'` in the
+need table itself, which is where the rule that derived the need already knows the answer. The word on the
+card is one of four: `Your pen` · `With {first name}` (or `With the client` where the row carries no name
+we will print) · `With the maker` · `At rest`.
+
+**The day's line quotes the grid** (**D7**). Up to three lines, each naming one of the top three cards in
+rank order, plus the answered-client note as a fourth when one landed inside 24 hours. Before this the line
+selected by its own rule while the roster ordered by another — tolerable under stage plates, incoherent in
+a grid where position *is* the message.
+
+**The hit model** (**D10**). The link is scoped to the card's upper block — custody, name, person·phase, at
+least 88px — as an absolutely-positioned overlay belonging to the name link, so the whole block is one
+target. The act is a separate full-width 44px band below. Two clean targets per card, name then act, DOM
+order, no nesting, no roving tabindex.
+
+**The trade-off inside that ruling, taken deliberately.** The upper block **is** the link zone: the custody
+row and the person·phase line take `pointer-events: none` so a click anywhere in the block — including on
+those two lines — activates the name link. They are consequently **not selectable**. That is the cost, and
+it is paid knowingly: an 88px target that is only really 24px of it is the sub-44px defect the card exists
+to fix, and a block that looks clickable but swallows the click in its top-left corner is worse than a
+small honest link. What is preserved is the thing designers actually copy — **the need sentence below the
+block stays fully selectable**, as does every word in the at-rest ledger row, where the name link is an
+ordinary inline link and nothing overlays anything. The client's name also still stands, selectable, in
+the ledger half. Raising the two lines with `z-index` instead was rejected: it makes the middle of a
+supposedly-single target dead, which is the failure mode a user cannot see or explain.
+
+*Entries add: R143 · last id = R143*
+
+### R144 · One new token, and one only — the card edge — 2026-09-09
+
+**Ruled by Kody, 2026-09-09** (**D4**, **D4a**, **R5**; the accessibility critic's finding F1). This **amends
+the "no new token" rule** recorded in **I153** (`The house sheet has a home`, 2026-09-08), whose §A1 reads
+*"Do not add tokens."*
+
+A card is a component boundary where a row is not, so WCAG 1.4.11's 3:1 attaches to its edge. Measured on
+the shipped palette, nothing reaches it: `--hairline` on paper **1.20:1**, `--hairline-strong` composited
+**1.30:1**, `--doc-paper` on `--paper` **1.025:1**. D4's zero-shadow rule forbids the elevation that would
+otherwise carry the boundary, and `--elevation-sheet` is R126's, scoped to margin chips, the ledger sheet
+and the drawer — not spendable here. The exception is therefore granted, once and narrowly:
+
+**One boundary grey. `#8F8C88` — 3.21:1 on `--doc-paper`, 3.13:1 on `--color-off-white`.** Named
+`--card-edge` in `docs/design/house-sheet/SPEC.md` (following that file's convention) and
+`--color-card-edge` in `apps/designer-portal/src/app/globals.css` (following that file's `--color-*`
+convention). The two names are deliberate, not drift.
+
+**Claim cards only** (**D4a**). The at-rest ledger rows keep the existing hairline — they are rows, and a row
+is not a component boundary. Nothing else in either portal spends this token. It is an edge and never a
+word: it is not an `-ink` companion, it clears no text floor, and no letter is ever set in it.
+
+The dark companion is **`#77736E`** (3.19:1 on the sheet's `--paper #2A2622`), recorded in the house sheet's
+`@media (prefers-color-scheme: dark)` block. It is deliberately **not** written into the designer portal's
+`globals.css`: that file declares no `prefers-color-scheme` block and its `.dark` class redefines none of
+the paper, ink or hairline tokens, so a dark value there would be dead code claiming a dark surface the
+portal does not paint.
+
+*Entries add: R144 · last id = R144*
+
+### R145 · Lead contact — phone stands beside email, not inside the prose — 2026-09-09
+
+**Ruled by Kody, 2026-09-09.** A lead now carries `contact_phone` alongside `contact_email`, both optional,
+both plain fields on the row rather than words buried in the capture note. Where a phone number is present
+it follows the lead all the way into the client record when the lead is accepted — `designer_clients` gets
+its own `client_phone`, sourced from the lead, not re-typed by hand.
+
+Old leads whose phone number lives only in the brief's free-text prose are left exactly as they are. This
+is not an oversight: nothing distinguishes a phone digit-string in old prose from a suite number or a project
+code without a designer's eye on it, and a wrong auto-extraction would be worse than an empty field a
+designer can fill once, on sight.
+
+*Entries add: R145 · last id = R145*
+
+### R146 · Return to lead — an undo, not an editor's redo — 2026-09-09
+
+**Ruled by Kody, 2026-09-09.** A Discovery move can be walked back by any co-member of the studio, but only
+while it is still, honestly, an undo: the moment a proposal, folio content, a note, a thread, or a
+client match to the app exists on that relationship, "Move back to New Lead" refuses rather than silently
+discarding work someone else may be depending on. The reversal itself deletes the now-empty relationship row
+outright and says nothing to the client — there was never anything for the client to see.
+
+The action is offered in two places: on the Discovery folder itself, and as an Undo toast riding the
+"Accept · begin" moment, for the designer who wants the shortest possible path back out of a lead accepted
+by mistake.
+
+One thing is deliberately left undone. There is no stage-history ledger for leads — no record of who
+accepted, who reverted, or when — so a return-to-lead leaves no trace beyond the row's own current shape.
+That gap is real and is deferred, not resolved, by this ruling.
+
+*Entries add: R146 · last id = R146*
+
+### R147 · Editing people — the card knows who is allowed to touch it — 2026-09-09
+
+**Ruled by Kody, 2026-09-09.** Any studio member can edit the live rolodex cards and the field parties on a
+project, working from that person's own card. A captured client — someone with no Patina account yet — is
+edited by the studio too, but through "Edit details" on the People room, not through the household sheet's
+document surface. An account holder is different in kind: once someone has signed in, only they manage
+their own name, email, and phone, and the studio's card for them goes read-only on those fields. Makers stay
+read-only across the board — the studio does not edit a maker's own particulars from inside Patina.
+
+None of this rewrites history. A project's roster — who was on it, and as whom — is never altered by a
+later edit to a person's card; the card and the roster row it once populated are different things now.
+
+*Entries add: R147 · last id = R147*
+
+### R148 · Phone precedence — the account holder's own number wins — 2026-09-10
+
+**Ruled by Kody, 2026-09-10.** Wherever a person's phone number can come from two places — a
+studio-captured number on the lead or client record, and the number on that person's own Patina
+account — the account holder's own number wins, on every surface: the People directory, the Brief,
+and the household sheet. A studio-captured number stands only until an account exists to outrank
+it, the same way an account holder's name and email already stand above a studio's card for them
+under R147.
+
+*Entries add: R148 · last id = R148*
+
+### R149 · The Agreement Room — rulings AR-a…AR-h — 2026-09-10
+
+**Ruled by Kody, 2026-09-10** (**AR-a**–**AR-h** and **AM-1**–**AM-3**, by interview on the panel's sheet 17). The evidence register is `artifacts/agreement-room-2026-09-10/` — brief, seven seat memos, three built specimens, four review rounds and the ruling sheet at `artifacts/agreement-room-2026-09-10/rulings.md`; the deck, *The Paper, Under the Pencil*, is published at https://claude.ai/code/artifact/736766d5-60cb-4c17-a264-fa09cf972eb3.
+
+**One. D · the galley ships, and A stays on the record as the live alternative.** In D the printed part stays on screen and its editor unfolds beneath it; the studio never loses the sentence it is rewriting. A — the paper is the page, the printed part replaced by its editor in its own place — is the alternative on record, named so that a later wave that wants it does not have to re-derive it. That is a note of what was second, not a fallback rule: nothing in a build lane may treat A as the thing to fall back to when D is inconvenient.
+
+**Two. R24 is reversed: composition is not reversible; the seven-facet room is retired.** Kody, in as many words: *"I go back on this. Lets remove this concept all together. We have the parts, the templates and saved states that cover all this."* R24 (`artifacts/agreement-composed-2026-09-06/build/rulings-2026-09-06.md`) ruled that the composed room offer *Return to the seven facets*, calling `discard_agreement_parts`, and that the seven-facet room's `agreement_composed` notice name that act. Every agreement is parts on first open — which is already what the live flags do — so the act had nothing left to return to. It goes, and the room it returned to goes with it: `ServiceAgreementEditor` in `service-agreement-drafting-room.tsx`, `returnedToFacets`, the UI path to `discard_agreement_parts`, `AGREEMENT_PART_COPY.returnToFacets` and `.composedElsewhere`, the `facet` count in the RoomShell header, and the send sheet's facet sentence. The **R17** flag-off notice is retired with them. The `discard_agreement_parts` RPC itself may stay for admin use; that is a **ruling owed at build time**, not settled here. This also settles **AM-1**, which asked what to rename the act: an act that is deleted is not renamed.
+
+**Three. R39's hide act extends to every agreement.** R39 put the "hidden from your client" toggle on a part in the designer lane of Wave 3; it now lives on every agreement, beside the other part acts, not in the turnkey lane alone. Two guards are unchanged and are not reopened by this: **R33** — a `schedule` part hidden from the client never projects into `proposal_service_terms` or the authority, and readiness says so in words (*"This fee is hidden from your client, so it cannot bill."*); **R48** — a `pricing_basis` part, and `draws`, are always client-visible and carry no hide act at all. A studio may quiet a part. It may never quiet the price.
+
+**Four. §A14 · Fields on paper is adopted, and a studio working band at 1200px is named.** The typographer's field rule — the label is a `.t-head` and is always there, no `placeholder`; a prose field inherits the paper's body metrics and grows with its content; a money field is `.t-money` right-aligned to its block's own rule with the currency mark as furniture the field prints and never stores; held is a `--rail` ground, a 2px `--terracotta-ink` leading rule and a reason in words, never `opacity` and never `disabled` — goes into `docs/design/house-sheet/SPEC.md` as **§A14**, pasted from the Agreement Room build contract (`artifacts/agreement-room-2026-09-10/specimens/SPEC.md` §2). Separately, D's 1200 band exceeds §A4's 1100 page measure: **§F-Q** names **1200px as the studio working band** for studio surfaces, keeps prose capped at **65ch**, and leaves the **1100** page measure untouched for client pages. A designer's working tool and a letter the studio sends do not share a measure, the same distinction **PP-9** drew for the wordmark.
+
+**Five. Three strings and one act.** The **"Preview client copy"** act is retired in D and in A: a full read of the paper at the paper's own measure replaces it, and that read is an **overlay, never a route** — a client's copy is not a page of the studio's portal. On a design-services agreement the paper **says plainly that no total exists**, in one sentence — professional time is billed as worked up to the ceiling, and no total is promised — and it does **no arithmetic**: a ceiling, a retainer and a flat fee are three figures that do not add, and a page that adds them tells the homeowner something untrue. D's fold act takes the word **"Write"**.
+
+**Six. AM-2 and AM-3 are declined; the sheet gains no exception.** Part heads stay **roman at `.t-d3`**, one head per part and never two — `.t-authorship` is an aside and an authorship line, never a heading, as **I153** already records. The page title **holds `.t-d2` at every width**; the sheet gains no responsive step, the ask having been filed against an email title that the header reduction retires.
+
+**One defect folded in, not hotfixed.** The paper and the room's only `Review & send` trigger are both `hidden min-[1180px]:block` (`room-shell.tsx:155`), so there is no way to open the send sheet at 1024 or 390 in production today. The send trigger moves onto the page at every width **in the build wave** — it is not carved out as a hotfix ahead of it.
+
+*Entries add: R149 · last id = R149*
+
+### R150 · The Standing Head — six rulings and a direction — 2026-09-10
+
+**Ruled by Kody, 2026-09-10** (**R1**–**R6**; panel `artifacts/phase-header-2026-09-10/`, deck
+`the-standing-head.html`). Five memos — information, typography, interaction, designer, critic — read
+the standing head of every Document spread and found it answering *where* six times and *what* zero
+times: the name, the stage sub-label, the track band, the region head and the readiness band each place
+Edna somewhere, and nothing on the page states the job itself — house, rooms, money, date (A1). Two of
+the six statements are worse than silent. Block 5's `Nothing yet` is a hardcoded constant —
+`registerFor` returns `empty('Nothing yet')` unconditionally for brief, discovery and direction
+(`lens-ladder-derivation.ts:556-561`) — printed forty pixels above block 6's true `3 of 5`. And the
+`SECTION_STAGE` map that synthesizes blocks 3/4 on every pre-work spread is a four-entry per-stop
+constant with no position and no fidelity, identical on every discovery spread forever, and it runs
+backwards: brief→01, discovery→02, direction→05, proposal→03 (A2, A3).
+
+| # | Ruling | Lean / deviation |
+|---|---|---|
+| R1 | **Machinery.** The eleven-stage vocabulary prints only where a schedule resolver anchors it — project, install, care; behind a door at brief, discovery, direction, proposal. The `SECTION_STAGE` inversion is not ruled — it never reaches the glass. | Matches the panel's lean. |
+| R2 | **Studio-private voice, neutral phrasing.** The Document names who is waiting on whom and the owed money at the top — "Waiting on Edna:", never "Edna owes you." The client page keeps its own gentler sentence. | Matches the panel's lean. |
+| R3 | **Region head kept, silent.** The `<h2>` and its 2px rule stay for landmarks and rail jumps; it prints nothing while the band states the standing fact. | Panel leaned a section rule (Playfair 26, Direction 3's shape); Kody ruled "keep it, silent" instead — the deviation this entry is named for. |
+| R4 | **Subject line per engagement, seeded at read time, never persisted.** An optional one-line description, seeded from project type plus named rooms, editable by the studio; the head degrades to the assembled line without it. | Matches the panel's lean; "seeded at read time, never persisted" narrows the panel's plain "add a field." |
+| R5 | **One leader act.** Exactly one primary act, in the head; the readiness act becomes the head's act the moment `ready` flips — until then the readiness band carries no act. | Matches the panel's lean. |
+| R6 | **Name at 34.** Amends R126; the standing sentence rises to 16. | Matches the panel's lean. |
+
+**The direction: The Band.** The 56px sticky band is the page's only leader region, and everything
+that restated it is deleted: the letterhead keeps the name and nothing else, band line 1 carries
+identity and — only where a resolver anchors it — stage, and band line 2 carries the standing sentence,
+one act, and a fixed `+N MORE` door whose rows split by kind. The pre-work region head keeps its `<h2>`
+and its rule but prints nothing, the readiness band demotes to a caption that becomes the band's own
+sentence the instant `ready` flips, and the undo prints its consequence always. R140 is crossed
+knowingly: the agreed figure takes band line 1's right slot on project spreads and the owed sentence
+stands beneath it.
+
+**Amendments.** R126 is amended: the letterhead name prints at 34px (the top of the seven-step sheet),
+not 40px, at every width. R111 stands as the shape of the stage phrase; R1 above rules where it prints.
+R66's readiness band loses its act and its glyph (R5, A5).
+
+**Build.** Implementation record follows as I154: branch `build/standing-head-2026-09-10`, migration
+00590.
+
+**Defects D1–D7**, found along the way and folded into the build rather than patched standalone:
+
+| # | Defect | File |
+|---|---|---|
+| D1 | The `+N MORE` door lists every open input with the same shared act object. | `page.tsx` ~2145 |
+| D2 | Region-jump targets lose their focus ring — `outline-none` with no `focus-visible:` pair. | `RegionHead`'s `<h2>` |
+| D3 | A raw pigment prints as text below the 4.5:1 floor `globals.css` itself documents. | stage sub-label, `--color-aged-oak` |
+| D4 | Heading order runs h1 → h3 → h2 via a sr-only stage heading. | sr-only `<h3>Workflow stage</h3>` |
+| D5 | Typographic contract breaches in the head — negative tracking at 32px, truncation on two lines, an eighth type step. | `doc-letterhead.tsx:78` and both band lines |
+| D6 | `Nothing yet` is a literal fallback, not a derivation. | `page.tsx`, `lens-ladder-derivation.ts` |
+| D7 | The undo prints no forward consequence sentence, only its refusal reason when blocked. | undo control |
+
+*Entries add: R150 · last id = R150*
+
+### I154 · The Band built — the head of every spread, per R150 — 2026-09-10
+
+Branch `build/standing-head-2026-09-10` from `origin/main` `6f00099b3`; **not merged, not
+deployed** — Kody merges and ships. Commits in order: `6801d987` 00590 engagement subject (W1a) ·
+`103080c08` the band (W1b) · `d70dc3cd2` the head (W1c) · `5b6601e94` merge · `4525da0c5` P5 on
+project papers · `59ea45420` W3 review fixes · `a615289e9` the medium form.
+
+**What changed**, per `artifacts/phase-header-2026-09-10/build/PROGRAM.md`:
+
+- **R1 machinery.** `SectionStageLineMount` unmounts at brief · discovery · direction · proposal;
+  stays at project · install · care. The rail keeps its `CORE · STAGE 03` register.
+- **R2 voice.** Line 2 of the band prints the standing sentence with owners — `Waiting on Edna:
+  working budget, how they live.` / `Yours to add: project type and named rooms.` — client named by
+  first name.
+- **R3 silent region head.** `PreworkRegion`'s `<h2>` and 2px rule stay at brief · discovery ·
+  direction, printing nothing; proposal-spread regions keep their real status lines.
+- **R4 subject.** Migration 00590 adds `subject text` to `projects`, `proposals`,
+  `designer_clients`, `leads`, and `document_state.subject` (45th column, all four legs). Letterhead
+  prints `row.subject ?? assembled`, click-to-edit, never persists the assembled line.
+- **R5 one leader.** The readiness band loses its act; on `ready` the band's rest act runs
+  `begin_direction_from_discovery` and lands on the new document.
+- **R6 name 34.** `<h1>` to 34px, tracking 0. **This build also carries R6's second half**: line 2 of
+  the band rises to 16px.
+- **D1 door.** Each sheet input row carries its own act; the fact the band's act already names is
+  excluded from the rows and from `withheld`.
+- **D2–D7, A5**: focus ring restored on the region-jump `<h2>`; raw pigment below 4.5:1 replaced;
+  heading order fixed (sr-only stage heading to `<h2>`); letterhead type contract fixed (no negative
+  tracking, no truncation); `Nothing yet` now derives `N of 5 essentials` from readiness; the undo
+  always prints a consequence sentence, allowed or refused; the readiness band's glyph goes with it.
+- **Beyond the ruled table**: the band's standing sentence has three forms — long · medium · short —
+  chosen by the measure, never empty. The medium form names facts by short label (`scope`,
+  `budget`). The client short name keeps a whole name like `the Ashfords` intact and keeps a pair
+  like `Edna & Rob` together rather than truncating mid-pair. The `+N MORE` door is clay-ink over
+  open inputs, terracotta where an exception is withheld. The subject editor is a real button whose
+  accessible name carries the printed line, not a bare pencil icon.
+
+**Gates**, verbatim: designer-portal `tsc --noEmit` clean; jest 568 suites / 7174 tests green;
+`@patina/supabase` `tsc --noEmit` clean, vitest 98 files / 1213 passed / 12 skipped; admin-portal
+`next build` exit 0; `supabase/tests/document/document_state_subject_test.sql` — four legs — under
+`ON_ERROR_STOP=1`. E2E, chromium: `prework-regions` 10, `lens-band-height` 23 (+1 skipped),
+`lens-a11y` 7, `workflow-stage-responsive` 7, `lens-cls` 2, `lens-density` 13 — all passed;
+`lens-contrast` 6 passed, 1 failed — `:183`, D-B28's request allowlist, against product-image and
+`project_rooms` reads from modules this branch never touched; recorded as standing debt at
+`DECISIONS.md:10315`. Measured: the band holds 56px at 1440 and at 390; the `<h1>` measures 34px;
+the discovery seed's line 2 prints `Yours to add: scope. Waiting on the Ashfords: budget and 3
+more.` at 1440 (medium form, 498px, unclipped) and `1 yours · 4 theirs` at 390.
+
+**Scoped out / owed.** Subject editing on project papers has no affordance — P5 kept the
+letterhead's height contract; reachable later through the instruments ledger. `fits()` under-charges
+every act by roughly 24px of `.da-act` box on every measure it evaluates — a ruling is owed on
+whether to charge that honestly rather than patch around it. W3 review findings 5, 8, 9, 10, 12, 20,
+21, 24 are left exactly as noted in `artifacts/phase-header-2026-09-10/build/review-w3.md` — not
+fixed, not dismissed. Webkit e2e was not run. No signed-in human walk of the shipped surfaces has
+happened yet.
+
+**Before this ships**: the migration (00590) must reach Strata — `supabase db push` — before the
+portal deploys, since the letterhead reads `document_state.subject` directly.
+
+*Entries add: I154 · last id = I154*
+
+### R152 · The studio's own clock — the hour-tracking rulings — 2026-09-11
+
+**Ruled by Kody, 2026-09-11** (**HT-1**…**HT-41** and the program rulings **P-1**…**P-8**, by
+interview on the panel's sheet; evidence register `artifacts/hour-tracking-2026-09-11/` — brief, nine
+seat memos, `synthesis.md`, the ruling sheet `rulings.md`, and the executable plan
+`build/plan-v2.md`). Nine seats read one table, `public.project_time_entries`, and found capture
+inside a document already best-in-class and almost everything around it failing — two of the failures
+live money defects. This entry records what was ruled; the waves carry it out.
+
+**One. The scope lens — R77 amended, not replaced.** The Hours ledger grows one **admin-gated scope
+lens** in the same sheet: *mine · a member · this project · the studio*. One sheet — no `/hours` page,
+no admin-portal route, no tab bar, no member leaderboard, no staff picker inside a money ledger (the
+member scope is entered from the person in the People Room). The project scope **stops ANDing
+`user_id`**: it answers *this house's hours*, not *my hours on this house*, which is what it has
+silently answered since R75. Totals sit **above** the rows that produced them (V11). A plain member
+sees no lens. The member scope is **aggregate by default**; free-text notes only behind an explicit
+detail act, and the studio rollup's return shape never carries `notes` at all — asserted per role in
+SQL, not filtered in the client (HT-8, HT-9, HT-10, HT-36, HT-37, HT-38).
+
+**Two. `billable` becomes an explicit control at every capture surface — D10 and R20 amended.** Today
+the three capture paths disagree: the desk auto-timer sends the fail-closed intent (false), a
+hand-typed entry sends nothing (true by default), Patina Field sends nothing (true). One server-owned
+rule resolves `billable` for every `source`, a pill at every surface is seeded from the resolved
+answer, and **the implicit `?? true` default goes**. The row prints its reason in words
+(*"non-billable · no agreement"*) instead of a bare `Non-bill`. **`activity` is recorded, never
+required** — the strip's `'design'` default goes and an unset activity prints *"activity not set"*.
+R20's write-first close-out is untouched: **the zero-tap in-document path stays zero taps**, and no
+wave may add a required field to it (HT-11, HT-12, HT-24).
+
+**Three. Yesterday's hour, and the backdated mark.** Backdating is allowed — **any date, until the
+entry is invoiced** (the invoiced-entry lock already freezes `started_at`). The ledger add row and the
+⌘K verb carry a date field defaulting to the **paged week**, closing a live mis-dating bug: paging the
+ledger back a week and using the add row files the entry into today. An entry logged more than **30
+days** after the fact carries a quiet **"backdated"** mark — a derived, unstyled DM-mono word on the
+row, no badge and no colour (HT-13, HT-40).
+
+**Four. Auto-start is disclosed, and a member may opt out — R19 amended.** A member's first document
+open shows a **one-time dismissible sentence** saying the document starts a timer; the per-member
+opt-out lives on their **own profile**, defaults on, and off falls back to **one-tap manual start** —
+never to no timer. R19's consent evidence was one person, who is also the owner; this is what changes
+that (HT-35).
+
+**Five. The role chip.** Where a member holds more than one live roster role on a project, they
+**pick the role per entry** and the row records it. The chip appears only for a multi-role member;
+a single-role member sees nothing new. A role a member does not hold is refused server-side — a
+client cannot claim a rate it has no seat for (HT-4, HT-41).
+
+**Six. One quiet Record row, and no nudges — under R82.** A running timer over **8 hours** writes one
+quiet Record row on the Post's Record page. No push, no email, no badge, and **no daily anything,
+ever**. The opt-in weekly unlogged-day reminder is built but dark: weekly at most, per member,
+default off, and its cron entry is never scheduled (HT-34, P-5 — the program ships unflagged, so the
+absent cron entry is the off switch).
+
+**R64 keeps its 30-minute number.** Only its **scope** wording extends: the abandonment bound binds
+**any clock-derived duration**, Patina Field included, not the desk alone. The cumulative-idle hole is
+real (`time-derivation.ts` sums cumulative idle and uses it only for the annotation string while the
+bound reads the single longest gap) and is **instrumented before it is relitigated** — R64 is
+explicitly "watch with data", and no data has been watched (HT-16, HT-17).
+
+**Companion VISION entry.** V11 (`docs/vision/VISION-DECISIONS.md`) strengthens VISION §6 with the
+ledger test that permits this sheet: *a total is permitted as the front matter of the rows that
+produced it; a total with no rows beneath it is a dashboard.* D9 is amended there too — capture
+belongs wherever the work happened; review belongs only in the drawer ledger, never a page.
+
+**Renumbered R151 → R152 before merge.** A different R151 — *People room as a construction CRM*,
+ruled the same day — was committed first on `build/people-room-crm-2026-09-11` (`1970075c2`), at the
+same line of this append-only file. Two programs cut from the same head on 2026-09-11; this one
+ships last, so this one moved. Its companion VISION entry moved with it, V10 → V11.
+
+*Entries add: R152 · last id = R152*
+### R151 · People room as a construction CRM — panel "Everyone on the Job" — 2026-09-11
+
+**Ruled by Kody, 2026-09-11** (**PR-a, PR-b, PR-c, PR-d, PR-g, PR-q, PR-r** by interview, plus one
+overrule on the eighteen leans; panel and evidence register `artifacts/people-room-crm-2026-09-11/`,
+rulings sheet `artifacts/people-room-crm-2026-09-11/rulings.md`, deck *Everyone on the Job*
+published at https://claude.ai/code/artifact/9be6c6e0-af40-43be-a46f-4ba6f29ab766). Twelve seats —
+six construction, six UX/UI — reworked the People room into a construction CRM: firms and people
+carry typed reach, consent, and paper facts; seats on a job carry authority, stage, and window; the
+Directory becomes a studio-wide ledger with the Call Sheet as its per-project DocSheet.
+
+**Seven rulings, by interview:**
+
+| ID | Ruling |
+|---|---|
+| PR-a | **Overruled the panel's park.** Build the trade-side compliance upload door (COI, W-9, licence, signed waivers) in P3 — a tokened field-link page a trade writes to, landing on the studio's company card unverified until a studio member confirms it. Amends VISION S2 (see the linked VISION-DECISIONS.md entry). |
+| PR-b | Hybrid adopted. A seat snapshots name-at-time and trade-on-the-job; typed channels, contact rule, consent, and document expiries live-read from the card when `studio_contact_id` is set. |
+| PR-c | Household + seat adopted, split by job. A household holds members and the change-order threshold; every member who acts on a job gets a seat carrying the authority grant. |
+| PR-d | Ends with the job adopted. The 90-day link clock is retired; a grant ends with the engagement window, renews on use, and prints its end date in words. |
+| PR-g | Mixed list adopted. Firm rows appear under Everyone, sorted into the band of the crew they carry; the head names both nouns ("29 people, 22 firms"). |
+| PR-q | 1200 ledger adopted. Hairline ledger rows replace bordered card rows at the 1200 studio working band; the Call Sheet stays a 760px DocSheet. |
+| PR-r | Never store the code adopted. Patina stores the lockbox version, the key holder, the hours, and who was told — never the gate code itself. |
+
+**Eighteen leans** (PR-e, f, h, i, j, k, l, m, n, o, p, s, t, u, v, w, x) **stand** as the panel
+recorded them. **PR-y is overruled**: no flag. The rebuilt `people_directory` replaces the
+six-branch view outright at 100% on deploy, rather than shipping behind a flag with the old view
+kept live.
+
+**Program terms** (rulings.md §6): all three phases build in this program; one deploy chain at the
+end; 100% rollout at deploy, no flag; the `call-sheet` flag is retired with Call Sheet live for
+every studio; the pending email-deliverability chain deploys as step one of the final chain; Patina
+Field (Capture) roster and site access screens ship to TestFlight; People help articles are drafted
+and pushed to Sanity. Done is deploy + probes + a walk script — Kody's signed-in prod walk is owed
+separately.
+
+*Entries add: R151 · last id = R152*

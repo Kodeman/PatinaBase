@@ -31,6 +31,8 @@ export interface PartySmsMessage {
 }
 
 export const partySmsKeys = {
+  /** Every field-link list, for a revoke that does not know the seat. */
+  all: ['field-links'] as const,
   thread: (partyId: string | null | undefined) => ['party-sms', partyId ?? 'none'] as const,
   links: (partyId: string | null | undefined) => ['field-links', partyId ?? 'none'] as const,
 };
@@ -118,43 +120,97 @@ export function useActiveFieldLink(partyId: string | null | undefined) {
   });
 }
 
+export interface CreateFieldLinkInput {
+  partyId: string;
+  /**
+   * PR-l — the studio's CHOICE of end date, when it has one to make. The RPC
+   * outranks it with the seat's own window where the seat HAS one (the later
+   * of `on_site_to` and `warranty_until`, through the end of that day); a
+   * windowless seat takes this date; a windowless seat with no date falls back
+   * to the old 90 days, which PR-d retires as a DEFAULT, not as a value — a
+   * seat with no window still needs an end.
+   */
+  expiresAt?: string | null;
+  /** Invalidates this project's roster reads when the mint changes a seat's
+   *  reach word from "On paper" to "Field link". */
+  projectId?: string | null;
+}
+
 /**
- * Mint (or regenerate) a field link for a party. create_field_link (00283)
- * revokes any prior active token and returns the RAW token exactly once — the
- * caller shows/copies it now; only sha256(token) is stored. Same RPC serves
- * "Copy field link" and "Regenerate".
+ * Mint (or regenerate) a field link for a seat. `create_field_link` revokes any
+ * prior active token and returns the RAW token exactly once — the caller
+ * shows/copies it now; only sha256(token) is stored. Same RPC serves "Copy
+ * field link" and "Regenerate".
+ *
+ * PR-d (00627): THE GRANT ENDS WITH THE JOB. The two-argument signature reads
+ * the expiry off the seat's window, so the mint act's consequence sentence
+ * ("until the job's window closes, 13 August 2027") states a fact rather than a
+ * flat 90-day clock unrelated to the work. 00284's authorization guard and its
+ * supersede are carried verbatim by that signature, so nothing about who may
+ * mint has moved.
  */
 export function useCreateFieldLink() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ partyId }: { partyId: string }) => {
+    mutationFn: async ({ partyId, expiresAt }: CreateFieldLinkInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
-      const { data, error } = await supabase.rpc('create_field_link', { p_party_id: partyId });
+      const { data, error } = await supabase.rpc('create_field_link', {
+        p_party_id: partyId,
+        p_expires_at: expiresAt ?? null,
+      });
       if (error) throw error;
       // RETURNS TABLE (id, token) → a one-row array.
       const row = Array.isArray(data) ? data[0] : data;
       return row as { id: string; token: string };
     },
-    onSuccess: (_data, { partyId }) => {
+    onSuccess: (_data, { partyId, projectId }) => {
       void queryClient.invalidateQueries({ queryKey: partySmsKeys.links(partyId) });
+      void queryClient.invalidateQueries({ queryKey: ['access-grants'] });
+      // A live field link is exactly what `reach_state` reads as "Field link"
+      // on both directory views.
+      void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      void queryClient.invalidateQueries({ queryKey: ['people-directory-seats'] });
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: ['project-roster', projectId] });
+      }
     },
   });
 }
 
-/** Revoke a field link (kills it immediately). */
+/**
+ * Revoke a field link (kills it immediately).
+ *
+ * CR-5 — THE REACH WORD MUST SHUT WITH THE DOOR. This used to invalidate the
+ * link list alone, so revoking from the seat sheet left the Directory row, the
+ * seat line and every roster row still printing reach `Field link` for a door
+ * that was already shut — CR-12's defect in a second door. The mint three
+ * functions above already fans out to all four; so does this.
+ */
 export function useRevokeFieldLink() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ tokenId }: { tokenId: string; partyId: string }) => {
+    mutationFn: async ({
+      tokenId,
+    }: {
+      tokenId: string;
+      partyId: string;
+      projectId?: string | null;
+    }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { error } = await supabase.rpc('revoke_field_link', { p_token_id: tokenId });
       if (error) throw error;
       return true;
     },
-    onSuccess: (_data, { partyId }) => {
+    onSuccess: (_data, { partyId, projectId }) => {
       void queryClient.invalidateQueries({ queryKey: partySmsKeys.links(partyId) });
+      void queryClient.invalidateQueries({ queryKey: ['access-grants'] });
+      void queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+      void queryClient.invalidateQueries({ queryKey: ['people-directory-seats'] });
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: ['project-roster', projectId] });
+      }
     },
   });
 }

@@ -13,17 +13,33 @@
  *  · the invite control only ever appears for a not_asked party WITH a phone
  *    on file (no phone → nothing to text → no control).
  */
-import { fireEvent, render, screen } from '@testing-library/react';
-import type { PartyRole } from '@patina/supabase';
-import { PartyProfileSheet } from '../party-profile-sheet';
+import { fireEvent, render, screen } from "@testing-library/react";
+import type { PartyRole } from "@patina/supabase";
+import { PartyProfileSheet } from "../party-profile-sheet";
 
 const recordConsentMutate = jest.fn();
 const recordConsentState = { isPending: false };
 
-const personData: { current: Record<string, unknown> | null } = { current: null };
+const personData: { current: Record<string, unknown> | null } = {
+  current: null,
+};
 
-jest.mock('@patina/supabase', () => ({
+jest.mock("@patina/supabase", () => ({
   usePerson: () => ({ data: personData.current }),
+  // R-BE — the sheet resolves the SEAT through people_directory_seats and takes
+  // the consent word off the identity's own `consent_status` column. The
+  // fixture's person doubles as the identity here.
+  usePersonSeat: () => ({
+    data: personData.current
+      ? {
+          seat: {
+            seat_id: "party-1",
+            project_id: personData.current.project_id,
+          },
+          identity: personData.current,
+        }
+      : { seat: null, identity: null },
+  }),
   usePartySmsThread: () => ({ data: [] }),
   useSendPartySms: () => ({
     mutate: jest.fn(),
@@ -36,31 +52,45 @@ jest.mock('@patina/supabase', () => ({
   useRevokeFieldLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useFieldMediaUrl: () => ({ data: null }),
   useOrganizations: () => ({ data: [] }),
+  // CR-1: the promote band resolves the studio from the SEAT's project
+  // (project_recorded_studio), never from the membership list.
+  useProjectRecordedStudio: () => ({ data: 'org-1' }),
   useProjectParties: () => ({ data: [] }),
   useRecordPartySmsConsent: () => ({
     mutate: recordConsentMutate,
     isPending: recordConsentState.isPending,
   }),
+  // F3 — the sheet's edit mode calls this unconditionally at render time now
+  // (not just on save); every mount of PartyProfileSheet needs it mocked.
+  useUpdateProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
   fieldLinkUrl: (token: string) => `https://patina.cloud/field/${token}`,
 }));
 
-jest.mock('@/hooks/use-feature-flag', () => ({
+jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));
 
 function person(over: Partial<Record<string, unknown>> = {}) {
   return {
-    person_id: 'party-1',
-    display_name: 'Sal Moretti',
+    person_id: "party-1",
+    display_name: "Sal Moretti",
     email: null,
-    phone: '5551234567',
+    phone: "5551234567",
     profile_id: null,
-    project_id: 'project-1',
+    project_id: "project-1",
     designer_id: null,
-    status_raw: 'not_asked',
+    // R-AS/R-BE: `status_raw` is the ARCHIVE state on a v4 row, never the
+    // consent word. The sheet reads `consent_status`, which is the studio's
+    // own record through `channel_consent_status()`.
+    status_raw: "active",
+    consent_status: "not_asked",
+    reach_state: "on_paper",
+    paper_state: null,
+    contact_rule_summary: null,
+    seat_count: 1,
     last_touch_at: null,
-    meta: { phone_e164: '+15551234567' },
-    scope: 'mine',
+    meta: { phone_e164: "+15551234567" },
+    scope: "mine",
     ...over,
   };
 }
@@ -71,134 +101,189 @@ beforeEach(() => {
   personData.current = null;
 });
 
-const ROLE: PartyRole = 'sub';
+const ROLE: PartyRole = "sub";
 
-describe('PartyProfileSheet — opted_out is a locked state, never a designer-flippable control', () => {
-  it('renders the STOP/START explanation with no checkbox and no invite action', () => {
-    personData.current = person({ status_raw: 'opted_out' });
+describe("PartyProfileSheet — opted_out is a locked state, never a designer-flippable control", () => {
+  it("renders the STOP/START explanation with no checkbox and no invite action", () => {
+    personData.current = person({ consent_status: "opted_out" });
     render(
-      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+      <PartyProfileSheet
+        open
+        partyId="party-1"
+        role={ROLE}
+        onClose={jest.fn()}
+      />,
     );
 
     expect(
       screen.getByText(
-        'They opted out by text. Only they can rejoin by replying START.',
+        "They opted out by text. Only they can rejoin by replying START.",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.queryByText('Invite to texts')).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByText("Invite to texts")).not.toBeInTheDocument();
   });
 });
 
 describe('PartyProfileSheet — pending renders as "invite sent", no resend control', () => {
-  it('shows the waiting copy with no button to re-send', () => {
-    personData.current = person({ status_raw: 'pending' });
+  it("shows the waiting copy with no button to re-send", () => {
+    personData.current = person({ consent_status: "pending" });
     render(
-      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+      <PartyProfileSheet
+        open
+        partyId="party-1"
+        role={ROLE}
+        onClose={jest.fn()}
+      />,
     );
 
     expect(
       screen.getByText(/Invite sent — waiting on their reply/),
     ).toBeInTheDocument();
     expect(
-      screen.queryAllByRole('button').some((el) => /resend/i.test(el.textContent ?? '')),
+      screen
+        .queryAllByRole("button")
+        .some((el) => /resend/i.test(el.textContent ?? "")),
     ).toBe(false);
-    expect(screen.queryByText('Invite to texts')).not.toBeInTheDocument();
+    expect(screen.queryByText("Invite to texts")).not.toBeInTheDocument();
   });
 });
 
-describe('PartyProfileSheet — the invite control is hidden without a phone on file', () => {
-  it('shows a phone-needed hint instead of the checkbox/consent form', () => {
-    personData.current = person({ status_raw: 'not_asked', phone: null, meta: {} });
+describe("PartyProfileSheet — the invite control is hidden without a phone on file", () => {
+  it("shows a phone-needed hint instead of the checkbox/consent form", () => {
+    personData.current = person({
+      consent_status: "not_asked",
+      phone: null,
+      meta: {},
+    });
     render(
-      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+      <PartyProfileSheet
+        open
+        partyId="party-1"
+        role={ROLE}
+        onClose={jest.fn()}
+      />,
     );
 
     expect(
-      screen.getByText('Add a phone number to invite this party to texts.'),
+      screen.getByText("Add a phone number to invite this party to texts."),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.queryByText('Invite to texts')).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByText("Invite to texts")).not.toBeInTheDocument();
   });
 });
 
-describe('PartyProfileSheet — not_asked with a phone shows the invite-to-texts flow', () => {
-  it('the submit control starts disabled with a title/aria-label explaining why (F7)', () => {
-    personData.current = person({ status_raw: 'not_asked' });
+describe("PartyProfileSheet — not_asked with a phone shows the invite-to-texts flow", () => {
+  // W2b — §A5 "held": the act is OFFERED and cannot be taken, so it keeps its
+  // place in the tab order and the reason stands beside it as visible words
+  // (`aria-describedby`). A native `disabled` took the control out of the tab
+  // order and took its own explanation — which lived in a `title` — with it.
+  it("the submit control is held, not disabled, and points at the visible reason", () => {
+    personData.current = person({ consent_status: "not_asked" });
     render(
-      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+      <PartyProfileSheet
+        open
+        partyId="party-1"
+        role={ROLE}
+        onClose={jest.fn()}
+      />,
     );
 
-    const submit = screen.getByRole('button', {
-      name: /Invite to texts — check the consent box above first/,
-    });
-    expect(submit).toBeDisabled();
-    expect(submit).toHaveAttribute('title', 'Check the consent box above first');
+    const submit = screen.getByRole("button", { name: "Invite to texts" });
+    expect(submit).not.toBeDisabled();
+    expect(submit).toHaveAttribute("aria-disabled", "true");
+    expect(submit).toHaveAttribute("aria-describedby", "field-invite-reason");
+    expect(document.getElementById("field-invite-reason")).toHaveTextContent(
+      "Tick the consent box above first.",
+    );
   });
 
-  it('requires a consent method and non-blank evidence before it will submit, and the error is announced (role=alert, F7)', () => {
-    personData.current = person({ status_raw: 'not_asked' });
+  it("requires a consent method and non-blank evidence before it will submit, and the error is announced (role=alert, F7)", () => {
+    personData.current = person({ consent_status: "not_asked" });
     render(
-      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+      <PartyProfileSheet
+        open
+        partyId="party-1"
+        role={ROLE}
+        onClose={jest.fn()}
+      />,
     );
 
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole("checkbox"));
     // No method chosen, no evidence typed yet.
-    fireEvent.click(screen.getByText('Invite to texts'));
+    fireEvent.click(screen.getByText("Invite to texts"));
 
-    const alert = screen.getByRole('alert');
+    const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent(
-      'Record how and where they gave prior consent before sending a text.',
+      "Record how and where they gave prior consent before sending a text.",
     );
     expect(recordConsentMutate).not.toHaveBeenCalled();
   });
 
-  it('both form fields carry a real associated label (F7)', () => {
-    personData.current = person({ status_raw: 'not_asked' });
+  it("both form fields carry a real associated label (F7)", () => {
+    personData.current = person({ consent_status: "not_asked" });
     render(
-      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+      <PartyProfileSheet
+        open
+        partyId="party-1"
+        role={ROLE}
+        onClose={jest.fn()}
+      />,
     );
 
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole("checkbox"));
 
-    expect(screen.getByLabelText('How consent was given')).toBeInTheDocument();
-    expect(screen.getByLabelText('Consent record')).toBeInTheDocument();
+    expect(screen.getByLabelText("How consent was given")).toBeInTheDocument();
+    expect(screen.getByLabelText("Consent record")).toBeInTheDocument();
   });
 
-  it('fires the hook with the exact four-field consent bundle once the guard is satisfied — no dead projectId (F8)', () => {
-    personData.current = person({ status_raw: 'not_asked' });
+  it("fires the hook with the exact four-field consent bundle once the guard is satisfied — no dead projectId (F8)", () => {
+    personData.current = person({ consent_status: "not_asked" });
     render(
-      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+      <PartyProfileSheet
+        open
+        partyId="party-1"
+        role={ROLE}
+        onClose={jest.fn()}
+      />,
     );
 
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.change(screen.getByLabelText('How consent was given'), {
-      target: { value: 'verbal' },
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.change(screen.getByLabelText("How consent was given"), {
+      target: { value: "verbal" },
     });
-    fireEvent.change(screen.getByLabelText('Consent record'), {
-      target: { value: 'Told me at the site kickoff on Aug 8' },
+    fireEvent.change(screen.getByLabelText("Consent record"), {
+      target: { value: "Told me at the site kickoff on Aug 8" },
     });
-    fireEvent.click(screen.getByText('Invite to texts'));
+    fireEvent.click(screen.getByText("Invite to texts"));
 
     expect(recordConsentMutate).toHaveBeenCalledTimes(1);
     const [input] = recordConsentMutate.mock.calls[0];
     expect(input).toEqual({
-      partyId: 'party-1',
-      phone: '5551234567',
-      smsConsentSource: 'verbal',
-      smsConsentEvidence: 'Told me at the site kickoff on Aug 8',
+      partyId: "party-1",
+      // R-AS: the consent record is the STUDIO's, resolved from the project, so
+      // the hook needs the job as well as the seat.
+      projectId: "project-1",
+      phone: "5551234567",
+      smsConsentSource: "verbal",
+      smsConsentEvidence: "Told me at the site kickoff on Aug 8",
     });
   });
 });
 
-describe('PartyProfileSheet — granted keeps the existing texting composer', () => {
-  it('renders the send-a-text composer, not the invite flow', () => {
-    personData.current = person({ status_raw: 'granted' });
+describe("PartyProfileSheet — granted keeps the existing texting composer", () => {
+  it("renders the send-a-text composer, not the invite flow", () => {
+    personData.current = person({ consent_status: "granted" });
     render(
-      <PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />,
+      <PartyProfileSheet
+        open
+        partyId="party-1"
+        role={ROLE}
+        onClose={jest.fn()}
+      />,
     );
 
-    expect(screen.getByLabelText('Send a text')).toBeInTheDocument();
-    expect(screen.queryByText('Invite to texts')).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Send a text")).toBeInTheDocument();
+    expect(screen.queryByText("Invite to texts")).not.toBeInTheDocument();
   });
 });

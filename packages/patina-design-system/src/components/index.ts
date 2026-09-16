@@ -107,6 +107,9 @@ export * from './Media'
 // Brand Icons
 export * from './StrataMark'
 
+// Invoice paper (shared by both portals' print routes)
+export * from './InvoicePaper'
+
 // Utility Components
 export * from './DragDrop'
 

@@ -319,6 +319,28 @@ export const STUDIO_VERBS: StudioSurface[] = [
     },
   },
   {
+    key: 'log-time',
+    kind: 'verb',
+    label: 'Log time',
+    subLabel: 'an hour with nothing in hand',
+    // Deliberately NOT bare 'time'/'hours': those belong to the Hours ledger
+    // (the review surface). What a designer types to CAPTURE an hour is a verb.
+    aliases: [
+      'log time',
+      'log hours',
+      'add time',
+      'record time',
+      'backdate',
+      'yesterday',
+    ],
+    icon: Clock,
+    scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/desk',
+      blurb: 'A call, a drive, a sourcing run — logged where you stand, on any date.',
+    },
+  },
+  {
     key: 'add-maker',
     kind: 'verb',
     label: 'Add a maker',

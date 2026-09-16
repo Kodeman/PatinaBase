@@ -134,4 +134,39 @@ describe('PreworkRegion', () => {
     renderAt(null, { eyebrow: 'v3 · saved Aug 12' });
     expect(screen.getByText('v3 · saved Aug 12')).toBeInTheDocument();
   });
+
+  // R3 — brief, discovery and direction: the band states the standing fact, so
+  // the head states nothing. What must survive is the LANDMARK: the rule, the
+  // `<h2>` with its id and its -1 tabindex (the rail jumps land there), and
+  // the region root the ladder indexes.
+  describe('silent (R3 — the head prints nothing)', () => {
+    it('keeps the h2 as a landmark, sr-only, with its id and jump target', () => {
+      const { container } = renderAt('full', { silent: true });
+
+      const heading = screen.getByRole('heading', { name: 'Scope & engagement' });
+      expect(heading).toHaveClass('sr-only');
+      expect(heading).toHaveAttribute('id', 'scope-region-heading');
+      expect(heading).toHaveAttribute('tabindex', '-1');
+      expect(container.querySelector('[data-region-head="scope"]')).not.toBeNull();
+    });
+
+    it('prints no status line and no eyebrow', () => {
+      const { container } = renderAt('full', {
+        silent: true,
+        eyebrow: 'v3 · saved Aug 12',
+      });
+
+      const head = container.querySelector('[data-region-head="scope"]')!;
+      expect(head.querySelectorAll('p')).toHaveLength(0);
+      expect(head).not.toHaveTextContent('4 rooms in scope');
+      expect(screen.queryByText('v3 · saved Aug 12')).not.toBeInTheDocument();
+    });
+
+    it('leaves the rule and the body exactly as they were', () => {
+      const { container } = renderAt('full', { silent: true });
+
+      expect(container.querySelector('[data-rule-weight]')).not.toBeNull();
+      expect(screen.getByText('the scope body')).toBeInTheDocument();
+    });
+  });
 });

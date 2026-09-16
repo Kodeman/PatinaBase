@@ -1,0 +1,88 @@
+{
+  "consoleErrors": [
+    "[1440x900] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+    "[1440x900] Error logged: AppError: Not authenticated\n    at w (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:13317)\n    at Object.onError (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:1941)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-530a2a57a0b7a863.js:1:35074) {queryKey: Array(1), meta: undefined}",
+    "[1280x800] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+    "[1280x800] Error logged: AppError: Not authenticated\n    at w (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:13317)\n    at Object.onError (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:1941)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-530a2a57a0b7a863.js:1:35074) {queryKey: Array(1), meta: undefined}",
+    "[390x844@2x] TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+    "[390x844@2x] Error logged: AppError: Not authenticated\n    at w (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:13317)\n    at Object.onError (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:1941)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-530a2a57a0b7a863.js:1:35074) {queryKey: Array(1), meta: undefined}"
+  ],
+  "pageErrors": [],
+  "shots": [
+    "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w3/renders/desk-1440x900.png",
+    "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w3/renders/desk-1440x900-facet-needs-me.png",
+    "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w3/renders/desk-1440x900-facet-by-person.png",
+    "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w3/renders/desk-1280x800.png",
+    "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w3/renders/desk-390x844@2x.png"
+  ],
+  "overflow": [
+    {
+      "label": "1440x900 /desk",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "ok": true
+    },
+    {
+      "label": "1440x900 /desk needs-me",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "ok": true
+    },
+    {
+      "label": "1440x900 /desk by-person",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "ok": true
+    },
+    {
+      "label": "1280x800 /desk",
+      "scrollWidth": 1280,
+      "clientWidth": 1280,
+      "ok": true
+    },
+    {
+      "label": "390x844@2x /desk",
+      "scrollWidth": 437,
+      "clientWidth": 390,
+      "ok": false
+    }
+  ],
+  "facts": {
+    "heading": "EVERY JOB · 17 LIVE · 1 OVERDUE",
+    "overdueLine": "One thing is overdue — Aspen.",
+    "dayLinePresent": 1,
+    "dayLines": [
+      "Aspen Loft Refresh — project, overdue 4 days",
+      "Marcus Wright · New lead — respond by Sep 11"
+    ],
+    "rosterRows": 17,
+    "stagePlates": [
+      "BRIEF · 5",
+      "DISCOVERY · 1",
+      "DIRECTION · 3",
+      "PROPOSAL · 2",
+      "PROJECT · 5",
+      "INSTALL · 1"
+    ],
+    "boardsRail": 0,
+    "recentBoardsStrip": 0,
+    "wideGrid": "662px 260px",
+    "hasShadow": "NAV.doc-elevated fixed inset-x-0 bottom-0 z-40 hidden h-[60px] grid-cols-[1fr_auto_1fr] items-center gap-4 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-[22px] min-[1180px]:grid",
+    "facetNeedsMePresent": 1,
+    "afterNeedsMe": {
+      "heading": "EVERY JOB · 17 LIVE · 1 OVERDUE · SHOWING WHAT NEEDS YOU",
+      "pressed": "true",
+      "rows": 9,
+      "emptySentence": null
+    },
+    "facetByPersonPresent": 1,
+    "afterByPerson": {
+      "heading": "EVERY JOB · 17 LIVE · 1 OVERDUE · BY PERSON",
+      "pressed": "true",
+      "personPlates": [
+        "LEAH HARTWELL · 17"
+      ],
+      "rows": 17
+    }
+  }
+}

@@ -1,0 +1,17 @@
+Pager usage is off.
+BEGIN
+SET
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  Z: raw field_link_tokens (shipped RLS) = 7
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  Z: v_access_grants field_link = 7
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  Z: access_grants_trade_rfq() = 0
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  Z: access_grants_plan_transmittals() = 0
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  Z: access_grants_invoice_links() = 0
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  Z: access_grants_trade_agreement_links() = 0
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  Z: identity_phone_numbers(LDS, Dana card) = 0 numbers  (cross-tenant oracle?)
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  LDS owner: trade_rfq = 0
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  LDS owner: plan_transmittals = 0
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  LDS owner: invoice_links = 0
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  LDS owner: v_access_grants = 14
+psql:probe198-w1b-final-r12-access-grant-readers.sql:36: NOTICE:  LDS owner: grant_ids that look like a 64-hex credential = 0
+DO
+ROLLBACK

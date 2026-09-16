@@ -255,6 +255,72 @@ describe('Supabase compatibility proxy', () => {
     );
   });
 
+  it('lets a public storage object be cached, without carrying a cookie', async () => {
+    const response = await proxySupabaseRequest(
+      new Request(
+        'https://api.patina.cloud/storage/v1/object/public/studio-logos/m/mark.png',
+      ),
+      env,
+      config,
+      'trace-0000000009',
+      async () =>
+        new Response('png', {
+          status: 200,
+          headers: {
+            'cache-control': 'public, max-age=31536000',
+            'set-cookie': 'session=value',
+          },
+        }),
+    );
+
+    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000');
+    expect(response.headers.get('cdn-cache-control')).toBe(null);
+    expect(response.headers.get('cloudflare-cdn-cache-control')).toBe(null);
+    expect(response.headers.get('set-cookie')).toBe(null);
+  });
+
+  it('gives a public storage object a default cache lifetime when upstream states none', async () => {
+    const response = await proxySupabaseRequest(
+      new Request(
+        'https://api.patina.cloud/storage/v1/object/public/studio-logos/m/mark.png',
+        { method: 'HEAD' },
+      ),
+      env,
+      config,
+      'trace-0000000010',
+      async () => new Response(null, { status: 200 }),
+    );
+    expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
+  });
+
+  it('still refuses to cache a signed storage object or a write to a public path', async () => {
+    const signed = await proxySupabaseRequest(
+      new Request('https://api.patina.cloud/storage/v1/object/sign/docs/x.pdf'),
+      env,
+      config,
+      'trace-0000000011',
+      async () =>
+        new Response('pdf', {
+          status: 200,
+          headers: { 'cache-control': 'public, max-age=31536000' },
+        }),
+    );
+    expect(signed.headers.get('cache-control')).toBe('private, no-store');
+    expect(signed.headers.get('cdn-cache-control')).toBe('no-store');
+
+    const upload = await proxySupabaseRequest(
+      new Request(
+        'https://api.patina.cloud/storage/v1/object/public/studio-logos/m/mark.png',
+        { method: 'POST', body: 'bytes' },
+      ),
+      env,
+      config,
+      'trace-0000000012',
+      async () => new Response('ok', { status: 200 }),
+    );
+    expect(upload.headers.get('cache-control')).toBe('private, no-store');
+  });
+
   it('times out a never-settling compatibility fetch independently', async () => {
     await expect(
       proxySupabaseRequest(

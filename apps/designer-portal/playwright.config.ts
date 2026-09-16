@@ -102,7 +102,7 @@ export default defineConfig({
      * workspaces deterministic in local and CI journeys. */
     env: {
       NEXT_PUBLIC_FLAG_OVERRIDES:
-        'procurement-workspace-pilot:true,the-document-pilot:true',
+        'procurement-workspace-pilot:true,the-document-pilot:true,client-invite-letter:true',
       /* Self-safing override: apps/designer-portal/.env.local has legitimately
        * pointed NEXT_PUBLIC_SUPABASE_URL at Strata prod before (e2e history),
        * and the loadEnvFile() calls above put whatever .env.local has into

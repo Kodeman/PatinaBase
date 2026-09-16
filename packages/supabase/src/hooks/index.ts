@@ -111,6 +111,11 @@ export {
   useRemoveProductFromProject,
   useUpdateProjectProductNotes,
 } from "./use-projects";
+export { useUpdateEngagementSubject } from "./use-engagement-subject";
+export type {
+  EngagementSubjectKind,
+  UpdateEngagementSubjectInput,
+} from "./use-engagement-subject";
 export {
   useSession,
   useUser,
@@ -231,10 +236,12 @@ export {
   useMarkLeadViewed,
   useAcceptLead,
   useBeginDiscovery,
+  useReturnToLeadCheck,
+  useReturnToLead,
   useNurtureLead,
   useDeclineLead,
 } from "./use-leads";
-export type { Lead, LeadFilters } from "./use-leads";
+export type { Lead, LeadFilters, ReturnToLeadCheck } from "./use-leads";
 export {
   useDiscovery,
   useUpsertDiscovery,
@@ -279,6 +286,14 @@ export type {
   ClientMessage,
   ClientFilters,
 } from "./use-clients";
+export {
+  useClientInvitationStatus,
+  clientInvitationStatusKeys,
+} from "./use-client-invitation-status";
+export type {
+  ClientInvitationState,
+  ClientInvitationStatus,
+} from "./use-client-invitation-status";
 export {
   // Client Decisions
   useClientDecisions,
@@ -416,6 +431,7 @@ export {
   useProjectRoster,
   isProjectArtifactApproval,
   excludeProjectArtifactApprovals,
+  normalizePartyPhoneForCompare,
 } from "./use-coordination";
 export type {
   Court,
@@ -440,7 +456,95 @@ export type {
   RemoveProjectPartyInput,
   RecordPartySmsConsentInput,
   ProjectRosterRow,
+  // People room CRM (W2a)
+  CloseProjectPartySeatInput,
+  SeatDeleteRefusal,
+  RosterBand,
+  RosterWindowSeat,
+  AuthorityScope,
+  ProjectPartyAuthority,
+  SetPartyAuthorityInput,
+  SiteAccessEmergencyLine,
+  ProjectSiteAccessCard,
+  UpdateSiteAccessCardInput,
 } from "./use-coordination";
+// People room CRM (W2a) — the seat's close act, the window bands, authority on
+// the seat, and the site access card.
+export {
+  useCloseProjectPartySeat,
+  SEAT_CLOSE_REFUSAL_SENTENCES,
+  SEAT_CLOSE_MONEY_HELD_REASON,
+  asSeatCloseError,
+  seatCloseIsHeldForMoney,
+  seatDeleteRefusal,
+  SEAT_DELETE_REFUSAL_SENTENCES,
+  ROSTER_BANDS,
+  ROSTER_BAND_LABELS,
+  rosterBandFor,
+  rosterDateKey,
+  groupRosterByWindow,
+  useProjectRosterByWindow,
+  useProjectRecordedStudio,
+  ALL_AUTHORITY_SCOPES,
+  ADMIN_ONLY_AUTHORITY_SCOPES,
+  AUTHORITY_SCOPE_LABELS,
+  isAdminOnlyAuthorityScope,
+  usePartyAuthority,
+  useSetPartyAuthority,
+  partyAuthorityKeys,
+  useSiteAccessCard,
+  useUpdateSiteAccessCard,
+  useLogSiteAccessTold,
+  siteAccessKeys,
+} from "./use-coordination";
+// People room CRM (W3/P2) — the Bidding band's facts, and Bring forward.
+export {
+  ALL_SEAT_BID_OUTCOMES,
+  SEAT_BID_OUTCOME_STAGE,
+  SEAT_BID_OUTCOME_LABELS,
+  SEAT_BID_OUTCOME_ACTS,
+  SEAT_BID_COLUMNS,
+  seatCarriesBid,
+  bidStageOutcome,
+  seatClosedByHand,
+  isSeatBidOutcome,
+  asBidError,
+  partyBidKeys,
+  useProjectPartyBids,
+  useSetPartyBid,
+  useBringForward,
+} from "./use-coordination";
+export type {
+  SeatBidOutcome,
+  SeatBid,
+  SetPartyBidInput,
+  BidStageOutcome,
+  BringForwardPick,
+  BringForwardInput,
+  BringForwardResult,
+} from "./use-coordination";
+// People room CRM (W3/P2) — the household (E3, 00632, PR-c).
+export {
+  clientHouseholdKeys,
+  useClientHouseholds,
+  useClientHousehold,
+  useProjectHousehold,
+  useCreateClientHousehold,
+  useSetHouseholdThreshold,
+  useAddHouseholdMember,
+  asHouseholdError,
+  HOUSEHOLD_MEMBER_ROLE_LABELS,
+  HOUSEHOLD_GRANT_SOURCE_CLAUSE,
+  householdOwnsGrant,
+} from "./use-households";
+export type {
+  ClientHousehold,
+  ClientSideMoneyGrant,
+  HouseholdMemberRole,
+  CreateClientHouseholdInput,
+  SetHouseholdThresholdInput,
+  AddHouseholdMemberInput,
+} from "./use-households";
 // Field Coordination (Wave 5) — SMS triage, cross-project field rollup, and the
 // per-party thread / composer / field-link data layer.
 export {
@@ -465,19 +569,128 @@ export {
   fieldLinkUrl,
   partySmsKeys,
 } from "./use-party-sms";
-export type { PartySmsMessage, FieldLinkToken } from "./use-party-sms";
+export type {
+  PartySmsMessage,
+  FieldLinkToken,
+  CreateFieldLinkInput,
+} from "./use-party-sms";
 export {
   usePeopleDirectory,
   usePerson,
+  usePeopleSeats,
+  usePersonSeat,
   peopleKeys,
+  peopleSeatKeys,
   FIELD_ROSTER_ROLES,
   isFieldRosterRole,
 } from "./use-people";
 export type {
   PartyRole,
   PeopleDirectoryRow,
+  PeopleDirectorySeat,
   PeopleFilters,
+  PeopleSeatFilters,
+  PersonSeatResolution,
 } from "./use-people";
+// People room CRM (W2a) — consent lives on the RECORD, never on a seat.
+export {
+  useChannelConsent,
+  useChannelConsentRecords,
+  useRecordChannelConsent,
+  useRecordChannelInvite,
+  useRecordChannelReconsent,
+  useProjectConsentOrg,
+  asWrittenConsentError,
+  consentKeys,
+  CONSENT_LEGACY_FROZEN,
+  CONSENT_FROZEN_SENTENCE,
+} from "./use-consent";
+export type {
+  ConsentChannelKind,
+  ConsentStatus,
+  ConsentSource,
+  ChannelConsentRecord,
+  ChannelConsentResolution,
+  RecordChannelConsentInput,
+  RecordChannelInviteInput,
+  RecordChannelReconsentInput,
+} from "./use-consent";
+// People room CRM (W2a) — E9, every door Patina opens, in one shape.
+export {
+  useAccessGrants,
+  useRevokeAccessGrant,
+  accessGrantKeys,
+  accessGrantRevokeRoute,
+  accessGrantNaturalKey,
+  isAccessGrantRevokable,
+  ALL_ACCESS_GRANT_TIERS,
+  FIRM_SCOPED_ACCESS_GRANT_TIERS,
+  ACCESS_GRANT_TIER_LABELS,
+  ACCESS_GRANT_TIER_OPENS,
+  ACCESS_GRANT_REVOKE_ROUTES,
+  ACCESS_GRANT_NOT_REVOKABLE_SENTENCE,
+} from "./use-access-grants";
+export type {
+  AccessGrant,
+  AccessGrantTier,
+  AccessGrantFilters,
+  AccessGrantRevokeRoute,
+  RevokeAccessGrantInput,
+} from "./use-access-grants";
+// People room CRM (W4/P3) — E13 touches, CRM-23 notices, the paperwork door
+// and the inbound queue it fills.
+export {
+  useTouches,
+  useLastTouch,
+  useRecordNotice,
+  asNoticeError,
+  touchKeys,
+  touchSentence,
+  touchDay,
+  touchInstantDay,
+  touchInstantIsoDay,
+  STUDIO_TIME_ZONE,
+  lastInboundDecision,
+  inboundDecisionSentence,
+  NO_TOUCH_SENTENCE,
+  TOUCH_CHANNEL_PHRASES,
+  TOUCH_DECISION_CLASS_LABELS,
+  TOUCH_AUTHORITY_SENTENCES,
+} from "./use-touches";
+export type {
+  StudioTouch,
+  TouchFilters,
+  TouchSubjectType,
+  TouchChannelKind,
+  TouchDecisionClass,
+  TouchAuthorityCheck,
+  RecordNoticeInput,
+  RecordedNotice,
+} from "./use-touches";
+export {
+  usePaperworkLinks,
+  useMintPaperworkLink,
+  useRevokePaperworkLink,
+  asPaperworkLinkError,
+  paperworkLinkKeys,
+  paperworkLinkUrl,
+  thirtyDaysOut,
+  firmEngagementWindowEnd,
+} from "./use-paperwork-links";
+export type {
+  PaperworkLinkToken,
+  MintPaperworkLinkInput,
+  MintedPaperworkLink,
+} from "./use-paperwork-links";
+export {
+  useInboundDocuments,
+  useConfirmInboundDocument,
+  useRejectInboundDocument,
+  asInboundDocumentError,
+  inboundDocumentKeys,
+  inboundQueueHeading,
+  inboundDocumentLine,
+} from "./use-inbound-documents";
 export {
   // Client Reviews
   useClientReviews,
@@ -718,7 +931,10 @@ export type {
   RoomScanStyleSignals,
   RoomScanFilters,
 } from "./use-room-scans";
-export type { RoomScanOwnerKind, RoomScanWithProvenance } from "./use-room-scans";
+export type {
+  RoomScanOwnerKind,
+  RoomScanWithProvenance,
+} from "./use-room-scans";
 export {
   useRoomScanPhotos,
   useRoomScanCovers,
@@ -1606,9 +1822,7 @@ export type {
   BoardItemFeedbackRow,
 } from "./board-verdicts";
 export { useBoardReactionStatuses } from "./use-board-reaction-status";
-export {
-  useBoardsReactionRollup,
-} from "./use-board-reaction-rollup";
+export { useBoardsReactionRollup } from "./use-board-reaction-rollup";
 export type {
   BoardReactionRollupEntry,
   BoardsReactionRollup,
@@ -1642,6 +1856,7 @@ export {
   useInvoicePaymentOptions,
   useNotifyCheckIntent,
   useInvoiceLink,
+  invoiceLinkIsLive,
   useRegenerateInvoiceLink,
   RegenerateInvoiceLinkError,
   useVoidInvoice,
@@ -2005,6 +2220,91 @@ export type {
   StudioContactFilters,
   StudioContactHistory,
   PromoteToStudioContactInput,
+  StudioCompanyCardFields,
+  StudioPersonCardFields,
+  UpdateStudioContactCardPatch,
+} from "./use-studio-contacts";
+// People room CRM (W2a) — typed channels (E6), the contact rule (E7),
+// affiliations (E4) and compliance documents (E10), all on the rolodex card.
+export {
+  useStudioContactChannels,
+  useStudioContactChannelsFor,
+  useAddStudioContactChannel,
+  useUpdateStudioContactChannel,
+  useSetStudioContactChannelStatus,
+  studioChannelKeys,
+  isContactChannelHeld,
+  ALL_CONTACT_CHANNEL_KINDS,
+  CONTACT_CHANNEL_KIND_LABELS,
+  PERSON_CHANNEL_KINDS,
+  COMPANY_CHANNEL_KINDS,
+  ALL_CONTACT_CHANNEL_STATUSES,
+  useContactRule,
+  useContactRules,
+  useSetContactRule,
+  useClearContactRule,
+  contactRuleKeys,
+  ALL_CONTACT_RULE_CHANNELS,
+  useAffiliations,
+  useSetAffiliation,
+  useCloseAffiliation,
+  affiliationKeys,
+  useComplianceDocuments,
+  useComplianceDocumentsFor,
+  retainedComplianceDocuments,
+  useComplianceState,
+  useRecordComplianceDocument,
+  useConfirmComplianceDocument,
+  complianceKeys,
+  complianceDocRequiresExpiry,
+  ALL_COMPLIANCE_DOC_TYPES,
+  COMPLIANCE_DOC_TYPE_LABELS,
+  DATED_COMPLIANCE_DOC_TYPES,
+  ALL_COMPLIANCE_BLOCKS,
+  COMPLIANCE_BLOCK_LABELS,
+} from "./use-studio-contacts";
+// People room CRM (W3/P2) — the merge record (00629, PR-o), the archive door,
+// and the nightly expiry notice (00630).
+export {
+  ALL_MERGE_MATCHED_ON,
+  MERGE_MATCHED_ON_LABELS,
+  STUDIO_CONTACT_ARCHIVE_STANDING_SENTENCE,
+  asArchiveError,
+  asMergeError,
+  studioContactMergeKeys,
+  useStudioContactMerges,
+  useMergeStudioContacts,
+  resolvedContactKeys,
+  useResolvedContactId,
+  complianceNoticeKeys,
+  useComplianceNotices,
+  indexComplianceNotices,
+} from "./use-studio-contacts";
+export type {
+  MergeMatchedOn,
+  StudioContactMerge,
+  MergeStudioContactsInput,
+  ComplianceNotice,
+} from "./use-studio-contacts";
+export type {
+  ContactChannelKind,
+  ContactChannelStatus,
+  StudioContactChannel,
+  AddStudioContactChannelInput,
+  UpdateStudioContactChannelInput,
+  SetStudioContactChannelStatusInput,
+  ContactRuleSubjectType,
+  ContactRuleChannel,
+  StudioContactRule,
+  SetStudioContactRuleInput,
+  StudioPersonAffiliation,
+  AffiliationFilters,
+  SetAffiliationInput,
+  ComplianceDocType,
+  ComplianceBlock,
+  StudioComplianceDocument,
+  ComplianceDocumentFilters,
+  RecordComplianceDocumentInput,
 } from "./use-studio-contacts";
 
 // The Plan Room (00429) — sheets, prints, batches, issues, transmittals: the
@@ -2077,14 +2377,107 @@ export {
 export type { MarkProjectReadInput } from "./use-reading-marks";
 export {
   useRoomConceptRender,
+  useRoomConceptRenderRecord,
+  useRemoveRoomConceptRender,
   roomConceptRenderPath,
   roomConceptRenderRoomsKey,
   roomConceptRenderThresholdKey,
+  roomConceptRenderRecordKey,
   ROOM_RENDERS_BUCKET,
   ROOM_RENDER_MAX_BYTES,
   ROOM_RENDER_MIME_TYPES,
+  ROOM_CONCEPT_RENDER_SIGNED_URL_SECONDS,
 } from "./use-room-concept-render";
 export type {
   UploadRoomConceptRenderInput,
   UploadRoomConceptRenderResult,
+  RoomConceptRenderRecord,
+  RemoveRoomConceptRenderInput,
 } from "./use-room-concept-render";
+export {
+  useEmailDelivery,
+  deriveEmailDeliveryState,
+  shouldPollEmailDelivery,
+  emailDeliveryKeys,
+  EMAIL_DELIVERY_SELECT,
+} from "./use-email-delivery";
+export type {
+  EmailDelivery,
+  EmailDeliveryRefType,
+  EmailDeliveryState,
+  EmailDeliveryStatus,
+  EmailDeliveryRow,
+} from "./use-email-delivery";
+export {
+  studioMemberRateKeys,
+  useStudioMemberRates,
+  useSetStudioMemberRate,
+} from "./use-studio-member-rates";
+export type {
+  StudioMemberRate,
+  SetStudioMemberRateInput,
+} from "./use-studio-member-rates";
+export {
+  isInvoiceEligibleTimeEntry,
+  isRatePendingTimeEntry,
+  studioPeriodStartISO,
+  filterProjectUnbilledEntries,
+  fetchTimeSummary,
+  useUnbilledTime,
+  useStudioUnbilledTime,
+  useCreateTimeEntry,
+  useUpdateTimeEntry,
+  useDeleteTimeEntry,
+  useRunningTimer,
+  useStartTimer,
+  useStopTimer,
+  useTimeCaptureProjects,
+  useMyRateRoles,
+  useDiscardTimer,
+  useClaimTimeEntries,
+  useTimeEntryLedger,
+  useStudioHoursRollup,
+  useProjectHoursTotal,
+  useProjectPricingStudio,
+  useTimeEntryNote,
+  useStampProjectPricingStudio,
+  useUpdatePhaseEstimates,
+} from "./use-time-tracking";
+export type {
+  TimeBillingState,
+  TimeRateSource,
+  TimeRateRole,
+  InvoiceEligibleTimeEntry,
+  StudioPeriod,
+  ProjectTimeEntry,
+  UnbilledTimeRow,
+  UnbilledTimeSummary,
+  StudioUnbilledTimeRow,
+  TimePhaseSummary,
+  ProjectTimeSummary,
+  CreateTimeEntryInput,
+  UpdateTimeEntryInput,
+  RunningTimer,
+  StartTimerInput,
+  StartTimerResult,
+  StopTimerInput,
+  TimeEntrySource,
+  TimeCaptureProject,
+  ClaimTimeEntriesInput,
+  TimeEntryLedgerRow,
+  TimeEntryLedgerParams,
+  TimeHoursGroupBy,
+  StudioHoursRollupParams,
+  StudioHoursRollupRow,
+  ProjectHoursTotal,
+} from "./use-time-tracking";
+
+// HT-35 — the automatic timer's disclosure and its per-member opt-out.
+export {
+  useTimeAutostartPreference,
+  useSetTimeAutostartOptOut,
+  useMarkTimeAutostartDisclosed,
+  fetchTimeAutostartPreference,
+  timeAutostartKeys,
+} from "./use-time-autostart";
+export type { TimeAutostartPreference } from "./use-time-autostart";

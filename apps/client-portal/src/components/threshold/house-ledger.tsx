@@ -2,10 +2,9 @@
 
 import { Fragment } from 'react';
 
-import {
-  countInWords,
-  moneyInWords,
-} from '@/components/threshold/instruments/standing-sentence';
+import { formatCurrency } from '@patina/shared';
+
+import { countInWords } from '@/components/threshold/instruments/standing-sentence';
 import { parseSourceDate, type HouseLedgerModel } from '@/lib/threshold/derive';
 import { owedDueLine } from '@/lib/threshold/standing';
 
@@ -23,6 +22,11 @@ import { owedDueLine } from '@/lib/threshold/standing';
    and a homeowner reading "$1,440" with no words is being handed a fact she
    has to decode; "Held on finished work · $1,440" is a fact she can read. So
    the row is the pair, and a row that has lost its words is not rendered.
+
+   EVERY FIGURE CARRIES ITS CENTS (§F-B / PP-2). A ledger is arithmetic, and
+   arithmetic that rounds does not add up on the page it is printed on: a
+   client checking "$11,100 agreed · $0 paid · $4,060 owed" against her own
+   invoice finds neither figure on it. `formatCurrency` is the one speller.
 
    Nothing is ever reported as zero. A line with nothing to say says nothing —
    the same rule the standing sentence keeps — and a figure the surface does
@@ -97,10 +101,10 @@ function reconcileClauses(ledger: HouseLedgerModel): ReconcileClause[] | null {
   if (!figure(ledger.owedCents)) return null;
   const clauses: ReconcileClause[] = [];
   if (figure(ledger.agreedCents)) {
-    clauses.push({ figure: moneyInWords(ledger.agreedCents), words: 'agreed' });
+    clauses.push({ figure: formatCurrency(ledger.agreedCents), words: 'agreed' });
   }
   if (typeof ledger.paidCents === 'number' && Number.isFinite(ledger.paidCents)) {
-    clauses.push({ figure: moneyInWords(ledger.paidCents), words: 'paid' });
+    clauses.push({ figure: formatCurrency(ledger.paidCents), words: 'paid' });
   }
   const owed = owedWords(
     ledger.owedInvoiceCount,
@@ -108,7 +112,7 @@ function reconcileClauses(ledger: HouseLedgerModel): ReconcileClause[] | null {
     ledger.owedInvoiceNumber,
   );
   clauses.push({
-    figure: moneyInWords(ledger.owedCents),
+    figure: formatCurrency(ledger.owedCents),
     words: `${owed.charAt(0).toLowerCase()}${owed.slice(1)}`,
   });
   return clauses;
@@ -118,12 +122,12 @@ function standsSentence(ledger: HouseLedgerModel): string | null {
   const agreed = figure(ledger.agreedCents) ? ledger.agreedCents : null;
   const planned = figure(ledger.plannedCents) ? ledger.plannedCents : null;
   if (agreed !== null && planned !== null) {
-    return `The house stands at ${moneyInWords(agreed)} agreed of ${moneyInWords(
+    return `The house stands at ${formatCurrency(agreed)} agreed of ${formatCurrency(
       planned,
     )} planned.`;
   }
-  if (agreed !== null) return `The house stands at ${moneyInWords(agreed)} agreed.`;
-  if (planned !== null) return `The house stands at ${moneyInWords(planned)} planned.`;
+  if (agreed !== null) return `The house stands at ${formatCurrency(agreed)} agreed.`;
+  if (planned !== null) return `The house stands at ${formatCurrency(planned)} planned.`;
   return null;
 }
 
@@ -152,7 +156,7 @@ export function HouseLedger({ ledger, today }: HouseLedgerProps) {
     >
       {owed !== null && (
         <p data-testid="house-ledger-owed" className="t-d2 text-[var(--text-primary)]">
-          {moneyInWords(owed)}
+          {formatCurrency(owed)}
         </p>
       )}
 
@@ -196,7 +200,7 @@ export function HouseLedger({ ledger, today }: HouseLedgerProps) {
         >
           <span data-ledger-words>{row.words}</span>
           <span data-ledger-figure className="t-money text-[var(--text-primary)]">
-            {moneyInWords(row.cents)}
+            {formatCurrency(row.cents)}
           </span>
         </div>
       ))}

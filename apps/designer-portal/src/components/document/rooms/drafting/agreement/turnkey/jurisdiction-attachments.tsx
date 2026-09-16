@@ -25,7 +25,7 @@ import { DESIGN_BUILD_COPY } from "@patina/types";
 import { Button } from "@/components/ui/controls";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 /** The six seeded jurisdictions and what each notice is called. Kept in step
  *  with the seed in migration 1, PART 4. */
@@ -68,7 +68,7 @@ export function JurisdictionAttachments({
             >
               <span className="text-[12px] text-[var(--text-body)]">
                 {notice.title}
-                <span className="ml-2 text-[11px] text-[var(--color-aged-oak)]">
+                <span className="ml-2 text-[11px] text-[var(--ink-subtle)]">
                   {notice.citation}
                 </span>
               </span>

@@ -1,0 +1,49 @@
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+INSERT 0 1
+INSERT 0 1
+=== premise: the two resolvers disagree on this project ===
+ consent_resolver_names 
+------------------------
+ Leah Hartwell
+(1 row)
+
+ assume_user 
+-------------
+ 
+(1 row)
+
+ gate_resolver_names_for_the_working_admin 
+-------------------------------------------
+ Local Dev Studio
+(1 row)
+
+=== A. the working studio's ADMIN names their OWN firm card on their own seat ===
+psql:probe137-r7-party-card-resolver.sql:36: NOTICE:  A: REFUSED — party_company_other_studio  (P0001)
+DO
+=== B. the same admin names a card of the GUESSED studio, which they are not a member of ===
+psql:probe137-r7-party-card-resolver.sql:47: NOTICE:  B: a FOREIGN studio's firm pointer LANDED on this studio's seat
+DO
+=== C. what the working studio now reads on its own seat line ===
+               seat_id                |  display_name  |              company_id              | paper_state 
+--------------------------------------+----------------+--------------------------------------+-------------
+ e7000000-0000-4000-8000-0000000000e1 | Studioless Sub | e7000000-0000-4000-8000-0000000000f1 | not_on_file
+(1 row)
+
+ can_the_admin_read_that_card 
+------------------------------
+                            0
+(1 row)
+
+=== D. and the warranty contact pointer, same resolver ===
+psql:probe137-r7-party-card-resolver.sql:64: NOTICE:  D: REFUSED — party_warranty_contact_other_studio
+DO
+ reset_role 
+------------
+ 
+(1 row)
+
+ROLLBACK

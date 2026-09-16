@@ -765,6 +765,24 @@ BEGIN
     298000, 0, ts - INTERVAL '28 days', ts - INTERVAL '28 days'
   );
 
+  -- The draw the wall gate reads. Without it `bundle.tradeScope.draws` is
+  -- empty, `gatesOnAcceptance` finds nothing, and the wall's act falls back to
+  -- "Accept the finished work" over a consequence sentence that can name no
+  -- money — so the one place on this page where a figure moves on the client's
+  -- word has no figure on it locally. The whole scope is billed on acceptance
+  -- here, which is why the draw is the client price entire.
+  --
+  -- Written while the proposal is still 'draft': `guard_trade_scope_draws`
+  -- freezes the schedule the moment the scope leaves draft, and the block
+  -- below is what takes it out.
+  INSERT INTO public.trade_scope_draws (
+    proposal_id, label, percentage, amount_cents, sort_order,
+    gates_on_acceptance, created_at, updated_at
+  ) VALUES (
+    v_ts_proposal, 'On acceptance', 100, 298000, 0,
+    TRUE, ts - INTERVAL '28 days', ts - INTERVAL '28 days'
+  );
+
   PERFORM set_config('app.proposal_accept_id', v_ts_proposal::text, true);
   PERFORM set_config('app.commercial_document_id', v_ts_proposal::text, true);
   UPDATE public.proposals

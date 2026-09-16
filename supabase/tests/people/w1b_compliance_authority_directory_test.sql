@@ -1,0 +1,4411 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- W1b — compliance, authority, the identity directory, the site access card,
+--        the access-grant ledger, and the field link's window expiry
+--
+-- Migrations under test: 00623 (studio_compliance_documents +
+-- compliance_state), 00624 (project_parties' stage/window + company pointer,
+-- project_party_authority + PR-n), 00625 (project_site_access_cards + PR-w),
+-- 00626 (people_directory v4 + people_directory_seats), 00627
+-- (v_access_grants + create_field_link's PR-d expiry).
+--
+-- Blocks 1–2 and 5–8 build their own fixtures. Blocks 3–4 and 9–10 assert
+-- against the SEEDED Okonkwo fixture (seed/people_crm_dev.sql), because the
+-- brief's acceptance is stated in the fixture's own words — Dana Kowalski's
+-- two seats, F-08's field link — and a test that re-invented them would prove
+-- the view works on data the room will never hold.
+--
+--   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+--        -v ON_ERROR_STOP=1 -f supabase/tests/people/w1b_compliance_authority_directory_test.sql
+--
+-- One transaction, ROLLBACKed. Requires the dev seed (pnpm supabase:reset).
+--
+-- Blocks 21 and 22 are the r12 regression legs: 21 stages its own two seats
+-- and executes 00624's stage backfill BOTH ways, because that statement is a
+-- no-op on every reset (migrations run before seeds) and only ever really
+-- runs at the deploy; 22 walks the shipped inline add on a carded human's own
+-- number and the three cases the auto-link must refuse.
+-- ═══════════════════════════════════════════════════════════════════════════
+BEGIN;
+
+-- ─── helpers (the 00594 W1a test's own shape) ──────────────────────────────
+CREATE OR REPLACE FUNCTION pg_temp.assume_user(p_user_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  PERFORM set_config('role', 'authenticated', true);
+  PERFORM set_config(
+    'request.jwt.claims',
+    json_build_object('sub', p_user_id::text, 'role', 'authenticated')::text,
+    true
+  );
+  EXECUTE 'SET LOCAL ROLE authenticated';
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user(UUID) TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION pg_temp.assume_anon()
+RETURNS VOID AS $$
+BEGIN
+  PERFORM set_config('request.jwt.claims', NULL, true);
+  EXECUTE 'SET LOCAL ROLE anon';
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_anon() TO PUBLIC;
+
+CREATE OR REPLACE FUNCTION pg_temp.reset_role()
+RETURNS VOID AS $$
+BEGIN
+  EXECUTE 'RESET ROLE';
+  PERFORM set_config('request.jwt.claims', NULL, true);
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
+
+-- ─── scratch fixture for the state and policy blocks ──────────────────────
+-- A second studio, so nothing here can read as the seeded one's.
+INSERT INTO public.organizations (id, type, name, slug, status) VALUES
+  ('f1000000-0000-4000-8000-00000000000a', 'design_studio', 'Test Studio A', 'w1b-studio-a', 'active');
+
+INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at) VALUES
+  -- the seed's owner is also this studio's owner, so is_studio_comember() can
+  -- resolve the project's designer through a shared membership
+  ('a0000000-0000-0000-0000-000000000004', 'f1000000-0000-4000-8000-00000000000a', 'owner',  'active', now()),
+  -- and a plain MEMBER, which is what PR-n narrows
+  ('a0000000-0000-0000-0000-000000000003', 'f1000000-0000-4000-8000-00000000000a', 'member', 'active', now())
+ON CONFLICT (user_id, organization_id) DO UPDATE SET role = EXCLUDED.role, status = 'active';
+
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by) VALUES
+  ('f2000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-00000000000a','company','sub','Four Words Electric','sub','a0000000-0000-0000-0000-000000000004'),
+  ('f2000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-00000000000a','company','sub','Undated Paper Co','sub','a0000000-0000-0000-0000-000000000004'),
+  ('f2000000-0000-4000-8000-000000000003','f1000000-0000-4000-8000-00000000000a','company','lender','No Paper Bank','lender','a0000000-0000-0000-0000-000000000004');
+INSERT INTO public.studio_contacts
+  (id, organization_id, entity_kind, contact_kind, full_name, company_id, created_by) VALUES
+  ('f2000000-0000-4000-8000-000000000011','f1000000-0000-4000-8000-00000000000a','person','sub','Wire Person','f2000000-0000-4000-8000-000000000001','a0000000-0000-0000-0000-000000000004');
+
+INSERT INTO public.projects
+  (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+  ('f3000000-0000-4000-8000-00000000000a','W1b test job','a0000000-0000-0000-0000-000000000004','f1000000-0000-4000-8000-00000000000a','active','a0000000-0000-0000-0000-000000000004','full');
+
+INSERT INTO public.project_parties
+  (id, project_id, party_kind, display_name, phone, company_id, stage,
+   on_site_from, on_site_to, created_by) VALUES
+  ('f4000000-0000-4000-8000-000000000001','f3000000-0000-4000-8000-00000000000a','sub','Wire Person','(612) 555-0911',
+   'f2000000-0000-4000-8000-000000000001','active','2026-11-02','2026-12-18','a0000000-0000-0000-0000-000000000004'),
+  ('f4000000-0000-4000-8000-000000000002','f3000000-0000-4000-8000-00000000000a','gc','No Window Person','(612) 555-0912',
+   NULL,'active',NULL,NULL,'a0000000-0000-0000-0000-000000000004'),
+  ('f4000000-0000-4000-8000-000000000003','f3000000-0000-4000-8000-00000000000a','sub','Warranty Person','(612) 555-0913',
+   NULL,'warranty',NULL,NULL,'a0000000-0000-0000-0000-000000000004');
+UPDATE public.project_parties SET warranty_until = '2027-06-30'
+ WHERE id = 'f4000000-0000-4000-8000-000000000003';
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 1. compliance_state: four words, and the 30-day window
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  w text;
+BEGIN
+  -- not_on_file: nothing at all. Distinct from lapsed (C21/R-K).
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000003');
+  IF w <> 'not_on_file' THEN
+    RAISE EXCEPTION '1a expected not_on_file for a card with no paper, got %', w;
+  END IF;
+  w := public.compliance_state(NULL);
+  IF w <> 'not_on_file' THEN
+    RAISE EXCEPTION '1b expected not_on_file for a NULL holder, got %', w;
+  END IF;
+
+  -- An UNDATED paper (a W-9) is held and cannot lapse.
+  INSERT INTO public.studio_compliance_documents
+    (organization_id, holder_type, holder_id, doc_type, issued_on, blocks)
+  VALUES ('f1000000-0000-4000-8000-00000000000a','company','f2000000-0000-4000-8000-000000000002',
+          'w9','2024-01-01','{payment}');
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000002');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '1c expected current for undated paper only, got %', w;
+  END IF;
+
+  -- current: an expiry comfortably beyond the window.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
+  VALUES ('f5000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-00000000000a','company',
+          'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE + 200, '{site_access,draw}');
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'current' THEN RAISE EXCEPTION '1d expected current, got %', w; END IF;
+
+  -- the boundary: exactly 30 days out is INSIDE the window; 31 is not.
+  UPDATE public.studio_compliance_documents SET expires_on = CURRENT_DATE + 31
+   WHERE id = 'f5000000-0000-4000-8000-000000000001';
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'current' THEN RAISE EXCEPTION '1e expected current at +31 days, got %', w; END IF;
+
+  UPDATE public.studio_compliance_documents SET expires_on = CURRENT_DATE + 30
+   WHERE id = 'f5000000-0000-4000-8000-000000000001';
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'lapses_soon' THEN RAISE EXCEPTION '1f expected lapses_soon at +30 days, got %', w; END IF;
+
+  -- today is not yet lapsed; yesterday is.
+  UPDATE public.studio_compliance_documents SET expires_on = CURRENT_DATE
+   WHERE id = 'f5000000-0000-4000-8000-000000000001';
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'lapses_soon' THEN RAISE EXCEPTION '1g expected lapses_soon on the expiry day, got %', w; END IF;
+
+  UPDATE public.studio_compliance_documents SET expires_on = CURRENT_DATE - 1
+   WHERE id = 'f5000000-0000-4000-8000-000000000001';
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'lapsed' THEN RAISE EXCEPTION '1h expected lapsed the day after, got %', w; END IF;
+
+  -- worst-first: one lapsed paper outranks a current one beside it.
+  INSERT INTO public.studio_compliance_documents
+    (organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
+  VALUES ('f1000000-0000-4000-8000-00000000000a','company','f2000000-0000-4000-8000-000000000001',
+          'coi_wc', CURRENT_DATE + 300, '{site_access}');
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'lapsed' THEN RAISE EXCEPTION '1i expected lapsed to outrank current, got %', w; END IF;
+
+  -- a SUPERSEDED paper is out of the reckoning: the renewal answers.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
+  VALUES ('f5000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-00000000000a','company',
+          'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE + 365, '{site_access,draw}');
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000002'
+   WHERE id = 'f5000000-0000-4000-8000-000000000001';
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '1j a superseded lapse must not still hold the card; got %', w;
+  END IF;
+
+  -- a paper that holds NO gate cannot move the word (w1b r1 MAJOR-3).
+  -- CS2 §4: "a date with no gate changes nothing"; PR-h puts the word in the
+  -- blocked family, so a lapsed training card that gates nothing must not make
+  -- a firm whose COI is current print the blocked word.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+  VALUES ('f5000000-0000-4000-8000-000000000003','f1000000-0000-4000-8000-00000000000a','company',
+          'f2000000-0000-4000-8000-000000000001','other_named','a training card',
+          CURRENT_DATE - 1, '{}');
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '1k a gateless lapse changed the word (CS2 §4), got %', w;
+  END IF;
+
+  -- nor inside the 30-day window
+  UPDATE public.studio_compliance_documents SET expires_on = CURRENT_DATE + 10
+   WHERE id = 'f5000000-0000-4000-8000-000000000003';
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '1l a gateless paper 10 days out changed the word, got %', w;
+  END IF;
+
+  -- give that SAME paper one gate and the same date now holds the card
+  UPDATE public.studio_compliance_documents
+     SET blocks = '{payment}', expires_on = CURRENT_DATE - 1
+   WHERE id = 'f5000000-0000-4000-8000-000000000003';
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000001');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '1m a gated lapse must hold the card, got %', w;
+  END IF;
+
+  -- and not_on_file still means NO paper, not no GATING paper: a card holding
+  -- only a gateless expired certificate is on file, and reads current.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+  VALUES ('f5000000-0000-4000-8000-000000000004','f1000000-0000-4000-8000-00000000000a','company',
+          'f2000000-0000-4000-8000-000000000003','other_named','a courtesy letter',
+          CURRENT_DATE - 1, '{}');
+  w := public.compliance_state('f2000000-0000-4000-8000-000000000003');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '1n a card holding only gateless paper must read current, got %', w;
+  END IF;
+
+  RAISE NOTICE '1. compliance_state: four words, the 30-day boundary both ways, worst-first precedence, a superseded lapse released, and a gateless lapse that changes nothing until it holds a gate: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 2. The holder guard: a person card is not a firm, and not another studio's
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  raised text;
+  v_type text;
+  v_old  uuid;
+  v_new  uuid;
+BEGIN
+  BEGIN
+    INSERT INTO public.studio_compliance_documents
+      (organization_id, holder_type, holder_id, doc_type, expires_on)
+    VALUES ('f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000011','coi_gl', CURRENT_DATE + 100);
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_holder_kind_mismatch%' THEN
+    RAISE EXCEPTION '2a a person card accepted as holder_type=company: %', COALESCE(raised,'no error');
+  END IF;
+
+  BEGIN
+    INSERT INTO public.studio_compliance_documents
+      (organization_id, holder_type, holder_id, doc_type, expires_on)
+    VALUES ('b0000000-0000-0000-0000-000000000001','company',
+            'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE + 100);
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_holder_other_studio%' THEN
+    RAISE EXCEPTION '2b a cross-studio document was accepted (PR-u): %', COALESCE(raised,'no error');
+  END IF;
+
+  -- a PERSON-held paper is legitimate: a master licence is the person's
+  INSERT INTO public.studio_compliance_documents
+    (organization_id, holder_type, holder_id, doc_type, doc_label, expires_on)
+  VALUES ('f1000000-0000-4000-8000-00000000000a','person',
+          'f2000000-0000-4000-8000-000000000011','other_named','OSHA 30 card', CURRENT_DATE + 400);
+
+  -- other_named still needs its label
+  BEGIN
+    INSERT INTO public.studio_compliance_documents
+      (organization_id, holder_type, holder_id, doc_type)
+    VALUES ('f1000000-0000-4000-8000-00000000000a','person',
+            'f2000000-0000-4000-8000-000000000011','other_named');
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%doc_label_check%' THEN
+    RAISE EXCEPTION '2c an unnamed other_named was accepted (PR-f): %', COALESCE(raised,'no error');
+  END IF;
+
+  -- and blocks is a subset of the three gates that have a surface
+  BEGIN
+    INSERT INTO public.studio_compliance_documents
+      (organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
+    VALUES ('f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE + 100,'{permit}');
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%blocks_check%' THEN
+    RAISE EXCEPTION '2d a gate no surface honours was accepted: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- a supersede is a RENEWAL, not a way to hide a lapse (w1b r1 MAJOR-4).
+  -- Card and studio were the whole guard, so one UPDATE through PostgREST by a
+  -- plain studio member pointed a lapsed COI at the firm's undated W-9 and the
+  -- paper word flipped from lapsed to current with the lapse still on file.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000021','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE - 1, '{site_access}'),
+    ('f5000000-0000-4000-8000-000000000022','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','w9', NULL, '{payment}'),
+    ('f5000000-0000-4000-8000-000000000023','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE - 10, '{site_access}'),
+    ('f5000000-0000-4000-8000-000000000024','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','coi_gl', CURRENT_DATE + 365, '{site_access}'),
+    ('f5000000-0000-4000-8000-000000000025','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','w9', CURRENT_DATE - 1, '{payment}');
+
+  -- the walked laundering: a W-9 as the renewal of a COI
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000022'
+     WHERE id = 'f5000000-0000-4000-8000-000000000021';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_wrong_type%' THEN
+    RAISE EXCEPTION '2e a W-9 was accepted as the renewal of a lapsed COI: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- and a COI that expired even earlier is not a renewal either
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000023'
+     WHERE id = 'f5000000-0000-4000-8000-000000000021';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_not_later%' THEN
+    RAISE EXCEPTION '2f a shorter-dated COI was accepted as a renewal: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- the real renewal lands: the same paper, covering longer
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000024'
+   WHERE id = 'f5000000-0000-4000-8000-000000000021';
+  IF NOT EXISTS (
+    SELECT 1 FROM public.studio_compliance_documents
+     WHERE id = 'f5000000-0000-4000-8000-000000000021'
+       AND superseded_by = 'f5000000-0000-4000-8000-000000000024') THEN
+    RAISE EXCEPTION '2g a genuine renewal was refused';
+  END IF;
+
+  -- an UNDATED successor may NOT retire a DATED paper, whatever the type
+  -- (w1b final review r4 MAJOR-1). This leg used to assert the opposite as a
+  -- deliberate exemption — "an undated successor of the same paper is
+  -- open-ended and qualifies" — and the exemption was the door: the row below
+  -- is a W-9 that expired yesterday and gates `payment`, so retiring it with
+  -- an undated W-9 takes a gating lapse out of the reckoning and the card
+  -- reads `current` forever with the lapse still on file. What decides is the
+  -- PAPER, not its type: only a dated row can lapse.
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000022'
+     WHERE id = 'f5000000-0000-4000-8000-000000000025';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_undated%' THEN
+    RAISE EXCEPTION '2h a DATED W-9 was retired by an undated one: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- and the honest open-ended case still lands: an UNDATED paper retired by
+  -- another undated one hides nothing, because neither can ever read lapsed.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000026','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000001','w9', NULL, '{payment}');
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000022'
+   WHERE id = 'f5000000-0000-4000-8000-000000000026';
+  IF NOT EXISTS (
+    SELECT 1 FROM public.studio_compliance_documents
+     WHERE id = 'f5000000-0000-4000-8000-000000000026'
+       AND superseded_by = 'f5000000-0000-4000-8000-000000000022') THEN
+    RAISE EXCEPTION '2h1 an undated W-9 was refused as the renewal of another undated one';
+  END IF;
+
+  -- ═══ r2 MAJOR-1 door (a): a DATED type must carry its date ═══════════════
+  -- r1 MAJOR-4 was closed by requiring the same doc_type and a date no earlier,
+  -- and the leg above (2h) states the deliberate exemption for an undated
+  -- successor. Nothing required expires_on on a COI, so the successor could be
+  -- an undated COI: compliance_state() counts an undated paper as held and
+  -- unable to lapse, so two ordinary member writes — record the renewal without
+  -- typing the date, mark the old one superseded — flipped a firm holding a
+  -- lapsed, GATING certificate from `lapsed` to `current` with the lapse still
+  -- on file.
+  BEGIN
+    INSERT INTO public.studio_compliance_documents
+      (organization_id, holder_type, holder_id, doc_type, issuer, blocks)
+    VALUES ('f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000001','coi_gl',
+            'Acme Mutual (renewal, no date typed)','{site_access,draw}');
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%dated_expiry_check%' THEN
+    RAISE EXCEPTION '2i an undated COI was recorded, and an undated certificate reads current forever: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- a licence and a bond are dated types too
+  BEGIN
+    INSERT INTO public.studio_compliance_documents
+      (organization_id, holder_type, holder_id, doc_type, blocks)
+    VALUES ('f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000001','bond','{}');
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%dated_expiry_check%' THEN
+    RAISE EXCEPTION '2j an undated bond was recorded: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- an UNDATED type is untouched: a W-9 and a signed waiver are open-ended
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, blocks)
+  VALUES ('f5000000-0000-4000-8000-000000000031','f1000000-0000-4000-8000-00000000000a','company',
+          'f2000000-0000-4000-8000-000000000002','lien_waiver_unconditional','{payment}');
+
+  -- and the trigger says the same thing where the CHECK cannot see it — over a
+  -- row that predates the constraint. The constraint is dropped and restored
+  -- inside this rolled-back transaction so the second guard is exercised on its
+  -- own; a successor with no date is refused for a dated paper.
+  EXECUTE 'ALTER TABLE public.studio_compliance_documents '
+          'DROP CONSTRAINT studio_compliance_documents_dated_expiry_check';
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, issuer, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000032','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000002','coi_gl','Acme Mutual (no date typed)','{site_access}');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000033','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000002','coi_gl', CURRENT_DATE - 1,'{site_access}');
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000032'
+     WHERE id = 'f5000000-0000-4000-8000-000000000033';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_undated%' THEN
+    RAISE EXCEPTION '2k an undated COI was accepted as the renewal of a lapsed one: %', COALESCE(raised,'no error');
+  END IF;
+  DELETE FROM public.studio_compliance_documents
+   WHERE id = 'f5000000-0000-4000-8000-000000000032';
+  EXECUTE 'ALTER TABLE public.studio_compliance_documents '
+          'ADD CONSTRAINT studio_compliance_documents_dated_expiry_check CHECK ('
+          '  doc_type NOT IN (''coi_gl'', ''coi_wc'', ''coi_auto'', ''license'', ''bond'')'
+          '  OR expires_on IS NOT NULL)';
+
+  -- ═══ r2 MAJOR-1 door (b): a supersede may not close a chain ══════════════
+  -- Only self-reference was blocked, so A -> B then B -> A passed both r1 legs
+  -- whenever the two rows shared a doc_type and a date — and compliance_state()
+  -- excludes EVERY superseded row, so a card fell back to whatever gateless
+  -- paper it holds, or to nothing at all.
+  --
+  -- The cycle's two rows used to be one expired duplicate retiring the other.
+  -- r3 MAJOR-1 refuses that on its own now (compliance_successor_already_lapsed
+  -- on the first leg), and a later-dated successor would answer
+  -- compliance_successor_not_later on the closing edge — so the only shape in
+  -- which a cycle is still reachable, and therefore the only shape that tests
+  -- the head-of-chain guard, is two IN-FORCE duplicates of the same
+  -- certificate carrying the same date and the same gates. That is also the
+  -- realistic act: the same COI recorded twice. The card holds a W-9 as well,
+  -- because the fallback a closed loop buys is whatever gateless paper remains.
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000004','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Cycle Paper Co','sub','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000041','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE + 100,'{site_access,draw}'),
+    ('f5000000-0000-4000-8000-000000000042','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE + 100,'{site_access,draw}');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000043','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000004','w9','{payment}');
+
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'current' THEN
+    RAISE EXCEPTION '2l the cycle card must start current on two in-force duplicates, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000004');
+  END IF;
+  IF (SELECT count(*) FROM public.studio_compliance_documents
+       WHERE holder_id = 'f2000000-0000-4000-8000-000000000004'
+         AND doc_type = 'coi_gl' AND superseded_by IS NULL) <> 2 THEN
+    RAISE EXCEPTION '2l0 the cycle card must start with two live certificates';
+  END IF;
+
+  -- the first leg is legitimate: one duplicate retired by its twin — same
+  -- paper, same date, same gates, and the twin is in force
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000042'
+   WHERE id = 'f5000000-0000-4000-8000-000000000041';
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'current' THEN
+    RAISE EXCEPTION '2l1 retiring one duplicate by its twin was not honoured, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000004');
+  END IF;
+
+  -- the second leg closes the loop, and is refused
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000041'
+     WHERE id = 'f5000000-0000-4000-8000-000000000042';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_already_superseded%' THEN
+    RAISE EXCEPTION '2m a supersede CYCLE was accepted: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- and the consequence the cycle bought is gone. Had it closed, BOTH dated
+  -- COIs would have left the reckoning and the card would rest on its W-9
+  -- alone; the head of the chain is still standing and still dated in force,
+  -- which is what the word is resting on.
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'current' THEN
+    RAISE EXCEPTION '2n the refused cycle moved the word to %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000004');
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.studio_compliance_documents
+              WHERE id = 'f5000000-0000-4000-8000-000000000042'
+                AND superseded_by IS NOT NULL) THEN
+    RAISE EXCEPTION '2n1 the loop-closing edge was recorded after all';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                  WHERE holder_id = 'f2000000-0000-4000-8000-000000000004'
+                    AND doc_type = 'coi_gl' AND superseded_by IS NULL
+                    AND expires_on >= CURRENT_DATE) THEN
+    RAISE EXCEPTION '2n2 the card''s word no longer rests on a dated certificate in force';
+  END IF;
+
+  -- a genuine three-row chain is untouched: the head is always in force
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000044','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000004','coi_gl', CURRENT_DATE + 365,'{site_access,draw}');
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000044'
+   WHERE id = 'f5000000-0000-4000-8000-000000000042';
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000004') <> 'current' THEN
+    RAISE EXCEPTION '2o a real renewal at the head of the chain was not honoured, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000004');
+  END IF;
+
+  -- ═══ r3 MAJOR-1 door (c): a successor must itself be IN FORCE ════════════
+  -- Reachable with two ordinary member writes on the seeded Okonkwo fixture:
+  -- record a coi_gl dated five days ago and point the 2026-03-31 lapse at it.
+  -- Every r1 and r2 guard passes — same doc_type, a date not earlier, a date
+  -- present, a successor at the head of its own chain — and compliance_state()
+  -- excludes every superseded row, so Northgate Electric, Dana Kowalski's
+  -- identity row and both her seat lines flipped from lapsed to current over a
+  -- record holding no in-force general-liability certificate at all. This leg
+  -- carries the gates forward, so it isolates the date from door (d).
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000005','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Stale Renewal Co','sub','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, issuer, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000051','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000005','coi_gl','Lakes Regional', CURRENT_DATE - 200,'{site_access,draw}'),
+    ('f5000000-0000-4000-8000-000000000052','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000005','coi_gl','Acme Mutual', CURRENT_DATE - 5,'{site_access,draw}');
+
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000005') <> 'lapsed' THEN
+    RAISE EXCEPTION '2p0 the stale-renewal card must start lapsed, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000005');
+  END IF;
+
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000052'
+     WHERE id = 'f5000000-0000-4000-8000-000000000051';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_already_lapsed%' THEN
+    RAISE EXCEPTION '2p a certificate that expired five days ago was accepted as a renewal: %', COALESCE(raised,'no error');
+  END IF;
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000005') <> 'lapsed' THEN
+    RAISE EXCEPTION '2p1 the refused stale renewal still moved the word to %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000005');
+  END IF;
+
+  -- ═══ r3 MAJOR-1 door (d): a successor must carry the gates it retires ════
+  -- The other half, and the one that bites on an HONEST renewal: blocks
+  -- defaults to '{}', so a future-dated certificate recorded without its gates
+  -- retires a gating lapse with a gateless row. compliance_state() counts only
+  -- paper with a non-empty blocks[], so the card reads `current` with nothing
+  -- gating site access or the draw — and reads `current` forever once the
+  -- renewal itself lapses, which is the same hole one renewal later. The
+  -- INSERT below never names blocks, exactly as the walked act did.
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000006','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Gateless Renewal Co','sub','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, issuer, expires_on, blocks) VALUES
+    ('f5000000-0000-4000-8000-000000000061','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000006','coi_gl','Lakes Regional', CURRENT_DATE - 200,'{site_access,draw}');
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, issuer, expires_on) VALUES
+    ('f5000000-0000-4000-8000-000000000062','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000006','coi_gl','Acme Mutual', CURRENT_DATE + 365);
+
+  IF EXISTS (SELECT 1 FROM public.studio_compliance_documents
+              WHERE id = 'f5000000-0000-4000-8000-000000000062'
+                AND cardinality(blocks) <> 0) THEN
+    RAISE EXCEPTION '2q0 the gateless renewal was not recorded with the empty default';
+  END IF;
+
+  BEGIN
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = 'f5000000-0000-4000-8000-000000000062'
+     WHERE id = 'f5000000-0000-4000-8000-000000000061';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%compliance_successor_drops_a_gate%' THEN
+    RAISE EXCEPTION '2q a renewal carrying none of the retired row''s gates was accepted: %', COALESCE(raised,'no error');
+  END IF;
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000006') <> 'lapsed' THEN
+    RAISE EXCEPTION '2q1 the refused gateless renewal still moved the word to %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000006');
+  END IF;
+
+  -- and the positive control: the same act with the gates typed on the renewal
+  -- lands, and the word moves honestly.
+  UPDATE public.studio_compliance_documents
+     SET blocks = '{site_access,draw}'
+   WHERE id = 'f5000000-0000-4000-8000-000000000062';
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000062'
+   WHERE id = 'f5000000-0000-4000-8000-000000000061';
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000006') <> 'current' THEN
+    RAISE EXCEPTION '2q2 a renewal carrying the gates was refused, word reads %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000006');
+  END IF;
+  -- a SUPERSET of the retired gates is a renewal too (<@, not =)
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = NULL
+   WHERE id = 'f5000000-0000-4000-8000-000000000061';
+  UPDATE public.studio_compliance_documents
+     SET blocks = '{site_access,draw,payment}'
+   WHERE id = 'f5000000-0000-4000-8000-000000000062';
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f5000000-0000-4000-8000-000000000062'
+   WHERE id = 'f5000000-0000-4000-8000-000000000061';
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000006') <> 'current' THEN
+    RAISE EXCEPTION '2q3 a renewal widening the gates was refused, word reads %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000006');
+  END IF;
+
+  -- ═══ r4 MAJOR-1: the FOURTH door — the four NON-DATED types ══════════════
+  -- Both the undated leg (r2 door a) and the in-force leg (r3 door c)
+  -- enumerated the five dated doc_types, so for w9, lien_waiver_conditional,
+  -- lien_waiver_unconditional and other_named the whole door stayed open. It
+  -- was walked as a plain studio member through RLS: an expired
+  -- lien_waiver_conditional gating {draw,payment} went from `lapsed` to
+  -- `current` in two ordinary writes — record an UNDATED successor of the same
+  -- type carrying the same gates, then retire the lapse with it — with the
+  -- expired paper still on file, while the same act with a coi_gl was refused.
+  -- A conditional waiver is dated by construction ("through 31 Oct") and the
+  -- seed already holds a dated, site_access-gating other_named (F-09's OSHA 30
+  -- card), so the only thing between the fixture and this door was the
+  -- calendar. One leg per non-dated type, each with its dated-successor
+  -- positive control, so the rule is proven to key on the PAPER and not on a
+  -- vocabulary anyone has to keep in step.
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000007','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Nondated Paper Co','sub','a0000000-0000-0000-0000-000000000004');
+
+  FOREACH v_type IN ARRAY ARRAY['w9','lien_waiver_conditional',
+                                'lien_waiver_unconditional','other_named'] LOOP
+    v_old := gen_random_uuid();
+    v_new := gen_random_uuid();
+
+    INSERT INTO public.studio_compliance_documents
+      (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+    VALUES (v_old,'f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000007', v_type,
+            CASE WHEN v_type = 'other_named' THEN 'an OSHA 30 card' END,
+            CURRENT_DATE - 40, '{draw,payment}');
+    IF public.compliance_state('f2000000-0000-4000-8000-000000000007') <> 'lapsed' THEN
+      RAISE EXCEPTION '2r0 % must start lapsed for this leg to mean anything, got %',
+        v_type, public.compliance_state('f2000000-0000-4000-8000-000000000007');
+    END IF;
+
+    -- the successor: undated, same type, the gates carried forward, which is
+    -- every guard r1–r3 added satisfied
+    INSERT INTO public.studio_compliance_documents
+      (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+    VALUES (v_new,'f1000000-0000-4000-8000-00000000000a','company',
+            'f2000000-0000-4000-8000-000000000007', v_type,
+            CASE WHEN v_type = 'other_named' THEN 'an OSHA 30 card' END,
+            NULL, '{draw,payment}');
+    BEGIN
+      UPDATE public.studio_compliance_documents
+         SET superseded_by = v_new WHERE id = v_old;
+      raised := NULL;
+    EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+    END;
+    IF raised IS NULL OR raised NOT LIKE '%compliance_successor_undated%' THEN
+      RAISE EXCEPTION '2r % : an UNDATED successor retired a dated, gating lapse: %',
+        v_type, COALESCE(raised,'no error');
+    END IF;
+    IF public.compliance_state('f2000000-0000-4000-8000-000000000007') <> 'lapsed' THEN
+      RAISE EXCEPTION '2r1 % : the refused launder still moved the word to %',
+        v_type, public.compliance_state('f2000000-0000-4000-8000-000000000007');
+    END IF;
+
+    -- an expired DATED successor is refused for these types too: the in-force
+    -- test keys on the successor's own date, not on a type list
+    UPDATE public.studio_compliance_documents
+       SET expires_on = CURRENT_DATE - 5 WHERE id = v_new;
+    BEGIN
+      UPDATE public.studio_compliance_documents
+         SET superseded_by = v_new WHERE id = v_old;
+      raised := NULL;
+    EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+    END;
+    IF raised IS NULL OR raised NOT LIKE '%compliance_successor_already_lapsed%' THEN
+      RAISE EXCEPTION '2r2 % : a successor that expired five days ago was accepted: %',
+        v_type, COALESCE(raised,'no error');
+    END IF;
+
+    -- and the positive control: dated, in force, gates carried — a renewal
+    UPDATE public.studio_compliance_documents
+       SET expires_on = CURRENT_DATE + 200 WHERE id = v_new;
+    UPDATE public.studio_compliance_documents
+       SET superseded_by = v_new WHERE id = v_old;
+    IF public.compliance_state('f2000000-0000-4000-8000-000000000007') <> 'current' THEN
+      RAISE EXCEPTION '2r3 % : a genuine dated renewal was refused, word reads %',
+        v_type, public.compliance_state('f2000000-0000-4000-8000-000000000007');
+    END IF;
+
+    -- clear the card so the next type starts from nothing
+    DELETE FROM public.studio_compliance_documents WHERE id = v_old;
+    DELETE FROM public.studio_compliance_documents WHERE id = v_new;
+    IF public.compliance_state('f2000000-0000-4000-8000-000000000007') <> 'not_on_file' THEN
+      RAISE EXCEPTION '2r4 % : the card did not clear between legs', v_type;
+    END IF;
+  END LOOP;
+
+  RAISE NOTICE '2. the holder guard: a person is not a firm, a document belongs to one studio, other_named needs its label, blocks is a closed vocabulary, a supersede must be the same paper covering at least as long, a dated type must carry its date, a supersede may not close a chain, and — for ALL NINE types, keyed on the paper''s own date and not on a vocabulary — a DATED paper may only be retired by a dated successor that is itself in force and carries at least the gates it retires: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 3. people_directory: ONE row for Dana Kowalski, two seats, fixture words
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  r          record;
+  n          integer;
+  seats      text;
+  w          text;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE display_name = 'Dana Kowalski';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '3a Dana Kowalski must be ONE row in the Directory (G-9), found %', n;
+  END IF;
+
+  SELECT * INTO r FROM public.people_directory WHERE display_name = 'Dana Kowalski';
+  IF r.role <> 'contact' THEN
+    RAISE EXCEPTION '3b a carded human''s identity row is the rolodex card, got role %', r.role;
+  END IF;
+  IF r.person_id <> 'd0e10000-0000-0000-0000-000000000011' THEN
+    RAISE EXCEPTION '3c her identity is her person card, got %', r.person_id;
+  END IF;
+  IF r.seat_count <> 2 THEN
+    RAISE EXCEPTION '3d she holds two seats (Okonkwo and Lindqvist), seat_count = %', r.seat_count;
+  END IF;
+  -- The fixture's own words. Reach: a live field link on her Okonkwo seat.
+  IF r.reach_state <> 'field_link' THEN
+    RAISE EXCEPTION '3e reach must read field_link, got %', r.reach_state;
+  END IF;
+  -- Consent: granted, carried by the PHONE from the 2025 Lindqvist job (F-11).
+  IF r.consent_status <> 'granted' THEN
+    RAISE EXCEPTION '3f consent must read granted from the record, got %', r.consent_status;
+  END IF;
+  -- Paper: Northgate Electric's general liability lapsed 31 Mar 2026 (F-11).
+  IF r.paper_state <> 'lapsed' THEN
+    RAISE EXCEPTION '3g paper must read her FIRM''s lapse, got %', r.paper_state;
+  END IF;
+  -- She carries no contact rule; "no rule" is a fact, not an empty string (R-V).
+  IF r.contact_rule_summary IS NOT NULL THEN
+    RAISE EXCEPTION '3h she has no recorded rule, got %', r.contact_rule_summary;
+  END IF;
+
+  -- her two seats, keyed to that one row
+  SELECT count(*) INTO n FROM public.people_directory_seats s
+   WHERE s.person_id = r.person_id;
+  IF n <> 2 THEN
+    RAISE EXCEPTION '3i people_directory_seats must nest two seats under her row, found %', n;
+  END IF;
+
+  SELECT string_agg(s.project_name || '/' || s.stage, ' · ' ORDER BY s.project_name)
+    INTO seats
+    FROM public.people_directory_seats s WHERE s.person_id = r.person_id;
+  IF seats <> 'Lindqvist kitchen/warranty · Okonkwo residence/active' THEN
+    RAISE EXCEPTION '3j her seats and their stages read "%"', seats;
+  END IF;
+
+  -- PR-p: stage lives on the seat, never on the person row. people_directory
+  -- has no stage column at all, and this is the assertion that keeps it so.
+  SELECT count(*) INTO n FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='people_directory' AND column_name='stage';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '3k people_directory grew a person-level stage column (PR-p/C1)';
+  END IF;
+
+  -- and the honest count: 28 people and 21 firms, one row each (G-9)
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE role = 'contact' AND meta->>'organization_id' = 'b0000000-0000-0000-0000-000000000001'
+     AND meta->>'entity_kind' = 'person';
+  IF n <> 28 THEN RAISE EXCEPTION '3l expected 28 person cards, got %', n; END IF;
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE role = 'contact' AND meta->>'organization_id' = 'b0000000-0000-0000-0000-000000000001'
+     AND meta->>'entity_kind' = 'company';
+  IF n <> 21 THEN RAISE EXCEPTION '3m expected 21 firm cards, got %', n; END IF;
+
+  -- Tom Marrow is the case G-9 named: one human, one row, not one per project.
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name = 'Erin Sato';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '3n Erin Sato holds two seats on two projects and must still be ONE row, found %', n;
+  END IF;
+
+  -- ═══ r2 MAJOR-2: the consent word covers every number the identity carries ═
+  -- v4 moves every carded human to the CONTACTS branch, which read the CARD's
+  -- phone_e164 alone — so a recorded refusal on the number the person's SEAT
+  -- carries left the face, and the identity row printed `not_asked` (or no word
+  -- at all) over people_directory_seats printing `opted_out` for the same human
+  -- off the same record. The seeded fixture cannot show it: every card there
+  -- shares its seat's number, zero disagreements across all 62 rows. These are
+  -- the two shapes that disagree, plus the control that must still read NULL.
+  PERFORM pg_temp.reset_role();
+
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, full_name, phone, company_id, created_by)
+  VALUES
+    ('f2000000-0000-4000-8000-000000000021','f1000000-0000-4000-8000-00000000000a','person','sub',
+     'Two Number Sub','(612) 555-7100','f2000000-0000-4000-8000-000000000001',
+     'a0000000-0000-0000-0000-000000000004'),
+    ('f2000000-0000-4000-8000-000000000022','f1000000-0000-4000-8000-00000000000a','person','sub',
+     'Cardless Number Sub',NULL,'f2000000-0000-4000-8000-000000000001',
+     'a0000000-0000-0000-0000-000000000004'),
+    ('f2000000-0000-4000-8000-000000000023','f1000000-0000-4000-8000-00000000000a','person','sub',
+     'No Number Anywhere Sub',NULL,'f2000000-0000-4000-8000-000000000001',
+     'a0000000-0000-0000-0000-000000000004');
+
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, studio_contact_id, company_id,
+     stage, created_by)
+  VALUES
+    -- a card whose number is NOT the number its seat carries
+    ('f4000000-0000-4000-8000-000000000121','f3000000-0000-4000-8000-00000000000a','sub',
+     'Two Number Sub','(612) 555-7200','f2000000-0000-4000-8000-000000000021',
+     'f2000000-0000-4000-8000-000000000001','active','a0000000-0000-0000-0000-000000000004'),
+    -- a card with no number at all, seated on a number that refused
+    ('f4000000-0000-4000-8000-000000000122','f3000000-0000-4000-8000-00000000000a','sub',
+     'Cardless Number Sub','(612) 555-7001','f2000000-0000-4000-8000-000000000022',
+     'f2000000-0000-4000-8000-000000000001','active','a0000000-0000-0000-0000-000000000004');
+
+  -- the record: a refusal on each SEAT's number, nothing on the card's own
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, opt_out_at,
+     opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES
+    ('f1000000-0000-4000-8000-00000000000a','sms','+16125557200','opted_out', now(),
+     'verbal','said stop on site', now(),'a0000000-0000-0000-0000-000000000004'),
+    ('f1000000-0000-4000-8000-00000000000a','sms','+16125557001','opted_out', now(),
+     'verbal','said stop on site', now(),'a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Sub';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3o a refusal on the number this person''s SEAT carries must be on the identity row (§1.4), got %', COALESCE(w,'NULL');
+  END IF;
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Cardless Number Sub';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3p a card with NO number must still print its seat''s refusal, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- the seat line beneath agrees, which is the whole point
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE display_name IN ('Two Number Sub','Cardless Number Sub')
+     AND consent_status <> 'opted_out';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '3q % seat lines disagree with the record the row now reads', n;
+  END IF;
+
+  -- NULL still means no number ANYWHERE, not "no number on the card"
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'No Number Anywhere Sub';
+  IF w IS NOT NULL THEN
+    RAISE EXCEPTION '3r a carded human with no number anywhere must print no consent word, got %', w;
+  END IF;
+
+  -- and the reduction is least-permission-first, not last-write-wins: a
+  -- granted card number does not answer for an un-recorded seat number
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET status = 'granted', refusal_unanswered = false, opt_out_at = NULL,
+         consented_at = now(), source = 'written', evidence = 'signed form',
+         recorded_at = now(), recorded_by = 'a0000000-0000-0000-0000-000000000004',
+         opt_out_source = NULL, opt_out_evidence = NULL,
+         opt_out_recorded_at = NULL, opt_out_recorded_by = NULL
+   WHERE organization_id = 'f1000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125557200';
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, consented_at,
+     source, evidence, recorded_at, recorded_by)
+  VALUES
+    ('f1000000-0000-4000-8000-00000000000a','sms','+16125557100','granted', now(),
+     'written','signed form', now(),'a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Sub';
+  IF w IS DISTINCT FROM 'granted' THEN
+    RAISE EXCEPTION '3s both of this identity''s numbers are granted and the row reads %', COALESCE(w,'NULL');
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET status = 'not_asked', consented_at = NULL, source = NULL,
+         evidence = NULL, recorded_at = NULL, recorded_by = NULL
+   WHERE organization_id = 'f1000000-0000-4000-8000-00000000000a'
+     AND channel_kind = 'sms' AND channel_value = '+16125557100';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Sub';
+  IF w IS DISTINCT FROM 'not_asked' THEN
+    RAISE EXCEPTION '3t one un-asked number must pull the identity word back to not_asked, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- ═══ r4 MAJOR-2: a person's OWN gating lapse reaches every reader ════════
+  -- paper_state was compliance_state(COALESCE(company_id, card_id)) on both
+  -- readers, so the person's own card was consulted ONLY when they had no
+  -- firm — and holder_type='person' exists precisely for person-held paper (a
+  -- master licence, an OSHA card; 00623's banner, CS2-21). Walked on the
+  -- seeded fixture with one honest record change and zero adversarial writes:
+  -- Luis Ochoa's own site_access-gating OSHA 30 card expires,
+  -- compliance_state(his card) = lapsed, compliance_state(his firm) = current,
+  -- and BOTH shipped readers printed `current` for him. Block 3 could not see
+  -- it because Dana Kowalski holds no personal paper at all.
+  PERFORM pg_temp.reset_role();
+
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, company_name, company_kind, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000031','f1000000-0000-4000-8000-00000000000a',
+          'company','sub','Current Firm Co','sub','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, full_name, company_id, created_by)
+  VALUES
+    ('f2000000-0000-4000-8000-000000000032','f1000000-0000-4000-8000-00000000000a','person',
+     'sub','Own Paper Sub','f2000000-0000-4000-8000-000000000031',
+     'a0000000-0000-0000-0000-000000000004'),
+    ('f2000000-0000-4000-8000-000000000033','f1000000-0000-4000-8000-00000000000a','person',
+     'sub','No Own Paper Sub','f2000000-0000-4000-8000-000000000031',
+     'a0000000-0000-0000-0000-000000000004');
+
+  -- the firm's certificate is in force; the PERSON's own card gates site
+  -- access and expired ten days ago
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, doc_label, expires_on, blocks)
+  VALUES
+    ('f5000000-0000-4000-8000-000000000081','f1000000-0000-4000-8000-00000000000a','company',
+     'f2000000-0000-4000-8000-000000000031','coi_gl', NULL, CURRENT_DATE + 365,'{site_access,draw}'),
+    ('f5000000-0000-4000-8000-000000000082','f1000000-0000-4000-8000-00000000000a','person',
+     'f2000000-0000-4000-8000-000000000032','other_named','OSHA 30 card',
+     CURRENT_DATE - 10,'{site_access}');
+
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, studio_contact_id, company_id, stage, created_by)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000161','f3000000-0000-4000-8000-00000000000a','sub',
+     'Own Paper Sub','f2000000-0000-4000-8000-000000000032',
+     'f2000000-0000-4000-8000-000000000031','active','a0000000-0000-0000-0000-000000000004'),
+    ('f4000000-0000-4000-8000-000000000162','f3000000-0000-4000-8000-00000000000a','sub',
+     'No Own Paper Sub','f2000000-0000-4000-8000-000000000033',
+     'f2000000-0000-4000-8000-000000000031','active','a0000000-0000-0000-0000-000000000004');
+
+  -- the record, before any reader: the two holders disagree
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000031') <> 'current' THEN
+    RAISE EXCEPTION '3u the firm must read current for this leg to mean anything, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000031');
+  END IF;
+  IF public.compliance_state('f2000000-0000-4000-8000-000000000032') <> 'lapsed' THEN
+    RAISE EXCEPTION '3u1 the person''s own card must read lapsed, got %',
+      public.compliance_state('f2000000-0000-4000-8000-000000000032');
+  END IF;
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT paper_state INTO w FROM public.people_directory
+   WHERE display_name = 'Own Paper Sub';
+  IF w IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION '3v a person''s OWN gating lapse must reach their Directory row even though their firm is current, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT paper_state INTO w FROM public.people_directory_seats
+   WHERE seat_id = 'f4000000-0000-4000-8000-000000000161';
+  IF w IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION '3v1 and their seat line must say so too, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- the control that keeps the reduction honest in the other direction: a
+  -- person holding NO personal paper must still read their firm's word, not
+  -- `not_on_file` (C21/R-K — no paper is a different fact from a lapse)
+  SELECT paper_state INTO w FROM public.people_directory
+   WHERE display_name = 'No Own Paper Sub';
+  IF w IS DISTINCT FROM 'current' THEN
+    RAISE EXCEPTION '3v2 a person with no personal paper must read their firm''s word, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT paper_state INTO w FROM public.people_directory_seats
+   WHERE seat_id = 'f4000000-0000-4000-8000-000000000162';
+  IF w IS DISTINCT FROM 'current' THEN
+    RAISE EXCEPTION '3v3 nor on their seat line, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- and the firm's own row is unchanged: a firm answers with its own paper
+  SELECT paper_state INTO w FROM public.people_directory
+   WHERE display_name = 'Current Firm Co';
+  IF w IS DISTINCT FROM 'current' THEN
+    RAISE EXCEPTION '3v4 the firm row must read its own paper, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- ═══ r4 MAJOR-3: a seat the caller cannot see may not soften the word ════
+  -- identity_consent_status() reduced worst-first over a SECURITY INVOKER
+  -- project_parties scan, so a seat outside the caller's visibility
+  -- contributed no number — and removing a number can only make the word MORE
+  -- permissive. Walked with an ordinary studio act: the designer of record on
+  -- one job is set to organization_members.status='removed', and the owner's
+  -- row for the same card flipped from `opted_out` to `granted` while the
+  -- record still refused the number and the seat line that would have argued
+  -- was gone with it. That row is a send door (party-profile-sheet.tsx:262
+  -- computes `granted` from this word, :742 opens the composer on it).
+  PERFORM pg_temp.reset_role();
+
+  INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at,
+                          created_at, updated_at, instance_id, aud, role)
+  VALUES ('a0000000-0000-4000-8000-0000000000f3','w1b-leaver@test.invalid','',NOW(),NOW(),NOW(),
+          '00000000-0000-0000-0000-000000000000','authenticated','authenticated');
+  INSERT INTO public.profiles (id, email, full_name)
+  VALUES ('a0000000-0000-4000-8000-0000000000f3','w1b-leaver@test.invalid','Leaver Designer')
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at)
+  VALUES ('a0000000-0000-4000-8000-0000000000f3','f1000000-0000-4000-8000-00000000000a',
+          'member','active', now());
+
+  -- his job, in the same studio, and a card whose OFFICE line is permitted
+  INSERT INTO public.projects
+    (id, name, designer_id, studio_id, status, created_by, client_visibility_tier)
+  VALUES ('f3000000-0000-4000-8000-0000000000f3','W1b leaver job',
+          'a0000000-0000-4000-8000-0000000000f3','f1000000-0000-4000-8000-00000000000a',
+          'active','a0000000-0000-4000-8000-0000000000f3','full');
+  INSERT INTO public.studio_contacts
+    (id, organization_id, entity_kind, contact_kind, full_name, phone, created_by)
+  VALUES ('f2000000-0000-4000-8000-000000000041','f1000000-0000-4000-8000-00000000000a',
+          'person','sub','Two Line Trade','(612) 555-9001',
+          'a0000000-0000-0000-0000-000000000004');
+  -- and his MOBILE, which said STOP, carried ONLY by a seat on that job
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, studio_contact_id, phone, stage, created_by)
+  VALUES ('f4000000-0000-4000-8000-000000000171','f3000000-0000-4000-8000-0000000000f3','sub',
+          'Two Line Trade','f2000000-0000-4000-8000-000000000041','(612) 555-9002','active',
+          'a0000000-0000-4000-8000-0000000000f3');
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, consented_at, source,
+     evidence, recorded_at, recorded_by)
+  VALUES ('f1000000-0000-4000-8000-00000000000a','sms','+16125559001','granted', now(),
+          'written','signed form', now(),'a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, opt_out_at, opt_out_source,
+     opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES ('f1000000-0000-4000-8000-00000000000a','sms','+16125559002','opted_out', now(),
+          'inbound_sms','replied STOP', now(),'a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE person_id = 'f2000000-0000-4000-8000-000000000041';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3w while the seat is visible the word must already be opted_out, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- the ordinary act: the designer of record leaves the studio
+  PERFORM pg_temp.reset_role();
+  UPDATE public.organization_members SET status = 'removed'
+   WHERE user_id = 'a0000000-0000-4000-8000-0000000000f3'
+     AND organization_id = 'f1000000-0000-4000-8000-00000000000a';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the seat really is invisible now — otherwise this leg proves nothing
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE person_id = 'f2000000-0000-4000-8000-000000000041';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '3w1 the seat must be outside the caller''s visibility for this leg to mean anything, found %', n;
+  END IF;
+  SELECT seat_count INTO n FROM public.people_directory
+   WHERE person_id = 'f2000000-0000-4000-8000-000000000041';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '3w2 the invisible seat is still counted (%), so the leg is not testing the degrade', n;
+  END IF;
+
+  -- and the word is STILL the record's refusal: the reduction is as
+  -- authoritative as the verdict it reduces
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE person_id = 'f2000000-0000-4000-8000-000000000041';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3x a seat the caller cannot see dropped its refusal and the row printed % over a record that says opted_out', COALESCE(w,'NULL');
+  END IF;
+  -- the record, unchanged, said so all along
+  IF public.channel_consent_status('f1000000-0000-4000-8000-00000000000a','sms','+16125559002')
+     IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '3x1 the record itself moved, which is not what this leg is about';
+  END IF;
+  -- and a non-member still reads nothing at all: the number set is gated
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000002');
+  IF public.identity_consent_status('f1000000-0000-4000-8000-00000000000a',
+       'f2000000-0000-4000-8000-000000000041', '+16125559001') IS NOT NULL THEN
+    RAISE EXCEPTION '3x2 a non-member of the studio read a consent word through the definer number set';
+  END IF;
+  -- 3x2 names the VICTIM's org, which the gate refuses — and that is the only
+  -- case this leg ever covered. The BLOCKING-1 shape names the CALLER'S OWN
+  -- org with a FOREIGN identity key, which the gate used to accept, and it is
+  -- walked in block 13 (r5 MINOR-39): the caller there needs a studio of
+  -- their own, which no actor in this block has.
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '3. people_directory v4: one row per identity, Dana''s two seats beneath it, her four fixture words, no person-level stage, an honest 28 + 21, the consent word reduced worst-first over every number the identity carries — the card''s and its seats'', including a seat outside the caller''s visibility — and the paper word reduced worst-first over the person''s own card AND their firm: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 4. The uncarded identity collapses across projects
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Two seats on two projects for one human with no rolodex card and no login,
+-- sharing only a phone number: crm-model §4 rule 2. One Directory row, two
+-- seats, and the row points at the most recently updated seat so a shipped
+-- reader still lands somewhere real.
+DO $$
+DECLARE
+  n        integer;
+  v_person uuid;
+  w        text;
+BEGIN
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, stage, created_by, updated_at)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000101','f3000000-0000-4000-8000-00000000000a','sub',
+     'Twice Seated','(612) 555-0999','active','a0000000-0000-0000-0000-000000000004','2026-01-01T00:00:00Z'),
+    ('f4000000-0000-4000-8000-000000000102','d0e00000-0000-0000-0000-00000000000a','sub',
+     'Twice Seated','(612) 555-0999','active','a0000000-0000-0000-0000-000000000004','2026-06-01T00:00:00Z');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name = 'Twice Seated';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4a an uncarded human on two jobs must be ONE row, found %', n;
+  END IF;
+
+  SELECT person_id INTO v_person FROM public.people_directory WHERE display_name = 'Twice Seated';
+  IF v_person <> 'f4000000-0000-4000-8000-000000000102' THEN
+    RAISE EXCEPTION '4b the row must point at the most recently updated seat, got %', v_person;
+  END IF;
+
+  SELECT seat_count INTO n FROM public.people_directory WHERE display_name = 'Twice Seated';
+  IF n <> 2 THEN RAISE EXCEPTION '4c seat_count must be 2, got %', n; END IF;
+
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE person_id = v_person;
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4d both seats must key to that one identity row, found %', n;
+  END IF;
+
+  -- and both seats agree on the identity key, which is the phone (rule 2)
+  SELECT count(DISTINCT identity_key) INTO n FROM public.people_directory_seats
+   WHERE seat_id IN ('f4000000-0000-4000-8000-000000000101','f4000000-0000-4000-8000-000000000102');
+  IF n <> 1 THEN RAISE EXCEPTION '4e the two seats keyed differently'; END IF;
+
+  -- ═══ r2 MAJOR-3: reach reads the IDENTITY's links, not the winner's ══════
+  -- The party branch passed the winning seat's id, so the EXISTS clause could
+  -- only match a link minted on that one seat. The live door here hangs on the
+  -- OLDER seat — the one the Directory does NOT point at — and the row read
+  -- `on_paper` while the seat line beneath it printed `field_link`, which is
+  -- the reach drift G-20/G-21 this program exists to remove: the studio's next
+  -- act is to mint a second door for someone who already holds one.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.field_link_tokens
+    (id, party_id, project_id, token_hash, status, expires_at, created_by)
+  VALUES ('f6000000-0000-4000-8000-000000000101',
+          'f4000000-0000-4000-8000-000000000101','f3000000-0000-4000-8000-00000000000a',
+          'w1b-r2-major3-identity-link','active', now() + interval '30 days',
+          'a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT reach_state INTO w FROM public.people_directory
+   WHERE display_name = 'Twice Seated';
+  IF w IS DISTINCT FROM 'field_link' THEN
+    RAISE EXCEPTION '4e1 a live link on a NON-winning seat must read field_link on the identity row, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- and it really is the non-winning seat that holds it
+  SELECT reach_state INTO w FROM public.people_directory_seats
+   WHERE seat_id = 'f4000000-0000-4000-8000-000000000101';
+  IF w IS DISTINCT FROM 'field_link' THEN
+    RAISE EXCEPTION '4e2 the seat holding the link reads %', COALESCE(w,'NULL');
+  END IF;
+  SELECT reach_state INTO w FROM public.people_directory_seats
+   WHERE seat_id = 'f4000000-0000-4000-8000-000000000102';
+  IF w IS DISTINCT FROM 'on_paper' THEN
+    RAISE EXCEPTION '4e3 the WINNING seat must hold no link for this leg to mean anything, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- a revoked or expired door is not a door
+  PERFORM pg_temp.reset_role();
+  UPDATE public.field_link_tokens SET status = 'revoked'
+   WHERE id = 'f6000000-0000-4000-8000-000000000101';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT reach_state INTO w FROM public.people_directory
+   WHERE display_name = 'Twice Seated';
+  IF w IS DISTINCT FROM 'on_paper' THEN
+    RAISE EXCEPTION '4e4 a revoked link still reads %', COALESCE(w,'NULL');
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  UPDATE public.field_link_tokens
+     SET status = 'active', expires_at = now() - interval '1 day'
+   WHERE id = 'f6000000-0000-4000-8000-000000000101';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT reach_state INTO w FROM public.people_directory
+   WHERE display_name = 'Twice Seated';
+  IF w IS DISTINCT FROM 'on_paper' THEN
+    RAISE EXCEPTION '4e5 an expired link still reads %', COALESCE(w,'NULL');
+  END IF;
+  PERFORM pg_temp.reset_role();
+  UPDATE public.field_link_tokens SET status = 'revoked'
+   WHERE id = 'f6000000-0000-4000-8000-000000000101';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- ═══ r3 tests MAJOR-1: the PARTY branch's consent word is the IDENTITY's ══
+  -- The word was computed INSIDE the DISTINCT ON, off the winning seat's own
+  -- phone_e164, while reach three legs above already asked the identity. An
+  -- uncarded identity keyed on a LOGIN (party_identity_key()'s 2nd leg, which
+  -- outranks the phone) may hold two seats with two different numbers, and
+  -- whichever seat was updated most recently decided the printed word — even
+  -- when a different number of that same identity is the one the studio's
+  -- record says opted_out. The refusal here sits on the OLDER seat's number;
+  -- the winner's number has no record at all, so the old expression printed
+  -- `not_asked` over a recorded refusal.
+  --
+  -- RE-STATED INTRA-STUDIO (w1b final review r5 BLOCKING-1). The older seat
+  -- used to sit on the Test Studio A project while the record was written at
+  -- the SEEDED studio, so the leg's premise was only constructible through
+  -- identity_phone_numbers()' unscoped cross-tenant seat scan — the hole
+  -- itself. Both seats now sit in the seeded studio (Lindqvist and Okonkwo,
+  -- project_consent_org = b0000000-…-0001 for both), which is the population
+  -- R-AK resolves the record at, and the r3 defect the leg exists for — two
+  -- numbers on one login-keyed identity, the refusal on the NON-winning one —
+  -- is unchanged. The closed door gets its own leg, 4e8b.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, profile_id, phone, stage,
+     created_by, updated_at)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000141','d0e00000-0000-0000-0000-00000000000b','sub',
+     'Two Number Login','a0000000-0000-0000-0000-000000000002','(612) 555-0771','active',
+     'a0000000-0000-0000-0000-000000000004','2026-01-01T00:00:00Z'),
+    ('f4000000-0000-4000-8000-000000000142','d0e00000-0000-0000-0000-00000000000a','sub',
+     'Two Number Login','a0000000-0000-0000-0000-000000000002','(612) 555-0772','active',
+     'a0000000-0000-0000-0000-000000000004','2026-06-01T00:00:00Z');
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, opt_out_at,
+     opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES
+    ('b0000000-0000-0000-0000-000000000001','sms','+16125550771','opted_out', now(),
+     'verbal','said stop on site', now(),'a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- one row, and it points at the NEWER seat, whose number holds no record
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4e6 a login-keyed identity on two jobs must be ONE row, found %', n;
+  END IF;
+  SELECT person_id INTO v_person FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF v_person <> 'f4000000-0000-4000-8000-000000000142' THEN
+    RAISE EXCEPTION '4e7 the winning seat must be the newer one for this leg to mean anything, got %', v_person;
+  END IF;
+
+  -- the refusal on the identity's OTHER number is the word, worst-first
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e8 a refusal on a NON-winning seat''s number must be the identity''s word, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- 4e8b, the door BLOCKING-1 closed: a seat in ANOTHER studio carrying a
+  -- number this studio has a record for contributes nothing. The seat scan
+  -- inside identity_phone_numbers() is definer, so RLS never filtered it and
+  -- the only predicate was that the CALLER belonged to the org they NAMED —
+  -- both arguments caller-supplied. A number no seat of this studio carries is
+  -- not a number this studio can reach the human on.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, stage, created_by, updated_at)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000143','f3000000-0000-4000-8000-00000000000a','sub',
+     'Foreign Studio Seat','(612) 555-0773','active',
+     'a0000000-0000-0000-0000-000000000004','2026-01-01T00:00:00Z');
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, opt_out_at,
+     opt_out_source, opt_out_evidence, opt_out_recorded_at, opt_out_recorded_by)
+  VALUES
+    ('b0000000-0000-0000-0000-000000000001','sms','+16125550773','opted_out', now(),
+     'verbal','said stop on site', now(),'a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  -- the record exists, at the seeded studio
+  IF public.channel_consent_status('b0000000-0000-0000-0000-000000000001','sms','+16125550773')
+     IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e8b0 the record must say opted_out for this leg to mean anything';
+  END IF;
+  -- the seat exists, in Test Studio A, and that studio is where it resolves
+  IF public.project_consent_org('f3000000-0000-4000-8000-00000000000a')
+     = 'b0000000-0000-0000-0000-000000000001' THEN
+    RAISE EXCEPTION '4e8b1 the foreign seat''s project must NOT resolve to the seeded studio';
+  END IF;
+  -- and the number set for the seeded studio does not reach it
+  SELECT count(*) INTO n FROM public.identity_phone_numbers(
+    'b0000000-0000-0000-0000-000000000001', '+16125550773', NULL) AS q(v)
+   WHERE q.v = '+16125550773';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '4e8b2 a seat in another studio still entered the number set (% rows)', n;
+  END IF;
+  -- the control: the studio that DOES hold the seat gets the number
+  SELECT count(*) INTO n FROM public.identity_phone_numbers(
+    'f1000000-0000-4000-8000-00000000000a', '+16125550773', NULL) AS q(v)
+   WHERE q.v = '+16125550773';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4e8b3 the seat''s OWN studio must still see its number, got %', n;
+  END IF;
+  PERFORM pg_temp.reset_role();
+  DELETE FROM public.studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND channel_kind = 'sms' AND channel_value = '+16125550773';
+  DELETE FROM public.project_parties
+   WHERE id = 'f4000000-0000-4000-8000-000000000143';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- and the three faces of the party branch agree: status_raw, meta and the
+  -- appended column are one value, so no reader can print a softer word
+  SELECT status_raw INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e9 status_raw disagrees with the record, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT meta->>'sms_consent_status' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e10 meta.sms_consent_status disagrees with the record, got %', COALESCE(w,'NULL');
+  END IF;
+
+  -- the negative control: the winning seat's number ALONE, which is what the
+  -- old expression read, has no record and would have printed not_asked
+  SELECT COALESCE(public.channel_consent_status(
+           public.project_consent_org('d0e00000-0000-0000-0000-00000000000a'),
+           'sms','+16125550772'), 'not_asked') INTO w;
+  IF w IS DISTINCT FROM 'not_asked' THEN
+    RAISE EXCEPTION '4e11 the winning seat''s own number must carry no record for this leg to mean anything, got %', w;
+  END IF;
+
+  -- ═══ r4 MAJOR-4: the WORD and its two DATES come off the SAME record ═════
+  -- r3 lifted the word above the DISTINCT ON and keyed it on the identity, and
+  -- left the two dates joined on the WINNING SEAT's phone_e164 — projected
+  -- beside it as meta.sms_consented_at / meta.sms_opt_out_at. Give the winning
+  -- seat's number a DATED GRANT and the older seat's number keeps the refusal:
+  -- the row then printed consent_status `opted_out` with sms_consented_at
+  -- 2 May 2025 and sms_opt_out_at NULL, so R-Q's one consent sentence
+  -- ("<Source> consent, <d Mon yyyy>, on the <project>.") composed "Written
+  -- consent, 2 May 2025" for a human the record refuses — and the refusal's
+  -- own date was nowhere on the row.
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET opt_out_at = '2025-12-03T00:00:00Z'::timestamptz
+   WHERE organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND channel_kind = 'sms' AND channel_value = '+16125550771';
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, consented_at,
+     source, evidence, recorded_at, recorded_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','sms','+16125550772','granted',
+          '2025-05-02T00:00:00Z'::timestamptz,'written','signed form', now(),
+          'a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the word is still the refusal, worst-first
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e12 a dated grant on the WINNING seat''s number softened the word to %', COALESCE(w,'NULL');
+  END IF;
+
+  -- and both dates belong to the record that decided it
+  SELECT meta->>'sms_opt_out_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NULL OR (w::timestamptz) IS DISTINCT FROM '2025-12-03T00:00:00Z'::timestamptz THEN
+    RAISE EXCEPTION '4e13 an opted_out row must carry the REFUSAL''s own date, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT meta->>'sms_consented_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NOT NULL THEN
+    RAISE EXCEPTION '4e14 an opted_out row printed a consent date off ANOTHER number (%), which R-Q composes into a consent claim over a refusal', w;
+  END IF;
+
+  -- the other direction, same rule: lift the refusal and the grant's own date
+  -- is the one that prints
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET status = 'granted', refusal_unanswered = false, opt_out_at = NULL,
+         consented_at = '2026-02-09T00:00:00Z'::timestamptz, source = 'written',
+         evidence = 'signed form', recorded_at = now(),
+         recorded_by = 'a0000000-0000-0000-0000-000000000004',
+         opt_out_source = NULL, opt_out_evidence = NULL,
+         opt_out_recorded_at = NULL, opt_out_recorded_by = NULL
+   WHERE organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND channel_kind = 'sms' AND channel_value = '+16125550771';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'granted' THEN
+    RAISE EXCEPTION '4e15 both numbers are granted and the row reads %', COALESCE(w,'NULL');
+  END IF;
+  SELECT meta->>'sms_consented_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NULL OR (w::timestamptz) NOT IN ('2026-02-09T00:00:00Z'::timestamptz,
+                                           '2025-05-02T00:00:00Z'::timestamptz) THEN
+    RAISE EXCEPTION '4e16 a granted row must carry the consent date of one of this identity''s own granted records, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT meta->>'sms_opt_out_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NOT NULL THEN
+    RAISE EXCEPTION '4e17 a granted row still carries an opt-out date (%)', w;
+  END IF;
+
+  -- ═══ r5 MAJOR-2: the DECIDING record can itself be contradictory ═════════
+  -- channel_consent_status() folds refusal_unanswered INTO the word
+  -- (00594:1016) and 00594's own backfill deliberately mints records that read
+  -- status='granted' WITH an unanswered refusal — its comment says so —
+  -- carrying a real consented_at and, because a folded refusal is routinely
+  -- DATELESS, frequently no opt_out_at. R-BC was satisfied (both dates off the
+  -- deciding record) and r4 MAJOR-4's consequence came back anyway: the row
+  -- read consent_status `opted_out` beside a live sms_consented_at, and R-Q's
+  -- one fixed sentence composes "Written consent, 2 May 2025" for a human the
+  -- rail refuses. No record in the local fixture carries refusal_unanswered,
+  -- so nothing in the wave touched this population; the Strata backfill makes
+  -- it. The dates are now ONE-SIDED.
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET refusal_unanswered = true
+   WHERE organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND channel_kind = 'sms' AND channel_value = '+16125550772';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the record itself is the contradictory one: granted, dated, and refused
+  SELECT (status || '/' || refusal_unanswered::text || '/' ||
+          COALESCE(consented_at::date::text,'-') || '/' ||
+          COALESCE(opt_out_at::date::text,'-')) INTO w
+    FROM public.studio_channel_consent
+   WHERE organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND channel_kind = 'sms' AND channel_value = '+16125550772';
+  IF w IS DISTINCT FROM 'granted/true/2025-05-02/-' THEN
+    RAISE EXCEPTION '4e18 the fixture for this leg is not the folded refusal it needs, got %', COALESCE(w,'NULL');
+  END IF;
+  IF public.channel_consent_status('b0000000-0000-0000-0000-000000000001','sms','+16125550772')
+     IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e19 the fold must make the verdict opted_out for this leg to mean anything';
+  END IF;
+
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '4e20 a folded refusal must be the word, got %', COALESCE(w,'NULL');
+  END IF;
+  SELECT meta->>'sms_consented_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NOT NULL THEN
+    RAISE EXCEPTION '4e21 the refused row printed the deciding record''s OWN consent date (%), which R-Q composes into a dated consent claim beside the refusal', w;
+  END IF;
+  -- and the refusal's own date is empty rather than invented: this record has
+  -- none, which is what a folded refusal routinely looks like
+  SELECT meta->>'sms_opt_out_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NOT NULL THEN
+    RAISE EXCEPTION '4e22 a dateless folded refusal must leave opt_out_at empty, got %', w;
+  END IF;
+  -- the other side of the one-sided rule, on the same record: lift the fold
+  -- and the grant's own date prints again
+  PERFORM pg_temp.reset_role();
+  UPDATE public.studio_channel_consent
+     SET refusal_unanswered = false
+   WHERE organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND channel_kind = 'sms' AND channel_value = '+16125550772';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT meta->>'sms_consented_at' INTO w FROM public.people_directory
+   WHERE display_name = 'Two Number Login';
+  IF w IS NULL THEN
+    RAISE EXCEPTION '4e23 a granted row must still carry its own consent date; the suppression is one-sided, not a deletion';
+  END IF;
+
+  -- MIXED KINDS (w1b r1 MAJOR-2): the same human seated under a kind the
+  -- Directory does not emit. people_directory picked its winner over the seven
+  -- kinds and people_directory_seats over every kind, so the newest seat being
+  -- a `vendor` made the row claim two seats and nest none — the one join the
+  -- redesign rests on.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, stage, created_by, updated_at)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000111','f3000000-0000-4000-8000-00000000000a','sub',
+     'Mixed Kinds','(612) 555-0888','active','a0000000-0000-0000-0000-000000000004','2026-01-01T00:00:00Z'),
+    ('f4000000-0000-4000-8000-000000000112','d0e00000-0000-0000-0000-00000000000a','vendor',
+     'Mixed Kinds','(612) 555-0888','active','a0000000-0000-0000-0000-000000000004','2026-06-01T00:00:00Z');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name = 'Mixed Kinds';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4f a mixed-kind uncarded human must be ONE row, found %', n;
+  END IF;
+
+  SELECT person_id, seat_count INTO v_person, n
+    FROM public.people_directory WHERE display_name = 'Mixed Kinds';
+  IF v_person <> 'f4000000-0000-4000-8000-000000000111' THEN
+    RAISE EXCEPTION '4g the Directory must win on a seat it actually emits (the sub), got %', v_person;
+  END IF;
+  IF n <> 2 THEN RAISE EXCEPTION '4h seat_count must count every kind, got %', n; END IF;
+
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE person_id = v_person;
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4i the row claims 2 seats and nests % — the two views picked different winners', n;
+  END IF;
+
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE person_id = v_person AND party_kind = 'vendor';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4j the vendor seat must nest under the same identity row, found %', n;
+  END IF;
+
+  -- ═══ r3 MAJOR-1 (migrations review): PR-c's OWN client_rep seat ══════════
+  -- The client, lead, maker and team branches carry a DOMAIN-TABLE id as
+  -- person_id (designer_clients.id, leads.id, vendors.id,
+  -- project_team_members.id) while seat_count was identity_seat_count() keyed
+  -- on a PROFILE id, and people_directory_seats.person_id is only ever a
+  -- rolodex card id or a party id. One ordinary INSERT — the thing PR-c rules
+  -- in, a household member's own client_rep seat stamped with their LOGIN —
+  -- made the client row read seat_count 2 and nest ZERO, with both seats
+  -- hanging under a person_id no Directory row carries. The whole-fixture
+  -- assertion below only ever ran over data that could not break it, because
+  -- every seeded designer_clients row has a null client_id.
+  -- The household is a SEEDED designer_clients row carrying a real login
+  -- (d0000000-…-c001 / client-solo@patina.dev), so the shape is the shipped
+  -- one, not an invention of this test.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, profile_id, email, stage, created_by)
+  VALUES
+    ('f4000000-0000-4000-8000-000000000131','f3000000-0000-4000-8000-00000000000a',
+     'client_rep','Household Rep','a0000000-0000-0000-0000-00000000c005',
+     'client-solo@patina.dev','active','a0000000-0000-0000-0000-000000000004'),
+    ('f4000000-0000-4000-8000-000000000132','f3000000-0000-4000-8000-00000000000a',
+     'other','Household Rep (second seat)','a0000000-0000-0000-0000-00000000c005',
+     'client-solo@patina.dev','active','a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- the identity really does hold two seats …
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id IN ('f4000000-0000-4000-8000-000000000131',
+                     'f4000000-0000-4000-8000-000000000132');
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4l the two client_rep seats are not visible to the studio, found %', n;
+  END IF;
+
+  -- … and the client Directory row claims only what it can nest: 0
+  SELECT seat_count INTO n FROM public.people_directory
+   WHERE role = 'client' AND person_id = 'd0000000-0000-0000-0000-00000000c001';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '4m the client branch claims % seats and can nest none', n;
+  END IF;
+
+  -- the seats nest under their own party id, and PR-c's read is the STAMPED
+  -- path: no Directory row carries the seat's person_id while it is uncarded
+  SELECT count(DISTINCT person_id) INTO n FROM public.people_directory_seats
+   WHERE seat_id IN ('f4000000-0000-4000-8000-000000000131',
+                     'f4000000-0000-4000-8000-000000000132');
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4n the two seats of one login keyed to % person_ids', n;
+  END IF;
+
+  -- ── r10 MAJOR-2: two studios that merely SHARE a designer of record ────
+  -- identity_seat_count() counted over project_parties' RLS alone, whose whole
+  -- rule is is_studio_comember(designer) — true whenever the caller shares ANY
+  -- active organization with the designer of record — while
+  -- people_directory_seats and the Directory's own party branch additionally
+  -- require is_active_studio_member(project_tenant_org(project_id)). Two
+  -- different sets, and separating them needs no cross-tenant stamp (r9
+  -- MAJOR-2's card guard) and no adversarial write: one human seated on a job
+  -- of each of two studios that share a designer does it, which is the shipped
+  -- local shape. Staged BEFORE the whole-fixture invariant below, so that
+  -- assertion runs over data that can break it — as one caller in one studio
+  -- it could not.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.organizations (id, type, name, slug, status) VALUES
+    ('f1000000-0000-4000-8000-00000000000c','design_studio','Test Studio C','w1b-studio-c','active');
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at) VALUES
+    -- the SAME designer of record, consulting for a second design studio, and
+    -- nobody else: the one-studio caller below belongs to Test Studio A and to
+    -- the seeded studio, and to this one not at all
+    -- `admin`, not `owner`: 00484's last_owner_protected guard would refuse the
+    -- teardown DELETE below, and nothing here turns on the owner role
+    ('a0000000-0000-0000-0000-000000000004','f1000000-0000-4000-8000-00000000000c','admin','active', now())
+  ON CONFLICT (user_id, organization_id) DO UPDATE SET role = EXCLUDED.role, status = 'active';
+  INSERT INTO public.projects
+    (id, name, designer_id, studio_id, status, created_by, client_visibility_tier) VALUES
+    ('f3000000-0000-4000-8000-00000000000c','W1b second-studio job',
+     'a0000000-0000-0000-0000-000000000004','f1000000-0000-4000-8000-00000000000c',
+     'active','a0000000-0000-0000-0000-000000000004','full');
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, stage, created_by) VALUES
+    ('f4000000-0000-4000-8000-000000000151','f3000000-0000-4000-8000-00000000000a',
+     'sub','Wendell Pike','(612) 555-7777','active','a0000000-0000-0000-0000-000000000004'),
+    ('f4000000-0000-4000-8000-000000000152','f3000000-0000-4000-8000-00000000000c',
+     'sub','Wendell Pike','(612) 555-7777','active','a0000000-0000-0000-0000-000000000004');
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  -- the premise, stated rather than assumed
+  IF NOT public.is_active_studio_member('f1000000-0000-4000-8000-00000000000a') THEN
+    RAISE EXCEPTION '4o the one-studio caller must be a member of the studio whose job holds the first seat';
+  END IF;
+  IF public.is_active_studio_member('f1000000-0000-4000-8000-00000000000c') THEN
+    RAISE EXCEPTION '4p the one-studio caller must NOT be a member of the second design studio';
+  END IF;
+  IF NOT public.is_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '4q the one-studio caller must be a co-member of the shared designer, or project_parties'' RLS hides the second seat and there is nothing to diverge';
+  END IF;
+  -- and it is NOT a read door: RLS already shows this caller BOTH party rows.
+  -- The defect under test is two columns of one wave disagreeing (r6 MAJOR-2's
+  -- recorded ruling is that this view is not the door).
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE id IN ('f4000000-0000-4000-8000-000000000151',
+                'f4000000-0000-4000-8000-000000000152');
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4r the caller reads % of the two party rows directly; both must be visible or this leg measures visibility instead of the disagreement', n;
+  END IF;
+  -- the seats view shows exactly one of them …
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id IN ('f4000000-0000-4000-8000-000000000151',
+                     'f4000000-0000-4000-8000-000000000152');
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4s the seats view shows the one-studio caller % of the two seats; the tenant leg should show exactly the one', n;
+  END IF;
+  -- … so the Directory row must claim exactly that one
+  SELECT seat_count INTO n FROM public.people_directory
+   WHERE role = 'sub' AND display_name = 'Wendell Pike';
+  IF n IS NULL THEN
+    RAISE EXCEPTION '4t the one-studio caller reads no Directory row for the shared identity, so its claim cannot be measured';
+  END IF;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '4u the Directory row claims % seats and nests 1: identity_seat_count() is counting over a wider set than the seats view shows', n;
+  END IF;
+
+  -- the control: the designer, a member of BOTH studios, claims 2 and nests 2,
+  -- which is what makes the line above a defect and not an access rule
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT seat_count INTO n FROM public.people_directory
+   WHERE role = 'sub' AND display_name = 'Wendell Pike';
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4v the both-studios caller claims % seats; the control must see both', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id IN ('f4000000-0000-4000-8000-000000000151',
+                     'f4000000-0000-4000-8000-000000000152');
+  IF n <> 2 THEN
+    RAISE EXCEPTION '4w the both-studios caller nests % of the two seats; the control must nest both', n;
+  END IF;
+
+  -- the invariant itself, over EVERY Directory row the caller can see:
+  -- what a row claims is what it nests. The client_rep seats above are staged
+  -- BEFORE it, so it now runs over data that could break it.
+  SELECT count(*) INTO n
+    FROM public.people_directory pd
+   WHERE pd.seat_count > 0
+     AND pd.seat_count <> (
+           SELECT count(*) FROM public.people_directory_seats s
+            WHERE s.person_id = pd.person_id);
+  IF n <> 0 THEN
+    RAISE EXCEPTION '4k % Directory rows claim a seat count they cannot nest', n;
+  END IF;
+
+  -- and once more as the ONE-STUDIO caller, over the same staged data
+  PERFORM pg_temp.reset_role();
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT count(*) INTO n
+    FROM public.people_directory pd
+   WHERE pd.seat_count > 0
+     AND pd.seat_count <> (
+           SELECT count(*) FROM public.people_directory_seats s
+            WHERE s.person_id = pd.person_id);
+  IF n <> 0 THEN
+    RAISE EXCEPTION '4x % Directory rows claim a seat count the ONE-STUDIO caller cannot nest', n;
+  END IF;
+
+  -- unwind the second design studio, so blocks 13 and 17 build the only ones
+  PERFORM pg_temp.reset_role();
+  DELETE FROM public.project_parties
+   WHERE id IN ('f4000000-0000-4000-8000-000000000151',
+                'f4000000-0000-4000-8000-000000000152');
+  DELETE FROM public.projects WHERE id = 'f3000000-0000-4000-8000-00000000000c';
+  DELETE FROM public.organization_members
+   WHERE organization_id = 'f1000000-0000-4000-8000-00000000000c';
+  DELETE FROM public.organizations WHERE id = 'f1000000-0000-4000-8000-00000000000c';
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '4. the uncarded identity: two seats on two jobs collapse to one row keyed on the phone, pointing at the newest seat, reach reads a live door on a NON-winning seat (and stops reading a revoked or expired one), the consent word AND its two dates come off the one record that decided them rather than off the winning seat''s number, a seat in ANOTHER studio contributes no number to the set, a folded refusal_unanswered on a granted record prints no consent date beside the refusal it decides, a mixed-kind identity nests every seat it claims, PR-c''s login-stamped client_rep seats leave the client row claiming 0, a shared identity seated on a job of each of TWO design studios that merely share a designer of record claims exactly the one seat the one-studio caller can nest while the both-studios caller claims and nests both (r10 MAJOR-2), and no row anywhere claims a count it cannot nest, for either caller: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 5. project_party_authority: PR-n's insert policy, by role
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  raised text;
+  n      integer;
+BEGIN
+  -- a plain MEMBER may record selections …
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  INSERT INTO public.project_party_authority (engagement_id, scope)
+  VALUES ('f4000000-0000-4000-8000-000000000001','selections');
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f4000000-0000-4000-8000-000000000001' AND scope = 'selections';
+  IF n <> 1 THEN RAISE EXCEPTION '5a a studio member could not record a selections grant'; END IF;
+
+  -- … and may NOT record money (PR-n)
+  BEGIN
+    INSERT INTO public.project_party_authority (engagement_id, scope, threshold_cents)
+    VALUES ('f4000000-0000-4000-8000-000000000001','money',250000);
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLSTATE;
+  END;
+  IF raised IS DISTINCT FROM '42501' THEN
+    RAISE EXCEPTION '5b a plain member wrote a MONEY grant (PR-n), sqlstate %', COALESCE(raised,'none');
+  END IF;
+
+  -- … nor draw certification
+  BEGIN
+    INSERT INTO public.project_party_authority (engagement_id, scope)
+    VALUES ('f4000000-0000-4000-8000-000000000001','draw_certify');
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLSTATE;
+  END;
+  IF raised IS DISTINCT FROM '42501' THEN
+    RAISE EXCEPTION '5c a plain member wrote a DRAW_CERTIFY grant (PR-n), sqlstate %', COALESCE(raised,'none');
+  END IF;
+
+  -- an OWNER may. Money is integer cents.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.project_party_authority (engagement_id, scope, threshold_cents)
+  VALUES ('f4000000-0000-4000-8000-000000000001','money',250000);
+  SELECT threshold_cents INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f4000000-0000-4000-8000-000000000001' AND scope = 'money';
+  IF n <> 250000 THEN RAISE EXCEPTION '5d the $2,500 line must be 250000 cents, got %', n; END IF;
+
+  -- and a member may not edit the money grant an owner wrote
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  UPDATE public.project_party_authority SET threshold_cents = 999999999
+   WHERE engagement_id = 'f4000000-0000-4000-8000-000000000001' AND scope = 'money';
+  IF FOUND THEN
+    RAISE EXCEPTION '5e a plain member raised a money threshold (PR-n)';
+  END IF;
+
+  -- someone outside the studio sees no grant at all
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000001');
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f4000000-0000-4000-8000-000000000001';
+  IF n <> 0 THEN RAISE EXCEPTION '5f a non-member read % authority rows', n; END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '5. project_party_authority: a member records selections and is refused money and draw certification, an owner records both, and a non-member reads nothing (PR-n): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 6. copy_to must name seats on the same job
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  raised text;
+BEGIN
+  BEGIN
+    INSERT INTO public.project_party_authority (engagement_id, scope, copy_to)
+    VALUES ('f4000000-0000-4000-8000-000000000001','schedule',
+            ARRAY['d0e30000-0000-0000-0000-000000000007'::uuid]);
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%authority_copy_to_off_project%' THEN
+    RAISE EXCEPTION '6a an off-project copy_to was accepted: %', COALESCE(raised,'no error');
+  END IF;
+
+  INSERT INTO public.project_party_authority (engagement_id, scope, copy_to)
+  VALUES ('f4000000-0000-4000-8000-000000000001','schedule',
+          ARRAY['f4000000-0000-4000-8000-000000000002'::uuid]);
+
+  RAISE NOTICE '6. copy_to: a seat on another job is refused, a seat on this one lands: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 7. The site access card: studio only, PR-r and PR-w
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  n      integer;
+  raised text;
+BEGIN
+  -- PR-r: there is NO gate_code column, and that is the ruling, not an omission
+  SELECT count(*) INTO n FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='project_site_access_cards'
+     AND column_name IN ('gate_code','code','access_code','lockbox_code');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '7a project_site_access_cards stores an access code (PR-r forbids it)';
+  END IF;
+
+  -- PR-w: no client policy, and no show_to_client column to make one
+  SELECT count(*) INTO n FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='project_site_access_cards'
+     AND column_name = 'show_to_client';
+  IF n <> 0 THEN RAISE EXCEPTION '7b the site access card grew a show_to_client toggle (PR-w)'; END IF;
+
+  SELECT count(*) INTO n FROM pg_policy p
+    JOIN pg_class c ON c.oid = p.polrelid
+   WHERE c.relname = 'project_site_access_cards';
+  IF n <> 4 THEN
+    RAISE EXCEPTION '7c expected exactly the four studio policies on the site access card, found %', n;
+  END IF;
+
+  -- a studio member reads the seeded card
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n <> 1 THEN RAISE EXCEPTION '7d a studio member cannot read the site access card'; END IF;
+
+  -- a CLIENT account reads nothing (PR-w)
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000001');
+  SELECT count(*) INTO n FROM public.project_site_access_cards;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '7e a client account read % site access rows (PR-w forbids any)', n;
+  END IF;
+
+  -- and anon is refused at the GRANT, before any policy runs
+  PERFORM pg_temp.assume_anon();
+  BEGIN
+    SELECT count(*) INTO n FROM public.project_site_access_cards;
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  IF raised IS DISTINCT FROM '42501' THEN
+    RAISE EXCEPTION '7f anon was not refused the site access card at the grant, sqlstate %',
+      COALESCE(raised, 'none — it READ the table');
+  END IF;
+
+  RAISE NOTICE '7. the site access card: no code column and no client toggle (PR-r), four studio policies, a client reads nothing and anon is refused at the grant (PR-w): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 8. The key holder is a seat on this job
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  raised text;
+BEGIN
+  BEGIN
+    INSERT INTO public.project_site_access_cards (project_id, key_holder_engagement_id)
+    VALUES ('f3000000-0000-4000-8000-00000000000a','d0e30000-0000-0000-0000-000000000006');
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%site_access_key_holder_off_project%' THEN
+    RAISE EXCEPTION '8a a key holder from another job was accepted: %', COALESCE(raised,'no error');
+  END IF;
+
+  INSERT INTO public.project_site_access_cards
+    (project_id, key_holder_engagement_id, lockbox_version)
+  VALUES ('f3000000-0000-4000-8000-00000000000a','f4000000-0000-4000-8000-000000000001',
+          'Lockbox, version 1');
+
+  RAISE NOTICE '8. the key holder must be a seat on the card''s own project: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 9. v_access_grants: F-08's field link, with the WINDOW expiry
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  r record;
+  n integer;
+  v_window_end timestamptz;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- Erin Sato's Okonkwo seat: the grant ends through the end of the window's
+  -- last day — NOT 90 days from the mint (PR-d).
+  SELECT g.* INTO r
+    FROM public.v_access_grants g
+   WHERE g.tier = 'field_link'
+     AND g.subject_type = 'engagement'
+     AND g.subject_id = 'd0e30000-0000-0000-0000-000000000008';
+  IF r.grant_id IS NULL THEN
+    RAISE EXCEPTION '9a F-08''s field link is missing from v_access_grants';
+  END IF;
+  IF r.scope_type <> 'project' OR r.scope_id <> 'd0e00000-0000-0000-0000-00000000000a' THEN
+    RAISE EXCEPTION '9b the grant''s scope must be the Okonkwo project, got %/%', r.scope_type, r.scope_id;
+  END IF;
+  -- DERIVED, NOT HARD-CODED (W3, 2026-09-13). The literal here was
+  -- 2027-08-14T00:00:00+00, which held only while the seed stated the Okonkwo
+  -- windows as absolute dates. W2 round 4 (2f4964494, "seed dates") made
+  -- people_crm_dev.sql shift every window on that project by
+  -- (CURRENT_DATE - DATE '2026-10-20') so the fixture reads as "this week"
+  -- whenever it is seeded, which moves this grant's end by the same distance
+  -- and broke the literal on every day but one. The assertion that matters is
+  -- unchanged and is now stated as the RULE: the grant ends through the END of
+  -- the seat's own window day (00627's v_window_end::timestamptz + 1 day), and
+  -- NOT 90 days from the mint (PR-d).
+  SELECT (max(d)::timestamptz + interval '1 day') INTO v_window_end
+    FROM public.project_parties pp
+    CROSS JOIN LATERAL (VALUES (pp.on_site_to), (pp.warranty_until)) AS v(d)
+   WHERE pp.id = 'd0e30000-0000-0000-0000-000000000008';
+  IF r.expires_at <> v_window_end THEN
+    RAISE EXCEPTION '9c expected the window end %, got %', v_window_end, r.expires_at;
+  END IF;
+  IF r.expires_at >= now() + interval '90 days' - interval '1 day'
+     AND r.expires_at <= now() + interval '90 days' + interval '1 day' THEN
+    RAISE EXCEPTION '9c the grant took the 90-day default, not the window';
+  END IF;
+  IF r.revoked_at IS NOT NULL THEN
+    RAISE EXCEPTION '9d the seeded link reads revoked';
+  END IF;
+
+  -- her Lindqvist seat's window closed in 2025 but its warranty runs to
+  -- 2026-11-21, and PR-l takes the later of the two.
+  SELECT g.expires_at::date INTO r
+    FROM public.v_access_grants g
+   WHERE g.tier = 'field_link' AND g.subject_id = 'd0e40000-0000-0000-0000-000000000008';
+  IF r IS NULL THEN RAISE EXCEPTION '9e her second seat''s link is missing'; END IF;
+
+  -- the ledger carries every tier the caller can see, and NO credential
+  SELECT count(*) INTO n FROM public.v_access_grants WHERE grant_id ~ '[0-9a-f]{64}';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '9f % grant_ids look like a bearer token', n;
+  END IF;
+
+  -- and the four closed sources come through their definer readers without
+  -- raising: a plain member of no such studio simply sees nothing.
+  SELECT count(*) INTO n FROM public.access_grants_invoice_links();
+  SELECT count(*) INTO n FROM public.access_grants_trade_rfq();
+  SELECT count(*) INTO n FROM public.access_grants_plan_transmittals();
+  SELECT count(*) INTO n FROM public.access_grants_trade_agreement_links();
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '9. v_access_grants: F-08''s field link ends with the engagement (PR-d), her warranty seat''s link takes the later date (PR-l), no bearer credential is in the ledger, and the four grant-closed sources read without raising: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 10. create_field_link: the window sets expires_at, and the old shape still
+--     works for a seat that has none
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_id     uuid;
+  v_prior  uuid;
+  v_exp    timestamptz;
+  v_status text;
+  n        integer;
+  raised   text;
+BEGIN
+  -- a seat with a window: 2026-12-18 → through the end of that day
+  SELECT id INTO v_id FROM public.create_field_link('f4000000-0000-4000-8000-000000000001');
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_id;
+  IF v_exp <> '2026-12-19T00:00:00+00'::timestamptz THEN
+    RAISE EXCEPTION '10a expected the window end 2026-12-19, got %', v_exp;
+  END IF;
+
+  -- a seat with NO window and no caller date: the 90-day fallback stands
+  SELECT id INTO v_id FROM public.create_field_link('f4000000-0000-4000-8000-000000000002');
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_id;
+  IF v_exp::date <> (now() + interval '90 days')::date THEN
+    RAISE EXCEPTION '10b expected the 90-day fallback, got %', v_exp;
+  END IF;
+
+  -- a seat with NO window and an explicit date: the caller's date wins
+  SELECT id INTO v_id
+    FROM public.create_field_link('f4000000-0000-4000-8000-000000000002',
+                                  '2027-03-01T00:00:00Z'::timestamptz);
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_id;
+  IF v_exp <> '2027-03-01T00:00:00+00'::timestamptz THEN
+    RAISE EXCEPTION '10c expected the caller''s date, got %', v_exp;
+  END IF;
+
+  -- a WARRANTY-only seat: warranty_until answers when on_site_to is null (PR-l)
+  SELECT id INTO v_id FROM public.create_field_link('f4000000-0000-4000-8000-000000000003');
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_id;
+  IF v_exp <> '2027-07-01T00:00:00+00'::timestamptz THEN
+    RAISE EXCEPTION '10d expected the warranty end 2027-07-01, got %', v_exp;
+  END IF;
+
+  -- the window still outranks a caller date, which is what PR-d means
+  SELECT id INTO v_id
+    FROM public.create_field_link('f4000000-0000-4000-8000-000000000001',
+                                  '2099-01-01T00:00:00Z'::timestamptz);
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_id;
+  IF v_exp <> '2026-12-19T00:00:00+00'::timestamptz THEN
+    RAISE EXCEPTION '10e a caller date overrode the engagement window, got %', v_exp;
+  END IF;
+
+  -- and the mint still supersedes the prior active token
+  SELECT count(*) INTO raised FROM public.field_link_tokens
+   WHERE party_id = 'f4000000-0000-4000-8000-000000000001' AND status = 'active';
+  IF raised <> '1' THEN
+    RAISE EXCEPTION '10f the mint left % active tokens on one seat', raised;
+  END IF;
+
+  -- 00284's authorization guard is untouched: a non-owner authenticated caller
+  -- is still refused.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000001');
+  BEGIN
+    PERFORM public.create_field_link('f4000000-0000-4000-8000-000000000001');
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLSTATE;
+  END;
+  PERFORM pg_temp.reset_role();
+  IF raised IS DISTINCT FROM '42501' THEN
+    RAISE EXCEPTION '10g a non-owner minted a field link, sqlstate %', COALESCE(raised,'none');
+  END IF;
+
+  -- A CLOSED window cannot date a live grant (w1b r1 MAJOR-1). Taking it
+  -- unconditionally stamped the token in the past and revoked the link the
+  -- trade was already using in the same call, and the shipped SMS rail
+  -- (_shared/sms.ts:624-629, any {{link}} template) texted that dead URL.
+  INSERT INTO public.project_parties
+    (id, project_id, party_kind, display_name, phone, stage,
+     on_site_from, on_site_to, created_by)
+  VALUES ('f4000000-0000-4000-8000-000000000004','f3000000-0000-4000-8000-00000000000a','sub',
+          'Closed Window Person','(612) 555-0914','off_job',
+          CURRENT_DATE - 90, CURRENT_DATE - 30,'a0000000-0000-0000-0000-000000000004');
+
+  SELECT id INTO v_prior FROM public.create_field_link('f4000000-0000-4000-8000-000000000004');
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_prior;
+  IF v_exp <= now() THEN
+    RAISE EXCEPTION '10h a closed window minted a token dated in the past: %', v_exp;
+  END IF;
+  IF v_exp::date <> (now() + interval '90 days')::date THEN
+    RAISE EXCEPTION '10i a closed window must fall to the 90-day default, got %', v_exp;
+  END IF;
+
+  -- and the link the studio just copied is actually live
+  IF public.reach_state_for(NULL, NULL, 'f4000000-0000-4000-8000-000000000004') <> 'field_link' THEN
+    RAISE EXCEPTION '10j the minted link is not live: reach reads %',
+      public.reach_state_for(NULL, NULL, 'f4000000-0000-4000-8000-000000000004');
+  END IF;
+
+  -- a caller date in the past is not stamped either
+  SELECT id INTO v_id
+    FROM public.create_field_link('f4000000-0000-4000-8000-000000000004',
+                                  now() - interval '1 day');
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_id;
+  IF v_exp <= now() THEN
+    RAISE EXCEPTION '10k a caller date in the past was stamped: %', v_exp;
+  END IF;
+
+  -- the prior token was superseded only by a mint that could succeed
+  SELECT status INTO v_status FROM public.field_link_tokens WHERE id = v_prior;
+  IF v_status <> 'revoked' THEN
+    RAISE EXCEPTION '10l the prior token reads % after a successful mint', v_status;
+  END IF;
+  SELECT count(*) INTO n FROM public.field_link_tokens
+   WHERE party_id = 'f4000000-0000-4000-8000-000000000004' AND status = 'active';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '10m the closed-window seat carries % active tokens', n;
+  END IF;
+
+  -- no mint anywhere in this block left a live token dated in the past
+  SELECT count(*) INTO n FROM public.field_link_tokens
+   WHERE status = 'active' AND expires_at <= now()
+     AND party_id IN ('f4000000-0000-4000-8000-000000000001',
+                      'f4000000-0000-4000-8000-000000000002',
+                      'f4000000-0000-4000-8000-000000000003',
+                      'f4000000-0000-4000-8000-000000000004');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '10n % live tokens are dated in the past', n;
+  END IF;
+
+  RAISE NOTICE '10. create_field_link: the engagement window sets the expiry and outranks a caller date, warranty answers alone, the 90-day fallback survives for a windowless seat and for a CLOSED one, no mint is dated in the past or revokes on behalf of one, and the supersede and 00284''s ownership guard are untouched: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 11. The stage and the window are writable; the consent columns are not
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  raised text;
+  v_stage text;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  UPDATE public.project_parties
+     SET stage = 'closeout', on_site_to = '2027-01-31', off_job_reason = 'scope complete'
+   WHERE id = 'f4000000-0000-4000-8000-000000000001';
+  SELECT stage INTO v_stage FROM public.project_parties
+   WHERE id = 'f4000000-0000-4000-8000-000000000001';
+  IF v_stage <> 'closeout' THEN
+    RAISE EXCEPTION '11a a studio member could not move the seat''s stage, it reads %', v_stage;
+  END IF;
+
+  -- and the freeze still holds the eight consent columns (R-AY / R-AX)
+  BEGIN
+    UPDATE public.project_parties SET sms_consent_status = 'granted'
+     WHERE id = 'f4000000-0000-4000-8000-000000000001';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%consent_legacy_column_frozen%' THEN
+    RAISE EXCEPTION '11b the consent freeze did not hold: %', COALESCE(raised,'no error');
+  END IF;
+
+  -- a bad stage is refused
+  BEGIN
+    UPDATE public.project_parties SET stage = 'on_the_job'
+     WHERE id = 'f4000000-0000-4000-8000-000000000001';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%project_parties_stage_check%' THEN
+    RAISE EXCEPTION '11c a stage outside the vocabulary was accepted: %', COALESCE(raised,'no error');
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+
+  -- the company pointer must name a firm in the project's own studio
+  BEGIN
+    UPDATE public.project_parties
+       SET company_id = 'd0e20000-0000-0000-0000-000000000001'
+     WHERE id = 'f4000000-0000-4000-8000-000000000002';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%party_company_other_studio%' THEN
+    RAISE EXCEPTION '11d a cross-studio firm pointer was accepted: %', COALESCE(raised,'no error');
+  END IF;
+
+  BEGIN
+    UPDATE public.project_parties
+       SET company_id = 'f2000000-0000-4000-8000-000000000011'
+     WHERE id = 'f4000000-0000-4000-8000-000000000002';
+    raised := NULL;
+  EXCEPTION WHEN OTHERS THEN raised := SQLERRM;
+  END;
+  IF raised IS NULL OR raised NOT LIKE '%party_company_not_a_company%' THEN
+    RAISE EXCEPTION '11e a PERSON card was accepted as the seat''s firm: %', COALESCE(raised,'no error');
+  END IF;
+
+  RAISE NOTICE '11. the seat''s new columns are writable by a member, the eight consent columns are still frozen, the stage vocabulary is closed, and the firm pointer must be a firm in this studio: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 12. The seeded fixture's own facts, as the room will read them
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  n integer;
+  w text;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  -- R-F's "5 reachable by text": five granted records in this studio
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE consent_status = 'granted'
+     AND meta->>'organization_id' = 'b0000000-0000-0000-0000-000000000001';
+  IF n <> 5 THEN RAISE EXCEPTION '12a expected 5 granted numbers, got %', n; END IF;
+
+  -- F-12 Pete Rusk: the refusal he made on the Lindqvist thread still answers
+  -- on the Okonkwo job, because consent is a fact about the NUMBER (G-3).
+  SELECT consent_status INTO w FROM public.people_directory
+   WHERE display_name = 'Pete Rusk';
+  IF w <> 'opted_out' THEN
+    RAISE EXCEPTION '12b Pete Rusk must read opted_out from the record, got %', w;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE display_name = 'Pete Rusk' AND consent_status <> 'opted_out';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '12c % of Pete Rusk''s seats disagree with his record', n;
+  END IF;
+  -- … and the refusal does NOT move his REACH word. crm-model's reach-tier
+  -- table lists F-12 in the field-link row and his access matrix reads "Phone,
+  -- Field link by another channel"; fixture.md's "Patina reach today" column
+  -- says `field link`. The mechanism and the text consent are two axes (PR-e),
+  -- and the seed used to mint no link for his Okonkwo seat, so the Directory
+  -- printed `on_paper` — the word for someone Patina has never tried to reach
+  -- at all — and taught the opposite of the design (w1b final review r10,
+  -- tests F2).
+  SELECT reach_state INTO w FROM public.people_directory
+   WHERE display_name = 'Pete Rusk';
+  IF w <> 'field_link' THEN
+    RAISE EXCEPTION '12c2 Pete Rusk must read reach field_link (crm-model''s field-link tier; his phone is opted out of TEXT, not of the link), got %', w;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE display_name = 'Pete Rusk' AND reach_state = 'field_link';
+  IF n < 1 THEN
+    RAISE EXCEPTION '12c3 no seat of Pete Rusk carries the field link the fixture gives him';
+  END IF;
+
+  -- F-18 Joe Wozniak is invited and has not answered
+  SELECT consent_status INTO w FROM public.people_directory WHERE display_name = 'Joe Wozniak';
+  IF w <> 'pending' THEN RAISE EXCEPTION '12d Joe Wozniak must read pending, got %', w; END IF;
+
+  -- F-15 Frank Bauer's rule names the route, and F-14 Rosa is who to write
+  SELECT contact_rule_summary INTO w FROM public.people_directory
+   WHERE display_name = 'Frank Bauer';
+  IF w IS NULL OR w NOT LIKE 'Never text.%' OR w NOT LIKE '%Write Rosa Delgado instead.%' THEN
+    RAISE EXCEPTION '12e Frank Bauer''s rule reads "%"', COALESCE(w,'NULL');
+  END IF;
+
+  -- F-27 Ray Thao is never texted, and the 311 portal is a channel
+  SELECT contact_rule_summary INTO w FROM public.people_directory WHERE display_name = 'Ray Thao';
+  IF w IS NULL OR w NOT LIKE 'Never text.%' OR w NOT LIKE '%portal_311%' THEN
+    RAISE EXCEPTION '12f Ray Thao''s rule reads "%"', COALESCE(w,'NULL');
+  END IF;
+
+  -- C13/R-A: a lender and an AHJ hold no paper. The VIEW still reports
+  -- not_on_file — the "print no word at all" rule is the room's, not the
+  -- view's, and this assertion is what says so.
+  SELECT paper_state INTO w FROM public.people_directory WHERE display_name = 'Great Northern Bank';
+  IF w <> 'not_on_file' THEN
+    RAISE EXCEPTION '12g the view must report the FACT for a lender, got %', w;
+  END IF;
+
+  -- F-05 Chidi signs money over $2,500, and the grant carries the figure
+  SELECT a.threshold_cents INTO n
+    FROM public.project_party_authority a
+    JOIN public.project_parties pp ON pp.id = a.engagement_id
+   WHERE pp.display_name = 'Chidi Okonkwo' AND a.scope = 'money';
+  IF n <> 250000 THEN
+    RAISE EXCEPTION '12h Chidi''s money grant reads % cents', COALESCE(n::text,'NULL');
+  END IF;
+
+  -- F-08 Erin PREPARES the change order and does not sign it
+  SELECT count(*) INTO n
+    FROM public.project_party_authority a
+    JOIN public.project_parties pp ON pp.id = a.engagement_id
+   WHERE pp.id = 'd0e30000-0000-0000-0000-000000000008'
+     AND a.scope = 'change_order' AND a.prepares_only IS TRUE;
+  IF n <> 1 THEN RAISE EXCEPTION '12i Erin''s prepares-only grant is missing'; END IF;
+
+  -- the site access card names the key holder and holds no code
+  SELECT count(*) INTO n FROM public.project_site_access_cards c
+    JOIN public.project_parties pp ON pp.id = c.key_holder_engagement_id
+   WHERE c.project_id = 'd0e00000-0000-0000-0000-00000000000a'
+     AND pp.display_name = 'Ngozi Eze';
+  IF n <> 1 THEN RAISE EXCEPTION '12j the key holder is not Ngozi Eze'; END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '12. the seeded fixture reads as the fixture: five granted numbers, Pete''s Lindqvist refusal answering on Okonkwo while his REACH still reads field_link (r10 tests F2), Joe invited, Frank routed to Rosa, Ray never texted, the lender''s paper reported as a fact, Chidi''s $2,500 line in cents, Erin preparing only, and Ngozi holding the key: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 13. The tenant boundary: one studio, on both sides
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Three findings from the final review's round 5, all one shape: the wave's
+-- sensitive objects were scoped through the DESIGNER, and
+-- is_studio_comember(p_owner) is true whenever the caller shares ANY active
+-- organization with that owner. An outside designer who also works for a
+-- second studio therefore handed every member of that second studio the first
+-- studio's seats, its authority grants with their money thresholds, and its
+-- site access card — read AND write — while the consent word on those seats
+-- COALESCEd an unreadable record to the affirmative `not_asked`.
+--
+--   BLOCKING-1  identity_phone_numbers() answered for a studio the caller
+--               named rather than the studio the rows belong to (MINOR-39's
+--               missing leg: the caller's OWN org, a FOREIGN identity key)
+--   MAJOR-1     the party branch and people_directory_seats render an
+--               unreadable consent record as `not_asked`
+--   MAJOR-3     project_site_access_cards and project_party_authority are
+--               read and written by a co-member of another tenant
+--
+-- r6 BLOCKING-1 adds the four SECURITY DEFINER access-grant readers of 00627
+-- to the same block. Three of them were gated on is_studio_comember(designer)
+-- alone, and because they are definer that WHERE clause is the whole rule —
+-- r5's clean list tested "a foreign owner", who shares nothing, which is the
+-- wrong actor. The actor below is the right one: a co-member of the designer
+-- who is not a member of the owning studio. The fixture writes one rfq token,
+-- one plan transmittal token and one invoice link, each on a project or
+-- invoice that RECORDS its studio, so the tenant leg is the thing under test.
+--
+-- A third studio, holding the seeded studio's designer AND one outsider, is
+-- the whole fixture. It is created HERE rather than at the top of the file so
+-- no earlier block's actor changes.
+DO $$
+DECLARE
+  n integer;
+  w text;
+BEGIN
+  INSERT INTO public.organizations (id, type, name, slug, status) VALUES
+    ('f1000000-0000-4000-8000-00000000000b','design_studio','Test Studio B','w1b-studio-b','active');
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at) VALUES
+    -- the seeded studio's designer of record, consulting for a second studio
+    ('a0000000-0000-0000-0000-000000000004','f1000000-0000-4000-8000-00000000000b','owner','active', now()),
+    -- and an ordinary member of that second studio, who has no business in
+    -- the seeded studio at all
+    ('a0000000-0000-0000-0000-000000000002','f1000000-0000-4000-8000-00000000000b','member','active', now())
+  ON CONFLICT (user_id, organization_id) DO UPDATE SET role = EXCLUDED.role, status = 'active';
+
+  -- r6 BLOCKING-1's fixture: one grant on each of the three sources whose
+  -- reader was loose, every one of them on paperwork whose tenant IS recorded
+  -- (proposal …cb03 sits on project …c0d1, invoice …cc01 names studio_id,
+  -- the plan token is on the seeded Okonkwo job).
+  INSERT INTO public.trade_rfq_requests (id, proposal_id, party_id, scope_snapshot, status)
+  VALUES ('f1800000-0000-4000-8000-00000000000b','b0000000-0000-0000-0000-00000000cb03',
+          (SELECT id FROM public.project_parties
+            WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a' LIMIT 1),
+          '{}'::jsonb,'sent');
+  INSERT INTO public.trade_rfq_tokens (id, rfq_request_id, proposal_id, party_id,
+                                       token_hash, status, created_by)
+  VALUES ('f1700000-0000-4000-8000-00000000000b','f1800000-0000-4000-8000-00000000000b',
+          'b0000000-0000-0000-0000-00000000cb03',
+          (SELECT id FROM public.project_parties
+            WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a' LIMIT 1),
+          repeat('e',64),'active','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.plan_issues (id, project_id, issue_number, name, idempotency_key,
+                                  request_hash, set_checksum, sheet_count, created_by)
+  VALUES ('f1600000-0000-4000-8000-00000000000b','d0e00000-0000-0000-0000-00000000000a',
+          9013,'W1b block 13 issue','w1b-b13-key',repeat('c',64),repeat('d',64),1,
+          'a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.plan_transmittals (id, project_id, issue_id, party_display_name,
+                                        purpose, sent_at, created_by)
+  VALUES ('f1400000-0000-4000-8000-00000000000b','d0e00000-0000-0000-0000-00000000000a',
+          'f1600000-0000-4000-8000-00000000000b','Block 13','pricing',now(),
+          'a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.plan_transmittal_tokens (id, transmittal_id, project_id, token_hash,
+                                              status, created_by)
+  VALUES ('f1500000-0000-4000-8000-00000000000b','f1400000-0000-4000-8000-00000000000b',
+          'd0e00000-0000-0000-0000-00000000000a',repeat('b',64),'active',
+          'a0000000-0000-0000-0000-000000000004');
+  -- 00636 froze the plaintext column: a link row carries sha256 and an end
+  -- date, and the raw token exists only in the letter that carried it.
+  INSERT INTO public.invoice_links (id, invoice_id, token_hash, expires_at, status,
+                                    created_by, created_at, last_viewed_at)
+  VALUES ('f1300000-0000-4000-8000-00000000000b','b0000000-0000-0000-0000-00000000cc01',
+          encode(extensions.digest(repeat('a',64),'sha256'),'hex'),
+          now() + interval '30 days','active',
+          'a0000000-0000-0000-0000-000000000004',now(),now());
+
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000002');
+
+  -- the premise: they ARE a co-member of the designer, and are NOT a member
+  -- of the studio that owns the work. Without both halves this block proves
+  -- nothing.
+  IF NOT public.is_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '13a the outsider must be a co-member of the designer of record';
+  END IF;
+  IF public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION '13b the outsider must NOT be a member of the seeded studio';
+  END IF;
+  IF public.project_designer('d0e00000-0000-0000-0000-00000000000a')
+     <> 'a0000000-0000-0000-0000-000000000004' THEN
+    RAISE EXCEPTION '13c the seeded project''s designer is not the shared one';
+  END IF;
+
+  -- ── MAJOR-3: the site access card ──────────────────────────────────────
+  -- Direction §7 rates this table risk High and calls it the first genuinely
+  -- sensitive text in the room; PR-w rules it studio-only.
+  SELECT count(*) INTO n FROM public.project_site_access_cards;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13d a co-member of another tenant read % site access card(s) — the lockbox version, the alarm account, the hours, the key holder and the emergency lines', n;
+  END IF;
+  -- and the write is closed too: the r5 probe landed an UPDATE on 1 row
+  UPDATE public.project_site_access_cards
+     SET lockbox_version = 'changed by an outsider'
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13e a co-member of another tenant changed the lockbox version on % row(s)', n;
+  END IF;
+
+  -- ── MAJOR-3: the authority grants and their money thresholds ───────────
+  SELECT count(*) INTO n FROM public.project_party_authority;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13f a co-member of another tenant read % authority grant(s), thresholds included', n;
+  END IF;
+
+  -- ── MAJOR-1: the seats view, and the consent word on it ────────────────
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id IN ('d0e00000-0000-0000-0000-00000000000a',
+                        'd0e00000-0000-0000-0000-00000000000b');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13g a co-member of another tenant read % of the seeded studio''s seat rows', n;
+  END IF;
+  -- the party branch of the Directory, AND the team branch beside it
+  --
+  -- RESTORED TO `role <> 'contact'` (W3 r7 M-3). This line was narrowed to
+  -- `role NOT IN ('contact', 'team')` mid-wave, under a comment saying the
+  -- TEAM branch's gate was still is_studio_comember(designer) alone and that
+  -- the leak of a teammate's NAME and project id was REPORTED rather than
+  -- changed. Both halves stopped being true in the same wave: 00629's TEAM
+  -- branch now takes R-BD's tenant conjunct
+  -- (is_active_studio_member(project_tenant_org(tm.project_id)), or the
+  -- caller standing on the project themselves), and w3-data-report.md records
+  -- the correction as MADE. The narrowing therefore left a cross-tenant
+  -- visibility fix with no assertion anywhere — the leg could be reverted and
+  -- all three suites would stay green. Measured with the original predicate
+  -- against the shipped view: 0 rows, and 0 `team` rows anywhere for this
+  -- caller.
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE role <> 'contact'
+     AND project_id IN ('d0e00000-0000-0000-0000-00000000000a',
+                        'd0e00000-0000-0000-0000-00000000000b');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13h a co-member of another tenant read % party- or team-branch Directory row(s) whose consent word they cannot source', n;
+  END IF;
+  -- and the rolodex, which was already tenant-scoped, is unchanged
+  SELECT count(*) INTO n FROM public.studio_contacts
+   WHERE organization_id = 'b0000000-0000-0000-0000-000000000001';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13i the rolodex leaked % card(s), which was never the finding', n;
+  END IF;
+
+  -- ── BLOCKING-1 / MINOR-39: the caller's OWN org, a FOREIGN key ─────────
+  -- This is the call the suite never made. p_organization_id and
+  -- p_identity_key are both caller-supplied and the seat leg had no
+  -- organization predicate, so the gate proved only that the caller belonged
+  -- to the studio they NAMED. Adaeze Okonkwo's rolodex card is the foreign
+  -- key; +16125550104 is the number her seat carries.
+  SELECT count(*) INTO n FROM public.identity_phone_numbers(
+    'f1000000-0000-4000-8000-00000000000b',
+    'd0e10000-0000-0000-0000-000000000004', NULL) AS q(v);
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13j naming their OWN studio with a FOREIGN identity key returned % number(s) — a cross-tenant phone oracle over /rest/v1/rpc/', n;
+  END IF;
+  -- the same shape with a raw number as the key, which is the existence
+  -- oracle: "is this number seated anywhere on the platform"
+  SELECT count(*) INTO n FROM public.identity_phone_numbers(
+    'f1000000-0000-4000-8000-00000000000b', '+16125550219', NULL) AS q(v);
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13k a guessed number answered as an existence oracle (% rows)', n;
+  END IF;
+  -- and the carried control: naming the VICTIM's org is refused at the gate
+  SELECT count(*) INTO n FROM public.identity_phone_numbers(
+    'b0000000-0000-0000-0000-000000000001',
+    'd0e10000-0000-0000-0000-000000000004', NULL) AS q(v);
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13l the gate itself let a non-member through (% rows)', n;
+  END IF;
+  -- no consent word and no dates by that route either
+  IF public.identity_consent_status('f1000000-0000-4000-8000-00000000000b',
+       'd0e10000-0000-0000-0000-000000000004', NULL) IS NOT NULL THEN
+    RAISE EXCEPTION '13m a foreign identity''s consent word answered under the caller''s own org';
+  END IF;
+  SELECT count(*) INTO n FROM public.identity_consent_evidence(
+    'f1000000-0000-4000-8000-00000000000b',
+    'd0e10000-0000-0000-0000-000000000004', NULL);
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13n a foreign identity''s consent DATES answered under the caller''s own org (% rows)', n;
+  END IF;
+  -- and naming the foreign NUMBER themselves borrows no foreign verdict: the
+  -- p_card_phone_e164 leg echoes a number the caller already holds, resolved
+  -- against THEIR OWN studio's record, which has none. That leg is not a read
+  -- of anything — the seat scan was.
+  IF public.identity_consent_status('f1000000-0000-4000-8000-00000000000b',
+       'd0e10000-0000-0000-0000-000000000004', '+16125550104')
+     IS DISTINCT FROM 'not_asked' THEN
+    RAISE EXCEPTION '13m1 a number the caller named resolved to a verdict their own studio has no record for, got %',
+      COALESCE(public.identity_consent_status('f1000000-0000-4000-8000-00000000000b',
+        'd0e10000-0000-0000-0000-000000000004', '+16125550104'), 'NULL');
+  END IF;
+  SELECT count(*) INTO n FROM public.identity_consent_evidence(
+    'f1000000-0000-4000-8000-00000000000b',
+    'd0e10000-0000-0000-0000-000000000004', '+16125550104');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13n1 a number the caller named yielded % evidence row(s) from another studio''s record', n;
+  END IF;
+
+  -- ── r6 BLOCKING-1: 00627's four definer readers ────────────────────────
+  -- Definer, EXECUTE to authenticated, published at /rest/v1/rpc/<name>, so
+  -- each WHERE clause is the whole access rule with no RLS behind it. This
+  -- caller is a co-member of the designer AND a co-member through a
+  -- design_studio, so is_design_studio_comember() — the predicate the shipped
+  -- policies carry — is true for them: the tenant leg is what must refuse.
+  IF NOT public.is_design_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '13u the outsider must also satisfy the shipped policies'' own predicate, or the tenant leg is not what this proves';
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_trade_rfq()
+   WHERE grant_id = 'rfq_link:f1700000-0000-4000-8000-00000000000b';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13v a co-member of another tenant read % rfq_link grant(s) of the seeded studio through a SECURITY DEFINER reader', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_plan_transmittals()
+   WHERE grant_id = 'plan_link:f1500000-0000-4000-8000-00000000000b';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13w a co-member of another tenant read % plan_link grant(s) of the seeded studio through a SECURITY DEFINER reader', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_invoice_links()
+   WHERE grant_id = 'invoice_pay:f1300000-0000-4000-8000-00000000000b';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13x a co-member of another tenant read % invoice_pay grant(s) — which invoices have live pay links and when each was last viewed', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_trade_agreement_links();
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13y the agreement_link reader, which was already tenant-scoped, returned % row(s)', n;
+  END IF;
+  -- and none of them reaches the ledger either
+  SELECT count(*) INTO n FROM public.v_access_grants
+   WHERE grant_id IN ('rfq_link:f1700000-0000-4000-8000-00000000000b',
+                      'plan_link:f1500000-0000-4000-8000-00000000000b',
+                      'invoice_pay:f1300000-0000-4000-8000-00000000000b');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '13z v_access_grants handed the same % row(s) through the union', n;
+  END IF;
+
+  -- ── the positive control: the studio's own owner still reads it all ────
+  -- A tenant conjunct that closed the room to its own members would be the
+  -- worse defect.
+  -- Counted against the SEEDED studio's own rows, not globally: earlier blocks
+  -- in this transaction added cards, grants and seats of their own.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a'
+     AND lockbox_version = 'Lockbox, version 3';
+  IF n <> 1 THEN RAISE EXCEPTION '13o the owner lost the seeded site access card, got %', n; END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority a
+    JOIN public.project_parties pp ON pp.id = a.engagement_id
+   WHERE pp.project_id IN ('d0e00000-0000-0000-0000-00000000000a',
+                           'd0e00000-0000-0000-0000-00000000000b');
+  IF n < 11 THEN RAISE EXCEPTION '13p the owner lost the seeded authority grants, got %', n; END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id IN ('d0e00000-0000-0000-0000-00000000000a',
+                        'd0e00000-0000-0000-0000-00000000000b');
+  IF n < 31 THEN RAISE EXCEPTION '13q the owner lost the seeded seat rows, got %', n; END IF;
+  -- and the owner still reads the record honestly, which is what MAJOR-1's
+  -- softened word hid: Pete Rusk's refusal on +16125550112
+  SELECT DISTINCT consent_status INTO w FROM public.people_directory_seats
+   WHERE phone_e164 = '+16125550112';
+  IF w IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '13r the owner''s own seat row no longer reads the recorded refusal, got %', COALESCE(w,'NULL');
+  END IF;
+  -- the admin of the same studio, too
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n <> 1 THEN RAISE EXCEPTION '13s the studio admin lost the site access card, got %', n; END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id IN ('d0e00000-0000-0000-0000-00000000000a',
+                        'd0e00000-0000-0000-0000-00000000000b');
+  IF n < 31 THEN RAISE EXCEPTION '13t the studio admin lost the seeded seat rows, got %', n; END IF;
+  -- and the three definer readers still answer for the studio's own admin: a
+  -- tenant leg that closed the ledger to its own studio would be the worse
+  -- defect, and the admin is not the designer of record on any of the three
+  SELECT count(*) INTO n FROM public.access_grants_trade_rfq()
+   WHERE grant_id = 'rfq_link:f1700000-0000-4000-8000-00000000000b';
+  IF n <> 1 THEN RAISE EXCEPTION '13u1 the studio admin lost the rfq_link grant, got %', n; END IF;
+  SELECT count(*) INTO n FROM public.access_grants_plan_transmittals()
+   WHERE grant_id = 'plan_link:f1500000-0000-4000-8000-00000000000b';
+  IF n <> 1 THEN RAISE EXCEPTION '13u2 the studio admin lost the plan_link grant, got %', n; END IF;
+  SELECT count(*) INTO n FROM public.access_grants_invoice_links()
+   WHERE grant_id = 'invoice_pay:f1300000-0000-4000-8000-00000000000b';
+  IF n <> 1 THEN RAISE EXCEPTION '13u3 the studio admin lost the invoice_pay grant, got %', n; END IF;
+  -- through the ledger too, and with no bearer credential in it
+  SELECT count(*) INTO n FROM public.v_access_grants
+   WHERE grant_id IN ('rfq_link:f1700000-0000-4000-8000-00000000000b',
+                      'plan_link:f1500000-0000-4000-8000-00000000000b',
+                      'invoice_pay:f1300000-0000-4000-8000-00000000000b');
+  IF n <> 3 THEN RAISE EXCEPTION '13u4 the ledger lost the studio''s own grants, got % of 3', n; END IF;
+  SELECT count(*) INTO n FROM public.v_access_grants WHERE grant_id ~ '[0-9a-f]{64}';
+  IF n <> 0 THEN RAISE EXCEPTION '13u5 % ledger row(s) carry a 64-hex bearer credential', n; END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '13. the tenant boundary: a co-member of another studio reads no site access card, no authority grant, no seat row, no party-branch Directory row and no access-grant row of the seeded studio through any of 00627''s four definer readers, cannot change the lockbox version, and cannot pull a foreign identity''s numbers, consent word or consent dates by naming their OWN org — while the studio''s own owner and admin still read all of it, refusal and all three grants included: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 14. A project that records no studio: the gate may not guess
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r6 MAJOR-1. r5's tenant conjunct resolved through
+-- project_consent_org(), whose fallback is _primary_studio_for(designer_id) —
+-- on a project whose studio_id is NULL that names whatever studio the
+-- designer's own memberships rank first, which need not be the studio doing
+-- the work. Five of eight local projects are in that state and their designer
+-- owns two design studios, so nothing in the record chooses: an ADMIN of the
+-- studio doing the work read 0 seats, 0 site access cards and 0 authority
+-- grants, and an INSERT of a card was refused. For people_directory that was
+-- a REGRESSION — 00594's party branch carried no tenant leg at all.
+--
+-- The gate now resolves through project_tenant_org() (00624 §1): the recorded
+-- studio when there is one, else the DESIGN studio the caller and the job's
+-- designer share. This block walks both sides on the same studio-less job.
+--
+-- AND THE TWO CARD POINTERS ARE THE THIRD AND FOURTH WRITE (w1b final review
+-- r7 BLOCKING-1). r6's fix moved every gate in the wave onto
+-- project_tenant_org() except assert_project_party_cards(), which is the ONLY
+-- tenant guard on project_parties.company_id and .warranty_contact_person_id
+-- — so this block asserted "may record both" over a job where two further
+-- writes did not land at all, and where a card of the guessed studio DID. The
+-- legs below record both pointers naming the working studio's own cards and
+-- walk the foreign card's refusal in both column names.
+DO $$
+DECLARE
+  n integer;
+  v_org uuid;
+BEGIN
+  -- premise: the project records no studio, and the two resolvers disagree
+  SELECT count(*) INTO n FROM public.projects
+   WHERE id = 'b0000000-0000-0000-0000-0000000000d1' AND studio_id IS NULL;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14a the fixture project must record NO studio for this block to mean anything';
+  END IF;
+  IF public.project_consent_org('b0000000-0000-0000-0000-0000000000d1')
+     = 'b0000000-0000-0000-0000-000000000001' THEN
+    RAISE EXCEPTION '14b the consent resolver already names the studio doing the work; the disagreement this block is about is gone';
+  END IF;
+
+  -- a manufacturer organization holding the designer of record and one
+  -- outsider: the caller is_studio_comember() lets through and the tenant
+  -- must not
+  INSERT INTO public.organizations (id, type, name, slug, status) VALUES
+    ('f2000000-0000-4000-8000-00000000000c','manufacturer','Test Manufacturer C','w1b-mfr-c','active')
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password,
+                          email_confirmed_at, created_at, updated_at,
+                          raw_app_meta_data, raw_user_meta_data)
+  VALUES ('f2100000-0000-4000-8000-00000000000c','00000000-0000-0000-0000-000000000000',
+          'authenticated','authenticated','w1b-mfr-c@test.local','x',now(),now(),now(),
+          '{}'::jsonb,'{}'::jsonb)
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.organization_members (user_id, organization_id, role, status, joined_at) VALUES
+    ('f2100000-0000-4000-8000-00000000000c','f2000000-0000-4000-8000-00000000000c','owner','active',now()),
+    ('a0000000-0000-0000-0000-000000000004','f2000000-0000-4000-8000-00000000000c','member','active',now())
+  ON CONFLICT (user_id, organization_id) DO UPDATE SET role = EXCLUDED.role, status = 'active';
+
+  -- a seat, a card and an authority grant on that studio-less job
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('f2200000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-0000000000d1',
+          'sub','Block 14 Studioless Sub','+16125559991','electrical');
+  INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+  VALUES ('b0000000-0000-0000-0000-0000000000d1','Block 14 lockbox v1');
+  INSERT INTO public.project_party_authority (engagement_id, scope)
+  VALUES ('f2200000-0000-4000-8000-00000000000c','selections');
+
+  -- and four rolodex cards for the two card POINTERS (w1b final review r7
+  -- BLOCKING-1): a firm and a warranty contact in the studio DOING the work,
+  -- and the same two in the studio the CONSENT resolver guesses, which this
+  -- caller is not a member of and reads 0 rows of.
+  INSERT INTO public.studio_contacts (id, organization_id, entity_kind, contact_kind,
+                                      company_name, full_name, created_by) VALUES
+    ('f2400000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-000000000001',
+     'company','trade','Block 14 Own Firm',NULL,'a0000000-0000-0000-0000-000000000004'),
+    ('f2500000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-000000000001',
+     'person','trade',NULL,'Block 14 Own Warranty Contact','a0000000-0000-0000-0000-000000000004'),
+    ('f2600000-0000-4000-8000-00000000000c',
+     public.project_consent_org('b0000000-0000-0000-0000-0000000000d1'),
+     'company','trade','Block 14 Foreign Firm',NULL,'a0000000-0000-0000-0000-000000000004'),
+    ('f2700000-0000-4000-8000-00000000000c',
+     public.project_consent_org('b0000000-0000-0000-0000-0000000000d1'),
+     'person','trade',NULL,'Block 14 Foreign Warranty Contact','a0000000-0000-0000-0000-000000000004');
+
+  -- ── the ADMIN of the studio actually doing the work ────────────────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  IF NOT public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION '14c the actor must be a member of the studio doing the work';
+  END IF;
+  IF public.is_active_studio_member(
+       public.project_consent_org('b0000000-0000-0000-0000-0000000000d1')) THEN
+    RAISE EXCEPTION '14d the actor must NOT be a member of the org the consent resolver guesses, or the regression cannot be observed';
+  END IF;
+  v_org := public.project_tenant_org('b0000000-0000-0000-0000-0000000000d1');
+  IF v_org <> 'b0000000-0000-0000-0000-000000000001' THEN
+    RAISE EXCEPTION '14e the gate resolver named % instead of the studio doing the work', COALESCE(v_org::text,'NULL');
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14f the admin of the studio doing the work reads % seat row(s) on its own job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE display_name = 'Block 14 Studioless Sub';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14g the Directory shows % row(s) for a human the record seats on that job', n;
+  END IF;
+  -- ── AND THE TWO SENSITIVE OBJECTS ASK THE RECORD, NOT THE CALLER ──────
+  -- w1b final review r8 BLOCKING-1. project_tenant_org() above still names
+  -- this studio for THIS caller — and that is exactly why the site access
+  -- card and the authority grant may not ask it: the same expression named
+  -- the OTHER studio for a member of the other studio, who then read the
+  -- lockbox version, the alarm account, the hours, the key holder and the gas
+  -- line, and landed an UPDATE (block 17). is_active_studio_member(
+  -- project_tenant_org(p)) is self-satisfying on this population, so it is no
+  -- tenant boundary here. Both tables now resolve
+  -- project_recorded_studio()/project_party_recorded_studio() (00624 §1c):
+  -- where the record names NO studio the job refuses BOTH studios, this admin
+  -- included, and the studio-less population carries neither feature until
+  -- R-BD's W3 backfill names a studio. PR-w's posture, paid for in the open.
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14h a job that records NO studio held % readable site access card(s) — the sensitive text may not be gated on a caller-relative tenant', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f2200000-0000-4000-8000-00000000000c';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14i a job that records NO studio held % readable authority grant(s), money threshold included', n;
+  END IF;
+  UPDATE public.project_site_access_cards
+     SET lockbox_version = 'changed on a job that records no studio'
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14h2 the lockbox version on a studio-less job was changed on % row(s)', n;
+  END IF;
+  BEGIN
+    INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+    VALUES ('b0000000-0000-0000-0000-0000000000d3','Block 14 admin write');
+    RAISE EXCEPTION '14h3 a site access card was RECORDED on a job that names no studio';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.project_party_authority (engagement_id, scope, threshold_cents)
+    VALUES ('f2200000-0000-4000-8000-00000000000c','money',250000);
+    RAISE EXCEPTION '14i2 a money authority grant was RECORDED on a seat of a job that names no studio';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- ── and the room's own acts LAND on a job that RECORDS this studio ─────
+  -- The same two writes, one field different: Cedar Lane Study names
+  -- studio_id. Nothing about the caller, the designer or the seat changes, so
+  -- this is the mutation control for the four refusals above — the record,
+  -- not the gate, is what moved.
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name,
+                                      phone_e164, trade)
+  VALUES ('f7000000-0000-4000-8000-000000000014',
+          'b0000000-0000-0000-0000-00000000c0d1','sub','Block 14 Recorded Sub',
+          '+16125559994','electrical');
+  INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+  VALUES ('b0000000-0000-0000-0000-00000000c0d1','Block 14 admin write');
+  INSERT INTO public.project_party_authority (engagement_id, scope, threshold_cents)
+  VALUES ('f7000000-0000-4000-8000-000000000014','money',250000);
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-00000000c0d1'
+     AND lockbox_version = 'Block 14 admin write';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14h4 the admin reads % site access card(s) it just recorded on a job that RECORDS its studio', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f7000000-0000-4000-8000-000000000014'
+     AND scope = 'money' AND threshold_cents = 250000;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14i3 the admin reads % money grant(s) it just recorded on a job that RECORDS its studio (PR-n standing resolves at the RECORDED studio)', n;
+  END IF;
+
+  -- ── and the two ROLODEX POINTERS, the third and fourth write on this job ──
+  -- w1b final review r7 BLOCKING-1. assert_project_party_cards() was the one
+  -- tenant guard r6 MAJOR-1 left on project_consent_org(), and on this
+  -- population that INVERTED it: the working studio's own firm card was
+  -- refused party_company_other_studio, its own warranty contact
+  -- party_warranty_contact_other_studio, while a card of the guessed studio —
+  -- which this caller reads 0 rows of — LANDED on this studio's seat and
+  -- printed paper_state not_on_file on its own seat line. Both directions are
+  -- walked here, because a guard that refuses the compliant write and accepts
+  -- the cross-tenant one fails two ways and the error name it raises is
+  -- exactly the violation it permits.
+  UPDATE public.project_parties SET company_id = 'f2400000-0000-4000-8000-00000000000c'
+   WHERE id = 'f2200000-0000-4000-8000-00000000000c';
+  IF NOT EXISTS (SELECT 1 FROM public.project_parties
+                  WHERE id = 'f2200000-0000-4000-8000-00000000000c'
+                    AND company_id = 'f2400000-0000-4000-8000-00000000000c') THEN
+    RAISE EXCEPTION '14t the working studio''s OWN firm card did not land on its own seat';
+  END IF;
+  UPDATE public.project_parties
+     SET warranty_contact_person_id = 'f2500000-0000-4000-8000-00000000000c'
+   WHERE id = 'f2200000-0000-4000-8000-00000000000c';
+  IF NOT EXISTS (SELECT 1 FROM public.project_parties
+                  WHERE id = 'f2200000-0000-4000-8000-00000000000c'
+                    AND warranty_contact_person_id = 'f2500000-0000-4000-8000-00000000000c') THEN
+    RAISE EXCEPTION '14u the working studio''s OWN warranty contact did not land on its own seat';
+  END IF;
+  -- the card this caller cannot read may not be named
+  IF (SELECT count(*) FROM public.studio_contacts
+       WHERE id = 'f2600000-0000-4000-8000-00000000000c') <> 0 THEN
+    RAISE EXCEPTION '14v the foreign card is readable to this caller, so the refusal below proves nothing';
+  END IF;
+  BEGIN
+    UPDATE public.project_parties SET company_id = 'f2600000-0000-4000-8000-00000000000c'
+     WHERE id = 'f2200000-0000-4000-8000-00000000000c';
+    RAISE EXCEPTION '14w a FIRM card of the studio the consent resolver guesses LANDED on this studio''s own seat';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'party_company_other_studio' THEN RAISE; END IF;
+  END;
+  BEGIN
+    UPDATE public.project_parties
+       SET warranty_contact_person_id = 'f2700000-0000-4000-8000-00000000000c'
+     WHERE id = 'f2200000-0000-4000-8000-00000000000c';
+    RAISE EXCEPTION '14x a PERSON card of the studio the consent resolver guesses LANDED as this studio''s own warranty contact';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'party_warranty_contact_other_studio' THEN RAISE; END IF;
+  END;
+
+  -- ── and the word on that restored seat may not be the affirmative one ──
+  -- The record that decides it lives at the org project_consent_org() guesses,
+  -- which this admin is not a member of, so the COALESCE to 'not_asked' is
+  -- gated: unknown prints as NULL. Without the gate the wider visibility
+  -- reintroduces r5 MAJOR-1 — the affirmative word over a recorded refusal,
+  -- on the row the composer opens from.
+  PERFORM pg_temp.reset_role();
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('f2300000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-0000000000d1',
+          'sub','Block 14 Studioless Refuser','+16125559992','electrical');
+  INSERT INTO public.studio_channel_consent (organization_id, channel_kind, channel_value,
+                                             status, opt_out_at, opt_out_source)
+  VALUES (public.project_consent_org('b0000000-0000-0000-0000-0000000000d1'),
+          'sms','+16125559992','opted_out',now(),'inbound_sms')
+  ON CONFLICT (organization_id, channel_kind, channel_value)
+    DO UPDATE SET status = 'opted_out', opt_out_at = now(), opt_out_source = 'inbound_sms';
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id = 'f2300000-0000-4000-8000-00000000000c'
+     AND consent_status IS NOT NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14q the seats view printed a consent word (%) over a record this caller cannot read',
+      (SELECT consent_status FROM public.people_directory_seats
+        WHERE seat_id = 'f2300000-0000-4000-8000-00000000000c');
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE display_name = 'Block 14 Studioless Refuser' AND consent_status IS NOT NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14r the party branch printed a consent word over a record this caller cannot read';
+  END IF;
+  -- and to a member of the org the record lives at, the refusal still reads
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id = 'f2300000-0000-4000-8000-00000000000c'
+     AND consent_status = 'opted_out';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '14s the refusal no longer reads for a member of the record''s own org (% row(s))', n;
+  END IF;
+
+  -- ── the co-member through a NON-design organization ────────────────────
+  PERFORM pg_temp.assume_user('f2100000-0000-4000-8000-00000000000c');
+  IF NOT public.is_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '14j the outsider must be a co-member of the designer of record';
+  END IF;
+  IF public.is_design_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '14k the outsider must NOT share a design studio with the designer';
+  END IF;
+  IF public.project_tenant_org('b0000000-0000-0000-0000-0000000000d1') IS NOT NULL THEN
+    RAISE EXCEPTION '14l the gate resolver named a tenant for a caller who shares no design studio with the job';
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14m a co-member through a manufacturer org read % seat row(s) of a studio-less job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14n a co-member through a manufacturer org read % site access card(s) of a studio-less job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f2200000-0000-4000-8000-00000000000c';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '14o a co-member through a manufacturer org read % authority grant(s) of a studio-less job', n;
+  END IF;
+  BEGIN
+    INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+    VALUES ('b0000000-0000-0000-0000-0000000000d4','outsider write');
+    RAISE EXCEPTION '14p a co-member through a manufacturer org RECORDED a site access card on a studio-less job';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '14. a studio-less job: the admin of the studio doing the work reads its SEAT and its Directory row and may record the seat''s FIRM pointer and its WARRANTY CONTACT, both naming their own rolodex cards (r6/r7 BLOCKING-1) — while the two SENSITIVE objects ask the RECORD and refuse it the card and the grant on that job, read and write alike, and land the same two writes on a job that RECORDS its studio (r8 BLOCKING-1) — while a firm card and a person card of the studio the consent resolver guesses are refused party_company_other_studio / party_warranty_contact_other_studio, the consent word on that seat reads NULL rather than the affirmative one because the deciding record lives where it cannot be read, and a co-member of the designer through a NON-DESIGN organization reads none of it and may write nothing. The second DESIGN studio of the same designer — the actor the caller-relative gate resolver admits, and this block does not test — is block 17: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 15. The four designer-scoped branches, on the record
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r6 MAJOR-2, RULED: the client, lead, maker and team
+-- branches of people_directory stay is_studio_comember(designer_id), carried
+-- from 00594/00420, and the view's COMMENT now says which branches are
+-- tenant-scoped and which are designer-scoped by inheritance. The reason it is
+-- a ruling and not a fix is that THIS VIEW IS NOT THE DOOR:
+-- designer_clients_studio_rw and leads_studio_select carry the same predicate
+-- on the base tables with SELECT granted to authenticated, so tightening the
+-- branches alone would close nothing and would repeat MAJOR-1 (the only
+-- tenant resolver those branches reach is the guessing one).
+--
+-- The invariant this block holds is exactly that: the client branch is no
+-- broader and no narrower than designer_clients itself for the same caller.
+-- If someone later tightens the view alone, this leg fails and points at the
+-- ruling; if the 00584-shaped sweep tightens the base tables too, both counts
+-- go to 0 together and it still passes.
+DO $$
+DECLARE
+  n_view integer;
+  n_base integer;
+BEGIN
+  PERFORM pg_temp.assume_user('f2100000-0000-4000-8000-00000000000c');
+  SELECT count(*) INTO n_view FROM public.people_directory WHERE role = 'client';
+  SELECT count(*) INTO n_base FROM public.designer_clients;
+  IF n_view <> n_base THEN
+    RAISE EXCEPTION '15a the client branch (%) and designer_clients itself (%) disagree for the same caller — r6 MAJOR-2 was ruled on the ground that they cannot, so either the view was tightened alone (which closes nothing) or the base table was, and the ruling needs revisiting', n_view, n_base;
+  END IF;
+  -- and the objects this wave DOES gate stay shut to that same caller
+  IF (SELECT count(*) FROM public.people_directory_seats) <> 0
+     OR (SELECT count(*) FROM public.project_site_access_cards) <> 0
+     OR (SELECT count(*) FROM public.project_party_authority) <> 0
+     OR (SELECT count(*) FROM public.studio_compliance_documents) <> 0 THEN
+    RAISE EXCEPTION '15b the tenant-scoped objects answered a co-member through a manufacturer org';
+  END IF;
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '15. the client branch inherits designer_clients'' own posture exactly (% row(s) each) while every tenant-scoped object of this wave stays shut to the same caller — r6 MAJOR-2 is a ruling of record, not a silent inconsistency: passed', n_view;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 16. A number the studio's own seat carries reaches the identity's word,
+--     whether or not the job records its studio
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r7 MAJOR-1. identity_phone_numbers()' seat leg — added by
+-- r5 BLOCKING-1 to close a cross-tenant phone-number oracle — was a single
+-- EQUALITY against project_consent_org(), and an equality against a GUESSING
+-- resolver is the wrong instrument in front of a WORST-FIRST reduction:
+-- dropping a number can only make the printed word MORE permissive (this
+-- function's own r4 MAJOR-3 argument). On a job that records no studio_id the
+-- guess names whatever studio the designer's memberships rank first, so the
+-- studio's own seat dropped out and the identity row printed the affirmative
+-- word over the studio's OWN recorded refusal — with the seat line printing
+-- NULL (the r6 gate), so nothing on the face argued. Fail-OPEN, on the row the
+-- text composer opens from. The leg now names the studio DOING the work beside
+-- the record's studio (R-BD/R-BB).
+--
+-- The control is probe138's, both ways: ONE field — projects.studio_id —
+-- decided whether the refusal reached the face, with nothing else about the
+-- seat, the number or the record changing. So the same seat is read on a
+-- studio-less job and then on a job that records its studio, and the word has
+-- to be the same refusal both times.
+DO $$
+DECLARE
+  v_word    text;
+  v_numbers text[];
+BEGIN
+  -- a card in the studio doing the work, carrying a permitted number
+  INSERT INTO public.studio_contacts (id, organization_id, entity_kind, contact_kind,
+                                      full_name, phone_e164, created_by)
+  VALUES ('f2800000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-000000000001',
+          'person','trade','Block 16 Carded Trade','+16125559996',
+          'a0000000-0000-0000-0000-000000000004');
+  -- the studio's OWN two records: the card's number is permitted, the second
+  -- work mobile is refused
+  INSERT INTO public.studio_channel_consent (organization_id, channel_kind, channel_value,
+                                             status, source, recorded_at, consented_at)
+  VALUES ('b0000000-0000-0000-0000-000000000001','sms','+16125559996','granted','written',now(),now())
+  ON CONFLICT (organization_id, channel_kind, channel_value)
+    DO UPDATE SET status = 'granted', source = 'written', consented_at = now();
+  INSERT INTO public.studio_channel_consent (organization_id, channel_kind, channel_value,
+                                             status, opt_out_at, opt_out_source)
+  VALUES ('b0000000-0000-0000-0000-000000000001','sms','+16125559997','opted_out',now(),'inbound_sms')
+  ON CONFLICT (organization_id, channel_kind, channel_value)
+    DO UPDATE SET status = 'opted_out', opt_out_at = now(), opt_out_source = 'inbound_sms';
+  -- and the seat that carries the refused number, on the STUDIO-LESS job.
+  --
+  -- THIS ROW IS NOW LEGACY-ONLY, AND THE TRIGGER IS LIFTED TO WRITE IT (w1b
+  -- final review r11 MAJOR-3). Since r9 MAJOR-2 the card guard names
+  -- studio_contact_id, and since r11 MAJOR-3 that leg asks the RECORD: on a
+  -- project whose studio_id is NULL a stamp is refused outright
+  -- (party_card_project_has_no_studio), because the caller-relative resolver
+  -- checked the card against the WRITER's own studio and a member of the
+  -- designer's SECOND design studio landed a foreign card on the working
+  -- studio's seat. No authenticated path can create this row any more — not
+  -- this admin's INSERT, and not a project_id move of an already-stamped seat.
+  -- What the guard cannot do is REPAIR the stamps already on the table (m11),
+  -- and r7 MAJOR-1's fail-open is a READ of exactly that population. So the
+  -- guard is lifted for one INSERT, as the table's owner, to stage the legacy
+  -- row — and put back immediately, so every later write in this block and in
+  -- blocks 17-21 is judged by the live guard. Leg 16h below proves the door is
+  -- shut on the way in while this leg proves the word is right on the way out.
+  ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');  -- admin of the studio doing the work
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name, trade,
+                                      phone_e164, studio_contact_id, created_by)
+  VALUES ('f2900000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-0000000000d1',
+          'sub','Block 16 Carded Trade','electrical','+16125559997',
+          'f2800000-0000-4000-8000-00000000000c','a0000000-0000-0000-0000-000000000004');
+  PERFORM pg_temp.reset_role();
+  ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+
+  -- 16h: and the live guard refuses to mint that row, for the honest actor as
+  -- flatly as for the foreign one — there is nothing in a record that names no
+  -- studio to tell the studio doing the work from the designer's second one.
+  BEGIN
+    INSERT INTO public.project_parties (id, project_id, party_kind, display_name,
+                                        phone_e164, studio_contact_id, created_by)
+    VALUES ('f2950000-0000-4000-8000-00000000000c','b0000000-0000-0000-0000-0000000000d1',
+            'sub','Block 16 Guard Control','+16125559995',
+            'f2800000-0000-4000-8000-00000000000c','a0000000-0000-0000-0000-000000000004');
+    RAISE EXCEPTION '16h a studio_contact_id stamp LANDED on a project that records no studio — the identity key was checked against the writer''s own studio (r11 MAJOR-3)';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'party_card_project_has_no_studio' THEN RAISE; END IF;
+  END;
+
+  IF NOT public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION '16a the actor must be a member of the studio whose card and records these are';
+  END IF;
+  IF public.is_active_studio_member(
+       public.project_consent_org('b0000000-0000-0000-0000-0000000000d1')) THEN
+    RAISE EXCEPTION '16b the actor must NOT be a member of the org the consent resolver guesses, or the fail-open this block is about cannot be observed';
+  END IF;
+
+  SELECT array_agg(n ORDER BY n) INTO v_numbers
+    FROM public.identity_phone_numbers('b0000000-0000-0000-0000-000000000001',
+           'f2800000-0000-4000-8000-00000000000c','+16125559996') AS t(n);
+  IF v_numbers IS DISTINCT FROM ARRAY['+16125559996','+16125559997'] THEN
+    RAISE EXCEPTION '16c the number set for a card whose seat sits on a STUDIO-LESS job of this same studio is % — the seat''s number has to be in it, or the worst-first reduction reads more permissively than the studio''s own record', COALESCE(v_numbers::text,'NULL');
+  END IF;
+  SELECT consent_status INTO v_word FROM public.people_directory
+   WHERE person_id = 'f2800000-0000-4000-8000-00000000000c';
+  IF v_word IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '16d the Directory row printed % over this studio''s own recorded refusal on a number its own seat carries', COALESCE(v_word,'NULL');
+  END IF;
+
+  -- ── the mutation control: the same seat on a job that RECORDS its studio ──
+  PERFORM pg_temp.reset_role();
+  UPDATE public.project_parties
+     SET project_id = 'b0000000-0000-0000-0000-00000000c0d1'
+   WHERE id = 'f2900000-0000-4000-8000-00000000000c';
+  IF (SELECT studio_id FROM public.projects
+       WHERE id = 'b0000000-0000-0000-0000-00000000c0d1')
+     IS DISTINCT FROM 'b0000000-0000-0000-0000-000000000001' THEN
+    RAISE EXCEPTION '16e the control project must RECORD this studio for the control to be a control';
+  END IF;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT array_agg(n ORDER BY n) INTO v_numbers
+    FROM public.identity_phone_numbers('b0000000-0000-0000-0000-000000000001',
+           'f2800000-0000-4000-8000-00000000000c','+16125559996') AS t(n);
+  IF v_numbers IS DISTINCT FROM ARRAY['+16125559996','+16125559997'] THEN
+    RAISE EXCEPTION '16f the control''s number set is % — the two placements disagree, so projects.studio_id still decides what the reduction sees', COALESCE(v_numbers::text,'NULL');
+  END IF;
+  SELECT consent_status INTO v_word FROM public.people_directory
+   WHERE person_id = 'f2800000-0000-4000-8000-00000000000c';
+  IF v_word IS DISTINCT FROM 'opted_out' THEN
+    RAISE EXCEPTION '16g the control printed % — one field may not decide whether a recorded refusal reaches the face', COALESCE(v_word,'NULL');
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '16. the number set and the identity''s consent word: a LEGACY seat on a STUDIO-LESS job of this studio contributes its number, so the studio''s own recorded refusal decides the Directory word (opted_out, not the affirmative one), and the same seat moved onto a job that RECORDS its studio reads identically — projects.studio_id no longer decides whether a refusal reaches the face (r7 MAJOR-1, probe138''s control both ways). The staging INSERT now needs the card guard lifted, and 16h proves why: since r11 MAJOR-3 a studio_contact_id stamp on a project that records no studio is refused party_card_project_has_no_studio for every writer, so this population can only be inherited, never minted — which is exactly why the READ still has to be right: passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 17. The designer's SECOND DESIGN STUDIO, on a job that records no studio
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r8 BLOCKING-1, the leg block 14 lacked. Block 13's actor
+-- is a co-member through a design studio but on projects that RECORD their
+-- studio; block 14's studio-less actor is a co-member through a MANUFACTURER
+-- organization, which organizations.type = 'design_studio' refuses. Neither
+-- is the actor the gate admits: an ordinary member of a DESIGN studio the
+-- job's designer of record also works for, on a job whose record names no
+-- studio at all. For that caller project_tenant_org() answers with the
+-- CALLER'S OWN studio, so is_active_studio_member() over it is
+-- self-satisfying — measured, that caller read the lockbox version, the alarm
+-- account 'ALARM-ACCT-99812', the site hours, the key holder and the gas
+-- emergency line, landed an UPDATE of lockbox_version, and read the money
+-- grant's 250000 threshold. The premise legs below assert that the resolver
+-- still names this caller's own studio and the membership test still passes,
+-- because the fix is NOT in the conjunct: the two sensitive objects stopped
+-- asking it (project_recorded_studio(), 00624 §1c).
+--
+-- WHAT STAYS READABLE HERE IS RECORDED, NOT ASSUMED (legs D). The seat row
+-- and the Directory's party row on that job remain visible to this caller,
+-- deliberately: r6 MAJOR-1 (the admin of the studio doing the work read 0
+-- seats on its own studio-less job) and r7 MAJOR-1 (a refused number dropped
+-- out of a worst-first reduction and the row printed the affirmative word)
+-- are what a record-only gate THERE reintroduces, and block 14 asserts the
+-- other side of both. A seat row carries a name, a trade, a number and a
+-- paper word; no lockbox version, no alarm account, no threshold — and its
+-- consent word is already NULL for this caller. That residue is a ruling owed
+-- to Kody with the Strata studio_id IS NULL count, and it is asserted here so
+-- that a change to it cannot pass unnoticed.
+DO $$
+DECLARE
+  n     integer;
+  v_org uuid;
+  v_lock text;
+BEGIN
+  -- the actor: block 13's ordinary member of Test Studio B — a DESIGN studio
+  -- whose owner is this job's designer of record — never a member of the
+  -- studio doing the work.
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000002');
+  IF NOT public.is_active_studio_member('f1000000-0000-4000-8000-00000000000b') THEN
+    RAISE EXCEPTION '17a the actor must be a member of the designer''s SECOND design studio';
+  END IF;
+  IF public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION '17b the actor must NOT be a member of the studio doing the work';
+  END IF;
+  IF NOT public.is_design_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '17c the actor must share a DESIGN studio with the designer of record — a manufacturer co-member is block 14''s actor, not this one';
+  END IF;
+
+  -- the premise: the caller-relative resolver names the CALLER'S OWN studio
+  -- on this job, and the membership test over it passes. Without both halves
+  -- this block proves nothing, and with them the conjunct is not a boundary.
+  v_org := public.project_tenant_org('b0000000-0000-0000-0000-0000000000d1');
+  IF v_org IS DISTINCT FROM 'f1000000-0000-4000-8000-00000000000b' THEN
+    RAISE EXCEPTION '17d the gate resolver named % for this caller; the self-satisfying leg this block is about is gone, so the assertions below prove something else', COALESCE(v_org::text,'NULL');
+  END IF;
+  IF NOT public.is_active_studio_member(v_org) THEN
+    RAISE EXCEPTION '17e is_active_studio_member(project_tenant_org(job)) is false for a caller in the designer''s second design studio; the premise of r8 BLOCKING-1 no longer holds';
+  END IF;
+
+  -- ── A. the site access card: the sensitive text, read ──────────────────
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17f a member of the designer''s SECOND design studio read % site access card(s) of a studio-less job — the lockbox version, the alarm account, the hours, the key holder and the emergency lines', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_site_access_cards;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17g the same caller read % site access card(s) anywhere on the platform', n;
+  END IF;
+
+  -- ── B. and the WRITE, which is the half r7 never walked ────────────────
+  UPDATE public.project_site_access_cards
+     SET lockbox_version = 'CHANGED BY THE OTHER STUDIO'
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17h a member of the designer''s SECOND design studio changed the lockbox version on % row(s)', n;
+  END IF;
+  BEGIN
+    INSERT INTO public.project_site_access_cards (project_id, lockbox_version)
+    VALUES ('b0000000-0000-0000-0000-0000000000d4','other studio write');
+    RAISE EXCEPTION '17i a member of the designer''s SECOND design studio RECORDED a site access card on a studio-less job';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- ── C. the money authority grant and its threshold ─────────────────────
+  SELECT count(*) INTO n FROM public.project_party_authority
+   WHERE engagement_id = 'f2200000-0000-4000-8000-00000000000c';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17j the same caller read % authority grant(s) of a studio-less job, money threshold included', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17k the same caller read % authority grant(s) anywhere on the platform', n;
+  END IF;
+
+  -- ── D. the recorded residue: the seat row, and its NULL consent word ───
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF n < 1 THEN
+    RAISE EXCEPTION '17l the seats view now hides a studio-less job from a design co-member (% row(s)) — that is r6 MAJOR-1 restored, not a fix; block 14 asserts the working studio''s admin reads it', n;
+  END IF;
+  -- only meaningful while the deciding record is somewhere this caller
+  -- cannot read; _primary_studio_for() may rank this very studio first, and
+  -- then the word is legitimately sourced.
+  IF NOT public.is_active_studio_member(
+           public.project_consent_org('b0000000-0000-0000-0000-0000000000d1')) THEN
+    SELECT count(*) INTO n FROM public.people_directory_seats
+     WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1'
+       AND consent_status IS NOT NULL;
+    IF n <> 0 THEN
+      RAISE EXCEPTION '17m a seat row printed a consent word for a caller who cannot read the deciding record (% row(s))', n;
+    END IF;
+  END IF;
+
+  -- ── E. and the card the record DOES name reads for its own studio ──────
+  -- "while the working studio's admin reads all three": same three objects,
+  -- on the seeded job that RECORDS Local Dev Studio.
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '17n the second design studio read % site access card(s) of a job that RECORDS the other studio', n;
+  END IF;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT count(*) INTO n FROM public.project_site_access_cards
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '17o the admin of the studio doing the work reads % site access card(s) on the job that records its studio', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.project_party_authority a
+    JOIN public.project_parties pp ON pp.id = a.engagement_id
+   WHERE pp.project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n < 1 THEN
+    RAISE EXCEPTION '17p the same admin reads % authority grant(s) on that job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE project_id = 'd0e00000-0000-0000-0000-00000000000a';
+  IF n < 1 THEN
+    RAISE EXCEPTION '17q the same admin reads % seat row(s) on that job', n;
+  END IF;
+
+  -- and the lockbox version on the studio-less job is the one the studio
+  -- wrote, read back with RLS off: the refused UPDATE changed nothing.
+  PERFORM pg_temp.reset_role();
+  SELECT lockbox_version INTO v_lock FROM public.project_site_access_cards
+   WHERE project_id = 'b0000000-0000-0000-0000-0000000000d1';
+  IF v_lock IS DISTINCT FROM 'Block 14 lockbox v1' THEN
+    RAISE EXCEPTION '17r the stored lockbox version is now % — a refused UPDATE still landed', COALESCE(v_lock,'NULL');
+  END IF;
+
+  RAISE NOTICE '17. the designer''s SECOND DESIGN STUDIO on a studio-less job: the gate resolver still names that caller''s own studio and the membership test still passes (the conjunct is not the boundary), and the two sensitive objects — which now ask the RECORD — give it 0 site access cards, 0 authority grants, 0 rows changed on the lockbox version and a refused INSERT, platform-wide as well as on the job; the seat row and its NULL consent word stay readable on purpose (r6/r7 MAJOR-1, the residue named in 00624 §1c and owed to Kody with the Strata studio_id IS NULL count); and the admin of the studio doing the work reads the card, the grants and the seats on the job that RECORDS its studio (r8 BLOCKING-1): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 18. The same second design studio, and 00627's four DEFINER readers
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r9 BLOCKING-1, the leg block 17 lacked. r8 moved the site
+-- access card and the authority grant off project_tenant_org() and onto
+-- project_recorded_studio(); the four SECURITY DEFINER access-grant readers of
+-- 00627 were left behind, and three of them resolved the caller-relative
+-- resolver. Because those functions are definer their WHERE clause is the
+-- WHOLE access rule (00627's own banner), all four are EXECUTE to
+-- authenticated so PostgREST publishes them at /rest/v1/rpc/<name>, and the
+-- three base tables are closed to authenticated at TABLE level — so the reader
+-- is the only authenticated door. Walked: block 17's actor read the owning
+-- studio's invoice pay link (invoice id, minted date, last_viewed_at), its
+-- plan transmittal link (project, granted_by, expires_at, last_used_at) and
+-- its RFQ link on a studio-less job, while a direct read of invoice_links and
+-- of plan_transmittal_tokens.created_by was permission denied for the same
+-- caller.
+--
+-- The fixture mints one grant on each of the three project-bearing tiers, all
+-- on Aspen Loft Refresh, which records NO studio — the population where the
+-- caller-relative leg is self-satisfying. Block 13's three grants, on
+-- paperwork whose tenant IS recorded, are the mutation control: the working
+-- studio's own admin still reads all three. The cost r9 states in each
+-- COMMENT is asserted too: on the studio-less job NO studio reads those
+-- tiers, that admin included, until R-BD's W3 backfill names one.
+DO $$
+DECLARE
+  n     integer;
+  v_org uuid;
+BEGIN
+  -- ── the fixture, as the table owner ────────────────────────────────────
+  INSERT INTO public.trade_rfq_requests
+    (id, proposal_id, party_id, scope_snapshot, status)
+  VALUES ('f8200000-0000-4000-8000-00000000000e',
+          'b0000000-0000-0000-0000-0000000cd001',
+          'f2200000-0000-4000-8000-00000000000c','{}'::jsonb,'sent');
+  INSERT INTO public.trade_rfq_tokens
+    (id, rfq_request_id, proposal_id, party_id, token_hash, status, created_by)
+  VALUES ('f8300000-0000-4000-8000-00000000000e',
+          'f8200000-0000-4000-8000-00000000000e',
+          'b0000000-0000-0000-0000-0000000cd001',
+          'f2200000-0000-4000-8000-00000000000c',
+          repeat('1',64),'active','a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.plan_issues
+    (id, project_id, issue_number, name, idempotency_key, request_hash,
+     set_checksum, sheet_count, created_by)
+  VALUES ('f8400000-0000-4000-8000-00000000000e',
+          'b0000000-0000-0000-0000-0000000000d1',9018,'W1b block 18 issue',
+          'w1b-b18-key',repeat('2',64),repeat('3',64),1,
+          'a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.plan_transmittals
+    (id, project_id, issue_id, party_display_name, purpose, sent_at, created_by)
+  VALUES ('f8500000-0000-4000-8000-00000000000e',
+          'b0000000-0000-0000-0000-0000000000d1',
+          'f8400000-0000-4000-8000-00000000000e','Block 18','pricing',now(),
+          'a0000000-0000-0000-0000-000000000004');
+  INSERT INTO public.plan_transmittal_tokens
+    (id, transmittal_id, project_id, token_hash, status, created_by, last_used_at)
+  VALUES ('f8600000-0000-4000-8000-00000000000e',
+          'f8500000-0000-4000-8000-00000000000e',
+          'b0000000-0000-0000-0000-0000000000d1',repeat('4',64),'active',
+          'a0000000-0000-0000-0000-000000000004', now());
+  INSERT INTO public.invoices
+    (id, project_id, designer_id, status, subtotal_cents, total_cents)
+  VALUES ('f8700000-0000-4000-8000-00000000000e',
+          'b0000000-0000-0000-0000-0000000000d1',
+          'a0000000-0000-0000-0000-000000000004','draft',0,0);
+  INSERT INTO public.invoice_links
+    (id, invoice_id, token_hash, expires_at, status, created_by, created_at, last_viewed_at)
+  VALUES ('f8800000-0000-4000-8000-00000000000e',
+          'f8700000-0000-4000-8000-00000000000e',
+          encode(extensions.digest(repeat('5',64),'sha256'),'hex'),
+          now() + interval '30 days','active',
+          'a0000000-0000-0000-0000-000000000004',now(),now());
+
+  -- the premise: the RECORD names no studio on this job, and the invoice
+  -- inherits that — so its tenant leg is the project leg, not invoices.studio_id
+  IF public.project_recorded_studio('b0000000-0000-0000-0000-0000000000d1')
+     IS NOT NULL THEN
+    RAISE EXCEPTION '18a the fixture job must record NO studio for this block to mean anything';
+  END IF;
+  IF (SELECT studio_id FROM public.invoices
+       WHERE id = 'f8700000-0000-4000-8000-00000000000e') IS NOT NULL THEN
+    RAISE EXCEPTION '18b the fixture invoice names a studio_id, so its first CASE leg answers and the project leg this block is about is never reached';
+  END IF;
+
+  -- ── the actor: block 17's, unchanged ───────────────────────────────────
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000002');
+  IF public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION '18c the actor must NOT be a member of the studio doing the work';
+  END IF;
+  IF NOT public.is_design_studio_comember('a0000000-0000-0000-0000-000000000004') THEN
+    RAISE EXCEPTION '18d the actor must satisfy the shipped design-studio predicate, or the tenant leg is not what this proves';
+  END IF;
+  v_org := public.project_tenant_org('b0000000-0000-0000-0000-0000000000d1');
+  IF v_org IS DISTINCT FROM 'f1000000-0000-4000-8000-00000000000b'
+     OR NOT public.is_active_studio_member(v_org) THEN
+    RAISE EXCEPTION '18e the caller-relative resolver no longer names this caller''s own studio (%), so the self-satisfying leg this block is about is gone and the assertions below prove something else', COALESCE(v_org::text,'NULL');
+  END IF;
+
+  -- ── all four readers, then the ledger ──────────────────────────────────
+  SELECT count(*) INTO n FROM public.access_grants_invoice_links()
+   WHERE grant_id = 'invoice_pay:f8800000-0000-4000-8000-00000000000e';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '18f a member of the designer''s SECOND design studio read % invoice_pay grant(s) of a studio-less job — which invoices hold live pay links and when each was last viewed', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_plan_transmittals()
+   WHERE grant_id = 'plan_link:f8600000-0000-4000-8000-00000000000e';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '18g the same caller read % plan_link grant(s) of a studio-less job, granted_by and last_used_at included', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_trade_rfq()
+   WHERE grant_id = 'rfq_link:f8300000-0000-4000-8000-00000000000e';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '18h the same caller read % rfq_link grant(s) of a studio-less job', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_trade_agreement_links();
+  IF n <> 0 THEN
+    RAISE EXCEPTION '18i the agreement_link reader, which is record-based through studio_contact_org(), returned % row(s)', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.v_access_grants
+   WHERE grant_id IN ('invoice_pay:f8800000-0000-4000-8000-00000000000e',
+                      'plan_link:f8600000-0000-4000-8000-00000000000e',
+                      'rfq_link:f8300000-0000-4000-8000-00000000000e');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '18j v_access_grants handed the same % row(s) through its four definer tiers', n;
+  END IF;
+  -- and none of block 13's recorded-tenant grants either
+  SELECT count(*) INTO n FROM public.v_access_grants
+   WHERE grant_id IN ('rfq_link:f1700000-0000-4000-8000-00000000000b',
+                      'plan_link:f1500000-0000-4000-8000-00000000000b',
+                      'invoice_pay:f1300000-0000-4000-8000-00000000000b');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '18k the same caller read % grant(s) of jobs that DO record the other studio', n;
+  END IF;
+
+  -- ── the mutation control: the working studio's admin, on recorded paperwork ──
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  SELECT count(*) INTO n FROM public.access_grants_invoice_links()
+   WHERE grant_id = 'invoice_pay:f1300000-0000-4000-8000-00000000000b';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '18l the admin of the studio doing the work reads % invoice_pay grant(s) on an invoice that NAMES its studio — a tenant leg that closed the ledger to its own studio would be the worse defect', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_plan_transmittals()
+   WHERE grant_id = 'plan_link:f1500000-0000-4000-8000-00000000000b';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '18m the same admin reads % plan_link grant(s) on a job that RECORDS its studio', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.access_grants_trade_rfq()
+   WHERE grant_id = 'rfq_link:f1700000-0000-4000-8000-00000000000b';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '18n the same admin reads % rfq_link grant(s) on a proposal whose project RECORDS its studio', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.v_access_grants
+   WHERE grant_id IN ('rfq_link:f1700000-0000-4000-8000-00000000000b',
+                      'plan_link:f1500000-0000-4000-8000-00000000000b',
+                      'invoice_pay:f1300000-0000-4000-8000-00000000000b');
+  IF n <> 3 THEN
+    RAISE EXCEPTION '18o the ledger hands that admin % of its own studio''s 3 recorded grants', n;
+  END IF;
+
+  -- ── and the cost r9 states, asserted rather than assumed ───────────────
+  -- On the studio_id IS NULL population NO studio reads these three tiers —
+  -- the working studio's own admin included — until R-BD's W3 backfill names
+  -- one. Stated in all three COMMENTs; it fails here if it ever stops being
+  -- true without the backfill.
+  SELECT count(*) INTO n FROM public.v_access_grants
+   WHERE grant_id IN ('invoice_pay:f8800000-0000-4000-8000-00000000000e',
+                      'plan_link:f8600000-0000-4000-8000-00000000000e',
+                      'rfq_link:f8300000-0000-4000-8000-00000000000e');
+  IF n <> 0 THEN
+    RAISE EXCEPTION '18p the studio-less job''s % grant(s) are readable again — either the backfill landed and this leg needs restating, or the record-only resolver came back out', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.v_access_grants WHERE grant_id ~ '[0-9a-f]{64}';
+  IF n <> 0 THEN
+    RAISE EXCEPTION '18q % ledger row(s) carry a 64-hex bearer credential', n;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '18. 00627''s four DEFINER readers on a studio-less job: the designer''s SECOND design studio — for whom the caller-relative resolver still names its own studio and the membership test still passes — reads 0 invoice_pay, 0 plan_link, 0 rfq_link and 0 agreement_link grants, and 0 through v_access_grants'' four definer tiers, because the three project-bearing legs now ask project_recorded_studio(); the working studio''s own admin still reads all three grants on paperwork whose tenant IS recorded, and reads 0 on the studio-less job — the cost r9 states in each COMMENT, until R-BD''s W3 backfill names a studio (r9 BLOCKING-1): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 19. A supersede is re-reckoned at every READ, not only where it was written
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r9 MAJOR-1, the FIFTH door to r1 MAJOR-4's consequence and
+-- the one the guard family could never close. r3/r4's two invariants — a
+-- successor must be IN FORCE, and must carry at least the gates of the row it
+-- retires — are asserted at the instant superseded_by is written and never
+-- again; `blocks` was not in assert_compliance_holder_trg's UPDATE OF list at
+-- all; and the guard body is wrapped in `IF NEW.superseded_by IS NOT NULL`, so
+-- it reads the row's OWN successor and never the rows pointing AT it. Four
+-- ordinary writes by a plain studio admin, every one of them a PATCH/POST a
+-- portal caller can make, therefore left Northgate Electric's 2026-03-31
+-- gating lapse on file — unchanged, still saying blocks {site_access,draw} —
+-- while the card read `current` with zero in-force gating coi_gl, which
+-- identity_paper_state() carries to Dana Kowalski's Directory row and both her
+-- seat lines.
+--
+-- So compliance_state() drops a superseded row only while its successor still
+-- EARNS the retirement. The two writes that did the damage still land — the
+-- trigger cannot see a row's predecessors, and `blocks` in its UPDATE OF list
+-- does not change that — and the word stays honest anyway, which is the whole
+-- point of putting the reckoning in the reader. The honest supersede must
+-- still release the lapse, or the fix would just be a refusal to forget.
+DO $$
+DECLARE
+  w      text;
+  n      integer;
+  v_dana text;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');  -- a plain ADMIN of the owning studio
+  IF NOT public.is_active_studio_member('b0000000-0000-0000-0000-000000000001') THEN
+    RAISE EXCEPTION '19a the actor must be a member of the studio whose paper this is';
+  END IF;
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '19b Northgate Electric must read lapsed before this walk, got %', w;
+  END IF;
+
+  -- write 1: an HONEST in-force renewal carrying both gates
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
+  VALUES ('f9000000-0000-4000-8000-00000000000f',
+          'b0000000-0000-0000-0000-000000000001','company',
+          'd0e20000-0000-0000-0000-000000000003','coi_gl',
+          CURRENT_DATE + 200,'{site_access,draw}');
+  -- write 2: point the 2026-03-31 lapse at it. Every one of the ten guards
+  -- passes, and the word is CORRECTLY current: real cover is on file.
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f9000000-0000-4000-8000-00000000000f'
+   WHERE id = 'd0e50000-0000-0000-0000-000000000006';
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '19c an honest supersede must RELEASE the lapse — a reader that never forgets is not the fix; got %', w;
+  END IF;
+
+  -- write 3: back-date the successor. The trigger fires (expires_on is in its
+  -- UPDATE OF list) and the guard body is skipped, because the successor's own
+  -- superseded_by is NULL. The write lands; the reader must reckon again.
+  UPDATE public.studio_compliance_documents
+     SET expires_on = CURRENT_DATE - 1
+   WHERE id = 'f9000000-0000-4000-8000-00000000000f';
+  IF NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                  WHERE id = 'f9000000-0000-4000-8000-00000000000f'
+                    AND expires_on = CURRENT_DATE - 1) THEN
+    RAISE EXCEPTION '19d the back-dating write did not land, so this leg tests nothing';
+  END IF;
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '19e an expired successor must not hold a retirement, got %', w;
+  END IF;
+
+  -- restore the date, so the next leg measures the GATES alone
+  UPDATE public.studio_compliance_documents
+     SET expires_on = CURRENT_DATE + 200
+   WHERE id = 'f9000000-0000-4000-8000-00000000000f';
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '19f the in-force successor must hold the retirement again, got %', w;
+  END IF;
+
+  -- write 4: empty the successor's gates. This is the write the trigger could
+  -- not even see before r9 (`blocks` was outside its UPDATE OF list); it is in
+  -- the list now, and it STILL lands, because the guard reads the row's own
+  -- successor and this row has none. The reader is what has to answer.
+  UPDATE public.studio_compliance_documents SET blocks = '{}'
+   WHERE id = 'f9000000-0000-4000-8000-00000000000f';
+  IF NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                  WHERE id = 'f9000000-0000-4000-8000-00000000000f'
+                    AND cardinality(blocks) = 0) THEN
+    RAISE EXCEPTION '19g the de-gating write did not land, so this leg tests nothing';
+  END IF;
+  -- the record has not moved: the retired certificate is still on file, still
+  -- expired, still gating
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE id = 'd0e50000-0000-0000-0000-000000000006'
+     AND expires_on = '2026-03-31'
+     AND blocks @> '{site_access,draw}';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '19h the retired certificate is no longer on file as it was, so the record/reader disagreement this block is about cannot be measured';
+  END IF;
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE holder_id = 'd0e20000-0000-0000-0000-000000000003'
+     AND doc_type = 'coi_gl' AND superseded_by IS NULL
+     AND cardinality(blocks) > 0
+     AND (expires_on IS NULL OR expires_on >= CURRENT_DATE);
+  IF n <> 0 THEN
+    RAISE EXCEPTION '19i the firm holds % in-force gating coi_gl, so `current` would be honest and this leg proves nothing', n;
+  END IF;
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '19j a de-gated successor still retired a GATING lapse: the card reads % over a firm with no in-force cover, which is r1 MAJOR-4''s consequence through the fifth door', w;
+  END IF;
+
+  -- and the word reaches the face the same way it did before: worst-first over
+  -- the person's own card AND their firm (R-BA)
+  SELECT paper_state INTO v_dana FROM public.people_directory
+   WHERE display_name = 'Dana Kowalski' AND role = 'contact';
+  IF v_dana IS DISTINCT FROM 'lapsed' THEN
+    RAISE EXCEPTION '19k Dana Kowalski''s Directory row reads % while her firm holds a gating lapse with no in-force cover', COALESCE(v_dana,'NULL');
+  END IF;
+
+  -- and the honest supersede still releases it: restore the gates and the date
+  UPDATE public.studio_compliance_documents SET blocks = '{site_access,draw}'
+   WHERE id = 'f9000000-0000-4000-8000-00000000000f';
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '19l a successor that is in force and carries the retired row''s gates must release it, got % — the reckoning has to be conditional, not a refusal to forget', w;
+  END IF;
+
+  -- unwind, so nothing downstream reads a fixture this block invented
+  UPDATE public.studio_compliance_documents SET superseded_by = NULL
+   WHERE id = 'd0e50000-0000-0000-0000-000000000006';
+  DELETE FROM public.studio_compliance_documents
+   WHERE id = 'f9000000-0000-4000-8000-00000000000f';
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '19m the fixture did not unwind: Northgate reads % rather than the seeded lapsed', w;
+  END IF;
+
+  -- ── the SECOND renewal: the reckoning is transitive, not one hop ───────
+  -- r10 MAJOR-1. A certificate is renewed every year, so the ordinary steady
+  -- state of a firm a studio keeps two years is a CHAIN: A retired by B, then
+  -- B retired by C. All four writes below are honest and pass all ten guards.
+  -- A one-hop reckoning breaks the same word in the opposite direction: the
+  -- day B's own certificate expires, A's IMMEDIATE successor is no longer in
+  -- force, A re-enters the count, and the card reads `lapsed` while C — in
+  -- force, non-superseded, gating — is on file. It arrives from the CALENDAR
+  -- ALONE, with no write, so there is no audit line and no act to point at.
+  -- Both directions are pinned here at once: `current` today, `current` with
+  -- the middle certificate's date already past, and `lapsed` once the head of
+  -- the chain is gutted.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
+  VALUES ('f9000000-0000-4000-8000-00000000001b',
+          'b0000000-0000-0000-0000-000000000001','company',
+          'd0e20000-0000-0000-0000-000000000003','coi_gl',
+          CURRENT_DATE + 10,'{site_access,draw}');
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f9000000-0000-4000-8000-00000000001b'
+   WHERE id = 'd0e50000-0000-0000-0000-000000000006';          -- A -> B
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on, blocks)
+  VALUES ('f9000000-0000-4000-8000-00000000001c',
+          'b0000000-0000-0000-0000-000000000001','company',
+          'd0e20000-0000-0000-0000-000000000003','coi_gl',
+          CURRENT_DATE + 400,'{site_access,draw}');
+  UPDATE public.studio_compliance_documents
+     SET superseded_by = 'f9000000-0000-4000-8000-00000000001c'
+   WHERE id = 'f9000000-0000-4000-8000-00000000001b';          -- B -> C
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '19n the chain A->B->C is four honest writes and must read current, got %', w;
+  END IF;
+
+  -- now the calendar alone: B's own certificate has passed. NOTHING is written
+  -- to A and nothing is written to C.
+  UPDATE public.studio_compliance_documents
+     SET expires_on = CURRENT_DATE - 1
+   WHERE id = 'f9000000-0000-4000-8000-00000000001b';
+  IF NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents
+                  WHERE id = 'f9000000-0000-4000-8000-00000000001b'
+                    AND expires_on = CURRENT_DATE - 1) THEN
+    RAISE EXCEPTION '19o the middle certificate did not age, so this leg tests nothing';
+  END IF;
+  -- the premise, stated rather than assumed: a ONE-HOP reckoning would now
+  -- re-admit A, which is expired and gating, and print the blocking word
+  SELECT count(*) INTO n FROM public.studio_compliance_documents d
+   WHERE d.holder_id = 'd0e20000-0000-0000-0000-000000000003'
+     AND cardinality(d.blocks) > 0
+     AND d.expires_on IS NOT NULL AND d.expires_on < CURRENT_DATE
+     AND (d.superseded_by IS NULL
+          OR NOT EXISTS (SELECT 1 FROM public.studio_compliance_documents s
+                          WHERE s.id = d.superseded_by
+                            AND (s.expires_on IS NULL OR s.expires_on >= CURRENT_DATE)
+                            AND d.blocks <@ s.blocks));
+  IF n = 0 THEN
+    RAISE EXCEPTION '19p the one-hop reckoning would not have re-admitted a lapse here, so this leg proves nothing';
+  END IF;
+  -- and the record says cover is on file
+  SELECT count(*) INTO n FROM public.studio_compliance_documents
+   WHERE holder_id = 'd0e20000-0000-0000-0000-000000000003'
+     AND doc_type = 'coi_gl' AND superseded_by IS NULL
+     AND cardinality(blocks) > 0
+     AND (expires_on IS NULL OR expires_on >= CURRENT_DATE);
+  IF n <> 1 THEN
+    RAISE EXCEPTION '19q the firm must hold exactly one in-force, non-superseded, gating coi_gl here, found %', n;
+  END IF;
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'current' THEN
+    RAISE EXCEPTION '19r the second renewal must not re-admit the first lapse: the card reads % over an in-force gating coi_gl, from the calendar alone', w;
+  END IF;
+  -- the word reaches the face the same way
+  SELECT paper_state INTO v_dana FROM public.people_directory
+   WHERE display_name = 'Dana Kowalski' AND role = 'contact';
+  IF v_dana IS DISTINCT FROM 'current' THEN
+    RAISE EXCEPTION '19s Dana Kowalski''s Directory row reads % while her firm is covered through the chain''s head', COALESCE(v_dana,'NULL');
+  END IF;
+
+  -- and the transitive walk is still CONDITIONAL, not a refusal to forget:
+  -- gut the head of the chain and every root behind it comes back
+  UPDATE public.studio_compliance_documents SET blocks = '{}'
+   WHERE id = 'f9000000-0000-4000-8000-00000000001c';
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '19t a gutted head of chain retired the 2026-03-31 lapse through two hops: got %', w;
+  END IF;
+
+  -- unwind this leg too
+  UPDATE public.studio_compliance_documents SET superseded_by = NULL
+   WHERE id IN ('d0e50000-0000-0000-0000-000000000006',
+                'f9000000-0000-4000-8000-00000000001b');
+  DELETE FROM public.studio_compliance_documents
+   WHERE id IN ('f9000000-0000-4000-8000-00000000001b',
+                'f9000000-0000-4000-8000-00000000001c');
+  w := public.compliance_state('d0e20000-0000-0000-0000-000000000003');
+  IF w <> 'lapsed' THEN
+    RAISE EXCEPTION '19u the chain leg did not unwind: Northgate reads % rather than the seeded lapsed', w;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '19. the supersede is re-reckoned at every READ: an honest in-force renewal carrying both gates releases the 2026-03-31 lapse, and the two ordinary member writes that used to outrun r3/r4 — back-date the successor, then empty its blocks — still LAND and no longer move the word, because compliance_state() drops a superseded row only while its successor is in force and still contains that row''s gates. Dana Kowalski''s Directory row follows the firm, and the honest release still works (r9 MAJOR-1). And the reckoning is TRANSITIVE, not one hop: the ordinary second renewal A->B->C reads current today and still current the day the middle certificate''s own date has passed — where a one-hop rule re-admitted the 2026-03-31 lapse from the calendar alone — while gutting the head of the chain still brings every root behind it back (r10 MAJOR-1): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 20. studio_contact_id, the v4 identity key, must name a card in the
+--     project's own studio
+-- ═══════════════════════════════════════════════════════════════════════════
+-- w1b final review r9 MAJOR-2. It was the one pointer of the 00592 R-AP family
+-- with no card guard of any kind — a bare self-FK into studio_contacts, which
+-- holds every studio's cards — while 00626 made it the identity key: the party
+-- branch excludes every stamped seat, people_directory_seats.person_id
+-- COALESCEs to the stamp, and party_identity_key()'s first precedence leg IS
+-- the stamp. So one ordinary UPDATE by the designer who owns two studios (the
+-- shipped local shape) re-stamped Ngozi Eze's Okonkwo seat with a card of the
+-- OTHER studio and: the working studio's admin read her seat nesting under a
+-- card it cannot read, her own Directory row's seat_count fell to 0 while
+-- v_project_roster and the site access card still named that seat as the key
+-- holder, and the other studio's row claimed seat_count 1 and nested 0.
+--
+-- The leg is KIND-AGNOSTIC on purpose: 00418's fold pass D2 legitimately
+-- stamps a COMPANY card on a vendor_id-bearing seat, so both controls below
+-- land — a person card and a company card of the project's own studio.
+DO $$
+DECLARE
+  n integer;
+  c integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');  -- admin of the studio doing the work
+  -- premise: the seat is stamped with its own studio's card today, and the
+  -- foreign card belongs to a studio this caller is a MEMBER of — so nothing
+  -- about reachability explains the refusal; only the project's studio does.
+  IF NOT EXISTS (SELECT 1 FROM public.project_parties
+                  WHERE id = 'd0e30000-0000-0000-0000-000000000006'
+                    AND studio_contact_id = 'd0e10000-0000-0000-0000-000000000006') THEN
+    RAISE EXCEPTION '20a Ngozi Eze''s seat is not stamped with her own studio''s card, so this block starts from the wrong state';
+  END IF;
+  IF NOT public.is_active_studio_member('f1000000-0000-4000-8000-00000000000a') THEN
+    RAISE EXCEPTION '20b the actor must be a member of the OTHER studio too, or the refusal below could be mistaken for unreachability';
+  END IF;
+  IF public.project_tenant_org('d0e00000-0000-0000-0000-00000000000a')
+     <> 'b0000000-0000-0000-0000-000000000001' THEN
+    RAISE EXCEPTION '20c the gate resolver does not name the studio doing the work on this job';
+  END IF;
+
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE seat_id = 'd0e30000-0000-0000-0000-000000000006';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '20d the seat is not visible to its own studio''s admin (% row(s)), so the consequence legs below measure nothing', n;
+  END IF;
+
+  -- ── the walked write: a PERSON card of the OTHER studio ────────────────
+  BEGIN
+    UPDATE public.project_parties
+       SET studio_contact_id = 'f2000000-0000-4000-8000-000000000011'
+     WHERE id = 'd0e30000-0000-0000-0000-000000000006';
+    RAISE EXCEPTION '20e a PERSON card of another studio LANDED as this seat''s identity key';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'party_studio_contact_other_studio' THEN RAISE; END IF;
+  END;
+
+  -- ── and a COMPANY card of the other studio, the same refusal ───────────
+  -- The leg is kind-agnostic, so the wrong STUDIO is refused for both kinds
+  -- and the wrong KIND is refused for neither.
+  BEGIN
+    UPDATE public.project_parties
+       SET studio_contact_id = 'f2000000-0000-4000-8000-000000000001'
+     WHERE id = 'd0e30000-0000-0000-0000-000000000006';
+    RAISE EXCEPTION '20f a COMPANY card of another studio LANDED as this seat''s identity key';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'party_studio_contact_other_studio' THEN RAISE; END IF;
+  END;
+
+  -- ── and on INSERT, not only UPDATE ─────────────────────────────────────
+  BEGIN
+    INSERT INTO public.project_parties
+      (id, project_id, party_kind, display_name, studio_contact_id)
+    VALUES ('fa000000-0000-4000-8000-000000000010',
+            'd0e00000-0000-0000-0000-00000000000a','sub','Block 20 Foreign Stamp',
+            'f2000000-0000-4000-8000-000000000011');
+    RAISE EXCEPTION '20g a new seat was RECORDED carrying another studio''s card as its identity key';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'party_studio_contact_other_studio' THEN RAISE; END IF;
+  END;
+
+  -- ── the consequence, measured: nothing moved ───────────────────────────
+  IF NOT EXISTS (SELECT 1 FROM public.project_parties
+                  WHERE id = 'd0e30000-0000-0000-0000-000000000006'
+                    AND studio_contact_id = 'd0e10000-0000-0000-0000-000000000006') THEN
+    RAISE EXCEPTION '20h a refused write still changed the stamp';
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE person_id = 'd0e10000-0000-0000-0000-000000000006';
+  SELECT COALESCE(max(seat_count),0) INTO c FROM public.people_directory
+   WHERE person_id = 'd0e10000-0000-0000-0000-000000000006';
+  IF n <> 1 OR c < 1 THEN
+    RAISE EXCEPTION '20i Ngozi Eze has % Directory row(s) claiming % seat(s) — a seated human named as the site access card''s key holder may not fall out of her own studio''s Directory', n, c;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE person_id = 'd0e10000-0000-0000-0000-000000000006';
+  IF n <> c THEN
+    RAISE EXCEPTION '20j her row claims % seat(s) and nests % — 00626''s promise is that no Directory row ever claims a seat_count it cannot nest', c, n;
+  END IF;
+  SELECT count(*) INTO n FROM public.v_project_roster
+   WHERE roster_id = 'd0e30000-0000-0000-0000-000000000006';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '20k the roster shows % row(s) for the seat the site access card names as key holder', n;
+  END IF;
+
+  -- ── the mutation control: the project's OWN cards land, either kind ────
+  -- Nothing about the caller, the seat or the column changes — only whose
+  -- rolodex the card is in.
+  UPDATE public.project_parties
+     SET studio_contact_id = 'f2500000-0000-4000-8000-00000000000c'
+   WHERE id = 'd0e30000-0000-0000-0000-000000000006';
+  IF NOT EXISTS (SELECT 1 FROM public.project_parties
+                  WHERE id = 'd0e30000-0000-0000-0000-000000000006'
+                    AND studio_contact_id = 'f2500000-0000-4000-8000-00000000000c') THEN
+    RAISE EXCEPTION '20l a PERSON card of the project''s OWN studio did not land as the seat''s identity key';
+  END IF;
+  UPDATE public.project_parties
+     SET studio_contact_id = 'f2400000-0000-4000-8000-00000000000c'
+   WHERE id = 'd0e30000-0000-0000-0000-000000000006';
+  IF NOT EXISTS (SELECT 1 FROM public.project_parties
+                  WHERE id = 'd0e30000-0000-0000-0000-000000000006'
+                    AND studio_contact_id = 'f2400000-0000-4000-8000-00000000000c') THEN
+    RAISE EXCEPTION '20m a COMPANY card of the project''s own studio was refused — 00418''s fold pass D2 stamps exactly that on a vendor-bearing seat, so the leg may not test entity_kind';
+  END IF;
+
+  -- put her own card back, and read the Directory once more
+  UPDATE public.project_parties
+     SET studio_contact_id = 'd0e10000-0000-0000-0000-000000000006'
+   WHERE id = 'd0e30000-0000-0000-0000-000000000006';
+  SELECT COALESCE(max(seat_count),0) INTO c FROM public.people_directory
+   WHERE person_id = 'd0e10000-0000-0000-0000-000000000006';
+  SELECT count(*) INTO n FROM public.people_directory_seats
+   WHERE person_id = 'd0e10000-0000-0000-0000-000000000006';
+  IF c < 1 OR n <> c THEN
+    RAISE EXCEPTION '20n after the controls her row claims % seat(s) and nests %', c, n;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '20. studio_contact_id is guarded like the rest of the R-AP family: a PERSON card and a COMPANY card of another studio are both refused party_studio_contact_other_studio, on UPDATE and on INSERT, by a caller who is a member of BOTH studios — so the seated human named as the site access card''s key holder stays in her own studio''s Directory, her row nests every seat it claims, and the roster still names her seat; while either kind of card from the project''s OWN studio lands, because 00418''s fold stamps a company card on a vendor-bearing seat (r9 MAJOR-2): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 21. 00624's stage backfill may not move project_parties.updated_at
+--     (w1b final review r12 MAJOR-1)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The statement is unreachable on a reset — migrations run before seeds, so
+-- project_parties is empty when 00624 executes it and eleven rounds measured
+-- a no-op. This block stages the two seats itself and executes the statement
+-- both ways: unbracketed (the mechanism, trapped and rolled back) and in the
+-- shipped bracketed form. It guards the MECHANISM — if the two readers ever
+-- stop ranking one identity's seats by updated_at, 21b fails and 00624's
+-- brackets have to be re-argued.
+DO $$
+DECLARE
+  d uuid; a uuid; b uuid;
+  win_person uuid; win_project uuid; win_touch timestamptz;
+  now_person uuid; now_project uuid; now_touch timestamptz;
+  st text;
+BEGIN
+  SELECT id INTO d FROM public.profiles WHERE email='designer@patina.dev';
+
+  -- one uncarded human on a phone no card carries: a seat on the COMPLETED
+  -- Lindqvist kitchen, 400 days quiet, and a seat on the ACTIVE Okonkwo
+  -- residence, 10 days quiet.
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, updated_at)
+  VALUES ('d0e00000-0000-0000-0000-00000000000b','sub','R12 M1 Probe','+16125559977',
+          now() - interval '400 days')
+  RETURNING id INTO a;
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, updated_at)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','R12 M1 Probe','+16125559977',
+          now() - interval '10 days')
+  RETURNING id INTO b;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT person_id, project_id, last_touch_at
+    INTO win_person, win_project, win_touch
+    FROM public.people_directory WHERE display_name = 'R12 M1 Probe';
+  PERFORM pg_temp.reset_role();
+
+  IF win_person IS DISTINCT FROM b THEN
+    RAISE EXCEPTION '21a the LIVE seat should be the Directory winner before any backfill, got %',
+      win_person;
+  END IF;
+
+  -- (b) the mechanism, in a trapped sub-block so the table is untouched after
+  BEGIN
+    UPDATE public.project_parties pp
+       SET stage = CASE
+                     WHEN COALESCE(pj.completed_at, pj.updated_at) > now() - interval '12 months'
+                       THEN 'warranty' ELSE 'off_job' END
+      FROM public.projects pj
+     WHERE pj.id = pp.project_id AND pj.status = 'completed' AND pp.stage = 'active';
+
+    PERFORM pg_temp.assume_user(d);
+    SELECT person_id INTO now_person
+      FROM public.people_directory WHERE display_name = 'R12 M1 Probe';
+    PERFORM pg_temp.reset_role();
+
+    IF now_person IS DISTINCT FROM a THEN
+      RAISE EXCEPTION
+        '21b the UNBRACKETED backfill no longer flips the winner onto the closed job (got %) — '
+        'the identity tie-break has changed and 00624''s brackets must be re-argued', now_person;
+    END IF;
+    RAISE EXCEPTION 'w1b21_rollback_control';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM <> 'w1b21_rollback_control' THEN RAISE; END IF;
+  END;
+
+  -- (c) the shipped form: 00624's own two ALTERs around the same statement
+  EXECUTE 'ALTER TABLE public.project_parties DISABLE TRIGGER set_updated_at_project_parties';
+  UPDATE public.project_parties pp
+     SET stage = CASE
+                   WHEN COALESCE(pj.completed_at, pj.updated_at) > now() - interval '12 months'
+                     THEN 'warranty' ELSE 'off_job' END
+    FROM public.projects pj
+   WHERE pj.id = pp.project_id AND pj.status = 'completed' AND pp.stage = 'active';
+  EXECUTE 'ALTER TABLE public.project_parties ENABLE TRIGGER set_updated_at_project_parties';
+
+  SELECT stage INTO st FROM public.project_parties WHERE id = a;
+  IF st <> 'warranty' THEN
+    RAISE EXCEPTION '21c the bracketed backfill must still MOVE the stage; the closed seat reads %', st;
+  END IF;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT person_id, project_id, last_touch_at
+    INTO now_person, now_project, now_touch
+    FROM public.people_directory WHERE display_name = 'R12 M1 Probe';
+  PERFORM pg_temp.reset_role();
+
+  IF now_person IS DISTINCT FROM win_person
+     OR now_project IS DISTINCT FROM win_project
+     OR now_touch IS DISTINCT FROM win_touch THEN
+    RAISE EXCEPTION
+      '21d the bracketed backfill moved the Directory row: person %->%, project %->%, last_touch %->%',
+      win_person, now_person, win_project, now_project, win_touch, now_touch;
+  END IF;
+
+  -- and the column itself: the closed job's seat is still 400 days quiet
+  IF (SELECT now() - updated_at FROM public.project_parties WHERE id = a)
+       < interval '399 days' THEN
+    RAISE EXCEPTION '21e the closed job''s seat had its updated_at stamped by the backfill (now %)',
+      (SELECT updated_at FROM public.project_parties WHERE id = a);
+  END IF;
+
+  DELETE FROM public.project_parties WHERE id IN (a, b);
+  RAISE NOTICE '21. 00624''s stage backfill: the UNBRACKETED statement does flip an uncarded human''s Directory row onto the job that finished — person_id, project_id and last_touch_at all follow updated_at — and the shipped bracketed form moves the stage while moving none of the three, on seats this block stages itself because a reset runs the migration against an empty table (r12 MAJOR-1): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 22. A carded human's UNSTAMPED seat is not a second identity
+--     (w1b final review r12 MAJOR-2)
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  d uuid; card uuid; ph text; later_card uuid;
+  before_rows int; after_rows int; c int; n int;
+BEGIN
+  SELECT id INTO d FROM public.profiles WHERE email='designer@patina.dev';
+  SELECT sc.id, sc.phone_e164 INTO card, ph
+    FROM public.studio_contacts sc
+   WHERE sc.organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND sc.full_name = 'Dana Kowalski';
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT count(*) INTO before_rows FROM public.people_directory;
+  PERFORM pg_temp.reset_role();
+
+  -- (a) the shipped inline add: useAddProjectParty with studioContactId
+  -- omitted, on the number the card already carries
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','Dana Kowalski', ph, 'electrical');
+
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE phone_e164 = ph AND studio_contact_id IS NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '22a % seat(s) carry Dana''s number with no rolodex stamp', n;
+  END IF;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT count(*) INTO after_rows FROM public.people_directory;
+  IF after_rows <> before_rows THEN
+    RAISE EXCEPTION '22b one inline add moved people_directory from % rows to %', before_rows, after_rows;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name = 'Dana Kowalski';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '22c Dana holds % Directory rows', n;
+  END IF;
+  SELECT seat_count INTO c FROM public.people_directory WHERE person_id = card;
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE person_id = card;
+  IF c <> 3 OR n <> 3 THEN
+    RAISE EXCEPTION '22d Dana''s row claims % seat(s) and nests % (three were expected)', c, n;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (b) the mirror: the card written AFTER the seat
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','R12 Later Card','+16125559911','plumbing');
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE display_name='R12 Later Card')
+       IS NOT NULL THEN
+    RAISE EXCEPTION '22e the seat was stamped before any card existed';
+  END IF;
+
+  INSERT INTO public.studio_contacts (organization_id, entity_kind, contact_kind, full_name, phone, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','person','trade','R12 Later Card','+16125559911', d)
+  RETURNING id INTO later_card;
+
+  SELECT count(*) INTO n FROM public.project_parties
+   WHERE display_name='R12 Later Card' AND studio_contact_id = later_card;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '22f the card minted after the seat claimed % of its 1 seat(s)', n;
+  END IF;
+  PERFORM pg_temp.assume_user(d);
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name='R12 Later Card';
+  IF n <> 1 THEN
+    RAISE EXCEPTION '22g that human holds % Directory rows after the card was written', n;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (c) two cards share the number: PR-o/R-Y's duplicate band, not a merge a
+  -- trigger may decide
+  INSERT INTO public.studio_contacts (organization_id, entity_kind, contact_kind, full_name, phone, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','person','trade','R12 Twin One','+16125559922', d),
+         ('b0000000-0000-0000-0000-000000000001','person','trade','R12 Twin Two','+16125559922', d);
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','R12 Twin Seat','+16125559922','framing');
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE display_name='R12 Twin Seat')
+       IS NOT NULL THEN
+    RAISE EXCEPTION '22h an ambiguous number stamped a card anyway';
+  END IF;
+
+  -- (d) a COMPANY card on the same number is not the human
+  INSERT INTO public.studio_contacts (organization_id, entity_kind, contact_kind, company_name, phone, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','company','trade','R12 Firm Line','+16125559944', d);
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','R12 Firm Seat','+16125559944','roofing');
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE display_name='R12 Firm Seat')
+       IS NOT NULL THEN
+    RAISE EXCEPTION '22i a firm''s main line stamped a company card on a human''s seat';
+  END IF;
+
+  -- (e) a project that records NO studio resolves no card at all, so the
+  -- auto-link can never collide with r11 MAJOR-3's
+  -- party_card_project_has_no_studio refusal
+  INSERT INTO public.studio_contacts (organization_id, entity_kind, contact_kind, full_name, phone, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','person','trade','R12 Studioless','+16125559933', d);
+  INSERT INTO public.project_parties (project_id, party_kind, display_name, phone_e164, trade)
+  VALUES ('b0000000-0000-0000-0000-0000000000d1','sub','R12 Studioless','+16125559933','tile');
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE display_name='R12 Studioless')
+       IS NOT NULL THEN
+    RAISE EXCEPTION '22j a seat on a studio-less job was stamped';
+  END IF;
+
+  RAISE NOTICE '22. the auto-link keeps one human one identity IN THE RECORD: the shipped inline add on a carded human''s own number comes out stamped, so people_directory holds the same % rows and Dana''s one row claims 3 seats and nests 3 (it was 62 -> 63, one row claiming 2 and one claiming 1); a card minted AFTER the seat claims it; and none of an ambiguous number, a firm''s main line or a studio-less job stamps anything (r12 MAJOR-2): passed', before_rows;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 23. The auto-linked seat's PAPER WORD is the identity's, and the studio-less
+--     population's ruled residue (w1b final review r13 MAJOR-2 / MAJOR-1)
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  d uuid; card uuid; firm uuid; paperless uuid; ph text;
+  seat uuid; row_word text; seat_word text; n int; k int;
+BEGIN
+  SELECT id INTO d FROM public.profiles WHERE email='designer@patina.dev';
+  SELECT sc.id, sc.company_id, sc.phone_e164 INTO card, firm, ph
+    FROM public.studio_contacts sc
+   WHERE sc.organization_id = 'b0000000-0000-0000-0000-000000000001'
+     AND sc.full_name = 'Dana Kowalski';
+
+  -- the fixture fact this block turns on: F-11, Northgate Electric's general
+  -- liability certificate expired 2026-03-31 gating site_access and draw, on a
+  -- sub who holds no personal paper of her own
+  IF public.identity_paper_state(card, firm) <> 'lapsed'
+     OR public.compliance_state(card) <> 'not_on_file' THEN
+    RAISE EXCEPTION '23 precondition: Dana reads % as an identity and % on her own card',
+      public.identity_paper_state(card, firm), public.compliance_state(card);
+  END IF;
+
+  -- (a) the shipped inline add — useAddProjectParty writes company_name as
+  -- free TEXT and never company_id — comes back stamped with her card by §1b,
+  -- and its seat line must print the word her Directory row prints. It read
+  -- `not_on_file` under a row reading `lapsed` (r13 MAJOR-2).
+  INSERT INTO public.project_parties
+    (project_id, party_kind, display_name, company_name, trade, phone_e164)
+  VALUES ('d0e00000-0000-0000-0000-00000000000a','sub','Dana Kowalski',
+          'Northgate Electric','electrical', ph)
+  RETURNING id INTO seat;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT paper_state INTO row_word FROM public.people_directory WHERE person_id = card;
+  SELECT paper_state INTO seat_word FROM public.people_directory_seats WHERE seat_id = seat;
+  IF row_word <> 'lapsed' OR seat_word IS DISTINCT FROM row_word THEN
+    RAISE EXCEPTION '23a the Directory row reads % and its own new seat line reads %',
+      row_word, seat_word;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (b) and the COALESCE is the seat's firm FIRST: a seat that names its own
+  -- company keeps its own firm's word (crm-model §5, "open engagements keep
+  -- the old company_id"), never the card's.
+  INSERT INTO public.studio_contacts
+    (organization_id, entity_kind, contact_kind, company_name, created_by)
+  VALUES ('b0000000-0000-0000-0000-000000000001','company','trade',
+          'R13 Paperless Firm', d)
+  RETURNING id INTO paperless;
+  UPDATE public.project_parties SET company_id = paperless WHERE id = seat;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT paper_state INTO seat_word FROM public.people_directory_seats WHERE seat_id = seat;
+  SELECT paper_state INTO row_word  FROM public.people_directory WHERE person_id = card;
+  IF seat_word <> 'not_on_file' OR row_word <> 'lapsed' THEN
+    RAISE EXCEPTION '23b a seat naming its own paperless firm reads % while the row reads %',
+      seat_word, row_word;
+  END IF;
+  PERFORM pg_temp.reset_role();
+  DELETE FROM public.project_parties WHERE id = seat;
+
+  -- (c) the RULED residue, recorded as a test so a future change has to face
+  -- it: on a project that records no studio the auto-link resolves no card
+  -- (project_recorded_studio() is NULL, and a caller-relative fallback would
+  -- put the writer's own studio inside the identity key — r11 MAJOR-3), so one
+  -- inline add of a carded human's own number is a SECOND Directory identity
+  -- until R-BD's W3 backfill names a studio. What may NEVER happen is the
+  -- affirmative word: the duplicate row prints the dormant `not_asked` of a
+  -- studio holding no record, never `granted`, and the send gate refuses on
+  -- the verdict before the invite carve-out (r13 MAJOR-1).
+  INSERT INTO public.project_parties
+    (project_id, party_kind, display_name, company_name, trade, phone_e164)
+  VALUES ('b0000000-0000-0000-0000-0000000000d1','sub','Pete Rusk',
+          'Rusk Mechanical','plumbing','+16125550112')
+  RETURNING id INTO seat;
+  IF (SELECT studio_contact_id FROM public.project_parties WHERE id = seat) IS NOT NULL THEN
+    RAISE EXCEPTION '23c a seat on a studio-less job was stamped after all';
+  END IF;
+
+  PERFORM pg_temp.assume_user(d);
+  SELECT count(*) INTO n FROM public.people_directory WHERE display_name = 'Pete Rusk';
+  SELECT count(*) INTO k FROM public.people_directory
+   WHERE display_name = 'Pete Rusk' AND consent_status = 'granted';
+  IF n <> 2 OR k <> 0 THEN
+    RAISE EXCEPTION '23d Pete Rusk holds % Directory rows, % of them reading granted', n, k;
+  END IF;
+  IF (SELECT consent_status FROM public.people_directory WHERE person_id = card) IS NOT NULL
+     AND (SELECT consent_status FROM public.people_directory
+           WHERE display_name = 'Pete Rusk' AND person_id = seat) = 'granted' THEN
+    RAISE EXCEPTION '23e the studio-less duplicate printed the affirmative word';
+  END IF;
+  PERFORM pg_temp.reset_role();
+  DELETE FROM public.project_parties WHERE id = seat;
+
+  RAISE NOTICE '23. the auto-linked seat prints the identity''s paper word — lapsed under a row reading lapsed, where it read not_on_file (r13 MAJOR-2) — a seat naming its own firm still keeps that firm''s word, and the studio-less population''s second identity is the RULED residue of r13 MAJOR-1: two rows until R-BD''s W3 backfill, and never the affirmative consent word: passed';
+END $$;
+
+-- ─── 24. r14 MAJOR-1: the reach word reduces over the seats the row NESTS ──
+--
+-- reach_state_for_identity() carried no tenant predicate: it matched
+-- party_identity_key() over field_link_tokens JOIN project_parties under the
+-- caller's own RLS, and both of those policies are
+-- is_studio_comember(designer of record) — true of anyone sharing ANY active
+-- organization with that designer — while identity_seat_count(), the
+-- identity_seats CTE and people_directory_seats' WHERE all additionally carry
+-- is_active_studio_member(project_tenant_org(project_id)) beside the job's own
+-- designer / lead / creator. So a live door minted by ANOTHER studio of the
+-- same designer decided this studio's word: the row printed `field_link` with
+-- zero live links of its own, over a seat line printing `on_paper`, and R-AB's
+-- "Copy field link" act on that row opens nothing.
+DO $$
+DECLARE
+  designer  UUID := 'a0000000-0000-0000-0000-000000000004';  -- owns both studios
+  admin_a   UUID := 'a0000000-0000-0000-0000-000000000003';  -- studio A only
+  studio_a  UUID := 'b0000000-0000-0000-0000-000000000001';
+  studio_b  UUID := 'f4000000-0000-4000-8000-00000000000b';
+  proj_a    UUID := 'd0e00000-0000-0000-0000-00000000000a';  -- Okonkwo residence
+  proj_b    UUID := 'f5000000-0000-4000-8000-00000000000b';
+  seat_a    UUID := 'f6000000-0000-4000-8000-00000000000a';
+  seat_b    UUID := 'f6000000-0000-4000-8000-00000000000b';
+  shared    TEXT := '+16125558844';  -- a number no card and no other block holds
+  word      TEXT;
+  seat_word TEXT;
+  n         INTEGER;
+BEGIN
+  -- A SECOND design studio of the same designer, with no other member.
+  INSERT INTO public.organizations (id, type, name, slug, status)
+  VALUES (studio_b, 'design_studio', 'W1B Second Studio', 'w1b-second-studio', 'active');
+  INSERT INTO public.organization_members (organization_id, user_id, role, status, joined_at)
+  VALUES (studio_b, designer, 'owner', 'active', now());
+  INSERT INTO public.projects (id, name, designer_id, studio_id, created_by, status)
+  VALUES (proj_b, 'W1B Studio B job', designer, studio_b, designer, 'active');
+
+  -- One UNSTAMPED seat in each studio on the SAME number, so both key on the
+  -- number itself (party_identity_key()'s third leg) and share one identity.
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name, phone, studio_contact_id)
+  VALUES (seat_a, proj_a, 'sub', 'W1B Shared Human', shared, NULL),
+         (seat_b, proj_b, 'sub', 'W1B Shared Human', shared, NULL);
+  IF (SELECT count(*) FROM public.project_parties
+       WHERE id IN (seat_a, seat_b) AND studio_contact_id IS NOT NULL) <> 0 THEN
+    RAISE EXCEPTION '24 setup: no card carries this number, so neither seat may be stamped';
+  END IF;
+
+  -- A live field link on STUDIO B's seat only.
+  INSERT INTO public.field_link_tokens (party_id, project_id, token_hash, expires_at, status)
+  VALUES (seat_b, proj_b, encode(extensions.digest('w1b-24-token','sha256'),'hex'),
+          now() + interval '30 days', 'active');
+
+  -- Read as the admin of studio A, who belongs to no part of studio B.
+  PERFORM pg_temp.assume_user(admin_a);
+
+  IF public.is_active_studio_member(studio_b) THEN
+    RAISE EXCEPTION '24 setup: this caller must NOT be a member of studio B';
+  END IF;
+
+  -- (a) the seats view already refuses studio B's seat — that is the record.
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE seat_id = seat_b;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '24a studio B''s seat nests under studio A''s room (% rows)', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE seat_id = seat_a;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '24a2 studio A''s own seat must nest exactly once, got %', n;
+  END IF;
+
+  -- (b) …and the word now agrees with it. Studio A holds no live link.
+  SELECT reach_state INTO word FROM public.people_directory
+   WHERE display_name = 'W1B Shared Human';
+  SELECT reach_state INTO seat_word FROM public.people_directory_seats
+   WHERE seat_id = seat_a;
+  IF word <> 'on_paper' OR seat_word <> 'on_paper' THEN
+    RAISE EXCEPTION '24b the row reads % over a seat line reading % — another '
+                    'studio''s door decided this studio''s word', word, seat_word;
+  END IF;
+  IF public.reach_state_for_identity(NULL, shared) <> 'on_paper' THEN
+    RAISE EXCEPTION '24b2 the function itself still crosses the tenant boundary';
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (c) THE CONTROL, so the predicate refuses a foreign door and not every
+  --     door: the same identity, a live link on studio A's OWN seat, and the
+  --     word turns.
+  INSERT INTO public.field_link_tokens (party_id, project_id, token_hash, expires_at, status)
+  VALUES (seat_a, proj_a, encode(extensions.digest('w1b-24-token-a','sha256'),'hex'),
+          now() + interval '30 days', 'active');
+  PERFORM pg_temp.assume_user(admin_a);
+  SELECT reach_state INTO word FROM public.people_directory
+   WHERE display_name = 'W1B Shared Human';
+  SELECT reach_state INTO seat_word FROM public.people_directory_seats
+   WHERE seat_id = seat_a;
+  IF word <> 'field_link' OR seat_word <> 'field_link' THEN
+    RAISE EXCEPTION '24c studio A''s own live link must read field_link on both '
+                    'lines, got row % / seat %', word, seat_word;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (d) and the designer of record, who belongs to BOTH studios, still reads
+  --     her own job's link through the tenant leg — r11 MAJOR-1 untouched.
+  PERFORM pg_temp.assume_user(designer);
+  IF public.reach_state_for_identity(NULL, shared) <> 'field_link' THEN
+    RAISE EXCEPTION '24d the designer of record lost her own job''s link';
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  DELETE FROM public.field_link_tokens WHERE party_id IN (seat_a, seat_b);
+  DELETE FROM public.project_parties WHERE id IN (seat_a, seat_b);
+
+  RAISE NOTICE '24. the reach word reduces over exactly the seats the row nests '
+               '— a live field link minted by another studio of the same '
+               'designer no longer prints field_link over a seat line reading '
+               'on_paper, the studio''s own link still does, and the designer of '
+               'record keeps her own job''s door (r14 MAJOR-1): passed';
+END $$;
+
+-- ─── 25. r15 MAJOR-2: the CONTACTS branch's reach word stops at the tenant ─
+--
+-- r14 MAJOR-1 (block 24) gave reach_state_for_identity() the seats view's
+-- WHERE. Its sibling reach_state_for() kept a card leg whose only predicate is
+-- pp.studio_contact_id = p_card_id — no projects join, no tenant leg, no
+-- designer-of-record leg — and the CONTACTS branch, where every carded human
+-- now lives (49 of the seeded studio's 62 rows against the party branch's 1),
+-- called exactly that leg. So a seat stamped with ANOTHER studio's card — the
+-- pre-00624 shape R-AP refuses on write but cannot repair on rows already on
+-- the table (00624:724-739's preflight, unmeasured on Strata) — printed
+-- `field_link` over seat_count 0 and no seat line at all: R-AB's "Copy field
+-- link" act on a door this studio cannot open, and R-F's vitals not counting
+-- the mint it needs.
+DO $$
+DECLARE
+  designer UUID := 'a0000000-0000-0000-0000-000000000004';  -- owns studio A, and C below
+  admin_a  UUID := 'a0000000-0000-0000-0000-000000000003';  -- studio A only
+  studio_a UUID := 'b0000000-0000-0000-0000-000000000001';
+  studio_c UUID := 'f4000000-0000-4000-8000-00000000000c';
+  proj_a   UUID := 'd0e00000-0000-0000-0000-00000000000a';  -- Okonkwo residence
+  proj_c   UUID := 'f5000000-0000-4000-8000-00000000000c';
+  card     UUID := 'f7000000-0000-4000-8000-00000000000c';
+  seat_c   UUID := 'f6000000-0000-4000-8000-00000000000c';
+  seat_a   UUID := 'f6000000-0000-4000-8000-00000000000d';
+  word     TEXT;
+  n        INTEGER;
+BEGIN
+  -- A THIRD design studio of the same designer, with no other member — so the
+  -- reader below shares an active org with the job's designer of record (both
+  -- base tables' RLS is is_studio_comember(designer_id)) and belongs to no
+  -- part of that job's own studio.
+  INSERT INTO public.organizations (id, type, name, slug, status)
+  VALUES (studio_c, 'design_studio', 'W1B Third Studio', 'w1b-third-studio', 'active');
+  INSERT INTO public.organization_members (organization_id, user_id, role, status, joined_at)
+  VALUES (studio_c, designer, 'owner', 'active', now());
+  INSERT INTO public.projects (id, name, designer_id, studio_id, created_by, status)
+  VALUES (proj_c, 'W1B Studio C job', designer, studio_c, designer, 'active');
+
+  -- The card is in STUDIO A's rolodex, so studio A's Directory emits it on the
+  -- contacts branch.
+  INSERT INTO public.studio_contacts (id, organization_id, entity_kind, contact_kind,
+                                      full_name, company_name, created_by)
+  VALUES (card, studio_a, 'person', 'sub', 'W1B Shared Card', 'W1B Shared Card LLC',
+          designer);
+
+  -- The legacy shape, staged the way block 16g stages its own: no live write
+  -- path can mint a seat wearing another studio's card (R-AP), so the guard is
+  -- lifted for one INSERT as the table's owner and put straight back.
+  ALTER TABLE public.project_parties DISABLE TRIGGER assert_project_party_cards_trg;
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name,
+                                      studio_contact_id, created_by)
+  VALUES (seat_c, proj_c, 'sub', 'W1B Shared Card', card, designer);
+  ALTER TABLE public.project_parties ENABLE TRIGGER assert_project_party_cards_trg;
+
+  INSERT INTO public.field_link_tokens (party_id, project_id, token_hash, expires_at, status)
+  VALUES (seat_c, proj_c, encode(extensions.digest('w1b-25-token-c','sha256'),'hex'),
+          now() + interval '30 days', 'active');
+
+  PERFORM pg_temp.assume_user(admin_a);
+  IF public.is_active_studio_member(studio_c) THEN
+    RAISE EXCEPTION '25 setup: this caller must NOT be a member of studio C';
+  END IF;
+  IF NOT public.is_active_studio_member(studio_a) THEN
+    RAISE EXCEPTION '25 setup: this caller must be a member of studio A';
+  END IF;
+
+  -- (a) THE PREMISE, so the block cannot pass for the wrong reason: this
+  --     caller really does read both base rows raw, which is why the old
+  --     card leg found the foreign door at all.
+  SELECT count(*) INTO n FROM public.project_parties WHERE id = seat_c;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '25a the foreign seat is not readable raw (%) — the word '
+                    'would read on_paper for the wrong reason', n;
+  END IF;
+  SELECT count(*) INTO n FROM public.field_link_tokens WHERE party_id = seat_c;
+  IF n <> 1 THEN
+    RAISE EXCEPTION '25a2 the foreign link is not readable raw (%) — same', n;
+  END IF;
+
+  -- (b) the seats view nests nothing under this card…
+  SELECT count(*) INTO n FROM public.people_directory_seats WHERE person_id = card;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '25b studio C''s seat nests under studio A''s room (% rows)', n;
+  END IF;
+
+  -- (c) …and the word agrees with it.
+  SELECT reach_state, seat_count INTO word, n
+    FROM public.people_directory WHERE person_id = card;
+  IF word IS NULL THEN
+    RAISE EXCEPTION '25c the card''s own studio must still see its Directory row';
+  END IF;
+  IF word <> 'on_paper' OR n <> 0 THEN
+    RAISE EXCEPTION '25c the row reads % over seat_count % — a door minted on '
+                    'another studio''s job decided this studio''s word', word, n;
+  END IF;
+  IF public.reach_state_for_identity(NULL, card::text) <> 'on_paper' THEN
+    RAISE EXCEPTION '25c2 the function itself still crosses the tenant boundary';
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  -- (d) THE CONTROL, so the predicate refuses a foreign door and not every
+  --     door: the same card, a seat and a live link on studio A's OWN job.
+  INSERT INTO public.project_parties (id, project_id, party_kind, display_name,
+                                      studio_contact_id, created_by)
+  VALUES (seat_a, proj_a, 'sub', 'W1B Shared Card', card, designer);
+  INSERT INTO public.field_link_tokens (party_id, project_id, token_hash, expires_at, status)
+  VALUES (seat_a, proj_a, encode(extensions.digest('w1b-25-token-a','sha256'),'hex'),
+          now() + interval '30 days', 'active');
+  PERFORM pg_temp.assume_user(admin_a);
+  SELECT reach_state, seat_count INTO word, n
+    FROM public.people_directory WHERE person_id = card;
+  IF word <> 'field_link' OR n <> 1 THEN
+    RAISE EXCEPTION '25d studio A''s own live link must read field_link over '
+                    'one nested seat, got % / %', word, n;
+  END IF;
+  SELECT reach_state INTO word FROM public.people_directory_seats
+   WHERE seat_id = seat_a;
+  IF word <> 'field_link' THEN
+    RAISE EXCEPTION '25d2 the seat line must read field_link beside it, got %', word;
+  END IF;
+  PERFORM pg_temp.reset_role();
+
+  DELETE FROM public.field_link_tokens WHERE party_id IN (seat_c, seat_a);
+  DELETE FROM public.project_parties   WHERE id IN (seat_c, seat_a);
+  DELETE FROM public.studio_contacts   WHERE id = card;
+
+  RAISE NOTICE '25. the CONTACTS branch''s reach word reduces over the seats '
+               'the row nests — a live field link on a seat wearing this '
+               'studio''s card but sitting on another studio''s job no longer '
+               'prints field_link over seat_count 0 and no seat line, and the '
+               'studio''s own link still does (r15 MAJOR-2): passed';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 26. QA-1 (w2 r5): the identity row carries the FIRM'S OWN NAME
+--
+-- `meta.company_name` was `studio_contacts.company_name` on the person's own
+-- row — 00417's typed-by-hand snapshot, which nothing since the affiliation
+-- table populates — so `personIdentityLine()` had a firm id it could not turn
+-- into a word and every crew row printed a bare kind word instead of
+-- "Northgate Electric · electrical". The contacts branch now joins the firm
+-- card the affiliation pointer names.
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  firm_name text;
+  firm_id   text;
+  n         integer;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+
+  SELECT meta->>'company_name', meta->>'company_id'
+    INTO firm_name, firm_id
+    FROM public.people_directory WHERE display_name = 'Dana Kowalski';
+  IF firm_id <> 'd0e20000-0000-0000-0000-000000000003' THEN
+    RAISE EXCEPTION '26a her firm pointer must be Northgate Electric, got %', firm_id;
+  END IF;
+  IF firm_name IS DISTINCT FROM 'Northgate Electric' THEN
+    RAISE EXCEPTION '26b her identity line must be able to say the firm''s name, got %',
+                    COALESCE(firm_name, '<null>');
+  END IF;
+
+  -- A firm's OWN row keeps its own name: company_id is NULL there, so the new
+  -- join misses and nothing about the company branch moved.
+  SELECT meta->>'company_name' INTO firm_name
+    FROM public.people_directory
+   WHERE person_id = 'd0e20000-0000-0000-0000-000000000003';
+  IF firm_name IS DISTINCT FROM 'Northgate Electric' THEN
+    RAISE EXCEPTION '26c the firm''s own row must still name itself, got %',
+                    COALESCE(firm_name, '<null>');
+  END IF;
+
+  -- and no CARDED identity carries a firm id it cannot name. The party branch
+  -- is deliberately not in this count: an uncarded seat's `company_name` is the
+  -- seat's own free text (`project_parties.company_name`), which is the seat's
+  -- fact and not the card's, and QA-1 is the contacts branch's defect.
+  SELECT count(*) INTO n FROM public.people_directory
+   WHERE role = 'contact'
+     AND meta->>'company_id' IS NOT NULL
+     AND meta->>'company_name' IS NULL;
+  IF n <> 0 THEN
+    RAISE EXCEPTION '26d % carded identity rows carry a firm id with no name', n;
+  END IF;
+
+  PERFORM pg_temp.reset_role();
+  RAISE NOTICE '26. the identity row resolves its firm pointer to the firm''s '
+               'own name, and a firm still names itself (QA-1): passed';
+END $$;
+
+DO $$ BEGIN RAISE NOTICE 'All W1b assertions passed.'; END $$;
+ROLLBACK;

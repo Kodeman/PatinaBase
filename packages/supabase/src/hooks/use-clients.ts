@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { peopleKeys } from './use-people';
+import { emailDeliveryKeys } from './use-email-delivery';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -25,6 +27,9 @@ export interface DesignerClient {
   // Direct contact info (for clients without profiles)
   client_email: string | null;
   client_name: string | null;
+  client_phone: string | null;
+  /** Normalized derivation of client_phone, set by a trigger (00583). */
+  client_phone_e164: string | null;
   // Extended fields (v2)
   referral_source: string | null;
   location: string | null;
@@ -347,11 +352,18 @@ export function useUpdateClientNotes() {
 
 /**
  * Update a client's editable contact fields on the designer's relationship row
- * (designer_clients): the working name + email (the contact for captured
- * clients without a Patina account) and notes. The client's OWN Patina profile
+ * (designer_clients): the working name, email, and phone (the contact for
+ * captured clients without a Patina account) and notes. The client's OWN Patina profile
  * (full_name/email/phone) is theirs — not edited here. Invalidates the client
  * lists AND the document/desk read models so a renamed household shows through
  * immediately (§5).
+ *
+ * No companion `client_phone_e164: null` write, unlike useUpdateStudioContact
+ * and useUpdateProjectParty: 00583's normalize_designer_client_phone_e164
+ * derives the e164 from the RAW column on UPDATE (it reads the e164 column
+ * only on INSERT), so clearing client_phone clears the derivation with it.
+ * 00281/00417 normalize COALESCE(NEW.phone, NEW.phone_e164) instead, which is
+ * why those two hooks must send both (review R3-04).
  */
 export function useUpdateClientContact() {
   const queryClient = useQueryClient();
@@ -365,15 +377,25 @@ export function useUpdateClientContact() {
       updates: {
         client_name?: string | null;
         client_email?: string | null;
+        client_phone?: string | null;
         notes?: string | null;
       };
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
+      // A whitespace-only number is not a number: stored as '   ' it reads as
+      // "has a phone" to everything testing `phone != null` while showing an
+      // empty directory cell, and normalize_phone_e164 makes nothing of it
+      // either (review R3-05 — the same trim useUpdateStudioContact does).
+      const patch =
+        updates.client_phone === undefined
+          ? updates
+          : { ...updates, client_phone: updates.client_phone?.trim() || null };
+
       const { data, error } = await supabase
         .from('designer_clients')
-        .update(updates)
+        .update(patch)
         .eq('id', clientId)
         .select()
         .single();
@@ -386,6 +408,10 @@ export function useUpdateClientContact() {
       queryClient.invalidateQueries({ queryKey: ['designer-client', clientId] });
       queryClient.invalidateQueries({ queryKey: ['document-state'] });
       queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
+      // F3-R1-03: the People Room reads this same edit through people_directory
+      // (the client branch) — without this, the profile head and Directory row
+      // keep showing the pre-edit name/email/phone after a successful save.
+      queryClient.invalidateQueries({ queryKey: peopleKeys.all });
     },
   });
 }
@@ -538,6 +564,9 @@ export function useAddClient() {
       source = 'direct',
       notes,
       invite = true,
+      letter,
+      note,
+      projectId,
     }: {
       clientEmail: string;
       clientName?: string;
@@ -545,12 +574,32 @@ export function useAddClient() {
       notes?: string;
       /** When true (default), send a Supabase Auth magic-link invite if no profile exists. */
       invite?: boolean;
+      /**
+       * The First Letter (flag `client-invite-letter`). When true the route
+       * takes the letter path; when absent it runs today's exact code, so the
+       * off state is byte-identical to today. The flag is read in the
+       * component, never here — this hook only carries what it is handed.
+       */
+      letter?: boolean;
+      /** The designer's own line. ≤280 after trimming; the route re-checks. */
+      note?: string;
+      /** The house the letter is about, and where the note is seeded (R8). */
+      projectId?: string;
     }) => {
       const response = await fetch('/api/clients/invite', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientEmail, clientName, source, notes, invite }),
+        body: JSON.stringify({
+          clientEmail,
+          clientName,
+          source,
+          notes,
+          invite,
+          // Omitted entirely when off, so the request body is byte-identical
+          // to today's — the assertion the e2e spec rests on.
+          ...(letter ? { letter: true, note, projectId } : {}),
+        }),
       });
 
       if (!response.ok) {
@@ -563,6 +612,7 @@ export function useAddClient() {
         profileId: string | null;
         invited: boolean;
         alreadyExists: boolean;
+        kind?: 'invite' | 'notice';
       }>;
     },
     onSuccess: () => {
@@ -599,18 +649,40 @@ export function useInviteAndLinkClient() {
       designerClientId,
       clientEmail,
       clientName,
+      letter,
+      note,
+      projectId,
     }: {
       /** The existing designer_clients.id to link. */
       designerClientId: string;
       /** Email to invite — defaults server-side to the row's client_email. */
       clientEmail?: string;
       clientName?: string;
+      /**
+       * The First Letter (flag `client-invite-letter`). When true the route
+       * takes the letter path; when absent it runs today's exact code, so the
+       * off state is byte-identical to today. The flag is read in the
+       * component, never here — this hook only carries what it is handed.
+       */
+      letter?: boolean;
+      /** The designer's own line. ≤280 after trimming; the route re-checks. */
+      note?: string;
+      /** The house the letter is about, and where the note is seeded (R8). */
+      projectId?: string;
     }) => {
       const response = await fetch('/api/clients/invite', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ designerClientId, clientEmail, clientName, invite: true }),
+        body: JSON.stringify({
+          designerClientId,
+          clientEmail,
+          clientName,
+          invite: true,
+          // Omitted entirely when off, so the request body is byte-identical
+          // to today's — the assertion the e2e spec rests on.
+          ...(letter ? { letter: true, note, projectId } : {}),
+        }),
       });
 
       if (!response.ok) {
@@ -623,6 +695,7 @@ export function useInviteAndLinkClient() {
         profileId: string | null;
         invited: boolean;
         alreadyExists: boolean;
+        kind?: 'invite' | 'notice';
       }>;
     },
     onSuccess: (_data, { designerClientId }) => {
@@ -631,6 +704,7 @@ export function useInviteAndLinkClient() {
       queryClient.invalidateQueries({ queryKey: ['designer-client-for-user'] });
       queryClient.invalidateQueries({ queryKey: ['client-stats'] });
       queryClient.invalidateQueries({ queryKey: ['client-activity'] });
+      queryClient.invalidateQueries({ queryKey: emailDeliveryKeys.all });
     },
   });
 }

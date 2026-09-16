@@ -1,0 +1,91 @@
+# Trimmed: full xcodebuild transcript was 4.0M of compile lines.
+# Kept: script milestones, every error/warning line, and the final 60 lines.
+# Chain: scripts/archive-testflight.sh --skip-regen --build-number 5 --app-id 6805156812
+
+=== MILESTONES / DIAGNOSTICS ===
+==> Archiving (Release) -> /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archives/PatinaField-20260913-005945.xcarchive
+2026-09-13 01:00:28.866 appintentsmetadataprocessor[22873:179291901] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+    Signing Identity:     "Apple Development: Kody Kochaver (BD8AHP9A59)"
+warning: Accent color ‘AccentColor’ is not present in any asset catalogs.
+2026-09-13 01:00:30.976 appintentsmetadataprocessor[22905:179292043] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+    Signing Identity:     "Apple Development: Kody Kochaver (BD8AHP9A59)"
+    Signing Identity:     "Apple Development: Kody Kochaver (BD8AHP9A59)"
+    Provisioning Profile: "iOS Team Provisioning Profile: cloud.patina.field"
+    Signing Identity:     "Apple Development: Kody Kochaver (BD8AHP9A59)"
+    Provisioning Profile: "iOS Team Provisioning Profile: cloud.patina.field"
+    Signing Identity:     "Apple Development: Kody Kochaver (BD8AHP9A59)"
+    Provisioning Profile: "iOS Team Provisioning Profile: cloud.patina.field"
+2026-09-13 01:01:19.287 appintentsmetadataprocessor[23169:179293991] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+    Signing Identity:     "Apple Development: Kody Kochaver (BD8AHP9A59)"
+    Provisioning Profile: "iOS Team Provisioning Profile: cloud.patina.field"
+** ARCHIVE SUCCEEDED **
+==> Archive OK: /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archives/PatinaField-20260913-005945.xcarchive (101M)
+==> Exporting -> /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/export/20260913-005945
+** EXPORT SUCCEEDED **
+==> Export OK: /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/export/20260913-005945/Capture.ipa ( 16M)
+==> Uploading to App Store Connect (app 6805156812)
+Upload committed in App Store Connect.
+Waiting for build 5 (0.1) to appear in App Store Connect...
+Build 23a23b88-5ac3-484a-bb94-e38f6e6e8ea2 discovered; waiting for processing...
+
+=== FINAL 60 LINES ===
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name Capture --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 18.0 --bundle-identifier cloud.patina.field --output /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app --target-triple arm64-apple-ios18.0 --binary-file /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app/Capture --dependency-file /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/IntermediateBuildFilesPath/Capture.build/Release-iphoneos/Capture.build/Objects-normal/arm64/Capture_dependency_info.dat --stringsdata-file /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/IntermediateBuildFilesPath/Capture.build/Release-iphoneos/Capture.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/IntermediateBuildFilesPath/Capture.build/Release-iphoneos/Capture.build/Objects-normal/arm64/Capture.SwiftFileList --metadata-file-list /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/IntermediateBuildFilesPath/Capture.build/Release-iphoneos/Capture.build/Capture.DependencyMetadataFileList --static-metadata-file-list /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/IntermediateBuildFilesPath/Capture.build/Release-iphoneos/Capture.build/Capture.DependencyStaticMetadataFileList --swift-const-vals-list /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/IntermediateBuildFilesPath/Capture.build/Release-iphoneos/Capture.build/Objects-normal/arm64/Capture.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-09-13 01:01:19.285 appintentsmetadataprocessor[23169:179293991] Starting appintentsmetadataprocessor export
+2026-09-13 01:01:19.287 appintentsmetadataprocessor[23169:179293991] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+AppIntentsSSUTraining (in target 'Capture' from project 'Capture')
+    cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app/Info.plist --temp-dir-path /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/IntermediateBuildFilesPath/Capture.build/Release-iphoneos/Capture.build/ssu --bundle-id cloud.patina.field --product-path /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app --extracted-metadata-path /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app/Metadata.appintents --deployment-postprocessing --metadata-file-list /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/IntermediateBuildFilesPath/Capture.build/Release-iphoneos/Capture.build/Capture.DependencyMetadataFileList --source-file /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app/Info.plist --archive-ssu-assets
+2026-09-13 01:01:19.303 appintentsnltrainingprocessor[23170:179293993] Parsing options for appintentsnltrainingprocessor
+2026-09-13 01:01:19.304 appintentsnltrainingprocessor[23170:179293993] Starting AppIntents SSU YAML Generation
+2026-09-13 01:01:19.304 appintentsnltrainingprocessor[23170:179293993] No AppShortcuts found - Skipping.
+
+Strip /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app/Capture (in target 'Capture' from project 'Capture')
+    cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/strip -D /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app/Capture
+
+SetOwnerAndGroup kody:staff /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app (in target 'Capture' from project 'Capture')
+    cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture
+    /usr/sbin/chown -RH kody:staff /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app
+
+SetMode u+w,go-w,a+rX /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app (in target 'Capture' from project 'Capture')
+    cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture
+    /bin/chmod -RH u+w,go-w,a+rX /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app
+
+CodeSign /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app (in target 'Capture' from project 'Capture')
+    cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture
+    
+    Signing Identity:     "Apple Development: Kody Kochaver (BD8AHP9A59)"
+    Provisioning Profile: "iOS Team Provisioning Profile: cloud.patina.field"
+                          (917dfb11-73dd-490e-852a-ee40d89c94c9)
+    
+    /usr/bin/codesign --force --sign D78462AB415A5032D11E8BDD4D7E58A27FA3BA6D --entitlements /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/IntermediateBuildFilesPath/Capture.build/Release-iphoneos/Capture.build/Capture.app.xcent --generate-entitlement-der /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app
+
+RegisterExecutionPolicyException /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app (in target 'Capture' from project 'Capture')
+    cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture
+    builtin-RegisterExecutionPolicyException /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app
+
+Validate /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app (in target 'Capture' from project 'Capture')
+    cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture
+    builtin-validationUtility /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app -validate-for-store -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app (in target 'Capture' from project 'Capture')
+    cd /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture
+    /usr/bin/touch -c /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archive-derived-data-b44f2271ef71/Build/Intermediates.noindex/ArchiveIntermediates/Capture/InstallationBuildProductsLocation/Applications/Capture.app
+
+** ARCHIVE SUCCEEDED **
+
+==> Archive OK: /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/archives/PatinaField-20260913-005945.xcarchive (101M)
+==> Exporting -> /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/export/20260913-005945
+2026-09-13 01:01:21.109 xcodebuild[23182:179294057] [MT] IDEDistribution: -[IDEDistributionLogging _createLoggingBundleAtPath:]: Created bundle at path "/var/folders/xv/_sfj2yb17jg33fx8nw7d_nf00000gn/T/Capture_2026-09-13_01-01-21.108.xcdistributionlogs".
+Exported Capture to: /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/export/20260913-005945
+** EXPORT SUCCEEDED **
+
+==> Export OK: /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/apps/mobile/Capture/.build/export/20260913-005945/Capture.ipa ( 16M)
+==> Uploading to App Store Connect (app 6805156812)
+Uploading Capture.ipa (16715329 bytes) to App Store Connect...
+Upload committed in App Store Connect.
+Waiting for build 5 (0.1) to appear in App Store Connect...
+Build 23a23b88-5ac3-484a-bb94-e38f6e6e8ea2 discovered; waiting for processing...
+{"uploadId":"23a23b88-5ac3-484a-bb94-e38f6e6e8ea2","fileId":"6d9577e7-a79f-4168-a2f8-40a18e74351b","fileName":"Capture.ipa","fileSize":16715329,"uploaded":true}
+ARCHIVE/UPLOAD EXIT: 0

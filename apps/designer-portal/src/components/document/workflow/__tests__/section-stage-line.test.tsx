@@ -150,6 +150,9 @@ describe("SectionStageLine", () => {
     const { container } = render(<SectionStageLine model={null} />);
 
     expect(container.textContent).toBe("Workflow stage");
+    // D4 — the sr-only name is an <h2>. The document's <h1> is the letterhead
+    // and every region head is an <h2>, so an <h3> here read h1 → h3 → h2.
+    expect(screen.getByText("Workflow stage").tagName).toBe("H2");
     expect(
       screen.queryByText("No active or delayed phase is configured"),
     ).toBeNull();

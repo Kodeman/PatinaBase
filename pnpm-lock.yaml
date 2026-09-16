@@ -1465,6 +1465,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.2.8)
+      '@patina/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@patina/types':
         specifier: workspace:*
         version: link:../types

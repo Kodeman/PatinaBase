@@ -31,6 +31,9 @@ export interface Lead {
   // Contact details for designer-captured prospects with no homeowner profile
   contact_name: string | null;
   contact_email: string | null;
+  contact_phone: string | null;
+  /** Normalized derivation of contact_phone, set by a trigger (00583). */
+  contact_phone_e164: string | null;
   // Track 6 R65 — where the lead came from (canonical chip label or free text).
   source: string | null;
   // Joined data
@@ -39,6 +42,7 @@ export interface Lead {
     email: string;
     full_name: string | null;
     avatar_url: string | null;
+    phone: string | null;
   };
 }
 
@@ -136,7 +140,8 @@ export function useLeads(filters?: LeadFilters) {
             id,
             email,
             full_name,
-            avatar_url
+            avatar_url,
+            phone
           )
         `)
         .order('created_at', { ascending: false });
@@ -188,7 +193,8 @@ export function useLead(leadId: string) {
             id,
             email,
             full_name,
-            avatar_url
+            avatar_url,
+            phone
           )
         `)
         .eq('id', leadId)
@@ -257,6 +263,7 @@ export function useCreateLead() {
       location_state?: string;
       contact_name?: string;
       contact_email?: string;
+      contact_phone?: string;
       // Optional ISO timestamp. Additive + backward-compatible: the old
       // legacy AddLeadDialog never passed it (stayed null there).
       // The Document's CaptureLeadSheet sets it +1 day (Track 6, R62) so the
@@ -286,6 +293,7 @@ export function useCreateLead() {
           location_state: input.location_state || null,
           contact_name: input.contact_name || null,
           contact_email: input.contact_email || null,
+          contact_phone: input.contact_phone || null,
           response_deadline: input.response_deadline || null,
           source: input.source || null,
           // match_score left null — the UI coalesces `match_score || 0`.
@@ -476,11 +484,12 @@ export function useAcceptLead() {
         // re-accepting the same lead idempotent).
         const { data: existingByLead } = await supabase
           .from('designer_clients')
-          .select('id')
+          .select('id, client_phone')
           .eq('lead_id', leadId)
           .maybeSingle();
 
         let existingId: string | null = existingByLead?.id ?? null;
+        let existingPhone: string | null = existingByLead?.client_phone ?? null;
 
         // Otherwise, if the lead carries an email, look for a profile-less
         // client of this designer already using that email (the row the
@@ -488,13 +497,14 @@ export function useAcceptLead() {
         if (!existingId && lead.contact_email) {
           const { data: existingByEmail } = await supabase
             .from('designer_clients')
-            .select('id')
+            .select('id, client_phone')
             .eq('designer_id', lead.designer_id)
             .eq('client_email', lead.contact_email)
             .is('client_id', null)
             .maybeSingle();
 
           existingId = existingByEmail?.id ?? null;
+          existingPhone = existingByEmail?.client_phone ?? null;
         }
 
         if (existingId) {
@@ -504,6 +514,12 @@ export function useAcceptLead() {
             .update({
               client_name: lead.contact_name ?? null,
               client_email: lead.contact_email ?? null,
+              // Mirrors begin_discovery's COALESCE(client_phone, ...): the
+              // household's own number wins, and a phone-less lead leaves the
+              // column alone.
+              ...(!existingPhone && lead.contact_phone
+                ? { client_phone: lead.contact_phone }
+                : {}),
               source: 'lead',
               lead_id: leadId,
               status: 'active',
@@ -519,6 +535,7 @@ export function useAcceptLead() {
               client_id: null,
               client_name: lead.contact_name ?? null,
               client_email: lead.contact_email ?? null,
+              client_phone: lead.contact_phone ?? null,
               source: 'lead',
               lead_id: leadId,
               status: 'active',
@@ -581,6 +598,141 @@ export function useBeginDiscovery() {
       queryClient.invalidateQueries({ queryKey: ['lead', leadId] });
       queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
       queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
+    },
+  });
+}
+
+/** What {@link useReturnToLeadCheck} answers: the door, and why it is shut. */
+export interface ReturnToLeadCheck {
+  allowed: boolean;
+  /** One plain sentence, written by the RPC, shown as helper text. */
+  reason: string | null;
+  lead_id: string | null;
+}
+
+/**
+ * Whether an accidental "Accept · begin" can still be undone (00585).
+ *
+ * An undo only exists while it is still an undo. The server refuses once the
+ * relationship holds real content or the client has been written to, and hands
+ * back the sentence to print under the disabled action — so the reason is
+ * never guessed at in the portal.
+ *
+ * Disabled without a relationship id. Kept fresh rather than cached long: the
+ * answer changes the moment anything is written to the engagement.
+ */
+export function useReturnToLeadCheck(designerClientId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['return-to-lead-check', designerClientId],
+    enabled: Boolean(designerClientId),
+    // R83: supporting context for a disabled action. A failed check must not
+    // raise the global red toast over a (document) surface — and after a
+    // successful undo the relationship is gone, so a late refetch answers
+    // `insufficient_privilege`, which is not an auth expiry and would otherwise
+    // land as a raw internal sentence on a success path.
+    meta: { errorSurface: 'silent' as const },
+    queryFn: async (): Promise<ReturnToLeadCheck> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('return_to_lead_check', {
+        p_designer_client_id: designerClientId,
+      });
+
+      if (error) throw error;
+      // Fail closed: a shape the RPC did not promise is not permission.
+      if (!data || typeof data.allowed !== 'boolean') {
+        throw new Error('Return-to-lead check did not return a verdict');
+      }
+
+      return {
+        allowed: data.allowed,
+        reason: data.reason ?? null,
+        lead_id: data.lead_id ?? null,
+      };
+    },
+  });
+}
+
+/**
+ * Undo an accidental "Accept · begin" (00585) — the lead goes back to `new`
+ * with its accepted stamp cleared, and the empty Discovery relationship is
+ * deleted, so the Desk folder reads as the Brief again.
+ *
+ * The RPC re-runs {@link useReturnToLeadCheck}'s check under a row lock and
+ * raises with its reason, so a stale open door still refuses at the act.
+ *
+ * Invalidates everything `useBeginDiscovery` does (it reverses that act), plus
+ * the client-list keys from use-clients.ts and the document-state / desk keys —
+ * the folder changes shape, so every surface that reads it must re-derive. Two
+ * exceptions: the check's own key is WRITTEN with the closed-door answer rather
+ * than invalidated or removed (its subject is gone, and a removed key its live
+ * observer re-creates would fetch), and the departing engagement's own
+ * document_state key is
+ * left alone (its page is mid-navigation and the row it would refetch has just
+ * been deleted).
+ */
+export function useReturnToLead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    // R83: both call sites print the refusal inline at the act site, so the
+    // global MutationCache toast must stay out of it.
+    meta: { errorSurface: 'inline' as const },
+    mutationFn: async (designerClientId: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('return_to_lead', {
+        p_designer_client_id: designerClientId,
+      });
+
+      if (error) throw error;
+      if (!data?.lead_id) {
+        throw new Error('Return to lead did not return the restored lead');
+      }
+
+      return data as { lead_id: string };
+    },
+    onSuccess: (result, designerClientId) => {
+      // useBeginDiscovery's set, keyed by the lead this act restores.
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['lead', result.lead_id] });
+      queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
+      // Then the rest. The check is ANSWERED rather than invalidated or
+      // removed: the relationship it asks about no longer exists, so a refetch
+      // would only earn an access-denied answer. Removing it is not the same as
+      // silencing it — the section is still mounted while the router replaces
+      // the URL, and React Query re-creates a removed query the moment its live
+      // observer renders again, which fetches it. That second
+      // `return_to_lead_check` 403s and logs `client relationship <id> not
+      // found or access denied` on a success path. Writing the closed-door
+      // answer instead leaves a fresh entry no observer needs to fetch, and the
+      // action it gates (`returnCheck?.lead_id`) reads it as gone.
+      queryClient.setQueryData<ReturnToLeadCheck>(
+        ['return-to-lead-check', designerClientId],
+        { allowed: false, reason: null, lead_id: null },
+      );
+      queryClient.invalidateQueries({
+        queryKey: ['designer-client', designerClientId],
+      });
+      queryClient.invalidateQueries({ queryKey: ['client-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['discovery', designerClientId] });
+      // Every document_state reader re-derives EXCEPT the departing engagement's
+      // own: its page is still mounted while the router replaces the URL, and a
+      // refetch there would resolve the deleted relationship to `missing` and
+      // flash a not-found document on a success path.
+      queryClient.invalidateQueries({
+        queryKey: ['document-state'],
+        predicate: (query) =>
+          !(
+            query.queryKey[1] === 'engagement' &&
+            query.queryKey[2] === designerClientId
+          ),
+      });
+      // Vestigial, and kept only because use-clients.ts and use-proposals.ts
+      // both carry it: no query in the tree keys on it. The Desk is the
+      // ['document-state', 'desk'] query the invalidation above covers.
+      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
     },
   });
 }

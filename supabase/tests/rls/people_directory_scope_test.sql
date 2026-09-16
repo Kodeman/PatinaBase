@@ -276,6 +276,16 @@ $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 -- ─── (a) column-order regression ────────────────────────────────────────────
+-- The property this case protects is the PREFIX: CREATE OR REPLACE VIEW
+-- cannot reorder or insert columns, so every `select('*')` reader — and every
+-- positional read — depends on those twelve staying first, in order, with
+-- `scope` twelfth. It does NOT protect the TOTAL: 00626 appends five (00626's
+-- own COMMENT: "Five columns are APPENDED, never inserted"), and asserting a
+-- total of twelve turned that legitimate append into an ABORT that took cases
+-- (b) through (k) with it under ON_ERROR_STOP — hiding a live regression its
+-- own case (h3) was written to catch (w1b final review r11 MAJOR-1). a2 now
+-- asserts what may not happen — a column inserted BEFORE the twelve, or one
+-- of them dropped — and lets the tail grow.
 DO $$
 DECLARE
   v_cols  TEXT;
@@ -295,7 +305,10 @@ BEGIN
   SELECT count(*) INTO v_total
   FROM information_schema.columns
   WHERE table_schema = 'public' AND table_name = 'people_directory';
-  ASSERT v_total = 12, 'FAIL a2: expected exactly 12 columns, got ' || v_total;
+  ASSERT v_total >= 12,
+    'FAIL a2: the twelve prefix columns must all still be there — got ' || v_total
+    || ' column(s) in total. Columns may be APPENDED after scope; none may be '
+    || 'inserted among the twelve or dropped.';
 
   -- scope must be the LAST column and text-typed.
   PERFORM 1 FROM information_schema.columns
@@ -767,11 +780,16 @@ BEGIN
   ASSERT v_count = 1,
     'FAIL j3c: a co-member must SELECT the studio''s saved_vendors row, got ' || v_count;
 
-  -- j4: WRITES still fail — every 00421 policy is SELECT-only.
-  UPDATE project_parties SET display_name = 'Comember Overreach'
+  -- j4: writes. 00421 made every policy here SELECT-only; 00584 widened
+  -- project_parties' INSERT/UPDATE/DELETE to studio co-members (a colleague
+  -- edits the project's directory), and left project_team_members and
+  -- saved_vendors exactly as they were. j4a/j4d/j4e therefore now expect the
+  -- write to LAND; j4b, j4c, j4f and j4g still expect refusal.
+  UPDATE project_parties SET display_name = 'Comember Edit'
    WHERE id = 'bd000000-0000-4000-8000-0000000000b1';
   GET DIAGNOSTICS v_count = ROW_COUNT;
-  ASSERT v_count = 0, 'FAIL j4a: a co-member must not UPDATE a party, rows affected: ' || v_count;
+  ASSERT v_count = 1,
+    'FAIL j4a: a co-member must UPDATE a party (00584), rows affected: ' || v_count;
 
   UPDATE project_team_members SET role = 'lead_designer'
    WHERE id = 'bd000000-0000-4000-8000-0000000000f2';
@@ -785,15 +803,14 @@ BEGIN
 
   DELETE FROM project_parties WHERE id = 'bd000000-0000-4000-8000-0000000000b1';
   GET DIAGNOSTICS v_count = ROW_COUNT;
-  ASSERT v_count = 0, 'FAIL j4d: a co-member must not DELETE a party, rows affected: ' || v_count;
+  ASSERT v_count = 1,
+    'FAIL j4d: a co-member must DELETE a party (00584), rows affected: ' || v_count;
 
-  v_raised := false;
-  BEGIN
-    INSERT INTO project_parties (id, project_id, party_kind, display_name)
-    VALUES ('bd000000-0000-4000-8000-0000000000be', 'bd000000-0000-4000-8000-0000000000e1', 'gc', 'Comember Sneak');
-  EXCEPTION WHEN insufficient_privilege THEN v_raised := true;
-  END;
-  ASSERT v_raised, 'FAIL j4e: a co-member must not INSERT a party';
+  INSERT INTO project_parties (id, project_id, party_kind, display_name)
+  VALUES ('bd000000-0000-4000-8000-0000000000be', 'bd000000-0000-4000-8000-0000000000e1', 'gc', 'Comember Add');
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  ASSERT v_count = 1,
+    'FAIL j4e: a co-member must INSERT a party (00584), rows affected: ' || v_count;
 
   v_raised := false;
   BEGIN

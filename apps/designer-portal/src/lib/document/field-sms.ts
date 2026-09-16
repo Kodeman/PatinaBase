@@ -10,6 +10,7 @@
  */
 
 import type { FieldParsedIntent } from '@patina/supabase';
+import { DAY_MONTH_FORMAT, WEEKDAY_SHORT_FORMAT } from './dates';
 
 /** The effect kind a parse carries, tolerant of `type` or `intent` naming. */
 export function fieldEffectType(parsed: FieldParsedIntent | null | undefined): string | null {
@@ -17,17 +18,13 @@ export function fieldEffectType(parsed: FieldParsedIntent | null | undefined): s
   return (parsed.type ?? parsed.intent ?? null) as string | null;
 }
 
-/** Format a bare `YYYY-MM-DD` as "Tue Jul 14" (LOCAL midnight — never slips a
+/** Format a bare `YYYY-MM-DD` as "Tue 14 July" (LOCAL midnight — never slips a
  *  day in negative-offset zones, matching format.ts). */
 export function fmtFieldDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
   if (Number.isNaN(d.getTime())) return null;
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  }).format(d);
+  return `${WEEKDAY_SHORT_FORMAT.format(d)} ${DAY_MONTH_FORMAT.format(d)}`;
 }
 
 /** Whether a parse is a date-bearing delay — the card offers a date editor. */

@@ -1,16 +1,23 @@
 // Supabase Edge Function: review-requests
 //
 // Runs daily at 09:30 UTC (scheduled by pg_cron in migration 00096).
-// Finds projects that moved to status='completed' 3+ days ago and have no
-// existing sent/queued/collected client_reviews row for that project.
-// For each candidate, sends a review-request email via Resend and inserts
-// a client_reviews row with request_status='sent'.
+// Finds projects that moved to status='completed' 3+ days ago, have no
+// existing sent/queued/collected client_reviews row for that project, and whose
+// client's profile is not email-suppressed.
+// For each candidate the client_reviews row is written FIRST as 'queued' with
+// the id the letter names, then promoted to 'sent' when the send lands, or
+// deleted when the send does not — so the row never outlives a letter that was
+// never delivered, and tomorrow's run retries a failure.
 //
 // PRD #13: review request auto-trigger. SMS (#33) intentionally deferred.
 
 // deno-lint-ignore-file no-explicit-any
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  type ComplianceSendResult,
+  sendCompliantEmail,
+} from '../_shared/send-email.ts';
 import {
   renderBrandedShell,
   paragraph,
@@ -29,10 +36,15 @@ import {
   studioSignatureCity,
 } from '../_shared/studio-identity.ts';
 import { clientProjectLink } from '../_shared/client-portal-links.ts';
+import {
+  BLOCKING_REQUEST_STATUSES,
+  isSuppressedRecipient,
+  projectsWithRequestOut,
+  type ReviewRequestRow,
+} from './logic.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_ADDRESS = Deno.env.get('RESEND_FROM') ?? 'hello@patina.cloud';
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
 
@@ -49,6 +61,8 @@ interface Profile {
   full_name: string | null;
   email: string | null;
   city: string | null;
+  /** Read for the client only: a suppressed address is not asked again. */
+  email_suppressed: boolean | null;
 }
 
 interface DesignerClient {
@@ -59,11 +73,17 @@ interface DesignerClient {
   client_name: string | null;
 }
 
-async function sendReviewEmail(opts: {
+async function sendReviewEmail(supabase: SupabaseClient, opts: {
   projectId: string;
   projectName: string;
   designerClientId: string;
+  /** Minted before the send so notification_log can name the row it belongs to. */
+  reviewId: string;
   clientEmail: string;
+  /** The client's auth user id, when she has an account. */
+  clientUserId: string | null;
+  /** Replies land on the designer, not on Patina. */
+  designerEmail: string | null;
   clientName: string | null;
   /** Display name for the subject/prose — studio, designer, or 'Patina'. */
   senderName: string;
@@ -72,7 +92,7 @@ async function sendReviewEmail(opts: {
   studioLogoUrl?: string;
   /** Who signs the letter (R7) — the studio, never Patina. */
   signature: StudioSignOff;
-}): Promise<boolean> {
+}): Promise<ComplianceSendResult> {
   const senderDisplay = opts.senderName;
   const greeting = opts.clientName ? `Hi ${escapeHtml(opts.clientName)},` : 'Hi there,';
   // Was `/review/<projectId>` — singular, and no such route ever existed, so
@@ -101,26 +121,30 @@ async function sendReviewEmail(opts: {
     ].join(''),
   });
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
+  const result = await sendCompliantEmail(supabase, {
+    to: opts.clientEmail,
+    subject,
+    html,
+    from: FROM_ADDRESS,
+    replyTo: opts.designerEmail ?? undefined,
+    userId: opts.clientUserId ?? undefined,
+    notificationType: 'review_request',
+    category: 'operational',
+    templateId: 'review-request',
+    ref: { type: 'client_review', id: opts.reviewId },
+    metadata: {
+      project_id: opts.projectId,
+      designer_client_id: opts.designerClientId,
+      review_id: opts.reviewId,
     },
-    body: JSON.stringify({
-      from: FROM_ADDRESS,
-      to: opts.clientEmail,
-      subject,
-      html,
-    }),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error('review-requests: Resend failed for project', opts.projectId, res.status, text);
-    return false;
+  if (!result.success) {
+    console.error(
+      'review-requests: send failed for project', opts.projectId, result.error,
+    );
   }
-  return true;
+  return result;
 }
 
 Deno.serve(async (_req: Request) => {
@@ -149,20 +173,20 @@ Deno.serve(async (_req: Request) => {
 
   const projectIds = candidates.map((p) => p.id);
 
-  // 2. Find projects that already have a sent/queued/collected review
+  // 2. Find projects that already have a review out or answered
   const { data: existingReviews, error: revError } = await supabase
     .from('client_reviews')
-    .select('project_id')
+    .select('project_id, request_status')
     .in('project_id', projectIds)
-    .in('request_status', ['sent', 'queued', 'collected']);
+    .in('request_status', [...BLOCKING_REQUEST_STATUSES]);
 
   if (revError) {
     console.error('review-requests: existing reviews query failed', revError);
     return new Response(JSON.stringify({ error: revError.message }), { status: 500 });
   }
 
-  const reviewedIds = new Set(
-    ((existingReviews ?? []) as { project_id: string }[]).map((r) => r.project_id)
+  const reviewedIds = projectsWithRequestOut(
+    (existingReviews ?? []) as ReviewRequestRow[],
   );
   const unreviewed = candidates.filter((p) => !reviewedIds.has(p.id));
 
@@ -179,7 +203,7 @@ Deno.serve(async (_req: Request) => {
 
   const { data: profilesData, error: profilesError } = await supabase
     .from('profiles')
-    .select('id, full_name, email, city')
+    .select('id, full_name, email, city, email_suppressed')
     .in('id', allProfileIds.length > 0 ? allProfileIds : ['00000000-0000-0000-0000-000000000000']);
 
   if (profilesError) {
@@ -218,6 +242,8 @@ Deno.serve(async (_req: Request) => {
 
   // 5. Process each candidate
   let sent = 0;
+  let skipped = 0;
+  let failed = 0;
   for (const project of unreviewed) {
     const clientProfile = project.client_id ? profileMap.get(project.client_id) : undefined;
     const designerProfile = project.designer_id ? profileMap.get(project.designer_id) : undefined;
@@ -238,6 +264,13 @@ Deno.serve(async (_req: Request) => {
       continue;
     }
 
+    // The send would be refused anyway; skipping here keeps the cron from
+    // minting and deleting a queued row for this project every single day.
+    if (isSuppressedRecipient(clientProfile)) {
+      skipped++;
+      continue;
+    }
+
     const clientName = clientProfile?.full_name ?? dc.client_name;
     const designerName = designerProfile?.full_name ?? null;
 
@@ -250,11 +283,32 @@ Deno.serve(async (_req: Request) => {
     const senderName = studioDisplayName(identity, designerName ?? 'Patina');
     const cobrand = studioCobrand(identity);
 
-    const ok = await sendReviewEmail({
+    // The row is written before the send, at the id the letter names, so a
+    // send that lands can never leave notification_log pointing at a
+    // client_reviews row that was never created.
+    const reviewId = crypto.randomUUID();
+    const { error: queueErr } = await supabase
+      .from('client_reviews')
+      .insert({
+        id: reviewId,
+        designer_client_id: dc.id,
+        project_id: project.id,
+        request_status: 'queued',
+      });
+
+    if (queueErr) {
+      console.error('review-requests: failed to queue review row for project', project.id, queueErr);
+      continue;
+    }
+
+    const result = await sendReviewEmail(supabase, {
       projectId: project.id,
       projectName: project.name,
       designerClientId: dc.id,
+      reviewId,
       clientEmail,
+      clientUserId: clientProfile?.id ?? null,
+      designerEmail: designerProfile?.email ?? null,
       clientName,
       senderName,
       studioName: cobrand.studioName,
@@ -273,26 +327,39 @@ Deno.serve(async (_req: Request) => {
       },
     });
 
-    if (ok) {
-      const { error: insertErr } = await supabase
+    if (result.success) {
+      const { error: updateErr } = await supabase
         .from('client_reviews')
-        .insert({
-          designer_client_id: dc.id,
-          project_id: project.id,
+        .update({
           request_status: 'sent',
           request_sent_at: new Date().toISOString(),
-        });
+        })
+        .eq('id', reviewId);
 
-      if (insertErr) {
-        console.error('review-requests: failed to insert review row for project', project.id, insertErr);
+      if (updateErr) {
+        console.error('review-requests: failed to mark review sent for project', project.id, updateErr);
       } else {
         sent++;
       }
+    } else {
+      // Nothing was sent and nothing is owed — drop the queued row so tomorrow
+      // retries this project instead of seeing it as already asked. A
+      // suppression lands here too: the candidate filter above, not a parked
+      // row, is what stops the daily retry.
+      const { error: deleteErr } = await supabase
+        .from('client_reviews')
+        .delete()
+        .eq('id', reviewId);
+
+      if (deleteErr) {
+        console.error('review-requests: failed to drop queued review for project', project.id, deleteErr);
+      }
+      failed++;
     }
   }
 
   return new Response(
-    JSON.stringify({ scanned: unreviewed.length, sent }),
+    JSON.stringify({ scanned: unreviewed.length, sent, skipped, failed }),
     { headers: { 'Content-Type': 'application/json' } },
   );
 });

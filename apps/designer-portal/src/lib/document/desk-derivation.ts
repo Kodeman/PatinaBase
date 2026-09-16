@@ -28,6 +28,9 @@ import {
   isCeremonySourceEvent,
   type DeskScheduleInput,
 } from './desk-schedule';
+// dates.ts imports nothing either, so the one date idiom costs this module no
+// dependency (PP-2 / R140).
+import { dayMonth } from './dates';
 // Type-only, so it is erased at compile time and buys no runtime dependency:
 // the filled-stamp tones are the Stamp component's contract, not a second
 // vocabulary declared here.
@@ -54,6 +57,10 @@ export interface DocumentStateRow {
   client_profile_id: string | null;
   client_name: string;
   title: string;
+  /** R4 (00590): the studio's own one-line description of this engagement,
+   *  read from whichever leg the row came from. Null until someone writes it —
+   *  the letterhead falls back to the assembled line, which is never stored. */
+  subject: string | null;
   project_status: string | null;
   current_phase: string | null;
   active_section: SectionKey;
@@ -252,15 +259,17 @@ export interface NeedLine {
    *  stamp is provenance, not a deadline, and `need-tie-break.ts` ranks a
    *  past `dueOn` as overdue. */
   dueOn?: string | null;
-  /** A3-L7 — whose hand the need's next move is in, when the rule already
-   *  knows: `'client'` where the studio is waiting on the client (an overdue
-   *  decision, an overdue invoice, a sent-but-unopened or viewed-but-unsigned
-   *  proposal), `'designer'` where the next act is the studio's own pen (a
-   *  signed proposal awaiting activation, a due task, a drafted-but-unsent
-   *  PO, a reconnect, a ceremony draft, a Pulse to send), `'maker'` where the
-   *  studio is waiting on a vendor (a PO sent but not yet acknowledged).
-   *  Absent where the rule has no clear single owner. */
-  owner?: 'designer' | 'client' | 'maker' | null;
+  /** A3-L7 / D6 — whose hand the need's next move is in. REQUIRED: every rule
+   *  states one, so a card never has to guess at render. `'client'` where the
+   *  studio is waiting on the client (an overdue decision, an overdue
+   *  invoice, a sent-but-unopened or viewed-but-unsigned proposal),
+   *  `'designer'` where the next act is the studio's own pen — the default
+   *  for a rule with no other clear single owner (a signed proposal awaiting
+   *  activation, a due task, a drafted-but-unsent PO, a reconnect, a
+   *  ceremony draft, a Pulse to send, and every other studio-side need),
+   *  `'maker'` where the studio is waiting on a vendor (a PO sent but not yet
+   *  acknowledged). */
+  owner: 'designer' | 'client' | 'maker';
 }
 
 export interface DeskFolder {
@@ -472,13 +481,13 @@ const STAMP = {
   mocha: { color: 'var(--color-mocha)', ink: 'var(--color-mocha)' },
 } as const;
 
-// Bare DATE columns (e.g. an invoice due_date 'YYYY-MM-DD') must parse as LOCAL
-// midnight, or `new Date()` reads them as UTC and the rendered day slips back a
-// day in negative-offset timezones. Timestamps (with a time part) are unaffected.
-const fmtDay = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
-    new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso),
-  );
+// PP-2 / R140 — the Desk prints one day idiom, "11 September", and the roster
+// row prints the same one as the day's line directly above it. `dayMonth` also
+// carries the guard this helper used to spell out: a bare DATE column (an
+// invoice due_date 'YYYY-MM-DD') parses as LOCAL midnight, or `new Date()`
+// reads it as UTC and the rendered day slips back a day in negative-offset
+// timezones. An unreadable date is silence rather than "Invalid Date".
+const fmtDay = (iso: string) => dayMonth(iso) ?? '';
 
 /** Whole dollars, the register the Desk states money in. Local rather than
  *  `project-commerce.ts`'s `money`, for the same reason every other helper
@@ -496,7 +505,13 @@ const daysBetween = (earlierIso: string, now: Date) =>
 // R106 — the Arrival Arc's small text helpers. Kept local (not folder-tab's
 // last-name convention): the parked card's copy is first-name, conversational
 // ("Introduce yourself to Elena").
-function firstName(name: string | null | undefined, fallback = 'them'): string {
+// D6: also the custody word's first name — "With Nora". The roster's own
+// module reads it from here rather than growing a second copy that could
+// drift from the parked card's copy.
+export function firstName(
+  name: string | null | undefined,
+  fallback = 'them',
+): string {
   const first = (name ?? '').trim().split(/\s+/)[0];
   return first || fallback;
 }
@@ -652,6 +667,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
         actionLabel: NEED_ACTION_LABELS.proposal_declined,
         stamp: { label: 'DECLINED', ...STAMP.terracotta },
         urgent: false,
+        owner: 'designer',
       });
     }
     if (row.proposal_status === 'expired') {
@@ -661,6 +677,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
         actionLabel: NEED_ACTION_LABELS.proposal_expired,
         stamp: { label: 'EXPIRED', ...STAMP.terracotta },
         urgent: false,
+        owner: 'designer',
       });
     }
     // C4: the client has flagged lines on a still-live proposal — a concrete
@@ -679,6 +696,7 @@ const needProposal: NeedRule = ({ row, now, flagged }) => {
         actionLabel: NEED_ACTION_LABELS.lines_flagged,
         stamp: { label: 'FLAGGED', ...STAMP.clay },
         urgent: false,
+        owner: 'designer',
         deepLink: `/drafting/${flagged.proposalId}?flagged=1`,
       });
     }
@@ -821,6 +839,7 @@ const needDamageClaim: NeedRule = ({ row }) => {
       actionLabel: NEED_ACTION_LABELS.damage_claim,
       stamp: { label: 'CLAIM OPEN', ...STAMP.terracotta, tone: 'damaged' },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -838,6 +857,7 @@ const needAwaitingInspection: NeedRule = ({ row }) => {
       actionLabel: NEED_ACTION_LABELS.awaiting_inspection,
       stamp: { label: 'DELIVERED', ...STAMP.sage },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -854,6 +874,7 @@ const needScheduleCollision: NeedRule = ({ conflict }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_conflict,
       stamp: { label: conflict.collision.label, ...STAMP.terracotta },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -873,6 +894,7 @@ const needScheduleContradiction: NeedRule = ({ schedule }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_conflict,
       stamp: { label: 'SCHEDULE', ...STAMP.terracotta },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -888,6 +910,7 @@ const needScheduleProposalConflict: NeedRule = ({ schedule }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_conflict,
       stamp: { label: 'SCHEDULE', ...STAMP.terracotta },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -906,6 +929,7 @@ const needScheduleProposal: NeedRule = ({ schedule }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_proposal,
       stamp: { label: 'PROPOSED', ...STAMP.clay },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;
@@ -950,6 +974,7 @@ const needScheduleUnconfigured: NeedRule = ({ row, schedule }) => {
       actionLabel: NEED_ACTION_LABELS.schedule_unconfigured,
       stamp: { label: 'BAND', ...STAMP.clay },
       urgent: false,
+      owner: 'designer',
     };
   }
   return null;

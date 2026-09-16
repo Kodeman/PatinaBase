@@ -1,0 +1,13 @@
+Independent runtime corroboration of w3-review-r14-migrations.md BLOCKING-1.
+Fixture: two person cards, one phone (+16125559940), R14Q SMS Older (2024, survivor per PR-o pre-pick)
+and R14Q SMS Newer (2026, folded), each holding a mobile channel row on that number; the NEWER row alone
+stamped sms_capable=true (matching "the studio had pressed 'This line takes texts' on the newer one").
+Pressed "Merge into R14Q SMS Older" via the live sheet, no survivor flip.
+DB after merge: studio_contact_channels has exactly ONE row left on the number, owned by the survivor,
+sms_capable=false. The folded row (sms_capable=true) is gone, not stranded — deleted by 00629's absorbed-row
+DELETE with no prior reduction of this column.
+Face after merge (survivor's own Reach & access panel, live, same browser session):
+"Mobile · preferred (612) 555-9940 ... Patina has not been told this line takes texts, so nothing about
+texting can be written down on it yet." with the "THIS LINE TAKES TEXTS" act showing again as unpressed —
+a previously-confirmed typed fact is gone from the face, a wrong fact per this task's own "blocking" definition.
+Fixture rows deleted afterward; confirmed zero R14Q-named studio_contacts remain.

@@ -33,7 +33,7 @@ import {
   isClientActionableProjectApproval,
   isProjectApprovalAwaitingStudioIssue,
 } from '@/lib/client-attention';
-import { DAY_MONTH_FORMAT as DAY_MONTH, dayMonth } from '@/lib/threshold/dates';
+import { DAY_MONTH_FORMAT as DAY_MONTH, dayMonth, legalDate } from '@/lib/threshold/dates';
 import { parseSourceDate } from '@/lib/threshold/derive';
 import { isPastDueRefusal, refusalSentence } from '@/lib/threshold/refusal';
 
@@ -314,7 +314,9 @@ export function revisionAct(
  * it second.
  */
 export function dueLine(due: Date, isOverdue: boolean): string {
-  const day = `Due ${DAY_MONTH.format(due)}`;
+  // A due date is a term of the ask, so it spells its year — the rule the
+  // letterbox and the money block keep.
+  const day = `Due ${legalDate(due)}`;
   return isOverdue ? `${day} · past its date` : day;
 }
 
@@ -765,7 +767,7 @@ export function ApprovalReceipt({
           data-testid="approval-receipt-stamp"
           state={stampStateForApproval(approval)}
           since={stampedAt}
-          dateLabel={stampedAt ? DAY_MONTH.format(stampedAt) : null}
+          dateLabel={legalDate(stampedAt)}
         >
           {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
         </Stamp>
@@ -1580,7 +1582,7 @@ export function ApprovalAsk({
               outcome: recordedOutcome,
             })}
             since={stampedAt}
-            dateLabel={stampedAt ? DAY_MONTH.format(stampedAt) : null}
+            dateLabel={legalDate(stampedAt)}
           >
             {`${approval.artifactTitle} · Edition ${approval.artifactVersion}`}
           </Stamp>

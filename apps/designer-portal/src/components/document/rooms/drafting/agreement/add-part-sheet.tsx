@@ -43,7 +43,7 @@ import {
 import { AuthorityChip } from "./schedules/authority-chip";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 /** A kind, in one mono mark. Type, not iconography — the room has no badges
  *  and no emoji. */

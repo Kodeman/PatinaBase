@@ -96,6 +96,15 @@ export interface RegionHeadProps {
    * carries the `aria-controls` that must keep naming a mounted body (W4-C7).
    */
   actsAtQuiet?: 'all' | 'leader';
+  /**
+   * R3 — the head stands as a LANDMARK and prints nothing. The `<h2>` keeps
+   * its id and its -1 tabindex so the rail's jumps still land and the heading
+   * outline is unbroken; it is `sr-only`, and the eyebrow, the status line and
+   * the exceptions are not rendered at all. The band states the standing fact
+   * at these stops, and a head that restates it is the second printing R3
+   * removes.
+   */
+  silent?: boolean;
 }
 
 export function RegionHead({
@@ -112,11 +121,12 @@ export function RegionHead({
   onFold,
   allowNoActs = false,
   actsAtQuiet = 'all',
+  silent = false,
 }: RegionHeadProps) {
   const showFold = Boolean(bodyId && onFold);
   const printedActions =
     actsAtQuiet === 'leader' ? actions.slice(0, 1) : actions;
-  const printedExceptions = exceptions.slice(0, 2);
+  const printedExceptions = silent ? [] : exceptions.slice(0, 2);
   // The ledger is a NAMED action region, not an anonymous box. The Room heads
   // that predate this primitive name theirs by hand ("Library actions",
   // "People actions", "Drafting actions"); a RegionHead's ledger carried
@@ -173,7 +183,7 @@ export function RegionHead({
             eyebrow is a constant (approvals, money, care) print exactly as
             before: nothing is reserved for a line that was never going to
             move. */}
-        {(eyebrow || reserveEyebrow) && (
+        {!silent && (eyebrow || reserveEyebrow) && (
           <p
             className={`font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]${
               reserveEyebrow ? ' min-h-[15.4px]' : ''
@@ -185,11 +195,19 @@ export function RegionHead({
         <h2
           id={headingId}
           tabIndex={-1}
-          className="font-heading text-[24px] font-medium leading-[1.2] text-[var(--text-primary)] outline-none"
+          // D2 — the letterhead's own ring, verbatim. `outline-none` on a
+          // -1 tabindex heading meant a rail jump landed with nothing drawn.
+          className={
+            silent
+              ? 'sr-only'
+              : 'font-heading text-[24px] font-medium leading-[1.2] text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]'
+          }
         >
           {name}
         </h2>
-        <p className="text-[12.5px] text-[var(--color-mocha)]">{status}</p>
+        {!silent && (
+          <p className="text-[12.5px] text-[var(--color-mocha)]">{status}</p>
+        )}
         {printedExceptions.length > 0 && (
           <p className="text-[12.5px] text-[var(--color-mocha)]">
             {printedExceptions.map((exception, index) => (

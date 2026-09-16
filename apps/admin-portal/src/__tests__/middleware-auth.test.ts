@@ -140,6 +140,33 @@ describe('Admin auth middleware', () => {
     );
   });
 
+  // W4 r3 MAJOR-6 — an account-less recipient's only unsubscribe door.
+  // `_shared/send-email.ts` defaults every List-Unsubscribe URL to
+  // admin.patina.cloud, and the GET route applies the opt-out and then
+  // redirects HERE with the outcome in the query string. Bounced to
+  // /auth/signin, a subcontractor's office manager with no Patina account was
+  // shown a sign-in form as the answer to "stop emailing me", and was never
+  // told it had worked.
+  it('lets an unauthenticated recipient read the unsubscribe outcome page', async () => {
+    const response = await middleware(
+      request(
+        'https://admin.patina.cloud/preferences/unsubscribe?status=applied&type=all_marketing',
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(redirectedTo(response)).toBeNull();
+  });
+
+  it('still walls off the signed-in /preferences surface beside it', async () => {
+    const response = await middleware(
+      request('https://admin.patina.cloud/preferences'),
+    );
+
+    expect(response.status).toBe(307);
+    expect(redirectedTo(response)?.pathname).toBe('/auth/signin');
+  });
+
   it('does not let RSC or prefetch headers bypass authentication and roles', async () => {
     const anonymous = await middleware(
       request('https://admin.patina.cloud/orders', { rsc: '1' }),

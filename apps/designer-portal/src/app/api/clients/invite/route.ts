@@ -4,6 +4,8 @@ import {
   badRequest,
   serverError,
 } from '@/lib/supabase-admin';
+import { validateLetterRequest } from './letter-branch';
+import { sendTheLetter } from './send-the-letter';
 
 // The client (homeowner) accepting this invite must land on the CLIENT
 // portal, not here. Without an explicit `redirectTo`, GoTrue falls back to
@@ -27,6 +29,16 @@ interface InviteRequestBody {
    * client_email.
    */
   designerClientId?: string;
+  /**
+   * The First Letter (flag `client-invite-letter`). When absent the route runs
+   * today's exact code — do NOT refactor that branch, so the off state stays
+   * provably byte-identical to today.
+   */
+  letter?: boolean;
+  /** The designer's own line, ≤280 after trimming. */
+  note?: string;
+  /** The house the letter is about; also where the note is seeded (R8). */
+  projectId?: string;
 }
 
 /**
@@ -110,6 +122,30 @@ export async function POST(request: NextRequest) {
 
   if (!clientEmail) {
     return badRequest('clientEmail is required');
+  }
+
+  // ── The First Letter (R5/R12/R13) ────────────────────────────────────────
+  try {
+    const letterVerdict = validateLetterRequest(body);
+    if ('error' in letterVerdict && letterVerdict.error) {
+      return badRequest(letterVerdict.error);
+    }
+    if (letterVerdict.take) {
+      return await sendTheLetter({
+        adminClient,
+        callerUser,
+        clientEmail,
+        clientName,
+        source,
+        notes,
+        existingRow,
+        note: letterVerdict.note,
+        projectId: letterVerdict.projectId,
+      });
+    }
+  } catch (err: any) {
+    console.error('[clients/invite] Unexpected error:', err);
+    return serverError(err?.message ?? 'Internal server error');
   }
 
   try {
@@ -296,3 +332,4 @@ export async function POST(request: NextRequest) {
     return serverError(err?.message ?? 'Internal server error');
   }
 }
+

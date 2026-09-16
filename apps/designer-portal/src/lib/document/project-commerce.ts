@@ -3,6 +3,7 @@ import type {
   WorkingBudgetLine,
   WorkingBudgetVersion,
 } from "@patina/types";
+import { legalDate } from "./dates";
 
 const cents = (value: unknown) => {
   const number = Number(value);
@@ -463,13 +464,7 @@ export const money = (cents: number) =>
   }).format(cents / 100);
 
 export const when = (value: string | null) =>
-  value
-    ? new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }).format(new Date(value))
-    : null;
+  value ? legalDate(new Date(value)) : null;
 
 /* ── Trade scopes (the Authorized Schedule deck, Act IV) ─────────────────────
  *

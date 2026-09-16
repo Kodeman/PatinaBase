@@ -80,8 +80,10 @@ describe('TheNote', () => {
 
     expect(screen.getByTestId('note-body')).toHaveTextContent(BODY);
     expect(screen.getByTestId('note-dateline')).toHaveTextContent('yesterday');
+    // The day the letter was sent is a term of it, so the signature spells
+    // the year — never a date the reader has to place off her own calendar.
     expect(screen.getByTestId('note-signature')).toHaveTextContent(
-      'Nora Quist · Quist Interiors · 4 August',
+      'Nora Quist · Quist Interiors · 4 August 2026',
     );
   });
 
@@ -96,7 +98,28 @@ describe('TheNote', () => {
       />,
     );
 
-    expect(screen.getByTestId('note-signature')).toHaveTextContent('Nora Quist · 4 August');
+    expect(screen.getByTestId('note-signature')).toHaveTextContent(
+      'Nora Quist · 4 August 2026',
+    );
+  });
+
+  // A solo studio's identity is often the designer's own name. Printed twice
+  // it reads as a stutter, not a signature.
+  it('signs once when the studio and the hand carry the same name', () => {
+    render(
+      <TheNote
+        note={note()}
+        earlier={[]}
+        enclosures={[]}
+        authorName="Nora Quist"
+        studioName="Nora Quist"
+        today={TODAY}
+      />,
+    );
+
+    expect(screen.getByTestId('note-signature')).toHaveTextContent(
+      'Nora Quist · 4 August 2026',
+    );
   });
 
   it('signs nothing at all with no author name — never a placeholder signature', () => {

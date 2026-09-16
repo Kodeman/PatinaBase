@@ -31,7 +31,7 @@ import {
 import { turnkeyMoney } from "./money";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 export const CLOSED_BOOK_NOTE =
   "Closed-book — your client reads the lines you wrote, not the trades' costs.";

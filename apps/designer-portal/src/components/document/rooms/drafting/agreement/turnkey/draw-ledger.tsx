@@ -30,7 +30,7 @@ import { documentEvents } from "@/lib/analytics/document-events";
 import { turnkeyMoney } from "./money";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 export const DEPOSIT_DRAW_KEY = "deposit";
 
@@ -122,7 +122,7 @@ export function DrawLedger({
               <div className="mt-0.5 flex flex-wrap items-center gap-3">
                 <span className={LABEL}>{drawStanding(draw)}</span>
                 {draw.retainageCents > 0 && (
-                  <span className="font-mono text-[11px] text-[var(--color-aged-oak)]">
+                  <span className="font-mono text-[11px] text-[var(--ink-subtle)]">
                     {turnkeyMoney(draw.retainageCents)} held
                   </span>
                 )}

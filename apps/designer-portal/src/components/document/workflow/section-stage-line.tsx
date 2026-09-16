@@ -64,9 +64,11 @@ export function SectionStageLine({
       className="mb-1 min-w-0 max-w-full overflow-x-clip"
     >
       {!hosted && (
-        <h3 id={headingId} className="sr-only">
+        // D4 — <h2>, not <h3>: the document's <h1> is the letterhead name and
+        // the region heads are <h2>, so an <h3> here read h1 → h3 → h2.
+        <h2 id={headingId} className="sr-only">
           Workflow stage
-        </h3>
+        </h2>
       )}
 
       {model ? (

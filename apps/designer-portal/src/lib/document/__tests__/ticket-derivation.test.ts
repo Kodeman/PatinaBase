@@ -528,7 +528,7 @@ describe('deriveTicket — the specimen reads as drawn', () => {
 
   it('states the install day the facts carried, and how far out it is', () => {
     expect(valueOf(rows, 'dates')).toBe(
-      'Install Tuesday, September 15 · three weeks out',
+      'Install Tuesday, 15 September · three weeks out',
     );
   });
 
@@ -697,7 +697,7 @@ describe('deriveTicket — the Dates row keeps one register', () => {
   });
 
   it('lets the date be the whole sentence past a year', () => {
-    expect(at('2028-01-10')).toBe('Install Monday, January 10');
+    expect(at('2028-01-10')).toBe('Install Monday, 10 January');
   });
 });
 
@@ -857,7 +857,7 @@ describe('deriveTicketSeam', () => {
       phrase: 'Install day has passed',
       standingSince: '2026-08-14',
     });
-    expect(valueOf(onProject, 'dates')).toBe('Installed Friday, August 14');
+    expect(valueOf(onProject, 'dates')).toBe('Installed Friday, 14 August');
 
     const onInstall = deriveTicket({ ...emptyInput('install'), dates: past });
     expect(onInstall.find((row) => row.key === 'dates')!.exception).toBeNull();

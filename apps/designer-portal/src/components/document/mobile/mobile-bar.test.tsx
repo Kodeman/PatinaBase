@@ -223,13 +223,8 @@ describe('the More menu · In this document (F49)', () => {
     window.removeEventListener('document:open-call-sheet', opened);
   });
 
-  it('drops the call sheet row when its flag is off', () => {
-    mockCallSheetOn = false;
-    mountBar();
-    const menu = openMore();
-    expect(menu.queryByRole('button', { name: 'Call sheet' })).toBeNull();
-    expect(menu.getByRole('link', { name: 'Plan room' })).toBeInTheDocument();
-  });
+  // The `call-sheet` flag is retired (rulings §6): the row is always there,
+  // and the case that asserted its absence with the flag off is gone with it.
 
   it('prints no document group off a document', () => {
     mockPathname = '/desk';
@@ -357,6 +352,56 @@ describe('the elected act at 390', () => {
     expect(act.querySelector('.da-label')?.textContent).toBe(
       'Mark the Okonkwo agreement signed',
     );
+  });
+});
+
+// D5 (VISION.md:50) — the centre slot's dwell-timer fallback ("Today" /
+// "In hand" + elapsed, or "Hands free") is gone. A timer that watches her is
+// not a tool; the "Time in hand … review or adjust" row in More stays,
+// because that one she opens.
+describe('the centre slot with no primary action (D5, VISION.md:50)', () => {
+  beforeEach(() => {
+    mockPathname = '/doc/proj-1';
+    mockCallSheetOn = true;
+  });
+
+  it('renders nothing — no dwell timer, no "Today", no "Hands free", no elapsed string', () => {
+    mountBar();
+
+    const bar = screen.getByTestId('mobile-bar');
+    expect(within(bar).queryByText('Today')).toBeNull();
+    expect(within(bar).queryByText('In hand')).toBeNull();
+    expect(within(bar).queryByText('Hands free')).toBeNull();
+    expect(within(bar).queryByText(/^\d+:\d{2}$/)).toBeNull();
+    expect(within(bar).queryByText(/^\d+\s*min$/)).toBeNull();
+  });
+
+  it('leaves the rest of the bar unchanged when a primary action IS registered', () => {
+    mountBar({
+      action: {
+        actionKey: 'mark-proposal-signed',
+        surfaceKey: 'open-document',
+        regionKey: 'proposal-watch-actions',
+        label: 'Mark the Okonkwo agreement signed',
+        target: { kind: 'press', onPress: jest.fn() },
+      },
+    });
+
+    const bar = screen.getByTestId('mobile-bar');
+    expect(
+      within(bar).getByRole('button', { name: 'Mark the Okonkwo agreement signed' }),
+    ).toBeInTheDocument();
+    expect(within(bar).queryByText('Today')).toBeNull();
+    expect(within(bar).queryByText('Hands free')).toBeNull();
+  });
+
+  it('the More row still renders "Time in hand … review or adjust" — that timer stays, she opens it', () => {
+    mountBar();
+    const menu = openMore();
+    expect(
+      menu.getByText(/review or adjust/),
+    ).toBeInTheDocument();
+    expect(menu.getByText('Time in hand')).toBeInTheDocument();
   });
 });
 
@@ -588,14 +633,7 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     window.removeEventListener('document:open-call-sheet', opened);
   });
 
-  it('drops the call sheet door when its flag is off, keeping the other three', () => {
-    mockCallSheetOn = false;
-    mountBarAndSheets();
-    openSections();
-    const panel = sectionsPanel();
-    expect(within(panel).queryByRole('button', { name: 'Call sheet' })).toBeNull();
-    expect(within(panel).getByRole('button', { name: 'Plan room' })).toBeInTheDocument();
-  });
+  // Flag retired (rulings §6) — the door stands for every studio.
 
   it('prints no ladder and no doors off a project (OD-8: nothing to open)', () => {
     mountBarAndSheets({

@@ -182,6 +182,7 @@ describe('useProjectNotes', () => {
           sent_at: '2026-09-04T00:00:00.000Z',
           answered_at: null,
           retired_at: null,
+          author_byline: null,
           created_at: '2026-09-04T00:00:00.000Z',
           updated_at: '2026-09-04T00:00:00.000Z',
         },
@@ -208,6 +209,7 @@ describe('useProjectNotes', () => {
         sentAt: '2026-09-04T00:00:00.000Z',
         answeredAt: null,
         retiredAt: null,
+        authorByline: null,
       },
     ]);
   });

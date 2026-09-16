@@ -203,7 +203,7 @@ describe('WallGate', () => {
   it('carries The Making’s draws caption verbatim', () => {
     renderGate();
     expect(screen.getByTestId('spine-gate-caption')).toHaveTextContent(
-      'One draw is paid. The draw of $1,440 releases on your acceptance.',
+      'One draw is paid. The draw of $1,440.00 releases on your acceptance.',
     );
   });
 
@@ -308,7 +308,7 @@ describe('WallGate', () => {
     // and it carries the same mark the doorstep's approvals carry.
     expect(stamp).toHaveTextContent('APPROVED');
     expect(stamp).toHaveAttribute('data-stamp-state', 'approved');
-    expect(stamp).toHaveTextContent('$1,440 released');
+    expect(stamp).toHaveTextContent('$1,440.00 released');
     expect(stamp).toHaveTextContent('Prairie Coat Painting');
     expect(screen.getByTestId('wall-hatch')).toHaveAttribute('data-wall-state', 'settled');
     expect(onAccepted).toHaveBeenCalledTimes(1);

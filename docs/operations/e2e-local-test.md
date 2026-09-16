@@ -74,6 +74,7 @@ UNSUBSCRIBE_TOKEN_SECRET=local-unsub-secret-32bytes-change-me-abc123
 POSTHOG_API_KEY=phc_local_ignored
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_SERVICE_ROLE_KEY=<paste from supabase status>
+# EMAIL_ASSET_HOST=https://api.patina.cloud  # origin email <img> sources are rewritten onto; unset leaves a local storage URL alone
 ```
 
 ### 2b. Postgres GUCs (needed by lead triggers + pg_cron invoker)

@@ -16,7 +16,25 @@ export async function middleware(req: NextRequest) {
   const isAuthPage =
     req.nextUrl.pathname.startsWith('/auth') ||
     req.nextUrl.pathname.startsWith('/login');
-  const isPublicPage = req.nextUrl.pathname === '/';
+  // THE UNSUBSCRIBE LANDING IS PUBLIC (W4 r3 MAJOR-6).
+  //
+  // `_shared/send-email.ts`'s DEFAULT_BASE_URL is https://admin.patina.cloud
+  // and none of the five account-less senders passes `unsubscribeBaseUrl`, so
+  // an account-less recipient's List-Unsubscribe URL points here. The RFC 8058
+  // one-click POST already works (`/api` passes through, and the route uses
+  // the service client). The GET path — which some mail clients rewrite links
+  // into — applies the opt-out and then redirects to /preferences/unsubscribe,
+  // which is not /api, not /auth and not /, so the redirect below bounced it
+  // to /auth/signin: a subcontractor's office manager with no Patina account,
+  // and no way to get one, was shown an admin sign-in form as the answer to
+  // "stop emailing me" and was never told it had worked.
+  //
+  // The page renders from its own query string and holds no account data (it
+  // reads `status`/`type`, or applies the token with a service client), so
+  // there is nothing here for a session to protect.
+  const isPublicPage =
+    req.nextUrl.pathname === '/' ||
+    req.nextUrl.pathname === '/preferences/unsubscribe';
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;

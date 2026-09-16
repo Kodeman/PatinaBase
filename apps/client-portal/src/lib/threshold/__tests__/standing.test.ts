@@ -57,7 +57,13 @@ describe('thresholdStanding — when nothing waits', () => {
   it('adds the balance when one stands open', () => {
     expect(
       thresholdStanding({ doors: 0, walls: 0, balanceCents: 912_500, nothingOwed: true }),
-    ).toBe('Nothing waits for your name. A balance of $9,125 stands open.');
+    ).toBe('Nothing waits for your name. A balance of $9,125.00 stands open.');
+  });
+
+  it('carries the cents of the balance it reports', () => {
+    expect(
+      thresholdStanding({ doors: 0, walls: 0, balanceCents: 912_540, nothingOwed: true }),
+    ).toBe('Nothing waits for your name. A balance of $9,125.40 stands open.');
   });
 
   it('adds the credenza line last', () => {
@@ -70,7 +76,7 @@ describe('thresholdStanding — when nothing waits', () => {
         credenzaLine: 'Your walnut credenza is on the bench in Dayton.',
       }),
     ).toBe(
-      'Nothing waits for your name. A balance of $9,125 stands open. Your walnut credenza is on the bench in Dayton.',
+      'Nothing waits for your name. A balance of $9,125.00 stands open. Your walnut credenza is on the bench in Dayton.',
     );
   });
 

@@ -41,7 +41,7 @@ import { fmtDay, todayYmd } from '@/lib/document/format';
 
 type AnyRecord = any;
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -83,7 +83,7 @@ function useVitalSave(projectId: string) {
   return { save, state, errorMsg };
 }
 
-function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | null }) {
+export function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | null }) {
   if (state === 'idle') return null;
   return (
     <span
@@ -496,12 +496,11 @@ export function LetterheadTitle({
 
   // One class set for both forms, so the rect does not move on the swap.
   const TYPE =
-    'font-heading text-[32px] font-medium leading-[1.08] tracking-[-0.015em] text-[var(--text-primary)] min-[1180px]:text-[40px]';
+    'font-heading text-[34px] font-medium leading-[1.08] text-[var(--text-primary)]';
 
   return (
-    /* 32px below 1180, 40px from 1180 up (W3-R4, corrected by NF-02: the
-       SHELL's own tier, never Tailwind's `sm`): 40px of Playfair spends ~46
-       characters of a 1440 measure but only ~11 of a 390 one. The `<h1>` never
+    /* R6 — 34px at every width, tracking 0: one step, so nothing about the
+       name changes as the measure does. The `<h1>` never
        changes element type, so the heading outline is stable across the swap.
        `break-words` wraps at WORD boundaries only — no `overflow-wrap:
        anywhere`, no `text-wrap: balance`: the em-dash form breaks after the

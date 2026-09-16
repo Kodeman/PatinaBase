@@ -178,7 +178,7 @@ describe('WorkBlock date capture (Date Instruments D2)', () => {
 
     // The popover closed and the chip now reads the picked day.
     expect(screen.queryByTestId('folio-popover')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Due date' })).toHaveTextContent('Aug 20');
+    expect(screen.getByRole('button', { name: 'Due date' })).toHaveTextContent('20 August');
 
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(createTaskMutate).toHaveBeenCalledWith(
@@ -191,7 +191,7 @@ describe('WorkBlock date capture (Date Instruments D2)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Due date' }));
     fireEvent.click(screen.getByText('commit-span'));
 
-    expect(screen.getByRole('button', { name: 'Due date' })).toHaveTextContent('Aug 25 – 28');
+    expect(screen.getByRole('button', { name: 'Due date' })).toHaveTextContent('25 August – 28');
 
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(createTaskMutate).toHaveBeenCalledWith(
@@ -206,7 +206,7 @@ describe('WorkBlock date capture (Date Instruments D2)', () => {
 
     // The chip reads a single date, never "Aug 20 – 20".
     const chip = screen.getByRole('button', { name: 'Due date' });
-    expect(chip).toHaveTextContent('Aug 20');
+    expect(chip).toHaveTextContent('20 August');
     expect(chip.textContent).not.toContain('–');
 
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -223,7 +223,7 @@ describe('WorkBlock date capture (Date Instruments D2)', () => {
       refetch: tasksRefetch,
     };
     renderWork();
-    expect(screen.getByText(/due Aug 25 – Aug 28/)).toBeVisible();
+    expect(screen.getByText(/due 25 August – 28 August/)).toBeVisible();
   });
 
   it('single-date rendering is unchanged for a plain due date', () => {
@@ -234,7 +234,7 @@ describe('WorkBlock date capture (Date Instruments D2)', () => {
       refetch: tasksRefetch,
     };
     renderWork();
-    expect(screen.getByText(/due Aug 28/)).toBeVisible();
+    expect(screen.getByText(/due 28 August/)).toBeVisible();
     expect(screen.queryByText(/–/)).not.toBeInTheDocument();
   });
 

@@ -15,6 +15,7 @@
  */
 
 import type { ProposalEngagementEvent, ProposalEngagementStats } from '@patina/supabase';
+import { DAY_MONTH_FORMAT } from './dates';
 
 /** The proposal lifecycle as the watch view reads it (proposals.status). */
 export type WatchStatus =
@@ -289,10 +290,7 @@ const SEND_WALL_STOOD_DOWN_STATES = ['executed', 'declined', 'superseded'];
 /** Beyond this the relative phrase stops helping and the wall states the day. */
 const SENT_PHRASE_CEILING_DAYS = 30;
 
-const fmtShortDay = (iso: string) =>
-  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
-    new Date(iso),
-  );
+const fmtShortDay = (iso: string) => DAY_MONTH_FORMAT.format(new Date(iso));
 
 /**
  * Whole CALENDAR days between two instants in the viewer's own zone — not

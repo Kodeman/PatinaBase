@@ -489,12 +489,13 @@ describe("ServiceAgreementInstruments · a composed agreement", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Review & send" }));
 
-    expect(
-      await screen.findByText(/Ready to send · every contractual facet/),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: /Send agreement/ }),
-    ).toBeEnabled();
+    // The sheet's own proof that R4's floor is met: a terminal act that is not
+    // held. "Ready to send · every contractual facet is present." is cut (N4).
+    const act = await screen.findByRole("button", {
+      name: /Send the agreement/,
+    });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    expect(screen.queryByText(/Ready to send/)).not.toBeInTheDocument();
     // The seven-facet questions a composed agreement never has to answer.
     expect(
       screen.queryByText("Set the design authorization ceiling."),
@@ -521,9 +522,11 @@ describe("ServiceAgreementInstruments · a composed agreement", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review & send" }));
 
     expect(await screen.findByText("Complete Design fee.")).toBeVisible();
+    // Held, never disabled — the act keeps its place in the tab order beside
+    // the reason it cannot be taken.
     expect(
-      screen.getByRole("button", { name: /Send agreement/ }),
-    ).toBeDisabled();
+      screen.getByRole("button", { name: /Send the agreement/ }),
+    ).toHaveAttribute("aria-disabled", "true");
   });
 
   it("keeps the seven-facet path for a document with no parts", async () => {

@@ -12,6 +12,11 @@
  *     template provenance on outbound),
  *   · a "Send text" composer, disabled with explanatory copy until the party
  *     has opted in (consent 'granted').
+ *   · F3 — an "Edit" action turns the contact card into a form (Name /
+ *     Company / Trade / Phone / Email); Kind and Project stay read-only, and
+ *     Save patches only the changed fields via `useUpdateProjectParty`. This
+ *     never rewrites a project's historical roster rows — it edits the one
+ *     live `project_parties` row this sheet is already open on.
  *
  * Zero shadows (D4); typography-first; the Room beneath never unmounts (D1).
  */
@@ -19,20 +24,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   usePerson,
+  usePersonSeat,
   usePartySmsThread,
   useSendPartySms,
   useActiveFieldLink,
   useCreateFieldLink,
   useRevokeFieldLink,
   useFieldMediaUrl,
-  useOrganizations,
+  useProjectRecordedStudio,
   useProjectParties,
   useRecordPartySmsConsent,
+  useUpdateProjectParty,
+  normalizePartyPhoneForCompare,
   fieldLinkUrl,
   type PartyRole,
   type PartySmsMessage,
+  type UpdateProjectPartyPatch,
 } from '@patina/supabase';
 import {
+  ALL_FIELD_TRADES,
+  FIELD_TRADE_LABELS,
   SMS_CONSENT_DISPLAY,
   getFieldTradeLabel,
   getPartyKindLabel,
@@ -46,6 +57,49 @@ import { PromoteBand } from './promote-band';
 
 const META =
   'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+const EDIT_LABEL =
+  'mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
+const EDIT_INPUT =
+  'w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
+
+const PARTY_WRITE_DENIED = "Only this project's designer can edit its crew.";
+const PARTY_WRITE_RACED = "This person's record just changed — refresh to see it.";
+
+/** A zero-row write. `useUpdateProjectParty` ends `.update().select().single()`,
+ *  so when RLS's USING clause hides the row from the WRITE, PostgREST updates
+ *  nothing and `.single()` returns PGRST116 — not 42501, which needs a WITH
+ *  CHECK violation or a missing GRANT, and `project_parties_studio_update`
+ *  (00584) uses one predicate for both clauses. The refusal is reachable:
+ *  `project_parties_studio_comember_select` (00421) admits an active member of
+ *  the project's studio, while the UPDATE policy admits only a co-member of
+ *  the project's DESIGNER — so a teammate on a project whose designer has
+ *  since left the org reads this sheet and cannot save it. A vanished row
+ *  reads the same way, which is why the sentence is chosen by asking the read
+ *  side (`saveParty`) rather than by the code alone. */
+function isZeroRowWrite(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  const msg =
+    err instanceof Error
+      ? err.message
+      : (((err as { message?: unknown } | null)?.message as string | undefined) ?? '');
+  return /PGRST116/i.test(`${typeof code === 'string' ? code : ''} ${msg}`);
+}
+
+/** Everything else, in plain words — the same translation idiom
+ *  friendlyRolodexError does for the rolodex. 42501 keeps its own leg: an RLS
+ *  message or a missing GRANT is a permission refusal however it arrives. */
+function friendlyPartyWriteError(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code;
+  const msg =
+    err instanceof Error
+      ? err.message
+      : (((err as { message?: unknown } | null)?.message as string | undefined) ?? '');
+  const haystack = `${typeof code === 'string' ? code : ''} ${msg}`;
+  if (/row-level security|permission denied|42501/i.test(haystack)) {
+    return PARTY_WRITE_DENIED;
+  }
+  return msg || 'Could not save just now. Try again.';
+}
 
 function ConsentChip({ status }: { status: string | null | undefined }) {
   const cfg =
@@ -138,7 +192,29 @@ export function PartyProfileSheet({
   role: PartyRole;
   onClose: () => void;
 }) {
-  const { data: person } = usePerson(partyId, role);
+  const { data: person, refetch: refetchPerson } = usePerson(partyId, role);
+  // R-BE — THE SEAT READER. `partyId` is a `project_parties.id`, and
+  // `people_directory` v4 keys a carded human on their ROLODEX CARD, so
+  // `usePerson(<seat id>)` finds nothing for a carded seat. `usePersonSeat`
+  // resolves the seat through `people_directory_seats` and joins its identity
+  // on `person_id`; the consent WORD comes off that identity's own
+  // `consent_status` column and off nothing else.
+  const { data: seatResolution, refetch: refetchSeat } = usePersonSeat(partyId);
+  const seatIdentity = seatResolution?.identity ?? null;
+  /**
+   * CR3-1 — THE SEAT IS THE SHEET'S RECORD, and `person` is only its fallback.
+   *
+   * Every door into this sheet passes a `project_parties.id`: the Call Sheet's
+   * row chevron (`call-sheet-mount.tsx`) and the person card's seat line
+   * (`people-room.tsx`). Under `people_directory` v4 a carded human is keyed on
+   * their ROLODEX CARD, so `usePerson(<seat id>)` resolves NOTHING for a carded
+   * seat — twelve of twelve Okonkwo seats are carded — and the sheet opened
+   * headed "Field party" with no name, no phone, no trade, no company and no
+   * project, "Invite to texts" unreachable for somebody whose number is on the
+   * seat, and Edit refusing with "This party isn't attached to a project".
+   * `people_directory_seats` carries every one of those facts.
+   */
+  const seat = seatResolution?.seat ?? null;
   const { data: thread } = usePartySmsThread(open ? partyId : null);
   const { data: activeLink } = useActiveFieldLink(open ? partyId : null);
   const createLink = useCreateFieldLink();
@@ -148,19 +224,42 @@ export function PartyProfileSheet({
 
   // Call Sheet Wave 2 — the promote band (slide 10). Gated on the flag AND on
   // finding this party's real project_parties row (the mutation needs the
-  // full row, not just the people_directory projection `person` is). Both
-  // queries below are flag-disabled rather than merely flag-unused — the
-  // sheet stays mounted while closed (see the `open` gate on
-  // useProjectParties), so an ungated query would fire on every mount
-  // regardless of whether the promote band can ever render, flag on or not.
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
-  const { data: orgs } = useOrganizations({ enabled: callSheetOn });
-  const organizationId = useMemo(
-    () => orgs?.find((o) => o.type === 'design_studio')?.id ?? orgs?.[0]?.id ?? null,
-    [orgs],
+  // full row, not just the people_directory projection `person` is). The
+  // `call-sheet` flag that used to gate both queries is retired (rulings §6);
+  // the `open` gate below stays, because the sheet is mounted while closed and
+  // an ungated query would fire on every mount.
+  // CR3-1: the seat names its own job. `person.project_id` is null for every
+  // carded seat, so the promote band's row lookup never resolved either.
+  const seatProjectId = seat?.project_id ?? person?.project_id ?? null;
+  /**
+   * CR-1 — THE STUDIO COMES OFF THE JOB, NEVER OFF A MEMBERSHIP GUESS.
+   *
+   * This was the last `orgs.find(o => o.type === 'design_studio')?.id ??
+   * orgs?.[0]?.id` in the room — the QA-R2-1 / QA-R3-1 defect the r3 sweep
+   * fixed everywhere else — and the ONE place the guess drove a WRITE:
+   * `usePromoteToStudioContact` INSERTs a `studio_contacts` row at this id and
+   * then UPDATEs `project_parties.studio_contact_id` to point at it.
+   * `useOrganizations` has no ORDER BY, so for a designer who belongs to two
+   * design studios (designer@patina.dev belongs to "Leah Hartwell" and "Local
+   * Dev Studio") PostgREST's heap order decided which rolodex the card landed
+   * in. When it named the studio the job does not record,
+   * `assert_project_party_cards` (00624:646-678) raised
+   * `party_studio_contact_other_studio` on the link — and because the two
+   * PostgREST calls are not one transaction, the card stayed behind. Pressing
+   * again minted a second stray.
+   *
+   * `project_recorded_studio()` is the resolver that guard checks against, so
+   * reading it here is what makes the refusal unreachable: the card is only
+   * ever inserted into the rolodex the link will accept. A job that records no
+   * studio resolves NULL, `showPromoteBand` is false, and the act is not
+   * offered at all rather than minting an orphan the guard will refuse.
+   */
+  const { data: recordedStudioId } = useProjectRecordedStudio(
+    open ? seatProjectId : null,
   );
+  const organizationId = recordedStudioId ?? null;
   const { data: projectParties } = useProjectParties(
-    callSheetOn && open ? person?.project_id : null,
+    open ? seatProjectId : null,
   );
   const linkedParty = useMemo(
     () => projectParties?.find((p) => p.id === partyId) ?? null,
@@ -175,7 +274,6 @@ export function PartyProfileSheet({
     setJustPromotedPartyId(null);
   }, [partyId]);
   const showPromoteBand =
-    callSheetOn &&
     !!partyId &&
     !!organizationId &&
     !!linkedParty &&
@@ -203,15 +301,29 @@ export function PartyProfileSheet({
   }, [partyId]);
 
   const meta = (person?.meta ?? {}) as Record<string, unknown>;
-  const consent = (person?.status_raw ??
-    (meta.sms_consent_status as string) ??
-    'not_asked') as string;
+  // R-BE — NEVER `status_raw`. On a v4 card row that column carries the
+  // rolodex ARCHIVE state and reads `active` for someone the studio's record
+  // says `opted_out`; the old fallback chain then printed "Not asked" over a
+  // dated refusal the same screen's seat line reads correctly. NULL here means
+  // the identity could not be resolved, and the chip below renders nothing.
+  const consent = seatResolution?.identity?.consent_status ?? null;
   const granted = consent === 'granted';
-  const trade = getFieldTradeLabel(meta.trade as string | undefined);
-  const company = (meta.company_name as string | undefined) ?? null;
-  const projectName = (meta.project_name as string | undefined) ?? null;
+  // CR3-1: seat first, then the identity, then the directory projection.
+  const displayName = seat?.display_name ?? person?.display_name ?? null;
+  const rawTradeToken =
+    seat?.trade ?? (meta.trade as string | undefined) ?? '';
+  const trade = getFieldTradeLabel(rawTradeToken || undefined);
+  const company =
+    seat?.company_name ?? (meta.company_name as string | undefined) ?? null;
+  const projectName =
+    seat?.project_name ?? (meta.project_name as string | undefined) ?? null;
   const phone =
-    person?.phone ?? (meta.phone_e164 as string | undefined) ?? null;
+    seat?.phone_e164 ??
+    person?.phone ??
+    (meta.phone_e164 as string | undefined) ??
+    null;
+  // The seats view carries no email column; the identity behind the seat does.
+  const email = seatIdentity?.email ?? person?.email ?? null;
 
   const contact: Array<[string, string | null]> = useMemo(
     () => [
@@ -219,17 +331,170 @@ export function PartyProfileSheet({
       ['Trade', trade || null],
       ['Company', company],
       ['Phone', phone],
-      ['Email', person?.email ?? null],
+      ['Email', email],
       ['Project', projectName],
     ],
-    [role, trade, company, phone, person?.email, projectName],
+    [role, trade, company, phone, email, projectName],
   );
+
+  // F3 — the edit form. Kind and Project are never in this state (read-only
+  // in edit mode too); raw meta values feed it, not the humanized `trade`
+  // label above, so an untouched field round-trips exactly. Self-clears
+  // whenever a different party opens, same as the invite-to-texts state.
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    company: '',
+    trade: '',
+    phone: '',
+    email: '',
+  });
+  // Has the designer typed into this form yet? Until they have, a late-arriving
+  // record is allowed to re-hydrate it (below); once they have, nothing may
+  // overwrite what they typed.
+  const [editTouched, setEditTouched] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const updateParty = useUpdateProjectParty();
+  const editField = (patch: Partial<typeof editForm>) => {
+    setEditTouched(true);
+    setEditForm((f) => ({ ...f, ...patch }));
+  };
+  const rawTrade = rawTradeToken;
+  // CR3-1: the seat is a record. Gating "Edit" on `person` alone hid the act on
+  // every carded seat — which is every seat on the Okonkwo job.
+  const recordLoaded = !!seat || !!person;
+  useEffect(() => {
+    setEditing(false);
+    setEditTouched(false);
+    setEditError(null);
+  }, [partyId]);
+  // The snapshot. It re-runs while the form is UNTOUCHED, so a record that
+  // resolves after the sheet opened still fills the form — the earlier
+  // open-once snapshot took an empty record during the initial fetch and Save
+  // then cleared company / trade / phone / email off the row. Once the
+  // designer types, `editTouched` freezes it and no refetch can clobber the
+  // edit in progress. A record that goes AWAY (a query error that drops the
+  // cached row) leaves the last good snapshot standing rather than blanking
+  // the open form under the designer.
+  useEffect(() => {
+    if (!editing || editTouched || !recordLoaded) return;
+    setEditForm({
+      name: displayName ?? '',
+      company: company ?? '',
+      trade: rawTrade,
+      phone: phone ?? '',
+      email: email ?? '',
+    });
+  }, [
+    editing,
+    editTouched,
+    recordLoaded,
+    displayName,
+    email,
+    company,
+    rawTrade,
+    phone,
+  ]);
+
+  // F3-R2-09's shape, for the field trade: a stored trade can sit outside
+  // ALL_FIELD_TRADES (a hand-written value, or one retired from the vocab).
+  // Shown as its own option so the select renders what the row holds instead
+  // of a blank control that discards it on any unrelated save.
+  const outOfVocabTrade =
+    rawTrade && !(ALL_FIELD_TRADES as readonly string[]).includes(rawTrade)
+      ? rawTrade
+      : null;
+
+  // F3-R2-03 — warn before a save that will clear a granted/pending consent:
+  // normalized so a cosmetic reformat (spacing, parens, a leading +1) never
+  // trips the warning for a number that hasn't actually changed.
+  const phoneEditWillRevokeConsent =
+    editing &&
+    (consent === 'granted' || consent === 'pending') &&
+    normalizePartyPhoneForCompare(editForm.phone) !== normalizePartyPhoneForCompare(phone);
+
+  const saveParty = async () => {
+    if (!partyId) return;
+    setEditError(null);
+    // CR3-1: the seat names the job. Asking `person.project_id` refused EVERY
+    // carded seat, which is the whole shipped population.
+    if (!seatProjectId) {
+      setEditError(
+        "This party isn't attached to a project — reopen it from the roster.",
+      );
+      return;
+    }
+    const trimmedName = editForm.name.trim();
+    if (!trimmedName) {
+      setEditError('This party needs a name.');
+      return;
+    }
+    const originalCompany = company ?? '';
+    const originalTrade = rawTrade;
+    const trimmedCompany = editForm.company.trim();
+    const trimmedTrade = editForm.trade.trim();
+    const trimmedPhone = editForm.phone.trim();
+    const trimmedEmail = editForm.email.trim();
+
+    const patch: UpdateProjectPartyPatch = {};
+    if (trimmedName !== (displayName ?? '')) patch.displayName = trimmedName;
+    if (trimmedCompany !== originalCompany) patch.companyName = trimmedCompany || null;
+    if (trimmedTrade !== originalTrade) patch.trade = trimmedTrade || null;
+    // F3-R2-03 — compare normalized numbers, not raw strings: a cosmetic
+    // reformat of the same phone must not read as a change and silently
+    // revoke a granted/pending consent (useUpdateProjectParty reverts
+    // consent on any `patch.phone`, whatever the actual digits are).
+    if (normalizePartyPhoneForCompare(trimmedPhone) !== normalizePartyPhoneForCompare(phone))
+      patch.phone = trimmedPhone || null;
+    if (trimmedEmail !== (email ?? '')) patch.email = trimmedEmail || null;
+
+    if (Object.keys(patch).length === 0) {
+      setEditing(false);
+      setEditTouched(false);
+      return;
+    }
+    try {
+      await updateParty.mutateAsync({
+        id: partyId,
+        projectId: seatProjectId,
+        patch,
+      });
+      setEditing(false);
+      setEditTouched(false);
+    } catch (e) {
+      if (isZeroRowWrite(e)) {
+        // Zero rows matched: the row is either hidden from the write or gone.
+        // The read side is the only thing that can tell them apart — if it
+        // still returns the record, the refusal was authority, not a race.
+        let stillReadable = true;
+        try {
+          // CR3-1: ask the SEAT as well. A carded seat has no `person` row at
+          // all, so asking the directory alone read every refusal as a race.
+          const [{ data: freshSeat }, { data: freshPerson }] = await Promise.all(
+            [refetchSeat(), refetchPerson()],
+          );
+          stillReadable = !!freshSeat?.seat || !!freshPerson;
+        } catch {
+          // The read failed too. Say the reachable thing rather than guess.
+        }
+        setEditError(stillReadable ? PARTY_WRITE_DENIED : PARTY_WRITE_RACED);
+        return;
+      }
+      setEditError(friendlyPartyWriteError(e));
+    }
+  };
 
   const mint = async () => {
     if (!partyId) return;
     setLinkError(null);
     try {
-      const { token } = await createLink.mutateAsync({ partyId });
+      // CR11-9: the roster reads by project, so the mint must name it — the
+      // revoke below already does. Without it `['project-roster', projectId]`
+      // is never invalidated and the Call Sheet keeps reading "On paper".
+      const { token } = await createLink.mutateAsync({
+        partyId,
+        projectId: seatProjectId ?? undefined,
+      });
       const url = fieldLinkUrl(token);
       setMintedUrl(url);
       try {
@@ -250,7 +515,13 @@ export function PartyProfileSheet({
     if (!partyId || !activeLink) return;
     setLinkError(null);
     try {
-      await revokeLink.mutateAsync({ tokenId: activeLink.id, partyId });
+      // CR-5: the roster reads by project, so the revoke must name it or the
+      // rows behind this sheet keep printing reach `Field link`.
+      await revokeLink.mutateAsync({
+        tokenId: activeLink.id,
+        partyId,
+        projectId: seatProjectId,
+      });
       setMintedUrl(null);
     } catch (e) {
       setLinkError(
@@ -283,6 +554,10 @@ export function PartyProfileSheet({
     recordConsent.mutate(
       {
         partyId,
+        // The record is the studio's, resolved from the project — so the hook
+        // needs the job, not just the seat (R-AS). The seat's own project is
+        // the one the consent was collected on.
+        projectId: linkedParty?.project_id ?? seatProjectId ?? '',
         phone,
         smsConsentSource: inviteSource,
         smsConsentEvidence: inviteEvidence.trim(),
@@ -306,9 +581,20 @@ export function PartyProfileSheet({
       <div className={META}>Field crew · {getPartyKindLabel(role)}</div>
       <div className="mt-1 flex items-baseline justify-between gap-3">
         <h2 className="font-heading text-[1.6rem] font-medium text-[var(--color-charcoal)]">
-          {person?.display_name ?? 'Field party'}
+          {displayName ?? 'Field party'}
         </h2>
-        <ConsentChip status={consent} />
+        {/* No chip when the identity did not resolve. people_directory v4
+            keys a carded human on their rolodex card, so usePerson(<seat id>,
+            <party_kind>) finds no row for a stamped seat and `consent` falls
+            back to 'not_asked' — the sheet printed "Not asked" over a record
+            that says opted_out (w1b final review r7 MAJOR-2). R-BE owes W2 the
+            repoint: read people_directory_seats for the seat, join the
+            identity on person_id, and take the word from consent_status. Until
+            then the sheet says nothing rather than the affirmative-adjacent
+            word. */}
+        {/* No identity, no consent chip (R-BE). An absent record is its own
+            fact and must not print as a word. */}
+        {seatIdentity ? <ConsentChip status={consent} /> : null}
       </div>
 
       {/* Promote band (Call Sheet Wave 2, slide 10) — only when this party
@@ -322,19 +608,147 @@ export function PartyProfileSheet({
         />
       )}
 
-      {/* Contact card */}
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 border-y border-[var(--color-pearl)] py-3">
-        {contact
-          .filter(([, v]) => !!v)
-          .map(([label, value]) => (
-            <div key={label}>
-              <dt className={META}>{label}</dt>
-              <dd className="text-[0.82rem] text-[var(--color-charcoal)]">
-                {value}
-              </dd>
-            </div>
-          ))}
-      </dl>
+      {/* Contact card — F3 turns into an edit form behind "Edit". Kind and
+          Project are read-only in both states. */}
+      {editing ? (
+        <div className="mt-4 space-y-3 border-y border-[var(--color-pearl)] py-3">
+          <p className={META}>
+            {getPartyKindLabel(role)}
+            {projectName ? ` · ${projectName}` : ''}
+          </p>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-name">
+              Name
+            </label>
+            <input
+              id="party-edit-name"
+              value={editForm.name}
+              onChange={(e) => editField({ name: e.target.value })}
+              className={EDIT_INPUT}
+            />
+          </div>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-company">
+              Company
+            </label>
+            <input
+              id="party-edit-company"
+              value={editForm.company}
+              onChange={(e) => editField({ company: e.target.value })}
+              className={EDIT_INPUT}
+            />
+          </div>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-trade">
+              Trade
+            </label>
+            <select
+              id="party-edit-trade"
+              value={editForm.trade}
+              onChange={(e) => editField({ trade: e.target.value })}
+              className={EDIT_INPUT}
+            >
+              <option value="">Which trade…</option>
+              {outOfVocabTrade && (
+                <option value={outOfVocabTrade}>{outOfVocabTrade}</option>
+              )}
+              {ALL_FIELD_TRADES.map((t) => (
+                <option key={t} value={t}>
+                  {FIELD_TRADE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-phone">
+              Phone
+            </label>
+            <input
+              id="party-edit-phone"
+              type="tel"
+              value={editForm.phone}
+              onChange={(e) => editField({ phone: e.target.value })}
+              className={EDIT_INPUT}
+            />
+            {phoneEditWillRevokeConsent && (
+              <p className="mt-1.5 text-[0.7rem] leading-relaxed text-[var(--color-terracotta-ink)]">
+                Changing the number clears their texting opt-in — you&rsquo;ll
+                need to record consent again.
+              </p>
+            )}
+          </div>
+          <div>
+            <label className={EDIT_LABEL} htmlFor="party-edit-email">
+              Email
+            </label>
+            <input
+              id="party-edit-email"
+              type="email"
+              value={editForm.email}
+              onChange={(e) => editField({ email: e.target.value })}
+              className={EDIT_INPUT}
+            />
+          </div>
+          {editError && (
+            <p className="text-[0.7rem] text-[var(--color-terracotta-ink)]">{editError}</p>
+          )}
+          <DocumentActionRow
+            surfaceKey="people"
+            regionKey="party-details-editor"
+            aria-label="Field party edit actions"
+          >
+            <DocumentAction
+              actionKey="save-party-details"
+              variant="primary"
+              onClick={() => void saveParty()}
+              loading={updateParty.isPending}
+              loadingLabel="Saving…"
+            >
+              Save
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-party-details"
+              variant="tertiary"
+              onClick={() => {
+                setEditing(false);
+                setEditTouched(false);
+              }}
+            >
+              Cancel
+            </DocumentAction>
+          </DocumentActionRow>
+        </div>
+      ) : (
+        <>
+          <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 border-y border-[var(--color-pearl)] py-3">
+            {contact
+              .filter(([, v]) => !!v)
+              .map(([label, value]) => (
+                <div key={label}>
+                  <dt className={META}>{label}</dt>
+                  <dd className="text-[0.82rem] text-[var(--color-charcoal)]">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+          </dl>
+          {/* Only once the record has resolved: opening Edit mid-fetch used
+              to snapshot an empty form, and Save then cleared company, trade,
+              phone and email off the row. */}
+          {recordLoaded && (
+            <DocumentAction
+              actionKey="edit-party-details"
+              surfaceKey="people"
+              regionKey="party-contact-card"
+              variant="secondary"
+              onClick={() => setEditing(true)}
+              className="mt-2"
+            >
+              Edit
+            </DocumentAction>
+          )}
+        </>
+      )}
 
       {/* Field link — the no-auth "what's on me" link for the field party. */}
       <section className="mt-4">
@@ -355,7 +769,10 @@ export function PartyProfileSheet({
             </DocumentAction>
           )}
         </div>
-        <p className="mb-2 text-[0.72rem] leading-relaxed text-[var(--color-aged-oak)]">
+        <p
+          id="field-link-consequence"
+          className="mb-2 text-[0.72rem] leading-relaxed text-[var(--color-aged-oak)]"
+        >
           A no-login link to their tasks and punch list — big-thumb Done /
           Problem, no account needed.{' '}
           {activeLink
@@ -380,7 +797,9 @@ export function PartyProfileSheet({
           regionKey="field-link"
           variant="primary"
           onClick={() => void mint()}
-          disabled={createLink.isPending || !partyId}
+          held={!partyId}
+          disabled={!partyId}
+          aria-describedby="field-link-consequence"
           loading={createLink.isPending}
           loadingLabel="Minting…"
         >
@@ -424,10 +843,15 @@ export function PartyProfileSheet({
               rows={2}
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Send a text…"
               aria-label="Send a text"
               className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
             />
+            <p
+              id="field-text-reason"
+              className="mt-1 text-[0.7rem] leading-relaxed text-[var(--color-aged-oak)]"
+            >
+              Write the message first — a text with no words is not a text.
+            </p>
             <DocumentActionRow
               surfaceKey="people"
               regionKey="field-text-composer"
@@ -438,7 +862,9 @@ export function PartyProfileSheet({
                 actionKey="send-field-text"
                 variant="primary"
                 onClick={doSend}
-                disabled={!body.trim() || send.isPending}
+                held={!body.trim()}
+                disabled={!body.trim()}
+                aria-describedby="field-text-reason"
                 loading={send.isPending}
                 loadingLabel="Sending…"
               >
@@ -465,7 +891,7 @@ export function PartyProfileSheet({
         ) : consent === 'not_asked' && phone ? (
           <div>
             <p className="mb-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
-              Invite {person?.display_name ?? 'them'} to texts — they get a
+              Invite {displayName ?? 'them'} to texts — they get a
               confirmation to reply YES before anything sends.
             </p>
             <label className="flex cursor-pointer items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
@@ -539,6 +965,16 @@ export function PartyProfileSheet({
               </p>
             )}
 
+            {/* §A5 "held" — the reason stands beside the act and is reachable
+                by keyboard, which a native `disabled` would have removed from
+                the tab order along with its own explanation. */}
+            <p
+              id="field-invite-reason"
+              className="mt-3 text-[0.7rem] leading-relaxed text-[var(--color-aged-oak)]"
+            >
+              Tick the consent box above first. Patina never texts somebody the
+              studio has not recorded consent for.
+            </p>
             <DocumentActionRow
               surfaceKey="people"
               regionKey="field-invite-to-texts"
@@ -549,19 +985,11 @@ export function PartyProfileSheet({
                 actionKey="invite-party-to-texts"
                 variant="primary"
                 onClick={doInvite}
-                disabled={!inviteConsent || recordConsent.isPending}
+                held={!inviteConsent}
+                disabled={!inviteConsent}
+                aria-describedby="field-invite-reason"
                 loading={recordConsent.isPending}
                 loadingLabel="Inviting…"
-                title={
-                  !inviteConsent
-                    ? 'Check the consent box above first'
-                    : undefined
-                }
-                aria-label={
-                  !inviteConsent
-                    ? 'Invite to texts — check the consent box above first'
-                    : undefined
-                }
               >
                 Invite to texts
               </DocumentAction>

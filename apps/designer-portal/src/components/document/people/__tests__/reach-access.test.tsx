@@ -1,0 +1,1223 @@
+/**
+ * REACH & ACCESS (W2b) — the one control, three fixed sections, and the rules
+ * that make consent readable: one sentence everywhere (R-Q), a held channel
+ * keeps its row with its reason in words, and a grant's end date prints in
+ * words rather than as a countdown (PR-d).
+ */
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  ReachAccess,
+  channelRowParts,
+  heldChannelReason,
+  isPhoneChannel,
+  channelConsentAxis,
+  mintConsequenceSentence,
+  MINT_CLIENT_SIDE_SENTENCE,
+  NO_RULE_SENTENCE,
+  REACH_EMPTY_SENTENCE,
+} from "../reach-access";
+import {
+  consentSentence,
+  consentSentenceForRecord,
+} from "../consent-sentence";
+import { grantEndsSentence, NO_GRANT_SENTENCE } from "../access-grant-list";
+
+const channelsData: { current: unknown[] } = { current: [] };
+const grantsData: { current: unknown[] } = { current: [] };
+const ruleData: { current: Record<string, unknown> | null } = { current: null };
+const consentData: { current: Record<string, unknown> | null } = {
+  current: null,
+};
+/** CR-8: the studio roster `set_by` is resolved against. */
+const studioMembers: { current: unknown[] } = { current: [] };
+const recordConsent = jest.fn();
+const recordReconsent = jest.fn();
+const mintLink = jest.fn();
+// CR3-4 — the two writers the card grew: "Add a channel" (direction §3.2 R2)
+// and the per-row held status (§5.1). Both had ZERO call sites before this.
+const addChannel = jest.fn();
+const setChannelStatus = jest.fn();
+// CR13-1 — the line-type act, the one writer `sms_capable` never had.
+const updateChannel = jest.fn();
+
+jest.mock("@patina/supabase", () => ({
+  useStudioContactChannels: () => ({ data: channelsData.current }),
+  useContactRule: () => ({ data: ruleData.current }),
+  // CR-8: the rule's provenance needs the studio's roster to name its setter.
+  useOrganizationMembers: () => ({ data: studioMembers.current }),
+  useAccessGrants: () => ({ data: grantsData.current }),
+  useChannelConsent: () => ({ data: consentData.current }),
+  useRecordChannelConsent: () => ({ mutate: recordConsent, isPending: false }),
+  // PR-m / CR-25 — the way back from a refusal the studio may record itself.
+  useRecordChannelReconsent: () => ({ mutate: recordReconsent, isPending: false }),
+  useSetContactRule: () => ({ mutate: jest.fn(), isPending: false }),
+  useAddStudioContactChannel: () => ({ mutate: addChannel, isPending: false }),
+  useSetStudioContactChannelStatus: () => ({
+    mutate: setChannelStatus,
+    isPending: false,
+  }),
+  useUpdateStudioContactChannel: () => ({
+    mutate: updateChannel,
+    isPending: false,
+  }),
+  ALL_CONTACT_CHANNEL_STATUSES: ["active", "bounced", "unsubscribed", "dead"],
+  PERSON_CHANNEL_KINDS: ["mobile", "email"],
+  COMPANY_CHANNEL_KINDS: ["office", "dispatch", "ap_email"],
+  useCreateFieldLink: () => ({ mutate: mintLink, isPending: false }),
+  useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),
+  // W4 r2 W4R2-2 — the REAL firm-scoped tier list, so a new firm-scoped tier
+  // cannot be added to the package and silently dropped at this render again.
+  FIRM_SCOPED_ACCESS_GRANT_TIERS: jest.requireActual("@patina/supabase")
+    .FIRM_SCOPED_ACCESS_GRANT_TIERS,
+  // W4 r4 F1 — the REAL studio-timezone converter, so the day a grant row
+  // prints is measured against the shipped one rather than a stub.
+  touchInstantDay: jest.requireActual("@patina/supabase").touchInstantDay,
+  // W4 r10 M-1 (R-CB) — the REAL timestamptz day resolver, so a bounce
+  // recorded late in the studio evening prints the studio's day here too.
+  touchInstantIsoDay: jest.requireActual("@patina/supabase").touchInstantIsoDay,
+  isAccessGrantRevokable: (tier: string) =>
+    tier === "field_link" || tier === "project_review" ||
+    tier === "paperwork_link",
+  // CR5-2: the row asks the routing table what a revoke actually closes and
+  // whether the RPC demands a reason.
+  accessGrantRevokeRoute: (tier: string) =>
+    tier === "field_link"
+      ? { rpc: "revoke_field_link", idArg: "p_token_id", keySegment: 1 }
+      : tier === "project_review"
+        ? {
+            rpc: "revoke_project_review_access",
+            idArg: "p_edition_id",
+            reasonArg: "p_reason",
+            reasonRequired: true,
+            revokesWholeScope: true,
+            keySegment: 1,
+          }
+        : tier === "paperwork_link"
+          ? {
+              rpc: "revoke_paperwork_link",
+              idArg: "p_token_id",
+              reasonArg: "p_reason",
+              keySegment: 1,
+            }
+          : null,
+  ACCESS_GRANT_NOT_REVOKABLE_SENTENCE:
+    "This door is closed somewhere else in Patina, not from here.",
+  ACCESS_GRANT_TIER_LABELS: {
+    field_link: "Field link",
+    project_review: "Review access",
+    // CR7-2 — the one tier keyed on a FIRM (`subject_type = 'contact'`).
+    agreement_link: "Agreement link",
+    paperwork_link: "Paperwork link",
+  },
+  ACCESS_GRANT_TIER_OPENS: {
+    field_link: "the Call Sheet and the site access card",
+    project_review: "one review edition",
+    agreement_link: "one trade agreement",
+    paperwork_link: "one firm's paperwork, to send it in",
+  },
+  CONTACT_CHANNEL_KIND_LABELS: {
+    mobile: "Mobile",
+    email: "Email",
+    office: "Office",
+    portal_311: "311 portal",
+  },
+  isContactChannelHeld: (s: string) => !!s && s !== "active",
+  fieldLinkUrl: (token: string) => `https://patina.cloud/field/${token}`,
+}));
+
+/** CR-9: the channel row resolves a consent record's ORIGIN job by name. */
+const projectsData: { current: unknown[] } = { current: [] };
+jest.mock("@/hooks/use-projects", () => ({
+  useProjects: () => ({ data: projectsData.current }),
+}));
+
+jest.mock("@/lib/analytics/people-events", () => ({
+  peopleEvents: {
+    consentRecorded: jest.fn(),
+    grantMinted: jest.fn(),
+    grantRevoked: jest.fn(),
+  },
+}));
+
+const NOW = new Date("2026-10-20T00:00:00Z");
+
+/** The mint prop when a case names one, else the seat prop it mirrors. */
+function pick(
+  props: Record<string, unknown>,
+  mintKey: string,
+  seatKey: string,
+): string | null {
+  const key = mintKey in props ? mintKey : seatKey;
+  return (props[key] ?? null) as string | null;
+}
+
+function renderReach(over: Record<string, unknown> = {}) {
+  // QA-R11-1: a field link is minted on a FIELD seat, which the card resolves
+  // separately from the identity's first live seat. Dana Kowalski is a sub, so
+  // the two are the same seat here unless a case overrides the mint props.
+  const props: Record<string, unknown> = {
+    seatId: "seat-1",
+    seatProjectId: "proj-okonkwo",
+    seatProjectName: "Okonkwo residence",
+    seatWindowEnd: "2027-08-13",
+    warrantyEnd: null,
+    ...over,
+  };
+  render(
+    <ReachAccess
+      cardId="card-dana"
+      cardKind="person"
+      organizationId="org-1"
+      personName="Dana Kowalski"
+      {...(props as never)}
+      mintSeatId={pick(props, "mintSeatId", "seatId")}
+      mintProjectId={pick(props, "mintProjectId", "seatProjectId")}
+      mintProjectName={pick(props, "mintProjectName", "seatProjectName")}
+      mintWindowEnd={pick(props, "mintWindowEnd", "seatWindowEnd")}
+      onAnnounce={jest.fn()}
+      now={NOW}
+    />,
+  );
+}
+
+beforeEach(() => {
+  channelsData.current = [];
+  grantsData.current = [];
+  ruleData.current = null;
+  consentData.current = null;
+  studioMembers.current = [];
+  projectsData.current = [];
+  recordConsent.mockClear();
+  mintLink.mockClear();
+  addChannel.mockClear();
+  setChannelStatus.mockClear();
+});
+
+describe("the three sections", () => {
+  it("prints them in this order: Channels, Contact rule, Access grants", () => {
+    renderReach();
+    const heads = screen.getAllByRole("heading").map((h) => h.textContent);
+    expect(heads).toEqual(["Channels", "Contact rule", "Access grants"]);
+  });
+
+  it("says so in words when nothing is on file", () => {
+    renderReach();
+    expect(screen.getByText(REACH_EMPTY_SENTENCE)).toBeInTheDocument();
+    expect(screen.getByText(NO_RULE_SENTENCE)).toBeInTheDocument();
+    expect(screen.getByText(NO_GRANT_SENTENCE)).toBeInTheDocument();
+  });
+
+  // QA-R4-3 — direction §5.1: "Company variant: … Contact rule is replaced by
+  // three designations". The firm card printed the heading, the fallback and a
+  // LIVE "Edit the rule" whose save wrote a `subject_type = 'company'` row no
+  // reader in this build ever queries.
+  it("gives a COMPANY card no contact rule region at all", () => {
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    const heads = screen.getAllByRole("heading").map((h) => h.textContent);
+    expect(heads).toEqual(["Channels", "Access grants"]);
+    expect(screen.queryByText(NO_RULE_SENTENCE)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Edit the rule/ }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("a channel row", () => {
+  beforeEach(() => {
+    channelsData.current = [
+      {
+        id: "ch-1",
+        owner_type: "person",
+        owner_id: "card-dana",
+        channel_kind: "mobile",
+        value: "(612) 555-0111",
+        preferred: true,
+        verified: true,
+        verified_at: "2026-10-12T00:00:00Z",
+        status: "active",
+        status_at: null,
+        sms_capable: true,
+      },
+    ];
+  });
+
+  it("prints its kind, its markers, its number as a tel: link and its consent word", () => {
+    consentData.current = {
+      verdict: "granted",
+      record: {
+        status: "granted",
+        source: "written",
+        consented_at: "2025-05-02",
+        opt_out_at: null,
+        opt_out_source: null,
+      },
+    };
+    renderReach();
+    expect(
+      // `verified_at` is a timestamptz; midnight UTC on the 12th is the
+      // evening of the 11th in the studio, and the studio's day is the one
+      // that prints (R-CB, W4 r10 M-1).
+      screen.getByText("Mobile · preferred · verified 11 Oct 2026"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "(612) 555-0111" }),
+    ).toHaveAttribute("href", "tel:+16125550111");
+    expect(screen.getByText("Texting")).toBeInTheDocument();
+  });
+
+  /**
+   * QA-4 (w2 r5) — the Directory row printed "(612) 555-0111" and this row,
+   * two clicks away on the same person, printed "+16125550111", because a
+   * channel's value is commonly stored in E.164. The stored value still dials.
+   */
+  it("prints a number stored in E.164 in the same shape the Directory row uses", () => {
+    channelsData.current = [
+      { ...channelsData.current[0], id: "ch-e164", value: "+16125550111" },
+    ];
+    renderReach();
+    expect(
+      screen.getByRole("link", { name: "(612) 555-0111" }),
+    ).toHaveAttribute("href", "tel:+16125550111");
+  });
+
+  it("R-Q — the consent sentence reads the one wording, with source, date and job", () => {
+    consentData.current = {
+      verdict: "granted",
+      record: {
+        status: "granted",
+        source: "written",
+        consented_at: "2025-05-02",
+        opt_out_at: null,
+        opt_out_source: null,
+      },
+    };
+    renderReach({ seatProjectName: "Lindqvist kitchen" });
+    expect(
+      screen.getByText(
+        "Written consent, 2 May 2025, on the Lindqvist kitchen.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * CR-9 — SPEC §5.2 #4 IS TWO SENTENCES. The first names the job the consent
+   * came FROM (`origin_project_id`), the second where it landed; the card used
+   * to print only the first, and named the SEAT's job in it rather than the
+   * record's own.
+   */
+  it("R-Q + CR-9 — the origin job in the first sentence, the carry-forward in the second", () => {
+    consentData.current = {
+      verdict: "granted",
+      record: {
+        status: "granted",
+        source: "written",
+        consented_at: "2025-05-02",
+        opt_out_at: null,
+        opt_out_source: null,
+        origin_project_id: "proj-lindqvist",
+      },
+    };
+    projectsData.current = [
+      { id: "proj-lindqvist", name: "Lindqvist kitchen" },
+      { id: "proj-okonkwo", name: "Okonkwo residence" },
+    ];
+    renderReach({ seatWindowStart: "2026-10-12" });
+    expect(
+      screen.getByText(
+        "Written consent, 2 May 2025, on the Lindqvist kitchen. Carried forward to the Okonkwo residence, 12 Oct 2026.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("CR-9 — a consent recorded on the job in hand has been carried nowhere", () => {
+    consentData.current = {
+      verdict: "granted",
+      record: {
+        status: "granted",
+        source: "written",
+        consented_at: "2026-10-12",
+        opt_out_at: null,
+        opt_out_source: null,
+        origin_project_id: "proj-okonkwo",
+      },
+    };
+    projectsData.current = [{ id: "proj-okonkwo", name: "Okonkwo residence" }];
+    renderReach({ seatWindowStart: "2026-10-12" });
+    expect(screen.queryByText(/Carried forward/)).not.toBeInTheDocument();
+  });
+
+  it("prints NO consent word where the studio holds no record (R-BB)", () => {
+    consentData.current = { verdict: null, record: null };
+    const { container } = render(
+      <ReachAccess
+        cardId="card-dana"
+        cardKind="person"
+        organizationId="org-1"
+        personName="Dana Kowalski"
+        onAnnounce={jest.fn()}
+        now={NOW}
+      />,
+    );
+    expect(container.querySelector('[data-state-family="consent"]')).toBeNull();
+  });
+
+  it("a held channel keeps its row, its ground and its reason in words", () => {
+    channelsData.current = [
+      {
+        id: "ch-2",
+        owner_type: "person",
+        owner_id: "card-dana",
+        channel_kind: "email",
+        value: "dana@northgateelectric.com",
+        preferred: false,
+        verified: false,
+        verified_at: null,
+        status: "bounced",
+        status_at: "2026-03-12T00:00:00Z",
+        sms_capable: false,
+      },
+    ];
+    renderReach();
+    const row = document.querySelector(
+      '[data-reach-channel-held="true"]',
+    ) as HTMLElement;
+    expect(row).toBeInTheDocument();
+    expect(
+      // status_at is midnight UTC on the 12th = 7pm on the 11th in the
+      // studio; the studio's calendar names the day (R-CB).
+      within(row).getByText(/This address bounced back, 11 March 2026\./),
+    ).toBeInTheDocument();
+  });
+
+  it("records consent through the studio’s own ledger, with a method and evidence", () => {
+    renderReach();
+    fireEvent.click(screen.getByRole("button", { name: "Record consent" }));
+    fireEvent.change(screen.getByLabelText("How consent was given"), {
+      target: { value: "verbal" },
+    });
+    fireEvent.change(screen.getByLabelText("Where and when they agreed"), {
+      target: { value: "Recorded by Priya at the site kickoff." },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Put it on the books" }),
+    );
+    expect(recordConsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        channelKind: "sms",
+        channelValue: "(612) 555-0111",
+        status: "granted",
+        source: "verbal",
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("PR-m — the studio may record a refusal it heard", () => {
+    renderReach();
+    fireEvent.click(screen.getByRole("button", { name: "Record consent" }));
+    fireEvent.change(screen.getByLabelText("How consent was given"), {
+      target: { value: "verbal" },
+    });
+    fireEvent.change(screen.getByLabelText("Where and when they agreed"), {
+      target: { value: "Told Priya to stop on site." },
+    });
+    fireEvent.click(screen.getByLabelText("They told the studio to stop"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Put it on the books" }),
+    );
+    expect(recordConsent).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "opted_out" }),
+      expect.anything(),
+    );
+  });
+
+  it("refuses to write a consent with no source or evidence", () => {
+    renderReach();
+    fireEvent.click(screen.getByRole("button", { name: "Record consent" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Put it on the books" }),
+    );
+    expect(recordConsent).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Record how and where they agreed before this goes on the books.",
+    );
+  });
+});
+
+/**
+ * CR12-1 — THE CONSENT AXIS. A person card renders every channel the card
+ * holds, and the consent word, the consent sentence and "Record consent" used
+ * to print on all of them: an office landline was offered an SMS grant, and a
+ * `portal_311` scheduling handle was offered an EMAIL one. Ray Thao carries
+ * both, on a card whose rule clause reads "Never text. Office phone or the 311
+ * portal only.", and his office line is the same number
+ * `identity_consent_status` reduces the Directory word over (00626).
+ */
+describe("the consent axis", () => {
+  const rayOffice = {
+    id: "ch-ray-office",
+    owner_type: "person",
+    owner_id: "card-ray",
+    channel_kind: "office",
+    value: "+16125550127",
+    preferred: false,
+    verified: false,
+    verified_at: null,
+    status: "active",
+    status_at: null,
+    sms_capable: false,
+  };
+  const ray311 = {
+    ...rayOffice,
+    id: "ch-ray-311",
+    channel_kind: "portal_311",
+    value: "minneapolis-311",
+  };
+
+  function renderRay() {
+    channelsData.current = [rayOffice, ray311];
+    consentData.current = { verdict: "granted", record: null };
+    renderReach({ personName: "Ray Thao", cardId: "card-ray" });
+  }
+
+  it("offers Ray Thao's office line no consent word, no sentence and no act", () => {
+    renderRay();
+    const row = document.querySelector(
+      '[data-reach-channel="ch-ray-office"]',
+    ) as HTMLElement;
+    expect(row).toBeInTheDocument();
+    expect(row.querySelector('[data-state-family="consent"]')).toBeNull();
+    expect(row.querySelector("[data-consent-sentence]")).toBeNull();
+    expect(
+      within(row).queryByRole("button", { name: /Record consent/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers Ray Thao's 311 portal handle no consent word, no sentence and no act", () => {
+    renderRay();
+    const row = document.querySelector(
+      '[data-reach-channel="ch-ray-311"]',
+    ) as HTMLElement;
+    expect(row).toBeInTheDocument();
+    expect(row.querySelector('[data-state-family="consent"]')).toBeNull();
+    expect(row.querySelector("[data-consent-sentence]")).toBeNull();
+    expect(
+      within(row).queryByRole("button", { name: /Record consent/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps both lines on the card — a line nobody can consent to is still a way to reach him", () => {
+    renderRay();
+    expect(screen.getByText(/^Office/)).toBeInTheDocument();
+    expect(screen.getByText(/^311 portal/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "(612) 555-0127" }),
+    ).toHaveAttribute("href", "tel:+16125550127");
+  });
+
+  /**
+   * CR13-1 / CR13-2 — the nine seeded mobiles 00593 left `sms_capable = false`
+   * on. The record the other four faces already print is printed here too, and
+   * the studio has a door back to the recording band — PR-m's included.
+   */
+  const tomMobile = {
+    id: "ch-tom-mobile",
+    owner_type: "person",
+    owner_id: "card-tom",
+    channel_kind: "mobile",
+    value: "+16125550107",
+    preferred: false,
+    verified: false,
+    verified_at: null,
+    status: "active",
+    status_at: null,
+    sms_capable: false,
+  };
+
+  it("prints the record on an unconfirmed mobile — the word and the R-Q sentence (CR13-2)", () => {
+    channelsData.current = [tomMobile];
+    consentData.current = {
+      verdict: "opted_out",
+      record: {
+        source: null,
+        opt_out_source: "inbound_sms",
+        consented_at: null,
+        opt_out_at: "2025-12-03",
+        origin_project_id: null,
+      },
+    };
+    renderReach({ personName: "Tom Marrow", cardId: "card-tom" });
+    const row = document.querySelector(
+      '[data-reach-channel="ch-tom-mobile"]',
+    ) as HTMLElement;
+    expect(row.querySelector('[data-state-family="consent"]')).not.toBeNull();
+    expect(row.querySelector("[data-consent-sentence]")).toHaveTextContent(
+      "Opted out by text, 3 Dec 2025, on the Okonkwo residence.",
+    );
+  });
+
+  it("offers the line-type act on an unconfirmed mobile, and writes sms_capable (CR13-1)", () => {
+    channelsData.current = [tomMobile];
+    consentData.current = { verdict: null, record: null };
+    renderReach({ personName: "Tom Marrow", cardId: "card-tom" });
+    const row = document.querySelector(
+      '[data-reach-channel="ch-tom-mobile"]',
+    ) as HTMLElement;
+    // PR-m's door is shut until the line is known to take texts …
+    expect(
+      within(row).queryByRole("button", { name: /Record consent/ }),
+    ).not.toBeInTheDocument();
+    // … and this is the way to open it.
+    fireEvent.click(
+      within(row).getByRole("button", { name: "This line takes texts" }),
+    );
+    expect(updateChannel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "ch-tom-mobile",
+        ownerId: "card-tom",
+        smsCapable: true,
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("offers no line-type act once the line is known to take texts (CR13-1)", () => {
+    channelsData.current = [{ ...tomMobile, sms_capable: true }];
+    consentData.current = { verdict: null, record: null };
+    renderReach({ personName: "Tom Marrow", cardId: "card-tom" });
+    expect(
+      screen.queryByRole("button", { name: "This line takes texts" }),
+    ).not.toBeInTheDocument();
+    // PR-m's checkbox is reachable again.
+    fireEvent.click(screen.getByRole("button", { name: "Record consent" }));
+    expect(
+      screen.getByLabelText("They told the studio to stop"),
+    ).toBeInTheDocument();
+  });
+
+  it("still offers the act on a line that takes a text", () => {
+    channelsData.current = [
+      { ...rayOffice, id: "ch-mobile", channel_kind: "mobile", sms_capable: true },
+    ];
+    renderReach();
+    expect(
+      screen.getByRole("button", { name: "Record consent" }),
+    ).toBeInTheDocument();
+  });
+
+  it("reads the axis off sms_capable and the email kinds, never off the phone kind alone", () => {
+    expect(channelConsentAxis({ channel_kind: "mobile", sms_capable: true })).toBe(
+      "sms",
+    );
+    // 00593 leaves sms_capable false with no SMS-rail evidence, and calls the
+    // kind a placeholder ("line type unconfirmed"), so this is not a text line.
+    expect(
+      channelConsentAxis({ channel_kind: "mobile", sms_capable: false }),
+    ).toBeNull();
+    expect(
+      channelConsentAxis({ channel_kind: "office", sms_capable: false }),
+    ).toBeNull();
+    expect(
+      channelConsentAxis({ channel_kind: "after_hours", sms_capable: false }),
+    ).toBeNull();
+    expect(
+      channelConsentAxis({ channel_kind: "portal_311", sms_capable: false }),
+    ).toBeNull();
+    expect(channelConsentAxis({ channel_kind: "email", sms_capable: false })).toBe(
+      "email",
+    );
+    expect(
+      channelConsentAxis({ channel_kind: "ap_email", sms_capable: false }),
+    ).toBe("email");
+  });
+});
+
+/** CR-8 — SPEC §5.2 #5: the rule says who set it, not only when. */
+describe("the rule's provenance", () => {
+  it("names the setter off the studio's own roster", () => {
+    ruleData.current = {
+      id: "rule-dana",
+      channels_allowed: [],
+      channels_forbidden: ["email"],
+      route_to_person_id: null,
+      reason: "Never email. Text only. The email on file bounces.",
+      set_at: "2026-09-13T00:00:00Z",
+      set_by: "user-priya",
+    };
+    studioMembers.current = [
+      { user_id: "user-priya", profiles: { full_name: "Priya Natarajan" } },
+    ];
+    renderReach();
+    expect(
+      screen.getByText(
+        // `set_at` midnight UTC on the 13th is the 12th in the studio (R-CB).
+        "Never email. Text only. The email on file bounces. Set by Priya Natarajan, 12 Sep 2026.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("with no name to give, the date still stands alone", () => {
+    ruleData.current = {
+      id: "rule-dana",
+      channels_allowed: [],
+      channels_forbidden: ["email"],
+      route_to_person_id: null,
+      reason: "Never email. Text only. The email on file bounces.",
+      set_at: "2026-09-13T00:00:00Z",
+      set_by: "user-gone",
+    };
+    renderReach();
+    expect(
+      screen.getByText(
+        "Never email. Text only. The email on file bounces. Set 12 Sep 2026.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("minting a door", () => {
+  it("says what it opens and when it closes, in words", () => {
+    renderReach();
+    const act = screen.getByRole("button", { name: "Mint access" });
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      // CR7-3: the sentence names the JOB the door is minted on, not a date
+      // alone — a person on two live seats holds two possible doors.
+      "This opens the Call Sheet and the site access card to Dana Kowalski, on the Okonkwo residence, until the job's window closes, 13 August 2027. It never opens billing or the agreement.",
+    );
+    fireEvent.click(act);
+    expect(mintLink).toHaveBeenCalledWith(
+      expect.objectContaining({ partyId: "seat-1", projectId: "proj-okonkwo" }),
+      expect.anything(),
+    );
+  });
+
+  it("is held, with the reason beside it, when the person holds no seat", () => {
+    renderReach({ seatId: null });
+    const act = screen.getByRole("button", { name: "Mint access" });
+    expect(act).not.toBeDisabled();
+    expect(act).toHaveAttribute("aria-disabled", "true");
+  });
+
+  /**
+   * QA-R11-1 — the one mint control used to be wired unconditionally to
+   * `useCreateFieldLink()`, so pressing it on a CLIENT's card minted a
+   * field-crew grant whose declared scope is the Call Sheet and the site
+   * access card — the card PR-w rules studio-only and never client-facing.
+   */
+  it("QA-R11-1 — a client-side card holds the act and never mints a field link", () => {
+    renderReach({
+      mintSeatId: null,
+      mintHeldSentence: MINT_CLIENT_SIDE_SENTENCE,
+    });
+    const act = screen.getByRole("button", { name: "Mint access" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(MINT_CLIENT_SIDE_SENTENCE);
+    fireEvent.click(act);
+    expect(mintLink).not.toHaveBeenCalled();
+  });
+
+  /**
+   * CR3-6 — PR-l's two radios chose NOTHING, so they are gone and the room
+   * states the one date the RPC will land on.
+   *
+   * `create_field_link(uuid, timestamptz)` (00627) computes
+   * `max(on_site_to, warranty_until)` and takes it whenever it is still ahead;
+   * the caller's `p_expires_at` is only read when there is no live window at
+   * all. So "Ends with the job" on a seat whose warranty outlives its window
+   * still minted to the warranty end, the sentence above the act named a date
+   * the token did not carry, and the analytics event recorded a choice that
+   * never reached the database. Restoring the choice is a W3 migration.
+   */
+  it("CR3-6 — a warranty that outlives the window IS the date, and the card says so", () => {
+    renderReach({ warrantyEnd: "2027-11-21" });
+    expect(screen.queryByLabelText("Ends with the job")).not.toBeInTheDocument();
+    const act = screen.getByRole("button", { name: "Mint access" });
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "until the job's window closes, 21 November 2027",
+    );
+    expect(
+      screen.getByText(
+        "This seat runs out a warranty, so the door ends with the warranty.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("CR3-6 — a seat with no window at all says the ninety-day term, not a date", () => {
+    renderReach({ seatWindowEnd: null, warrantyEnd: null });
+    const act = screen.getByRole("button", { name: "Mint access" });
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "the door runs ninety days from today and renews when they use it",
+    );
+  });
+
+  it("CR3-6 — a window that has already closed is the same fact as no window", () => {
+    renderReach({ seatWindowEnd: "2026-01-04", warrantyEnd: null });
+    const act = screen.getByRole("button", { name: "Mint access" });
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent("ninety days from today");
+  });
+});
+
+describe("a grant row", () => {
+  it("prints the tier, what it opens, the dates and a Revoke that confirms first", () => {
+    grantsData.current = [
+      {
+        grant_id: "field_link:tok-1",
+        tier: "field_link",
+        subject_type: "engagement",
+        subject_id: "card-dana",
+        scope_type: "project",
+        scope_id: "proj-okonkwo",
+        granted_by: null,
+        // W4 r4 F1: a timestamptz, and midnight UTC is 7pm the PREVIOUS day in
+        // the studio's own zone — the ordinary evening a link is minted. The
+        // row must print the studio's calendar day (11 Oct), the way the
+        // inbound-document line on the same card already does; this fixture
+        // asserted the UTC day and so held the defect in place.
+        granted_at: "2026-10-12T00:00:00Z",
+        // QA-R8-1: what `create_field_link` actually stores for R-D's window
+        // (13 Aug 2027) — the window's last day PLUS one, an EXCLUSIVE
+        // boundary "through the end of that day" (00627:578-585). The row
+        // prints the last day the door is open, so it must read 13 August.
+        expires_at: "2027-08-14T00:00:00Z",
+        last_used_at: "2026-10-17T00:00:00Z",
+        revoked_at: null,
+        revoke_reason: null,
+      },
+    ];
+    renderReach();
+    expect(
+      screen.getByText(
+        "Field link · the Call Sheet and the site access card · minted 11 Oct 2026 · used 16 Oct 2026",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Ends with the job, 13 August 2027. Renews when they use it.",
+      ),
+    ).toBeInTheDocument();
+    const revoke = screen.getByRole("button", { name: "Revoke" });
+    expect(revoke).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(revoke);
+    expect(revoke).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByRole("button", { name: "Close this door" }),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * W4 r4 F1 — THE EVENING HOURS, WHICH IS WHEN DOORS ARE MINTED.
+   *
+   * Reproduced live: a paperwork link minted at 19:09 CDT on 15 Sep read
+   * "minted 16 Sep 2026" while the inbound-document line three rows below it
+   * on the same card, for the same evening, correctly read "15 Sep 2026".
+   */
+  it("prints the studio's own calendar day for an evening mint, not UTC's", () => {
+    grantsData.current = [
+      {
+        grant_id: "paperwork_link:tok-2",
+        tier: "paperwork_link",
+        subject_type: "contact",
+        subject_id: "card-dana",
+        scope_type: "company",
+        scope_id: "card-dana",
+        granted_by: null,
+        // 19:09:24 CDT, 15 September 2026.
+        granted_at: "2026-09-16T00:09:24.000Z",
+        expires_at: null,
+        // 14:00 CDT the same day — a daytime instant is unmoved.
+        last_used_at: "2026-09-15T19:00:00.000Z",
+        revoked_at: null,
+        revoke_reason: null,
+      },
+    ];
+    renderReach();
+    const row = screen.getByText(/minted 15 Sep 2026/);
+    expect(row).toHaveTextContent("used 15 Sep 2026");
+    expect(screen.queryByText(/16 Sep 2026/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * CR5-2 (w2 r5) — `revoke_project_review_access` revokes EVERY reviewer on the
+ * edition and raises on a reason under five characters. The row offered the
+ * same fixed "Optional" prompt it offers a field link, and said nothing about
+ * who else the press closes the door on.
+ */
+describe("a whole-scope revoke says so, and asks for the reason its RPC demands", () => {
+  beforeEach(() => {
+    grantsData.current = [
+      {
+        grant_id: "project_review:edition-9:actor-1",
+        tier: "project_review",
+        subject_type: "profile",
+        subject_id: "profile-dana",
+        scope_type: "edition",
+        scope_id: "edition-9",
+        granted_by: null,
+        granted_at: "2026-10-12T00:00:00Z",
+        expires_at: null,
+        last_used_at: null,
+        revoked_at: null,
+        revoke_reason: null,
+      },
+    ];
+  });
+
+  it("names everyone the press closes the door on, before the act", () => {
+    renderReach();
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(
+      screen.getByText(
+        "This closes the review for everyone on this edition, not only Dana Kowalski.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("asks for a reason as REQUIRED, never optional, and refuses a short one", () => {
+    renderReach();
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    expect(
+      screen.getByText(
+        "Say why the door closes. Required, at least five characters, kept with the record.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Why it closes"), {
+      target: { value: "no" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close this door" }));
+    expect(
+      screen.getByText("Write at least five characters saying why it closes."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("the pure parts", () => {
+  it("names the phone kinds", () => {
+    expect(isPhoneChannel("mobile")).toBe(true);
+    expect(isPhoneChannel("email")).toBe(false);
+  });
+
+  it("channelRowParts leaves out a marker it does not hold", () => {
+    expect(
+      channelRowParts({
+        channel_kind: "email",
+        preferred: false,
+        verified: false,
+        verified_at: null,
+      } as never),
+    ).toEqual(["Email"]);
+  });
+
+  it("heldChannelReason says why, and what still reaches them", () => {
+    expect(
+      heldChannelReason({
+        channel_kind: "email",
+        status: "bounced",
+        status_at: "2026-03-12T00:00:00Z",
+      } as never),
+    ).toBe(
+      "This address bounced back, 11 March 2026. Texts and calls still reach them.",
+    );
+  });
+
+  /**
+   * CR10-3 — the status editor offers "It bounces" on every kind, so a
+   * bouncing MOBILE printed "This address bounced back… Texts and calls still
+   * reach them." beside a phone number: it called a number an address, then
+   * promised texts still reach the line it had just declared held.
+   */
+  it("gives a bouncing PHONE its own words", () => {
+    expect(
+      heldChannelReason({
+        channel_kind: "mobile",
+        status: "bounced",
+        status_at: "2026-03-12T00:00:00Z",
+      } as never),
+    ).toBe(
+      "Texts to this number bounced back, 11 March 2026. Calls still reach them.",
+    );
+  });
+
+  /**
+   * W4 r10 M-1 (R-CB) — THE DAY IS THE STUDIO'S, NOT UTC'S. `status_at` is a
+   * timestamptz; the old `.slice(0, 10)` read the UTC day off the wire, so a
+   * bounce recorded at 8pm in the studio printed tomorrow's date on the card.
+   */
+  it("reads a held channel's day on the studio's calendar, not UTC's", () => {
+    // 2026-03-11 20:00 America/Chicago — already the 12th in UTC.
+    expect(
+      heldChannelReason({
+        channel_kind: "email",
+        status: "dead",
+        status_at: "2026-03-12T01:00:00Z",
+      } as never),
+    ).toBe("This line is dead, 11 March 2026.");
+    // 2026-03-12 09:00 America/Chicago — the same UTC day, and the same
+    // studio day, so the two only ever part at the edges.
+    expect(
+      heldChannelReason({
+        channel_kind: "email",
+        status: "dead",
+        status_at: "2026-03-12T14:00:00Z",
+      } as never),
+    ).toBe("This line is dead, 12 March 2026.");
+  });
+
+  it("stamps a verified marker on the studio's day too", () => {
+    expect(
+      channelRowParts({
+        channel_kind: "mobile",
+        preferred: false,
+        verified: true,
+        verified_at: "2026-10-12T02:00:00Z",
+      } as never),
+    ).toEqual(["Mobile", "verified 11 Oct 2026"]);
+  });
+
+  it("a grant with no end date still ends with the job", () => {
+    expect(grantEndsSentence(null, NOW)).toBe(
+      "Ends with the job. Renews when they use it.",
+    );
+  });
+
+  it("a grant inside fourteen days adds the count, and nothing outside it does", () => {
+    expect(grantEndsSentence("2026-10-27T00:00:00Z", NOW)).toContain(
+      "7 days left.",
+    );
+    expect(grantEndsSentence("2027-08-13T00:00:00Z", NOW)).not.toContain(
+      "days left",
+    );
+  });
+
+  /**
+   * QA-R8-1 — the field link's stored expiry is an EXCLUSIVE boundary, so the
+   * row names the last day the door is open. Dana Kowalski's Okonkwo seat runs
+   * to 24 May 2027; `create_field_link` stores 25 May 00:00, and the card's
+   * Seats region and Mint sentence both say 24 May.
+   */
+  it("the field link's end date is the seat's own last day, not the day after", () => {
+    expect(grantEndsSentence("2027-05-25T00:00:00Z", NOW, "field_link")).toBe(
+      "Ends with the job, 24 May 2027. Renews when they use it.",
+    );
+    // The ninety-day fallback and a caller-supplied end-of-day both stay on
+    // their own day — one rule, all three branches of the RPC.
+    expect(
+      grantEndsSentence("2027-05-24T23:59:59Z", NOW, "field_link"),
+    ).toContain("24 May 2027");
+    expect(
+      grantEndsSentence("2027-05-24T14:33:21Z", NOW, "field_link"),
+    ).toContain("24 May 2027");
+    // A tier that stores a plain instant keeps the instant it carries — but
+    // the DAY it prints is still the studio's. Midnight UTC on the 25th is
+    // 7pm on the 24th in the studio, and the door is dead all day on the 25th
+    // (R-CB, W4 r10 M-1).
+    expect(grantEndsSentence("2027-05-25T00:00:00Z", NOW, "doc_share")).toBe(
+      "Ends 24 May 2027.",
+    );
+    // A mid-afternoon instant reads the same day on either calendar.
+    expect(grantEndsSentence("2027-05-25T18:00:00Z", NOW, "doc_share")).toBe(
+      "Ends 25 May 2027.",
+    );
+  });
+
+  /**
+   * W4 r3 (QA) MAJOR-1 — the paperwork door stores the same exclusive whole-day
+   * boundary the field link does (`v_window_end::timestamptz + interval '1
+   * day'`, 00637:470-475), so the durable Access grants row read one day later
+   * than the mint band's own "Ends with the job — 8 February 2027".
+   */
+  it("the paperwork door's end date is the day the studio chose, not the day after", () => {
+    expect(
+      grantEndsSentence("2027-02-09T00:00:00+00:00", NOW, "paperwork_link"),
+    ).toBe("Ends 8 February 2027.");
+    // A caller-supplied end-of-day still names its own day — one rule, both
+    // branches of the mint.
+    expect(
+      grantEndsSentence("2027-02-08T23:59:59Z", NOW, "paperwork_link"),
+    ).toBe("Ends 8 February 2027.");
+    // …and it keeps the paperwork tier's own wording, never the field link's
+    // "renews when they use it": a door onto paper does not renew on use.
+    expect(
+      grantEndsSentence("2027-02-09T00:00:00Z", NOW, "paperwork_link"),
+    ).not.toContain("Renews");
+  });
+
+  it("a refusal reads as a refusal, with the date it was made", () => {
+    expect(
+      consentSentence({
+        status: "opted_out",
+        optOutSource: "inbound_sms",
+        optOutAt: "2025-12-03",
+        projectName: "Lindqvist kitchen",
+      }),
+    ).toBe("Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.");
+  });
+
+  it("a record with no date prints no sentence at all", () => {
+    expect(consentSentence({ status: "granted", source: "verbal" })).toBeNull();
+  });
+
+  /**
+   * CR-2 — THE WORD AND THE CLAUSE ON ONE LINE MUST AGREE.
+   * `channel_consent_status()` folds `refusal_unanswered` into `opted_out`
+   * whatever `status` says, and 00594 mints `granted` rows carrying that flag
+   * on purpose. Reading `record.status` printed "Written consent, 2 May 2025"
+   * beside a terracotta `Opted out`.
+   */
+  it("the VERDICT decides which half of the record the sentence reads", () => {
+    const record = {
+      status: "granted",
+      refusal_unanswered: true,
+      source: "written",
+      consented_at: "2025-05-02",
+      opt_out_source: "inbound_sms",
+      opt_out_at: "2025-12-03",
+    } as never;
+    expect(
+      consentSentenceForRecord({ verdict: "opted_out", record }, "Lindqvist kitchen"),
+    ).toBe("Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.");
+    expect(
+      consentSentenceForRecord({ verdict: "granted", record }, "Lindqvist kitchen"),
+    ).toBe("Written consent, 2 May 2025, on the Lindqvist kitchen.");
+  });
+
+  it("the mint sentence never promises a window it does not have", () => {
+    expect(mintConsequenceSentence("Erin Sato", null)).toBe(
+      "This opens the Call Sheet and the site access card to Erin Sato until the job's window closes. It never opens billing or the agreement.",
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Round 7
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("CR7-2 — a firm's card reads firm-scoped tokens only", () => {
+  const crewFieldLink = {
+    grant_id: "field_link:tok-1",
+    tier: "field_link",
+    subject_type: "engagement",
+    subject_id: "seat-dana",
+    scope_type: "project",
+    scope_id: "proj-okonkwo",
+    granted_by: null,
+    granted_at: "2026-10-12",
+    expires_at: "2027-08-13",
+    last_used_at: null,
+    revoked_at: null,
+    revoke_reason: null,
+  };
+  const firmAgreementLink = {
+    ...crewFieldLink,
+    grant_id: "agreement_link:agr-1",
+    tier: "agreement_link",
+    subject_type: "contact",
+    subject_id: "card-northgate",
+  };
+
+  it("withholds a crew member's personal door — its word AND its Revoke", () => {
+    grantsData.current = [crewFieldLink];
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    // "Field link" is one of the three reach words, and SPEC §5.3 #9 bars every
+    // one of them from a company card.
+    expect(screen.queryByText(/Field link/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Revoke/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(NO_GRANT_SENTENCE)).toBeInTheDocument();
+  });
+
+  it("still prints a token the FIRM itself holds", () => {
+    grantsData.current = [firmAgreementLink];
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    expect(screen.queryByText(NO_GRANT_SENTENCE)).not.toBeInTheDocument();
+    expect(screen.getByText(/Agreement link/)).toBeInTheDocument();
+  });
+
+  it("leaves a PERSON's own card untouched", () => {
+    grantsData.current = [crewFieldLink];
+    renderReach();
+    expect(screen.getByText(/Field link/)).toBeInTheDocument();
+  });
+
+  // W4 r2 MAJOR W4R2-2. The filter was `subject_type === "contact"`, written
+  // when `agreement_link` was the only firm-scoped tier. W4's paperwork door
+  // stamps `subject_type = 'company'` (00637 branch 12), so a LIVE grant was
+  // dropped at render and `revoke_paperwork_link` became unreachable from every
+  // surface in the build. The filter now names the tiers, not the subject type.
+  const firmPaperworkLink = {
+    ...crewFieldLink,
+    grant_id: "paperwork_link:tok-pw",
+    tier: "paperwork_link",
+    subject_type: "company",
+    subject_id: "card-northgate",
+    scope_type: "organization",
+    scope_id: "org-1",
+    expires_at: "2026-10-15T23:59:59+00:00",
+  };
+
+  it("prints a LIVE paperwork door on the firm's card, with its Revoke", () => {
+    grantsData.current = [firmPaperworkLink];
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    expect(screen.queryByText(NO_GRANT_SENTENCE)).not.toBeInTheDocument();
+    expect(screen.getByText(/Paperwork link/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Revoke/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps both firm-scoped tiers on the same card", () => {
+    grantsData.current = [firmAgreementLink, firmPaperworkLink, crewFieldLink];
+    renderReach({ cardKind: "company", personName: "Northgate Electric" });
+    expect(screen.getByText(/Agreement link/)).toBeInTheDocument();
+    expect(screen.getByText(/Paperwork link/)).toBeInTheDocument();
+    expect(screen.queryByText(/Field link/)).not.toBeInTheDocument();
+  });
+});
+
+describe("CR7-3 — the acts name the job they land on", () => {
+  it("names the job in the mint consequence sentence", () => {
+    expect(
+      mintConsequenceSentence("Dana Kowalski", "2027-08-13", "Okonkwo residence"),
+    ).toBe(
+      "This opens the Call Sheet and the site access card to Dana Kowalski, on the Okonkwo residence, until the job's window closes, 13 August 2027. It never opens billing or the agreement.",
+    );
+  });
+
+  it("names the job in the Record-consent band", () => {
+    channelsData.current = [
+      {
+        id: "ch-1",
+        owner_type: "person",
+        owner_id: "card-dana",
+        channel_kind: "mobile",
+        value: "+16125550111",
+        status: "active",
+        is_preferred: true,
+        // CR12-1: the consent band is offered on a line that takes a text.
+        sms_capable: true,
+      },
+    ];
+    renderReach();
+    fireEvent.click(screen.getByRole("button", { name: "Record consent" }));
+    expect(
+      screen.getByText("This is recorded on the Okonkwo residence."),
+    ).toBeInTheDocument();
+  });
+});

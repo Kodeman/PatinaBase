@@ -1,0 +1,22 @@
+Pager usage is off.
+BEGIN
+SET
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:  Dana card=d0e10000-0000-0000-0000-000000000011  phone=+16125550111
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:  BEFORE  person_id=d0e10000-0000-0000-0000-000000000011 role=contact seats=2 consent=granted
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:  AFTER   person_id=d0e10000-0000-0000-0000-000000000011 role=contact seats=3 consent=granted
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:  people_directory rows: 62 -> 62  (one human, one new seat)
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:  people_directory_seats rows for Dana: 3
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:     seat identity_key=d0e10000-0000-0000-0000-000000000011 person_id=d0e10000-0000-0000-0000-000000000011 project=Okonkwo residence
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:     seat identity_key=d0e10000-0000-0000-0000-000000000011 person_id=d0e10000-0000-0000-0000-000000000011 project=Okonkwo residence
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:     seat identity_key=d0e10000-0000-0000-0000-000000000011 person_id=d0e10000-0000-0000-0000-000000000011 project=Lindqvist kitchen
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:  RECORD: seats on Okonkwo carrying Dana's number AND her card stamp: 2
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:58: NOTICE:  RECORD: seats anywhere carrying Dana's number and NO stamp: 0
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:87: NOTICE:  MIRROR: the seat starts unstamped (studio_contact_id=<NULL>)
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:87: NOTICE:  MIRROR: card minted = 6fa111fa-c864-4a87-8ed8-4c92a69374fc
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:87: NOTICE:  MIRROR: seats now carrying that card: 1
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:87: NOTICE:  MIRROR: people_directory rows for that human: 1
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe204-w1b-fix-r12-m2-unstamped-seat.sql:102: NOTICE:  AMBIGUITY: two cards share the number, so the seat stays unstamped: 1 of 1
+DO
+ROLLBACK

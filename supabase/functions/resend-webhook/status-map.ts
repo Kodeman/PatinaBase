@@ -44,9 +44,57 @@ export const DELIVERY_UPGRADE_FROM_STATUSES = [
 ] as const;
 
 /**
+ * The `last_event` label written for each event this webhook handles — every
+ * one of them, including the two that deliberately change no status.
+ *
+ * 'email.sent' is Resend's own accept confirmation and must never downgrade a
+ * row that has already reached 'delivered'/'opened'/'clicked'.
+ * 'email.delivery_delayed' is a transient retry notice, not an outcome: the
+ * message may still land, so the status stays where it was and only
+ * `delayed_at` records that a retry happened.
+ */
+export const RESEND_EVENT_LAST_EVENT: Record<string, string> = {
+  "email.sent": "sent",
+  "email.delivered": "delivered",
+  "email.delivery_delayed": "delivery_delayed",
+  "email.opened": "opened",
+  "email.clicked": "clicked",
+  "email.bounced": "bounced",
+  "email.complained": "complained",
+};
+
+/** The `last_event` label for an event type, or null when it is unhandled. */
+export function lastEventName(eventType: string): string | null {
+  return RESEND_EVENT_LAST_EVENT[eventType] ?? null;
+}
+
+/**
  * Resend bounce types that are permanent. A hard bounce suppresses the
  * recipient on the first event; soft bounces stay on the rolling threshold.
+ *
+ * Resend's own payload capitalises the value ("Permanent" / "Transient"), so
+ * the comparison folds case — the pre-00591 handler read a `bounce_type` key
+ * that the provider never sends, and so never once saw a hard bounce.
  */
-export function isHardBounce(bounceType?: string): boolean {
-  return bounceType === "hard" || bounceType === "permanent";
+export function isHardBounce(bounceType?: string | null): boolean {
+  const value = (bounceType ?? "").trim().toLowerCase();
+  return value === "hard" || value === "permanent";
+}
+
+/** The bounce sub-object Resend sends on `email.bounced` (docs: webhooks/emails/bounced). */
+interface ResendBounceData {
+  bounce?: { type?: string; subType?: string; message?: string };
+  /** Never sent by Resend; read for anything replaying a legacy payload. */
+  bounce_type?: string;
+  [key: string]: unknown;
+}
+
+/** "Permanent" / "Transient" — `data.bounce.type`, else a legacy flat key. */
+export function resolveBounceType(data: ResendBounceData): string | null {
+  return data.bounce?.type ?? data.bounce_type ?? null;
+}
+
+/** The receiving server's own words: `data.bounce.message`, else its subType. */
+export function resolveBounceReason(data: ResendBounceData): string | null {
+  return data.bounce?.message ?? data.bounce?.subType ?? null;
 }

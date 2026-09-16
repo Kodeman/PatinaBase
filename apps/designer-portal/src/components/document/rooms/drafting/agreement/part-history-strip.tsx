@@ -18,7 +18,7 @@ import { useAgreementPartEvents } from "@patina/supabase";
 import type { AgreementPartEvent } from "@patina/types";
 
 const LABEL =
-  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]";
+  "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
 
 const FIRST_FEW = 5;
 
@@ -96,7 +96,7 @@ export function PartHistoryStrip({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="mt-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
+          className="mt-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--ink-subtle)]"
         >
           Show all {mine.length}
         </button>

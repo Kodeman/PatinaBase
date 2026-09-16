@@ -229,7 +229,7 @@ describe('ApprovalAsk — the ask, answered where it stands', () => {
     const plate = within(ask).getByTestId('approval-plate');
     expect(plate).toHaveTextContent('Library elevations');
     expect(plate).toHaveTextContent(/Edition 3 · Issued \d+ August/);
-    expect(screen.getByTestId('approval-due-line')).toHaveTextContent('Due 20 August');
+    expect(screen.getByTestId('approval-due-line')).toHaveTextContent('Due 20 August 2026');
     expect(screen.getByTestId('approval-rationale')).toHaveTextContent(
       'This releases the joinery package for pricing.',
     );
@@ -2472,15 +2472,15 @@ describe('the outcome is signed and held (P-18)', () => {
    the money rail keeps with "Past due · {date}". */
 describe('the date line', () => {
   it('says what has become of a date that has passed', () => {
-    expect(dueLine(new Date(2026, 7, 31), true)).toBe('Due 31 August · past its date');
-    expect(dueLine(new Date(2026, 7, 31), false)).toBe('Due 31 August');
+    expect(dueLine(new Date(2026, 7, 31), true)).toBe('Due 31 August 2026 · past its date');
+    expect(dueLine(new Date(2026, 7, 31), false)).toBe('Due 31 August 2026');
   });
 
   it('never says the retired word, and never wears a colour', () => {
     render(<ApprovalAsk approval={{ ...APPROVAL, isOverdue: true }} />);
 
     const line = screen.getByTestId('approval-due-line');
-    expect(line).toHaveTextContent('Due 20 August · past its date');
+    expect(line).toHaveTextContent('Due 20 August 2026 · past its date');
     expect(line.textContent).not.toMatch(/overdue/i);
     expect(line.className).toContain('text-[var(--text-body)]');
     expect(line.className).not.toMatch(/red|terracotta/);

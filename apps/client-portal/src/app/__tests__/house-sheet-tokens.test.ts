@@ -46,10 +46,15 @@ const SHEET_HEXES = [
   '#5F6B57', // sage-ink (new)
 ] as const;
 
-/** The four tokens this portal lacked outright (Lane H2 step 1). */
+/** The tokens this portal lacked outright (Lane H2 step 1, plus --hairline
+ * from the W2 follow-up: the sheet's stroke token, carrying the sheet's own
+ * hex rather than aliasing --rail — §A10 keeps --rail for fills and forbids
+ * drawing a line in it — and distinct from the portal's --border-default
+ * (#E5E2DD), which is a different value. */
 const NEW_TOKENS: Record<string, string> = {
   '--paper-doc': '#FCFAF6',
   '--rail': '#E8E3DB',
+  '--hairline': '#E8E3DB',
   '--ink-subtle': '#5A4E43',
   '--sage-ink': '#5F6B57',
 };
@@ -137,7 +142,7 @@ describe('house-sheet tokens (§A1)', () => {
     }
   });
 
-  it('declares the four tokens this portal lacked, at the sheet value', () => {
+  it('declares the tokens this portal lacked, at the sheet value', () => {
     for (const [name, hex] of Object.entries(NEW_TOKENS)) {
       const re = new RegExp(`${name.replace(/[-]/g, '\\-')}:\\s*${hex}\\s*;`, 'i');
       expect(css).toMatch(re);
@@ -155,6 +160,14 @@ describe('house-sheet tokens (§A1)', () => {
     }
   });
 
+  it('--hairline is the sheet hex, never borrowed from --rail or --border-default', () => {
+    // §A10: --rail is a fill/ground. A stroke token that resolved through it
+    // would read as that borrowing to the next reader of the chain.
+    expect(css).not.toMatch(/--hairline:\s*var\(--rail\)/);
+    expect(css).not.toMatch(/--hairline:\s*var\(--border-default\)/);
+    expect(css).toMatch(/--hairline:\s*#E8E3DB\s*;/i);
+  });
+
   it('declares the new rgba literal token at the sheet value', () => {
     for (const [name, value] of Object.entries(NEW_RGBA_TOKENS)) {
       const escapedValue = value.replace(/[.]/g, '\\.').replace(/[()]/g, '\\$&');
@@ -163,7 +176,7 @@ describe('house-sheet tokens (§A1)', () => {
     }
   });
 
-  it('adds no hex literal in its own token block beyond the four new ones', () => {
+  it('adds no hex literal in its own token block beyond the new ones', () => {
     const tokenRegion = region('house-sheet tokens');
     const hexes = tokenRegion.match(/#[0-9a-fA-F]{3,8}/g) ?? [];
     const allowed = new Set(Object.values(NEW_TOKENS).map((h) => h.toUpperCase()));

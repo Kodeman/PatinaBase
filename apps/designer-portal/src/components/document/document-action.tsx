@@ -27,7 +27,8 @@ export type DocumentActionVariant =
   | 'inked'
   | 'secondary'
   | 'tertiary'
-  | 'danger';
+  | 'danger'
+  | 'terminal';
 export type DocumentActionPresentation = 'inline' | 'mobile_dock';
 
 interface ActionRegion {
@@ -50,7 +51,7 @@ const ActionRegionContext = createContext<ActionRegion | null>(null);
    the matching "The Scored Ink (I107)" block. Colour and depth are value only
    — never a shadow (D4). ─────────────────────────────────────────────────── */
 const BASE_CLASS =
-  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
+  'da-act relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-2 whitespace-nowrap px-[6px] pt-[4px] pb-[10px] font-mono text-[12px] uppercase no-underline disabled:cursor-not-allowed aria-disabled:cursor-not-allowed';
 
 const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   primary: 'da-primary font-medium tracking-[0.12em]',
@@ -58,6 +59,7 @@ const VARIANT_CLASS: Record<DocumentActionVariant, string> = {
   secondary: 'da-secondary font-normal tracking-[0.1em]',
   tertiary: 'da-tertiary font-light tracking-[0.1em]',
   danger: 'da-danger font-medium tracking-[0.12em]',
+  terminal: 'da-terminal font-medium tracking-[0]',
 };
 
 interface DocumentActionBaseProps {
@@ -67,6 +69,24 @@ interface DocumentActionBaseProps {
   variant?: DocumentActionVariant;
   presentation?: DocumentActionPresentation;
   loading?: boolean;
+  /**
+   * §A5 "held" — the act is offered and cannot be taken. Native `disabled`
+   * removes the control from the tab order, so the reason standing beside it
+   * (`aria-describedby`, forwarded like any other aria prop) is never reached
+   * by keyboard. `held` keeps it focusable, marks it `aria-disabled="true"`
+   * and swallows the activation.
+   *
+   * Opt-in, and read only in company with `disabled`/`loading`: every other
+   * caller renders exactly as before.
+   */
+  held?: boolean;
+  /**
+   * Called when a held act is activated — after the act itself is swallowed,
+   * so the caller says WHY rather than doing the thing. Keyboard activation
+   * of a button or a link dispatches a click, so this one path covers Enter,
+   * Space and the pointer. Read only while `held`.
+   */
+  onHeldActivate?: () => void;
   loadingLabel?: ReactNode;
   leading?: ReactNode;
   trailing?: ReactNode;
@@ -125,6 +145,8 @@ export const DocumentAction = forwardRef<
     variant = 'secondary',
     presentation = 'inline',
     loading = false,
+    held = false,
+    onHeldActivate,
     loadingLabel,
     leading,
     trailing,
@@ -142,6 +164,7 @@ export const DocumentAction = forwardRef<
   const surfaceKey = explicitSurfaceKey ?? region?.surfaceKey ?? 'document';
   const regionKey = explicitRegionKey ?? region?.regionKey ?? 'unscoped';
   const unavailable = disabled || loading;
+  const isHeld = held && unavailable;
   const shown = useRef(new Set<string>());
   const shownKey = `${actionKey}:${presentation}`;
 
@@ -199,8 +222,16 @@ export const DocumentAction = forwardRef<
     'data-action-variant': variant,
     'data-action-region': regionKey,
     'aria-busy': loading || undefined,
+    'data-held': isHeld || undefined,
     onPointerDown: markInkPoint,
     onPointerMove: markInkPoint,
+    // Held is faint ink on the rail (N-6), never opacity — and it is already
+    // painted by `.da-act[aria-disabled='true']` (`--text-faint`, byte-
+    // identical to `--ink-faint`) and `.da-terminal[aria-disabled='true']`
+    // (`--doc-rail-stock`, i.e. `--rail`) in `globals.css:1066-1086`. Utility
+    // classes appended here lost that cascade (0,1,0 against 0,2,0) and were
+    // inert (T1R-06); a held-specific treatment belongs in a
+    // `.da-act[data-held='true']` rule after :1086, not here.
     className: [BASE_CLASS, VARIANT_CLASS[variant], className ?? ''].join(' '),
   };
 
@@ -209,6 +240,7 @@ export const DocumentAction = forwardRef<
     const handleClick = async (event: MouseEvent<HTMLAnchorElement>) => {
       if (unavailable) {
         event.preventDefault();
+        if (isHeld) onHeldActivate?.();
         return;
       }
       // A capture failure must never block the act itself — the same
@@ -233,7 +265,7 @@ export const DocumentAction = forwardRef<
         href={href}
         ref={ref as React.Ref<HTMLAnchorElement>}
         aria-disabled={unavailable || undefined}
-        tabIndex={unavailable ? -1 : rest.tabIndex}
+        tabIndex={unavailable && !held ? -1 : rest.tabIndex}
         onClick={handleClick}
       >
         {content}
@@ -241,9 +273,19 @@ export const DocumentAction = forwardRef<
     );
   }
 
+  // Spread, never written as `aria-disabled={isHeld || undefined}`: that form
+  // sits after `{...rest}` and erases a caller's OWN `aria-disabled` on every
+  // act that is not held. `discovery-section.tsx:554` is one such caller, and
+  // its refusal stopped being announced. Held adds the mark; nothing else
+  // touches it.
+  const heldMark = isHeld ? ({ 'aria-disabled': true } as const) : null;
+
   const buttonOnClick = onClick as DocumentActionButtonProps['onClick'];
   const handleClick = async (event: MouseEvent<HTMLButtonElement>) => {
-    if (unavailable) return;
+    if (unavailable) {
+      if (isHeld) onHeldActivate?.();
+      return;
+    }
     // Same isolate-and-log guard as the Link branch above — a capture
     // failure can never swallow the click's own state update.
     try {
@@ -264,7 +306,8 @@ export const DocumentAction = forwardRef<
       {...shared}
       ref={ref as React.Ref<HTMLButtonElement>}
       type={(rest as ButtonHTMLAttributes<HTMLButtonElement>).type ?? 'button'}
-      disabled={unavailable}
+      disabled={unavailable && !held}
+      {...heldMark}
       onClick={handleClick}
     >
       {content}

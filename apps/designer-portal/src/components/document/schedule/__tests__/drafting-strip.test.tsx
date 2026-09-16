@@ -161,7 +161,7 @@ describe('DraftingStrip — the deck’s anatomy', () => {
 
   it('marks today and dates it under the strip', () => {
     renderStrip();
-    expect(screen.getByText(/Today · Sep 15/)).toBeVisible();
+    expect(screen.getByText(/Today · 15 September/)).toBeVisible();
   });
 
   it('names the three gestures in the hint caption', () => {

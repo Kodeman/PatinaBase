@@ -75,6 +75,7 @@ describe('schedule_conflict need (R28)', () => {
     expect(need?.text).toBe('Two installs collide — week of Jul 13');
     expect(need?.stamp.label).toBe('COLLISION');
     expect(need?.urgent).toBe(false);
+    expect(need?.owner).toBe('designer');
   });
 
   it('drift does not raise a need line — it stays a motion chip', () => {
@@ -149,6 +150,7 @@ describe('schedule_unconfigured need (R113 / R6)', () => {
     expect(need?.kind).toBe('schedule_unconfigured');
     expect(need?.text).toBe('Name the phases for this project');
     expect(need?.urgent).toBe(false);
+    expect(need?.owner).toBe('designer');
   });
 
   it('an unanchored install week asks for the anchor', () => {
@@ -368,6 +370,7 @@ describe('the resolver contradiction joins schedule_conflict (R4)', () => {
     expect(need?.kind).toBe('schedule_conflict');
     expect(need?.text).toBe(CONTRADICTION);
     expect(need?.urgent).toBe(false);
+    expect(need?.owner).toBe('designer');
     // R113: a desk line never carries an engine identifier.
     expect(need?.text).not.toMatch(UUID_RE);
   });
@@ -421,6 +424,7 @@ describe('the resolver contradiction joins schedule_conflict (R4)', () => {
     expect(need?.kind).toBe('schedule_conflict');
     expect(need?.text).toBe('A recorded date contradicts an anchor already committed');
     expect(need?.text).not.toMatch(UUID_RE);
+    expect(need?.owner).toBe('designer');
   });
 });
 
@@ -445,6 +449,7 @@ describe('schedule_proposal need (R109 / R110)', () => {
     expect(need?.text).toBe('A signed act proposes a schedule anchor — review');
     expect(need?.actionLabel).toBe('Review the proposed date');
     expect(need?.urgent).toBe(false);
+    expect(need?.owner).toBe('designer');
   });
 
   it('an operational fact names a recorded event, never a signature', () => {

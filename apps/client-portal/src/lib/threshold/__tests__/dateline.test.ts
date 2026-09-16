@@ -34,36 +34,43 @@ describe('readingMarkLine — where she last stood', () => {
 });
 
 describe('owedDueLine — what the owed row adds to its figure', () => {
-  it('names the day one open invoice falls due', () => {
-    expect(owedDueLine(new Date(2026, 7, 15), 1)).toBe('due 15 August');
+  it('names the day one open invoice falls due, year and all', () => {
+    expect(owedDueLine(new Date(2026, 7, 15), 1)).toBe('due 15 August 2026');
   });
 
   it('names the day as the SOONEST when the figure spans several invoices', () => {
     // Neither "due" (the whole balance falls that day) nor "first due" (the
     // rest have days of their own) is true of a set; "soonest" is.
-    expect(owedDueLine(new Date(2026, 7, 15), 3, undefined, 3)).toBe('soonest due 15 August');
-    expect(owedDueLine(new Date(2026, 7, 15), 1, undefined, 3)).toBe('soonest due 15 August');
+    expect(owedDueLine(new Date(2026, 7, 15), 3, undefined, 3)).toBe(
+      'soonest due 15 August 2026',
+    );
+    expect(owedDueLine(new Date(2026, 7, 15), 1, undefined, 3)).toBe(
+      'soonest due 15 August 2026',
+    );
   });
 
   it('says plain "due" only for one dated invoice with nothing else open', () => {
-    expect(owedDueLine(new Date(2026, 7, 15), 1, undefined, 1)).toBe('due 15 August');
+    expect(owedDueLine(new Date(2026, 7, 15), 1, undefined, 1)).toBe('due 15 August 2026');
   });
 
   it('says nothing when no invoice carries a due date', () => {
     expect(owedDueLine(null, 1)).toBeNull();
   });
 
-  it('spells the year out once the day is not in this one', () => {
+  // A due date is a term of the invoice it is owed on (PP-2). It no longer
+  // reckons against today at all: the year is on the page in the year it
+  // falls in and in every other one, so the same figure cannot read one way
+  // in December and another in January.
+  it('spells the year out whatever today is', () => {
     expect(owedDueLine(new Date(2026, 7, 15), 1, new Date(2027, 0, 4), 1)).toBe(
       'due 15 August 2026',
     );
     expect(owedDueLine(new Date(2026, 7, 15), 3, new Date(2027, 0, 4), 3)).toBe(
       'soonest due 15 August 2026',
     );
-  });
-
-  it('leaves the year off in the year the day falls in', () => {
-    expect(owedDueLine(new Date(2026, 7, 15), 1, new Date(2026, 0, 4), 1)).toBe('due 15 August');
+    expect(owedDueLine(new Date(2026, 7, 15), 1, new Date(2026, 0, 4), 1)).toBe(
+      'due 15 August 2026',
+    );
   });
 });
 

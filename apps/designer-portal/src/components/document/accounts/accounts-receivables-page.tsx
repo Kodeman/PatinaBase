@@ -17,13 +17,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useChaseInvoice,
+  useEmailDelivery,
   useSendInvoice,
   invoiceDaysOverdue,
   type ArAging,
+  type EmailDelivery,
   type Invoice,
 } from '@patina/supabase';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
+import { DeliveryWord } from '../delivery-word';
 import { DocumentAction } from '../document-action';
 import { Stamp } from '../stamp';
 import { openInvoiceFolio } from './invoice-overlays';
@@ -38,6 +41,11 @@ export function AccountsReceivablesPage({
   onOpenDocument: (projectId: string | null) => void;
 }) {
   const { openInvoices, buckets, totalBalanceCents } = aging;
+  // One read for the whole page — a per-row hook would open N queries.
+  const emailDelivery = useEmailDelivery(
+    'invoice',
+    openInvoices.map((inv) => inv.id),
+  );
 
   if (openInvoices.length === 0) {
     return (
@@ -73,6 +81,7 @@ export function AccountsReceivablesPage({
           <ReceivableRow
             key={inv.id}
             invoice={inv}
+            delivery={emailDelivery.byRef[inv.id] ?? null}
             highlight={inv.id === highlightInvoiceId}
             onOpenDocument={onOpenDocument}
           />
@@ -84,10 +93,12 @@ export function AccountsReceivablesPage({
 
 function ReceivableRow({
   invoice,
+  delivery,
   highlight,
   onOpenDocument,
 }: {
   invoice: Invoice;
+  delivery: EmailDelivery | null;
   highlight: boolean;
   onOpenDocument: (projectId: string | null) => void;
 }) {
@@ -168,6 +179,14 @@ function ReceivableRow({
             folio →
           </span>
         </button>
+        {/* Sentence case, terracotta — so it sits OUTSIDE the facts line,
+            which is uppercase and truncating. */}
+        <DeliveryWord
+          delivery={delivery}
+          recipient={invoice.client?.email}
+          mode="attention"
+          className="block truncate"
+        />
         <p className="truncate font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           {invoice.project?.name ?? invoice.title ?? 'Studio'}
           {studioInvoice && (

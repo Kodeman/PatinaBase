@@ -2,7 +2,8 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
+import { formatCurrency } from '@patina/shared';
+
 import type { ThresholdMark } from '@/lib/threshold/derive';
 import {
   LEADER_TEXT_DX,
@@ -103,7 +104,7 @@ const ANCHOR_CLASS =
 
 /** The mark, said in words: what it is, what it is worth, what it wants. */
 function markSentence(mark: ThresholdMark): string {
-  const money = mark.amountCents > 0 ? `${moneyInWords(mark.amountCents)}, ` : '';
+  const money = mark.amountCents > 0 ? `${formatCurrency(mark.amountCents)}, ` : '';
   return mark.kind === 'door'
     ? `${mark.label} — ${money}your name.`
     : `${mark.label} — ${money}held back until you accept it.`;

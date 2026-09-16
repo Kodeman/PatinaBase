@@ -119,6 +119,13 @@ export interface LadderPreworkFacts {
   stageLine: string | null;
   /** The proposal's own total, in cents (`proposals.total_amount`). */
   investmentCents: number | null;
+  /**
+   * D6 — how many of the five discovery essentials are captured
+   * (`deriveDiscoveryReadiness`). `null`/absent = nobody has answered yet, and
+   * only then may the stop print `Nothing yet`: the literal used to print
+   * unconditionally, forty pixels above the readiness band's true `3 of 5`.
+   */
+  essentialsDone?: number | null;
 }
 
 export interface LadderInput {
@@ -532,6 +539,17 @@ function investmentRegister(facts: LadderPreworkFacts | undefined): Register {
   };
 }
 
+function discoveryRegister(facts: LadderPreworkFacts | undefined): Register {
+  const done = facts?.essentialsDone ?? null;
+  if (done == null) return empty('Nothing yet');
+  return {
+    value: `${done} OF 5`,
+    narrowValue: `${done} OF 5`,
+    countLine: `${done} of 5 essentials`,
+    fallback: null,
+  };
+}
+
 function registerFor(key: DocumentIndexKey, input: LadderInput): Register {
   switch (key) {
     case 'approvals':
@@ -552,11 +570,12 @@ function registerFor(key: DocumentIndexKey, input: LadderInput): Register {
       return scopeRegister(input.prework);
     case 'investment':
       return investmentRegister(input.prework);
-    // The three stage stops and the vision have no number to state — a brief,
-    // a discovery, a direction and a vision are prose. They print their name
-    // over `NOTHING YET` at every state (OD-2, DL-02).
-    case 'brief':
+    // D6 — discovery is the one pre-work stop that HAS a number: the five
+    // essentials. The brief, the direction and the vision are still prose, and
+    // print their name over `NOTHING YET` at every state (OD-2, DL-02).
     case 'discovery':
+      return discoveryRegister(input.prework);
+    case 'brief':
     case 'direction':
       return empty('Nothing yet');
     case 'vision':

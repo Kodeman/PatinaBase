@@ -1,0 +1,57 @@
+BEGIN
+=== the gating lapse on file ===
+                  id                  |    company_name    | doc_type | expires_on |       blocks       | superseded_by |  word  
+--------------------------------------+--------------------+----------+------------+--------------------+---------------+--------
+ d0e50000-0000-0000-0000-000000000034 | Ostrom Builders    | coi_gl   | 2025-12-31 | {site_access,draw} |               | lapsed
+ d0e50000-0000-0000-0000-000000000006 | Northgate Electric | coi_gl   | 2026-03-31 | {site_access,draw} |               | lapsed
+(2 rows)
+
+SELECT 1
+GRANT
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000003", "role" : "authenticated"}
+(1 row)
+
+SET
+-- (a) MINOR-31: ONE UPDATE of blocks (not in the trigger UPDATE OF list)
+SAVEPOINT
+UPDATE 1
+ after_blocks_emptied 
+----------------------
+ current
+(1 row)
+
+ROLLBACK
+-- (b) MINOR-36b: ONE UPDATE of expires_on
+SAVEPOINT
+UPDATE 1
+ after_date_edit 
+-----------------
+ current
+(1 row)
+
+ROLLBACK
+-- (c) NEW: ONE DELETE — the paper the migration says is never deleted
+SAVEPOINT
+DELETE 1
+ after_delete 
+--------------
+ current
+(1 row)
+
+ROLLBACK
+-- (d) MINOR-25: a member may claim ANOTHER profile verified the paper
+SAVEPOINT
+UPDATE 1
+             verified_by              | verified 
+--------------------------------------+----------
+ a0000000-0000-0000-0000-000000000004 | t
+(1 row)
+
+ROLLBACK
+-- (e) control: the r1-r4 supersede doors are still closed
+psql:artifacts/people-room-crm-2026-09-11/build/probe122-w1b-final-r6-lapse-doors.sql:64: NOTICE:  supersede refused: compliance_successor_already_lapsed
+DO
+RESET
+ROLLBACK

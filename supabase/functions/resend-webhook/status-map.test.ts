@@ -10,7 +10,11 @@ import {
 import {
   DELIVERY_UPGRADE_FROM_STATUSES,
   isHardBounce,
+  lastEventName,
+  RESEND_EVENT_LAST_EVENT,
   RESEND_EVENT_STATUS,
+  resolveBounceReason,
+  resolveBounceType,
 } from "./status-map.ts";
 
 Deno.test("email.delivered is the only writer of 'delivered'", () => {
@@ -73,4 +77,59 @@ Deno.test("soft and unknown bounce types stay on the rolling threshold", () => {
   assertFalse(isHardBounce("soft"));
   assertFalse(isHardBounce("transient"));
   assertFalse(isHardBounce(undefined));
+});
+
+Deno.test("'sent' and 'delivery_delayed' are handled but write no status", () => {
+  // Resend's accept is not a delivery, and a delay is not an outcome; both
+  // would otherwise downgrade a row that has already gone further.
+  assertEquals(RESEND_EVENT_STATUS["email.sent"], undefined);
+  assertEquals(RESEND_EVENT_STATUS["email.delivery_delayed"], undefined);
+  assertEquals(lastEventName("email.sent"), "sent");
+  assertEquals(lastEventName("email.delivery_delayed"), "delivery_delayed");
+});
+
+Deno.test("every status-writing event also carries a last_event label", () => {
+  for (const type of Object.keys(RESEND_EVENT_STATUS)) {
+    assertEquals(typeof RESEND_EVENT_LAST_EVENT[type], "string");
+  }
+});
+
+Deno.test("an unhandled event type has no last_event label", () => {
+  assertEquals(lastEventName("email.scheduled"), null);
+});
+
+Deno.test("bounce detail comes from the bounce sub-object Resend sends", () => {
+  // https://resend.com/docs/webhooks/emails/bounced — data.bounce carries
+  // { type, subType, message }; there is no flat bounce_type key.
+  const data = {
+    bounce: {
+      type: "Permanent",
+      subType: "Suppressed",
+      message: "The recipient's address is on the suppression list.",
+    },
+  };
+  assertEquals(resolveBounceType(data), "Permanent");
+  assertEquals(
+    resolveBounceReason(data),
+    "The recipient's address is on the suppression list.",
+  );
+});
+
+Deno.test("bounce detail falls back to the flat key and to subType", () => {
+  assertEquals(resolveBounceType({ bounce_type: "hard" }), "hard");
+  assertEquals(
+    resolveBounceReason({ bounce: { subType: "MessageRejected" } }),
+    "MessageRejected",
+  );
+  assertEquals(resolveBounceType({}), null);
+  assertEquals(resolveBounceReason({}), null);
+});
+
+Deno.test("Resend's capitalised bounce type still reads as permanent", () => {
+  // The pre-00591 handler compared lowercase against a key Resend never sends,
+  // so a real hard bounce never once suppressed an address.
+  assertEquals(isHardBounce("Permanent"), true);
+  assertEquals(isHardBounce("Hard"), true);
+  assertFalse(isHardBounce("Transient"));
+  assertFalse(isHardBounce(null));
 });

@@ -45,11 +45,27 @@ import {
 } from "./part-kinds";
 
 export interface AgreementBlocker {
-  /** The part this blocker belongs to, so the rail can mark the row. Null for
-   *  a blocker about the document as a whole (its kind, its state, its
+  /** The part this blocker belongs to, so the outline can mark the row. Null
+   *  for a blocker about the document as a whole (its kind, its state, its
    *  client, the class floor). */
   partId: string | null;
   message: string;
+  /**
+   * The imperative phrase the readiness voice counts with — "name a fee",
+   * "name a ceiling", "link a client". Absent, the voice falls back to
+   * `message`, so the region is never empty and never wrong (§A10).
+   */
+  ask?: string;
+  /** What the voice says when THIS blocker is the one that just went —
+   *  "Role rates name the fee". Absent, no transition sentence is composed. */
+  cleared?: string;
+  /**
+   * The blocker's message adds nothing the readiness voice is not already
+   * saying, so the galley's foot does not print it a second time. SPEC §5
+   * marks #20 — the client-link sentence — "comment, not rendered"; the voice
+   * counts it as `link a client` and that is the whole of it.
+   */
+  quiet?: boolean;
 }
 
 export interface AgreementReadiness {
@@ -91,6 +107,45 @@ export function duplicateMoneyBlocker(label: string): string {
  *  showed none of the reason. Named here once because the rail marks the row
  *  with it and the readiness panel prints it. */
 export const BLANK_ROLE_BLOCKER = "Every role on the rate card needs a name.";
+
+/**
+ * HT-4 — a rate that names no roster role prices nobody.
+ *
+ * `resolve_time_rate_cents` and `classify_project_time_entry_authority` (00618)
+ * ask `roster_role` first and fall to the legacy label only for a card written
+ * before the binding existed. That fallback is a normalize-match, so a card
+ * carrying two labels neither of which matches — the shipped default
+ * "Principal designer" beside "Associate" — prices every hour on the project at
+ * `rate_source='none'`, `pending_authorization`, NULL `authority_rate_id`, for
+ * ever: 00577's promotion loop will not promote a row with no rate to promote.
+ *
+ * The room asks for the binding BEFORE the document is sent, because after
+ * countersign the rate rows are the immutable snapshot of a signed contract and
+ * the binding can no longer be made. Save is unaffected — a draft is allowed to
+ * be unfinished — and a card that carries no roles at all asks nothing.
+ */
+export const UNBOUND_ROLE_BLOCKER =
+  "Every rate on the card names the roster role it prices.";
+
+/**
+ * W7-R2-03 — a rate that prices at nothing is not a rate.
+ *
+ * `+ Add a role` seeds a fully-named, BOUND row at $0/hr on both surfaces that
+ * write a rate card. Before the enum binding, the seed's EMPTY name was the
+ * guard: it tripped BLANK_ROLE_BLOCKER here and `rateCardForSave`'s trim filter
+ * on the studio page dropped it. Both of those now pass, and nothing else in
+ * the chain asks for a positive number — R-7 below asks only that ONE role be
+ * priced, `upsert_agreement_parts` (00618) refuses only an ABSENT rate, and
+ * `_agreement_assert_cents` accepts 0. A bound card wins tier 1 in both pricing
+ * legs, so every hour that roster role logs would price
+ * `rate_source='authority'`, `hourly_rate_cents=0`, `billing_state='authorized'`
+ * — it reads as priced, bills nothing, and `guard_invoiced_time_entry` freezes
+ * it at $0 the moment it is invoiced. After countersign the rate rows are the
+ * immutable snapshot of a signed contract, so there is no repair short of a new
+ * agreement version. Asked here, before the document can go.
+ */
+export const ZERO_RATE_BLOCKER =
+  "Every role on the rate card needs an hourly rate above zero.";
 
 /** R33 — a fee the homeowner never sees never reaches the money row. */
 export const HIDDEN_FEE_BLOCKER =
@@ -162,8 +217,11 @@ export function assessAgreementReadiness({
 }): AgreementReadiness {
   const blockers: AgreementBlocker[] = [];
   const notes: string[] = [];
-  const add = (partId: string | null, message: string) =>
-    blockers.push({ partId, message });
+  const add = (
+    partId: string | null,
+    message: string,
+    voice?: { ask: string; cleared?: string; quiet?: boolean },
+  ) => blockers.push({ partId, message, ...voice });
 
   // R-1 / R-2 — the document itself, unchanged from the flag-off wording.
   if (
@@ -254,12 +312,22 @@ export function assessAgreementReadiness({
         )
       ) {
         add(part.id, "Add at least one role with an hourly rate.");
+      } else if (roles.some((role) => !(role.hourlyRateCents > 0))) {
+        // Only where R-7 above is silent: a card that already carries one real
+        // rate is the case a seeded $0 row rides in on unremarked.
+        add(part.id, ZERO_RATE_BLOCKER);
       }
       // Every role, not just one of them: the RPC walks the whole array and
       // refuses on the first blank name, so a named role standing beside a
       // blank one is a save the server will not take.
       if (roles.some((role) => role.roleName.trim().length === 0)) {
         add(part.id, BLANK_ROLE_BLOCKER);
+      }
+      // HT-4 — and every rate binds to a roster role, or the hours it was
+      // written to price strand at `rate_source='none'` the moment the
+      // agreement is countersigned.
+      if (roles.length > 0 && roles.some((role) => !role.rosterRole)) {
+        add(part.id, UNBOUND_ROLE_BLOCKER);
       }
     }
 
@@ -434,9 +502,10 @@ export function assessAgreementReadiness({
       );
     });
     const doubleCount = validateNoDoubleCount({
-      supervision: supervisionParts.length > 0
-        ? readSupervision(supervisionParts[0].payload ?? {})
-        : null,
+      supervision:
+        supervisionParts.length > 0
+          ? readSupervision(supervisionParts[0].payload ?? {})
+          : null,
       subMarkupBps: readSubMarkupBps(pricingBasisPart?.payload ?? {}),
     });
     if (doubleCount) {
@@ -485,9 +554,21 @@ export function assessAgreementReadiness({
   // alone would leave a `design_build` document with the turnkey block
   // skipped — the flag off — carrying no money question at all.
   if (!turnkeyFloor && !namesAFee && hiddenFees.length === 0) {
+    // SPEC §4 Direction I puts this sentence BESIDE the Role rates seam, not
+    // at the paper's foot — it is the note D's crux (iv) names. So it is
+    // filed against the rate-card part whenever the composition carries one:
+    // the strip beside that part prints it, the outline's row says "needs
+    // attention", and the held Send's focus lands on the part the sentence is
+    // about. With no rate card to point at it stays a document blocker and
+    // the foot carries it, remedy and all.
+    const rateCardPart =
+      parts.find(
+        (part) => part.kind === "schedule" && part.variant === "rate_card",
+      ) ?? null;
     add(
-      null,
+      rateCardPart?.id ?? null,
       "This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.",
+      { ask: "name a fee", cleared: "Role rates name the fee" },
     );
   }
 
@@ -527,12 +608,13 @@ export function assessAgreementReadiness({
     add(
       ceilingPart?.id ?? null,
       "An agreement that bills hourly needs a ceiling. Add a Ceiling part, or remove the role rates.",
+      { ask: "name a ceiling" },
     );
   }
 
   // R-3 — last, as it is today.
   if (!recipientEmail?.trim()) {
-    add(null, CLIENT_LINK_BLOCKER);
+    add(null, CLIENT_LINK_BLOCKER, { ask: "link a client", quiet: true });
   }
 
   return { ready: blockers.length === 0, blockers, notes };
@@ -580,5 +662,7 @@ export function blockersForPart(
 export function documentBlockers(
   readiness: AgreementReadiness,
 ): AgreementBlocker[] {
-  return readiness.blockers.filter((blocker) => blocker.partId === null);
+  return readiness.blockers.filter(
+    (blocker) => blocker.partId === null && blocker.quiet !== true,
+  );
 }

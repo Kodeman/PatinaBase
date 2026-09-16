@@ -1,0 +1,184 @@
+################ PHASE A — the shipped bodies ################
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+INSERT 0 4
+UPDATE 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+=== premise: the two resolvers disagree on this project ===
+ consent_resolver_names 
+------------------------
+ Leah Hartwell
+(1 row)
+
+ assume_user 
+-------------
+ 
+(1 row)
+
+ gate_resolver_names 
+---------------------
+ Local Dev Studio
+(1 row)
+
+=== A. own firm card on own seat (block 14t) ===
+psql:artifacts/people-room-crm-2026-09-11/build/probe143-w1b-fix-r7-negative-control.sql:54: NOTICE:  A: the working studio's OWN firm pointer LANDED
+DO
+=== B. own warranty contact on own seat (block 14u) ===
+psql:artifacts/people-room-crm-2026-09-11/build/probe143-w1b-fix-r7-negative-control.sql:61: NOTICE:  B: the working studio's OWN warranty contact LANDED
+DO
+=== C. a FOREIGN studio's firm card on this studio's seat (block 14w) ===
+ can_the_admin_read_the_foreign_card 
+-------------------------------------
+                                   0
+(1 row)
+
+psql:artifacts/people-room-crm-2026-09-11/build/probe143-w1b-fix-r7-negative-control.sql:69: NOTICE:  C: refused — party_company_other_studio
+DO
+              company_id              | paper_state 
+--------------------------------------+-------------
+ e7100000-0000-4000-8000-0000000000a1 | not_on_file
+(1 row)
+
+=== D. the number set and the identity word on the studio-less job (block 16c/16d) ===
+ record_for_the_seats_number 
+-----------------------------
+ opted_out
+(1 row)
+
+         number_set          
+-----------------------------
+ {+16125559996,+16125559997}
+(1 row)
+
+     display_name      | consent_status 
+-----------------------+----------------
+ Probe143 Carded Trade | opted_out
+(1 row)
+
+=== E. the mutation control: the same seat on a job that RECORDS its studio (block 16f/16g) ===
+ reset_role 
+------------
+ 
+(1 row)
+
+UPDATE 1
+ assume_user 
+-------------
+ 
+(1 row)
+
+     number_set_control      
+-----------------------------
+ {+16125559996,+16125559997}
+(1 row)
+
+     display_name      | consent_status 
+-----------------------+----------------
+ Probe143 Carded Trade | opted_out
+(1 row)
+
+ reset_role 
+------------
+ 
+(1 row)
+
+ROLLBACK
+################ PHASE B — r6's bodies restored (the pre-fix behaviour) ################
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 4
+UPDATE 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+=== premise: the two resolvers disagree on this project ===
+ consent_resolver_names 
+------------------------
+ Leah Hartwell
+(1 row)
+
+ assume_user 
+-------------
+ 
+(1 row)
+
+ gate_resolver_names 
+---------------------
+ Local Dev Studio
+(1 row)
+
+=== A. own firm card on own seat (block 14t) ===
+psql:artifacts/people-room-crm-2026-09-11/build/probe143-w1b-fix-r7-negative-control.sql:224: NOTICE:  A: REFUSED — party_company_other_studio
+DO
+=== B. own warranty contact on own seat (block 14u) ===
+psql:artifacts/people-room-crm-2026-09-11/build/probe143-w1b-fix-r7-negative-control.sql:231: NOTICE:  B: REFUSED — party_warranty_contact_other_studio
+DO
+=== C. a FOREIGN studio's firm card on this studio's seat (block 14w) ===
+ can_the_admin_read_the_foreign_card 
+-------------------------------------
+                                   0
+(1 row)
+
+psql:artifacts/people-room-crm-2026-09-11/build/probe143-w1b-fix-r7-negative-control.sql:239: NOTICE:  C: a FOREIGN studio's firm pointer LANDED on this studio's seat
+DO
+              company_id              | paper_state 
+--------------------------------------+-------------
+ e7100000-0000-4000-8000-0000000000b1 | not_on_file
+(1 row)
+
+=== D. the number set and the identity word on the studio-less job (block 16c/16d) ===
+ record_for_the_seats_number 
+-----------------------------
+ opted_out
+(1 row)
+
+   number_set   
+----------------
+ {+16125559996}
+(1 row)
+
+     display_name      | consent_status 
+-----------------------+----------------
+ Probe143 Carded Trade | granted
+(1 row)
+
+=== E. the mutation control: the same seat on a job that RECORDS its studio (block 16f/16g) ===
+ reset_role 
+------------
+ 
+(1 row)
+
+UPDATE 1
+ assume_user 
+-------------
+ 
+(1 row)
+
+     number_set_control      
+-----------------------------
+ {+16125559996,+16125559997}
+(1 row)
+
+     display_name      | consent_status 
+-----------------------+----------------
+ Probe143 Carded Trade | opted_out
+(1 row)
+
+ reset_role 
+------------
+ 
+(1 row)
+
+ROLLBACK

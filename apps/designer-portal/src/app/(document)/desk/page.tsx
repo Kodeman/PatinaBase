@@ -27,6 +27,7 @@ import {
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DeskRoster } from '@/components/document/desk-roster';
 import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
+import { WEEKDAY_FORMAT, dayMonth } from '@/lib/document/dates';
 import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reaction-rollup';
@@ -75,11 +76,6 @@ export default function DeskPage() {
   // as account-studio-page.tsx, kept minimal here since this page only needs
   // the owner check + open-step count, not the full studio row.
   const { value: studioWorkspacesEnabled } = useFeatureFlag('studio-workspaces');
-  // The rolodex step (row 4) reads real data only behind `call-sheet`, exactly
-  // as the Studio page does — without these two inputs the step counted as
-  // permanently open here and the whisper's openCount ran one ahead of the
-  // checklist the whisper sends you to.
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   // L8 — the owner's handoff-note margin note, behind the teammate-persona
   // flag (W2). Flag off (or loading) never renders it.
   const { value: teammatePersonaEnabled } = useFeatureFlag(
@@ -89,9 +85,7 @@ export default function DeskPage() {
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
   const { data: studioMembers } = useOrganizationMembers(studio?.id ?? '');
   const { data: studioProjects } = useProjects();
-  const { data: studioContacts } = useStudioContacts(
-    callSheetOn ? (studio?.id ?? null) : null,
-  );
+  const { data: studioContacts } = useStudioContacts(studio?.id ?? null);
   // activeMemberCountBeyondSelf / hiresWithFirstDocument (L3, 00559): same
   // active-only / first-document-opened derivation as account-studio-page.tsx,
   // so this whisper's openCount never runs ahead or behind the checklist it
@@ -116,8 +110,8 @@ export default function DeskPage() {
     myJobTitle: studioMembers?.find((m) => m.user_id === user?.id)?.job_title ?? null,
     activeMemberCountBeyondSelf: otherActiveStudioMembers.length,
     projectsCount: studioProjects?.length ?? 0,
-    contactsCount: callSheetOn ? (studioContacts?.length ?? 0) : 0,
-    seedSkipped: callSheetOn ? !!studio?.rolodex_seed_skipped_at : false,
+    contactsCount: studioContacts?.length ?? 0,
+    seedSkipped: !!studio?.rolodex_seed_skipped_at,
     hiresWithFirstDocument: otherActiveStudioMembers.filter(
       (m) => m.first_document_opened_at != null,
     ).length,
@@ -194,11 +188,10 @@ export default function DeskPage() {
       : now.getHours() < 18
         ? 'Good afternoon'
         : 'Good evening';
+  // PP-2 — the Desk's one date style. The greeting says the same idiom the
+  // day's line says beneath it, and neither composes its own formatter.
   const dateLabel = hydrated
-    ? `${new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(now)} · ${new Intl.DateTimeFormat(
-        'en-US',
-        { month: 'long', day: 'numeric' },
-      ).format(now)}`.toUpperCase()
+    ? `${WEEKDAY_FORMAT.format(now)} · ${dayMonth(now)}`.toUpperCase()
     : '';
   const name =
     profile?.display_name || profile?.full_name || user?.name || null;
@@ -225,6 +218,24 @@ export default function DeskPage() {
   // space — larger, and earlier in the composition — rather than sitting as
   // bottom front matter. Only known once the read resolves.
   const deskEmpty = !!data && roster.liveCount === 0;
+
+  const rosterBlock =
+    isLoading && !data ? (
+      <div
+        className="space-y-3"
+        aria-hidden
+        data-tour-anchor="desk-needs-your-hand"
+      >
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="h-6 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
+          />
+        ))}
+      </div>
+    ) : (
+      <DeskRoster roster={roster} studioMembers={studioMembers} />
+    );
 
   return (
     <main className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14">
@@ -416,29 +427,19 @@ export default function DeskPage() {
             />
           )}
 
-          {isLoading && !data ? (
-            <div
-              className="space-y-3"
-              aria-hidden
-              data-tour-anchor="desk-needs-your-hand"
-            >
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-6 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)]"
-                />
-              ))}
-            </div>
-          ) : (
-            <DeskRoster roster={roster} />
-          )}
-
-          {/* D5 — the recents strip returns (B2-L2 deleted it along with the
-              folio grid it used to sit beside). It keeps its own quiet
-              doorway shape rather than a roster line: a board has no stage
-              and no need line, so it never fit the roster's one-line-per-job
-              grammar. It renders nothing of its own once its query resolves
-              empty, so a boardless studio sees no seam here at all. */}
+          {/* The roster takes the full width of the desk at every viewport.
+              IA-17's ≥1280px boards rail took a 260px column out of it, which
+              left the ledger row narrower than its own fixed tracks — the
+              sentence column resolved to 0px and broke one character to a
+              line. The boards go back below the roster, where they were. */}
+          {rosterBlock}
+          {/* D5 — the recents strip returns (B2-L2 deleted it along with
+              the folio grid it used to sit beside). It keeps its own
+              quiet doorway shape rather than a roster line: a board has
+              no stage and no need line, so it never fit the roster's
+              one-line-per-job grammar. It renders nothing of its own once
+              its query resolves empty, so a boardless studio sees no seam
+              here at all. */}
           <RecentBoardsStrip />
           <DeskBoardsReactionRollup />
 

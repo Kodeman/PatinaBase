@@ -1,0 +1,39 @@
+Pager usage is off.
+BEGIN
+CREATE FUNCTION
+GRANT
+CREATE FUNCTION
+GRANT
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:89: NOTICE:  Q1 pass: live resolves; bogus/truncated/uppercased/expired/revoked all refuse (write refused: paperwork_token_invalid)
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:141: NOTICE:  Q2 pass: inbound INSERTs alongside; verified original untouched
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:159: NOTICE:  Q3 pass: storage context is the token's own org/company (fc000000-0000-4000-8000-00000000000b/fc200000-0000-4000-8000-00000000000b)
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:204: NOTICE:  Q4 pass: each studio sees only its own folder; anon sees none
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:224: NOTICE:  Q4b: CONFIRMED 22P02 — a non-uuid first segment blinds the whole bucket scan
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:274: NOTICE:  Q5 pass: hashed lookup live, plaintext dead, expiry closes both readers
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:292: NOTICE:  Q6 pass: org resolved server-side, unknown subject writes nothing
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:318: NOTICE:  Q7 pass: members read their own touches, never write
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:348: NOTICE:  Q8 pass: stranger id dropped, both same-named seats kept (names={"Same Name","Same Name"}, refs={fc500000-0000-4000-8000-00000000000b,fc500000-0000-4000-8000-00000000000c})
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:362: NOTICE:  Q9 pass: cross-tenant notice refused
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:386: NOTICE:  Q10a pass: cross-tenant confirm refused
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:386: NOTICE:  Q10b pass: cross-tenant reject refused
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:413: NOTICE:  Q11 pass: every W4 definer RPC is closed to anon and PUBLIC
+DO
+psql:artifacts/people-room-crm-2026-09-11/build/probe714-w4-r14-door-and-pay.sql:441: NOTICE:  Q12 pass: every W4 SECURITY DEFINER pins search_path
+DO
+ROLLBACK

@@ -97,6 +97,7 @@ import { AuthorizationStamp } from './schedule/authorization-stamp';
 import { GuidedEmptyState } from './guided-empty-state';
 import { AddLineSheet } from './schedule/add-line-sheet';
 import { AddToProjectSheet, openAddToProject } from './schedule/add-to-project-sheet';
+import { ConceptRenderUpload } from './rooms/concept-render-upload';
 import { CompositionBar } from './schedule/composition-bar';
 import { ReviewReleaseSheet } from './schedule/review-release-sheet';
 import {
@@ -1582,6 +1583,13 @@ function FFESectionBody({
                 }
                 {...roomHeadingProps(roomRows)}
               />
+              {!selecting && (
+                <ConceptRenderUpload
+                  projectId={projectId}
+                  roomId={room.id}
+                  roomName={room.name}
+                />
+              )}
               <ul>
                 {roomRows.map((row) => (
                   <FFELine key={row.item.id} {...lineProps(row)} />

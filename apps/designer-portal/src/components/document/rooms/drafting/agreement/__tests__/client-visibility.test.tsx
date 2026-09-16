@@ -15,7 +15,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { DESIGN_BUILD_COPY, type AgreementPart } from "@patina/types";
 import { PartEditor } from "../part-editor";
-import { PartsRail } from "../parts-rail";
+import { GalleyPart } from "../galley/galley-part";
 import {
   HIDDEN_FEE_BLOCKER,
   HIDDEN_TURNKEY_MONEY_BLOCKER,
@@ -114,40 +114,49 @@ describe("the visibility act on a part", () => {
   });
 });
 
-describe("the chip on the rail", () => {
+describe("the hide act on the part", () => {
   const hidden = part({
     partKey: "studio.note",
     title: "Studio note",
     clientVisible: false,
   });
 
-  function renderRail(visibilityOn: boolean) {
+  function renderPart(onHide?: (next: boolean) => void) {
     return render(
-      <PartsRail
-        parts={[hidden]}
-        selectedId={hidden.id}
-        blockedIds={new Set()}
-        onSelect={jest.fn()}
-        onReorder={jest.fn()}
-        onRename={jest.fn()}
-        onRemove={jest.fn()}
-        onAdd={jest.fn()}
+      <GalleyPart
+        part={hidden}
+        ids={{
+          section: "part-studio-note",
+          head: "head-studio-note",
+          foldAct: "write-studio-note",
+          foldPanel: "fold-studio-note",
+        }}
+        currency="USD"
+        turnkey={false}
+        drawsNothing={false}
+        open={false}
         readOnly={false}
-        libraryOn
-        visibilityOn={visibilityOn}
-      />,
+        canMoveUp={false}
+        canMoveDown
+        onToggle={jest.fn()}
+        onMove={jest.fn()}
+        onHide={onHide}
+      >
+        <p>the fold</p>
+      </GalleyPart>,
     );
   }
 
-  it("marks a hidden row when the act exists", () => {
-    const { container } = renderRail(true);
+  // AR-e — the act lives with the other part acts, on every agreement.
+  it("marks a hidden part when the act exists", () => {
+    const { container } = renderPart(jest.fn());
     expect(
       container.querySelector('[data-client-visible="false"]')?.textContent,
-    ).toBe(DESIGN_BUILD_COPY.hiddenFromClient);
+    ).toBe("Show to the client");
   });
 
-  it("marks nothing when it does not — Wave 2's rail exactly", () => {
-    const { container } = renderRail(false);
+  it("marks nothing where the act is withheld (R48)", () => {
+    const { container } = renderPart(undefined);
     expect(
       container.querySelector('[data-client-visible="false"]'),
     ).not.toBeInTheDocument();
@@ -232,7 +241,12 @@ const turnkeyMoney = () => [
       gmpCents: 8_413_400,
       subDisclosure: "closed_book",
       costLines: [
-        { id: "cab", label: "Cabinetry", category: "sub", basisCents: 7_130_000 },
+        {
+          id: "cab",
+          label: "Cabinetry",
+          category: "sub",
+          basisCents: 7_130_000,
+        },
       ],
       scheduleOfValues: [{ id: "k", label: "Kitchen", cents: 8_413_400 }],
     },
@@ -245,8 +259,20 @@ const turnkeyMoney = () => [
     payload: {
       retainageBps: 500,
       draws: [
-        { key: "deposit", label: "Deposit", pct: 10, sortOrder: 1, retainageApplies: false },
-        { key: "final", label: "Final", pct: 90, sortOrder: 2, retainageApplies: true },
+        {
+          key: "deposit",
+          label: "Deposit",
+          pct: 10,
+          sortOrder: 1,
+          retainageApplies: false,
+        },
+        {
+          key: "final",
+          label: "Final",
+          pct: 90,
+          sortOrder: 2,
+          retainageApplies: true,
+        },
       ],
     },
   }),
@@ -267,9 +293,8 @@ describe("R48 · the two turnkey money parts cannot be hidden", () => {
     });
     expect(readiness.ready).toBe(false);
     expect(
-      readiness.blockers.find(
-        (blocker) => blocker.partId === parts[index].id,
-      )?.message,
+      readiness.blockers.find((blocker) => blocker.partId === parts[index].id)
+        ?.message,
     ).toBe(HIDDEN_TURNKEY_MONEY_BLOCKER);
   });
 
@@ -284,9 +309,9 @@ describe("R48 · the two turnkey money parts cannot be hidden", () => {
       parts,
       recipientEmail: "halvorsen@example.com",
     });
-    expect(
-      readiness.blockers.map((blocker) => blocker.message),
-    ).toContain(HIDDEN_TURNKEY_MONEY_BLOCKER);
+    expect(readiness.blockers.map((blocker) => blocker.message)).toContain(
+      HIDDEN_TURNKEY_MONEY_BLOCKER,
+    );
   });
 
   it("says nothing while both stand visible", () => {
@@ -296,9 +321,9 @@ describe("R48 · the two turnkey money parts cannot be hidden", () => {
       recipientEmail: "halvorsen@example.com",
       turnkey: { attestationLive: true, enabledJurisdictions: [] },
     });
-    expect(
-      readiness.blockers.map((blocker) => blocker.message),
-    ).not.toContain(HIDDEN_TURNKEY_MONEY_BLOCKER);
+    expect(readiness.blockers.map((blocker) => blocker.message)).not.toContain(
+      HIDDEN_TURNKEY_MONEY_BLOCKER,
+    );
   });
 
   it("offers no hide toggle on either of them", () => {

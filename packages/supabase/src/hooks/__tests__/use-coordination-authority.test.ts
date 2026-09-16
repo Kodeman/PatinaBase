@@ -42,6 +42,7 @@ vi.mock('@tanstack/react-query', () => ({
 
 import {
   excludeProjectArtifactApprovals,
+  useAddProjectParty,
   useCreateCoordinationItem,
   useDeleteCoordinationItem,
   useExtendCoordinationItem,
@@ -50,6 +51,7 @@ import {
   useReassignCoordinationItem,
   useRecordPartySmsConsent,
   useResolveCoordinationItem,
+  useUpdateProjectParty,
   useCoordinationRealtime,
   useSubmitCoordinationRevision,
   useUpdateCoordinationItem,
@@ -326,50 +328,11 @@ describe('coordination authority routing', () => {
   });
 });
 
-describe('useRecordPartySmsConsent — the only writer of consent columns on an existing party', () => {
+describe('useRecordPartySmsConsent — R-AS: the record, and no seat column at all', () => {
   const PARTY_ID = 'party-1';
+  const PROJECT_ID = 'proj-1';
+  const ORG_ID = 'org-beta';
   const PHONE = '5551234567';
-  const E164 = '+15551234567';
-
-  /** `.select('phone_e164').eq('id', …).maybeSingle()` — the pre-write
-   *  self-row lookup (F3's phone_e164 source, and F2's skip-the-sibling-
-   *  check-without-a-phone path). */
-  function selfRowBuilder(result: { data: unknown; error: unknown }) {
-    const maybeSingle = vi.fn().mockResolvedValue(result);
-    const eq = vi.fn(() => ({ maybeSingle }));
-    const select = vi.fn(() => ({ eq }));
-    return { select, eq, maybeSingle };
-  }
-
-  /** `.select('id').eq('phone_e164', …).eq('sms_consent_status', 'opted_out').limit(1)`
-   *  — the F3 phone-global opt-out check. */
-  function siblingBuilder(result: { data: unknown; error: unknown }) {
-    const limit = vi.fn().mockResolvedValue(result);
-    const eq2 = vi.fn(() => ({ limit }));
-    const eq1 = vi.fn(() => ({ eq: eq2 }));
-    const select = vi.fn(() => ({ eq: eq1 }));
-    return { select, eq1, eq2, limit };
-  }
-
-  /** `.update(payload).eq('id', …).eq('phone', …).eq('sms_consent_status', 'not_asked').select().single()`
-   *  — the six-column write itself, phone-pinned (F4). */
-  function mainUpdateBuilder(result: { data: unknown; error: unknown }) {
-    const single = vi.fn().mockResolvedValue(result);
-    const select = vi.fn(() => ({ single }));
-    const eq3 = vi.fn(() => ({ select }));
-    const eq2 = vi.fn(() => ({ eq: eq3 }));
-    const eq1 = vi.fn(() => ({ eq: eq2 }));
-    const update = vi.fn((_payload: Record<string, unknown>) => ({ eq: eq1 }));
-    return { update, eq1, eq2, eq3, select, single };
-  }
-
-  /** `.update(revertPayload).eq('id', …)` — the F2 not_asked revert; no
-   *  `.select()` follows, so the mock's `eq` resolves directly. */
-  function revertUpdateBuilder(result: { error: unknown }) {
-    const eq = vi.fn().mockResolvedValue(result);
-    const update = vi.fn((_payload: Record<string, unknown>) => ({ eq }));
-    return { update, eq };
-  }
 
   function config() {
     return useRecordPartySmsConsent() as unknown as {
@@ -377,177 +340,298 @@ describe('useRecordPartySmsConsent — the only writer of consent columns on an 
     };
   }
 
-  it('writes exactly the six not_asked→pending columns, stamped with the attester (F1), pinned to the phone (F4), after clearing the F3 opt-out check', async () => {
-    const self = selfRowBuilder({ data: { phone_e164: E164 }, error: null });
-    const sibling = siblingBuilder({ data: [], error: null });
-    const main = mainUpdateBuilder({
-      data: { id: PARTY_ID, project_id: 'proj-1', phone_e164: E164 },
-      error: null,
-    });
-    from
-      .mockReturnValueOnce({ select: self.select })
-      .mockReturnValueOnce({ select: sibling.select })
-      .mockReturnValueOnce({ update: main.update });
+  const input = {
+    partyId: PARTY_ID,
+    projectId: PROJECT_ID,
+    phone: PHONE,
+    smsConsentSource: 'verbal' as const,
+    smsConsentEvidence: 'Told me at the site kickoff',
+  };
 
-    await config().mutationFn({
-      partyId: PARTY_ID,
-      phone: PHONE,
-      smsConsentSource: 'verbal',
-      smsConsentEvidence: 'Told me at the site kickoff on Aug 8',
-    });
-
-    // F3 — self row's phone_e164 looked up, then checked for an opted-out sibling.
-    expect(self.eq).toHaveBeenCalledWith('id', PARTY_ID);
-    expect(sibling.eq1).toHaveBeenCalledWith('phone_e164', E164);
-    expect(sibling.eq2).toHaveBeenCalledWith('sms_consent_status', 'opted_out');
-    expect(sibling.limit).toHaveBeenCalledWith(1);
-
-    // F1 — the attester comes from the authenticated user, not the caller.
-    expect(getUser).toHaveBeenCalledTimes(1);
-
-    expect(main.update).toHaveBeenCalledTimes(1);
-    const payload = main.update.mock.calls[0][0] as Record<string, unknown>;
-    expect(Object.keys(payload).sort()).toEqual(
-      [
-        'sms_consent_disclosure_version',
-        'sms_consent_evidence',
-        'sms_consent_recorded_at',
-        'sms_consent_recorded_by',
-        'sms_consent_source',
-        'sms_consent_status',
-      ].sort(),
-    );
-    expect(payload).toEqual({
-      sms_consent_status: 'pending',
-      sms_consent_source: 'verbal',
-      sms_consent_evidence: 'Told me at the site kickoff on Aug 8',
-      sms_consent_recorded_at: expect.any(String),
-      sms_consent_recorded_by: 'designer-1',
-      sms_consent_disclosure_version: 'field-sms-v1',
-    });
-    // F4 — the phone is pinned alongside the not_asked guard.
-    expect(main.eq1).toHaveBeenCalledWith('id', PARTY_ID);
-    expect(main.eq2).toHaveBeenCalledWith('phone', PHONE);
-    expect(main.eq3).toHaveBeenCalledWith('sms_consent_status', 'not_asked');
+  beforeEach(() => {
+    from.mockReset();
+    rpc.mockReset();
   });
 
-  it('F2 — reverts to not_asked (all six columns) and throws a clear error when the updated row has no phone_e164', async () => {
-    const self = selfRowBuilder({ data: { phone_e164: null }, error: null });
-    const main = mainUpdateBuilder({
-      data: { id: PARTY_ID, project_id: 'proj-1', phone_e164: null },
-      error: null,
-    });
-    const revert = revertUpdateBuilder({ error: null });
-    from
-      .mockReturnValueOnce({ select: self.select })
-      .mockReturnValueOnce({ update: main.update })
-      .mockReturnValueOnce({ update: revert.update });
+  it('records the invite on the studio ledger and touches project_parties not at all', async () => {
+    // The whole point of R-AS. The old body flipped six frozen columns on the
+    // seat; the freeze trigger refuses every one of them, so the act failed
+    // loudly and the studio saw a Postgres string. Now the fact goes where the
+    // send gate and both readers already look.
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
 
-    await expect(
-      config().mutationFn({
-        partyId: PARTY_ID,
-        phone: PHONE,
-        smsConsentSource: 'verbal',
-        smsConsentEvidence: 'Told me at kickoff',
-      }),
-    ).rejects.toThrow(/can't receive texts/i);
+    await config().mutationFn(input);
 
-    // No phone_e164 on the self row → the sibling opt-out check never runs.
-    expect(from).toHaveBeenCalledTimes(3);
-    expect(revert.update).toHaveBeenCalledWith({
-      sms_consent_status: 'not_asked',
-      sms_consent_source: null,
-      sms_consent_evidence: null,
-      sms_consent_recorded_at: null,
-      sms_consent_recorded_by: null,
-      sms_consent_disclosure_version: null,
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[0]).toEqual([
+      'project_consent_org',
+      { p_project_id: PROJECT_ID },
+    ]);
+    expect(rpc.mock.calls[1][0]).toBe('record_channel_invite');
+    expect(rpc.mock.calls[1][1]).toEqual({
+      p_organization_id: ORG_ID,
+      p_channel_kind: 'sms',
+      p_channel_value: PHONE,
+      p_source: 'verbal',
+      p_evidence: 'Told me at the site kickoff',
+      p_disclosure_version: 'field-sms-v1',
+      p_origin_project_id: PROJECT_ID,
     });
-    expect(revert.eq).toHaveBeenCalledWith('id', PARTY_ID);
   });
 
-  it('F3 — refuses when the phone already opted out on a sibling row, without writing', async () => {
-    const self = selfRowBuilder({ data: { phone_e164: E164 }, error: null });
-    const sibling = siblingBuilder({ data: [{ id: 'party-2' }], error: null });
-    from
-      .mockReturnValueOnce({ select: self.select })
-      .mockReturnValueOnce({ select: sibling.select });
+  it('calls the door that cannot lower a standing grant, and never names a status', async () => {
+    // close-review r2 MAJOR-1: `record_channel_consent(…, 'pending', …)` would
+    // demote a repeat sub's evidenced grant every time they were invited again.
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
 
-    await expect(
-      config().mutationFn({
-        partyId: PARTY_ID,
-        phone: PHONE,
-        smsConsentSource: 'verbal',
-        smsConsentEvidence: 'Told me at kickoff',
-      }),
-    ).rejects.toThrow(/opted out/i);
+    await config().mutationFn(input);
 
-    expect(from).toHaveBeenCalledTimes(2);
-    expect(getUser).not.toHaveBeenCalled();
+    const [name, args] = rpc.mock.calls[1] as [string, Record<string, unknown>];
+    expect(name).toBe('record_channel_invite');
+    expect(args).not.toHaveProperty('p_status');
   });
 
-  it('F4/F6 — a zero-row match (guard column or pinned phone moved under us) surfaces as a friendly race message, not the raw PGRST116 error', async () => {
-    const self = selfRowBuilder({ data: { phone_e164: null }, error: null });
-    const main = mainUpdateBuilder({
-      data: null,
-      error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' },
-    });
-    from
-      .mockReturnValueOnce({ select: self.select })
-      .mockReturnValueOnce({ update: main.update });
+  it('runs no sibling probe and no transition pin — the RPC owns both gates', async () => {
+    // The three seat-shaped guards the old body carried (a phone-global
+    // opted_out probe, a `.eq('sms_consent_status','not_asked')` pin, and a
+    // revert when phone_e164 failed to normalize) all asked questions of a
+    // frozen copy. 00594's own gates ask them of the ledger, before anything
+    // is written or sent.
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
 
-    await expect(
-      config().mutationFn({
-        partyId: PARTY_ID,
-        phone: PHONE,
-        smsConsentSource: 'verbal',
-        smsConsentEvidence: 'Told me at kickoff',
-      }),
-    ).rejects.toThrow(/just changed — refresh/i);
+    await config().mutationFn(input);
 
-    expect(main.eq2).toHaveBeenCalledWith('phone', PHONE);
+    expect(from).not.toHaveBeenCalled();
   });
 
-  it('surfaces a non-race update error verbatim rather than the friendly race copy', async () => {
-    const self = selfRowBuilder({ data: { phone_e164: null }, error: null });
-    const dbError = { code: '42501', message: 'permission denied' };
-    const main = mainUpdateBuilder({ data: null, error: dbError });
-    from
-      .mockReturnValueOnce({ select: self.select })
-      .mockReturnValueOnce({ update: main.update });
+  it('refuses before the RPC when the project has no studio to record against', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: null });
 
-    await expect(
-      config().mutationFn({
-        partyId: PARTY_ID,
-        phone: PHONE,
-        smsConsentSource: 'verbal',
-        smsConsentEvidence: 'Told me at kickoff',
-      }),
-    ).rejects.toBe(dbError);
+    await expect(config().mutationFn(input)).rejects.toThrow(/isn't attached to a studio/i);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns the RPC's channel_opted_out into a sentence", async () => {
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'channel_opted_out', code: 'P0001' },
+      });
+
+    await expect(config().mutationFn(input)).rejects.toThrow(/already opted out/i);
+  });
+
+  it('turns an un-textable number into a sentence, where the old body reverted a stranded seat', async () => {
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: 'invalid_channel_value', code: 'P0001' },
+      });
+
+    await expect(config().mutationFn(input)).rejects.toThrow(/can't receive texts/i);
   });
 
   it("refuses to write without a phone, mirroring useAddProjectParty's wantsText guard", async () => {
-    await expect(
-      config().mutationFn({
-        partyId: PARTY_ID,
-        phone: '',
-        smsConsentSource: 'verbal',
-        smsConsentEvidence: 'Told me at kickoff',
-      }),
-    ).rejects.toThrow(/phone number/i);
-    expect(from).not.toHaveBeenCalled();
-    expect(getUser).not.toHaveBeenCalled();
+    await expect(config().mutationFn({ ...input, phone: '  ' })).rejects.toThrow(
+      /needs a phone number/i,
+    );
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it('refuses to write without non-blank evidence', async () => {
     await expect(
-      config().mutationFn({
-        partyId: PARTY_ID,
-        phone: PHONE,
-        smsConsentSource: 'verbal',
-        smsConsentEvidence: '   ',
+      config().mutationFn({ ...input, smsConsentEvidence: '   ' }),
+    ).rejects.toThrow(/how and where/i);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('useAddProjectParty — the invite goes on the record, and ONLY on the record (R-AS)', () => {
+  const PROJECT_ID = 'proj-1';
+  const ORG_ID = 'org-beta';
+
+  function insertBuilder(result: { data: unknown; error: unknown }) {
+    const single = vi.fn().mockResolvedValue(result);
+    const select = vi.fn(() => ({ single }));
+    const insert = vi.fn((_payload: Record<string, unknown>) => ({ select }));
+    return { insert, select, single };
+  }
+
+  function config() {
+    return useAddProjectParty() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+  }
+
+  const textableInput = {
+    projectId: PROJECT_ID,
+    partyKind: 'sub' as const,
+    displayName: 'Ray Thao',
+    phone: '(612) 555-9001',
+    textUpdates: true,
+    smsConsentSource: 'verbal' as const,
+    smsConsentEvidence: 'Told me at the site kickoff',
+  };
+
+  /** The eight columns 00594 froze. Not one of them may appear in an INSERT
+   *  payload any more, whichever way the designer ticked the box. */
+  const FROZEN_COLUMNS = [
+    'sms_consent_status',
+    'sms_consent_source',
+    'sms_consent_evidence',
+    'sms_consent_recorded_at',
+    'sms_consent_recorded_by',
+    'sms_consent_disclosure_version',
+    'sms_consented_at',
+    'sms_opt_out_at',
+  ];
+
+  beforeEach(() => {
+    from.mockReset();
+    rpc.mockReset();
+  });
+
+  it('records the invite on the studio record BEFORE the seat is born', async () => {
+    const ins = insertBuilder({ data: { id: 'party-9', project_id: PROJECT_ID }, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    await config().mutationFn(textableInput);
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[0]).toEqual([
+      'project_consent_org',
+      { p_project_id: PROJECT_ID },
+    ]);
+    expect(rpc.mock.calls[1][0]).toBe('record_channel_invite');
+    expect(rpc.mock.calls[1][1]).toEqual({
+      p_organization_id: ORG_ID,
+      p_channel_kind: 'sms',
+      p_channel_value: '(612) 555-9001',
+      p_source: 'verbal',
+      p_evidence: 'Told me at the site kickoff',
+      p_disclosure_version: 'field-sms-v1',
+      p_origin_project_id: PROJECT_ID,
+    });
+  });
+
+  it('writes NO frozen consent column on the seat, even when the designer ticked text updates', async () => {
+    const ins = insertBuilder({ data: { id: 'party-9', project_id: PROJECT_ID }, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    await config().mutationFn(textableInput);
+
+    const seat = ins.insert.mock.calls[0][0] as Record<string, unknown>;
+    for (const column of FROZEN_COLUMNS) expect(seat).not.toHaveProperty(column);
+  });
+
+  it('writes no frozen column and no record when the designer did not tick text updates', async () => {
+    const ins = insertBuilder({ data: { id: 'party-9', project_id: PROJECT_ID }, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+
+    await config().mutationFn({ ...textableInput, textUpdates: false });
+
+    expect(rpc).not.toHaveBeenCalled();
+    const seat = ins.insert.mock.calls[0][0] as Record<string, unknown>;
+    for (const column of FROZEN_COLUMNS) expect(seat).not.toHaveProperty(column);
+  });
+
+  it('calls the door that cannot lower a standing grant', async () => {
+    const ins = insertBuilder({ data: { id: 'party-9', project_id: PROJECT_ID }, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    await config().mutationFn(textableInput);
+
+    const [name, args] = rpc.mock.calls[1] as [string, Record<string, unknown>];
+    expect(name).toBe('record_channel_invite');
+    expect(args).not.toHaveProperty('p_status');
+  });
+
+  it('refuses before the seat exists when the project has no studio to record against', async () => {
+    const ins = insertBuilder({ data: null, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(config().mutationFn(textableInput)).rejects.toThrow(/isn't attached to a studio/i);
+    expect(ins.insert).not.toHaveBeenCalled();
+  });
+
+  it("turns the RPC's channel_opted_out into a sentence, and never writes the seat", async () => {
+    const ins = insertBuilder({ data: null, error: null });
+    from.mockReturnValue({ insert: ins.insert });
+    rpc
+      .mockResolvedValueOnce({ data: ORG_ID, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'channel_opted_out', code: 'P0001' } });
+
+    await expect(config().mutationFn(textableInput)).rejects.toThrow(/already opted out/i);
+    expect(ins.insert).not.toHaveBeenCalled();
+  });
+});
+
+describe('the frozen columns still speak English if the database ever refuses', () => {
+  // Nothing in the portal names a frozen column any more, so
+  // `refuse_legacy_consent_write_trg` cannot fire from here. 00594's OTHER
+  // trigger still can: `consent_opted_out_phone_frozen` (R-AX) guards
+  // `phone`/`phone_e164` on a refused seat in the database, where no hook can
+  // be bypassed. The translation stays for it, and for any path a later wave
+  // adds — a raw Postgres string is rendered verbatim into the party sheet's
+  // own error slot.
+  const FROZEN = {
+    message: 'consent_legacy_column_frozen',
+    code: 'P0001',
+    hint: 'project_parties.sms_consent_* is legacy since 00594.',
+  };
+
+  beforeEach(() => {
+    from.mockReset();
+    rpc.mockReset();
+  });
+
+  it('useUpdateProjectParty turns a freeze refusal into a sentence', async () => {
+    const currentMaybeSingle = vi.fn().mockResolvedValue({
+      data: { phone_e164: '+15551234567', project_id: 'proj-1' },
+      error: null,
+    });
+    const currentEq = vi.fn(() => ({ maybeSingle: currentMaybeSingle }));
+    const single = vi.fn().mockResolvedValue({ data: null, error: FROZEN });
+    const selectAfterUpdate = vi.fn(() => ({ single }));
+    const updateEq = vi.fn(() => ({ select: selectAfterUpdate }));
+    const update = vi.fn(() => ({ eq: updateEq }));
+    from
+      .mockReturnValueOnce({ select: vi.fn(() => ({ eq: currentEq })) })
+      .mockReturnValueOnce({ update });
+    rpc.mockImplementation((fn: string) => {
+      if (fn === 'project_consent_org') return Promise.resolve({ data: 'org-1', error: null });
+      if (fn === 'channel_consent_status') return Promise.resolve({ data: null, error: null });
+      throw new Error(`unexpected rpc ${fn}`);
+    });
+
+    const hook = useUpdateProjectParty() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    await expect(
+      hook.mutationFn({
+        id: 'party-1',
+        projectId: 'proj-1',
+        patch: { phone: '612-555-0199' },
       }),
-    ).rejects.toThrow(/prior consent/i);
-    expect(from).not.toHaveBeenCalled();
-    expect(getUser).not.toHaveBeenCalled();
+    ).rejects.toThrow(/Texting consent has moved to the studio's own record/);
   });
 });

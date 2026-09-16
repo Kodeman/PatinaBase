@@ -129,7 +129,7 @@ describe('LetterheadVitals prints only what is real (D-6, amended by D-B7)', () 
     mockProject = { ...baseProject, start_date: '2026-01-15' };
     const { container } = render(<LetterheadVitals projectId="project-1" />);
 
-    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('15 January');
     // The set date prints its value and no act; its unset sibling names itself.
     expect(
       screen.queryByRole('button', { name: 'Set start' }),
@@ -232,13 +232,13 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     const { rerender } = render(<LetterheadVitals projectId="project-1" />);
 
     fireEvent.click(screen.getByLabelText('Start'));
-    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('15 January');
 
     // A refetch lands a different value while the popover is still up.
     mockProject = { ...baseProject, start_date: '2026-02-01' };
     rerender(<LetterheadVitals projectId="project-1" />);
 
-    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('15 January');
   });
 
   it('the × hands focus to the act that replaces the field — never to <body>', async () => {
@@ -270,14 +270,14 @@ describe('LetterheadVitals date vitals — the Calendar Folio (D5)', () => {
     // An echo lands while the popover is up — must not clobber it live.
     mockProject = { ...baseProject, start_date: '2026-05-01' };
     rerender(<LetterheadVitals projectId="project-1" />);
-    expect(screen.getByLabelText('Start')).toHaveTextContent('Jan 15');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('15 January');
 
     // Dismiss (Esc/outside-click stand-in) WITHOUT picking a date.
     fireEvent.click(screen.getByText('close-popover'));
 
     // The display must now show what the server actually has — not stay
     // stuck at the value the popover opened with.
-    expect(screen.getByLabelText('Start')).toHaveTextContent('May 1');
+    expect(screen.getByLabelText('Start')).toHaveTextContent('1 May');
   });
 });
 

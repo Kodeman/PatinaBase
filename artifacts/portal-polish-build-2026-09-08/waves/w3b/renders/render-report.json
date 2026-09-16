@@ -1,0 +1,238 @@
+{
+  "consoleErrors": [
+    "[1440x900] http://localhost:3000/desk TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+    "[1440x900] http://localhost:3000/desk Error logged: AppError: Not authenticated\n    at w (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:13317)\n    at Object.onError (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:1941)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-530a2a57a0b7a863.js:1:35074) {queryKey: Array(1), meta: undefined}",
+    "[390x844@2x] http://localhost:3000/desk TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+    "[390x844@2x] http://localhost:3000/desk Error logged: AppError: Not authenticated\n    at w (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:13317)\n    at Object.onError (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:1941)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-530a2a57a0b7a863.js:1:35074) {queryKey: Array(1), meta: undefined}"
+  ],
+  "pageErrors": [],
+  "shots": [
+    "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w3b/renders/desk-1440x900.png",
+    "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w3b/renders/doc-1440x900.png",
+    "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w3b/renders/orders-ledger-1440x900.png",
+    "/Users/kody/Code/patina-merged/artifacts/portal-polish-build-2026-09-08/waves/w3b/renders/desk-390x844@2x.png"
+  ],
+  "overflow": [
+    {
+      "label": "1440x900 /desk",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "ok": true
+    },
+    {
+      "label": "1440x900 /doc/006a08f4-aa39-4fcb-8e02-ee3506efb1cb",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "ok": true
+    },
+    {
+      "label": "1440x900 orders ledger",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "ok": true
+    },
+    {
+      "label": "390x844@2x /desk",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "ok": true
+    }
+  ],
+  "facts": {
+    "heading": "EVERY JOB · 17 LIVE · 1 OVERDUE",
+    "greeting": "Good evening, Leah\n\nTUESDAY · 8 SEPTEMBER\n\n＋\nCAPTURE A LEAD\nBEGIN A BRIEF\n＋\nOPEN A PROJECT\nNO PROPOSAL NEEDED\nFIND ANYTHING\n⌘K",
+    "dayLines": [
+      "Aspen Loft Refresh — project, overdue 4 days\n\nMarcus Wright · new lead — respond by 11 September\n\nand 7 more below"
+    ],
+    "rosterRows": 17,
+    "hasShadow": [
+      "NAV.doc-elevated fixed inset-x-0 bottom-0 z-40 hidden h-[60px] g → rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"
+    ],
+    "scoreHover_desk": {
+      "total": 0,
+      "rest": [],
+      "hovered": []
+    },
+    "docHref": "/doc/006a08f4-aa39-4fcb-8e02-ee3506efb1cb",
+    "docTitle": "The Desk · Patina",
+    "docH1": "Full Room",
+    "scoreHover_doc": {
+      "total": 3,
+      "rest": [
+        {
+          "text": "Put down",
+          "tag": "SPAN",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        }
+      ],
+      "hovered": [
+        {
+          "text": "Put down",
+          "hoverColor": "rgb(196, 165, 123)",
+          "hoverHeight": "1px"
+        }
+      ]
+    },
+    "ordersDoorFound": 1,
+    "ordersHeading": "Orders",
+    "scoreHover_orders": {
+      "total": 20,
+      "rest": [
+        {
+          "text": "Ledger",
+          "tag": "BUTTON",
+          "restColor": "rgb(44, 41, 38)",
+          "restHeight": "1px",
+          "transform": "matrix(1, 0, 0, 1, 0, 0)",
+          "content": "\"\""
+        },
+        {
+          "text": "The Week",
+          "tag": "BUTTON",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        },
+        {
+          "text": "Receiving",
+          "tag": "BUTTON",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        },
+        {
+          "text": "Vendors",
+          "tag": "BUTTON",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        },
+        {
+          "text": "all",
+          "tag": "BUTTON",
+          "restColor": "rgb(44, 41, 38)",
+          "restHeight": "1px",
+          "transform": "matrix(1, 0, 0, 1, 0, 0)",
+          "content": "\"\""
+        },
+        {
+          "text": "Chen Residence",
+          "tag": "BUTTON",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        },
+        {
+          "text": "Olsen Lake House",
+          "tag": "BUTTON",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        },
+        {
+          "text": "all",
+          "tag": "BUTTON",
+          "restColor": "rgb(44, 41, 38)",
+          "restHeight": "1px",
+          "transform": "matrix(1, 0, 0, 1, 0, 0)",
+          "content": "\"\""
+        },
+        {
+          "text": "due",
+          "tag": "BUTTON",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        },
+        {
+          "text": "pending",
+          "tag": "BUTTON",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        },
+        {
+          "text": "paid",
+          "tag": "BUTTON",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        },
+        {
+          "text": "Select multiple",
+          "tag": "BUTTON",
+          "restColor": "rgb(139, 115, 85)",
+          "restHeight": "1px",
+          "transform": "none",
+          "content": "\"\""
+        }
+      ],
+      "hovered": [
+        {
+          "text": "Ledger",
+          "hoverColor": "rgb(196, 165, 123)",
+          "hoverHeight": "1px"
+        },
+        {
+          "text": "The Week",
+          "hoverColor": "rgb(196, 165, 123)",
+          "hoverHeight": "1px"
+        }
+      ]
+    },
+    "mobileRosterNames": [
+      {
+        "text": "Full Room",
+        "right": 122,
+        "width": 75,
+        "classes": "row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+      },
+      {
+        "text": "Consultation",
+        "right": 141,
+        "width": 94,
+        "classes": "row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+      },
+      {
+        "text": "Full Room",
+        "right": 122,
+        "width": 75,
+        "classes": "row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+      },
+      {
+        "text": "Full Room",
+        "right": 122,
+        "width": 75,
+        "classes": "row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+      },
+      {
+        "text": "Full Room",
+        "right": 122,
+        "width": 75,
+        "classes": "row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+      },
+      {
+        "text": "The Ashfords (no-login household)",
+        "right": 299,
+        "width": 251,
+        "classes": "row-wash-score min-w-0 font-heading text-[16px] font-medium text-[var(--text-primary)] no-underline transition-colors [overflow-wrap:anywhere] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+      }
+    ],
+    "widestElement": {
+      "right": 390,
+      "tag": "HTML",
+      "cls": ""
+    }
+  }
+}

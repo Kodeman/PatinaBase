@@ -26,6 +26,7 @@ const BASE_LEAD = {
   homeowner: null,
   contact_name: null,
   contact_email: null,
+  contact_phone: null,
   source: null,
   homeowner_id: null,
   match_score: null,
@@ -82,5 +83,58 @@ describe("BriefSection — one head, not two (W5-R2 item 4)", () => {
 
   it("renders with no `onEyebrow` at all — the prop is optional", () => {
     expect(() => render(<BriefSection leadId="lead-1" />)).not.toThrow();
+  });
+});
+
+describe("BriefSection — the captured contact line (00583)", () => {
+  it("prints name, email, and phone separated by a middle dot", () => {
+    mockLead = {
+      ...BASE_LEAD,
+      contact_name: "The Okafors",
+      contact_email: "okafors@email.com",
+      contact_phone: "(555) 014-2200",
+    };
+    render(<BriefSection leadId="lead-1" />);
+    expect(screen.getByText("The Okafors")).toBeInTheDocument();
+    expect(screen.getByText("okafors@email.com")).toBeInTheDocument();
+    expect(screen.getByText("(555) 014-2200")).toBeInTheDocument();
+  });
+
+  it("prints a phone-only capture without a leading separator", () => {
+    mockLead = { ...BASE_LEAD, contact_phone: "(555) 014-2200" };
+    render(<BriefSection leadId="lead-1" />);
+    const line = screen.getByText("(555) 014-2200").parentElement;
+    expect(line?.textContent).toBe("(555) 014-2200");
+  });
+
+  it("prefers the joined homeowner profile's phone, as the name and email do", () => {
+    mockLead = {
+      ...BASE_LEAD,
+      contact_phone: "(555) 014-2200",
+      homeowner: { full_name: "Ada Okafor", email: "ada@email.com", phone: "(555) 990-0001" },
+    };
+    render(<BriefSection leadId="lead-1" />);
+    expect(screen.getByText("(555) 990-0001")).toBeInTheDocument();
+    expect(screen.queryByText("(555) 014-2200")).toBeNull();
+  });
+
+  it("falls back to the captured phone when the profile carries none", () => {
+    mockLead = {
+      ...BASE_LEAD,
+      contact_phone: "(555) 014-2200",
+      homeowner: { full_name: "Ada Okafor", email: "ada@email.com", phone: null },
+    };
+    render(<BriefSection leadId="lead-1" />);
+    expect(screen.getByText("(555) 014-2200")).toBeInTheDocument();
+  });
+
+  it("falls back to the joined homeowner profile's phone on an inbound lead", () => {
+    mockLead = {
+      ...BASE_LEAD,
+      homeowner_id: "profile-1",
+      homeowner: { full_name: "Ada Okafor", email: "ada@email.com", phone: "(555) 990-0001" },
+    };
+    render(<BriefSection leadId="lead-1" />);
+    expect(screen.getByText("(555) 990-0001")).toBeInTheDocument();
   });
 });

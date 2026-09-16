@@ -1,0 +1,440 @@
+Skip to the paper
+←
+PUT DOWN
+
+Client
+
+PROJECT
+ACTIVE
+
+Client approvals
+NOTHING YET
+Schedule
+NOT KNOWN YET
+Pieces
+NOTHING YET
+Money
+NOTHING YET
+Closing the book
+0 OF 6 CLOSED OUT
+The record
+NOTHING YET
+
+FILED WITH THIS JOB
+
+Plan room
+Spec book
+Boards
+Call sheet
+Okonkwo residence
+No client linked — attach one↗
+START
+12 October
+×
+TARGET
+13 August
+×
+SET A BUDGET BAND
+$1,400,000
+NEEDS SETUP · 1
+→
+MESSAGE
+PREVIEW
+SHARING
+CALL SHEET · 26
+· 18 ON PAPER
+
+Name the phases for this project
+OPEN THE SCHEDULE
+
+EXACT ARTIFACT · NAMED AUTHORITY
+
+Client approvals
+
+0 decided · no decision lead
+
+FOLD ↑
+
+Bind each request to one issued plan, client-ready specification, or published budget checkpoint. Discussion stays in the project thread; only the recorded outcome settles an approval.
+
+Add the project client before assigning decision authority.
+
+APPROVAL RECORD
+
+No exact-artifact approvals have been authored.
+
+Schedule dates
+UNFOLD ↓
+
+No active phase handoffs need attention.
+
+Workflow stage
+
+BAND
+
+Schedule
+
+0 phases · nothing active · next milestone —
+
+FOLD ↑
+COMPOSE A SCHEDULE · THREE STARTING POINTS
+TYPOGRAPHIC · NO WIZARDS
+i
+The Patina Six
+Consultation · Schematic Design · Design Development · Procurement & Orders · Installation & Styling · Completion — the studio’s standard six, pre-chained. Delete what the project doesn’t need.
+DEFAULT
+ii
+From a past project
+Pull the phase chain from a finished project — with the durations that actually happened, not the ones that were hoped for. Your history becomes your estimate.
+AS-BUILT
+iii
+Start blank
+An empty spine and a ghost line — name your first phase. For the project that fits no template.
+BLANK
+THE WORK
+THE DEPENDENCY WEB
+ADD TASK
+Pieces
+
+Nothing yet
+
+ADD A LINE
+FOLD ↑
+
+Nothing yet
+
+THE MONEY · ONE REGION
+
+Money
+
+Nothing yet
+
+DRAW AN INVOICE
+FOLD ↑
+
+Nothing yet
+
+CARE · CLOSING THE BOOK
+
+Closing the book
+
+0 of 6 closed out
+
+CLOSE THE BOOK
+
+0 of 6 closed out · not yet on the paper · press Closing the book on the index to open
+
+The record
+
+Nothing yet
+
+LEAH HARTWELL
+HANDS ON THE WORK: YOU
+BRIEF A VENDOR
+HOLD
+ARCHIVE
+ADD TO THE TEAM
+
+–One client, one paper. The rail on the left says where this stands; the margin here is where decisions, messages, and money gather. Nothing is a form — it fills as the work happens.
+MORE
+APPEARS ONCE · RECEDES ON USE
+
+IN THE MARGIN
+
++ NOTE
+
+The margin — decisions, messages, and money gather here
+
+PATINA
+/
+DOCUMENT
+Library
+People
+The Scans
+Ledgers
+↑
+Find anything
+⌘K
+IN HAND TODAY
+1h 04m
+THE POST
+LH
+Leah Hartwell
+LEAH HARTWELL
+CALL SHEET
+PUT BACK · ESC
+
+Call sheet · Okonkwo residence
+
+Key held by Ngozi Eze. Luis Ochoa controls the gate. Changed 16 Oct 2026.
+
+OPEN THE SITE ACCESS CARD
+
+8 on the job this week · 0 reachable by text · 2 with accounts · 6 on paper
+
+FROM THE ROLODEX
+NEW PERSON
+PRINT
+STUDIO SIDE
+2
+LH
+Leah Hartwell
+ACCOUNT
+SM
+Studio Manager
+ACCOUNT
+CLIENT SIDE
+3
+CL
+Client
+THE CLIENT
+ON PAPER
+AO
+Adaeze Okonkwo
+CLIENT
+■ Okonkwo household
+Selections.
+ON PAPER
+ON THE JOB
+›
+(612) 555-0104
+CO
+Chidi Okonkwo
+CLIENT REP
+■ Okonkwo household
+Signs money to $2,500. Approves change orders to $2,500. Certifies draws.
+ON PAPER
+ON THE JOB
+›
+(612) 555-0105
+
+Email first. Call for anything over $2,500 — a change order or a draw.
+
+ON THE JOB · THIS WEEK
+3
+SR
+Sam Rowe
+ARCHITECT
+■ Beck + Rowe Architects
+1 Aug 2026 to 13 Aug 2027
+Approves change orders.
+ON PAPER
+ON THE JOB
+›
+(612) 555-0110
+
+Email only. Phone for emergencies. Never texted.
+
+CB
+Claire Bissett
+VENDOR
+■ Stonehaven Tile Gallery
+ON PAPER
+ON THE JOB
+›
+(612) 555-0120
+RT
+Ray Thao
+OTHER
+■ City of Minneapolis, CPED Inspections
+ON PAPER
+ON THE JOB
+›
+(612) 555-0127
+
+Building inspector. Never text. Inspections are scheduled through the 311 portal. Hours: Weekdays 08:00 to 16:00.
+
+ON THE JOB · LATER
+17
+CN
+Carol Nyström
+OTHER
+■ Great Northern Bank
+From 12 Oct 2026
+Certifies draws.
+ON PAPER
+ON THE JOB
+›
+(612) 555-0126
+
+Lender's inspector. Email and phone; never texted.
+
+ES
+Erin Sato
+GENERAL CONTRACTOR
+■ Marrow & Sons
+From 12 Oct 2026
+Prepares only.
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0108
+LO
+Luis Ochoa
+GENERAL CONTRACTOR
+■ Marrow & Sons
+From 12 Oct 2026
+Controls site access.
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0109
+NE
+Ngozi Eze
+RECEIVER
+From 12 Oct 2026
+Holds a key.
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0106
+TM
+Tom Marrow
+GENERAL CONTRACTOR
+■ Marrow & Sons
+From 12 Oct 2026
+Signs money. Approves change orders.
+ON PAPER
+ON THE JOB
+›
+(612) 555-0107
+DK
+Dana Kowalski
+SUBCONTRACTOR · ELECTRICAL
+■ Northgate Electric
+From 19 Oct 2026
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0111
+
+Site access held. Northgate Electric’s COI, general liability lapsed 31 March 2026.
+
+JW
+Joe Wozniak
+SUBCONTRACTOR · CARPENTRY & FRAMING
+■ Cedar & Iron Framing
+From 19 Oct 2026
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0118
+PR
+Pete Rusk
+SUBCONTRACTOR · PLUMBING
+■ Rusk Mechanical
+From 9 Nov 2026
+FIELD LINK
+AWARDED
+›
+(612) 555-0112
+
+Opted out by text, 3 Dec 2025, on the Okonkwo residence.
+
+FB
+Frank Bauer
+SUBCONTRACTOR · DRYWALL
+■ Twin Cities Drywall & Plaster
+From 11 Jan 2027
+ON PAPER
+AWARDED
+›
+
+No direct contact, at his request. Write Rosa Delgado; she forwards what he has to sign. rosa@twin-cities-drywall-plaster.com +16125550114
+
+RD
+Rosa Delgado
+SUBCONTRACTOR · DRYWALL
+■ Twin Cities Drywall & Plaster
+From 11 Jan 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0114
+JL
+Jim Lindgren
+SUBCONTRACTOR · HVAC
+■ Boreal HVAC
+From 1 Feb 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0117
+KM
+Kelly Marsh
+SUBCONTRACTOR
+■ Radon Solutions North
+From 1 Feb 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0119
+IH
+Ingrid Halvorsen
+SUBCONTRACTOR · CABINETRY
+■ Halvorsen Cabinet Works
+From 5 Apr 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0113
+
+Email only. No cell for work — the shop line is the voice door.
+
+AO
+Amara Osei
+SUBCONTRACTOR · PAINT
+■ Lakeshore Painting Co.
+From 4 May 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0116
+OA
+Owen Ashby
+VENDOR
+■ Ashgrove Millwork
+From 21 Jun 2027
+ON PAPER
+ON THE JOB
+›
+(612) 555-0123
+NB
+Nadia Brooks
+STAGER
+■ Kestrel Staging
+From 16 Aug 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0124
+JF
+Jonah Feld
+PHOTOGRAPHER
+■ Jonah Feld Photography
+From 13 Sep 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0125
+BIDDING
+1
+RF
+Rivera Finishes
+SUBCONTRACTOR · PAINT
+■ Rivera Finishes
+ON PAPER
+NO RESPONSE
+›
+(612) 555-0219
+DONE
+1
+GN
+Granite North
+VENDOR
+■ Granite North
+Off the job 2 Oct 2026. Slab program went to Stonehaven.
+ON PAPER
+OFF THE JOB
+›
+(612) 555-0220

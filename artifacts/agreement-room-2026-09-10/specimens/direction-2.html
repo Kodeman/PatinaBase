@@ -1,0 +1,1147 @@
+<!doctype html>
+<html lang="en" data-state="resting">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Direction II · The paper is the page</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* SHARED BLOCK — BEGIN … */
+/* SHARED BLOCK — paste verbatim; the reviewer diffs it */
+:root {
+  color-scheme: light dark;
+
+  /* — paper, three stocks — */
+  --paper:            #FAF7F2;  /* the ground */
+  --paper-doc:        #FCFAF6;  /* a document laid on the ground */
+  --rail:             #E8E3DB;  /* the rail / deeper sheet */
+
+  /* — ink — */
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+
+  /* — hairlines — */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* — the rest rule pigment — */
+  --oak:              #8B7355;
+
+  /* — state pigments: material value / paper ink — */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* — the seven stage plates — */
+  --tab-brief:     #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal:  #575D1D;
+  --tab-project:   #6D4E24;
+  --tab-install:   #823832;
+  --tab-care:      #823832;
+
+  --elevation-sheet: 0 1px 2px rgba(44, 41, 38, .08);
+
+  /* — rhythm — */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* — motion — */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* — families — */
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+    /* J: the seven plates keep their light values in dark mode; lifting them
+       drops the white label to 3.90/4.20/4.46:1 (T01). */
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+  /* J: the seven plates keep their light values in dark mode (T01). */
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 60px; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+h1, h2, h3, p, ul, ol, figure { margin: 0; padding: 0; }
+ul { list-style: none; }
+
+/* ——— A3. the type scale ——— */
+.t-d1      { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.t-d2      { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; letter-spacing: 0; }
+.t-d3      { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; }
+.t-meta    { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.t-head    { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-style: italic; font-weight: 400; }
+.t-d1 .t-authorship { font-size: inherit; line-height: inherit; }
+
+/* ——— A5. the action tiers ——— */
+.act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.act .label { position: relative; display: inline-block; line-height: 13px; }
+.act .label::before, .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.act .label::before { bottom: -5px; height: 1px; }
+.act .label::after  { bottom: -8.5px; height: 1px; }
+
+.act--tertiary { color: var(--ink-subtle); }
+.act--tertiary .label::before { background: var(--oak); }
+.act--tertiary .label::after  { content: none; }
+.act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.act--tertiary:active { color: var(--ink); transition-duration: var(--press-in); }
+
+.act--secondary { color: var(--ink); }
+.act--secondary .label::before { height: 1.5px; background: var(--ink); }
+.act--secondary .label::after  { background: var(--clay); }
+.act--secondary:hover .label::after { height: 2px; }
+.act--secondary:active { transition-duration: var(--press-in); }
+
+/* — shared block: inline tier, pressed state, chip (byte-identical in all three specimens) — */
+.act--inline{display:inline;min-height:0;min-width:0;padding:0 0 3px;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;white-space:normal;background:none;border:0;border-bottom:1px solid var(--oak);cursor:pointer;text-decoration:none;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.act--inline .label{display:inline;line-height:inherit}
+.act--inline .label::before,.act--inline .label::after,.act--inline::after{content:none}
+.act--inline:hover{border-bottom-color:var(--ink-faint);border-bottom-width:1.5px;padding-bottom:2.5px}
+.act--inline:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+.act[aria-pressed="true"]{color:var(--ink)}
+.act[aria-pressed="true"] .label::before{height:1.5px;background:var(--ink)}
+.act[aria-pressed="true"] .label::after{content:'';background:var(--clay)}
+.act[aria-pressed="false"]{color:var(--ink-subtle)}
+.act[aria-pressed="false"] .label::before{height:1px;background:var(--oak)}
+.act[aria-pressed="false"] .label::after{content:none}
+.chip{min-height:44px;padding:10px 14px;border-radius:var(--radius-box);font-family:var(--font-body);font-size:14px;color:var(--ink);background:var(--paper);border:1px solid var(--hairline-strong);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--rail);border-color:var(--ink-faint)}
+.chip:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+
+.act:focus-visible {
+  outline: 2px solid var(--clay-ink);
+  outline-offset: 2px;
+}
+.act::after {
+  content: '\2038' / ''; position: absolute; left: 1px; top: 50%;
+  font-size: 14px; line-height: 1; color: var(--ink-faint);
+  opacity: 0; transform: translateY(-50%);
+  transition: opacity 140ms linear; pointer-events: none;
+}
+.act:focus-visible::after { opacity: 1; }
+
+/* ——— A3 addition · .t-money (§F-B) ——— */
+.t-money { font-family: var(--font-meta); font-size: 15px; line-height: 1.50; font-weight: 400; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+
+/* ——— A5 · terminal tier ——— */
+.act--terminal {
+  padding: 13px 22px;
+  min-height: 48px;
+  border-radius: var(--radius-box);
+  background: var(--ink);
+  color: var(--ink-paper);
+  letter-spacing: .06em;
+}
+.act--terminal .label::before,
+.act--terminal .label::after { content: none; }
+.act--terminal:hover  { background: #1F1D1A; }
+.act--terminal:active { transform: translateY(1px); transition-duration: var(--press-in); }
+.act--terminal:focus-visible::after { color: var(--ink-paper); }
+
+/* aria-disabled — set from script, never the bare HTML attribute */
+.act[aria-disabled="true"] { cursor: not-allowed; }
+.act--tertiary[aria-disabled="true"],
+.act--secondary[aria-disabled="true"] { color: var(--ink-faint); }
+.act--tertiary[aria-disabled="true"] .label::before,
+.act--secondary[aria-disabled="true"] .label::before,
+.act--secondary[aria-disabled="true"] .label::after { background: var(--hairline-strong); }
+.act--terminal[aria-disabled="true"] {
+  background: var(--rail);
+  color: var(--ink-faint);
+  border: 1px solid var(--hairline-strong);
+}
+.act--terminal.is-loading { background: var(--ink); }
+.act--terminal.is-loading .label { opacity: 1; }
+
+/* C — the terminal label names its amount in body type, sentence case */
+.act--terminal .label {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+  z-index: 1;
+}
+
+/* ——— A6 · the consequence sentence ——— */
+.consequence {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 56ch;
+  margin: 0 0 12px;
+}
+
+
+/* ——— A12 · the specimen frame ——— */
+.specimen-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px;
+  padding: 10px 24px;
+  background: var(--rail);
+  color: var(--ink-muted);
+  font-family: var(--font-meta);
+  font-size: 11px;
+  letter-spacing: .04em;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+.specimen-meta .switcher { display: flex; align-items: center; gap: 12px; }
+
+/* ——— A11 · reduced motion and forced colors ——— */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .act--terminal { border: 2px solid ButtonText; }
+  .act .label::before, .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .stamp, .stamp::before { border-color: CanvasText; }
+  .plate, .empty .floor, hr { border-color: CanvasText; }
+  .act:focus-visible { outline: 2px solid Highlight; }
+}
+/* SHARED BLOCK — END */
+
+/* §A14 · Fields on paper ─────────────────────────────────────────────── */
+
+/* The group. One module between groups, a half-module inside one. */
+.field           { display: block; margin: 0 0 var(--module); }
+.field:last-child{ margin-bottom: 0; }
+
+/* The label — .t-head, exactly. 11px is the floor and there is nothing below
+   it. The label is always present and always above the field. A placeholder
+   is not a label: no field carries a `placeholder` attribute (A13). */
+.field > .label {
+  display: block;
+  margin: 0 0 12px;
+  font-family: var(--font-meta);
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+/* The box. A sheet laid on the page: --paper-doc ground, a 1px
+   --hairline-strong box, 2px radius, and a 1px --ink-faint BASELINE rule —
+   the ruled line of a form on paper, and the one edge a reader can actually
+   see. No shadow, ever (A4). */
+.field-control {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 12px;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--ink-faint);
+  border-radius: var(--radius-hair);
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 16px;          /* .t-body */
+  line-height: 1.55;
+  letter-spacing: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Prose — the clause body. Inherits the paper's body metrics exactly, caps at
+   the paper's own measure, and grows with its content: a paper has no
+   scrollbar and no resize grip. */
+.field-control--prose {
+  max-width: 65ch;
+  min-height: calc(var(--module) * 3);
+  resize: none;
+  overflow: hidden;
+  field-sizing: content;
+}
+/* Auto-grow where field-sizing is unsupported: the control and a hidden
+   mirror of its value share one grid cell, so the cell is always as tall as
+   the text. In a static specimen `data-value` is authored, not scripted. */
+.field-grow { display: grid; max-width: 65ch;
+              font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.field-grow::after {
+  content: attr(data-value) ' ';
+  visibility: hidden;
+  white-space: pre-wrap;
+}
+.field-grow > .field-control--prose,
+.field-grow::after {
+  grid-area: 1 / 1 / 2 / 2;
+  font: inherit;
+  padding: 12px;
+  border: 1px solid transparent;
+}
+
+/* Select. Same box, same metrics. The mark is drawn from two 1px --ink-faint
+   edges — never a glyph font, never an image (an image cannot read a token).
+   The longest option must still fit: a clipped option is truncation (A4). */
+.field-select { position: relative; }
+.field-select .field-control { padding-right: 36px; }
+.field-select::after {
+  content: '';
+  position: absolute; right: 14px; top: 50%;
+  width: 7px; height: 7px; margin-top: -6px;
+  border-right: 1px solid var(--ink-faint);
+  border-bottom: 1px solid var(--ink-faint);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* Money — .t-money in the field exactly as on the paper, so a figure never
+   changes family between being typed and being printed (A3: one family per
+   figure). Right-aligned to the block's own rule, never to the page edge
+   (F-I). The currency mark is furniture printed by the field: never typed,
+   never stored, never part of the value. */
+.field-money { position: relative; display: inline-block; }
+.field-money .field-control {
+  max-width: 13ch;
+  padding-left: 30px;
+  text-align: right;
+  font-family: var(--font-meta);
+  font-size: 15px;          /* .t-money */
+  line-height: 1.5;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.field-money::before {
+  content: '$';
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-meta);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  pointer-events: none;
+}
+
+/* Focus — §A5's focus, unchanged, for every field. `outline` and not `border`,
+   so a focused field never resizes its neighbours (A5, VC-22). */
+.field-control:focus-visible {
+  outline: 2px solid var(--clay-ink);
+  outline-offset: 2px;
+}
+
+/* Held — a field that may not be written, or is written wrong. The ink stays
+   at full strength: never opacity, ever (A5). The ground moves to --rail, a
+   2px --terracotta-ink rule takes the leading edge, and the reason prints
+   directly beneath in words. The rule is the second channel, so the state
+   survives forced colors (A11); the ground change alone is 1.23:1 and carries
+   nothing. */
+.field-control[aria-invalid="true"],
+.field-control[aria-disabled="true"] {
+  background: var(--rail);
+  color: var(--ink);
+  border-left: 2px solid var(--terracotta-ink);
+  padding-left: 11px;       /* 12 − 1, so the text does not move */
+  cursor: not-allowed;
+}
+.field .reason {
+  display: block;
+  margin: 12px 0 0;
+  max-width: 56ch;
+  font-family: var(--font-body);
+  font-size: 14px;          /* .t-body-sm */
+  line-height: 1.50;
+  color: var(--ink);
+}
+
+/* A money row: label on the line, figure right-aligned to the block's own rule
+   (F-I). Stacks below 520px — no container queries exist in the portal (FS-1),
+   so this is a viewport rule and the specimen says so. */
+.money-row { display: flex; align-items: baseline; justify-content: space-between;
+             gap: 12px; margin: 0 0 12px; }
+.money-row > .label { margin: 0; }
+.money-rows { border-top: 1px solid var(--hairline-strong); padding-top: 12px; }
+@media (max-width: 519px) {
+  .money-row { display: block; }
+  .money-row > .label { margin: 0 0 12px; }
+}
+
+/* Studio chrome. Readiness sentences and marginal notes are the studio's, not
+   the paper's: --rail ground, a 2px --clay-ink leading rule (5.61:1 on paper,
+   4.70:1 on rail — AX-5's proposal), a .t-head running head. NO-4's binding
+   treatment, at 1440, 1024 and 390 alike. */
+.studio-note { background: var(--rail); border-left: 2px solid var(--clay-ink);
+               padding: 12px; margin: 0 0 var(--module); color: var(--ink); }
+.studio-note > .head { display: block; margin: 0 0 12px; color: var(--ink-subtle); }
+.studio-note > p { max-width: 56ch; }
+
+/* ═══ Direction II · A · the paper is the page ════════════════════════════ */
+
+/* `.field { display: block }` outranks the UA sheet's `[hidden]`, so the state
+   script's `fold.hidden` would not hide the field group without this. */
+[hidden] { display: none !important; }
+
+/* ——— the bands ———
+   1440   144 │ 168 outline │ 48 │ 720 paper │ 48 │ 168 margin │ 144
+   1024   one column, 712 paper — the studio strips interrupt the sheet
+    390   16 │ readiness band · the parts · 358 paper │ 16
+
+   NO-4, as ruled: the readiness band, the marginal notes, the studio rest row
+   and the part standing sit outside the paper's ground at every width — the
+   right margin at the wide band, and a --rail strip that visibly interrupts
+   the sheet below it. The paper's TRUE text measure is the sheet's own
+   624 / 616 / 310; the editor takes exactly that, never an indent inside it. */
+.room  { width: 1152px; max-width: calc(100% - 96px); margin: 0 auto; }
+.paper, .page-foot { max-width: 720px; }
+
+/* Reading order is title → the studio → the parts → the paper → the page foot,
+   which is the narrow stack exactly; the wide band places the columns without
+   moving a node. */
+@media (min-width: 1248px) {
+  .room { display: grid; grid-template-columns: 168px 720px 168px;
+          column-gap: 48px; align-items: start; }
+  .room__title { grid-column: 1 / -1; grid-row: 1; }
+  .col-margin  { grid-column: 3; grid-row: 2; }
+  .col-outline { grid-column: 1; grid-row: 2; }
+  .col-paper   { grid-column: 2; grid-row: 2; }
+  .page-foot   { grid-column: 2; grid-row: 3; }
+}
+@media (min-width: 768px) and (max-width: 1247px) {
+  .room { display: block; width: 100%; max-width: 808px; padding: 0 48px; }
+  .paper, .page-foot { max-width: 712px; }
+}
+@media (max-width: 767px) {
+  .room { display: block; padding: 0 16px; width: 100%; max-width: none; }
+  .act--terminal { white-space: normal; }
+}
+@media (max-width: 1247px) {
+  .col-margin, .col-outline { margin: 0 0 var(--module); }
+}
+
+.page { padding: var(--module) 0 48px; }
+.room__title { margin: 0 0 var(--module); }
+.eyebrow { color: var(--ink-subtle); }
+.title-h1 { margin: 12px 0; }
+.prepared { margin: 12px 0 0; max-width: 65ch; }
+#owner-reason { margin: 12px 0 0; color: var(--ink-subtle); max-width: 56ch; }
+.record { margin: 12px 0 0; color: var(--ink-subtle); }
+
+/* ——— the paper ———
+   No element wraps both a sheet segment and a studio strip. `.paper` is a
+   transparent column and paints nothing; the ground is painted only by
+   `.sheet-seg`, so every studio node is a sibling of the segments and never a
+   descendant of the paper's stock. */
+.sheet-seg { background: var(--paper-doc); border: 1px solid var(--hairline);
+             border-radius: var(--radius-hair); padding: var(--module);
+             margin: 0 0 var(--module); }
+@media (min-width: 768px) { .sheet-seg { padding: 48px; } }
+
+/* At the wide band the strips leave the flow for the right margin, so the
+   segments butt into one continuous sheet. */
+@media (min-width: 1248px) {
+  .paper { position: relative; }
+  .sheet-seg { margin: 0; border-radius: 0; border-top-width: 0;
+               padding-top: 0; padding-bottom: 0; }
+  .sheet-seg--first { border-top-width: 1px; padding-top: 48px;
+                      border-radius: var(--radius-hair) var(--radius-hair) 0 0; }
+  .sheet-seg--last  { padding-bottom: 48px;
+                      border-radius: 0 0 var(--radius-hair) var(--radius-hair); }
+  .studio-strip { position: absolute; left: calc(100% + 48px);
+                  width: 168px; margin: 0; }
+}
+.studio-strip { scroll-margin-top: 24px; }
+.studio-strip .act { white-space: normal; justify-content: flex-start;
+                     text-align: left; }
+.strip__part { color: var(--ink); margin: 0 0 12px; }
+.strip__standing { color: var(--ink-subtle); margin: 0 0 12px; }
+.studio-strip p:last-child, .studio-strip div:last-child { margin-bottom: 0; }
+
+.paper__head { margin: 0 0 var(--module); }
+.paper__rule { border: 0; border-top: 1px solid var(--hairline-strong);
+               margin: 0 0 var(--module); }
+
+.part            { padding: 0 0 var(--module); scroll-margin-top: 24px; }
+.seam            { min-height: 44px; display: flex; align-items: center;
+                   border-top: 1px solid var(--hairline); margin-top: var(--module); }
+.part__head      { margin: 0 0 12px; }
+
+/* The seam act is the quietest word on the paper: --ink-faint, standing on the
+   seam's own hairline, drawing no rule of its own. Persistent at every seam
+   and at every width — no hover, no reveal. */
+.seam .act { color: var(--ink-faint); }
+.seam .act .label::before, .seam .act .label::after { content: none; }
+.seam .act:hover { color: var(--ink); }
+
+/* Selection — never hover — gates the per-part acts, so the resting paper
+   carries its seams and nothing else. A part is selected by clicking it or by
+   putting the keyboard in it; the outline's rows select it too. */
+.part__acts { display: none; flex-wrap: wrap; align-items: center;
+              gap: 0 24px; margin-top: 12px; }
+.part[data-selected="true"] .part__acts,
+.part[data-mode="editing"] .part__acts { display: flex; }
+.part[data-selected="true"],
+.part[data-mode="editing"] { border-left: 2px solid var(--oak);
+                             padding-left: 22px; margin-left: -24px; }
+.part[data-mode="editing"] { border-left-color: var(--ink); }
+.part[data-mode="editing"] .part__head::after {
+  content: ' — being written'; font-family: var(--font-meta); font-size: 11px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); }
+.part:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+.part__printed p + p,
+.part__printed ul { margin-top: 12px; }
+.part__printed p  { color: var(--ink-muted); max-width: 65ch; }
+.part__printed ul { max-width: 65ch; }
+.part__printed .t-money { color: var(--ink); }
+.part__printed li { color: var(--ink-muted); margin: 0 0 6px; }
+.part[data-mode="editing"] .part__printed { display: none; }
+
+/* An unwritten part draws nothing on the paper — no heading, no sentence. Its
+   whole segment is absent until it is being written, and the studio row in the
+   margin is what the designer opens. */
+html:not([data-state="money"]) .sheet-seg--rates { display: none; }
+
+/* The prose field keeps the mirror's metrics exactly — same 1px border box —
+   but takes the §A14 edge back, which `border: 1px solid transparent` above
+   would otherwise erase. */
+.field-grow > .field-control--prose {
+  border: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--ink-faint);
+}
+
+/* ——— the outline ——— */
+.col-outline .outline__head { margin: 0 0 12px; }
+.outline__toggle .mark::after { content: '\25B8'; }
+.outline__toggle[aria-expanded="true"] .mark::after { content: '\25BE'; }
+.outline { border-top: 1px solid var(--hairline); margin: 0 0 12px; }
+.outline a {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  min-height: 44px; padding: 6px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+  color: var(--ink-subtle); text-decoration: none;
+}
+.outline a:hover { color: var(--ink); }
+.outline a:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.outline .attention { color: var(--terracotta-ink); }
+/* seven modules is not a line of 26 uppercase characters: the outline's acts
+   wrap rather than run into the paper's gutter */
+.col-outline .act { white-space: normal; justify-content: flex-start; text-align: left; }
+
+/* ——— the paper's foot, and the page's ——— */
+.paper__foot { margin-top: var(--module); }
+.paper__foot .act--terminal { margin-bottom: 12px; }
+.paper__foot .act--tertiary { display: flex; }
+
+/* The return act, its consequence and its hold caption sit at the page foot at
+   the paper's own measure, at every width, in the quietest tier. */
+.page-foot { margin-top: 48px; border-top: 1px solid var(--hairline);
+             padding-top: var(--module); }
+.page-foot .act--tertiary { display: flex; }
+.hold-caption { margin: 12px 0 0; color: var(--ink-subtle); }
+
+.col-margin .studio-note:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<div class="specimen-meta" role="region" aria-label="Specimen controls">
+  <span>Direction II &middot; The paper is the page</span>
+  <span>Fixture: Okonkwo house &middot; Dave Okonkwo &middot; Middle West Studio, Madison &middot; fictional data</span>
+  <span>Nothing drawn but the paper &middot; no photographs</span>
+  <div class="switcher" role="group" aria-label="State">
+    <button type="button" class="chip" id="state-resting" aria-pressed="true">Resting</button>
+    <button type="button" class="chip" id="state-clause"  aria-pressed="false">Editing a clause</button>
+    <button type="button" class="chip" id="state-money"   aria-pressed="false">Editing the money</button>
+  </div>
+</div>
+
+<div class="page">
+<main class="room">
+
+  <div class="room__title">
+    <p class="t-head eyebrow">Design services agreement &middot; V1</p>
+    <h1 class="t-d2 title-h1">Dave Okonkwo</h1>
+    <p class="t-head eyebrow">Draft</p>
+    <p class="t-body prepared">Prepared for Dave Okonkwo &middot; dave@okonkwo.test &mdash;
+      <button type="button" class="act act--inline" id="client-act" aria-disabled="true"
+              aria-describedby="owner-reason"><span class="label">Change the client account</span></button></p>
+    <p class="t-body-sm" id="owner-reason">Only the agreement owner can change the client account.</p>
+    <p class="t-meta record" id="record">Saved 10 September 2026, 5:36 am</p>
+  </div>
+  <!-- the title's email-only fallback: dave@okonkwo.test -->
+  <!-- the title's third state, neither name nor email: A draft with no client yet -->
+  <!-- the unlinked prepared-for line: Prepared for no one yet — Link a client -->
+
+  <aside class="col-margin" aria-label="The studio">
+    <p class="studio-note" id="room-status-wrap">
+      <span class="t-head head">The studio</span>
+      <span class="t-body" id="room-status" role="status" aria-live="polite">One thing before this can go: name a fee.</span></p>
+    <!-- the two-item form of #room-status: Two things before this can go: name a fee; link a client. -->
+    <!-- the nothing-outstanding form of #room-status: Nothing left to finish. -->
+  </aside>
+
+  <div class="col-outline">
+    <h2 class="outline__head"><button type="button" class="act act--tertiary outline__toggle" id="toggle-outline" aria-expanded="true" aria-controls="outline-body"><span class="mark" aria-hidden="true"></span><span class="label t-head">The parts</span></button></h2>
+    <div id="outline-body">
+      <nav aria-label="Agreement parts">
+        <ul class="outline">
+          <li><a href="#part-services">Services</a></li>
+          <li><a href="#part-deliverables">Deliverables</a></li>
+          <li><a href="#part-exclusions">Exclusions</a></li>
+          <li><a href="#note-rates">Role rates</a></li>
+          <li><a href="#part-ceiling">Ceiling <span class="t-head attention" id="ceiling-attention" hidden>needs attention</span></a></li>
+          <li><a href="#part-furnishings-deposit">Furnishings deposit</a></li>
+          <li><a href="#part-retainer">Retainer</a></li>
+          <li><a href="#part-billing-cadence">Billing cadence</a></li>
+          <li><a href="#part-terms">Terms</a></li>
+        </ul>
+      </nav>
+      <button type="button" class="act act--tertiary"><span class="label">Save as template&hellip;</span></button>
+    </div>
+  </div>
+
+  <div class="col-paper">
+    <div class="paper" id="paper">
+
+      <div class="sheet-seg sheet-seg--first">
+        <h2 class="t-d2 paper__head" id="paper-title">Okonkwo house &mdash; design services agreement</h2>
+        <hr class="paper__rule">
+        <div class="seam"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+
+        <section class="part" data-part-key="patina.services" data-part-name="Services" id="part-services" data-mode="printed" tabindex="0" aria-labelledby="head-services">
+          <h3 class="part__head t-d3" id="head-services">Services</h3>
+          <div class="part__printed">
+            <p class="t-body">Middle West Studio provides interior design services for the Okonkwo house: concept development, design documentation, and selections. The studio draws the rooms, specifies the pieces and finishes, and coordinates with the trades doing the work. Furnishings and purchasing stay outside this agreement.</p>
+          </div>
+          <div class="field" id="fold-services" hidden>
+            <label class="label t-head" for="f-services">The language the client reads and signs</label>
+            <div class="field-grow" data-value="Middle West Studio provides interior design services for the Okonkwo house: concept development, design documentation, and selections. The studio draws the rooms, specifies the pieces and finishes, and coordinates with the trades doing the work. Furnishings and purchasing stay outside this agreement.">
+              <textarea class="field-control field-control--prose" id="f-services" rows="4">Middle West Studio provides interior design services for the Okonkwo house: concept development, design documentation, and selections. The studio draws the rooms, specifies the pieces and finishes, and coordinates with the trades doing the work. Furnishings and purchasing stay outside this agreement.</textarea>
+            </div>
+          </div>
+          <div class="part__acts">
+            <button type="button" class="act act--tertiary" id="toggle-services" aria-expanded="false" aria-controls="fold-services"><span class="label">Write this part</span></button>
+            <button type="button" class="act act--tertiary" data-move="-1"><span class="label">Move up</span></button>
+            <button type="button" class="act act--tertiary" data-move="1"><span class="label">Move down</span></button>
+          </div>
+          <div class="seam"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+        </section>
+
+        <section class="part" data-part-key="patina.deliverables" data-part-name="Deliverables" id="part-deliverables" data-mode="printed" tabindex="0" aria-labelledby="head-deliverables">
+          <h3 class="part__head t-d3" id="head-deliverables">Deliverables</h3>
+          <div class="part__printed">
+            <ul class="t-body">
+              <li>&mdash; Concept presentation for each room in scope</li>
+              <li>&mdash; Design documentation &mdash; plans, elevations, and finish schedules</li>
+              <li>&mdash; Selection schedules naming maker, finish, and lead time</li>
+              <li>&mdash; One walkthrough at installation</li>
+            </ul>
+          </div>
+          <div class="part__acts">
+            <button type="button" class="act act--tertiary"><span class="label">Write this part</span></button>
+            <button type="button" class="act act--tertiary" data-move="-1"><span class="label">Move up</span></button>
+            <button type="button" class="act act--tertiary" data-move="1"><span class="label">Move down</span></button>
+          </div>
+          <div class="seam"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+        </section>
+
+        <section class="part" data-part-key="patina.exclusions" data-part-name="Exclusions" id="part-exclusions" data-mode="printed" tabindex="0" aria-labelledby="head-exclusions">
+          <h3 class="part__head t-d3" id="head-exclusions">Exclusions</h3>
+          <div class="part__printed">
+            <ul class="t-body">
+              <li>&mdash; Construction labor and permits</li>
+              <li>&mdash; Structural, mechanical, electrical, and plumbing engineering</li>
+              <li>&mdash; Purchasing, freight, and installation of furnishings</li>
+            </ul>
+          </div>
+          <div class="part__acts">
+            <button type="button" class="act act--tertiary"><span class="label">Write this part</span></button>
+            <button type="button" class="act act--tertiary" data-move="-1"><span class="label">Move up</span></button>
+            <button type="button" class="act act--tertiary" data-move="1"><span class="label">Move down</span></button>
+          </div>
+          <div class="seam" id="seam-role-rates"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+        </section>
+      </div>
+
+      <aside class="studio-note studio-strip" id="note-rates" data-anchor="part-role-rates" data-anchor-alt="seam-role-rates" aria-label="The studio on Role rates">
+        <span class="t-head head">The studio</span>
+        <p class="t-head strip__part">Role rates</p>
+        <p class="t-head strip__standing">Creates authority</p>
+        <p class="t-body-sm" id="rest-rates">Not written yet. Your client&rsquo;s copy does not print this part.</p>
+        <p class="t-body-sm" id="note-fee"><span id="fee-blocker">This agreement names no fee. Add a rate card, a flat fee, or a per-phase fee.</span></p>
+        <!-- the client blocker, unlinked variant only: Link a client with an email address. -->
+        <div><button type="button" class="act act--tertiary" id="toggle-role-rates" aria-expanded="false" aria-controls="fold-role-rates"><span class="label">Write this part</span></button></div>
+      </aside>
+
+      <div class="sheet-seg sheet-seg--rates">
+        <section class="part" data-part-key="patina.role_rates" data-part-name="Role rates" id="part-role-rates" data-mode="printed" tabindex="0" aria-labelledby="head-role-rates">
+          <h3 class="part__head t-d3" id="head-role-rates">Role rates</h3>
+          <div class="part__editor" id="fold-role-rates" hidden>
+            <div class="money-rows">
+              <div class="field money-row">
+                <label class="label t-head" for="rate-principal">Principal &middot; hourly</label>
+                <span class="field-money"><input class="field-control" id="rate-principal" type="text" inputmode="decimal" value="185.00"></span>
+              </div>
+              <div class="field money-row">
+                <label class="label t-head" for="rate-designer">Designer &middot; hourly</label>
+                <span class="field-money"><input class="field-control" id="rate-designer" type="text" inputmode="decimal" value="140.00"></span>
+              </div>
+              <div class="field money-row">
+                <label class="label t-head" for="rate-assistant">Assistant &middot; hourly</label>
+                <span class="field-money"><input class="field-control" id="rate-assistant" type="text" inputmode="decimal" value="85.0"></span>
+              </div>
+            </div>
+          </div>
+          <div class="part__acts">
+            <button type="button" class="act act--tertiary" data-move="-1"><span class="label">Move up</span></button>
+            <button type="button" class="act act--tertiary" data-move="1"><span class="label">Move down</span></button>
+          </div>
+          <div class="seam"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+        </section>
+      </div>
+
+      <aside class="studio-note studio-strip" id="strip-ceiling" data-anchor="part-ceiling" aria-label="The studio on Ceiling">
+        <span class="t-head head">The studio</span>
+        <p class="t-head strip__part">Ceiling</p>
+        <p class="t-head strip__standing">Creates authority</p>
+        <p class="t-body-sm" id="note-ceiling" hidden><span id="ceiling-blocker">An agreement that bills hourly needs a ceiling. Add a Ceiling part, or remove the role rates.</span></p>
+      </aside>
+
+      <div class="sheet-seg">
+        <section class="part" data-part-key="patina.ceiling" data-part-name="Ceiling" id="part-ceiling" data-mode="printed" tabindex="0" aria-labelledby="head-ceiling">
+          <h3 class="part__head t-d3" id="head-ceiling">Ceiling</h3>
+          <div class="part__printed">
+            <p class="t-body">Not yet set</p>
+          </div>
+          <div class="part__acts">
+            <button type="button" class="act act--tertiary" id="write-ceiling"><span class="label">Write this part</span></button>
+            <button type="button" class="act act--tertiary" data-move="-1"><span class="label">Move up</span></button>
+            <button type="button" class="act act--tertiary" data-move="1"><span class="label">Move down</span></button>
+          </div>
+          <div class="seam"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+        </section>
+      </div>
+
+      <aside class="studio-note studio-strip" id="strip-deposit" data-anchor="part-furnishings-deposit" aria-label="The studio on Furnishings deposit">
+        <span class="t-head head">The studio</span>
+        <p class="t-head strip__part">Furnishings deposit</p>
+        <p class="t-head strip__standing">Creates authority</p>
+      </aside>
+
+      <div class="sheet-seg">
+        <section class="part" data-part-key="patina.furnishings_deposit" data-part-name="Furnishings deposit" id="part-furnishings-deposit" data-mode="printed" tabindex="0" aria-labelledby="head-furnishings-deposit">
+          <h3 class="part__head t-d3" id="head-furnishings-deposit">Furnishings deposit</h3>
+          <div class="part__printed">
+            <p class="t-body">Not yet set</p>
+          </div>
+          <div class="part__acts">
+            <button type="button" class="act act--tertiary"><span class="label">Write this part</span></button>
+            <button type="button" class="act act--tertiary" data-move="-1"><span class="label">Move up</span></button>
+            <button type="button" class="act act--tertiary" data-move="1"><span class="label">Move down</span></button>
+          </div>
+          <div class="seam"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+        </section>
+      </div>
+
+      <aside class="studio-note studio-strip" id="strip-retainer" data-anchor="part-retainer" aria-label="The studio on Retainer">
+        <span class="t-head head">The studio</span>
+        <p class="t-head strip__part">Retainer</p>
+        <p class="t-head strip__standing">Creates authority</p>
+      </aside>
+
+      <div class="sheet-seg">
+        <section class="part" data-part-key="patina.retainer" data-part-name="Retainer" id="part-retainer" data-mode="printed" tabindex="0" aria-labelledby="head-retainer">
+          <h3 class="part__head t-d3" id="head-retainer">Retainer</h3>
+          <div class="part__printed">
+            <p class="t-money">$5,000.00</p>
+            <p class="t-body">Credited against the first invoices.</p>
+            <p class="t-body">Design work begins after the fully executed agreement and retainer payment.</p>
+          </div>
+          <div class="part__acts">
+            <button type="button" class="act act--tertiary"><span class="label">Write this part</span></button>
+            <button type="button" class="act act--tertiary" data-move="-1"><span class="label">Move up</span></button>
+            <button type="button" class="act act--tertiary" data-move="1"><span class="label">Move down</span></button>
+          </div>
+          <div class="seam"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+        </section>
+      </div>
+
+      <aside class="studio-note studio-strip" id="strip-cadence" data-anchor="part-billing-cadence" aria-label="The studio on Billing cadence">
+        <span class="t-head head">The studio</span>
+        <p class="t-head strip__part">Billing cadence</p>
+        <p class="t-head strip__standing">Creates authority</p>
+      </aside>
+
+      <div class="sheet-seg sheet-seg--last">
+        <section class="part" data-part-key="patina.billing_cadence" data-part-name="Billing cadence" id="part-billing-cadence" data-mode="printed" tabindex="0" aria-labelledby="head-billing-cadence">
+          <h3 class="part__head t-d3" id="head-billing-cadence">Billing cadence</h3>
+          <div class="part__printed">
+            <p class="t-body">Monthly</p>
+            <p class="t-body">Additional work requires written authorization before it can be invoiced.</p>
+          </div>
+          <div class="part__acts">
+            <button type="button" class="act act--tertiary"><span class="label">Write this part</span></button>
+            <button type="button" class="act act--tertiary" data-move="-1"><span class="label">Move up</span></button>
+            <button type="button" class="act act--tertiary" data-move="1"><span class="label">Move down</span></button>
+          </div>
+          <div class="seam"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+        </section>
+
+        <section class="part" data-part-key="patina.terms" data-part-name="Terms" id="part-terms" data-mode="printed" tabindex="0" aria-labelledby="head-terms">
+          <h3 class="part__head t-d3" id="head-terms">Terms</h3>
+          <div class="part__printed">
+            <p class="t-body">This agreement stands until the work it describes is finished, or until either party ends it in writing with fourteen days&rsquo; notice. Drawings, schedules, and specifications the studio prepares stay the studio&rsquo;s work; the Okonkwos hold a license to use them for this house. Invoices are due on receipt, and work pauses on an invoice unpaid for thirty days. Wisconsin law governs this agreement.</p>
+          </div>
+          <div class="part__acts">
+            <button type="button" class="act act--tertiary"><span class="label">Write this part</span></button>
+            <button type="button" class="act act--tertiary" data-move="-1"><span class="label">Move up</span></button>
+            <button type="button" class="act act--tertiary" data-move="1"><span class="label">Move down</span></button>
+          </div>
+          <div class="seam"><button type="button" class="act act--tertiary"><span class="label">+ Add a part</span></button></div>
+        </section>
+        <!-- the exception's standing and its consequence: Record only — This is recorded on the agreement. It does not create billing authority yet. -->
+      </div>
+
+    </div>
+
+    <div class="paper__foot">
+      <p class="consequence" id="send-consequence">Dave Okonkwo receives the six parts this agreement has written &mdash; the services, the deliverables, the exclusions, the $5,000.00 retainer, the monthly billing cadence and the terms &mdash; and his signature preserves consent; nothing is billed and no work is authorized until the studio countersigns.</p>
+      <button type="button" class="act act--terminal" id="send-act" aria-disabled="true" aria-describedby="fee-blocker"><span class="label">Send the agreement &middot; $5,000.00 retainer</span></button>
+      <button type="button" class="act act--tertiary"><span class="label">Read the whole paper</span></button>
+    </div>
+  </div>
+
+  <div class="page-foot">
+    <p class="consequence">This takes away the nine parts you have written and puts the seven facets back in their place; the money already recorded on the agreement does not change, and a part with no facet to return to &mdash; a flat fee, a per-phase fee, a draw schedule &mdash; does not survive it.</p>
+    <button type="button" class="act act--tertiary" data-hold="900" id="return-act"><span class="label">Return to the seven facets</span></button>
+    <p class="t-meta hold-caption">Press and hold to return</p>
+  </div>
+
+</main>
+</div>
+
+<script>
+(function () {
+  var READY = {
+    resting: 'One thing before this can go: name a fee.',
+    clause:  'One thing before this can go: name a fee.',
+    money:   'One thing before this can go: name a ceiling.'
+  };
+  var FOLD = { clause: 'services', money: 'role-rates' };
+  var root = document.documentElement;
+  var ids  = ['resting', 'clause', 'money'];
+
+  function apply(s) {
+    if (ids.indexOf(s) < 0) return;
+    root.dataset.state = s;
+    ids.forEach(function (k) {
+      var b = document.getElementById('state-' + k);
+      if (b) b.setAttribute('aria-pressed', String(k === s));
+    });
+    ['services', 'role-rates'].forEach(function (key) {
+      var fold = document.getElementById('fold-' + key);
+      var head = document.getElementById('toggle-' + key);
+      if (!fold) return;
+      var open = FOLD[s] === key;
+      fold.hidden = !open;
+      if (head) head.setAttribute('aria-expanded', String(open));
+    });
+    var status = document.getElementById('room-status');
+    if (status) status.textContent = READY[s];
+  }
+
+  ids.forEach(function (k) {
+    var b = document.getElementById('state-' + k);
+    if (b) b.addEventListener('click', function () { apply(k); });
+  });
+  window.addEventListener('message', function (e) {
+    var s = e.data && e.data.state;
+    if (s) apply(s);
+  });
+  apply('resting');
+})();
+
+(function () {
+  var root = document.documentElement;
+  var status = document.getElementById('room-status');
+  var record = document.getElementById('record');
+  var send = document.getElementById('send-act');
+  var paper = document.getElementById('paper');
+  var SAVED = 'Saved 10 September 2026, 5:36 am';
+  var SIX = "Dave Okonkwo receives the six parts this agreement has written — the services, the deliverables, the exclusions, the $5,000.00 retainer, the monthly billing cadence and the terms — and his signature preserves consent; nothing is billed and no work is authorized until the studio countersigns.";
+  var SEVEN = "Dave Okonkwo receives the seven parts this agreement has written — the services, the deliverables, the exclusions, the role rates, the $5,000.00 retainer, the monthly billing cadence and the terms — and his signature preserves consent; nothing is billed and no work is authorized until the studio countersigns.";
+  var CARET = 'selections.';
+  var WRITE = { 'toggle-services': 'clause', 'toggle-role-rates': 'money' };
+  var deskband = window.matchMedia('(min-width: 1248px)');
+
+  /* selection, not hover, gates a part's acts */
+  function selectPart(sec) {
+    if (!sec) return;
+    Array.prototype.forEach.call(document.querySelectorAll('.part[data-selected]'), function (p) {
+      if (p !== sec) p.removeAttribute('data-selected');
+    });
+    sec.setAttribute('data-selected', 'true');
+  }
+
+  function setPart(key, editing) {
+    var sec = document.getElementById('part-' + key);
+    var head = document.getElementById('toggle-' + key);
+    if (!sec) return;
+    sec.setAttribute('data-mode', editing ? 'editing' : 'printed');
+    if (editing) selectPart(sec);
+    else sec.removeAttribute('data-selected');
+    if (!head) return;
+    head.className = 'act ' + (editing ? 'act--secondary' : 'act--tertiary');
+    head.querySelector('.label').textContent = editing ? 'Done writing' : 'Write this part';
+  }
+
+  /* The studio's strips: the right margin at the wide band, anchored to the top
+     of the part each one names, stacked so no two overlap; in the flow, and
+     interrupting the sheet, at every width below it. */
+  function layoutStrips() {
+    var strips = Array.prototype.slice.call(document.querySelectorAll('.studio-strip'));
+    if (!deskband.matches) {
+      strips.forEach(function (s) { s.style.top = ''; });
+      return;
+    }
+    var base = paper.getBoundingClientRect().top;
+    var band = document.getElementById('room-status-wrap');
+    var floor = band ? Math.round(band.getBoundingClientRect().bottom - base) + 12 : 0;
+    strips.forEach(function (s) {
+      var a = document.getElementById(s.getAttribute('data-anchor'));
+      if (!a || !a.offsetParent) a = document.getElementById(s.getAttribute('data-anchor-alt') || '');
+      var top = a ? Math.round(a.getBoundingClientRect().top - base) : floor;
+      if (top < floor) top = floor;
+      s.style.top = top + 'px';
+      floor = top + s.offsetHeight + 12;
+    });
+  }
+
+  function sync(state, prev) {
+    var money = state === 'money';
+    setPart('services', state === 'clause');
+    setPart('role-rates', money);
+
+    record.textContent = SAVED + (state === 'clause' ? ' · Services not yet saved'
+                                : money ? ' · Role rates not yet saved' : '');
+
+    document.getElementById('send-consequence').textContent = money ? SEVEN : SIX;
+    send.setAttribute('aria-describedby', money ? 'ceiling-blocker' : 'fee-blocker');
+    document.getElementById('rest-rates').hidden = money;
+    document.getElementById('note-fee').hidden = money;
+    document.getElementById('note-ceiling').hidden = !money;
+    document.getElementById('ceiling-attention').hidden = !money;
+
+    if (prev === 'clause' && money) {
+      status.textContent = 'Role rates name the fee. One thing left: name a ceiling.';
+    }
+
+    /* the caret is placed here and nowhere else — no field carries `autofocus`,
+       and the reading position moves to the part, not to the field's foot */
+    if (prev) {
+      var sec = null, f = null, i;
+      if (state === 'clause') {
+        f = document.getElementById('f-services');
+        sec = document.getElementById('part-services');
+        f.focus({ preventScroll: true });
+        i = f.value.indexOf(CARET) + CARET.length;
+        f.setSelectionRange(i, i);
+      } else if (money) {
+        f = document.getElementById('rate-assistant');
+        sec = document.getElementById('part-role-rates');
+        f.focus({ preventScroll: true });
+        f.setSelectionRange(f.value.length, f.value.length);
+      }
+      if (sec) sec.scrollIntoView({ block: 'start' });
+    }
+    requestAnimationFrame(layoutStrips);
+  }
+
+  var prev = null;
+  function onState() {
+    var s = root.dataset.state;
+    if (s === prev) return;
+    var was = prev;
+    prev = s;
+    sync(s, was);
+  }
+  new MutationObserver(onState).observe(root, { attributes: true, attributeFilter: ['data-state'] });
+  onState();
+
+  /* the outline: a column at the wide band, a disclosure above the paper below it */
+  var body = document.getElementById('outline-body');
+  var toggle = document.getElementById('toggle-outline');
+  function setOutline(open) {
+    toggle.setAttribute('aria-expanded', String(open));
+    body.hidden = !open;
+  }
+  setOutline(deskband.matches);
+  deskband.addEventListener('change', function (e) { setOutline(e.matches); layoutStrips(); });
+  toggle.addEventListener('click', function () {
+    setOutline(toggle.getAttribute('aria-expanded') !== 'true');
+  });
+  window.addEventListener('resize', layoutStrips);
+  window.addEventListener('load', layoutStrips);
+
+  /* writing a part is the state, so the act and the switcher say the same thing */
+  Object.keys(WRITE).forEach(function (id) {
+    var b = document.getElementById(id);
+    if (!b) return;
+    b.addEventListener('click', function () {
+      var editing = b.getAttribute('aria-expanded') === 'true';
+      document.getElementById('state-' + (editing ? 'resting' : WRITE[id])).click();
+      if (editing) b.focus();
+    });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var s = root.dataset.state;
+    if (s === 'resting') return;
+    var back = document.getElementById(s === 'clause' ? 'toggle-services' : 'toggle-role-rates');
+    document.getElementById('state-resting').click();
+    if (back) back.focus();
+  });
+
+  /* a held act is never silent: it says why, and hands over the part that is unmet */
+  send.addEventListener('click', function () {
+    var reason = document.getElementById(send.getAttribute('aria-describedby'));
+    if (reason) status.textContent = reason.textContent;
+    var unmet;
+    if (root.dataset.state === 'money') {
+      selectPart(document.getElementById('part-ceiling'));
+      unmet = document.getElementById('write-ceiling');
+    } else {
+      unmet = document.getElementById('toggle-role-rates');
+    }
+    if (unmet) unmet.focus();
+    layoutStrips();
+  });
+  document.getElementById('client-act').addEventListener('click', function () {
+    status.textContent = document.getElementById('owner-reason').textContent;
+  });
+
+  /* the keyboard selects a part: putting focus in one is choosing it */
+  document.addEventListener('focusin', function (e) {
+    var p = e.target.closest ? e.target.closest('.part') : null;
+    if (p) { selectPart(p); layoutStrips(); }
+  });
+  document.addEventListener('click', function (e) {
+    var p = e.target.closest ? e.target.closest('.part') : null;
+    if (p) selectPart(p);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.outline a'), function (a) {
+    a.addEventListener('click', function () {
+      var p = document.querySelector(a.getAttribute('href'));
+      if (p && p.classList.contains('part')) selectPart(p);
+    });
+  });
+
+  /* reorder from the keyboard, and the room says where the part landed */
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-move]') : null;
+    if (!b) return;
+    var sec = b.closest('.part');
+    var all = Array.prototype.slice.call(document.querySelectorAll('.part'));
+    var shown = all.filter(function (p) { return p === sec || p.offsetParent !== null; });
+    var i = shown.indexOf(sec);
+    var j = i + Number(b.getAttribute('data-move'));
+    if (j < 0 || j >= shown.length) return;
+    var target = shown[j];
+    /* the paper is cut into segments, so a part can move between two parents */
+    if (j < i) target.parentNode.insertBefore(sec, target);
+    else target.parentNode.insertBefore(sec, target.nextSibling);
+    b.focus();
+    selectPart(sec);
+    var now = Array.prototype.slice.call(document.querySelectorAll('.part')).indexOf(sec);
+    status.textContent = sec.getAttribute('data-part-name') + ' is now part ' + (now + 1) + ' of 9.';
+    layoutStrips();
+  });
+})();
+</script>
+
+</body>
+</html>
+<!-- specimen-complete -->

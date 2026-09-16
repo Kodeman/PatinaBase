@@ -2,13 +2,13 @@
 
 import type { ReactNode } from 'react';
 
-import { invoiceBalanceCents } from '@patina/shared';
+import { formatCurrency, invoiceBalanceCents } from '@patina/shared';
 
-import { dayMonth, legalDate } from '@/lib/threshold/dates';
+import { legalDate } from '@/lib/threshold/dates';
 
 import { parseSpineDate } from './making-spine';
 import { ScoredAction } from './scored-action';
-import { moneyInWords } from './standing-sentence';
+
 
 /* ── THE TOLL — an open balance sitting on the line ──────────────────────────
    A toll is not a gate: the spine does not break for it. Money owed is a thing
@@ -36,9 +36,9 @@ export interface SpineTollProps {
   /** When it comes due. Null when the invoice carries no due date. */
   dueDate: string | null;
   /**
-   * Today, for deciding whether the due date needs its year spelled out — the
-   * same rule `formatSpineDate` applies on the spine. Omitted during SSR and
-   * the first client paint, which simply drops the year.
+   * Today. Threaded by the letterbox, and kept for the callers that pass it;
+   * the due date no longer reads it — a term of the invoice spells its year
+   * every time.
    */
   today?: Date;
   /** Fired when the client takes the act — the caller reports `tollFollowed`. */
@@ -57,11 +57,11 @@ export interface SpineTollProps {
   children?: ReactNode;
 }
 
-/** "due 15 August", and the year too, once it is not this year. */
-function formatDue(dueDate: string, today?: Date): string | null {
+/** "15 September 2026". A term of the invoice, so the year is on the page —
+ * the same rule the letterbox's summary line keeps. */
+function formatDue(dueDate: string): string | null {
   const due = parseSpineDate(dueDate);
-  if (!due) return null;
-  return today && today.getFullYear() !== due.getFullYear() ? legalDate(due) : dayMonth(due);
+  return due ? legalDate(due) : null;
 }
 
 export function SpineToll({
@@ -70,7 +70,6 @@ export function SpineToll({
   totalCents,
   paidCents,
   dueDate,
-  today,
   onFollow,
   settle,
   children,
@@ -83,11 +82,10 @@ export function SpineToll({
     amount_paid_cents: paidCents,
   });
 
-  // The deck writes "A toll on the line · due 15 August" — day and month, no
-  // year. `formatInvoiceDate`'s abbreviated month-with-year is the
-  // invoice-list idiom, and it disagreed with the very date column this row
-  // sits in.
-  const due = dueDate ? formatDue(dueDate, today) : null;
+  // "A toll on the line · due 15 September 2026". `formatInvoiceDate`'s
+  // abbreviated month-with-year is the invoice-list idiom, and it disagreed
+  // with the very date column this row sits in.
+  const due = dueDate ? formatDue(dueDate) : null;
   const dueLine = due ? `A toll on the line · due ${due}` : 'A toll on the line';
 
   return (
@@ -150,7 +148,7 @@ function Figure({
             : 'mt-0.5 font-mono text-[0.8rem] text-[var(--text-muted)]'
         }
       >
-        {moneyInWords(cents)}
+        {formatCurrency(cents)}
       </dd>
     </div>
   );

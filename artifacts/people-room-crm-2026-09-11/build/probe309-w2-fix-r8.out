@@ -1,0 +1,62 @@
+BEGIN
+SET
+SET
+== QA-R8-1 — the seat window vs the stored field-link boundary ==
+ display_name  | on_site_to | warranty_until |       expires_at       | last_open_day 
+---------------+------------+----------------+------------------------+---------------
+ Dana Kowalski | 2027-05-24 |                | 2027-05-25 00:00:00+00 | 2027-05-24
+(1 row)
+
+== CR8-1 — the dated paper the roster clause names ==
+    company_name    | doc_type |   number    | expires_on |       blocks       
+--------------------+----------+-------------+------------+--------------------
+ Northgate Electric | coi_gl   | GL-22907-25 | 2026-03-31 | {site_access,draw}
+ Northgate Electric | w9       |             |            | {payment}
+ Northgate Electric | license  | EA-009182   | 2027-12-31 | {}
+(3 rows)
+
+== CR8-2 — which legacy client records actually duplicate a person card ==
+            display_name            | profile_hits_card | phone_hits_card 
+------------------------------------+-------------------+-----------------
+ Client User                        | f                 | f
+ Client User                        | f                 | f
+ Elena Marlowe (no-login household) | f                 | f
+ Karin Lindqvist                    | f                 | f
+ Nora Ellison                       | f                 | f
+ The Ashfords (no-login household)  | f                 | f
+ The Okonkwo household              | f                 | t
+(7 rows)
+
+== CR8-2 — the raw two-noun head the room counts from ==
+ firms | people 
+-------+--------
+    21 |     42
+(1 row)
+
+== CR8-3 — the card carries no trade; the seat does ==
+   display_name   | card_has_trade_key | card_specialties |    seat_trade     
+------------------+--------------------+------------------+-------------------
+ Amara Osei       | f                  | []               | 
+ Ben Ostrom       | f                  | []               | 
+ Dana Kowalski    | f                  | []               | electrical
+ Erin Sato        | f                  | []               | 
+ Frank Bauer      | f                  | []               | 
+ Ingrid Halvorsen | f                  | []               | 
+ Jim Lindgren     | f                  | []               | 
+ Joe Wozniak      | f                  | []               | carpentry_framing
+ Kelly Marsh      | f                  | []               | 
+ Luis Ochoa       | f                  | []               | 
+ Ngozi Eze        | f                  | []               | 
+ Pete Rusk        | f                  | []               | 
+(12 rows)
+
+== CR8-5 — the seat kind cannot answer; the card kind can ==
+ display_name  | party_kind | card_kind | company_name 
+---------------+------------+-----------+--------------
+ Carol Nyström | other      | inspector | 
+ Dana Kowalski | sub        | sub       | 
+ Dana Kowalski | sub        | sub       | 
+ Ray Thao      | other      | inspector | 
+(4 rows)
+
+ROLLBACK

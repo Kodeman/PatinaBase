@@ -68,11 +68,20 @@ describe('RegionHead', () => {
     );
   });
 
-  it('names the region on a focusable heading', () => {
+  it('names the region on a focusable heading, and draws the ring it lands with (D2)', () => {
     renderHead();
     const heading = screen.getByRole('heading', { name: 'Approvals' });
     expect(heading).toHaveAttribute('id', 'region-approvals-heading');
     expect(heading).toHaveAttribute('tabindex', '-1');
+    // D2 — a -1 tabindex heading that a rail jump focuses cannot suppress its
+    // own outline. The letterhead's declaration, verbatim.
+    expect(heading.className).not.toMatch(/\boutline-none\b/);
+    expect(heading).toHaveClass(
+      'focus-visible:outline',
+      'focus-visible:outline-2',
+      'focus-visible:outline-offset-2',
+      'focus-visible:outline-[var(--color-clay)]',
+    );
   });
 
   it('renders no fold toggle without a body id', () => {

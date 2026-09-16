@@ -1,0 +1,77 @@
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+INSERT 0 1
+INSERT 0 0
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+=== C1: a PLAIN member presses "Close this seat" on the Call Sheet (useCloseProjectPartySeat) ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe-r21-a-seat-close-gate-on-the-face.sql:39: NOTICE:  C1 refused, message the portal prints verbatim: seat_close_money_authority_forbidden
+DO
+ reset_role 
+------------
+ 
+(1 row)
+
+=== C2: the SAME plain member records "They withdrew" in the Bidding band (useSetPartyBid) ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+psql:/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build/artifacts/people-room-crm-2026-09-11/build/probe-r21-a-seat-close-gate-on-the-face.sql:49: NOTICE:  C2 refused, message asBidError() returns verbatim: seat_close_money_authority_forbidden
+DO
+ reset_role 
+------------
+ 
+(1 row)
+
+   step   |  stage  | bid_outcome | off_job_at | scope | threshold_cents | effective_to 
+----------+---------+-------------+------------+-------+-----------------+--------------
+ C2 after | bidding | quoted      |            | money |          500000 | 
+(1 row)
+
+=== C3: the OWNER records "They withdrew" ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+ reset_role 
+------------
+ 
+(1 row)
+
+   step   |  stage  | bid_outcome | off_job_at | scope | threshold_cents | effective_to 
+----------+---------+-------------+------------+-------+-----------------+--------------
+ C3 after | off_job | withdrawn   | 2026-09-15 | money |          500000 | 2026-09-15
+(1 row)
+
+=== C4: R-BR — the owner CORRECTS the outcome back to "They quoted" (off_job_at + reason cleared) ===
+ assume_user 
+-------------
+ 
+(1 row)
+
+UPDATE 1
+ reset_role 
+------------
+ 
+(1 row)
+
+   step   |  stage  | bid_outcome | off_job_at | scope | threshold_cents | effective_to | reads_live 
+----------+---------+-------------+------------+-------+-----------------+--------------+------------
+ C4 after | bidding | quoted      |            | money |          500000 | 2026-09-15   | t
+(1 row)
+
+ROLLBACK

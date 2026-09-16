@@ -34,10 +34,11 @@ export const metadata: Metadata = {
   description: 'Custom home furnishing platform for interior designers',
 };
 
+// N-3 — the viewport caps no zoom: capping it fails WCAG 1.4.4, and nothing
+// here depends on the page staying at one scale.
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
 };
 
 // Workstream D-B2 (docs/engineering/repoint-b0-audit.md): server-read so a

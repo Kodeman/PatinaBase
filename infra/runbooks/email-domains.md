@@ -11,6 +11,7 @@ Patina sends transactional and marketing email through Resend. For deliverabilit
 | `RESEND_FROM_TRANSACTIONAL` | account verification, password reset, security alert, order confirmation, payment receipt, client confirmation, proposals, decision reminders, review requests, invites | `Patina <hello@patina.cloud>` |
 | `RESEND_FROM_MARKETING` | campaigns (campaign-dispatch), digests, engagement notifications (price drop, back in stock, weekly inspiration, etc.) | `Patina <mail@mail.patina.cloud>` |
 | `RESEND_FROM` | fallback when the category-specific var is unset | `Patina <hello@patina.cloud>` |
+| `EMAIL_ASSET_HOST` | origin that email `<img>` sources are rewritten onto — only for `/storage/v1/object/public/` URLs on the project's own origin; unset uses `https://api.patina.cloud`, and a local project origin is left alone | `https://api.patina.cloud` |
 
 If only `RESEND_FROM` is set, both categories share it (current state, single-domain).
 

@@ -1,811 +1,751 @@
-'use client';
+"use client";
 
 /**
- * Person Profile (R51 / Track B) — the role-adaptive profile centred on the
- * derived Relationship Journey. One component, branching by role:
+ * THE PERSON CARD — the room's unit (direction §1 line 1).
  *
- *  · client      → Style DNA + the woven journey + Projects / Trust & history /
- *    Nurture / Private-note side cards; actions Message, Schedule a touchpoint,
- *    View as them (the client mirror).
- *  · maker       → MakerProfile (../profile/maker-profile, R78/PRC-02): products
- *    carried, reviews, request-a-quote, roster save/unsave, and the Orders-book
- *    cross-link. Renders even for a maker not yet on the roster (the
- *    marketplace lens walks in pre-admission), so it loads from the vendor
- *    book, not the directory view.
- *  · gc          → the (sparser) journey + Engagements / Track record cards +
- *    a cross-link to the coordination view — we link, never rebuild.
- *  · team        → the margin-visibility colophon: which documents the teammate
- *    sees, their studio role, no Style DNA / nurture.
+ * Four role-branched documents collapse into ONE card with silent regions:
+ * Identity, Reach & access, Seats on projects, Past seats, Paper, History. A
+ * region never vanishes because its record is empty — it prints its own
+ * sentence instead ("No contact rule on file.", "No grant on file.", "No open
+ * seat on this project.") so the studio can tell a missing record from a
+ * missing region (R-V / C32).
  *
- * The journey is a DERIVATION (deriveRelationshipJourney) over the person's
- * existing proposals, projects, decisions, threads, touchpoints, and reviews —
- * never a stored activity log (R51). Reuses Avatar/RoleBadge from person-bits.
- * Zero shadows (D4), strict focus (D1), typography-first.
+ * Every project seat is a LINE BENEATH THE HUMAN, carrying its own stage word,
+ * its window and its authority. Authority is never a state word: it prints as
+ * plain uncoloured text — "Signs money to $2,500", "Selections", "Prepares
+ * only" — because it is a fact, not a state (direction §3.8).
+ *
+ * The one branch that survives: a MAKER opens the vendor's own book
+ * (`MakerProfile`, R78/PRC-02), which is the maker's record rather than the
+ * studio's card, and must open pre-admission from the marketplace lens where
+ * no directory row exists at all.
+ *
+ * The one affordance carried across from the four documents: HT-8's HOURS
+ * DOOR. There is no staff picker inside a money ledger, so a teammate's hours
+ * are reached from their card and from nowhere else; collapsing the four
+ * renderers would otherwise have closed the only entry point into a shipped
+ * surface. It rides in the card's head — the old `ProfileHead` actions slot —
+ * under the same gate it always carried: a linked auth profile, and a viewer
+ * who owns or administers the studio, because the Hours sheet renders no lens
+ * for a plain member and she could only leave that scope by closing the sheet.
  */
 
-import { useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from "react";
 import {
-  useClient,
-  useClientDecisions,
-  useClientProjects,
-  useClientReviews,
-  useNurtureTouchpoints,
+  AUTHORITY_SCOPE_LABELS,
+  isFieldRosterRole,
+  useAffiliations,
+  useComplianceDocuments,
+  useComplianceState,
+  useContactRules,
+  usePartyAuthority,
+  usePeopleSeats,
   usePerson,
-  useProposals,
-  useStartDirectThread,
-  useThreads,
-  type ClientDecision,
-  type PartyRole,
-} from '@patina/supabase';
-import { usePersonDocuments } from '@/hooks/use-person-documents';
+  useStudioContact,
+  useOrganizations,
+  useStudioContacts,
+  useStudioContactChannelsFor,
+  touchInstantDay,
+  type AuthorityScope,
+  type PeopleDirectorySeat,
+} from "@patina/supabase";
+import { partyKindOwesPaper } from "@patina/types";
 import {
-  deriveIssuanceState,
-  deriveRelationshipJourney,
-  deriveStatusDot,
-  humanizeSince,
-  isNurtureDue,
-  roleLabel,
-  type JourneyInputs,
-} from '@/lib/document/people-derivation';
-import type { PersonProfileProps } from '../types';
-import { ActionButton, BackLink, ProfileHead } from '../profile/profile-shell';
-import { MakerProfile } from '../profile/maker-profile';
-import { RelationshipJourney } from '../profile/relationship-journey';
-import { StyleDna } from '../profile/style-dna';
+  directoryBandOf,
+  directoryContactKind,
+  directoryEntryKind,
+  isClientSideKind,
+} from "@/lib/document/people-derivation";
 import {
-  NoteCard,
-  NurtureCard,
-  ProjectsCard,
-  TrustCard,
-  type ProfileProjectRow,
-} from '../profile/profile-cards';
+  contactRouteTarget,
+  contactRuleForbidsSms,
+  contactRuleIsHardBlock,
+  contactRuleTextHeldClause,
+  indexChannelsByOwner,
+  indexContactRules,
+} from "@/lib/document/contact-rule";
+import { DocumentAction } from "../../document-action";
+import { MakerProfile } from "../profile/maker-profile";
+import { Avatar } from "../person-bits";
+import { StateWord, PlainFact } from "../state-word";
+import {
+  SeatLine,
+  formatSeatDate,
+  seatLineParts,
+  seatWindowText,
+} from "../seat-line";
+import { CloseSeatAct } from "../close-seat-act";
+import { ArchiveCardDoor } from "../archive-card-door";
+import {
+  ReachAccess,
+  NO_SEAT_SENTENCE,
+  MINT_CLIENT_SIDE_SENTENCE,
+  MINT_WITHOUT_SEAT_SENTENCE,
+} from "../reach-access";
+import {
+  ComplianceTable,
+  NO_PAPER_OWED_SENTENCE,
+  paperHeldClause,
+} from "../compliance-table";
+import { RecordDocumentSheet } from "../record-document-sheet";
+import { LastTouchLine } from "../touch-line";
+import { formatMoneyFromCents } from "../people-format";
+import { useViewerStudio } from "@/hooks/use-viewer-studio";
+import { openHoursForMember } from "@/lib/document/open-hours-scope";
+import type { PersonProfileProps } from "../types";
 
-/** The winning option's label on a resolved selection decision, if any. */
-function chosenLabel(d: ClientDecision): string | null {
-  const opts = d.options ?? [];
-  const winner = opts.find((o) => o.selected);
-  return winner?.name ?? null;
+const REGION = "border-t border-[var(--hairline-strong)] py-6";
+const REGION_HEAD = "t-head mb-3 text-[var(--ink-subtle)]";
+
+export const NO_AUTHORITY_SENTENCE = "No authority on this job";
+export const NO_PAST_SEATS_SENTENCE = "No closed seat on file.";
+export const SEND_TEXT_CONSEQUENCE =
+  "This sends one text to the number on file. They can stop it at any time by replying STOP.";
+export const CANNOT_TEXT_SENTENCE =
+  "The studio holds no standing consent for this number, so no text may go out.";
+/**
+ * CR10-1 — THE COMPOSER LIVES ON A FIELD SEAT, AND NOWHERE ELSE.
+ *
+ * The act opened the person's FIRST live seat whatever its kind, and only a
+ * field seat (gc, sub, installer, receiver) opens a sheet with a thread and a
+ * composer in it. On a client, a client_rep, an inspector, a vendor or an
+ * architect seat the press moved nothing — and it was held only by the seed's
+ * missing consent, so recording consent turned it into an enabled act, under
+ * "This sends one text to the number on file", that sent nothing. Held with
+ * its own sentence now, the way MINT_WITHOUT_SEAT_SENTENCE holds the field
+ * link for a person with no seat at all.
+ */
+export const NO_TEXT_SEAT_SENTENCE =
+  "A text goes out from a seat on a job’s field crew, and this person holds none.";
+/**
+ * CR3-9 — a rule that bars the text rail outranks a recorded grant (C7).
+ *
+ * QA-R9-1: the clause in the middle is the RULE'S own (`contactRuleTextHeldClause`),
+ * so a do-not-contact block reads as one and carries its route, and only a
+ * genuine single-channel rule reads "never text".
+ */
+export function ruleHeldTextSentence(clause: string): string {
+  return `The studio’s rule for this person ${clause}. Change the rule above before any text goes out.`;
+}
+export const RULE_FORBIDS_TEXT_SENTENCE =
+  ruleHeldTextSentence("says never text");
+
+/** A seat is done when its stage says so — nothing about the window decides it. */
+const DONE_STAGES = new Set([
+  "off_job",
+  "retired",
+  "declined",
+  "no_response",
+  "warranty",
+]);
+
+/** "Signs money to $2,500" / "Selections" / "Prepares only" — plain text. */
+export function authorityPhrase(grant: {
+  scope: string;
+  threshold_cents: number | null;
+  prepares_only: boolean;
+}): string {
+  if (grant.prepares_only) return "Prepares only";
+  const label =
+    AUTHORITY_SCOPE_LABELS[grant.scope as AuthorityScope] ?? grant.scope;
+  const money = formatMoneyFromCents(grant.threshold_cents);
+  return money ? `${label} to ${money}` : label;
 }
 
-// ─── CLIENT profile ─────────────────────────────────────────────────────────
-
-function ClientProfile({
-  personId,
-  profileId,
-  role,
-  name,
-  email,
-  phone,
-  statusRaw,
-  lastTouchAt,
-  meta,
-  onBack,
-  openThread,
-  notify,
-}: {
-  personId: string;
-  profileId: string | null;
-  role: PartyRole;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  statusRaw: string | null;
-  lastTouchAt: string | null;
-  meta: Record<string, unknown>;
-  onBack: () => void;
-  openThread: (id: string) => void;
-  notify: (m: string) => void;
-}) {
-  const router = useRouter();
-  const now = useMemo(() => new Date(), []);
-
-  // Touchpoints and reviews are keyed on `designer_client_id`, so we scope the
-  // fetch server-side (P2). Only a real client has a `designer_clients.id` —
-  // `personId` for a lead is a lead id, so we gate on the role and skip the
-  // filter for leads (the hook then returns nothing, which is correct).
-  const designerClientId = role === 'client' ? personId : undefined;
-
-  const { data: client } = useClient(personId);
-  const { data: projects } = useClientProjects(personId);
-  // The Projects card's document list (I63/T2): document_state rows for this
-  // person, resolved by profile for login clients OR through the
-  // designer_clients relationship for no-login households — see
-  // use-person-documents.ts for the two-shape contract.
-  const { data: documents } = usePersonDocuments(personId, profileId);
-  const { data: proposals } = useProposals(
-    profileId ? { clientId: profileId } : undefined,
-  );
-  const { data: decisions } = useClientDecisions(personId);
-  const { data: allThreads } = useThreads({ scope: 'inbox' });
-  const { data: touchpoints } = useNurtureTouchpoints(
-    designerClientId ? { designerClientId } : undefined,
-  );
-  const { data: reviews } = useClientReviews(
-    designerClientId ? { designerClientId } : undefined,
-  );
-  const startDirect = useStartDirectThread();
-
-  // Threads with this person as a participant (profile_id match). Threads have
-  // no `designer_client_id`, so this match stays client-side on profile_id.
-  const threads = useMemo(() => {
-    if (!profileId) return [];
-    return (allThreads ?? []).filter((t) =>
-      (t.participants ?? []).some((p) => p.profile_id === profileId),
-    );
-  }, [allThreads, profileId]);
-
-  const touchpointList = touchpoints ?? [];
-  const reviewList = reviews ?? [];
-
-  const journey = useMemo(() => {
-    const inputs: JourneyInputs = {
-      person: {
-        person_id: personId,
-        role,
-        display_name: name,
-        email,
-        phone,
-        profile_id: profileId,
-        project_id: null,
-        designer_id: null,
-        status_raw: statusRaw,
-        last_touch_at: lastTouchAt,
-        meta,
-        // Unused by deriveRelationshipJourney's body (only proposals/projects/
-        // decisions/threads/touchpoints/reviews are read) — 'mine' satisfies
-        // the frozen PeopleDirectoryRow contract without a real scope signal
-        // to hand it (this profile is opened from a specific person, not a
-        // directory row carrying 00420's scope column).
-        scope: 'mine',
-      },
-      // Guard on profileId: useProposals(undefined) returns ALL the designer's
-      // proposals (RLS is designer-scoped, not client-scoped). A profileless
-      // lead/client must NOT inherit unrelated proposals into its journey.
-      proposals: !profileId
-        ? []
-        : (proposals ?? []).map((p) => {
-            // `signed_at` lives on the raw row (select('*')) but isn't on the typed
-            // Proposal shape; fall back to responded_at when the proposal is accepted.
-            const rawSigned =
-              (p as { signed_at?: string | null }).signed_at ?? null;
-            const signedAt =
-              rawSigned ?? (p.status === 'accepted' ? p.responded_at : null);
-            return {
-              id: p.id,
-              title: p.title,
-              status: p.status,
-              created_at: p.created_at,
-              sent_at: p.sent_at,
-              signed_at: signedAt,
-              total_cents:
-                typeof p.total_amount === 'number'
-                  ? Math.round(p.total_amount * 100)
-                  : null,
-            };
-          }),
-      projects: (projects ?? []).map((pj: Record<string, unknown>) => ({
-        id: pj['id'] as string,
-        name: (pj['name'] as string) ?? 'Project',
-        status: (pj['status'] as string) ?? null,
-        created_at: (pj['created_at'] as string) ?? null,
-        kickoff_date: (pj['kickoff_date'] as string) ?? null,
-        completed_at: (pj['completed_at'] as string) ?? null,
-      })),
-      decisions: (decisions ?? []).map((d) => ({
-        id: d.id,
-        title: d.title,
-        status: d.status,
-        created_at: d.created_at,
-        resolved_at: d.responded_at,
-        chosen_label: chosenLabel(d),
-      })),
-      threads: threads.map((t) => ({
-        id: t.id,
-        subject: t.title,
-        message_count: null,
-        last_message_at: t.last_message_at,
-      })),
-      touchpoints: touchpointList.map((t) => ({
-        id: t.id,
-        touchpoint_type: t.touchpoint_type,
-        status: t.status,
-        reason: t.reason,
-        suggested_date: t.suggested_date,
-        created_at: t.created_at,
-      })),
-      reviews: reviewList.map((r) => ({
-        id: r.id,
-        rating: r.rating,
-        review_text: r.review_text,
-        created_at: r.created_at,
-      })),
-    };
-    return deriveRelationshipJourney(inputs, now);
-  }, [
-    personId,
-    role,
-    name,
-    email,
-    phone,
-    profileId,
-    statusRaw,
-    lastTouchAt,
-    meta,
-    proposals,
-    projects,
-    decisions,
-    threads,
-    touchpointList,
-    reviewList,
-    now,
-  ]);
-
-  // Side-card rows: the Projects card lists this person's document_state
-  // rows (I63/T2 — "documents appear under Projects"), not the raw
-  // `projects` table alone, so a no-login household's Discovery/proposal
-  // document shows here even though it has no `projects` row yet. Each row
-  // opens `/doc/{engagement_id}` — the document resolver accepts any of a
-  // document's keys (project/proposal/lead/relationship id).
-  const projectRows: ProfileProjectRow[] = useMemo(
-    () =>
-      (documents ?? []).map((doc) => ({
-        id: doc.engagement_id,
-        name: doc.title,
-        state: doc.active_section,
-      })),
-    [documents],
-  );
-
-  const trust = useMemo(
-    () => buildClientTrust(client, reviewList.length),
-    [client, reviewList.length],
-  );
-
-  const due = isNurtureDue(
-    {
-      person_id: personId,
-      role,
-      display_name: name,
-      email,
-      phone,
-      profile_id: profileId,
-      project_id: null,
-      designer_id: null,
-      status_raw: statusRaw,
-      last_touch_at: lastTouchAt,
-      meta,
-      // Unused by isNurtureDue (switches on role/status_raw/last_touch_at
-      // and, for a proposal-stage client, meta's issuance evidence) — 'mine'
-      // satisfies the frozen PeopleDirectoryRow shape.
-      scope: 'mine',
-    },
-    now,
-  );
-  const dot = deriveStatusDot(
-    {
-      person_id: personId,
-      role,
-      display_name: name,
-      email,
-      phone,
-      profile_id: profileId,
-      project_id: null,
-      designer_id: null,
-      status_raw: statusRaw,
-      last_touch_at: lastTouchAt,
-      meta,
-      // Unused by deriveStatusDot (switches on role/status_raw/meta/dormancy
-      // only) — 'mine' satisfies the frozen PeopleDirectoryRow shape.
-      scope: 'mine',
-    },
-    now,
-  );
-  const nurtureText = nurtureLine(statusRaw, lastTouchAt, now, due, dot, meta);
-
-  const onMessage = () => {
-    if (!profileId) {
-      notify(
-        `${name} has no portal login yet — invite them to start a direct thread.`,
-      );
-      return;
-    }
-    const existing = threads[0];
-    if (existing) {
-      openThread(existing.id);
-      return;
-    }
-    startDirect.mutate(profileId, {
-      onSuccess: (threadId) => openThread(threadId),
-      onError: () =>
-        notify(`Couldn't open a thread with ${name} just now — try again.`),
-    });
-  };
-
-  const firstName = name.split(' ')[0] ?? name;
-
+/** The seat's own facts beneath its line, in the order SPEC §5.2 #7 prints. */
+function SeatFacts({ seat }: { seat: PeopleDirectorySeat }) {
+  const { data: authority } = usePartyAuthority(seat.seat_id);
+  const phrases = (authority ?? []).map(authorityPhrase);
+  const extras: string[] = [];
+  if (seat.site_access_mode === "escorted") extras.push("Escorted on site");
+  if (seat.contracted_through)
+    extras.push(`Contracted through ${seat.contracted_through}`);
+  if (seat.show_to_client === false) extras.push("Hidden from the client");
   return (
-    <>
-      <BackLink onBack={onBack} />
-      <ProfileHead
-        name={name}
-        role={role}
-        email={email}
-        phone={phone}
-        actions={
-          <>
-            <ActionButton
-              actionKey="message-person"
-              label="Message"
-              tone="dark"
-              onClick={onMessage}
-            />
-            <ActionButton
-              actionKey="schedule-touchpoint"
-              label="Schedule a touchpoint"
-              onClick={() =>
-                notify(
-                  `Composing a touchpoint for ${firstName} — pick a template (check-in, holiday, milestone) and a send time. Nurture keeps the relationship warm.`,
-                )
-              }
-            />
-            <ActionButton
-              actionKey="preview-as-person"
-              label="View as them"
-              onClick={() =>
-                notify(
-                  `Opens the client mirror — what ${firstName} sees of this relationship.`,
-                )
-              }
-            />
-          </>
-        }
-      />
-
-      <div className="mt-[1.3rem] grid grid-cols-1 gap-7 lg:grid-cols-[1.4fr_1fr]">
-        <div>
-          <StyleDna
-            tags={client?.style_tags ?? (meta['style_tags'] as string[]) ?? []}
-            preferences={client?.style_preferences ?? null}
-            narrative={client?.inspiration_quote ?? null}
-          />
-          <RelationshipJourney
-            events={journey}
-            onFollow={(href) => router.push(href)}
-          />
-        </div>
-        <div>
-          <NurtureCard text={nurtureText} due={due} onReachOut={onMessage} />
-          <ProjectsCard
-            title="Projects"
-            projects={projectRows}
-            onOpenProject={(id) => router.push(`/doc/${id}`)}
-            emptyLine="No projects yet — they open here as you start work together."
-          />
-          <TrustCard title="Trust & history" items={trust} />
-          <NoteCard note={client?.notes ?? null} />
-        </div>
-      </div>
-    </>
+    <div className="pl-2">
+      <p className="t-body-sm">
+        <PlainFact>
+          {phrases.length > 0 ? phrases.join(" · ") : NO_AUTHORITY_SENTENCE}
+        </PlainFact>
+      </p>
+      {extras.length > 0 && (
+        <p className="t-body-sm text-[var(--ink-subtle)]">
+          {extras.join(" · ")}
+        </p>
+      )}
+    </div>
   );
 }
-
-/** Trust & history lines, drawn from the real client row + review count. */
-function buildClientTrust(
-  client: ReturnType<typeof useClient>['data'],
-  reviewCount: number,
-): string[] {
-  const out: string[] = [];
-  if (client) {
-    if (client.total_projects > 0)
-      out.push(
-        `${client.total_projects} ${client.total_projects === 1 ? 'project' : 'projects'} together`,
-      );
-    if (client.total_revenue > 0)
-      out.push(
-        `$${Math.round(client.total_revenue).toLocaleString('en-US')} in lifetime work`,
-      );
-    if (
-      typeof client.satisfaction_score === 'number' &&
-      client.satisfaction_score > 0
-    )
-      out.push(`Satisfaction ${client.satisfaction_score.toFixed(1)} / 5`);
-    if (client.source === 'referral') out.push('Came by referral');
-  }
-  if (reviewCount > 0)
-    out.push(
-      `${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'} collected`,
-    );
-  if (out.length === 0) out.push('First engagement — building trust');
-  return out;
-}
-
-/** The Nurture card's one line, honest to status + dormancy. */
-function nurtureLine(
-  statusRaw: string | null,
-  lastTouchAt: string | null,
-  now: Date,
-  due: boolean,
-  dot: string,
-  meta: Record<string, unknown>,
-): string {
-  if (statusRaw === 'proposal') {
-    // J7: share deriveIssuanceState's one ordering (paper → sent → draft)
-    // rather than reimplementing the check a third time.
-    switch (deriveIssuanceState({ meta })) {
-      case 'paper':
-        return 'Handed over on paper — waiting on the signed copy to record.';
-      case 'sent':
-        return 'Proposal out — a nudge or a call may be overdue.';
-      case 'draft':
-        return 'Still drafting — nothing has gone to them yet.';
-    }
-  }
-  if (statusRaw === 'lead')
-    return 'New relationship — open the conversation within a day.';
-  if (statusRaw === 'completed' || statusRaw === 'nurture') {
-    if (due)
-      return `${humanizeSince(lastTouchAt, now)} since last touch — the Engine recommends reconnecting now.`;
-    if (dot === 'warm')
-      return `Drifting a little — last touched ${humanizeSince(lastTouchAt, now)}. Worth a check-in soon.`;
-    return 'A completed relationship — keep it warm with the occasional note.';
-  }
-  return 'On an active project together — the relationship is live.';
-}
-
-// ─── MAKER / GC profile (network) ───────────────────────────────────────────
-
-function NetworkProfile({
-  personId,
-  role,
-  name,
-  email,
-  phone,
-  projectId,
-  statusRaw,
-  lastTouchAt,
-  meta,
-  onBack,
-  notify,
-}: {
-  personId: string;
-  role: PartyRole;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  projectId: string | null;
-  statusRaw: string | null;
-  lastTouchAt: string | null;
-  meta: Record<string, unknown>;
-  onBack: () => void;
-  notify: (m: string) => void;
-}) {
-  const router = useRouter();
-  const now = useMemo(() => new Date(), []);
-
-  // A network party's journey is sparse: the project they're engaged on (when
-  // project-scoped, as GCs are) is the spine. No proposals / decisions / DNA.
-  const journey = useMemo(() => {
-    const projectName = (meta['project_name'] as string) ?? null;
-    const inputs: JourneyInputs = {
-      person: {
-        person_id: personId,
-        role,
-        display_name: name,
-        email,
-        phone,
-        profile_id: null,
-        project_id: projectId,
-        designer_id: null,
-        status_raw: statusRaw,
-        last_touch_at: lastTouchAt,
-        meta,
-        // Unused by deriveRelationshipJourney's body — see the ClientProfile
-        // comment above; same frozen-contract satisfaction, not a real signal.
-        scope: 'mine',
-      },
-      projects:
-        projectId && projectName
-          ? [
-              {
-                id: projectId,
-                name: projectName,
-                status: 'active',
-                kickoff_date: lastTouchAt,
-              },
-            ]
-          : [],
-    };
-    return deriveRelationshipJourney(inputs, now);
-  }, [
-    personId,
-    role,
-    name,
-    email,
-    phone,
-    projectId,
-    statusRaw,
-    lastTouchAt,
-    meta,
-    now,
-  ]);
-
-  const track = buildNetworkTrack(role, meta);
-  const projectRows: ProfileProjectRow[] = projectId
-    ? [
-        {
-          id: projectId,
-          name: (meta['project_name'] as string) ?? 'Their engagement',
-          state: 'active',
-        },
-      ]
-    : [];
-
-  const isGc = role === 'gc';
-
-  return (
-    <>
-      <BackLink onBack={onBack} />
-      <ProfileHead
-        name={name}
-        role={role}
-        email={email}
-        phone={phone}
-        actions={
-          <>
-            <ActionButton
-              actionKey="open-person-orders"
-              label="Open in Orders"
-              tone="dark"
-              onClick={() =>
-                notify(
-                  `Cross-links to the Orders book — ${name}'s terms, orders, and lead times live there.`,
-                )
-              }
-            />
-            {isGc && projectId && (
-              <ActionButton
-                actionKey="open-coordination"
-                label="Coordination"
-                onClick={() => router.push(`/doc/${projectId}`)}
-              />
-            )}
-          </>
-        }
-      />
-
-      <div className="mt-[1.3rem] grid grid-cols-1 gap-7 lg:grid-cols-[1.4fr_1fr]">
-        <div>
-          <RelationshipJourney
-            events={journey}
-            onFollow={(href) => router.push(href)}
-            emptyLine={
-              isGc
-                ? 'On an active project together — the shared history fills in as work moves.'
-                : 'A maker in your network — orders and lead times live in the Orders book.'
-            }
-          />
-        </div>
-        <div>
-          <ProjectsCard
-            title="Engagements"
-            projects={projectRows}
-            onOpenProject={(id) => router.push(`/doc/${id}`)}
-            emptyLine={
-              isGc
-                ? 'No active project on file.'
-                : 'Their orders live in the Orders book — open it to see the full ledger.'
-            }
-          />
-          <TrustCard title="Track record" items={track} />
-        </div>
-      </div>
-    </>
-  );
-}
-
-/** Track-record lines for a maker / GC, from the directory meta. */
-function buildNetworkTrack(
-  role: PartyRole,
-  meta: Record<string, unknown>,
-): string[] {
-  const out: string[] = [];
-  if (role === 'maker') {
-    if (meta['founding_circle']) out.push('Founding Circle maker');
-    const cat = (meta['primary_category'] as string) ?? '';
-    if (cat) out.push(`Primary category — ${cat.replace(/_/g, ' ')}`);
-    const lead = meta['lead_times'] as Record<string, unknown> | null;
-    if (lead && typeof lead['standard'] === 'number')
-      out.push(`${lead['standard']}-day standard lead`);
-    if (meta['trade_terms']) out.push('Honors trade pricing');
-    const reviews = meta['review_count'];
-    const rating = meta['designer_rating_avg'];
-    if (
-      typeof reviews === 'number' &&
-      reviews > 0 &&
-      typeof rating === 'number'
-    )
-      out.push(
-        `${rating.toFixed(1)}★ across ${reviews} ${reviews === 1 ? 'review' : 'reviews'}`,
-      );
-    if (meta['made_in']) out.push(`Made in ${meta['made_in']}`);
-  } else if (role === 'gc') {
-    const company = (meta['company_name'] as string) ?? '';
-    if (company) out.push(company);
-    out.push('Tracked party on the project — appears in the ball-in-court.');
-  }
-  if (out.length === 0) out.push('Building a track record together.');
-  return out;
-}
-
-// ─── TEAM profile (the colophon) ────────────────────────────────────────────
-
-function TeamProfile({
-  role,
-  name,
-  email,
-  phone,
-  projectId,
-  statusRaw,
-  meta,
-  onBack,
-  notify,
-}: {
-  role: PartyRole;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  projectId: string | null;
-  statusRaw: string | null;
-  meta: Record<string, unknown>;
-  onBack: () => void;
-  notify: (m: string) => void;
-}) {
-  const router = useRouter();
-  const studioRole = humanizeTeamRole(
-    statusRaw ?? (meta['role'] as string) ?? null,
-  );
-  const projectName = (meta['project_name'] as string) ?? null;
-
-  return (
-    <>
-      <BackLink onBack={onBack} />
-      <ProfileHead
-        name={name}
-        role={role}
-        email={email}
-        phone={phone}
-        actions={
-          <ActionButton
-            actionKey="adjust-person-visibility"
-            label="Adjust visibility"
-            onClick={() =>
-              notify(
-                `Opens this teammate's document access — margin visibility is set per document in studio settings.`,
-              )
-            }
-          />
-        }
-      />
-
-      <div className="mt-[1.3rem] grid grid-cols-1 gap-7 lg:grid-cols-[1.4fr_1fr]">
-        <div>
-          <div className="mb-[0.7rem] font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
-            The colophon · margin visibility
-          </div>
-          <p className="text-[0.78rem] leading-relaxed text-[var(--color-charcoal)]">
-            {name.split(' ')[0]} is on your studio as{' '}
-            <b className="font-semibold">{studioRole}</b>. Studio teammates read
-            the document with margin visibility — they see the spine, the
-            margin, and the work, but cost and margin stay yours unless you
-            grant it.
-          </p>
-          <p className="mt-3 text-[0.72rem] italic leading-relaxed text-[var(--color-aged-oak)]">
-            Margin visibility is granted per document, in studio settings —
-            never global.
-          </p>
-        </div>
-        <div>
-          {projectId && projectName ? (
-            <ProjectsCard
-              title="On these documents"
-              projects={[{ id: projectId, name: projectName, state: 'active' }]}
-              onOpenProject={(id) => router.push(`/doc/${id}`)}
-              emptyLine="Not assigned to a document yet."
-            />
-          ) : (
-            <ProjectsCard
-              title="On these documents"
-              projects={[]}
-              onOpenProject={(id) => router.push(`/doc/${id}`)}
-              emptyLine="Not assigned to a document yet."
-            />
-          )}
-          <TrustCard
-            title="Studio role"
-            items={[
-              `${studioRole}`,
-              'Reads the document with margin visibility',
-            ]}
-          />
-        </div>
-      </div>
-    </>
-  );
-}
-
-function humanizeTeamRole(raw: string | null): string {
-  switch (raw) {
-    case 'lead_designer':
-      return 'lead designer';
-    case 'support_designer':
-      return 'support designer';
-    case 'bookkeeper':
-      return 'bookkeeper';
-    case 'previous_lead':
-      return 'previous lead';
-    default:
-      return raw?.replace(/_/g, ' ') ?? 'studio teammate';
-  }
-}
-
-// ─── the role switch ────────────────────────────────────────────────────────
 
 export function PersonProfile({
   personId,
   role,
   onBack,
-  openThread,
   notify,
-}: PersonProfileProps) {
+  organizationId,
+  onOpenSeat,
+}: PersonProfileProps & {
+  organizationId: string | null;
+  /** Opens the seat's own sheet, where the SMS thread and composer live. */
+  onOpenSeat?: (seat: PeopleDirectorySeat) => void;
+}) {
   const { data: person, isLoading } = usePerson(personId, role);
+  const { data: card } = useStudioContact(personId);
+  const { data: affiliations } = useAffiliations({ personId });
+  const { data: seats } = usePeopleSeats({ personId });
+  const { data: documents } = useComplianceDocuments({ holderId: personId });
+  const { data: ownPaperState } = useComplianceState(personId);
+  // HT-8 — the Hours door carries the scope lens's own owner/admin gate.
+  // One ordered answer, shared with the sheet itself: a viewer who answers
+  // for two studios must not be keyed on whichever membership row came back
+  // first.
+  const { isOwnerOrAdmin: viewerIsOwnerOrAdmin } = useViewerStudio();
+  /**
+   * W6 QA F2 — the studio-member test, asked the way the Directory asks it.
+   *
+   * R-CC names the gate "the card's role is the studio-member role (the
+   * literal the test's renderTeammate uses: role 'team')", but v4 (00626)
+   * emits every CARDED human from the contacts branch as `role: 'contact'`
+   * with `meta.contact_kind = 'studio'`; only an UNCARDED seat still arrives
+   * under its own party kind. A gate on `role === 'team'` therefore never
+   * fires on a real carded teammate — Priya Natarajan returns
+   * `role: 'contact', profile_id: null`. `directoryBandOf` is the SAME
+   * predicate the six Directory chips already use, and STUDIO_KINDS holds
+   * both 'studio' (a card) and 'team' (an uncarded seat), so R-CC's literal
+   * and the shipped view agree through one function.
+   *
+   * R-CC amended 2026-09-16 (patina-merged-73, W6 QA F2 + review): the door
+   * is also withheld on an archived card — the same `card.archived_at`
+   * signal ArchiveCardDoor already reads below — so a studio member whose
+   * card has been archived does not keep an open door into her own Hours
+   * scope.
+   */
+  const viewerSeesStudioMember =
+    !!person &&
+    directoryEntryKind(person) === "person" &&
+    directoryBandOf(person) === "studio" &&
+    !card?.archived_at;
+  const [recordOpen, setRecordOpen] = useState(false);
+  const now = useMemo(() => new Date(), []);
 
-  // Makers read from the vendor book itself (R78/PRC-02) — richer than the
-  // directory row, and it must open PRE-admission too (the marketplace lens
-  // walks into makers who aren't on the roster, so have no directory row).
-  if (role === 'maker') {
+  // ── The rule, the route and who it may route to (QA-R2-3 / CR-10) ────────
+  // The same pair of reads `directory-view.tsx` and `roster-groups.tsx` build.
+  // Without them the person card — the surface direction §3.2 R3 calls the
+  // rule's home — printed "Do not contact directly." with no way to reach
+  // Rosa Delgado, and its "Write someone else instead" select offered nobody,
+  // so Leah task 4 could not be performed anywhere in the room.
+  const cardOrgId =
+    card?.organization_id ??
+    organizationId ??
+    (typeof person?.meta?.["organization_id"] === "string"
+      ? (person.meta["organization_id"] as string)
+      : null);
+  const { data: rolodex } = useStudioContacts(cardOrgId, {
+    includeArchived: false,
+  });
+  /**
+   * 00417 / 00629 — putting a card away is an owner's or an admin's act, in
+   * the studio that HOLDS the card. Read here so the door can say so before it
+   * is pressed rather than after the database refuses.
+   */
+  const { data: memberOrgs } = useOrganizations();
+  const canArchiveCard = useMemo(() => {
+    if (!cardOrgId) return false;
+    const role = (memberOrgs ?? []).find((o) => o.id === cardOrgId)?.membership
+      ?.role;
+    return role === "owner" || role === "admin";
+  }, [memberOrgs, cardOrgId]);
+  const { data: rules } = useContactRules();
+  const ruleIndex = useMemo(() => indexContactRules(rules), [rules]);
+  const rule = ruleIndex.get(personId) ?? null;
+  const routedPersonIds = useMemo(
+    () => (rule?.route_to_person_id ? [rule.route_to_person_id] : []),
+    [rule],
+  );
+  const { data: routedChannels } = useStudioContactChannelsFor(routedPersonIds);
+  const channelsByOwner = useMemo(
+    () => indexChannelsByOwner(routedChannels),
+    [routedChannels],
+  );
+  const peopleById = useMemo(() => {
+    const index = new Map<
+      string,
+      { id: string; name: string; email: string | null; phone: string | null }
+    >();
+    for (const c of rolodex ?? []) {
+      if (c.entity_kind !== "person" || !c.full_name) continue;
+      index.set(c.id, {
+        id: c.id,
+        name: c.full_name,
+        email: c.email,
+        phone: c.phone,
+      });
+    }
+    return index;
+  }, [rolodex]);
+  const routeTo = useMemo(
+    () => contactRouteTarget(rule, peopleById, channelsByOwner),
+    [rule, peopleById, channelsByOwner],
+  );
+  /** Every other person card in the studio — the rule's possible routes. */
+  const routeCandidates = useMemo(
+    () =>
+      [...peopleById.values()]
+        .filter((p) => p.id !== personId)
+        .map((p) => ({ id: p.id, name: p.name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [peopleById, personId],
+  );
+
+  const liveSeats = useMemo(
+    () => (seats ?? []).filter((s) => !DONE_STAGES.has(String(s.stage))),
+    [seats],
+  );
+  const pastSeats = useMemo(
+    () => (seats ?? []).filter((s) => DONE_STAGES.has(String(s.stage))),
+    [seats],
+  );
+
+  /**
+   * CR11-3: SPEC §5.2 #10's History sentence counts PROJECTS. `seat_count` is
+   * `identity_seat_count()` — the seats `people_directory_seats` nests (R-BG)
+   * — so a person holding two seats on one job read "Worked 2 of the studio's
+   * projects." The seats are already in hand; count the jobs they name.
+   */
+  const projectCount = useMemo(
+    () =>
+      new Set(
+        (seats ?? [])
+          .map((s) => s.project_id)
+          .filter((id): id is string => !!id),
+      ).size,
+    [seats],
+  );
+
+  /**
+   * E13's subjects for THIS human: their rolodex card (a letter to a person's
+   * own address) and every seat they hold (a text to a seat on a job). Not
+   * their profile — `record_touch` resolves a studio from a card or a seat and
+   * knows nothing about a login.
+   */
+  const touchSubjectIds = useMemo(() => {
+    const ids = (seats ?? []).map((s) => s.seat_id).filter(Boolean);
+    if (person?.person_id) ids.push(person.person_id);
+    return ids;
+  }, [seats, person?.person_id]);
+
+  /**
+   * CR-2: the subjects `v_access_grants` keys on — this identity's SEATS
+   * (a field link's subject is the engagement) and their LOGIN (an account's
+   * subject is the profile). Never the rolodex card id.
+   */
+  const grantSubjectIds = useMemo(() => {
+    const ids = (seats ?? []).map((s) => s.seat_id).filter(Boolean);
+    if (person?.profile_id) ids.push(person.profile_id);
+    return ids;
+  }, [seats, person?.profile_id]);
+
+  // QA-R2-7: a sole proprietor IS their own firm, so the Paper region reads the
+  // firm's documents as well as their own, and the WORD is the identity fold
+  // `identity_paper_state(card, company)` the Directory row and the seat line
+  // already print. Reading `compliance_state(card)` alone said "Not on file"
+  // for Dana Kowalski while Northgate Electric's own card said "Lapsed".
+  const firmId =
+    typeof person?.meta?.["company_id"] === "string"
+      ? (person.meta["company_id"] as string)
+      : null;
+  const { data: firmDocuments } = useComplianceDocuments({ holderId: firmId });
+
+  // Makers read from the vendor book itself (R78/PRC-02) — the maker's own
+  // record, not the studio's card, and it must open pre-admission.
+  if (role === "maker") {
     return <MakerProfile vendorId={personId} onBack={onBack} notify={notify} />;
   }
 
   if (isLoading || !person) {
     return (
       <>
-        <BackLink onBack={onBack} />
-        <p className="px-1 py-6 text-[0.76rem] text-[var(--color-aged-oak)]">
+        <DocumentAction
+          actionKey="back-to-directory"
+          surfaceKey="people"
+          regionKey="person-card"
+          variant="tertiary"
+          onClick={onBack}
+        >
+          Back
+        </DocumentAction>
+        <p className="t-body-sm py-6 text-[var(--ink-subtle)]">
           {isLoading
-            ? 'Reading the relationship…'
-            : `We couldn't find this ${roleLabel(role).toLowerCase()}.`}
+            ? "Reading the card…"
+            : "This card is not on the studio book."}
         </p>
       </>
     );
   }
 
-  const common = {
-    personId: person.person_id,
-    role: person.role,
-    name: person.display_name,
-    email: person.email,
-    phone: person.phone,
-    statusRaw: person.status_raw,
-    lastTouchAt: person.last_touch_at,
-    meta: person.meta ?? {},
-    onBack,
-    notify,
-  };
+  /**
+   * CR13-8 — ONE FIRM'S NAME BESIDE ITS OWN ROLE AND YEAR.
+   *
+   * The name comes off `people_directory`'s company pointer; the role and the
+   * start year used to come off `affiliations[0]` — an arbitrary open
+   * affiliation, from a query with no ORDER BY. R-AO makes two open
+   * affiliations a supported state (the Add sheet writes the second when an
+   * existing person is seated under a different firm), so SPEC §5.2 #1's
+   * "Northgate Electric · owner-operator, since 2025" could print one firm's
+   * name beside another firm's role. The card names ONE firm: it reads that
+   * firm's affiliation or none.
+   */
+  const affiliation = firmId
+    ? (affiliations ?? []).find((a) => a.company_id === firmId) ?? null
+    : (affiliations?.[0] ?? null);
+  const firmName =
+    (typeof person.meta?.["company_name"] === "string"
+      ? (person.meta["company_name"] as string)
+      : null) ?? null;
+  const sinceYear = formatSeatDate(affiliation?.from_date)?.slice(-4) ?? null;
+  const identityBits = [
+    firmName,
+    affiliation?.role_at_firm
+      ? sinceYear
+        ? `${affiliation.role_at_firm}, since ${sinceYear}`
+        : affiliation.role_at_firm
+      : null,
+  ].filter(Boolean) as string[];
 
-  if (person.role === 'client' || person.role === 'lead') {
-    return (
-      <ClientProfile
-        {...common}
-        profileId={person.profile_id}
-        openThread={openThread}
-      />
-    );
-  }
+  const firstSeat = liveSeats[0] ?? null;
+  // CR10-1: the seat the SMS thread hangs off — a field seat or nothing.
+  const textableSeat =
+    liveSeats.find((seat) => isFieldRosterRole(seat.party_kind)) ?? null;
+  /**
+   * QA-R11-1 — A FIELD LINK IS MINTED ON A FIELD SEAT OR NOT AT ALL.
+   *
+   * The card handed `ReachAccess` its first live seat of ANY kind, so "Mint
+   * access" on Adaeze Okonkwo — `party_kind` client — minted a field-crew
+   * grant whose declared scope (`ACCESS_GRANT_TIER_OPENS.field_link`) is "the
+   * Call Sheet and the site access card", the card PR-w rules studio-only and
+   * never client-facing. The same field-seat test the SMS thread already uses
+   * governs the door.
+   */
+  const mintSeat = textableSeat;
+  const clientSide = isClientSideKind(directoryContactKind(person));
+  // CR3-9: consent is necessary, not sufficient — the rule outranks it (C7).
+  // QA-R9-1: a HARD BLOCK holds the rail too — R-BL's routed rule sends the
+  // studio to another person, which a live composer on this one contradicts.
+  const ruleHoldsText =
+    contactRuleForbidsSms(rule) || contactRuleIsHardBlock(rule);
+  const ruleHeldClause = contactRuleTextHeldClause(rule, routeTo?.name ?? null);
+  const canText = person.consent_status === "granted" && !ruleHoldsText;
+  const soleProprietor = card?.is_sole_proprietor === true;
+  const owesPaper = partyKindOwesPaper(directoryContactKind(person));
+  // R-BA: one formula, worst-first over the person's OWN documents and their
+  // firm's. A sole proprietor's firm paper is their paper (direction §3.2 R5).
+  const docs = soleProprietor
+    ? [...(documents ?? []), ...(firmDocuments ?? [])]
+    : (documents ?? []);
+  const heldClause = paperHeldClause(docs, now);
 
-  if (person.role === 'gc') {
-    return <NetworkProfile {...common} projectId={person.project_id} />;
-  }
+  /**
+   * CR3-11 — ONE LIVE REGION, and it is the Room's.
+   *
+   * This card kept its own `role="status"` beside the Room's (people-room.tsx),
+   * so every consent, grant, document and designation change was announced
+   * TWICE from two live regions on one screen. Direction §5.5 names one
+   * destination — "the room's existing role='status' line" — and SPEC §7 #3
+   * asks for exactly one.
+   */
+  const announce = notify;
 
-  return <TeamProfile {...common} projectId={person.project_id} />;
+  return (
+    <div data-person-card={person.person_id} className="mx-auto max-w-[720px]">
+      <DocumentAction
+        actionKey="back-to-directory"
+        surfaceKey="people"
+        regionKey="person-card"
+        variant="tertiary"
+        onClick={onBack}
+      >
+        Back
+      </DocumentAction>
+
+      {/* R1 — Identity */}
+      <header className="flex items-center gap-4 pb-6">
+        <Avatar name={person.display_name} role={person.role} />
+        <div className="min-w-0">
+          <h2 className="t-d3 font-heading">{person.display_name}</h2>
+          {identityBits.length > 0 && (
+            <p className="t-meta mt-1 text-[var(--ink-subtle)]">
+              {identityBits.join(" · ")}
+            </p>
+          )}
+          {soleProprietor && (
+            <p className="t-meta mt-1 text-[var(--ink-subtle)]">
+              Sole proprietor
+            </p>
+          )}
+          {/* direction §8 P2 — archive and restore as a STANDING door, with
+              the reason line visible whether or not the caller may press it. */}
+          {card && (
+            <ArchiveCardDoor
+              contactId={card.id}
+              name={person.display_name}
+              archivedAt={card.archived_at}
+              canArchive={canArchiveCard}
+              onDone={announce}
+              className="mt-2"
+            />
+          )}
+        </div>
+        {/* HT-8 — the one door into the Hours sheet's member scope, which is
+            studio-wide and so belongs to a studio member, never to a client
+            who merely holds a portal account. */}
+        {viewerSeesStudioMember &&
+          person.profile_id &&
+          viewerIsOwnerOrAdmin && (
+            <div className="ml-auto shrink-0">
+              <DocumentAction
+                actionKey="open-person-hours"
+                surfaceKey="people"
+                regionKey="person-card"
+                variant="secondary"
+                onClick={() =>
+                  openHoursForMember(
+                    person.profile_id as string,
+                    person.display_name,
+                  )
+                }
+              >
+                Hours
+              </DocumentAction>
+            </div>
+          )}
+      </header>
+
+      {/* R2 — Reach & access: Channels, Contact rule, Access grants */}
+      <section className={REGION}>
+        <h3 className="t-head mb-4 text-[var(--ink-subtle)]">
+          Reach &amp; access
+        </h3>
+        <ReachAccess
+          cardId={person.person_id}
+          cardKind="person"
+          organizationId={cardOrgId}
+          personName={person.display_name}
+          routeTo={routeTo}
+          routeCandidates={routeCandidates}
+          grantSubjectIds={grantSubjectIds}
+          seatId={firstSeat?.seat_id ?? null}
+          seatProjectId={firstSeat?.project_id ?? null}
+          seatProjectName={firstSeat?.project_name ?? null}
+          seatWindowEnd={firstSeat?.on_site_to ?? null}
+          seatWindowStart={firstSeat?.on_site_from ?? null}
+          mintSeatId={mintSeat?.seat_id ?? null}
+          mintProjectId={mintSeat?.project_id ?? null}
+          mintProjectName={mintSeat?.project_name ?? null}
+          mintWindowEnd={mintSeat?.on_site_to ?? null}
+          mintHeldSentence={
+            clientSide ? MINT_CLIENT_SIDE_SENTENCE : MINT_WITHOUT_SEAT_SENTENCE
+          }
+          warrantyEnd={
+            mintSeat?.warranty_until ?? card?.warranty_until ?? null
+          }
+          onAnnounce={announce}
+          now={now}
+        />
+        <p
+          id={`person-text-consequence-${person.person_id}`}
+          className="t-body-sm mt-2 max-w-[56ch] text-[var(--ink-subtle)]"
+        >
+          {canText
+            ? textableSeat
+              ? SEND_TEXT_CONSEQUENCE
+              : NO_TEXT_SEAT_SENTENCE
+            : ruleHoldsText && ruleHeldClause
+              ? ruleHeldTextSentence(ruleHeldClause)
+              : CANNOT_TEXT_SENTENCE}
+        </p>
+        <DocumentAction
+          actionKey="send-a-text"
+          surfaceKey="people"
+          regionKey="reach-access"
+          variant="secondary"
+          held={!canText || !textableSeat}
+          disabled={!canText || !textableSeat}
+          aria-describedby={`person-text-consequence-${person.person_id}`}
+          onClick={() => {
+            if (textableSeat && onOpenSeat) onOpenSeat(textableSeat);
+          }}
+        >
+          Send a text
+        </DocumentAction>
+      </section>
+
+      {/* R4 — Seats on projects */}
+      <section className={REGION}>
+        <h3 className={REGION_HEAD}>Seats on projects</h3>
+        {liveSeats.length === 0 ? (
+          <p className="t-body-sm text-[var(--ink-subtle)]">
+            {NO_SEAT_SENTENCE}
+          </p>
+        ) : (
+          <ul className="m-0 list-none p-0">
+            {liveSeats.map((seat) => (
+              <li
+                key={seat.seat_id}
+                className="border-t border-[var(--hairline-strong)] py-2"
+              >
+                <SeatLine seat={seat} onOpen={(s) => onOpenSeat?.(s)} />
+                <SeatFacts seat={seat} />
+                {/* direction §3.2 R4 names this act on the person card, and
+                    the card had none: the seat could only be closed from the
+                    Call Sheet. One component, two surfaces (W3/P2). */}
+                <CloseSeatAct
+                  seatId={seat.seat_id}
+                  projectId={seat.project_id}
+                  organizationId={cardOrgId}
+                  name={person?.display_name ?? seat.display_name ?? "This person"}
+                  stage={seat.stage}
+                  onClosed={(message) => notify(message)}
+                  className="mt-1"
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* R4b — Past seats, folded */}
+      <section className={REGION}>
+        <h3 className={REGION_HEAD}>Past seats</h3>
+        {pastSeats.length === 0 ? (
+          <p className="t-body-sm text-[var(--ink-subtle)]">
+            {NO_PAST_SEATS_SENTENCE}
+          </p>
+        ) : (
+          <ul className="m-0 list-none p-0">
+            {pastSeats.map((seat) => (
+              <li
+                key={seat.seat_id}
+                className="border-t border-[var(--hairline-strong)] py-2"
+              >
+                <p className="t-body-sm flex flex-wrap items-center gap-x-2 text-[var(--ink-subtle)]">
+                  {/* CR-11: the studio's words, never the schema's. The live
+                      SeatLine beside this one already labels both axes; this
+                      one printed `client_rep` raw — the one string C5 and SPEC
+                      §8 #3 forbid by name. */}
+                  <span>{seatLineParts(seat).join(" · ")}</span>
+                  <StateWord family="stage" value={seat.stage} />
+                  {formatSeatDate(seat.off_job_at) && (
+                    <span>Closed {formatSeatDate(seat.off_job_at)}</span>
+                  )}
+                  {formatSeatDate(seat.warranty_until) && (
+                    <span>
+                      Warranty through {formatSeatDate(seat.warranty_until)}
+                    </span>
+                  )}
+                  {!seat.off_job_at &&
+                    seatWindowText(seat.on_site_from, seat.on_site_to) && (
+                      <span>
+                        {seatWindowText(seat.on_site_from, seat.on_site_to)}
+                      </span>
+                    )}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* R5 — Paper. A sole proprietor IS their own firm, so their own
+          documents are the firm's (direction §3.2 R5). */}
+      {soleProprietor && (
+        <section className={REGION} data-person-paper>
+          <h3 className={REGION_HEAD}>Paper</h3>
+          {!owesPaper ? (
+            <p className="t-body-sm text-[var(--ink-subtle)]">
+              {NO_PAPER_OWED_SENTENCE}
+            </p>
+          ) : (
+            <>
+              {docs.length > 0 ? (
+                <ComplianceTable documents={docs} today={now} />
+              ) : (
+                <p>
+                  <StateWord
+                    family="paper"
+                    value={
+                      person.paper_state ?? ownPaperState ?? "not_on_file"
+                    }
+                  />
+                </p>
+              )}
+              {heldClause && (
+                <p className="t-body-sm mt-3 border-l-2 border-[var(--terracotta-ink)] bg-[var(--rail)] py-[6px] pl-[11px] text-[var(--ink)]">
+                  {heldClause}
+                </p>
+              )}
+              <DocumentAction
+                actionKey="record-compliance-document"
+                surfaceKey="people"
+                regionKey="person-paper"
+                variant="secondary"
+                onClick={() => setRecordOpen(true)}
+              >
+                Record a document
+              </DocumentAction>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* R6 — History */}
+      <section className={REGION}>
+        <h3 className={REGION_HEAD}>History</h3>
+        <p className="t-body-sm text-[var(--ink)]">
+          {`Worked ${projectCount} of the studio's ${
+            projectCount === 1 ? "project" : "projects"
+          }.`}{" "}
+          {/* E13 / direction §7 P3 — the RECORD of the last contact, with its
+              channel, the decision it filed and whether the person who sent it
+              had the standing to (CRM-22). It outranks
+              `people_directory.last_touch_at`, which is the rolodex's own
+              `COALESCE(last_contacted_at, last_project_at, updated_at)`
+              (00626:1478) and answers a coarser question — two "last touch"
+              dates on one line would be the two-words-two-clicks-apart defect
+              this room keeps closing. The coarse date still prints for the
+              population E13 has no row for yet. */}
+          {/* THE STUDIO'S OWN CALENDAR, NOT UTC'S (R-CB, W4 r10 M-1).
+              `people_directory.last_touch_at` is a timestamptz —
+              COALESCE(last_contacted_at, last_project_at, updated_at),
+              00626:1478 — and PostgREST answers it in UTC, so slicing it to
+              ten characters and handing that to `formatSeatDate` (a DATE-only
+              parser) printed the UTC day: a contact at 21:30 CDT on 11 Sep
+              read "12 Sep 2026". This is the FALLBACK branch, so it is what
+              every person with no `studio_touches` row reads, and the only
+              absolute print of `last_touch_at` in the room — nothing else
+              could contradict it. `touchInstantDay` is the function that
+              already exists for exactly this. */}
+          <LastTouchLine
+            subjectIds={touchSubjectIds}
+            fallback={
+              touchInstantDay(person.last_touch_at)
+                ? `Last touch ${touchInstantDay(person.last_touch_at)}.`
+                : null
+            }
+          />
+        </p>
+      </section>
+
+      {cardOrgId && (
+        <RecordDocumentSheet
+          open={recordOpen}
+          onClose={() => setRecordOpen(false)}
+          organizationId={cardOrgId}
+          holderId={person.person_id}
+          holderName={person.display_name}
+          holderType="person"
+          onRecorded={announce}
+        />
+      )}
+    </div>
+  );
 }

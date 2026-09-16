@@ -3,19 +3,50 @@
  * Deliberately imports nothing from components or @patina/help-system
  * (the stages.ts → help-system → @portabletext ESM trap).
  */
+import { dayMonth } from '../dates';
 import {
   deriveNeed,
   folderTab,
   deriveMotion,
   partitionDesk,
   deriveReconnectNeeds,
+  NEED_ACTION_LABELS,
   type DocumentStateRow,
   type NurtureLike,
   type DeskCeremonySignal,
+  type DeskConflictInput,
+  type DeskFlaggedSignal,
+  type NeedKind,
+  type NeedLine,
+  type ReceivableSignal,
 } from '../desk-derivation';
 import type { DeskScheduleInput } from '../desk-schedule';
 
 const NOW = new Date('2026-06-11T12:00:00Z');
+
+/** D6 — every need kind states whose hand it is in. Ten carried nothing, and
+ *  a card would have had to guess at render, which the ruling forbids. */
+const OWNER_BY_KIND: Record<NeedKind, 'designer' | 'client' | 'maker'> = {
+  overdue_decision: 'client',
+  overdue_invoice: 'client',
+  proposal_signed: 'designer',
+  damage_claim: 'designer',
+  proposal_declined: 'designer',
+  proposal_expired: 'designer',
+  lines_flagged: 'designer',
+  new_lead: 'designer',
+  ceremony_pending: 'designer',
+  reconnect_due: 'designer',
+  hesitating_proposal: 'client',
+  awaiting_inspection: 'designer',
+  schedule_conflict: 'designer',
+  schedule_proposal: 'designer',
+  task_due: 'designer',
+  schedule_unconfigured: 'designer',
+  po_unsent: 'designer',
+  po_unacknowledged: 'maker',
+  pulse_due: 'designer',
+};
 
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
 const daysAhead = (n: number) => new Date(NOW.getTime() + n * 86_400_000).toISOString();
@@ -66,6 +97,232 @@ function mkRow(partial: Partial<DocumentStateRow>): DocumentStateRow {
   };
 }
 
+// D6 — the coverage guard reads REAL owner values off the real rules,
+// through a minimal fixture per kind, rather than comparing two typed
+// tables to each other (TypeScript already forces `OWNER_BY_KIND` and
+// `NEED_ACTION_LABELS` to carry the same keys — that proved nothing about
+// what a rule actually WRITES). Each thunk is built so only its own rule
+// fires: default counts are 0, `engagement_kind` defaults to 'project', and
+// no signal context is passed unless the kind under test needs one — so an
+// earlier rule in NEED_RULES order never shadows the one being checked.
+const DERIVE_BY_KIND: Record<NeedKind, () => NeedLine | null> = {
+  overdue_decision: () =>
+    deriveNeed(
+      mkRow({ overdue_decision_count: 1, earliest_overdue_due: daysAgo(1) }),
+      NOW,
+    ),
+  overdue_invoice: () =>
+    deriveNeed(mkRow({}), NOW, null, {
+      count: 1,
+      oldestDue: daysAgo(1),
+      totalBalanceCents: 100_000,
+      invoiceId: 'inv-1',
+      invoiceLabel: 'Invoice 1',
+    } satisfies ReceivableSignal),
+  proposal_signed: () =>
+    deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'accepted',
+      }),
+      NOW,
+    ),
+  damage_claim: () =>
+    deriveNeed(mkRow({ open_claim_count: 1, open_claim_po: 'AP-1' }), NOW),
+  proposal_declined: () =>
+    deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'declined',
+      }),
+      NOW,
+    ),
+  proposal_expired: () =>
+    deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'expired',
+      }),
+      NOW,
+    ),
+  lines_flagged: () =>
+    deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_id: 'pr1',
+        proposal_status: 'sent',
+        proposal_sent_at: daysAgo(0.5),
+      }),
+      NOW,
+      null,
+      null,
+      { count: 1, docTitle: 'Whitfield Residence', proposalId: 'pr1' } satisfies DeskFlaggedSignal,
+    ),
+  new_lead: () =>
+    deriveNeed(
+      mkRow({
+        engagement_kind: 'lead',
+        active_section: 'brief',
+        project_id: null,
+        lead_id: 'l1',
+        lead_status: 'new',
+        lead_response_deadline: daysAhead(5),
+      }),
+      NOW,
+    ),
+  ceremony_pending: () =>
+    deriveNeed(
+      mkRow({
+        engagement_kind: 'lead',
+        active_section: 'brief',
+        project_id: null,
+        lead_id: 'l1',
+        lead_status: 'new',
+      }),
+      NOW,
+      null,
+      null,
+      null,
+      {
+        id: 'c1',
+        state: 'draft',
+        introText: null,
+        offeredSlots: null,
+        offeredAt: null,
+        pickedSlotStartsAt: null,
+        timezone: null,
+        threadId: null,
+      } satisfies DeskCeremonySignal,
+    ),
+  reconnect_due: () =>
+    deriveNeed(
+      mkRow({
+        engagement_kind: 'lead',
+        active_section: 'brief',
+        project_id: null,
+        lead_id: 'l1',
+        lead_status: 'contacted',
+        lead_response_deadline: daysAgo(1),
+      }),
+      NOW,
+    ),
+  hesitating_proposal: () =>
+    deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'sent',
+        proposal_sent_at: daysAgo(3),
+      }),
+      NOW,
+    ),
+  awaiting_inspection: () =>
+    deriveNeed(mkRow({ awaiting_inspection_count: 2 }), NOW),
+  schedule_conflict: () =>
+    deriveNeed(mkRow({}), NOW, {
+      collision: { text: 'Two installs collide', label: 'COLLISION', date: null },
+      drift: null,
+    } satisfies DeskConflictInput),
+  schedule_proposal: () =>
+    deriveNeed(
+      mkRow({}),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      {
+        selection: { activePhaseId: 'phase-1', reason: 'status-in-progress' },
+        fidelity: 'frame',
+        positionText: 'Week 2',
+        activePhaseName: 'Procurement',
+        unconfigured: null,
+        conflicts: [],
+        contradictionText: null,
+        proposals: { count: 1, latestSourceEvent: 'po-sent', conflicting: 0 },
+      } satisfies DeskScheduleInput,
+    ),
+  task_due: () =>
+    deriveNeed(
+      mkRow({
+        due_task_count: 1,
+        earliest_task_due: daysAgo(1),
+        due_task_title: 'Order the sconces',
+      }),
+      NOW,
+    ),
+  schedule_unconfigured: () =>
+    deriveNeed(
+      mkRow({ engagement_kind: 'project', active_section: 'project' }),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      {
+        selection: { activePhaseId: null, reason: 'none' },
+        fidelity: 'band',
+        positionText: null,
+        activePhaseName: null,
+        unconfigured: 'no-phases',
+      } satisfies DeskScheduleInput,
+    ),
+  po_unsent: () =>
+    deriveNeed(
+      mkRow({
+        draft_unsent_po_count: 1,
+        oldest_draft_po_created_at: daysAgo(1),
+        draft_po_label: 'PO-1',
+      }),
+      NOW,
+    ),
+  po_unacknowledged: () =>
+    deriveNeed(
+      mkRow({
+        unacked_po_count: 1,
+        oldest_unacked_sent_at: daysAgo(1),
+        unacked_po_label: 'PO-2',
+      }),
+      NOW,
+    ),
+  pulse_due: () =>
+    deriveNeed(
+      mkRow({ unsent_pulse_count: 1, pulse_week_of: '2026-06-08' }),
+      new Date('2026-06-12T14:00:00Z'), // NOW's own week's Friday
+    ),
+};
+
+describe('D6 · every kind’s owner, read off a real derivation', () => {
+  it('names exactly the kinds the action-label table knows (coverage guard)', () => {
+    // A NeedKind added later without an owner fails here rather than shipping
+    // a card that guesses. This is a coverage guard, NOT the owner assertion —
+    // the assertions that matter drive the real rules, below.
+    expect(Object.keys(OWNER_BY_KIND).sort()).toEqual(
+      Object.keys(NEED_ACTION_LABELS).sort(),
+    );
+  });
+
+  for (const kind of Object.keys(NEED_ACTION_LABELS) as NeedKind[]) {
+    it(`derives ${kind} with owner ${OWNER_BY_KIND[kind]}`, () => {
+      const need = DERIVE_BY_KIND[kind]();
+      expect(need).not.toBeNull();
+      // Confirms the fixture actually reached the branch under test, rather
+      // than some earlier rule in NEED_RULES order shadowing it.
+      expect(need!.kind).toBe(kind);
+      expect(need!.owner).toBe(OWNER_BY_KIND[kind]);
+    });
+  }
+});
+
 describe('deriveNeed', () => {
   it('returns null for a quiet active project', () => {
     expect(deriveNeed(mkRow({}), NOW)).toBeNull();
@@ -102,6 +359,7 @@ describe('deriveNeed', () => {
     expect(need!.text).toBe('AP-012 has an open damage claim');
     expect(need!.stamp.label).toBe('CLAIM OPEN');
     expect(need!.urgent).toBe(false);
+    expect(need!.owner).toBe('designer');
   });
 
   it('open damage claims without a PO identifier still surface, pluralized', () => {
@@ -151,6 +409,7 @@ describe('deriveNeed', () => {
     expect(need!.stamp.label).toBe('DELIVERED');
     expect(need!.text).toMatch(/2 .*awaiting inspection/i);
     expect(need!.urgent).toBe(false);
+    expect(need!.owner).toBe('designer');
   });
 
   it('new lead with a comfortable deadline → need, not urgent', () => {
@@ -380,6 +639,24 @@ describe('deriveNeed', () => {
     );
     expect(need!.kind).toBe('proposal_declined');
     expect(need!.stamp.label).toBe('DECLINED');
+    expect(need!.owner).toBe('designer');
+  });
+
+  // D6 — no existing test in this file exercised the expired branch; written
+  // in the style of the declined test directly above it.
+  it('expired proposal → need with EXPIRED stamp', () => {
+    const need = deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'expired',
+      }),
+      NOW,
+    );
+    expect(need!.kind).toBe('proposal_expired');
+    expect(need!.stamp.label).toBe('EXPIRED');
+    expect(need!.owner).toBe('designer');
   });
 
   it('paused project never needs a hand, even with overdue decisions', () => {
@@ -409,9 +686,8 @@ describe('deriveNeed — overdue_invoice carries the receivable figure (B2-03)',
     expect(need!.text).toContain('$17,500');
     expect(need!.text).toBe(
       'Invoice 0418 · $17,500 overdue — oldest due ' +
-        new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
-          new Date(daysAgo(22)),
-        ) +
+        // PP-2 / R140 — the Desk states a day in one idiom, "11 September".
+        dayMonth(daysAgo(22)) +
         ' — send a reminder',
     );
   });
@@ -788,6 +1064,7 @@ describe('deriveNeed — lines_flagged (C4)', () => {
     expect(need!.stamp.label).toBe('FLAGGED');
     expect(need!.stamp.color).toBe('var(--color-clay)');
     expect(need!.urgent).toBe(false);
+    expect(need!.owner).toBe('designer');
   });
 
   it('singularizes a single flagged line', () => {

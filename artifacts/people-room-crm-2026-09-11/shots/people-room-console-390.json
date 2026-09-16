@@ -1,0 +1,58 @@
+{
+  "captures": [
+    {
+      "file": "people-room-state-directory-390.png",
+      "width": 390,
+      "hash": "state-directory",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "people-room-state-person-390.png",
+      "width": 390,
+      "hash": "state-person",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "people-room-state-company-390.png",
+      "width": 390,
+      "hash": "state-company",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "people-room-state-roster-390.png",
+      "width": 390,
+      "hash": "state-roster",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "people-room-state-add-390.png",
+      "width": 390,
+      "hash": "state-add",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    },
+    {
+      "file": "people-room-state-access-390.png",
+      "width": 390,
+      "hash": "state-access",
+      "state": null,
+      "errors": [],
+      "warnings": [],
+      "horizontalOverflow": false
+    }
+  ]
+}

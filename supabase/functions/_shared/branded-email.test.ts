@@ -118,6 +118,16 @@ Deno.test("studioName + studioLogoUrl → <img> with the logo URL and the name",
   assertStringIncludes(html, 'alt="Oakline Studio"');
 });
 
+Deno.test("an SVG studio logo falls back to the name — Gmail strips SVG <img>", () => {
+  const html = renderBrandedShell({
+    ...baseOpts(),
+    studioName: "Oakline Studio",
+    studioLogoUrl: "https://cdn.patina.cloud/studio-logos/abc/mark.SVG?v=2",
+  });
+  assert(!html.includes("<img src="), "an SVG mark must not be rendered as an <img>");
+  assertStringIncludes(html, "Sent on behalf of Oakline Studio");
+});
+
 Deno.test("hostile studioName is HTML-escaped (no raw markup)", () => {
   const hostile = '<script>alert("x")</script> & "Co" <b>';
   const nameOnly = renderBrandedShell({ ...baseOpts(), studioName: hostile });

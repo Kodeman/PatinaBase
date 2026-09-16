@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 
 import { ScoredAction } from './scored-action';
-import { moneyInWords } from './standing-sentence';
+import { formatCurrency } from '@patina/shared';
 
 /* ── THE GATE — Direction B's signature device ───────────────────────────────
    The spine runs the length of The Making unbroken until something is owed.
@@ -118,14 +118,14 @@ export function SpineGate({
 }: SpineGateProps) {
   const hasTotal = typeof totalCents === 'number' && totalCents > 0;
   const hasDeposit = typeof depositCents === 'number' && depositCents > 0;
-  // Whole dollars, like every other figure this surface prints — the caption
-  // three lines below is composed with the same formatter, and a gate that
-  // reads "$12,500.00" above "The draw of $1,440 releases…" is speaking two
-  // money idioms inside one block. Cents belong to the toll's ledger, where
-  // they are the point.
+  // Cents, like every other ledger figure on this surface (§F-B / PP-2). The
+  // caption three lines below and the consequence sentence under the act are
+  // composed with the same formatter, and a gate that reads "$12,500" above
+  // "The draw of $1,440.00 releases…" is speaking two money idioms inside one
+  // block.
   const vitals = [
     kindLabel ? kindLabel : null,
-    hasTotal ? moneyInWords(totalCents as number) : null,
+    hasTotal ? formatCurrency(totalCents as number) : null,
   ].filter((part): part is string => !!part);
 
   return (
@@ -174,7 +174,7 @@ export function SpineGate({
 
       {hasDeposit && (
         <p className="type-meta-small mt-1 text-[var(--text-muted)]" data-testid="spine-gate-deposit">
-          {moneyInWords(depositCents as number)} {MOVED_ON_ACT[variant]}
+          {formatCurrency(depositCents as number)} {MOVED_ON_ACT[variant]}
         </p>
       )}
 

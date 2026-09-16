@@ -1,0 +1,6 @@
+{
+  "siteAccessOpened": false,
+  "siteAccessError": "TimeoutError: locator.waitFor: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: /site access/i }).first() to be visible\u001b[22m\n",
+  "siteAccessOpened390": false,
+  "siteAccessError390": "TimeoutError: locator.waitFor: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: /site access/i }).first() to be visible\u001b[22m\n"
+}

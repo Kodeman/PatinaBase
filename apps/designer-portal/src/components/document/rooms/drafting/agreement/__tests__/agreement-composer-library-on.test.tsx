@@ -9,6 +9,7 @@
  */
 
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -24,6 +25,7 @@ import {
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 
 const mockMaterializeTemplate = jest.fn();
+const mockSaveParts = jest.fn();
 const mockRefetch = jest.fn();
 const mockStudioContext = jest.fn();
 const mockSavePart = jest.fn();
@@ -66,14 +68,37 @@ jest.mock("../../../../overlays/doc-sheet", () => ({
 }));
 
 jest.mock("../../../../document-action", () => ({
+  // The held contract, mirrored from the primitive T1 landed: a held act keeps
+  // its place in the tab order, carries `aria-disabled`, swallows the act and
+  // says why instead.
   DocumentAction: ({
     children,
     actionKey: _actionKey,
     trailing: _trailing,
     variant: _variant,
+    loading: _loading,
+    loadingLabel: _loadingLabel,
+    held,
+    onHeldActivate,
+    disabled,
+    onClick,
     ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> &
-    Record<string, unknown>) => <button {...props}>{children}</button>,
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<string, any>) => (
+    <button
+      {...props}
+      aria-disabled={disabled && held ? "true" : undefined}
+      disabled={disabled && !held ? true : undefined}
+      onClick={(event) => {
+        if (disabled) {
+          if (held) onHeldActivate?.();
+          return;
+        }
+        onClick?.(event);
+      }}
+    >
+      {children}
+    </button>
+  ),
 }));
 
 jest.mock("@/components/portal/client-picker", () => ({
@@ -104,7 +129,10 @@ jest.mock("@patina/supabase", () => ({
   licenseAttestationIsLive: () => false,
   useAgreementJurisdictionNotices: () => ({ data: [], isLoading: false }),
   useAgreementDraws: () => ({ data: [], isLoading: false }),
-  useSaveAgreementParts: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useSaveAgreementParts: () => ({
+    mutateAsync: mockSaveParts,
+    isPending: false,
+  }),
   useMaterializeStandardParts: () => ({
     mutateAsync: jest.fn().mockResolvedValue({ parts: [] }),
     isPending: false,
@@ -237,10 +265,32 @@ const twoParts = () => [
   part({ partKey: "patina.terms", position: 2, title: "Terms" }),
 ];
 
-const railRows = () =>
-  within(
-    screen.getByRole("navigation", { name: "Agreement parts" }),
-  ).getAllByRole("listitem");
+/* Below 1248 the outline is a disclosure, and jsdom's matchMedia answers
+   `false` to every query, so the suite opens it the way a laptop does. The
+   nav/ul/li contract is the shipped rail's, unchanged (FS-16). */
+const outline = () =>
+  screen.getByRole("navigation", { name: "Agreement parts" });
+const openOutline = () => {
+  const toggle = within(outline()).getByRole("button", { name: "The parts" });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+};
+const railRows = () => {
+  openOutline();
+  return within(outline()).getAllByRole("listitem");
+};
+/** One `+ Add a part` at every seam (AX-20); they are the same act. */
+const addAPart = () =>
+  fireEvent.click(screen.getAllByRole("button", { name: "+ Add a part" })[0]);
+const write = (title: string) =>
+  fireEvent.click(screen.getByRole("button", { name: `${title} Write` }));
+/** The record that replaced Save (§A5 "taken"). */
+const record = () => screen.getAllByText(/Not saved yet|^Saved /)[0];
+const startFromTemplate = () => {
+  openOutline();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Start from a template…" }),
+  );
+};
 
 function renderRoom(parts = twoParts()) {
   return render(
@@ -250,6 +300,10 @@ function renderRoom(parts = twoParts()) {
 
 beforeEach(() => {
   seq = 0;
+  mockSaveParts.mockReset();
+  mockSaveParts.mockImplementation(async (parts: AgreementPart[]) =>
+    bundleWith(parts.map((p, index) => ({ ...p, position: index + 1 }))),
+  );
   mockMaterializeTemplate.mockReset();
   mockRefetch.mockReset();
   mockSavePart.mockReset();
@@ -262,11 +316,14 @@ beforeEach(() => {
 });
 
 describe("the Contract Room with the Library on", () => {
-  it("puts the Library's three acts in the rail footer", () => {
+  // R7 — the Library's three acts survive the galley: the two template acts
+  // at the outline's foot, and `+ Add a part` at every seam of the paper.
+  it("puts the Library's acts on the outline's foot and the paper's seams", () => {
     renderRoom();
+    openOutline();
     expect(
-      screen.getByRole("button", { name: "+ Add a part" }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("button", { name: "+ Add a part" }).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: "Start from a template…" }),
     ).toBeInTheDocument();
@@ -280,18 +337,38 @@ describe("the Contract Room with the Library on", () => {
       data: { studioId: "studio-1", canManage: false },
     });
     renderRoom();
+    openOutline();
     expect(
       screen.queryByRole("button", { name: "Save as template…" }),
     ).not.toBeInTheDocument();
     // Composing is not editing — the rest of the footer stands.
     expect(
-      screen.getByRole("button", { name: "+ Add a part" }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("button", { name: "+ Add a part" }).length,
+    ).toBeGreaterThan(0);
   });
 
-  it("lays a Library part at the end of the rail", async () => {
-    renderRoom();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+  /* Walk D2 — the picker is mounted once at the page's foot, so the seam it
+     was opened FROM is what decides where the part lands. Written parts here
+     because an unwritten one prints nothing and carries no seam of its own. */
+  it("lays a Library part at the seam the picker was opened from", async () => {
+    renderRoom([
+      part({
+        partKey: "patina.services",
+        position: 1,
+        title: "Services",
+        payload: { body: "Interior design services." },
+      }),
+      part({
+        partKey: "patina.terms",
+        position: 2,
+        title: "Terms",
+        payload: { body: "Ownership and cancellation." },
+      }),
+    ]);
+    // [0] is the seam above the paper; [1] is the seam beneath Services.
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "+ Add a part" })[1]!,
+    );
 
     const row = screen
       .getAllByRole("listitem")
@@ -302,11 +379,12 @@ describe("the Contract Room with the Library on", () => {
     );
 
     await waitFor(() => expect(railRows()).toHaveLength(3));
-    expect(within(railRows()[2]).getByText("House rules")).toBeInTheDocument();
-    // The room is now dirty and offers the save.
-    expect(
-      screen.getByRole("button", { name: "Save agreement" }),
-    ).toBeEnabled();
+    expect(within(railRows()[0]).getByText("Services")).toBeInTheDocument();
+    expect(within(railRows()[1]).getByText("House rules")).toBeInTheDocument();
+    expect(within(railRows()[2]).getByText("Terms")).toBeInTheDocument();
+    // §A5 "taken" — no Save control survives; the record says what stands.
+    expect(screen.queryByRole("button", { name: "Save agreement" })).toBeNull();
+    expect(screen.getAllByText("Not saved yet").length).toBeGreaterThan(0);
   });
 
   it("replaces the composition with what the table says after a Template", async () => {
@@ -318,9 +396,7 @@ describe("the Contract Room with the Library on", () => {
     });
     renderRoom();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Start from a template…" }),
-    );
+    startFromTemplate();
     const row = screen
       .getAllByRole("listitem")
       .find((item) =>
@@ -346,12 +422,199 @@ describe("the Contract Room with the Library on", () => {
     ).toBeInTheDocument();
   });
 
+  /* WR-102 — `applyTemplate` replaces the composition wholesale from the
+     server, so it is an act like any other and has to bump the revision. It
+     did not, and a save already in the air resolved with `revision.current ===
+     sentAt`, took the "the server's answer IS the paper" branch, and laid the
+     PRE-template composition back over the template that had just replaced it
+     — with `dirty` cleared, so the room said nothing about it. */
+  it("keeps a Template laid in during a save when that save lands", async () => {
+    const gate: Array<() => void> = [];
+    mockSaveParts.mockImplementation(
+      (sent: AgreementPart[]) =>
+        new Promise((resolve) => {
+          gate.push(() =>
+            resolve(
+              bundleWith(
+                sent.map((p, index) => ({
+                  ...p,
+                  id: `reminted-${index}`,
+                  position: index + 1,
+                })),
+              ),
+            ),
+          );
+        }),
+    );
+    mockMaterializeTemplate.mockResolvedValue(1);
+    // A part the pre-template composition does not carry, so which composition
+    // is on the paper afterwards cannot be read two ways.
+    mockRefetch.mockResolvedValue({
+      data: [
+        part({
+          partKey: "studio.house-rules",
+          position: 1,
+          title: "House rules",
+        }),
+      ],
+    });
+    renderRoom();
+
+    // Write, then take the act — the save leaves and the room hands straight
+    // back, so the template goes in while it is still in the air.
+    write("Services");
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "Interior design services." },
+    });
+    openOutline();
+    fireEvent.click(
+      within(outline()).getByRole("button", { name: "Services" }),
+    );
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+
+    startFromTemplate();
+    const row = screen
+      .getAllByRole("listitem")
+      .find((item) =>
+        within(item).queryByText("Full-service residential"),
+      ) as HTMLElement;
+    fireEvent.click(within(row).getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: "Use this template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace the parts" }));
+
+    // WR-201 — the act now WAITS on the save rather than racing it, so the
+    // save that was carrying the OLD composition lands first and the
+    // materialize follows it.
+    await act(async () => {
+      gate.shift()!();
+    });
+    await waitFor(() =>
+      expect(railRows().map((r) => r.textContent ?? "")).toHaveLength(1),
+    );
+
+    // The template is still what the agreement is made of.
+    expect(
+      railRows()
+        .map((r) => r.textContent ?? "")
+        .join(" "),
+    ).toContain("House rules");
+    expect(railRows()).toHaveLength(1);
+    expect(
+      screen.getByText(
+        "The parts of Full-service residential are on this agreement.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  /* WR-201 — the revision guard reconciles a landing on the PAGE; it cannot
+     recall a request already on the wire. `upsert_agreement_parts` is
+     DELETE-then-INSERT, so a save that reaches Postgres AFTER
+     `materialize_agreement_template` replaces the template's parts with the
+     pre-template ones — and the landing correctly takes the stale branch, so
+     the page keeps the template, the table does not, and the record reads a
+     clean `Saved`. The loss surfaced only on the next load. `applyTemplate`
+     now waits for the flight (and its queued re-run) before materializing. */
+  it("holds a Template until the save already in the air has landed", async () => {
+    const gate: Array<() => void> = [];
+    mockSaveParts.mockImplementation(
+      (sent: AgreementPart[]) =>
+        new Promise((resolve) => {
+          gate.push(() =>
+            resolve(
+              bundleWith(
+                sent.map((p, index) => ({
+                  ...p,
+                  id: `reminted-${index}`,
+                  position: index + 1,
+                })),
+              ),
+            ),
+          );
+        }),
+    );
+    mockMaterializeTemplate.mockResolvedValue(1);
+    mockRefetch.mockResolvedValue({
+      data: [
+        part({
+          partKey: "studio.house-rules",
+          position: 1,
+          title: "House rules",
+        }),
+      ],
+    });
+    renderRoom();
+
+    write("Services");
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "Interior design services." },
+    });
+    openOutline();
+    fireEvent.click(
+      within(outline()).getByRole("button", { name: "Services" }),
+    );
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(1));
+    // The save is in the air, so the record does not yet read `Saved`.
+    expect(record()).not.toHaveTextContent(/^Saved /);
+
+    startFromTemplate();
+    const row = screen
+      .getAllByRole("listitem")
+      .find((item) =>
+        within(item).queryByText("Full-service residential"),
+      ) as HTMLElement;
+    fireEvent.click(within(row).getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: "Use this template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace the parts" }));
+
+    // The crux: nothing may reach `materialize_agreement_template` while a
+    // save is still on the wire, because the RPC that lands last wins.
+    await act(async () => {});
+    expect(mockMaterializeTemplate).not.toHaveBeenCalled();
+
+    // The save lands; only now may the template be laid in.
+    await act(async () => {
+      gate.shift()!();
+    });
+    await waitFor(() =>
+      expect(mockMaterializeTemplate).toHaveBeenCalledWith(
+        "studio.full-service",
+      ),
+    );
+    await waitFor(() => expect(railRows()).toHaveLength(1));
+
+    // State carries the template's parts, and the record reads `Saved` only
+    // once both have landed.
+    expect(
+      railRows()
+        .map((r) => r.textContent ?? "")
+        .join(" "),
+    ).toContain("House rules");
+    expect(record()).toHaveTextContent(/^Saved /);
+
+    // And the NEXT save sends the template's composition, not the nine parts
+    // the in-flight call was carrying.
+    write("House rules");
+    fireEvent.change(screen.getByRole("textbox", { name: "Body" }), {
+      target: { value: "The house rules." },
+    });
+    openOutline();
+    fireEvent.click(
+      within(outline()).getByRole("button", { name: "House rules" }),
+    );
+    await waitFor(() => expect(mockSaveParts).toHaveBeenCalledTimes(2));
+    const nextPayload = mockSaveParts.mock.calls[1][0] as AgreementPart[];
+    expect(nextPayload.map((p) => p.partKey)).toEqual(["studio.house-rules"]);
+    await act(async () => {
+      gate.shift()!();
+    });
+  });
+
   it("tells the designer a Template takes her unsaved edits with it", async () => {
     renderRoom();
 
     // Lay a Library part in without saving — the room is now holding a
     // composition the table has never seen.
-    fireEvent.click(screen.getByRole("button", { name: "+ Add a part" }));
+    addAPart();
     const libraryRow = screen
       .getAllByRole("listitem")
       .find((item) => within(item).queryByText("House rules")) as HTMLElement;
@@ -359,15 +622,9 @@ describe("the Contract Room with the Library on", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Add to this agreement" }),
     );
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Save agreement" }),
-      ).toBeEnabled(),
-    );
+    await waitFor(() => expect(railRows()).toHaveLength(3));
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Start from a template…" }),
-    );
+    startFromTemplate();
     const templateRow = screen
       .getAllByRole("listitem")
       .find((item) =>
@@ -387,9 +644,7 @@ describe("the Contract Room with the Library on", () => {
     });
     renderRoom();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Start from a template…" }),
-    );
+    startFromTemplate();
     const row = screen
       .getAllByRole("listitem")
       .find((item) =>
@@ -417,8 +672,15 @@ describe("the Contract Room with the Library on", () => {
         payload: { markupPercent: 18 },
       }),
     ]);
-    expect(within(railRows()[0]).getByText("record only")).toBeInTheDocument();
+    // R9's standing is the studio's word about the part, so it prints in the
+    // studio's strip beside it, never on the paper.
+    expect(
+      within(
+        screen.getByRole("complementary", { name: "The studio · Cost plus" }),
+      ).getByText("record only"),
+    ).toBeInTheDocument();
     // And the editor beneath says the same thing in a sentence.
+    write("Cost plus");
     expect(
       screen.getByText(
         "This is recorded on the agreement. It does not create billing authority yet.",
@@ -439,6 +701,7 @@ describe("the Contract Room with the Library on", () => {
     expect(
       screen.queryByRole("button", { name: "+ Add a part" }),
     ).not.toBeInTheDocument();
+    openOutline();
     expect(
       screen.queryByRole("button", { name: "Start from a template…" }),
     ).not.toBeInTheDocument();
@@ -449,10 +712,8 @@ describe("the Contract Room with the Library on", () => {
   // anything: `save_agreement_part`'s only caller in the portal was the
   // Library card's own rename.
   describe("keeping one part in the Library", () => {
-    const openRowMenu = (title: string) =>
-      fireEvent.click(
-        screen.getByRole("button", { name: `Part options for ${title}` }),
-      );
+    // The act moved with the rail's row menu: it is an act inside the open
+    // part's own fold now.
 
     it("keeps the part the designer chose, with its own defaults", async () => {
       renderRoom([
@@ -466,9 +727,9 @@ describe("the Contract Room with the Library on", () => {
         }),
       ]);
 
-      openRowMenu("House rules");
+      write("House rules");
       fireEvent.click(
-        screen.getByRole("button", { name: "Keep in the Library" }),
+        screen.getByRole("button", { name: "Keep in my Library" }),
       );
 
       await waitFor(() => expect(mockSavePart).toHaveBeenCalledTimes(1));
@@ -484,11 +745,11 @@ describe("the Contract Room with the Library on", () => {
       await screen.findByText("House rules is in your Library.");
 
       // Offered once: a second keep would mint a second Library entry for the
-      // same part, since `save_agreement_part` mints its own studio key.
-      openRowMenu("House rules");
+      // same part, since `save_agreement_part` mints its own studio key. Held,
+      // never natively disabled (§A5).
       expect(
-        screen.getByRole("button", { name: "Kept in the Library" }),
-      ).toBeDisabled();
+        screen.getByRole("button", { name: "In your Library" }),
+      ).toHaveAttribute("aria-disabled", "true");
     });
 
     it("offers the act to nobody but an owner or admin (R3)", () => {
@@ -496,9 +757,9 @@ describe("the Contract Room with the Library on", () => {
         data: { studioId: "studio-1", canManage: false },
       });
       renderRoom();
-      openRowMenu("Services");
+      write("Services");
       expect(
-        screen.queryByRole("button", { name: "Keep in the Library" }),
+        screen.queryByRole("button", { name: "Keep in my Library" }),
       ).not.toBeInTheDocument();
     });
   });

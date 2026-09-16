@@ -1,0 +1,165 @@
+{
+  "consoleErrors": [
+    "[1440x900] http://localhost:3000/desk TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+    "[1440x900] http://localhost:3000/desk Error logged: AppError: Not authenticated\n    at w (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:13317)\n    at Object.onError (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:1941)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-530a2a57a0b7a863.js:1:35074) {queryKey: Array(1), meta: undefined}",
+    "[390x844@2x] http://localhost:3000/desk TypeError: Failed to fetch\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:15165\n    at tO (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21424)\n    at tE (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:32:21172)\n    at http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36993\n    at rE._useSession (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:35244)\n    at async rE._getUser (http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36824)\n    at async http://localhost:3000/_next/static/chunks/2290-5e61441dd9c0c75e.js:45:36618",
+    "[390x844@2x] http://localhost:3000/desk Error logged: AppError: Not authenticated\n    at w (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:13317)\n    at Object.onError (http://localhost:3000/_next/static/chunks/4734-3ecf2bb61ffdb155.js:1:1941)\n    at u.fetch (http://localhost:3000/_next/static/chunks/3077-530a2a57a0b7a863.js:1:35074) {queryKey: Array(1), meta: undefined}"
+  ],
+  "pageErrors": [],
+  "shots": [
+    "/Users/kody/Code/patina-merged/.codex/worktrees/agent-pp-int3c/artifacts/portal-polish-build-2026-09-08/waves/w3c/renders/desk-1440x900.png",
+    "/Users/kody/Code/patina-merged/.codex/worktrees/agent-pp-int3c/artifacts/portal-polish-build-2026-09-08/waves/w3c/renders/doc-1440x900.png",
+    "/Users/kody/Code/patina-merged/.codex/worktrees/agent-pp-int3c/artifacts/portal-polish-build-2026-09-08/waves/w3c/renders/orders-ledger-1440x900.png",
+    "/Users/kody/Code/patina-merged/.codex/worktrees/agent-pp-int3c/artifacts/portal-polish-build-2026-09-08/waves/w3c/renders/desk-390x844@2x.png"
+  ],
+  "overflow": [
+    {
+      "label": "1440x900 /desk",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "ok": true
+    },
+    {
+      "label": "1440x900 /doc/0384388c-4004-4046-b252-abca59bb7e87",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "ok": true
+    },
+    {
+      "label": "1440x900 orders ledger",
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "ok": true
+    },
+    {
+      "label": "390x844@2x /desk",
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "ok": true
+    }
+  ],
+  "facts": {
+    "walkthroughDismissed": true,
+    "dates_desk-1440x900": {
+      "shortMonthHits": [],
+      "dayMonthHits": [
+        "· new lead — respond by 11 September",
+        "David Nielsen · New lead — respond by 13 September",
+        "Marcus Wright · New lead — respond by 11 September",
+        "Sarah Chen · New lead — respond by 13 September",
+        "Lily Tanaka · New lead — respond by 14 September",
+        "Overdue 4 days — 2 decisions overdue — oldest due 4 September"
+      ]
+    },
+    "greeting": "Good evening, Leah\n\nTUESDAY · 8 SEPTEMBER\n\n＋\nCAPTURE A LEAD\nBEGIN A BRIEF\n＋\nOPEN A PROJECT\nNO PROPOSAL NEEDED\nFIND ANYTHING\n⌘K",
+    "dayLines": [
+      "Aspen Loft Refresh — project, overdue 4 days\n\nMarcus Wright · new lead — respond by 11 September\n\nand 7 more below"
+    ],
+    "rosterLines": [
+      "Consultation\n\nElena Ruiz · quiet · nothing needs your hand\n\nOPEN THE JOB",
+      "Full Room\n\nDavid Nielsen · New lead — respond by 13 September\n\nOPEN THE JOB",
+      "Full Room\n\nMarcus Wright · New lead — respond by 11 September\n\nOPEN THE JOB",
+      "Full Room\n\nSarah Chen · New lead — respond by 13 September\n\nOPEN THE JOB",
+      "Full Room\n\nLily Tanaka · New lead — respond by 14 September\n\nOPEN THE JOB",
+      "The Ashfords (no-login household)\n\nThe Ashfords (no-login household) · Schedule the discovery call\n\nOPEN THE JOB",
+      "Elena Marlowe — Living Room Direction\n\nElena Marlowe (no-login household) · drafting, untouched 10d\n\nOPEN THE JOB",
+      "Concurrency source draft\n\nquiet · nothing needs your hand\n\nOPEN THE JOB",
+      "Concurrency target draft\n\nquiet · nothing needs your hand\n\nOPEN THE JOB",
+      "Sample accepted proposal\n\nSigned — open the project\n\nOPEN THE PROJECT",
+      "Aspen Loft — Living Room Refresh\n\nsent, unopened 1d\n\nOPEN THE JOB",
+      "Aspen Loft Refresh\n\n\nOverdue 4 days — 2 decisions overdue — oldest due 4 September\n\nREVIEW DECISIONS",
+      "Birch Hollow\n\nBand — no anchor yet\n\nOPEN THE JOB",
+      "Marrow & Vale Residence\n\nBand — no anchor yet\n\nOPEN THE JOB",
+      "Olsen Lake House\n\nAP-012 has an open damage claim\n\nREVIEW THE CLAIM",
+      "Chen Residence\n\nName the phases for this project\n\nOPEN THE SCHEDULE",
+      "Cedar Lane Study\n\nNora Ellison · Installation · Name the phases for this project\n\nOPEN THE SCHEDULE"
+    ],
+    "hasShadow": [
+      "NAV.doc-elevated fixed inset-x-0 bottom-0 z-40 hidden h-[60px] g → rgba(44, 41, 38, 0.08) 0px 1px 2px 0px"
+    ],
+    "docHref": "/doc/0384388c-4004-4046-b252-abca59bb7e87",
+    "dates_doc-1440x900": {
+      "shortMonthHits": [],
+      "dayMonthHits": [
+        "Reconnect 15 September"
+      ]
+    },
+    "selectedBeatsHover_doc": {
+      "count": 0,
+      "rest": [],
+      "hovered": [],
+      "charcoalWhileHovered": null
+    },
+    "ordersDoorFound": 1,
+    "selectedBeatsHover_orders": {
+      "count": 3,
+      "rest": [
+        {
+          "text": "Ledger",
+          "color": "rgb(44, 41, 38)",
+          "height": "1px"
+        },
+        {
+          "text": "all",
+          "color": "rgb(44, 41, 38)",
+          "height": "1px"
+        },
+        {
+          "text": "all",
+          "color": "rgb(44, 41, 38)",
+          "height": "1px"
+        }
+      ],
+      "hovered": [
+        {
+          "text": "Ledger",
+          "color": "rgb(44, 41, 38)",
+          "height": "1px"
+        },
+        {
+          "text": "all",
+          "color": "rgb(44, 41, 38)",
+          "height": "1px"
+        },
+        {
+          "text": "all",
+          "color": "rgb(44, 41, 38)",
+          "height": "1px"
+        }
+      ],
+      "charcoalWhileHovered": true
+    },
+    "dates_orders-1440x900": {
+      "shortMonthHits": [],
+      "dayMonthHits": [
+        "· new lead — respond by 11 September",
+        "David Nielsen · New lead — respond by 13 September",
+        "Marcus Wright · New lead — respond by 11 September",
+        "Sarah Chen · New lead — respond by 13 September",
+        "Lily Tanaka · New lead — respond by 14 September",
+        "Overdue 4 days — 2 decisions overdue — oldest due 4 September",
+        "~6 May",
+        "~25 May",
+        "~18 July",
+        "~2 August",
+        "~20 May"
+      ]
+    },
+    "dates_desk-390x844@2x": {
+      "shortMonthHits": [],
+      "dayMonthHits": [
+        "· new lead — respond by 11 September",
+        "David Nielsen · New lead — respond by 13 September",
+        "Marcus Wright · New lead — respond by 11 September",
+        "Sarah Chen · New lead — respond by 13 September",
+        "Lily Tanaka · New lead — respond by 14 September",
+        "Overdue 4 days — 2 decisions overdue — oldest due 4 September"
+      ]
+    },
+    "widestElement": {
+      "right": 390,
+      "tag": "HTML",
+      "cls": ""
+    }
+  }
+}

@@ -1,0 +1,4 @@
+Rivera Finishes, Okonkwo residence. Unfold row -> "Change what came back" -> unchanged-guard sentence:
+"The outcome is unchanged, so nothing moves. This records the dates and who priced it."
+Set "How it came back" = Selected -> "Recording this moves Rivera Finishes to Awarded. A bidder who did not win never reads as crew."
+"Write the bid" -> DB: bid_outcome=selected, stage=awarded. Reverted to bid_outcome=no_response, stage=no_response (seed value).

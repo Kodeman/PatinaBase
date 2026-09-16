@@ -36,22 +36,20 @@ describe('the letterhead', () => {
     expect(document.body).not.toHaveTextContent('In hand');
   });
 
-  it('prints the title at 32px below 1180 and the Life Review’s 40px from the shell’s own tier, and closes on the mid rule', () => {
+  it('prints the title at 34px at every width, tracking 0, and closes on the mid rule', () => {
     const { container } = render(
       <DocLetterhead title="Vandersteen residence" vitals="Procurement" />,
     );
     const title = screen.getByRole('heading', { name: 'Vandersteen residence' });
     expect(title).toHaveClass(
       'font-heading',
-      'text-[32px]',
-      // NF-02 — the switch is the SHELL's tier, not Tailwind's `sm` (640px):
-      // W3-R4 rules 32px "at 390" against the mockup's `#frame-390`, and
-      // D-B26/W3-R5 price the 40px title only where the ledger has its own
-      // bounded track. `sm` put 40px on every phone wider than 640.
-      'min-[1180px]:text-[40px]',
-      'tracking-[-0.015em]',
+      // R6 — 34, amending R126. One step: the 1180 jump to 40 and the negative
+      // tracking both went with it, so the name reads the same on every paper.
+      'text-[34px]',
       'text-[var(--text-primary)]',
     );
+    expect(title.className).not.toMatch(/min-\[1180px\]:text-\[40px\]/);
+    expect(title.className).not.toMatch(/tracking-/);
     const header = container.querySelector('header')!;
     expect(header).toHaveClass('doc-rule-mid');
     expect(header.className).not.toMatch(/border-b\b/);
@@ -143,12 +141,30 @@ describe('the letterhead', () => {
     expect(vitals).toBeVisible();
     // The e2e measures this element's height against the one-row budget.
     expect(vitals).toHaveAttribute('data-letterhead-vitals');
-    expect(vitals).toHaveClass(
-      'whitespace-nowrap',
-      'overflow-hidden',
-      'text-ellipsis',
-    );
+    // D5 — 15px, and it WRAPS. The clip trio made the line one row long
+    // whatever it carried, which is a vital the paper cannot finish.
+    expect(vitals).toHaveClass('text-[15px]');
+    expect(vitals.className).not.toMatch(/whitespace-nowrap/);
+    expect(vitals.className).not.toMatch(/overflow-hidden/);
+    expect(vitals.className).not.toMatch(/text-ellipsis/);
     expect(document.querySelector('.strata-mark')).not.toBeNull();
+  });
+
+  it('prints the subject it is given in row 2 left, above the vitals (R4)', () => {
+    render(
+      <DocLetterhead
+        title="Vandersteen residence"
+        vitals="Procurement"
+        client={<span data-testid="household">The Vandersteens</span>}
+        subject={<p data-testid="subject">Whole-house refresh · 4 rooms</p>}
+      />,
+    );
+
+    const subject = screen.getByTestId('subject');
+    const vitals = screen.getByText('Procurement');
+    expect(subject.parentElement).toBe(vitals.parentElement);
+    const cell = Array.from(subject.parentElement!.children);
+    expect(cell.indexOf(subject)).toBeLessThan(cell.indexOf(vitals));
   });
 
   it('carries no shadow (D4)', () => {

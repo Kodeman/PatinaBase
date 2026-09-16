@@ -1,0 +1,42 @@
+[
+  {
+    "tag": "BUTTON",
+    "name": "a client"
+  },
+  {
+    "tag": "BUTTON",
+    "name": "a household member"
+  },
+  {
+    "tag": "BUTTON",
+    "name": "a maker"
+  },
+  {
+    "tag": "BUTTON",
+    "name": "a GC"
+  },
+  {
+    "tag": "BUTTON",
+    "name": "a sub"
+  },
+  {
+    "tag": "BUTTON",
+    "name": "an installer"
+  },
+  {
+    "tag": "BUTTON",
+    "name": "a receiver"
+  },
+  {
+    "tag": "BUTTON",
+    "name": "someone else"
+  },
+  {
+    "tag": "INPUT",
+    "name": ""
+  },
+  {
+    "tag": "INPUT",
+    "name": ""
+  }
+]

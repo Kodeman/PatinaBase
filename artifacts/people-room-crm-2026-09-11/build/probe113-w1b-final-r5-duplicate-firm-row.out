@@ -1,0 +1,35 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+=== AA. Rivera Finishes: the two Directory rows, side by side ===
+              person_id               |  role   |  display_name   |     phone      | reach_state | consent_status | paper_state | seat_count | entity_kind |  seat_e164   |              company_id              
+--------------------------------------+---------+-----------------+----------------+-------------+----------------+-------------+------------+-------------+--------------+--------------------------------------
+ d0e20000-0000-0000-0000-000000000019 | contact | Rivera Finishes | (612) 555-0219 | on_paper    | not_asked      | not_on_file |          0 | company     |              | 
+ d0e30000-0000-0000-0000-000000000091 | sub     | Rivera Finishes | (612) 555-0219 | on_paper    | not_asked      | not_on_file |          1 |             | +16125550219 | d0e20000-0000-0000-0000-000000000019
+(2 rows)
+
+RESET
+=== AA2. the card and the seat, as postgres ===
+                  id                  | entity_kind |  company_name   |     phone      |  phone_e164  
+--------------------------------------+-------------+-----------------+----------------+--------------
+ d0e20000-0000-0000-0000-000000000019 | company     | Rivera Finishes | (612) 555-0219 | +16125550219
+(1 row)
+
+                  id                  | party_kind |  display_name   |  phone_e164  | studio_contact_id |              company_id              |  company_name   
+--------------------------------------+------------+-----------------+--------------+-------------------+--------------------------------------+-----------------
+ d0e30000-0000-0000-0000-000000000091 | sub        | Rivera Finishes | +16125550219 |                   | d0e20000-0000-0000-0000-000000000019 | Rivera Finishes
+(1 row)
+
+=== AA3. paper the card holds ===
+ doc_type | expires_on | blocks 
+----------+------------+--------
+(0 rows)
+
+=== AA4. Granite North too ===
+  role   | display_name  | paper_state |   ek    
+---------+---------------+-------------+---------
+ contact | Granite North | current     | company
+(1 row)
+
+ROLLBACK

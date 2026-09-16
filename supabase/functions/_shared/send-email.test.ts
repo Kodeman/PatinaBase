@@ -9,6 +9,7 @@ import {
   generateUnsubscribeUrl,
   prepareCompliantEmail,
   type PreparedResendRequest,
+  sendCompliantEmail,
   sendPreparedResendRequest,
 } from "./send-email.ts";
 
@@ -330,4 +331,183 @@ Deno.test("one-click unsubscribe always names /api/unsubscribe, never /preferenc
   } finally {
     Deno.env.delete("UNSUBSCRIBE_TOKEN_SECRET");
   }
+});
+
+/* ── Deliverability: text part, provider tags, notification_log refs ────────
+   The three carried on every send through the chokepoint. */
+
+/** Minimal client: clears policy reads, records the notification_log insert. */
+function loggingClient(captured: { insert?: Record<string, unknown> }) {
+  return {
+    from(table: string) {
+      const query: Record<string, unknown> = {
+        select: () => query,
+        eq: () => query,
+        in: () => query,
+        gte: () => Promise.resolve({ count: 0, error: null }),
+        maybeSingle: () =>
+          Promise.resolve({ data: { email_suppressed: false }, error: null }),
+        single: () =>
+          Promise.resolve({ data: { id: "log-1" }, error: null }),
+        insert: (row: Record<string, unknown>) => {
+          if (table === "notification_log") captured.insert = row;
+          return query;
+        },
+        update: () => query,
+      };
+      return query;
+    },
+  };
+}
+
+Deno.test("the Resend body carries a derived text part when the caller omits one", async () => {
+  const result = await prepareCompliantEmail(
+    loggingClient({}) as never,
+    {
+      ...emailOptions,
+      category: "transactional" as const,
+      html:
+        '<head><style>.a{color:red}</style></head><p>Your proposal is ready.</p>' +
+        '<a href="https://client.patina.cloud/p/1">Review proposal</a>',
+    },
+  );
+  assertEquals(result.state, "ready");
+  if (result.state !== "ready") return;
+  const body = JSON.parse(result.request.body);
+  assertEquals(
+    body.text,
+    "Your proposal is ready.\nReview proposal (https://client.patina.cloud/p/1)",
+  );
+});
+
+Deno.test("a caller-written text part is never overwritten", async () => {
+  const result = await prepareCompliantEmail(
+    loggingClient({}) as never,
+    {
+      ...emailOptions,
+      category: "transactional" as const,
+      text: "Hand-written.",
+    },
+  );
+  if (result.state !== "ready") throw new Error("expected ready");
+  assertEquals(JSON.parse(result.request.body).text, "Hand-written.");
+});
+
+Deno.test("every send is tagged with its category and template", async () => {
+  const result = await prepareCompliantEmail(
+    loggingClient({}) as never,
+    {
+      ...emailOptions,
+      category: "transactional" as const,
+      templateId: "invoice-reminder/stage 2",
+    },
+  );
+  if (result.state !== "ready") throw new Error("expected ready");
+  assertEquals(JSON.parse(result.request.body).tags, [
+    { name: "category", value: "transactional" },
+    { name: "template", value: "invoice-reminder-stage-2" },
+  ]);
+});
+
+Deno.test("a caller's own tag wins over the derived one of the same name", async () => {
+  const result = await prepareCompliantEmail(
+    loggingClient({}) as never,
+    {
+      ...emailOptions,
+      category: "transactional" as const,
+      templateId: "invoice-sent",
+      tags: [
+        { name: "category", value: "billing" },
+        { name: "studio", value: "middlewest" },
+      ],
+    },
+  );
+  if (result.state !== "ready") throw new Error("expected ready");
+  assertEquals(JSON.parse(result.request.body).tags, [
+    { name: "category", value: "billing" },
+    { name: "template", value: "invoice-sent" },
+    { name: "studio", value: "middlewest" },
+  ]);
+});
+
+/** Runs `fn` with a stubbed fetch and a known EMAIL_DEV_MODE, then restores
+ * both. sendCompliantEmail's live path posts to Resend, so a test that reaches
+ * it must never depend on the ambient env to stay off the network. */
+async function withStubbedSend(
+  devMode: string | null,
+  fn: (calls: Array<{ url: string; body: unknown }>) => Promise<void>,
+): Promise<void> {
+  const previousMode = Deno.env.get("EMAIL_DEV_MODE");
+  const previousKey = Deno.env.get("RESEND_API_KEY");
+  const realFetch = globalThis.fetch;
+  const calls: Array<{ url: string; body: unknown }> = [];
+
+  if (devMode === null) Deno.env.delete("EMAIL_DEV_MODE");
+  else Deno.env.set("EMAIL_DEV_MODE", devMode);
+  Deno.env.set("RESEND_API_KEY", "test-key");
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    calls.push({
+      url: typeof input === "string" ? input : input.toString(),
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+    });
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: "re_stub_1" }), { status: 200 }),
+    );
+  }) as typeof fetch;
+
+  try {
+    await fn(calls);
+  } finally {
+    globalThis.fetch = realFetch;
+    if (previousMode === undefined) Deno.env.delete("EMAIL_DEV_MODE");
+    else Deno.env.set("EMAIL_DEV_MODE", previousMode);
+    if (previousKey === undefined) Deno.env.delete("RESEND_API_KEY");
+    else Deno.env.set("RESEND_API_KEY", previousKey);
+  }
+}
+
+Deno.test("the notification_log insert stamps ref_type, ref_id and recipient", async () => {
+  const captured: { insert?: Record<string, unknown> } = {};
+  await withStubbedSend(null, async (calls) => {
+    await sendCompliantEmail(loggingClient(captured) as never, {
+      ...emailOptions,
+      category: "transactional" as const,
+      failClosedPolicyReads: false,
+      ref: { type: "invoice", id: "20000000-0000-4000-8000-000000000002" },
+    });
+    assertEquals(calls.length, 1);
+    assertEquals(calls[0].url, "https://api.resend.com/emails");
+    const body = calls[0].body as { text?: string };
+    assertEquals(typeof body.text, "string");
+  });
+  assertEquals(captured.insert?.ref_type, "invoice");
+  assertEquals(captured.insert?.ref_id, "20000000-0000-4000-8000-000000000002");
+  assertEquals(captured.insert?.recipient, "client@test.invalid");
+});
+
+Deno.test("a ref-stamped send with no userId still logs, with a null user_id", async () => {
+  const captured: { insert?: Record<string, unknown> } = {};
+  await withStubbedSend(null, async () => {
+    await sendCompliantEmail(loggingClient(captured) as never, {
+      ...emailOptions,
+      userId: undefined,
+      category: "transactional" as const,
+      ref: { type: "client_review", id: "30000000-0000-4000-8000-000000000003" },
+    });
+  });
+  assertEquals(captured.insert?.user_id, null);
+  assertEquals(captured.insert?.ref_type, "client_review");
+  assertEquals(captured.insert?.recipient, "client@test.invalid");
+});
+
+Deno.test("a send with neither a userId nor a ref writes no log row", async () => {
+  const captured: { insert?: Record<string, unknown> } = {};
+  await withStubbedSend(null, async () => {
+    await sendCompliantEmail(loggingClient(captured) as never, {
+      ...emailOptions,
+      userId: undefined,
+      category: "transactional" as const,
+    });
+  });
+  assertEquals(captured.insert, undefined);
 });

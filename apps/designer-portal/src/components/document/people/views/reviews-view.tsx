@@ -12,12 +12,14 @@
 import { useMemo, useState } from 'react';
 import {
   useClientReviews,
+  useEmailDelivery,
   useReviewStats,
   useCompletedProjectsWithoutReview,
   useTogglePortfolioPublish,
   type ClientReview,
   type CompletedProject,
 } from '@patina/supabase';
+import { DeliveryWord } from '../../delivery-word';
 import { ViewHeader, EmptyTeach } from '../view-shell';
 import { Avatar } from '../person-bits';
 import { ReviewRequestSheet } from '../ops/review-request-sheet';
@@ -68,6 +70,12 @@ export function ReviewsView({ notify }: PeopleViewProps) {
   const { data: toRequest, isLoading: loadingToRequest } =
     useCompletedProjectsWithoutReview();
   const togglePublish = useTogglePortfolioPublish();
+  // One read for the pending tab's sent asks — a per-row hook would open N,
+  // and no read at all on the tabs that never print the word.
+  const requestDelivery = useEmailDelivery(
+    'client_review',
+    tab === 'pending' ? (sent ?? []).map((r) => r.id) : [],
+  );
 
   const pendingCount = (toRequest?.length ?? 0) + (sent?.length ?? 0);
   const counts: Record<ReviewTab, number> = {
@@ -131,7 +139,17 @@ export function ReviewsView({ notify }: PeopleViewProps) {
             <QueueRow
               key={r.id}
               name={reviewClientName(r)}
-              why="Request sent — awaiting their words"
+              why={
+                <>
+                  Request sent — awaiting their words
+                  <DeliveryWord
+                    delivery={requestDelivery.byRef[r.id] ?? null}
+                    recipient={r.designer_client?.client_email ?? null}
+                    mode="attention"
+                    className="mt-0.5 block"
+                  />
+                </>
+              }
             />
           ))}
         </ul>
@@ -221,7 +239,7 @@ export function ReviewsView({ notify }: PeopleViewProps) {
         ))}
       </ul>
     );
-  }, [tab, loading, toRequest, sent, collected, queued, togglePublish, notify]);
+  }, [tab, loading, toRequest, sent, collected, queued, togglePublish, notify, requestDelivery.byRef]);
 
   return (
     <>

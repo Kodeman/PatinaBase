@@ -93,9 +93,9 @@ describe("ServiceAgreementPreview", () => {
     );
 
     expect(
-      screen.getByText("Signed Jan 15, 2026 on paper · recorded by the studio."),
+      screen.getByText("Signed 15 January 2026 on paper · recorded by the studio."),
     ).toBeVisible();
-    expect(screen.queryByText(/Aug 5, 2026/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/5 August 2026/)).not.toBeInTheDocument();
   });
 
   it("says nothing about paper for a signature taken on screen", () => {

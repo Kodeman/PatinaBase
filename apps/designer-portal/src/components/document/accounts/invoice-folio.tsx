@@ -10,13 +10,18 @@
  * rebuilt in the charcoal/paper grammar: quiet inline confirmations, R83
  * terracotta inline errors, NO toasts, zero shadows).
  *
- * Print (BIL-01): the folio prints ITSELF — the @media print stylesheet below
- * hides every body sibling of the portal root (PaperFolioSheet portals onto
- * <body>) and lets the paper flow as pages.
+ * Print (BIL-01): the folio does NOT print itself. It opens /invoices/<id>/print
+ * in a new tab, which renders the shared InvoicePaper under the
+ * `#invoice-print-root` visibility pattern. Printing in place printed a blank
+ * page — globals.css's `@media print { body * { visibility: hidden } }` restores
+ * visibility only for `.proposal-print-area`, which the folio never carried.
  */
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
+  invoiceLinkIsLive,
+  useEmailDelivery,
   useInvoice,
   useInvoiceLink,
   useIssueInvoice,
@@ -42,6 +47,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { DeliveryWord } from '../delivery-word';
 import { Stamp } from '../stamp';
 import { todayYmd } from '@/lib/document/format';
 import { dollarsToCents } from '@/lib/document/invoice-composer';
@@ -98,11 +104,16 @@ export function InvoiceFolio({
   const send = useSendInvoice({ errorSurface: 'inline' });
   const recordPayment = useRecordPayment({ errorSurface: 'inline' });
   const voidInvoice = useVoidInvoice({ errorSurface: 'inline' });
-  const reconcileCheckout = useReconcileInvoiceCheckout();
+  const reconcileCheckout = useReconcileInvoiceCheckout({ errorSurface: 'inline' });
   // The invoice's own address (00574). Null for a draft — nothing to copy yet.
   const { data: invoiceLink } = useInvoiceLink(invoiceId);
   const regenerateLink = useRegenerateInvoiceLink({ errorSurface: 'inline' });
   const reconciledSessionIds = useRef(new Set<string>());
+  // A draft has never been mailed, so there is nothing to ask about.
+  const emailDelivery = useEmailDelivery(
+    'invoice',
+    invoice && invoice.status !== 'draft' ? [invoice.id] : [],
+  );
 
   const [act, setAct] = useState<ActPanel>(null);
   /** R51's quiet confirmation grammar — sage when it landed, terracotta when not. */
@@ -119,6 +130,20 @@ export function InvoiceFolio({
   // band say "select the link above" about a link that was not above it.
   const [toolbarCopyStatus, setToolbarCopyStatus] = useState<CopyStatus>('idle');
   const [bandCopyStatus, setBandCopyStatus] = useState<CopyStatus>('idle');
+  /**
+   * THE MINTED ADDRESS LIVES HERE AND NOWHERE ELSE (R-BV).
+   *
+   * It used to be parked in the `['invoice-link', id]` query cache, where four
+   * acts a click away in this same folio — Issue & send, Record payment,
+   * Resend, Void — invalidated it, and the refetch could only ever come back
+   * address-less (`get_invoice_link` answers `token: NULL` since 00636). The
+   * folio printed "This address is shown once" and then destroyed it. Component
+   * state is the honest home for a value that is shown once: it lasts exactly
+   * as long as the folio the designer is reading, and no other reader of any
+   * cache key can find it. The invoice id rides along so a folio re-pointed at
+   * a different invoice cannot show the first one's address.
+   */
+  const [minted, setMinted] = useState<{ invoiceId: string; token: string } | null>(null);
   const pendingStripeSessionId = invoice?.payments?.find(
     (payment) =>
       payment.method === 'stripe' &&
@@ -143,7 +168,12 @@ export function InvoiceFolio({
           void qc.invalidateQueries({ queryKey: ['document-state'] });
         }
       })
-      .catch(() => undefined);
+      .catch((e: unknown) => {
+        if (!active) return;
+        setNote(
+          `Could not confirm the card payment — ${e instanceof Error ? e.message : 'try again'}`,
+        );
+      });
 
     return () => {
       active = false;
@@ -176,6 +206,7 @@ export function InvoiceFolio({
     );
   }
 
+  const delivery = emailDelivery.byRef[invoice.id] ?? null;
   const stamp = FOLIO_STAMP[invoice.status] ?? FOLIO_STAMP.draft;
   const overdue = isInvoiceOverdue(invoice);
   const balance = invoiceBalanceCents(invoice);
@@ -276,15 +307,28 @@ export function InvoiceFolio({
   // The invoice's own address — `/pay/<token>` opens for whoever holds it,
   // signed in or not (00574 · K1). The current origin preserves localhost →
   // :3002 routing when no env override is configured; production still uses
-  // the explicit portal var. Null until the invoice is issued and minted.
-  const clientInvoiceUrl = invoiceLink
+  // the explicit portal var.
+  //
+  // A TOKEN ONLY EVER ARRIVES FROM A MINT (00636): `get_invoice_link` answers
+  // `token: NULL`, so this is null on every folio the designer has not just
+  // regenerated on — including one whose link the send itself minted. Whether
+  // a link EXISTS is a separate question, and `linkExists`/`linkIsLive` below
+  // are what the recovery band asks (W4 r6 M-1). The mint's answer is read
+  // from this folio's own state, never from the cache (R-BV).
+  const mintedToken = minted?.invoiceId === invoiceId ? minted.token : null;
+  const clientInvoiceUrl = mintedToken
     ? invoiceLinkUrl(
         resolveClientPortalOrigin(
           typeof window === 'undefined' ? undefined : window.location.origin,
         ),
-        invoiceLink.token,
+        mintedToken,
       )
     : null;
+  const linkIsLive = invoiceLinkIsLive(invoiceLink);
+  // An active row whose clock has run out. A `closed` row is a voided
+  // invoice's receipt link (K5), not an expiry, so it reads as no live link
+  // rather than as "expired".
+  const linkHasExpired = !linkIsLive && invoiceLink?.status === 'active';
 
   const copyClientInvoiceUrl = async (site: 'toolbar' | 'band') => {
     if (!clientInvoiceUrl) return;
@@ -303,7 +347,9 @@ export function InvoiceFolio({
     setToolbarCopyStatus('idle');
     setBandCopyStatus('idle');
     try {
-      await regenerateLink.mutateAsync({ invoiceId });
+      const link = await regenerateLink.mutateAsync({ invoiceId });
+      // The one moment this address is readable by anyone, Patina included.
+      setMinted(link.token ? { invoiceId, token: link.token } : null);
       setNote('link replaced · the old one is dead');
       setAct(null);
     } catch (e) {
@@ -368,16 +414,6 @@ export function InvoiceFolio({
 
   return (
     <div>
-      {/* Print = the folio itself (R74). The sheet portals onto <body>, so the
-          folio's page is exactly the overlay subtree; everything else hides. */}
-      <style>{`@media print {
-        body > *:not([data-doc-overlay='paper-folio']) { display: none !important; }
-        [data-doc-overlay='paper-folio'] { position: static !important; overflow: visible !important; padding: 0 !important; }
-        [data-doc-overlay='paper-folio'] .paper-folio-backdrop { display: none !important; }
-        [data-doc-overlay='paper-folio'] .paper-folio-panel { position: static !important; max-width: none !important; border: 0 !important; border-radius: 0 !important; }
-        .folio-no-print { display: none !important; }
-      }`}</style>
-
       {/* ── Head: number · stamp · household · the doorway ─────────────── */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -397,20 +433,35 @@ export function InvoiceFolio({
             {overdue && <span style={{ color: TERRACOTTA_INK }}> · overdue</span>}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2.5">
-          <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
-          {documentProjectId && invoice.project && onOpenDocument && (
-            <DocumentAction
-              actionKey="open-invoice-document"
-              surfaceKey="accounts"
-              regionKey="invoice-letterhead"
-              variant="tertiary"
-              onClick={() => onOpenDocument(documentProjectId)}
-              className="folio-no-print"
-            >
-              document ↗
-            </DocumentAction>
-          )}
+        {/* The word can be a full sentence with an address in it, so this
+            column shrinks and caps rather than pushing the letterhead wide. */}
+        <div className="flex min-w-0 max-w-[60%] flex-col items-end gap-1 text-right">
+          <div className="flex items-center gap-2.5">
+            <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />
+            {documentProjectId && invoice.project && onOpenDocument && (
+              <DocumentAction
+                actionKey="open-invoice-document"
+                surfaceKey="accounts"
+                regionKey="invoice-letterhead"
+                variant="tertiary"
+                onClick={() => onOpenDocument(documentProjectId)}
+              >
+                document ↗
+              </DocumentAction>
+            )}
+          </div>
+          <DeliveryWord
+            delivery={delivery}
+            recipient={invoice.client?.email}
+            mode="all"
+            action={
+              delivery && (delivery.state === 'bounced' || delivery.state === 'suppressed') ? (
+                <Link href="/people" className="underline underline-offset-4">
+                  Fix the address in People
+                </Link>
+              ) : undefined
+            }
+          />
         </div>
       </div>
 
@@ -601,7 +652,7 @@ export function InvoiceFolio({
       </div>
 
       {/* ── The acts row ────────────────────────────────────────────────── */}
-      <div className="folio-no-print mt-5 border-t border-[var(--color-pearl)] pt-3">
+      <div className="mt-5 border-t border-[var(--color-pearl)] pt-3">
         <DocumentActionGroup surfaceKey="accounts" regionKey="invoice-actions">
           {isDraft && (
             <DocumentAction
@@ -644,10 +695,13 @@ export function InvoiceFolio({
               Void
             </DocumentAction>
           )}
-          {/* R51/R83: say why, or do not offer the act. `canShareLink` reads
-              the invoice's status and the link reads its own query, so the two
-              disagree on first load and after a failed mint — a greyed act
-              with no reason given is the one thing the folio must not draw. */}
+          {/* R51/R83: say why, or do not offer the act. Copy stands only where
+              there is an address to copy — a greyed act with no reason given is
+              the one thing the folio must not draw — so it waits on the mint.
+              Since 00636 froze `invoices.token`, `get_invoice_link` answers
+              `token: NULL` for every invoice, so this address arrives from one
+              place only: this folio's own `minted` state, written by the mint
+              and immune to every invalidation around it (R-BV). */}
           {canShareLink && clientInvoiceUrl && (
             <DocumentAction
               actionKey="copy-invoice-link"
@@ -662,7 +716,13 @@ export function InvoiceFolio({
                   : 'Copy link'}
             </DocumentAction>
           )}
-          {canShareLink && clientInvoiceUrl && (
+          {/* REGENERATE STANDS ON THE INVOICE'S STATUS ALONE (W4 r4 MAJOR-1).
+              It was gated on `clientInvoiceUrl` too, and it is the only act
+              that can put an address there: the one door to a copyable /pay
+              address was locked behind the door itself, so neither act ever
+              rendered on any issued invoice. Minting is what this act is for;
+              Copy appears the moment it lands. */}
+          {canShareLink && (
             <DocumentAction
               actionKey="regenerate-invoice-link"
               variant="tertiary"
@@ -673,16 +733,34 @@ export function InvoiceFolio({
             </DocumentAction>
           )}
           {canPrint && (
+            // Opens the print route in a new tab rather than printing in
+            // place: the folio is an overlay, and globals.css's
+            // `@media print { body * { visibility: hidden } }` reveals only
+            // `.proposal-print-area`, so printing here produced a blank page.
             <DocumentAction
               actionKey="print-invoice"
               variant="tertiary"
-              onClick={() => window.print()}
+              href={`/invoices/${invoiceId}/print`}
+              target="_blank"
+              rel="noopener"
               className="ml-auto"
             >
-              Print
+              Print / Save PDF
+              <span className="sr-only"> (opens in a new tab)</span>
             </DocumentAction>
           )}
         </DocumentActionGroup>
+
+        {/* THE ADDRESS IS SHOWN ONCE — the paperwork mint's own sentence
+            (`paperworkMintedSentence`), because this is the same bargain:
+            00636 stores only sha256, so the moment this folio closes nobody,
+            Patina included, can read the address back. It stands only while
+            there IS one, which is only after a mint. */}
+        {canShareLink && clientInvoiceUrl && (
+          <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+            This address is shown once. Copy it now — reopening this folio will not show it again.
+          </p>
+        )}
 
         {/* Quiet confirmation / R83 inline failure — at the act site. */}
         {note && (
@@ -743,9 +821,22 @@ export function InvoiceFolio({
                 )}
               </>
             ) : (
+              /* THE BAND SAYS WHICH OF THREE THINGS IS TRUE (W4 r6 M-1).
+                 It used to say "this invoice has no link yet" on every
+                 invoice it could ever appear on: the band is mounted from
+                 `doIssueAndSend`, and `invoice-send` mints a link before it
+                 attempts the send — so a link always existed, and the branch
+                 was taken only because 00636 leaves the ADDRESS unreadable.
+                 The sentence then sent the designer to Regenerate, whose own
+                 confirm panel says the old link dies — two contradicting
+                 statements about one record, one paragraph apart, with the
+                 household's emailed address the thing that pays for it. */
               <p className="text-[11px] text-[var(--color-charcoal)]">
-                Email did not reach the client, and this invoice has no link yet. Resend the
-                invoice to try again.
+                {linkIsLive
+                  ? 'Email did not reach the client. This invoice has a live link, but Patina cannot show you its address again — an address is shown once, at the mint. Regenerate link, above, mints a fresh one you can send them, and the address already sent stops working.'
+                  : linkHasExpired
+                    ? 'Email did not reach the client, and this invoice’s link has expired. Regenerate link, above, mints one you can send them.'
+                    : 'Email did not reach the client, and this invoice has no live link. Regenerate link, above, mints one you can send them.'}
               </p>
             )}
           </div>

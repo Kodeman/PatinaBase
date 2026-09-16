@@ -69,7 +69,7 @@ describe("the authority chip", () => {
     const { container: recorded } = render(
       <AuthorityChip variant="cost_plus" />,
     );
-    expect(recorded.firstChild).toHaveClass("text-[var(--color-aged-oak)]");
+    expect(recorded.firstChild).toHaveClass("text-[var(--ink-subtle)]");
   });
 
   it("answers `record-only` for a variant it has never heard of", () => {

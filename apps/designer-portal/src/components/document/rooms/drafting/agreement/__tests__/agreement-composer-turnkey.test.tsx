@@ -55,18 +55,37 @@ jest.mock("../../../../overlays/doc-sheet", () => ({
 }));
 
 jest.mock("../../../../document-action", () => ({
+  // The held contract, mirrored from the primitive T1 landed: a held act keeps
+  // its place in the tab order, carries `aria-disabled`, swallows the act and
+  // says why instead.
   DocumentAction: ({
     children,
     actionKey: _actionKey,
-    surfaceKey: _surfaceKey,
-    regionKey: _regionKey,
     trailing: _trailing,
     variant: _variant,
     loading: _loading,
     loadingLabel: _loadingLabel,
+    held,
+    onHeldActivate,
+    disabled,
+    onClick,
     ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> &
-    Record<string, unknown>) => <button {...props}>{children}</button>,
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<string, any>) => (
+    <button
+      {...props}
+      aria-disabled={disabled && held ? "true" : undefined}
+      disabled={disabled && !held ? true : undefined}
+      onClick={(event) => {
+        if (disabled) {
+          if (held) onHeldActivate?.();
+          return;
+        }
+        onClick?.(event);
+      }}
+    >
+      {children}
+    </button>
+  ),
 }));
 
 jest.mock("@/components/portal/client-picker", () => ({
@@ -292,25 +311,25 @@ function payloadOfSaved(partKey: string): Record<string, unknown> {
   return savedParts().find((entry) => entry.partKey === partKey)?.payload ?? {};
 }
 
-/** The rail row for a part. The drag handle and the row menu carry an
- *  `aria-label`; the row button itself does not, which is what tells them
- *  apart when all three mention the same title. */
-const openPart = (title: string) => {
-  const rail = screen.getByRole("navigation", { name: "Agreement parts" });
-  const row = within(rail)
-    .getAllByRole("button")
-    .find(
-      (button) =>
-        !button.hasAttribute("aria-label") &&
-        (button.textContent ?? "").includes(title),
-    );
-  if (!row) throw new Error(`No rail row for ${title}`);
-  fireEvent.click(row);
+/** Unfold a part from its own head on the paper. The fold act is labelled by
+ *  the head and then by itself, so its name is "Allowances Write". */
+const openPart = (title: string) =>
+  fireEvent.click(screen.getByRole("button", { name: `${title} Write` }));
+
+/* Below 1248 the outline is a disclosure and jsdom's matchMedia answers
+   `false` to every query, so the suite opens it the way a laptop does. */
+const outline = () =>
+  screen.getByRole("navigation", { name: "Agreement parts" });
+const openOutline = () => {
+  const toggle = within(outline()).getByRole("button", { name: "The parts" });
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
 };
 
-const save = async () => {
+/** §A5 "taken" — no Save control survives. Closing the open fold is the act,
+ *  and it writes the whole ordered array exactly as the button did. */
+const save = async (title: string) => {
   await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name: "Save agreement" }));
+    openPart(title);
   });
 };
 
@@ -339,7 +358,7 @@ describe("two writes in one act", () => {
     fireEvent.change(screen.getByLabelText("Allowance 1 amount"), {
       target: { value: "4000" },
     });
-    await save();
+    await save("Allowances");
 
     const allowances = payloadOfSaved(TURNKEY_PART_KEYS.allowances)
       .allowances as { label: string; amountCents: number }[];
@@ -396,7 +415,7 @@ describe("two writes in one act", () => {
     fireEvent.change(screen.getByLabelText("Cost line 2 amount"), {
       target: { value: "12000" },
     });
-    await save();
+    await save("Pricing basis");
 
     expect(costBasisOfSaved()).toBe(3_800_000 + 1_200_000);
     expect(costBasisOfSaved()).toBe(sumOfSavedLines());
@@ -413,7 +432,7 @@ describe("two writes in one act", () => {
     fireEvent.change(screen.getByLabelText("Allowance 1 amount"), {
       target: { value: "4000" },
     });
-    await save();
+    await save("Allowances");
 
     expect(costBasisOfSaved()).toBe(3_800_000 + 950_000 + 400_000);
     expect(costBasisOfSaved()).toBe(sumOfSavedLines());
@@ -423,7 +442,7 @@ describe("two writes in one act", () => {
     renderRoom(turnkeyParts());
     openPart("Who is doing the work");
     fireEvent.click(screen.getByRole("button", { name: "Open-book" }));
-    await save();
+    await save("Who is doing the work");
 
     expect(payloadOfSaved(TURNKEY_PART_KEYS.pricingBasis)).toMatchObject({
       subDisclosure: "open_book",
@@ -449,7 +468,7 @@ describe("two writes in one act", () => {
       ),
     ).toBeInTheDocument();
 
-    await save();
+    await save("Who is doing the work");
     expect(payloadOfSaved(TURNKEY_PART_KEYS.subDisclosure)).toMatchObject({
       mode: "open_book",
     });
@@ -469,12 +488,15 @@ describe("a design-build agreement with the flag off", () => {
   it("opens read-only", () => {
     designBuildOn = false;
     renderRoom(turnkeyParts());
-    // Nothing in the rail can be renamed, reordered or removed, and no part
-    // can be added — the three acts the row menu and the footer perform.
+    // Nothing can be reordered, hidden or removed, and no part can be added.
     expect(
-      screen.queryAllByRole("button", { name: /^Part options for/ }),
+      screen.queryAllByRole("button", { name: /Move (up|down)$/ }),
+    ).toHaveLength(0);
+    expect(
+      screen.queryAllByRole("button", { name: /Hide from the client/ }),
     ).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "+ Add a part" })).toBeNull();
+    openOutline();
     expect(
       screen.queryByRole("button", { name: "Start from a template…" }),
     ).toBeNull();
@@ -483,9 +505,9 @@ describe("a design-build agreement with the flag off", () => {
   it("still lists the parts as prose", () => {
     designBuildOn = false;
     renderRoom(turnkeyParts());
-    const rail = screen.getByRole("navigation", { name: "Agreement parts" });
-    expect(within(rail).getAllByRole("listitem")).toHaveLength(3);
-    expect(within(rail).getByText("Pricing basis")).toBeInTheDocument();
+    openOutline();
+    expect(within(outline()).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(outline()).getByText("Pricing basis")).toBeInTheDocument();
   });
 
   it("mounts no turnkey editor", () => {
@@ -528,6 +550,10 @@ describe("a design-build agreement with the flag off", () => {
   it("W3R1-08: does not offer to send a room it will not let anyone finish", () => {
     designBuildOn = false;
     renderRoom(turnkeyParts());
-    expect(screen.getByRole("button", { name: "Review & send" })).toBeDisabled();
+    // §A5 — held, never natively disabled: it keeps its place in the tab
+    // order and carries the reason it cannot be taken.
+    const send = screen.getByRole("button", { name: /Send the agreement/ });
+    expect(send).toHaveAttribute("aria-disabled", "true");
+    expect(send).not.toBeDisabled();
   });
 });

@@ -15,6 +15,39 @@
  *                         notes recede).
  *
  * No-ops when PostHog is not initialized (the track() guard).
+ *
+ * ─── Hour tracking (HT-27) — canonical event names, reserved here ─────────
+ * D-R1-05 (round-1 review, W4/lane D): this file is named the SOLE writer of
+ * hour-tracking's PostHog vocabulary for the whole program (plan-v2 §11 —
+ * "otherwise a four-lane conflict surface"), so the names are fixed here even
+ * though the emitter functions land wave-by-wave, each with the code that
+ * measures it (HT-27: the events must ship BEFORE any iOS extension wave, so
+ * data accumulates before a widget/intent decision rests on it). Reserved,
+ * not yet wired to a call site — do not invent a different string for any of
+ * these; do not add a new one without updating this block.
+ *
+ *   · time_entry_logged      — surface, source, activity, billable,
+ *                              rate_source, rate_role, duration_minutes,
+ *                              latency_ms. Every capture path emits this,
+ *                              including internal time (source='internal',
+ *                              W4) and Field (surface='field_sheet' |
+ *                              'field_visit', source='field_manual' |
+ *                              'field_visit', W6 — posthog-ios call sites
+ *                              read the name from here, not from a guess).
+ *   · time_rate_unresolved   — project_kind, rate_source='none', project_id.
+ *                              The alarm: fired wherever a row renders or
+ *                              returns with rate_source='none'.
+ *   · time_timer_started     — (W3, instrument only)
+ *   · time_timer_stopped     — adjusted, idle_minutes, and the
+ *                              cumulative-idle-to-raw-elapsed ratio (W3 —
+ *                              instrument only; do NOT touch the 30-minute
+ *                              R64 bound while adding this)
+ *   · time_scope_viewed      — scope, group_by (W2)
+ *   · time_entry_adjusted    — by_admin boolean (W2)
+ *   · time_entry_deleted     — (W2)
+ *   · time_autostart_disclosed  — (W2, HT-35)
+ *   · time_autostart_opted_out  — (W2, HT-35)
+ *   · time_export_taken       — scope, row_count, period (W5)
  */
 
 import posthog from "posthog-js";
@@ -35,6 +68,12 @@ const RECENT_DOCS_MAX = 5;
 // "seen" shape as the rest of this file's session-scoped dedup.
 const nudgeFiredSeen = new Set<string>();
 const freshTimesRequestedSeen = new Set<string>();
+// HT-26's rate alarm is a per-entry fact, not a per-render one (see `time`).
+const rateUnresolvedSeen = new Set<string>();
+// HT-35's disclosure is one sentence per member; the column (00618) is the
+// durable half and this is the per-session half, so a spine that re-mounts
+// between two documents does not report the sentence twice.
+let autostartDisclosedSeen = false;
 
 /** One entry in the recent-documents-in-hand MRU (command bar). */
 export interface RecentDocumentInHand {
@@ -159,6 +198,119 @@ const wayfinding = {
 };
 
 /**
+ * The hour-tracking event set (HT-27) — the canonical names, so every surface
+ * that captures or reviews an hour reports under one vocabulary and the
+ * widget/intent decision rests on data rather than taste. This module is the
+ * sole writer of those names; iOS (`posthog-ios`) and the edge mirror this list.
+ *
+ * CANONICAL NAMES
+ *   time_entry_logged      — an hour landed, from any surface
+ *   time_timer_started     — a running timer opened (desk only; HT-7)
+ *   time_timer_stopped     — it closed, with what the bound saw (HT-17)
+ *   time_entry_adjusted    — an existing entry was edited
+ *   time_entry_deleted     — an unbilled entry was removed
+ *   time_scope_viewed      — one of the four scopes was read (HT-8)
+ *   time_rate_unresolved   — an hour rendered or returned with no rate (HT-26)
+ *   time_export_taken      — hours left Patina as a file (HT-20)
+ *   time_autostart_disclosed / time_autostart_opted_out — HT-35's disclosure
+ *     band and its per-member opt-out. BUILT in W7 (stage 4), where the
+ *     orchestrator scoped them after W2 descoped HT-35 for want of a column.
+ *     The preference lives on `profiles.time_autostart_opt_out` and the stamp
+ *     on `profiles.time_autostart_disclosed_at` (00618) — per member and
+ *     cross-device, never `localStorage`, which is the machine's answer and not
+ *     hers.
+ *
+ * Nothing here carries `notes`: free text is the studio's, not telemetry
+ * (HT-36).
+ */
+const time = {
+  /** An hour landed. `latency_ms` is the capture act → written round trip. */
+  entryLogged: (props: {
+    surface: string;
+    source: string;
+    activity: string | null;
+    billable: boolean;
+    rate_source: string | null;
+    rate_role: string | null;
+    duration_minutes: number;
+    latency_ms: number | null;
+  }) => track("time_entry_logged", props),
+
+  /** A running timer opened. One slot per user, and it stays with the desk. */
+  timerStarted: (props: { surface: string; source: string; billable: boolean }) =>
+    track("time_timer_started", props),
+
+  /** It closed. `idle_ratio` is cumulative idle ÷ raw elapsed — the R64
+   *  instrument HT-17 asks for, reported and never acted on here. */
+  timerStopped: (props: {
+    surface: string;
+    duration_minutes: number;
+    adjusted: boolean;
+    idle_minutes: number | null;
+    idle_ratio: number | null;
+  }) => track("time_timer_stopped", props),
+
+  /** An entry was edited. `by_admin` = someone other than its author. */
+  entryAdjusted: (props: { field: string; by_admin: boolean }) =>
+    track("time_entry_adjusted", props),
+
+  /** An unbilled entry was removed (an invoiced one cannot be). */
+  entryDeleted: (props: { by_admin: boolean }) =>
+    track("time_entry_deleted", props),
+
+  /** One of the four scopes was read, and how its buckets were grouped. */
+  scopeViewed: (props: { scope: string; group_by: string | null }) =>
+    track("time_scope_viewed", props),
+
+  /** HT-26's alarm: an hour carries no rate. Once per entry per session —
+   *  a ledger re-render must not inflate the count it is the instrument for,
+   *  and neither does one hour seen twice, in the viewer's own week and again
+   *  in a scoped list.
+   *
+   *  `project_kind` is the ORIGIN commercial document's kind
+   *  ('design_services' | 'design_build' | …), or 'non_services' where the
+   *  project has no origin document — which is exactly what
+   *  `_is_design_services_project` (00578:2584) tests. There is no
+   *  `projects.kind` column to read. It is `null` from the SCOPED rows and
+   *  only from those: `time_entry_ledger` (00604) carries no kind, and a
+   *  per-row query to invent one would cost more than the segment is worth.
+   *  Read a null as "not said", never as "not services". */
+  rateUnresolved: (props: {
+    entry_id: string;
+    project_id: string;
+    project_kind: string | null;
+    rate_source: string;
+  }) => {
+    if (rateUnresolvedSeen.has(props.entry_id)) return;
+    rateUnresolvedSeen.add(props.entry_id);
+    track("time_rate_unresolved", props);
+  },
+
+  /** Hours left Patina as a file. */
+  exportTaken: (props: {
+    scope: string;
+    row_count: number;
+    period: string | null;
+  }) => track("time_export_taken", props),
+
+  /** HT-35 — the one-time auto-start sentence was shown. Fires when the band
+   *  RENDERS, which is also when the stamp is written, so the count and the
+   *  column answer the same question. Guarded per session as well as per
+   *  member: a re-render of the spine is not a second disclosure. */
+  autostartDisclosed: (props: { surface: string }) => {
+    if (autostartDisclosedSeen) return;
+    autostartDisclosedSeen = true;
+    track("time_autostart_disclosed", props);
+  },
+
+  /** HT-35 — a member changed her mind about the automatic timer.
+   *  `opted_out` carries the DIRECTION, so the event is as honest when she
+   *  turns it back on as when she turns it off. */
+  autostartOptedOut: (props: { opted_out: boolean }) =>
+    track("time_autostart_opted_out", props),
+};
+
+/**
  * D-B22 — the lens line's payload. `guideShown`/`guideSelected` are retired
  * with the strip that fired them: `DocumentGuide` no longer mounts, so those
  * two event names went dark at this deploy and a dashboard reading
@@ -196,7 +348,13 @@ export const documentEvents = {
     surface_key: string;
     region_key: string;
     action_key: string;
-    variant: "primary" | "inked" | "secondary" | "tertiary" | "danger";
+    variant:
+      | "primary"
+      | "inked"
+      | "secondary"
+      | "tertiary"
+      | "danger"
+      | "terminal";
     presentation: "inline" | "mobile_dock";
   }) => track("document_action_shown", props),
 
@@ -204,7 +362,13 @@ export const documentEvents = {
     surface_key: string;
     region_key: string;
     action_key: string;
-    variant: "primary" | "inked" | "secondary" | "tertiary" | "danger";
+    variant:
+      | "primary"
+      | "inked"
+      | "secondary"
+      | "tertiary"
+      | "danger"
+      | "terminal";
     presentation: "inline" | "mobile_dock";
   }) => track("document_action_selected", props),
 
@@ -395,4 +559,5 @@ export const documentEvents = {
 
   commandBar,
   wayfinding,
+  time,
 };

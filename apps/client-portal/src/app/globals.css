@@ -71,12 +71,20 @@
   --phase-walkthrough: #A8B5A0;
 
   /* ── House sheet (I153) — docs/design/house-sheet/SPEC.md §A1 ────────────
-     Four hexes this portal lacked, added verbatim, plus --hairline-strong
+     Five hexes this portal lacked, added verbatim, plus --hairline-strong
      (a genuinely new rgba value Lane H4's terminal-act/unavailable-terminal
-     CSS depends on — W2 review finding H2-1). */
+     CSS depends on — W2 review finding H2-1).
+
+     --hairline carries the sheet's own hex rather than aliasing --rail, which
+     shares it: §A10 keeps --rail for fills and grounds and forbids drawing a
+     line in it, so a stroke token that resolves THROUGH --rail would read as
+     that borrowing the next time anyone follows the chain. The portal's
+     --border-default (#E5E2DD) is a different value, so it is not an alias
+     either. */
   /* — house-sheet tokens:start — */
   --paper-doc: #FCFAF6;
   --rail: #E8E3DB;
+  --hairline: #E8E3DB;
   --ink-subtle: #5A4E43;
   --sage-ink: #5F6B57;
   --hairline-strong: rgba(44, 41, 38, .14);

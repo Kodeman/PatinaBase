@@ -16,7 +16,12 @@ import { useRouter } from 'next/navigation';
 // `currentColor`, `aria-hidden`: the icon decorates, the word still labels.
 import { BookOpen, Compass, FileText, LayoutGrid, Users } from 'lucide-react';
 import { useMarginItems } from '@/hooks/use-margin-items';
-import { useCoordinationItems, useSendDecisionReminder } from '@patina/supabase';
+import {
+  useCoordinationItems,
+  useSendDecisionReminder,
+  useTimeCaptureProjects,
+  type TimeRateRole,
+} from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 // W5-C2 — the SAME act implementations the margin-item sheet's own body runs
 // (`margin-bodies.tsx`), so the inline act and the sheet's act are one act.
@@ -45,6 +50,12 @@ import { openLedger } from '../command-bar';
 import { openAccount } from '../account/account-sheet';
 import { MobileAccountHeader } from '../account/mobile-account-header';
 import { DocumentAction, DocumentActionRow } from '../document-action';
+import {
+  BillablePill,
+  RateRoleChip,
+  useBillableIntent,
+} from '../time-capture';
+import { documentEvents } from '@/lib/analytics/document-events';
 import { lockBodyScroll } from '../overlays/body-scroll-lock';
 import {
   isElementRendered,
@@ -432,7 +443,6 @@ export function MobileSheets({
   const [noteDue, setNoteDue] = useState(todayYmd());
   const ladderValues = ladderValuesProp ?? activeDoc?.ladderValues ?? {};
   const router = useRouter();
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   const projectId = activeDoc?.projectId ?? null;
   const proposalId = activeDoc?.proposalId ?? null;
   const { data: items } = useMarginItems(projectId, proposalId);
@@ -689,25 +699,23 @@ export function MobileSheets({
                   Boards
                 </button>
               </li>
-              {callSheetOn && (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeSheet();
-                      window.dispatchEvent(
-                        new CustomEvent('document:open-call-sheet', {
-                          detail: { mode: 'sheet' },
-                        }),
-                      );
-                    }}
-                    className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
-                  >
-                    <Users size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
-                    Call sheet
-                  </button>
-                </li>
-              )}
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeSheet();
+                    window.dispatchEvent(
+                      new CustomEvent('document:open-call-sheet', {
+                        detail: { mode: 'sheet' },
+                      }),
+                    );
+                  }}
+                  className="flex min-h-11 w-full items-center gap-[8px] py-1.5 text-left font-heading text-[14px] text-[var(--color-charcoal)]"
+                >
+                  <Users size={14} strokeWidth={1.5} color="currentColor" aria-hidden="true" className="shrink-0" />
+                  Call sheet
+                </button>
+              </li>
             </ul>
           </>
         )}
@@ -1137,26 +1145,73 @@ function MobileTimerSheet() {
     resume,
     manualLog,
   } = useDocumentTime();
+  const { data: projects } = useTimeCaptureProjects();
   const [minutes, setMinutes] = useState('');
-  const [activity, setActivity] = useState('design');
+  // HT-24 — recorded, never defaulted. The phone filed every typed hour as
+  // design work the member never claimed.
+  const [activity, setActivity] = useState('');
+  // HT-14 — the project the hour goes to. With a document in hand it is that
+  // document; with nothing held the sheet ASKS, because the alternative that
+  // shipped was a form that accepted minutes, an activity and a tap, cleared
+  // itself, and wrote nothing at all.
+  const [pickedProject, setPickedProject] = useState('');
+  const [billable, setBillable] = useState(false);
+  // The document she last stated billable about (HT-11 · W3-R4-M1).
+  const [statedFor, setStatedFor] = useState<string | null>(null);
+  const [rateRole, setRateRole] = useState<TimeRateRole | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
+  const targetProjectId = heldProjectId ?? (pickedProject || null);
+  const intent = useBillableIntent(targetProjectId);
+  // HT-11 — billable is STATED. A thumb that touches the pill keeps its answer
+  // even when the authority read settles a second later; `seededFor` alone
+  // could not protect it, because it is only written once the read settles
+  // (W3-R4-M1).
+  const billableStated =
+    Boolean(targetProjectId) && statedFor === targetProjectId;
+  const stateBillable = (next: boolean) => {
+    setStatedFor(targetProjectId);
+    setBillable(next);
+  };
   useEffect(() => {
-    if (!heldProjectId) setFormOpen(false);
-  }, [heldProjectId]);
+    setStatedFor(null);
+  }, [targetProjectId]);
+  const seededFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!targetProjectId || !intent.isSettled) return;
+    if (billableStated) return;
+    if (seededFor.current === targetProjectId) return;
+    seededFor.current = targetProjectId;
+    setBillable(intent.billable);
+  }, [targetProjectId, intent.isSettled, intent.billable, billableStated]);
 
   const parsed = parseInt(minutes, 10);
-  const valid = Number.isFinite(parsed) && parsed >= 1;
+  // The act waits for the answer it is about to write: before the authority
+  // read settles the pill shows the fail-closed default, and an hour added in
+  // that window is `billable = false` whatever the agreement says (W3-R4-M1).
+  // Her own statement is an answer too, so a failed read strands nothing.
+  const valid =
+    Boolean(targetProjectId) &&
+    (intent.isSettled || billableStated) &&
+    Number.isFinite(parsed) &&
+    parsed >= 1;
 
   return (
     <div data-mobile-timer-sheet-content>
       <span className="doc-type-meta font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
-        In hand{paused ? ' · paused' : ''}
+        {heldProjectId ? `In hand${paused ? ' · paused' : ''}` : 'Nothing in hand'}
       </span>
-      <p className="mb-2 mt-1 font-mono text-[26px] tracking-[0.04em] text-[var(--color-charcoal)]">
-        {fmtElapsed(elapsedSeconds)}
-      </p>
+      {heldProjectId ? (
+        <p className="mb-2 mt-1 font-mono text-[26px] tracking-[0.04em] text-[var(--color-charcoal)]">
+          {fmtElapsed(elapsedSeconds)}
+        </p>
+      ) : (
+        <p className="mb-2 mt-1 t-body-sm text-[var(--text-muted)]">
+          No clock is running. You can still log an hour against any document.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         {running && (
           <button
@@ -1188,6 +1243,25 @@ function MobileTimerSheet() {
       </div>
       {formOpen && (
         <div className="mt-3 space-y-2">
+          {/* HT-14 — with nothing held the sheet asks which document the hour
+              belongs to. It never accepts an hour it has nowhere to put. */}
+          {!heldProjectId && (
+            <select
+              aria-label="Document"
+              value={pickedProject}
+              onChange={(e) => setPickedProject(e.target.value)}
+              className="doc-type-control min-h-11 w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)] [&_option]:bg-[var(--doc-paper)]"
+            >
+              <option value="">Document…</option>
+              {(projects ?? [])
+                .filter((p) => p.status === 'active')
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          )}
           <input
             type="number"
             min={1}
@@ -1203,12 +1277,32 @@ function MobileTimerSheet() {
             onChange={(e) => setActivity(e.target.value)}
             className="doc-type-control min-h-11 w-full rounded-[5px] border border-[var(--color-pearl)] bg-white px-2.5 py-2 text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
           >
+            {/* HT-24 — the honest first answer, not a silent 'design'. */}
+            <option value="">activity not set</option>
             {ACTIVITIES.map((a) => (
               <option key={a.key} value={a.key}>
                 {a.label}
               </option>
             ))}
           </select>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <BillablePill
+              value={billable}
+              onChange={stateBillable}
+              reason={
+                intent.isSettled || intent.unreadable ? intent.sentence : null
+              }
+              disabled={busy}
+              surfaceKey="mobile-timer"
+              regionKey="manual-time-entry"
+            />
+            <RateRoleChip
+              projectId={targetProjectId}
+              value={rateRole}
+              onChange={setRateRole}
+              disabled={busy}
+            />
+          </div>
           <DocumentActionRow
             surfaceKey="mobile-timer"
             regionKey="manual-time-entry"
@@ -1221,11 +1315,36 @@ function MobileTimerSheet() {
               loading={busy}
               loadingLabel="Adding…"
               onClick={async () => {
+                if (!targetProjectId) return;
                 setBusy(true);
+                setNote(null);
+                const startedMs = Date.now();
                 try {
-                  await manualLog(parsed, activity);
+                  const written = await manualLog({
+                    projectId: targetProjectId,
+                    minutes: parsed,
+                    activity: activity || null,
+                    billable,
+                    rateRole,
+                  });
+                  documentEvents.time.entryLogged({
+                    surface: 'mobile_timer_sheet',
+                    source: 'manual_entry',
+                    activity: written.activity ?? null,
+                    billable: written.billable,
+                    rate_source: written.rate_source ?? null,
+                    rate_role: written.rate_role ?? null,
+                    duration_minutes: written.duration_minutes,
+                    latency_ms: Date.now() - startedMs,
+                  });
+                  // Cleared ONLY after the server says it landed. The form
+                  // used to clear whether or not anything was written.
                   setMinutes('');
                   setFormOpen(false);
+                } catch (e) {
+                  setNote(
+                    `Not logged — ${e instanceof Error ? e.message : 'try again'}`,
+                  );
                 } finally {
                   setBusy(false);
                 }
@@ -1234,6 +1353,11 @@ function MobileTimerSheet() {
               Add entry
             </DocumentAction>
           </DocumentActionRow>
+          {note && (
+            <p role="alert" className="t-head text-[var(--color-terracotta-ink)]">
+              {note}
+            </p>
+          )}
         </div>
       )}
       <p className="mt-3 text-[14px] italic text-[var(--text-muted)]">

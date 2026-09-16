@@ -1,0 +1,340 @@
+LH
+Leah Hartwell
+ACCOUNT
+---
+SM
+Studio Manager
+ACCOUNT
+---
+AO
+Adaeze Okonkwo
+CLIENT
+■ Okonkwo household
+Selections.
+ON PAPER
+ON THE JOB
+(612) 555-0104
+---
+CO
+Chidi Okonkwo
+HOUSEHOLD MEMBER
+■ Okonkwo household
+Signs money to $2,500. Approves change orders to $2,500. Certifies draws.
+ON PAPER
+ON THE JOB
+(612) 555-0105
+
+Email first. Call for anything over $2,500 — a change order or a draw.
+---
+SR
+Sam Rowe
+ARCHITECT
+■ Beck + Rowe Architects
+27 Jun 2026 to 9 Jul 2027
+Approves change orders.
+ON PAPER
+ON THE JOB
+›
+(612) 555-0110
+
+Email only. Phone for emergencies. Never texted.
+---
+CN
+Carol Nyström
+CONTACT
+■ Great Northern Bank
+7 Sep 2026 to 9 Jul 2027
+Certifies draws.
+ON PAPER
+ON THE JOB
+(612) 555-0126
+
+Lender's inspector. Email and phone; never texted.
+---
+ES
+Erin Sato
+GC
+■ Marrow & Sons
+7 Sep 2026 to 9 Jul 2027
+Prepares only.
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0108
+---
+LO
+Luis Ochoa
+GC
+■ Marrow & Sons
+7 Sep 2026 to 9 Jul 2027
+Controls site access.
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0109
+---
+NE
+Ngozi Eze
+RECEIVER
+7 Sep 2026 to 26 Aug 2027
+Holds a key.
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0106
+---
+TM
+Tom Marrow
+GC
+■ Marrow & Sons
+7 Sep 2026 to 9 Jul 2027
+Signs money. Approves change orders.
+ON PAPER
+ON THE JOB
+›
+(612) 555-0107
+---
+DK
+Dana Kowalski
+SUB · ELECTRICAL
+■ Northgate Electric
+14 Sep 2026 to 26 May 2027
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0111
+
+Text only. The email on file bounces.
+
+Site access held. Northgate Electric’s insurance lapsed 31 March 2026.
+---
+JW
+Joe Wozniak
+SUB · CARPENTRY & FRAMING
+■ Cedar & Iron Framing
+14 Sep 2026 to 16 Oct 2026
+FIELD LINK
+ON THE JOB
+›
+(612) 555-0118
+---
+CB
+Claire Bissett
+VENDOR
+■ Stonehaven Tile Gallery
+ON PAPER
+ON THE JOB
+(612) 555-0120
+---
+RT
+Ray Thao
+CONTACT
+■ City of Minneapolis, CPED Inspections
+ON PAPER
+ON THE JOB
+(612) 555-0127
+
+Building inspector. Never text. Inspections are scheduled through the 311 portal. Hours: Weekdays 08:00 to 16:00.
+---
+PR
+Pete Rusk
+SUB · PLUMBING
+■ Rusk Mechanical
+From 5 Oct 2026
+FIELD LINK
+AWARDED
+›
+(612) 555-0112
+
+Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.
+---
+FB
+Frank Bauer
+SUB · DRYWALL
+■ Twin Cities Drywall & Plaster
+From 7 Dec 2026
+ON PAPER
+AWARDED
+›
+
+No direct contact, at his request. Write Rosa Delgado; she forwards what he has to sign. rosa@twin-cities-drywall-plaster.com (612) 555-0114
+---
+RD
+Rosa Delgado
+SUB · DRYWALL
+■ Twin Cities Drywall & Plaster
+From 7 Dec 2026
+ON PAPER
+AWARDED
+›
+(612) 555-0114
+---
+JL
+Jim Lindgren
+SUB · HVAC
+■ Boreal HVAC
+From 28 Dec 2026
+ON PAPER
+AWARDED
+›
+(612) 555-0117
+---
+KM
+Kelly Marsh
+SUB
+■ Radon Solutions North
+From 28 Dec 2026
+ON PAPER
+AWARDED
+›
+(612) 555-0119
+---
+IH
+Ingrid Halvorsen
+SUB · CABINETRY
+■ Halvorsen Cabinet Works
+From 1 Mar 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0113
+
+Email only. No cell for work — the shop line is the voice door.
+---
+AO
+Amara Osei
+SUB · PAINT
+■ Lakeshore Painting Co.
+From 30 Mar 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0116
+
+Lakeshore Painting Co.’s insurance lapses on 8 October 2026.
+---
+OA
+Owen Ashby
+VENDOR
+■ Ashgrove Millwork
+From 17 May 2027
+ON PAPER
+ON THE JOB
+(612) 555-0123
+---
+NB
+Nadia Brooks
+STAGER
+■ Kestrel Staging
+From 12 Jul 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0124
+---
+JF
+Jonah Feld
+PHOTOGRAPHER
+■ Jonah Feld Photography
+From 9 Aug 2027
+ON PAPER
+AWARDED
+›
+(612) 555-0125
+---
+RF
+Rivera Finishes
+SUB · PAINT
+■ Rivera Finishes
+ON PAPER
+NO RESPONSE
+›
+(612) 555-0219
+
+Asked 28 September 2026. Due 5 October 2026.
+---
+GN
+Granite North
+VENDOR
+■ Granite North
+Off the job 28 Aug 2026. Slab program went to Stonehaven.
+ON PAPER
+OFF THE JOB
+(612) 555-0220
+---
+BO
+Ben Ostrom
+GENERAL CONTRACTOR · OSTROM BUILDERS
+Worked 1 prior project, Lindqvist kitchen, closed 2025.
+Ostrom Builders’s insurance lapsed 31 December 2025.
+ON PAPER
+NOT ASKED
+LAPSED
+ADD
+---
+CB
+Claire Bissett
+VENDOR · STONEHAVEN TILE GALLERY · TILE
+Worked 1 prior project, Lindqvist kitchen, closed 2025.
+ON PAPER
+NOT ASKED
+CURRENT
+ADD
+---
+DK
+Dana Kowalski
+SUBCONTRACTOR · NORTHGATE ELECTRIC · ELECTRICAL
+Worked 1 prior project, Lindqvist kitchen, closed 2025.
+Northgate Electric’s insurance lapsed 31 March 2026.
+Text only. The email on file bounces.
+FIELD LINK
+TEXTING
+LAPSED
+ADD
+---
+ES
+Erin Sato
+GENERAL CONTRACTOR · MARROW & SONS
+Worked 1 prior project, Lindqvist kitchen, closed 2025.
+FIELD LINK
+TEXTING
+CURRENT
+ADD
+---
+IH
+Ingrid Halvorsen
+SUBCONTRACTOR · HALVORSEN CABINET WORKS · CABINETRY
+Worked 1 prior project, Lindqvist kitchen, closed 2025.
+Email only. No cell for work — the shop line is the voice door.
+ON PAPER
+NOT ASKED
+CURRENT
+ADD
+---
+PR
+Pete Rusk
+SUBCONTRACTOR · RUSK MECHANICAL · PLUMBING
+Worked 1 prior project, Lindqvist kitchen, closed 2025.
+Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.
+FIELD LINK
+OPTED OUT
+CURRENT
+ADD
+---
+identity
+---
+typed channels
+---
+contact rule
+---
+consent by channel value
+---
+document expiries
+---
+one history line
+---
+prior pricing
+---
+prior project notes
+---
+show to client

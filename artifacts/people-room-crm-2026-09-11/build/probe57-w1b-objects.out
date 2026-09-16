@@ -1,0 +1,153 @@
+Pager usage is off.
+=== 1. the four new relations exist, with RLS on and their policies ===
+           relname           | relkind | rls | policies | auth_select | anon_select 
+-----------------------------+---------+-----+----------+-------------+-------------
+ people_directory            | v       | f   |        0 | t           | t
+ people_directory_seats      | v       | f   |        0 | t           | f
+ project_party_authority     | r       | t   |        4 | t           | f
+ project_site_access_cards   | r       | t   |        4 | t           | f
+ studio_compliance_documents | r       | t   |        4 | t           | f
+ v_access_grants             | v       | f   |        0 | t           | f
+(6 rows)
+
+=== 2. PR-r: there is NO access code on the site access card ===
+ code_like_columns 
+-------------------
+                 0
+(1 row)
+
+=== 3. PR-w: the site access card's four policies, and no client leg ===
+                 polname                 | polcmd |                    using_expr                    
+-----------------------------------------+--------+--------------------------------------------------
+ project_site_access_cards_studio_delete | d      | is_studio_comember(project_designer(project_id))
+ project_site_access_cards_studio_insert | a      | 
+ project_site_access_cards_studio_select | r      | is_studio_comember(project_designer(project_id))
+ project_site_access_cards_studio_update | w      | is_studio_comember(project_designer(project_id))
+(4 rows)
+
+=== 4. PR-n: the money/draw_certify narrow is in the write policies ===
+                polname                | polcmd | has_admin_gate 
+---------------------------------------+--------+----------------
+ project_party_authority_studio_delete | d      | 
+ project_party_authority_studio_insert | a      | t
+ project_party_authority_studio_select | r      | 
+ project_party_authority_studio_update | w      | t
+(4 rows)
+
+=== 5. the new functions: volatility, definer-or-invoker, search_path, ACL ===
+               proname               | security_definer | provolatile |                  proconfig                  |                                 acl                                  
+-------------------------------------+------------------+-------------+---------------------------------------------+----------------------------------------------------------------------
+ access_grants_invoice_links         | t                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ access_grants_plan_transmittals     | t                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ access_grants_trade_agreement_links | t                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ access_grants_trade_rfq             | t                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ assert_compliance_holder            | t                | v           | {search_path=public}                        | postgres=X/postgres service_role=X/postgres
+ assert_party_authority_copy_to      | t                | v           | {search_path=public}                        | postgres=X/postgres service_role=X/postgres
+ assert_project_party_cards          | t                | v           | {search_path=public}                        | postgres=X/postgres service_role=X/postgres
+ assert_site_access_key_holder       | t                | v           | {search_path=public}                        | postgres=X/postgres service_role=X/postgres
+ compliance_state                    | f                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ contact_rule_summary                | f                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ create_field_link                   | t                | v           | {"search_path=public, extensions, pg_temp"} | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ create_field_link                   | t                | v           | {"search_path=public, extensions, pg_temp"} | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ identity_seat_count                 | f                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ party_identity_key                  | f                | i           |                                             | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ project_designer                    | t                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ project_party_org                   | t                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+ reach_state_for                     | f                | s           | {search_path=public}                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres
+(17 rows)
+
+=== 6. people_directory: twelve columns kept in place, five appended ===
+ ordinal_position |     column_name      |        data_type         
+------------------+----------------------+--------------------------
+                1 | person_id            | uuid
+                2 | role                 | text
+                3 | display_name         | text
+                4 | email                | text
+                5 | phone                | text
+                6 | profile_id           | uuid
+                7 | project_id           | uuid
+                8 | designer_id          | uuid
+                9 | status_raw           | text
+               10 | last_touch_at        | timestamp with time zone
+               11 | meta                 | jsonb
+               12 | scope                | text
+               13 | reach_state          | text
+               14 | consent_status       | text
+               15 | paper_state          | text
+               16 | contact_rule_summary | text
+               17 | seat_count           | integer
+(17 rows)
+
+=== 7. people_directory reads the record and compliance_state, not a frozen seat ===
+ reads_consent_record | reads_paper_state | keys_on_identity | still_reads_frozen_verdict | mentions_consent_dates | dates_still_off_the_seat 
+----------------------+-------------------+------------------+----------------------------+------------------------+--------------------------
+ t                    | t                 | t                | f                          | t                      | f
+(1 row)
+
+=== 8. create_field_link: both signatures callable, the expiry line ===
+                          args                          |                                 acl                                  | reads_warranty | reads_window 
+--------------------------------------------------------+----------------------------------------------------------------------+----------------+--------------
+ p_party_id uuid                                        | postgres=X/postgres authenticated=X/postgres service_role=X/postgres | f              | f
+ p_party_id uuid, p_expires_at timestamp with time zone | postgres=X/postgres authenticated=X/postgres service_role=X/postgres | t              | t
+(2 rows)
+
+=== 9. project_parties: the new columns, and the freeze trigger still names only consent + phone ===
+        column_name         | data_type | is_nullable | column_default 
+----------------------------+-----------+-------------+----------------
+ company_id                 | uuid      | YES         | 
+ contracted_through         | text      | YES         | 
+ off_job_at                 | date      | YES         | 
+ off_job_reason             | text      | YES         | 
+ on_site_from               | date      | YES         | 
+ on_site_to                 | date      | YES         | 
+ site_access_mode           | text      | YES         | 
+ stage                      | text      | NO          | 'active'::text
+ warranty_contact_person_id | uuid      | YES         | 
+ warranty_until             | date      | YES         | 
+(10 rows)
+
+         frozen_column          
+--------------------------------
+ phone
+ phone_e164
+ sms_consent_disclosure_version
+ sms_consent_evidence
+ sms_consent_recorded_at
+ sms_consent_recorded_by
+ sms_consent_source
+ sms_consent_status
+ sms_consented_at
+ sms_opt_out_at
+(10 rows)
+
+=== 10. v_access_grants: all eleven tiers, seven in the view and four in
+    the definer readers the grant-closed sources come through ===
+ tiers_named |                                                                         tiers                                                                         
+-------------+-------------------------------------------------------------------------------------------------------------------------------------------------------
+          11 | agreement_link, client_account, doc_share, evidence_upload, field_link, invoice_pay, plan_link, project_review, rfq_link, site_request, studio_member
+(1 row)
+
+=== 11. the seeded fixture, counted (the gate probe) ===
+ entity_kind | cards 
+-------------+-------
+ company     |    21
+ person      |    28
+(2 rows)
+
+      project      |  status   | seats 
+-------------------+-----------+-------
+ Lindqvist kitchen | completed |     7
+ Okonkwo residence | active    |    24
+(2 rows)
+
+        object        | count 
+----------------------+-------
+ affiliations         |    22
+ authority_grants     |    11
+ compliance_documents |    36
+ consent_records      |     7
+ contact_rules        |     6
+ site_access_cards    |     1
+ typed_channels       |    97
+(7 rows)
+

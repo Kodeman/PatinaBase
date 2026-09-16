@@ -40,7 +40,7 @@ describe('deriveKindLine', () => {
   it('decision states', () => {
     expect(
       deriveKindLine(mkItem({ state: 'pending', payload: { due_date: '2026-06-14T12:00:00Z' } })),
-    ).toBe('Decision · due Jun 14');
+    ).toBe('Decision · due 14 June');
     expect(deriveKindLine(mkItem({ state: 'pending' }))).toBe('Decision');
     expect(deriveKindLine(mkItem({ state: 'overdue' }))).toBe('Decision · overdue');
     expect(deriveKindLine(mkItem({ state: 'responded' }))).toBe('Decision · responded');
@@ -78,7 +78,7 @@ describe('deriveKindLine', () => {
       deriveKindLine(
         mkItem({ kind: 'note', state: 'open', payload: { due_date: '2026-06-14T12:00:00Z' } }),
       ),
-    ).toBe('Note · due Jun 14');
+    ).toBe('Note · due 14 June');
     expect(deriveKindLine(mkItem({ kind: 'note', state: 'escalated' }))).toBe('Note · escalated');
   });
 

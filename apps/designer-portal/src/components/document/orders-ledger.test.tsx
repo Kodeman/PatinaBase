@@ -438,7 +438,7 @@ describe('OrdersLedger · lifecycle columns (R7)', () => {
       po({ status: 'shipped', confirmed_eta: '2026-08-22' }),
     ]);
     expect(container.querySelector('[data-orders-expected]')).toHaveTextContent(
-      '~Aug 22',
+      '~22 August',
     );
   });
 

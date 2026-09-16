@@ -282,7 +282,7 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
     expect(promoted.rail).toBe(atRest.rail);
   });
 
-  test('W5-R5 §2 (N2) — the stage-line strip is the scope stop\'s body, so the first thing after the band is a region head', async ({
+  test('R1 — the stage line is off the pre-work glass entirely, and the first thing after the band is a region head', async ({
     authenticatedPage: page,
   }) => {
     await openPaper(page);
@@ -316,11 +316,17 @@ test.describe("the pre-work spreads under test (…d6, W5-R2)", () => {
     ).toBe(false);
     expect(firstAfterBand!.firstRegion).toBe('proposal');
 
-    // And it prints INSIDE `scope`, which is the fact its head now states.
+    // R1 — and it prints nowhere on this paper at all. `scope` hosted it as
+    // its body until this ruling; the head's own status line still states the
+    // phrase (derived from the source, not from the strip), and the rail is
+    // the door to the eleven-stage vocabulary itself.
     await expect(
       page.locator(
         '[data-index-region="scope"] [data-section-stage-line]',
       ),
-    ).toHaveCount(1);
+    ).toHaveCount(0);
+    await expect(
+      page.locator('[data-document-paper] [data-section-stage-line]'),
+    ).toHaveCount(0);
   });
 });

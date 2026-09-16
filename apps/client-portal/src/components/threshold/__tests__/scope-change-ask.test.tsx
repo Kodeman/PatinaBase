@@ -370,7 +370,7 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
     wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
 
     expect(screen.getByTestId("scope-change-new-room")).toHaveTextContent(
-      "Mudroom · $4,500",
+      "Mudroom · $4,500.00",
     );
   });
 
@@ -409,7 +409,7 @@ describe("PendingScopeChangeAsk — a studio-sent change, standing on the doorst
     });
     wrap(<PendingScopeChangeAsk projectId={PROJECT_ID} />);
 
-    expect(screen.getByText(/New project value: \$95,000\./)).toBeInTheDocument();
+    expect(screen.getByText(/New project value: \$95,000\.00\./)).toBeInTheDocument();
   });
 
   // Finding #21 — the counterweight act reads tertiary on this surface, not

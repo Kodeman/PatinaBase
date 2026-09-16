@@ -140,7 +140,7 @@ const STEPS: CoachmarkStep[] = [
     beforeShow: scrollAnchorIntoView('[data-tour-anchor="desk-greeting"]'),
     fallbackHeading: 'The Desk',
     fallbackBody:
-      'Every live job lands here, one line each, grouped by stage. A mark at the margin is a job that needs your hand.',
+      'Every live job lands here — a card for each one with a claim on your hand, and a line in the ledger below for the rest.',
   },
   {
     surfaceKey: TOUR.Step2TheFolder,
@@ -203,7 +203,7 @@ const STEPS_TEAMMATE: CoachmarkStep[] = [
     ...STEPS[0],
     fallbackHeading: 'The Desk',
     fallbackBody:
-      "Every live job in the studio lands here, one line each. A mark at the margin means someone's hand is needed — not always yours.",
+      "Every live job in the studio lands here — a card for each one with a claim on someone's hand, not always yours, and a line in the ledger below for the rest.",
   },
   {
     ...STEPS[1],

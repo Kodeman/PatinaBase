@@ -75,8 +75,15 @@ const exclusions = () =>
     payload: { items: [{ id: "b", text: "Construction labor" }] },
   });
 const roleRates = (
+  // HT-4 — the standard card is BOUND. An unbound rate prices nobody once the
+  // agreement is countersigned, so readiness holds the send until it is bound.
   roles = [
-    { roleName: "Principal designer", hourlyRateCents: 22_500, sortOrder: 0 },
+    {
+      roleName: "Principal designer",
+      hourlyRateCents: 22_500,
+      sortOrder: 0,
+      rosterRole: "lead_designer",
+    },
   ],
 ) =>
   part({
@@ -387,6 +394,125 @@ describe("assessAgreementReadiness — the conditional facet rules", () => {
     );
   });
 
+  // HT-4 — the defect this program was built to close, asked at the door the
+  // designer can still do something about it at. After countersign the rate
+  // rows are the immutable snapshot of a signed contract.
+  it("HT-4: blocks a rate row that names no roster role", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 26_000,
+          sortOrder: 0,
+        },
+        { roleName: "Associate", hourlyRateCents: 11_000, sortOrder: 1 },
+      ]),
+    ];
+    expect(messages(parts)).toContain(
+      "Every rate on the card names the roster role it prices.",
+    );
+    expect(assess(parts).ready).toBe(false);
+  });
+
+  it("HT-4: blocks a card where only ONE of two rates is bound", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 26_000,
+          sortOrder: 0,
+          rosterRole: "lead_designer",
+        },
+        { roleName: "Associate", hourlyRateCents: 11_000, sortOrder: 1 },
+      ]),
+    ];
+    expect(messages(parts)).toContain(
+      "Every rate on the card names the roster role it prices.",
+    );
+  });
+
+  it("HT-4: says nothing when every rate is bound", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 26_000,
+          sortOrder: 0,
+          rosterRole: "lead_designer",
+        },
+        {
+          roleName: "Associate",
+          hourlyRateCents: 11_000,
+          sortOrder: 1,
+          rosterRole: "support_designer",
+        },
+      ]),
+    ];
+    expect(messages(parts)).not.toContain(
+      "Every rate on the card names the roster role it prices.",
+    );
+    expect(assess(parts).ready).toBe(true);
+  });
+
+  // W7-R2-03 — `+ Add a role` seeds a fully-named, BOUND row at $0/hr. Before
+  // the enum binding, the seed's EMPTY name was the guard; now every other
+  // check passes it, and a countersigned $0 rate prices that roster role's
+  // every hour at rate_source='authority' for nothing, unrepairably.
+  it("blocks a seeded $0 role standing beside a priced one", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 26_000,
+          sortOrder: 0,
+          rosterRole: "lead_designer",
+        },
+        {
+          roleName: "Associate",
+          hourlyRateCents: 0,
+          sortOrder: 1,
+          rosterRole: "support_designer",
+        },
+      ]),
+    ];
+    expect(messages(parts)).toContain(
+      "Every role on the rate card needs an hourly rate above zero.",
+    );
+    expect(assess(parts).ready).toBe(false);
+  });
+
+  // R-7 already answers a card with NO priced role; it must not be doubled.
+  it("says the $0 sentence only where R-7 is silent", () => {
+    const parts = [
+      ...nine().filter((p) => p.partKey !== "patina.role_rates"),
+      roleRates([
+        {
+          roleName: "Principal designer",
+          hourlyRateCents: 0,
+          sortOrder: 0,
+          rosterRole: "lead_designer",
+        },
+      ]),
+    ];
+    expect(messages(parts)).toContain(
+      "Add at least one role with an hourly rate.",
+    );
+    expect(messages(parts)).not.toContain(
+      "Every role on the rate card needs an hourly rate above zero.",
+    );
+    expect(assess(parts).ready).toBe(false);
+  });
+
+  it("says nothing about rates when every role carries one", () => {
+    expect(messages(nine())).not.toContain(
+      "Every role on the rate card needs an hourly rate above zero.",
+    );
+  });
+
   it("R-8: blocks a negative retainer", () => {
     const parts = [
       ...nine().filter((p) => p.partKey !== "patina.retainer"),
@@ -503,7 +629,16 @@ describe("assessAgreementReadiness — keys, titles, and the document", () => {
   it("R-3: blocks a missing client email, and keeps it out of the attention count", () => {
     const readiness = assess(nine(), { recipientEmail: null });
     expect(readiness.blockers).toEqual([
-      { partId: null, message: "Link a client with an email address." },
+      {
+        partId: null,
+        message: "Link a client with an email address.",
+        // §A10 — the imperative phrase the readiness voice counts with.
+        ask: "link a client",
+        // SPEC §5 marks #20 "comment, not rendered": the voice already says
+        // `link a client`, so the galley's foot does not print the sentence a
+        // second time. `documentBlockers` is what reads this.
+        quiet: true,
+      },
     ]);
     expect(readiness.ready).toBe(false);
     expect(partsNeedingAttention(readiness)).toBe(0);

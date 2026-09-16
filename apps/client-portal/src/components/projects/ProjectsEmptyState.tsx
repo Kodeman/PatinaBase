@@ -63,7 +63,7 @@ export function EmptyStateActs() {
           variant="secondary"
           onClick={() => void signOut()}
         >
-          Leave the house
+          Sign out
         </ScoredAction>
       </div>
       <DetailsSheet open={detailsOpen} onClose={() => setDetailsOpen(false)} />

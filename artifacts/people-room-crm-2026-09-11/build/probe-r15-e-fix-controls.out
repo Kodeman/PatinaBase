@@ -1,0 +1,12 @@
+BEGIN
+SET
+{"sub":"a0000000-0000-0000-0000-000000000004","role":"authenticated"}
+INSERT 0 1
+INSERT 0 1
+E-a first add returned the OPEN seat it should reuse
+UPDATE 1
+E-b second add opened a NEW seat: yes
+f
+E-c live seat: threshold=500000 effective_to=<null>
+E-d closed seat: threshold=250000 effective_to=2026-09-15 off_job_at=2026-08-16
+ROLLBACK

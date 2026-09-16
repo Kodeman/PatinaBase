@@ -460,14 +460,14 @@ describe("ScheduleSpine quiet body (W4)", () => {
     // here — the rail carries the count. The install day and how far out it
     // stands are the whole line.
     const head = container.querySelector('[data-region-head="schedule"]')!;
-    expect(head).toHaveTextContent(/Install Sep 15/);
+    expect(head).toHaveTextContent(/Install 15 September/);
     expect(head).not.toHaveTextContent(/phase/i);
     expect(
       container.querySelectorAll("[data-region-count-line]"),
     ).toHaveLength(0);
     expect(
       screen.getByText(
-        "Install Sep 15 · not yet on the paper · press Schedule on the index to open",
+        "Install 15 September · not yet on the paper · press Schedule on the index to open",
       ),
     ).toHaveClass("sr-only");
 

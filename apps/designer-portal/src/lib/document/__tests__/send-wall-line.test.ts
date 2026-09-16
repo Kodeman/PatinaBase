@@ -94,7 +94,7 @@ describe('deriveSendWallLine — the verb', () => {
   it('withholds the nudge inside the cooldown and names the last one instead', () => {
     expect(line({ status: 'sent', lastNudgedAt: daysAgo(1) })).toMatchObject({
       verb: null,
-      stateWord: 'nudged Jun 23',
+      stateWord: 'nudged 23 June',
     });
   });
 
@@ -200,7 +200,7 @@ describe('deriveSendWallLine — the sent phrase', () => {
 
   it('stops counting days past the ceiling and states the day instead', () => {
     expect(line({ sentAt: daysAgo(30) })!.sentText).toBe('Sent 30 days ago');
-    expect(line({ sentAt: daysAgo(31) })!.sentText).toBe('Sent May 24');
+    expect(line({ sentAt: daysAgo(31) })!.sentText).toBe('Sent 24 May');
   });
 
   // 00477's paper door writes no sent_at, because nothing was sent.

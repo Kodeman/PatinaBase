@@ -204,7 +204,9 @@ describe('RedLetterZone', () => {
     expect(
       bar.queryByRole('button', { name: 'Send a reminder' }),
     ).not.toBeInTheDocument();
-    expect(bar.getByText('Hands free')).toBeInTheDocument();
+    // D5 (VISION.md:50) — the dwell timer is gone: with no primary action
+    // registered the centre slot renders nothing, not a "Hands free" glance.
+    expect(bar.queryByText('Hands free')).not.toBeInTheDocument();
   });
 
   it('C-6 — hands the band its rows and the one they elect', () => {

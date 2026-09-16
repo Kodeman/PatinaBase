@@ -3,11 +3,11 @@
 import { useState } from 'react';
 
 import type { Invoice } from '@patina/supabase';
-import { invoiceBalanceCents } from '@patina/shared';
+import { formatCurrency, invoiceBalanceCents } from '@patina/shared';
 
 import { ScoredAction } from '@/components/threshold/instruments/scored-action';
-import { moneyInWords } from '@/components/threshold/instruments/standing-sentence';
-import { dayMonth, legalDate } from '@/lib/threshold/dates';
+
+import { legalDate } from '@/lib/threshold/dates';
 import { visibleInvoices } from '@/lib/threshold/invoice-rollup';
 import { parseSourceDate, type InvoiceModel } from '@/lib/threshold/derive';
 
@@ -34,13 +34,10 @@ import { Settlement } from './settlement';
    the slot: a money line she can act on may never leave her to assume the
    work is hers. ─────────────────────────────────────────────────────────── */
 
-/** "12 June" in the surface's own idiom, and the year too once it is not this one. */
-function longDate(value: string | null | undefined, today?: Date): string | null {
-  const date = parseSourceDate(value);
-  if (!date) return null;
-  return today && today.getFullYear() !== date.getFullYear()
-    ? legalDate(date)
-    : dayMonth(date);
+/** "12 June 2026". These are due dates on open letters — terms of the paper,
+ * so the year is on the page and never left to the reader's own calendar. */
+function longDate(value: string | null | undefined): string | null {
+  return legalDate(parseSourceDate(value));
 }
 
 /** Still owed: the house may be asked for money on it. */
@@ -64,20 +61,20 @@ function toModel(invoice: Invoice): InvoiceModel {
 }
 
 /** What became of it, in one dated clause. */
-function receiptTrail(invoice: Invoice, today?: Date): string {
+function receiptTrail(invoice: Invoice): string {
   const balanceCents = invoiceBalanceCents(invoice);
   if (invoice.status === 'paid') {
-    const paid = longDate(invoice.paid_at, today);
+    const paid = longDate(invoice.paid_at);
     return paid ? `paid ${paid}` : 'paid';
   }
-  const due = longDate(invoice.due_date, today);
+  const due = longDate(invoice.due_date);
   if (invoice.status === 'partially_paid') {
     return due
-      ? `${moneyInWords(balanceCents)} outstanding, due ${due}`
-      : `${moneyInWords(balanceCents)} outstanding`;
+      ? `${formatCurrency(balanceCents)} outstanding, due ${due}`
+      : `${formatCurrency(balanceCents)} outstanding`;
   }
   if (due) return `due ${due}`;
-  const sent = longDate(invoice.sent_at, today);
+  const sent = longDate(invoice.sent_at);
   return sent ? `sent ${sent}` : 'awaiting payment';
 }
 
@@ -188,10 +185,10 @@ export function EarlierInvoices({
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <span className="text-[15px] leading-[1.62] text-[var(--text-body)]">
-                      {`${invoice.invoice_number ?? 'Invoice'} · ${moneyInWords(
+                      {`${invoice.invoice_number ?? 'Invoice'} · ${formatCurrency(
                         invoice.total_cents || 0,
                         invoice.currency || 'USD',
-                      )} · ${receiptTrail(invoice, today)}${origin(invoice)}`}
+                      )} · ${receiptTrail(invoice)}${origin(invoice)}`}
                     </span>
                     <span className="flex flex-wrap items-baseline gap-x-4">
                       {isOpen(invoice) && (

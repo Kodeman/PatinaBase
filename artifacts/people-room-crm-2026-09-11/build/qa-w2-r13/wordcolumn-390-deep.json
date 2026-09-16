@@ -1,0 +1,86 @@
+[
+  {
+    "family": "reach",
+    "value": "On paper",
+    "borderWidth": "0px",
+    "width": 58.09375,
+    "height": 16.5
+  },
+  {
+    "family": "consent",
+    "value": "Not asked",
+    "borderWidth": "0px",
+    "width": 65.34375,
+    "height": 16.5
+  },
+  {
+    "family": "paper",
+    "value": "Not on file",
+    "borderWidth": "0px",
+    "width": 79.875,
+    "height": 16.5
+  },
+  {
+    "family": "reach",
+    "value": "On paper",
+    "borderWidth": "1px",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "family": "consent",
+    "value": "Not asked",
+    "borderWidth": "1px",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "family": "paper",
+    "value": "Not on file",
+    "borderWidth": "1px",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "family": "reach",
+    "value": "On paper",
+    "borderWidth": "0px",
+    "width": 58.09375,
+    "height": 16.5
+  },
+  {
+    "family": "consent",
+    "value": "Not asked",
+    "borderWidth": "0px",
+    "width": 65.34375,
+    "height": 16.5
+  },
+  {
+    "family": "paper",
+    "value": "Not on file",
+    "borderWidth": "0px",
+    "width": 79.875,
+    "height": 16.5
+  },
+  {
+    "family": "reach",
+    "value": "On paper",
+    "borderWidth": "1px",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "family": "consent",
+    "value": "Not asked",
+    "borderWidth": "1px",
+    "width": 0,
+    "height": 0
+  },
+  {
+    "family": "paper",
+    "value": "Not on file",
+    "borderWidth": "1px",
+    "width": 0,
+    "height": 0
+  }
+]

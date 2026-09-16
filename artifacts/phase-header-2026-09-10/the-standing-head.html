@@ -1,0 +1,1566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Standing Head</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ───────────────────────────────────────────────────────────────
+   tokens — carried over from artifacts/desk-cards-2026-09-09/
+   three-cards-for-the-desk.html. The seven stage plates keep their
+   light values in dark mode; lifting them drops the white label
+   under 4.5:1.
+   ─────────────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  --oak:              #8B7355;
+
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --terracotta-ink:   #9C5340;
+
+  --tab-brief:     #497093;
+  --tab-discovery: #307063;
+  --tab-direction: #366A3A;
+  --tab-proposal:  #575D1D;
+  --tab-project:   #6D4E24;
+  --tab-install:   #823832;
+  --tab-care:      #823832;
+
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay:            #A8895E;
+    --clay-ink:        #D8B98A;
+    --terracotta-ink:  #E2A895;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay:            #A8895E;
+  --clay-ink:        #D8B98A;
+  --terracotta-ink:  #E2A895;
+  /* the seven plates keep their light values in dark mode. */
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+h1, h2, h3, h4, p, ul, ol, figure, table, dl, dd { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+hr { border: 0; }
+
+/* ─── the type scale ─── */
+.t-d0      { font-family: var(--font-display); font-size: 64px; line-height: 1.05; font-weight: 500; letter-spacing: -.01em; }
+.t-d1      { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; letter-spacing: 0; }
+.t-d2      { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; letter-spacing: 0; }
+.t-d3      { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; letter-spacing: 0; }
+.t-body    { font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 400; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; font-weight: 400; }
+.t-body-15 { font-family: var(--font-body); font-size: 15px; line-height: 1.50; font-weight: 400; }
+.t-body-20 { font-family: var(--font-body); font-size: 20px; line-height: 1.45; font-weight: 400; }
+.t-body-11 { font-family: var(--font-body); font-size: 11px; line-height: 1.50; font-weight: 400; }
+.t-meta    { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; font-weight: 400; letter-spacing: .08em; }
+.t-head    { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.t-money   { font-family: var(--font-meta); font-size: 15px; line-height: 1.5; font-weight: 400; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.t-authorship { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-style: italic; font-weight: 400; }
+.tab { font-variant-numeric: tabular-nums; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ─── the action tiers ─── */
+.act {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px 10px;
+  border: 0;
+  background: none;
+  font-family: var(--font-meta);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.act .label { position: relative; display: inline-block; line-height: 13px; }
+.act .label::before, .act .label::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  transform-origin: left center;
+  transition: background-color 150ms linear, height 150ms var(--ease);
+}
+.act .label::before { bottom: -5px; height: 1px; }
+.act .label::after  { bottom: -8.5px; height: 1px; }
+
+.act--tertiary { color: var(--ink-subtle); }
+.act--tertiary .label::before { background: var(--oak); }
+.act--tertiary .label::after  { content: none; }
+.act--tertiary:hover .label::before { background: var(--ink-faint); height: 1.5px; }
+.act--tertiary:active { color: var(--ink); transition-duration: var(--press-in); }
+
+.act--secondary { color: var(--ink); }
+.act--secondary .label::before { height: 1.5px; background: var(--ink); }
+.act--secondary .label::after  { background: var(--clay); }
+.act--secondary:hover .label::after { height: 2px; }
+.act--secondary:active { transition-duration: var(--press-in); }
+.act:active .label::before { height: 2px; }
+
+.act--terminal {
+  color: var(--ink-paper); background: var(--ink);
+  border-radius: var(--radius-box); padding: 4px 16px;
+}
+.act--terminal .label::before, .act--terminal .label::after { content: none; }
+.act--terminal:hover { background: var(--ink-muted); }
+
+.act--wrap { white-space: normal; text-align: left; justify-content: flex-start; }
+.act--full { width: 100%; justify-content: flex-start; }
+
+.act--inline{display:inline;min-height:0;min-width:0;padding:0 0 3px;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;white-space:normal;background:none;border:0;border-bottom:1px solid var(--oak);cursor:pointer;text-decoration:none;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.act--inline .label{display:inline;line-height:inherit}
+.act--inline .label::before,.act--inline .label::after,.act--inline::after{content:none}
+.act--inline:hover{border-bottom-color:var(--ink-faint);border-bottom-width:1.5px;padding-bottom:2.5px}
+.act--inline:focus-visible{outline:2px solid var(--clay-ink);outline-offset:2px}
+
+.act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* ─── page frame ─── */
+.page { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+.top-band { max-width: 1100px; margin: 0 auto; padding: 48px 24px 24px; border-bottom: 1px solid var(--hairline-strong); }
+.top-band .kicker { color: var(--ink-subtle); }
+.top-band h1 { margin-top: 12px; }
+.top-band .standfirst { color: var(--ink-muted); max-width: 62ch; margin-top: 24px; }
+.top-band .standfirst + .standfirst { margin-top: 12px; }
+
+section.band { margin-top: 72px; }
+section.band > h2 { color: var(--ink); }
+section.band > .lede { color: var(--ink-muted); max-width: 62ch; margin-top: 12px; }
+.sec-no { color: var(--ink-faint); display: block; margin-bottom: 12px; }
+h3.sub { margin-top: 48px; color: var(--ink); }
+p.note { color: var(--ink-muted); max-width: 62ch; margin-top: 12px; }
+p.note + p.note { margin-top: 12px; }
+
+/* ─── the stage plates ─── */
+.stage-plate {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-box);
+  color: #FFFFFF;
+}
+.stage-plate--brief     { background: var(--tab-brief); }
+.stage-plate--discovery { background: var(--tab-discovery); }
+.stage-plate--direction { background: var(--tab-direction); }
+.stage-plate--proposal  { background: var(--tab-proposal); }
+.stage-plate--project   { background: var(--tab-project); }
+.stage-plate--install   { background: var(--tab-install); }
+.stage-plate--care      { background: var(--tab-care); }
+
+/* ─── the pointer-tracked press wash ─── */
+.wash {
+  position: absolute; inset: 0; pointer-events: none;
+  background: var(--wash, var(--oak));
+  opacity: 0;
+  clip-path: circle(0px at var(--wx, 50%) var(--wy, 50%));
+  transition: clip-path 260ms var(--ease), opacity 160ms linear;
+}
+.w-brief     { --wash: var(--tab-brief); }
+.w-discovery { --wash: var(--tab-discovery); }
+.w-direction { --wash: var(--tab-direction); }
+.w-proposal  { --wash: var(--tab-proposal); }
+.w-project   { --wash: var(--tab-project); }
+.w-install   { --wash: var(--tab-install); }
+.w-care      { --wash: var(--tab-care); }
+
+/* ─── the mock frame ─── */
+figure.mock { margin-top: 24px; }
+figure.mock > .phone-rail { margin-top: 0; }
+figure.mock figcaption {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  margin-bottom: 12px; color: var(--ink-faint);
+}
+.stage-scroll { overflow-x: auto; padding-bottom: 4px; }
+.doc {
+  position: relative; overflow: hidden;
+  background: var(--paper-doc);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-hair);
+  padding: 28px 32px 32px;
+}
+.doc:hover .wash, .doc:focus-within .wash { opacity: .05; clip-path: circle(150% at var(--wx, 50%) var(--wy, 50%)); }
+.doc > *:not(.wash) { position: relative; }
+.doc--flush { padding: 0; }
+
+/* ─── head atoms ─── */
+.run { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 24px; color: var(--ink-subtle); }
+.run .phrase { overflow-wrap: anywhere; }
+.hd-name { display: block; margin-top: 12px; color: var(--ink); overflow-wrap: anywhere; }
+.hd-subject { display: block; margin-top: 4px; color: var(--ink-muted); }
+.hd-facts { display: block; margin-top: 8px; color: var(--ink); font-variant-numeric: tabular-nums; max-width: 62ch; }
+.hd-stand { margin-top: 12px; color: var(--ink); max-width: 62ch; }
+.hd-owing { margin-top: 8px; color: var(--ink-muted); max-width: 62ch; }
+.hd-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0 24px; margin-top: 4px; }
+.hd-acts--split { justify-content: space-between; }
+.money { color: var(--ink); }
+.overdue { color: var(--terracotta-ink); }
+.quiet { color: var(--ink-faint); }
+
+.rule-hair   { border-top: 1px solid var(--hairline); margin-top: 16px; }
+.rule-mid    { border-top: 1px solid var(--hairline-strong); margin-top: 16px; }
+.rule-region { border-top: 2px solid var(--hairline-strong); margin-top: 24px; }
+
+/* ─── the three-bar glyph (the StrataMark stand-in) ─── */
+.glyph { display: inline-flex; flex-direction: column; justify-content: center; gap: 2px; width: 14px; flex: 0 0 14px; vertical-align: middle; }
+.glyph i { display: block; height: 2px; border-radius: 1px; background: var(--oak); }
+.glyph i:nth-child(1) { width: 100%; }
+.glyph i:nth-child(2) { width: 64%; }
+.glyph i:nth-child(3) { width: 36%; }
+
+/* ─── today's track band ─── */
+.track { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+.track-bar { flex: 1 1 200px; min-width: 120px; height: 6px; background: var(--rail); border-radius: 2px; overflow: hidden; }
+.track-bar i { display: block; height: 100%; width: 40%; background: var(--oak); }
+.track .lab { color: var(--ink-subtle); }
+
+/* ─── today's readiness band ─── */
+.readiness { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 24px; padding: 16px 20px; background: var(--rail); border-radius: var(--radius-box); }
+.readiness .grow { flex: 1 1 240px; color: var(--ink); }
+.readiness .eyeb { color: var(--ink-subtle); }
+.readiness--caption { background: none; border-top: 1px solid var(--hairline); border-radius: 0; padding: 12px 0 0; color: var(--ink-muted); }
+.readiness--caption .grow { color: var(--ink-muted); }
+
+/* ─── the 56px sticky band ─── */
+.band56 { border-top: 1px solid var(--hairline-strong); border-bottom: 1px solid var(--hairline-strong); background: var(--paper); padding: 8px 20px; }
+.band56 .l1 { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; color: var(--ink-subtle); }
+.band56 .l1 .phrase { overflow-wrap: anywhere; }
+.band56 .l2 { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; }
+.band56 .l2 .say { flex: 1 1 260px; color: var(--ink); padding: 6px 0; }
+.band56--reprise { background: var(--paper-doc); }
+
+/* ─── the fixed door ─── */
+.door { margin-top: 12px; border: 1px solid var(--hairline); border-radius: var(--radius-box); background: var(--paper-doc); }
+.door-head { padding: 10px 16px; border-bottom: 1px solid var(--hairline); color: var(--ink-faint); }
+.door-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 44px; padding: 4px 16px; border-bottom: 1px solid var(--hairline); }
+.door-row:last-child { border-bottom: 0; }
+.door-row .kind { flex: 0 0 auto; }
+.door-row .what { flex: 1 1 200px; color: var(--ink); }
+.kind--exception { color: var(--terracotta-ink); }
+.kind--input { color: var(--clay-ink); }
+
+/* ─── tool row · undo · first content region ─── */
+.tools { display: flex; flex-wrap: wrap; gap: 0 24px; margin-top: 4px; }
+.undo { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+.undo .why { flex: 1 1 260px; color: var(--ink-muted); }
+.eyebrow-lead { display: flex; align-items: center; gap: 12px; margin-top: 12px; color: var(--ink-faint); }
+.eyebrow-lead .leader { flex: 1 1 24px; min-width: 24px; height: 1px; border-bottom: 1px solid var(--hairline); }
+.check-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 44px; padding: 4px 0; border-bottom: 1px solid var(--hairline); }
+.check-row .what { color: var(--ink); }
+.check-row .leader { flex: 1 1 24px; min-width: 24px; height: 1px; border-bottom: 1px dotted var(--hairline-strong); }
+.region-name { display: block; margin-top: 12px; color: var(--ink); }
+.region-rule { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-top: 12px; }
+.region-rule .cap { color: var(--ink-faint); }
+.micro-cap { display: block; margin-top: 4px; color: var(--ink-faint); }
+.region-eyebrow { display: block; margin-top: 12px; color: var(--ink-faint); }
+
+/* ─── §2 the annotated replica ─── */
+.anno-grid { display: grid; grid-template-columns: 152px minmax(0, 1fr); column-gap: 12px; row-gap: 0; align-items: start; }
+.anno { display: flex; align-items: baseline; gap: 8px; padding-top: 4px; min-height: 24px; }
+.anno-no {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--ink); background: var(--paper); color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.anno-flag { color: var(--terracotta-ink); }
+.anno-body { min-width: 0; }
+@media (max-width: 699px) {
+  .anno-grid { grid-template-columns: minmax(0, 1fr); }
+  .anno { padding-top: 12px; }
+}
+
+/* ─── §4 the exploded head ─── */
+.doc--exploded { padding-left: 60px; }
+.doc--exploded .reg { position: relative; }
+.doc--exploded .reg > .reg-marker { position: absolute; left: -32px; top: 0; }
+.reg-marker {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--ink); background: var(--paper); color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1;
+  letter-spacing: 0; font-variant-numeric: tabular-nums; z-index: 3;
+}
+.reg-list { display: grid; gap: 24px; margin-top: 24px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .reg-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.reg-item { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 12px; align-items: start; }
+.reg-key {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--ink); background: var(--paper); color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1;
+  font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+.reg-item h3 { color: var(--ink); font-family: var(--font-body); font-size: 14px; font-weight: 600; line-height: 1.5; }
+.reg-item p { color: var(--ink-muted); margin-top: 4px; }
+
+/* ─── the 390 frames ─── */
+.phone-rail { overflow-x: auto; margin-top: 24px; padding-bottom: 12px; }
+.phone-set { display: flex; gap: 24px; width: max-content; align-items: flex-start; }
+.phone {
+  width: 390px; flex: 0 0 390px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-box);
+  background: var(--paper);
+  padding: 16px;
+}
+.phone .phone-cap { color: var(--ink-faint); display: block; margin-bottom: 12px; }
+.phone .doc { padding: 16px 14px 20px; }
+.phone .doc--exploded { padding-left: 14px; }
+@media (max-width: 699px) {
+  .phone-set { display: block; width: auto; }
+  .phone { width: auto; flex: none; border: 0; padding: 0; background: none; }
+  .phone + .phone { margin-top: 24px; }
+}
+
+/* ─── tables ─── */
+.table-wrap { overflow-x: auto; margin-top: 24px; padding-bottom: 12px; }
+.scroll-hint { display: none; color: var(--ink-faint); margin-top: 4px; }
+@media (max-width: 699px) { .scroll-hint { display: block; } }
+table { border-collapse: collapse; min-width: 760px; }
+table.wide { min-width: 900px; }
+th, td {
+  text-align: left; vertical-align: top;
+  padding: 12px 24px 12px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+  color: var(--ink-muted);
+}
+thead th {
+  border-bottom: 1px solid var(--hairline-strong);
+  color: var(--ink-faint);
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase;
+  white-space: nowrap;
+}
+tbody th { color: var(--ink); font-family: var(--font-display); font-size: 20px; line-height: 1.3; font-weight: 500; }
+td .was { color: var(--ink-subtle); text-decoration: line-through; text-decoration-thickness: 1px; text-decoration-color: var(--oak); }
+td .is { color: var(--ink); }
+
+/* ─── spec blocks · honors / departs ─── */
+.spec { margin-top: 24px; display: grid; gap: 0; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .spec { grid-template-columns: 132px minmax(0, 1fr); column-gap: 24px; } }
+.spec dt { color: var(--ink-faint); font-family: var(--font-meta); font-size: 11px; line-height: 1.5; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.spec dd { color: var(--ink-muted); font-family: var(--font-body); font-size: 14px; line-height: 1.5; margin: 0; padding-top: 12px; }
+@media (min-width: 760px) { .spec dd { border-top: 1px solid var(--hairline); } }
+.verdict { display: grid; gap: 24px; margin-top: 24px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .verdict { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.verdict h3 { color: var(--ink-faint); font-family: var(--font-meta); font-size: 11px; line-height: 1.5; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.verdict p { color: var(--ink-muted); margin-top: 12px; }
+
+/* ─── rulings · defects ─── */
+.rulings { margin-top: 24px; }
+.ruling { border-top: 1px solid var(--hairline-strong); padding: 24px 0; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .ruling { grid-template-columns: 56px minmax(0, 1fr); column-gap: 24px; } }
+.ruling .rno { color: var(--ink-faint); font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.ruling h3 { color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-weight: 600; }
+.ruling p { color: var(--ink-muted); margin-top: 12px; max-width: 66ch; }
+.ruling p .lean { color: var(--ink); }
+.defect { border-top: 1px solid var(--hairline); padding: 16px 0; display: grid; gap: 4px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { .defect { grid-template-columns: 56px minmax(0, 1fr); column-gap: 24px; } }
+.defect .dno { color: var(--ink-faint); font-family: var(--font-meta); font-size: 12px; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.defect p { color: var(--ink-muted); max-width: 66ch; }
+.defect p.where { color: var(--ink-faint); margin-top: 4px; overflow-wrap: anywhere; }
+
+/* ─── colophon ─── */
+.colophon { max-width: 1100px; margin: 72px auto 0; padding: 24px 24px 96px; border-top: 1px solid var(--hairline-strong); color: var(--ink-subtle); }
+@media (max-width: 699px) {
+  .page { padding: 0 16px; }
+  .top-band { padding: 24px 16px; }
+  .colophon { padding: 24px 16px 72px; }
+  .doc { padding: 16px 14px 20px; }
+  .doc--exploded { padding-left: 14px; }
+  .doc--exploded .reg > .reg-marker { position: static; display: inline-flex; margin-right: 8px; }
+  .band56 { padding: 8px 14px; }
+}
+.colophon p { max-width: 66ch; }
+.colophon p + p { margin-top: 12px; }
+
+/* ─── motion & forced colors ─── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media (forced-colors: active) {
+  .wash { display: none; }
+  .act .label::before, .act .label::after { forced-color-adjust: none; background: ButtonText; }
+  .act:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid Highlight; }
+  .doc, .door, .door-row, .phone, .reg-marker, .reg-key, .anno-no, th, td, .ruling, .defect, .spec dt, .spec dd, .band56, .readiness { border-color: CanvasText; }
+  .stage-plate { forced-color-adjust: none; background: ButtonFace; color: ButtonText; border: 1px solid ButtonText; }
+  .glyph i, .track-bar i { forced-color-adjust: none; background: CanvasText; }
+}
+</style>
+</head>
+<body data-prose-total="1260">
+
+<!-- ─────────── 1 · masthead ─────────── -->
+<section class="top-band" id="top" data-prose-cap="40" aria-labelledby="h-deck">
+  <p class="kicker t-head">Patina &middot; The Document &middot; 10 September 2026</p>
+  <h1 class="t-d1" id="h-deck">The Standing Head</h1>
+  <p class="standfirst t-body">The top of every spread should say what the job is, where it stands, and what is next &mdash; once.</p>
+  <p class="standfirst t-body">Five lenses read today&rsquo;s head. Three directions came out of it.</p>
+</section>
+
+<main class="page">
+
+  <!-- ─────────── 2 · today ─────────── -->
+  <section class="band" id="today" data-prose-cap="90" aria-labelledby="h-today">
+    <span class="sec-no t-head">Section one</span>
+    <h2 class="t-d2" id="h-today">What the head says today</h2>
+    <p class="lede t-body">Before Edna&rsquo;s first answer appears, the page states where this project stands six times, in three vocabularies. Two of the six are not information, and one is false.</p>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--discovery t-head">Discovery</span> The screenshot Kody sent &middot; desktop &middot; name at 64, R126 rules 40</figcaption>
+      <div class="doc w-discovery">
+        <span class="wash" aria-hidden="true"></span>
+        <div class="anno-grid">
+
+          <!-- block 1 · letterhead -->
+          <div class="anno"><span class="anno-no" aria-hidden="true">1</span></div>
+          <div class="anno-body">
+            <span class="glyph" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="hd-name t-d0">Edna Courtney</span>
+          </div>
+          <div class="anno"><span class="anno-flag t-head"><span class="sr-only">Block 1 &mdash; </span>Name twice &middot; 11px</span></div>
+          <div class="anno-body">
+            <span class="hd-subject t-body-11">Edna Courtney &middot; In discovery</span>
+            <hr class="rule-hair">
+          </div>
+
+          <!-- block 2 · the sticky band, line 2 -->
+          <div class="anno"><span class="anno-no" aria-hidden="true">2</span></div>
+          <div class="anno-body">
+            <div class="band56" style="margin-top:16px">
+              <div class="l2">
+                <span class="say t-body-20">Finish what you need to know</span>
+                <a class="act act--secondary" href="#h-today"><span class="label">Add project type and named rooms</span></a>
+                <a class="act act--tertiary" href="#h-today"><span class="label">+2 more</span></a>
+              </div>
+            </div>
+          </div>
+
+          <!-- block 3 · stage sub-label -->
+          <div class="anno">
+            <span class="anno-no" aria-hidden="true">3</span>
+            <span class="anno-flag t-head"><span class="sr-only">Block 3 &mdash; </span>Constant</span>
+          </div>
+          <div class="anno-body">
+            <p class="t-meta" style="margin-top:16px;color:var(--oak)">DISCOVERY &amp; PROGRAMMING &middot; CORE &middot; STAGE 02</p>
+            <span class="micro-cap t-head">Printed at 4.30:1 on this paper &mdash; see D3</span>
+          </div>
+
+          <!-- block 4 · track band -->
+          <div class="anno">
+            <span class="anno-no" aria-hidden="true">4</span>
+            <span class="anno-flag t-head"><span class="sr-only">Block 4 &mdash; </span>Constant, drawn</span>
+          </div>
+          <div class="anno-body">
+            <div class="track">
+              <span class="track-bar" aria-hidden="true"><i></i></span>
+              <span class="lab t-meta">CORE &middot; 02</span>
+            </div>
+          </div>
+
+          <!-- block 5 · region head -->
+          <div class="anno"><span class="anno-no" aria-hidden="true">5</span></div>
+          <div class="anno-body">
+            <hr class="rule-region">
+            <p class="t-head" style="margin-top:12px;color:var(--ink-subtle)">In progress</p>
+            <span class="region-name t-d1">Discovery</span>
+          </div>
+          <div class="anno"><span class="anno-flag t-head"><span class="sr-only">Block 5 &mdash; </span>False</span></div>
+          <div class="anno-body">
+            <p class="t-body-sm" style="margin-top:4px;color:var(--ink-subtle)">Nothing yet</p>
+          </div>
+
+          <!-- block 6 · readiness band -->
+          <div class="anno">
+            <span class="anno-no" aria-hidden="true">6</span>
+            <span class="anno-flag t-head"><span class="sr-only">Block 6 &mdash; </span>Glyph twice</span>
+          </div>
+          <div class="anno-body">
+            <div class="readiness">
+              <span class="glyph" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="eyeb t-head">Working with Edna Courtney</span>
+              <span class="grow t-body-20"><strong class="tab">3</strong> of 5 essentials captured &mdash; keep going</span>
+              <a class="act act--secondary" href="#h-today"><span class="label">Begin the direction</span></a>
+            </div>
+          </div>
+
+          <!-- block 7 · tool row + undo -->
+          <div class="anno"></div>
+          <div class="anno-body">
+            <div class="tools">
+              <a class="act act--tertiary" href="#h-today"><span class="label">Run the discovery call</span></a>
+              <a class="act act--tertiary" href="#h-today"><span class="label">Attach the room scan</span></a>
+              <a class="act act--tertiary" href="#h-today"><span class="label">Add inspiration</span></a>
+            </div>
+            <div class="undo">
+              <a class="act act--tertiary" href="#h-today"><span class="label">Move back to New Lead</span></a>
+              <span class="why t-body-sm">This client&rsquo;s own details have been filled in.</span>
+            </div>
+          </div>
+
+          <!-- block 8 · first content region -->
+          <div class="anno"></div>
+          <div class="anno-body">
+            <div class="eyebrow-lead t-head">
+              <span>The essentials &mdash; structured &middot; they open &amp; seed the agreement</span>
+              <span class="leader" aria-hidden="true"></span>
+            </div>
+            <div class="check-row">
+              <span class="what t-body">Scope &amp; rooms</span>
+              <span class="leader" aria-hidden="true"></span>
+              <a class="act act--tertiary" href="#h-today"><span class="label">Not yet &#9656;</span></a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </figure>
+
+    <p class="note t-body-sm">Block 5&rsquo;s <span class="t-meta">Nothing yet</span> is a hardcoded constant printed forty pixels above block 6&rsquo;s true <em>3 of 5</em>. Blocks 3 and 4 are a per-stop constant, identical on every discovery spread forever. A line that cannot change is not information.</p>
+  </section>
+
+  <!-- ─────────── 3 · cut ─────────── -->
+  <section class="band" id="cut" data-prose-cap="60" aria-labelledby="h-cut">
+    <span class="sec-no t-head">Section two</span>
+    <h2 class="t-d2" id="h-cut">What we would cut, and why</h2>
+    <p class="lede t-body">Every direction below makes the same seven cuts. They differ only in where the surviving head lives.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Block</th>
+            <th scope="col">Was</th>
+            <th scope="col">Is</th>
+            <th scope="col">Why</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">1 &middot; vitals</th>
+            <td><span class="was">Edna Courtney &middot; In discovery</span></td>
+            <td><span class="is">the nouns of the job, or nothing</span></td>
+            <td>The name is already 34px above; the state moves into the sentence.</td>
+          </tr>
+          <tr>
+            <th scope="row">3 &middot; sub-label</th>
+            <td><span class="was">DISCOVERY &amp; PROGRAMMING &middot; CORE &middot; STAGE 02</span></td>
+            <td><span class="is">behind a door at pre-work; printed at project, install and care</span></td>
+            <td>A per-stop constant; the numbering inverts; not the studio&rsquo;s vocabulary.</td>
+          </tr>
+          <tr>
+            <th scope="row">4 &middot; track band</th>
+            <td><span class="was">40% bar + CORE &middot; 02</span></td>
+            <td><span class="is">deleted from the head</span></td>
+            <td>Encodes no quantity &mdash; a dashboard with one widget.</td>
+          </tr>
+          <tr>
+            <th scope="row">5 &middot; region head</th>
+            <td><span class="was">IN PROGRESS / Discovery / Nothing yet</span></td>
+            <td><span class="is">eyebrow deleted; status deleted; the name yields or becomes a section rule</span></td>
+            <td>The status is a lie; the name is the fourth &ldquo;where&rdquo;.</td>
+          </tr>
+          <tr>
+            <th scope="row">6 &middot; readiness band</th>
+            <td><span class="was">glyph &middot; WORKING WITH EDNA COURTNEY &middot; 3 of 5 &hellip; keep going &middot; act</span></td>
+            <td><span class="is">its one true sentence promoted into the head; glyph, eyebrow and &ldquo;keep going&rdquo; deleted</span></td>
+            <td>The only true statement of where Edna stands was the fourth block down.</td>
+          </tr>
+          <tr>
+            <th scope="row">2 &middot; band line 2</th>
+            <td><span class="was">a second head above the head</span></td>
+            <td><span class="is">the head&rsquo;s reprise at 56px, yielding while the head is in frame</span></td>
+            <td>R127 was right; blocks 3, 4 and 5 are the &ldquo;something between&rdquo; that crept back.</td>
+          </tr>
+          <tr>
+            <th scope="row">7 &middot; tool row + undo</th>
+            <td><span class="was">six acts before content</span></td>
+            <td><span class="is">kept, below the first content region; the undo gains its consequence sentence</span></td>
+            <td>Three good doors &mdash; but they are not the head.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="scroll-hint t-head no-prose">The table scrolls &rarr;</p>
+    </div>
+  </section>
+
+  <!-- ─────────── 4 · carries ─────────── -->
+  <section class="band" id="carries" data-prose-cap="100" aria-labelledby="h-carries">
+    <span class="sec-no t-head">Section three</span>
+    <h2 class="t-d2" id="h-carries">What every head carries, and what yields to it</h2>
+    <p class="lede t-body">Three registers, fixed order, once each &mdash; and the order is the order the eye takes them in.</p>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--discovery t-head">Discovery</span> The register, exploded &middot; Edna Courtney &middot; desktop &middot; the band reprise shown on scroll at 56px</figcaption>
+      <div class="doc doc--exploded w-discovery">
+        <span class="wash" aria-hidden="true"></span>
+
+        <div class="reg">
+          <span class="reg-marker" aria-hidden="true">1</span>
+          <span class="hd-name t-d1" style="margin-top:0">Edna Courtney</span>
+          <span class="hd-subject t-authorship">Whole-house refresh &middot; 1927 foursquare, Beaverdale</span>
+        </div>
+
+        <div class="reg" style="margin-top:12px">
+          <span class="reg-marker" aria-hidden="true">2</span>
+          <p class="hd-stand t-body" style="margin-top:0">Three of five essentials in hand; her call ran 6 September 2026.</p>
+        </div>
+
+        <div class="reg" style="margin-top:12px">
+          <span class="reg-marker" aria-hidden="true">3</span>
+          <p class="hd-owing t-body" style="margin-top:0">Waiting on Edna: <a class="act act--inline" href="#h-carries"><span class="label">budget comfort</span></a>, and <a class="act act--inline" href="#h-carries"><span class="label">how they live</span></a>.</p>
+          <div class="hd-acts"><a class="act act--secondary" href="#h-carries"><span class="label">Ask Edna for both</span></a></div>
+        </div>
+
+        <div class="reg" style="margin-top:12px">
+          <div class="band56 band56--reprise">
+            <div class="l1"><span class="t-head phrase">Edna Courtney &middot; Discovery</span></div>
+            <div class="l2">
+              <span class="say t-body-15">Three of five essentials in hand; her call ran 6 September 2026.</span>
+              <a class="act act--secondary" href="#h-carries"><span class="label">Ask Edna for both</span></a>
+            </div>
+          </div>
+        </div>
+
+        <div class="reg" style="margin-top:12px">
+          <hr class="rule-region">
+          <div class="region-rule">
+            <span class="region-name t-d2" style="margin-top:0">The essentials</span>
+            <a class="act act--tertiary" href="#h-carries"><span class="label">Workflow stage &#9656;</span></a>
+          </div>
+        </div>
+
+      </div>
+    </figure>
+
+    <ol class="reg-list">
+      <li class="reg-item">
+        <span class="reg-key" aria-hidden="true">1</span>
+        <div>
+          <h3>What</h3>
+          <p class="t-body-sm">The name she says out loud, and the nouns of the job. Never the state.</p>
+        </div>
+      </li>
+      <li class="reg-item">
+        <span class="reg-key" aria-hidden="true">2</span>
+        <div>
+          <h3>Where</h3>
+          <p class="t-body-sm">One sentence at body size, carrying one dated fact and one count. Not six.</p>
+        </div>
+      </li>
+      <li class="reg-item">
+        <span class="reg-key" aria-hidden="true">3</span>
+        <div>
+          <h3>Next</h3>
+          <p class="t-body-sm">One owed thing, its owner named, one act.</p>
+        </div>
+      </li>
+    </ol>
+
+    <p class="note t-body-sm"><span class="t-head">The band yields</span> &mdash; the 56px band is this head at 56px, never a second voice.</p>
+    <p class="note t-body-sm"><span class="t-head">The stage yields</span> &mdash; stage vocabulary prints only where a schedule resolver anchors it; elsewhere it lives behind a door.</p>
+
+    <dl class="spec">
+      <dt>Dates</dt>
+      <dd>One date form: 11 September 2026.</dd>
+    </dl>
+  </section>
+
+  <!-- ─────────── 5 · direction one ─────────── -->
+  <section class="band" id="masthead" data-prose-cap="120" aria-labelledby="h-masthead">
+    <span class="sec-no t-head">Direction one</span>
+    <h2 class="t-d2" id="h-masthead">The Masthead</h2>
+    <p class="lede t-body">The letterhead absorbs everything &mdash; one masthead of four lines under one rule, and the sticky band becomes that masthead&rsquo;s 56px reprise rather than a peer.</p>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--discovery t-head">Discovery</span> Edna Courtney &middot; desktop</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-discovery">
+          <span class="wash" aria-hidden="true"></span>
+          <div class="run">
+            <span class="t-head phrase">Discovery</span>
+            <a class="act act--tertiary" href="#h-masthead"><span class="label">Ledger &#9656;</span></a>
+          </div>
+          <span class="hd-name t-d1">Edna Courtney</span>
+          <span class="hd-subject t-authorship">Whole-house refresh &middot; 1927 foursquare, Beaverdale</span>
+          <p class="hd-stand t-body">Three of five essentials are captured &mdash; budget comfort and how they live are still Edna&rsquo;s to answer.</p>
+          <div class="hd-acts">
+            <a class="act act--secondary" href="#h-masthead"><span class="label">Add budget comfort</span></a>
+            <a class="act act--tertiary" href="#h-masthead"><span class="label">Run the discovery call</span></a>
+            <a class="act act--tertiary" href="#h-masthead"><span class="label">Attach the room scan</span></a>
+            <a class="act act--tertiary" href="#h-masthead"><span class="label">Add inspiration</span></a>
+          </div>
+          <hr class="rule-region">
+          <div class="eyebrow-lead t-head">
+            <span>The essentials &mdash; structured &middot; they open &amp; seed the agreement</span>
+            <span class="leader" aria-hidden="true"></span>
+          </div>
+          <div class="check-row">
+            <span class="what t-body">Scope &amp; rooms</span>
+            <span class="leader" aria-hidden="true"></span>
+            <a class="act act--tertiary" href="#h-masthead"><span class="label">Not yet &#9656;</span></a>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--direction t-head">Direction</span> Cedar Lane Study &middot; desktop</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-direction">
+          <span class="wash" aria-hidden="true"></span>
+          <div class="run">
+            <span class="t-head phrase">Direction</span>
+            <a class="act act--tertiary" href="#h-masthead"><span class="label">Ledger &#9656;</span></a>
+          </div>
+          <span class="hd-name t-d1">Cedar Lane Study</span>
+          <span class="hd-subject t-authorship">Nora Ellison</span>
+          <p class="hd-stand t-body">Two of three rooms are scoped and no fee schedule is chosen &mdash; open since 2 September 2026.</p>
+          <div class="hd-acts">
+            <a class="act act--secondary" href="#h-masthead"><span class="label">Open the Contract Room</span></a>
+            <a class="act act--tertiary" href="#h-masthead"><span class="label">Scope the third room</span></a>
+          </div>
+          <hr class="rule-region">
+          <div class="eyebrow-lead t-head">
+            <span>The direction &mdash; rooms &middot; they carry into the agreement</span>
+            <span class="leader" aria-hidden="true"></span>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--project t-head">Project</span> Sonnenberg residence &middot; desktop</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-project">
+          <span class="wash" aria-hidden="true"></span>
+          <div class="run">
+            <span class="t-head phrase">Project &middot; Design Development &middot; Core &middot; Stage 06 &middot; Estimated</span>
+            <a class="act act--tertiary" href="#h-masthead"><span class="label">Ledger &#9656;</span></a>
+          </div>
+          <span class="hd-name t-d1">Sonnenberg residence</span>
+          <span class="hd-subject t-authorship">Eleven pieces across four rooms &middot; Ingersoll Park</span>
+          <p class="hd-stand t-body">Week 3 of 9 toward 14 November 2026. Six of eleven pieces are in production and one is blocked; <span class="money t-money">$17,500.00</span> <span class="overdue">has been overdue since 12 August 2026</span>.</p>
+          <div class="hd-acts">
+            <a class="act act--secondary" href="#h-masthead"><span class="label">Release the next room</span></a>
+            <a class="act act--tertiary" href="#h-masthead"><span class="label">Open the FF&amp;E schedule</span></a>
+          </div>
+          <hr class="rule-region">
+          <div class="eyebrow-lead t-head">
+            <span>The schedule &mdash; eleven pieces &middot; six in production</span>
+            <span class="leader" aria-hidden="true"></span>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--discovery t-head">Discovery</span><span class="stage-plate stage-plate--project t-head">Project</span> The Masthead at 390 &middot; the Project running head wraps to two lines</figcaption>
+    <div class="phone-rail">
+      <div class="phone-set">
+        <div class="phone">
+          <span class="phone-cap t-head">Discovery &middot; 390</span>
+          <div class="doc w-discovery">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="run">
+              <span class="t-head phrase">Discovery</span>
+              <a class="act act--tertiary" href="#h-masthead"><span class="label">Ledger &#9656;</span></a>
+            </div>
+            <span class="hd-name t-d1">Edna Courtney</span>
+            <span class="hd-subject t-authorship">Whole-house refresh &middot; 1927 foursquare, Beaverdale</span>
+            <p class="hd-stand t-body">Three of five essentials are captured &mdash; budget comfort and how they live are still Edna&rsquo;s to answer.</p>
+            <div class="hd-acts">
+              <a class="act act--secondary act--full act--wrap" href="#h-masthead"><span class="label">Add budget comfort</span></a>
+              <a class="act act--tertiary act--wrap" href="#h-masthead"><span class="label">Run the discovery call</span></a>
+              <a class="act act--tertiary act--wrap" href="#h-masthead"><span class="label">Attach the room scan</span></a>
+              <a class="act act--tertiary act--wrap" href="#h-masthead"><span class="label">Add inspiration</span></a>
+            </div>
+            <hr class="rule-region">
+            <div class="eyebrow-lead t-head">
+              <span>The essentials &mdash; structured</span>
+              <span class="leader" aria-hidden="true"></span>
+            </div>
+            <div class="check-row">
+              <span class="what t-body">Scope &amp; rooms</span>
+              <span class="leader" aria-hidden="true"></span>
+              <a class="act act--tertiary" href="#h-masthead"><span class="label">Not yet &#9656;</span></a>
+            </div>
+          </div>
+        </div>
+        <div class="phone">
+          <span class="phone-cap t-head">Project &middot; 390</span>
+          <div class="doc w-project">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="run">
+              <span class="t-head phrase">Project &middot; Design Development &middot; Core &middot; Stage 06 &middot; Estimated</span>
+              <a class="act act--tertiary" href="#h-masthead"><span class="label">Ledger &#9656;</span></a>
+            </div>
+            <span class="hd-name t-d1">Sonnenberg residence</span>
+            <span class="hd-subject t-authorship">Eleven pieces across four rooms &middot; Ingersoll Park</span>
+            <p class="hd-stand t-body">Week 3 of 9 toward 14 November 2026. Six of eleven pieces are in production and one is blocked; <span class="money t-money">$17,500.00</span> <span class="overdue">has been overdue since 12 August 2026</span>.</p>
+            <div class="hd-acts">
+              <a class="act act--secondary act--full act--wrap" href="#h-masthead"><span class="label">Release the next room</span></a>
+              <a class="act act--tertiary act--wrap" href="#h-masthead"><span class="label">Open the FF&amp;E schedule</span></a>
+            </div>
+            <hr class="rule-region">
+            <div class="eyebrow-lead t-head">
+              <span>The schedule &mdash; eleven pieces &middot; six in production</span>
+              <span class="leader" aria-hidden="true"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </figure>
+
+    <dl class="spec">
+      <dt>Type</dt>
+      <dd>Running head DM Mono 11 uc .08em &middot; name Playfair 500 at 34 &middot; subject Playfair italic 20 &middot; standing sentence Inter 16 &middot; acts DM Mono 13 uc. Seven steps, no eighth.</dd>
+      <dt>Rules</dt>
+      <dd>Exactly one rule under the head: the 2px region rule, which first fires at <span class="t-meta">THE ESSENTIALS</span>. The pre-work region head is deleted; at project stops the region heads stay under the running head.</dd>
+      <dt>The band</dt>
+      <dd>Line 1 already yields while the letterhead is in frame; line 2 now yields with it. Scrolled past, the band prints identity &middot; stop &middot; sentence &middot; act &mdash; the masthead at 56px.</dd>
+      <dt>What yields</dt>
+      <dd>The tool row is illustrative; the subject line yields to the client&rsquo;s name when the title already carries the nouns; at install the date displaces the nouns.</dd>
+      <dt>Touches</dt>
+      <dd><span class="t-meta">R126</span> 40&rarr;34, negative tracking&rarr;0 &middot; <span class="t-meta">R111, I114</span> the phrase survives as words at 11 caps, losing its own line and bars &middot; <span class="t-meta">R127</span> band and head become one utterance at two scales &middot; <span class="t-meta">R66</span> the readiness band loses ground, glyph and eyebrow, and keeps its act.</dd>
+    </dl>
+
+    <div class="verdict">
+      <div>
+        <h3>Honors</h3>
+        <p class="t-body-sm">V9 P2, P3 and P5; the seven type steps; wrap, never truncate. R66&rsquo;s act survives and R140 holds &mdash; the owed figure outranks the agreed, so $212,000 does not print in a head.</p>
+      </div>
+      <div>
+        <h3>Departs</h3>
+        <p class="t-body-sm">The name drops from 40 to 34, and the pre-work region head is deleted outright: at a one-region stop, a head above the head is a title page for a one-page book.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── 6 · direction two ─────────── -->
+  <section class="band" id="band" data-prose-cap="130" aria-labelledby="h-band">
+    <span class="sec-no t-head">Direction two</span>
+    <h2 class="t-d2" id="h-band">The Band</h2>
+    <p class="lede t-body">The 56px band is already the one declared head. Make it the page&rsquo;s only leader region, delete everything that restates it, and let the letterhead keep the name alone.</p>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--discovery t-head">Discovery</span> Edna Courtney &middot; desktop &middot; door open</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-discovery">
+          <span class="wash" aria-hidden="true"></span>
+          <span class="glyph" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="hd-name t-d1">Edna Courtney</span>
+          <div class="band56" style="margin-top:16px">
+            <div class="l1"><span class="t-head phrase">Edna Courtney &middot; Discovery</span></div>
+            <div class="l2">
+              <span class="say t-body-15">Two essentials open &mdash; working budget, how they live. Call held 6 September 2026.</span>
+              <a class="act act--secondary" href="#h-band"><span class="label">Add working budget</span></a>
+              <a class="act act--tertiary" href="#h-band"><span class="label">+1 more</span></a>
+            </div>
+          </div>
+          <div class="door">
+            <p class="door-head t-head">Open inputs &middot; each row carries its own act</p>
+            <div class="door-row">
+              <span class="kind kind--input t-head">Open input</span>
+              <span class="what t-body-sm">Working budget &mdash; Edna&rsquo;s</span>
+              <a class="act act--tertiary" href="#h-band"><span class="label">Add working budget</span></a>
+            </div>
+            <div class="door-row">
+              <span class="kind kind--input t-head">Open input</span>
+              <span class="what t-body-sm">How they live &mdash; Edna&rsquo;s</span>
+              <a class="act act--tertiary" href="#h-band"><span class="label">Add lifestyle needs</span></a>
+            </div>
+          </div>
+          <hr class="rule-region">
+          <div class="eyebrow-lead t-head">
+            <span>The essentials &mdash; structured &middot; they open &amp; seed the agreement</span>
+            <span class="leader" aria-hidden="true"></span>
+          </div>
+          <div class="check-row">
+            <span class="what t-body">Scope &amp; rooms</span>
+            <span class="leader" aria-hidden="true"></span>
+            <a class="act act--tertiary" href="#h-band"><span class="label">Not yet &#9656;</span></a>
+          </div>
+          <div class="tools">
+            <a class="act act--tertiary" href="#h-band"><span class="label">Run the discovery call</span></a>
+            <a class="act act--tertiary" href="#h-band"><span class="label">Attach the room scan</span></a>
+            <a class="act act--tertiary" href="#h-band"><span class="label">Add inspiration</span></a>
+          </div>
+          <div class="undo">
+            <a class="act act--tertiary" href="#h-band"><span class="label">Move back to New Lead</span></a>
+            <span class="why t-body-sm">Returns this to the lead queue; nothing here is lost.</span>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--direction t-head">Direction</span> Cedar Lane Study &middot; desktop &middot; door open</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-direction">
+          <span class="wash" aria-hidden="true"></span>
+          <span class="glyph" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="hd-name t-d1">Cedar Lane Study</span>
+          <div class="band56" style="margin-top:16px">
+            <div class="l1"><span class="t-head phrase">Cedar Lane Study &middot; Direction</span></div>
+            <div class="l2">
+              <span class="say t-body-15">One room unscoped; fee schedule not chosen.</span>
+              <a class="act act--secondary" href="#h-band"><span class="label">Choose the fee schedule</span></a>
+              <a class="act act--tertiary" href="#h-band"><span class="label">+1 more</span></a>
+            </div>
+          </div>
+          <div class="door">
+            <p class="door-head t-head">Standing exceptions, then open inputs</p>
+            <div class="door-row">
+              <span class="kind kind--exception t-head">Standing</span>
+              <span class="what t-body-sm">No fee schedule chosen &mdash; open since 2 September 2026</span>
+              <a class="act act--tertiary" href="#h-band"><span class="label">Choose the fee schedule</span></a>
+            </div>
+            <div class="door-row">
+              <span class="kind kind--input t-head">Open input</span>
+              <span class="what t-body-sm">Third room unscoped &mdash; yours</span>
+              <a class="act act--tertiary" href="#h-band"><span class="label">Scope the third room</span></a>
+            </div>
+          </div>
+          <hr class="rule-region">
+          <div class="eyebrow-lead t-head">
+            <span>The direction &mdash; rooms &middot; they carry into the agreement</span>
+            <span class="leader" aria-hidden="true"></span>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--project t-head">Project</span> Sonnenberg residence &middot; desktop &middot; door open</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-project">
+          <span class="wash" aria-hidden="true"></span>
+          <span class="glyph" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="hd-name t-d1">Sonnenberg residence</span>
+          <div class="band56" style="margin-top:16px">
+            <div class="l1">
+              <span class="t-head phrase">Sonnenberg residence &middot; Project &middot; Design Development &middot; Week 3 of 9</span>
+              <span class="t-money money">$212,000</span>
+            </div>
+            <div class="l2">
+              <span class="say t-body-15"><span class="money t-money">$17,500</span> <span class="overdue">overdue since 12 August 2026</span>; one piece blocked.</span>
+              <a class="act act--secondary" href="#h-band"><span class="label">Resolve the balance</span></a>
+              <a class="act act--tertiary" href="#h-band"><span class="label">+1 more</span></a>
+            </div>
+          </div>
+          <div class="door">
+            <p class="door-head t-head">Standing exceptions &middot; each row carries its own act</p>
+            <div class="door-row">
+              <span class="kind kind--exception t-head">Standing</span>
+              <span class="what t-body-sm"><span class="money t-money">$17,500.00</span> <span class="overdue">overdue since 12 August 2026</span> &mdash; Sonnenberg&rsquo;s</span>
+              <a class="act act--tertiary" href="#h-band"><span class="label">Resolve the balance</span></a>
+            </div>
+            <div class="door-row">
+              <span class="kind kind--exception t-head">Standing</span>
+              <span class="what t-body-sm">One piece blocked at the workroom &mdash; yours</span>
+              <a class="act act--tertiary" href="#h-band"><span class="label">Chase the blocked piece</span></a>
+            </div>
+          </div>
+          <hr class="rule-region">
+          <h3 class="region-eyebrow t-head">Design Development &middot; Core &middot; Stage 06 &middot; Estimated</h3>
+          <span class="region-name t-d2">The schedule</span>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--discovery t-head">Discovery</span><span class="stage-plate stage-plate--project t-head">Project</span> The Band at 390 &mdash; the Project band line 1 wraps and exceeds 56px at 390</figcaption>
+    <div class="phone-rail">
+      <div class="phone-set">
+        <div class="phone">
+          <span class="phone-cap t-head">Discovery &middot; 390 &middot; pinned</span>
+          <div class="doc doc--flush w-discovery">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="band56">
+              <div class="l1"><span class="t-head phrase">Edna Courtney &middot; Discovery</span></div>
+              <div class="l2">
+                <span class="say t-body-15">Open &middot; budget, lifestyle</span>
+                <a class="act act--secondary" href="#h-band"><span class="label">Add budget</span></a>
+                <a class="act act--tertiary" href="#h-band"><span class="label">+1</span></a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="phone">
+          <span class="phone-cap t-head">Discovery &middot; 390 &middot; page below the pin</span>
+          <div class="doc w-discovery">
+            <span class="wash" aria-hidden="true"></span>
+            <span class="glyph" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="hd-name t-d1">Edna Courtney</span>
+            <hr class="rule-region">
+              <div class="eyebrow-lead t-head">
+              <span>The essentials &mdash; structured</span>
+              <span class="leader" aria-hidden="true"></span>
+            </div>
+            <div class="check-row">
+              <span class="what t-body">Scope &amp; rooms</span>
+              <span class="leader" aria-hidden="true"></span>
+              <a class="act act--tertiary" href="#h-band"><span class="label">Not yet &#9656;</span></a>
+            </div>
+            <div class="undo">
+              <a class="act act--tertiary act--wrap" href="#h-band"><span class="label">Move back to New Lead</span></a>
+              <span class="why t-body-sm">Returns this to the lead queue; nothing here is lost.</span>
+            </div>
+          </div>
+        </div>
+        <div class="phone">
+          <span class="phone-cap t-head">Project &middot; 390 &middot; pinned &mdash; exceeds 56px at 390</span>
+          <div class="doc doc--flush w-project">
+            <span class="wash" aria-hidden="true"></span>
+            <div class="band56">
+              <div class="l1">
+                <span class="t-head phrase">Sonnenberg residence &middot; Project &middot; Design Development &middot; Week 3 of 9</span>
+                <span class="t-money money">$212,000</span>
+              </div>
+              <div class="l2">
+                <span class="say t-body-15"><span class="money t-money">$17,500</span> <span class="overdue">overdue since 12 August 2026</span>; one piece blocked.</span>
+                <a class="act act--secondary" href="#h-band"><span class="label">Resolve the balance</span></a>
+                <a class="act act--tertiary" href="#h-band"><span class="label">+1 more</span></a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </figure>
+
+    <dl class="spec">
+      <dt>Type</dt>
+      <dd>Band line 1 DM Mono 11 uc &middot; band line 2 Inter 15 with one act at DM Mono 13 uc &middot; name Playfair 500 at 34 &middot; readiness caption Inter 14, no <span class="t-meta">da-act</span> class.</dd>
+      <dt>The door</dt>
+      <dd>Each row carries its own act and the named item is not re-listed. Rows split by kind &mdash; standing exceptions in <span class="t-meta">terracotta-ink</span>, open inputs in <span class="t-meta">clay-ink</span>.</dd>
+      <dt>Readiness</dt>
+      <dd>The readiness caption prints nothing until <span class="t-meta">ready</span> flips; then its fact and act become the band&rsquo;s sentence.</dd>
+      <dt>Keyboard</dt>
+      <dd>Desktop and 390 alike: band act &rarr; door &rarr; tool row &times;3 &rarr; undo. Five stops, each distinct. The undo prints its consequence always.</dd>
+      <dt>Touches</dt>
+      <dd><span class="t-meta">R111</span> the sub-label loses its own pre-content line &middot; <span class="t-meta">R66</span> the readiness act is removed in favor of the band&rsquo;s &middot; <span class="t-meta">I114</span> the stage folds into the region head rather than standing free &middot; <span class="t-meta">I118</span> names the activate / no-activate split without resolving it &middot; <span class="t-meta">R140</span> the agreed figure takes band line 1&rsquo;s right slot, above the owed.</dd>
+    </dl>
+
+    <div class="verdict">
+      <div>
+        <h3>Honors</h3>
+        <p class="t-body-sm">R127 whole &mdash; the 56px contract is the height contract. The register of R126 holds, the 4.5:1 ink floor holds, and inputs keep their own section.</p>
+      </div>
+      <div>
+        <h3>Departs</h3>
+        <p class="t-body-sm">The readiness band loses its act to the band&rsquo;s, and the region head keeps a rule it prints nothing under. The agreed figure prints in the band; R140 ranks the owed figure above it, so on Sonnenberg the $17,500 sentence stands under the $212,000 slot. The name and the glyph print twice &mdash; letterhead and band, letterhead and caption. This direction accepts that in exchange for keeping R127 whole.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── 7 · direction three ─────────── -->
+  <section class="band" id="paragraph" data-prose-cap="120" aria-labelledby="h-paragraph">
+    <span class="sec-no t-head">Direction three</span>
+    <h2 class="t-d2" id="h-paragraph">The Standing Paragraph</h2>
+    <p class="lede t-body">The head speaks in the studio&rsquo;s own voice: the facts of the job, then two sentences saying where it stands and who is waiting on whom.</p>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--discovery t-head">Discovery</span> Edna Courtney &middot; desktop</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-discovery">
+          <span class="wash" aria-hidden="true"></span>
+          <span class="hd-name t-d1" style="margin-top:0">Edna Courtney</span>
+          <span class="hd-facts t-body">Whole-house refresh &middot; Beaverdale foursquare &middot; began 4 September 2026</span>
+          <hr class="rule-hair">
+          <p class="hd-stand t-body">Three of five essentials in hand; her call ran 6 September 2026.</p>
+          <p class="hd-owing t-body">Waiting on Edna: <a class="act act--inline" href="#h-paragraph"><span class="label">budget comfort</span></a>, and <a class="act act--inline" href="#h-paragraph"><span class="label">how they live</span></a>.</p>
+          <div class="hd-acts hd-acts--split">
+            <span></span>
+            <a class="act act--secondary" href="#h-paragraph"><span class="label">Ask Edna for both</span></a>
+          </div>
+          <hr class="rule-region">
+          <div class="region-rule">
+            <span class="region-name t-d2" style="margin-top:0">Discovery</span>
+          </div>
+          <div class="check-row" style="margin-top:12px">
+            <span class="what t-body">Scope &amp; rooms</span>
+            <span class="leader" aria-hidden="true"></span>
+            <a class="act act--tertiary" href="#h-paragraph"><span class="label">Not yet &#9656;</span></a>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--direction t-head">Direction</span> Cedar Lane Study &middot; desktop</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-direction">
+          <span class="wash" aria-hidden="true"></span>
+          <span class="hd-name t-d1" style="margin-top:0">Cedar Lane Study</span>
+          <span class="hd-subject t-authorship">Nora Ellison</span>
+          <span class="hd-facts t-body">Two rooms of three scoped &middot; direction opened 2 September 2026</span>
+          <hr class="rule-hair">
+          <p class="hd-stand t-body">The direction is drafted and can&rsquo;t go out without a <a class="act act--inline" href="#h-paragraph"><span class="label">fee schedule</span></a>.</p>
+          <p class="hd-owing t-body">That one is yours.</p>
+          <div class="hd-acts hd-acts--split">
+            <span></span>
+            <a class="act act--secondary" href="#h-paragraph"><span class="label">Open the Contract Room</span></a>
+          </div>
+          <hr class="rule-region">
+          <div class="region-rule">
+            <span class="region-name t-d2" style="margin-top:0">Direction</span>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--project t-head">Project</span> Sonnenberg residence &middot; desktop</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-project">
+          <span class="wash" aria-hidden="true"></span>
+          <span class="hd-name t-d1" style="margin-top:0">Sonnenberg residence</span>
+          <span class="hd-facts t-body"><span class="money t-money">$212,000</span> &middot; eleven pieces &middot; target 14 November 2026</span>
+          <hr class="rule-hair">
+          <p class="hd-stand t-body">Six pieces in production, one blocked; <span class="money t-money">$17,500</span> <span class="overdue">overdue since 12 August 2026</span>.</p>
+          <p class="hd-owing t-body">The invoice is Sonnenberg&rsquo;s; the <a class="act act--inline" href="#h-paragraph"><span class="label">blocked piece</span></a> is yours.</p>
+          <div class="hd-acts hd-acts--split">
+            <span></span>
+            <a class="act act--secondary" href="#h-paragraph"><span class="label">Chase the blocked piece</span></a>
+          </div>
+          <hr class="rule-region">
+          <div class="region-rule">
+            <span class="region-name t-d2" style="margin-top:0">The schedule</span>
+            <span class="cap t-head">Design Development &middot; Core &middot; Stage 06 &middot; Week 3 of 9</span>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--install t-head">Install</span> Vandersteen &middot; desktop &middot; the dated case</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-install">
+          <span class="wash" aria-hidden="true"></span>
+          <span class="hd-name t-d1" style="margin-top:0">Vandersteen</span>
+          <span class="hd-facts t-body">Install Thursday, 18 September 2026 &mdash; eight days out</span>
+          <hr class="rule-hair">
+          <p class="hd-stand t-body">Two <a class="act act--inline" href="#h-paragraph"><span class="label">arrivals</span></a> are waiting on your inspection.</p>
+          <p class="hd-owing t-body">Nothing else is on you.</p>
+          <div class="hd-acts hd-acts--split">
+            <span></span>
+            <a class="act act--secondary" href="#h-paragraph"><span class="label">Inspect the two arrivals</span></a>
+          </div>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--care t-head">Care</span> Osterberg residence &middot; desktop &middot; the quiet case (P5)</figcaption>
+      <div class="stage-scroll">
+        <div class="doc w-care">
+          <span class="wash" aria-hidden="true"></span>
+          <span class="hd-name t-d1" style="margin-top:0">Osterberg residence</span>
+          <span class="hd-facts t-body quiet">Installed 22 August 2026 &middot; settled</span>
+          <p class="hd-stand t-body quiet">Nothing is waiting.</p>
+        </div>
+      </div>
+    </figure>
+
+    <figure class="mock">
+      <figcaption class="t-head"><span class="stage-plate stage-plate--discovery t-head">Discovery</span><span class="stage-plate stage-plate--project t-head">Project</span><span class="stage-plate stage-plate--care t-head">Care</span> The Standing Paragraph at 390 &middot; four rows, one column, the act on its own 44px row</figcaption>
+    <div class="phone-rail">
+      <div class="phone-set">
+        <div class="phone">
+          <span class="phone-cap t-head">Discovery &middot; 390</span>
+          <div class="doc w-discovery">
+            <span class="wash" aria-hidden="true"></span>
+            <span class="hd-name t-d1" style="margin-top:0">Edna Courtney</span>
+            <span class="hd-facts t-body">Whole-house refresh &middot; Beaverdale foursquare &middot; began 4 September 2026</span>
+            <hr class="rule-hair">
+            <p class="hd-stand t-body">Three of five essentials in hand; her call ran 6 September 2026.</p>
+            <p class="hd-owing t-body">Waiting on Edna: <a class="act act--inline" href="#h-paragraph"><span class="label">budget comfort</span></a>, and <a class="act act--inline" href="#h-paragraph"><span class="label">how they live</span></a>.</p>
+            <div class="hd-acts">
+              <a class="act act--secondary act--full act--wrap" href="#h-paragraph"><span class="label">Ask Edna for both</span></a>
+            </div>
+            <hr class="rule-region">
+            <div class="region-rule">
+              <span class="region-name t-d2" style="margin-top:0">Discovery</span>
+            </div>
+            <div class="check-row" style="margin-top:12px">
+              <span class="what t-body">Scope &amp; rooms</span>
+              <span class="leader" aria-hidden="true"></span>
+              <a class="act act--tertiary" href="#h-paragraph"><span class="label">Not yet &#9656;</span></a>
+            </div>
+          </div>
+        </div>
+        <div class="phone">
+          <span class="phone-cap t-head">Project &middot; 390</span>
+          <div class="doc w-project">
+            <span class="wash" aria-hidden="true"></span>
+            <span class="hd-name t-d1" style="margin-top:0">Sonnenberg residence</span>
+            <span class="hd-facts t-body"><span class="money t-money">$212,000</span> &middot; eleven pieces &middot; target 14 November 2026</span>
+            <hr class="rule-hair">
+            <p class="hd-stand t-body">Six pieces in production, one blocked; <span class="money t-money">$17,500</span> <span class="overdue">overdue since 12 August 2026</span>.</p>
+            <p class="hd-owing t-body">The invoice is Sonnenberg&rsquo;s; the <a class="act act--inline" href="#h-paragraph"><span class="label">blocked piece</span></a> is yours.</p>
+            <div class="hd-acts">
+              <a class="act act--secondary act--full act--wrap" href="#h-paragraph"><span class="label">Chase the blocked piece</span></a>
+            </div>
+            <hr class="rule-region">
+            <div class="region-rule">
+              <span class="region-name t-d2" style="margin-top:0">The schedule</span>
+              <span class="cap t-head">Design Development &middot; Core &middot; Stage 06 &middot; Week 3 of 9</span>
+            </div>
+          </div>
+        </div>
+        <div class="phone">
+          <span class="phone-cap t-head">Care &middot; 390 &middot; the quiet case</span>
+          <div class="doc w-care">
+            <span class="wash" aria-hidden="true"></span>
+            <span class="hd-name t-d1" style="margin-top:0">Osterberg residence</span>
+            <span class="hd-facts t-body quiet">Installed 22 August 2026 &middot; settled</span>
+            <p class="hd-stand t-body quiet">Nothing is waiting.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    </figure>
+
+    <dl class="spec">
+      <dt>Type</dt>
+      <dd>Name Playfair 500 at 34 &middot; subject Playfair italic 20 &middot; facts line Inter 16 in ink, tabular &mdash; not metadata &middot; standing and owing sentences Inter 16 &middot; act DM Mono 13 uc &middot; section rule Playfair 26 with a mono-11 caption at its right.</dd>
+      <dt>The stage</dt>
+      <dd>The stage phrase prints only where a schedule resolver anchors it (project &middot; install &middot; care).</dd>
+      <dt>Owed items</dt>
+      <dd>The owed things are oak-scored words inside the owing sentence and jump to their facet. One act, right; the consequence is the sentence above it (P3).</dd>
+      <dt>Hit targets</dt>
+      <dd>The oak-scored words inside sentences are text links to a facet, not controls; the 44px rule applies to the acts.</dd>
+      <dt>At 390</dt>
+      <dd>The same four rows in one column; the act drops to its own 44px full-width row. The whole head is five lines or fewer, so the essentials checklist is above the fold on a phone.</dd>
+      <dt>Touches</dt>
+      <dd><span class="t-meta">R111, I114</span> the stage sub-label leaves the head entirely &middot; <span class="t-meta">I114, R113</span> the track band goes, and &ldquo;render a band, never an error&rdquo; becomes &ldquo;render nothing&rdquo; &middot; <span class="t-meta">R126</span> 34 not 40, facts at Inter 16 not mono 12 &middot; <span class="t-meta">R66</span> the StrataMark leaves the readiness band &middot; <span class="t-meta">R140</span> the agreed figure leads the Project facts line, above the owed.</dd>
+    </dl>
+
+    <div class="verdict">
+      <div>
+        <h3>Honors</h3>
+        <p class="t-body-sm">R127 finally enforced; money, dates and names raised off the metadata floor; P3, P5 and R66&rsquo;s soft gate; every non-license.</p>
+      </div>
+      <div>
+        <h3>Departs</h3>
+        <p class="t-body-sm">The eleven-stage vocabulary leaves the glass entirely, the track band goes, and the head wants one thing that does not exist &mdash; a one-line description per engagement.</p>
+      </div>
+    </div>
+    <p class="note t-body-sm">Without that field the facts line is assembled from project type, rooms and money, and reads stiffly on half the jobs.</p>
+  </section>
+
+  <!-- ─────────── 8 · side by side ─────────── -->
+  <section class="band" id="side-by-side" data-prose-cap="40" aria-labelledby="h-compare">
+    <span class="sec-no t-head">Section four</span>
+    <h2 class="t-d2" id="h-compare">Side by side</h2>
+    <p class="lede t-body">The three directions against the questions that decide between them.</p>
+
+    <div class="table-wrap">
+      <table class="wide">
+        <thead>
+          <tr>
+            <th scope="col">&nbsp;</th>
+            <th scope="col">The Masthead</th>
+            <th scope="col">The Band</th>
+            <th scope="col">The Standing Paragraph</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Where the head lives</th>
+            <td>The letterhead.</td>
+            <td>The sticky band.</td>
+            <td>The letterhead, in prose.</td>
+          </tr>
+          <tr>
+            <th scope="row">Voice</th>
+            <td>Editorial, one sentence.</td>
+            <td>Operational, one line.</td>
+            <td>The studio&rsquo;s, two sentences with owners.</td>
+          </tr>
+          <tr>
+            <th scope="row">Stage vocabulary</th>
+            <td>Running head at project and after; a door at pre-work.</td>
+            <td>Band line 1 at project and after; region eyebrow.</td>
+            <td>Off the glass; a mono caption at the section rule if at all.</td>
+          </tr>
+          <tr>
+            <th scope="row">Region head at pre-work</th>
+            <td>Deleted.</td>
+            <td>Kept, prints nothing.</td>
+            <td>A Playfair 26 section rule.</td>
+          </tr>
+          <tr>
+            <th scope="row">Readiness band</th>
+            <td>Act kept, the rest folded.</td>
+            <td>A caption; becomes the band&rsquo;s sentence when ready.</td>
+            <td>Folded into the owing sentence.</td>
+          </tr>
+          <tr>
+            <th scope="row">Lines before first content <span class="t-head">Discovery, desktop</span></th>
+            <td class="tab">5</td>
+            <td class="tab">3 (door closed)</td>
+            <td class="tab">5</td>
+          </tr>
+          <tr>
+            <th scope="row">Rulings crossed</th>
+            <td><span class="t-meta">R126 R111 I114 R127 R66</span></td>
+            <td><span class="t-meta">R111 R66 I114 R140</span></td>
+            <td><span class="t-meta">R111 I114 R113 R126 R66 R140</span></td>
+          </tr>
+          <tr>
+            <th scope="row">New data needed</th>
+            <td>None.</td>
+            <td>None.</td>
+            <td>A one-line description (optional).</td>
+          </tr>
+          <tr>
+            <th scope="row">Panel lean</th>
+            <td>The most complete answer to &ldquo;what is this project&rdquo;.</td>
+            <td>The least construction; the safest ship.</td>
+            <td>The most honest answer to &ldquo;who is waiting&rdquo;.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="scroll-hint t-head no-prose">The table scrolls &rarr;</p>
+    </div>
+  </section>
+
+  <!-- ─────────── 9 · rulings ─────────── -->
+  <section class="band" id="rulings" data-prose-cap="320" aria-labelledby="h-rulings">
+    <span class="sec-no t-head">Section five</span>
+    <h2 class="t-d2" id="h-rulings">Rulings for Kody</h2>
+    <p class="lede t-body">Six decisions, not a sequence. Nothing below should be settled in code.</p>
+
+    <div class="rulings">
+      <div class="ruling">
+        <span class="rno">R1</span>
+        <div>
+          <h3>Does the eleven-stage vocabulary print at pre-work stops at all?</h3>
+          <p class="t-body-sm">Four seats say it is machinery, not paper: print it only where a schedule resolver anchors it &mdash; project, install, care &mdash; and keep it behind a door at brief, discovery, direction and proposal. That closes the backwards numbering without ruling the mapping. The alternative, completing the stop-to-stage map so numbers rise monotonically, is the bigger job R124/R125 deliberately deferred. <span class="lean">Lean: machinery.</span></p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <span class="rno">R2</span>
+        <div>
+          <h3>May the head speak in studio-private voice?</h3>
+          <p class="t-body-sm">&ldquo;Waiting on Edna: budget comfort&rdquo; and &ldquo;$17,500 overdue since 12 August 2026&rdquo; are exactly what Leah needs and exactly what she does not want Edna reading across the dining table. Rule whether the Document names who is late at the top, with the client page carrying its own gentler sentence. This decides whether the money line may sit at the top at all. <span class="lean">Lean: studio-private, in neutral phrasing &mdash; &ldquo;Waiting on Edna:&rdquo;, never &ldquo;Edna owes you&rdquo;.</span></p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <span class="rno">R3</span>
+        <div>
+          <h3>Does the pre-work region head survive?</h3>
+          <p class="t-body-sm">At a one-region stop, is <em>Discovery</em> at Playfair 34 under an eyebrow a head, a section rule, or nothing? The Masthead deletes it; The Band keeps it silent; The Standing Paragraph makes it a section rule. <span class="lean">Lean: a section rule &mdash; a name that yields while the head names it.</span></p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <span class="rno">R4</span>
+        <div>
+          <h3>A one-line description per engagement.</h3>
+          <p class="t-body-sm">&ldquo;Whole-house refresh &middot; Beaverdale foursquare&rdquo; is the truest line on Edna&rsquo;s page and today it does not exist. Add an optional field, seeded from project type and named rooms, editable by the studio. <span class="lean">Lean: yes; the head degrades to the assembled line without it.</span></p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <span class="rno">R5</span>
+        <div>
+          <h3>One leader per page.</h3>
+          <p class="t-body-sm">Today the band&rsquo;s act and &ldquo;Begin the Direction&rdquo; are both primary with no coordinating region. Rule that the page has one leader act, and that the readiness act becomes the head&rsquo;s the moment <span class="t-meta">ready</span> flips. <span class="lean">Lean: one leader.</span></p>
+        </div>
+      </div>
+
+      <div class="ruling">
+        <span class="rno">R6</span>
+        <div>
+          <h3>The name at 40 or 34.</h3>
+          <p class="t-body-sm">R126 set the letterhead at 40; the spec&rsquo;s scale tops at 34. Two seats want 34 so the standing sentence can rise to 16 without the head spending the whole scale. <span class="lean">Lean: 34.</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── 10 · found along the way ─────────── -->
+  <section class="band" id="found" data-prose-cap="200" aria-labelledby="h-found">
+    <span class="sec-no t-head">Section six</span>
+    <h2 class="t-d2" id="h-found">Found along the way</h2>
+    <p class="lede t-body">Seven live defects, independent of any direction.</p>
+
+    <div class="defects">
+      <div class="defect">
+        <span class="dno">D1</span>
+        <div>
+          <p class="t-body-sm">The <span class="t-meta">+N MORE</span> door builds every open input row with one shared act object, so Edna&rsquo;s &ldquo;Lifestyle needs&rdquo; row says and does &ldquo;Add working budget&rdquo;.</p>
+          <p class="where t-meta">apps/designer-portal/src/app/(document)/doc/[id]/page.tsx (~2145)</p>
+        </div>
+      </div>
+      <div class="defect">
+        <span class="dno">D2</span>
+        <div>
+          <p class="t-body-sm">Region-jump targets lose their focus ring: the region head&rsquo;s h2 is <span class="t-meta">tabIndex -1</span> with a bare <span class="t-meta">outline-none</span> and no focus-visible pair.</p>
+          <p class="where t-meta">apps/designer-portal/src/components/document/region/region-head.tsx</p>
+        </div>
+      </div>
+      <div class="defect">
+        <span class="dno">D3</span>
+        <div>
+          <p class="t-body-sm">A raw pigment printed as text below the house floor: aged oak at 4.30:1 on paper-doc, under the 4.5:1 the stylesheet itself documents. Clay-ink is one token away.</p>
+          <p class="where t-meta">apps/designer-portal/src/components/document/workflow/section-stage-line.tsx &middot; e2e/document/lens-contrast.spec.ts</p>
+        </div>
+      </div>
+      <div class="defect">
+        <span class="dno">D4</span>
+        <div>
+          <p class="t-body-sm">Heading order runs h1 &rarr; h3 &rarr; h2: the stage line prints a screen-reader-only h3 between the letterhead and the region.</p>
+          <p class="where t-meta">apps/designer-portal/src/components/document/workflow/section-stage-line.tsx</p>
+        </div>
+      </div>
+      <div class="defect">
+        <span class="dno">D5</span>
+        <div>
+          <p class="t-body-sm">Contract breaches in the head: negative Playfair tracking at 32px, ellipsis on the vitals, clipping on both band lines, and a 12px eighth step the sheet does not have.</p>
+          <p class="where t-meta">apps/designer-portal/src/components/document/doc-letterhead.tsx:78,92 &middot; lens-band.tsx:38</p>
+        </div>
+      </div>
+      <div class="defect">
+        <span class="dno">D6</span>
+        <div>
+          <p class="t-body-sm"><span class="t-meta">Nothing yet</span> is a literal fallback, not a derivation &mdash; returned unconditionally for brief, discovery and direction.</p>
+          <p class="where t-meta">apps/designer-portal/src/lib/document/lens-ladder-derivation.ts:556-561 &middot; page.tsx preworkStatus()</p>
+        </div>
+      </div>
+      <div class="defect">
+        <span class="dno">D7</span>
+        <div>
+          <p class="t-body-sm">The undo has no forward consequence sentence when available; only its refusal reason prints when blocked. Its aria-disabled-in-tab-order refusal is the right model and should be kept.</p>
+          <p class="where t-meta">apps/designer-portal/src/components/document/discovery/discovery-section.tsx (~547-575)</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ─────────── 11 · colophon ─────────── -->
+<footer class="colophon" id="colophon" data-prose-cap="40" aria-labelledby="h-colophon">
+  <h2 class="sr-only" id="h-colophon">Colophon</h2>
+  <p class="t-body-sm">Every head here is live HTML and CSS in Patina&rsquo;s own tokens. Nothing is a screenshot.</p>
+  <p class="t-body-sm">Five seats, 10 September 2026: information architect, typographer, interaction designer, a practicing designer in Leah&rsquo;s seat, accessibility critic. Synthesis by Fable.</p>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  /* placeholder links: this is a specimen sheet, not the portal */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a[href^="#"]') : null;
+    if (a) { e.preventDefault(); }
+  });
+
+  /* ── the press wash: stage pigment opening from the pointer ── */
+  function washTarget(el) {
+    return el.closest ? el.closest('.doc') : null;
+  }
+  document.addEventListener('pointermove', function (e) {
+    var host = washTarget(e.target);
+    if (!host) { return; }
+    var r = host.getBoundingClientRect();
+    if (!r.width || !r.height) { return; }
+    host.style.setProperty('--wx', ((e.clientX - r.left) / r.width * 100).toFixed(2) + '%');
+    host.style.setProperty('--wy', ((e.clientY - r.top) / r.height * 100).toFixed(2) + '%');
+  }, { passive: true });
+  document.addEventListener('focusin', function (e) {
+    var host = washTarget(e.target);
+    if (!host) { return; }
+    host.style.setProperty('--wx', '50%');
+    host.style.setProperty('--wy', '50%');
+  });
+})();
+</script>
+
+</body>
+</html>

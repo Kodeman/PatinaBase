@@ -11,14 +11,32 @@
  *              its own "+ Add new client").
  *   · CHANGE — re-point the document to a different client. Gated to draft for
  *              proposals so a sent/signed proposal can't be mis-attributed.
- *   · EDIT   — correct the relationship's working name/email (for captured
- *              clients without a Patina account) and notes.
+ *   · EDIT   — correct the relationship's working name/email/phone (for
+ *              captured clients without a Patina account) and notes. The email
+ *              and phone inputs carry autocomplete="off": they hold the
+ *              household's details, and an autofill token would offer the
+ *              signed-in designer's own address and number instead.
+ *
+ * Two details that read as inconsistencies and are not:
+ *   · The three read lines resolve profile-first — a client who holds a Patina
+ *     account owns their name, email, and phone. people_directory agrees on
+ *     the PHONE (00589) and still resolves name and email captured-first,
+ *     which is the studio's own roster; the phone is the one column the
+ *     household alone can edit, so it is the one the directory defers on.
+ *   · An emptied "Email on file" re-fills from the lead on the next save
+ *     (00399's hydrate trigger, unchanged); an emptied "Phone on file" stays
+ *     empty (00583 hydrates phone on INSERT only). Clearing an email needs
+ *     00399 revisited, not a change here.
  *
  * Named "The household" on purpose — "Account" already means the login sheet
  * (account/account-sheet.tsx) and the project money band (account-band.tsx).
+ *
+ * F3-R2-16 — `startEditing` opens straight into EDIT (default false, every
+ * on-document caller unaffected) for a caller whose own door already
+ * promised the form, e.g. the People room's "Edit details".
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   useClient,
   useDesignerClientForClientUser,
@@ -52,6 +70,12 @@ export interface HouseholdSheetProps {
   clientName: string;
   /** Proposal status — gates CHANGE to draft so a sent proposal keeps its client. */
   proposalStatus?: string | null;
+  /** F3-R2-16 — open straight into the EDIT form rather than the VIEW state.
+   *  Default false keeps every on-document caller's behavior (view first,
+   *  "Edit details" to reach the form) unchanged; the People room's own
+   *  "Edit details" action — which already promised the form — passes true
+   *  so it doesn't ask the designer to click "Edit details" twice. */
+  startEditing?: boolean;
 }
 
 export function HouseholdSheet({
@@ -64,6 +88,7 @@ export function HouseholdSheet({
   designerClientId = null,
   clientName,
   proposalStatus,
+  startEditing = false,
 }: HouseholdSheetProps) {
   const { data: rel } = useDesignerClientForClientUser(
     clientProfileId ?? undefined,
@@ -76,7 +101,7 @@ export function HouseholdSheet({
   const hasProfile = !!client?.client_id || !!client?.client;
   const name = client?.client?.full_name ?? client?.client_name ?? clientName;
   const email = client?.client?.email ?? client?.client_email ?? null;
-  const phone = client?.client?.phone ?? null;
+  const phone = client?.client?.phone ?? client?.client_phone ?? null;
   const status = client?.status ?? null;
   const hasHousehold = Boolean(clientProfileId || designerClientId);
 
@@ -98,15 +123,34 @@ export function HouseholdSheet({
     proposalStatus !== 'draft';
   const canChange = !!attachTarget && !proposalLocked;
 
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', notes: '' });
+  const [editing, setEditing] = useState(startEditing);
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    notes: '',
+  });
+  // F3-R2-12 — hydrate once per relationship, not on every field-level
+  // refetch: on-demand mounting (F3-R1-14) means this effect's first run can
+  // now land after the designer has already started typing, and re-hydrating
+  // on every `client` change would clobber those keystrokes.
+  const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
+    if (!client?.id || hydratedFor.current === client.id) return;
+    hydratedFor.current = client.id;
     setForm({
       name: client?.client_name ?? '',
       email: client?.client_email ?? '',
+      phone: client?.client_phone ?? '',
       notes: client?.notes ?? '',
     });
-  }, [client?.id, client?.client_name, client?.client_email, client?.notes]);
+  }, [
+    client?.id,
+    client?.client_name,
+    client?.client_email,
+    client?.client_phone,
+    client?.notes,
+  ]);
 
   const onPick = (clientId: string | null) => {
     if (!attachTarget) return;
@@ -120,6 +164,7 @@ export function HouseholdSheet({
       : {
           client_name: form.name.trim() || null,
           client_email: form.email.trim() || null,
+          client_phone: form.phone.trim() || null,
           notes: form.notes || null,
         };
     updateContact.mutate(
@@ -211,8 +256,8 @@ export function HouseholdSheet({
           </div>
         )}
 
-        {/* EDIT — the relationship's working details (always notes; name/email
-            for captured clients without a Patina account). */}
+        {/* EDIT — the relationship's working details (always notes;
+            name/email/phone for captured clients without a Patina account). */}
         {client && (
           <div className="mt-6 border-t border-[var(--color-pearl)] pt-4">
             {!editing ? (
@@ -255,11 +300,28 @@ export function HouseholdSheet({
                       <input
                         id="household-email"
                         type="email"
+                        autoComplete="off"
                         value={form.email}
                         onChange={(e) =>
                           setForm((f) => ({ ...f, email: e.target.value }))
                         }
                         placeholder="client@email.com"
+                        className={fieldCls}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className={labelCls} htmlFor="household-phone">
+                        Phone on file
+                      </label>
+                      <input
+                        id="household-phone"
+                        type="tel"
+                        autoComplete="off"
+                        value={form.phone}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, phone: e.target.value }))
+                        }
+                        placeholder="(555) 014-2200"
                         className={fieldCls}
                       />
                     </div>
