@@ -14,7 +14,7 @@ Bootstrap date: 2026-09-11
 | W3 | P2 — phase-two feature slice per ruling | **DONE** — close-out commit `bfd8b3833` |
 | W4 | P3 web — incl. trade upload door + Sanity help content | **DONE (web)** — close-out commit `3f9f1eeff`; r14 (final) reviews all clean (code 0/0/33m, data-edge 0/0/13m, QA 0/0/2m); Sanity help push **BLOCKED** on `SANITY_AUTH_TOKEN` — 18/18 docs errored `Insufficient permissions; permission "create" required` — Kody to supply a token with create rights on the help-system dataset, then re-run `studios/help-system/scripts/run-people-help-seed.mjs --commit` |
 | W5 | P3 iOS — Patina Field / client app work + TestFlight | **DONE** — see `w5-ship-report.md` |
-| W6 | Integration + Chrome QA on a local prod build | not started |
+| W6 | Integration + Chrome QA on a local prod build | **RESTARTS FRESH** — the origin/main rebase is **COMPLETE** (2026-09-16, session patina-merged-73): all 160 commits replayed onto `c879118ec`, branch tip `12ca2c014`, 160 ahead of origin/main. The earlier W6 pass ran against the pre-rebase tree and its F1 finding produced **R-CC** (the HT-8 Hours door is a studio-member card act), so W6 starts from the top on this HEAD. Rebase record, conflicts and regen results: `build/w6-rebase.md` §Resumed 2026-09-16 |
 | W7 | Single deploy chain — starts with the email-deliverability checklist (`artifacts/people-room-crm-2026-09-11/build/email-deliverability-checklist.md`) | not started |
 
 ## Gates (every wave)
