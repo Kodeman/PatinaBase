@@ -588,13 +588,17 @@ export function AddPersonSheet({
    *    enabled). A successful `useOrganizations` read is always an array, so
    *    `undefined` there never means "no memberships".
    *  · 'none'    — the job records no studio (a RESOLVED null), or the caller
-   *    holds no ACTIVE membership in the studio that keeps this job's book.
-   *    `useOrganizations` selects `status = 'active'` only
-   *    (packages/supabase/src/hooks/use-organizations.ts:167-169) and all four
-   *    `project_party_authority_studio_*` policies gate on
-   *    `is_active_studio_member(project_party_recorded_studio())`
-   *    (00624:989,1003,1019,1045) — so an absent row and a NULL book are the
-   *    same refusal, said in the same place.
+   *    holds no is_active_studio_member standing in the studio that keeps this
+   *    job's book. F-B2: LIST-PRESENCE IS NOT THAT PREDICATE.
+   *    `useOrganizations` filters on `status = 'active'` ALONE
+   *    (packages/supabase/src/hooks/use-organizations.ts:167-169), while
+   *    `is_active_studio_member` requires `status = 'active' AND role <>
+   *    'guest'` (00417:40-55, where the guest exclusion is deliberate — a
+   *    guest seat is a client's or a contractor's courtesy login and must not
+   *    open the studio's book). An active guest therefore reads back IN the
+   *    list and is refused by all four `project_party_authority_studio_*`
+   *    policies (00624:989,1003,1019,1045) all the same, so a guest row, an
+   *    absent row and a NULL book are one refusal, said in one place.
    *  · 'member' / 'admin' — the caller's role in that studio. Money and
    *    draw_certify are the owner's or an admin's (PR-n).
    */
@@ -605,7 +609,7 @@ export function AddPersonSheet({
     if (recordedStudioId === null) return "none";
     if (recordedStudioId === undefined || orgs === undefined) return "unread";
     const org = orgs.find((o) => o.id === recordedStudioId);
-    if (!org) return "none";
+    if (!org || org.membership?.role === "guest") return "none";
     const role = org.membership?.role;
     return role === "owner" || role === "admin" ? "admin" : "member";
   }, [orgs, recordedStudioId]);
@@ -618,6 +622,18 @@ export function AddPersonSheet({
    * the card, the channels and the rule had been written. A 'none' standing is
    * not held: the band is gone there and the clearing effect below has already
    * taken the grant off the page.
+   *
+   * F-B1 — AND NOT BEFORE A JOB IS CHOSEN. With no project picked
+   * `useProjectRecordedStudio(null)` is disabled, so its data is `undefined`
+   * and the standing reads 'unread' — for a reason no retry can answer. A hold
+   * there took the press that should have met "pick which one they're on"
+   * (`submitParty`, below) and spent it on `onHeldActivate` instead. There is
+   * no standing to read until there is a job, and no band to type into either
+   * (the render below).
+   *
+   * F-B3 — the sentence keys on `orgsLoading` alone: the branch above returns
+   * first on every unresolved book, so this one is only reached once the book
+   * has resolved and `recordedStudioLoading` is false.
    */
   const heldReason: { id: string; sentence: string } | null =
     isEditMode || !isSeatKind(kind)
@@ -629,13 +645,12 @@ export function AddPersonSheet({
               ? RECORDED_STUDIO_HELD_SENTENCE
               : RECORDED_STUDIO_UNREAD_SENTENCE,
           }
-        : authorityStanding === "unread" && grantRequested
+        : !!projectId && authorityStanding === "unread" && grantRequested
           ? {
               id: AUTHORITY_STANDING_HELD_ID,
-              sentence:
-                orgsLoading || recordedStudioLoading
-                  ? AUTHORITY_STANDING_HELD_SENTENCE
-                  : AUTHORITY_STANDING_UNREAD_SENTENCE,
+              sentence: orgsLoading
+                ? AUTHORITY_STANDING_HELD_SENTENCE
+                : AUTHORITY_STANDING_UNREAD_SENTENCE,
             }
           : null;
   /**
@@ -911,10 +926,16 @@ export function AddPersonSheet({
      * against a standing read off two queries that may not have come back; the
      * act already holds there, and a future caller reaching this function
      * directly meets the same refusal with the same sentence.
+     *
+     * F-B1 — with no project picked the recorded-studio query is disabled and
+     * the standing is 'unread' with nothing to read: the press falls through
+     * to the pick-a-project refusal a few lines down, which is the true one.
+     * F-B3 — the guard above returns on every unresolved book, so the sentence
+     * keys on `orgsLoading` alone here too.
      */
-    if (authorityStanding === "unread" && grantRequested) {
+    if (!!projectId && authorityStanding === "unread" && grantRequested) {
       setError(
-        orgsLoading || recordedStudioLoading
+        orgsLoading
           ? AUTHORITY_STANDING_HELD_SENTENCE
           : AUTHORITY_STANDING_UNREAD_SENTENCE,
       );
@@ -1768,8 +1789,17 @@ export function AddPersonSheet({
               affiliation before the refusal came back as "Could not add them
               just now". An UNRESOLVED standing is neither: the band stays
               offered while a query is out and the act is held instead
-              (R-CD). */}
-          {authorityStanding === "none" ? (
+              (R-CD).
+
+              F-B1 — AND NOTHING AT ALL BEFORE A JOB IS CHOSEN. The standing
+              this band stands on is standing in the studio THIS JOB records,
+              and with no project picked `useProjectRecordedStudio(null)` is
+              disabled: the standing read 'unread' for a reason no press can
+              answer, the band was offered anyway, and a phrase typed into it
+              held the act on "Couldn't read your standing…". Neither sentence
+              stands in its place here — there is no job to say anything about
+              yet, and the project select above is the thing to use. */}
+          {!projectId ? null : authorityStanding === "none" ? (
             <p className="mb-4 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
               {recordedStudioId === null
                 ? NO_STUDIO_AUTHORITY_SENTENCE
@@ -2055,7 +2085,14 @@ export function AddPersonSheet({
             heldReason
               ? () => {
                   // Either query can be the unresolved one, and both can be.
-                  if (recordedStudioId === undefined) {
+                  // F-B1: never the recorded-studio query with no project
+                  // picked — it is DISABLED there, and TanStack v5's
+                  // `refetch()` runs the queryFn regardless of `enabled`, which
+                  // for a null project returns `null` (use-coordination.ts:2336)
+                  // — a resolved "this job keeps no book" answer invented for a
+                  // job nobody has chosen, which the clearing effect would then
+                  // act on.
+                  if (projectId && recordedStudioId === undefined) {
                     void refetchRecordedStudio();
                   }
                   if (orgs === undefined) void refetchOrganizations();

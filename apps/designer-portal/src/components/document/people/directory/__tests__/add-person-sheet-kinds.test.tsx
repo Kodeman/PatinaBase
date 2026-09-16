@@ -83,16 +83,22 @@ jest.mock("@patina/supabase", () => ({
   // CR5-1: the card is minted into the studio the seat's PROJECT records —
   // the resolver `assert_project_party_cards()` checks against — never the one
   // holding the book. `recordedStudio` lets a case say the job records none.
-  useProjectRecordedStudio: () => {
+  // F-B1: the real hook is `enabled: Boolean(projectId)`
+  // (use-coordination.ts:2332-2346), so with no project picked the query never
+  // runs and its data is `undefined` with `isLoading` false — a fourth way to
+  // read unresolved, and the one no retry answers. The mock honours the
+  // argument the sheet passes so a case can stand where the studio does.
+  useProjectRecordedStudio: (projectId: string | null | undefined) => {
     const unresolved =
+      !projectId ||
       recordedStudio.loading ||
       recordedStudio.isError ||
       recordedStudio.fetchStatus === "paused";
     return {
       data: unresolved ? undefined : recordedStudio.current,
-      isLoading: recordedStudio.loading,
-      isError: recordedStudio.isError,
-      fetchStatus: recordedStudio.fetchStatus,
+      isLoading: !!projectId && recordedStudio.loading,
+      isError: !!projectId && recordedStudio.isError,
+      fetchStatus: projectId ? recordedStudio.fetchStatus : "idle",
       refetch: recordedStudioRefetch,
     };
   },
@@ -599,6 +605,12 @@ describe("a sub", () => {
   });
 
   it("R-J — says plainly that nothing defaulted, and offers the act (CR-16)", () => {
+    // F-B1: the band is offered only once a job is chosen — the standing it
+    // stands on is standing in the studio THAT JOB records, and this describe's
+    // beforeEach opens the sheet with no project picked.
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
     expect(
       screen.getByText("Nothing defaulted from the agreement."),
     ).toBeInTheDocument();
@@ -1005,6 +1017,105 @@ describe("the recorded studio, while it is still resolving", () => {
     expect(
       screen.getByRole("button", { name: "Add to the roster" }),
     ).not.toHaveAttribute("aria-disabled");
+  });
+
+  /**
+   * F-B1 — AND NO BAND AT ALL BEFORE A JOB IS CHOSEN. The standing the band
+   * stands on is standing in the studio THIS JOB records, so with no project
+   * picked `useProjectRecordedStudio(null)` is disabled (`enabled:
+   * Boolean(projectId)`, use-coordination.ts:2332-2346) and its data is
+   * `undefined` — 'unread' standing, for a reason no press can answer. The
+   * band was offered anyway: a phrase typed into it held the act on
+   * "Couldn't read your standing…", so the press could never reach the one
+   * refusal that is true here, and the held retry ran the DISABLED query's own
+   * `queryFn` (v5's `refetch` ignores `enabled`), which returns `null` for a
+   * null project — a resolved "keeps no book" answer invented for a job nobody
+   * had chosen, on which the clearing effect then wiped what was typed.
+   */
+  it("offers no authority band before a job is chosen, and says to pick one", async () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a sub" }));
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Hector Salas" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Confirm from the agreement" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("What they may decide"),
+    ).not.toBeInTheDocument();
+    // Nor either sentence that stands in the band's place at 'none': there is
+    // no job to say anything about a studio of, and the project select is the
+    // thing to use.
+    expect(
+      screen.queryByText(
+        "This job isn’t attached to a studio yet, so there is nowhere to record the authority.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "You’re not on the studio that keeps this job’s book, so there is nowhere to record the authority.",
+      ),
+    ).not.toBeInTheDocument();
+
+    // The act is not held on a standing there is no job to read: the press
+    // lands on the refusal that names what is actually missing.
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(act);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Field crew work a project — pick which one they’re on.",
+    );
+    expect(addParty).not.toHaveBeenCalled();
+    expect(recordedStudioRefetch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * F-B2 — A GUEST IS ON THE LIST AND HOLDS NO STANDING. `useOrganizations`
+   * filters on `status = 'active'` ALONE (use-organizations.ts:167-169), while
+   * `is_active_studio_member` — what all four authority policies gate on —
+   * requires `status = 'active' AND role <> 'guest'` (00417:40-55, where the
+   * guest exclusion is deliberate: a guest seat is a courtesy login and must
+   * not open the studio's book). Reading list-presence as the predicate
+   * offered a guest every scope and met the policy refusal after the seat, the
+   * card, the channels and the rule were written.
+   */
+  it("holds no standing for a guest on the studio that keeps the book", async () => {
+    orgsState.list = [
+      { id: "org-1", type: "design_studio", membership: { role: "guest" } },
+    ];
+    openSub();
+
+    expect(
+      screen.getByText(
+        "You’re not on the studio that keeps this job’s book, so there is nowhere to record the authority.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Up to, in dollars"),
+    ).not.toBeInTheDocument();
+
+    // The seat itself is unaffected — it is the GRANT a guest cannot record.
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(act);
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(setAuthority).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   /**
