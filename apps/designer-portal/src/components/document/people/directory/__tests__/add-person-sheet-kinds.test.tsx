@@ -950,6 +950,66 @@ describe("the recorded studio, while it is still resolving", () => {
     expect(setAuthority).not.toHaveBeenCalled();
   });
 
+  /**
+   * F1 — WITH NO RECORDED STUDIO THERE IS NO STANDING TO READ, so an
+   * unreadable list is not a reason to hold. `isOrgAdmin` answers `false`
+   * there whatever the list says (CR11-11), and holding the act suppressed the
+   * one notice that IS true on such a job.
+   */
+  it("does not hold on standing where the job records no studio", () => {
+    recordedStudio.current = null;
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    expect(
+      screen.queryByText(
+        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
+      ),
+    ).not.toBeInTheDocument();
+    // The true notice, no longer suppressed: money and draws are ungrantable
+    // on a job that records no studio.
+    expect(
+      screen.getByText(
+        "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Signs money" })).toBeDisabled();
+  });
+
+  /**
+   * F2 — AND NO GRANT ASKED FOR IS NO REASON EITHER. The write runs under
+   * `phrase || threshold`; the band has no collapse control, so an open, empty
+   * band over an unreadable list held the add forever for a grant that would
+   * never be written.
+   */
+  it("does not hold on standing while the authority band is open and empty", async () => {
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    expect(
+      screen.queryByText(
+        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
+      ),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(setAuthority).not.toHaveBeenCalled();
+  });
+
   /** And the retry releases it: the list reads back, the owner may press. */
   it("releases the act once the standing reads back as the owner’s", async () => {
     orgsState.isError = true;
@@ -960,6 +1020,10 @@ describe("the recorded studio, while it is still resolving", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Record the authority" }),
     );
+    // F2: the hold needs a grant on the page — an empty band is never held.
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
     await waitFor(() => expect(orgsRefetch).toHaveBeenCalled());
 

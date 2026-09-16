@@ -235,11 +235,13 @@ const RECORDED_STUDIO_UNREAD_SENTENCE =
  * read off the membership list, so a grant asked for while that list is
  * UNRESOLVED meets a refusal about standing nobody has read yet. Unresolved is
  * `data === undefined`, not `isLoading` — `useOrganizations`
- * (packages/supabase/src/hooks/use-organizations.ts:150-182) has no `enabled`
+ * (packages/supabase/src/hooks/use-organizations.ts:150-184) has no `enabled`
  * gate here and THROWS `Not authenticated` with no session, so an error or an
  * offline-paused fetch reads `isLoading === false` with `data` still
- * undefined; every resolved fetch returns an array, never undefined, so the
- * hold cannot latch for a signed-in owner.
+ * undefined; every SUCCESSFUL fetch returns an array, never undefined, so a
+ * read that came back cannot latch the hold for a signed-in owner — but a read
+ * that errored latches until a press or a reconnect (`refetchOnReconnect:
+ * true`, apps/designer-portal/src/lib/react-query.ts:195).
  */
 const AUTHORITY_STANDING_HELD_ID = "add-person-authority-standing-held";
 const AUTHORITY_STANDING_HELD_SENTENCE =
@@ -455,6 +457,9 @@ export function AddPersonSheet({
   const [otherLabel, setOtherLabel] = useState("");
   const [contactRule, setContactRuleText] = useState("");
   const [authorityPhrase, setAuthorityPhrase] = useState("");
+  // F2: the figure sits beside the phrase because the pair is what decides
+  // whether a grant is asked for at all — read below, before the act's hold.
+  const [authorityThreshold, setAuthorityThreshold] = useState("");
   // R-J / C20 — the Authority field opens from one of two acts, never sits
   // there looking pre-filled (SPEC §5.5 #16).
   const [authorityOpen, setAuthorityOpen] = useState(false);
@@ -533,8 +538,30 @@ export function AddPersonSheet({
    * below then read `false` for a real owner: the money and draw scopes
    * rendered disabled and the notice asserted a standing nobody had read. The
    * state every read of the list below stands on is `undefined`.
+   *
+   * F1 — AND ONLY WHERE THERE IS STANDING TO READ. `isOrgAdmin` below answers
+   * `false` unconditionally while `recordedStudioId` is falsey (CR11-11: no
+   * recorded studio, no standing), so on a job whose book resolved to NULL the
+   * list is never consulted and an unreadable list changes no answer. Holding
+   * there held the act on a question this sheet does not ask, offered money
+   * and draw_certify that are ungrantable on that job, and suppressed the
+   * notice that is the true one there.
    */
-  const authorityStandingUnresolved = authorityOpen && orgs === undefined;
+  const authorityStandingUnread =
+    authorityOpen && !!recordedStudioId && orgs === undefined;
+  /**
+   * F2 — THE ACT IS HELD ONLY WHERE A GRANT IS ACTUALLY ASKED FOR. The write
+   * below runs under `authorityPhrase || authorityThreshold` alone, and the
+   * band has no collapse control — `setAuthorityOpen(true)` from either act,
+   * `false` only in `reset()`. An open, empty band over an unreadable list
+   * therefore held the add for a grant that would never be written, with no
+   * way back. What the band OFFERS still reads `authorityStandingUnread` — the
+   * scopes on offer do not depend on what has been typed — while the ACT is
+   * held only once a grant is on the page to be refused.
+   */
+  const authorityStandingUnresolved =
+    authorityStandingUnread &&
+    (authorityPhrase.trim() !== "" || authorityThreshold.trim() !== "");
   /**
    * R-CD, amended — WHAT HOLDS THE ACT, AND THE SENTENCE BESIDE IT.
    *
@@ -590,7 +617,6 @@ export function AddPersonSheet({
   const [authorityScope, setAuthorityScope] = useState<AuthorityScope>(
     defaultAuthorityScope,
   );
-  const [authorityThreshold, setAuthorityThreshold] = useState("");
   // The sheet's kind decides the sensible default; a studio that opens the
   // band may say something else.
   useEffect(() => {
@@ -598,18 +624,18 @@ export function AddPersonSheet({
   }, [defaultAuthorityScope]);
   // PR-n: money and draw certification are an owner's or an admin's to grant.
   // The DB refuses them either way; the face says so before the press.
-  // F-A: while the list is unresolved `isOrgAdmin` is not an answer, so the
-  // scope is not snapped back on it — the act is held instead.
+  // F-A: while the list is unread `isOrgAdmin` is not an answer, so the scope
+  // is not snapped back on it — the act is held instead.
   useEffect(() => {
     if (
-      !authorityStandingUnresolved &&
+      !authorityStandingUnread &&
       !isOrgAdmin &&
       isAdminOnlyAuthorityScope(authorityScope)
     ) {
       setAuthorityScope(defaultAuthorityScope);
     }
   }, [
-    authorityStandingUnresolved,
+    authorityStandingUnread,
     isOrgAdmin,
     authorityScope,
     defaultAuthorityScope,
@@ -813,6 +839,20 @@ export function AddPersonSheet({
         recordedStudioLoading
           ? RECORDED_STUDIO_HELD_SENTENCE
           : RECORDED_STUDIO_UNREAD_SENTENCE,
+      );
+      return;
+    }
+    /**
+     * F3 — THE SAME DEFENCE ON THE STANDING SIDE. The grant below is refused
+     * against `isOrgAdmin`, which is read off a list that may not have come
+     * back; the act already holds there, and a future caller reaching this
+     * function directly meets the same refusal with the same sentence.
+     */
+    if (authorityStandingUnresolved) {
+      setError(
+        orgsLoading
+          ? AUTHORITY_STANDING_HELD_SENTENCE
+          : AUTHORITY_STANDING_UNREAD_SENTENCE,
       );
       return;
     }
@@ -1694,7 +1734,7 @@ export function AddPersonSheet({
                   key={scope}
                   value={scope}
                   disabled={
-                    !authorityStandingUnresolved &&
+                    !authorityStandingUnread &&
                     !isOrgAdmin &&
                     isAdminOnlyAuthorityScope(scope)
                   }
@@ -1703,10 +1743,10 @@ export function AddPersonSheet({
                 </option>
               ))}
             </select>
-            {/* F-A: an unresolved list is not a refusal. While it is out, the
+            {/* F-A: an unread list is not a refusal. While it is out, the
                 scopes stay offered and this notice stays silent — the act
                 carries the reason instead. */}
-            {!authorityStandingUnresolved && !isOrgAdmin && (
+            {!authorityStandingUnread && !isOrgAdmin && (
               <p className="mt-1 text-[0.66rem] leading-relaxed text-[var(--color-aged-oak)]">
                 Signing money and certifying draws are the studio owner&rsquo;s
                 or an admin&rsquo;s to grant.
