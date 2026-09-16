@@ -778,3 +778,72 @@ $ lsof -nP -iTCP:3000 -sTCP:LISTEN
 $ lsof -nP -iTCP:3002 -sTCP:LISTEN
 ```
 Both empty — confirmed before finishing.
+
+---
+
+## §12 Nine-red triage (2026-09-16)
+
+Scope: the nine designer reds §11's final clean full run classed **OURS** purely
+because the program touched a file they exercise. Each is re-run under one
+reproducible procedure and given a root cause with `file:line` evidence.
+
+**Procedure, once, in order:** `pnpm --dir WT supabase:reset` → clean
+(`{"message":"Reset local database."}`) → `psql … -f
+scripts/the-document-lens-seed.sql` (exit 0) → `supabase functions serve
+paperwork-upload --env-file <path OUTSIDE the repo>` with `EMAIL_DEV_MODE=dry_run`
+(no `.env` file created anywhere in the tree) → the specs grouped by file through
+`pnpm --dir WT/apps/designer-portal exec playwright test <files> --project=chromium
+--workers=1`, letting **Playwright's own `webServer`** start the server so
+`playwright.config.ts:103-123`'s `NEXT_PUBLIC_FLAG_OVERRIDES`
+(`…,client-invite-letter:true`) is actually inlined.
+
+Test-process env (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`,
+`NEXT_PUBLIC_SUPABASE_URL`, `MAILPIT_URL`) was exported from a shell file outside
+the repo — `e2e/helpers/supabase-admin.ts:8` throws without it and
+`playwright.config.ts`'s `webServer.env` reaches only the server, never the test
+process. `NEXT_PUBLIC_FLAG_OVERRIDES` was deliberately **not** exported, so the
+config's own block stayed the sole source of the letter flag.
+
+### The table
+
+| Spec : line | Class | Evidence | Commit |
+|---|---|---|---|
+| `e2e/document/desk-walkthrough.spec.ts:152` | **PRE-EXISTING** | `expect(rec?.completed).toBe(true)` → `undefined`. The whole write path is byte-identical to `origin/main`: `git diff --name-only origin/main HEAD -- packages/help-system/src/persistence/ packages/help-system/src/proactive/ apps/designer-portal/src/app/(document)/layout.tsx` is **empty**. `supabaseAdapter.ts`'s own header states the contract: writes are an async write-through whose "failures (network, RLS, schema mismatch) are logged via console.warn but never throw", while the in-memory cache stays authoritative — so the UI completes the tour and `profiles.help_state` need not follow. Non-deterministic, and it MOVES between the file's three tests run to run: §10 recorded `:193`, §11 `:152`, this pass `:152` in the grouped run and then **`:115`** when the file was run alone (`run-C`, 1 failed / 2 did not run) — the identical assertion at `:144`. A deterministic regression from a specific product change cannot move like that. | — |
+| `e2e/document/help-panel.spec.ts:73` | **PRE-EXISTING** | `locator.fill` timeout "waiting for `getByRole('dialog', {name:'Command bar'}).getByRole('textbox')`". The command bar's input carries an explicit `role="combobox"` (`command-bar.tsx:1117-1120`), which an ARIA `textbox` query can never match. That role landed in **`e5e36e96b` "fix(designer): ⌘K is a combobox (B03)", 2026-09-08 — `git merge-base --is-ancestor e5e36e96b origin/main` = true**. The spec is untouched by this branch (`git log origin/main..HEAD -- <spec>` empty), and this branch's only edit to `command-bar.tsx` is the `call-sheet` flag removal (3 insertions / 5 deletions, none of them the input). §10 already recorded the same "command-palette timeout cluster". | — |
+| `e2e/document/margin-handoffs.spec.ts:154` | **PRE-EXISTING** | `[data-standing-row][data-standing-tier="overdue"]` filtered by `/\d+ decisions? overdue — oldest due [A-Z][a-z]{2} \d{1,2}/` → count 0. The run's own `error-context.md` shows the standing sheet **open and carrying the row**: `dialog "Standing · 3"` → `paragraph: 3 decisions overdue — oldest due 11 September`. The sentence is there; the spec's regex wants `MMM D` ("Sep 11") and the product prints `D Month` ("11 September"). That string is built by `desk-derivation.ts:598`, and `git diff --name-only origin/main HEAD --` is **empty** for `desk-derivation.ts`, `lens-band-derivation.ts`, `document-guide.ts`, `standing-sheet.tsx`, `lens-band.tsx`, `workflow-gate.ts` and the spec itself. Nothing in this branch's `doc/[id]/page.tsx` diff (call-sheet flag retirement, `?sheet=call`) touches the derivation the assertion reads. | — |
+| `e2e/wave2-screenshots.spec.ts:24` | **PRE-EXISTING** | Dies on the **sign-in page**, never reaching `/doc/${PROPOSAL_ID}`: `locator.fill` timeout "waiting for `locator('input[type="password"]').first()`" at `wave2-screenshots.spec.ts:19`, inside the file's own private `signInDesigner`. That helper reveals the password panel with `/sign in with email/i` only; the golden-hour auth restyle renamed the control, and the suite's shared fixture already matches **both** spellings — `e2e/fixtures/auth.ts:43`, `name: /sign in with email\|use email and password instead/i`. Spec and `PortalAuth` are both untouched by this branch (`git diff --name-only origin/main HEAD -- apps/designer-portal/src/components/auth apps/designer-portal/src/app/auth packages/auth` empty). §11 attributed this to `desk/page.tsx`/`doc/[id]/page.tsx`; the failure never loads either page. (§10's theory that `password123` is wrong is also superseded — `auth.ts:15` uses that same password and the fixture-backed specs sign in fine.) | — |
+| `e2e/wave2-screenshots.spec.ts:37` | **PRE-EXISTING** | Same helper, same line, same call log (`wave2-screenshots.spec.ts:19` reached from `:43`). | — |
+| `e2e/wp3-screenshots.spec.ts:153` | **PRE-EXISTING** | `getByText(/With Client User ·/).first()` → `Received: hidden`, resolving 9× to the same `<p class="break-words text-[13px] …">With Client User · Issue 02 …</p>`. That `<p>` is a margin-handoff need line inside the margin rail, and `margin-rail.tsx:332` makes the whole panel `hidden` until `min-[1180px]` — at the spec's 390px viewport it is `display:none` **by design, in code byte-identical to `origin/main`** (`git diff --name-only origin/main HEAD --` empty for `margin-rail.tsx`, `margin-handoff-item.tsx`, `responsive-document-shell.tsx`, `workflow-gate.ts` and the spec). The run's `error-context.md` confirms the visible 390px face carries no "With …" text at all — it is the standing head band (`OVERDUE 5D · DECISIONS` / `Chase` / `+2 MORE`). This branch's only edit in that render path, `letterhead-instruments.tsx` (+1/−6, mounting `CallSheetInstrument` unconditionally), **adds** a control ("Call sheet · 0", visible in the same snapshot) and removes nothing that ever printed "With <name> ·"; and an off-screen control would still read *visible* to Playwright, not *hidden*. | — |
+| `e2e/people/add-client-letter.spec.ts:47` | **ENVIRONMENTAL** | Under the procedure above it **passes**: `✓ 1 … a letter goes to a new client, and only one (14.1s)`. §11's 60s `getByLabel('A line for Dave')` timeout was the flag gap `d39878620` named — the letter block is behind `useFeatureFlag("client-invite-letter")` (`add-person-sheet.tsx:342-344`), which Next inlines at build/dev start, and §11 built and started its own server without it. One further **local-stack** gap had to be cleared to see the green, and it is worth recording: `playwright.config.ts`'s `webServer.env` hard-codes the **ES256** demo keys while this machine's CLI stack issues the **HS256** legacy keys, and `client-invite` string-compares the bearer against its own `SUPABASE_SERVICE_ROLE_KEY` (`index.ts:678-686` → `lib.ts:103-116`). Probed directly: ES256 bearer → `{"error":"unauthorized"}`, HS256 bearer → `{"error":"email_required"}`. With the dev server given the stack's own HS256 keys plus the same flag override, the send goes through. Not a defect in this branch either way. | — |
+| `e2e/people/add-client-letter.spec.ts:123` | **ENVIRONMENTAL** | Passes under the procedure with no other change at all: `✓ 2 … the roster still works with no letter, and nothing is sent (6.3s)` on the very first grouped run (`run-B`), which used Playwright's own `webServer` and nothing else. Same flag gap as `:47`. | — |
+| `e2e/people/bring-forward.spec.ts:264` | **TEST-SIDE (fixed)** | `getByRole('button', {name:'Add one to the roster'})` → element(s) not found. Both tests in the file share one `beforeAll` project and Playwright runs a file's tests in order in one worker at `--workers=1`; task 5 (`:117`) seats Dana Kowalski on that project, so the second pick of her is `pickedSplit.seated`, `bringForwardActLabel(pickedSplit.fresh.length)` (`rolodex-picker.tsx:1072`, `lib/document/bring-forward.ts:96-100`) correctly reads **"Add to the roster"**, and the run's own `error-context.md` shows the sheet saying so: `button "Add to the roster"` beside `Adds no seats to the Bring forward bs4ih. Dana Kowalski is already on the call sheet.` The product is right; the pick has to be someone task 5 left behind — Erin Sato, who shares the Lindqvist history (R-BP / seed F-28) and whom task 5 already asserts is NOT ticked. Re-run green through Playwright's own webServer: **2 passed (45.7s)**. | `d8ea9e7a5` |
+
+### Verdict
+
+**0 of the nine are PRODUCT.** Six are pre-existing reds in code this branch
+never touched, two were the letter flag not reaching a hand-started server, and
+one was a test-order defect in this program's own spec, now fixed. §11's OURS
+column over-counted: it attributed the six to `desk/page.tsx` and
+`doc/[id]/page.tsx` on a "touched a file they exercise" rule, but in every case
+the failing assertion reads a surface those two diffs do not reach — and two of
+them (`wave2-screenshots`) never load a document page at all.
+
+### Runs behind this section
+
+| Run | Command | Result |
+|---|---|---|
+| `run-A` | `playwright test e2e/document/desk-walkthrough.spec.ts e2e/document/help-panel.spec.ts e2e/document/margin-handoffs.spec.ts e2e/wave2-screenshots.spec.ts e2e/wp3-screenshots.spec.ts --project=chromium --workers=1` | 6 failed / 6 passed / 1 skipped / 5 did not run (5.5m) — all six A-cluster reds reproduced |
+| `run-B` | `playwright test e2e/people/add-client-letter.spec.ts e2e/people/bring-forward.spec.ts --project=chromium --workers=1` | 2 failed / 2 passed (1.1m) — `:123` green on the flag alone; `:47` on the key mismatch; `:264` on the seated pick |
+| `run-B3` | same two files, dev server given the stack's HS256 keys + the same flag override, spec fix applied | **4 passed (52.5s)** |
+| `run-C` | `playwright test e2e/document/desk-walkthrough.spec.ts --project=chromium --workers=1` (file alone) | 1 failed (`:115`, not `:152`) / 2 did not run — the red moved |
+| `run-D` | `playwright test e2e/people/bring-forward.spec.ts --project=chromium --workers=1`, Playwright's own webServer | **2 passed (45.7s)** |
+
+Ports at the end of this pass:
+
+```
+$ lsof -nP -iTCP:3000 -sTCP:LISTEN
+$ lsof -nP -iTCP:3002 -sTCP:LISTEN
+```
+
+Both empty. No prod (Strata/Cloudflare) resource was read or written at any
+point in this triage; local Supabase only.
