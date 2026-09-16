@@ -8230,6 +8230,7 @@ export type Database = {
           payer_id: string | null
           payment_method: string | null
           return_nonce: string | null
+          return_nonce_consumed_at: string | null
           state: string
           stripe_checkout_session_id: string | null
           stripe_customer_id: string
@@ -8250,6 +8251,7 @@ export type Database = {
           payer_id?: string | null
           payment_method?: string | null
           return_nonce?: string | null
+          return_nonce_consumed_at?: string | null
           state?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id: string
@@ -8270,6 +8272,7 @@ export type Database = {
           payer_id?: string | null
           payment_method?: string | null
           return_nonce?: string | null
+          return_nonce_consumed_at?: string | null
           state?: string
           stripe_checkout_session_id?: string | null
           stripe_customer_id?: string
@@ -36862,10 +36865,7 @@ export type Database = {
           payer_id: string
         }[]
       }
-      resolve_invoice_return_nonce: {
-        Args: { p_nonce: string }
-        Returns: string
-      }
+      resolve_invoice_return_nonce: { Args: { p_nonce: string }; Returns: Json }
       resolve_item_feedback: {
         Args: { p_feedback_id: string }
         Returns: {

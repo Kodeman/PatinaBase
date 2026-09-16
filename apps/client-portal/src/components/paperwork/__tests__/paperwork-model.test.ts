@@ -49,6 +49,15 @@ describe('formatPaperDate', () => {
   });
 });
 
+describe('rowSentence, the two states spec \u00a73 gained', () => {
+  it('prints the awaiting-check and refused sentences', () => {
+    expect(rowSentence('awaiting_check', 'Licence', '2027-03-31')).toBe(
+      'Licence, not yet checked.',
+    );
+    expect(rowSentence('refused', 'W-9', null)).toBe('W-9 was not accepted.');
+  });
+});
+
 describe('joinWords', () => {
   it('joins one, two and three gates', () => {
     expect(joinWords([])).toBe('');
@@ -217,25 +226,68 @@ describe('buildPaperworkRows', () => {
     expect(coi?.awaitingCheck).toBe(true);
   });
 
-  // W4 round-1 review QA-B1: an upload nobody has opened is not paper the
-  // studio holds, and the firm's own page may not say it is.
-  it('reads not on file when the only paper of a type is waiting for the check', () => {
+  // W4 round-1 review QA-B1, then R-BU: an upload nobody has opened is not
+  // paper the studio holds, and the firm's own page may not say it is — nor
+  // may it say "is not on file" one line above its own receipt (W4 r7 MAJOR-2).
+  it('reads not yet checked when the only paper of a type is waiting for the check', () => {
     const rows = buildPaperworkRows(
       context([
         doc({
           doc_type: 'license',
-          state: 'current',
+          state: 'awaiting_check',
           expires_on: '2027-03-31',
           awaiting_check: true,
         }),
       ]),
     );
     const licence = rows.find((row) => row.docType === 'license');
-    expect(licence?.state).toBe('not_on_file');
+    expect(licence?.state).toBe('awaiting_check');
     expect(licence?.awaitingCheck).toBe(true);
-    expect(licence?.sentence).toBe('Licence is not on file.');
+    expect(licence?.sentence).toBe('Licence, not yet checked.');
+    // The word does not disagree with the receipt printed under it.
+    expect(licence?.sentence).not.toMatch(/not on file/i);
+    expect(licence?.sentence).not.toMatch(/current/i);
     // Something has been sent, so the form does not open itself at her.
     expect(licence?.openByDefault).toBe(false);
+  });
+
+  // W4 r7 M-4: a refusal reaches the firm here or nowhere.
+  it('says a refused paper was not accepted, in the studio\u2019s own words', () => {
+    const rows = buildPaperworkRows(
+      context([
+        doc({
+          doc_type: 'coi_gl',
+          state: 'refused',
+          expires_on: null,
+          blocks: ['site_access'],
+          awaiting_check: false,
+          refusal_reason: 'The certificate names the wrong job address',
+        }),
+      ]),
+    );
+    const coi = rows.find((row) => row.docType === 'coi_gl');
+    expect(coi?.state).toBe('refused');
+    expect(coi?.sentence).toBe('COI, general liability was not accepted.');
+    expect(coi?.reasonSentence).toBe('The certificate names the wrong job address.');
+    expect(coi?.awaitingCheck).toBe(false);
+    // Nothing is waiting, and paper is owed again, so the form opens.
+    expect(coi?.openByDefault).toBe(true);
+  });
+
+  it('keeps a refusal from outranking paper the studio now holds', () => {
+    const rows = buildPaperworkRows(
+      context([
+        doc({
+          doc_type: 'w9',
+          state: 'current',
+          blocks: [],
+          expires_on: null,
+        }),
+      ]),
+    );
+    const w9 = rows.find((row) => row.docType === 'w9');
+    expect(w9?.state).toBe('current');
+    expect(w9?.reasonSentence).toBeNull();
   });
 
   it('lets the paper the studio HOLDS speak the word when a renewal is pending beside it', () => {

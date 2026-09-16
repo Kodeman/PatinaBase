@@ -807,6 +807,111 @@ BEGIN
   RAISE NOTICE '9b. MAJOR-1 — awaiting_check is the firm''s own upload, never the paper the studio typed itself: passed';
 END $$;
 
+-- ── one row per type, and the state IS the word (R-BU, W4 r7 MAJOR-2 / M-4) ──
+-- Before this, resolve_paperwork_link computed the row's state from expires_on
+-- and blocks alone and carried awaiting_check beside it as a flag. An
+-- in-force certificate nobody had opened therefore read 'current' on the
+-- firm's page while compliance_state read the same firm as not_on_file — two
+-- surfaces, one fact, two answers. The state now says which it is, and a
+-- refusal is a state too (M-4) instead of a row that silently disappears.
+DO $$
+DECLARE
+  v_firm   uuid := 'fa200000-0000-4000-8000-00000000000c';
+  v_token  text;
+  v_docs   jsonb;
+  v_row    jsonb;
+  v_reject uuid := 'fa700000-0000-4000-8000-000000000021';
+  v_pend   uuid;
+BEGIN
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000004');
+  SELECT m.token INTO v_token
+    FROM public.mint_paperwork_link(v_firm, now() + interval '30 days') m;
+  PERFORM pg_temp.reset_role();
+
+  -- (a) ONE ROW PER TYPE. coi_gl on this firm carries a refusal (block 9) and
+  -- an unchecked upload (block 9b); the page speaks about the type once.
+  v_docs := (public.resolve_paperwork_link(v_token, false))->'documents';
+  IF (SELECT count(*) FROM jsonb_array_elements(v_docs) d
+       WHERE d->>'doc_type' = 'coi_gl') <> 1 THEN
+    RAISE EXCEPTION 'BLOCK 9c FAIL (a): coi_gl speaks % times, not once',
+      (SELECT count(*) FROM jsonb_array_elements(v_docs) d WHERE d->>'doc_type' = 'coi_gl');
+  END IF;
+
+  -- (b) THE AGREEMENT. The only coi_gl paper anyone could act on is an upload
+  -- nobody has opened, so the firm's page must not call it current — the word
+  -- the studio's own read gives that paper is not_on_file.
+  SELECT d INTO v_row FROM jsonb_array_elements(v_docs) d
+   WHERE d->>'doc_type' = 'coi_gl';
+  IF v_row->>'state' <> 'awaiting_check' THEN
+    RAISE EXCEPTION 'BLOCK 9c FAIL (b): the firm''s page reads coi_gl as %, while the studio holds nothing of the kind',
+      v_row->>'state';
+  END IF;
+  IF NOT (v_row->>'awaiting_check')::boolean OR v_row->>'refusal_reason' IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 9c FAIL (b2): a fresh upload did not replace the older refusal as the type''s word';
+  END IF;
+
+  -- (c) THE CONFIRM IS WHAT MAKES IT CURRENT. A member opens the same upload
+  -- and the page's word changes with the studio's.
+  SELECT id INTO v_pend FROM public.studio_compliance_documents
+   WHERE holder_id = v_firm AND doc_type = 'coi_gl'
+     AND inbound AND verified_at IS NULL AND rejected_at IS NULL
+   ORDER BY created_at DESC LIMIT 1;
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  PERFORM public.confirm_inbound_document(v_pend);
+  PERFORM pg_temp.reset_role();
+
+  v_docs := (public.resolve_paperwork_link(v_token, false))->'documents';
+  SELECT d INTO v_row FROM jsonb_array_elements(v_docs) d
+   WHERE d->>'doc_type' = 'coi_gl';
+  IF v_row->>'state' NOT IN ('current', 'lapses_soon')
+     OR (v_row->>'awaiting_check')::boolean THEN
+    RAISE EXCEPTION 'BLOCK 9c FAIL (c): the confirmed certificate still reads % / awaiting %',
+      v_row->>'state', v_row->>'awaiting_check';
+  END IF;
+
+  -- (d) M-4: A REFUSAL IS THE TYPE'S WORD WHEN NOTHING ELSE STANDS, and it
+  -- carries the reason the studio typed. The chase is an agent draft that
+  -- lands awaiting_review, so this page is the only place the firm can read it.
+  INSERT INTO public.studio_compliance_documents
+    (id, organization_id, holder_type, holder_id, doc_type, expires_on,
+     source, inbound)
+  VALUES (v_reject, 'fa000000-0000-4000-8000-00000000000a', 'company', v_firm,
+          'bond', CURRENT_DATE + 100, 'field_link', true);
+  PERFORM pg_temp.assume_user('a0000000-0000-0000-0000-000000000003');
+  PERFORM public.reject_inbound_document(v_reject, 'The bond expired before the start date');
+  PERFORM pg_temp.reset_role();
+
+  v_docs := (public.resolve_paperwork_link(v_token, false))->'documents';
+  SELECT d INTO v_row FROM jsonb_array_elements(v_docs) d
+   WHERE d->>'doc_type' = 'bond';
+  IF v_row IS NULL THEN
+    RAISE EXCEPTION 'BLOCK 9c FAIL (d): the refused bond vanished from the firm''s page with no word';
+  END IF;
+  IF v_row->>'state' <> 'refused'
+     OR v_row->>'refusal_reason' <> 'The bond expired before the start date'
+     OR (v_row->>'awaiting_check')::boolean THEN
+    RAISE EXCEPTION 'BLOCK 9c FAIL (d2): the refused bond reads % / %',
+      v_row->>'state', v_row->>'refusal_reason';
+  END IF;
+
+  -- (e) and a refusal stops being the last word the moment the firm sends
+  -- another of the same type.
+  PERFORM public.record_inbound_compliance_document(
+    v_token, 'bond', NULL, 'BOND-9', 'Western National Test',
+    CURRENT_DATE, CURRENT_DATE + 300,
+    'fa000000-0000-4000-8000-00000000000a/' || v_firm::text || '/'
+      || gen_random_uuid()::text || '/bond.pdf');
+  v_docs := (public.resolve_paperwork_link(v_token, false))->'documents';
+  SELECT d INTO v_row FROM jsonb_array_elements(v_docs) d
+   WHERE d->>'doc_type' = 'bond';
+  IF v_row->>'state' <> 'awaiting_check' OR v_row->>'refusal_reason' IS NOT NULL THEN
+    RAISE EXCEPTION 'BLOCK 9c FAIL (e): the replaced refusal is still the bond''s word (% / %)',
+      v_row->>'state', v_row->>'refusal_reason';
+  END IF;
+
+  RAISE NOTICE '9b2. R-BU / M-4 — one row per doc type, awaiting_check is a state rather than a flag beside a wrong one, and a refusal reaches the firm in the studio''s own words: passed';
+END $$;
+
 -- ── the confirm answers all four of R-AZ's time-varying legs ──────────────
 DO $$
 DECLARE

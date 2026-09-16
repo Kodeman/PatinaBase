@@ -133,8 +133,9 @@ export async function middleware(req: NextRequest) {
   // link (00574): the token is resolved server-side via resolve_invoice_link()
   // — the homeowner paying a bill has no account and, in the payer-less case
   // the feature exists for, has no profile row to have one with. The prefix
-  // deliberately covers /pay/return/<nonce> (the Stripe return hop) and
-  // /pay/dead (the static sheet it lands on when the nonce names nothing).
+  // deliberately covers /pay/return/<nonce> (the Stripe return hop),
+  // /pay/dead (the static sheet it lands on when the nonce names nothing) and
+  // /pay/used (where a SPENT return nonce lands — R-BT).
   // S-10: bare `/pay` too, so this and app-chrome's `PUBLIC_PREFIXES` agree
   // about the same prefix. Without it `/pay` was chrome-less but not public,
   // and would have produced `callbackUrl=/pay`.

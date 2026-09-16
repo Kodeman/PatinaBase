@@ -15,7 +15,10 @@
 --               would tell a guesser the shape of the guess was right (S2).
 --               Expiry is tested BELOW the dead-link branch (W4 r5 F1): a
 --               closed link's sheet is a receipt, not a pay door, so it keeps
---               answering withdrawn/settling however old it is.
+--               answering withdrawn/settling however old it is. A PAID
+--               invoice's link is exempt for the same reason (W4 r7 MAJOR-4):
+--               it stays `active`, its sheet is the household's own receipt,
+--               and no Checkout can open on it.
 --   token       FROZEN NULL. The column stays so the rollback is a widening,
 --               and a CHECK holds it at NULL so no later code can refill it.
 --
@@ -41,13 +44,26 @@
 --    than "no link yet", which would be false about an invoice whose link the
 --    send itself minted (W4 r6 M-1). status and expires_at ride back for
 --    exactly that sentence.
---  · resolve_invoice_return_nonce ROTATES. The Stripe return trades a nonce
---    for an address, and there is no stored address left to trade. It mints a
---    fresh token ON THE SAME LINK ROW the attempt was claimed against — the
---    row keeps its id, its Stripe customer and its payer email, so F2 ("a
---    nonce is not an alias for a regenerated token") still holds: it is the
---    same grant, re-addressed for the holder who just proved they came back
---    from Checkout. The function is VOLATILE now, not STABLE.
+--  · resolve_invoice_return_nonce ROTATES, ONCE, ON A SUCCESS ONLY (R-BT).
+--    The Stripe return trades a nonce for an address, and there is no stored
+--    address left to trade. It mints a fresh token ON THE SAME LINK ROW the
+--    attempt was claimed against — the row keeps its id, its Stripe customer
+--    and its payer email, so F2 ("a nonce is not an alias for a regenerated
+--    token") still holds: it is the same grant, re-addressed for the holder
+--    who just proved they came back from Checkout. The function is VOLATILE
+--    now, not STABLE. Two things bound it, and both are closed here rather
+--    than named as hazards:
+--      THE CANCEL PATH. Stripe's cancel_url no longer rides the nonce. The
+--      driver hands back the /pay/<token> the client opened (the link rail
+--      holds that token from the request) or the signed-in letterbox, so a
+--      client who presses Back at Checkout keeps the address in her inbox
+--      instead of watching it rotate out from under her (W4 r7 BLOCKING-1).
+--      THE SPENT NONCE. §2b adds return_nonce_consumed_at and the function
+--      claims it in the same statement it reads the nonce with, so a second
+--      GET — back button, prefetch, mail-client scanner, double tap — rotates
+--      nothing and answers {"state":"spent"}. The route lands that on
+--      /pay/used, which is readable; it can no longer kill the address the
+--      first redirect handed the browser (W4 r7 MAJOR-1).
 --  · THE MINT GUARD HAS A SWEEP BEHIND IT (§6). ensure_invoice_link refuses
 --    to rotate while a Checkout attempt is claimed / session_created /
 --    processing; a `processing` row is ACH money in flight, which 00574's
@@ -58,11 +74,6 @@
 --    hour, with the same signature (R-BY). The letters do not take the
 --    fallback address while the guard stands: they hold (invoice-reminders,
 --    invoice-send).
---    KNOWN HAZARD: two GETs of /pay/return/<nonce> rotate twice and the first
---    redirect's address is then dead. The route is a 303 with
---    Cache-Control: private, no-store and is fetched once by the returning
---    browser; a prefetch of it would flake. Named here so it is not discovered
---    as a mystery.
 --
 -- Lineage (grep -rln "CREATE OR REPLACE FUNCTION[^(]*<name>" supabase/migrations/*.sql
 -- | sort | tail -1, run 2026-09-15):
@@ -193,8 +204,27 @@ COMMENT ON COLUMN public.invoice_links.expires_at IS
   'regeneration, which is every send (CRM-29). An expired ACTIVE link resolves '
   'to the same NULL a revoked or unknown one does (S2); a closed link is past '
   'expiry by construction and still answers its withdrawn/settling receipt '
-  '(W4 r5 F1). Rows that were already dead when 00636 ran carry the date they '
-  'died on.';
+  '(W4 r5 F1), and so does a PAID invoice''s link, which stays active and '
+  'whose sheet is the household''s own receipt (W4 r7 MAJOR-4). Rows that were '
+  'already dead when 00636 ran carry the date they died on.';
+
+-- ── 2b. The return nonce is spent by its first use (R-BT) ──────────────────
+-- 00574 minted a nonce per attempt and never marked it used, which was
+-- harmless while the return merely READ an address. Since §4 rotates, an
+-- unmarked nonce is a loaded gun: any replay of /pay/return/<nonce> — a back
+-- button, a browser prefetch, a mail-client link scanner — re-addressed the
+-- link and killed the address the previous redirect had just handed the payer.
+-- The stamp below is the single-use gate; resolve_invoice_return_nonce claims
+-- it in the same statement it reads, so two concurrent GETs cannot both win.
+ALTER TABLE public.invoice_checkout_attempts
+  ADD COLUMN IF NOT EXISTS return_nonce_consumed_at timestamptz;
+
+COMMENT ON COLUMN public.invoice_checkout_attempts.return_nonce_consumed_at IS
+  'When this attempt''s return nonce was resolved — stamped once, by '
+  'resolve_invoice_return_nonce, in the statement that claims it. A nonce '
+  'carrying this date rotates nothing further: the replay answers '
+  '{"state":"spent"} and the payer lands on /pay/used rather than on a dead '
+  'address (00636, R-BT).';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. The producers — mint the hash, emit the raw once
@@ -461,18 +491,63 @@ COMMENT ON FUNCTION public.invoice_link_is_live(uuid) IS
   'fact create-checkout-session needed when it was calling ensure_invoice_link '
   'for a boolean (00636). Mints nothing and revokes nothing.';
 
--- The Stripe return. ROTATES the bound link''s token (see banner).
+-- THE STRIPE RETURN — ROTATES ONCE, AND ONLY FOR A SUCCESS (R-BT).
+--
+-- Two legs of one ruling live here; the third is in the driver.
+--
+--  · CANCEL NEVER COMES THROUGH HERE. invoiceCheckoutReturnBase now hands
+--    Stripe the nonce address for 'success' only; a cancel_url goes back to
+--    the /pay/<token> the client opened (the link rail holds that token from
+--    the request) or to the signed-in letterbox. A client who presses Back at
+--    Stripe therefore lands on the address in her inbox, still live, rather
+--    than rotating the link she was about to pay with (W4 r7 BLOCKING-1).
+--
+--  · A NONCE IS SPENT BY ITS FIRST RESOLUTION. The claim is the UPDATE below:
+--    one statement, so two simultaneous GETs cannot both win it. A repeat GET
+--    — a back button, a prefetch, a mail-client link scanner, a double tap —
+--    answers state 'spent' and rotates NOTHING, so it cannot kill the address
+--    the first redirect just handed the browser (W4 r7 MAJOR-1). The route
+--    lands a spent nonce on /pay/used, a readable page, never the dead sheet.
+--
+-- Returns jsonb rather than text because the route needs to tell three
+-- outcomes apart and one of them carries no address:
+--   {"state":"rotated","token":"<64 hex>"}   first resolution
+--   {"state":"spent"}                        already resolved once
+--   NULL                                     malformed / unknown / no link
+DROP FUNCTION IF EXISTS public.resolve_invoice_return_nonce(text);
 CREATE OR REPLACE FUNCTION public.resolve_invoice_return_nonce(p_nonce text)
-RETURNS text
+RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
-  v_link_id uuid;
-  v_token   text;
+  v_attempt_id uuid;
+  v_link_id    uuid;
+  v_token      text;
 BEGIN
   IF p_nonce IS NULL OR p_nonce !~ '^[0-9a-f]{64}$' THEN
+    RETURN NULL;
+  END IF;
+
+  -- The claim. `return_nonce_consumed_at IS NULL` in the WHERE makes this the
+  -- single-use gate: the row is stamped and returned in one statement, so a
+  -- second caller reads no row and rotates nothing.
+  UPDATE public.invoice_checkout_attempts a
+     SET return_nonce_consumed_at = now()
+   WHERE a.return_nonce = p_nonce
+     AND a.return_nonce_consumed_at IS NULL
+  RETURNING a.id INTO v_attempt_id;
+
+  IF v_attempt_id IS NULL THEN
+    -- Spent, or never existed. Only a nonce that really is on the books reads
+    -- as spent; an unknown one keeps 00574's silence (S2).
+    IF EXISTS (
+      SELECT 1 FROM public.invoice_checkout_attempts a
+       WHERE a.return_nonce = p_nonce
+    ) THEN
+      RETURN jsonb_build_object('state', 'spent');
+    END IF;
     RETURN NULL;
   END IF;
 
@@ -481,7 +556,7 @@ BEGIN
   SELECT l.id INTO v_link_id
   FROM public.invoice_checkout_attempts a
   JOIN public.invoice_links l ON l.invoice_id = a.invoice_id
-  WHERE a.return_nonce = p_nonce
+  WHERE a.id = v_attempt_id
     AND l.status <> 'revoked'
     AND l.created_at <= a.created_at
   ORDER BY (l.status = 'active') DESC, l.created_at DESC
@@ -498,19 +573,23 @@ BEGIN
          expires_at = now() + interval '30 days'
    WHERE id = v_link_id;
 
-  RETURN v_token;
+  RETURN jsonb_build_object('state', 'rotated', 'token', v_token);
 END;
 $$;
 
 COMMENT ON FUNCTION public.resolve_invoice_return_nonce(text) IS
-  'Service-only: the address behind a Checkout return nonce '
+  'Service-only: the address behind a SUCCESSFUL Checkout return '
   '(/pay/return/<nonce> → /pay/<token>). Since 00636 it ROTATES rather than '
   'reads: the stored value is a hash, so the SAME link row the attempt was '
   'claimed against (F2 — never a later mint, never a revoked one) is '
   're-addressed with a fresh token and a fresh 30 days, and the raw value is '
   'returned once to the holder who just proved they came back from Checkout. '
-  'NULL for malformed/unknown. VOLATILE: two GETs of the return route rotate '
-  'twice and the first address dies — the route is a single 303, no-store.';
+  'SINGLE USE (R-BT): the first resolution stamps return_nonce_consumed_at in '
+  'the same statement that claims it, so a replayed GET answers '
+  '{"state":"spent"} and rotates nothing — the address the first redirect '
+  'handed the browser stays live. A cancelled Checkout never reaches this '
+  'function at all; its cancel_url is the /pay/<token> the client opened. '
+  'NULL for malformed, unknown, or a nonce whose link has been revoked.';
 
 CREATE OR REPLACE FUNCTION public.resolve_invoice_link(
   p_token text,
@@ -571,7 +650,18 @@ BEGIN
   -- link closed before this migration (the backfill below dates a closed row
   -- from revoked_at, i.e. already past), and, forward-going, every receipt
   -- 30 days after its last mint.
+  --
+  -- A PAID INVOICE IS A RECEIPT TOO (W4 r7 MAJOR-4). Its link is still
+  -- `active` — closing it is not what payment does — so the expiry test caught
+  -- it, and 31 days after this migration every client re-opening the address
+  -- she was emailed for an invoice she has already SETTLED met the dead sheet.
+  -- There is no self-service way back: ensure_invoice_link is service_role and
+  -- the regenerate door is the studio's. The paper is her own receipt and the
+  -- till is shut on it either way — resolve_invoice_link_for_checkout takes
+  -- only sent/partially_paid rows with a positive balance, so an expired paid
+  -- link serves the sheet and can open no Checkout.
   IF NOT v_dead
+     AND v_invoice.status <> 'paid'
      AND v_link.expires_at IS NOT NULL AND v_link.expires_at <= now() THEN
     RETURN NULL;
   END IF;
@@ -829,7 +919,8 @@ COMMENT ON FUNCTION public.resolve_invoice_link(text, boolean) IS
   'view_count when p_record_view, and returns one narrow jsonb discriminated '
   'by kind: invoice, withdrawn (closed link / void invoice, K5), settling '
   '(M10), or NULL for malformed/unknown/revoked/draft and for an EXPIRED link '
-  'that is still live.';
+  'on an invoice that is still owing. A PAID invoice''s link answers its '
+  'receipt however old it is (W4 r7 MAJOR-4).';
 
 CREATE OR REPLACE FUNCTION public.resolve_invoice_link_for_checkout(p_token text)
 RETURNS TABLE (

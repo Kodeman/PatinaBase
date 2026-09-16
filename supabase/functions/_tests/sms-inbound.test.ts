@@ -248,6 +248,7 @@ Deno.test("a numbered menu reply applies mark_done", async () => {
 function coordinationScenario(opts: {
   courtPartyId?: string | null;
   authority?: Array<Record<string, unknown>>;
+  coordinationKind?: string;
 }) {
   const now = new Date("2026-07-08T18:00:00Z");
   const touches: Array<Record<string, unknown>> = [];
@@ -261,7 +262,7 @@ function coordinationScenario(opts: {
         {
           id: "dec1",
           project_id: "proj1",
-          coordination_kind: "selection",
+          coordination_kind: opts.coordinationKind ?? "selection",
           court_party_id: opts.courtPartyId ?? null,
         },
       ],
@@ -302,6 +303,46 @@ Deno.test("a coordination item with no named court is judged by the sender's own
   assertEquals(touches.length, 1);
   assertEquals(touches[0].p_decision_class, "selection");
   assertEquals(touches[0].p_authority_check, "passed");
+});
+
+// W4 r7 MAJOR-5. A signoff is the money class, and 00624's money-class grants
+// are money, change_order AND draw_certify — the same owner/admin gate, on the
+// very rail W4 touches (issue_agreement_draw_invoice). Leaving draw_certify
+// out of the table filed a certifier's texted approval as
+// failed_no_authority, so the studio read "no authority on file" about the one
+// party who held exactly the grant that answers.
+Deno.test("a draw_certify grant answers a money decision (MAJOR-5)", async () => {
+  const { fake, touches, now } = coordinationScenario({
+    coordinationKind: "signoff",
+    authority: [
+      { id: "auth1", engagement_id: "p1", scope: "draw_certify", prepares_only: false, effective_from: null, effective_to: null },
+    ],
+  });
+  await processInbound(
+    params({ From: "+15551110099", Body: "DONE 1", MessageSid: "SMdraw1" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, now },
+  );
+  assertEquals(touches.length, 1);
+  assertEquals(touches[0].p_decision_class, "money");
+  assertEquals(touches[0].p_authority_check, "passed");
+});
+
+// PR-n still decides WITHIN the class: F-03 and F-08 assemble the draw, they
+// do not sign it.
+Deno.test("a prepares_only draw_certify grant does not sign the draw (MAJOR-5)", async () => {
+  const { fake, touches, now } = coordinationScenario({
+    coordinationKind: "signoff",
+    authority: [
+      { id: "auth1", engagement_id: "p1", scope: "draw_certify", prepares_only: true, effective_from: null, effective_to: null },
+    ],
+  });
+  await processInbound(
+    params({ From: "+15551110099", Body: "DONE 1", MessageSid: "SMdraw2" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, now },
+  );
+  assertEquals(touches.length, 1);
+  assertEquals(touches[0].p_decision_class, "money");
+  assertEquals(touches[0].p_authority_check, "failed_no_authority");
 });
 
 Deno.test("a coordination item whose court names ANOTHER seat is still failed_unknown_sender", async () => {

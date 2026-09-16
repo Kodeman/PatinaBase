@@ -2,18 +2,24 @@
  * THE FIRM'S PAPER, IN WORDS (build/upload-door-spec.md §3).
  *
  * `resolve_paperwork_link` (00637) hands the page one row per compliance
- * document the studio HOLDS for this firm. The page owes the firm something
- * wider: one row per document type it owes, whether or not a paper for it is
- * on file, each carrying the paper word from direction.md §3.8 — Current,
+ * document TYPE the studio holds paper for (R-BU). The page owes the firm
+ * something wider: a row for every type it owes, whether or not a paper for it
+ * is on file, each carrying the paper word from direction.md §3.8 — Current,
  * Lapses in 30 days, Lapsed, Not on file — and, on a lapsed row, what the
  * lapse holds up.
  *
  * Every sentence this file builds is the spec's own §3 copy table, verbatim:
  *
- *   current      "{Doc type}, current."
- *   lapsing      "{Doc type}, lapses {date}."
- *   lapsed       "{Doc type}, lapsed {date}."  + "Blocks {gates}."
- *   not on file  "{Doc type} is not on file."
+ *   current        "{Doc type}, current."
+ *   lapsing        "{Doc type}, lapses {date}."
+ *   lapsed         "{Doc type}, lapsed {date}."  + "Blocks {gates}."
+ *   not on file    "{Doc type} is not on file."
+ *   awaiting check "{Doc type}, not yet checked."  + the receipt sentence
+ *   refused        "{Doc type} was not accepted."  + the studio's own reason
+ *
+ * The last two are spec §3 amendments (R-BU, W4 r7 M-4): "current" is reserved
+ * for paper a studio member has confirmed, and a refusal reaches the firm on
+ * the firm's own page, because nothing else carries it there.
  *
  * No sentence tells the firm what happens if it does not upload. The block
  * printed in the row IS the notice.
@@ -30,14 +36,22 @@ import {
   type ComplianceDocType,
 } from '@patina/supabase';
 
-/** One element of `resolve_paperwork_link`'s `documents` array (00637). */
+/**
+ * One element of `resolve_paperwork_link`'s `documents` array (00637). ONE PER
+ * DOCUMENT TYPE since R-BU, with the state the studio's own book would say:
+ * `current` only for paper a member has confirmed, `awaiting_check` when the
+ * only paper of that type is an upload nobody has opened, and `refused` — with
+ * the studio's reason — when a refusal is the last word on the type.
+ */
 export interface PaperworkDocument {
   doc_type: string;
   doc_label: string | null;
   expires_on: string | null;
   blocks: string[] | null;
-  state: 'current' | 'lapses_soon' | 'lapsed';
+  state: 'current' | 'lapses_soon' | 'lapsed' | 'awaiting_check' | 'refused';
   awaiting_check: boolean;
+  /** The studio's own words, printed to the firm. Null unless state is refused. */
+  refusal_reason?: string | null;
 }
 
 /** `resolve_paperwork_link`'s whole answer. No ids, no file paths, no names. */
@@ -48,7 +62,13 @@ export interface PaperworkContext {
   documents: PaperworkDocument[];
 }
 
-export type PaperState = 'current' | 'lapses_soon' | 'lapsed' | 'not_on_file';
+export type PaperState =
+  | 'current'
+  | 'lapses_soon'
+  | 'lapsed'
+  | 'not_on_file'
+  | 'awaiting_check'
+  | 'refused';
 
 /**
  * The paper a studio expects of every firm — spec §3's own three, "COI, W-9,
@@ -130,7 +150,15 @@ export function isUploadOnly(docType: string): boolean {
   return (UPLOAD_ONLY_DOC_TYPES as readonly string[]).includes(docType);
 }
 
-/** Spec §3's copy table, one sentence per state. */
+/**
+ * Spec §3's copy table, one sentence per state.
+ *
+ * `awaiting_check` and `refused` are the two states added with R-BU and W4 r7
+ * M-4. Both exist because the firm was reading one thing while the studio's
+ * book said another: an unchecked upload read "current" (or, one line above
+ * its own receipt, "is not on file"), and a refused paper simply vanished back
+ * into "is not on file" with the reason reaching nobody.
+ */
 export function rowSentence(
   state: PaperState,
   title: string,
@@ -138,6 +166,8 @@ export function rowSentence(
 ): string {
   const date = formatPaperDate(expiresOn);
   if (state === 'not_on_file') return `${title} is not on file.`;
+  if (state === 'awaiting_check') return `${title}, not yet checked.`;
+  if (state === 'refused') return `${title} was not accepted.`;
   if (state === 'lapsed') {
     return date ? `${title}, lapsed ${date}.` : `${title}, lapsed.`;
   }
@@ -162,6 +192,22 @@ export function blocksSentence(
   return `Blocks ${joinWords(words)}.`;
 }
 
+/**
+ * The refusal, in the studio's own words. The reject act tells the studio
+ * member plainly that "the firm reads this", and 00637 refuses a refusal with
+ * no words in it, so the reason always exists and always travels (W4 r7 M-4).
+ * Printed as its own sentence; a reason typed without a full stop gets one.
+ */
+export function reasonSentence(
+  state: PaperState,
+  reason: string | null | undefined,
+): string | null {
+  if (state !== 'refused') return null;
+  const words = reason?.trim();
+  if (!words) return null;
+  return /[.!?]$/.test(words) ? words : `${words}.`;
+}
+
 export interface PaperworkRow {
   /** Stable per document type; an `other_named` paper is keyed by its name. */
   key: string;
@@ -175,6 +221,8 @@ export interface PaperworkRow {
   awaitingCheck: boolean;
   sentence: string;
   blocksSentence: string | null;
+  /** The studio's own words for a refusal, printed to the firm (W4 r7 M-4). */
+  reasonSentence: string | null;
   uploadOnly: boolean;
   expiryRequired: boolean;
   /** Spec §3: a row with nothing on file opens its form without being asked. */
@@ -183,9 +231,11 @@ export interface PaperworkRow {
 
 const STATE_RANK: Record<PaperState, number> = {
   lapsed: 0,
-  not_on_file: 1,
-  lapses_soon: 2,
-  current: 3,
+  refused: 1,
+  not_on_file: 2,
+  awaiting_check: 3,
+  lapses_soon: 4,
+  current: 5,
 };
 
 function groupKey(doc: { doc_type: string; doc_label: string | null }): string {
@@ -197,77 +247,57 @@ function groupKey(doc: { doc_type: string; doc_label: string | null }): string {
 /**
  * One row per document type, worst paper first.
  *
- * A firm can hold two live papers of one type — a verified certificate and a
- * renewal the studio has not checked yet (spec §5.4: an upload never overwrites
- * a verified document). They are one row here: the row speaks with the worse
- * paper's word, and says the renewal has been received beside it.
+ * `resolve_paperwork_link` now groups by type itself (R-BU), so this reduces
+ * what it is handed rather than deriving the word: the state on the row IS the
+ * word the studio's own book would say. The reduction is kept because the page
+ * must never print two rows for one type whatever the read returns, and
+ * because the expected-type list below is the page's, not the database's.
  *
- * AND PAPER NOBODY HAS OPENED SPEAKS NO WORD (W4 r1 QA-B1). An upload landed
+ * PAPER NOBODY HAS OPENED SPEAKS NO WORD (W4 r1 QA-B1, R-BU). An upload landed
  * unverified and the row read "Licence, current." straight back at the firm,
- * on the same page as "Received. <Studio> will confirm it." — the studio held
- * nothing yet. A pending paper contributes the receipt sentence and never the
- * word: the group's word comes from the paper the studio HOLDS, and a type
- * where the only paper is pending reads "not on file", which is what the
- * studio's own compliance_state() says of it (00623).
+ * on the same page as "Received. <Studio> will confirm it." Then it read
+ * "Licence is not on file." beside the same receipt — a second disagreement
+ * about the same paper (W4 r7 MAJOR-2). It now reads "Licence, not yet
+ * checked.", which is what compliance_state() says of it on the studio side.
+ *
+ * A REFUSED PAPER KEEPS ITS PLACE AND ITS REASON (W4 r7 M-4): the firm is told
+ * the document came back and why, in the studio's words, instead of watching
+ * its receipt silently revert to "is not on file".
  */
 export function buildPaperworkRows(context: PaperworkContext): PaperworkRow[] {
   const groups = new Map<string, PaperworkRow>();
-  const pending = new Map<string, PaperworkDocument>();
 
   for (const doc of context.documents ?? []) {
     if (!doc?.doc_type) continue;
     const key = groupKey(doc);
-    if (doc.awaiting_check === true) {
-      pending.set(key, doc);
-      continue;
-    }
     const title = documentTitle(doc.doc_type, doc.doc_label);
     const state: PaperState = doc.state ?? 'current';
+    const awaitingCheck = doc.awaiting_check === true || state === 'awaiting_check';
     const existing = groups.get(key);
 
-    if (!existing || STATE_RANK[state] < STATE_RANK[existing.state]) {
-      groups.set(key, {
-        key,
-        docType: doc.doc_type,
-        docLabel: doc.doc_label,
-        title,
-        state,
-        expiresOn: doc.expires_on ?? null,
-        blocks: [...(doc.blocks ?? [])],
-        awaitingCheck: existing?.awaitingCheck === true,
-        sentence: rowSentence(state, title, doc.expires_on ?? null),
-        blocksSentence: blocksSentence(state, doc.blocks),
-        uploadOnly: isUploadOnly(doc.doc_type),
-        expiryRequired: expiryRequired(doc.doc_type),
-        openByDefault: false,
-      });
-    }
-  }
-
-  // The receipt rides on whatever row the type already has, and makes its own
-  // when the pending paper is the only one of its kind.
-  for (const [key, doc] of pending) {
-    const existing = groups.get(key);
-    if (existing) {
-      existing.awaitingCheck = true;
+    if (existing && STATE_RANK[existing.state] <= STATE_RANK[state]) {
+      // A worse word already speaks for this type; the receipt still rides.
+      existing.awaitingCheck = existing.awaitingCheck || awaitingCheck;
       continue;
     }
-    const title = documentTitle(doc.doc_type, doc.doc_label);
+
     groups.set(key, {
       key,
       docType: doc.doc_type,
       docLabel: doc.doc_label,
       title,
-      state: 'not_on_file',
-      expiresOn: null,
-      blocks: [],
-      awaitingCheck: true,
-      sentence: rowSentence('not_on_file', title, null),
-      blocksSentence: null,
+      state,
+      expiresOn: doc.expires_on ?? null,
+      blocks: [...(doc.blocks ?? [])],
+      awaitingCheck: awaitingCheck || existing?.awaitingCheck === true,
+      sentence: rowSentence(state, title, doc.expires_on ?? null),
+      blocksSentence: blocksSentence(state, doc.blocks),
+      reasonSentence: reasonSentence(state, doc.refusal_reason ?? null),
       uploadOnly: isUploadOnly(doc.doc_type),
       expiryRequired: expiryRequired(doc.doc_type),
-      // Something HAS been sent, so the form does not open itself at her.
-      openByDefault: false,
+      // Something has been sent and is waiting, so the form does not open
+      // itself at her; a refusal is the one state that asks for paper again.
+      openByDefault: state === 'refused',
     });
   }
 
@@ -285,6 +315,7 @@ export function buildPaperworkRows(context: PaperworkContext): PaperworkRow[] {
       awaitingCheck: false,
       sentence: rowSentence('not_on_file', title, null),
       blocksSentence: null,
+      reasonSentence: null,
       uploadOnly: isUploadOnly(docType),
       expiryRequired: expiryRequired(docType),
       openByDefault: true,

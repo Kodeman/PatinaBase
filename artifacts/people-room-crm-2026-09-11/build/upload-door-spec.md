@@ -62,6 +62,8 @@ Copy is written in the studio's voice, addressed to the firm, with no caveat and
 | Row, lapsing | "{Doc type}, lapses {date}." |
 | Row, lapsed | "{Doc type}, lapsed {date}. Blocks {blocks in words}." |
 | Row, not on file | "{Doc type} is not on file." |
+| Row, awaiting check (R-BU) | "{Doc type}, not yet checked." followed by the receipt sentence below. `current` is reserved for paper a studio member has confirmed, so the firm's page and `compliance_state` say the same thing about the same paper |
+| Row, refused (W4 r7 M-4) | "{Doc type} was not accepted." followed by the studio's own reason, verbatim, as its own sentence. The refusal reaches the firm here or nowhere: the chase is an agent draft that lands `awaiting_review`, and Agent OS forbids automated external sends. The reject act already tells the studio member "the firm reads this" |
 | Upload button | "Add {doc type}" |
 | After upload | "Received. {Studio name} will confirm it." |
 

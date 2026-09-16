@@ -375,23 +375,32 @@ async function recomputeDraftTotals(supabase: any, invoiceId: string): Promise<v
  * ['project-financials', id]) and the earnings caches.
  */
 /**
- * `invoiceId` is passed by the acts that move an invoice's LINK state (00574):
- * issue mints one, send/record-payment/void change what it resolves to. The
- * folio's recovery band and its two link acts read `['invoice-link', id]`, and
- * the designer portal's staleTime is five minutes — without this the band tells
- * the designer the invoice has no link at the one moment it just got one.
- * Voiding invalidates too: the link survives as `closed` and still resolves,
- * to K5's withdrawn sheet rather than to a dead page.
+ * THE INVOICE-LINK KEY IS NOT INVALIDATED HERE, AND THAT IS THE POINT (R-BV).
+ *
+ * It used to be: `invoiceId` is passed by the acts that move an invoice's LINK
+ * state (00574) — issue mints one, send / record-payment / void change what it
+ * resolves to — and refetching kept the folio's recovery band honest while
+ * `get_invoice_link` could still answer with an address.
+ *
+ * Since 00636 it cannot. `get_invoice_link` returns `token: NULL` for every
+ * invoice, by a CHECK, so that refetch can only ever parse to an address-less
+ * row — and it landed on top of the one address the designer had just minted,
+ * unmounting Copy under the sentence "This address is shown once." Four acts
+ * one click away in the same folio (issue, record payment, send, void) made
+ * that deterministic. The address now lives in the folio's own component state
+ * for the folio's lifetime, and the status/expiry the band branches on are not
+ * money-moving facts: `useInvoiceLink` re-reads them on its own schedule.
+ *
+ * `invoiceId` is still taken, because the callers pass it and it names which
+ * invoice moved; it simply buys no invalidation any more.
  */
 function invalidateInvoiceEffects(
   queryClient: QueryClient,
   projectId?: string | null,
   invoiceId?: string | null,
 ) {
+  void invoiceId;
   queryClient.invalidateQueries({ queryKey: ['invoices'] });
-  if (invoiceId) {
-    queryClient.invalidateQueries({ queryKey: ['invoice-link', invoiceId] });
-  }
   if (projectId) {
     queryClient.invalidateQueries({ queryKey: ['projects', projectId] });
     queryClient.invalidateQueries({ queryKey: ['project-payment-milestones', projectId] });
@@ -1400,7 +1409,6 @@ export class RegenerateInvoiceLinkError extends Error {
  * (M11), for a draft or void invoice, and for a caller without authority.
  */
 export function useRegenerateInvoiceLink(options?: { errorSurface?: 'inline' }) {
-  const queryClient = useQueryClient();
   return useMutation({
     meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({ invoiceId }: { invoiceId: string }): Promise<InvoiceLink> => {
@@ -1435,19 +1443,15 @@ export function useRegenerateInvoiceLink(options?: { errorSurface?: 'inline' }) 
       // no stated end", which is what a just-minted link is.
       return { token: data, status: 'active', expiresAt: null };
     },
-    onSuccess: (link, { invoiceId }) => {
-      // THE MINT IS THE ONLY AUTHORITY ON THE ADDRESS (W4 r1 M-5).
-      //
-      // setQueryData echoes the freshly minted token so the folio can copy it.
-      // The invalidate that used to follow re-read `get_invoice_link`, which
-      // since 00636 answers `token: NULL` for every invoice (the column is
-      // frozen; only a producer can emit a raw value) — so the refetch parsed
-      // to null and the address the designer had just minted disappeared from
-      // under the Copy control. The one remaining route to a copyable pay
-      // address destroyed what it produced. No invalidate: the cached value is
-      // the address, and the next mint replaces it.
-      queryClient.setQueryData(['invoice-link', invoiceId], link);
-    },
+    // NOTHING IS WRITTEN TO THE CACHE (R-BV).
+    //
+    // The minted address used to be echoed into `['invoice-link', invoiceId]`
+    // so the folio could read it back. A query key is the wrong home for a
+    // value that is shown once: anything that invalidated that key — and four
+    // invoice acts did — destroyed the address, and any other mount of the
+    // same key would read it. The caller holds the returned token in its own
+    // component state for as long as it means to offer Copy, and the address
+    // leaves with the folio, which is exactly what 00636 promises the studio.
   });
 }
 

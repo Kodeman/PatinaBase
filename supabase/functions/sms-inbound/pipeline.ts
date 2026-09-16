@@ -657,9 +657,19 @@ type AuthorityVerdict =
   | "failed_no_authority"
   | "failed_unknown_sender";
 
-/** The authority scopes (00624) that answer for each decision class. */
+/** The authority scopes (00624) that answer for each decision class.
+ *
+ *  `draw_certify` sits in the money class beside `money` and `change_order`
+ *  (W4 r7 MAJOR-5). 00624 grants it the same PR-n gate as money — only an
+ *  owner or admin of the studio may write it — and the act it names, certifying
+ *  a draw, is the money act on the rail W4 itself touches
+ *  (issue_agreement_draw_invoice). Leaving it out of this table filed a
+ *  certifier's texted approval as `failed_no_authority`, so the studio read
+ *  "no authority on file" about a party who held exactly the grant that
+ *  answers. `prepares_only` still decides within the class: F-03 and F-08
+ *  assemble the draw, they do not sign it. */
 const AUTHORITY_SCOPES: Record<string, string[]> = {
-  money: ["money", "change_order"],
+  money: ["money", "change_order", "draw_certify"],
   selection: ["selections"],
   schedule: ["schedule"],
   site_access: ["site_access", "key"],

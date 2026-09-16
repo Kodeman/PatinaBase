@@ -130,6 +130,20 @@ export function InvoiceFolio({
   // band say "select the link above" about a link that was not above it.
   const [toolbarCopyStatus, setToolbarCopyStatus] = useState<CopyStatus>('idle');
   const [bandCopyStatus, setBandCopyStatus] = useState<CopyStatus>('idle');
+  /**
+   * THE MINTED ADDRESS LIVES HERE AND NOWHERE ELSE (R-BV).
+   *
+   * It used to be parked in the `['invoice-link', id]` query cache, where four
+   * acts a click away in this same folio — Issue & send, Record payment,
+   * Resend, Void — invalidated it, and the refetch could only ever come back
+   * address-less (`get_invoice_link` answers `token: NULL` since 00636). The
+   * folio printed "This address is shown once" and then destroyed it. Component
+   * state is the honest home for a value that is shown once: it lasts exactly
+   * as long as the folio the designer is reading, and no other reader of any
+   * cache key can find it. The invoice id rides along so a folio re-pointed at
+   * a different invoice cannot show the first one's address.
+   */
+  const [minted, setMinted] = useState<{ invoiceId: string; token: string } | null>(null);
   const pendingStripeSessionId = invoice?.payments?.find(
     (payment) =>
       payment.method === 'stripe' &&
@@ -299,13 +313,15 @@ export function InvoiceFolio({
   // `token: NULL`, so this is null on every folio the designer has not just
   // regenerated on — including one whose link the send itself minted. Whether
   // a link EXISTS is a separate question, and `linkExists`/`linkIsLive` below
-  // are what the recovery band asks (W4 r6 M-1).
-  const clientInvoiceUrl = invoiceLink?.token
+  // are what the recovery band asks (W4 r6 M-1). The mint's answer is read
+  // from this folio's own state, never from the cache (R-BV).
+  const mintedToken = minted?.invoiceId === invoiceId ? minted.token : null;
+  const clientInvoiceUrl = mintedToken
     ? invoiceLinkUrl(
         resolveClientPortalOrigin(
           typeof window === 'undefined' ? undefined : window.location.origin,
         ),
-        invoiceLink.token,
+        mintedToken,
       )
     : null;
   const linkIsLive = invoiceLinkIsLive(invoiceLink);
@@ -331,7 +347,9 @@ export function InvoiceFolio({
     setToolbarCopyStatus('idle');
     setBandCopyStatus('idle');
     try {
-      await regenerateLink.mutateAsync({ invoiceId });
+      const link = await regenerateLink.mutateAsync({ invoiceId });
+      // The one moment this address is readable by anyone, Patina included.
+      setMinted(link.token ? { invoiceId, token: link.token } : null);
       setNote('link replaced · the old one is dead');
       setAct(null);
     } catch (e) {
@@ -682,7 +700,8 @@ export function InvoiceFolio({
               the one thing the folio must not draw — so it waits on the mint.
               Since 00636 froze `invoices.token`, `get_invoice_link` answers
               `token: NULL` for every invoice, so this address arrives from one
-              place only: `useRegenerateInvoiceLink`'s own `setQueryData`. */}
+              place only: this folio's own `minted` state, written by the mint
+              and immune to every invalidation around it (R-BV). */}
           {canShareLink && clientInvoiceUrl && (
             <DocumentAction
               actionKey="copy-invoice-link"

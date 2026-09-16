@@ -48,9 +48,12 @@ export interface InvoiceCheckoutTarget {
   invoiceId: string;
   lineItemName: string;
   /**
-   * Today's letterbox / front-door return addresses. The M7 safety valve: used
-   * whenever a nonce address cannot be built — no `nonceReturnOrigin`, or a
-   * reused attempt claimed before 00574 that carries no nonce.
+   * Today's letterbox / front-door return addresses. `successUrl` is the M7
+   * safety valve, used whenever a nonce address cannot be built — no
+   * `nonceReturnOrigin`, or a reused attempt claimed before 00574 that carries
+   * no nonce. `cancelUrl` is not a valve at all: it is ALWAYS where a cancelled
+   * Checkout lands (R-BT), so a rail that holds the payer's own address — the
+   * link rail holds the /pay/<token> the request carried — must put it here.
    */
   successUrl: string;
   cancelUrl: string;
@@ -192,16 +195,31 @@ export function invoiceSessionMetadata(attempt: InvoiceCheckoutAttempt): Record<
   };
 }
 
-/** Where Stripe sends the payer back: the nonce address when it can be built, else the fallback. */
+/**
+ * Where Stripe sends the payer back.
+ *
+ * A SUCCESS rides the nonce: /pay/return/<nonce> trades it for a fresh
+ * address, because since 00636 there is no stored address left to hand back.
+ *
+ * A CANCEL NEVER DOES (R-BT). The return hop rotates the link, so routing a
+ * cancel through it killed the /pay/<token> in the client's inbox the moment
+ * she pressed Back at Stripe — she had abandoned a payment and lost the way
+ * back to the invoice in the same click. `target.cancelUrl` is the address she
+ * came from: the link rail sets it to the very /pay/<token> the request
+ * carried, and the signed-in rail to the house the payer is standing in.
+ */
 export function invoiceCheckoutReturnBase(
   attempt: InvoiceCheckoutAttempt,
   target: InvoiceCheckoutTarget,
   checkout: 'success' | 'cancelled'
 ): string {
+  if (checkout === 'cancelled') {
+    return target.cancelUrl;
+  }
   if (attempt.returnNonce && target.nonceReturnOrigin) {
     return invoiceLinkReturnAddress(target.nonceReturnOrigin, attempt.returnNonce, checkout);
   }
-  return checkout === 'success' ? target.successUrl : target.cancelUrl;
+  return target.successUrl;
 }
 
 /** The claim-error table, shared by both rails. */

@@ -14420,12 +14420,6 @@ END $g$;
 
 -- 00574_invoice_links.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.resolve_invoice_return_nonce(text) FROM PUBLIC, anon, authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00574_invoice_links.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.set_invoice_link_stripe_customer(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -14493,12 +14487,6 @@ END $g$;
 -- 00574_invoice_links.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.resolve_invoice_link_for_checkout(text) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00574_invoice_links.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.resolve_invoice_return_nonce(text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

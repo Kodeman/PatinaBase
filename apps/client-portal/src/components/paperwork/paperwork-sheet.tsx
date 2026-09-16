@@ -77,7 +77,10 @@ export function PaperworkSheet({ token, studioName, context }: PaperworkSheetPro
         {announcement}
       </p>
       {rows.map((row) => {
-        const isReceived = received[row.key] === true || row.awaitingCheck;
+        // A refused row has nothing waiting, so it never prints the receipt —
+        // it prints the refusal and opens its form (W4 r7 M-4).
+        const isReceived =
+          row.state !== 'refused' && (received[row.key] === true || row.awaitingCheck);
         const isOpen = opened[row.key] === true || (row.openByDefault && !isReceived);
 
         return (
@@ -91,6 +94,20 @@ export function PaperworkSheet({ token, studioName, context }: PaperworkSheetPro
             {row.blocksSentence && (
               <p className="type-body-small mt-1 text-[var(--terracotta-ink)]">
                 {row.blocksSentence}
+              </p>
+            )}
+
+            {/* THE REFUSAL TRAVELS HERE OR NOWHERE (W4 r7 M-4). The chase is an
+                agent draft that lands `awaiting_review`, and Agent OS forbids
+                automated external sends, so this page is the only face the
+                firm has. The studio was told plainly that the firm reads these
+                words when it typed them. */}
+            {row.reasonSentence && (
+              <p
+                data-paperwork-refusal={row.key}
+                className="type-body-small mt-1 text-[var(--terracotta-ink)]"
+              >
+                {row.reasonSentence}
               </p>
             )}
 

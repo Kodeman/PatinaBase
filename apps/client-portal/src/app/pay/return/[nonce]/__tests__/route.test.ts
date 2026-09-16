@@ -2,6 +2,11 @@
  * S10 — Stripe never sees the token. It is handed a single-purpose nonce, and
  * this route trades it back at the moment the guest returns. A nonce that names
  * nothing lands on the same dead sheet a guessed token does.
+ *
+ * R-BT: the trade happens ONCE. The RPC answers jsonb — `rotated` with the
+ * fresh address, `spent` on any replay, NULL for anything it will not name —
+ * and a spent nonce lands on /pay/used, which is readable, rather than killing
+ * the address the first return handed the browser.
  */
 
 import { GET } from "../route";
@@ -43,12 +48,15 @@ type FakeResponse = {
   headers: { get(name: string): string | null };
 };
 
-/** §2.6's single-purpose RPC — one call, a `text` return, no embed. */
-function stubClient(token: unknown, error: unknown = null) {
-  const rpc = jest.fn().mockResolvedValue({ data: token, error });
+/** §2.6's single-purpose RPC — one call, a jsonb return, no embed. */
+function stubClient(answer: unknown, error: unknown = null) {
+  const rpc = jest.fn().mockResolvedValue({ data: answer, error });
   jest.mocked(createServiceClient).mockReturnValue({ rpc } as never);
   return { rpc };
 }
+
+/** The first resolution: the link was re-addressed and this is the address. */
+const rotated = (token = TOKEN) => ({ state: "rotated", token });
 
 function call(search = "", nonce = NONCE): Promise<FakeResponse> {
   return GET(
@@ -68,7 +76,7 @@ beforeEach(() => {
 
 describe("GET /pay/return/[nonce]", () => {
   it("303s to the sheet, carrying the return params Stripe sent", async () => {
-    const chain = stubClient(TOKEN);
+    const chain = stubClient(rotated());
 
     const response = await call(
       "?checkout=success&session_id=cs_1&payment_id=pay_1",
@@ -91,15 +99,32 @@ describe("GET /pay/return/[nonce]", () => {
     );
   });
 
-  it("carries a cancelled return the same way", async () => {
-    stubClient(TOKEN);
+  it("carries whatever checkout marker rides along", async () => {
+    // Stripe's cancel_url no longer points here (R-BT) — the marker is still
+    // copied through rather than filtered, because the sheet reads it.
+    stubClient(rotated());
     const response = await call("?checkout=cancelled");
     const location = new URL(response.headers.get("location") as string);
     expect(location.searchParams.get("checkout")).toBe("cancelled");
   });
 
+  it("sends a spent nonce to /pay/used, and rotates nothing", async () => {
+    const chain = stubClient({ state: "spent" });
+
+    const response = await call("?checkout=success&session_id=cs_1");
+
+    expect(chain.rpc).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://client.patina.test/pay/used",
+    );
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0",
+    );
+  });
+
   it("drops anything else appended to the return address", async () => {
-    stubClient(TOKEN);
+    stubClient(rotated());
     const response = await call(
       "?checkout=success&next=https%3A%2F%2Felsewhere.test&foo=bar",
     );
@@ -131,9 +156,23 @@ describe("GET /pay/return/[nonce]", () => {
   });
 
   it("never 303s to something that is not a token", async () => {
-    stubClient("https://elsewhere.test");
+    stubClient(rotated("https://elsewhere.test"));
     const response = await call("?checkout=success");
     expect(response.headers.get("location")).toBe(
+      "https://client.patina.test/pay/dead",
+    );
+  });
+
+  it("treats a shapeless answer as dead, not as a rotation", async () => {
+    stubClient(TOKEN);
+    const legacy = await call("?checkout=success");
+    expect(legacy.headers.get("location")).toBe(
+      "https://client.patina.test/pay/dead",
+    );
+
+    stubClient({ state: "rotated" });
+    const tokenless = await call("?checkout=success");
+    expect(tokenless.headers.get("location")).toBe(
       "https://client.patina.test/pay/dead",
     );
   });

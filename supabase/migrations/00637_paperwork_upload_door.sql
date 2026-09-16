@@ -605,39 +605,116 @@ BEGIN
      WHERE id = v_row.id;
   END IF;
 
-  -- No ids, no file paths, no uploader names: the firm learns only what paper
-  -- the studio holds for it and what a lapse blocks (spec §3).
-  SELECT COALESCE(jsonb_agg(d ORDER BY d->>'doc_type'), '[]'::jsonb)
+  -- ONE ROW PER DOCUMENT TYPE, AND THE WORD IS THE STUDIO'S (R-BU).
+  --
+  -- This used to hand the page one row per DOCUMENT with a separate
+  -- awaiting_check flag, and computed `state` from expires_on/blocks alone.
+  -- A firm whose only COI was the one it had just uploaded therefore read
+  -- 'current' here while compliance_state (§1b) read not_on_file on the
+  -- studio's own card: the firm's page and the studio's book disagreed about
+  -- the same paper. 'current' is now reserved for paper a studio member has
+  -- CONFIRMED. A type whose only paper is an unchecked upload reads
+  -- 'awaiting_check'; when a confirmed paper and an unchecked upload both
+  -- stand, the confirmed paper is the row and awaiting_check rides as its flag
+  -- (spec §3, W4 r7 MAJOR-2).
+  --
+  -- A REFUSED PAPER SAYS SO, IN THE STUDIO'S OWN WORDS (W4 r7 M-4). A rejected
+  -- row used to be filtered out entirely, so the firm's page reverted from
+  -- "Received. <Studio> will confirm it." to "<Doc type> is not on file." and
+  -- the refusal reached nobody — the chase is an agent draft that lands
+  -- awaiting_review, and Agent OS forbids automated external sends. The reject
+  -- act already promises the firm reads the reason ("Say why it is refused.
+  -- The firm reads this"), so it travels here. A refusal is the LAST WORD only
+  -- while nothing has replaced it: a type that now holds confirmed paper, or
+  -- carries a fresh upload waiting to be checked, speaks with that instead.
+  --
+  -- Still no ids, no file paths, no uploader names: the firm learns what paper
+  -- the studio holds, what a lapse blocks, and why a paper came back (spec §3).
+  WITH paper AS (
+    SELECT doc.doc_type,
+           doc.doc_label,
+           doc.expires_on,
+           doc.blocks,
+           doc.rejection_reason,
+           doc.rejected_at,
+           doc.created_at,
+           (doc.rejected_at IS NOT NULL)                          AS refused,
+           (doc.inbound AND doc.verified_at IS NULL
+              AND doc.rejected_at IS NULL)                        AS unchecked,
+           CASE
+             WHEN doc.expires_on IS NULL OR cardinality(doc.blocks) = 0
+               THEN 'current'
+             WHEN doc.expires_on < CURRENT_DATE THEN 'lapsed'
+             WHEN doc.expires_on <= CURRENT_DATE + 30 THEN 'lapses_soon'
+             ELSE 'current' END                                   AS held_state,
+           CASE WHEN doc.doc_type = 'other_named'
+                THEN 'other_named:' || lower(btrim(COALESCE(doc.doc_label, '')))
+                ELSE doc.doc_type END                             AS group_key
+      FROM public.studio_compliance_documents doc
+     WHERE doc.holder_id = v_row.company_id
+       AND doc.organization_id = v_row.organization_id
+       AND doc.superseded_by IS NULL
+  ),
+  -- The paper the studio HOLDS: its own typed record, or an upload a member
+  -- has confirmed. Worst word first, so one lapsed certificate is not hidden
+  -- behind a current one of the same type.
+  held AS (
+    SELECT DISTINCT ON (group_key) *
+      FROM paper
+     WHERE NOT refused AND NOT unchecked
+     ORDER BY group_key,
+              CASE held_state WHEN 'lapsed' THEN 0
+                              WHEN 'lapses_soon' THEN 1
+                              ELSE 2 END,
+              expires_on NULLS LAST
+  ),
+  unchecked_paper AS (
+    SELECT DISTINCT ON (group_key) *
+      FROM paper
+     WHERE unchecked
+     ORDER BY group_key, created_at DESC
+  ),
+  -- The most recent refusal, and only for a type with nothing else standing.
+  refused_paper AS (
+    SELECT DISTINCT ON (group_key) *
+      FROM paper
+     WHERE refused
+     ORDER BY group_key, rejected_at DESC
+  ),
+  keys AS (
+    SELECT DISTINCT group_key FROM paper
+  ),
+  grouped AS (
+    SELECT k.group_key,
+           COALESCE(h.doc_type, u.doc_type, r.doc_type)      AS doc_type,
+           COALESCE(h.doc_label, u.doc_label, r.doc_label)   AS doc_label,
+           COALESCE(h.expires_on, u.expires_on)              AS expires_on,
+           COALESCE(h.blocks, u.blocks, r.blocks)            AS blocks,
+           CASE
+             WHEN h.group_key IS NOT NULL THEN h.held_state
+             WHEN u.group_key IS NOT NULL THEN 'awaiting_check'
+             ELSE 'refused' END                              AS state,
+           (u.group_key IS NOT NULL)                         AS awaiting_check,
+           CASE WHEN h.group_key IS NULL AND u.group_key IS NULL
+                THEN r.rejection_reason END                  AS refusal_reason
+      FROM keys k
+      LEFT JOIN held            h ON h.group_key = k.group_key
+      LEFT JOIN unchecked_paper u ON u.group_key = k.group_key
+      LEFT JOIN refused_paper   r ON r.group_key = k.group_key
+  )
+  SELECT COALESCE(
+           jsonb_agg(jsonb_build_object(
+             'doc_type', g.doc_type,
+             'doc_label', g.doc_label,
+             'expires_on', g.expires_on,
+             'blocks', g.blocks,
+             'state', g.state,
+             'awaiting_check', g.awaiting_check,
+             'refusal_reason', g.refusal_reason
+           ) ORDER BY g.doc_type, g.doc_label NULLS FIRST),
+           '[]'::jsonb)
     INTO v_documents
-    FROM (
-      SELECT jsonb_build_object(
-               'doc_type', doc.doc_type,
-               'doc_label', doc.doc_label,
-               'expires_on', doc.expires_on,
-               'blocks', doc.blocks,
-               'state', CASE
-                 WHEN doc.expires_on IS NULL OR cardinality(doc.blocks) = 0
-                   THEN 'current'
-                 WHEN doc.expires_on < CURRENT_DATE THEN 'lapsed'
-                 WHEN doc.expires_on <= CURRENT_DATE + 30 THEN 'lapses_soon'
-                 ELSE 'current' END,
-               -- ONLY PAPER THE FIRM SENT IS "RECEIVED" (W4 r1 MAJOR-1).
-               -- The studio's own "Record a document" act writes
-               -- `source='studio', inbound=false` and never stamps
-               -- verified_at, so without the inbound leg this said
-               -- awaiting_check over every paper the STUDIO typed — and the
-               -- firm's own page answered "Received. <Studio> will confirm
-               -- it." about paper the firm never sent (measured: five seeded
-               -- company cards carry exactly such a W-9).
-               'awaiting_check',
-                 doc.inbound AND doc.verified_at IS NULL AND doc.rejected_at IS NULL
-             ) AS d
-        FROM public.studio_compliance_documents doc
-       WHERE doc.holder_id = v_row.company_id
-         AND doc.organization_id = v_row.organization_id
-         AND doc.superseded_by IS NULL
-         AND doc.rejected_at IS NULL
-    ) rows;
+    FROM grouped g;
 
   RETURN jsonb_build_object(
     'studio_name', v_studio,
@@ -658,7 +735,12 @@ COMMENT ON FUNCTION public.resolve_paperwork_link(text, boolean) IS
   'revoked and expired all return the same NULL so a dead link never confirms '
   'it existed (spec §3). Carries no ids, no file paths and no names: the firm '
   'learns the studio''s name, its own name, and what paper is held or owed '
-  '(00637).';
+  '(00637). ONE ROW PER DOCUMENT TYPE (R-BU): state is current / lapses_soon / '
+  'lapsed for paper a member has confirmed, awaiting_check when the only paper '
+  'of that type is an upload nobody has opened, and refused — with the '
+  'studio''s own reason — when a refusal is the last word on the type. '
+  '''current'' never speaks for unchecked paper, so this page and '
+  'compliance_state agree.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 8. record_inbound_compliance_document (spec §5) — the write

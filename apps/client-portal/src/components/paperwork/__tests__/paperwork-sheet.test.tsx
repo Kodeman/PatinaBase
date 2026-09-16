@@ -57,6 +57,50 @@ function renderSheet(documents: PaperworkDocument[]) {
 }
 
 describe('PaperworkSheet', () => {
+  // R-BU / W4 r7 MAJOR-2: two sentences about one document, one line apart,
+  // used to disagree. They now say the same thing.
+  it('reads an unchecked upload as not yet checked, beside its receipt', () => {
+    renderSheet([
+      doc({
+        doc_type: 'coi_gl',
+        state: 'awaiting_check',
+        awaiting_check: true,
+      }),
+    ]);
+
+    expect(screen.getByText('COI, general liability, not yet checked.')).toBeInTheDocument();
+    expect(screen.getByText('Received. Local Dev Studio will confirm it.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('COI, general liability is not on file.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('COI, general liability, current.')).not.toBeInTheDocument();
+  });
+
+  // W4 r7 M-4: the studio pressed Reject and typed a reason it was told the
+  // firm would read. This page is the only place it can be read.
+  it('prints a refusal and its reason, and asks for the paper again', () => {
+    renderSheet([
+      doc({
+        doc_type: 'coi_gl',
+        state: 'refused',
+        expires_on: null,
+        awaiting_check: false,
+        refusal_reason: 'The certificate names the wrong job address',
+      }),
+    ]);
+
+    expect(screen.getByText('COI, general liability was not accepted.')).toBeInTheDocument();
+    expect(
+      screen.getByText('The certificate names the wrong job address.'),
+    ).toBeInTheDocument();
+    // No receipt sentence: nothing is waiting for the studio any more.
+    expect(
+      screen.queryByText('Received. Local Dev Studio will confirm it.'),
+    ).not.toBeInTheDocument();
+    // The form stands open, because paper is owed again.
+    expect(screen.getByTestId('form-COI, general liability')).toBeInTheDocument();
+  });
+
   it('opens a form for every expected paper the studio does not hold', () => {
     renderSheet([]);
     expect(screen.getByText('COI, general liability is not on file.')).toBeInTheDocument();

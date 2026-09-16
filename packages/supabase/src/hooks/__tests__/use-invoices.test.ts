@@ -965,7 +965,17 @@ describe('useNotifyCheckIntent', () => {
 // Invoice links (00574) — the link key, and the quiet read
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("invoice-link invalidation (F1)", () => {
+// R-BV — THE INVOICE-LINK KEY IS NOT INVALIDATED BY THE ACTS AROUND IT.
+//
+// F1 (an earlier round) had invalidateInvoiceEffects invalidate
+// ["invoice-link", invoiceId], which was right while get_invoice_link could
+// still read an address back. 00636 froze invoice_links.token at NULL: the
+// only moment an address exists is the mint's own return value. An
+// invalidation now refetches a row that can only come back address-less, so
+// each of these four acts EVICTED the token the designer had just been told
+// to copy — Issue, Record payment, Resend and Void all did it, one click
+// after the folio printed "This address is shown once."
+describe("invoice-link invalidation (R-BV)", () => {
   type OnSuccess = (
     result: unknown,
     vars: { invoiceId: string; projectId?: string },
@@ -979,14 +989,17 @@ describe("invoice-link invalidation (F1)", () => {
   ];
 
   for (const [name, hook] of cases) {
-    it(`${name} onSuccess invalidates ["invoice-link", invoiceId]`, () => {
+    it(`${name} onSuccess leaves ["invoice-link", invoiceId] alone`, () => {
       const config = hook() as unknown as { onSuccess: OnSuccess };
       config.onSuccess({ project_id: "proj-1" }, { invoiceId: "inv-1", projectId: "proj-1" });
-      expect(invalidatedKeys()).toContainEqual(["invoice-link", "inv-1"]);
+      expect(invalidatedKeys()).not.toContainEqual(["invoice-link", "inv-1"]);
+      // and the rest of the fan-out is untouched — this is one key, not a
+      // narrowing of what an act refreshes.
+      expect(invalidatedKeys()).toContainEqual(["invoices"]);
     });
   }
 
-  it("does not invalidate a link key when no invoiceId is in hand", () => {
+  it("never invalidates a link key at all, with or without an invoiceId in hand", () => {
     const config = useUpsertLineItems() as unknown as {
       onSuccess: (rows: unknown, vars: { projectId?: string }) => void;
     };
@@ -1127,20 +1140,28 @@ describe("invoiceLinkIsLive", () => {
 // W4 round-1 review M-5 — the mint is the only authority on the address
 // ─────────────────────────────────────────────────────────────────────────────
 describe('useRegenerateInvoiceLink', () => {
-  it('writes the minted token to the cache and never invalidates it away', () => {
+  // R-BV: the mint hands the address back and writes NOTHING to the cache.
+  // A show-once secret has no business in a store whose whole contract is
+  // "this may be refetched at any time"; the folio holds it in component
+  // state for as long as that folio is open, and nowhere else.
+  it('returns the minted address without putting it in the query cache', async () => {
     const config = useRegenerateInvoiceLink() as unknown as {
-      onSuccess: (
-        link: { token: string; status: string },
-        vars: { invoiceId: string },
-      ) => void;
+      onSuccess?: unknown;
+      mutationFn: (vars: { invoiceId: string }) => Promise<unknown>;
     };
-    const link = { token: 'a'.repeat(64), status: 'active' as const };
-    config.onSuccess(link, { invoiceId: 'inv-1' });
+    const token = 'a'.repeat(64);
+    supabaseClient.rpc.mockResolvedValue({ data: token, error: null });
 
-    expect(setQueryData).toHaveBeenCalledWith(['invoice-link', 'inv-1'], link);
-    // 00636 froze invoice_links.token at NULL, so a refetch of get_invoice_link
-    // parses to null and the address the designer just minted would vanish from
-    // under the Copy control.
+    await expect(config.mutationFn({ invoiceId: 'inv-1' })).resolves.toEqual({
+      token,
+      status: 'active',
+      expiresAt: null,
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('regenerate_invoice_link', {
+      p_invoice_id: 'inv-1',
+    });
+    expect(config.onSuccess).toBeUndefined();
+    expect(setQueryData).not.toHaveBeenCalled();
     expect(invalidatedKeys()).not.toContainEqual(['invoice-link', 'inv-1']);
   });
 });

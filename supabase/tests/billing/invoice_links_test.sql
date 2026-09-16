@@ -867,6 +867,31 @@ BEGIN
                        (SELECT value FROM links_state WHERE label = 'token45'))),
     'nothing to check out on a paid invoice';
 
+  -- W4 r7 MAJOR-4: A PAID INVOICE IS A RECEIPT PAST THE EXPIRY TOO. 00636
+  -- stamps every link a 30-day end date, its backfill included, so on day 31
+  -- the address in the client's inbox is the only record she has of a bill
+  -- she has already settled. The expiry closes the PAY door, not the receipt.
+  UPDATE public.invoice_links
+     SET expires_at = now() - interval '31 days'
+   WHERE invoice_id = 'a5745000-0000-4000-8000-000000000045';
+  v := public.resolve_invoice_link((SELECT value FROM links_state WHERE label = 'token45'));
+  ASSERT v IS NOT NULL AND v->'invoice'->>'status' = 'paid',
+    'MAJOR-4: a paid invoice past its expiry still answers its receipt';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.resolve_invoice_link_for_checkout(
+                       (SELECT value FROM links_state WHERE label = 'token45'))),
+    'MAJOR-4: and the expired paid link still buys nothing';
+  -- An UNPAID invoice gets no such grace: its expired address is dead.
+  UPDATE public.invoice_links
+     SET expires_at = now() - interval '31 days'
+   WHERE invoice_id = 'a5745000-0000-4000-8000-000000000031'
+     AND status = 'active';
+  ASSERT public.resolve_invoice_link(v_token) IS NULL,
+    'MAJOR-4: an unpaid invoice''s expired address is still dead';
+  UPDATE public.invoice_links
+     SET expires_at = now() + interval '30 days'
+   WHERE invoice_id IN ('a5745000-0000-4000-8000-000000000045',
+                        'a5745000-0000-4000-8000-000000000031');
+
   -- The checkout resolver: ids only, coalesced bps, the household payer or NULL.
   ASSERT (SELECT r.invoice_id = 'a5745000-0000-4000-8000-000000000031'
                  AND r.payer_id = 'a5740000-0000-4000-8000-000000000004'
@@ -1041,6 +1066,7 @@ DECLARE
   v_error text;
   v_final jsonb;
   v_rotated text;
+  v_answer jsonb;
 BEGIN
   SELECT id INTO v_link FROM public.invoice_links
   WHERE invoice_id = 'a5745000-0000-4000-8000-000000000032' AND status = 'active';
@@ -1099,7 +1125,10 @@ BEGIN
   -- id, its Stripe customer and its payer email (F2 — still never a later
   -- mint), and the returning payer is handed a fresh address. The suite
   -- follows the rotation, because the old address is now dead.
-  v_rotated := public.resolve_invoice_return_nonce(v_claim->>'return_nonce');
+  v_answer := public.resolve_invoice_return_nonce(v_claim->>'return_nonce');
+  ASSERT v_answer->>'state' = 'rotated',
+    format('the first resolution rotates: %s', v_answer);
+  v_rotated := v_answer->>'token';
   ASSERT v_rotated ~ '^[0-9a-f]{64}$'
      AND v_rotated <> (SELECT value FROM links_state WHERE label = 'token32'),
     'the return nonce trades for a fresh address on the same link';
@@ -1109,6 +1138,21 @@ BEGIN
   ASSERT public.resolve_invoice_link(v_rotated, false) IS NOT NULL,
     'the rotated address opens the sheet';
   UPDATE links_state SET value = v_rotated WHERE label = 'token32';
+
+  -- R-BT leg 2 (W4 r7 MAJOR-1): THE NONCE IS SPENT. A replayed GET — back
+  -- button, prefetch, link scanner — answers 'spent', carries no address, and
+  -- rotates nothing, so the address the first redirect handed the browser is
+  -- still the one that opens the sheet.
+  v_answer := public.resolve_invoice_return_nonce(v_claim->>'return_nonce');
+  ASSERT v_answer = jsonb_build_object('state', 'spent'),
+    format('a replayed nonce is spent and carries no address: %s', v_answer);
+  ASSERT public.resolve_invoice_link(v_rotated, false) IS NOT NULL,
+    'R-BT: the replay left the rotated address alive';
+  ASSERT (SELECT return_nonce_consumed_at IS NOT NULL
+          FROM public.invoice_checkout_attempts
+          WHERE id = (v_claim->>'attempt_id')::uuid),
+    'R-BT: the first resolution stamped return_nonce_consumed_at';
+
   ASSERT public.resolve_invoice_return_nonce('garbage') IS NULL
      AND public.resolve_invoice_return_nonce(repeat('0', 64)) IS NULL,
     'a malformed or unknown nonce resolves to NULL';
@@ -1198,7 +1242,7 @@ BEGIN
           FROM public.invoices WHERE id = 'a5745000-0000-4000-8000-000000000037'),
     'M3 A: the invoice pointer is cleared';
   -- The household's own nonce trades on the same link row (00636 rotates).
-  v_rotated := public.resolve_invoice_return_nonce(v_house->>'return_nonce');
+  v_rotated := public.resolve_invoice_return_nonce(v_house->>'return_nonce')->>'token';
   ASSERT v_rotated ~ '^[0-9a-f]{64}$'
      AND v_rotated <> (SELECT value FROM links_state WHERE label = 'token37'),
     'the household nonce trades for a fresh address on the invoice link';
@@ -1572,7 +1616,7 @@ BEGIN
   ASSERT public.resolve_invoice_return_nonce(
            (SELECT return_nonce FROM public.invoice_checkout_attempts
             WHERE id = (SELECT value::uuid FROM links_state WHERE label = 'attempt40')))
-         ~ '^[0-9a-f]{64}$',
+         ->>'token' ~ '^[0-9a-f]{64}$',
     'the nonce still trades on the closed link';
 END;
 $$;

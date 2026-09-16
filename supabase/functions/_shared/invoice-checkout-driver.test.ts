@@ -132,16 +132,17 @@ const target: InvoiceCheckoutTarget = {
   nonceReturnOrigin: 'https://client.test',
 };
 
-Deno.test('driver return: the nonce address when both the nonce and the origin exist', () => {
+Deno.test('driver return: the nonce address is the SUCCESS hop, and only that (R-BT)', () => {
   const claimed = attempt({ returnNonce: NONCE });
   assertEquals(
     invoiceCheckoutReturnBase(claimed, target, 'success'),
     `https://client.test/pay/return/${NONCE}?checkout=success&session_id={CHECKOUT_SESSION_ID}`
   );
-  assertEquals(
-    invoiceCheckoutReturnBase(claimed, target, 'cancelled'),
-    `https://client.test/pay/return/${NONCE}?checkout=cancelled`
-  );
+  // W4 r7 BLOCKING-1: a cancel used to travel the same hop, and the hop
+  // rotates the link. Pressing Back at Stripe therefore killed the /pay
+  // address in the client's inbox. A cancel goes straight back to the address
+  // she opened; nothing is rotated because nothing was paid.
+  assertEquals(invoiceCheckoutReturnBase(claimed, target, 'cancelled'), target.cancelUrl);
 });
 
 Deno.test('driver return: falls back to today\'s address when the nonce or the origin is missing (M7)', () => {

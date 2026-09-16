@@ -31,6 +31,29 @@ let mockInvoiceLink: {
   expiresAt?: string | null;
 } | null = null;
 
+/**
+ * THE ONLY WAY AN ADDRESS EXISTS ON A FOLIO (R-BV).
+ *
+ * The mint's answer is held in the folio's own component state now, not in the
+ * `['invoice-link', id]` cache — four invoice acts invalidated that key and
+ * `get_invoice_link` can only ever answer `token: NULL`, so the folio was
+ * destroying the address it had just promised to show once. A test that wants
+ * an address therefore mints one, exactly as the designer does; there is no
+ * longer any way to hand the folio a token behind its back.
+ */
+async function mintAddress(token = LINK_TOKEN) {
+  mockRegenerateLink.mockResolvedValue({ token, status: 'active', expiresAt: null });
+  fireEvent.click(screen.getByRole('button', { name: 'Regenerate link' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Replace the link' }));
+  await screen.findByRole('button', { name: 'Copy link' });
+}
+
+/** Resend, and let the email fail — the folio's recovery band appears. */
+async function resendAndBounce() {
+  fireEvent.click(screen.getByRole('button', { name: 'Resend' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Resend email' }));
+}
+
 const invoice: Invoice = {
   id: 'invoice-1',
   project_id: 'project-1',
@@ -241,55 +264,43 @@ describe('InvoiceFolio delivery recovery', () => {
     expect(mockInvalidateQueries).not.toHaveBeenCalled();
   });
 
-  it('keeps the issued invoice reachable when email delivery fails', async () => {
-    // An address already minted on this invoice (the only way one exists:
-    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
-    mockIssue.mockResolvedValue({
-      ...invoice,
-      status: 'sent',
-      invoice_number: 'INV-1042',
-    });
+  it('keeps the minted address through a send that fails — mint, then Resend (R-BV)', async () => {
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1042' };
     mockSend.mockRejectedValue(new Error('provider unavailable'));
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
-    const confirmations = screen.getAllByRole('button', {
-      name: 'Issue & send',
-    });
-    fireEvent.click(confirmations[confirmations.length - 1]);
+    await mintAddress();
+    await resendAndBounce();
 
     await waitFor(() =>
-      expect(screen.getByText(/Could not send — issued as INV-1042/)).toBeInTheDocument(),
+      expect(screen.getByText(/Could not send/)).toBeInTheDocument(),
     );
 
     // K1 (00574): the recovery address is the invoice's own link, not the
-    // signed-in `/invoices/<id>` page.
+    // signed-in `/invoices/<id>` page. R-BV: and the send that just failed —
+    // whose mutation invalidates the invoice caches — did not take it away.
     const fallback = screen.getByRole('link', { name: PAY_URL });
     expect(fallback).toHaveAttribute('href', PAY_URL);
     expect(screen.getByRole('button', { name: 'Copy client link' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeEnabled();
   });
 
   it('offers the pay link to an unlinked household, and says where the receipt goes', async () => {
-    // An address already minted on this invoice (the only way one exists:
-    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     // Reverses the pre-00574 behaviour: an account-less household was told to
     // go get an account. The link needs none — but with no profile on either
     // side there is no address on file, which is what M5 makes the folio say.
-    mockInvoice = { ...invoice, client_id: null, client: undefined };
-    mockIssue.mockResolvedValue({
-      ...mockInvoice,
+    mockInvoice = {
+      ...invoice,
       status: 'sent',
       invoice_number: 'INV-1043',
-    });
+      client_id: null,
+      client: undefined,
+    };
     mockSend.mockRejectedValue(new Error('provider unavailable'));
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
-    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
-    fireEvent.click(confirmations[confirmations.length - 1]);
+    await mintAddress();
+    await resendAndBounce();
 
     expect(await screen.findByRole('link', { name: PAY_URL })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy client link' })).toBeInTheDocument();
@@ -299,16 +310,12 @@ describe('InvoiceFolio delivery recovery', () => {
   });
 
   it('omits the receipt-at-checkout line when the household has an account', async () => {
-    // An address already minted on this invoice (the only way one exists:
-    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
-    mockIssue.mockResolvedValue({ ...invoice, status: 'sent', invoice_number: 'INV-1044' });
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1044' };
     mockSend.mockRejectedValue(new Error('provider unavailable'));
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
-    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
-    fireEvent.click(confirmations[confirmations.length - 1]);
+    await mintAddress();
+    await resendAndBounce();
 
     expect(await screen.findByRole('link', { name: PAY_URL })).toBeInTheDocument();
     expect(
@@ -317,11 +324,10 @@ describe('InvoiceFolio delivery recovery', () => {
   });
 
   it('uses the authoritative project client for a legacy nullable-client invoice', async () => {
-    // An address already minted on this invoice (the only way one exists:
-    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     mockInvoice = {
       ...invoice,
+      status: 'sent',
+      invoice_number: 'INV-1043',
       client_id: null,
       client: undefined,
       project: {
@@ -335,17 +341,11 @@ describe('InvoiceFolio delivery recovery', () => {
         },
       },
     };
-    mockIssue.mockResolvedValue({
-      ...mockInvoice,
-      status: 'sent',
-      invoice_number: 'INV-1043',
-    });
     mockSend.mockRejectedValue(new Error('provider unavailable'));
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
-    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
-    fireEvent.click(confirmations[confirmations.length - 1]);
+    await mintAddress();
+    await resendAndBounce();
 
     expect(await screen.findByRole('link', { name: PAY_URL })).toBeInTheDocument();
     expect(screen.queryByText(/has no linked portal account/i)).not.toBeInTheDocument();
@@ -459,24 +459,16 @@ describe('InvoiceFolio delivery recovery', () => {
   });
 
   it('announces clipboard failure instead of silently resetting the button', async () => {
-    // An address already minted on this invoice (the only way one exists:
-    // `useRegenerateInvoiceLink`'s setQueryData — see the default above).
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: jest.fn().mockRejectedValue(new Error('denied')) },
     });
-    mockIssue.mockResolvedValue({
-      ...invoice,
-      status: 'sent',
-      invoice_number: 'INV-1044',
-    });
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1044' };
     mockSend.mockRejectedValue(new Error('provider unavailable'));
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
-    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
-    fireEvent.click(confirmations[confirmations.length - 1]);
+    await mintAddress();
+    await resendAndBounce();
 
     const copy = await screen.findByRole('button', { name: 'Copy client link' });
     fireEvent.click(copy);
@@ -487,10 +479,10 @@ describe('InvoiceFolio delivery recovery', () => {
 
   // ── The link acts, standing in the folio's own row (00574 · K1) ────────
 
-  it('offers Copy link and Regenerate link on an issued invoice that has an address', () => {
+  it('offers Copy link and Regenerate link on an issued invoice that has an address', async () => {
     mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1050' };
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
     render(<InvoiceFolio invoiceId="invoice-1" />);
+    await mintAddress();
 
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Regenerate link' })).toBeEnabled();
@@ -516,9 +508,9 @@ describe('InvoiceFolio delivery recovery', () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1050' };
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
+    await mintAddress();
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(PAY_URL));
@@ -599,11 +591,12 @@ describe('InvoiceFolio delivery recovery', () => {
 
   it('brings Copy link up once Regenerate has minted an address', async () => {
     mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1060' };
-    // What `useRegenerateInvoiceLink.onSuccess` does: setQueryData puts the
-    // freshly minted token into ['invoice-link', id]. Nothing else can.
-    mockRegenerateLink.mockImplementation(async () => {
-      mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
-      return mockInvoiceLink;
+    // What the mint returns is all there is: the folio parks it in its own
+    // state and the cache never sees it (R-BV).
+    mockRegenerateLink.mockResolvedValue({
+      token: LINK_TOKEN,
+      status: 'active',
+      expiresAt: null,
     });
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
@@ -637,19 +630,13 @@ describe('InvoiceFolio delivery recovery', () => {
     expect(screen.getByRole('button', { name: 'Regenerate link' })).toBeEnabled();
   });
 
-  it('gives the recovery band the address once the invoice has one', async () => {
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
-    mockIssue.mockImplementation(async () => ({
-      ...invoice,
-      status: 'sent',
-      invoice_number: 'INV-1061',
-    }));
+  it('gives the recovery band the address once the folio has minted one', async () => {
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1061' };
     mockSend.mockRejectedValue(new Error('provider unavailable'));
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
-    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
-    fireEvent.click(confirmations[confirmations.length - 1]);
+    await mintAddress();
+    await resendAndBounce();
 
     // Not the "no link yet" else-branch.
     expect(await screen.findByRole('link', { name: PAY_URL })).toBeInTheDocument();
@@ -715,9 +702,10 @@ describe('InvoiceFolio delivery recovery', () => {
 
   it('prints the shown-once sentence beside Copy link at the mint, and only there', async () => {
     mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1064' };
-    mockRegenerateLink.mockImplementation(async () => {
-      mockInvoiceLink = { token: LINK_TOKEN, status: 'active', expiresAt: null };
-      return mockInvoiceLink;
+    mockRegenerateLink.mockResolvedValue({
+      token: LINK_TOKEN,
+      status: 'active',
+      expiresAt: null,
     });
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
@@ -736,17 +724,12 @@ describe('InvoiceFolio delivery recovery', () => {
   it('keeps the two copy sites\u2019 statuses apart', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
-    mockIssue.mockImplementation(async () => {
-      mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1062' };
-      return mockInvoice;
-    });
+    mockInvoice = { ...invoice, status: 'sent', invoice_number: 'INV-1062' };
     mockSend.mockRejectedValue(new Error('provider unavailable'));
 
     render(<InvoiceFolio invoiceId="invoice-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Issue & send' }));
-    const confirmations = screen.getAllByRole('button', { name: 'Issue & send' });
-    fireEvent.click(confirmations[confirmations.length - 1]);
+    await mintAddress();
+    await resendAndBounce();
 
     // Both sites are on screen: the toolbar act and the recovery band.
     await screen.findByRole('button', { name: 'Copy client link' });
@@ -814,7 +797,7 @@ describe('InvoiceFolio · what became of the mail', () => {
 
   beforeEach(() => {
     mockInvoice = sentInvoice;
-    mockInvoiceLink = { token: LINK_TOKEN, status: 'active' };
+    mockInvoiceLink = { token: null, status: 'active' };
     mockEmailDeliveryByRef = {};
     jest.clearAllMocks();
     mockRefetch.mockResolvedValue({ data: sentInvoice });
