@@ -214,16 +214,29 @@ const DOOR_NOUN: Record<SeatAddKind, string> = {
   other_named: "contact",
 };
 
-/** "a sub", "an installer" — the article the noun actually takes. */
 /**
- * R-CD — the act's held sentence while the job's recorded studio is still
- * resolving. `undefined` from that query means "not known yet"; only a
- * resolved `null` means the job records no studio.
+ * R-CD, amended (patina-merged-73) — the act's held sentences while the job's
+ * recorded studio is UNRESOLVED. `undefined` from that query means "not known
+ * yet" whatever the reason — the first fetch, an RPC error, or a fetch paused
+ * offline; only a resolved `null` means the job records no studio. The first
+ * sentence is for a query still out, the second for one that came back with
+ * nothing readable.
  */
 const RECORDED_STUDIO_HELD_ID = "add-person-recorded-studio-held";
 const RECORDED_STUDIO_HELD_SENTENCE =
   "Checking which studio keeps this job’s book.";
+const RECORDED_STUDIO_UNREAD_SENTENCE =
+  "Couldn’t read which studio keeps this job’s book. Press again to try once more.";
+/**
+ * F3 — the standing an authority grant is refused against is read off the
+ * membership list, so a grant asked for while that list is out meets a refusal
+ * about standing nobody has read yet.
+ */
+const AUTHORITY_STANDING_HELD_ID = "add-person-authority-standing-held";
+const AUTHORITY_STANDING_HELD_SENTENCE =
+  "Checking your standing in this job’s studio.";
 
+/** "a sub", "an installer" — the article the noun actually takes. */
 function withArticle(noun: string): string {
   return `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`;
 }
@@ -303,7 +316,7 @@ export function AddPersonSheet({
   const contactRuleWrite = useSetContactRule();
   const setAuthority = useSetPartyAuthority();
   const setAffiliation = useSetAffiliation();
-  const { data: orgs } = useOrganizations();
+  const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   // QA-R3-1: the caller's answer wins. The fallback is the membership list
   // SORTED by id — never `.find()` over an unordered read, which is the defect
   // itself: a designer in two design studios got a different answer between
@@ -479,8 +492,51 @@ export function AddPersonSheet({
    * may live in, so none is minted at all (party-profile-sheet.tsx:257-260
    * reads it the same way for the same reason).
    */
-  const { data: recordedStudioId, isLoading: recordedStudioLoading } =
-    useProjectRecordedStudio(open && projectId ? projectId : null);
+  const {
+    data: recordedStudioId,
+    isLoading: recordedStudioLoading,
+    refetch: refetchRecordedStudio,
+  } = useProjectRecordedStudio(open && projectId ? projectId : null);
+  /**
+   * R-CD, amended (patina-merged-73) — UNRESOLVED IS UNRESOLVED.
+   *
+   * `recordedStudioLoading` alone is only the first of three ways this query
+   * leaves `data` undefined: react-query.ts:180-191 sets `retry: false` for a
+   * non-network error, so an RPC failure lands `status: 'error'` with
+   * `fetchStatus: 'idle'`, and the default `networkMode: 'online'` parks an
+   * offline fetch at `fetchStatus: 'paused'`. Both read `isLoading === false`
+   * with `data` still undefined — the act released, and a press wrote the seat,
+   * skipped the mint and skipped `noBookClause` too, so a job that in fact
+   * keeps a book got a cardless seat in silence. The state the guard turns on
+   * is the one the writes read: `undefined`.
+   */
+  const recordedStudioUnresolved =
+    !!projectId && recordedStudioId === undefined;
+  /**
+   * R-CD, amended — WHAT HOLDS THE ACT, AND THE SENTENCE BESIDE IT.
+   *
+   * Only a seat kind is held by either read (F4): a client or a maker writes
+   * no seat and no grant, so neither query stands on their path. The second
+   * branch is F3 — `isOrgAdmin` reads the membership list, and a grant asked
+   * for while that list is still out met the owner/admin refusal AFTER the
+   * seat, the card, the channels and the rule had been written.
+   */
+  const heldReason: { id: string; sentence: string } | null =
+    isEditMode || !isSeatKind(kind)
+      ? null
+      : recordedStudioUnresolved
+        ? {
+            id: RECORDED_STUDIO_HELD_ID,
+            sentence: recordedStudioLoading
+              ? RECORDED_STUDIO_HELD_SENTENCE
+              : RECORDED_STUDIO_UNREAD_SENTENCE,
+          }
+        : authorityOpen && orgsLoading
+          ? {
+              id: AUTHORITY_STANDING_HELD_ID,
+              sentence: AUTHORITY_STANDING_HELD_SENTENCE,
+            }
+          : null;
   /**
    * CR-12 — THE SCOPE AND THE FIGURE ARE THE STUDIO'S TO RECORD.
    *
@@ -701,6 +757,15 @@ export function AddPersonSheet({
 
   const submitParty = async () => {
     if (!isSeatKind(kind)) return;
+    /**
+     * R-CD, amended (F5) — the invariant holds by construction, not by one
+     * button. Enter in the email, the website and the client email fields all
+     * call `submit()` straight past the act, so the writer itself refuses
+     * while the job's recorded studio is unresolved — the state every write
+     * below reads. `projectId` is checked a few lines down and prints its own
+     * refusal; with none picked there is no job whose studio could resolve.
+     */
+    if (recordedStudioUnresolved) return;
     setError(null);
     const trimmedName = partyName.trim();
     const partyKind = SEAT_PARTY_KIND[kind];
@@ -1765,15 +1830,20 @@ export function AddPersonSheet({
                 ? "add-party-phone-on-file"
                 : null,
               isSeatKind(kind) ? "add-party-consequence" : null,
-              recordedStudioLoading ? RECORDED_STUDIO_HELD_ID : null,
+              heldReason?.id ?? null,
             ]
               .filter(Boolean)
               .join(" ") || undefined
           }
           loading={pending}
           loadingLabel={isEditMode ? "Saving…" : "Adding…"}
-          held={recordedStudioLoading}
-          disabled={recordedStudioLoading}
+          held={!!heldReason}
+          disabled={!!heldReason}
+          onHeldActivate={
+            recordedStudioUnresolved
+              ? () => void refetchRecordedStudio()
+              : undefined
+          }
           onClick={() => void submit()}
         >
           {isEditMode
@@ -1793,12 +1863,12 @@ export function AddPersonSheet({
 
       {/* R-CD: a held act carries a VISIBLE reason beside it (direction §5.5),
           the shape close-seat-act.tsx already ships. */}
-      {recordedStudioLoading && (
+      {heldReason && (
         <p
-          id={RECORDED_STUDIO_HELD_ID}
+          id={heldReason.id}
           className="mt-1 text-[0.7rem] text-[var(--ink-subtle)]"
         >
-          {RECORDED_STUDIO_HELD_SENTENCE}
+          {heldReason.sentence}
         </p>
       )}
 

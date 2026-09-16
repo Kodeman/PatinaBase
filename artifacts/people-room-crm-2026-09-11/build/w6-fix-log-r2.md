@@ -450,4 +450,63 @@ solves for its own names.
 | Targeted e2e, client | `tests/design-build-door.spec.ts`, prod build on :3002 | **2 passed** |
 | Port hygiene | `lsof -nP -iTCP:3000 -sTCP:LISTEN` / `-iTCP:3002` after the pass | both empty |
 
-R-CD — Add sheet studio-loading race
+## R-CD — Add sheet studio-loading race
+
+**Root cause.** `useProjectRecordedStudio` answers `undefined` until it
+resolves, and `recordedStudioId` is read by three writes: the firm-card mint
+(`add-person-sheet.tsx:764`), the person-card mint (`:826`) and the
+`noBookClause` sentence (`:835`, `=== null`). The first two are guarded by a
+falsey check and the third by an equality check, so an UNRESOLVED read fell
+through every one of them: the seat was written, no card was minted, and the
+sentence that says the number rides on the seat was not printed. The seat came
+out cardless in silence on a job that in fact keeps a book. `a32d557bf` held the
+act while `isLoading` was true, which closes only the first-fetch window.
+
+**The fix.** The hold turns on the state the writes actually read —
+`recordedStudioId === undefined` — not on `isLoading`. Two further ways to
+reach `undefined` with `isLoading === false` were live: `react-query.ts:180-191`
+sets `retry: false` for a non-network error, so an RPC failure parks at
+`status: 'error'` / `fetchStatus: 'idle'`; and the default
+`networkMode: 'online'` parks an offline fetch at `fetchStatus: 'paused'`. Both
+released the act. The hold is now structural as well as presentational:
+`submitParty` returns on an unresolved studio, so the three Enter-key submits
+(`:1205-1206`, `:1234-1235`, `:1354-1355`) that call `submit()` straight past
+the act cannot write either. It is scoped to seat kinds — a client or a maker
+writes no seat and no card, and was being held for a book neither of them
+reads. The held sentence differs by state: still fetching, “Checking which
+studio keeps this job’s book.”; on error or paused, “Couldn’t read which studio
+keeps this job’s book. Press again to try once more.”, with the held act’s
+`onHeldActivate` refetching the query (the `archive-card-door.tsx:99-102`
+idiom). The sibling case on the standing side is held the same way: `isOrgAdmin`
+reads `useOrganizations()`, which nothing held on, so an authority grant asked
+for while that list was out met the owner/admin refusal at `:900-903` AFTER the
+seat, the card, the channels and the rule had been written; the act is now held
+while the membership list is loading, with its own one-line sentence and no
+change to the write order. Two smaller ones in the same commit: the JSDoc
+`/** "a sub", "an installer" … */` was put back on `withArticle`, which the
+R-CD const block had been inserted in front of; and `people-fixture.ts`’s
+`mobileFor` docstring named 555-0308 as the seed’s highest number when the seed
+also carries 555-0777 (the alarm company on a site record) — both still clear of
+the 4000–9999 band the helper hashes into.
+
+**The amendment.** Recorded under R-CD in `rulings.md` §3 (appended, not
+renumbered): for a seat kind the submit is held whenever the recorded studio is
+unresolved, whatever the reason; only a resolved value releases it — a uuid
+mints the card, a resolved `null` takes the no-card path and prints
+`noBookClause`.
+
+**Gates.**
+
+| Gate | Command | Result |
+|---|---|---|
+| People unit suites | `pnpm --dir WT/apps/designer-portal exec jest src/components/document/people` | **31 suites / 477 tests passed** |
+| Designer types | `pnpm --dir WT --filter @patina/designer-portal type-check` | **clean** |
+
+Four cases were added to the spec’s “the recorded studio, while it is still
+resolving” describe: the act held on an error state with the press calling
+`refetch` and nothing written; the act held on a paused/offline fetch with
+nothing written; a client kind NOT held while the query is out; and the act held
+while the membership behind an authority grant is still out, with neither the
+seat nor the grant written. No server, database or Playwright command was run
+for this pass — the full e2e suites were running on this worktree under another
+agent.

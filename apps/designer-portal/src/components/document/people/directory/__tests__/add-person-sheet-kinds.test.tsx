@@ -25,13 +25,22 @@ const setAffiliation = jest.fn();
 const addFirmCard = jest.fn(async () => ({ id: "firm-minted" }));
 /**
  * CR5-1 — what `project_recorded_studio()` answers for the picked project.
- * R-CD: `loading` is the third state the guard used to be blind to — the
- * query has not answered yet, so `data` is `undefined`, not `null`.
+ * R-CD, amended: `data` is `undefined` in THREE states, not one — the query
+ * still out (`loading`), a non-network RPC error that react-query does not
+ * retry (`isError`, `fetchStatus: 'idle'`), and a fetch paused offline
+ * (`fetchStatus: 'paused'`). Each of the three is "not known yet"; only a
+ * resolved `null` means the job records no studio.
  */
 const recordedStudio = {
   current: "org-1" as string | null,
   loading: false,
+  isError: false,
+  fetchStatus: "idle" as "idle" | "fetching" | "paused",
 };
+/** R-CD, amended: the held act's retry — pressing it asks the book again. */
+const recordedStudioRefetch = jest.fn();
+/** F3 — the membership list the authority band's refusal is read against. */
+const orgsState = { loading: false };
 
 jest.mock("@patina/supabase", () => ({
   useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
@@ -46,10 +55,19 @@ jest.mock("@patina/supabase", () => ({
   // CR5-1: the card is minted into the studio the seat's PROJECT records —
   // the resolver `assert_project_party_cards()` checks against — never the one
   // holding the book. `recordedStudio` lets a case say the job records none.
-  useProjectRecordedStudio: () => ({
-    data: recordedStudio.loading ? undefined : recordedStudio.current,
-    isLoading: recordedStudio.loading,
-  }),
+  useProjectRecordedStudio: () => {
+    const unresolved =
+      recordedStudio.loading ||
+      recordedStudio.isError ||
+      recordedStudio.fetchStatus === "paused";
+    return {
+      data: unresolved ? undefined : recordedStudio.current,
+      isLoading: recordedStudio.loading,
+      isError: recordedStudio.isError,
+      fetchStatus: recordedStudio.fetchStatus,
+      refetch: recordedStudioRefetch,
+    };
+  },
   useSaveVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetContactRule: () => ({ mutateAsync: setRule, isPending: false }),
   // CR-3: the front door now records the person-to-firm tie too.
@@ -76,15 +94,18 @@ jest.mock("@patina/supabase", () => ({
   useStudioIdentity: () => ({ data: { name: "Middle West Studio" } }),
   useUpdateStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useOrganizations: () => ({
-    data: [
-      {
-        id: "org-1",
-        type: "design_studio",
-        // CR-12: the money scopes are an owner's or an admin's to grant, and
-        // the sheet reads that off the caller's own membership.
-        membership: { role: "owner" },
-      },
-    ],
+    data: orgsState.loading
+      ? undefined
+      : [
+          {
+            id: "org-1",
+            type: "design_studio",
+            // CR-12: the money scopes are an owner's or an admin's to grant,
+            // and the sheet reads that off the caller's own membership.
+            membership: { role: "owner" },
+          },
+        ],
+    isLoading: orgsState.loading,
   }),
   peopleKeys: { all: ["people-directory"] },
   peopleSeatKeys: { all: ["people-directory-seats"] },
@@ -161,6 +182,10 @@ beforeEach(() => {
   onAdded.mockReset();
   recordedStudio.current = "org-1";
   recordedStudio.loading = false;
+  recordedStudio.isError = false;
+  recordedStudio.fetchStatus = "idle";
+  recordedStudioRefetch.mockReset().mockResolvedValue({});
+  orgsState.loading = false;
 });
 
 describe("the kind switch", () => {
@@ -762,6 +787,98 @@ describe("the recorded studio, while it is still resolving", () => {
     expect(onAdded.mock.calls[0][0]).not.toContain(
       "isn’t attached to a studio yet",
     );
+  });
+
+  /**
+   * R-CD, amended (patina-merged-73) — the hold is on UNRESOLVED, not on
+   * "loading". react-query.ts:180-191 turns retry off for a non-network error,
+   * so an RPC failure lands `isLoading === false` with `data` still undefined:
+   * the act used to release and the press wrote a seat with no card and no
+   * sentence saying so.
+   */
+  it("holds the act when the book could not be read, and pressing it asks again", async () => {
+    recordedStudio.isError = true;
+    openSub();
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-recorded-studio-held",
+    );
+    expect(
+      screen.getByText(
+        "Couldn’t read which studio keeps this job’s book. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(recordedStudioRefetch).toHaveBeenCalled());
+    expect(addParty).not.toHaveBeenCalled();
+    expect(promote).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The same silence by the other road: the default `networkMode: 'online'`
+   * parks an offline fetch at `fetchStatus: 'paused'`, which is neither
+   * loading nor an error and leaves `data` undefined all the same.
+   */
+  it("holds the act while the fetch is paused offline, and writes nothing", async () => {
+    recordedStudio.fetchStatus = "paused";
+    openSub();
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByText(
+        "Couldn’t read which studio keeps this job’s book. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(act).toHaveAttribute("aria-disabled", "true"));
+    expect(addParty).not.toHaveBeenCalled();
+    expect(promote).not.toHaveBeenCalled();
+  });
+
+  /** The book is a SEAT's question. A client writes no seat and no card. */
+  it("never holds a client on this query", () => {
+    recordedStudio.loading = true;
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a client" }));
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    expect(
+      screen.queryByText("Checking which studio keeps this job’s book."),
+    ).not.toBeInTheDocument();
+  });
+
+  /**
+   * F3 — the same class on the standing side. `isOrgAdmin` reads the
+   * membership list, so a grant asked for while that list was still out met
+   * the owner/admin refusal AFTER the seat, the card, the channels and the
+   * rule had been written.
+   */
+  it("holds the act while the studio membership behind an authority grant is still out", async () => {
+    orgsState.loading = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("What they may decide"), {
+      target: { value: "selections" },
+    });
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-authority-standing-held",
+    );
+    expect(
+      screen.getByText("Checking your standing in this job’s studio."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(act).toHaveAttribute("aria-disabled", "true"));
+    expect(addParty).not.toHaveBeenCalled();
+    expect(setAuthority).not.toHaveBeenCalled();
   });
 });
 

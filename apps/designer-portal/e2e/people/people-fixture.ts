@@ -24,7 +24,8 @@ export function uniqueName(prefix: string): string {
  * digits are hashed off the full name, which already carries uniqueName()'s
  * per-run suffix, so two people added inside one test differ from each other
  * as well as from the run before. The 4000–9999 band sits clear of every
- * seeded number (the seed's highest is 555-0308) (W6 QA F4-new).
+ * seeded number (the seed's highest is 555-0777, the alarm company on a site
+ * record; 555-0308 is the highest on a card) (W6 QA F4-new).
  */
 export function mobileFor(name: string): string {
   let hash = 0;
