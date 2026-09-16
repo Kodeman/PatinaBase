@@ -25,18 +25,27 @@ interface Recorded {
   patch: Record<string, unknown>;
   /** Statuses the update was gated on, when it was gated at all. */
   guard?: string[];
+  /** The column and value the update was keyed on, when it was keyed at all. */
+  match?: [string, unknown];
 }
 
 function stubClient(
   logRow: Record<string, unknown> | null,
   bounceCount = 0,
+  /** Typed email channels carrying the event's address (CRM-12). */
+  channelRows: Array<{ id: string; status: string }> = [],
 ) {
   const updates: Recorded[] = [];
 
   function chain(table: string, patch?: Record<string, unknown>) {
     const node = {
       select: () => node,
-      eq: () => node,
+      eq: (column: string, value: unknown) => {
+        if (patch) {
+          updates[updates.length - 1].match = [column, value];
+        }
+        return node;
+      },
       in: (_column: string, values: string[]) => {
         if (patch) {
           updates[updates.length - 1].guard = values;
@@ -51,7 +60,12 @@ function stubClient(
         return chain(table, next);
       },
       then: (resolve: (v: unknown) => void) =>
-        resolve({ data: null, error: null }),
+        resolve({
+          data: !patch && table === "studio_contact_channels"
+            ? channelRows
+            : null,
+          error: null,
+        }),
     };
     return node;
   }
@@ -83,6 +97,64 @@ Deno.test("an email_id with no notification_log row is reported unmatched", asyn
     data: { email_id: "missing" },
   });
   assertEquals(outcome, { matched: false });
+  assertEquals(updates.length, 0);
+});
+
+// W4 r2 MAJOR-3. B-2 narrowed the notification_log ref to the SENDING studio's
+// own card, so a letter from po-send / quote-request-send / trade-rfq-send /
+// trade-agreement-send (none of which pass an explicit ref) writes NO log row
+// when that studio's book does not carry the address. The letter's attribution
+// is gone; the address's deliverability must not be. D-6: a dead mailbox is
+// dead for everyone, whoever's letter found out.
+Deno.test("an UNMATCHED hard bounce still kills the address on every card", async () => {
+  const { client, updates } = stubClient(null, 0, [
+    { id: "chan-a", status: "active" },
+    { id: "chan-b", status: "active" },
+  ]);
+  const outcome = await handleResendEvent(client as never, {
+    type: "email.bounced",
+    data: {
+      email_id: "untracked",
+      to: ["dana@kowalskitile.test"],
+      bounce: { type: "Permanent" },
+    },
+  });
+  // Still unmatched: no log row exists to stamp.
+  assertEquals(outcome, { matched: false });
+  const channelWrites = updates.filter(
+    (u) => u.table === "studio_contact_channels",
+  );
+  assertEquals(channelWrites.length, 1);
+  assertEquals(channelWrites[0].patch.status, "dead");
+  assert(typeof channelWrites[0].patch.status_at === "string");
+  assertEquals(channelWrites[0].guard, ["chan-a", "chan-b"]);
+  // Nothing was written to notification_log — there was no row.
+  assertEquals(logUpdates(updates).length, 0);
+});
+
+Deno.test("an UNMATCHED complaint unsubscribes the address", async () => {
+  const { client, updates } = stubClient(null, 0, [
+    { id: "chan-a", status: "active" },
+  ]);
+  await handleResendEvent(client as never, {
+    type: "email.complained",
+    data: { email_id: "untracked", to: ["dana@kowalskitile.test"] },
+  });
+  const channelWrites = updates.filter(
+    (u) => u.table === "studio_contact_channels",
+  );
+  assertEquals(channelWrites.length, 1);
+  assertEquals(channelWrites[0].patch.status, "unsubscribed");
+});
+
+Deno.test("an UNMATCHED event that is neither a bounce nor a complaint writes nothing", async () => {
+  const { client, updates } = stubClient(null, 0, [
+    { id: "chan-a", status: "active" },
+  ]);
+  await handleResendEvent(client as never, {
+    type: "email.opened",
+    data: { email_id: "untracked", to: ["dana@kowalskitile.test"] },
+  });
   assertEquals(updates.length, 0);
 });
 
@@ -197,7 +269,7 @@ Deno.test("a lone soft bounce records the bounce and suppresses nobody", async (
   assertEquals(updates.find((u) => u.table === "profiles"), undefined);
 });
 
-Deno.test("a bounce on a row with no user_id never touches profiles", async () => {
+Deno.test("a bounce on a row with no user_id and no address never touches profiles", async () => {
   const { client, updates } = stubClient({ ...LOG_ROW, user_id: null });
   const outcome = await handleResendEvent(client as never, {
     type: "email.bounced",
@@ -207,6 +279,80 @@ Deno.test("a bounce on a row with no user_id never touches profiles", async () =
   const [first] = logUpdates(updates);
   assertEquals(first.patch.status, "bounced");
   assertEquals(updates.find((u) => u.table === "profiles"), undefined);
+});
+
+// W4 r13 MAJOR-1. campaign-dispatch picks its audience from
+// profiles.email_suppressed and never asks the channel gate, so a killing
+// verdict that lands only on studio_contact_channels leaves that one rail
+// mailing a dead mailbox. Both ledgers are written from the same event, by
+// ADDRESS, on every path — including the two the by-id writes cannot reach.
+Deno.test("an UNMATCHED hard bounce suppresses every profile carrying the address", async () => {
+  const { client, updates } = stubClient(null, 0, [
+    { id: "chan-a", status: "active" },
+  ]);
+  await handleResendEvent(client as never, {
+    type: "email.bounced",
+    data: {
+      email_id: "untracked",
+      to: ["Dana@Kowalskitile.test"],
+      bounce: { type: "Permanent" },
+    },
+  });
+  const profileWrites = updates.filter((u) => u.table === "profiles");
+  assertEquals(profileWrites.length, 1);
+  assertEquals(profileWrites[0].patch.email_suppressed, true);
+  assert(typeof profileWrites[0].patch.email_suppressed_at === "string");
+  // Keyed on the address as 00593 stores it — lower, trimmed — and on `email`,
+  // never on a wildcard read.
+  assertEquals(profileWrites[0].match, ["email", "dana@kowalskitile.test"]);
+});
+
+Deno.test("an UNMATCHED complaint suppresses every profile carrying the address", async () => {
+  const { client, updates } = stubClient(null, 0, [
+    { id: "chan-a", status: "active" },
+  ]);
+  await handleResendEvent(client as never, {
+    type: "email.complained",
+    data: { email_id: "untracked", to: ["dana@kowalskitile.test"] },
+  });
+  const profileWrites = updates.filter((u) => u.table === "profiles");
+  assertEquals(profileWrites.length, 1);
+  assertEquals(profileWrites[0].patch.email_suppressed, true);
+});
+
+Deno.test("an UNMATCHED soft bounce suppresses nobody", async () => {
+  const { client, updates } = stubClient(null, 0, [
+    { id: "chan-a", status: "active" },
+  ]);
+  await handleResendEvent(client as never, {
+    type: "email.bounced",
+    data: {
+      email_id: "untracked",
+      to: ["dana@kowalskitile.test"],
+      bounce: { type: "Transient" },
+    },
+  });
+  const channelWrites = updates.filter(
+    (u) => u.table === "studio_contact_channels",
+  );
+  assertEquals(channelWrites[0].patch.status, "bounced");
+  assertEquals(updates.find((u) => u.table === "profiles"), undefined);
+});
+
+Deno.test("a hard bounce on a logged row with no user_id still suppresses by address", async () => {
+  const { client, updates } = stubClient(
+    { ...LOG_ROW, user_id: null, recipient: "dana@kowalskitile.test" },
+    0,
+    [{ id: "chan-a", status: "active" }],
+  );
+  const outcome = await handleResendEvent(client as never, {
+    type: "email.bounced",
+    data: { email_id: "re_1", bounce: { type: "Permanent" } },
+  });
+  assertEquals(outcome, { matched: true });
+  const profileWrites = updates.filter((u) => u.table === "profiles");
+  assertEquals(profileWrites.length, 1);
+  assertEquals(profileWrites[0].patch.email_suppressed, true);
 });
 
 Deno.test("engagement events keep writing their own timestamps and the trail", async () => {

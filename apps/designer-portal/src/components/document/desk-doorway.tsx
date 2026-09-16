@@ -82,6 +82,10 @@ type Book = keyof typeof BOOK_PAGES;
  *  Stripe Checkout return is a doorway too: it wants the Orders book open. */
 const DOORWAY_KEYS = [
   'book',
+  // `sheet` is an ALIAS of `book`, not a second grammar: the founding-cohort
+  // CTA and the help copy both say `?sheet=hours`, and an unknown key is
+  // ignored in silence (see above), so that live link landed on a bare Desk.
+  'sheet',
   'page',
   'vendorId',
   'projectId',
@@ -129,7 +133,8 @@ function DeskDoorwayInner() {
     if (consumedRef.current === signature) return;
     consumedRef.current = signature;
 
-    const book = params.get('book')?.toLowerCase() ?? null;
+    const book =
+      (params.get('book') ?? params.get('sheet'))?.toLowerCase() ?? null;
     const account = params.get('account')?.toLowerCase() ?? null;
     const checkout = params.get('checkout')?.toLowerCase() ?? null;
     const authorization = params.get('authorization');

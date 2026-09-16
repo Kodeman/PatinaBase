@@ -32,18 +32,23 @@ import {
   useUpdateStudioBillingSettings,
   useStudioAgreementDefaults,
   useUpdateStudioAgreementDefaults,
+  useStudioMemberRates,
   type MemberRole,
   type OrganizationMemberWithProfile,
 } from '@patina/supabase';
+import type { RateCardRow, RosterRateRole } from '@patina/types';
 import { useAuth } from '@/hooks/use-auth';
+import { useAccountStudio } from '@/hooks/use-viewer-studio';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
+import { ROSTER_RATE_ROLES } from '../rooms/drafting/agreement/part-kinds';
 import { monogramOf } from '@/lib/document/account-identity';
 import { clampInvitableRole, friendlyInviteError, isInviteExpired } from '@/lib/document/invite-status';
 import { StudioInviteModal } from './studio-invite-modal';
 import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { StudioSetupChecklist } from './studio-setup-checklist';
 import { MemberTitleLine } from './member-title-line';
+import { StudioRateRows } from './studio-rate-rows';
 import { AgreementLibraryCard } from './agreement-library-card';
 import { LicensingAttestationCard } from './licensing-attestation-card';
 import { studioEvents } from '@/lib/analytics/studio-events';
@@ -80,7 +85,7 @@ const AGREEMENT_CREDIT_RULES = [
 ] as const;
 
 type AgreementDefaultsForm = {
-  rateCard: { roleName: string; hourlyRateCents: number; sortOrder: number }[];
+  rateCard: RateCardRow[];
   depositPercent: string;
   cadence: 'monthly' | 'biweekly' | 'milestone';
   retainerCreditRule: 'credited' | 'non_refundable' | 'replenishing';
@@ -96,6 +101,38 @@ function agreementPercentInput(value: string): number | null {
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed)) return null;
   return Math.min(100, Math.max(0, Math.round(parsed)));
+}
+
+/**
+ * What the save writes, and what the dirty check compares against — one
+ * mapper, because two copies of it drifted apart the moment `rosterRole`
+ * arrived and a card that carried a binding read permanently dirty.
+ *
+ * HT-4 — the binding rides with the label. `materialize_standard_parts`
+ * (00618) seeds a new agreement's rate card from this array, and a row with no
+ * `rosterRole` reaches the composer as the unchosen state: the server prices it
+ * by its label until somebody picks, and the room's readiness panel holds the
+ * send until somebody does.
+ */
+function rateCardForSave(rows: RateCardRow[]): RateCardRow[] {
+  return (
+    rows
+      .filter((role) => role.roleName.trim())
+      // W7-R4-01 — at most one rate per roster role, so a card of more than
+      // four rows carries at least one that can never be bound. `+ Add a role`
+      // is spent at four, but this card was uncapped before this wave and
+      // `materialize_standard_parts` seeds EVERY row of it onto each new
+      // agreement — where an unbound row holds the send with no act in the
+      // composer that could take it off. Trimmed here so the inflow stops;
+      // the composer's own per-row Remove repairs a card already written.
+      .slice(0, ROSTER_RATE_ROLES.length)
+      .map((role, sortOrder) => ({
+        roleName: role.roleName.trim(),
+        hourlyRateCents: role.hourlyRateCents,
+        sortOrder,
+        ...(role.rosterRole ? { rosterRole: role.rosterRole } : {}),
+      }))
+  );
 }
 
 const agreementDollars = (cents: number) => (cents / 100).toString();
@@ -156,7 +193,6 @@ export function AccountStudioPage() {
   // flag; flag-off keeps the checklist in its exact Wave-1 shape (SKIP
   // disabled, "coming with the rolodex" — studio-setup-checklist.tsx's
   // default when onSkipSeed/onOpenSeedReview are omitted).
-  const { value: callSheetOn } = useFeatureFlag('call-sheet');
   // "The Agreement, Composed" W1 (P3). Fail-closed: the defaults card, and the
   // read behind it, exist only for a studio the flag has reached.
   const { value: agreementPartsOn } = useFeatureFlag('agreement-parts');
@@ -171,21 +207,35 @@ export function AccountStudioPage() {
   const [seedReviewOpen, setSeedReviewOpen] = useState(false);
   const [skipSeedError, setSkipSeedError] = useState<string | null>(null);
 
-  // Prefer a design_studio membership; fall back to the first org of any
-  // type (mirrors account-identity.ts's activeStudio resolution, but keeps
-  // the full org row this page needs for management).
-  const studio = useMemo(
-    () => orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null,
-    [orgs],
-  );
+  // S-2 — ONE studio identity across the three surfaces this program touches.
+  // This page used to resolve its own studio as
+  // `orgs?.find(o => o.type === 'design_studio') ?? orgs?.[0]` — an unordered
+  // PostgREST read with no `.order()` anywhere, on the page that carries HT-3's
+  // "Studio rates" card, the only per-member rate door in the product. Measured
+  // on the default seed: the section listed only 'Leah Hartwell · owner' while
+  // the member logging the priced hours belongs to 'Local Dev Studio', so the
+  // owner had no door to price the person doing the priced work and the rate she
+  // could type was written against a studio that prices nothing. `useAccountStudio`
+  // returns the same owner/admin answer the Hours lens and the internal-hour
+  // studio follow (and the same viewer-chosen one when she answers for two),
+  // falling back — ordered — to this page's original resolution for a plain
+  // member, who chooses nothing and is simply looking at the studio she is in.
+  const {
+    studio,
+    candidates: studioCandidates,
+    selectStudio,
+  } = useAccountStudio();
 
   const { data: members } = useOrganizationMembers(studio?.id ?? '');
   const { data: projects } = useProjects();
-  const { data: contacts } = useStudioContacts(callSheetOn ? (studio?.id ?? null) : null);
+  const { data: contacts } = useStudioContacts(studio?.id ?? null);
   const { data: billingSettings } = useStudioBillingSettings(studio?.id);
   const { data: agreementDefaults } = useStudioAgreementDefaults(
     agreementPartsOn ? studio?.id : null,
   );
+  // HT-3 — the studio's per-member rates. Owner/admin read the studio's rows;
+  // RLS (00598) decides, and the section below renders only for them.
+  const { data: memberRates } = useStudioMemberRates(studio?.id ?? null);
 
   const createOrg = useCreateOrganization();
   const updateOrg = useUpdateOrganization();
@@ -309,8 +359,8 @@ export function AccountStudioPage() {
   const hiresWithFirstDocument = otherActiveMembers.filter(
     (m) => m.first_document_opened_at != null,
   ).length;
-  const contactsCount = callSheetOn ? (contacts?.length ?? 0) : 0;
-  const seedSkipped = callSheetOn ? !!studio?.rolodex_seed_skipped_at : false;
+  const contactsCount = contacts?.length ?? 0;
+  const seedSkipped = !!studio?.rolodex_seed_skipped_at;
 
   const handleSkipSeed = () => {
     if (!studio || updateOrg.isPending) return;
@@ -427,13 +477,7 @@ export function AccountStudioPage() {
 
   const handleSaveAgreementDefaults = () => {
     if (!studio || updateAgreementDefaults.isPending) return;
-    const rateCard = agreementForm.rateCard
-      .filter((role) => role.roleName.trim())
-      .map((role, sortOrder) => ({
-        roleName: role.roleName.trim(),
-        hourlyRateCents: role.hourlyRateCents,
-        sortOrder,
-      }));
+    const rateCard = rateCardForSave(agreementForm.rateCard);
     const depositPercent = agreementPercentInput(agreementForm.depositPercent);
     const defaultExclusions = agreementForm.defaultExclusions
       .split('\n')
@@ -608,13 +652,31 @@ export function AccountStudioPage() {
   const agreementDepositPercent = agreementPercentInput(
     agreementForm.depositPercent,
   );
-  const agreementFormRateCard = agreementForm.rateCard
-    .filter((role) => role.roleName.trim())
-    .map((role, sortOrder) => ({
-      roleName: role.roleName.trim(),
-      hourlyRateCents: role.hourlyRateCents,
-      sortOrder,
-    }));
+  const agreementFormRateCard = rateCardForSave(agreementForm.rateCard);
+  // HT-4 — one rate per roster role. Two rates for the same role leave the
+  // resolver choosing between them, and `upsert_agreement_parts` refuses the
+  // seeded card outright ("the rate card prices lead_designer twice", 00618),
+  // so the act that would create the second one is spent instead of offered.
+  const agreementRolesTaken = new Set<RosterRateRole>(
+    agreementForm.rateCard.flatMap((role) =>
+      role.rosterRole ? [role.rosterRole] : [],
+    ),
+  );
+  const agreementNextFreeRole = ROSTER_RATE_ROLES.find(
+    (role) => !agreementRolesTaken.has(role.value),
+  );
+  // W7-R4-13 — picking a role also rewrites the row's client-facing label to
+  // the canonical one, and `upsert_agreement_parts` refuses two rows with the
+  // same NAME. A legacy row still carrying "Bookkeeper" as free text would
+  // therefore turn a neighbouring pick into a refusal about a name the studio
+  // never typed, one surface later. Not offered instead.
+  const agreementLabelsAt = agreementForm.rateCard.map((role) =>
+    role.roleName.trim().toLowerCase(),
+  );
+  const agreementLabelTakenElsewhere = (index: number, label: string) =>
+    agreementLabelsAt.some(
+      (name, rowIndex) => rowIndex !== index && name === label.toLowerCase(),
+    );
   const agreementDefaultsDirty =
     !!agreementDefaults &&
     (JSON.stringify(agreementFormRateCard) !==
@@ -653,21 +715,19 @@ export function AccountStudioPage() {
         seedSkipped={seedSkipped}
         hiresWithFirstDocument={hiresWithFirstDocument}
         onInvite={() => setInviteOpen(true)}
-        onSkipSeed={callSheetOn && canManage ? handleSkipSeed : undefined}
+        onSkipSeed={canManage ? handleSkipSeed : undefined}
         skipSeedPending={updateOrg.isPending}
-        onOpenSeedReview={callSheetOn ? () => setSeedReviewOpen(true) : undefined}
+        onOpenSeedReview={() => setSeedReviewOpen(true)}
         skipSeedError={skipSeedError}
         className="mb-6 border-b border-[var(--color-pearl)] pb-5"
       />
 
-      {/* Call Sheet Wave 2 — row 4's rolodex review. */}
-      {callSheetOn && (
-        <RolodexSeedSheet
-          open={seedReviewOpen}
-          onClose={() => setSeedReviewOpen(false)}
-          organizationId={studio.id}
-        />
-      )}
+      {/* Row 4's rolodex review. */}
+      <RolodexSeedSheet
+        open={seedReviewOpen}
+        onClose={() => setSeedReviewOpen(false)}
+        organizationId={studio.id}
+      />
 
       {/* Identity */}
       <div className="mb-6">
@@ -721,6 +781,29 @@ export function AccountStudioPage() {
               <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                 {studio.slug}
               </p>
+              {/* S-1/S-2 — an owner of two studios gets a door to the other, and
+                  the Hours lens, the internal-hour studio and the rate card
+                  below all follow the same choice. Silent, this page showed one
+                  studio's roster while the priced hours belonged to the other. */}
+              {studioCandidates.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const at = studioCandidates.findIndex(
+                      (c) => c.id === studio.id,
+                    );
+                    const next =
+                      studioCandidates[(at + 1) % studioCandidates.length] ??
+                      studioCandidates[0];
+                    if (next) selectStudio(next.id);
+                  }}
+                  className="mt-1 min-h-11 inline-flex items-center font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)] underline decoration-dotted underline-offset-4 hover:text-[var(--color-charcoal)]"
+                >
+                  studio{' '}
+                  {studioCandidates.findIndex((c) => c.id === studio.id) + 1} of{' '}
+                  {studioCandidates.length} · switch
+                </button>
+              )}
             </div>
             {canManage && (
               <DocumentAction
@@ -1096,24 +1179,58 @@ export function AccountStudioPage() {
                   {agreementForm.rateCard.map((role, index) => (
                     <div
                       key={index}
-                      className="grid grid-cols-[minmax(0,1fr)_120px_auto] items-center gap-2"
+                      /* W7-R6-01 — mirrors the composer's picker fix
+                         (part-editor.tsx, W7-R5-01): below `sm` (the same
+                         line doc-sheet already changes its own padding on)
+                         the picker takes the whole first line and the rate
+                         and Remove share the second, so the closed picker
+                         keeps the full ~308px fold measure instead of a
+                         120px column that clipped four of its five labels. */
+                      className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_120px_auto]"
                     >
-                      <input
+                      <Select
+                        wrapperClassName="col-span-2 sm:col-span-1"
                         aria-label={`Default role ${index + 1}`}
-                        value={role.roleName}
-                        onChange={(e) =>
+                        value={role.rosterRole ?? ''}
+                        onChange={(e) => {
+                          const picked = ROSTER_RATE_ROLES.find(
+                            (option) => option.value === e.target.value,
+                          );
+                          if (!picked) return;
                           setAgreementForm((form) => ({
                             ...form,
                             rateCard: form.rateCard.map((row, rowIndex) =>
                               rowIndex === index
-                                ? { ...row, roleName: e.target.value }
+                                ? {
+                                    ...row,
+                                    rosterRole: picked.value,
+                                    roleName: picked.label,
+                                  }
                                 : row,
                             ),
-                          }))
-                        }
-                        placeholder="Principal designer"
-                        className={FIELD}
-                      />
+                          }));
+                        }}
+                      >
+                        <option value="" disabled>
+                          {role.roleName.trim() || 'Choose a role'}
+                        </option>
+                        {ROSTER_RATE_ROLES.map((option) => (
+                          <option
+                            key={option.value}
+                            value={option.value}
+                            disabled={
+                              (agreementRolesTaken.has(option.value) &&
+                                role.rosterRole !== option.value) ||
+                              agreementLabelTakenElsewhere(
+                                index,
+                                option.label,
+                              )
+                            }
+                          >
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
                       <input
                         aria-label={`Default role ${index + 1} hourly rate`}
                         inputMode="decimal"
@@ -1146,7 +1263,7 @@ export function AccountStudioPage() {
                             ),
                           }))
                         }
-                        className="text-[12px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+                        className="justify-self-end text-[12px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
                       >
                         Remove
                       </button>
@@ -1155,23 +1272,32 @@ export function AccountStudioPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() =>
+                  disabled={!agreementNextFreeRole}
+                  onClick={() => {
+                    if (!agreementNextFreeRole) return;
                     setAgreementForm((form) => ({
                       ...form,
                       rateCard: [
                         ...form.rateCard,
                         {
-                          roleName: '',
+                          roleName: agreementNextFreeRole.label,
+                          rosterRole: agreementNextFreeRole.value,
                           hourlyRateCents: 0,
                           sortOrder: form.rateCard.length,
                         },
                       ],
-                    }))
-                  }
-                  className="mt-2 text-[12px] text-[var(--color-clay-ink)]"
+                    }));
+                  }}
+                  className="mt-2 text-[12px] text-[var(--color-clay-ink)] disabled:opacity-50"
                 >
                   + Add a role
                 </button>
+                <p className={HELP}>
+                  Each rate prices the hours its roster role logs. A rate you
+                  have not bound yet keeps its old label, and the agreement it
+                  seeds asks for the role — and for a rate above zero — before
+                  it can be sent.
+                </p>
               </div>
 
               <div className="mb-4">
@@ -1585,6 +1711,57 @@ export function AccountStudioPage() {
             );
           })}
         </ul>
+      )}
+
+      {/* Studio rates (HT-3) — tier 2 of the one rate chain, owner/admin only.
+          A signed agreement rate still wins; this is what prices an hour where
+          no card covers the work, and it is the only rate-editing surface
+          outside a contract. Nothing here writes onto a time entry: the server
+          resolves the rate when the hour is priced. */}
+      {/* `user` gates the section, not just the row: while useAuth() is
+          unresolved every row's `m.user_id === user?.id` is false, so the acting
+          admin was briefly offered the inert field on her OWN row. */}
+      {canManage && user?.id && (
+        <div className="mt-6 border-t border-[var(--color-pearl)] pt-5">
+          <h3 className={`${LABEL} mb-3`}>Studio rates</h3>
+          <p className={`${HELP} mb-4 mt-0`}>
+            What an hour of each teammate&rsquo;s time is worth when no signed
+            agreement names a rate for the work. A new figure is a new dated
+            row — the rate an invoice already billed against stays on the
+            record.
+          </p>
+          <ul>
+            {(members ?? [])
+              .filter((m) => m.user_id && m.status === 'active')
+              .map((m) => {
+                const label =
+                  m.profiles?.display_name || m.profiles?.email || 'Teammate';
+                return (
+                  <li
+                    key={m.id}
+                    className="flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] py-3"
+                  >
+                    <p className="min-w-0 t-body-sm text-[var(--color-charcoal)]">
+                      {`${label} · ${m.role}`}
+                    </p>
+                    <StudioRateRows
+                      studioId={studio.id}
+                      userId={m.user_id}
+                      memberLabel={label}
+                      rates={memberRates ?? []}
+                      /* HT-3-e(2) (00615) — an admin's rate for HERSELF prices
+                         nothing: the resolver skips a self-authored row unless
+                         that person is the studio's owner. Offering the field
+                         here would take the keystroke and change no money. */
+                      selfAuthoredInert={
+                        m.user_id === user?.id && myRole !== 'owner'
+                      }
+                    />
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
       )}
 
       {transferOwner.isError && (

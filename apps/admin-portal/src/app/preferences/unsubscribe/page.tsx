@@ -3,7 +3,12 @@ import { applyUnsubscribeToken, type UnsubscribeOutcome } from '@patina/notifica
 import { getServiceClient } from '@/lib/admin-api';
 
 interface PageProps {
-  searchParams: Promise<{ token?: string; status?: string; type?: string }>;
+  searchParams: Promise<{
+    token?: string;
+    status?: string;
+    type?: string;
+    scope?: string;
+  }>;
 }
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +24,12 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
       ok: params.status === 'applied',
       status: params.status as UnsubscribeOutcome['status'],
       type: params.type as UnsubscribeOutcome['type'],
+      // The one-click GET applies the token and redirects here, so the scope
+      // has to survive the hop or this page reads the narrow type again.
+      scope:
+        params.scope === 'address' || params.scope === 'account'
+          ? params.scope
+          : undefined,
     };
   } else if (!token) {
     outcome = { ok: false, status: 'malformed' };
@@ -37,17 +48,21 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
           {outcome.ok ? (
             <>
               <h1 style={styles.heading}>You&rsquo;ve been unsubscribed</h1>
-              <p style={styles.text}>
-                {outcome.type === 'all_marketing'
-                  ? "We've turned off all marketing emails to your address. You'll still receive essential account notifications (receipts, security alerts)."
-                  : `We've unsubscribed you from ${humanizeType(outcome.type)} emails.`}
-              </p>
-              <p style={styles.text}>
-                Change your mind? Manage all preferences in your account.
-              </p>
-              <Link href="/" style={styles.button}>
-                Manage Preferences
-              </Link>
+              <p style={styles.text}>{appliedCopy(outcome)}</p>
+              {outcome.scope === 'address' ? (
+                <p style={styles.text}>
+                  Changed your mind? Ask the studio to send again and they can turn it back on.
+                </p>
+              ) : (
+                <>
+                  <p style={styles.text}>
+                    Change your mind? Manage all preferences in your account.
+                  </p>
+                  <Link href="/" style={styles.button}>
+                    Manage Preferences
+                  </Link>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -68,6 +83,26 @@ export default async function UnsubscribePage({ searchParams }: PageProps) {
       </div>
     </main>
   );
+}
+
+/**
+ * WHAT THE CLICK ACTUALLY DID (W4 r4 MAJOR-2).
+ *
+ * An account-less recipient's click lands on the ADDRESS: every email-kind
+ * channel carrying it, across every card and every studio, and the send gate
+ * then refuses every category to it — invoices and purchase orders included.
+ * This page used to read the token's own narrow type and tell her "We've
+ * unsubscribed you from po sent emails", which the record contradicts on the
+ * one act whose whole purpose is telling her what she just did.
+ */
+function appliedCopy(outcome: UnsubscribeOutcome): string {
+  if (outcome.scope === 'address') {
+    return "We've stopped all email from this studio to this address, including invoices and purchase orders.";
+  }
+  if (outcome.type === 'all_marketing') {
+    return "We've turned off all marketing emails to your address. You'll still receive essential account notifications (receipts, security alerts).";
+  }
+  return `We've unsubscribed you from ${humanizeType(outcome.type)} emails.`;
 }
 
 function humanizeType(type: string | undefined): string {

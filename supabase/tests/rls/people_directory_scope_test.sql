@@ -276,6 +276,16 @@ $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 -- ─── (a) column-order regression ────────────────────────────────────────────
+-- The property this case protects is the PREFIX: CREATE OR REPLACE VIEW
+-- cannot reorder or insert columns, so every `select('*')` reader — and every
+-- positional read — depends on those twelve staying first, in order, with
+-- `scope` twelfth. It does NOT protect the TOTAL: 00626 appends five (00626's
+-- own COMMENT: "Five columns are APPENDED, never inserted"), and asserting a
+-- total of twelve turned that legitimate append into an ABORT that took cases
+-- (b) through (k) with it under ON_ERROR_STOP — hiding a live regression its
+-- own case (h3) was written to catch (w1b final review r11 MAJOR-1). a2 now
+-- asserts what may not happen — a column inserted BEFORE the twelve, or one
+-- of them dropped — and lets the tail grow.
 DO $$
 DECLARE
   v_cols  TEXT;
@@ -295,7 +305,10 @@ BEGIN
   SELECT count(*) INTO v_total
   FROM information_schema.columns
   WHERE table_schema = 'public' AND table_name = 'people_directory';
-  ASSERT v_total = 12, 'FAIL a2: expected exactly 12 columns, got ' || v_total;
+  ASSERT v_total >= 12,
+    'FAIL a2: the twelve prefix columns must all still be there — got ' || v_total
+    || ' column(s) in total. Columns may be APPENDED after scope; none may be '
+    || 'inserted among the twelve or dropped.';
 
   -- scope must be the LAST column and text-typed.
   PERFORM 1 FROM information_schema.columns

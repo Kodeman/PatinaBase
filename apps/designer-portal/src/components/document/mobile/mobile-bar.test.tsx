@@ -223,13 +223,8 @@ describe('the More menu · In this document (F49)', () => {
     window.removeEventListener('document:open-call-sheet', opened);
   });
 
-  it('drops the call sheet row when its flag is off', () => {
-    mockCallSheetOn = false;
-    mountBar();
-    const menu = openMore();
-    expect(menu.queryByRole('button', { name: 'Call sheet' })).toBeNull();
-    expect(menu.getByRole('link', { name: 'Plan room' })).toBeInTheDocument();
-  });
+  // The `call-sheet` flag is retired (rulings §6): the row is always there,
+  // and the case that asserted its absence with the flag off is gone with it.
 
   it('prints no document group off a document', () => {
     mockPathname = '/desk';
@@ -638,14 +633,7 @@ describe('the sections sheet · the ladder for the open spread (W2, OD-14, recon
     window.removeEventListener('document:open-call-sheet', opened);
   });
 
-  it('drops the call sheet door when its flag is off, keeping the other three', () => {
-    mockCallSheetOn = false;
-    mountBarAndSheets();
-    openSections();
-    const panel = sectionsPanel();
-    expect(within(panel).queryByRole('button', { name: 'Call sheet' })).toBeNull();
-    expect(within(panel).getByRole('button', { name: 'Plan room' })).toBeInTheDocument();
-  });
+  // Flag retired (rulings §6) — the door stands for every studio.
 
   it('prints no ladder and no doors off a project (OD-8: nothing to open)', () => {
     mountBarAndSheets({

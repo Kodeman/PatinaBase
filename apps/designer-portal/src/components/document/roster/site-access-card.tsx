@@ -1,0 +1,730 @@
+'use client';
+
+/**
+ * THE SITE ACCESS CARD (E15, direction §3.7, SPEC §5.6) — Leah's third task,
+ * "who has site access on Okonkwo right now", answered from one screen.
+ *
+ * PR-r IS THE SHAPE. Patina stores the lockbox VERSION, the key holder, the
+ * hours, the receiving note and who was told. THE CODE IS NEVER STORED and
+ * there is no field in which to type one: the card prints that the code is held
+ * off Patina and names who to ask.
+ *
+ * PR-w IS THE AUDIENCE. Studio only. There is no client leg in the RLS, no
+ * `show_to_client` toggle, and the card says so on its face.
+ *
+ * R-X — at 390 the WHOLE who-to-call line is the `tel:` target, at least 44px
+ * tall. Every line is one control with the name, the role and the number in its
+ * accessible name, so a thumb on a site never has to find eleven digits.
+ */
+
+import { useEffect, useState } from 'react';
+import { KeyRound } from 'lucide-react';
+import {
+  useProject,
+  useSiteAccessCard,
+  useUpdateSiteAccessCard,
+  type ProjectPartyAuthority,
+  type SiteAccessEmergencyLine,
+} from '@patina/supabase';
+import {
+  rosterShortDate,
+  siteAccessSummaryLine,
+  wayInSentence,
+  type CallSheetProjection,
+  type CallSheetRow,
+} from '@/lib/document/roster-derivation';
+import { peopleEvents } from '@/lib/analytics/people-events';
+import { DocSheet } from '../overlays/doc-sheet';
+import { DocumentAction, DocumentActionRow } from '../document-action';
+import { StateWord } from '../people/state-word';
+import { TelLink, telDisplay } from '../people/tel-link';
+import { NoticeLog } from './notice-log';
+
+const REGION_HEAD =
+  'font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--color-clay-ink)]';
+const LINE = 'text-[0.82rem] text-[var(--color-charcoal)]';
+const FIELD_INPUT =
+  'mb-2 min-h-11 w-full border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.82rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]';
+
+/** An emergency line as the card stores it. The seed writes `label` where the
+ *  hook's type says `role`; both are read, so a line never loses its word. */
+interface StoredLine {
+  name?: string | null;
+  role?: string | null;
+  label?: string | null;
+  phone?: string | null;
+}
+
+/**
+ * CRM-23's `notice_of` for this card: the fact that changed, in words. The
+ * lockbox VERSION is named where the card holds one — never a code, which
+ * PR-r keeps off Patina entirely.
+ *
+ * The column carries the studio's OWN phrase ("Lockbox, version 3"), which is
+ * why `wayInSentence` prints it verbatim rather than wrapping it — and why
+ * this does too. An earlier draft prefixed "Lockbox, version " and the first
+ * notice it wrote read "Lockbox, version Lockbox, version 3."
+ */
+export function wayInFact(
+  changedAt: string | null | undefined,
+  lockboxVersion: string | null | undefined,
+): string {
+  const day = changedAt ? rosterShortDate(changedAt) : null;
+  const version = (lockboxVersion ?? '').trim();
+  const head = day ? `The way in changed ${day}.` : 'The way in changed.';
+  return version ? `${head} ${version}.` : head;
+}
+
+/** The seat this project says controls the gate — the `site_access` grant. */
+export function gateControllerName(
+  rows: CallSheetRow[],
+  authorityBySeat: Record<string, ProjectPartyAuthority[]>,
+): string | null {
+  for (const row of rows) {
+    if (!row.seatId) continue;
+    const grants = authorityBySeat[row.seatId] ?? [];
+    if (grants.some((g) => g.scope === 'site_access' && !g.prepares_only)) return row.name;
+  }
+  return null;
+}
+
+/** The seat holding the key, by the card's own pointer. */
+export function keyHolderRow(
+  rows: CallSheetRow[],
+  keyHolderEngagementId: string | null | undefined,
+): CallSheetRow | null {
+  if (!keyHolderEngagementId) return null;
+  return rows.find((row) => row.seatId === keyHolderEngagementId) ?? null;
+}
+
+/** R-U's one-line fold, for the head of the Call Sheet. */
+export function useSiteAccessSummary(
+  projectId: string | null | undefined,
+  rows: CallSheetRow[],
+  authorityBySeat: Record<string, ProjectPartyAuthority[]>,
+): string {
+  const { data: card } = useSiteAccessCard(projectId);
+  if (!card) return '';
+  return siteAccessSummaryLine({
+    keyHolderName: keyHolderRow(rows, card.key_holder_engagement_id)?.name ?? null,
+    gateControllerName: gateControllerName(rows, authorityBySeat),
+    changedAt: card.changed_at,
+  });
+}
+
+function EditableLine({
+  label,
+  value,
+  empty,
+  onSave,
+  fieldId,
+  saving,
+}: {
+  label: string;
+  value: string;
+  empty: string;
+  /** Resolves when the write lands; REJECTS when it does not, and the editor
+   *  stays open on the rejection (CR-11). */
+  onSave: (next: string) => Promise<void>;
+  fieldId: string;
+  saving: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  return (
+    <div>
+      {editing ? (
+        <>
+          <label className={REGION_HEAD} htmlFor={fieldId}>
+            {label}
+          </label>
+          <input
+            id={fieldId}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="min-h-11 w-full border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[0.82rem] text-[var(--color-charcoal)] outline-none focus:border-[var(--color-clay)]"
+          />
+          <DocumentActionRow
+            surfaceKey="site-access"
+            regionKey={`edit-${fieldId}`}
+            className="mt-1"
+            aria-label={`Save ${label.toLowerCase()}`}
+          >
+            <DocumentAction
+              actionKey="save-site-access-line"
+              variant="primary"
+              onClick={() => {
+                void onSave(draft).then(
+                  () => setEditing(false),
+                  // The error prints in the card's own slot; the editor stays
+                  // open with what the studio typed still in it.
+                  () => undefined,
+                );
+              }}
+              loading={saving}
+              loadingLabel="Writing…"
+            >
+              Save
+            </DocumentAction>
+            <DocumentAction
+              actionKey="cancel-site-access-line"
+              variant="tertiary"
+              onClick={() => {
+                setDraft(value);
+                setEditing(false);
+              }}
+            >
+              Leave it
+            </DocumentAction>
+          </DocumentActionRow>
+        </>
+      ) : (
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+          <p className={LINE}>{value || empty}</p>
+          <DocumentAction
+            actionKey={`edit-${fieldId}`}
+            surfaceKey="site-access"
+            regionKey="site-access-regions"
+            variant="tertiary"
+            onClick={() => {
+              setDraft(value);
+              setEditing(true);
+            }}
+          >
+            Edit
+          </DocumentAction>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function SiteAccessCard({
+  open,
+  onClose,
+  projectId,
+  projectTitle,
+  projectAddress,
+  projection,
+  authorityBySeat = {},
+  onOpenSeat,
+}: {
+  open: boolean;
+  onClose: () => void;
+  projectId: string;
+  projectTitle: string;
+  projectAddress?: string | null;
+  projection: CallSheetProjection;
+  authorityBySeat?: Record<string, ProjectPartyAuthority[]>;
+  onOpenSeat?: (row: CallSheetRow) => void;
+}) {
+  const { data: card, isLoading } = useSiteAccessCard(open ? projectId : null);
+  /**
+   * QA-R13-2 — THE ADDRESS SPEC §5.6 #1 ASKS FOR, FROM THE PROJECT ITSELF.
+   *
+   * The head printed "Site access · Okonkwo residence" and stopped. The prop
+   * below has existed since round 6 and no live caller ever passed it, so the
+   * one card a trade opens on a phone to find the house never named the house
+   * — while `projects.site_address` held "4412 Fremont Ave S, Minneapolis MN
+   * 55409" all along. The card reads the fact itself; the prop stays as the
+   * caller's override.
+   */
+  const { data: project } = useProject(open ? projectId : '');
+  const address =
+    projectAddress ??
+    ((project as { site_address?: string | null } | undefined)?.site_address ??
+      null);
+  const updateCard = useUpdateSiteAccessCard();
+  const [saveError, setSaveError] = useState<string | null>(null);
+  /**
+   * CR3-5 — THE TWO COLUMNS NOTHING COULD WRITE.
+   *
+   * `useUpdateSiteAccessCard` has accepted `keyHolderEngagementId` and
+   * `emergencyLines` since 00625; no surface passed either, so in production
+   * "Who to call first" always printed "– No emergency line on file." and
+   * "Key holder" always printed "– Nobody on the job is marked as holding a
+   * key.", and R-U's head fold lost its key-holder half. The dev seed writes
+   * both columns, which is why every local walk passed. Direction §3.7 puts
+   * E15's ownership on this card: it is the only place either can be written.
+   */
+  const [namingKeyHolder, setNamingKeyHolder] = useState(false);
+  const [keyHolderDraft, setKeyHolderDraft] = useState('');
+  const [editingLines, setEditingLines] = useState(false);
+  const [lineDraft, setLineDraft] = useState({ name: '', role: '', phone: '' });
+  const [lineError, setLineError] = useState<string | null>(null);
+
+  const rows = projection.rows;
+  const keyHolder = keyHolderRow(rows, card?.key_holder_engagement_id);
+  const gate = gateControllerName(rows, authorityBySeat);
+  const told = card?.told_refs ?? [];
+  const toldNames = told
+    .map((seatId) => rows.find((row) => row.seatId === seatId)?.name)
+    .filter((name): name is string => !!name);
+  const changedBy =
+    rows.find((row) => row.profileId && row.profileId === card?.changed_by)?.name ?? null;
+
+  const lines = ((card?.emergency_lines ?? []) as StoredLine[]).filter(
+    (line) => !!line?.name,
+  );
+
+  // Seeded once per opening of the picker, from the card's own pointer.
+  useEffect(() => {
+    if (!namingKeyHolder) return;
+    setKeyHolderDraft(card?.key_holder_engagement_id ?? '');
+  }, [namingKeyHolder, card?.key_holder_engagement_id]);
+
+  const seatChoices = rows.filter(
+    (row): row is CallSheetRow & { seatId: string } => !!row.seatId,
+  );
+
+  /** The card stores `{name, role, phone}`; the seed's `label` is read on the
+   *  way out and normalised on the way back in, so an edit never drops a word
+   *  a seeded row carried. */
+  const storedLines = (): SiteAccessEmergencyLine[] =>
+    ((card?.emergency_lines ?? []) as StoredLine[])
+      .filter((line) => !!line?.name)
+      .map((line) => ({
+        name: String(line.name),
+        role: (line.role ?? line.label ?? null) || null,
+        phone: line.phone ?? null,
+      }));
+
+  // CR-11: an RLS refusal, the `key_holder_engagement_id` BEFORE trigger
+  // (00625:185-207) or a dropped connection used to leave the card looking
+  // saved with the OLD value in it and no message anywhere — on the one
+  // surface whose value is "who to call and who was told". The promise is
+  // returned so the editor can stay open until it resolves, and a failure
+  // lands in a real error slot.
+  const save = async (
+    patch: Parameters<typeof updateCard.mutateAsync>[0],
+    region: string,
+  ) => {
+    setSaveError(null);
+    try {
+      await updateCard.mutateAsync(patch);
+      peopleEvents.siteAccessChanged({ region });
+    } catch (e) {
+      setSaveError(
+        e instanceof Error
+          ? e.message
+          : 'That did not save. The card still reads what it did before.',
+      );
+      throw e;
+    }
+  };
+
+  return (
+    <DocSheet open={open} onClose={onClose} title="Site access" icon={KeyRound}>
+      <div data-site-access-card>
+        <p className="font-heading text-[1.05rem] italic leading-snug text-[var(--color-charcoal)]">
+          Site access · {projectTitle}
+        </p>
+        {address && (
+          <p data-site-address className="mt-1 text-[0.8rem] text-[var(--color-aged-oak)]">
+            {address}
+          </p>
+        )}
+        <p className="mt-1 text-[0.74rem] text-[var(--color-aged-oak)]">
+          Studio only. This card never reaches a client page.
+        </p>
+
+        {/* CR-11 — the card had no error slot at all. A silent write loss on
+            the one surface that answers "who do I call" is the worst failure
+            available to it. */}
+        {saveError && (
+          <p
+            role="alert"
+            data-site-access-error
+            className="mt-2 border-l-2 border-[var(--color-terracotta-ink)] bg-[rgba(196,131,111,0.07)] px-3 py-2 text-[0.74rem] text-[var(--color-charcoal)]"
+          >
+            {saveError}
+          </p>
+        )}
+
+        {isLoading && (
+          <p className="py-8 text-center text-[0.74rem] text-[var(--color-aged-oak)]">
+            Reading the way in…
+          </p>
+        )}
+
+        {!isLoading && !card && (
+          <div className="mt-6 border-t border-[var(--color-pearl)] pt-6">
+            <p className="text-[0.8rem] text-[var(--color-aged-oak)]">
+              – Nothing is written about the way in yet.
+            </p>
+            <DocumentActionRow
+              surfaceKey="site-access"
+              regionKey="site-access-empty"
+              className="mt-2"
+              aria-label="Start the site access card"
+            >
+              <DocumentAction
+                actionKey="start-site-access-card"
+                variant="primary"
+                onClick={() => {
+                  // CR3-3: `{ projectId }` ALONE. `useUpdateSiteAccessCard`
+                  // reads `lockboxVersion !== undefined` as "the way in
+                  // changed", and `null` is not `undefined` — so starting a
+                  // blank card stamped `changed_at`/`changed_by` and blanked
+                  // `told_refs`, and the card then printed "The way in changed
+                  // <today>. Nobody has been told yet." directly under "No
+                  // lockbox on file." Starting a card claims nothing.
+                  void save({ projectId }, 'way_in').catch(() => undefined);
+                }}
+                loading={updateCard.isPending}
+                loadingLabel="Writing…"
+              >
+                Start the card
+              </DocumentAction>
+            </DocumentActionRow>
+          </div>
+        )}
+
+        {!isLoading && card && (
+          <div className="mt-6 flex flex-col gap-6">
+            <section>
+              <h3 className={REGION_HEAD}>Who to call first</h3>
+              <ul className="mt-1 flex flex-col">
+                {lines.length === 0 && (
+                  <li className="text-[0.78rem] text-[var(--color-aged-oak)]">
+                    – No emergency line on file.
+                  </li>
+                )}
+                {lines.map((line, index) => {
+                  const role = (line.role ?? line.label ?? '').trim();
+                  // QA-4: the stored value dials; the printed one reads.
+                  const text = [line.name, role, telDisplay(line.phone)]
+                    .filter(Boolean)
+                    .join(', ');
+                  return (
+                    <li key={`${line.name}-${index}`}>
+                      {line.phone ? (
+                        <TelLink
+                          phone={line.phone}
+                          label={text}
+                          personName={line.name}
+                          fullWidth
+                        />
+                      ) : (
+                        <span className={LINE}>{text}</span>
+                      )}
+                      <DocumentAction
+                        actionKey="drop-emergency-line"
+                        surfaceKey="site-access"
+                        regionKey="emergency-lines"
+                        variant="tertiary"
+                        onClick={() => {
+                          void save(
+                            {
+                              projectId,
+                              emergencyLines: storedLines().filter(
+                                (_l, i) => i !== index,
+                              ),
+                            },
+                            'emergency_lines',
+                          ).catch(() => undefined);
+                        }}
+                      >
+                        Take {line.name} off the list
+                      </DocumentAction>
+                    </li>
+                  );
+                })}
+              </ul>
+              <DocumentAction
+                actionKey="add-emergency-line"
+                surfaceKey="site-access"
+                regionKey="emergency-lines"
+                variant="tertiary"
+                aria-expanded={editingLines}
+                aria-controls="site-access-emergency-lines"
+                onClick={() => {
+                  setLineError(null);
+                  setEditingLines((editing) => !editing);
+                }}
+                className="mt-1"
+              >
+                Add someone to call
+              </DocumentAction>
+              <div
+                id="site-access-emergency-lines"
+                hidden={!editingLines}
+                className="mt-2"
+              >
+                <label className={REGION_HEAD} htmlFor="site-access-line-name">
+                  Name
+                </label>
+                <input
+                  id="site-access-line-name"
+                  value={lineDraft.name}
+                  onChange={(e) =>
+                    setLineDraft((d) => ({ ...d, name: e.target.value }))
+                  }
+                  className={FIELD_INPUT}
+                />
+                <label className={REGION_HEAD} htmlFor="site-access-line-role">
+                  What they are to this job
+                </label>
+                <input
+                  id="site-access-line-role"
+                  value={lineDraft.role}
+                  onChange={(e) =>
+                    setLineDraft((d) => ({ ...d, role: e.target.value }))
+                  }
+                  className={FIELD_INPUT}
+                />
+                <label className={REGION_HEAD} htmlFor="site-access-line-phone">
+                  Number
+                </label>
+                <input
+                  id="site-access-line-phone"
+                  type="tel"
+                  value={lineDraft.phone}
+                  onChange={(e) =>
+                    setLineDraft((d) => ({ ...d, phone: e.target.value }))
+                  }
+                  className={FIELD_INPUT}
+                />
+                <DocumentActionRow
+                  surfaceKey="site-access"
+                  regionKey="emergency-lines"
+                  className="mt-1"
+                  aria-label="Save who to call"
+                >
+                  <DocumentAction
+                    actionKey="save-emergency-line"
+                    variant="primary"
+                    loading={updateCard.isPending}
+                    loadingLabel="Writing…"
+                    onClick={() => {
+                      setLineError(null);
+                      const name = lineDraft.name.trim();
+                      if (!name) {
+                        setLineError('A line to call needs a name.');
+                        return;
+                      }
+                      void save(
+                        {
+                          projectId,
+                          emergencyLines: [
+                            ...storedLines(),
+                            {
+                              name,
+                              role: lineDraft.role.trim() || null,
+                              phone: lineDraft.phone.trim() || null,
+                            },
+                          ],
+                        },
+                        'emergency_lines',
+                      ).then(
+                        () => {
+                          setLineDraft({ name: '', role: '', phone: '' });
+                          setEditingLines(false);
+                        },
+                        () => undefined,
+                      );
+                    }}
+                  >
+                    Add them
+                  </DocumentAction>
+                </DocumentActionRow>
+                {lineError && (
+                  <p
+                    role="alert"
+                    className="mt-1 text-[0.72rem] text-[var(--color-terracotta-ink)]"
+                  >
+                    {lineError}
+                  </p>
+                )}
+              </div>
+            </section>
+
+            <section>
+              <h3 className={REGION_HEAD}>The way in</h3>
+              <div className="mt-1">
+                {/* CR6-3 / PR-r: the CONTROL names the version, never the
+                    region. A box carrying the region's own name, "The way in",
+                    sitting directly above "The code is held off Patina", reads
+                    as an invitation to type the code — and whatever is typed
+                    prints verbatim as the first half of that very sentence.
+                    The column behind it is a version; the label says so. */}
+                <EditableLine
+                  label="Lockbox version"
+                  fieldId="site-access-way-in"
+                  value={card.lockbox_version ?? ''}
+                  empty="No lockbox version on file."
+                  saving={updateCard.isPending}
+                  onSave={(next) =>
+                    save({ projectId, lockboxVersion: next }, 'way_in')
+                  }
+                />
+              </div>
+              <p className={`mt-1 ${LINE}`} data-way-in>
+                {/* CR-10: the GATE CONTROLLER first. SPEC §5.6 #3 and
+                    direction §3.7 both fix the line as "…ask Luis Ochoa" —
+                    the superintendent who controls the gate, not Ngozi Eze
+                    who holds the key. PR-r's whole value is naming the right
+                    person to ask. */}
+                {wayInSentence(card.lockbox_version, gate ?? keyHolder?.name)}
+              </p>
+              {gate && <p className={`mt-1 ${LINE}`}>{gate} controls the gate.</p>}
+            </section>
+
+            <section>
+              <h3 className={REGION_HEAD}>Key holder</h3>
+              {keyHolder ? (
+                <p className={`mt-1 ${LINE}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      peopleEvents.personCardOpened({ source: 'site_access' });
+                      onOpenSeat?.(keyHolder);
+                    }}
+                    className="min-h-11 underline decoration-[var(--color-clay)] underline-offset-[3px]"
+                  >
+                    {keyHolder.name}
+                  </button>{' '}
+                  holds a key.{' '}
+                  <StateWord family="consent" value={keyHolder.consent} plain />{' '}
+                  {keyHolder.phone && (
+                    <TelLink
+                      phone={keyHolder.phone}
+                      label={telDisplay(keyHolder.phone)}
+                      personName={keyHolder.name}
+                    />
+                  )}
+                </p>
+              ) : (
+                <p className="mt-1 text-[0.78rem] text-[var(--color-aged-oak)]">
+                  – Nobody on the job is marked as holding a key.
+                </p>
+              )}
+              <DocumentAction
+                actionKey="name-key-holder"
+                surfaceKey="site-access"
+                regionKey="key-holder"
+                variant="tertiary"
+                aria-expanded={namingKeyHolder}
+                aria-controls="site-access-key-holder"
+                onClick={() => setNamingKeyHolder((naming) => !naming)}
+                className="mt-1"
+              >
+                {keyHolder ? 'Name a different key holder' : 'Name the key holder'}
+              </DocumentAction>
+              <div
+                id="site-access-key-holder"
+                hidden={!namingKeyHolder}
+                className="mt-2"
+              >
+                <label
+                  className={REGION_HEAD}
+                  htmlFor="site-access-key-holder-seat"
+                >
+                  Who holds a key
+                </label>
+                <select
+                  id="site-access-key-holder-seat"
+                  value={keyHolderDraft}
+                  onChange={(e) => setKeyHolderDraft(e.target.value)}
+                  className={FIELD_INPUT}
+                >
+                  <option value="">Nobody on the job holds one</option>
+                  {seatChoices.map((row) => (
+                    <option key={row.seatId} value={row.seatId}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+                <DocumentActionRow
+                  surfaceKey="site-access"
+                  regionKey="key-holder"
+                  className="mt-1"
+                  aria-label="Save the key holder"
+                >
+                  <DocumentAction
+                    actionKey="save-key-holder"
+                    variant="primary"
+                    loading={updateCard.isPending}
+                    loadingLabel="Writing…"
+                    onClick={() => {
+                      void save(
+                        {
+                          projectId,
+                          keyHolderEngagementId: keyHolderDraft || null,
+                        },
+                        'key_holder',
+                      ).then(
+                        () => setNamingKeyHolder(false),
+                        () => undefined,
+                      );
+                    }}
+                  >
+                    Write it down
+                  </DocumentAction>
+                </DocumentActionRow>
+              </div>
+            </section>
+
+            <section>
+              <h3 className={REGION_HEAD}>Hours</h3>
+              <div className="mt-1">
+                <EditableLine
+                  label="Hours"
+                  fieldId="site-access-hours"
+                  value={card.site_hours ?? ''}
+                  empty="No site hours on file."
+                  saving={updateCard.isPending}
+                  onSave={(next) => save({ projectId, siteHours: next }, 'hours')}
+                />
+              </div>
+            </section>
+
+            <section>
+              <h3 className={REGION_HEAD}>Receiving</h3>
+              <div className="mt-1">
+                <EditableLine
+                  label="Receiving"
+                  fieldId="site-access-receiving"
+                  value={card.receiver_instructions ?? ''}
+                  empty="No receiving note on file."
+                  saving={updateCard.isPending}
+                  onSave={(next) =>
+                    save({ projectId, receiverInstructions: next }, 'receiving')
+                  }
+                />
+              </div>
+            </section>
+
+            <section>
+              <h3 className={REGION_HEAD}>Who was told</h3>
+              <p className={`mt-1 ${LINE}`} data-who-was-told>
+                {card.changed_at
+                  ? `The way in changed ${rosterShortDate(card.changed_at)}${
+                      changedBy ? `, by ${changedBy}` : ''
+                    }.`
+                  : 'Nothing has changed yet.'}
+                {toldNames.length > 0 ? ` Told: ${toldNames.join(', ')}.` : ' Nobody has been told yet.'}
+              </p>
+              <div className="mt-2">
+                <NoticeLog
+                  projectId={projectId}
+                  panelId="site-access-notice-log"
+                  told={told}
+                  /* CRM-23 — the record says what the face says. The stamp on
+                     the card IS the change being noticed, so the notice text
+                     is the card's own sentence rather than a second wording
+                     invented for the log. */
+                  fact={wayInFact(card.changed_at, card.lockbox_version)}
+                  seats={rows
+                    .filter((row): row is CallSheetRow & { seatId: string } => !!row.seatId)
+                    .map((row) => ({ seatId: row.seatId, name: row.name }))}
+                />
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+    </DocSheet>
+  );
+}

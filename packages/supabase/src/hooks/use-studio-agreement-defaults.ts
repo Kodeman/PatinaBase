@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { StudioAgreementDefaults } from '@patina/types';
+import type { RateCardRow, StudioAgreementDefaults } from '@patina/types';
 import { createBrowserClient } from '../client';
 
 // Lazy client getter to avoid module-level initialization during SSR
@@ -23,7 +23,10 @@ const getSupabase = () => createBrowserClient();
 /** The snake_case row shape as `studio_agreement_defaults` stores it. */
 export interface StudioAgreementDefaultsRow {
   studio_id: string;
-  rate_card: { roleName: string; hourlyRateCents: number; sortOrder: number }[] | null;
+  /** HT-4 — each row may carry `rosterRole`, the binding
+   *  `materialize_standard_parts` seeds onto a new agreement's rate card. A
+   *  row written before the binding existed has none. */
+  rate_card: RateCardRow[] | null;
   deposit_percent: number | null;
   cadence: StudioAgreementDefaults['cadence'];
   retainer_credit_rule: StudioAgreementDefaults['retainerCreditRule'];

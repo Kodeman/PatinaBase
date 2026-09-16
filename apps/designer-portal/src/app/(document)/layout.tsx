@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { StudioDrawer } from '@/components/document/studio-drawer';
 import { RegistryShortcuts } from '@/components/document/registry-shortcuts';
 import { KeysShortcut } from '@/components/document/keys-shortcut';
+import { LogTimeShortcut } from '@/components/document/log-time-shortcut';
+import { LogTimeOverlay } from '@/components/document/log-time-sheet';
 import { KeysSheet } from '@/components/document/overlays/keys-sheet';
 import { LogStrip } from '@/components/document/log-strip';
 import { CommandBar } from '@/components/document/command-bar';
@@ -97,6 +99,10 @@ export default function DocumentLayout({
                       block, and the key itself all reach the same overlay. */}
                   <KeysShortcut />
                   <KeysSheet />
+                  {/* W3 — "Log time" with nothing in hand: the ⌘K verb and
+                      the bare `t` both open this one form. */}
+                  <LogTimeShortcut />
+                  <LogTimeOverlay />
                   {/* ⌘K from anywhere in the document model (spec §3). */}
                   <CommandBar />
                   {/* D2 break-through rules — opened from ⌘K, ships all-off. */}

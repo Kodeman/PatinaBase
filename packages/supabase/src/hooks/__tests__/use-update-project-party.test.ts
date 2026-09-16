@@ -1,18 +1,22 @@
 /**
- * F3-R1-02 / F3-R1-12 / F3-R2-01 / F3-R2-02 — `useUpdateProjectParty`'s
- * phone-change consent handling.
+ * `useUpdateProjectParty`'s phone-change handling, after R-AS.
  *
- * A GENUINE phone change (normalized E.164, not the raw string) reverts a
- * `pending`/`granted` party to `not_asked` — unless the number being moved TO
- * already has its own `opted_out` sibling row, in which case this row is set
- * to `opted_out` too rather than wrongly reopening an already-opted-out
- * number. An `opted_out` party is NEVER touched by this hook (F3-R2-01): that
- * status is the only stored record of a recipient's STOP, and lifting it
- * would both erase that record and reopen the invite path for a number that
- * opted out. A `not_asked` party has nothing to revert. A save that never
- * touches the phone must leave consent columns untouched, and neither must a
- * save whose phone patch normalizes to the same number already on file
- * (F3-R2-03's cosmetic-reformat case, mirrored here at the hook level).
+ * WHAT THIS FILE USED TO PIN, AND WHY IT NO LONGER DOES. A genuine phone change
+ * used to REVERT the seat's consent: `pending`/`granted` back to `not_asked`,
+ * or across to `opted_out` when a sibling row on the new number had refused,
+ * inheriting that sibling's date. Every one of those writes named a column
+ * 00594 froze, so every one of them raised. More to the point, they were
+ * writes to a COPY: `studio_channel_consent` is keyed on the NUMBER, so moving
+ * a seat's number already moves which record the seat reads, and a revert on
+ * the seat could only ever contradict the one live ledger.
+ *
+ * WHAT SURVIVES IS A READ. A number the studio's RECORD refused cannot move
+ * (close-review r3 MAJOR-4, repointed at the record in r14 BLOCKING-1): the
+ * refusal belongs to the number on file and must not travel to a corrected one.
+ * The hook asks `project_consent_org()` then `channel_consent_status()` — the
+ * same pair 00594's freeze asks — and refuses in a sentence.
+ *
+ * A cosmetic reformat of the same digits is not a change and still lands.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,8 +36,11 @@ function makeBuilder(result: { data: unknown; error: unknown }): MockBuilder {
   return builder;
 }
 
-/** `.select('sms_consent_status, phone_e164').eq('id', …).maybeSingle()` —
- *  the current-row lookup a phone patch always runs first. */
+/** `.select('phone_e164, project_id').eq('id', …).maybeSingle()` — the ONE
+ *  lookup a phone patch runs. It no longer selects `sms_consent_status`: the
+ *  seat's own column is frozen at its `not_asked` default for every row any
+ *  live write path produces, so reading it could only ever answer for
+ *  pre-freeze rows the backfill already folded into the record. */
 function currentRowBuilder(result: { data: unknown; error: unknown }) {
   const maybeSingle = vi.fn().mockResolvedValue(result);
   const eq = vi.fn(() => ({ maybeSingle }));
@@ -41,26 +48,23 @@ function currentRowBuilder(result: { data: unknown; error: unknown }) {
   return { select, eq, maybeSingle };
 }
 
-/** `.select('id, sms_opt_out_at').eq('phone_e164', …).eq('sms_consent_status',
- *  'opted_out').order('sms_opt_out_at', …).limit(1)` — checked only when a
- *  pending/granted row's phone genuinely changes to a normalizable number. The
- *  order is what makes the inherited opt-out date the latest word on that
- *  number. No `.neq('id', …)`: the probe is keyed on the NEW number while this
- *  row still holds the old one, so it can never be its own sibling (R3-06). */
-function siblingBuilder(result: { data: unknown; error: unknown }) {
-  const limit = vi.fn().mockResolvedValue(result);
-  const order = vi.fn(() => ({ limit }));
-  const eq2 = vi.fn(() => ({ order }));
-  const eq1 = vi.fn(() => ({ eq: eq2 }));
-  const select = vi.fn(() => ({ eq: eq1 }));
-  return { select, eq1, eq2, order, limit };
-}
-
 let builder: MockBuilder;
 const from = vi.fn(() => builder);
 
+/** The two RPCs a genuine phone change asks. The default says "this studio
+ *  holds no record for that number", which is every test but the refusals. */
+const rpc = vi.fn();
+function defaultRpc(consentVerdict: string | null = null) {
+  rpc.mockImplementation((fn: string) => {
+    if (fn === 'project_consent_org') return Promise.resolve({ data: 'org-1', error: null });
+    if (fn === 'channel_consent_status')
+      return Promise.resolve({ data: consentVerdict, error: null });
+    throw new Error(`unexpected rpc ${fn}`);
+  });
+}
+
 vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({ from }),
+  createBrowserClient: () => ({ from, rpc }),
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -73,248 +77,277 @@ import { useUpdateProjectParty } from '../use-coordination';
 beforeEach(() => {
   builder = makeBuilder({ data: { id: 'party-1' }, error: null });
   from.mockClear();
+  rpc.mockReset();
+  defaultRpc(null);
 });
 
 function mutationFnOf(hook: unknown) {
   return (hook as { mutationFn: (input: unknown) => Promise<unknown> }).mutationFn;
 }
 
-describe('useUpdateProjectParty — phone change resets SMS consent', () => {
-  it('reverts a granted party to not_asked when the phone genuinely changes (F3-R1-02)', async () => {
+/** The eight columns 00594 froze. None may appear in an UPDATE patch. */
+const FROZEN_COLUMNS = [
+  'sms_consent_status',
+  'sms_consent_source',
+  'sms_consent_evidence',
+  'sms_consent_recorded_at',
+  'sms_consent_recorded_by',
+  'sms_consent_disclosure_version',
+  'sms_consented_at',
+  'sms_opt_out_at',
+];
+
+function expectNoFrozenColumns(patch: Record<string, unknown>) {
+  for (const column of FROZEN_COLUMNS) expect(patch).not.toHaveProperty(column);
+}
+
+describe('useUpdateProjectParty — R-AS: a phone change writes no consent column', () => {
+  it('sends only the phone on a genuine change, whatever the seat once said', async () => {
     const currentRow = currentRowBuilder({
-      data: { sms_consent_status: 'granted', phone_e164: '+15551112222' },
-      error: null,
-    });
-    const sibling = siblingBuilder({ data: [], error: null });
-    from
-      .mockReturnValueOnce({ select: currentRow.select })
-      .mockReturnValueOnce({ select: sibling.select })
-      .mockReturnValueOnce(builder);
-
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
-      id: 'party-1',
-      projectId: 'project-1',
-      patch: { phone: '5559876543' },
-    });
-
-    expect(sibling.eq1).toHaveBeenCalledWith('phone_e164', '+15559876543');
-    expect(sibling.eq2).toHaveBeenCalledWith('sms_consent_status', 'opted_out');
-    expect(builder.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        phone: '5559876543',
-        sms_consent_status: 'not_asked',
-        sms_consent_source: null,
-        sms_consent_evidence: null,
-        sms_consent_recorded_at: null,
-        sms_consent_recorded_by: null,
-        sms_consent_disclosure_version: null,
-        sms_consented_at: null,
-        sms_opt_out_at: null,
-      }),
-    );
-  });
-
-  it('sets a pending party to opted_out (not not_asked) when the new number already opted out elsewhere', async () => {
-    const currentRow = currentRowBuilder({
-      data: { sms_consent_status: 'pending', phone_e164: '+15551112222' },
-      error: null,
-    });
-    const sibling = siblingBuilder({
-      data: [{ id: 'party-9', sms_opt_out_at: '2026-09-01T14:32:00.000Z' }],
+      data: { phone_e164: '+15551112222', project_id: 'proj-1' },
       error: null,
     });
     from
-      .mockReturnValueOnce({ select: currentRow.select })
-      .mockReturnValueOnce({ select: sibling.select })
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
       .mockReturnValueOnce(builder);
 
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
+    await mutationFnOf(useUpdateProjectParty())({
       id: 'party-1',
-      projectId: 'project-1',
-      patch: { phone: '5559876543' },
+      projectId: 'proj-1',
+      patch: { phone: '555-999-0000' },
     });
 
-    expect(builder.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        phone: '5559876543',
-        sms_consent_status: 'opted_out',
-        sms_consent_source: null,
-        sms_consented_at: null,
-      }),
-    );
-    // The opt-out moment is the SIBLING's, inherited: nobody replied STOP on
-    // this row, so stamping the edit's own clock would date an opt-out that
-    // never happened here.
-    const optedOutPatch = builder.update.mock.calls[0][0] as Record<string, unknown>;
-    expect(optedOutPatch.sms_opt_out_at).toBe('2026-09-01T14:32:00.000Z');
-    expect(sibling.order).toHaveBeenCalledWith('sms_opt_out_at', {
-      ascending: false,
-      nullsFirst: false,
-    });
+    expect(builder.__patch).toEqual({ phone: '555-999-0000' });
+    expectNoFrozenColumns(builder.__patch as Record<string, unknown>);
   });
 
-  it('inherits no opt-out date when the sibling carries none', async () => {
+  it('runs NO sibling probe — the record is keyed on the number, not on a row', async () => {
+    // The old body's `.eq('phone_e164', next).eq('sms_consent_status',
+    // 'opted_out')` scan existed to find a refusal on the number being moved
+    // TO. `studio_channel_consent` is that scan, done once, per studio.
     const currentRow = currentRowBuilder({
-      data: { sms_consent_status: 'granted', phone_e164: '+15551112222' },
-      error: null,
-    });
-    const sibling = siblingBuilder({
-      data: [{ id: 'party-9', sms_opt_out_at: null }],
+      data: { phone_e164: '+15551112222', project_id: 'proj-1' },
       error: null,
     });
     from
-      .mockReturnValueOnce({ select: currentRow.select })
-      .mockReturnValueOnce({ select: sibling.select })
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
       .mockReturnValueOnce(builder);
 
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
+    await mutationFnOf(useUpdateProjectParty())({
       id: 'party-1',
-      projectId: 'project-1',
-      patch: { phone: '5559876543' },
+      projectId: 'proj-1',
+      patch: { phone: '555-999-0000' },
     });
 
-    expect(builder.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sms_consent_status: 'opted_out',
-        sms_opt_out_at: null,
-      }),
-    );
-  });
-
-  it('never lifts an opted-out party’s consent — the phone changes, the compliance record does not (F3-R2-01)', async () => {
-    const currentRow = currentRowBuilder({
-      data: { sms_consent_status: 'opted_out', phone_e164: '+15550001111' },
-      error: null,
-    });
-    // opted_out never reaches the sibling check — only two `from` calls.
-    from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
-
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
-      id: 'party-2',
-      projectId: 'project-1',
-      patch: { phone: '5551112222' },
-    });
-
+    // Exactly two `from()` calls: the current-row lookup, then the update.
     expect(from).toHaveBeenCalledTimes(2);
-    expect(builder.update).toHaveBeenCalledWith({ phone: '5551112222' });
-    const patchArg = builder.update.mock.calls[0][0];
-    expect(patchArg).not.toHaveProperty('sms_consent_status');
-    expect(patchArg).not.toHaveProperty('sms_opt_out_at');
   });
 
-  it('leaves a not_asked party’s consent columns alone on a phone change — nothing to revert', async () => {
+  it('reads only phone_e164 and project_id — never the frozen status column', async () => {
     const currentRow = currentRowBuilder({
-      data: { sms_consent_status: 'not_asked', phone_e164: '+15550001111' },
+      data: { phone_e164: '+15551112222', project_id: 'proj-1' },
       error: null,
     });
-    from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
+    from
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
+      .mockReturnValueOnce(builder);
 
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
-      id: 'party-5',
-      projectId: 'project-1',
-      patch: { phone: '5551112222' },
-    });
-
-    expect(builder.update).toHaveBeenCalledWith({ phone: '5551112222' });
-  });
-
-  it('does not touch consent when the phone patch normalizes to the same number already on file (F3-R2-03)', async () => {
-    const currentRow = currentRowBuilder({
-      data: { sms_consent_status: 'granted', phone_e164: '+15551112222' },
-      error: null,
-    });
-    // Cosmetically reformatted — same digits as the E.164 on file — so no
-    // sibling check should run either.
-    from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
-
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
+    await mutationFnOf(useUpdateProjectParty())({
       id: 'party-1',
-      projectId: 'project-1',
+      projectId: 'proj-1',
+      patch: { phone: '555-999-0000' },
+    });
+
+    expect(currentRow.select).toHaveBeenCalledWith('phone_e164, project_id');
+  });
+});
+
+describe('useUpdateProjectParty — the refusal that cannot travel', () => {
+  it("refuses when the STUDIO RECORD says the number on file opted out (r14 BLOCKING-1)", async () => {
+    const currentRow = currentRowBuilder({
+      data: { phone_e164: '+15551112222', project_id: 'proj-77' },
+      error: null,
+    });
+    from.mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder);
+    defaultRpc('opted_out');
+
+    await expect(
+      mutationFnOf(useUpdateProjectParty())({
+        id: 'party-1',
+        projectId: 'proj-1',
+        patch: { phone: '612-555-0199' },
+      }),
+    ).rejects.toThrow(/refusal is attached to the number on file/i);
+
+    expect(builder.update).not.toHaveBeenCalled();
+    // The project on the ROW resolves the studio, not the one the caller
+    // passed: a seat's ledger belongs to the seat's own job.
+    expect(rpc).toHaveBeenCalledWith('project_consent_org', { p_project_id: 'proj-77' });
+    expect(rpc).toHaveBeenCalledWith('channel_consent_status', {
+      p_organization_id: 'org-1',
+      p_channel_kind: 'sms',
+      p_channel_value: '+15551112222',
+    });
+  });
+
+  it('asks the record for the OLD number, not the new one', async () => {
+    const currentRow = currentRowBuilder({
+      data: { phone_e164: '+15551112222', project_id: 'proj-1' },
+      error: null,
+    });
+    from
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
+      .mockReturnValueOnce(builder);
+
+    await mutationFnOf(useUpdateProjectParty())({
+      id: 'party-1',
+      projectId: 'proj-1',
+      patch: { phone: '612-555-0199' },
+    });
+
+    const verdictCall = rpc.mock.calls.find(([name]) => name === 'channel_consent_status');
+    expect(verdictCall?.[1]).toMatchObject({ p_channel_value: '+15551112222' });
+  });
+
+  it('lets a cosmetic reformat of a refused number through, asking nothing', async () => {
+    // Same digits is not a change, so the refusal never comes up.
+    const currentRow = currentRowBuilder({
+      data: { phone_e164: '+15551112222', project_id: 'proj-1' },
+      error: null,
+    });
+    from
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
+      .mockReturnValueOnce(builder);
+    defaultRpc('opted_out');
+
+    await mutationFnOf(useUpdateProjectParty())({
+      id: 'party-1',
+      projectId: 'proj-1',
       patch: { phone: '(555) 111-2222' },
     });
 
-    expect(from).toHaveBeenCalledTimes(2);
-    expect(builder.update).toHaveBeenCalledWith({ phone: '(555) 111-2222' });
-    const patchArg = builder.update.mock.calls[0][0];
-    expect(patchArg).not.toHaveProperty('sms_consent_status');
+    expect(builder.__patch).toEqual({ phone: '(555) 111-2222' });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
-  it('leaves consent columns untouched when the save never touches the phone', async () => {
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
-      id: 'party-3',
-      projectId: 'project-1',
-      patch: { displayName: 'New Name' },
-    });
-
-    expect(from).toHaveBeenCalledTimes(1);
-    expect(builder.update).toHaveBeenCalledWith({ display_name: 'New Name' });
-    const patchArg = builder.update.mock.calls[0][0];
-    expect(patchArg).not.toHaveProperty('sms_consent_status');
-  });
-
-  it('clears the phone (and still reverts a granted party’s consent) when the patch sets it to null', async () => {
+  it('lands the edit when the project resolves to no studio at all', async () => {
+    // A studio-less project has no ledger to hold a refusal. The edit is not
+    // refused on a verdict nobody can read.
     const currentRow = currentRowBuilder({
-      data: { sms_consent_status: 'pending', phone_e164: '+15551234567' },
+      data: { phone_e164: '+15551112222', project_id: 'proj-1' },
       error: null,
     });
-    // nextE164 normalizes to null for a cleared phone — the sibling check
-    // never runs (nothing to look up an opted-out match against).
-    from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
+    from
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
+      .mockReturnValueOnce(builder);
+    rpc.mockImplementation((fn: string) => {
+      if (fn === 'project_consent_org') return Promise.resolve({ data: null, error: null });
+      throw new Error(`unexpected rpc ${fn}`);
+    });
 
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
-      id: 'party-4',
-      projectId: 'project-1',
+    await mutationFnOf(useUpdateProjectParty())({
+      id: 'party-1',
+      projectId: 'proj-1',
+      patch: { phone: '612-555-0199' },
+    });
+
+    expect(builder.__patch).toEqual({ phone: '612-555-0199' });
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a pending or granted record move — only a refusal is stuck', async () => {
+    const currentRow = currentRowBuilder({
+      data: { phone_e164: '+15551112222', project_id: 'proj-1' },
+      error: null,
+    });
+    from
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
+      .mockReturnValueOnce(builder);
+    defaultRpc('granted');
+
+    await mutationFnOf(useUpdateProjectParty())({
+      id: 'party-1',
+      projectId: 'proj-1',
+      patch: { phone: '612-555-0199' },
+    });
+
+    expect(builder.__patch).toEqual({ phone: '612-555-0199' });
+  });
+});
+
+describe('useUpdateProjectParty — the phone column itself', () => {
+  it('sends phone_e164: null alongside a cleared phone', async () => {
+    // 00281's normalizer reads COALESCE(NEW.phone, NEW.phone_e164), so clearing
+    // the raw phone alone leaves the old E.164 standing — and that column is
+    // the inbound SMS conversation key.
+    const currentRow = currentRowBuilder({
+      data: { phone_e164: '+15551112222', project_id: 'proj-1' },
+      error: null,
+    });
+    from
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
+      .mockReturnValueOnce(builder);
+
+    await mutationFnOf(useUpdateProjectParty())({
+      id: 'party-1',
+      projectId: 'proj-1',
       patch: { phone: null },
     });
 
-    expect(from).toHaveBeenCalledTimes(2);
-    expect(builder.update).toHaveBeenCalledWith(
-      expect.objectContaining({ phone: null, sms_consent_status: 'not_asked' }),
-    );
-  });
-
-  // 00281's normalizer derives phone_e164 from COALESCE(NEW.phone,
-  // NEW.phone_e164), so a cleared phone alone leaves the old E.164 standing —
-  // and that column is the inbound SMS conversation key.
-  it('sends phone_e164: null alongside a cleared phone', async () => {
-    const currentRow = currentRowBuilder({
-      data: { sms_consent_status: 'not_asked', phone_e164: '+15551234567' },
-      error: null,
-    });
-    from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
-
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
-      id: 'party-6',
-      projectId: 'project-1',
-      patch: { phone: '   ' },
-    });
-
-    expect(builder.update).toHaveBeenCalledWith({ phone: null, phone_e164: null });
+    expect(builder.__patch).toEqual({ phone: null, phone_e164: null });
   });
 
   it('does not send phone_e164 when the phone is set rather than cleared', async () => {
     const currentRow = currentRowBuilder({
-      data: { sms_consent_status: 'not_asked', phone_e164: null },
+      data: { phone_e164: null, project_id: 'proj-1' },
       error: null,
     });
-    from.mockReturnValueOnce({ select: currentRow.select }).mockReturnValueOnce(builder);
+    from
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
+      .mockReturnValueOnce(builder);
 
-    const mutationFn = mutationFnOf(useUpdateProjectParty());
-    await mutationFn({
-      id: 'party-7',
-      projectId: 'project-1',
-      patch: { phone: '5551234567' },
+    await mutationFnOf(useUpdateProjectParty())({
+      id: 'party-1',
+      projectId: 'proj-1',
+      patch: { phone: '555-999-0000' },
     });
 
-    expect(builder.update).toHaveBeenCalledWith({ phone: '5551234567' });
+    expect(builder.__patch).not.toHaveProperty('phone_e164');
+  });
+
+  it('runs no lookup and no RPC when the save never touches the phone', async () => {
+    from.mockReturnValueOnce(builder);
+
+    await mutationFnOf(useUpdateProjectParty())({
+      id: 'party-1',
+      projectId: 'proj-1',
+      patch: { displayName: 'Rosa Delgado', showToClient: true },
+    });
+
+    expect(builder.__patch).toEqual({ display_name: 'Rosa Delgado', show_to_client: true });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(from).toHaveBeenCalledTimes(1);
+  });
+
+  it('still patches the other columns beside a phone change', async () => {
+    const currentRow = currentRowBuilder({
+      data: { phone_e164: '+15551112222', project_id: 'proj-1' },
+      error: null,
+    });
+    from
+      .mockReturnValueOnce({ select: currentRow.select } as unknown as MockBuilder)
+      .mockReturnValueOnce(builder);
+
+    await mutationFnOf(useUpdateProjectParty())({
+      id: 'party-1',
+      projectId: 'proj-1',
+      patch: { phone: '555-999-0000', trade: 'electrical', email: ' dana@x.com ' },
+    });
+
+    expect(builder.__patch).toEqual({
+      phone: '555-999-0000',
+      trade: 'electrical',
+      email: 'dana@x.com',
+    });
   });
 });

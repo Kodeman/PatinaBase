@@ -1,0 +1,624 @@
+/**
+ * THE COMPANY CARD (W2b) — six regions, and the three rules the face keeps:
+ * a firm has neither consent nor reach, the Paper region always prints, and on
+ * the crew line only the name is a control.
+ */
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { CompanyCard, companyIdentityLine } from "../company-card";
+
+const cardData: { current: Record<string, unknown> | null } = { current: null };
+/** CR3-8 — what the verdict band actually writes. */
+const updateCardMutate = jest.fn();
+const docsData: { current: unknown[] } = { current: [] };
+const chaseMutate = jest.fn();
+
+/** CR-10: the History region's first job and project count read these. */
+const seatsData: { current: unknown[] } = { current: [] };
+/** W4/P3 — the inbound queue on the Paper region, and E13 on History. */
+const inboundData: { current: unknown[] } = { current: [] };
+const lastTouch: { current: unknown } = { current: null };
+
+jest.mock("@patina/supabase", () => ({
+  // ── W4/P3 — E13 touches, CRM-23 notices, the paperwork door, the queue ──
+  useTouches: () => ({ data: [] }),
+  useLastTouch: () => ({ data: lastTouch.current }),
+  useRecordNotice: () => ({
+    mutateAsync: async () => ({
+      id: 'touch-1',
+      what: 'x',
+      recorded_at: '2026-09-15T00:00:00Z',
+      recorded_by: null,
+      told_names: [],
+    }),
+    isPending: false,
+  }),
+  asNoticeError: (e: unknown) =>
+    e instanceof Error ? e.message : String(e ?? ''),
+  lastInboundDecision: (
+    rows: ReadonlyArray<{ direction: string; decision_class: string }> | null | undefined,
+  ) =>
+    (rows ?? []).find(
+      (r) => r.direction === 'in' && r.decision_class !== 'none',
+    ) ?? null,
+  inboundDecisionSentence: (t: { decision_class: string; authority_check: string } | null) =>
+    t
+      ? `A ${t.decision_class} decision came in.${
+          t.authority_check === 'failed_no_authority'
+            ? ' Received, not authority.'
+            : ''
+        }`
+      : null,
+  touchSentence: () => 'Last touch 12 Sep 2026, by text.',
+  NO_TOUCH_SENTENCE: 'No contact on the record yet.',
+  useInboundDocuments: () => ({ data: inboundData.current }),
+  useConfirmInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRejectInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  inboundQueueHeading: (n: number) =>
+    `${n} document${n === 1 ? '' : 's'} waiting for your check`,
+  inboundDocumentLine: (
+    d: { doc_type: string },
+    firm: string,
+  ) => `${d.doc_type}, uploaded by ${firm}.`,
+  usePaperworkLinks: () => ({ data: [] }),
+  useMintPaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
+  thirtyDaysOut: () => '2026-10-15',
+  // The REAL derivation, not a copy. This double reproduced the function body
+  // WITHOUT its "is the day still ahead" test, so the card could go on offering
+  // a window that `mint_paperwork_link` refuses (W4 r2 MAJOR-2).
+  firmEngagementWindowEnd: jest.requireActual("@patina/supabase")
+    .firmEngagementWindowEnd,
+  useStudioContact: () => ({ data: cardData.current }),
+  // W3/P2 — 00630's nightly notices behind the Paper region's sentence.
+  useComplianceNotices: () => ({ data: [] }),
+  indexComplianceNotices: () => new Map(),
+  useStudioContacts: () => ({
+    data: [
+      { id: "card-dana", entity_kind: "person", full_name: "Dana Kowalski" },
+    ],
+  }),
+  useAffiliations: () => ({
+    data: [
+      {
+        id: "aff-1",
+        person_id: "card-dana",
+        company_id: "firm-northgate",
+        role_at_firm: "owner-operator",
+        is_paperwork_contact: true,
+        is_signer: true,
+        holds_trade_license: true,
+      },
+    ],
+  }),
+  useComplianceDocuments: () => ({ data: docsData.current }),
+  // `compliance_state()` reduces worst-first over the holder's own paper, so
+  // the mock follows the fixture rather than pinning one word.
+  useComplianceState: () => ({
+    data: docsData.current.length === 0 ? "not_on_file" : "lapsed",
+  }),
+  usePeopleSeats: () => ({ data: seatsData.current }),
+  useUpdateStudioContact: () => ({
+    mutateAsync: updateCardMutate,
+    isPending: false,
+  }),
+  useRecordComplianceDocument: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  // CR-9: the crew line carries the rule and the routed channel.
+  useContactRules: () => ({ data: [] }),
+  useStudioContactChannelsFor: () => ({ data: [] }),
+  // CR-8: the company variant of Reach & access is mounted on this card now.
+  useStudioContactChannels: () => ({ data: [] }),
+  useContactRule: () => ({ data: null }),
+  useOrganizationMembers: () => ({ data: [] }),
+  useAccessGrants: () => ({ data: [] }),
+  useChannelConsent: () => ({ data: null }),
+  useRecordChannelConsent: () => ({ mutate: jest.fn(), isPending: false }),
+  useRecordChannelReconsent: () => ({ mutate: jest.fn(), isPending: false }),
+  useSetContactRule: () => ({ mutate: jest.fn(), isPending: false }),
+  // CR3-4 — the two channel writers the card grew.
+  useAddStudioContactChannel: () => ({ mutate: jest.fn(), isPending: false }),
+  useSetStudioContactChannelStatus: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+  ALL_CONTACT_CHANNEL_STATUSES: ["active", "bounced", "unsubscribed", "dead"],
+  PERSON_CHANNEL_KINDS: ["mobile", "email"],
+  COMPANY_CHANNEL_KINDS: ["office", "dispatch", "ap_email"],
+  useCreateFieldLink: () => ({ mutate: jest.fn(), isPending: false }),
+  useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),
+  isAccessGrantRevokable: () => false,
+  ACCESS_GRANT_NOT_REVOKABLE_SENTENCE:
+    "This door is closed somewhere else in Patina, not from here.",
+  ACCESS_GRANT_TIER_LABELS: { field_link: "Field link" },
+  ACCESS_GRANT_TIER_OPENS: {
+    field_link: "the Call Sheet and the site access card",
+  },
+  CONTACT_CHANNEL_KIND_LABELS: { office: "Office", ap_email: "AP email" },
+  isContactChannelHeld: (s: string) => !!s && s !== "active",
+  fieldLinkUrl: (token: string) => `https://patina.cloud/field/${token}`,
+  COMPLIANCE_BLOCK_LABELS: {
+    site_access: "site access",
+    payment: "payment",
+    draw: "the draw",
+  },
+  COMPLIANCE_DOC_TYPE_LABELS: { coi_gl: "COI, general liability" },
+  ALL_COMPLIANCE_BLOCKS: ["site_access", "payment", "draw"],
+  ALL_COMPLIANCE_DOC_TYPES: ["coi_gl"],
+  complianceDocRequiresExpiry: () => true,
+}));
+
+jest.mock("../compliance-chase", () => {
+  const actual = jest.requireActual("../compliance-chase");
+  return {
+    ...actual,
+    useChaseTheRenewal: () => ({ mutate: chaseMutate, isPending: false }),
+  };
+});
+
+jest.mock("@/lib/analytics/people-events", () => ({
+  peopleEvents: { companyCardOpened: jest.fn() },
+}));
+
+const TODAY = new Date("2026-10-20T00:00:00Z");
+
+function renderCard(over: Record<string, unknown> = {}) {
+  const onOpenPerson = jest.fn();
+  render(
+    <CompanyCard
+      firmId="firm-northgate"
+      organizationId="org-1"
+      jobsCount={2}
+      onOpenPerson={onOpenPerson}
+      onAnnounce={jest.fn()}
+      onBack={jest.fn()}
+      today={TODAY}
+      {...over}
+    />,
+  );
+  return { onOpenPerson };
+}
+
+beforeEach(() => {
+  chaseMutate.mockClear();
+  seatsData.current = [];
+  inboundData.current = [];
+  lastTouch.current = null;
+  docsData.current = [
+    {
+      id: "doc-1",
+      doc_type: "coi_gl",
+      doc_label: null,
+      number: "GL-9021-18",
+      issuer: "Lakes Casualty",
+      issued_on: "2025-04-01",
+      expires_on: "2026-03-31",
+      held_by: "studio",
+      blocks: ["site_access", "payment", "draw"],
+    },
+  ];
+  cardData.current = {
+    id: "firm-northgate",
+    organization_id: "org-1",
+    entity_kind: "company",
+    company_name: "Northgate Electric",
+    contact_kind: "sub",
+    company_kind: "sub",
+    trades: ["electrical"],
+    warranty_until: "2026-11-21",
+    remit_to: "Northgate Electric",
+    tax_id_last4: "4417",
+    retainage_bps: 1000,
+    signer_person_id: "card-dana",
+    paperwork_contact_person_id: "card-dana",
+    site_contact_person_id: "card-dana",
+    studio_verdict: null,
+  };
+});
+
+describe("the six regions", () => {
+  it("prints each head", () => {
+    renderCard();
+    for (const head of [
+      "Crew & designations",
+      "Paper",
+      "Payee",
+      "Jobs",
+      "History",
+    ]) {
+      expect(screen.getByRole("heading", { name: head })).toBeInTheDocument();
+    }
+  });
+
+  it("the identity line counts the crew, the jobs and the warranty", () => {
+    renderCard();
+    expect(
+      screen.getByText(
+        "Electrical sub · 1 person · 2 projects · warranty through 21 November 2026",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * CR6-2 — eleven of the twenty-one seeded firms carry no trade, so they fell
+   * through to the branch that pushed the COLUMN: Marrow & Sons headed its
+   * card "gc · 3 people · 2 projects" while the Directory firm row that opens
+   * it read "GC". One firm, two words, two clicks apart.
+   */
+  it("prints the studio's word for a firm that carries no trade (CR6-2)", () => {
+    const line = (kind: string) =>
+      companyIdentityLine(
+        { company_kind: kind, contact_kind: kind, trades: [] } as never,
+        { crew: 3, jobs: 2 },
+      );
+    expect(line("gc")).toBe("GC · 3 people · 2 projects");
+    expect(line("authority")).toBe("Authority · 3 people · 2 projects");
+    expect(line("lender")).toBe("Lender · 3 people · 2 projects");
+    expect(line("photography")).toBe("Photography · 3 people · 2 projects");
+    expect(line("maker")).toBe("Maker · 3 people · 2 projects");
+    expect(line("supplier")).toBe("Supplier · 3 people · 2 projects");
+    expect(line("stager")).toBe("Stager · 3 people · 2 projects");
+    expect(line("architect")).toBe("Architect · 3 people · 2 projects");
+    expect(line("sub")).toBe("Subcontractor · 3 people · 2 projects");
+  });
+
+  /**
+   * CR11-4 — the trade branch used to concatenate the RAW `company_kind`
+   * token, so a firm carrying both a trade and a kind printed "Carpentry gc"
+   * on its own face while the Directory firm row two clicks away printed "GC".
+   * The running-prose map is the second register of the same vocabulary: it
+   * keeps SPEC §5.3 #1's "Electrical sub" and puts no token on a face.
+   */
+  it("prints the running-prose kind after a trade, never the column token (CR11-4)", () => {
+    const line = (kind: string, trade: string) =>
+      companyIdentityLine(
+        { company_kind: kind, contact_kind: kind, trades: [trade] } as never,
+        { crew: 1, jobs: 2 },
+      );
+    expect(line("sub", "electrical")).toBe("Electrical sub · 1 person · 2 projects");
+    expect(line("gc", "carpentry_framing")).toMatch(/ GC · 1 person/);
+    expect(line("gc", "carpentry_framing")).not.toMatch(/ gc /);
+    expect(line("vendor", "tile")).toMatch(/ vendor · 1 person/);
+    // A kind with no prose word prints as its own part, never glued to a trade.
+    expect(line("other", "tile")).toMatch(/ · Other · 1 person/);
+  });
+
+  it("a firm has neither a consent word nor a reach word", () => {
+    const { container } = render(
+      <CompanyCard
+        firmId="firm-northgate"
+        organizationId="org-1"
+        onOpenPerson={jest.fn()}
+        onAnnounce={jest.fn()}
+        onBack={jest.fn()}
+        today={TODAY}
+      />,
+    );
+    expect(container.querySelector('[data-state-family="consent"]')).toBeNull();
+    expect(container.querySelector('[data-state-family="reach"]')).toBeNull();
+  });
+});
+
+describe("R-W — the crew line", () => {
+  it("makes the NAME the control and leaves the designations plain", () => {
+    const { onOpenPerson } = renderCard();
+    const control = screen.getByRole("button", { name: "Dana Kowalski" });
+    fireEvent.click(control);
+    expect(onOpenPerson).toHaveBeenCalledWith("card-dana");
+    const line = control.closest("li") as HTMLElement;
+    expect(line).toHaveTextContent(
+      "owner-operator · paperwork contact · signer · site contact · holds the trade licence",
+    );
+    expect(within(line).getAllByRole("button")).toHaveLength(1);
+  });
+});
+
+describe("R-P — the Paper region, in one fixed order", () => {
+  it("prints the table, the leading-rule clause, the sentence, then the acts", () => {
+    renderCard();
+    const region = document.querySelector(
+      "[data-company-paper]",
+    ) as HTMLElement;
+    const text = region.textContent ?? "";
+    const table = text.indexOf("COI, general liability");
+    const clause = text.indexOf("Site access, payment and the draw are held");
+    const sentence = text.indexOf("This drafts a note to");
+    const act = text.indexOf("Record a document");
+    expect(table).toBeGreaterThanOrEqual(0);
+    expect(clause).toBeGreaterThan(table);
+    expect(sentence).toBeGreaterThan(clause);
+    expect(act).toBeGreaterThan(sentence);
+  });
+
+  it("C21 — a firm with no paper still prints the region, the word and the act", () => {
+    docsData.current = [];
+    renderCard();
+    expect(screen.getByText("Not on file")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Record a document" }),
+    ).toBeInTheDocument();
+  });
+
+  it("C13 — a lender prints one line and no act at all", () => {
+    cardData.current = {
+      ...(cardData.current as object),
+      company_kind: "lender",
+    };
+    renderCard();
+    expect(
+      screen.getByText("No paper is held for this firm."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record a document" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Chase the renewal" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("Chase the renewal", () => {
+  it("files a draft for review and says so — nothing is sent", () => {
+    renderCard();
+    const act = screen.getByRole("button", { name: "Chase the renewal" });
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "This drafts a note to Northgate Electric's paperwork contact and files it for your review. Nothing is sent until you send it.",
+    );
+    fireEvent.click(act);
+    expect(chaseMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "firm-northgate",
+        companyName: "Northgate Electric",
+        paperworkContactPersonId: "card-dana",
+      }),
+      expect.anything(),
+    );
+  });
+});
+
+describe("the payee region", () => {
+  it("prints the remit line, the tax id tail and the retainage", () => {
+    renderCard();
+    expect(screen.getByText("Remit to Northgate Electric")).toBeInTheDocument();
+    expect(screen.getByText("Tax id ending 4417")).toBeInTheDocument();
+    expect(screen.getByText("Retainage 10%")).toBeInTheDocument();
+    expect(screen.getByText("Signs: Dana Kowalski")).toBeInTheDocument();
+  });
+
+  /**
+   * CR13-6 — `remit_to` is NULL on most seeded firms, and the line used to
+   * fall back to the firm's own name: a payee asserted from nothing, on the
+   * region a bookkeeper reads before cutting a cheque.
+   */
+  it("says so when no payee has been written, rather than naming the firm", () => {
+    (cardData.current as Record<string, unknown>).remit_to = null;
+    renderCard();
+    expect(screen.getByText("No remit-to on file.")).toBeInTheDocument();
+    expect(screen.queryByText("Remit to Northgate Electric")).toBeNull();
+  });
+});
+
+describe("the history region", () => {
+  beforeEach(() => {
+    updateCardMutate.mockReset().mockResolvedValue({});
+  });
+
+  /**
+   * CR-10 — SPEC §5.3 #8 and direction §3.3 R6 name THREE facts here: the
+   * first job, its year, and how many projects the firm has held. The region
+   * printed the verdict alone, though the Jobs region directly above already
+   * holds the seats that answer them.
+   */
+  it("prints the first job, its year and the project count (SPEC §5.3 #8)", () => {
+    seatsData.current = [
+      {
+        seat_id: "seat-lind",
+        person_id: "card-dana",
+        studio_contact_id: "card-dana",
+        company_id: "firm-northgate",
+        project_id: "proj-lindqvist",
+        project_name: "Lindqvist kitchen",
+        stage: "active",
+        on_site_from: "2025-04-14",
+      },
+      {
+        seat_id: "seat-ok",
+        person_id: "card-dana",
+        studio_contact_id: "card-dana",
+        company_id: "firm-northgate",
+        project_id: "proj-okonkwo",
+        project_name: "Okonkwo residence",
+        stage: "active",
+        on_site_from: "2026-10-12",
+      },
+    ];
+    renderCard();
+    expect(document.querySelector("[data-firm-history]")).toHaveTextContent(
+      "First job 2025, the Lindqvist kitchen. Two projects.",
+    );
+    expect(screen.getByText("No verdict recorded.")).toBeInTheDocument();
+  });
+
+  it("says no verdict is recorded, and offers to record one", () => {
+    renderCard();
+    expect(screen.getByText("No verdict recorded.")).toBeInTheDocument();
+    const act = screen.getByRole("button", { name: "Record a verdict" });
+    expect(act).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(act);
+    expect(act).toHaveAttribute("aria-expanded", "true");
+  });
+
+  /**
+   * CR3-8 — the band opened EMPTY over a standing verdict and saved
+   * `verdict.trim() || null` over it: two clicks, no confirm, no undo, with the
+   * text it destroyed printed one line above. The same class as CR-3, in the
+   * same file; the designations and payee bands added in the same round both
+   * carry a seeding ref and this one was left out.
+   */
+  it("seeds the editor from the verdict it edits, so an untouched save keeps it", async () => {
+    cardData.current = {
+      ...(cardData.current as object),
+      studio_verdict: "Good crew. Slow to send paper.",
+    };
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Record a verdict" }));
+    expect(screen.getByLabelText("What the studio thinks")).toHaveValue(
+      "Good crew. Slow to send paper.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save the verdict" }));
+    await waitFor(() => expect(updateCardMutate).toHaveBeenCalled());
+    expect(updateCardMutate.mock.calls[0][0].card).toEqual({
+      studioVerdict: "Good crew. Slow to send paper.",
+    });
+  });
+
+  it("still records a first verdict on a card that holds none", async () => {
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Record a verdict" }));
+    expect(screen.getByLabelText("What the studio thinks")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("What the studio thinks"), {
+      target: { value: "Would hire again." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save the verdict" }));
+    await waitFor(() => expect(updateCardMutate).toHaveBeenCalled());
+    expect(updateCardMutate.mock.calls[0][0].card).toEqual({
+      studioVerdict: "Would hire again.",
+    });
+  });
+});
+
+/**
+ * CR3-11 — ONE LIVE REGION, and it is the Room's. This card kept its own
+ * `role="status"` beside the Room's (people-room.tsx), so every designation,
+ * payee, document and verdict change was announced TWICE from two live regions
+ * on one screen. Direction §5.5 names one destination; SPEC §7 #3 asks for
+ * exactly one.
+ */
+describe("CR3-11 — the card announces through the Room, not beside it", () => {
+  it("mounts no live region of its own", () => {
+    renderCard();
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
+  });
+});
+
+
+/* ── W4/P3 — the paperwork door and what it fills (spec §6, R-AD, E13) ────── */
+
+describe("the Paper region's inbound queue", () => {
+  it("prints nothing where no paper is waiting", () => {
+    const { container } = render(<div />);
+    container.remove();
+    renderCard();
+    expect(document.querySelector("[data-inbound-queue]")).toBeNull();
+  });
+
+  it("stands INSIDE the Paper region, above the table", () => {
+    inboundData.current = [
+      {
+        id: "doc-2",
+        holder_id: "firm-northgate",
+        doc_type: "coi_gl",
+        doc_label: null,
+        created_at: "2026-10-12T10:00:00Z",
+      },
+    ];
+    renderCard();
+    const paper = document.querySelector("[data-company-paper]")!;
+    expect(paper.querySelector("[data-inbound-queue]")).not.toBeNull();
+    expect(
+      screen.getByText("1 document waiting for your check"),
+    ).toBeInTheDocument();
+  });
+
+  it("prints on a firm that never owed paper, because it ARRIVED", () => {
+    // R-A / C13 keeps the paper WORD off a lender; a document the firm
+    // actually sent through the studio's own door is a different fact.
+    cardData.current = {
+      ...(cardData.current as Record<string, unknown>),
+      contact_kind: "lender",
+      company_kind: "lender",
+    };
+    inboundData.current = [
+      {
+        id: "doc-2",
+        holder_id: "firm-northgate",
+        doc_type: "coi_gl",
+        doc_label: null,
+        created_at: "2026-10-12T10:00:00Z",
+      },
+    ];
+    renderCard();
+    expect(
+      screen.getByText("1 document waiting for your check"),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("Mint a paperwork link on the Paper act row", () => {
+  it("stands beside Record a document and Chase the renewal", () => {
+    renderCard();
+    expect(screen.getByText("Mint a paperwork link")).toBeInTheDocument();
+  });
+
+  it("names the firm's own window, read off the same seats the card holds", () => {
+    seatsData.current = [
+      {
+        seat_id: "seat-dana",
+        person_id: "card-dana",
+        studio_contact_id: "card-dana",
+        company_id: "firm-northgate",
+        project_id: "okonkwo",
+        project_name: "Okonkwo residence",
+        stage: "active",
+        on_site_from: "2026-10-12",
+        on_site_to: "2027-08-13",
+        warranty_until: null,
+        off_job_at: null,
+      },
+    ];
+    renderCard();
+    fireEvent.click(screen.getByText("Mint a paperwork link"));
+    expect(
+      screen.getByText(
+        "– The door can end with this firm's work here, 13 August 2027.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no door to a firm whose card the studio never asked paper of", () => {
+    cardData.current = {
+      ...(cardData.current as Record<string, unknown>),
+      contact_kind: "lender",
+      company_kind: "lender",
+    };
+    renderCard();
+    expect(screen.queryByText("Mint a paperwork link")).toBeNull();
+  });
+});
+
+describe("the History region reads E13", () => {
+  it("says its own sentence where no contact is on the record (R-V)", () => {
+    renderCard();
+    expect(screen.getByText("No contact on the record yet.")).toBeInTheDocument();
+  });
+
+  it("prints the record's sentence where a touch exists", () => {
+    lastTouch.current = { id: "t1" };
+    renderCard();
+    expect(
+      screen.getByText("Last touch 12 Sep 2026, by text."),
+    ).toBeInTheDocument();
+  });
+});

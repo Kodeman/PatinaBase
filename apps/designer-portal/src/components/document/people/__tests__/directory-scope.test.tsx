@@ -1,48 +1,57 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { useFeatureFlag } from '@/hooks/use-feature-flag';
-import { DirectoryView } from '../views/directory-view';
-import { DEFAULT_CONTACT_SCOPE } from '../directory/scope-lens';
-import { DIRECTORY_ROLES } from '@/lib/document/directory-roles';
-import type { PeopleViewProps } from '../types';
+/**
+ * The Directory (W2b). Rewritten: eleven chips, a flag, and two separate lists
+ * (people from `people_directory`, firms from `studio_contacts`) are retired by
+ * PR-g's mixed list, the six chips, and the rollout ruling that took the
+ * `call-sheet` flag out.
+ *
+ * What survives from the old spec, and is pinned again below: the MINE · STUDIO
+ * lens must narrow the QUERY, not just its own visual state (U6 / Wave 4).
+ */
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import type { PeopleDirectoryRow } from "@patina/supabase";
+import { DirectoryView } from "../views/directory-view";
+import type { PeopleViewProps } from "../types";
 
-jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: jest.fn() }));
-const mockUseFeatureFlag = useFeatureFlag as jest.Mock;
+const mockUsePeopleDirectory = jest.fn();
+const mockUseStudioContacts = jest.fn(() => ({ data: [], isLoading: false }));
+// QA-R2-2: a firm's open jobs come off the SEATS view now — v4 nulls
+// `project_id` on every carded human's directory row.
+const mockUsePeopleSeats = jest.fn(() => ({ data: [] as unknown[] }));
 
-// The MarginNote teach line reports through the wayfinding emitter — mocked
-// so this spec never loads posthog (same posture as margin-note.test.tsx).
-// actionShown/actionSelected are also mocked: the "review what seeded" click
-// mounts RolodexSeedSheet, whose DocumentAction buttons fire actionShown on
-// mount (same posture as studio-invite-modal.test.tsx).
-jest.mock('@/lib/analytics/document-events', () => ({
-  documentEvents: {
-    wayfinding: { marginNote: jest.fn() },
-    actionShown: jest.fn(),
-    actionSelected: jest.fn(),
+jest.mock("@patina/supabase", () => ({
+  // W3/P2 — the Compare & merge sheet the duplicate band now opens.
+  useStudioContact: () => ({ data: null }),
+  useMergeStudioContacts: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useComplianceDocuments: () => ({ data: [] }),
+  ALL_MERGE_MATCHED_ON: ["profile", "phone", "email", "company_name", "manual"],
+  MERGE_MATCHED_ON_LABELS: {
+    profile: "They sign in with the same account",
+    phone: "They share a phone number",
+    email: "They share an email address",
+    company_name: "Same firm, same name",
+    manual: "The studio says so",
   },
+  usePeopleDirectory: (...args: unknown[]) =>
+    mockUsePeopleDirectory(...(args as [])),
+  useStudioContacts: (...args: unknown[]) =>
+    mockUseStudioContacts(...(args as [])),
+  usePeopleSeats: (...args: unknown[]) => mockUsePeopleSeats(...(args as [])),
+  // W2 r1 fixes: the Directory now reads the rule ROWS, the routed people's
+  // channels and the consent records behind the word (CR-5/6/13/14/22).
+  useContactRules: () => ({ data: [] }),
+  useStudioContactChannelsFor: () => ({ data: [] }),
+  useChannelConsentRecords: () => ({ data: [] }),
 }));
 
-// Captures the filters DirectoryView actually passes through to
-// usePeopleDirectory — this is the whole point of the spec below: the U6/Wave
-// 4 ruling ("BROWSE surfaces get the lens") only holds if the query itself is
-// scoped, not just the ScopeLens toggle's visual state.
-const mockUsePeopleDirectory = jest.fn(() => ({ data: [], isLoading: false }));
+jest.mock("@/hooks/use-projects", () => ({ useProjects: () => ({ data: [] }) }));
 
-jest.mock('@patina/supabase', () => ({
-  usePeopleDirectory: (...args: unknown[]) => mockUsePeopleDirectory(...args),
-  useStudioContacts: jest.fn(() => ({ data: [], isLoading: false })),
-  useArchiveStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useRestoreStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  // The real predicate (00281's FIELD_ROSTER_ROLES) — reimplemented rather than
-  // requireActual so this spec stays a pure unit test of DirectoryView's chip
-  // wiring, not a transitive test of every hook module @patina/supabase re-exports.
-  isFieldRosterRole: (role: string | null | undefined) =>
-    !!role && ['gc', 'sub', 'installer', 'receiver'].includes(role),
+jest.mock("../directory/makers-marketplace", () => ({
+  MakersMarketplace: () => <div data-testid="marketplace" />,
 }));
 
-beforeEach(() => {
-  window.localStorage.clear();
-  mockUsePeopleDirectory.mockClear();
-});
+jest.mock("@/lib/analytics/people-events", () => ({
+  peopleEvents: { directoryChip: jest.fn() },
+}));
 
 const NAV: PeopleViewProps = {
   openPerson: jest.fn(),
@@ -51,184 +60,355 @@ const NAV: PeopleViewProps = {
   notify: jest.fn(),
 };
 
-function renderDirectory(overrides: Partial<Parameters<typeof DirectoryView>[0]> = {}) {
-  return render(
+function row(over: Partial<PeopleDirectoryRow> = {}): PeopleDirectoryRow {
+  return {
+    person_id: "card-dana",
+    role: "contact",
+    display_name: "Dana Kowalski",
+    email: "dana@northgateelectric.com",
+    phone: "(612) 555-0111",
+    profile_id: null,
+    project_id: "proj-okonkwo",
+    designer_id: null,
+    status_raw: "active",
+    last_touch_at: null,
+    meta: {
+      entity_kind: "person",
+      contact_kind: "sub",
+      company_name: "Northgate Electric",
+      company_id: "firm-northgate",
+      specialties: ["electrical"],
+    },
+    scope: "studio",
+    reach_state: "field_link",
+    consent_status: "granted",
+    paper_state: "lapsed",
+    contact_rule_summary: null,
+    seat_count: 1,
+    ...over,
+  } as PeopleDirectoryRow;
+}
+
+const FIRM = row({
+  person_id: "firm-northgate",
+  display_name: "Northgate Electric",
+  phone: null,
+  meta: { entity_kind: "company", contact_kind: "sub" },
+  paper_state: "lapsed",
+  seat_count: 0,
+});
+
+const BANK = row({
+  person_id: "firm-bank",
+  display_name: "Great Northern Bank",
+  phone: null,
+  meta: { entity_kind: "company", contact_kind: "lender" },
+  paper_state: "not_on_file",
+  seat_count: 0,
+});
+
+const ADAEZE = row({
+  person_id: "card-adaeze",
+  display_name: "Adaeze Okonkwo",
+  phone: "(612) 555-0104",
+  email: "adaeze@okonkwo.net",
+  meta: { entity_kind: "person", contact_kind: "client" },
+  reach_state: "account",
+  paper_state: null,
+});
+
+/** The studio's OWN people. Their card kind is `studio` (CR-7), not `team`. */
+const STUDIO_PEOPLE = ["Leah Hartwell", "Priya Natarajan", "Dale Whitcomb"].map(
+  (name, i) =>
+    row({
+      person_id: `card-studio-${i}`,
+      display_name: name,
+      phone: null,
+      email: null,
+      meta: { entity_kind: "person", contact_kind: "studio" },
+      reach_state: "account",
+      consent_status: null,
+      paper_state: null,
+      seat_count: 0,
+    }),
+);
+
+/** A bid taken from a firm with nobody named — one entity, not two (QA-R2-9). */
+const COMPANY_ONLY_SEAT = row({
+  person_id: "seat-rivera",
+  role: "sub",
+  display_name: "Rivera Finishes",
+  phone: "(612) 555-0219",
+  email: null,
+  profile_id: null,
+  meta: {
+    company_name: "Rivera Finishes",
+    company_id: "firm-rivera",
+    studio_contact_id: null,
+    trade: "paint",
+  },
+  seat_count: 1,
+});
+
+function renderDirectory(
+  rows: PeopleDirectoryRow[],
+  over: Partial<Parameters<typeof DirectoryView>[0]> = {},
+) {
+  mockUsePeopleDirectory.mockReturnValue({ data: rows, isLoading: false });
+  const onChipChange = jest.fn();
+  const onOpenFirm = jest.fn();
+  const result = render(
     <DirectoryView
       {...NAV}
-      role="all"
-      onRoleChange={jest.fn()}
+      chip="everyone"
+      onChipChange={onChipChange}
+      trade="all"
+      onTradeChange={jest.fn()}
       makerLens="roster"
       onMakerLens={jest.fn()}
       search=""
-      onAddPerson={jest.fn()}
       organizationId="org-1"
-      scope="mine"
+      scope="studio"
       onScopeChange={jest.fn()}
-      {...overrides}
+      onOpenFirm={onOpenFirm}
+      {...over}
     />,
   );
+  return { ...result, onChipChange, onOpenFirm };
 }
 
-const LEGACY_CHIPS = ['All', 'Clients', 'Leads', 'Makers', 'Field', 'Team'];
-const CALL_SHEET_CHIPS = [
-  'All',
-  'Field',
-  'Clients',
-  'Leads',
-  'Makers',
-  'Team',
-  'GCs',
-  'Subs',
-  'Installers',
-  'Receivers',
-  'Companies',
-];
+beforeEach(() => {
+  mockUsePeopleDirectory.mockReset();
+  mockUseStudioContacts.mockReturnValue({ data: [], isLoading: false });
+  mockUsePeopleSeats.mockReset();
+  mockUsePeopleSeats.mockReturnValue({ data: [] });
+});
 
-describe('DirectoryView — role chip set, flag off', () => {
-  beforeEach(() => {
-    mockUseFeatureFlag.mockReturnValue({ value: false, isLoading: false });
+describe("the six chips", () => {
+  it('prints exactly six, in order, inside a group labelled "Narrow the book"', () => {
+    renderDirectory([]);
+    const group = screen.getByRole("group", { name: "Narrow the book" });
+    expect(
+      within(group)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Everyone", "Clients", "Crew", "Makers", "Studio", "Firms"]);
   });
 
-  it('renders exactly the pre-Wave-2 chip set', () => {
-    renderDirectory();
-    for (const label of LEGACY_CHIPS) {
-      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
-    }
-    for (const label of ['GCs', 'Subs', 'Installers', 'Receivers', 'Companies']) {
-      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
-    }
+  it("Everyone is the pressed chip on open", () => {
+    renderDirectory([]);
+    expect(screen.getByRole("button", { name: "Everyone" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
-  it('never mounts the ScopeLens', () => {
-    renderDirectory();
-    expect(screen.queryByRole('button', { name: 'mine' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'studio' })).not.toBeInTheDocument();
+  it("shows the trade line only under Crew and Makers", () => {
+    const { unmount } = renderDirectory([], { chip: "crew" });
+    expect(
+      screen.getByRole("group", { name: "Narrow by trade" }),
+    ).toBeInTheDocument();
+    unmount();
+    renderDirectory([], { chip: "clients" });
+    expect(
+      screen.queryByRole("group", { name: "Narrow by trade" }),
+    ).not.toBeInTheDocument();
   });
 });
 
-describe('DirectoryView — role chip set, flag on', () => {
-  beforeEach(() => {
-    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
-  });
-
-  it('renders the Call Sheet Wave 2 chip set, including the field-kind singles and Companies', () => {
-    renderDirectory();
-    for (const label of CALL_SHEET_CHIPS) {
-      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
-    }
-  });
-
-  it('the lens reflects MINE when the Room passes it (a controlled prop, not its own default)', () => {
-    renderDirectory({ scope: 'mine' });
-    expect(screen.getByRole('button', { name: 'mine' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: 'studio' })).not.toHaveAttribute('aria-current');
-  });
-
-  it('the lens reflects STUDIO when the Room passes it', () => {
-    renderDirectory({ scope: 'studio' });
-    expect(screen.getByRole('button', { name: 'studio' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByRole('button', { name: 'mine' })).not.toHaveAttribute('aria-current');
-  });
-});
-
-describe('DirectoryView — U6 (Wave 4): STUDIO is the default lens', () => {
-  it("scope-lens.tsx's DEFAULT_CONTACT_SCOPE — the Room's single source of truth — is 'studio'", () => {
-    expect(DEFAULT_CONTACT_SCOPE).toBe('studio');
-  });
-});
-
-describe('DirectoryView — U6 (Wave 4): the lens actually filters the query', () => {
-  beforeEach(() => {
-    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
-  });
-
-  it('STUDIO (the default) passes no scope filter — the unfiltered, RLS-admitted read', () => {
-    renderDirectory({ scope: 'studio' });
+describe("the MINE · STUDIO lens narrows the query, not just the toggle", () => {
+  it("passes scope: mine through to usePeopleDirectory", () => {
+    renderDirectory([], { scope: "mine" });
     expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
-      role: 'all',
+      role: "all",
+      scope: "mine",
+    });
+  });
+
+  it("STUDIO is the unfiltered read — never .eq(scope, studio)", () => {
+    renderDirectory([], { scope: "studio" });
+    expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
+      role: "all",
       scope: undefined,
     });
   });
+});
 
-  it('toggling to MINE passes scope: "mine" through to the query', () => {
-    renderDirectory({ scope: 'mine' });
-    expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
-      role: 'all',
-      scope: 'mine',
-    });
+describe("one list, two entry types (PR-g)", () => {
+  it("prints people and firms together under Everyone", () => {
+    renderDirectory([row(), FIRM]);
+    expect(
+      screen.getByRole("button", { name: "Dana Kowalski" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Northgate Electric" }),
+    ).toBeInTheDocument();
   });
 
-  it('MINE composes with a role chip other than "all"', () => {
-    renderDirectory({ scope: 'mine', role: 'client' });
-    expect(mockUsePeopleDirectory).toHaveBeenCalledWith({
-      role: 'client',
-      scope: 'mine',
+  it("the Firms chip shows firms only", () => {
+    renderDirectory([row(), FIRM], { chip: "firms" });
+    expect(
+      screen.queryByRole("button", { name: "Dana Kowalski" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Northgate Electric" }),
+    ).toBeInTheDocument();
+  });
+
+  it("R-H — a lender firm shows under both chips with no paper word", () => {
+    const { unmount } = renderDirectory([BANK]);
+    expect(
+      screen.getByRole("button", { name: "Great Northern Bank" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Not on file")).not.toBeInTheDocument();
+    unmount();
+    renderDirectory([BANK], { chip: "firms" });
+    expect(
+      screen.getByRole("button", { name: "Great Northern Bank" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Not on file")).not.toBeInTheDocument();
+  });
+
+  it("opens a firm by its own card id", () => {
+    const { onOpenFirm } = renderDirectory([FIRM]);
+    fireEvent.click(screen.getByRole("button", { name: "Northgate Electric" }));
+    expect(onOpenFirm).toHaveBeenCalledWith("firm-northgate");
+  });
+
+  it("a firm row counts the crew off its rows and the open jobs off the seats", () => {
+    // QA-R2-2: `people_directory.project_id` is NULL for every carded human,
+    // so the count comes from `people_directory_seats`, which carries
+    // `company_id`.
+    mockUsePeopleSeats.mockReturnValue({
+      data: [
+        {
+          seat_id: "seat-1",
+          person_id: "card-dana",
+          project_id: "proj-okonkwo",
+          company_id: "firm-northgate",
+          stage: "awarded",
+        },
+        // A closed seat is not an open job.
+        {
+          seat_id: "seat-2",
+          person_id: "card-dana",
+          project_id: "proj-lindqvist",
+          company_id: "firm-northgate",
+          stage: "off_job",
+        },
+      ],
     });
+    renderDirectory([row(), FIRM]);
+    expect(
+      screen.getByText("Subcontractor · 1 on the crew · 1 open job"),
+    ).toBeInTheDocument();
   });
 });
 
-describe('DirectoryView — the STUDIO-lens teach line (R94)', () => {
-  beforeEach(() => {
-    mockUseFeatureFlag.mockReturnValue({ value: true, isLoading: false });
+describe("the studio's own people (CR-7)", () => {
+  it("bands the three `studio` cards under the Studio chip, not under Crew", () => {
+    renderDirectory([...STUDIO_PEOPLE, row()], { chip: "studio" });
+    for (const name of ["Leah Hartwell", "Priya Natarajan", "Dale Whitcomb"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    expect(
+      screen.queryByRole("button", { name: "Dana Kowalski" }),
+    ).not.toBeInTheDocument();
   });
 
-  it('shows the teach line on first landing in STUDIO scope, with an underlined review link', () => {
-    renderDirectory({ scope: 'studio' });
-    const note = screen.getByRole('note');
-    expect(note).toHaveTextContent("The whole studio’s book, not just yours.");
-    const link = screen.getByRole('button', { name: 'review what seeded' });
-    expect(link).toHaveClass('underline');
+  it("keeps them out of Crew", () => {
+    renderDirectory([...STUDIO_PEOPLE, row()], { chip: "crew" });
+    expect(
+      screen.queryByRole("button", { name: "Leah Hartwell" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Dana Kowalski" }),
+    ).toBeInTheDocument();
   });
 
-  it('never shows the teach line in MINE scope', () => {
-    renderDirectory({ scope: 'mine' });
-    expect(screen.queryByRole('note')).not.toBeInTheDocument();
-  });
-
-  it('never shows the teach line with the flag off, even in STUDIO scope', () => {
-    mockUseFeatureFlag.mockReturnValue({ value: false, isLoading: false });
-    renderDirectory({ scope: 'studio' });
-    expect(screen.queryByRole('note')).not.toBeInTheDocument();
-  });
-
-  it('recedes for good — marked seen in localStorage — the first time "review what seeded" fires', async () => {
-    renderDirectory({ scope: 'studio' });
-    expect(window.localStorage.getItem('patina:margin-note:rolodex-studio-lens')).toBeNull();
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'review what seeded' }));
-    });
-
-    expect(screen.queryByRole('note')).not.toBeInTheDocument();
-    expect(window.localStorage.getItem('patina:margin-note:rolodex-studio-lens')).not.toBeNull();
-  });
-
-  it('never renders once the note has already been seen, on a later mount', () => {
-    window.localStorage.setItem('patina:margin-note:rolodex-studio-lens', String(Date.now()));
-    renderDirectory({ scope: 'studio' });
-    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  it("CR-15 — with no firm and no trade the line is a WORD, never `studio`", () => {
+    const { container } = renderDirectory(STUDIO_PEOPLE, { chip: "studio" });
+    const lines = [...container.querySelectorAll("[data-person-row] p.t-meta")];
+    expect(lines).toHaveLength(3);
+    // "Studio", never the raw card token. (The lens's own `studio` word below
+    // the chips is a control, not a row's identity line.)
+    for (const line of lines) expect(line.textContent).toBe("Studio");
   });
 });
 
-describe('People Room — the legacy ?role= param map stays pinned', () => {
-  it('keeps every pre-Wave-2 role value, in its original order, before the new company value', () => {
-    const legacy: readonly string[] = [
-      'all',
-      'field',
-      'client',
-      'lead',
-      'maker',
-      'team',
-      'gc',
-      'sub',
-      'installer',
-      'receiver',
-    ];
-    expect(DIRECTORY_ROLES.slice(0, legacy.length)).toEqual(legacy);
+describe("a company-only engagement is not a head (QA-R2-9)", () => {
+  it("never surfaces as a person-shaped row beside its own firm row", () => {
+    renderDirectory([COMPANY_ONLY_SEAT, FIRM]);
+    // The firm's row stands; the phantom person does not.
+    expect(
+      screen.getByRole("button", { name: "Northgate Electric" }),
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll("[data-person-row]")).toHaveLength(0);
+  });
+});
+
+describe("narrowing", () => {
+  it("matches phone digits", () => {
+    renderDirectory([row(), ADAEZE], { search: "0111" });
+    expect(
+      screen.getByRole("button", { name: "Dana Kowalski" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Adaeze Okonkwo" }),
+    ).not.toBeInTheDocument();
   });
 
-  it('adds Call Sheet Wave 2\'s "company" additively, after every legacy value', () => {
-    expect(DIRECTORY_ROLES[DIRECTORY_ROLES.length - 1]).toBe('company');
-    expect(DIRECTORY_ROLES).toHaveLength(11);
+  it("matches a trade", () => {
+    renderDirectory([row(), ADAEZE], { search: "electrical" });
+    expect(
+      screen.getByRole("button", { name: "Dana Kowalski" }),
+    ).toBeInTheDocument();
+  });
+
+  it("narrows by the trade line", () => {
+    renderDirectory([row(), ADAEZE], { chip: "crew", trade: "plumbing" });
+    expect(
+      screen.queryByRole("button", { name: "Dana Kowalski" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says so in the room’s own words when nothing is left", () => {
+    renderDirectory([row()], { search: "nobody here" });
+    expect(
+      screen.getByText(/Nobody under this narrowing yet\./),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("the duplicate band", () => {
+  /**
+   * R-Y held the merge act back while the sheet did not exist. W3/P2 built it
+   * (direction §8), so the band now names the two cards AND offers the act —
+   * the band's first job is still naming the collision, so Compare is the
+   * secondary word after the two names.
+   */
+  it("names the two cards, opens each, and offers Compare these two (W3/P2)", () => {
+    const chidi = row({
+      person_id: "card-chidi",
+      display_name: "Chidi Okonkwo",
+      phone: "6125550104",
+      meta: { entity_kind: "person", contact_kind: "client_rep" },
+    });
+    renderDirectory([ADAEZE, chidi]);
+    const band = document.querySelector("[data-duplicate-band]") as HTMLElement;
+    expect(band).toHaveTextContent("These two cards share a phone.");
+    expect(
+      within(band).getByRole("button", { name: "Adaeze Okonkwo" }),
+    ).toBeInTheDocument();
+    expect(
+      within(band).getByRole("button", { name: "Chidi Okonkwo" }),
+    ).toBeInTheDocument();
+    expect(
+      within(band).getByRole("button", { name: "Compare these two" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(band).getByRole("button", { name: "Chidi Okonkwo" }),
+    );
+    expect(NAV.openPerson).toHaveBeenCalledWith("card-chidi", "contact");
   });
 });

@@ -13,7 +13,6 @@
  */
 import { render, screen } from '@testing-library/react';
 
-let mockCallSheetFlag = true;
 const mockOrgs = jest.fn();
 const mockMembers = jest.fn();
 const mockProjects = jest.fn();
@@ -61,11 +60,9 @@ jest.mock('@/hooks/use-answered-notes', () => ({
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 
 jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: (name: string) =>
-    name === 'call-sheet'
-      ? { value: mockCallSheetFlag, isLoading: false }
-      : // studio-workspaces — the whisper's own gate, always on here.
-        { value: true, isLoading: false },
+  // studio-workspaces — the whisper's own gate, always on here. `call-sheet`
+  // is retired (rulings §6) and no longer read anywhere on this page.
+  useFeatureFlag: () => ({ value: true, isLoading: false }),
 }));
 
 // ── Everything else the Desk mounts. ──────────────────────────────────────
@@ -126,7 +123,6 @@ function studio(over: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  mockCallSheetFlag = true;
   mockOrgs.mockReturnValue([studio()]);
   // Own title set; nobody else on the crew (one open step).
   mockMembers.mockReturnValue([{ user_id: 'me', job_title: 'Principal' }]);
@@ -173,15 +169,12 @@ describe('Desk — the studio setup whisper counts the rolodex', () => {
     expect(screen.getByText(WHISPER)).toBeInTheDocument();
   });
 
-  it('reads the rolodex only behind the call-sheet flag, exactly as the Studio page does', () => {
-    mockCallSheetFlag = false;
+  it('reads the rolodex for the studio, with no flag in the way', () => {
+    // The `call-sheet` flag is retired (rulings §6): the rolodex step reads
+    // real data for every studio, on this surface and on the Studio page both.
     mockContacts.mockReturnValue([{ id: 'c-1' }]);
     render(<DeskPage />);
-    // Flag off: the rolodex step falls back to un-seeded on BOTH surfaces, so
-    // the whisper is still the truthful reading of the checklist.
-    expect(screen.getByText(WHISPER)).toBeInTheDocument();
-    // …and the contacts query is never even asked for an organization.
-    expect(mockContacts).toHaveBeenCalledWith(null);
+    expect(mockContacts).toHaveBeenCalledWith('org-1');
   });
 
   it('never whispers at a member — they cannot act on the checklist', () => {

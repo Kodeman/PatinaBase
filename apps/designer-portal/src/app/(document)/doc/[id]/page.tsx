@@ -1229,6 +1229,14 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       setCallSheetMode('sheet');
       setCallSheetOpen(true);
     }
+    // CR10-1 — `?sheet=call` is the Call Sheet's ADDRESS (direction §2.1), the
+    // destination a People-room seat line walks to. Read on arrival the way
+    // `ffeItemId` above is, so the link opens the sheet rather than landing on
+    // the document beside it. The param stays in the bar: it is the address.
+    if (new URLSearchParams(window.location.search).get('sheet') === 'call') {
+      setCallSheetMode('sheet');
+      setCallSheetOpen(true);
+    }
     return () => window.removeEventListener('document:open-call-sheet', onOpenCallSheet);
   }, []);
 
@@ -1887,7 +1895,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // early returns below, alongside the page's other hooks. The roster fetch is
   // gated on the flag so a cohort without it doesn't pay for a query neither
   // the kickoff band nor the instrument will render from.
-  const callSheetGate = useFeatureFlag('call-sheet');
 
   // W2 · THE LADDER — one segment per stop the spread puts on the paper, and
   // the doors filed beneath them. Derived once, here, and printed twice: by
@@ -2024,10 +2031,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     ? deriveLadderDoors({
         ticket: ticketInput,
         held: Boolean(heldRoomId),
-        // F-13/C-09 — one rule, both tiers: the sections sheet gates its Call
-        // sheet row on this flag, and with it off nothing mounts the overlay
-        // the door opens.
-        callSheetEnabled: callSheetGate.value,
+        // The `call-sheet` flag is retired (rulings §6): the row and the
+        // overlay it opens are live for every studio.
+        callSheetEnabled: true,
         routes: {
           planroom: shelfRouteFor('planroom', id),
           specbook: shelfRouteFor('specbook', id),
@@ -2154,7 +2160,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   }, [worktableOn, arrivedProjectId]);
 
   const rosterProjectId =
-    callSheetGate.value && row?.engagement_kind === 'project' && row.project_id
+    row?.engagement_kind === 'project' && row.project_id
       ? row.project_id
       : null;
   const { data: rosterRows, isLoading: rosterLoading } =
@@ -2679,7 +2685,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       roomsSettled={docRoomsSettled}
       schedule={scheduleFacts}
       scheduleSettled={!scheduleQuery.isLoading}
-      callSheetEnabled={callSheetGate.value}
+      callSheetEnabled
       rosterCount={(rosterRows ?? []).length}
       rosterSettled={rosterSettled}
       onRows={acceptTicketRows}

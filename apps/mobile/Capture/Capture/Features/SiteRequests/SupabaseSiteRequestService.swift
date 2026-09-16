@@ -13,8 +13,19 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
     private static let displayURLLifetime = 10 * 60
     /// `party_kind` is the wave-4 addition: PunchCourtResolver routes on it
     /// (ruling 2, GC-only), and it was the one column this select did not carry.
+    ///
+    /// R-AV: `sms_consent_status` is NOT here. `project_parties`' eight consent
+    /// columns are frozen legacy since 00594 — readable, untrustworthy — and the
+    /// studio's verdict for a number lives in `studio_channel_consent`, reached
+    /// through `channel_consent_status()`. The verdict is read separately, from
+    /// `people_directory_seats` (00626), the same record-backed reader the
+    /// People room uses.
     private static let partyColumns =
-        "id,display_name,company_name,phone,phone_e164,trade,party_kind,sms_consent_status"
+        "id,display_name,company_name,phone,phone_e164,trade,party_kind"
+    /// The record's verdict, keyed by seat id. `consent_status` is
+    /// `channel_consent_status()` at the project's studio, NULL where the caller
+    /// cannot read the record that decides it (00626) — and NULL is not granted.
+    private static let seatConsentColumns = "seat_id,consent_status"
 
     let client: SupabaseClient
     let functionBaseURL: URL
@@ -50,6 +61,7 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
             .eq("project_id", value: projectID)
             .order("display_name")
             .execute().value
+        async let partyConsent = seatConsent(projectID: projectID)
         async let binderEntries: [SiteBinderEntryRow] = client.from("site_binder_entries")
             .select("id,room_id,request_id,item_id,item_version_id,deliverable_id,"
                 + "entry_kind,payload,supersedes_entry_id,approved_at,"
@@ -57,8 +69,8 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
             .eq("project_id", value: projectID)
             .order("approved_at", ascending: false)
             .execute().value
-        let (projectRow, requestRows, roomRows, partyRows, binderRows) =
-            try await (project, requests, rooms, parties, binderEntries)
+        let (projectRow, requestRows, roomRows, partyRows, binderRows, consentBySeat) =
+            try await (project, requests, rooms, parties, binderEntries, partyConsent)
 
         let (itemRows, eventRows) = try await currentRows(requestIDs: requestRows.map(\.id))
         let events = eventRows.map(\.event)
@@ -77,7 +89,7 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
             },
             reviewItems: signedReviewItems,
             rooms: roomRows.map { $0.room(currentEntries: currentBinderEntries) },
-            assignees: partyRows.compactMap(\.assignee),
+            assignees: partyRows.compactMap { $0.assignee(consentStatus: consentBySeat[$0.id]) },
             events: events,
             binderEntries: binderHistory,
             currentBinderEntries: currentBinderEntries
@@ -85,12 +97,28 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
     }
 
     func fieldParties(projectID: String) async throws -> [FieldPartyRef] {
-        let rows: [ProjectPartyRow] = try await client.from("project_parties")
+        async let parties: [ProjectPartyRow] = client.from("project_parties")
             .select(Self.partyColumns)
             .eq("project_id", value: projectID)
             .order("display_name")
             .execute().value
-        return rows.map(\.fieldParty)
+        async let consent = seatConsent(projectID: projectID)
+        let (rows, consentBySeat) = try await (parties, consent)
+        return rows.map { $0.fieldParty(consentStatus: consentBySeat[$0.id]) }
+    }
+
+    /// R-AV. The seats view is `security_invoker`, so a seat whose deciding
+    /// record the caller cannot read carries no word at all; a seat the view does
+    /// not carry is absent from this map. Both read as "not granted" at the call
+    /// site, which is the only direction this may fail in.
+    private func seatConsent(projectID: String) async throws -> [String: String] {
+        let rows: [SeatConsentRow] = try await client.from("people_directory_seats")
+            .select(Self.seatConsentColumns)
+            .eq("project_id", value: projectID)
+            .execute().value
+        return rows.reduce(into: [:]) { map, row in
+            map[row.seatID] = row.consentStatus
+        }
     }
 
     private func signingMedia(
@@ -488,6 +516,17 @@ private struct SiteBinderDerivativesWire: Decodable {
     }
 }
 
+/// The seat's own facts. The consent word is NOT among them (R-AV) — it arrives
+/// from `people_directory_seats` and is passed in.
+private struct SeatConsentRow: Decodable {
+    let seatID: String
+    let consentStatus: String?
+    enum CodingKeys: String, CodingKey {
+        case seatID = "seat_id"
+        case consentStatus = "consent_status"
+    }
+}
+
 private struct ProjectPartyRow: Decodable {
     let id: String
     let displayName: String
@@ -496,28 +535,26 @@ private struct ProjectPartyRow: Decodable {
     let phoneE164: String?
     let trade: String?
     let partyKind: String?
-    let consentStatus: String
     enum CodingKeys: String, CodingKey {
         case id, phone, trade
         case displayName = "display_name"
         case companyName = "company_name"
         case phoneE164 = "phone_e164"
         case partyKind = "party_kind"
-        case consentStatus = "sms_consent_status"
     }
 
     /// Unlike `assignee`, never nil — a phoneless party still has to REACH the
     /// resolver, which is what decides it is no court. The number travels with
     /// it because consent and a phone are independent columns and the resolver
     /// needs both to promise a text honestly.
-    var fieldParty: FieldPartyRef {
+    func fieldParty(consentStatus: String?) -> FieldPartyRef {
         FieldPartyRef(id: id, displayName: displayName,
                       partyKind: partyKind ?? "",
                       smsConsentGranted: consentStatus == "granted",
                       phoneE164: phoneE164 ?? phone)
     }
 
-    var assignee: SiteRequestAssignee? {
+    func assignee(consentStatus: String?) -> SiteRequestAssignee? {
         guard let normalizedPhone = phoneE164 ?? phone, !normalizedPhone.isEmpty else { return nil }
         return SiteRequestAssignee(
             partyID: id, name: displayName, normalizedPhone: normalizedPhone,

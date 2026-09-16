@@ -81,7 +81,8 @@ public final class CaptureStore {
         Specimen.self, CapturePhoto.self, CaptureMeasurement.self, CaptureProjectRef.self,
         ScanUploadRecord.self,  // item 8 — durable resumable upload state (additive)
         SiteRequestOutboxRecord.self,
-        FieldVisitCloseRecord.self  // wave 4 — the visit close's time entry (additive)
+        FieldVisitCloseRecord.self,  // wave 4 — the visit close's time entry (additive)
+        TimeEntryOutboxRecord.self   // W6 — an hour that is not a visit (additive)
     ])
 
     public let container: ModelContainer
@@ -688,6 +689,27 @@ public final class CaptureStore {
     /// the whole of the match, normalised the way `CaptureOwnerIdentity` is.
     public func visitCloseOutbox(owner: CaptureOwnerIdentity) -> [FieldVisitCloseRecord] {
         visitCloseOutbox().filter {
+            $0.ownerUserID
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == owner.userID
+        }
+    }
+
+    /// The standing hours this phone owes the desk — LogTimeSheet's queue, the
+    /// sibling of `visitCloseOutbox()`. Oldest first: a drive logged on Monday
+    /// lands before Tuesday's when a road finally gives her signal back.
+    public func timeEntryOutbox() -> [TimeEntryOutboxRecord] {
+        let descriptor = FetchDescriptor<TimeEntryOutboxRecord>(
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)])
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    /// Owner-scoped for the same reason `visitCloseOutbox(owner:)` is: the
+    /// record carries the author's user id, `log_time` takes the author from
+    /// `auth.uid()`, and an unscoped drain would send the PREVIOUS designer's
+    /// hour under whoever signed in next.
+    public func timeEntryOutbox(owner: CaptureOwnerIdentity) -> [TimeEntryOutboxRecord] {
+        timeEntryOutbox().filter {
             $0.ownerUserID
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .lowercased() == owner.userID

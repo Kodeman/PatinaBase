@@ -34,6 +34,9 @@ jest.mock('@patina/supabase', () => ({
   // page without a QueryClientProvider, so its data hooks are stubbed the way
   // every other hook on this page already is. The card's own behaviour is
   // covered in agreement-defaults-card.test.tsx.
+  // HT-3's Studio rates section reads the dated rows and writes on blur.
+  useStudioMemberRates: () => ({ data: [] }),
+  useSetStudioMemberRate: () => ({ mutate: jest.fn(), isPending: false }),
   useStudioAgreementDefaults: () => ({
     data: {
       studioId: 'studio-1',
@@ -126,7 +129,7 @@ function mutation(mutate = jest.fn()) {
   };
 }
 
-function organization(role: 'owner' | 'admin') {
+function organization(role: 'owner' | 'admin' | 'member') {
   return {
     id: 'studio-1',
     type: 'design_studio',
@@ -143,7 +146,7 @@ function organization(role: 'owner' | 'admin') {
   };
 }
 
-function organizationMembers(selfRole: 'owner' | 'admin') {
+function organizationMembers(selfRole: 'owner' | 'admin' | 'member') {
   return [
     {
       id: 'membership-self',
@@ -577,5 +580,66 @@ describe('AccountStudioPage — invited roster: expiry + resend', () => {
     expect(
       within(row2 as HTMLElement).getByRole('button', { name: 'Resend invite' }),
     ).toBeDisabled();
+  });
+});
+
+describe('AccountStudioPage — the studio rate card (HT-3)', () => {
+  it('is absent for a plain member and present for an admin', () => {
+    mockUseOrganizations.mockReturnValue({
+      data: [organization('member')],
+      isLoading: false,
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: organizationMembers('member'),
+    });
+    const asMember = render(<AccountStudioPage />);
+    expect(
+      asMember.queryByRole('heading', { name: 'Studio rates' }),
+    ).not.toBeInTheDocument();
+    asMember.unmount();
+
+    mockUseOrganizations.mockReturnValue({
+      data: [organization('admin')],
+      isLoading: false,
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: organizationMembers('admin'),
+    });
+    render(<AccountStudioPage />);
+    expect(
+      screen.getByRole('heading', { name: 'Studio rates' }),
+    ).toBeInTheDocument();
+  });
+
+  it('gives the acting admin her own row the sentence, not the field (HT-3-e(2))', () => {
+    // 00615 prices a self-authored row only where that person is the studio's
+    // owner, so for an admin's own row the field would take the keystroke and
+    // change no money.
+    mockUseOrganizations.mockReturnValue({
+      data: [organization('admin')],
+      isLoading: false,
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: organizationMembers('admin'),
+    });
+    render(<AccountStudioPage />);
+
+    const ownRow = screen
+      .getByText('Current Owner · admin')
+      .closest('li') as HTMLElement;
+    expect(
+      within(ownRow).queryByLabelText('Hourly rate for Current Owner'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(ownRow).getByText(/does not price your own hours/),
+    ).toBeInTheDocument();
+
+    // A teammate's row still takes a rate.
+    const memberRow = screen
+      .getByText('Team Member · member')
+      .closest('li') as HTMLElement;
+    expect(
+      within(memberRow).getByLabelText('Hourly rate for Team Member'),
+    ).toBeInTheDocument();
   });
 });

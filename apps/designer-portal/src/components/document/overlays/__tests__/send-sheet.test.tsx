@@ -1082,7 +1082,8 @@ describe('SendSheet — the letter for an unlinked captured household', () => {
     const call = mockInviteAndLinkClient.mock.calls[0][0];
     expect(call.letter).toBe(true);
     expect(call.note).toHaveLength(LETTER_NOTE_MAX);
-  });
+    // 300 real keystrokes: races jest's 5s default under the full parallel run.
+  }, 20000);
 
   it('flag off — legacy invite copy, no counter, no letter key', async () => {
     mockLetterFlag = { value: false, isLoading: false };

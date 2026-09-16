@@ -83,7 +83,7 @@ import {
   startInvoiceCheckout,
   stripeSessionView,
 } from '../_shared/invoice-checkout-driver.ts';
-import { ensureInvoiceLinkUrl } from '../_shared/invoice-links.ts';
+import { hasLiveInvoiceLink } from '../_shared/invoice-links.ts';
 import {
   TAX_SHIPPING_CONFIG_KEY,
   buildDirectOrderIntakeMetadata,
@@ -940,8 +940,12 @@ async function reconcileStoredInvoiceCheckout(
  * The signed-in invoice rail: the caller's own Stripe customer, then the shared
  * driver on the payer identity. Return addresses move onto the
  * /pay/return/<nonce> form (00574, S10) whenever the invoice has a live link;
- * ensureInvoiceLinkUrl returning null — the M7 safety valve — keeps today's
- * letterbox address so a session is never created with a broken return.
+ * no live link — the M7 safety valve — keeps today's letterbox address so a
+ * session is never created with a broken return.
+ *
+ * ASKS, NEVER MINTS (00636): since the pay token is stored as a hash,
+ * ensure_invoice_link regenerates on every call, and asking it for this
+ * boolean would revoke the very address the payer is standing on, mid-payment.
  */
 async function startSignedInInvoiceCheckout(
   admin: SupabaseClient,
@@ -953,7 +957,7 @@ async function startSignedInInvoiceCheckout(
   const customer = await ensureStripeCustomer(admin, stripe, caller.id);
   if (!customer.ok) return json(checkoutCustomerFailureBody(customer), customer.status);
   const invoiceId = payable.metadata.invoice_id;
-  const linkUrl = await ensureInvoiceLinkUrl(admin, CLIENT_PORTAL_URL, invoiceId);
+  const linkIsLive = await hasLiveInvoiceLink(admin, invoiceId);
   return startInvoiceCheckout({
     admin,
     stripe,
@@ -971,7 +975,7 @@ async function startSignedInInvoiceCheckout(
       successUrl: payable.successUrl,
       cancelUrl: payable.cancelUrl,
       processingDetail: payable.processingDetail,
-      nonceReturnOrigin: linkUrl ? CLIENT_PORTAL_URL : null,
+      nonceReturnOrigin: linkIsLive ? CLIENT_PORTAL_URL : null,
     },
     paymentMethod,
   });

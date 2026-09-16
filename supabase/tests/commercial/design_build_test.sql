@@ -1006,8 +1006,15 @@ BEGIN
            v_offer->>'amountCents');
   ASSERT v_offer->>'label' = 'Deposit at signing',
     'T23: in the studio''s own words for the draw';
-  ASSERT v_offer->>'payToken' ~ '^[0-9a-f]{64}$',
-    format('T23: with the link the payer surface reads, got %L',
+  -- AND IT CARRIES NO ADDRESS (00638, W4 round-1 review B-1 / QA-B2). Since
+  -- 00636 invoice_links stores sha256 and freezes the plaintext column at
+  -- NULL, so this STABLE read had nothing to re-read — and it may not call the
+  -- revoking minter, which would kill the payer's address on every page load.
+  -- The bundle names the invoice and the figure; the sign route's own offer
+  -- carries the live /pay token (asserted at T13 above), and the door's reload
+  -- path names the letter in her letterbox.
+  ASSERT v_offer->>'payToken' IS NULL,
+    format('T23: the bundle must carry no pay address, got %L',
            v_offer->>'payToken');
 
   -- Settled is not an offer.

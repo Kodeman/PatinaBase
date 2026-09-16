@@ -47,6 +47,10 @@ public final class AppContainer {
     public let featureFlags: CaptureFeatureFlags
     /// The offline project + room cache the door and the suggestion lane share.
     public let projectCache: CaptureProjectCache
+    /// W5's People room seam, scoped to one project, and the on-disk cache that
+    /// keeps its two objects readable with no signal.
+    public let peopleRoom: any PeopleRoomService
+    public let peopleRoomCache = PeopleRoomCache()
     public let companion = FieldCompanionController(
         initialPresentation: .hidden(reason: .cameraActive),
         defaultHint: "Next steps"
@@ -63,6 +67,9 @@ public final class AppContainer {
     public let siteRequests: any SiteRequestService
     public let guestSiteRequests: any GuestSiteRequestService
     let siteRequestOutboxDrainer: SiteRequestOutboxDrainer
+    /// W6 — the read half of Field's hours: "My hours this week" and the roster
+    /// roles that decide whether LogTimeSheet raises a role chip (HT-41).
+    public let hours: any FieldHoursService
 
     /// S2 inline project creation (real PostgREST insert vs. local-only). App
     /// -internal; nil in mock mode.
@@ -72,6 +79,9 @@ public final class AppContainer {
     /// lifecycle, no per-record secret to wait on a screen for. Nil in mock
     /// mode: TimeEntryGateway has no mock conformer.
     let visitCloseOutboxDrainer: VisitCloseOutboxDrainer?
+    /// W6 — LogTimeSheet's queue. Nil in mock mode, exactly as its visit-close
+    /// sibling is: there is no authenticated writer to drain to.
+    let timeEntryOutboxDrainer: TimeEntryOutboxDrainer?
     /// O2 "Continue with Patina" seam (real OAuth vs. stub). App-internal — the
     /// existential lives app-side; feature teams never touch it.
     let authorizer: any WorkspaceAuthorizing
@@ -99,17 +109,35 @@ public final class AppContainer {
     /// Sync and the visit-close drain share one field-write gateway — the same
     /// authenticated writer margin notes and punch tasks already use — so they
     /// are built together and lifted out of `init()` for `function_body_length`.
-    private static func makeSyncAndDrainer(
+    /// The authenticated write side, built together because it is one gateway.
+    /// A value rather than a tuple: W6 made it four members, and four members
+    /// with positional names is how a drainer ends up wired to the wrong queue.
+    struct WriteLanes {
+        let sync: any CaptureSyncService
+        let visitClose: VisitCloseOutboxDrainer
+        /// W6's hours queue — a SIBLING of the visit close's drainer, not a
+        /// second job inside it (FS-44).
+        let timeEntry: TimeEntryOutboxDrainer
+        let hours: any FieldHoursService
+    }
+
+    private static func makeWriteLanes(
         store: CaptureStore, analytics: any CaptureAnalytics, session: SupabaseSessionService,
         client: SupabaseClient, cache: CaptureProjectCache
-    ) -> (sync: any CaptureSyncService, drainer: VisitCloseOutboxDrainer) {
+    ) -> WriteLanes {
         let liveActivity = CaptureLiveActivityController()
         let gateway = SupabaseCaptureGateway(client: client, bucket: AppConfiguration.captureMediaBucket)
         let fieldWrites = SupabaseFieldWriteGateway(client: client)
         let sync = LocalCaptureSyncService(store: store, analytics: analytics,
                                            liveActivity: liveActivity, session: session, remote: gateway,
                                            projectCache: cache, fieldWrites: fieldWrites)
-        return (sync, VisitCloseOutboxDrainer(store: store, gateway: fieldWrites, session: session))
+        return WriteLanes(
+            sync: sync,
+            visitClose: VisitCloseOutboxDrainer(store: store, gateway: fieldWrites,
+                                                session: session, analytics: analytics),
+            timeEntry: TimeEntryOutboxDrainer(store: store, gateway: fieldWrites,
+                                              session: session, analytics: analytics),
+            hours: SupabaseFieldHoursService(client: client, session: session))
     }
 
     public init() {
@@ -142,13 +170,14 @@ public final class AppContainer {
             self.messaging = work.messaging; self.receiving = work.receiving
             self.portalAuth = work.portalAuth; self.siteScan = work.siteScan
             self.siteRequests = work.siteRequests; self.guestSiteRequests = work.siteRequests
-            self.siteRequestOutboxDrainer = work.drainer
+            self.siteRequestOutboxDrainer = work.drainer; self.peopleRoom = work.peopleRoom
 
             let cache = CaptureProjectCache(store: store, projects: work.projects); self.projectCache = cache
-            let (sync, drainer) = Self.makeSyncAndDrainer(
+            let lanes = Self.makeWriteLanes(
                 store: store, analytics: analytics, session: session, client: client, cache: cache)
-            self.sync = sync
-            self.visitCloseOutboxDrainer = drainer
+            self.sync = lanes.sync; self.hours = lanes.hours
+            self.visitCloseOutboxDrainer = lanes.visitClose
+            self.timeEntryOutboxDrainer = lanes.timeEntry
             self.projectCreator = SupabaseProjectCreator(client: client, session: session)
 
             #if targetEnvironment(simulator)
@@ -171,23 +200,22 @@ public final class AppContainer {
             self.authorizer = StubWorkspaceAuthorizer()
             self.sync = InMemoryCaptureSyncService()
             self.projectCreator = nil
-            self.visitCloseOutboxDrainer = nil
+            self.visitCloseOutboxDrainer = nil; self.timeEntryOutboxDrainer = nil
+            self.hours = MockFieldHoursService()
             self.camera = MockCameraService()
             self.location = MockLocationService()
 
             // Phase 2 seams — mock conformers (also the harness/preview default).
-            self.projects = MockProjectsService()
-            self.leads = MockLeadsService()
-            self.decisions = MockDecisionsReadService()
-            self.messaging = MockMessagingService()
-            self.receiving = MockReceivingService()
+            self.projects = MockProjectsService(); self.leads = MockLeadsService()
+            self.decisions = MockDecisionsReadService(); self.messaging = MockMessagingService()
+            self.receiving = MockReceivingService(); self.siteScan = MockSiteScanService()
             self.portalAuth = MockPortalAuthApprovalService()
-            self.siteScan = MockSiteScanService()
             let siteRequests = MockSiteRequestService()
             self.siteRequests = siteRequests
             self.guestSiteRequests = siteRequests
             self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
             self.projectCache = CaptureProjectCache(store: store, projects: projects)
+            self.peopleRoom = MockPeopleRoomService()
         }
 
         // The ladder runs before analytics exists, so it reports rather than
@@ -229,6 +257,7 @@ public final class AppContainer {
         /// The concrete conforms to both the designer and guest protocol, so one
         /// `SupabaseSiteRequestService` construction serves both properties.
         let siteRequests: SupabaseSiteRequestService
+        let peopleRoom: any PeopleRoomService
         let drainer: SiteRequestOutboxDrainer
     }
 
@@ -247,6 +276,7 @@ public final class AppContainer {
             portalAuth: QRApproveServiceFactory.make(deps: deps),
             siteScan: SiteScanServiceFactory.make(deps: deps),
             siteRequests: siteRequests,
+            peopleRoom: PeopleRoomServiceFactory.make(deps: deps),
             drainer: SiteRequestOutboxDrainer(store: deps.store, remote: siteRequests))
     }
 

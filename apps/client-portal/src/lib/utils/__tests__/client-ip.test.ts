@@ -13,7 +13,7 @@
  * Fix: prefer `cf-connecting-ip`, then the first hop of `x-forwarded-for`,
  * then the legacy `x-client-ip` as a last-resort fallback.
  */
-import { resolveClientIp } from '../client-ip';
+import { normalizeCallerIp, resolveClientIp } from '../client-ip';
 
 describe('resolveClientIp', () => {
   it('prefers cf-connecting-ip over every other header', () => {
@@ -45,5 +45,32 @@ describe('resolveClientIp', () => {
 
   it('returns null when no IP header is present at all — this was the production bug', () => {
     expect(resolveClientIp(new Headers())).toBeNull();
+  });
+});
+
+// R-CA (W4 r10 MAJOR-2). `resolveClientIp` answers what the headers SAY, which
+// is what an audit trail wants. A RATE BUCKET wants an address or nothing: the
+// paperwork door's limiter took an `inet`, so a caller-written
+// `cf-connecting-ip: not-an-ip` raised 22P02 and the door read the error as
+// "within limit" — one header switched its only abuse control off.
+describe('normalizeCallerIp', () => {
+  it('keeps a real v4 or v6 address', () => {
+    expect(normalizeCallerIp('203.0.113.7')).toBe('203.0.113.7');
+    expect(normalizeCallerIp(' 198.51.100.1 ')).toBe('198.51.100.1');
+    expect(normalizeCallerIp('2001:db8::1')).toBe('2001:db8::1');
+  });
+
+  it('strips the port a proxy appends', () => {
+    expect(normalizeCallerIp('1.2.3.4:5678')).toBe('1.2.3.4');
+    expect(normalizeCallerIp('[2001:db8::1]:443')).toBe('2001:db8::1');
+  });
+
+  it('answers null for anything that is not an address', () => {
+    expect(normalizeCallerIp('not-an-ip')).toBeNull();
+    expect(normalizeCallerIp('999.1.1.1')).toBeNull();
+    expect(normalizeCallerIp('1.2.3.4; drop')).toBeNull();
+    expect(normalizeCallerIp('')).toBeNull();
+    expect(normalizeCallerIp(null)).toBeNull();
+    expect(normalizeCallerIp(undefined)).toBeNull();
   });
 });

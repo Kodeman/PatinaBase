@@ -18,7 +18,11 @@
  * file may branch on `studio_contact_id` to infer provenance; it doesn't.
  */
 
-import type { ProjectRosterRow } from '@patina/supabase';
+import type {
+  PeopleDirectorySeat,
+  ProjectRosterRow,
+  RosterBand,
+} from '@patina/supabase';
 
 // ============================================================================
 // GROUPING (slide 11)
@@ -193,7 +197,12 @@ const PROFILE_OPENABLE_KINDS: readonly string[] = [
  */
 export function rosterProfileRole(row: ProjectRosterRow): string | null {
   if (row.source !== 'party' || !row.roster_id) return null;
-  return PROFILE_OPENABLE_KINDS.includes(row.kind ?? '') ? (row.kind as string) : null;
+  return seatProfileRole(row.kind);
+}
+
+/** The same truth, for a seat that carries only its kind. */
+export function seatProfileRole(kind: string | null | undefined): string | null {
+  return PROFILE_OPENABLE_KINDS.includes(kind ?? '') ? (kind as string) : null;
 }
 
 function nameOf(row: ProjectRosterRow): string {
@@ -426,4 +435,690 @@ export function vitalsInstrumentSuffix(rows: ProjectRosterRow[]): string {
  */
 export function kickoffRetired(rows: ProjectRosterRow[]): boolean {
   return rows.length >= 4;
+}
+
+// ============================================================================
+// THE CALL SHEET, BANDED BY THE WINDOW (direction §3.4, SPEC §5.4)
+//
+// Build & supply is retired. The sheet prints Studio side, Client side, and
+// then the four window bands `rosterBandFor` decides. One row shape carries
+// all three sources — a team login, the document's own client, and a seat off
+// `people_directory_seats` — so the bands, the vitals and the row component
+// never branch on which table a name came from.
+//
+// Pure. `today` is injected, every date is a DATE string compared as a string,
+// and nothing here reads a clock or a hook.
+// ============================================================================
+
+/** The six bands the sheet prints, in the order it prints them. */
+export type CallSheetBand =
+  | 'studioSide'
+  | 'clientSide'
+  | 'this_week'
+  | 'later'
+  | 'bidding'
+  | 'done';
+
+export const CALL_SHEET_BANDS: readonly CallSheetBand[] = [
+  'studioSide',
+  'clientSide',
+  'this_week',
+  'later',
+  'bidding',
+  'done',
+] as const;
+
+/** The band headings. The four window labels match `ROSTER_BAND_LABELS`; they
+ *  are restated here so the sheet's own two bands live in the same table. */
+export const CALL_SHEET_BAND_LABELS: Record<CallSheetBand, string> = {
+  studioSide: 'Studio side',
+  clientSide: 'Client side',
+  this_week: 'On the job · this week',
+  later: 'On the job · later',
+  bidding: 'Bidding',
+  done: 'Done',
+};
+
+/** Where a row came from. A seat is the only kind that can be written to. */
+export type CallSheetRowSource = 'seat' | 'team' | 'client';
+
+/** One printable line on the Call Sheet. */
+export interface CallSheetRow {
+  key: string;
+  /** `project_parties.id` — null for a team login and for the synthetic client. */
+  seatId: string | null;
+  /** The identity's `people_directory.person_id`, where the seat has one. */
+  personId: string | null;
+  /** `profiles.id` — a studio login. Present on the studio side and on the
+   *  document's own client; a seat carries none. */
+  profileId: string | null;
+  source: CallSheetRowSource;
+  name: string;
+  partyKind: string | null;
+  trade: string | null;
+  companyName: string | null;
+  companyId: string | null;
+  /** The mono second line: role and title on the studio side, kind · trade on
+   *  a seat. */
+  meta: string;
+  phone: string | null;
+  email: string | null;
+  phoneE164: string | null;
+  reach: RosterReachState | null;
+  /** `project_parties.stage` — the stored value, reduced to a word by the row. */
+  stage: string | null;
+  consent: string | null;
+  paper: string | null;
+  ruleSummary: string | null;
+  onSiteFrom: string | null;
+  onSiteTo: string | null;
+  /** CR-2 — `project_parties.warranty_until`. The field-link RPC dates a token
+   *  from `max(on_site_to, warranty_until)`, so a row that cannot see the
+   *  warranty cannot state the date the door will carry. */
+  warrantyUntil: string | null;
+  offJobAt: string | null;
+  offJobReason: string | null;
+  showToClient: boolean | null;
+  projectId: string | null;
+}
+
+export interface CallSheetProjection {
+  bands: Record<CallSheetBand, CallSheetRow[]>;
+  rows: CallSheetRow[];
+}
+
+const MONTHS_LONG = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/** The date parts of a DATE column or a timestamp, read as written. Never a
+ *  `new Date()` — a DATE string parsed as UTC and printed in a local zone
+ *  loses a day west of Greenwich, which on a site window is a real day. */
+function dateParts(value: string | null | undefined): [number, number, number] | null {
+  const raw = (value ?? '').trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const month = Number(m);
+  if (month < 1 || month > 12) return null;
+  return [Number(y), month, Number(d)];
+}
+
+/** "13 August 2027" — the long form every sentence uses. */
+export function rosterLongDate(value: string | null | undefined): string {
+  const parts = dateParts(value);
+  if (!parts) return '';
+  const [y, m, d] = parts;
+  return `${d} ${MONTHS_LONG[m - 1]} ${y}`;
+}
+
+/** "16 Oct 2026" — the short form the head line and the window use. */
+export function rosterShortDate(value: string | null | undefined): string {
+  const parts = dateParts(value);
+  if (!parts) return '';
+  const [y, m, d] = parts;
+  return `${d} ${MONTHS_SHORT[m - 1]} ${y}`;
+}
+
+/** The window on a seat line: "12 Oct 2026 to 13 Aug 2027", "From 9 Nov 2026",
+ *  "Until 19 Dec 2026", or nothing at all. */
+export function seatWindowText(
+  from: string | null | undefined,
+  to: string | null | undefined,
+): string {
+  const start = rosterShortDate(from);
+  const end = rosterShortDate(to);
+  if (start && end) return `${start} to ${end}`;
+  if (start) return `From ${start}`;
+  if (end) return `Until ${end}`;
+  return '';
+}
+
+function metaOf(kind: string | null, trade: string | null, kindLabel: string): string {
+  return [kindLabel || (kind ?? ''), trade ?? ''].filter(Boolean).join(' · ');
+}
+
+/**
+ * A seat, as a Call Sheet row. `roster` is the same seat's `v_project_roster`
+ * line when the caller could read one: the seats view carries `phone_e164` but
+ * no dialable phone and no email, and a row with a number nobody can tap is
+ * the thing this program exists to end.
+ */
+export function callSheetRowFromSeat(
+  seat: PeopleDirectorySeat,
+  roster: ProjectRosterRow | undefined,
+  kindLabel: string,
+  tradeLabel: string,
+): CallSheetRow {
+  const name = seat.display_name ?? roster?.display_name ?? seat.company_name ?? 'Unnamed';
+  return {
+    key: `seat:${seat.seat_id}`,
+    seatId: seat.seat_id,
+    personId: seat.person_id,
+    profileId: null,
+    source: 'seat',
+    name,
+    partyKind: seat.party_kind,
+    trade: seat.trade,
+    companyName: seat.company_name ?? roster?.company_name ?? null,
+    companyId: seat.company_id,
+    meta: metaOf(seat.party_kind, tradeLabel || null, kindLabel),
+    phone: roster?.phone ?? null,
+    email: roster?.email ?? null,
+    phoneE164: seat.phone_e164,
+    reach: (seat.reach_state as RosterReachState | null) ?? null,
+    stage: seat.stage,
+    consent: seat.consent_status,
+    paper: seat.paper_state,
+    ruleSummary: seat.contact_rule_summary,
+    onSiteFrom: seat.on_site_from,
+    onSiteTo: seat.on_site_to,
+    warrantyUntil: seat.warranty_until,
+    offJobAt: seat.off_job_at,
+    offJobReason: seat.off_job_reason,
+    showToClient: seat.show_to_client,
+    projectId: seat.project_id,
+  };
+}
+
+/** A studio login, as a Call Sheet row. Nothing writes to it: a team row is a
+ *  `project_team_members` seat with no party behind it. */
+export function callSheetRowFromTeam(
+  row: ProjectRosterRow,
+  meta: string,
+): CallSheetRow {
+  return {
+    key: `team:${row.roster_id ?? row.display_name ?? ''}`,
+    seatId: null,
+    personId: null,
+    profileId: row.profile_id,
+    source: 'team',
+    name: row.display_name ?? 'Unnamed',
+    partyKind: row.kind,
+    trade: row.trade,
+    companyName: row.company_name,
+    companyId: null,
+    meta,
+    phone: row.phone,
+    email: row.email,
+    phoneE164: null,
+    reach: reachState(row),
+    stage: null,
+    consent: null,
+    paper: null,
+    ruleSummary: null,
+    onSiteFrom: null,
+    onSiteTo: null,
+    warrantyUntil: null,
+    offJobAt: null,
+    offJobReason: null,
+    showToClient: null,
+    projectId: row.project_id,
+  };
+}
+
+/** The document's own client, when no seat already claims them. */
+export function callSheetRowFromClient(row: ProjectRosterRow): CallSheetRow {
+  return {
+    key: `client:${row.roster_id ?? row.display_name ?? ''}`,
+    seatId: null,
+    personId: null,
+    profileId: row.profile_id,
+    source: 'client',
+    name: row.display_name ?? 'Unnamed',
+    partyKind: 'client',
+    trade: null,
+    companyName: null,
+    companyId: null,
+    meta: 'The client',
+    phone: row.phone,
+    email: row.email,
+    phoneE164: null,
+    reach: reachState(row),
+    stage: null,
+    consent: null,
+    paper: null,
+    ruleSummary: null,
+    onSiteFrom: null,
+    onSiteTo: null,
+    warrantyUntil: null,
+    offJobAt: null,
+    offJobReason: null,
+    showToClient: null,
+    projectId: row.project_id,
+  };
+}
+
+/** Party kinds that stand on the client side of the sheet whatever their
+ *  window says — the household is not crew and never bands by a site date. */
+const CLIENT_BAND_KINDS: readonly string[] = ['client', 'client_rep'];
+
+export interface CallSheetLabels {
+  /** `getPartyKindLabel` — passed in so this module keeps a type-only import
+   *  surface (the ESM trap the file's header names). */
+  kindLabel: (kind: string | null | undefined) => string;
+  tradeLabel: (kind: string | null | undefined, trade: string | null | undefined) => string;
+  /** The studio side's own second line: role, and a title only when it adds
+   *  something. */
+  teamMeta: (row: ProjectRosterRow) => string;
+}
+
+/**
+ * The whole sheet, in six bands.
+ *
+ * · Studio side — `v_project_roster`'s team branch.
+ * · Client side — seats whose kind is `client` / `client_rep`, plus the
+ *   document's own client when no seat claims them.
+ * · this week / later / bidding / done — every other seat, banded by
+ *   `rosterBandFor` (a done stage decides, then a bid stage, then the window).
+ *
+ * Seats are the source for the crew bands, `v_project_roster` for the studio
+ * side, and the two are joined on the seat id for the phone and the email.
+ */
+export function callSheetProjection(
+  rosterRows: ProjectRosterRow[],
+  seats: PeopleDirectorySeat[],
+  options: {
+    client?: SyntheticClient | null;
+    today: string;
+    labels: CallSheetLabels;
+    bandFor: (seat: { stage: string | null; on_site_from: string | null; on_site_to: string | null }, today: string) => RosterBand;
+  },
+): CallSheetProjection {
+  const { client, today, labels, bandFor } = options;
+  const bands: Record<CallSheetBand, CallSheetRow[]> = {
+    studioSide: [],
+    clientSide: [],
+    this_week: [],
+    later: [],
+    bidding: [],
+    done: [],
+  };
+
+  const rosterBySeat = new Map<string, ProjectRosterRow>();
+  for (const row of rosterRows) {
+    if (row.source === 'party' && row.roster_id) rosterBySeat.set(row.roster_id, row);
+  }
+
+  for (const row of rosterRows) {
+    if (row.source === 'team') bands.studioSide.push(callSheetRowFromTeam(row, labels.teamMeta(row)));
+  }
+  bands.studioSide.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+  for (const seat of seats) {
+    const row = callSheetRowFromSeat(
+      seat,
+      rosterBySeat.get(seat.seat_id),
+      labels.kindLabel(seat.party_kind),
+      labels.tradeLabel(seat.party_kind, seat.trade),
+    );
+    if (CLIENT_BAND_KINDS.includes(seat.party_kind ?? '')) {
+      bands.clientSide.push(row);
+      continue;
+    }
+    bands[bandFor(seat, today)].push(row);
+  }
+
+  // The client leads their own side; a rep follows, then by name.
+  bands.clientSide.sort((a, b) => {
+    const ra = a.partyKind === 'client' ? 0 : 1;
+    const rb = b.partyKind === 'client' ? 0 : 1;
+    if (ra !== rb) return ra - rb;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+
+  // The crew bands read in window order — the soonest window first, an undated
+  // seat last — so "who is here this week" reads as a day, not as an alphabet.
+  const byWindow = (a: CallSheetRow, b: CallSheetRow) => {
+    const fa = a.onSiteFrom ?? '';
+    const fb = b.onSiteFrom ?? '';
+    if (fa !== fb) {
+      if (!fa) return 1;
+      if (!fb) return -1;
+      return fa.localeCompare(fb);
+    }
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  };
+  bands.this_week.sort(byWindow);
+  bands.later.sort(byWindow);
+  bands.bidding.sort(byWindow);
+  bands.done.sort(byWindow);
+
+  /**
+   * QA-3 — REAL HOUSEHOLD SEATS REPLACE THIS ROW (direction §4's own component
+   * inventory: "synthetic client row (:85-148) replaced by real household
+   * seats").
+   *
+   * The claim test was a name/profile match against the document's own
+   * `client_name`, which is a household LABEL, not a person: Okonkwo's reads
+   * "Client" and matches neither Adaeze nor Chidi, so the sheet printed a
+   * third, nameless "Client · THE CLIENT" row above the two real seats and
+   * counted three people on the client side where two stand.
+   *
+   * A client side that holds any real seat is a client side that has been
+   * answered. The row survives only where the job lists nobody at all — a
+   * legacy project with no `client`/`client_rep` seat — so the person the job
+   * is for is still named there.
+   */
+  const synthetic = syntheticClientRow(client);
+  if (synthetic && bands.clientSide.length === 0) {
+    bands.clientSide.unshift(callSheetRowFromClient(synthetic));
+  }
+
+  const rows = CALL_SHEET_BANDS.flatMap((band) => bands[band]);
+  return { bands, rows };
+}
+
+// ============================================================================
+// VITALS — counted off the window (SPEC §5.4 #3)
+// ============================================================================
+
+export interface CallSheetVitals {
+  onTheJobThisWeek: number;
+  textable: number;
+  withAccounts: number;
+  onPaper: number;
+}
+
+/**
+ * The four counts, ALL FOUR over the same population (SPEC §5.4 #3 / R-F).
+ *
+ * CR-9: only the first number was scoped. The other three counted
+ * `projection.rows` — which is every band flattened, `later`, `bidding` and
+ * `done` included — so a line reading "12 on the job this week · … · 2 on
+ * paper" quietly counted the whole book for the last three and the fixture's
+ * "2 on paper" printed as a dozen. A vitals line whose numbers close over
+ * different populations is four facts pretending to be one.
+ *
+ * The population is the sheet's own present tense: the studio side, the client
+ * side, and who is on the job THIS WEEK. "Reachable by text" is a standing
+ * grant on the studio's own record, never an invite.
+ */
+export function callSheetVitals(projection: CallSheetProjection): CallSheetVitals {
+  let textable = 0;
+  let withAccounts = 0;
+  let onPaper = 0;
+  const counted = [
+    ...projection.bands.studioSide,
+    ...projection.bands.clientSide,
+    ...projection.bands.this_week,
+  ];
+  for (const row of counted) {
+    if (row.consent === 'granted') textable += 1;
+    if (row.reach === 'account') withAccounts += 1;
+    if (row.reach === 'on_paper') onPaper += 1;
+  }
+  return {
+    onTheJobThisWeek: counted.length,
+    textable,
+    withAccounts,
+    onPaper,
+  };
+}
+
+/** "12 on the job this week · 5 reachable by text · 4 with accounts · 2 on
+ *  paper" — always all four counts, even at zero. */
+export function callSheetVitalsLine(projection: CallSheetProjection): string {
+  const v = callSheetVitals(projection);
+  return `${v.onTheJobThisWeek} on the job this week · ${v.textable} reachable by text · ${v.withAccounts} with accounts · ${v.onPaper} on paper`;
+}
+
+// ============================================================================
+// THE SENTENCES (SPEC §5.8)
+//
+// The consent sentence is NOT here: R-Q asks for one wording everywhere, and
+// it lives in `components/document/people/consent-sentence.ts` beside the
+// person card that prints it most. A second copy would be a second wording.
+// ============================================================================
+
+/**
+ * CR8-1 / CR3-15 — THE ROW'S NOUN, NOT THE COLUMN HEAD'S.
+ *
+ * `COMPLIANCE_DOC_TYPE_LABELS` is the company card's Paper TABLE vocabulary,
+ * where "COI, general liability" is the right Type column head (SPEC §5.3 #3).
+ * Dropped into this sentence it read "Northgate Electric's COI, general
+ * liability lapsed 31 March 2026." where SPEC §5.4 #7 fixes the acceptance
+ * string as "Northgate Electric's insurance lapsed 31 March 2026." — a clause
+ * in words does not speak in filing-cabinet tabs.
+ *
+ * Only a DATED paper can lapse into this clause (`DATED_COMPLIANCE_DOC_TYPES`
+ * — the three certificates, the licence and the bond), so those five are the
+ * whole map; anything else falls through to whatever label the caller holds.
+ */
+const HELD_CLAUSE_PAPER_NOUNS: Readonly<Record<string, string>> = {
+  coi_gl: 'insurance',
+  coi_wc: 'workers comp insurance',
+  coi_auto: 'auto insurance',
+  license: 'licence',
+  bond: 'bond',
+};
+
+export function heldClausePaperNoun(
+  docType: string | null | undefined,
+  fallbackLabel: string,
+): string {
+  return HELD_CLAUSE_PAPER_NOUNS[String(docType)] ?? fallbackLabel;
+}
+
+/**
+ * PR-h / R-S — a firm's lapsed paper prints on the roster row as a CLAUSE IN
+ * WORDS, never a badge: "Site access held. Northgate Electric's insurance
+ * lapsed 31 March 2026." The document lives on the company card; this is the
+ * row's sentence about it.
+ */
+export function heldClause(
+  companyName: string | null | undefined,
+  paper: { docLabel: string; expiresOn: string | null | undefined; blocks: string[] },
+): string {
+  const firm = (companyName ?? '').trim();
+  const blocks = paper.blocks.includes('site_access')
+    ? 'Site access held.'
+    : paper.blocks.includes('payment')
+      ? 'Payment held.'
+      : paper.blocks.includes('draw')
+        ? 'The draw is held.'
+        : 'Held.';
+  const when = rosterLongDate(paper.expiresOn);
+  const owner = firm ? `${firm}’s ` : '';
+  const lapsed = when ? ` lapsed ${when}` : ' has lapsed';
+  return `${blocks} ${owner}${paper.docLabel}${lapsed}.`;
+}
+
+/**
+ * THE BID NOTE (direction §3.4, SPEC §5.4 #9, R-R).
+ *
+ * "Due 5 October 2026. Holds until 4 November 2026. Priced by Tom Marrow."
+ *
+ * Printed at BOTH widths on a row carrying a bid history — a studio checking
+ * the roster on a phone needs it as much as at a desk (C28). Only the columns
+ * that hold something speak: 00631 refused to guess `bid_due_at` out of
+ * free-text timeline prose, so an empty date prints nothing rather than a
+ * number the record does not make.
+ */
+export function bidNote(bid: {
+  askedAt?: string | null;
+  dueAt?: string | null;
+  quotedAt?: string | null;
+  selectedAt?: string | null;
+  validUntil?: string | null;
+  quotedByName?: string | null;
+  /**
+   * r13 MAJOR-1 — the estimator's card has been PUT AWAY. The record still
+   * names them, so the clause still prints; it says where the card went rather
+   * than going quiet, which is what the archived-excluded rolodex used to make
+   * it do.
+   */
+  quotedByArchived?: boolean;
+}): string {
+  const parts: string[] = [];
+  // Chronological, which is also the order the two acceptance strings are
+  // written in: SPEC §5.4 #9's "Asked 28 September 2026. Due 5 October 2026."
+  // and R-R's "Quoted 2 October 2026. Selected 9 October 2026." (r1 M-6 —
+  // before 00631 minted the three dated columns, the row could print neither).
+  const asked = rosterLongDate(bid.askedAt);
+  if (asked) parts.push(`Asked ${asked}.`);
+  const due = rosterLongDate(bid.dueAt);
+  if (due) parts.push(`Due ${due}.`);
+  const quoted = rosterLongDate(bid.quotedAt);
+  if (quoted) parts.push(`Quoted ${quoted}.`);
+  const selected = rosterLongDate(bid.selectedAt);
+  if (selected) parts.push(`Selected ${selected}.`);
+  const holds = rosterLongDate(bid.validUntil);
+  if (holds) parts.push(`Holds until ${holds}.`);
+  const by = (bid.quotedByName ?? '').trim();
+  if (by) {
+    parts.push(
+      bid.quotedByArchived
+        ? `Priced by ${by}, whose card is put away.`
+        : `Priced by ${by}.`,
+    );
+  }
+  return parts.join(' ');
+}
+
+/**
+ * PR-d / PR-l — the field link ends with the ENGAGEMENT, and the sentence says
+ * so in words. No 90-day clock on a face.
+ */
+export function fieldLinkExpirySentence(to: string | null | undefined): string {
+  const when = rosterLongDate(to);
+  return when
+    ? `Ends with the job, ${when}. Renews when they use it.`
+    : 'Ends with the job. Renews when they use it.';
+}
+
+/**
+ * CR-2 — ONE DERIVATION FOR BOTH MINT DOORS. This pair lived beside the person
+ * card's Mint access act (`reach-access.tsx`) and the Call Sheet's "Copy field
+ * link" never reached it: the row named `row.onSiteTo` alone, so a seat whose
+ * warranty outlived its window printed a date thirteen months in the past
+ * under a live door, and recorded `expiry_source: 'engagement_window'` for a
+ * token the RPC had already dated from the warranty. Both doors now read the
+ * same two functions, from here.
+ *
+ * CR3-6 — THE DATE THE DOOR WILL ACTUALLY CARRY.
+ *
+ * `create_field_link(uuid, timestamptz)` (00627) does NOT take the caller's
+ * date when the seat has a live window. It computes
+ * `max(on_site_to, warranty_until)` and takes that whenever it is still ahead,
+ * falling through to `p_expires_at` only when there is no live window at all,
+ * and to ninety days when there is neither. PR-l's two radios therefore chose
+ * nothing: on a seat whose warranty outlives its window, "Ends with the job"
+ * still minted to the warranty end, the consequence sentence above the act
+ * named a date the token did not carry, and `peopleEvents.grantMinted` recorded
+ * a choice that never reached the database.
+ *
+ * So the room states the one date the RPC will use rather than offering a
+ * choice it cannot honour. Restoring the choice is a W3 migration — let
+ * `p_expires_at` outrank the window when it is supplied — not a second guess
+ * on this side of the wire.
+ */
+export function grantWindowEnd(
+  seatWindowEnd: string | null | undefined,
+  warrantyEnd: string | null | undefined,
+  now: Date,
+): string | null {
+  const days = [seatWindowEnd, warrantyEnd]
+    .map((value) => value?.slice(0, 10))
+    .filter((value): value is string => !!value);
+  if (days.length === 0) return null;
+  const latest = days.sort()[days.length - 1];
+  // The RPC reads a window through the END of its last day, and a window that
+  // has already closed is the same fact as no window at all.
+  const closesAt = new Date(`${latest}T00:00:00Z`);
+  closesAt.setUTCDate(closesAt.getUTCDate() + 1);
+  return closesAt.getTime() > now.getTime() ? latest : null;
+}
+
+/** What the act says when the RPC will fall through to its ninety-day term. */
+export const MINT_FALLBACK_SENTENCE =
+  "This seat carries no window, so the door runs ninety days from today and " +
+  "renews when they use it. It never opens billing or the agreement.";
+
+/**
+ * R-U — the site access line under the Call Sheet heading: "Key held by Ngozi
+ * Eze. Luis Ochoa controls the gate. Changed 16 Oct 2026." Each clause prints
+ * only where the card holds the fact.
+ */
+export function siteAccessSummaryLine(facts: {
+  keyHolderName?: string | null;
+  gateControllerName?: string | null;
+  changedAt?: string | null;
+}): string {
+  const parts: string[] = [];
+  if (facts.keyHolderName?.trim()) parts.push(`Key held by ${facts.keyHolderName.trim()}.`);
+  if (facts.gateControllerName?.trim())
+    parts.push(`${facts.gateControllerName.trim()} controls the gate.`);
+  const changed = rosterShortDate(facts.changedAt);
+  if (changed) parts.push(`Changed ${changed}.`);
+  return parts.join(' ');
+}
+
+/**
+ * PR-r — the way in, in words, with NO code. "Lockbox, version 3. The code is
+ * held off Patina; ask Luis Ochoa." The second sentence names the person to
+ * ASK — the GATE CONTROLLER (SPEC §5.6 #3, direction §3.7) — or nobody, and
+ * never a field where a code could be typed. The key holder is a different
+ * fact with its own region; asking them for a code they do not control sends
+ * the reader to the wrong person (CR-10).
+ */
+export function wayInSentence(
+  lockboxVersion: string | null | undefined,
+  askName: string | null | undefined,
+): string {
+  const version = (lockboxVersion ?? '').trim();
+  const ask = (askName ?? '').trim();
+  const held = ask
+    ? `The code is held off Patina; ask ${ask}.`
+    : 'The code is held off Patina.';
+  return version ? `${version}. ${held}` : held;
+}
+
+/** The authority phrase, as plain text (direction §3.8 — authority is NEVER a
+ *  state word). "$2,500" from integer cents; a prepares-only grant says so. */
+export function authorityPhrase(
+  grants: ReadonlyArray<{
+    scope: string;
+    threshold_cents: number | null;
+    prepares_only: boolean;
+  }>,
+  labels: Record<string, string>,
+): string {
+  if (grants.length === 0) return '';
+  const phrases = grants.map((grant) => {
+    if (grant.prepares_only) return 'Prepares only';
+    const label = labels[grant.scope] ?? grant.scope;
+    if (grant.threshold_cents != null) {
+      const dollars = Math.round(grant.threshold_cents / 100);
+      return `${label} to $${dollars.toLocaleString('en-US')}`;
+    }
+    return label;
+  });
+  return Array.from(new Set(phrases)).join('. ') + '.';
 }

@@ -8,6 +8,11 @@
 //   1. Auth: resolve the caller from the Authorization header.
 //   2. Prove can_manage_invoice through a caller-JWT Supabase client, then load
 //      the invoice (service role) + joins and require issued (not draft/void).
+//   2b. Hold the letter whenever invoice_letter_must_hold says so (a Checkout
+//      in flight, or the 24h return window after one whose return rode the
+//      nonce): 00636 will not mint a fresh address under a payer, and a letter
+//      with no address is not worth sending (409 checkout_in_flight, W4 r6
+//      MAJOR-1 / r10 MAJOR-1, R-BZ).
 //   3. Resolve the recipient: invoice.client_id → project.client_id profile,
 //      falling back to designer_clients.client_email for not-yet-signed-up
 //      clients (mirrors decision-reminders).
@@ -51,7 +56,7 @@ import {
   invoiceForClause,
   invoiceSubjectName,
 } from '../_shared/invoice-subject.ts';
-import { letterPortalUrl } from '../_shared/invoice-links.ts';
+import { invoiceLetterMustHold, letterPortalUrl } from '../_shared/invoice-links.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -205,6 +210,48 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // ── A letter is not sent into a payment in flight (W4 r6 MAJOR-1) ──────
+  //
+  // `ensure_invoice_link` refuses to mint while a Checkout is in flight, and
+  // for 24 hours after an attempt whose return rode `/pay/return/<nonce>`
+  // finalized — minting would kill the address the payer is standing on or
+  // returning to. `letterPortalUrl` then falls back to the signed-in
+  // letterbox, which is no use to the account-less payer this rail exists for.
+  // So the letter HOLDS rather than shipping a second-best address: someone
+  // who is paying this invoice right now is not someone to write to.
+  //
+  // THE QUESTION IS ASKED OF THE GUARD ITSELF (R-BZ, W4 r10 MAJOR-1). This
+  // used to re-list three of the guard's states here, which is how the rail
+  // came to disagree with it the moment a fourth leg was added: a declined
+  // card let the letter through, carrying the signed-in address.
+  // `invoice_letter_must_hold` IS the guard's own predicate, so the two cannot
+  // drift again. 00636 §6's sweep closes a `processing` row that never
+  // resolves after 10 days, so this can never hold forever.
+  const letterHold = await invoiceLetterMustHold(admin, invoiceId);
+  if (!letterHold.readable) {
+    // Fail closed: an unreadable predicate cannot tell us the client is
+    // mid-payment, and sending anyway is the outcome this guard exists to stop.
+    console.error('invoice-send: checkout-attempt check failed', invoiceId);
+    return json(
+      {
+        error: 'checkout_attempt_check_failed',
+        detail: 'Patina could not check whether this invoice is being paid right now. Try again.',
+      },
+      503
+    );
+  }
+  if (letterHold.hold) {
+    console.log('invoice-send: held — invoice is mid-payment or just settled', invoiceId);
+    return json(
+      {
+        error: 'checkout_in_flight',
+        detail:
+          'the client is paying this invoice right now, so Patina held the letter rather than replace the address they are standing on. Send it once the payment lands or falls through.',
+      },
+      409
+    );
+  }
+
   // ── Resolve recipient ──────────────────────────────────────────────────
   // Prefer the signed-up client profile (enables suppression / preferences /
   // in-app inbox); fall back to designer_clients.client_email for clients who
@@ -259,8 +306,10 @@ Deno.serve(async (req: Request) => {
   const studioInvoice = !invoice.project_id;
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   // K1: the letter carries the invoice's own address — `/pay/<token>` opens
-  // for anyone holding it, signed in or not. A null (draft, void, or a failed
-  // mint) falls back to today's signed-in form rather than a broken address.
+  // for anyone holding it, signed in or not. A null (draft, void, a Checkout
+  // standing on the current address, or a failed mint) falls back to the
+  // signed-in `/?invoice=<id>` letterbox — a page that exists, which
+  // `/invoices/<id>` is not (W4 r6 MAJOR-1).
   // metadata.deep_link below stays `/invoices/<id>`: it routes the iOS inbox
   // by id (I2), so the emailed link and the in-app row land differently.
   const portalUrl = await letterPortalUrl(admin, CLIENT_PORTAL_URL, invoice.id);
@@ -312,6 +361,10 @@ Deno.serve(async (req: Request) => {
       category: 'operational',
       templateId: sendType === 'reminder' ? 'invoice-reminder-manual' : 'invoice-sent',
       ref: { type: 'invoice', id: invoice.id },
+      // The studio this letter is from, so an account-less recipient's out
+      // touch is filed in the sending studio's own book and nowhere else
+      // (W4 r1 B-2).
+      organizationId: identity?.studioId ?? invoice.studio_id ?? undefined,
       // subject/message/deep_link double as the in-app inbox rendering (the
       // client portal surfaces this notification_log row — see header note).
       metadata: {

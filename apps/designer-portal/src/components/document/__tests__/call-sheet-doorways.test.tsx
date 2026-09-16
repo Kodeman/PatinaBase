@@ -230,18 +230,8 @@ describe('command-bar — the "This surface" call sheet row', () => {
     expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
   });
 
-  it('is absent with a project document in hand when the flag is off', async () => {
-    mockCallSheetFlag = false;
-    mockPathname.mockReturnValue('/doc/eng-1');
-    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] });
-
-    render(<CommandBar />);
-    await openPalette();
-
-    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
-    // A3-L3 — its three siblings are not flag-gated and still stand.
-    expect(screen.getByText('Plan room')).toBeInTheDocument();
-  });
+  // Flag retired (rulings §6): with a project document in hand the row is
+  // always offered, so the flag-off case below it is gone.
 
   it('appears in "This surface" with a project document in hand and the flag on', async () => {
     mockCallSheetFlag = true;
@@ -290,15 +280,7 @@ describe('command-bar — typed search respects document scope (⌘K leak fix)',
     });
   }
 
-  it('(a) flag off + "roster": no Call sheet row, even with a project document in hand', async () => {
-    mockCallSheetFlag = false;
-    mockPathname.mockReturnValue('/doc/eng-1');
-    mockDeskData.mockReturnValue({ folders: [{ row: deskRow() }], chips: [] });
-
-    await openPaletteAndType('roster');
-
-    expect(screen.queryByText('Call sheet')).not.toBeInTheDocument();
-  });
+  // Flag retired (rulings §6).
 
   it('(b) flag on + no document in hand + "roster": no Call sheet row', async () => {
     mockCallSheetFlag = true;
@@ -454,18 +436,7 @@ describe('letterhead-instruments — the Call Sheet instrument', () => {
     expect(button!.textContent).toBe('Call sheet · 1');
   });
 
-  it('is byte-absent — not merely hidden — when the flag is off', () => {
-    mockCallSheetFlag = false;
-    mockUseProjectRoster.mockReturnValue({ data: [rosterRow(), rosterRow()] });
-
-    const { baseElement } = renderInstruments();
-
-    expect(screen.queryByText(/Call sheet/)).not.toBeInTheDocument();
-    expect(baseElement.querySelector('[data-action-key="open-call-sheet"]')).toBeNull();
-    // The roster query the instrument would have needed is never even
-    // requested — the row isn't mounted at all, not just rendered null.
-    expect(mockUseProjectRoster).not.toHaveBeenCalled();
-  });
+  // Flag retired (rulings §6): the instrument mounts for every studio.
 });
 
 

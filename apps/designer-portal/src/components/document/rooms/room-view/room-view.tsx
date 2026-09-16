@@ -301,7 +301,7 @@ export function RoomView({
     <div className="mx-auto max-w-[1180px] px-6 pb-20 pt-8 sm:px-8">
       {/* rv-head */}
       <div className="mb-1.5 flex flex-wrap items-baseline gap-4">
-        <h1 className="font-heading text-[28px] font-medium text-[var(--color-charcoal)] sm:text-[34px]">
+        <h2 className="font-heading text-[28px] font-medium text-[var(--color-charcoal)] sm:text-[34px]">
           {clientName ?? 'Untitled room'}
           {roomType && (
             <span className="italic text-[var(--color-mocha)]">
@@ -309,7 +309,7 @@ export function RoomView({
               · {roomType}.
             </span>
           )}
-        </h1>
+        </h2>
         {docLink && (
           <Link
             href={docLink.href}

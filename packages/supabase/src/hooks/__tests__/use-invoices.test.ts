@@ -19,10 +19,11 @@ vi.mock('@supabase/ssr', () => ({
 }));
 
 const invalidateQueries = vi.fn();
+const setQueryData = vi.fn();
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (config: unknown) => config,
   useMutation: (config: unknown) => config,
-  useQueryClient: () => ({ invalidateQueries }),
+  useQueryClient: () => ({ invalidateQueries, setQueryData }),
 }));
 
 // Import AFTER mocks.
@@ -42,7 +43,9 @@ import {
   useRecordPayment,
   useSendInvoice,
   useVoidInvoice,
+  invoiceLinkIsLive,
   useInvoiceLink,
+  useRegenerateInvoiceLink,
   type CreateDraftInvoiceInput,
   type CreateDraftStudioInvoiceInput,
   type DraftLineInput,
@@ -962,28 +965,75 @@ describe('useNotifyCheckIntent', () => {
 // Invoice links (00574) — the link key, and the quiet read
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("invoice-link invalidation (F1)", () => {
+// R-BV — THE INVOICE-LINK KEY IS NOT INVALIDATED BY THE MONEY ACTS AROUND IT.
+//
+// F1 (an earlier round) had invalidateInvoiceEffects invalidate
+// ["invoice-link", invoiceId], which was right while get_invoice_link could
+// still read an address back. 00636 froze invoice_links.token at NULL: the
+// only moment an address exists is the mint's own return value. An
+// invalidation now refetches a row that can only come back address-less, so
+// each of these four acts EVICTED the token the designer had just been told
+// to copy — Issue, Record payment, Resend and Void all did it, one click
+// after the folio printed "This address is shown once."
+//
+// R-BW then made the link ROW load-bearing: the folio's bounce band branches
+// on whether a live link exists and on its clock. So the two acts that MINT a
+// link — issue, and send, which mints one before it attempts the email — do
+// re-read that key, and the two that only move money still do not (W4 r8
+// MAJOR-2). The address is safe either way: it lives in the folio's own state,
+// and 00636 guarantees the refetch cannot bring one home.
+describe("invoice-link invalidation (R-BV × R-BW)", () => {
   type OnSuccess = (
     result: unknown,
     vars: { invoiceId: string; projectId?: string },
   ) => void;
+  type OnSettled = (
+    result: unknown,
+    error: unknown,
+    vars: { invoiceId: string; projectId?: string },
+  ) => void;
 
-  const cases: Array<[string, () => unknown]> = [
-    ["useIssueInvoice", useIssueInvoice],
-    ["useSendInvoice", useSendInvoice],
+  const moneyActs: Array<[string, () => unknown]> = [
     ["useRecordPayment", useRecordPayment],
     ["useVoidInvoice", useVoidInvoice],
   ];
 
-  for (const [name, hook] of cases) {
-    it(`${name} onSuccess invalidates ["invoice-link", invoiceId]`, () => {
-      const config = hook() as unknown as { onSuccess: OnSuccess };
+  for (const [name, hook] of moneyActs) {
+    it(`${name} onSuccess leaves ["invoice-link", invoiceId] alone`, () => {
+      const config = hook() as unknown as { onSuccess: OnSuccess; onSettled?: OnSettled };
       config.onSuccess({ project_id: "proj-1" }, { invoiceId: "inv-1", projectId: "proj-1" });
-      expect(invalidatedKeys()).toContainEqual(["invoice-link", "inv-1"]);
+      config.onSettled?.({}, null, { invoiceId: "inv-1", projectId: "proj-1" });
+      expect(invalidatedKeys()).not.toContainEqual(["invoice-link", "inv-1"]);
+      // and the rest of the fan-out is untouched — this is one key, not a
+      // narrowing of what an act refreshes.
+      expect(invalidatedKeys()).toContainEqual(["invoices"]);
     });
   }
 
-  it("does not invalidate a link key when no invoiceId is in hand", () => {
+  it("useIssueInvoice re-reads the link it just minted", () => {
+    const config = useIssueInvoice() as unknown as { onSuccess: OnSuccess };
+    config.onSuccess({ project_id: "proj-1" }, { invoiceId: "inv-1", projectId: "proj-1" });
+    expect(invalidatedKeys()).toContainEqual(["invoice-link", "inv-1"]);
+    expect(invalidatedKeys()).toContainEqual(["invoices"]);
+  });
+
+  // The band is mounted by the send that FAILED, so a failed send is the one
+  // that most needs the fresh read.
+  it("useSendInvoice re-reads the link fact whether the email landed or not", () => {
+    const sent = useSendInvoice() as unknown as { onSettled: OnSettled };
+    sent.onSettled({ emailSent: true }, null, { invoiceId: "inv-1", projectId: "proj-1" });
+    expect(invalidatedKeys()).toContainEqual(["invoice-link", "inv-1"]);
+
+    invalidateQueries.mockClear();
+    const bounced = useSendInvoice() as unknown as { onSettled: OnSettled };
+    bounced.onSettled(undefined, new Error("no_recipient"), {
+      invoiceId: "inv-1",
+      projectId: "proj-1",
+    });
+    expect(invalidatedKeys()).toContainEqual(["invoice-link", "inv-1"]);
+  });
+
+  it("never invalidates a link key at all, with or without an invoiceId in hand", () => {
     const config = useUpsertLineItems() as unknown as {
       onSuccess: (rows: unknown, vars: { projectId?: string }) => void;
     };
@@ -1012,10 +1062,39 @@ describe("useInvoiceLink", () => {
   });
 
   it("reads get_invoice_link and returns the link", async () => {
-    supabaseClient.rpc.mockResolvedValue({ data: { token: TOKEN, status: "active" }, error: null });
+    supabaseClient.rpc.mockResolvedValue({
+      data: { token: TOKEN, status: "active", expires_at: "2026-10-15T00:00:00.000Z" },
+      error: null,
+    });
     const config = useInvoiceLink("inv-1") as unknown as QueryConfig;
-    await expect(config.queryFn()).resolves.toEqual({ token: TOKEN, status: "active" });
+    await expect(config.queryFn()).resolves.toEqual({
+      token: TOKEN,
+      status: "active",
+      expiresAt: "2026-10-15T00:00:00.000Z",
+    });
     expect(supabaseClient.rpc).toHaveBeenCalledWith("get_invoice_link", { p_invoice_id: "inv-1" });
+  });
+
+  // W4 r6 M-1: the shape every real production row has — the link EXISTS and
+  // its address cannot be read back. A reader that folds this to null tells
+  // the designer the invoice has no link, which is how the folio's recovery
+  // band came to say "this invoice has no link yet" about a link the send had
+  // just minted.
+  it("keeps the row when the token is null, because that is the link's existence", async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: { token: null, status: "active", expires_at: "2026-10-15T00:00:00.000Z" },
+      error: null,
+    });
+    await expect(
+      (useInvoiceLink("inv-1") as unknown as QueryConfig).queryFn(),
+    ).resolves.toEqual({ token: null, status: "active", expiresAt: "2026-10-15T00:00:00.000Z" });
+  });
+
+  it("answers null only when the invoice has no link at all", async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: null, error: null });
+    await expect(
+      (useInvoiceLink("inv-1") as unknown as QueryConfig).queryFn(),
+    ).resolves.toBeNull();
   });
 
   it("resolves null on a refusal rather than throwing into the global toast (F2)", async () => {
@@ -1031,10 +1110,16 @@ describe("useInvoiceLink", () => {
   });
 
   it("refuses a malformed token rather than handing one on (F4)", async () => {
+    // The row survives — a bad token is "no address to show", not "no link" —
+    // but the malformed value never reaches a clipboard or an href.
     for (const token of ["not-a-token", TOKEN.toUpperCase(), TOKEN.slice(1), 42, null]) {
       supabaseClient.rpc.mockResolvedValue({ data: { token, status: "active" }, error: null });
       const config = useInvoiceLink("inv-1") as unknown as QueryConfig;
-      await expect(config.queryFn()).resolves.toBeNull();
+      await expect(config.queryFn()).resolves.toEqual({
+        token: null,
+        status: "active",
+        expiresAt: null,
+      });
     }
   });
 
@@ -1047,6 +1132,70 @@ describe("useInvoiceLink", () => {
     supabaseClient.rpc.mockResolvedValue({ data: { token: TOKEN, status: "closed" }, error: null });
     await expect(
       (useInvoiceLink("inv-1") as unknown as QueryConfig).queryFn(),
-    ).resolves.toEqual({ token: TOKEN, status: "closed" });
+    ).resolves.toEqual({ token: TOKEN, status: "closed", expiresAt: null });
+  });
+});
+
+// W4 r6 M-1 — the question the recovery band asks: is there a live link,
+// whatever can or cannot be shown of it.
+describe("invoiceLinkIsLive", () => {
+  const NOW = new Date("2026-09-15T12:00:00.000Z");
+
+  it("reads status first, then the clock — resolve_invoice_link's own order", () => {
+    expect(invoiceLinkIsLive(null, NOW)).toBe(false);
+    expect(invoiceLinkIsLive(undefined, NOW)).toBe(false);
+    expect(
+      invoiceLinkIsLive({ token: null, status: "closed", expiresAt: null }, NOW),
+    ).toBe(false);
+    // The production shape: a link with no readable address is still live.
+    expect(
+      invoiceLinkIsLive(
+        { token: null, status: "active", expiresAt: "2026-10-15T00:00:00.000Z" },
+        NOW,
+      ),
+    ).toBe(true);
+    expect(
+      invoiceLinkIsLive(
+        { token: null, status: "active", expiresAt: "2026-09-14T00:00:00.000Z" },
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it("treats a missing or unreadable clock as live, never as expired", () => {
+    expect(invoiceLinkIsLive({ token: null, status: "active", expiresAt: null }, NOW)).toBe(true);
+    expect(
+      invoiceLinkIsLive({ token: null, status: "active", expiresAt: "not a date" }, NOW),
+    ).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// W4 round-1 review M-5 — the mint is the only authority on the address
+// ─────────────────────────────────────────────────────────────────────────────
+describe('useRegenerateInvoiceLink', () => {
+  // R-BV: the mint hands the address back and writes NOTHING to the cache.
+  // A show-once secret has no business in a store whose whole contract is
+  // "this may be refetched at any time"; the folio holds it in component
+  // state for as long as that folio is open, and nowhere else.
+  it('returns the minted address without putting it in the query cache', async () => {
+    const config = useRegenerateInvoiceLink() as unknown as {
+      onSuccess?: unknown;
+      mutationFn: (vars: { invoiceId: string }) => Promise<unknown>;
+    };
+    const token = 'a'.repeat(64);
+    supabaseClient.rpc.mockResolvedValue({ data: token, error: null });
+
+    await expect(config.mutationFn({ invoiceId: 'inv-1' })).resolves.toEqual({
+      token,
+      status: 'active',
+      expiresAt: null,
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('regenerate_invoice_link', {
+      p_invoice_id: 'inv-1',
+    });
+    expect(config.onSuccess).toBeUndefined();
+    expect(setQueryData).not.toHaveBeenCalled();
+    expect(invalidatedKeys()).not.toContainEqual(['invoice-link', 'inv-1']);
   });
 });

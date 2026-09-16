@@ -1,0 +1,1552 @@
+/**
+ * THE ADD SHEET, WIDENED (W2b / SPEC §5.5).
+ *
+ * Eight kind words, a household member who writes a `client_rep` seat without
+ * the string ever reaching a face (C5), a named other who must be named (PR-f),
+ * a trade a sub cannot be added without, and the chain a seat pulls behind it:
+ * the card the rule and the channels hang on (Leah task 1).
+ */
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { AddPersonSheet } from "../add-person-sheet";
+
+const addParty = jest.fn();
+const promote = jest.fn();
+const addChannel = jest.fn();
+const setRule = jest.fn();
+const setAuthority = jest.fn();
+const setAffiliation = jest.fn();
+/** CR8-4 — the company card the sheet files for a firm typed by hand. */
+const addFirmCard = jest.fn(async () => ({ id: "firm-minted" }));
+/**
+ * CR5-1 — what `project_recorded_studio()` answers for the picked project.
+ * R-CD, amended: `data` is `undefined` in THREE states, not one — the query
+ * still out (`loading`), a non-network RPC error that react-query does not
+ * retry (`isError`, `fetchStatus: 'idle'`), and a fetch paused offline
+ * (`fetchStatus: 'paused'`). Each of the three is "not known yet"; only a
+ * resolved `null` means the job records no studio.
+ */
+const recordedStudio = {
+  current: "org-1" as string | null,
+  loading: false,
+  isError: false,
+  fetchStatus: "idle" as "idle" | "fetching" | "paused",
+};
+/** R-CD, amended: the held act's retry — pressing it asks the book again. */
+const recordedStudioRefetch = jest.fn();
+/**
+ * F3 — the membership list the authority band's refusal is read against.
+ * F-A: `undefined` there is three states too — still out, errored (react-query
+ * does not retry a non-network error), or a fetch paused offline. Only a
+ * resolved read is an answer about standing.
+ * F-A3 — and a RESOLVED list need not contain the studio that keeps this job's
+ * book: `useOrganizations` selects `status = 'active'` only
+ * (use-organizations.ts:167-169), so a caller who was never on that studio, or
+ * whose membership was suspended, reads back a list without it. `list` lets a
+ * case say so, and say which role the membership carries.
+ */
+const orgsState = {
+  loading: false,
+  isError: false,
+  list: [
+    {
+      id: "org-1",
+      type: "design_studio",
+      // CR-12: the money scopes are an owner's or an admin's to grant,
+      // and the sheet reads that off the caller's own membership.
+      membership: { role: "owner" },
+    },
+  ] as Array<{
+    id: string;
+    type: string;
+    membership: { role: string };
+  }>,
+};
+/** F-A — the held act's retry on the standing side. */
+const orgsRefetch = jest.fn();
+
+jest.mock("@patina/supabase", () => ({
+  useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useAddProjectParty: () => ({ mutateAsync: addParty, isPending: false }),
+  useAddStudioContact: () => ({ mutateAsync: addFirmCard, isPending: false }),
+  useAddStudioContactChannel: () => ({
+    mutateAsync: addChannel,
+    isPending: false,
+  }),
+  useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  usePromoteToStudioContact: () => ({ mutateAsync: promote, isPending: false }),
+  // CR5-1: the card is minted into the studio the seat's PROJECT records —
+  // the resolver `assert_project_party_cards()` checks against — never the one
+  // holding the book. `recordedStudio` lets a case say the job records none.
+  // F-B1: the real hook is `enabled: Boolean(projectId)`
+  // (use-coordination.ts:2332-2346), so with no project picked the query never
+  // runs and its data is `undefined` with `isLoading` false — a fourth way to
+  // read unresolved, and the one no retry answers. The mock honours the
+  // argument the sheet passes so a case can stand where the studio does.
+  useProjectRecordedStudio: (projectId: string | null | undefined) => {
+    const unresolved =
+      !projectId ||
+      recordedStudio.loading ||
+      recordedStudio.isError ||
+      recordedStudio.fetchStatus === "paused";
+    return {
+      data: unresolved ? undefined : recordedStudio.current,
+      isLoading: !!projectId && recordedStudio.loading,
+      isError: !!projectId && recordedStudio.isError,
+      fetchStatus: projectId ? recordedStudio.fetchStatus : "idle",
+      refetch: recordedStudioRefetch,
+    };
+  },
+  useSaveVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useSetContactRule: () => ({ mutateAsync: setRule, isPending: false }),
+  // CR-3: the front door now records the person-to-firm tie too.
+  useSetAffiliation: () => ({ mutateAsync: setAffiliation, isPending: false }),
+  useSetPartyAuthority: () => ({ mutateAsync: setAuthority, isPending: false }),
+  useStudioContacts: () => ({
+    data: [
+      {
+        id: "firm-cedar",
+        entity_kind: "company",
+        company_name: "Cedar & Iron Framing",
+      },
+      // QA-R5-1: a standing person card, so the sheet can tell the studio
+      // whose card a typed number already belongs to.
+      {
+        id: "card-dana",
+        entity_kind: "person",
+        full_name: "Dana Kowalski",
+        phone: "(612) 555-0111",
+        phone_e164: "+16125550111",
+      },
+    ],
+  }),
+  useStudioIdentity: () => ({ data: { name: "Middle West Studio" } }),
+  useUpdateStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useOrganizations: () => ({
+    data: orgsState.loading || orgsState.isError ? undefined : orgsState.list,
+    isLoading: orgsState.loading,
+    isError: orgsState.isError,
+    refetch: orgsRefetch,
+  }),
+  peopleKeys: { all: ["people-directory"] },
+  peopleSeatKeys: { all: ["people-directory-seats"] },
+  ALL_AUTHORITY_SCOPES: [
+    "money",
+    "change_order",
+    "selections",
+    "schedule",
+    "site_access",
+    "key",
+    "draw_certify",
+  ],
+  AUTHORITY_SCOPE_LABELS: {
+    money: "Signs money",
+    change_order: "Approves change orders",
+    selections: "Selections",
+    schedule: "Sets the schedule",
+    site_access: "Controls site access",
+    key: "Holds a key",
+    draw_certify: "Certifies draws",
+  },
+  isAdminOnlyAuthorityScope: (scope: string) =>
+    scope === "money" || scope === "draw_certify",
+}));
+
+// R-J's first branch reads the project's standing grants; the sheet asks for
+// them through the Call Sheet's own hook (CR-16).
+jest.mock("../../../roster/use-project-authority", () => ({
+  useProjectAuthority: () => ({ data: {} }),
+  projectAuthorityKeys: { project: () => [] },
+}));
+
+jest.mock("@/hooks/use-projects", () => ({
+  useProjects: () => ({
+    data: [
+      { id: "11111111-1111-4111-8111-111111111111", name: "Okonkwo residence" },
+    ],
+  }),
+}));
+jest.mock("@/hooks/use-auth", () => ({
+  useAuth: () => ({ user: { id: "u1" } }),
+}));
+jest.mock("@/hooks/use-feature-flag", () => ({
+  useFeatureFlag: () => ({ value: false, isLoading: false }),
+}));
+jest.mock("@/lib/analytics/events", () => ({
+  clientEvents: { create: jest.fn() },
+}));
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+}));
+
+const PROJECT = "11111111-1111-4111-8111-111111111111";
+
+/** The Room's own confirmation channel — what the studio is actually told. */
+const onAdded = jest.fn();
+
+function openSheet() {
+  render(<AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />);
+}
+
+beforeEach(() => {
+  addParty.mockReset().mockResolvedValue({
+    id: "seat-new",
+    project_id: PROJECT,
+    studio_contact_id: null,
+  });
+  promote.mockReset().mockResolvedValue({ id: "card-new" });
+  addChannel.mockReset().mockResolvedValue({});
+  setRule.mockReset().mockResolvedValue({});
+  setAuthority.mockReset().mockResolvedValue({});
+  setAffiliation.mockReset().mockResolvedValue({});
+  addFirmCard.mockReset().mockResolvedValue({ id: "firm-minted" });
+  onAdded.mockReset();
+  recordedStudio.current = "org-1";
+  recordedStudio.loading = false;
+  recordedStudio.isError = false;
+  recordedStudio.fetchStatus = "idle";
+  recordedStudioRefetch.mockReset().mockResolvedValue({});
+  orgsState.loading = false;
+  orgsState.isError = false;
+  orgsState.list = [
+    { id: "org-1", type: "design_studio", membership: { role: "owner" } },
+  ];
+  orgsRefetch.mockReset().mockResolvedValue({});
+});
+
+describe("the kind switch", () => {
+  it("offers eight words, in order, inside a labelled group", () => {
+    openSheet();
+    const group = screen.getByRole("group", { name: "What kind of person" });
+    expect(
+      within(group)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual([
+      "a client",
+      "a household member",
+      "a maker",
+      "a GC",
+      "a sub",
+      "an installer",
+      "a receiver",
+      "someone else",
+    ]);
+  });
+
+  it("marks the chosen word pressed", () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a sub" }));
+    expect(screen.getByRole("button", { name: "a sub" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+});
+
+describe("a sub", () => {
+  beforeEach(() => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a sub" }));
+  });
+
+  it("needs a trade — a sub with none cannot be found by the trade line", async () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Joe Wozniak" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "A sub or an installer needs the trade they work in.",
+    );
+    expect(addParty).not.toHaveBeenCalled();
+  });
+
+  it("matches a firm the studio already keeps, rather than typing it twice", () => {
+    expect(screen.getByLabelText("Company")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Company"), {
+      target: { value: "firm-cedar" },
+    });
+    expect(screen.queryByLabelText("New company name")).not.toBeInTheDocument();
+  });
+
+  /**
+   * CR-3 — THE PICKED CARD'S ID, NOT ONLY ITS NAME. The firm select stored
+   * `firmId` and used it only to fill the free-text company box, so a person
+   * added through the front door had NO firm identity: `directoryFirmOf` reads
+   * `meta.company_id`, and `project_parties.company_id` was unwritable from the
+   * portal. The rolodex half — `useSetAffiliation` — had zero call sites
+   * anywhere in apps/.
+   */
+  it("ties the seat and the person to the firm card that was picked", async () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Pete Rusk" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Company"), {
+      target: { value: "firm-cedar" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0117" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(setAffiliation).toHaveBeenCalled());
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "firm-cedar",
+        companyName: "Cedar & Iron Framing",
+      }),
+    );
+    expect(setAffiliation).toHaveBeenCalledWith({
+      personId: "card-new",
+      companyId: "firm-cedar",
+    });
+  });
+
+  /**
+   * CR8-4 — a firm typed by hand is FILED, not snapshotted. It used to write
+   * the name as a string with `company_id` NULL and no affiliation, so the
+   * firm got no Directory row, no company card and no way ever to record its
+   * COI, W-9, payee or chase — the compliance spine the company card is the
+   * only writer of.
+   */
+  it("files a company card for a firm typed by hand, and ties the person to it", async () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Pete Rusk" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("New company name"), {
+      target: { value: "Rusk Mechanical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0117" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    // CR5-1's rule governs the firm card too: the studio the JOB records.
+    expect(addFirmCard).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      entityKind: "company",
+      contactKind: "sub",
+      companyName: "Rusk Mechanical",
+    });
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "firm-minted",
+        companyName: "Rusk Mechanical",
+      }),
+    );
+    await waitFor(() =>
+      expect(setAffiliation).toHaveBeenCalledWith({
+        personId: "card-new",
+        companyId: "firm-minted",
+      }),
+    );
+  });
+
+  it("matches a firm the book already holds rather than filing it twice", async () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Pete Rusk" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("New company name"), {
+      target: { value: "  cedar & iron framing " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(addFirmCard).not.toHaveBeenCalled();
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: "firm-cedar" }),
+    );
+  });
+
+  it("files no firm card where the job records no studio", async () => {
+    recordedStudio.current = null;
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Pete Rusk" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("New company name"), {
+      target: { value: "Rusk Mechanical" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(addFirmCard).not.toHaveBeenCalled();
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: null,
+        companyName: "Rusk Mechanical",
+      }),
+    );
+    expect(setAffiliation).not.toHaveBeenCalled();
+  });
+
+  it("writes the seat, mints the card, files the channels and the rule", async () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Dana Kowalski" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0111" },
+    });
+    fireEvent.change(screen.getByLabelText("How to reach them"), {
+      target: { value: "Text only. The email on file bounces." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(setRule).toHaveBeenCalled());
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({ partyKind: "sub", trade: "electrical" }),
+    );
+    expect(promote).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-1" }),
+    );
+    expect(addChannel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerId: "card-new",
+        channelKind: "mobile",
+        value: "(612) 555-0111",
+        smsCapable: true,
+      }),
+    );
+    expect(setRule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subjectType: "person",
+        subjectId: "card-new",
+        reason: "Text only. The email on file bounces.",
+        // CR-21: NOTHING is inferred from an empty box. "Text only. The email
+        // on file bounces." typed beside a blank Email field used to write a
+        // rule FORBIDDING email — which is what every send gate then read.
+        channelsForbidden: [],
+      }),
+    );
+  });
+
+  /**
+   * CR5-1 (w2 r5) — the mint used the studio holding the BOOK while
+   * `assert_project_party_cards()` checks the seat's card against the studio
+   * the JOB records. Where the job records none, the card INSERT landed and
+   * the stamp then raised `party_card_project_has_no_studio`, so a card sat in
+   * the rolodex with nothing pointing at it and every retry minted another.
+   */
+  it("mints no card where the job records no studio, and says what was not kept", async () => {
+    recordedStudio.current = null;
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Hector Salas" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0119" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(promote).not.toHaveBeenCalled();
+    expect(addChannel).not.toHaveBeenCalled();
+    expect(onAdded.mock.calls[0][0]).toBe(
+      "Hector Salas added to Okonkwo residence. This job isn’t attached to a studio yet, so the number and the note ride on the seat, not on a card in the book.",
+    );
+  });
+
+  it("the consequence sentence names the job and says what it never opens", () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Joe Wozniak" },
+    });
+    const sentence = document.getElementById(
+      "add-party-consequence",
+    ) as HTMLElement;
+    expect(sentence).toHaveTextContent("Okonkwo residence Call Sheet");
+    expect(sentence).toHaveTextContent(
+      "It never opens billing or the agreement.",
+    );
+  });
+
+  /**
+   * QA-R5-1 — 00626's `apply_party_rolodex_link_trg` attaches a new seat to
+   * the ONE standing person card in the studio carrying the typed number. The
+   * sheet used to write and announce identically whether that card's name was
+   * the name on screen or somebody else's, so an unrelated name typed against
+   * a standing number silently overwrote THAT person's contact rule and
+   * channel under a success line naming the person typed.
+   */
+  it("names whose card a typed number is already on, before the write", () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "QA Collide Person" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0111" },
+    });
+    const line = document.getElementById(
+      "add-party-phone-on-file",
+    ) as HTMLElement;
+    expect(line).toHaveTextContent(
+      "This number is already on file for Dana Kowalski.",
+    );
+    expect(line).toHaveTextContent("land on Dana Kowalski’s card");
+    // The act is described by it, so the fact reaches the ear at the act too.
+    expect(
+      screen.getByRole("button", { name: "Add to the roster" }),
+    ).toHaveAttribute(
+      "aria-describedby",
+      "add-party-phone-on-file add-party-consequence",
+    );
+  });
+
+  it("says nothing when the number and the name are the same person", () => {
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "dana kowalski" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0111" },
+    });
+    expect(document.getElementById("add-party-phone-on-file")).toBeNull();
+  });
+
+  it("names the card the seat landed on in the confirmation", async () => {
+    // The stamp 00626's BEFORE-INSERT auto-link wrote: a card that already
+    // stood, not one this sheet minted.
+    addParty.mockResolvedValue({
+      id: "seat-new",
+      project_id: PROJECT,
+      studio_contact_id: "card-dana",
+    });
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "QA Collide Person" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0111" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(onAdded.mock.calls[0][0]).toBe(
+      "QA Collide Person added to Okonkwo residence. That number is already on file for Dana Kowalski, so this seat and what you wrote sit on Dana Kowalski’s card.",
+    );
+  });
+
+  it("adds no such clause when the card is the person typed", async () => {
+    addParty.mockResolvedValue({
+      id: "seat-new",
+      project_id: PROJECT,
+      studio_contact_id: "card-dana",
+    });
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Dana Kowalski" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0111" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(onAdded.mock.calls[0][0]).toBe(
+      "Dana Kowalski added to Okonkwo residence.",
+    );
+  });
+
+  it("R-J — says plainly that nothing defaulted, and offers the act (CR-16)", () => {
+    // F-B1: the band is offered only once a job is chosen — the standing it
+    // stands on is standing in the studio THAT JOB records, and this describe's
+    // beforeEach opens the sheet with no project picked.
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    expect(
+      screen.getByText("Nothing defaulted from the agreement."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Record the authority" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says what actually happens — nothing is sent from here (CR-4)", () => {
+    fireEvent.click(
+      screen.getByLabelText(/They gave prior express consent for text updates/),
+    );
+    // R-AS took both halves off the seat INSERT, so `fc_optin_invite_dispatch`
+    // no longer fires. Telling the studio to wait for a YES to a message
+    // Patina never sent is a consent-adjacent falsehood.
+    expect(
+      screen.getByText(/Patina has not sent them anything yet\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/until they reply YES/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * CR3-1 — this sheet's consent door is `record_channel_invite`, which leaves
+   * a standing grant alone and otherwise records `pending`, the word every
+   * face beside it prints as "Invited". Claiming consent here contradicted
+   * the Directory row, the seat line and the Call Sheet row for the same
+   * number. The sheet prints the record's own word.
+   */
+  it("CR3-1 — names the invite, never consent, on the evidence note", () => {
+    fireEvent.click(
+      screen.getByLabelText(/They gave prior express consent for text updates/),
+    );
+    expect(
+      screen.getByText(/is invited, not consenting\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/is recorded as consenting/),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("a household member (PR-c / C5)", () => {
+  it("writes a client_rep seat, and the string never reaches a face", async () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a household member" }));
+    expect(document.body.textContent).not.toContain("client_rep");
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Chidi Okonkwo" },
+    });
+    // F-6: the grant is written under the same three conjuncts that hold the
+    // act — `authorityOpen` among them — so the band is OPENED here rather
+    // than typed into while it is still hidden, which is what a studio does.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Signs money to $2,500" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({ partyKind: "client_rep" }),
+    );
+    await waitFor(() =>
+      expect(setAuthority).toHaveBeenCalledWith(
+        expect.objectContaining({
+          engagementId: "seat-new",
+          scope: "change_order",
+          sourceClause: "Signs money to $2,500",
+        }),
+      ),
+    );
+  });
+  /**
+   * CR13-7 — the door says "a household member"; the intro and the refusal
+   * used to say "client rep", off the `PartyKind` the door writes. One door,
+   * the studio's words (C5).
+   */
+  it("says the same noun in its intro and its refusal as on its door", async () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a household member" }));
+    expect(document.body.textContent).toContain(
+      "Add a household member to a project",
+    );
+    expect(document.body.textContent).not.toContain("client rep");
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "A household member needs a name.",
+    );
+  });
+
+  it("takes the article its own noun takes", async () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "an installer" }));
+    expect(document.body.textContent).toContain(
+      "Add an installer to a project",
+    );
+  });
+});
+
+describe("someone else (PR-f)", () => {
+  it("must be named before the seat is written", async () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "someone else" }));
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Ray Thao" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Say what they are to this job.",
+    );
+    expect(addParty).not.toHaveBeenCalled();
+  });
+
+  it("carries the written label onto the seat", async () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "someone else" }));
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Ray Thao" },
+    });
+    fireEvent.change(screen.getByLabelText("What they are to this job"), {
+      target: { value: "city inspector" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(addParty).toHaveBeenCalledWith(
+      expect.objectContaining({ partyKind: "other", trade: "city inspector" }),
+    );
+  });
+});
+
+/**
+ * R-CD — THE ACT IS HELD WHILE THE JOB'S STUDIO IS STILL UNKNOWN.
+ *
+ * `recordedStudioId` is `undefined` until the query answers and `null` once it
+ * answers "this job records no studio". The card-mint guard read both as
+ * falsey, so a press landed during the first render wrote the seat, minted no
+ * card, and printed the no-card sentence about a job that in fact keeps a
+ * book. The act is held until the query resolves; only a resolved `null` takes
+ * the no-card path.
+ */
+describe("the recorded studio, while it is still resolving", () => {
+  /** The seat's fields, on a sheet that is already rendered. */
+  function fillSub() {
+    fireEvent.click(screen.getByRole("button", { name: "a sub" }));
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Hector Salas" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+    fireEvent.change(screen.getByLabelText("Mobile"), {
+      target: { value: "(612) 555-0119" },
+    });
+  }
+
+  function openSub() {
+    openSheet();
+    fillSub();
+  }
+
+  it("holds the act while the query is still out, and writes nothing", async () => {
+    recordedStudio.loading = true;
+    openSub();
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-recorded-studio-held",
+    );
+    expect(
+      screen.getByText("Checking which studio keeps this job’s book."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(act).toHaveAttribute("aria-disabled", "true"));
+    expect(addParty).not.toHaveBeenCalled();
+    expect(promote).not.toHaveBeenCalled();
+  });
+
+  it("takes the no-card path on a resolved none, and says what was not kept", async () => {
+    recordedStudio.current = null;
+    openSub();
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(act);
+
+    await waitFor(() => expect(onAdded).toHaveBeenCalled());
+    expect(promote).not.toHaveBeenCalled();
+    expect(onAdded.mock.calls[0][0]).toBe(
+      "Hector Salas added to Okonkwo residence. This job isn’t attached to a studio yet, so the number and the note ride on the seat, not on a card in the book.",
+    );
+  });
+
+  it("mints the card into the studio the job records once it resolves", async () => {
+    openSub();
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+
+    await waitFor(() => expect(promote).toHaveBeenCalled());
+    expect(promote).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-1" }),
+    );
+    await waitFor(() =>
+      expect(addChannel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ownerId: "card-new",
+          channelKind: "mobile",
+          value: "(612) 555-0119",
+        }),
+      ),
+    );
+    expect(onAdded.mock.calls[0][0]).not.toContain(
+      "isn’t attached to a studio yet",
+    );
+  });
+
+  /**
+   * R-CD, amended (patina-merged-73) — the hold is on UNRESOLVED, not on
+   * "loading". react-query.ts:180-191 turns retry off for a non-network error,
+   * so an RPC failure lands `isLoading === false` with `data` still undefined:
+   * the act used to release and the press wrote a seat with no card and no
+   * sentence saying so.
+   */
+  it("holds the act when the book could not be read, and pressing it asks again", async () => {
+    recordedStudio.isError = true;
+    openSub();
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-recorded-studio-held",
+    );
+    expect(
+      screen.getByText(
+        "Couldn’t read which studio keeps this job’s book. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(recordedStudioRefetch).toHaveBeenCalled());
+    expect(addParty).not.toHaveBeenCalled();
+    expect(promote).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The same silence by the other road: the default `networkMode: 'online'`
+   * parks an offline fetch at `fetchStatus: 'paused'`, which is neither
+   * loading nor an error and leaves `data` undefined all the same.
+   */
+  it("holds the act while the fetch is paused offline, and writes nothing", async () => {
+    recordedStudio.fetchStatus = "paused";
+    openSub();
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByText(
+        "Couldn’t read which studio keeps this job’s book. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(act).toHaveAttribute("aria-disabled", "true"));
+    expect(addParty).not.toHaveBeenCalled();
+    expect(promote).not.toHaveBeenCalled();
+  });
+
+  /** The book is a SEAT's question. A client writes no seat and no card. */
+  it("never holds a client on this query", () => {
+    recordedStudio.loading = true;
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a client" }));
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    expect(
+      screen.queryByText("Checking which studio keeps this job’s book."),
+    ).not.toBeInTheDocument();
+  });
+
+  /**
+   * F3 — the same class on the standing side. `isOrgAdmin` reads the
+   * membership list, so a grant asked for while that list was still out met
+   * the owner/admin refusal AFTER the seat, the card, the channels and the
+   * rule had been written.
+   */
+  it("holds the act while the studio membership behind an authority grant is still out", async () => {
+    orgsState.loading = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("What they may decide"), {
+      target: { value: "selections" },
+    });
+    // A grant is only WRITTEN when a phrase or a figure was typed; without one
+    // `setAuthority` is never reached and the assertion below says nothing.
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-authority-standing-held",
+    );
+    expect(
+      screen.getByText("Checking your standing in this job’s studio."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(act).toHaveAttribute("aria-disabled", "true"));
+    expect(addParty).not.toHaveBeenCalled();
+    expect(setAuthority).not.toHaveBeenCalled();
+  });
+
+  /**
+   * F-A — an errored membership read is not an answer about standing. On
+   * `isLoading` alone the act released and `isOrgAdmin` read false for a real
+   * owner: the money and draw scopes rendered disabled under a notice
+   * asserting a refusal nobody had read.
+   */
+  it("holds the act when the standing could not be read, and asserts no refusal", async () => {
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-authority-standing-held",
+    );
+    expect(
+      screen.getByText(
+        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+    // No standing was read, so none is asserted: the scopes stay offered and
+    // the owner/admin notice stays silent.
+    expect(
+      screen.queryByText(
+        "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Signs money" }),
+    ).not.toBeDisabled();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(orgsRefetch).toHaveBeenCalled());
+    expect(addParty).not.toHaveBeenCalled();
+    expect(setAuthority).not.toHaveBeenCalled();
+  });
+
+  /**
+   * F-1 — WITH NO RECORDED STUDIO THERE IS NO AUTHORITY TO RECORD, so the
+   * band is not offered at all. Every `project_party_authority` policy
+   * (00624:989,1003,1019,1045) gates on
+   * `is_active_studio_member(project_party_recorded_studio())`, false for a
+   * NULL studio (00417:47): EVERY scope is refused on such a job, and the
+   * refusal landed after the seat, the channels, the rule and the affiliation
+   * were written — as the generic "Could not add them just now. Try again."
+   *
+   * This replaces the F1 case that asserted the owner/admin notice and the
+   * disabled money scope on a no-studio job: with no band there is no notice
+   * to suppress and no scope on offer to disable, which is what CR11-11's
+   * "the band closes" always claimed.
+   */
+  it("offers no authority band at all where the job records no studio", () => {
+    recordedStudio.current = null;
+    orgsState.isError = true;
+    openSub();
+
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Confirm from the agreement" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("What they may decide"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Up to, in dollars"),
+    ).not.toBeInTheDocument();
+    // The seat itself is unaffected — it is the GRANT that has nowhere to go.
+    expect(
+      screen.getByRole("button", { name: "Add to the roster" }),
+    ).not.toHaveAttribute("aria-disabled");
+  });
+
+  /**
+   * F-B1 — AND NO BAND AT ALL BEFORE A JOB IS CHOSEN. The standing the band
+   * stands on is standing in the studio THIS JOB records, so with no project
+   * picked `useProjectRecordedStudio(null)` is disabled (`enabled:
+   * Boolean(projectId)`, use-coordination.ts:2332-2346) and its data is
+   * `undefined` — 'unread' standing, for a reason no press can answer. The
+   * band was offered anyway: a phrase typed into it held the act on
+   * "Couldn't read your standing…", so the press could never reach the one
+   * refusal that is true here, and the held retry ran the DISABLED query's own
+   * `queryFn` (v5's `refetch` ignores `enabled`), which returns `null` for a
+   * null project — a resolved "keeps no book" answer invented for a job nobody
+   * had chosen, on which the clearing effect then wiped what was typed.
+   */
+  it("offers no authority band before a job is chosen, and says to pick one", async () => {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a sub" }));
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Hector Salas" },
+    });
+    fireEvent.change(screen.getByLabelText("Trade"), {
+      target: { value: "electrical" },
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Confirm from the agreement" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("What they may decide"),
+    ).not.toBeInTheDocument();
+    // Nor either sentence that stands in the band's place at 'none': there is
+    // no job to say anything about a studio of, and the project select is the
+    // thing to use.
+    expect(
+      screen.queryByText(
+        "This job isn’t attached to a studio yet, so there is nowhere to record the authority.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "You’re not on the studio that keeps this job’s book, so there is nowhere to record the authority.",
+      ),
+    ).not.toBeInTheDocument();
+
+    // The act is not held on a standing there is no job to read: the press
+    // lands on the refusal that names what is actually missing.
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(act);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Field crew work a project — pick which one they’re on.",
+    );
+    expect(addParty).not.toHaveBeenCalled();
+    expect(recordedStudioRefetch).not.toHaveBeenCalled();
+  });
+
+  /**
+   * F-B2 — A GUEST IS ON THE LIST AND HOLDS NO STANDING. `useOrganizations`
+   * filters on `status = 'active'` ALONE (use-organizations.ts:167-169), while
+   * `is_active_studio_member` — what all four authority policies gate on —
+   * requires `status = 'active' AND role <> 'guest'` (00417:40-55, where the
+   * guest exclusion is deliberate: a guest seat is a courtesy login and must
+   * not open the studio's book). Reading list-presence as the predicate
+   * offered a guest every scope and met the policy refusal after the seat, the
+   * card, the channels and the rule were written.
+   */
+  it("holds no standing for a guest on the studio that keeps the book", async () => {
+    orgsState.list = [
+      { id: "org-1", type: "design_studio", membership: { role: "guest" } },
+    ];
+    openSub();
+
+    expect(
+      screen.getByText(
+        "You’re not on the studio that keeps this job’s book, so there is nowhere to record the authority.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Up to, in dollars"),
+    ).not.toBeInTheDocument();
+
+    // F-2 — WHAT THIS ASSERTS IS THE SHEET, NOT THE OUTCOME. The sheet holds
+    // nothing back on the seat: it drops the grant and writes the seat as it
+    // would for anyone. In production that seat is refused too —
+    // `project_parties_studio_insert` gates on `is_studio_comember`
+    // (00584:884-893), which admits no guest on either side of the shared
+    // membership (00315:44-48), so a guest on the studio that keeps this job's
+    // book is refused the SEAT as well as the grant, and the refusal comes
+    // back as the generic "Could not add them just now. Try again.". The
+    // point here is only that the guest's standing takes the GRANT off the
+    // press and does not turn the press itself into a client-side refusal.
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(act);
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(setAuthority).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  /**
+   * F-A1 — A GRANT DOES NOT SURVIVE THE BAND THAT CARRIED IT. A phrase typed
+   * while the job still recorded a studio used to survive a change to one that
+   * records none: the band unmounted, the state stayed, and the writer's guard
+   * then refused the WHOLE add — the seat included — on a grant with no field
+   * left to clear it in. Nothing typed is stranded behind a band that is no
+   * longer there: the grant comes off the page with the band, the sentence
+   * says why, and the seat still goes in.
+   *
+   * (This replaces the F-1 case that asserted the refusal alert on this press.
+   * The refusal is still there — `submitParty`'s third guard — but the
+   * clearing effect this same amendment adds makes it unreachable from the
+   * sheet, which is the point: a studio cannot be locked out of the add.)
+   */
+  it("clears a grant carried onto a no-studio job, and still writes the seat", async () => {
+    const view = render(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    fillSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Up to, in dollars"), {
+      target: { value: "2500" },
+    });
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    recordedStudio.current = null;
+    view.rerender(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This job isn’t attached to a studio yet, so there is nowhere to record the authority.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+
+    // The band is offered again the moment the book reads back — and what was
+    // typed behind it is gone, not lying in wait for the next press.
+    recordedStudio.current = "org-1";
+    view.rerender(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    expect(screen.getByLabelText("Authority")).toHaveValue("");
+    expect(screen.getByLabelText("Up to, in dollars")).toHaveValue("");
+
+    recordedStudio.current = null;
+    view.rerender(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(act);
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(setAuthority).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  /**
+   * R1 — THE BAND'S SECOND UNMOUNT PATH CLEARS LIKE THE FIRST. F-B1 draws
+   * nothing at all before a job is chosen, which gave the band a way off the
+   * page that the standing never changes for: clearing the project select
+   * back to "Which project…" took the band away with the standing still
+   * reading the old job's. A phrase and a figure typed under that job stayed
+   * in state where nobody could see them and reattached to the NEXT job
+   * picked — one client's authority carried onto another's work. Both paths
+   * clear alike.
+   */
+  it("clears a grant stranded by clearing the project select", () => {
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+    fireEvent.change(screen.getByLabelText("Up to, in dollars"), {
+      target: { value: "2500" },
+    });
+
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: "" },
+    });
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Up to, in dollars"),
+    ).not.toBeInTheDocument();
+
+    // The same job again — the band is back, closed, and holding nothing.
+    fireEvent.change(screen.getByLabelText("Project"), {
+      target: { value: PROJECT },
+    });
+    expect(
+      screen.getByRole("button", { name: "Record the authority" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByLabelText("Authority")).toHaveValue("");
+    expect(screen.getByLabelText("Up to, in dollars")).toHaveValue("");
+  });
+
+  /**
+   * F-2 — AN UNRESOLVED BOOK IS NOT A RESOLVED NONE. The old standing
+   * predicates read the `undefined` of a book still out or unreadable as the
+   * resolved NULL, so the owner/admin notice asserted a refusal against a
+   * standing that had read nothing, and the money and draw scopes rendered
+   * disabled — for a caller who may be the owner. The F-A defect by the other
+   * road. `authorityStanding` answers 'unread' there.
+   */
+  it("asserts no standing while the job’s own book is unresolved", () => {
+    recordedStudio.loading = true;
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-recorded-studio-held",
+    );
+    expect(
+      screen.getByText("Checking which studio keeps this job’s book."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Signs money" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("option", { name: "Certifies draws" }),
+    ).not.toBeDisabled();
+  });
+
+  it("asserts no standing when the job’s own book could not be read", () => {
+    recordedStudio.isError = true;
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-recorded-studio-held",
+    );
+    expect(
+      screen.getByText(
+        "Couldn’t read which studio keeps this job’s book. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Signs money" }),
+    ).not.toBeDisabled();
+  });
+
+  /**
+   * F-A2 — AN UNRESOLVED BOOK OVER A RESOLVED LIST IS STILL UNREAD STANDING.
+   * The standing question is "what is my role in the studio that keeps THIS
+   * job's book", and a list that came back cannot answer it while the book has
+   * not. Reading the list alone made a real owner a non-admin: the notice
+   * asserted a refusal, the money and draw scopes rendered disabled, and the
+   * snap-back took a scope the studio had chosen away again.
+   */
+  it("asserts no standing on an unreadable book, whatever the membership list says", () => {
+    recordedStudio.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("What they may decide"), {
+      target: { value: "money" },
+    });
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-recorded-studio-held",
+    );
+    expect(
+      screen.getByText(
+        "Couldn’t read which studio keeps this job’s book. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Signs money" }),
+    ).not.toBeDisabled();
+    // And the scope the studio chose is still the one on the page.
+    expect(screen.getByLabelText("What they may decide")).toHaveValue("money");
+  });
+
+  /**
+   * F-A3 — A BOOK KEPT BY A STUDIO THIS CALLER IS NOT ON. `useOrganizations`
+   * returns ACTIVE memberships only (use-organizations.ts:167-169) and all
+   * four authority policies gate on
+   * `is_active_studio_member(project_party_recorded_studio())` (00624), so
+   * every scope is refused — and the refusal landed after the seat, the
+   * channels, the rule and the affiliation were written. The band is not
+   * offered, the sentence says why, and the grant does not survive it.
+   */
+  it("offers no band, and clears the grant, where the caller is not on the studio that keeps the book", async () => {
+    const view = render(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    fillSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+
+    orgsState.list = [
+      { id: "org-9", type: "design_studio", membership: { role: "admin" } },
+    ];
+    view.rerender(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+
+    expect(
+      screen.getByText(
+        "You’re not on the studio that keeps this job’s book, so there is nowhere to record the authority.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "This job isn’t attached to a studio yet, so there is nowhere to record the authority.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Record the authority" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Authority")).not.toBeInTheDocument();
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    fireEvent.click(act);
+
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(setAuthority).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  /**
+   * The snap-back, and the notice, on the one standing that asserts them: a
+   * membership that READ BACK as a plain member's. A scope chosen while the
+   * list was still out is not a scope the sheet may keep once the answer
+   * arrives.
+   */
+  it("snaps an admin-only scope back once the standing reads back as a member’s", async () => {
+    orgsState.loading = true;
+    const view = render(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    fillSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("What they may decide"), {
+      target: { value: "money" },
+    });
+    expect(screen.getByLabelText("What they may decide")).toHaveValue("money");
+    expect(
+      screen.queryByText(
+        "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
+      ),
+    ).not.toBeInTheDocument();
+
+    orgsState.loading = false;
+    orgsState.list = [
+      { id: "org-1", type: "design_studio", membership: { role: "member" } },
+    ];
+    view.rerender(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("What they may decide")).toHaveValue(
+        "selections",
+      ),
+    );
+    expect(
+      screen.getByText(
+        "Signing money and certifying draws are the studio owner’s or an admin’s to grant.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Signs money" })).toBeDisabled();
+  });
+
+  /**
+   * F2's other disjunct — a FIGURE with no phrase is a grant too, and the
+   * write runs under `phrase || threshold`. A hold that read the phrase alone
+   * would release the act on this one and meet the refusal after the writes.
+   */
+  it("holds the act on an unread standing where only the figure was typed", async () => {
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    fireEvent.change(screen.getByLabelText("Up to, in dollars"), {
+      target: { value: "2500" },
+    });
+    expect(screen.getByLabelText("Authority")).toHaveValue("");
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act.getAttribute("aria-describedby")).toContain(
+      "add-person-authority-standing-held",
+    );
+    expect(
+      screen.getByText(
+        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(orgsRefetch).toHaveBeenCalled());
+    expect(addParty).not.toHaveBeenCalled();
+    expect(setAuthority).not.toHaveBeenCalled();
+  });
+
+  /**
+   * F2 — AND NO GRANT ASKED FOR IS NO REASON EITHER. The write runs under
+   * `phrase || threshold`; the band has no collapse control, so an open, empty
+   * band over an unreadable list held the add forever for a grant that would
+   * never be written.
+   */
+  it("does not hold on standing while the authority band is open and empty", async () => {
+    orgsState.isError = true;
+    openSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    expect(act).not.toHaveAttribute("aria-disabled");
+    expect(
+      screen.queryByText(
+        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
+      ),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(act);
+    await waitFor(() => expect(addParty).toHaveBeenCalled());
+    expect(setAuthority).not.toHaveBeenCalled();
+  });
+
+  /** And the retry releases it: the list reads back, the owner may press. */
+  it("releases the act once the standing reads back as the owner’s", async () => {
+    orgsState.isError = true;
+    const view = render(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+    fillSub();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Record the authority" }),
+    );
+    // F2: the hold needs a grant on the page — an empty band is never held.
+    fireEvent.change(screen.getByLabelText("Authority"), {
+      target: { value: "Letter of 3 March" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+    await waitFor(() => expect(orgsRefetch).toHaveBeenCalled());
+
+    orgsState.isError = false;
+    view.rerender(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={onAdded} />,
+    );
+
+    const act = screen.getByRole("button", { name: "Add to the roster" });
+    await waitFor(() => expect(act).not.toHaveAttribute("aria-disabled"));
+    expect(
+      screen.queryByText(
+        "Couldn’t read your standing in this job’s studio. Press again to try once more.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Signs money" }),
+    ).not.toBeDisabled();
+  });
+});
+
+describe("the whole sheet", () => {
+  it("carries no placeholder attribute anywhere", () => {
+    const { container } = render(
+      <AddPersonSheet open onClose={jest.fn()} onAdded={jest.fn()} />,
+    );
+    expect(container.querySelectorAll("[placeholder]")).toHaveLength(0);
+  });
+});

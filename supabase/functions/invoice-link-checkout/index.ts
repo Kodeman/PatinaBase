@@ -46,7 +46,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@17';
-import { INVOICE_LINK_TOKEN_PATTERN } from '../_shared/invoice-links.ts';
+import { INVOICE_LINK_TOKEN_PATTERN, invoiceLinkUrl } from '../_shared/invoice-links.ts';
 import { invoiceCheckoutReturnAddress } from '../_shared/invoice-checkout-core.ts';
 import {
   checkoutCustomerFailureBody,
@@ -230,21 +230,22 @@ Deno.serve(async (req: Request) => {
     target: {
       invoiceId: invoice.id,
       lineItemName,
-      // Every attempt claimed through 00574 carries a return nonce, so Stripe
-      // returns the payer through /pay/return/<nonce>. The letterbox address
-      // below can only be reached by a legacy attempt and is the M7 valve.
+      // Every attempt claimed through 00574 carries a return nonce, so a
+      // SUCCESSFUL Checkout returns the payer through /pay/return/<nonce>. The
+      // letterbox address below can only be reached by a legacy attempt and is
+      // the M7 valve.
       successUrl: invoiceCheckoutReturnAddress(
         CLIENT_PORTAL_URL,
         invoice.project_id,
         invoice.id,
         'success'
       ),
-      cancelUrl: invoiceCheckoutReturnAddress(
-        CLIENT_PORTAL_URL,
-        invoice.project_id,
-        invoice.id,
-        'cancelled'
-      ),
+      // A CANCEL GOES BACK WHERE SHE CAME FROM (R-BT). This rail holds the
+      // payer's own address — the token this request carried — and the return
+      // hop rotates it, so sending a cancelled Checkout through the nonce
+      // killed the /pay address in her inbox at the moment she decided not to
+      // pay yet. The invoice is untouched, so the address still resolves.
+      cancelUrl: invoiceLinkUrl(CLIENT_PORTAL_URL, token),
       processingDetail:
         'A bank transfer for this invoice is already processing. Bank transfers take 3–5 business days to clear.',
       nonceReturnOrigin: CLIENT_PORTAL_URL,

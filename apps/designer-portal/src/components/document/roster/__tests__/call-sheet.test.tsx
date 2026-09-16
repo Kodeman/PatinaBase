@@ -1,274 +1,496 @@
-import { render, screen } from '@testing-library/react';
-import type { ProjectRosterRow } from '@patina/supabase';
+/**
+ * The Call Sheet's own pixels (SPEC §5.4 #1–#3, #6, #8–#10).
+ *
+ * The head names the job, folds the site access card to one line with a way in,
+ * and counts the WINDOW. Beneath it the six bands print in one order, with
+ * Bidding standing apart from the crew.
+ *
+ * The picker and the site access card are stubbed: each has its own spec, and
+ * stacking a second overlay here would make this one about overlays.
+ */
+
+import { fireEvent, render, screen } from '@testing-library/react';
+import type { PeopleDirectorySeat, ProjectRosterRow } from '@patina/supabase';
 import { CallSheet } from '../call-sheet';
 
 const useProjectRoster = jest.fn();
+const usePeopleSeats = jest.fn();
 
-jest.mock('@patina/supabase', () => ({
-  useProjectRoster: (...args: unknown[]) => useProjectRoster(...args),
-  // Consumed by RosterRow's unfold rails — collapsed rows never call them,
-  // but the module must resolve.
-  useUpdateProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useRemoveProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useCreateFieldLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useSendPartySms: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  fieldLinkUrl: (t: string) => t,
+/** QA-R13-1: the row resolves the job a consent record NAMES, so the sheet's
+ *  own project name is never substituted into R-Q's sentence. */
+jest.mock('@/hooks/use-projects', () => ({
+  useProjects: () => ({ data: [] }),
 }));
 
-let mockFlagValue = true;
-jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: () => ({ value: mockFlagValue, isLoading: false }),
+jest.mock('@patina/supabase', () => {
+  const BID = ['prospect', 'invited', 'bidding', 'declined', 'no_response'];
+  const DONE = ['closeout', 'warranty', 'off_job', 'retired'];
+  return {
+  // ── W4/P3 — E13 touches, CRM-23 notices, the paperwork door, the queue ──
+  useTouches: () => ({ data: [] }),
+  useLastTouch: () => ({ data: null }),
+  useRecordNotice: () => ({
+    mutateAsync: async () => ({
+      id: 'touch-1',
+      what: 'x',
+      recorded_at: '2026-09-15T00:00:00Z',
+      recorded_by: null,
+      told_names: [],
+    }),
+    isPending: false,
+  }),
+  asNoticeError: (e: unknown) =>
+    e instanceof Error ? e.message : String(e ?? ''),
+  lastInboundDecision: (
+    rows: ReadonlyArray<{ direction: string; decision_class: string }> | null | undefined,
+  ) =>
+    (rows ?? []).find(
+      (r) => r.direction === 'in' && r.decision_class !== 'none',
+    ) ?? null,
+  inboundDecisionSentence: (t: { decision_class: string; authority_check: string } | null) =>
+    t
+      ? `A ${t.decision_class} decision came in.${
+          t.authority_check === 'failed_no_authority'
+            ? ' Received, not authority.'
+            : ''
+        }`
+      : null,
+  touchSentence: () => 'Last touch 12 Sep 2026, by text.',
+  NO_TOUCH_SENTENCE: 'No contact on the record yet.',
+  useInboundDocuments: () => ({ data: [] }),
+  useConfirmInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRejectInboundDocument: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  inboundQueueHeading: (n: number) =>
+    `${n} document${n === 1 ? '' : 's'} waiting for your check`,
+  inboundDocumentLine: (
+    d: { doc_type: string },
+    firm: string,
+  ) => `${d.doc_type}, uploaded by ${firm}.`,
+  usePaperworkLinks: () => ({ data: [] }),
+  useMintPaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
+  thirtyDaysOut: () => '2026-10-15',
+  firmEngagementWindowEnd: () => null,
+    // r21 MAJOR-1 / major-2 (R-BS) — PR-n standing, read before the press.
+    // 00634 refuses the close of a seat carrying an OPEN money or
+    // draw-certify grant to anyone who is not an owner or an admin.
+    seatCloseIsHeldForMoney: (
+      authority: ReadonlyArray<{ scope: string; effective_to: string | null }> | null | undefined,
+      isPrincipal: boolean,
+    ) =>
+      !isPrincipal &&
+      (authority ?? []).some(
+        (g) => g.effective_to == null && ['money', 'draw_certify'].includes(g.scope),
+      ),
+    SEAT_CLOSE_MONEY_HELD_REASON:
+      'This seat signs for money. Closing it ends that, and ending it is the principal’s. An owner or an admin of the studio can close this seat.',
+    useProjectRoster: (...args: unknown[]) => useProjectRoster(...args),
+    usePeopleSeats: (...args: unknown[]) => usePeopleSeats(...args),
+    useProjectConsentOrg: () => ({ data: 'studio-1' }),
+    // QA-2: the head's Add sheet needs the studio that holds the book, folded
+    // from the directory exactly as the Room and the picker fold it.
+    useOrganizations: () => ({ data: [{ id: 'studio-1', type: 'design_studio' }] }),
+    usePeopleDirectory: () => ({ data: [] }),
+    useSiteAccessCard: () => ({
+      data: {
+        key_holder_engagement_id: 'seat-ngozi',
+        changed_at: '2026-10-16T14:00:00Z',
+        lockbox_version: 'Lockbox, version 3',
+        told_refs: [],
+        emergency_lines: [],
+      },
+      isLoading: false,
+    }),
+    rosterBandFor: (
+      seat: { stage: string | null; on_site_from: string | null },
+      today: string,
+    ) => {
+      const stage = seat.stage ?? '';
+      if (DONE.includes(stage)) return 'done';
+      if (BID.includes(stage)) return 'bidding';
+      if (seat.on_site_from && seat.on_site_from > today) return 'later';
+      return 'this_week';
+    },
+    rosterDateKey: () => '2026-10-20',
+    // The row's own rails — collapsed rows never call them, but the module
+    // must resolve.
+    useUpdateProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useCloseProjectPartySeat: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useRemoveProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useCreateFieldLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useSendPartySms: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useChannelConsent: () => ({ data: { verdict: null, record: null } }),
+    useComplianceDocuments: () => ({ data: [] }),
+    useComplianceDocumentsFor: () => ({ data: [] }),
+    fieldLinkUrl: (t: string) => t,
+    AUTHORITY_SCOPE_LABELS: { money: 'Signs money', selections: 'Selections' },
+    COMPLIANCE_DOC_TYPE_LABELS: {},
+    SEAT_DELETE_REFUSAL_SENTENCES: { consent: '', bid: '', waiver: '', unknown: '' },
+    // W2 r1: the sheet reads the rule ROWS and the routed people's channels,
+    // so one predicate and one clause serve every face (CR-5/6/14/15/22).
+    useContactRules: () => ({ data: [] }),
+    useStudioContactChannelsFor: () => ({ data: [] }),
+    useStudioContacts: () => ({ data: [] }),
+    // ── W3/P2 ────────────────────────────────────────────────────────────
+    useProjectPartyBids: () => ({ data: {} }),
+    useSetPartyBid: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useComplianceNotices: () => ({ data: [] }),
+    indexComplianceNotices: () => new Map(),
+    ALL_SEAT_BID_OUTCOMES: [
+      'asked',
+      'quoted',
+      'selected',
+      'declined',
+      'no_response',
+      'withdrawn',
+    ],
+    SEAT_BID_OUTCOME_ACTS: {
+      asked: 'Asked for a price',
+      quoted: 'They quoted',
+      selected: 'Selected',
+      declined: 'They declined',
+      no_response: 'No response',
+      withdrawn: 'They withdrew',
+    },
+    // MAJOR-3: the consequence sentence names a destination, so it reads the
+    // STATE map, not the act map.
+    SEAT_BID_OUTCOME_LABELS: {
+      asked: 'Bidding',
+      quoted: 'Bidding',
+      selected: 'Awarded',
+      declined: 'Declined',
+      no_response: 'No response',
+      withdrawn: 'Off the job',
+    },
+    // MAJOR-1 / MAJOR-7: the bid follows its COLUMNS, not the band.
+    // r8 BLOCKING-1: the face reads the same answer the write does.
+    bidStageOutcome: (
+      previous: { bidOutcome: string | null; stage: string | null },
+      next: string | null | undefined,
+    ) => {
+      const stages: Record<string, string> = {
+        asked: 'invited',
+        quoted: 'bidding',
+        selected: 'awarded',
+        declined: 'declined',
+        no_response: 'no_response',
+        withdrawn: 'off_job',
+      };
+      const outcome = next ?? null;
+      const moved = outcome !== (previous.bidOutcome ?? null);
+      const pastTheBid = [
+        'mobilized',
+        'active',
+        'closeout',
+        'warranty',
+        'retired',
+      ].includes(previous.stage ?? '');
+      const writes = !!outcome && moved && (!pastTheBid || outcome === 'withdrawn');
+      return {
+        outcome,
+        moved,
+        pastTheBid,
+        stage: writes ? stages[outcome as string] : null,
+      };
+    },
+    seatCarriesBid: (bid: Record<string, unknown> | null | undefined) =>
+      !!bid &&
+      [
+        'bidDueAt',
+        'bidOutcome',
+        'bidValidUntil',
+        'bidQuotedByPersonId',
+        'bidAmountCents',
+        'bidAskedAt',
+        'bidQuotedAt',
+        'bidSelectedAt',
+      ].some((key) => bid[key] != null),
+    useProjectHousehold: () => ({ data: null }),
+    useAddHouseholdMember: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useCreateClientHousehold: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    useSetHouseholdThreshold: () => ({ mutateAsync: jest.fn(), isPending: false }),
+    HOUSEHOLD_MEMBER_ROLE_LABELS: {
+      client: 'decides the work',
+      client_rep: 'signs for the household',
+    },
+    seatDeleteRefusal: () => null,
+  };
+});
+
+// The project-wide authority read is a react-query hook of its own; the sheet
+// under test is about the bands and the head, not about a QueryClientProvider.
+jest.mock('../use-project-authority', () => ({
+  useProjectAuthority: () => ({ data: {} }),
 }));
 
-// The picker is its own sheet with its own spec — stub it so this spec is
-// about the call sheet's own pixels (and so a second overlay never stacks).
-// Kept as a prop-capturing mock (not just () => null) so the openMode specs
-// below can assert what CallSheet hands it — `open`/`startInAdd` — without
-// depending on the picker's own rendering.
 const mockRolodexPicker = jest.fn(() => null);
 jest.mock('../rolodex-picker', () => ({
   RolodexPicker: (props: unknown) => mockRolodexPicker(props),
 }));
 
-function row(over: Partial<ProjectRosterRow> = {}): ProjectRosterRow {
+const mockAddPersonSheet = jest.fn(() => null);
+jest.mock('../../people/directory/add-person-sheet', () => ({
+  AddPersonSheet: (props: unknown) => mockAddPersonSheet(props),
+}));
+
+const mockSiteAccessCard = jest.fn(() => null);
+jest.mock('../site-access-card', () => ({
+  SiteAccessCard: (props: unknown) => mockSiteAccessCard(props),
+  useSiteAccessSummary: () =>
+    'Key held by Ngozi Eze. Luis Ochoa controls the gate. Changed 16 Oct 2026.',
+}));
+
+function seat(over: Partial<PeopleDirectorySeat>): PeopleDirectorySeat {
   return {
-    roster_id: `r-${Math.random().toString(36).slice(2)}`,
-    source: 'party',
-    project_id: 'proj-1',
-    kind: 'sub',
+    identity_key: 'k',
+    person_id: 'card',
+    seat_id: 'seat',
+    project_id: 'okonkwo',
+    project_name: 'Okonkwo residence',
+    project_status: 'active',
+    designer_id: null,
+    party_kind: 'sub',
     display_name: 'Someone',
+    trade: null,
+    stage: 'active',
+    on_site_from: null,
+    on_site_to: null,
+    site_access_mode: null,
+    contracted_through: null,
+    company_id: null,
+    company_name: null,
+    warranty_until: null,
+    warranty_contact_person_id: null,
+    off_job_at: null,
+    off_job_reason: null,
+    show_to_client: false,
+    studio_contact_id: null,
+    phone_e164: null,
+    consent_status: null,
+    reach_state: 'on_paper',
+    paper_state: null,
+    contact_rule_summary: null,
+    updated_at: null,
+    scope: 'studio',
+    ...over,
+  };
+}
+
+const SEATS = [
+  seat({
+    seat_id: 'seat-adaeze',
+    party_kind: 'client',
+    display_name: 'Adaeze Okonkwo',
+    reach_state: 'account',
+    consent_status: 'granted',
+  }),
+  seat({
+    seat_id: 'seat-dana',
+    display_name: 'Dana Kowalski',
+    trade: 'electrical',
+    on_site_from: '2026-10-12',
+    on_site_to: '2027-08-13',
+    reach_state: 'field_link',
+    consent_status: 'granted',
+  }),
+  seat({
+    seat_id: 'seat-pete',
+    display_name: 'Pete Rusk',
+    stage: 'awarded',
+    on_site_from: '2026-11-09',
+    consent_status: 'opted_out',
+  }),
+  seat({ seat_id: 'seat-rivera', display_name: 'Rivera Finishes', stage: 'no_response' }),
+  seat({
+    seat_id: 'seat-granite',
+    display_name: 'Granite North',
+    stage: 'off_job',
+    off_job_at: '2026-10-02',
+  }),
+];
+
+const ROSTER: ProjectRosterRow[] = [
+  {
+    roster_id: 'team-priya',
+    source: 'team',
+    project_id: 'okonkwo',
+    kind: 'team',
+    display_name: 'Priya Natarajan',
     company_name: null,
     email: null,
     phone: null,
     trade: null,
     job_title: null,
-    staff_role: null,
+    staff_role: 'Lead designer',
     studio_contact_id: null,
-    profile_id: null,
-    show_to_client: false,
+    profile_id: 'profile-priya',
+    show_to_client: null,
     has_active_field_link: false,
-    sms_consent_status: 'not_asked',
+    sms_consent_status: null,
     updated_at: null,
-    ...over,
-  };
-}
-
-const ROSTER = [
-  row({ source: 'team', kind: 'team', display_name: 'Leah Warner', profile_id: 'p-1' }),
-  row({ kind: 'client', display_name: 'Margaret Ellsworth', profile_id: 'p-2' }),
-  row({ kind: 'gc', display_name: 'Danny Ochoa', has_active_field_link: true }),
-  row({ kind: 'sub', trade: 'tile', display_name: 'Rosa Martínez' }),
+  },
 ];
 
-// The default props carry NO client identity — the specs below that are about
-// the roster's own rows stay exactly as they were before Wave 5's synthetic
-// client row existed. The client-side specs pass it explicitly.
 const props = {
   open: true,
   onClose: jest.fn(),
-  projectId: 'proj-1',
-  projectTitle: 'Ellsworth Residence',
+  projectId: 'okonkwo',
+  projectTitle: 'Okonkwo residence',
 };
 
 beforeEach(() => {
-  mockFlagValue = true;
-  useProjectRoster.mockReset();
-  useProjectRoster.mockReturnValue({ data: ROSTER, isLoading: false });
+  useProjectRoster.mockReset().mockReturnValue({ data: ROSTER, isLoading: false });
+  usePeopleSeats.mockReset().mockReturnValue({ data: SEATS, isLoading: false });
   mockRolodexPicker.mockClear();
+  mockSiteAccessCard.mockClear();
 });
 
-describe('CallSheet — the sheet', () => {
-  it('renders the sub-line and the vitals in one mono string', () => {
+describe('CallSheet — the head', () => {
+  it('names the job', () => {
     render(<CallSheet {...props} />);
-    expect(
-      screen.getByText('Everyone on Ellsworth Residence, and how to reach them.'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('4 ON THE JOB · 0 REACHABLE BY TEXT · 2 WITH ACCOUNTS'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Call sheet · Okonkwo residence')).toBeInTheDocument();
   });
 
-  it('renders the three groups with their counts, and nothing else', () => {
+  it('folds the site access card to one line with a way in (R-U)', () => {
     render(<CallSheet {...props} />);
-    expect(screen.getByText('Studio side')).toBeInTheDocument();
-    expect(screen.getByText('Client side')).toBeInTheDocument();
-    expect(screen.getByText('Build & supply')).toBeInTheDocument();
-    // Studio 1 · Client 1 · Build & supply 2 (gc + sub)
-    expect(screen.getAllByText('1')).toHaveLength(2);
-    expect(screen.getByText('2')).toBeInTheDocument();
-  });
-
-  it('omits a group entirely when nobody is in it', () => {
-    useProjectRoster.mockReturnValue({
-      data: [row({ kind: 'gc', display_name: 'Danny Ochoa' })],
-      isLoading: false,
-    });
-    render(<CallSheet {...props} />);
-    expect(screen.getByText('Build & supply')).toBeInTheDocument();
-    expect(screen.queryByText('Studio side')).not.toBeInTheDocument();
-    expect(screen.queryByText('Client side')).not.toBeInTheDocument();
-  });
-
-  it('permits exactly ONE primary in the action region (scored ink)', () => {
-    const { baseElement } = render(<CallSheet {...props} />);
-    const region = baseElement.querySelector(
-      '[data-action-region="call-sheet-actions"]',
+    expect(document.querySelector('[data-site-access-line]')).toHaveTextContent(
+      'Key held by Ngozi Eze. Luis Ochoa controls the gate. Changed 16 Oct 2026.',
     );
-    expect(region).not.toBeNull();
     expect(
-      region!.querySelectorAll('[data-action-variant="primary"]'),
-    ).toHaveLength(1);
-    // …and it is FROM THE ROLODEX, not NEW PERSON (slide 11, mnote 2).
-    expect(
-      region!.querySelector('[data-action-variant="primary"]')?.textContent,
-    ).toContain('From the rolodex');
+      screen.getByRole('button', { name: /Open the site access card/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('opens the site access card from that line (Leah task 3, one click)', () => {
+    render(<CallSheet {...props} />);
+    expect(mockSiteAccessCard).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: false }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Open the site access card/ }));
+    expect(mockSiteAccessCard).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true }),
+    );
+  });
+
+  it('counts the window first (SPEC §5.4 #3)', () => {
+    render(<CallSheet {...props} />);
+    // CR-9: all four numbers close over ONE population — studio side, client
+    // side, on the job this week. The last three used to count every band.
+    expect(document.querySelector('[data-call-sheet-vitals]')).toHaveTextContent(
+      '3 on the job this week · 2 reachable by text · 2 with accounts · 0 on paper',
+    );
+  });
+
+  it('leads with From the rolodex, then New person, then Print', () => {
+    render(<CallSheet {...props} />);
+    expect(screen.getByRole('button', { name: /From the rolodex/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /New person/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Print$/ })).toBeInTheDocument();
   });
 });
 
-// ============================================================================
-// THE CLIENT (Wave 5) — v_project_roster has no client branch, so the project's
-// actual client (projects.client_id) never appeared on their own call sheet.
-// The document hands their identity down; the sheet prepends the row.
-// ============================================================================
-
-describe('CallSheet — the client on the call sheet', () => {
-  // Deliberately NOT the ROSTER's client-kind party row (Margaret) — the
-  // dedupe specs below own that collision.
-  const withClient = {
-    ...props,
-    clientName: 'Harold Ellsworth',
-    clientProfileId: 'client-profile-1',
-  };
-
-  // The sheet also prints the client name as its mono sub-line, so rows are
-  // queried by their own unfold button rather than by bare text.
-  const clientRows = () =>
-    screen.queryAllByRole('button', { expanded: false, name: /Harold Ellsworth/ });
-
-  it('shows the client on the client side, and says so in mono', () => {
-    render(<CallSheet {...withClient} />);
-    expect(clientRows()).toHaveLength(1);
-    expect(screen.getByText('The client')).toBeInTheDocument();
-    expect(screen.getByText('Client side')).toBeInTheDocument();
+describe('CallSheet — the bands', () => {
+  it('prints the six bands in one order, Bidding apart from the crew', () => {
+    render(<CallSheet {...props} />);
+    const bands = Array.from(document.querySelectorAll('[data-roster-band]')).map((el) =>
+      el.getAttribute('data-roster-band'),
+    );
+    expect(bands).toEqual([
+      'studioSide',
+      'clientSide',
+      'this_week',
+      'later',
+      'bidding',
+      'done',
+    ]);
+    expect(screen.getByText('Studio side')).toBeInTheDocument();
+    expect(screen.getByText('On the job · this week')).toBeInTheDocument();
+    expect(screen.getByText('On the job · later')).toBeInTheDocument();
+    expect(screen.getByText('Bidding')).toBeInTheDocument();
+    expect(screen.getByText('Done')).toBeInTheDocument();
   });
 
-  it('counts the client in the vitals the sheet prints', () => {
-    render(<CallSheet {...withClient} />);
-    // 5 rows shown (4 roster + the client), 3 with accounts (2 roster + the
-    // client's own profile). Nobody is textable — no consent is granted.
-    expect(
-      screen.getByText('5 ON THE JOB · 0 REACHABLE BY TEXT · 3 WITH ACCOUNTS'),
-    ).toBeInTheDocument();
+  /**
+   * QA-2 — the count used to sit as a bare sibling of the label inside the
+   * <h2>, so no element's text was ever exactly "Studio side": the heading's
+   * read "Studio side2" and its accessible name "Studio side 2". SPEC §5.4 #4
+   * and direction §3.4 name the band by the plain words, and an e2e locator
+   * for the heading could not find one. `getByText` would not have caught it
+   * (it reads a node's DIRECT text children only), so this walks textContent.
+   */
+  it('QA-2 — every band label is an element whose whole text is the label', () => {
+    render(<CallSheet {...props} />);
+    const labels: Record<string, string> = {
+      studioSide: 'Studio side',
+      clientSide: 'Client side',
+      this_week: 'On the job · this week',
+      later: 'On the job · later',
+      bidding: 'Bidding',
+      done: 'Done',
+    };
+    for (const [band, label] of Object.entries(labels)) {
+      const heading = document.querySelector(`[data-roster-band="${band}"] h2`);
+      expect(heading).not.toBeNull();
+      const own = Array.from(heading!.querySelectorAll('*')).filter(
+        (el) => (el.textContent ?? '').trim() === label,
+      );
+      expect(own).toHaveLength(1);
+    }
   });
 
-  it('gives the client no party affordances — not even a chevron', () => {
-    render(<CallSheet {...withClient} onOpenProfile={jest.fn()} />);
-    expect(
-      screen.queryByRole('button', { name: /Open Harold Ellsworth's profile/ }),
-    ).not.toBeInTheDocument();
+  it('never says Build & supply', () => {
+    render(<CallSheet {...props} />);
+    expect(document.body.textContent).not.toMatch(/Build & supply/i);
   });
 
-  it('stands in for the empty state when nobody else is on the job yet', () => {
+  it('puts each name in the band its window decides', () => {
+    render(<CallSheet {...props} />);
+    const band = (key: string) =>
+      document.querySelector(`[data-roster-band="${key}"]`)?.textContent ?? '';
+    expect(band('studioSide')).toContain('Priya Natarajan');
+    expect(band('clientSide')).toContain('Adaeze Okonkwo');
+    expect(band('this_week')).toContain('Dana Kowalski');
+    expect(band('later')).toContain('Pete Rusk');
+    expect(band('bidding')).toContain('Rivera Finishes');
+    expect(band('done')).toContain('Granite North');
+  });
+
+  it('says so plainly when nobody is on the job yet', () => {
+    usePeopleSeats.mockReturnValue({ data: [], isLoading: false });
     useProjectRoster.mockReturnValue({ data: [], isLoading: false });
-    render(<CallSheet {...withClient} />);
-    expect(screen.queryByText('– No one is on the call sheet yet.')).not.toBeInTheDocument();
-    expect(clientRows()).toHaveLength(1);
-    expect(
-      screen.getByText('1 ON THE JOB · 0 REACHABLE BY TEXT · 1 WITH ACCOUNTS'),
-    ).toBeInTheDocument();
-  });
-
-  it('never reads the client twice when a party row already claims them', () => {
-    useProjectRoster.mockReturnValue({
-      data: [
-        row({
-          kind: 'client',
-          display_name: 'Harold Ellsworth',
-          profile_id: 'client-profile-1',
-        }),
-      ],
-      isLoading: false,
-    });
-    render(<CallSheet {...withClient} />);
-    // One row, not two — and it is the party row (no THE CLIENT pill), the
-    // one with a phone number and actions under it.
-    expect(clientRows()).toHaveLength(1);
-    expect(screen.queryByText('The client')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('1 ON THE JOB · 0 REACHABLE BY TEXT · 1 WITH ACCOUNTS'),
-    ).toBeInTheDocument();
-  });
-});
-
-describe('CallSheet — the empty sheet', () => {
-  beforeEach(() => {
-    useProjectRoster.mockReturnValue({ data: [], isLoading: false });
-  });
-
-  it('states the emptiness and offers the first name', () => {
     render(<CallSheet {...props} />);
     expect(screen.getByText('– No one is on the call sheet yet.')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Add the first name' }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Studio side')).not.toBeInTheDocument();
   });
+});
 
-  it('still tells the truth in the vitals line', () => {
+describe('CallSheet — the picker doorways', () => {
+  it('opens the picker on From the rolodex', () => {
     render(<CallSheet {...props} />);
-    expect(
-      screen.getByText('0 ON THE JOB · 0 REACHABLE BY TEXT · 0 WITH ACCOUNTS'),
-    ).toBeInTheDocument();
-  });
-});
-
-describe('CallSheet — the flag', () => {
-  it('renders nothing at all when `call-sheet` is off', () => {
-    mockFlagValue = false;
-    const { baseElement } = render(<CallSheet {...props} />);
-    expect(baseElement.querySelector('[data-call-sheet-region]')).toBeNull();
-    expect(screen.queryByText('Studio side')).not.toBeInTheDocument();
-  });
-});
-
-// ============================================================================
-// openMode — FIX 2 (kickoff/instrument open modes). document:open-call-sheet
-// carries an optional { mode } detail; the page forwards it straight through
-// as this prop. 'picker'/'add' pre-address the RolodexPicker so the doorway
-// skips the intermediate roster list; the default 'sheet' behaves exactly as
-// before (the picker stays closed until the sheet's own actions open it).
-// ============================================================================
-
-describe('CallSheet — openMode', () => {
-  it('opens straight to the rolodex picker when openMode="picker"', () => {
-    render(<CallSheet {...props} openMode="picker" />);
-
+    fireEvent.click(screen.getByRole('button', { name: /From the rolodex/ }));
     expect(mockRolodexPicker).toHaveBeenLastCalledWith(
       expect.objectContaining({ open: true, startInAdd: false }),
     );
   });
 
-  it('opens the picker already in its add-a-person state when openMode="add"', () => {
-    render(<CallSheet {...props} openMode="add" />);
-
-    expect(mockRolodexPicker).toHaveBeenLastCalledWith(
-      expect.objectContaining({ open: true, startInAdd: true }),
-    );
-  });
-
-  it('leaves the picker closed for the default "sheet" mode', () => {
+  // QA-2 (w2 r5): "New person" opened the rolodex picker's inline form, so the
+  // Call Sheet could not reach direction §3.5's Add sheet — the kind switch,
+  // the contact rule, the consent capture and the authority field — at all.
+  it('opens the Add sheet on New person, on this job, not the picker', () => {
     render(<CallSheet {...props} />);
-
-    expect(mockRolodexPicker).toHaveBeenLastCalledWith(
-      expect.objectContaining({ open: false, startInAdd: false }),
+    fireEvent.click(screen.getByRole('button', { name: /New person/ }));
+    expect(mockAddPersonSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true, initialProjectId: 'okonkwo' }),
     );
-  });
-
-  it('never pre-addresses the picker while the sheet itself is closed', () => {
-    render(<CallSheet {...props} open={false} openMode="picker" />);
-
     expect(mockRolodexPicker).toHaveBeenLastCalledWith(
       expect.objectContaining({ open: false }),
+    );
+  });
+
+  it('honours a pre-addressed open mode', () => {
+    render(<CallSheet {...props} openMode="add" />);
+    expect(mockRolodexPicker).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true, startInAdd: true }),
     );
   });
 });

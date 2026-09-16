@@ -13,9 +13,48 @@ const personData: { current: Record<string, unknown> | null } = { current: null 
 /** What a refetch of the person query returns — the read side the sheet asks
  *  when a write matches zero rows. Defaults to "still there". */
 const personRefetch = jest.fn();
+/** CR3-1 — the sheet reads the SEAT, so the zero-row re-read asks the seat too:
+ *  a carded seat has no `people_directory` row of its own, and asking the
+ *  directory alone read every authority refusal as a race. */
+const seatRefetch = jest.fn();
+const seatData: { current: Record<string, unknown> | null } = { current: null };
+/** A CARDED seat: `people_directory_seats` resolves it, and
+ *  `usePerson(<seat id>)` finds nothing at all — twelve of twelve Okonkwo seats
+ *  are this shape (CR3-1). */
+const cardedSeat = {
+  seat: {
+    seat_id: 'party-1',
+    project_id: 'proj-1',
+    project_name: 'The Okonkwo Residence',
+    display_name: 'Sal Moretti',
+    trade: 'plumbing',
+    company_name: 'Moretti Plumbing',
+    phone_e164: '5551234567',
+  },
+  identity: {
+    person_id: 'card-sal',
+    email: 'sal@morettiplumbing.com',
+    consent_status: 'not_asked',
+  },
+};
 
 jest.mock('@patina/supabase', () => ({
   usePerson: () => ({ data: personData.current, refetch: personRefetch }),
+  // R-BE — the sheet resolves the SEAT through people_directory_seats and takes
+  // the consent word off the identity's own `consent_status` column. The
+  // fixture's person doubles as the identity here.
+  usePersonSeat: () => ({
+    data: seatData.current ?? {
+      seat: personData.current
+        ? {
+            seat_id: 'party-1',
+            project_id: personData.current.project_id,
+          }
+        : null,
+      identity: personData.current,
+    },
+    refetch: seatRefetch,
+  }),
   usePartySmsThread: () => ({ data: [] }),
   useSendPartySms: () => ({
     mutate: jest.fn(),
@@ -28,6 +67,9 @@ jest.mock('@patina/supabase', () => ({
   useRevokeFieldLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useFieldMediaUrl: () => ({ data: null }),
   useOrganizations: () => ({ data: [] }),
+  // CR-1: the promote band resolves the studio from the SEAT's project
+  // (project_recorded_studio), never from the membership list.
+  useProjectRecordedStudio: () => ({ data: 'org-1' }),
   useProjectParties: () => ({ data: [] }),
   useRecordPartySmsConsent: () => ({ mutate: jest.fn(), isPending: false }),
   useUpdateProjectParty: () => ({
@@ -58,7 +100,15 @@ function person(over: Partial<Record<string, unknown>> = {}) {
     profile_id: null,
     project_id: 'project-1',
     designer_id: null,
-    status_raw: 'not_asked',
+    // R-AS/R-BE: `status_raw` is the ARCHIVE state on a v4 row, never the
+    // consent word. The sheet reads `consent_status`, which is the studio's
+    // own record through `channel_consent_status()`.
+    status_raw: 'active',
+    consent_status: 'not_asked',
+    reach_state: 'on_paper',
+    paper_state: null,
+    contact_rule_summary: null,
+    seat_count: 1,
     last_touch_at: null,
     meta: {
       company_name: 'Moretti Plumbing',
@@ -75,11 +125,81 @@ beforeEach(() => {
   updateMutateAsync.mockReset();
   updateMutateAsync.mockResolvedValue({});
   personData.current = person();
+  // Null means "follow the person fixture" — the sheet's usual case, where the
+  // identity behind the seat is the same record. A test that needs the CR3-1
+  // shape (a CARDED seat, resolvable by seat id and by nothing else) sets it.
+  seatData.current = null;
   personRefetch.mockReset();
   personRefetch.mockImplementation(async () => ({ data: personData.current }));
+  seatRefetch.mockReset();
+  seatRefetch.mockImplementation(async () => ({ data: seatData.current }));
 });
 
 const ROLE: PartyRole = 'sub';
+
+/**
+ * CR3-1 — THE SHEET IS THE SEAT'S SHEET.
+ *
+ * `people_directory` v4 keys a carded human on their ROLODEX CARD, so
+ * `usePerson(<seat id>)` resolves nothing for a carded seat — twelve of twelve
+ * Okonkwo seats are carded, and both live doors into this sheet (the Call
+ * Sheet's chevron and the person card's seat line) pass a `project_parties.id`.
+ * The sheet opened headed "Field party" with no name, phone, trade, company or
+ * project; "Invite to texts" refused for somebody whose number is on the seat;
+ * and Edit always refused with "This party isn't attached to a project".
+ */
+describe('PartyProfileSheet — a CARDED seat, with no directory row of its own', () => {
+  beforeEach(() => {
+    personData.current = null;
+    seatData.current = cardedSeat;
+  });
+
+  it('heads the sheet with the seat’s name, not "Field party"', () => {
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    expect(
+      screen.getByRole('heading', { name: 'Sal Moretti' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Field party' })).not.toBeInTheDocument();
+  });
+
+  it('prints the contact card off the seat, email off the identity', () => {
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    expect(screen.getByText('Plumbing')).toBeInTheDocument();
+    expect(screen.getByText('Moretti Plumbing')).toBeInTheDocument();
+    expect(screen.getByText('5551234567')).toBeInTheDocument();
+    expect(screen.getByText('sal@morettiplumbing.com')).toBeInTheDocument();
+    expect(screen.getByText('The Okonkwo Residence')).toBeInTheDocument();
+  });
+
+  it('offers Edit, and Save reaches the mutation with the SEAT’s project', async () => {
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Sal R. Moretti' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalled());
+    expect(updateMutateAsync).toHaveBeenCalledWith({
+      id: 'party-1',
+      projectId: 'proj-1',
+      patch: { displayName: 'Sal R. Moretti' },
+    });
+    expect(
+      screen.queryByText(/isn’t attached to a project/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers the texts invite, because the number is on the seat', () => {
+    render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
+    expect(
+      screen.getByRole('button', { name: 'Invite to texts' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Add a phone number to invite this party to texts.'),
+    ).not.toBeInTheDocument();
+  });
+});
 
 describe('PartyProfileSheet — edit', () => {
   it('starts read-only, with an Edit action', () => {
@@ -159,7 +279,7 @@ describe('PartyProfileSheet — edit', () => {
   // edited on a granted/pending party, never for an untouched field or a
   // not_asked/opted_out one.
   it('warns inline only when editing the phone would clear a granted consent', () => {
-    personData.current = person({ status_raw: 'granted' });
+    personData.current = person({ consent_status: 'granted' });
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
@@ -351,6 +471,8 @@ describe('PartyProfileSheet — edit', () => {
       message: 'JSON object requested, multiple (or no) rows returned',
     });
     personRefetch.mockResolvedValue({ data: null });
+    // The seat is gone too — that is what "vanished" means for a carded seat.
+    seatRefetch.mockResolvedValue({ data: { seat: null, identity: null } });
     render(<PartyProfileSheet open partyId="party-1" role={ROLE} onClose={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sal R. Moretti' } });

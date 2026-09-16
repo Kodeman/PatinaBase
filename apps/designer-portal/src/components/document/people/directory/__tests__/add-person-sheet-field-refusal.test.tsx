@@ -4,23 +4,26 @@
  * nothing announced it. The refusal is now an alert, and it still writes
  * nothing.
  */
-import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AddPersonSheet } from '../add-person-sheet';
+import { render, screen, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AddPersonSheet } from "../add-person-sheet";
 
 const addPartyMutateAsync = jest.fn();
 
-jest.mock('@/hooks/use-feature-flag', () => ({
+jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));
 
-jest.mock('@/hooks/use-auth', () => ({
-  useAuth: () => ({ user: { id: 'designer-1' } }),
+jest.mock("@/hooks/use-auth", () => ({
+  useAuth: () => ({ user: { id: "designer-1" } }),
 }));
 
-jest.mock('@patina/supabase', () => ({
-  ...jest.requireActual('@patina/supabase'),
-  useStudioIdentity: () => ({ data: { name: 'Middle West Studio' }, isLoading: false }),
+jest.mock("@patina/supabase", () => ({
+  ...jest.requireActual("@patina/supabase"),
+  useStudioIdentity: () => ({
+    data: { name: "Middle West Studio" },
+    isLoading: false,
+  }),
   useProjects: () => ({ data: [], isLoading: false }),
   useAddProjectParty: () => ({
     mutateAsync: addPartyMutateAsync,
@@ -41,15 +44,15 @@ beforeEach(() => {
   addPartyMutateAsync.mockReset();
 });
 
-describe('AddPersonSheet — a field kind with no project', () => {
-  it('says why in an alert, and adds nobody', () => {
+describe("AddPersonSheet — a field kind with no project", () => {
+  it("says why in an alert, and adds nobody", () => {
     renderWithClient(<AddPersonSheet open onClose={jest.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'a sub' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add to roster' }));
+    fireEvent.click(screen.getByRole("button", { name: "a sub" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Field crew work a project — pick which one they’re on.',
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Field crew work a project — pick which one they’re on.",
     );
     expect(addPartyMutateAsync).not.toHaveBeenCalled();
   });

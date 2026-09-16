@@ -31,6 +31,7 @@ ALL_SCREENS=(
   V0.visit V1.session-tray V2.cull V3.detail
   U1.sync U2.library-search T1.settings T2.account
   W1.work
+  H1.log-time
   P1.project-list P2.project-detail
   L1.lead-list L2.lead-detail
   D1.decision-list D2.decision-detail

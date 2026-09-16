@@ -1,414 +1,782 @@
 /**
- * J7 — the person profile's Nurture card must read the same issuance evidence
- * (deriveIssuanceState: paper → sent → draft) deriveRelationshipLine and
- * isNurtureDue read, rather than reimplementing "proposal sent" off bare
- * status_raw a third time. See
- * apps/designer-portal/src/lib/document/people-derivation.ts.
+ * THE PERSON CARD (W2b). Rewritten: the four role-branched documents this
+ * spec tested — Style DNA, the woven journey, Engagements / Track record, the
+ * team colophon — collapse into one card with silent regions (direction §4).
  *
- * F3 also lives here: the client branch's "Edit details" door (opens the
- * existing HouseholdSheet standalone) and the studio-contact/gc/trade
- * branches' "Edit" door (opens AddPersonSheet's edit mode), including the
- * archived-card hide.
+ * What it pins is the rule those silent regions rest on (R-V / C32): a region
+ * never vanishes because its record is empty. A region that vanishes reads as
+ * an oversight; a region that says "none on file" reads as a fact, and the
+ * studio must be able to tell the two apart at a glance.
+ *
+ * The last block pins the one affordance carried across from the four
+ * documents: HT-8's Hours door, which lived in the deleted team renderer and
+ * is the only entry point into the Hours sheet's member scope.
  */
-import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { StudioContact } from '@patina/supabase';
-import { PersonProfile } from '../views/person-profile';
+import { fireEvent, render, screen } from "@testing-library/react";
+import type { PeopleDirectoryRow, PeopleDirectorySeat } from "@patina/supabase";
+import { PersonProfile } from "../views/person-profile";
 
-const mockPush = jest.fn();
+const personData: { current: PeopleDirectoryRow | null } = { current: null };
+const seatData: { current: PeopleDirectorySeat[] } = { current: [] };
+const cardData: { current: Record<string, unknown> | null } = { current: null };
+const authorityData: { current: unknown[] } = { current: [] };
+/** CR13-8 — R-AO allows two OPEN affiliations at once; the card must pair one
+ *  firm's name with that firm's own role and year. */
+const affiliationData: { current: Record<string, unknown>[] } = { current: [] };
+/** CR3-9 — the rule row governing this person, which the composers must read. */
+const rulesData: { current: unknown[] } = { current: [] };
+/** QA-R9-1 — the studio's other cards, so a routed rule can name its door. */
+const rolodexData: { current: unknown[] } = { current: [] };
+/** W4/P3 — E13's record, which outranks the rolodex's coarse last-touch date. */
+const lastTouch: { current: unknown } = { current: null };
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+/** The acting viewer's seat in her own studio — HT-8 gates the Hours door on it. */
+let viewerStudioRole: "owner" | "admin" | "member" = "owner";
 
-let mockPersonData: Record<string, unknown> | null = null;
-let mockStudioContact: StudioContact | null = null;
-
-jest.mock('@patina/supabase', () => ({
-  usePerson: () => ({ data: mockPersonData, isLoading: false }),
-  useClient: () => ({ data: null }),
-  useClientProjects: () => ({ data: [] }),
-  useProposals: () => ({ data: [] }),
-  useClientDecisions: () => ({ data: [] }),
-  useThreads: () => ({ data: [] }),
-  useNurtureTouchpoints: () => ({ data: [] }),
-  useClientReviews: () => ({ data: [] }),
-  useStartDirectThread: () => ({ mutate: jest.fn() }),
-  useStyles: () => ({ data: [] }),
-  // F3 — HouseholdSheet ("Edit details") and AddPersonSheet's edit mode
-  // ("Edit"), both now reachable from this component's tree.
-  useDesignerClientForClientUser: () => ({ data: undefined }),
-  useUpdateClientContact: () => ({ mutate: jest.fn(), isPending: false }),
-  useStudioContact: () => ({ data: mockStudioContact }),
-  useUpdateStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useAddClient: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useAddProjectParty: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useSaveVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useStudioIdentity: () => ({ data: null, isLoading: false }),
-}));
-
-jest.mock('@/hooks/use-person-documents', () => ({
-  usePersonDocuments: () => ({ data: [] }),
-}));
-
-jest.mock('@/hooks/use-attach-client', () => ({
-  useAttachDocumentClient: () => ({
+jest.mock("@patina/supabase", () => ({
+  // ── W4/P3 — E13 touches, CRM-23 notices, the paperwork door, the queue ──
+  useTouches: () => ({ data: [] }),
+  useLastTouch: () => ({ data: lastTouch.current }),
+  useRecordNotice: () => ({
+    mutateAsync: async () => ({
+      id: "touch-1",
+      what: "x",
+      recorded_at: "2026-09-15T00:00:00Z",
+      recorded_by: null,
+      told_names: [],
+    }),
+    isPending: false,
+  }),
+  asNoticeError: (e: unknown) =>
+    e instanceof Error ? e.message : String(e ?? ""),
+  lastInboundDecision: (
+    rows:
+      | ReadonlyArray<{ direction: string; decision_class: string }>
+      | null
+      | undefined,
+  ) =>
+    (rows ?? []).find(
+      (r) => r.direction === "in" && r.decision_class !== "none",
+    ) ?? null,
+  inboundDecisionSentence: (
+    t: { decision_class: string; authority_check: string } | null,
+  ) =>
+    t
+      ? `A ${t.decision_class} decision came in.${
+          t.authority_check === "failed_no_authority"
+            ? " Received, not authority."
+            : ""
+        }`
+      : null,
+  touchSentence: () => "Last touch 12 Sep 2026, by text.",
+  NO_TOUCH_SENTENCE: "No contact on the record yet.",
+  useInboundDocuments: () => ({ data: [] }),
+  useConfirmInboundDocument: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useRejectInboundDocument: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  inboundQueueHeading: (n: number) =>
+    `${n} document${n === 1 ? "" : "s"} waiting for your check`,
+  inboundDocumentLine: (d: { doc_type: string }, firm: string) =>
+    `${d.doc_type}, uploaded by ${firm}.`,
+  usePaperworkLinks: () => ({ data: [] }),
+  useMintPaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRevokePaperworkLink: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  paperworkLinkUrl: (t: string) => `https://client.patina.cloud/paperwork/${t}`,
+  thirtyDaysOut: () => "2026-10-15",
+  // W4 r10 M-1 (R-CB) — the REAL studio-timezone day resolver for
+  // `last_touch_at`, a timestamptz, so the seat line prints the studio's day.
+  touchInstantDay: jest.requireActual("@patina/supabase").touchInstantDay,
+  firmEngagementWindowEnd: () => null,
+  // r21 MAJOR-1 / major-2 (R-BS) — PR-n standing, read before the press.
+  // 00634 refuses the close of a seat carrying an OPEN money or
+  // draw-certify grant to anyone who is not an owner or an admin.
+  seatCloseIsHeldForMoney: (
+    authority:
+      | ReadonlyArray<{ scope: string; effective_to: string | null }>
+      | null
+      | undefined,
+    isPrincipal: boolean,
+  ) =>
+    !isPrincipal &&
+    (authority ?? []).some(
+      (g) =>
+        g.effective_to == null && ["money", "draw_certify"].includes(g.scope),
+    ),
+  SEAT_CLOSE_MONEY_HELD_REASON:
+    "This seat signs for money. Closing it ends that, and ending it is the principal’s. An owner or an admin of the studio can close this seat.",
+  // W3/P2 — the archive door and the seat's own close act.
+  useOrganizations: () => ({ data: [] }),
+  useArchiveStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useRestoreStudioContact: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useCloseProjectPartySeat: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  STUDIO_CONTACT_ARCHIVE_STANDING_SENTENCE:
+    "Only an owner or an admin of the studio may put a card away, or bring one back.",
+  AUTHORITY_SCOPE_LABELS: {
+    money: "Signs money",
+    change_order: "Approves change orders",
+    selections: "Selections",
+  },
+  // CR10-1 — the composer hangs off a FIELD seat, so the card asks which kinds
+  // are field kinds before it offers "Send a text".
+  isFieldRosterRole: (role: string | null) =>
+    ["gc", "sub", "installer", "receiver"].includes(role ?? ""),
+  usePerson: () => ({ data: personData.current, isLoading: false }),
+  useStudioContact: () => ({ data: cardData.current }),
+  useAffiliations: () => ({ data: affiliationData.current }),
+  usePeopleSeats: () => ({ data: seatData.current }),
+  useComplianceDocuments: () => ({ data: [] }),
+  useComplianceState: () => ({ data: "lapsed" }),
+  usePartyAuthority: () => ({ data: authorityData.current }),
+  // CR-10 / QA-R2-3: the card resolves the rule, the route and the studio's
+  // other cards, so "Do not contact" can say where to write instead.
+  useStudioContacts: () => ({ data: rolodexData.current }),
+  useContactRules: () => ({ data: rulesData.current }),
+  useStudioContactChannelsFor: () => ({ data: [] }),
+  // Reach & access reads these; the card's own regions are what this spec is
+  // about, so each is answered with the "nothing on file" shape.
+  useStudioContactChannels: () => ({ data: [] }),
+  useContactRule: () => ({ data: null }),
+  useOrganizationMembers: () => ({ data: [] }),
+  useAccessGrants: () => ({ data: [] }),
+  useChannelConsent: () => ({ data: null }),
+  useRecordChannelConsent: () => ({ mutate: jest.fn(), isPending: false }),
+  useSetContactRule: () => ({ mutate: jest.fn(), isPending: false }),
+  // CR3-4 — the two channel writers the card grew.
+  useAddStudioContactChannel: () => ({ mutate: jest.fn(), isPending: false }),
+  useSetStudioContactChannelStatus: () => ({
     mutate: jest.fn(),
     isPending: false,
-    isError: false,
-    error: null,
+  }),
+  ALL_CONTACT_CHANNEL_STATUSES: ["active", "bounced", "unsubscribed", "dead"],
+  PERSON_CHANNEL_KINDS: ["mobile", "email"],
+  COMPANY_CHANNEL_KINDS: ["office", "dispatch", "ap_email"],
+  useCreateFieldLink: () => ({ mutate: jest.fn(), isPending: false }),
+  useRevokeAccessGrant: () => ({ mutate: jest.fn(), isPending: false }),
+  useRecordComplianceDocument: () => ({
+    mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  isAccessGrantRevokable: () => false,
+  ACCESS_GRANT_NOT_REVOKABLE_SENTENCE:
+    "This door is closed somewhere else in Patina, not from here.",
+  ACCESS_GRANT_TIER_LABELS: { field_link: "Field link" },
+  ACCESS_GRANT_TIER_OPENS: {
+    field_link: "the Call Sheet and the site access card",
+  },
+  CONTACT_CHANNEL_KIND_LABELS: { mobile: "Mobile", email: "Email" },
+  isContactChannelHeld: (s: string) => !!s && s !== "active",
+  fieldLinkUrl: (token: string) => `https://patina.cloud/field/${token}`,
+  ALL_COMPLIANCE_BLOCKS: ["site_access", "payment", "draw"],
+  ALL_COMPLIANCE_DOC_TYPES: ["coi_gl"],
+  COMPLIANCE_BLOCK_LABELS: {
+    site_access: "site access",
+    payment: "payment",
+    draw: "the draw",
+  },
+  COMPLIANCE_DOC_TYPE_LABELS: { coi_gl: "COI, general liability" },
+  complianceDocRequiresExpiry: () => true,
+  // HT-8 — the card's "Hours" door carries the scope lens's own owner/admin
+  // gate, so the branch reads the viewer's studio membership.
+  useOrganizations: () => ({
+    data: [
+      {
+        id: "studio-1",
+        name: "Leah Mbeki Studio",
+        type: "design_studio",
+        membership: { role: viewerStudioRole, status: "active" },
+      },
+    ],
   }),
 }));
 
-jest.mock('@/components/portal/client-picker', () => ({
-  ClientPicker: () => null,
+jest.mock("../profile/maker-profile", () => ({
+  MakerProfile: () => <div data-testid="maker-profile" />,
 }));
 
-jest.mock('@/hooks/use-projects', () => ({
-  useProjects: () => ({ data: [] }),
+jest.mock("@/lib/analytics/people-events", () => ({
+  peopleEvents: {
+    personCardOpened: jest.fn(),
+    consentRecorded: jest.fn(),
+    grantMinted: jest.fn(),
+    grantRevoked: jest.fn(),
+  },
 }));
 
-jest.mock('@/hooks/use-auth', () => ({
-  useAuth: () => ({ user: { id: 'designer-1' } }),
-}));
-
-jest.mock('@/hooks/use-feature-flag', () => ({
-  useFeatureFlag: () => ({ value: false, isLoading: false }),
-}));
-
-function renderWithClient(ui: React.ReactElement) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
-  );
-}
-
-function studioContact(over: Partial<StudioContact> = {}): StudioContact {
+function person(over: Partial<PeopleDirectoryRow> = {}): PeopleDirectoryRow {
   return {
-    id: 'contact-1',
-    organization_id: 'org-1',
-    entity_kind: 'person',
-    company_id: null,
-    contact_kind: 'other',
-    full_name: 'Priya Raman',
-    company_name: null,
-    email: 'priya@example.com',
-    phone: '5551234567',
-    phone_e164: '+15551234567',
-    specialties: [],
-    vendor_id: null,
+    person_id: "card-dana",
+    role: "contact",
+    display_name: "Dana Kowalski",
+    email: "dana@northgateelectric.com",
+    phone: "(612) 555-0111",
     profile_id: null,
-    created_by: 'designer-1',
-    notes: null,
-    archived_at: null,
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    ...over,
-  };
-}
-
-// The client-role path under test never renders MakerProfile, but
-// person-profile.tsx imports it eagerly at module scope — its own import
-// chain (command-bar → post-sheet → @patina/help-system →
-// @portabletext/react) ships ESM Jest doesn't transform. Stub it out rather
-// than pull that unrelated chain into a client-profile test.
-jest.mock('../profile/maker-profile', () => ({
-  MakerProfile: () => null,
-}));
-
-function basePerson(overrides: Record<string, unknown>) {
-  return {
-    person_id: 'client-1',
-    role: 'client',
-    display_name: 'Harper Vale',
-    email: 'harper@example.com',
-    phone: null,
-    profile_id: 'profile-1',
     project_id: null,
-    designer_id: 'designer-1',
-    status_raw: 'proposal',
-    last_touch_at: new Date().toISOString(),
-    meta: {},
-    scope: 'mine',
-    ...overrides,
-  };
+    designer_id: null,
+    status_raw: "active",
+    last_touch_at: "2026-10-17T12:00:00Z",
+    meta: {
+      entity_kind: "person",
+      contact_kind: "sub",
+      company_name: "Northgate Electric",
+      // As `people_directory` builds it — the pointer the card's firm facts
+      // (paper, and CR13-8's affiliation) are read against.
+      company_id: "firm-northgate",
+    },
+    scope: "studio",
+    reach_state: "field_link",
+    consent_status: "granted",
+    paper_state: "lapsed",
+    contact_rule_summary: null,
+    seat_count: 2,
+    ...over,
+  } as PeopleDirectoryRow;
 }
 
-describe('PersonProfile — Nurture card (J7)', () => {
-  it('reads a merely-drafted, never-sent proposal honestly, not as an overdue nudge', () => {
-    mockPersonData = basePerson({ meta: { has_sent_proposal: false } });
-    render(
+function seat(over: Partial<PeopleDirectorySeat> = {}): PeopleDirectorySeat {
+  return {
+    identity_key: "card-dana",
+    person_id: "card-dana",
+    seat_id: "seat-1",
+    project_id: "proj-okonkwo",
+    project_name: "Okonkwo residence",
+    project_status: "active",
+    designer_id: null,
+    party_kind: "sub",
+    display_name: "Dana Kowalski",
+    trade: "electrical",
+    stage: "active",
+    on_site_from: "2026-10-12",
+    on_site_to: "2027-08-13",
+    site_access_mode: "escorted",
+    contracted_through: "Marrow & Sons",
+    company_id: "firm-northgate",
+    company_name: "Northgate Electric",
+    warranty_until: null,
+    warranty_contact_person_id: null,
+    off_job_at: null,
+    off_job_reason: null,
+    show_to_client: false,
+    studio_contact_id: "card-dana",
+    phone_e164: "+16125550111",
+    consent_status: "granted",
+    reach_state: "field_link",
+    paper_state: "lapsed",
+    contact_rule_summary: null,
+    updated_at: null,
+    scope: "studio",
+    ...over,
+  } as PeopleDirectorySeat;
+}
+
+function renderCard(props: Record<string, unknown> = {}) {
+  const onOpenSeat = jest.fn();
+  render(
+    <PersonProfile
+      personId="card-dana"
+      role="contact"
+      organizationId="org-1"
+      onBack={jest.fn()}
+      openPerson={jest.fn()}
+      openThread={jest.fn()}
+      goView={jest.fn()}
+      notify={jest.fn()}
+      onOpenSeat={onOpenSeat}
+      {...props}
+    />,
+  );
+  return { onOpenSeat };
+}
+
+beforeEach(() => {
+  lastTouch.current = null;
+  personData.current = person();
+  affiliationData.current = [
+    {
+      id: "aff-1",
+      person_id: "card-dana",
+      company_id: "firm-northgate",
+      role_at_firm: "owner-operator",
+      from_date: "2025-03-01",
+      is_paperwork_contact: true,
+      is_signer: true,
+      holds_trade_license: true,
+    },
+  ];
+  rulesData.current = [];
+  rolodexData.current = [];
+  seatData.current = [seat()];
+  cardData.current = {
+    id: "card-dana",
+    is_sole_proprietor: true,
+    organization_id: "org-1",
+    warranty_until: null,
+  };
+  authorityData.current = [];
+});
+
+describe("the regions", () => {
+  it("prints every region head, in order", () => {
+    renderCard();
+    for (const head of [
+      "Reach & access",
+      "Seats on projects",
+      "Past seats",
+      "Paper",
+      "History",
+    ]) {
+      expect(screen.getByRole("heading", { name: head })).toBeInTheDocument();
+    }
+  });
+
+  it("R-V — an absent record prints its own sentence, exactly", () => {
+    seatData.current = [];
+    renderCard();
+    expect(screen.getByText("No contact rule on file.")).toBeInTheDocument();
+    expect(screen.getByText("No grant on file.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No open seat on this project."),
+    ).toBeInTheDocument();
+  });
+
+  it("names the firm and the role at it", () => {
+    renderCard();
+    expect(
+      screen.getByText("Northgate Electric · owner-operator, since 2025"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Sole proprietor")).toBeInTheDocument();
+  });
+
+  /**
+   * CR13-8 — a person may hold two OPEN affiliations (R-AO). The card names
+   * ONE firm, and the role and the year beside that name must be that firm's.
+   */
+  it("pairs the firm it names with that firm's own role and year", () => {
+    affiliationData.current = [
+      {
+        id: "aff-2",
+        person_id: "card-dana",
+        company_id: "firm-marrow",
+        role_at_firm: "office manager",
+        from_date: "2019-01-01",
+        is_paperwork_contact: false,
+        is_signer: false,
+        holds_trade_license: false,
+      },
+      ...affiliationData.current,
+    ];
+    renderCard();
+    expect(
+      screen.getByText("Northgate Electric · owner-operator, since 2025"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/office manager/)).toBeNull();
+  });
+});
+
+describe("the seats beneath the human", () => {
+  it("prints the seat, its stage word and its window", () => {
+    renderCard();
+    const line = screen.getByRole("button", {
+      // CR13-3: the seat line speaks the studio's words, not the column heads.
+      name: /Okonkwo residence · sub · electrical/,
+    });
+    expect(line).toHaveTextContent("On the job");
+    expect(line).toHaveTextContent("12 Oct 2026 to 13 Aug 2027");
+  });
+
+  it("authority prints as plain text, never as a state word", () => {
+    authorityData.current = [
+      { scope: "money", threshold_cents: 250000, prepares_only: false },
+    ];
+    const { container } = render(
       <PersonProfile
-        personId="client-1"
-        role="client"
+        personId="card-dana"
+        role="contact"
+        organizationId="org-1"
         onBack={jest.fn()}
-        openThread={jest.fn()}
         openPerson={jest.fn()}
+        openThread={jest.fn()}
         goView={jest.fn()}
         notify={jest.fn()}
       />,
     );
+    const phrase = screen.getByText("Signs money to $2,500");
+    expect(phrase).toBeInTheDocument();
+    expect(phrase.closest("[data-state-word]")).toBeNull();
+    expect(container).toBeTruthy();
+  });
 
+  it("says so plainly when the seat carries no grant", () => {
+    renderCard();
+    expect(screen.getByText("No authority on this job")).toBeInTheDocument();
+  });
+
+  it("prints the seat’s own facts beside it", () => {
+    renderCard();
     expect(
-      screen.getByText('Still drafting — nothing has gone to them yet.'),
+      screen.getByText(
+        "Escorted on site · Contracted through Marrow & Sons · Hidden from the client",
+      ),
     ).toBeInTheDocument();
+  });
+
+  it("folds a closed seat into Past seats, never into the live list", () => {
+    seatData.current = [
+      seat(),
+      seat({
+        seat_id: "seat-0",
+        project_name: "Lindqvist kitchen",
+        stage: "warranty",
+        off_job_at: "2025-11-21",
+        warranty_until: "2026-11-21",
+      }),
+    ];
+    renderCard();
+    const past = screen
+      .getByText(/Lindqvist kitchen/)
+      .closest("li") as HTMLElement;
+    expect(past).toHaveTextContent("Warranty");
+    expect(past).toHaveTextContent("Closed 21 Nov 2025");
+    expect(past).toHaveTextContent("Warranty through 21 Nov 2026");
+    // The live list still holds only the open seat.
     expect(
-      screen.queryByText(/Proposal out.*nudge or a call may be overdue/),
+      screen.getByRole("button", { name: /Okonkwo residence · sub/ }),
+    ).toBeInTheDocument();
+  });
+});
+
+/**
+ * CR11-3 — `seat_count` is `identity_seat_count()` (R-BG), the seats
+ * `people_directory_seats` NESTS. Printed as a project count, a person holding
+ * two seats on one job read "Worked 2 of the studio's projects."
+ */
+describe("the History sentence counts projects, not seats", () => {
+  it("two seats on one job are one project", () => {
+    personData.current = person({ seat_count: 2 });
+    seatData.current = [seat(), seat({ seat_id: "seat-1b" })];
+    renderCard();
+    expect(
+      screen.getByText(/Worked 1 of the studio's project\./),
+    ).toBeInTheDocument();
+  });
+
+  it("two seats on two jobs are two projects", () => {
+    personData.current = person({ seat_count: 2 });
+    seatData.current = [
+      seat(),
+      seat({
+        seat_id: "seat-2",
+        project_id: "proj-lindqvist",
+        project_name: "Lindqvist kitchen",
+      }),
+    ];
+    renderCard();
+    expect(
+      screen.getByText(/Worked 2 of the studio's projects\./),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("Send a text", () => {
+  it("is held, with the reason beside it, when the studio holds no consent", () => {
+    personData.current = person({ consent_status: "opted_out" });
+    renderCard();
+    const act = screen.getByRole("button", { name: "Send a text" });
+    expect(act).not.toBeDisabled();
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "The studio holds no standing consent for this number, so no text may go out.",
+    );
+  });
+
+  it("opens the seat’s own sheet when consent stands", () => {
+    const { onOpenSeat } = renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Send a text" }));
+    expect(onOpenSeat).toHaveBeenCalled();
+  });
+
+  /**
+   * CR10-1 — AN ENABLED ACT THAT SENDS NOTHING. The composer lives on the
+   * field party sheet, which only a gc / sub / installer / receiver seat
+   * opens. On a client or a client_rep seat the act was held only by the
+   * seed's missing consent, so recording consent made it live and inert.
+   */
+  it("is held, with its own sentence, when no seat is a field seat", () => {
+    seatData.current = [seat({ party_kind: "client_rep", trade: null })];
+    const { onOpenSeat } = renderCard();
+    const act = screen.getByRole("button", { name: "Send a text" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    expect(act).not.toBeDisabled();
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "A text goes out from a seat on a job’s field crew, and this person holds none.",
+    );
+    fireEvent.click(act);
+    expect(onOpenSeat).not.toHaveBeenCalled();
+  });
+
+  it("reaches past a non-field seat to the field seat that carries the thread", () => {
+    seatData.current = [
+      seat({ seat_id: "seat-client", party_kind: "client", trade: null }),
+      seat({ seat_id: "seat-sub", party_kind: "sub" }),
+    ];
+    const { onOpenSeat } = renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Send a text" }));
+    expect(onOpenSeat).toHaveBeenCalledWith(
+      expect.objectContaining({ seat_id: "seat-sub" }),
+    );
+  });
+
+  /**
+   * CR3-9 — THE RULE OUTRANKS THE GRANT (C7). Direction §2.2 lists E7's readers
+   * as "every composer before consent"; this act read `consent_status` alone,
+   * so a person with a recorded grant AND a "Never text" rule got a live act
+   * and a live Send — exactly what PR-m's manual path and the Add sheet's
+   * free-text rule can produce together.
+   */
+  it("is held by a 'never text' rule even where the grant stands", () => {
+    rulesData.current = [
+      {
+        id: "rule-1",
+        subject_type: "person",
+        subject_id: "card-dana",
+        channels_allowed: [],
+        channels_forbidden: ["sms"],
+        route_to_person_id: null,
+        contact_hours: null,
+        escalation_by_class: {},
+        reason: "Never text. Office phone only.",
+        set_by: null,
+        set_at: "2026-10-06T00:00:00Z",
+        created_at: "",
+        updated_at: "",
+      },
+    ];
+    const { onOpenSeat } = renderCard();
+    const act = screen.getByRole("button", { name: "Send a text" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "The studio’s rule for this person says never text. Change the rule above before any text goes out.",
+    );
+    fireEvent.click(act);
+    expect(onOpenSeat).not.toHaveBeenCalled();
+  });
+
+  /**
+   * QA-R9-1 — a full do-not-contact block is not "never text". Frank Bauer's
+   * rule shuts every direct channel and routes the contact to Rosa Delgado;
+   * the old literal named the one channel the rule does not single out and
+   * dropped the only door it leaves open.
+   */
+  it("names a do-not-contact block, and its route, instead of 'never text'", () => {
+    rolodexData.current = [
+      {
+        id: "card-rosa",
+        entity_kind: "person",
+        full_name: "Rosa Delgado",
+        email: "rosa@bauer.example",
+        phone: null,
+      },
+    ];
+    rulesData.current = [
+      {
+        id: "rule-frank",
+        subject_type: "person",
+        subject_id: "card-dana",
+        channels_allowed: [],
+        channels_forbidden: ["sms", "mobile", "office", "email"],
+        route_to_person_id: "card-rosa",
+        contact_hours: null,
+        escalation_by_class: {},
+        reason: "No direct contact, at his request.",
+        set_by: null,
+        set_at: "2026-10-06T00:00:00Z",
+        created_at: "",
+        updated_at: "",
+      },
+    ];
+    renderCard();
+    const act = screen.getByRole("button", { name: "Send a text" });
+    expect(act).toHaveAttribute("aria-disabled", "true");
+    const reason = document.getElementById(
+      act.getAttribute("aria-describedby") as string,
+    );
+    expect(reason).toHaveTextContent(
+      "The studio’s rule for this person says do not contact directly. Write Rosa Delgado instead. Change the rule above before any text goes out.",
+    );
+  });
+});
+
+/**
+ * CR3-11 — ONE LIVE REGION, and it is the Room's. This card kept its own
+ * `role="status"` beside the Room's (people-room.tsx), so every consent, grant
+ * and document change was announced TWICE from two live regions on one screen.
+ */
+describe("CR3-11 — the card announces through the Room, not beside it", () => {
+  it("mounts no live region of its own", () => {
+    renderCard();
+    expect(screen.queryAllByRole("status")).toHaveLength(0);
+  });
+});
+
+describe("the one surviving branch", () => {
+  it("a maker opens the vendor’s own book", () => {
+    renderCard({ role: "maker" });
+    expect(screen.getByTestId("maker-profile")).toBeInTheDocument();
+  });
+});
+
+describe("the Hours door on a teammate (HT-8)", () => {
+  const renderTeammate = () => {
+    personData.current = person({
+      person_id: "party-team-1",
+      role: "team",
+      display_name: "Maria Obi",
+      profile_id: "maria",
+      status_raw: "lead_designer",
+      meta: { role: "lead_designer" },
+    });
+    cardData.current = null;
+    seatData.current = [];
+    return renderCard({ personId: "party-team-1", role: "team" });
+  };
+
+  it("opens for an owner — the one door into the member scope", () => {
+    viewerStudioRole = "owner";
+    renderTeammate();
+    expect(screen.getByRole("button", { name: "Hours" })).toBeInTheDocument();
+  });
+
+  it("is absent for a plain member, who has no lens to leave that scope by", () => {
+    // The Hours sheet renders no lens, no rollup and no own rows in the member
+    // scope for a viewer without the admin's instrument, so an ungated door led
+    // her somewhere she could only leave by closing the sheet.
+    viewerStudioRole = "member";
+    renderTeammate();
+    expect(
+      screen.queryByRole("button", { name: "Hours" }),
+    ).not.toBeInTheDocument();
+    viewerStudioRole = "owner";
+  });
+
+  it("is absent on a card with no linked account, whatever the viewer", () => {
+    viewerStudioRole = "owner";
+    renderCard();
+    expect(
+      screen.queryByRole("button", { name: "Hours" }),
     ).not.toBeInTheDocument();
   });
 
-  it('keeps the old overdue-nudge copy once the proposal was actually sent', () => {
-    mockPersonData = basePerson({ meta: { has_sent_proposal: true } });
-    render(
-      <PersonProfile
-        personId="client-1"
-        role="client"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={jest.fn()}
-      />,
-    );
-
-    expect(
-      screen.getByText('Proposal out — a nudge or a call may be overdue.'),
-    ).toBeInTheDocument();
+  /**
+   * W6 QA F2 — the shape a REAL carded teammate arrives in.
+   *
+   * 00626 (v4) emits every carded human from the contacts branch as
+   * `role: 'contact'` with `meta.contact_kind = 'studio'`; only an uncarded
+   * seat still carries its own party kind. The gate above was written against
+   * `role === 'team'` alone, so the door was absent on the only kind of person
+   * R-CC asks it to appear on — Priya Natarajan and Leah Hartwell in the dev
+   * seed both return `role: 'contact', contact_kind: 'studio'`.
+   */
+  it("opens on a CARDED studio member, who arrives as role 'contact'", () => {
+    viewerStudioRole = "owner";
+    personData.current = person({
+      person_id: "card-leah",
+      role: "contact",
+      display_name: "Leah Hartwell",
+      profile_id: "leah-auth-id",
+      meta: { entity_kind: "person", contact_kind: "studio" },
+    });
+    cardData.current = null;
+    seatData.current = [];
+    renderCard({ personId: "card-leah", role: "contact" });
+    expect(screen.getByRole("button", { name: "Hours" })).toBeInTheDocument();
   });
 
-  it('a missing has_sent_proposal signal fails closed to the honest draft copy', () => {
-    mockPersonData = basePerson({ meta: {} });
-    render(
-      <PersonProfile
-        personId="client-1"
-        role="client"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={jest.fn()}
-      />,
-    );
-
+  /**
+   * R-CC amended 2026-09-16 (patina-merged-73, W6 QA F2 + review) — the
+   * door is withheld on an archived card, the same `archived_at` signal
+   * ArchiveCardDoor already reads.
+   */
+  it("is absent on an archived studio member with a linked account, viewer owner", () => {
+    viewerStudioRole = "owner";
+    personData.current = person({
+      person_id: "card-leah",
+      role: "contact",
+      display_name: "Leah Hartwell",
+      profile_id: "leah-auth-id",
+      meta: { entity_kind: "person", contact_kind: "studio" },
+    });
+    cardData.current = {
+      id: "card-leah",
+      is_sole_proprietor: false,
+      organization_id: "org-1",
+      warranty_until: null,
+      archived_at: "2026-09-15T00:00:00Z",
+    };
+    seatData.current = [];
+    renderCard({ personId: "card-leah", role: "contact" });
     expect(
-      screen.getByText('Still drafting — nothing has gone to them yet.'),
-    ).toBeInTheDocument();
-  });
-
-  it('names a paper issuance for what it is — neither a send nor a draft', () => {
-    mockPersonData = basePerson({ meta: { issued_on_paper: true } });
-    render(
-      <PersonProfile
-        personId="client-1"
-        role="client"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={jest.fn()}
-      />,
-    );
-
-    expect(
-      screen.getByText('Handed over on paper — waiting on the signed copy to record.'),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText('Proposal out — a nudge or a call may be overdue.'),
+      screen.queryByRole("button", { name: "Hours" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("is absent on a CARDED crew member with an account — 'contact' alone is not the studio", () => {
+    viewerStudioRole = "owner";
+    personData.current = person({ profile_id: "dana-auth-id" });
+    cardData.current = null;
+    seatData.current = [];
+    renderCard();
     expect(
-      screen.queryByText('Still drafting — nothing has gone to them yet.'),
+      screen.queryByRole("button", { name: "Hours" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("is absent on a client card with an account — the member scope is the studio’s, not the house’s", () => {
+    viewerStudioRole = "owner";
+    personData.current = person({
+      person_id: "party-client-1",
+      role: "client",
+      display_name: "Adaeze Okonkwo",
+      profile_id: "adaeze",
+    });
+    cardData.current = null;
+    seatData.current = [];
+    renderCard({ personId: "party-client-1", role: "client" });
+    expect(
+      screen.queryByRole("button", { name: "Hours" }),
     ).not.toBeInTheDocument();
   });
 });
 
-describe('PersonProfile — client "Edit details" opens the household sheet standalone (F3)', () => {
-  it('opens HouseholdSheet for a captured client', () => {
-    mockPersonData = basePerson({ role: 'client', meta: {} });
-    renderWithClient(
-      <PersonProfile
-        personId="client-1"
-        role="client"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={jest.fn()}
-      />,
-    );
+/* ── W4/P3 — the History region reads E13 (direction §7 P3) ───────────────── */
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit details' }));
-    expect(screen.getAllByText('The household').length).toBeGreaterThan(0);
+describe("the History region's last touch", () => {
+  it("keeps the rolodex's coarse date where E13 holds nothing for them", () => {
+    renderCard();
+    expect(screen.getByText(/Last touch 17 Oct 2026\./)).toBeInTheDocument();
   });
 
-  it('never offers Edit details for a bare lead — its personId is a leads.id, not a designer_clients.id', () => {
-    mockPersonData = basePerson({ role: 'lead', meta: {} });
-    renderWithClient(
-      <PersonProfile
-        personId="lead-1"
-        role="lead"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={jest.fn()}
-      />,
-    );
-
-    expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
-  });
-});
-
-describe('PersonProfile — rolodex "Edit" on a studio-contact-backed profile (F3)', () => {
-  it('shows Edit for a pure rolodex card (role contact) and opens AddPersonSheet’s edit mode', () => {
-    mockPersonData = basePerson({
-      person_id: 'contact-1',
-      role: 'contact',
-      display_name: 'Priya Raman',
-      meta: {},
-    });
-    mockStudioContact = studioContact({ id: 'contact-1', full_name: 'Priya Raman' });
-    renderWithClient(
-      <PersonProfile
-        personId="contact-1"
-        role="contact"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={jest.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    expect(screen.getByText('Edit Priya Raman')).toBeInTheDocument();
-  });
-
-  it('hides Edit when the backing card is archived', () => {
-    mockPersonData = basePerson({
-      person_id: 'contact-1',
-      role: 'contact',
-      display_name: 'Priya Raman',
-      meta: {},
-    });
-    mockStudioContact = studioContact({
-      id: 'contact-1',
-      archived_at: '2026-01-02T00:00:00Z',
-    });
-    renderWithClient(
-      <PersonProfile
-        personId="contact-1"
-        role="contact"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={jest.fn()}
-      />,
-    );
-
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
-  });
-
-  it('offers "Edit rolodex card" (not the bare "Edit") for a network/team party folded into the rolodex via meta.studio_contact_id — the head still shows the party row, not this card (F3-R1-05)', () => {
-    mockPersonData = basePerson({
-      person_id: 'party-1',
-      role: 'architect',
-      display_name: 'Dana Wu',
-      meta: { studio_contact_id: 'contact-2' },
-    });
-    mockStudioContact = studioContact({ id: 'contact-2', full_name: 'Dana Wu' });
-    renderWithClient(
-      <PersonProfile
-        personId="party-1"
-        role="architect"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={jest.fn()}
-      />,
-    );
-
-    expect(screen.getByRole('button', { name: 'Edit rolodex card' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
-  });
-
-  it('hides Edit for a party never folded into the rolodex', () => {
-    mockPersonData = basePerson({
-      person_id: 'party-1',
-      role: 'architect',
-      display_name: 'Dana Wu',
-      meta: {},
-    });
-    mockStudioContact = null;
-    renderWithClient(
-      <PersonProfile
-        personId="party-1"
-        role="architect"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={jest.fn()}
-      />,
-    );
-
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
-  });
-
-  // F3-R2-13 — a background refetch (or someone archiving the card) must
-  // never unmount an open edit sheet out from under the designer without
-  // explanation.
-  it('closes an open edit sheet with an explanation instead of silently vanishing when the card is archived mid-edit', () => {
-    mockPersonData = basePerson({
-      person_id: 'contact-1',
-      role: 'contact',
-      display_name: 'Priya Raman',
-      meta: {},
-    });
-    mockStudioContact = studioContact({ id: 'contact-1', full_name: 'Priya Raman' });
-    const notify = jest.fn();
-    const { rerender } = renderWithClient(
-      <PersonProfile
-        personId="contact-1"
-        role="contact"
-        onBack={jest.fn()}
-        openThread={jest.fn()}
-        openPerson={jest.fn()}
-        goView={jest.fn()}
-        notify={notify}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    expect(screen.getByText('Edit Priya Raman')).toBeInTheDocument();
-
-    // The card gets archived mid-edit (another tab, or someone else).
-    mockStudioContact = studioContact({
-      id: 'contact-1',
-      full_name: 'Priya Raman',
-      archived_at: '2026-01-02T00:00:00Z',
-    });
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <PersonProfile
-          personId="contact-1"
-          role="contact"
-          onBack={jest.fn()}
-          openThread={jest.fn()}
-          openPerson={jest.fn()}
-          goView={jest.fn()}
-          notify={notify}
-        />
-      </QueryClientProvider>,
-    );
-
-    expect(screen.queryByText('Edit Priya Raman')).not.toBeInTheDocument();
-    expect(notify).toHaveBeenCalledWith(
-      expect.stringContaining('reopen it to try again'),
-    );
+  it("prints the RECORD instead, once a touch exists — never both", () => {
+    lastTouch.current = { id: "t1" };
+    renderCard();
+    expect(
+      screen.getByText(/Last touch 12 Sep 2026, by text\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Last touch 17 Oct 2026/)).toBeNull();
   });
 });

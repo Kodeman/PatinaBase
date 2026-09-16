@@ -31,7 +31,23 @@ jest.mock('@/hooks/use-margin-notes', () => ({
   useCreateMarginNote: () => ({ mutate: mockCreateNote, isPending: false }),
 }));
 const mockCreateNote = jest.fn();
+let mockCaptureProjects: Array<{ id: string; name: string; status: string }> = [
+  { id: 'project-1', name: 'Whitfield House', status: 'active' },
+  { id: 'project-2', name: 'Ashford Heights', status: 'active' },
+];
+let mockMyRateRoles: string[] = ['lead_designer'];
+
+jest.mock('@/hooks/use-commercial-documents', () => ({
+  useProjectBillingAuthority: () => ({ data: null, isLoading: false }),
+  commercialDocumentKeys: { authority: (id: string) => ['project-authority', id] },
+  fetchProjectBillingAuthority: jest.fn().mockResolvedValue(null),
+}));
+
 jest.mock('@patina/supabase', () => ({
+  // W3 (HT-14) — the timer sheet's project picker when nothing is held, and
+  // HT-41's role chip. Both read through @patina/supabase.
+  useTimeCaptureProjects: () => ({ data: mockCaptureProjects }),
+  useMyRateRoles: () => ({ data: mockMyRateRoles }),
   useUnreadInboxCount: () => ({ data: 0 }),
   useProcurementUnreadCount: () => ({ data: 0 }),
   useUnseenShipped: () => ({ data: [] }),

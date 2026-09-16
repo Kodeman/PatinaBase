@@ -108,6 +108,45 @@ export function duplicateMoneyBlocker(label: string): string {
  *  with it and the readiness panel prints it. */
 export const BLANK_ROLE_BLOCKER = "Every role on the rate card needs a name.";
 
+/**
+ * HT-4 — a rate that names no roster role prices nobody.
+ *
+ * `resolve_time_rate_cents` and `classify_project_time_entry_authority` (00618)
+ * ask `roster_role` first and fall to the legacy label only for a card written
+ * before the binding existed. That fallback is a normalize-match, so a card
+ * carrying two labels neither of which matches — the shipped default
+ * "Principal designer" beside "Associate" — prices every hour on the project at
+ * `rate_source='none'`, `pending_authorization`, NULL `authority_rate_id`, for
+ * ever: 00577's promotion loop will not promote a row with no rate to promote.
+ *
+ * The room asks for the binding BEFORE the document is sent, because after
+ * countersign the rate rows are the immutable snapshot of a signed contract and
+ * the binding can no longer be made. Save is unaffected — a draft is allowed to
+ * be unfinished — and a card that carries no roles at all asks nothing.
+ */
+export const UNBOUND_ROLE_BLOCKER =
+  "Every rate on the card names the roster role it prices.";
+
+/**
+ * W7-R2-03 — a rate that prices at nothing is not a rate.
+ *
+ * `+ Add a role` seeds a fully-named, BOUND row at $0/hr on both surfaces that
+ * write a rate card. Before the enum binding, the seed's EMPTY name was the
+ * guard: it tripped BLANK_ROLE_BLOCKER here and `rateCardForSave`'s trim filter
+ * on the studio page dropped it. Both of those now pass, and nothing else in
+ * the chain asks for a positive number — R-7 below asks only that ONE role be
+ * priced, `upsert_agreement_parts` (00618) refuses only an ABSENT rate, and
+ * `_agreement_assert_cents` accepts 0. A bound card wins tier 1 in both pricing
+ * legs, so every hour that roster role logs would price
+ * `rate_source='authority'`, `hourly_rate_cents=0`, `billing_state='authorized'`
+ * — it reads as priced, bills nothing, and `guard_invoiced_time_entry` freezes
+ * it at $0 the moment it is invoiced. After countersign the rate rows are the
+ * immutable snapshot of a signed contract, so there is no repair short of a new
+ * agreement version. Asked here, before the document can go.
+ */
+export const ZERO_RATE_BLOCKER =
+  "Every role on the rate card needs an hourly rate above zero.";
+
 /** R33 — a fee the homeowner never sees never reaches the money row. */
 export const HIDDEN_FEE_BLOCKER =
   "This fee is hidden from your client, so it cannot bill.";
@@ -273,12 +312,22 @@ export function assessAgreementReadiness({
         )
       ) {
         add(part.id, "Add at least one role with an hourly rate.");
+      } else if (roles.some((role) => !(role.hourlyRateCents > 0))) {
+        // Only where R-7 above is silent: a card that already carries one real
+        // rate is the case a seeded $0 row rides in on unremarked.
+        add(part.id, ZERO_RATE_BLOCKER);
       }
       // Every role, not just one of them: the RPC walks the whole array and
       // refuses on the first blank name, so a named role standing beside a
       // blank one is a save the server will not take.
       if (roles.some((role) => role.roleName.trim().length === 0)) {
         add(part.id, BLANK_ROLE_BLOCKER);
+      }
+      // HT-4 — and every rate binds to a roster role, or the hours it was
+      // written to price strand at `rate_source='none'` the moment the
+      // agreement is countersigned.
+      if (roles.length > 0 && roles.some((role) => !role.rosterRole)) {
+        add(part.id, UNBOUND_ROLE_BLOCKER);
       }
     }
 

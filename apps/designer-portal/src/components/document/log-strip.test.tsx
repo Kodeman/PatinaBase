@@ -3,14 +3,43 @@ import { LogStrip } from './log-strip';
 
 const mockLogOffer = jest.fn().mockResolvedValue(undefined);
 const mockDiscardOffer = jest.fn().mockResolvedValue(undefined);
-let mockOffer: null | {
+type MockOffer = {
   projectId: string;
   projectName: string;
   suggestedMinutes: number;
   rawSeconds: number;
   idleSeconds: number;
-} = null;
+  billable: boolean;
+  hourlyRateCents: number | null;
+  rateSource: string | null;
+  rateRole: string | null;
+  ratedAmountCents: number | null;
+};
+let mockOffer: MockOffer | null = null;
 let mockHeldProjectId: string | null = null;
+/** HT-41 — the strip's role mark reads the viewer's live seats. */
+let mockRateRoles: string[] = ['lead_designer'];
+
+/** W3 — the strip's rate readout and role mark read the written row, so the
+ *  offer fixture carries what the server stored. Defaults: the shape a
+ *  fail-closed auto-timer produces on a project with no signed authority. */
+const offerFixture = (over: Partial<MockOffer> = {}): MockOffer => ({
+  projectId: 'whitfield-project',
+  projectName: 'Whitfield House',
+  suggestedMinutes: 26,
+  rawSeconds: 1560,
+  idleSeconds: 0,
+  billable: false,
+  hourlyRateCents: null,
+  rateSource: 'none',
+  rateRole: null,
+  ratedAmountCents: null,
+  ...over,
+});
+
+jest.mock('@patina/supabase', () => ({
+  useMyRateRoles: () => ({ data: mockRateRoles }),
+}));
 
 // D-B54 — the cross-project rule moved into the provider, which publishes it
 // as one boolean both edge tenants read (`mobile-bar.tsx` yields on exactly
@@ -40,18 +69,13 @@ describe('LogStrip', () => {
   beforeEach(() => {
     mockOffer = null;
     mockHeldProjectId = null;
+    mockRateRoles = ['lead_designer'];
     mockLogOffer.mockClear();
     mockDiscardOffer.mockClear();
   });
 
   it('becomes the mobile edge owner with readable, full-size form controls', async () => {
-    mockOffer = {
-      projectId: 'whitfield-project',
-      projectName: 'Whitfield House',
-      suggestedMinutes: 26,
-      rawSeconds: 1560,
-      idleSeconds: 0,
-    };
+    mockOffer = offerFixture();
     render(<LogStrip />);
 
     const strip = screen.getByRole('region', { name: 'Log time offer' });
@@ -66,13 +90,7 @@ describe('LogStrip', () => {
   });
 
   it('preserves log and discard behavior through Scored Ink actions', async () => {
-    mockOffer = {
-      projectId: 'whitfield-project',
-      projectName: 'Whitfield House',
-      suggestedMinutes: 26,
-      rawSeconds: 1560,
-      idleSeconds: 0,
-    };
+    mockOffer = offerFixture();
     render(<LogStrip />);
 
     fireEvent.change(
@@ -82,8 +100,11 @@ describe('LogStrip', () => {
       },
     );
     fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    // HT-24 — the activity is NOT defaulted to 'design' any more, and HT-11
+    // puts the billable answer on the wire from the pill rather than leaving
+    // it to a `?? true` two layers down.
     await waitFor(() =>
-      expect(mockLogOffer).toHaveBeenCalledWith(31, 'design'),
+      expect(mockLogOffer).toHaveBeenCalledWith(31, null, false),
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
@@ -97,13 +118,12 @@ describe('LogStrip', () => {
 
   it('does not overlay an unrelated saved offer on the project in hand', () => {
     mockHeldProjectId = 'harper-project';
-    mockOffer = {
+    mockOffer = offerFixture({
       projectId: 'ashford-project',
       projectName: 'Ashford Heights — main floor refresh',
       suggestedMinutes: 32,
       rawSeconds: 32 * 60,
-      idleSeconds: 0,
-    };
+    });
 
     render(<LogStrip />);
 
@@ -112,17 +132,141 @@ describe('LogStrip', () => {
   });
 
   it('resurfaces the saved offer when no different project is in hand', () => {
-    mockOffer = {
+    mockOffer = offerFixture({
       projectId: 'ashford-project',
       projectName: 'Ashford Heights — main floor refresh',
       suggestedMinutes: 32,
       rawSeconds: 32 * 60,
-      idleSeconds: 0,
-    };
+    });
 
     render(<LogStrip />);
 
     expect(screen.getByRole('region', { name: 'Log time offer' })).toBeVisible();
     expect(screen.getByText('Ashford Heights — main floor refresh')).toBeVisible();
+  });
+
+  // ── W3 ────────────────────────────────────────────────────────────────────
+
+  it('starts with the activity UNSET and offers "activity not set" (HT-24)', () => {
+    mockOffer = offerFixture();
+    render(<LogStrip />);
+
+    const activity = screen.getByRole('combobox', { name: 'Activity' });
+    expect(activity).toHaveValue('');
+    expect(
+      screen.getByRole('option', { name: 'activity not set' }),
+    ).toBeInTheDocument();
+  });
+
+  it('seeds the billable pill from the row the server wrote, and never from true (HT-11)', () => {
+    mockOffer = offerFixture({ billable: false });
+    render(<LogStrip />);
+
+    const pill = screen.getByRole('button', { name: /Non-billable/ });
+    expect(pill).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('prints the resolved rate, and "rate pending" rather than a blank (HT-26)', () => {
+    mockOffer = offerFixture({ rateSource: 'none', hourlyRateCents: null, billable: true });
+    render(<LogStrip />);
+
+    expect(screen.getByText(/rate pending/)).toBeInTheDocument();
+  });
+
+  it('prints the rate and amount the server stored when the hour is priced', () => {
+    mockOffer = offerFixture({
+      billable: true,
+      rateSource: 'studio_member',
+      hourlyRateCents: 18000,
+      ratedAmountCents: 7800,
+    });
+    render(<LogStrip />);
+
+    expect(screen.getByText(/Studio rate/)).toBeInTheDocument();
+    expect(screen.getByText(/\$180/)).toBeInTheDocument();
+  });
+
+  it('drops the amount the moment the pill says the hour is not billable, and says so once (HT-12/HT-26, W3-R5-m1)', () => {
+    // The strip passes the LIVE pill state and the STORED amount, so the two
+    // disagree between the tap and the write. A money figure beside a
+    // non-billable hour is three facts wearing one face, which is what this
+    // surface exists to stop.
+    mockOffer = offerFixture({
+      billable: true,
+      rateSource: 'studio_member',
+      hourlyRateCents: 18000,
+      ratedAmountCents: 7800,
+    });
+    render(<LogStrip />);
+    expect(screen.getByText(/\$78/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Billable/ }));
+
+    // The pill itself is the ONE word for the non-billable state now
+    // ("Non-billable" — HT-11). The rate readout beside it prints nothing:
+    // it used to also print "not billable", the same fact twice, side by
+    // side (W3-R5-m1).
+    expect(
+      screen.getByRole('button', { name: /Non-billable/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/not billable/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$78/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the billable pill and rate readout legible on the dark bar below 1180px (WCAG AA, W3-R5-M1)', () => {
+    // The strip is `bg-charcoal` at every width BELOW `min-[1180px]` — 390
+    // AND 1024 both. `max-[1179px]:!text-[rgba(250,247,242,0.72)]` is the
+    // exact override every pre-existing control in this strip already
+    // carries (Log, Discard, the minutes input); it is a static class, so
+    // asserting its presence covers both widths without a real layout pass.
+    mockOffer = offerFixture({
+      billable: true,
+      rateSource: 'none',
+      hourlyRateCents: null,
+    });
+    render(<LogStrip />);
+
+    const pill = screen.getByRole('button', { name: /Billable/ });
+    expect(pill).toHaveClass('max-[1179px]:!text-[rgba(250,247,242,0.72)]');
+
+    const readout = screen.getByText(/rate pending/);
+    expect(readout).toHaveClass(
+      'max-[1179px]:!text-[rgba(250,247,242,0.72)]',
+    );
+  });
+
+  it('names the role only for a member who holds more than one seat (HT-41)', () => {
+    mockRateRoles = ['lead_designer'];
+    mockOffer = offerFixture({ rateRole: 'lead_designer' });
+    const single = render(<LogStrip />);
+    expect(screen.queryByText(/as lead designer/)).not.toBeInTheDocument();
+    single.unmount();
+
+    mockRateRoles = ['lead_designer', 'bookkeeper'];
+    mockOffer = offerFixture({ rateRole: 'bookkeeper' });
+    render(<LogStrip />);
+    expect(screen.getByText(/as bookkeeper/)).toBeInTheDocument();
+  });
+
+  it('logs the pill answer the designer actually chose', async () => {
+    mockOffer = offerFixture({ billable: false });
+    render(<LogStrip />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Non-billable/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+
+    await waitFor(() =>
+      expect(mockLogOffer).toHaveBeenCalledWith(26, null, true),
+    );
+  });
+
+  it('keeps the zero-tap path zero — Log works with nothing touched', async () => {
+    mockOffer = offerFixture();
+    render(<LogStrip />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
+    await waitFor(() =>
+      expect(mockLogOffer).toHaveBeenCalledWith(26, null, false),
+    );
   });
 });
