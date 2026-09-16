@@ -10,9 +10,12 @@
 -- invoice's life, and K7 said no expiry. This file reverses both.
 --
 --   token_hash  sha256 of the raw token, hex. UNIQUE. The lookup key.
---   expires_at  30 days, set at every mint. An expired link dies into the same
---               silence a revoked one does — no "expired" sentence, which
+--   expires_at  30 days, set at every mint. An expired LIVE link dies into the
+--               same silence a revoked one does — no "expired" sentence, which
 --               would tell a guesser the shape of the guess was right (S2).
+--               Expiry is tested BELOW the dead-link branch (W4 r5 F1): a
+--               closed link's sheet is a receipt, not a pay door, so it keeps
+--               answering withdrawn/settling however old it is.
 --   token       FROZEN NULL. The column stays so the rollback is a widening,
 --               and a CHECK holds it at NULL so no later code can refill it.
 --
@@ -108,7 +111,11 @@ UPDATE public.invoice_links
 -- EVERY LIVE LINK GETS A FULL 30 DAYS FROM THIS MIGRATION, not from its own
 -- created_at. Dating a shipped link from its creation would kill, at deploy,
 -- every pay address a client is already holding — a silent outage on the money
--- rail dressed as a hardening. A dead link keeps the date it died on.
+-- rail dressed as a hardening. A dead link keeps the date it died on, which
+-- puts it in the past; that is harmless because resolve_invoice_link tests
+-- expiry BELOW its dead-link branch (W4 r5 F1), so a client holding a /pay
+-- address for an invoice she has already paid still gets the withdrawn sheet
+-- rather than DeadLink.
 UPDATE public.invoice_links
    SET expires_at = CASE
          WHEN status = 'active' THEN now() + interval '30 days'
@@ -148,9 +155,11 @@ COMMENT ON COLUMN public.invoice_links.token_hash IS
   'sha256(raw token), hex. The lookup key for every resolver (00636).';
 COMMENT ON COLUMN public.invoice_links.expires_at IS
   'When this address stops answering — 30 days from its mint, reset by every '
-  'regeneration, which is every send (CRM-29). An expired link resolves to '
-  'the same NULL a revoked or unknown one does (S2). Rows that were already '
-  'dead when 00636 ran carry the date they died on.';
+  'regeneration, which is every send (CRM-29). An expired ACTIVE link resolves '
+  'to the same NULL a revoked or unknown one does (S2); a closed link is past '
+  'expiry by construction and still answers its withdrawn/settling receipt '
+  '(W4 r5 F1). Rows that were already dead when 00636 ran carry the date they '
+  'died on.';
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 3. The producers — mint the hash, emit the raw once
@@ -501,12 +510,10 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  -- 00636: the raw token is never stored. The row is found by its sha256,
-  -- and an expired link dies into the same silence a revoked one does.
+  -- 00636: the raw token is never stored. The row is found by its sha256.
   SELECT * INTO v_link FROM invoice_links
    WHERE token_hash = public.invoice_link_token_hash(p_token);
-  IF NOT FOUND OR v_link.status = 'revoked'
-     OR (v_link.expires_at IS NOT NULL AND v_link.expires_at <= now()) THEN
+  IF NOT FOUND OR v_link.status = 'revoked' THEN
     RETURN NULL;
   END IF;
 
@@ -516,6 +523,20 @@ BEGIN
   END IF;
 
   v_dead := v_link.status = 'closed' OR v_invoice.status = 'void';
+
+  -- W4 r5 F1/MAJOR-1: an expiry silences a LIVE pay door only. A dead link's
+  -- sheet is a receipt (K5/M10 withdrawn/settling), not a bearer pay door —
+  -- nothing on it can be paid, and resolve_invoice_link_for_checkout already
+  -- refuses anything that is not status='active'. Testing expiry above v_dead
+  -- made two populations answer NULL and show the generic DeadLink page: every
+  -- link closed before this migration (the backfill below dates a closed row
+  -- from revoked_at, i.e. already past), and, forward-going, every receipt
+  -- 30 days after its last mint.
+  IF NOT v_dead
+     AND v_link.expires_at IS NOT NULL AND v_link.expires_at <= now() THEN
+    RETURN NULL;
+  END IF;
+
   IF NOT v_dead AND v_invoice.status NOT IN ('sent','partially_paid','paid') THEN
     RETURN NULL;
   END IF;
@@ -762,12 +783,14 @@ END;
 $$;
 COMMENT ON FUNCTION public.resolve_invoice_link(text, boolean) IS
   'The only guest read path for /pay/<token>. 00588''s body verbatim, with the '
-  'lookup moved onto token_hash and an expired link added to the dead-link '
-  'silence (00636). Called through the client portal''s service client '
+  'lookup moved onto token_hash and an expired ACTIVE link added to the '
+  'dead-link silence (00636; expiry sits below the v_dead branch per W4 r5 F1, '
+  'so a receipt never goes silent). Called through the client portal''s service client '
   '(service_role only holds EXECUTE — J33). Validates the 64-hex token, bumps '
   'view_count when p_record_view, and returns one narrow jsonb discriminated '
   'by kind: invoice, withdrawn (closed link / void invoice, K5), settling '
-  '(M10), or NULL for malformed/unknown/revoked/EXPIRED/draft.';
+  '(M10), or NULL for malformed/unknown/revoked/draft and for an EXPIRED link '
+  'that is still live.';
 
 CREATE OR REPLACE FUNCTION public.resolve_invoice_link_for_checkout(p_token text)
 RETURNS TABLE (

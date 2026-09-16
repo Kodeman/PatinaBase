@@ -5,13 +5,19 @@ import { applyUnsubscribeToken } from '@patina/notifications';
 async function apply(token: string | null) {
   return token
     ? await applyUnsubscribeToken(createServiceClient(), token)
-    : { ok: false as const, status: 'malformed' as const, type: undefined };
+    : { ok: false as const, status: 'malformed' as const, type: undefined, scope: undefined };
 }
 
 function outcomePage(req: NextRequest, outcome: Awaited<ReturnType<typeof apply>>) {
   const redirect = new URL('/preferences/unsubscribe', req.url);
   redirect.searchParams.set('status', outcome.status);
   if (outcome.type) redirect.searchParams.set('type', String(outcome.type));
+  // The scope is what the write actually covered. An account-less recipient's
+  // click stops the whole ADDRESS, not the narrow type her token names, so it
+  // has to cross the redirect or the landing page reads the type again and
+  // tells her something the record contradicts (W4 r5 F2, mirroring the
+  // admin portal's W4 r4 MAJOR-2 fix).
+  if (outcome.scope) redirect.searchParams.set('scope', outcome.scope);
   return redirect;
 }
 

@@ -2201,3 +2201,151 @@ Deno.test("START lifts an unanswered refusal standing on a record whose status c
   assertEquals(rec.status, "granted");
   assertEquals(rec.refusal_unanswered, false);
 });
+
+// ── W4 r5 F3 / MAJOR-2: the touch names the seat the message answered ───────
+//
+// sms_conversations is keyed on (twilio_number, phone_e164) and the rail sends
+// from one platform-wide TWILIO_FROM_NUMBER, so there is ONE conversation row
+// per phone across every studio and conv.party_id is whichever seat the first
+// outbound send stamped. Filing the consent-keyword touches there left, on a
+// shared number, the studio whose record actually moved with no touch at all —
+// its card, seat line, roster row and touchSentence kept printing the previous
+// contact while its Directory row already showed the new verdict.
+
+Deno.test("an inbound STOP files a touch for EVERY studio's seat on the number, not just the conversation's", async () => {
+  const phone = "+15551110098";
+  const touches: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase(
+    baseSeed({
+      projects: [
+        { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+        { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+      ],
+      project_parties: [
+        { id: "p1", phone_e164: phone, project_id: "proj1", party_kind: "sub", sms_consent_status: "granted" },
+        { id: "p2", phone_e164: phone, project_id: "proj2", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_conversations: [
+        {
+          id: "convS2", twilio_number: TO, phone_e164: phone, state: "idle",
+          active_project_id: "proj1", party_id: "p1", state_context: {},
+        },
+      ],
+    }),
+    { record_touch: (args) => { touches.push(args); return { data: "touch", error: null }; } },
+  );
+  const res = await processInbound(
+    params({ From: phone, Body: "STOP", MessageSid: "SMstoptouch2" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "opted_out");
+  assertEquals(touches.length, 2, "one touch per answering seat");
+  assertEquals(
+    touches.map((t) => t.p_subject_id).sort().join(","),
+    "p1,p2",
+    "org-beta's seat is touched too — its record just moved",
+  );
+  assert(touches.every((t) => t.p_subject_type === "engagement"));
+  assert(touches.every((t) => t.p_direction === "in"));
+  assert(touches.every((t) => t.p_authority_check === "n/a"));
+});
+
+Deno.test("a STOP that reaches only a record-only studio still files the conversation's seat", async () => {
+  const phone = "+15551110099";
+  const touches: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase(
+    baseSeed({
+      project_parties: [],
+      studio_channel_consent: [{
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: phone,
+        status: "granted",
+      }],
+      sms_conversations: [
+        {
+          id: "convS3", twilio_number: TO, phone_e164: phone, state: "idle",
+          active_project_id: null, party_id: "pOld", state_context: {},
+        },
+      ],
+    }),
+    { record_touch: (args) => { touches.push(args); return { data: "touch", error: null }; } },
+  );
+  const res = await processInbound(
+    params({ From: phone, Body: "STOP", MessageSid: "SMstoptouch3" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "opted_out");
+  assertEquals(touches.length, 1, "no seat answered, so the conversation's seat stands in");
+  assertEquals(touches[0].p_subject_id, "pOld");
+});
+
+Deno.test("an inbound START files a touch for every studio it re-grants, not just the conversation's", async () => {
+  const phone = "+15551110100";
+  const touches: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase(
+    baseSeed({
+      projects: [
+        { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+        { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+      ],
+      project_parties: [
+        { id: "p1", phone_e164: phone, project_id: "proj1", party_kind: "sub", sms_consent_status: "opted_out" },
+        { id: "p2", phone_e164: phone, project_id: "proj2", party_kind: "sub", sms_consent_status: "opted_out" },
+      ],
+      studio_channel_consent: [
+        { organization_id: "org-alpha", channel_kind: "sms", channel_value: phone, status: "opted_out" },
+        { organization_id: "org-beta", channel_kind: "sms", channel_value: phone, status: "opted_out" },
+      ],
+      sms_conversations: [
+        {
+          id: "convS4", twilio_number: TO, phone_e164: phone, state: "idle",
+          active_project_id: "proj1", party_id: "p1", state_context: {},
+        },
+      ],
+    }),
+    { record_touch: (args) => { touches.push(args); return { data: "touch", error: null }; } },
+  );
+  const res = await processInbound(
+    params({ From: phone, Body: "START", MessageSid: "SMstarttouch2" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "resubscribed");
+  assertEquals(touches.map((t) => t.p_subject_id).sort().join(","), "p1,p2");
+});
+
+Deno.test("an inbound YES files a touch only for the studio whose invite it answered", async () => {
+  const phone = "+15551110101";
+  const touches: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase(
+    baseSeed({
+      projects: [
+        { id: "proj1", name: "Maple St", designer_id: "dz1", studio_id: "org-alpha" },
+        { id: "proj2", name: "Beta job", designer_id: "dz2", studio_id: "org-beta" },
+      ],
+      project_parties: [
+        { id: "p1", phone_e164: phone, project_id: "proj1", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+        { id: "p2", phone_e164: phone, project_id: "proj2", party_kind: "sub", sms_consent_status: "pending", display_name: "Sal Sub" },
+      ],
+      // Only org-beta has an invite in flight, and the conversation's stamped
+      // seat is org-alpha's — the exact disagreement this fix closes.
+      studio_channel_consent: [
+        { organization_id: "org-beta", channel_kind: "sms", channel_value: phone, status: "pending" },
+      ],
+      sms_conversations: [
+        {
+          id: "convS5", twilio_number: TO, phone_e164: phone, state: "idle",
+          active_project_id: "proj1", party_id: "p1", state_context: {},
+        },
+      ],
+    }),
+    { record_touch: (args) => { touches.push(args); return { data: "touch", error: null }; } },
+  );
+  const res = await processInbound(
+    params({ From: phone, Body: "YES", MessageSid: "SMyestouch2" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG },
+  );
+  assertEquals(res.disposition, "granted");
+  assertEquals(touches.length, 1);
+  assertEquals(touches[0].p_subject_id, "p2", "the seat whose studio was actually granted");
+});

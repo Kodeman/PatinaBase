@@ -88,14 +88,18 @@ the last two rows of the table:
 | `get_invoice_link` | `{token, status}` | `{token: NULL, status, expires_at}` |
 | `resolve_invoice_return_nonce` | read the bound link's token | **rotates** it: the same link row (same id, Stripe customer, payer email — F2 still holds) is re-addressed and the raw value returned once to the holder who just came back from Checkout. Now VOLATILE |
 | `create-checkout-session` | called `ensureInvoiceLinkUrl` for a boolean | calls the new `invoice_link_is_live` — minting for a boolean would have revoked the payer's own address mid-payment |
-| `resolve_invoice_link` / `_for_checkout` | matched the plaintext | match `token_hash`, and an expired link dies into the same silence a revoked one does |
+| `resolve_invoice_link` / `_for_checkout` | matched the plaintext | match `token_hash`, and an expired **live** link dies into the same silence a revoked one does. In `resolve_invoice_link` the expiry test sits BELOW the `v_dead` branch (W4 r5 F1), so a closed link keeps answering its withdrawn/settling receipt however old it is |
 | `issue_agreement_draw_invoice` (00578 → **00638**) | `SELECT link.token` after the issue trigger fired | **mints**: `ensure_invoice_link(v_invoice_id)` inside the issuing transaction returns the raw value once. Nobody holds the address it revokes — it was written three statements earlier in this same transaction. The client-portal sign route's deposit offer carries a live `/pay/<token>` again |
 | `get_client_commercial_document_bundle` (00578 → **00638**) | `SELECT link.token` in the depositOffer | **carries no address**: `payToken` is `NULL::text`. It is STABLE and read on every page load, so it may not call the revoking minter. The door gate's reload path points at the deposit letter in the homeowner's own letterbox (`/?invoice=<id>`) instead, and `adaptDesignBuildDepositOffer` no longer requires a token for the offer to exist |
 
 **Backfill:** every link already live got a full 30 days **from the migration**, not from its own
 `created_at`. Dating a shipped link from creation would have killed, at deploy, every pay address
 a client is already holding — a silent money-rail outage dressed as a hardening. Dead rows keep
-the date they died on.
+the date they died on, which puts them in the past. That is only harmless because
+`resolve_invoice_link` tests expiry BELOW its dead-link branch (W4 r5 F1) — stated here as a
+dependency, not as a neutral fact: with the two in the other order, every client holding a
+`/pay` address for an invoice she had already paid would have seen `DeadLink` on deploy day
+instead of her K5/M10 receipt. Test block 4c asserts the pairing.
 
 **The pay page needed no change**: it passes the raw token to `resolve_invoice_link`, which
 hashes it. Same for `invoice-send` (`letterPortalUrl` → `ensure_invoice_link`) and
