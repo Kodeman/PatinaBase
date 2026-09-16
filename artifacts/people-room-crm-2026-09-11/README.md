@@ -116,3 +116,9 @@ node /Users/kody/Code/patina-merged/.codex/worktrees/agent-people-crm/artifacts/
 ## 9. Rulings owed
 
 Twenty-five rulings and five orchestrator decisions are recorded in `rulings.md`. Seven need Kody's ruling before build starts.
+
+## 10. Shipped
+
+The full build program (W0–W7) is in production as of 2026-09-16. What
+shipped, the verification evidence, anomalies, and every step still owed to
+Kody: `build/ship/report.md`.
