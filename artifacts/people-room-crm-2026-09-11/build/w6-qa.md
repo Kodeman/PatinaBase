@@ -137,3 +137,83 @@ Both `next start` processes and `supabase functions serve paperwork-upload` were
 
 `artifacts/people-room-crm-2026-09-11/build/qa-w6/`:
 `01-directory-1440.png`, `02-directory-390.png`, `03-directory-1440-dark.png`, `04-add-sheet.png`, `05-call-sheet-1440.png`, `06-call-sheet-1024.png`, `07-call-sheet-390.png`, `08-person-card-priya-team.png`, `08b-person-card-priya-recheck.png`, `09-person-card-adaeze-client.png`, `console-errors.json`, `findings.json`, `keyboard-tab-walk-directory.json`, `keyboard-tab-walk-add-sheet.json`.
+
+---
+
+## Re-check round 2 — 2026-09-16
+
+Scope: re-run ONLY the QA checks behind F1–F4 from round 1 (`w6-fix-log-r1.md`, commit `c83e119c4`) and verify them fixed. No other suites re-run. Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build`, branch `build/people-room-crm-2026-09-11`, HEAD `c83e119c4`. Local DB only (`postgresql://postgres:postgres@127.0.0.1:54322/postgres`); no prod touched.
+
+| ID | Round-1 claim | Check re-run | Result |
+|---|---|---|---|
+| **F1** | Corrupted `$g$` block in `supabase/seed/00-legacy-grants.sql` broke `pnpm supabase:reset` | `pnpm supabase:reset` (sandbox disabled, Docker socket) from a clean state | **FIXED.** Full clean run: every migration 00560–00638 + `20260910152111` applied, every seed file — `00-legacy-grants.sql` included — seeded without error, ending `Finished supabase db reset on branch main.` / `{"message":"Reset local database."}`. `$g$` count confirmed even (5782) before the run. |
+| **F2** | R-CC Hours-door gate unreachable on a real carded teammate (`person.role === 'team'` vs. shipped v4 shape) | (a) `jest src/components/document/people` unit suite incl. the HT-8 regression block in `person-profile.test.tsx`; (b) live browser check: signed in as Leah Hartwell (`designer@patina.dev`) via the portal's own sign-in UI (password path, local-prod build), opened her own card at `/people?person=d0e10000-0000-0000-0000-000000000001` | **FIXED.** (a) `person-profile.test.tsx`: **27/27 passed**, HT-8 block green. (b) Live: the `HOURS` door renders in the card head next to `PUT THIS CARD AWAY` — Leah is the one seeded team member carrying a linked `profile_id` (per round 1's own DB check), and she is the owner viewing her own card. Screenshot: `qa-w6-r2/f2-leah-hours-door.png`. Note: round 1 already clarified `e2e/document/hours.spec.ts:60/72` is an unrelated red (Desk `?sheet=hours` query-scrub assertion, not this gate) — not re-litigated here. |
+| **F3** | First `a[data-tel-link]` on the Okonkwo Call Sheet resolved to the client, not Luis Ochoa | `playwright test e2e/people/call-sheet.spec.ts` (chromium, local-prod build+start, inline env) | **FIXED.** `call-sheet.spec.ts:91` ("task 3 — who has site access right now, one click from the sheet") **passed** — the scoped `[data-site-access-card] a[data-tel-link]` locator resolves to Luis Ochoa with a `tel:+` href. All 3 chromium tests in the file passed (task 6 banding, task 3 notice-logging, task 3 site-access). |
+| **F4** | `getByLabel('Trade')` strict-mode violation (substring match hit both the Directory filter group and the Add-sheet select) | `playwright test e2e/people/person-card.spec.ts` (chromium, same build) | **The specific defect is FIXED** — `getByLabel("Trade", { exact: true })` inside `addSub()` no longer throws a strict-mode error in either test that calls it; both runs get past that line cleanly. **However, both tests in this file (`task 4`, `R-V`) still fail**, now on a different, newly-exposed defect — see below. |
+
+### New finding surfaced while re-running F4's spec (not one of F1–F4; found only because the strict-mode error that used to mask it is now fixed)
+
+`apps/designer-portal/e2e/people/person-card.spec.ts`'s own `addSub()` helper hard-codes the **same** mobile number, `(612) 555-0115`, for every contact it creates via the UI. `supabase/seed/people_crm_dev.sql:248/716` already seeds a permanent contact ("Frank Bauer", `d0e10000-0000-0000-0000-000000000015`) carrying that exact number as both its `office` and `mobile` channel. Patina's phone-collision merge behavior (intentional — see this program's own `b4c1ff290 fix(people-room): W2 round-4 findings — phone-collision disclosure`) then attaches every subsequent `addSub()` submission in the same run to whichever contact currently holds that phone number rather than creating the new, distinctly-named contact the test expects — so `cardByName(<the new unique name>)` never resolves and `expect.poll(...).not.toBeNull()` times out at 15s.
+
+Confirmed reproducible: `task 4` (2nd `addSub` call, for "Frank Bauer …") and `R-V` (its single `addSub` call, for "Erin Sato …" — a name that shares nothing with the seed collision, ruling out a name-based cause) both fail identically at the same line, at `--workers=1` (not a concurrency artifact). This is a test-fixture bug — the product's phone-collision/merge behavior is working as this program intended; the test helper just violates its own seed data's phone number.
+
+| ID | Severity | Ours | Claim | Fix |
+|---|---|---|---|---|
+| F4-new | Major (blocks 2 of `person-card.spec.ts`'s tests from a clean pass) | Ours (test file, `apps/designer-portal/e2e/people/person-card.spec.ts`) | `addSub()` hard-codes mobile `(612) 555-0115` for every synthetic contact it creates, colliding with the seeded "Frank Bauer" contact's phone (`people_crm_dev.sql:248/716`) and every one it. The intentional phone-collision merge logic then attaches each new submission to that existing contact instead of creating a new one, so `cardByName(name)` never resolves for the names the test expects and both `task 4` and `R-V` time out. | Give `addSub()` a unique phone per call (e.g. derive last 4 digits from the same random suffix `uniqueName()` already appends), so each synthetic sub gets its own channel and doesn't collide with seed data or with the other `addSub()` call in the same test. |
+
+### Build / server
+
+Designer portal only (the only app these 4 checks touch): `next build --webpack` then `next start -p 3000`, both with the inline local env (`NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321`, local anon/service-role keys from `supabase status -o env`, `NEXT_PUBLIC_DESIGNER_PORTAL_DATA_MODE=live`, `NEXT_PUBLIC_FLAG_OVERRIDES=the-document-pilot:true`, service URLs at localhost:3014/3015/3016) — sandbox disabled for both (build silently truncates inside the default sandbox, per round 1's own note). Build succeeded (same `output: 'standalone'` warning as round 1, non-fatal). Server confirmed listening on `:3000` (PID 46513, cwd under this worktree) before any Playwright run, `kill`ed cleanly after, port confirmed free.
+
+### Summary
+
+F1, F2, F3 verified fixed. F4's own reported defect (the strict-mode `getByLabel` violation) is verified fixed. A separate, previously-masked test-fixture bug in the same spec file (F4-new above) is left open — it is not part of F4's original claim and does not indicate the F4 fix is wrong, but it does mean `person-card.spec.ts` still does not pass clean end-to-end.
+
+---
+
+## Re-check round 3 — 2026-09-16
+
+Scope: re-run ONLY the check behind **F4-new** (round 2, `w6-qa.md` above) and verify it fixed. No other suites re-run. Worktree `/Users/kody/Code/patina-merged/.codex/worktrees/agent-people-build`, branch `build/people-room-crm-2026-09-11`, HEAD `30e06ab9f fix(people-crm): W6 QA round 2 — a synthetic sub gets its own number, so it stops merging into the seed's Frank Bauer`. Local DB only (`postgresql://postgres:postgres@127.0.0.1:54322/postgres`); no prod touched.
+
+### Fix inspected
+
+`apps/designer-portal/e2e/people/person-card.spec.ts` now derives a per-call mobile number from the target name instead of hard-coding `(612) 555-0115`:
+
+```ts
+function mobileFor(name: string): string {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) % 6000;
+  return `(612) 555-${4000 + hash}`;
+}
+```
+
+`addSub()` calls `.fill(mobileFor(name))` on the Mobile field instead of a literal. Confirmed the 4000–9999 band is clear of every seeded number: `grep -oE '555-0[0-9]{3}' supabase/seed/people_crm_dev.sql | sort -u | tail -1` → `555-0308` (seed's own highest), and `grep -c '555-'` shows 113 phone-bearing lines total, none above `0308`.
+
+### Procedure
+
+1. `supabase db reset --workdir <worktree>` (sandbox disabled, Docker socket) — clean run: every migration 00560–00638 + `20260910152111` applied, every seed file (`people_crm_dev.sql` included) seeded without error, ending `Finished supabase db reset on branch main.` / `{"message":"Reset local database."}`.
+2. `pnpm --dir apps/designer-portal build --webpack` (sandbox disabled; inline env: `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321`, local anon/service-role keys from `supabase status -o env`, `NEXT_PUBLIC_DESIGNER_PORTAL_DATA_MODE=live`, `NEXT_PUBLIC_FLAG_OVERRIDES=the-document-pilot:true`, service URLs at localhost:3014/3015/3016) — succeeded, same `output: 'standalone'` warning as prior rounds (non-fatal), full route table produced including `/people`.
+3. `next start -p 3000` in the background with the same inline env. Confirmed listening on `:3000` (cwd under this worktree) before any Playwright run.
+4. `npx playwright test e2e/people/person-card.spec.ts --project=chromium --workers=1` (the same low/no-concurrency mode round 1 and round 2 deliberately used to isolate this file from resource-contention flakiness, and the mode F4-new's own repro used).
+
+### Result
+
+**FIXED.** Both tests in the file passed:
+
+```
+Running 2 tests using 1 worker
+  2 passed (12.7s)
+```
+
+- `task 4 — do not contact, routed to somebody reachable` — passes. Its two `addSub()` calls (for synthetic "Rosa Delgado …" and "Frank Bauer …") now get distinct hashed mobile numbers, so neither collides with the seed's permanent Frank Bauer (`d0e10000-0000-0000-0000-000000000015`, `(612) 555-0115`) or with each other; `cardByName(name)` resolves the newly-created, distinctly-named contact for both.
+- `R-V — every region prints, and an absent record says so in words` — passes. Its single `addSub()` call (for synthetic "Erin Sato …") resolves cleanly.
+
+Re-ran the same file with `--repeat-each=2` at default (parallel) concurrency as an additional stress check beyond the requested scope: this surfaced a **different**, name-collision issue (`uniqueName()`'s `Date.now().toString(36).slice(-5)` suffix can coincide when two workers call it in the same millisecond, producing two contacts with the identical name and a `PGRST116` "multiple rows" error from `cardByName`). This is not the F4-new defect — it only appears under true concurrent workers, a mode round 1 and round 2 both deliberately avoided for this exact reason ("low concurrency to filter resource-contention flakiness"), and it is not part of this round's requested scope. No stray rows were left in the DB afterward (`select full_name, count(*) from studio_contacts where full_name ilike '%Frank Bauer %' or '%Erin Sato %' or '%Rosa Delgado %' group by full_name` → 0 rows), so `removePerson()`'s cleanup still held. Noted here for the record only; not filed as a tracked finding since it falls outside this round's scope and the file's own documented single-worker execution mode.
+
+### Servers / ports
+
+`next start -p 3000` was this program's own process (cwd under the worktree); stopped with `kill` after the runs, `lsof -nP -iTCP:3000 -sTCP:LISTEN` confirmed empty before returning. Port 3002 was never touched this round (client-portal not in scope for F4-new).
+
+### Summary
+
+F4-new verified fixed under its own documented reproduction method (`--workers=1`). `person-card.spec.ts` now passes clean end-to-end (2/2) in that mode.
