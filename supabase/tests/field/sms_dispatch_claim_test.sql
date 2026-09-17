@@ -451,4 +451,42 @@ BEGIN
 END
 $$;
 
+-- Case 12: null-attributed selection authority is unique even after terminal
+-- suppression/expiry. The same inbound cannot resurrect a hidden question.
+DO $$
+DECLARE
+  v_id uuid;
+  v_status text;
+  v_duplicate boolean;
+BEGIN
+  INSERT INTO public.sms_messages
+    (conversation_id, direction, body, party_id, project_id, template_key, dedupe_key, twilio_status, recipe)
+  VALUES ('d0000000-0000-4000-8000-0000000000c1', 'outbound', 'authorized selection', NULL, NULL,
+    'sms_selection', 'selection:origin:project_choice', 'deferred', '{"template_key":"sms_selection","params":{},"party_id":null,"project_id":null,"link_kind":null}'::jsonb)
+  RETURNING id INTO v_id;
+  FOREACH v_status IN ARRAY ARRAY['deferred','claimed','queued','sent','delivered','failed','undelivered','expired','suppressed'] LOOP
+    UPDATE public.sms_messages SET twilio_status = v_status WHERE id = v_id;
+    v_duplicate := false;
+    BEGIN
+      INSERT INTO public.sms_messages
+        (conversation_id, direction, body, party_id, project_id, template_key, dedupe_key, twilio_status)
+      VALUES ('d0000000-0000-4000-8000-0000000000c1', 'outbound', 'duplicate selection', NULL, NULL,
+        'sms_selection', 'selection:origin:project_choice', 'claimed');
+    EXCEPTION WHEN unique_violation THEN v_duplicate := true;
+    END;
+    ASSERT v_duplicate, 'FAIL 12a: null selection claim must survive status ' || v_status;
+  END LOOP;
+  -- New kind/origin is a distinct question. Ordinary null-attributed rows
+  -- deliberately remain outside this narrow index.
+  INSERT INTO public.sms_messages
+    (conversation_id, direction, body, template_key, dedupe_key)
+  VALUES
+    ('d0000000-0000-4000-8000-0000000000c1', 'outbound', 'other kind', 'sms_selection', 'selection:origin:ref_clarify'),
+    ('d0000000-0000-4000-8000-0000000000c1', 'outbound', 'other origin', 'sms_selection', 'selection:other:project_choice'),
+    ('d0000000-0000-4000-8000-0000000000c1', 'outbound', 'ordinary', 'sms_help', 'ordinary'),
+    ('d0000000-0000-4000-8000-0000000000c1', 'outbound', 'ordinary again', 'sms_help', 'ordinary');
+  RAISE NOTICE 'sms_dispatch_claim: case 12 (null selection claim, terminal non-revival) passed.';
+END
+$$;
+
 ROLLBACK;

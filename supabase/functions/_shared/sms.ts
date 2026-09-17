@@ -48,6 +48,14 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { interpolate } from "./render-template.ts";
 import { captureServerEvent } from "./aesthete-events.ts";
+import {
+  isSelectionInput, recoverSmsSelection, SELECTION_TEMPLATE, selectionDedupeKey,
+  validateSmsSelection,
+} from "./sms-selection.ts";
+import type {
+  SelectionManifest, SelectionQuestion, SelectionSmsInput, ValidatedSelection,
+} from "./sms-selection.ts";
+export { recoverSmsSelection } from "./sms-selection.ts";
 
 // ── Injectable seams ────────────────────────────────────────────────────────
 export interface SmsDeps {
@@ -59,7 +67,11 @@ export interface SmsDeps {
   now?: Date;
 }
 
-export interface SendPartySmsInput {
+export type SendPartySmsInput = OrdinarySmsInput | SelectionSmsInput;
+
+export interface OrdinarySmsInput {
+  kind?: "party";
+  selection?: never;
   /** Preferred: resolve phone + consent + project from the party row. */
   partyId?: string;
   /** Alt path: an explicit phone (consent still checked across party rows). */
@@ -110,6 +122,8 @@ export interface SendPartySmsInput {
 export type SendStatus = "sent" | "queued" | "deferred" | "failed";
 
 export interface SendPartySmsResult {
+  /** Present only for a re-read, authorized durable selection question. */
+  selection?: SelectionQuestion;
   sent: boolean;
   deferred?: boolean;
   reason?: string;
@@ -511,6 +525,9 @@ export async function orgsOfProjects(
 export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
 
 export interface ChannelConsentDecision {
+  /** Distinguish a known denial from an unreadable authority for selection. */
+  unreadable?: boolean;
+  organizationId?: string;
   verdict: ChannelConsentVerdict;
   /** Did a studio_channel_consent ROW answer, or is this the absence of one? */
   recordPresent: boolean;
@@ -609,7 +626,7 @@ export async function channelConsentDecision(
       "channelConsentVerdict: refusing, the owning studio could not be resolved",
       { projectId },
     );
-    return { verdict: "refuse", recordPresent: false, recordGeneration: null };
+    return { verdict: "refuse", recordPresent: false, recordGeneration: null, unreadable: true };
   }
 
   if (org) {
@@ -625,13 +642,13 @@ export async function channelConsentDecision(
         "channelConsentVerdict: refusing, the consent record could not be read",
         recordError,
       );
-      return { verdict: "refuse", recordPresent: false, recordGeneration: null };
+      return { verdict: "refuse", recordPresent: false, recordGeneration: null, unreadable: true };
     }
     if (!record) {
       // No record is `not_asked`, and `not_asked` refuses (R-AW). The fold ran
       // inside 00594, so every seat that ever carried a verdict has a record
       // behind it; a pair with none was never asked by this studio.
-      return { verdict: "refuse", recordPresent: false, recordGeneration: null };
+      return { verdict: "refuse", recordPresent: false, recordGeneration: null, organizationId: org };
     }
     const row = record as {
       status: string;
@@ -643,21 +660,21 @@ export async function channelConsentDecision(
     // A refusal the recipient has not answered still stands, whatever the
     // status now says (r6 M6-3), so it is read before the status is.
     if (row.refusal_unanswered === true) {
-      return { verdict: "refuse", recordPresent: true, recordGeneration: generation };
+      return { verdict: "refuse", recordPresent: true, organizationId: org, recordGeneration: generation };
     }
     if (row.status === "granted") {
-      return { verdict: "allow", recordPresent: true, recordGeneration: generation };
+      return { verdict: "allow", recordPresent: true, organizationId: org, recordGeneration: generation };
     }
     // `pending` is the invite in flight — sendPartySms's invite gate owns it.
     if (row.status === "pending") {
       return {
         verdict: "unknown",
         recordPresent: true,
-        recordGeneration: generation,
+        organizationId: org, recordGeneration: generation,
       };
     }
     // `opted_out`, and `not_asked` recorded by the fold: both refuse.
-    return { verdict: "refuse", recordPresent: true, recordGeneration: generation };
+    return { verdict: "refuse", recordPresent: true, organizationId: org, recordGeneration: generation };
   }
 
   // No studio resolves at all — nothing to scope to, so the reduction stays
@@ -727,6 +744,7 @@ export async function contactRuleForbidsSms(
   supabase: SupabaseClient,
   partyId: string | null,
   phone: string,
+  diagnostics?: { unreadable: boolean },
 ): Promise<boolean> {
   const subjects: Array<{ type: string; id: string }> = [];
 
@@ -742,6 +760,7 @@ export async function contactRuleForbidsSms(
         "contactRuleForbidsSms: refusing, the seat's card could not be read",
         partyError,
       );
+      if (diagnostics) diagnostics.unreadable = true;
       return true;
     }
     const cardId = (party as { studio_contact_id?: string | null } | null)
@@ -761,6 +780,7 @@ export async function contactRuleForbidsSms(
         "contactRuleForbidsSms: refusing, the channel scan failed",
         channelError,
       );
+      if (diagnostics) diagnostics.unreadable = true;
       return true;
     }
     for (const row of (channels ?? []) as Array<{ owner_id: string }>) {
@@ -779,6 +799,7 @@ export async function contactRuleForbidsSms(
       "contactRuleForbidsSms: refusing, the rule could not be read",
       ruleError,
     );
+    if (diagnostics) diagnostics.unreadable = true;
     return true;
   }
 
@@ -798,7 +819,7 @@ export async function contactRuleForbidsSms(
 
 async function resolveRecipient(
   supabase: SupabaseClient,
-  input: SendPartySmsInput,
+  input: OrdinarySmsInput,
 ): Promise<Recipient> {
   if (input.partyId) {
     const { data: party } = await supabase
@@ -949,7 +970,7 @@ interface RenderedBody {
  */
 async function resolveBody(
   supabase: SupabaseClient,
-  input: SendPartySmsInput,
+  input: OrdinarySmsInput,
   recipient: Recipient,
   clientPortalUrl: string,
   opts: { mintLink: boolean },
@@ -1060,6 +1081,8 @@ async function findOrCreateConversation(
  * fresh at the moment the text actually goes out.
  */
 export interface SendRecipe {
+  /** Internal, source-bound selection; params stays empty and attribution null. */
+  selection?: SelectionManifest;
   /** NULL when the caller supplied a literal body: the stored body IS the body. */
   template_key: string | null;
   params: Record<string, unknown>;
@@ -1251,6 +1274,35 @@ export async function sendPartySms(
   input: SendPartySmsInput,
   deps: SmsDeps = {},
 ): Promise<SendPartySmsResult> {
+  if (input.kind !== "selection") return await sendPartySmsCore(supabase, input, deps);
+  if (!isSelectionInput(input)) return { sent: false, status: "failed", reason: "selection_invalid" };
+  const recoveryInput = { inboundMessageId: input.selection.inboundMessageId, kind: input.selection.kind, phone: input.phone };
+  const existing = await recoverSmsSelection(supabase, recoveryInput, deps);
+  if (existing.found) return existing;
+  const sender = smsConversationNumber(deps);
+  if (!sender) return { sent: false, status: "failed", reason: "conversation_number_not_configured" };
+  const checked = await validateSmsSelection(supabase, input.selection, input.phone, sender, deps.now ?? new Date());
+  if (!checked.ok) return { sent: false, status: "failed", reason: checked.reason };
+  const result = await sendPartySmsCore(supabase, {
+    phone: input.phone, templateKey: SELECTION_TEMPLATE,
+    dedupeKey: selectionDedupeKey(input.selection.inboundMessageId, input.selection.kind),
+    automationPhase: input.automationPhase,
+  }, deps, checked.value);
+  // A provider response or a duplicate INSERT is not durable question state.
+  // Always re-read the actual row, including settlement races and failures.
+  if (!result.messageId && result.reason !== "duplicate_send_claim") return result;
+  const recovered = await recoverSmsSelection(supabase, recoveryInput, deps);
+  return { ...recovered, dueAt: recovered.status === "deferred" ? result.dueAt : undefined,
+    reason: recovered.reason ?? result.reason,
+    provider_code: recovered.provider_code ?? result.provider_code };
+}
+
+async function sendPartySmsCore(
+  supabase: SupabaseClient,
+  input: OrdinarySmsInput,
+  deps: SmsDeps,
+  selection?: ValidatedSelection,
+): Promise<SendPartySmsResult> {
   const now = deps.now ?? new Date();
   const fetchImpl = deps.fetchImpl ?? fetch;
   const mode = devMode(deps);
@@ -1276,7 +1328,10 @@ export async function sendPartySms(
   });
 
   // ── Resolve recipient ─────────────────────────────────────────────────────
-  const recipient = await resolveRecipient(supabase, input);
+  if (!selection && input.templateKey === SELECTION_TEMPLATE) return refused("selection_input_required");
+  const recipient: Recipient = selection
+    ? { phone: selection.manifest.recipientPhone, partyId: null, projectId: null, displayName: null }
+    : await resolveRecipient(supabase, input);
   if (!recipient.phone) return refused("no_phone_number");
 
   // The physical number sms-inbound keys the thread on — never the MG…
@@ -1302,7 +1357,9 @@ export async function sendPartySms(
 
   // ── GATE 2: consent ───────────────────────────────────────────────────────
   // The studio's own consent record for this number (00594), and nothing else.
-  const decision = await channelConsentDecision(
+  const decision: ChannelConsentDecision = selection
+    ? { verdict: "allow", recordPresent: true, recordGeneration: null }
+    : await channelConsentDecision(
     supabase,
     recipient.phone,
     recipient.projectId,
@@ -1313,7 +1370,7 @@ export async function sendPartySms(
   // binds the double-opt-in invite too: "never text" is not "never text except
   // once, to ask".
   if (
-    await contactRuleForbidsSms(supabase, recipient.partyId, recipient.phone)
+    !selection && await contactRuleForbidsSms(supabase, recipient.partyId, recipient.phone)
   ) {
     return refused("contact_rule_forbids_sms");
   }
@@ -1360,7 +1417,7 @@ export async function sendPartySms(
     return refused("field_line_phase_off");
   }
 
-  const convId = await findOrCreateConversation(
+  const convId = selection?.manifest.conversationId ?? await findOrCreateConversation(
     supabase,
     conversationNumber,
     recipient.phone,
@@ -1379,13 +1436,18 @@ export async function sendPartySms(
 
   const templateKey = input.templateKey ?? null;
   const rendersFromTemplate = !input.body && !!templateKey;
+  const selectionRecipe: SendRecipe | null = selection ? {
+    template_key: SELECTION_TEMPLATE, params: {}, party_id: null, project_id: null,
+    link_kind: null, automation_phase: declaredPhase > 0 ? declaredPhase : null,
+    selection: selection.manifest,
+  } : null;
 
   // ── GATE 4: quiet hours → defer (store, do not send, DO NOT MINT) ─────────
   if (isQuietHours(now, fieldTz)) {
     const dueAt = nextSendWindowStart(now, fieldTz).toISOString();
     // Rendered WITHOUT minting: this copy is a PREVIEW for the thread, and the
     // link it names does not exist yet (contract S6).
-    const preview = await resolveBody(
+    const preview = selection ? { body: selection.body, linkKind: null } : await resolveBody(
       supabase,
       input,
       recipient,
@@ -1412,7 +1474,7 @@ export async function sendPartySms(
     }
 
     const safeParams = safeRecipeParams(input.vars);
-    const recipe: SendRecipe | null = rendersFromTemplate || declaredPhase > 0
+    const recipe: SendRecipe | null = selectionRecipe ?? (rendersFromTemplate || declaredPhase > 0
       ? {
         template_key: rendersFromTemplate ? templateKey : null,
         params: safeParams.params,
@@ -1425,7 +1487,7 @@ export async function sendPartySms(
           (safeParams.droppedLink ? "field" : null),
         automation_phase: declaredPhase > 0 ? declaredPhase : null,
       }
-      : null;
+      : null);
     // A row with no TEMPLATE to render from is flushed by sending the body
     // stored on it, so the body stored has to BE the body to send. A raw body
     // that the audit copy replaces, or that redaction would alter, is not:
@@ -1486,7 +1548,7 @@ export async function sendPartySms(
   }
 
   // ── Render, MINTING THE LINK HERE AND NOWHERE ELSE ────────────────────────
-  const rendered = await resolveBody(
+  const rendered = selection ? { body: selection.body, linkKind: null } : await resolveBody(
     supabase,
     input,
     recipient,
@@ -1494,11 +1556,11 @@ export async function sendPartySms(
     { mintLink: true },
   );
   if (!rendered.body || !rendered.body.trim()) return refused("empty_body");
-  const body = rendered.body;
+  let body = rendered.body;
   // What the thread keeps. Redacted in both directions: a caller's audit copy
   // is used as given, and a body we rendered has its token taken out of it, so
   // no stored row and no log line carries a live credential (contract S6).
-  const auditBody = redactFieldLinkTokens(input.auditBody?.trim() || body);
+  let auditBody = redactFieldLinkTokens(input.auditBody?.trim() || body);
   // The recipe is durable, so it is credential-free here for exactly the same
   // reason it is on the deferred row: a row this send claimed can be read back
   // by the reconciliation sweep long after the link it named has been handed out.
@@ -1514,7 +1576,7 @@ export async function sendPartySms(
     project_id: recipient.projectId,
     template_key: templateKey,
     site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ?? null,
-    recipe: rendersFromTemplate
+    recipe: selectionRecipe ?? (rendersFromTemplate
       ? {
         template_key: templateKey,
         params: sentParams.params,
@@ -1524,7 +1586,7 @@ export async function sendPartySms(
           (sentParams.droppedLink ? "field" : null),
         automation_phase: declaredPhase > 0 ? declaredPhase : null,
       }
-      : null,
+      : null),
     dedupe_key: dedupeKey,
     claimed_at: now.toISOString(),
   });
@@ -1543,6 +1605,37 @@ export async function sendPartySms(
     // The row IS the claim and the record of the send. Without it a text would
     // go out that nothing in the room can see, reconcile or stop.
     return refused("send_not_claimable");
+  }
+
+  if (selection) {
+    // Reauthorize after claiming, and use THAT render for both wire and preview.
+    // Studio ownership/names may have changed since the initial filtering pass.
+    try {
+      const checked = await validateSmsSelection(supabase, selection.manifest,
+        recipient.phone, conversationNumber, now, true);
+      if (!checked.ok) {
+        if (checked.unreadable) await releaseSendClaim(supabase, messageId, checked.reason);
+        else await supabase.from("sms_messages").update({
+          twilio_status: "suppressed", error_message: checked.reason,
+        }).eq("id", messageId);
+        return { ...refused(checked.reason), messageId, conversationId: convId ?? undefined };
+      }
+      body = checked.value.body;
+      auditBody = redactFieldLinkTokens(body);
+      const { data: preview, error } = await supabase.from("sms_messages")
+        .update({ body: auditBody })
+        .eq("id", messageId).eq("twilio_status", "claimed").is("twilio_sid", null)
+        .select("id").maybeSingle();
+      if (error || !preview) {
+        await releaseSendClaim(supabase, messageId, "selection_preview_unrecorded");
+        return { ...refused("selection_preview_unrecorded"), messageId, conversationId: convId ?? undefined };
+      }
+    } catch (error) {
+      // Pre-provider only: a transport exception below remains ambiguous and
+      // must NOT release the claim for an immediate second provider attempt.
+      await releaseSendClaim(supabase, messageId, error);
+      return { ...refused("selection_preview_unrecorded"), messageId, conversationId: convId ?? undefined };
+    }
   }
 
   // ── Send (dev-mode aware) ─────────────────────────────────────────────────
@@ -1847,6 +1940,33 @@ export async function flushDeferredMessages(
       continue;
     }
 
+    const selectionRow = row.template_key === SELECTION_TEMPLATE;
+    let validatedSelection: ValidatedSelection | undefined;
+    if (selectionRow) {
+      const recipe = row.recipe;
+      const manifest = recipe?.selection;
+      if (row.party_id !== null || row.project_id !== null || recipe?.party_id !== null ||
+        recipe?.project_id !== null || recipe?.link_kind !== null || recipe?.template_key !== SELECTION_TEMPLATE ||
+        !manifest || manifest.conversationId !== row.conversation_id ||
+        row.dedupe_key !== selectionDedupeKey(manifest.inboundMessageId, manifest.kind) ||
+        !recipe.params || Object.keys(recipe.params).length || senderNumber !== smsConversationNumber(deps)) {
+        await supabase.from("sms_messages").update({ twilio_status: "suppressed", error_message: "selection_recipe_invalid" }).eq("id", row.id);
+        suppressed++;
+        continue;
+      }
+      const checked = await validateSmsSelection(supabase, manifest, phone, senderNumber, now, true);
+      if (!checked.ok) {
+        if (checked.unreadable) { skipped++; continue; }
+        await supabase.from("sms_messages").update({
+          twilio_status: checked.reason === "selection_expired" ? "expired" : "suppressed",
+          error_message: checked.reason,
+        }).eq("id", row.id);
+        if (checked.reason === "selection_expired") expired++; else suppressed++;
+        continue;
+      }
+      validatedSelection = checked.value;
+    }
+
     // Re-check consent — it may have changed since the row was deferred.
     // The studio's own record for this number, resolved through the deferred
     // row's party, exactly as sendPartySms does. The seat is read for the
@@ -1866,7 +1986,7 @@ export async function flushDeferredMessages(
       deferredProjectId = party?.project_id ?? deferredProjectId;
       deferredDisplayName = party?.display_name ?? null;
     }
-    const verdict = await channelConsentVerdict(
+    const verdict = selectionRow ? "allow" : await channelConsentVerdict(
       supabase,
       phone,
       deferredProjectId,
@@ -1900,7 +2020,7 @@ export async function flushDeferredMessages(
     // Written down AFTER the row was deferred, it still binds the send that
     // actually happens: a rule the studio entered last night is not answered by
     // a message composed the evening before it (SQ-37 R3).
-    if (await contactRuleForbidsSms(supabase, row.party_id, phone)) {
+    if (!selectionRow && await contactRuleForbidsSms(supabase, row.party_id, phone)) {
       await supabase
         .from("sms_messages")
         .update({
@@ -1988,7 +2108,16 @@ export async function flushDeferredMessages(
     // which is sms_reconcile_accepted_send()'s question, not this one's.
     let sendBody = row.body;
     try {
-      if (recipe && recipe.template_key) {
+      if (validatedSelection) {
+        const checked = await validateSmsSelection(supabase, validatedSelection.manifest, phone, senderNumber, now, true);
+        if (!checked.ok) {
+          if (checked.unreadable) await releaseSendClaim(supabase, row.id, checked.reason);
+          else await supabase.from("sms_messages").update({ twilio_status: "suppressed", error_message: checked.reason }).eq("id", row.id);
+          skipped++;
+          continue;
+        }
+        sendBody = checked.value.body;
+      } else if (recipe && recipe.template_key) {
         const rendered = await resolveBody(
           supabase,
           {

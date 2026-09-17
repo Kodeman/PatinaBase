@@ -14,6 +14,8 @@ import {
   assert,
   assertEquals,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import { handleStatusCallback } from "../sms-status/handler.ts";
+import { signTwilio } from "./sign-twilio.ts";
 import { handleSmsDispatch } from "../sms-dispatch/handler.ts";
 import type { SendPartySmsResult } from "../_shared/sms.ts";
 import { createFakeSupabase, type FakeSupabase } from "./fake-supabase.ts";
@@ -777,3 +779,45 @@ Deno.test("a provider refusal answers 502 with the code, through the real send p
   assertEquals(row.twilio_status, "failed");
   assertEquals(row.error_code, "21610");
 });
+
+
+for (const status of ["delivered", "undelivered", "failed"]) {
+  Deno.test("real userId dispatch notification-only receipt settles " + status, async () => {
+    const fake = createFakeSupabase({
+      profiles: [{ id: "u1", phone: "+15551230001", sms_opt_in: true, display_name: "Test" }],
+      notification_preferences: [{ user_id: "u1", channels_sms: true }],
+    });
+    const callbackUrl = "https://example.test/status";
+    const env = envOf({ ...BASE_ENV, SMS_DEV_MODE: "off", SMS_STATUS_CALLBACK_URL: callbackUrl });
+    let wires = 0;
+    const res = await handleSmsDispatch(post({ userId: "u1", body: "Synthetic profile notification" }), {
+      supabase: fake as never, getEnv: env,
+      fetchImpl: (async (_url, init) => {
+        wires++;
+        const body = new URLSearchParams(String(init?.body));
+        assertEquals(body.get("StatusCallback"), callbackUrl);
+        assertEquals(body.get("To"), "+15551230001");
+        return new Response(JSON.stringify({ sid: "SM_user", status: "queued" }), { status: 201 });
+      }) as typeof fetch,
+    });
+    assertEquals(res.status, 202);
+    assertEquals(wires, 1);
+    const payload = await res.json();
+    assertEquals(payload.provider_id, "SM_user");
+    assertEquals(fake._data.sms_messages?.length ?? 0, 0, "userId producer stores no sms_messages row");
+    const row = fake._data.notification_log[0];
+    assertEquals(row.channel, "sms");
+    assertEquals(row.provider_id, "SM_user");
+    assertEquals(row.status, "sending");
+    const params: Record<string, string> = { MessageSid: "SM_user", MessageStatus: status };
+    if (status !== "delivered") Object.assign(params, { ErrorCode: "30034", ErrorMessage: "blocked" });
+    const request = new Request(callbackUrl, { method: "POST", headers: {
+      "X-Twilio-Signature": await signTwilio(BASE_ENV.TWILIO_AUTH_TOKEN, callbackUrl, params),
+    }, body: new URLSearchParams(params) });
+    assertEquals((await handleStatusCallback(request, { supabase: fake as never, getEnv: env })).status, 204);
+    assertEquals(row.status, status === "delivered" ? "delivered" : "failed",
+      "accepted ordinary user notification must settle from signed provider receipt");
+    if (status !== "delivered") assertEquals(row.error, "blocked");
+    assertEquals(wires, 1, "receipt never sends a second SMS");
+  });
+}

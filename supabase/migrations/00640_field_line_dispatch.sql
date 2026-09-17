@@ -327,6 +327,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS sms_messages_send_claim_uniq
     AND COALESCE(twilio_status, 'claimed') NOT IN
         ('failed', 'undelivered', 'canceled', 'expired', 'suppressed');
 
+-- A selection belongs to the handset, not an arbitrary first studio. Keep
+-- terminal rows in this claim too: STOP/expiry must not be resurrected by a
+-- retry of the same originating inbound. A replacement needs a new origin.
+CREATE UNIQUE INDEX IF NOT EXISTS sms_messages_selection_claim_uniq
+  ON public.sms_messages (conversation_id, template_key, dedupe_key)
+  WHERE direction = 'outbound' AND party_id IS NULL AND project_id IS NULL
+    AND conversation_id IS NOT NULL AND template_key = 'sms_selection'
+    AND dedupe_key IS NOT NULL;
+
 COMMENT ON INDEX public.sms_messages_send_claim_uniq IS
   'The Field Line (00640), contract S5: one LOGICAL send per (party, template, '
   'dedupe key) while that send is live. The insert IS the claim — a concurrent '
