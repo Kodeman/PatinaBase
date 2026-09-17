@@ -82,6 +82,21 @@ Deno.test("condition: damage is not ok, and plain ok is", () => {
   }
 });
 
+Deno.test("negated participles report a clean condition only when their remainder is clean", () => {
+  for (const body of [
+    "not damaged", "nothing damaged", "nothing broken", "not scratched",
+    "nothing is damaged", "isn't damaged", "isnt damaged", "wasn't broken",
+    "wasnt broken", "aren't damaged", "arent damaged", "never damaged",
+  ]) {
+    const got = parse(body);
+    assertEquals(got?.intent, "report_condition", body);
+    assertEquals(got?.condition?.ok, true, `${body} is a clean condition`);
+  }
+  assertEquals(parse("not damaged but missing a chair")?.condition?.ok, false);
+  assertEquals(parse("not damaged, no good"), null);
+  assertEquals(parse("not damaged?"), null);
+});
+
 Deno.test("departure: leaving, done for today", () => {
   for (const body of ["leaving", "Done for today", "packing up"]) {
     const got = parse(body);

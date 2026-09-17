@@ -187,6 +187,9 @@ const DAMAGE_RE =
 const NEGATED_DAMAGE_RE =
   /\bno (damage|damages|issues|problems|marks|dents|scratches|breaks)\b/g;
 
+const NEGATED_DAMAGE_PARTICIPLE_RE =
+  /\b(not|nothing|nothing is|isn't|isnt|wasn't|wasnt|aren't|arent|never)\s+(damaged|scratched|broken|cracked|chipped|dented|torn|ripped|stained|soaked|missing)\b/g;
+
 /** Language that describes a condition they have NOT seen yet. */
 const CONDITIONAL_RE = /\b(if|unless|will|once)\s/;
 
@@ -391,7 +394,9 @@ export function parseFieldMessageDeterministic(
   // yet. A promise is never a report.
   if (CONDITIONAL_RE.test(norm)) return null;
 
-  const withoutNegation = norm.replace(NEGATED_DAMAGE_RE, " ");
+  const withoutNegation = norm
+    .replace(NEGATED_DAMAGE_RE, " ")
+    .replace(NEGATED_DAMAGE_PARTICIPLE_RE, " ");
   if (
     withoutNegation !== norm &&
     (CLEAN_REMAINDER_NEGATION_RE.test(withoutNegation) || withoutNegation.includes("?"))
@@ -401,17 +406,16 @@ export function parseFieldMessageDeterministic(
   if (CONDITION_OK_PHRASES.has(norm)) {
     return { ...base, intent: "report_condition", condition: { ok: true, note } };
   }
-  if (withoutNegation !== norm && !isCleanRemainder(withoutNegation)) {
-    // "no damage but missing a chair", "no damage yet" — the negation was one
-    // clause of a sentence, and the rest of the sentence is what matters. A
-    // matched negation is not proof that the goods are fine.
-    return null;
-  }
   if (DAMAGE_RE.test(withoutNegation)) {
     return { ...base, intent: "report_condition", condition: { ok: false, note } };
   }
+  if (withoutNegation !== norm && withoutNegation.trim() && !isCleanRemainder(withoutNegation)) {
+    // "no damage yet" — the negation was one clause of a sentence, and the
+    // rest is uncertain. A matched negation is not proof that the goods are fine.
+    return null;
+  }
   if (withoutNegation !== norm) {
-    // "no damage, all unwrapped" — a negation and nothing else is a clean call.
+    // A bare negated participle is the trade's clean report.
     return { ...base, intent: "report_condition", condition: { ok: true, note } };
   }
 
