@@ -95,12 +95,16 @@ export function createFieldLineHarness(): FieldLineHarness {
       { id: "studio-b", full_name: "Studio B" },
     ],
     projects: [
-      { id: "project-a", name: "Ash House", designer_id: "studio-a" },
-      { id: "project-b", name: "Birch House", designer_id: "studio-b" },
+      { id: "project-a", name: "Ash House", designer_id: "studio-a", studio_id: "studio-a" },
+      { id: "project-b", name: "Birch House", designer_id: "studio-b", studio_id: "studio-b" },
     ],
     project_parties: [
-      { id: "party-a", project_id: "project-a", phone_e164: SHARED_RECIPIENT, party_kind: "sub", display_name: "Riley", sms_consent_status: "granted" },
-      { id: "party-b", project_id: "project-b", phone_e164: SHARED_RECIPIENT, party_kind: "sub", display_name: "Riley", sms_consent_status: "granted" },
+      { id: "party-a", project_id: "project-a", phone_e164: SHARED_RECIPIENT, party_kind: "sub", display_name: "Riley", sms_consent_status: "granted", sms_consent_source: "fixture", sms_consent_evidence: "fixture consent evidence", sms_consent_recorded_at: "2026-10-01T00:00:00.000Z", sms_consent_disclosure_version: "fixture-v1" },
+      { id: "party-b", project_id: "project-b", phone_e164: SHARED_RECIPIENT, party_kind: "sub", display_name: "Riley", sms_consent_status: "granted", sms_consent_source: "fixture", sms_consent_evidence: "fixture consent evidence", sms_consent_recorded_at: "2026-10-01T00:00:00.000Z", sms_consent_disclosure_version: "fixture-v1" },
+    ],
+    studio_channel_consent: [
+      { organization_id: "studio-a", channel_kind: "sms", channel_value: SHARED_RECIPIENT, status: "granted", refusal_unanswered: false },
+      { organization_id: "studio-b", channel_kind: "sms", channel_value: SHARED_RECIPIENT, status: "granted", refusal_unanswered: false },
     ],
     email_templates: [
       { slug: "sms_daily_digest", is_active: true, html_content: "{{studio_name}}: {{menu}} Msg&data rates may apply. Reply HELP for help, STOP to opt out." },

@@ -10,6 +10,20 @@ Deno.test("field-line fixture harness is isolated and signed", async () => {
   assertEquals(harness.clock.toISOString(), "2026-11-01T14:00:00.000Z");
   assertEquals(harness.studios.A.partyId !== harness.studios.B.partyId, true);
 
+  harness.fake._data.projects = harness.fake._data.projects.map((project) =>
+    project.id === harness.studios.B.projectId
+      ? { ...project, studio_id: null, designer_id: null }
+      : project
+  );
+  harness.fake._data.studio_channel_consent = harness.fake._data.studio_channel_consent.filter(
+    (record) => record.organization_id !== harness.studios.B.id,
+  );
+  const unconsentedB = await harness.send({
+    partyId: harness.studios.B.partyId,
+    body: "Studio B: fixture message. Msg&data rates may apply. Reply HELP for help, STOP to opt out.",
+  });
+  assertEquals(unconsentedB, { sent: false, reason: "not_consented" });
+
   harness.provider.setOutcome({ kind: "fail", code: 30007 });
   harness.mediaStore.interruptNextUpload();
   assert(harness.fake._failUploadsFor?.has("*"));
