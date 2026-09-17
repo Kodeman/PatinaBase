@@ -643,6 +643,11 @@ BEGIN
        '{{studio_name}} at {{project_name}}: delivery {{delivery_window}}, {{delivery_summary}}. Ref {{ref}}. Reply OK {{ref}} to confirm, or text what is wrong.',
        '["studio_name","project_name","delivery_window","delivery_summary","ref"]'),
 
+      ('sms_selection',
+       'Field SMS - Selection question',
+       '{{selection}}',
+       '["selection"]'),
+
       ('sms_help',
        'Field SMS - HELP reply',
        '{{studio_name}} project updates by text (~1 msg/day). Questions: hello@patina.cloud',

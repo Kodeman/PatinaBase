@@ -622,5 +622,37 @@ BEGIN
 END
 $$;
 
+-- A combined selection's body AND credential-free recipe carry multiple
+-- studios' identifiers. Neither studio (nor a co-member) may read that row.
+INSERT INTO public.sms_messages
+  (id, conversation_id, direction, body, party_id, project_id, template_key, twilio_status, recipe)
+VALUES ('ab000000-0000-4000-8000-0000000000f6', 'ab000000-0000-4000-8000-0000000000f1',
+  'outbound', 'Studio A: 1) Ash House. Studio B: 2) Birch House.', NULL, NULL, 'sms_selection', 'deferred',
+  '{"template_key":"sms_selection","params":{},"party_id":null,"project_id":null,"link_kind":null,"selection":{"options":[{"partyId":"ab000000-0000-4000-8000-0000000000b1","projectId":"ab000000-0000-4000-8000-0000000000a1","number":1},{"partyId":"ab000000-0000-4000-8000-0000000000b2","projectId":"ab000000-0000-4000-8000-0000000000a2","number":2}]}}'::jsonb);
+DO $$
+DECLARE
+  v_user uuid;
+  v_count integer;
+BEGIN
+  FOREACH v_user IN ARRAY ARRAY[
+    'ab000000-0000-4000-8000-000000000001'::uuid,
+    'ab000000-0000-4000-8000-000000000002'::uuid,
+    'ab000000-0000-4000-8000-000000000003'::uuid
+  ] LOOP
+    PERFORM pg_temp.assume_user(v_user);
+    SELECT count(body || recipe::text) INTO v_count FROM public.sms_messages
+      WHERE id = 'ab000000-0000-4000-8000-0000000000f6';
+    ASSERT v_count = 0, 'FAIL 14a: studio must not read a combined selection body/manifest';
+    PERFORM pg_temp.reset_role();
+  END LOOP;
+  SET LOCAL ROLE service_role;
+  SELECT count(*) INTO v_count FROM public.sms_messages
+    WHERE id = 'ab000000-0000-4000-8000-0000000000f6' AND recipe->'selection' IS NOT NULL;
+  ASSERT v_count = 1, 'FAIL 14b: service role must recover the combined selection manifest';
+  RESET ROLE;
+  RAISE NOTICE 'sms_tables: case 14 (selection body and manifest service-only) passed.';
+END
+$$;
+
 ROLLBACK TO SAVEPOINT sms_tables_test;
 RELEASE SAVEPOINT sms_tables_test;

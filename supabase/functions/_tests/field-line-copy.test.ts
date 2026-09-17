@@ -47,6 +47,7 @@ const GSM7_EXTENDED = "^{}\\[~]|€";
  *  so the producer and this test cannot disagree about the budget. */
 const MAX_PARAM: Record<string, string> = {
   link: `https://client.patina.cloud/field/${"a".repeat(64)}`,
+  selection: "S".repeat(240),
   studio_name: "S".repeat(24),
   project_name: "P".repeat(24),
   item_title: "I".repeat(40),
@@ -70,6 +71,7 @@ const EXPECTED_SLUGS = [
   "sms_daily_digest",
   "sms_delivery_confirm",
   "sms_help",
+  "sms_selection",
 ];
 
 interface Template {
@@ -131,7 +133,7 @@ const TEMPLATES: Template[] = [
   body: `${unquote(m[3])} ${CLOSING}`,
 }));
 
-Deno.test("the six Field Line templates are the ones in the migration", () => {
+Deno.test("the seven Field Line templates are the ones in the migration", () => {
   assertEquals(TEMPLATES.map((t) => t.slug).sort(), [...EXPECTED_SLUGS].sort());
 });
 
@@ -152,7 +154,7 @@ Deno.test("the closing line is defined once and ends every body", () => {
 Deno.test("the studio's name comes first in every body", () => {
   for (const t of TEMPLATES) {
     assert(
-      t.body.startsWith("{{studio_name}}"),
+      t.body.startsWith(t.slug === "sms_selection" ? "{{selection}}" : "{{studio_name}}"),
       `${t.slug} opens with "${t.body.slice(0, 32)}…" — the studio comes first`,
     );
   }
