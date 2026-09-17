@@ -120,3 +120,13 @@ artifacts/**/shots-mb/
 artifacts/.*/
 artifacts/**/cws-upload/
 apps/mobile/Mobile.xcworkspace/xcuserdata/
+
+# 2026-09-17 cleanup: screenshot walks, probes and calibration dumps stay local (1.3 GB); program records commit
+artifacts/**/shots/
+artifacts/**/probe/
+artifacts/**/render-check/
+artifacts/ios-daily-return-2026-08-26/mock/calibrate/
+artifacts/ios-daily-return-2026-08-26/mock/kit-demo-*.png
+
+# Retired Coolify box: env snapshots hold credentials, never commit
+infra/coolify/
