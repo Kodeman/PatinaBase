@@ -197,7 +197,7 @@ const FIELD_LINK_TOKEN_RE = /(\/field\/)[A-Za-z0-9._~-]{8,}/g;
 // into sms_messages.body verbatim — the exact thing the redaction exists to
 // stop, arriving by the one door it did not watch. Nothing a trade is told is
 // 64 hex characters long: a run that shape is a credential, not copy.
-const BARE_CREDENTIAL_RE = /\b[0-9a-fA-F]{64,}\b/g;
+const BARE_CREDENTIAL_RE = /(?<![0-9a-fA-F])[0-9a-fA-F]{64,}(?![0-9a-fA-F])/g;
 
 /**
  * Strip the credential out of anything that is about to be STORED or LOGGED
