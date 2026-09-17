@@ -90,25 +90,93 @@ export interface MenuEntry {
   project_id: string;
 }
 
-/** Render "1) Title (due today) 2) Other" + the structured menu entries. */
+/** A GSM-7 extension character costs two septets; everything else costs one. */
+const GSM7_EXTENDED = "^{}\\[~]|€";
+
+function septetsOf(text: string): number {
+  let count = 0;
+  for (const ch of text) count += GSM7_EXTENDED.includes(ch) ? 2 : 1;
+  return count;
+}
+
+/**
+ * Everything the digest menu may spend (contract S8). sms_daily_digest (00641)
+ * is the tightest body in the copy set, and the menu is the only part of it
+ * this code controls, so the cap lives with the producer rather than in a test:
+ *
+ *    306  two GSM-7 segments
+ *   -118  the template's own words + the rates/HELP/STOP closing line
+ *    -98  the field link (CLIENT_PORTAL_URL + "/field/" + a 64-hex token)
+ *    -24  {{studio_name}} at the 24-septet maximum the copy contract gives a name
+ *    -24  {{project_name}}, the same 24-septet name budget
+ *   ————
+ *     42
+ *
+ * Names are budgeted in SEPTETS, not characters: a name written in GSM-7
+ * extension characters spends two septets each and overruns this on its own.
+ */
+export const DIGEST_MENU_MAX_SEPTETS = 42;
+
+/** As many of `text`'s characters as `budget` septets will pay for. */
+function truncateToSeptets(text: string, budget: number): string {
+  let out = "";
+  let used = 0;
+  for (const ch of text) {
+    const cost = GSM7_EXTENDED.includes(ch) ? 2 : 1;
+    if (used + cost > budget) break;
+    out += ch;
+    used += cost;
+  }
+  return out.trimEnd();
+}
+
+/**
+ * Render "1) Title (due today) 2) Other" + the structured menu entries, inside
+ * `maxSeptets`. A first item too long for the budget is truncated with "..."
+ * (three basic septets — an ellipsis character would turn the whole message
+ * into 70-character UCS-2 segments); later items are dropped whole and counted
+ * as "+N more", and `entries` drops with them, so a number someone replies with
+ * always names a line they were actually shown.
+ */
 export function buildDigestMenu(
   items: DigestItem[],
   today: string,
+  maxSeptets: number = DIGEST_MENU_MAX_SEPTETS,
 ): { menuText: string; entries: MenuEntry[] } {
   const entries: MenuEntry[] = [];
   const parts: string[] = [];
-  items.forEach((it, idx) => {
+
+  const labelOf = (it: DigestItem): string => {
+    if (!it.due) return "";
+    if (it.due === today) return " (due today)";
+    if (it.due < today) return " (overdue)";
+    return ` (due ${formatDue(it.due)})`;
+  };
+  const compose = (shown: string[], more: number): string =>
+    [shown.join(" "), more > 0 ? `+${more} more` : ""].filter(Boolean).join(" ");
+
+  for (const [idx, it] of items.entries()) {
     const n = idx + 1;
-    entries.push({ n, kind: it.kind, id: it.id, project_id: it.project_id });
-    let label = "";
-    if (it.due) {
-      if (it.due === today) label = " (due today)";
-      else if (it.due < today) label = " (overdue)";
-      else label = ` (due ${formatDue(it.due)})`;
+    const head = `${n}) `;
+    const label = labelOf(it);
+    const rest = items.length - n;
+    let part = `${head}${it.title}${label}`;
+
+    if (septetsOf(compose([...parts, part], rest)) > maxSeptets) {
+      // Only the first line earns a truncation — dropping it would leave a
+      // menu with no items and a "+N more" nobody can reply to.
+      if (parts.length > 0) break;
+      const room = maxSeptets - septetsOf(compose([`${head}...${label}`], rest));
+      const title = room > 0 ? truncateToSeptets(it.title, room) : "";
+      if (!title) break;
+      part = `${head}${title}...${label}`;
     }
-    parts.push(`${n}) ${it.title}${label}`);
-  });
-  return { menuText: parts.join(" "), entries };
+
+    parts.push(part);
+    entries.push({ n, kind: it.kind, id: it.id, project_id: it.project_id });
+  }
+
+  return { menuText: compose(parts, items.length - parts.length), entries };
 }
 
 function formatDue(iso: string): string {

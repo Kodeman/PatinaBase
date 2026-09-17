@@ -6914,6 +6914,89 @@ export type Database = {
           },
         ]
       }
+      field_delivery_reports: {
+        Row: {
+          arrived_at: string | null
+          availability_at: string | null
+          condition_at: string | null
+          condition_note: string | null
+          condition_ok: boolean | null
+          created_at: string
+          id: string
+          left_at: string | null
+          party_id: string
+          project_id: string
+          proposed_date: string | null
+          proposed_window: string | null
+          subject_id: string
+          subject_kind: string
+          updated_at: string
+        }
+        Insert: {
+          arrived_at?: string | null
+          availability_at?: string | null
+          condition_at?: string | null
+          condition_note?: string | null
+          condition_ok?: boolean | null
+          created_at?: string
+          id?: string
+          left_at?: string | null
+          party_id: string
+          project_id: string
+          proposed_date?: string | null
+          proposed_window?: string | null
+          subject_id: string
+          subject_kind: string
+          updated_at?: string
+        }
+        Update: {
+          arrived_at?: string | null
+          availability_at?: string | null
+          condition_at?: string | null
+          condition_note?: string | null
+          condition_ok?: boolean | null
+          created_at?: string
+          id?: string
+          left_at?: string | null
+          party_id?: string
+          project_id?: string
+          proposed_date?: string | null
+          proposed_window?: string | null
+          subject_id?: string
+          subject_kind?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_delivery_reports_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id", "project_id"]
+          },
+          {
+            foreignKeyName: "field_delivery_reports_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "field_delivery_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "field_delivery_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       field_link_tokens: {
         Row: {
           created_at: string
@@ -23955,9 +24038,11 @@ export type Database = {
         Row: {
           applied_effect: Json | null
           body: string | null
+          claimed_at: string | null
           confidence: number | null
           conversation_id: string
           created_at: string
+          dedupe_key: string | null
           direction: string
           error_code: string | null
           error_message: string | null
@@ -23970,6 +24055,7 @@ export type Database = {
           parsed_intent: Json | null
           party_id: string | null
           project_id: string | null
+          recipe: Json | null
           reviewed_at: string | null
           reviewed_by: string | null
           site_request_dispatch_outbox_id: string | null
@@ -23980,9 +24066,11 @@ export type Database = {
         Insert: {
           applied_effect?: Json | null
           body?: string | null
+          claimed_at?: string | null
           confidence?: number | null
           conversation_id: string
           created_at?: string
+          dedupe_key?: string | null
           direction: string
           error_code?: string | null
           error_message?: string | null
@@ -23995,6 +24083,7 @@ export type Database = {
           parsed_intent?: Json | null
           party_id?: string | null
           project_id?: string | null
+          recipe?: Json | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           site_request_dispatch_outbox_id?: string | null
@@ -24005,9 +24094,11 @@ export type Database = {
         Update: {
           applied_effect?: Json | null
           body?: string | null
+          claimed_at?: string | null
           confidence?: number | null
           conversation_id?: string
           created_at?: string
+          dedupe_key?: string | null
           direction?: string
           error_code?: string | null
           error_message?: string | null
@@ -24020,6 +24111,7 @@ export type Database = {
           parsed_intent?: Json | null
           party_id?: string | null
           project_id?: string | null
+          recipe?: Json | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           site_request_dispatch_outbox_id?: string | null
@@ -31544,6 +31636,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _apply_field_delivery_effect: {
+        Args: {
+          p_effect: Json
+          p_party_id: string
+          p_sms_message_id: string
+          p_source: string
+        }
+        Returns: Json
+      }
       _apply_field_effect_legacy_00399: {
         Args: {
           p_effect: Json
@@ -34377,7 +34478,11 @@ export type Database = {
             }[]
           }
         | {
-            Args: { p_expires_at: string; p_party_id: string }
+            Args: {
+              p_expires_at: string
+              p_party_id: string
+              p_revoke_prior?: boolean
+            }
             Returns: {
               id: string
               token: string
@@ -35134,6 +35239,14 @@ export type Database = {
       field_capture_jsonb_text_array: {
         Args: { p_value: Json }
         Returns: string[]
+      }
+      field_effect_authority_scopes: {
+        Args: { p_effect_type: string }
+        Returns: string[]
+      }
+      field_project_lead_user: {
+        Args: { p_project_id: string }
+        Returns: string
       }
       file_plan_prints: {
         Args: {
@@ -36471,6 +36584,10 @@ export type Database = {
           organization_id: string
         }[]
       }
+      party_holds_field_authority: {
+        Args: { p_on?: string; p_party_id: string; p_scopes: string[] }
+        Returns: boolean
+      }
       party_identity_key: {
         Args: {
           p_email: string
@@ -37675,6 +37792,10 @@ export type Database = {
         Args: { p_reason?: string; p_token_id: string }
         Returns: boolean
       }
+      revoke_party_field_links: {
+        Args: { p_party_id: string }
+        Returns: number
+      }
       revoke_plan_transmittal_link: {
         Args: { p_transmittal_id: string }
         Returns: Json
@@ -38534,8 +38655,21 @@ export type Database = {
         Returns: string
       }
       sms_phone_suppressed: { Args: { p_recipient: string }; Returns: boolean }
+      sms_reconcile_accepted_send: {
+        Args: {
+          p_error_code?: string
+          p_error_message?: string
+          p_provider_sid: string
+          p_status?: string
+        }
+        Returns: string
+      }
       sms_release_expired_short_codes: {
         Args: { p_recipient: string; p_sender: string }
+        Returns: number
+      }
+      sms_release_stale_send_claims: {
+        Args: { p_older_than?: string }
         Returns: number
       }
       sms_resolve_prompt: {
@@ -39342,12 +39476,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39371,11 +39505,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39396,11 +39530,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39421,11 +39555,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39438,11 +39572,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
