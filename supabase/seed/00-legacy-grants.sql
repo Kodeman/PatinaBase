@@ -17522,6 +17522,18 @@ END $g$;
 
 -- 00639_field_line_authority.sql
 DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
   REVOKE ALL ON public.sms_prompts FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;

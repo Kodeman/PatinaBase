@@ -12,14 +12,19 @@
 --      column, because _shared/sms.ts channelConsentVerdict reads the table
 --      directly (:411-448) and refuses on that flag before it reads status.
 --      Suppression is phone-global: it survives adding a new party on a new
---      project, and holds with no party rows at all.
+--      project, and holds with no party rows at all. A13 adds contract revision
+--      5's rule: the stamp normalizes BOTH sides, because studio_channel_consent
+--      stores whatever its writer passed and '15556665555' is the same handset
+--      as '+15556665555'.
 --
 --   B. REF CODES (contract S1). `Ref NN` is 2 digits 10–99, unique per
 --      (sender, recipient) across open prompts and prompts closed inside 90
 --      days, 3 digits once exhausted. The 90-day window is materialized as
 --      code_reserved because now() cannot live in an index predicate. The
 --      allocator serializes on an advisory lock; the partial unique index is
---      the backstop a racing writer hits.
+--      the backstop a racing writer hits. B7 covers contract revision 5's
+--      sms_create_prompt(): allocation, the tombstone read and the INSERT in one
+--      transaction under one lock, and a cross-tenant prompt still unwritable.
 --
 --   C. THE PROMPT BINDING IS IMMUTABLE (contract S1) and cross-tenant prompts
 --      are unwritable (the composite party/project foreign key). A late reply
@@ -41,9 +46,10 @@
 --
 -- NOT ASSERTED HERE, deliberately: a genuine two-session race. A psql script is
 -- one session, so the concurrency claim is measured as its two mechanisms —
--- the advisory lock is observed in pg_locks after allocation (case B4), and the
--- partial unique index is observed refusing the duplicate a loser would write
--- (case B2). A cross-session test belongs to the harness (P0-11), not here.
+-- the advisory lock is observed in pg_locks after allocation (case B4) and after
+-- sms_create_prompt's insert (case B7a), and the partial unique index is
+-- observed refusing the duplicate a loser would write (case B2). A cross-session
+-- test belongs to the harness (P0-11), not here.
 --
 -- Transaction-wrapped, and nested on a SAVEPOINT so the file can be piped
 -- STRAIGHT AFTER the migration inside one outer transaction (the ticket verify
@@ -341,7 +347,50 @@ BEGIN
              AND status = 'opted_out' AND refusal_unanswered) = 2,
     'FAIL A12d: lifting a suppression must not restore any record on its own';
 
-  RAISE NOTICE 'sms_authority A: suppression beats the record (A1-A12) passed.';
+  -- A13. THE COUNTEREXAMPLE THE SECOND REVIEW REPRODUCED (SQ-30 R3).
+  -- studio_channel_consent has no normalizing trigger and no CHECK, so a record
+  -- written by a service client or an older path can sit at any spelling of the
+  -- same handset. Comparing the stored text to the (normalized) suppression left
+  -- those records granted with refusal_unanswered false — the exact two columns
+  -- _shared/sms.ts channelConsentVerdict reads — while channel_consent_status(),
+  -- which normalizes, already said opted_out. Contract revision 5: normalize
+  -- BOTH sides. Three spellings, two organizations, one STOP.
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, refusal_unanswered, consented_at)
+  VALUES ('5a000000-0000-4000-8000-0000000000d1', 'sms', '+15556665555',  'granted', false, now()),
+         ('5a000000-0000-4000-8000-0000000000d2', 'sms', '15556665555',   'granted', false, now()),
+         ('5a000000-0000-4000-8000-0000000000d2', 'sms', '1 555 666 5555', 'granted', false, now());
+  ASSERT (SELECT count(*) FROM public.studio_channel_consent
+           WHERE public.normalize_channel_value('sms', channel_value) = '+15556665555'
+             AND status = 'granted' AND NOT refusal_unanswered) = 3,
+    'FAIL A13a: the three spellings must start as three clean granted records, got '
+      || (SELECT string_agg(channel_value || '=' || status || '/' || refusal_unanswered::text, ' | ')
+            FROM public.studio_channel_consent
+           WHERE public.normalize_channel_value('sms', channel_value) = '+15556665555');
+
+  INSERT INTO public.sms_suppressions (sender_number, recipient_phone, reason)
+  VALUES ('+15550000000', '+15556665555', 'stop');
+
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.studio_channel_consent
+     WHERE public.normalize_channel_value('sms', channel_value) = '+15556665555'
+       AND (status IS DISTINCT FROM 'opted_out' OR refusal_unanswered IS NOT TRUE)),
+    'FAIL A13b: a non-canonical stored channel_value is the same handset and must be stamped too';
+
+  -- A13c. The suppression itself may arrive in any spelling: it is normalized on
+  -- the way in, so it still finds every record.
+  INSERT INTO public.studio_channel_consent
+    (organization_id, channel_kind, channel_value, status, refusal_unanswered, consented_at)
+  VALUES ('5a000000-0000-4000-8000-0000000000d1', 'sms', '15554445555', 'granted', false, now());
+  INSERT INTO public.sms_suppressions (sender_number, recipient_phone, reason)
+  VALUES ('+15550000000', '(555) 444-5555', 'stop');
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.studio_channel_consent
+     WHERE public.normalize_channel_value('sms', channel_value) = '+15554445555'
+       AND (status IS DISTINCT FROM 'opted_out' OR refusal_unanswered IS NOT TRUE)),
+    'FAIL A13c: a formatted STOP must reach a non-canonical record as well';
+
+  RAISE NOTICE 'sms_authority A: suppression beats the record (A1-A13) passed.';
 END
 $$;
 
@@ -355,6 +404,7 @@ DECLARE
   v_reserved BOOLEAN;
   v_locks    INTEGER;
   v_before   INTEGER;
+  v_prompt   UUID;
 BEGIN
   -- B1. The first ref on a handset is 10, the next is 11.
   v_code := public.sms_next_short_code('+15550000000', '+15557770000');
@@ -461,7 +511,82 @@ BEGIN
   ASSERT v_code = '11',
     'FAIL B6c: a deleted engagement must not release its ref inside the 90-day window, got ' || COALESCE(v_code, '<null>');
 
-  RAISE NOTICE 'sms_authority B: ref-code allocation (B1-B6) passed.';
+  -- B7. ALLOCATION AND BINDING IN ONE TRANSACTION (contract S1 revision 5).
+  -- SQ-30's lens: sms_next_short_code's advisory lock only covers the tombstone
+  -- read for the rest of the CALLER's transaction, so a caller that fetched a
+  -- code in one round trip and inserted the prompt in the next held nothing in
+  -- between and two issuers could both read the same code as free.
+  -- public.sms_create_prompt() does both under that one lock.
+  --
+  -- ON CONCURRENCY: two sessions are not simulated here (psql is one session and
+  -- the whole suite runs inside one transaction, where a second connection would
+  -- see none of these fixtures). What is MEASURED is the property that makes the
+  -- race impossible: the pair's advisory lock is taken by sms_create_prompt
+  -- itself and, being an xact lock, is still held when the INSERT lands and until
+  -- the caller commits — so a concurrent caller on the same (sender, recipient)
+  -- blocks at the lock and does not read the code as free. The partial unique
+  -- index sms_prompts_short_code_reserved_uniq remains the write-time backstop
+  -- for anyone who writes a prompt without going through this door (B2a).
+  SELECT count(*) INTO v_before FROM pg_locks
+   WHERE locktype = 'advisory' AND pid = pg_backend_pid();
+  SELECT id, short_code INTO v_prompt, v_code
+    FROM public.sms_create_prompt(
+      '5a000000-0000-4000-8000-0000000000b1', '5a000000-0000-4000-8000-0000000000a1',
+      'confirm_availability', NULL, 1, now() + interval '3 days',
+      '+15550000000', '+15559990000');
+  SELECT count(*) INTO v_locks FROM pg_locks
+   WHERE locktype = 'advisory' AND pid = pg_backend_pid();
+  ASSERT v_locks > v_before,
+    'FAIL B7a: sms_create_prompt must hold the pair''s advisory lock through the insert, not just around the read';
+  ASSERT v_code = '10',
+    'FAIL B7b: the first ref on a fresh handset must be 10, got ' || COALESCE(v_code, '<null>');
+  ASSERT EXISTS (SELECT 1 FROM public.sms_prompts
+                  WHERE id = v_prompt AND short_code = '10'
+                    AND project_id = '5a000000-0000-4000-8000-0000000000a1'
+                    AND party_id   = '5a000000-0000-4000-8000-0000000000b1'
+                    AND recipient_phone = '+15559990000'),
+    'FAIL B7c: sms_create_prompt must return the id of the row it inserted, bound to its party and project';
+  ASSERT EXISTS (SELECT 1 FROM public.sms_short_code_reservations
+                  WHERE sender_number = '+15550000000' AND recipient_phone = '+15559990000'
+                    AND short_code = '10' AND reserved_until > now()),
+    'FAIL B7d: the prompt and its 90-day tombstone must be written in the same transaction';
+
+  -- B7e. The second call on the same handset cannot repeat the code.
+  SELECT short_code INTO v_code
+    FROM public.sms_create_prompt(
+      '5a000000-0000-4000-8000-0000000000b1', '5a000000-0000-4000-8000-0000000000a1',
+      'report_arrival', NULL, 1, now() + interval '3 days',
+      '+15550000000', '+15559990000');
+  ASSERT v_code = '11',
+    'FAIL B7e: a second prompt on the same handset must take the next ref, got ' || COALESCE(v_code, '<null>');
+
+  -- B7f. It respects the tombstone, which is the half that outlives the prompt
+  -- rows: '12' is reserved by a handset that has no live prompt at all.
+  INSERT INTO public.sms_short_code_reservations
+    (sender_number, recipient_phone, short_code, reserved_until)
+  VALUES ('+15550000000', '+15559990000', '12', now() + interval '30 days');
+  SELECT short_code INTO v_code
+    FROM public.sms_create_prompt(
+      '5a000000-0000-4000-8000-0000000000b1', '5a000000-0000-4000-8000-0000000000a1',
+      'report_condition', NULL, 1, now() + interval '3 days',
+      '+15550000000', '+15559990000');
+  ASSERT v_code = '13',
+    'FAIL B7f: sms_create_prompt must skip a code still held by a tombstone, got ' || COALESCE(v_code, '<null>');
+
+  -- B7g. A cross-tenant prompt is unwritable through this door too: the
+  -- composite (party_id, project_id) foreign key refuses it.
+  v_raised := false;
+  BEGIN
+    PERFORM public.sms_create_prompt(
+      '5a000000-0000-4000-8000-0000000000b3', '5a000000-0000-4000-8000-0000000000a1',
+      'report_delay', NULL, 1, now() + interval '3 days',
+      '+15550000000', '+15559990000');
+  EXCEPTION WHEN foreign_key_violation THEN v_raised := true;
+  END;
+  ASSERT v_raised,
+    'FAIL B7g: sms_create_prompt must not be able to write a prompt naming another studio''s party';
+
+  RAISE NOTICE 'sms_authority B: ref-code allocation (B1-B7) passed.';
 END
 $$;
 

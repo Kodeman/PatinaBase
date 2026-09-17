@@ -23813,6 +23813,7 @@ export type Database = {
       }
       sms_conversation_context: {
         Row: {
+          backfilled_at: string | null
           conversation_id: string
           party_id: string | null
           paused_until: string | null
@@ -23822,6 +23823,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          backfilled_at?: string | null
           conversation_id: string
           party_id?: string | null
           paused_until?: string | null
@@ -23831,6 +23833,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          backfilled_at?: string | null
           conversation_id?: string
           party_id?: string | null
           paused_until?: string | null
@@ -38506,6 +38509,22 @@ export type Database = {
         }[]
       }
       sms_backfill_conversation_context: { Args: never; Returns: number }
+      sms_create_prompt: {
+        Args: {
+          p_expires_at: string
+          p_kind: string
+          p_party_id: string
+          p_project_id: string
+          p_recipient_phone: string
+          p_sender_number: string
+          p_subject_id: string
+          p_version: number
+        }
+        Returns: {
+          id: string
+          short_code: string
+        }[]
+      }
       sms_is_suppressed: {
         Args: { p_recipient: string; p_sender: string }
         Returns: boolean

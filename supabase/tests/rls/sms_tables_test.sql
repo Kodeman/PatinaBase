@@ -37,12 +37,14 @@
 --      PRIVILEGE level (contract S12), because this stack's creation-time
 --      defaults hand anon and authenticated arwdDxtm on every new table.
 --  12. twilio_sid UNIQUE = the inbound idempotency claim.
---  13. THE BACKFILL ITSELF. 00639 does not copy the shared legacy state_context
---      onto the pinned project's row; it classifies it. Studio A must read its
---      own menu and nothing of B's chooser, and the unresolved body and media
---      must be on the holding row (project_id NULL) that no studio admits.
---      This is the SQ-24 F1 counterexample, run against the fixture that
---      produced it (the mid-chooser transport row a few dozen lines below).
+--  13. THE BACKFILL ITSELF (contract revision 5). 00639 does not put the shared
+--      legacy state_context on ANY project's row — not wholesale (SQ-24 F1) and
+--      not classified (SQ-30 R1). After it runs, studio A, studio B and A's
+--      co-member each read NOTHING for the fixture conversation; the whole JSON
+--      is on the holding row (project_id NULL) verbatim, for P0-06b to re-ask;
+--      a re-run replaces that held copy rather than keeping a stale one; an
+--      attributed row stamped backfilled_at — what an earlier 00639 left behind
+--      — is deleted, and an unstamped attributed row (live rail state) is not.
 --
 -- How to run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -494,77 +496,128 @@ END
 $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- Case 13 · The BACKFILL classifies; it does not copy (00639, SQ-24 F1)
+-- Case 13 · The BACKFILL HOLDS; it attributes nothing (00639, contract rev 5)
 -- ═══════════════════════════════════════════════════════════════════════════
--- The two context rows in the fixtures above are hand-made, which is exactly
--- how the first candidate's suite missed this: it asserted on sanitized rows it
--- had written itself. Here they are removed and the migration's own rule is
--- asked to produce them from the legacy transport row — the shared, mid-chooser
--- state_context that names BOTH studios and parks the unresolved inbound text
--- and its photo.
+-- Two reviews rejected two attempts to decide which studio a legacy
+-- state_context key belongs to (SQ-24 F1, then SQ-30 R1: field-daily reuses the
+-- handset's conversation without moving active_project_id, so the pin and the
+-- menu routinely name different studios). Contract revision 5 stops deciding.
+-- Everything the transport row carried moves VERBATIM to the holding row that
+-- no studio policy admits, and P0-06b re-asks.
+--
+-- The two context rows in the fixtures above are hand-made, which is exactly how
+-- the first candidate's suite missed this: it asserted on sanitized rows it had
+-- written itself. Here they are removed, an attributed row of the kind an
+-- EARLIER 00639 wrote is planted in their place, and the migration's own rule is
+-- asked to produce the outcome from the legacy transport row.
 DO $$
 DECLARE
-  v_rows    INTEGER;
-  v_ctx     JSONB;
-  v_project UUID;
+  v_legacy  JSONB;
   v_state   TEXT;
+  v_rows    INTEGER;
   v_count   INTEGER;
+  v_held    JSONB;
+  v_total   INTEGER;
 BEGIN
+  SELECT state_context, state INTO v_legacy, v_state
+    FROM sms_conversations WHERE id = 'ab000000-0000-4000-8000-0000000000f1';
+
   DELETE FROM sms_conversation_context
    WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1';
 
+  -- What a database that ran 2060c132 or 3cc12bf4 is carrying right now: a
+  -- project-attributed row holding classified legacy JSON. The stamp is what the
+  -- migration's own ALTER puts on every row that predates the column.
+  INSERT INTO sms_conversation_context
+    (conversation_id, project_id, party_id, state, state_context, backfilled_at)
+  VALUES ('ab000000-0000-4000-8000-0000000000f1', 'ab000000-0000-4000-8000-0000000000a1',
+          'ab000000-0000-4000-8000-0000000000b1', 'awaiting_project_choice', v_legacy, now());
+
   PERFORM public.sms_backfill_conversation_context();
 
-  -- 13a. Studio A's designer reads exactly one row, and it is A's own project.
+  -- 13a. Studio A's designer reads NOTHING for this conversation. Not a
+  -- sanitized row: nothing. Legacy state is never attributed to a studio.
   PERFORM pg_temp.assume_user('ab000000-0000-4000-8000-000000000001');
   SELECT count(*) INTO v_rows FROM sms_conversation_context
    WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1';
-  ASSERT v_rows = 1,
-    'FAIL 13a: studio A must read exactly its own backfilled context row, got ' || v_rows;
-  SELECT project_id, state, state_context INTO v_project, v_state, v_ctx
-    FROM sms_conversation_context
-   WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1';
-  ASSERT v_project = 'ab000000-0000-4000-8000-0000000000a1',
-    'FAIL 13b: the row A reads must be A''s project';
+  ASSERT v_rows = 0,
+    'FAIL 13a: studio A must read no backfilled context row at all, got ' || v_rows;
 
-  -- 13c. Nothing of studio B, and nothing unresolved, came across.
-  ASSERT NOT (v_ctx ? 'chooser'),
-    'FAIL 13c: A must not read the cross-studio chooser through the backfill';
-  ASSERT NOT (v_ctx ? 'pending_body') AND NOT (v_ctx ? 'pending_media')
-         AND NOT (v_ctx ? 'pending_message_id'),
-    'FAIL 13d: A must not read the unresolved inbound text or its media';
-  ASSERT v_ctx::text NOT LIKE '%ab000000-0000-4000-8000-0000000000a2%'
-     AND v_ctx::text NOT LIKE '%ab000000-0000-4000-8000-0000000000b2%',
-    'FAIL 13e: no studio B project or party identifier may appear in A''s context';
-  ASSERT v_state = 'idle',
-    'FAIL 13f: with no chooser of its own, A''s row cannot be awaiting_project_choice, got ' || v_state;
-
-  -- 13g. Studio B is not handed a row at all: the pin was A's.
+  -- 13b. And neither does studio B.
   PERFORM pg_temp.assume_user('ab000000-0000-4000-8000-000000000002');
   SELECT count(*) INTO v_rows FROM sms_conversation_context
    WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1';
   ASSERT v_rows = 0,
-    'FAIL 13g: studio B must read no context row for a conversation pinned to A, got ' || v_rows;
+    'FAIL 13b: studio B must read no backfilled context row at all, got ' || v_rows;
+
+  -- 13c. Nor does studio A's co-member, who reaches A's rows by the 00584 path.
+  PERFORM pg_temp.assume_user('ab000000-0000-4000-8000-000000000003');
+  SELECT count(*) INTO v_rows FROM sms_conversation_context
+   WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1';
+  ASSERT v_rows = 0,
+    'FAIL 13c: studio A''s co-member must read no backfilled context row either, got ' || v_rows;
   PERFORM pg_temp.reset_role();
 
-  -- 13h. The unresolved content IS kept — on the holding row, for P0-06b —
-  -- and that row belongs to no project, so no policy above can admit it.
+  -- 13d. Exactly ONE row exists for the conversation, it is the holding row, and
+  -- it carries the legacy JSON byte for byte — nothing dropped, nothing split.
   SELECT count(*) INTO v_count FROM sms_conversation_context
-   WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1'
-     AND project_id IS NULL
-     AND state_context ? 'chooser'
-     AND state_context ->> 'pending_body' = 'grout is cracked in the guest bath';
+   WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1';
   ASSERT v_count = 1,
-    'FAIL 13h: the unresolved chooser, body and media must survive on the holding row (project_id NULL), got ' || v_count;
+    'FAIL 13d: exactly one row — the holding row — must exist for the conversation, got ' || v_count;
+  SELECT state_context INTO v_held FROM sms_conversation_context
+   WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1'
+     AND project_id IS NULL AND party_id IS NULL;
+  ASSERT v_held = v_legacy,
+    'FAIL 13e: the holding row must carry the legacy state_context VERBATIM, got ' || COALESCE(v_held::text, '<null>');
+  ASSERT (SELECT state FROM sms_conversation_context
+           WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1') = v_state,
+    'FAIL 13f: the holding row keeps the conversation''s own state';
 
-  -- 13i. Running it again writes nothing new.
-  SELECT count(*) INTO v_count FROM sms_conversation_context;
+  -- 13g. The row an earlier 00639 wrote is GONE — convergence is a property of
+  -- the data, not only of the DDL (SQ-30 R2).
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM sms_conversation_context
+     WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1'
+       AND project_id IS NOT NULL),
+    'FAIL 13g: an attributed row stamped backfilled_at must be deleted, not kept or merged';
+
+  -- 13h. Re-running writes no new row and REPLACES the held copy rather than
+  -- preserving a stale one.
+  SELECT count(*) INTO v_total FROM sms_conversation_context;
   PERFORM public.sms_backfill_conversation_context();
   SELECT count(*) INTO v_rows FROM sms_conversation_context;
-  ASSERT v_rows = v_count,
-    'FAIL 13i: the backfill must be idempotent, ' || v_count || ' -> ' || v_rows;
+  ASSERT v_rows = v_total,
+    'FAIL 13h: the backfill must be idempotent, ' || v_total || ' -> ' || v_rows;
+  SELECT state_context INTO v_held FROM sms_conversation_context
+   WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1' AND project_id IS NULL;
+  ASSERT v_held = v_legacy,
+    'FAIL 13i: a re-run must leave the held copy equal to the legacy JSON';
+  UPDATE sms_conversation_context
+     SET state_context = '{"stale": true}'::jsonb
+   WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1' AND project_id IS NULL;
+  PERFORM public.sms_backfill_conversation_context();
+  SELECT state_context INTO v_held FROM sms_conversation_context
+   WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1' AND project_id IS NULL;
+  ASSERT v_held = v_legacy,
+    'FAIL 13j: ON CONFLICT must REPLACE the held copy, not keep the old one';
 
-  RAISE NOTICE 'sms_tables: case 13 (backfill classifies, SQ-24 F1) passed.';
+  -- 13k. Live rail state is not legacy state: a row P0-06b writes carries no
+  -- backfilled_at stamp and the backfill must never delete it.
+  INSERT INTO sms_conversation_context
+    (conversation_id, project_id, party_id, state, state_context)
+  VALUES ('ab000000-0000-4000-8000-0000000000f1', 'ab000000-0000-4000-8000-0000000000a1',
+          'ab000000-0000-4000-8000-0000000000b1', 'idle',
+          '{"menu": [{"n": 1, "kind": "task", "title": "A: set guest bath tile"}]}'::jsonb);
+  PERFORM public.sms_backfill_conversation_context();
+  SELECT count(*) INTO v_count FROM sms_conversation_context
+   WHERE conversation_id = 'ab000000-0000-4000-8000-0000000000f1'
+     AND project_id = 'ab000000-0000-4000-8000-0000000000a1'
+     AND backfilled_at IS NULL
+     AND state_context -> 'menu' -> 0 ->> 'title' = 'A: set guest bath tile';
+  ASSERT v_count = 1,
+    'FAIL 13k: an unstamped attributed row is live state and must survive the backfill, got ' || v_count;
+
+  RAISE NOTICE 'sms_tables: case 13 (backfill holds, attributes nothing, converges) passed.';
   RAISE NOTICE 'All sms_tables assertions passed (two studios, one handset).';
 END
 $$;

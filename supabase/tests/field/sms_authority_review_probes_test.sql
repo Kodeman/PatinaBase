@@ -1,10 +1,11 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- The Field Line · SQ-24 REVIEW PROBES, kept in the repo (00639)
+-- The Field Line · REVIEW PROBES, kept in the repo (00639)
 --
--- The bound Codex review of this migration's first candidate
--- (2060c1320a388da3222ec13072a874537f545d61) reproduced three defects in
--- rolled-back local SQL. Each one is here, as the reviewer wrote it, so the
--- counterexample ships with the fix and a later change cannot quietly undo it:
+-- SIX probes from two bound Codex reviews of this migration's two rejected
+-- candidates. Each one is here, as its reviewer wrote it, so the counterexample
+-- ships with the fix and a later change cannot quietly undo it.
+--
+-- SQ-24, on the FIRST candidate (2060c1320a388da3222ec13072a874537f545d61):
 --
 --   F1  backfill leak      — studio A read studio B's chooser and the
 --                            unresolved pending body/media out of the
@@ -19,14 +20,39 @@
 --                            released a live `Ref 10` inside its 90-day window,
 --                            so a late reply resolved another studio's prompt.
 --
+-- SQ-30, on the SECOND candidate (3cc12bf4e480b91456f2a8e80c00c92412875e6f),
+-- which replaced the copy with a CLASSIFIER — the reason contract revision 5
+-- removed classification altogether:
+--
+--   R1  menu leak          — field-daily reuses a handset's conversation
+--                            without moving active_project_id and then writes
+--                            another party's menu onto it, so the pin says A
+--                            while the menu is B's and the classifier gave A
+--                            B's project and task ids.
+--   R2  upgrade convergence— re-applying over a database that already ran an
+--                            earlier 00639 kept that version's attributed JSON
+--                            (ON CONFLICT DO NOTHING), so the schema converged
+--                            and the DATA did not.
+--   R3  normalization      — the STOP stamp compared a normalized value to an
+--                            un-normalized stored channel_value, so a record at
+--                            '15551230000' stayed granted after a STOP.
+--
 -- VERBATIM, with one mechanical adaptation, stated plainly: the reviewer had no
 -- 00639 file to run, so the backfill probe INLINED the whole candidate migration
 -- between its fixture and its assertion. Here the migration is applied by the
 -- verify line that runs this file, so in its place the backfill's own entry
 -- point — public.sms_backfill_conversation_context() — is called over the
--- fixture. Every fixture row, every probe statement and every assertion message
--- is the reviewer's own text, unchanged. Source:
+-- fixture. The same substitution is made once more in R2, where the reviewer
+-- \i-ed an unapply script, the REJECTED migration twice and then the candidate:
+-- none of that can run inside a file the migration under test has already been
+-- applied before, so the STATE that sequence produces is planted directly and
+-- the repair's entry point is called in its place (the note above R2 says so in
+-- full). Each probe also switches from the reviewer's own BEGIN/ROLLBACK to a
+-- SAVEPOINT, and resets the role the savepoint form leaves set. Every fixture
+-- row, every probe statement and every assertion message is the reviewer's own
+-- text, unchanged. Sources:
 -- /Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-24/
+-- /Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-30/
 --
 -- How to run (after the migration, in the same transaction):
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -34,7 +60,7 @@
 --     -f supabase/migrations/00639_field_line_authority.sql \
 --     -f supabase/tests/field/sms_authority_review_probes_test.sql -c "ROLLBACK"
 --
--- Each probe owns a SAVEPOINT, so the three fixtures do not see each other and
+-- Each probe owns a SAVEPOINT, so the six fixtures do not see each other and
 -- the schema under test is left standing for whatever runs next. Run on its
 -- own, the BEGIN opens the transaction and closing the connection discards it.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -266,6 +292,241 @@ DO $$ BEGIN ASSERT NOT EXISTS (SELECT 1 FROM public.sms_resolve_prompt('+1555000
 ROLLBACK TO SAVEPOINT sq24_f3_retention;
 RELEASE SAVEPOINT sq24_f3_retention;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- R1 · the backfill must not hand studio A studio B's DIGEST MENU either
+--      (verification/SQ-30/menu-leak.{sql,log})
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The reviewer's real-producer input: field-daily/core.ts:153-170 reuses the
+-- handset's conversation WITHOUT moving active_project_id, and :269-274 then
+-- writes that party's menu — entries carrying their own project_id (:103) —
+-- onto it. So the pin says studio A while the menu is studio B's, and the
+-- classifier that shipped in the second candidate handed A both.
+SAVEPOINT sq30_r1_menu_leak;
+
+SET LOCAL statement_timeout = 30000;
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab-studio-a@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ab000000-0000-4000-8000-000000000002', 'ab-studio-b@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ab000000-0000-4000-8000-000000000003', 'ab-a-comember@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO profiles (id, email, full_name, created_at, updated_at)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab-studio-a@test.invalid',   'AB Studio A',   NOW(), NOW()),
+  ('ab000000-0000-4000-8000-000000000002', 'ab-studio-b@test.invalid',   'AB Studio B',   NOW(), NOW()),
+  ('ab000000-0000-4000-8000-000000000003', 'ab-a-comember@test.invalid', 'AB A Co-member', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- Two real studios, so is_studio_comember (00556) resolves the 00584 branch.
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000d1', 'design_studio', 'AB Studio A Org', 'ab-studio-a-org', 'active'),
+  ('ab000000-0000-4000-8000-0000000000d2', 'design_studio', 'AB Studio B Org', 'ab-studio-b-org', 'active');
+
+INSERT INTO organization_members (user_id, organization_id, role, status)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-0000000000d1', 'owner',  'active'),
+  ('ab000000-0000-4000-8000-000000000003', 'ab000000-0000-4000-8000-0000000000d1', 'member', 'active'),
+  ('ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-0000000000d2', 'owner',  'active');
+
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000a1', 'AB Studio A Project', 'ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-0000000000d1'),
+  ('ab000000-0000-4000-8000-0000000000a2', 'AB Studio B Project', 'ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-0000000000d2');
+
+-- ONE tile setter, working for both studios, texting from one handset.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000b1', 'ab000000-0000-4000-8000-0000000000a1', 'sub', 'AB Tile (for A)', '5551230000'),
+  ('ab000000-0000-4000-8000-0000000000b2', 'ab000000-0000-4000-8000-0000000000a2', 'sub', 'AB Tile (for B)', '5551230000');
+
+-- One transport row, pinned to studio A. Its state_context is mid-chooser: it
+-- names BOTH studios' projects and parks the unresolved inbound body + media.
+INSERT INTO sms_conversations (id, twilio_number, phone_e164, party_id, active_project_id, state, state_context)
+VALUES ('ab000000-0000-4000-8000-0000000000f1', '+15550000000', '+15551230000',
+        'ab000000-0000-4000-8000-0000000000b1', 'ab000000-0000-4000-8000-0000000000a1',
+        'awaiting_project_choice',
+        jsonb_build_object(
+          'chooser', jsonb_build_array(
+            jsonb_build_object('n', 1, 'project_id', 'ab000000-0000-4000-8000-0000000000a1', 'party_id', 'ab000000-0000-4000-8000-0000000000b1'),
+            jsonb_build_object('n', 2, 'project_id', 'ab000000-0000-4000-8000-0000000000a2', 'party_id', 'ab000000-0000-4000-8000-0000000000b2')
+          ),
+          'pending_body', 'grout is cracked in the guest bath',
+          'pending_media', jsonb_build_array('holding/ab000000-0000-4000-8000-0000000000f1/1.jpg')
+        ));
+
+
+
+UPDATE public.sms_conversations SET state='idle',state_context='{"menu":[{"n":1,"kind":"task","id":"ab000000-0000-4000-8000-0000000000e2","project_id":"ab000000-0000-4000-8000-0000000000a2"}],"menu_created_at":"2026-09-17T00:00:00Z"}'::jsonb WHERE id='ab000000-0000-4000-8000-0000000000f1';
+SELECT public.sms_backfill_conversation_context();
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"ab000000-0000-4000-8000-000000000001","role":"authenticated"}';
+SELECT project_id,state_context FROM public.sms_conversation_context WHERE conversation_id='ab000000-0000-4000-8000-0000000000f1';
+DO $$ BEGIN ASSERT NOT EXISTS (SELECT 1 FROM public.sms_conversation_context WHERE conversation_id='ab000000-0000-4000-8000-0000000000f1' AND state_context::text LIKE '%ab000000-0000-4000-8000-0000000000a2%'), 'REVIEW FAIL: A reads B digest menu through classified backfill'; END $$;
+RESET ROLE;
+RESET request.jwt.claims;
+ROLLBACK TO SAVEPOINT sq30_r1_menu_leak;
+RELEASE SAVEPOINT sq30_r1_menu_leak;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- R2 · applying the repair over a database that already ran an earlier 00639
+--      must not keep that version's attributed JSON
+--      (verification/SQ-30/upgrade-existing-context.{sql,log})
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ADAPTATION (the second of the two, stated as plainly as the first): the
+-- reviewer built the "already ran an earlier 00639" state by \i-ing an unapply
+-- script, then the REJECTED migration, then the fixture, then the rejected
+-- migration again, and finally the candidate migration. None of that can run
+-- inside this file: the migration under test is applied by the verify line
+-- BEFORE it, and a test file may not drop and re-create the schema it is
+-- measuring. What the reviewer's sequence PRODUCES is planted directly instead —
+-- a project-attributed sms_conversation_context row carrying the legacy JSON
+-- wholesale, stamped backfilled_at exactly as this migration's own ALTER stamps
+-- every row that predates that column — and the repair's own entry point is
+-- invoked in place of the final \i. The fixture, the psql session role, and the
+-- assertion are the reviewer's, unchanged.
+SAVEPOINT sq30_r2_upgrade_existing;
+
+SET LOCAL statement_timeout=60000;
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab-studio-a@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ab000000-0000-4000-8000-000000000002', 'ab-studio-b@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ab000000-0000-4000-8000-000000000003', 'ab-a-comember@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO profiles (id, email, full_name, created_at, updated_at)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab-studio-a@test.invalid',   'AB Studio A',   NOW(), NOW()),
+  ('ab000000-0000-4000-8000-000000000002', 'ab-studio-b@test.invalid',   'AB Studio B',   NOW(), NOW()),
+  ('ab000000-0000-4000-8000-000000000003', 'ab-a-comember@test.invalid', 'AB A Co-member', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- Two real studios, so is_studio_comember (00556) resolves the 00584 branch.
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000d1', 'design_studio', 'AB Studio A Org', 'ab-studio-a-org', 'active'),
+  ('ab000000-0000-4000-8000-0000000000d2', 'design_studio', 'AB Studio B Org', 'ab-studio-b-org', 'active');
+
+INSERT INTO organization_members (user_id, organization_id, role, status)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-0000000000d1', 'owner',  'active'),
+  ('ab000000-0000-4000-8000-000000000003', 'ab000000-0000-4000-8000-0000000000d1', 'member', 'active'),
+  ('ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-0000000000d2', 'owner',  'active');
+
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000a1', 'AB Studio A Project', 'ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-0000000000d1'),
+  ('ab000000-0000-4000-8000-0000000000a2', 'AB Studio B Project', 'ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-0000000000d2');
+
+-- ONE tile setter, working for both studios, texting from one handset.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000b1', 'ab000000-0000-4000-8000-0000000000a1', 'sub', 'AB Tile (for A)', '5551230000'),
+  ('ab000000-0000-4000-8000-0000000000b2', 'ab000000-0000-4000-8000-0000000000a2', 'sub', 'AB Tile (for B)', '5551230000');
+
+-- One transport row, pinned to studio A. Its state_context is mid-chooser: it
+-- names BOTH studios' projects and parks the unresolved inbound body + media.
+INSERT INTO sms_conversations (id, twilio_number, phone_e164, party_id, active_project_id, state, state_context)
+VALUES ('ab000000-0000-4000-8000-0000000000f1', '+15550000000', '+15551230000',
+        'ab000000-0000-4000-8000-0000000000b1', 'ab000000-0000-4000-8000-0000000000a1',
+        'awaiting_project_choice',
+        jsonb_build_object(
+          'chooser', jsonb_build_array(
+            jsonb_build_object('n', 1, 'project_id', 'ab000000-0000-4000-8000-0000000000a1', 'party_id', 'ab000000-0000-4000-8000-0000000000b1'),
+            jsonb_build_object('n', 2, 'project_id', 'ab000000-0000-4000-8000-0000000000a2', 'party_id', 'ab000000-0000-4000-8000-0000000000b2')
+          ),
+          'pending_body', 'grout is cracked in the guest bath',
+          'pending_media', jsonb_build_array('holding/ab000000-0000-4000-8000-0000000000f1/1.jpg')
+        ));
+
+
+-- ↓ what the reviewer's "apply the rejected 00639 over this fixture" leaves
+--   behind: the whole legacy state_context on studio A's attributed row.
+INSERT INTO sms_conversation_context (conversation_id, project_id, party_id, state, state_context, backfilled_at)
+SELECT c.id, c.active_project_id, c.party_id, c.state, c.state_context, now()
+  FROM sms_conversations c WHERE c.id='ab000000-0000-4000-8000-0000000000f1';
+-- ↓ in place of `\i …/00639_field_line_authority.sql` (already applied above)
+SELECT public.sms_backfill_conversation_context();
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims=$q${"sub":"ab000000-0000-4000-8000-000000000001","role":"authenticated"}$q$;
+SELECT project_id,state_context FROM sms_conversation_context WHERE conversation_id=$q$ab000000-0000-4000-8000-0000000000f1$q$;
+DO $$ BEGIN ASSERT NOT EXISTS (SELECT 1 FROM sms_conversation_context WHERE conversation_id=$q$ab000000-0000-4000-8000-0000000000f1$q$ AND state_context ? $q$pending_body$q$), $q$REVIEW FAIL: repair retains previously backfilled cross-studio JSON$q$; END $$;
+RESET ROLE;
+RESET request.jwt.claims;
+ROLLBACK TO SAVEPOINT sq30_r2_upgrade_existing;
+RELEASE SAVEPOINT sq30_r2_upgrade_existing;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- R3 · equivalent spellings of one handset are one handset for the STOP stamp
+--      (verification/SQ-30/noncanonical-record.{sql,log})
+-- ═══════════════════════════════════════════════════════════════════════════
+SAVEPOINT sq30_r3_noncanonical;
+
+SET LOCAL statement_timeout = '120s';
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab-studio-a@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ab000000-0000-4000-8000-000000000002', 'ab-studio-b@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ab000000-0000-4000-8000-000000000003', 'ab-a-comember@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO profiles (id, email, full_name, created_at, updated_at)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab-studio-a@test.invalid',   'AB Studio A',   NOW(), NOW()),
+  ('ab000000-0000-4000-8000-000000000002', 'ab-studio-b@test.invalid',   'AB Studio B',   NOW(), NOW()),
+  ('ab000000-0000-4000-8000-000000000003', 'ab-a-comember@test.invalid', 'AB A Co-member', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- Two real studios, so is_studio_comember (00556) resolves the 00584 branch.
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000d1', 'design_studio', 'AB Studio A Org', 'ab-studio-a-org', 'active'),
+  ('ab000000-0000-4000-8000-0000000000d2', 'design_studio', 'AB Studio B Org', 'ab-studio-b-org', 'active');
+
+INSERT INTO organization_members (user_id, organization_id, role, status)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-0000000000d1', 'owner',  'active'),
+  ('ab000000-0000-4000-8000-000000000003', 'ab000000-0000-4000-8000-0000000000d1', 'member', 'active'),
+  ('ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-0000000000d2', 'owner',  'active');
+
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000a1', 'AB Studio A Project', 'ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-0000000000d1'),
+  ('ab000000-0000-4000-8000-0000000000a2', 'AB Studio B Project', 'ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-0000000000d2');
+
+-- ONE tile setter, working for both studios, texting from one handset.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000b1', 'ab000000-0000-4000-8000-0000000000a1', 'sub', 'AB Tile (for A)', '5551230000'),
+  ('ab000000-0000-4000-8000-0000000000b2', 'ab000000-0000-4000-8000-0000000000a2', 'sub', 'AB Tile (for B)', '5551230000');
+
+-- One transport row, pinned to studio A. Its state_context is mid-chooser: it
+-- names BOTH studios' projects and parks the unresolved inbound body + media.
+INSERT INTO sms_conversations (id, twilio_number, phone_e164, party_id, active_project_id, state, state_context)
+VALUES ('ab000000-0000-4000-8000-0000000000f1', '+15550000000', '+15551230000',
+        'ab000000-0000-4000-8000-0000000000b1', 'ab000000-0000-4000-8000-0000000000a1',
+        'awaiting_project_choice',
+        jsonb_build_object(
+          'chooser', jsonb_build_array(
+            jsonb_build_object('n', 1, 'project_id', 'ab000000-0000-4000-8000-0000000000a1', 'party_id', 'ab000000-0000-4000-8000-0000000000b1'),
+            jsonb_build_object('n', 2, 'project_id', 'ab000000-0000-4000-8000-0000000000a2', 'party_id', 'ab000000-0000-4000-8000-0000000000b2')
+          ),
+          'pending_body', 'grout is cracked in the guest bath',
+          'pending_media', jsonb_build_array('holding/ab000000-0000-4000-8000-0000000000f1/1.jpg')
+        ));
+
+
+
+INSERT INTO studio_channel_consent(organization_id,channel_kind,channel_value,status,refusal_unanswered) VALUES
+($q$ab000000-0000-4000-8000-0000000000d1$q$,$q$sms$q$,$q$+15551230000$q$,$q$granted$q$,false),
+($q$ab000000-0000-4000-8000-0000000000d2$q$,$q$sms$q$,$q$15551230000$q$,$q$granted$q$,false),
+($q$ab000000-0000-4000-8000-0000000000d2$q$,$q$sms$q$,$q$1 555 123 0000$q$,$q$granted$q$,false);
+INSERT INTO sms_suppressions(sender_number,recipient_phone) VALUES ($q$+15550000000$q$,$q$+15551230000$q$);
+SELECT channel_value,normalize_channel_value($q$sms$q$,channel_value),status,refusal_unanswered,channel_consent_status(organization_id,channel_kind,channel_value) AS room FROM studio_channel_consent WHERE organization_id IN ($q$ab000000-0000-4000-8000-0000000000d1$q$,$q$ab000000-0000-4000-8000-0000000000d2$q$);
+DO $$ BEGIN ASSERT NOT EXISTS (SELECT 1 FROM studio_channel_consent WHERE normalize_channel_value($q$sms$q$,channel_value)=$q$+15551230000$q$ AND (status<>$q$opted_out$q$ OR NOT refusal_unanswered)), $q$REVIEW FAIL: equivalent noncanonical stored channels escape suppression stamp$q$; END $$;
+ROLLBACK TO SAVEPOINT sq30_r3_noncanonical;
+RELEASE SAVEPOINT sq30_r3_noncanonical;
+
 DO $$ BEGIN
-  RAISE NOTICE 'sms_authority_review_probes: SQ-24 F1, F2 and F3 all pass against 00639.';
+  RAISE NOTICE 'sms_authority_review_probes: SQ-24 F1/F2/F3 and SQ-30 R1/R2/R3 all pass against 00639.';
 END $$;

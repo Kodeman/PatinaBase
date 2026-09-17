@@ -103,16 +103,11 @@
 --   F1  THE BACKFILL LEAKED. It copied the whole shared state_context onto the
 --       active project's authenticated-readable context row, so studio A read
 --       studio B's chooser entries and the unresolved pending body and media.
---       The backfill is now a CLASSIFIED MOVE
---       (public.sms_backfill_conversation_context): a project-attributed row
---       receives only the keys that belong to THAT project — menu,
---       menu_created_at, delivery_confirms_sent, and a project_pin that names
---       it — and it receives the parked reply as well ONLY when the chooser
---       names no other project. Anything still unresolved goes to an
---       UNATTRIBUTED HOLDING ROW (project_id NULL) that no studio policy
---       reaches, so P0-06b can finish the choice. project_id is therefore
---       nullable and the (conversation_id, project_id) key is a unique index
---       with NULLS NOT DISTINCT instead of a primary key.
+--       The backfill became a classified move, and the review of THAT candidate
+--       (SQ-30) found the classification itself unsound — see REPAIR PASS 2.
+--       project_id is nullable and the (conversation_id, project_id) key is a
+--       unique index with NULLS NOT DISTINCT instead of a primary key, so an
+--       UNATTRIBUTED HOLDING ROW (project_id NULL) can exist at all.
 --   F2  SUPPRESSION DID NOT REACH THE RECORDS THAT ALREADY EXISTED. The BEFORE
 --       trigger below stamps a record as it is written, which leaves a record
 --       already sitting at granted/refusal_unanswered=false untouched — and
@@ -137,6 +132,33 @@
 --       studio taking a sub off a job must not be told to wait ninety days, and
 --       a retention fact about a phone number is not a reason to hold tenant
 --       rows hostage.
+--
+-- REPAIR PASS 2 — the bound Codex review of the SECOND candidate (SQ-30)
+-- rejected the classifier itself. Two rejections on one defect chain, so the
+-- STORY CONTRACT WAS NARROWED (revision 5) and this file implements the narrower
+-- rule rather than a third guess:
+--   R1+R2  NO CLASSIFIER. sms_backfill_conversation_context() never writes a
+--          project-attributed row. Every conversation's legacy state_context
+--          moves VERBATIM to the holding row (project_id NULL, party_id NULL)
+--          with ON CONFLICT … DO UPDATE, so a re-run REPLACES the held copy
+--          instead of preserving a stale one. The new backfilled_at column marks
+--          rows this backfill produced — including, via the ALTER that adds it,
+--          the rows an EARLIER 00639 wrote — and the function deletes the
+--          attributed ones first, so applying this file over a database that ran
+--          2060c132 or 3cc12bf4 converges to the same safe state as a first
+--          application. Why no classifier can work here: field-daily/core.ts
+--          :153-170 reuses a handset's conversation without moving
+--          active_project_id while :269-274 writes that party's menu onto it, so
+--          the pin and the menu routinely name different studios. Menus are a
+--          daily digest and choosers are a live question; P0-06b re-asks both.
+--   R3     THE SUPPRESSION STAMP NORMALIZES BOTH SIDES. A stored channel_value
+--          of '15551230000' is the same handset as a suppression at
+--          '+15551230000' and is stamped too.
+--   S1     ONE TRANSACTION CREATES A PROMPT. public.sms_create_prompt() takes
+--          the advisory lock, reads the tombstone and inserts the prompt in one
+--          transaction and returns (id, short_code); sms_next_short_code() stays
+--          as its internal allocator. The old shape — allocate in one round
+--          trip, insert in the next — held no lock in between.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -403,6 +425,16 @@ CREATE TRIGGER sms_suppression_holds_consent_record_trg
 -- Lifting a suppression restores NOTHING — the guard is on lifted_at IS NULL,
 -- so an UPDATE that sets lifted_at does no stamping and no un-stamping. Contract
 -- revision 4: START re-grants only the records it names, explicitly, in P0-06a.
+--
+-- CONTRACT REVISION 5 (SQ-30 R3): the comparison normalizes BOTH SIDES.
+-- studio_channel_consent has no normalizing trigger and no CHECK, so a record
+-- written by a service client or an older code path can sit at '15551230000' or
+-- '1 555 123 0000' while the suppression carries '+15551230000'. Matching the
+-- stored text verbatim left those records granted with refusal_unanswered false
+-- — the exact columns the send gate reads — while channel_consent_status()
+-- (which normalizes through sms_phone_suppressed) already said opted_out. Both
+-- sides therefore go through normalize_channel_value('sms', …), the one key rule
+-- 00593 defines, so equivalent spellings of one handset are one handset here too.
 CREATE OR REPLACE FUNCTION public.sms_suppression_stamps_existing_records()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -414,8 +446,9 @@ BEGIN
     UPDATE public.studio_channel_consent scc
        SET status             = 'opted_out',
            refusal_unanswered = true
-     WHERE scc.channel_kind  = 'sms'
-       AND scc.channel_value = NEW.recipient_phone
+     WHERE scc.channel_kind = 'sms'
+       AND public.normalize_channel_value('sms', scc.channel_value)
+             = public.normalize_channel_value('sms', NEW.recipient_phone)
        AND (scc.status IS DISTINCT FROM 'opted_out'
             OR scc.refusal_unanswered IS NOT TRUE);
   END IF;
@@ -432,9 +465,12 @@ COMMENT ON FUNCTION public.sms_suppression_stamps_existing_records() IS
   'because the send gate reads the record itself and never asks a suppression '
   'helper. SECURITY DEFINER so the stamp is unconditional; the table it is '
   'triggered from is service-role only, so nothing an authenticated caller can '
-  'do reaches it. NEW.recipient_phone is already normalized here — the BEFORE '
-  'trigger sms_suppressions_a_normalize ran first. Lifting a suppression does '
-  'not undo the stamp (contract revision 4: START re-grants explicitly).';
+  'do reaches it. Contract revision 5 (SQ-30 R3): the match normalizes BOTH '
+  'sides through normalize_channel_value(''sms'', …) — studio_channel_consent '
+  'stores whatever its writer passed, so a record at ''15551230000'' is the same '
+  'handset as a suppression at ''+15551230000'' and must be stamped too. Lifting '
+  'a suppression does not undo the stamp (contract revision 4: START re-grants '
+  'explicitly).';
 
 DROP TRIGGER IF EXISTS sms_suppressions_b_hold_records ON public.sms_suppressions;
 CREATE TRIGGER sms_suppressions_b_hold_records
@@ -789,7 +825,12 @@ COMMENT ON FUNCTION public.sms_next_short_code(TEXT, TEXT) IS
   'sms_short_code_reservations, which outlives the prompt rows (SQ-24 F3), AND '
   'from the live rows themselves, so neither half alone can hand a code back '
   'early. Takes a transaction-level advisory lock on the pair so concurrent '
-  'issuers serialize; the partial unique index is the write-time backstop.';
+  'issuers serialize; the partial unique index is the write-time backstop. '
+  'INTERNAL (contract revision 5): the lock it takes only covers the tombstone '
+  'read for the rest of the CALLER''s transaction, so allocating here and '
+  'inserting the prompt from another statement — or another round trip — leaves '
+  'the window open. Callers use public.sms_create_prompt(), which does both '
+  'under that one lock; this function stays as its allocator and for tests.';
 
 -- ── Ref resolution: a stale ref can never retarget ──────────────────────────
 CREATE OR REPLACE FUNCTION public.sms_resolve_prompt(
@@ -834,6 +875,90 @@ COMMENT ON FUNCTION public.sms_resolve_prompt(TEXT, TEXT, TEXT) IS
   'code is read digits-only, so `Ref 17`, `#17` and `17` all resolve the same '
   'row.';
 
+-- ── One transaction allocates AND binds the code (contract S1 revision 5) ───
+-- sms_next_short_code's advisory lock is held to the end of the CALLER's
+-- transaction. A TypeScript caller that asked for a code in one round trip and
+-- inserted the prompt in the next therefore held nothing in between: two
+-- issuers on the same handset could both read `10` free and the loser would
+-- only discover it at the partial unique index — after the message it belonged
+-- to had already been composed. This RPC closes that window by construction:
+-- one call, one transaction, lock → tombstone → insert → the code it issued.
+-- The prompt's own AFTER trigger writes the 90-day tombstone, so the row and
+-- its reservation are committed together or not at all.
+--
+-- It is the ONLY prompt-creation entry point for the rail (P0-06a's consent
+-- challenges, P0-06b's digest refs, later phases). The composite (party_id,
+-- project_id) foreign key still refuses a party that belongs to another
+-- studio's project, so a cross-tenant prompt is unwritable through this door as
+-- well as through a direct INSERT.
+CREATE OR REPLACE FUNCTION public.sms_create_prompt(
+  p_party_id        UUID,
+  p_project_id      UUID,
+  p_kind            TEXT,
+  p_subject_id      UUID,
+  p_version         INTEGER,
+  p_expires_at      TIMESTAMPTZ,
+  p_sender_number   TEXT,
+  p_recipient_phone TEXT
+)
+RETURNS TABLE (id UUID, short_code TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+  v_sender    TEXT := public.normalize_channel_value('sms', p_sender_number);
+  v_recipient TEXT := public.normalize_channel_value('sms', p_recipient_phone);
+  v_code      TEXT;
+  v_id        UUID;
+BEGIN
+  IF p_party_id IS NULL OR p_project_id IS NULL THEN
+    RAISE EXCEPTION 'sms_create_prompt: a prompt is always about one party on one project'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_sender IS NULL OR v_recipient IS NULL THEN
+    RAISE EXCEPTION 'sms_create_prompt: sender and recipient are both required'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Stated here as well as inside the allocator, because THIS function is where
+  -- the guarantee is claimed: the pair is serialized from before the code is
+  -- read until the caller's transaction ends, so the prompt is inserted while
+  -- the lock still stands. Advisory locks nest, so taking it twice is free.
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_sender || '|' || v_recipient, 0));
+
+  v_code := public.sms_next_short_code(v_sender, v_recipient);
+
+  INSERT INTO public.sms_prompts
+    (project_id, party_id, sender_number, recipient_phone, kind, subject_id,
+     version, short_code, expires_at)
+  VALUES (p_project_id, p_party_id, v_sender, v_recipient, p_kind, p_subject_id,
+          COALESCE(p_version, 1), v_code,
+          COALESCE(p_expires_at, now() + interval '7 days'))
+  RETURNING sms_prompts.id, sms_prompts.short_code INTO v_id, v_code;
+
+  RETURN QUERY SELECT v_id, v_code;
+END;
+$fn$;
+
+REVOKE ALL ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT)
+  TO service_role;
+
+COMMENT ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT) IS
+  'The Field Line (00639), contract S1 revision 5: ask one handset one question '
+  'and return the `Ref NN` that answers it — allocation, the 90-day tombstone '
+  'read and the prompt INSERT in ONE transaction under ONE advisory lock on '
+  '(sender, recipient). This is the only prompt-creation entry point for the '
+  'rail; sms_next_short_code is its internal allocator, because a code fetched '
+  'in one round trip and bound in the next is a code two issuers can read as '
+  'free. Returns (id, short_code). SECURITY DEFINER, service-role only: the '
+  'prompt tables are service-role only and this speaks for them. A party that '
+  'does not belong to p_project_id raises foreign_key_violation on the '
+  'composite (party_id, project_id) key — a cross-tenant prompt is unwritable '
+  'here too.';
+
 ALTER TABLE public.sms_prompts ENABLE ROW LEVEL SECURITY;
 -- S12: strip the creation-time defaults BEFORE the policy, then hand back only
 -- a team-scoped read. Writes belong to the service client alone.
@@ -874,6 +999,7 @@ CREATE TABLE IF NOT EXISTS public.sms_conversation_context (
                     CHECK (state IN ('idle', 'awaiting_project_choice', 'awaiting_confirmation')),
   state_context   JSONB NOT NULL DEFAULT '{}'::jsonb,
   paused_until    TIMESTAMPTZ,
+  backfilled_at   TIMESTAMPTZ,
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -890,6 +1016,31 @@ ALTER TABLE public.sms_conversation_context DROP CONSTRAINT IF EXISTS sms_conver
 ALTER TABLE public.sms_conversation_context ALTER COLUMN project_id DROP NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS sms_conversation_context_key
   ON public.sms_conversation_context (conversation_id, project_id) NULLS NOT DISTINCT;
+
+-- backfilled_at marks a row this migration's own backfill wrote, so convergence
+-- is a property of the DATA and not only of the DDL (contract revision 5, SQ-30
+-- R2). A database that already ran an EARLIER version of this same migration
+-- number carries attributed rows that version classified out of the legacy
+-- state_context; the ALTER below is the moment those rows become identifiable.
+-- Nothing else writes this table in Phase 0 — P0-06b is the first consumer, and
+-- it arrives after this file — so every row that predates the column came from
+-- an earlier application of 00639 and is stamped as such. sms_backfill_
+-- conversation_context() then deletes the attributed ones (see below), which is
+-- what makes applying this repair over 2060c132 or 3cc12bf4 land on the same
+-- safe state as applying it to a database that never saw either.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_attribute
+     WHERE attrelid = 'public.sms_conversation_context'::regclass
+       AND attname  = 'backfilled_at'
+       AND NOT attisdropped
+  ) THEN
+    ALTER TABLE public.sms_conversation_context ADD COLUMN backfilled_at TIMESTAMPTZ;
+    UPDATE public.sms_conversation_context SET backfilled_at = now();
+  END IF;
+END;
+$$;
 
 -- Composite FK again, with a column-list SET NULL (PG 15+): losing the party
 -- must not try to NULL project_id, which is half the primary key.
@@ -921,10 +1072,19 @@ COMMENT ON TABLE public.sms_conversation_context IS
   'redesign. A row with project_id NULL is the unattributed holding row: state '
   'that belongs to no project yet, readable by service_role alone.';
 COMMENT ON COLUMN public.sms_conversation_context.project_id IS
-  'The studio''s project, or NULL for the unattributed holding row — the '
-  'mid-chooser state a conversation carries before anyone owns it. No policy '
-  'admits a NULL, so the parked reply and its media are service-role only until '
-  'the choice resolves (SQ-24 F1).';
+  'The studio''s project, or NULL for the unattributed holding row — where ALL '
+  'legacy sms_conversations.state_context lands, verbatim, because the rail that '
+  'wrote it keyed it by handset and not by project (contract revision 5). No '
+  'policy admits a NULL, so the held menu, chooser, parked reply and its media '
+  'are service-role only until P0-06b re-asks and the person''s answer says '
+  'which project they belong to.';
+COMMENT ON COLUMN public.sms_conversation_context.backfilled_at IS
+  'When sms_backfill_conversation_context() wrote this row out of the legacy '
+  'sms_conversations.state_context. NULL on every row the rail writes in normal '
+  'operation (P0-06b onward). It exists so the backfill can REMOVE the rows an '
+  'earlier version of this migration produced without touching live state: a '
+  'project-attributed row carrying this stamp is machine-classified legacy, and '
+  'contract revision 5 forbids legacy state on an attributed row.';
 COMMENT ON COLUMN public.sms_conversation_context.paused_until IS
   'Outbound automation for this party on this project is held until this '
   'instant (a studio can mute a handset without revoking consent). Enforcement '
@@ -938,29 +1098,42 @@ CREATE TRIGGER set_updated_at_sms_conversation_context
 CREATE INDEX IF NOT EXISTS idx_sms_conversation_context_project
   ON public.sms_conversation_context (project_id, updated_at DESC);
 
--- ── The backfill is a CLASSIFIED MOVE, not a copy (SQ-24 F1) ───────────────
--- The legacy state_context on the transport row is shared by every studio on
--- the handset: mid-chooser it names both studios' projects and parks the
--- unresolved inbound body and its media (pipeline.ts:1414-1425 writes exactly
--- that while leaving the older active_project_id in place). Copying it wholesale
--- onto the pinned project's row — which authenticated studio members read — was
--- the leak the review reproduced. Each key is therefore placed by whom it
--- belongs to:
---   menu, menu_created_at, delivery_confirms_sent → the pinned project's row;
---     field-daily wrote them for THAT project's digest.
---   project_pin → the pinned project's row, and only when the pin names it.
---   chooser, pending_body, pending_media, pending_message_id, pending_effect,
---     pending_party_id → the pinned project's row ONLY when nothing foreign is
---     parked (the chooser names no other project and no pending_effect names
---     one); otherwise the unattributed holding row, which no studio reads.
--- The state column follows its evidence: a row that did not receive a chooser
--- cannot be awaiting_project_choice, and one that did not receive a
--- pending_effect cannot be awaiting_confirmation.
+-- ── The backfill HOLDS the legacy state; it never attributes it ────────────
+-- CONTRACT REVISION 5 (S4). Two independent reviews rejected two attempts to
+-- decide, in SQL, which studio a legacy state_context key belongs to. The
+-- second one (SQ-30 R1) is the reason the rule changed rather than the
+-- classifier: field-daily/core.ts:153-170 reuses the handset's conversation
+-- WITHOUT moving active_project_id, and :269-274 then writes that party's menu
+-- — whose entries carry their own project_id (:103) — onto it. So a real row
+-- can read `active_project_id = studio A` while its menu is studio B's, and any
+-- rule keyed on the pin hands A studio B's project and task ids. The inputs are
+-- ambiguous by construction: origin/main's producers key this state by HANDSET,
+-- not by project. There is no classifier that is right about them.
+--
+-- The rule is therefore the one thing that is certainly safe: every
+-- conversation's legacy state_context moves VERBATIM to the UNATTRIBUTED
+-- HOLDING ROW (project_id NULL, party_id NULL), which no policy below admits
+-- and no studio can read. Nothing is attributed, so nothing can be
+-- misattributed. Nothing is discarded either: the JSON is preserved byte for
+-- byte for P0-06b, which treats a holding row as "ask again" — a fresh chooser
+-- or a fresh digest menu — and re-attributes the held pending_body/pending_media
+-- to the project the person then chooses, then deletes the row. That costs one
+-- re-ask on a rail that is dormant on Strata (no live menus, no live choosers),
+-- and P0-06b has to be able to rebuild both anyway.
+--
+-- CONVERGENCE (SQ-30 R2). Applying this file over a database that already ran
+-- an earlier 00639 must reach the same state as applying it to one that never
+-- did — and that is a claim about DATA, not only about DDL. The earlier
+-- versions left attributed rows holding classified legacy JSON; those rows are
+-- stamped backfilled_at by the ALTER above, and this function DELETES them
+-- before it holds anything. `ON CONFLICT … DO UPDATE` then REPLACES any held
+-- copy rather than keeping the old one, so a second run is a refresh, not a
+-- no-op that preserves stale content.
 --
 -- It is a FUNCTION rather than a bare statement so the rule can be exercised
--- against a fixture after the migration has been applied (the negative test at
--- supabase/tests/rls/sms_tables_test.sql case 13 and the review probe), and so
--- P0-06b and the later legacy-column drop can re-run exactly this rule.
+-- against a fixture after the migration has been applied (supabase/tests/rls/
+-- sms_tables_test.sql case 13 and the review probes), and so P0-06b and the
+-- later legacy-column drop can re-run exactly this rule.
 CREATE OR REPLACE FUNCTION public.sms_backfill_conversation_context()
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -968,88 +1141,37 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $fn$
 DECLARE
-  k_project    CONSTANT TEXT[] := ARRAY['menu', 'menu_created_at', 'delivery_confirms_sent'];
-  k_unresolved CONSTANT TEXT[] := ARRAY['chooser', 'pending_body', 'pending_media',
-                                        'pending_message_id', 'pending_effect', 'pending_party_id'];
-  c         RECORD;
-  v_foreign BOOLEAN;
-  v_ctx     JSONB;
-  v_state   TEXT;
-  v_party   UUID;
   v_written INTEGER := 0;
   v_rows    INTEGER;
-  k         TEXT;
+  c         RECORD;
 BEGIN
-  FOR c IN SELECT id, active_project_id, party_id, state, state_context, updated_at
-             FROM public.sms_conversations LOOP
+  -- Rows an earlier version of this migration wrote. Live rail state is never
+  -- stamped, so this cannot reach anything P0-06b or the inbound pipeline owns.
+  DELETE FROM public.sms_conversation_context
+   WHERE project_id IS NOT NULL
+     AND backfilled_at IS NOT NULL;
 
-    -- Is anything parked here that names a project other than the pinned one?
-    v_foreign := false;
-    IF jsonb_typeof(c.state_context -> 'chooser') = 'array' THEN
-      SELECT EXISTS (
-        SELECT 1
-          FROM jsonb_array_elements(c.state_context -> 'chooser') AS e
-         WHERE NULLIF(e ->> 'project_id', '') IS DISTINCT FROM c.active_project_id::text
-      ) INTO v_foreign;
-    END IF;
-    IF NULLIF(c.state_context -> 'pending_effect' ->> '_project_id', '') IS NOT NULL
-       AND (c.state_context -> 'pending_effect' ->> '_project_id')
-             IS DISTINCT FROM c.active_project_id::text THEN
-      v_foreign := true;
-    END IF;
+  FOR c IN SELECT id, state, state_context, updated_at
+             FROM public.sms_conversations
+            WHERE COALESCE(state_context, '{}'::jsonb) <> '{}'::jsonb
+               OR COALESCE(state, 'idle') <> 'idle' LOOP
 
-    IF c.active_project_id IS NOT NULL THEN
-      v_ctx := '{}'::jsonb;
-      FOREACH k IN ARRAY k_project LOOP
-        IF c.state_context ? k THEN
-          v_ctx := v_ctx || jsonb_build_object(k, c.state_context -> k);
-        END IF;
-      END LOOP;
-      IF (c.state_context -> 'project_pin' ->> 'project_id') = c.active_project_id::text THEN
-        v_ctx := v_ctx || jsonb_build_object('project_pin', c.state_context -> 'project_pin');
-      END IF;
-      IF NOT v_foreign THEN
-        FOREACH k IN ARRAY k_unresolved LOOP
-          IF c.state_context ? k THEN
-            v_ctx := v_ctx || jsonb_build_object(k, c.state_context -> k);
-          END IF;
-        END LOOP;
-      END IF;
-
-      v_state := c.state;
-      IF v_state = 'awaiting_project_choice' AND NOT (v_ctx ? 'chooser') THEN
-        v_state := 'idle';
-      ELSIF v_state = 'awaiting_confirmation' AND NOT (v_ctx ? 'pending_effect') THEN
-        v_state := 'idle';
-      END IF;
-
-      -- party_id is carried only when that party really belongs to that project;
-      -- the composite foreign key would refuse it otherwise, which is the point.
-      v_party := NULL;
-      SELECT pp.id INTO v_party
-        FROM public.project_parties pp
-       WHERE pp.id = c.party_id AND pp.project_id = c.active_project_id;
-
-      INSERT INTO public.sms_conversation_context
-        (conversation_id, project_id, party_id, state, state_context, updated_at)
-      VALUES (c.id, c.active_project_id, v_party, v_state, v_ctx, c.updated_at)
-      ON CONFLICT DO NOTHING;
-      GET DIAGNOSTICS v_rows = ROW_COUNT;
-      v_written := v_written + v_rows;
-    END IF;
-
-    -- Whatever is still unresolved goes to the holding row, so that P0-06b can
-    -- finish the choice without the content having been readable by a studio
-    -- that may turn out not to own it.
-    IF (v_foreign OR c.active_project_id IS NULL)
-       AND EXISTS (SELECT 1 FROM unnest(k_unresolved) AS u(k) WHERE c.state_context ? u.k) THEN
-      INSERT INTO public.sms_conversation_context
-        (conversation_id, project_id, party_id, state, state_context, updated_at)
-      VALUES (c.id, NULL, NULL, c.state, c.state_context, c.updated_at)
-      ON CONFLICT DO NOTHING;
-      GET DIAGNOSTICS v_rows = ROW_COUNT;
-      v_written := v_written + v_rows;
-    END IF;
+    -- Verbatim. No key is read, moved, split or dropped: whatever the handset's
+    -- transport row carried is what the holding row carries, for P0-06b to
+    -- resolve with the person on the other end.
+    INSERT INTO public.sms_conversation_context
+      (conversation_id, project_id, party_id, state, state_context, updated_at, backfilled_at)
+    VALUES (c.id, NULL, NULL, c.state, COALESCE(c.state_context, '{}'::jsonb),
+            c.updated_at, now())
+    ON CONFLICT (conversation_id, project_id) DO UPDATE
+       SET party_id      = NULL,
+           state         = EXCLUDED.state,
+           state_context = EXCLUDED.state_context,
+           backfilled_at = EXCLUDED.backfilled_at;
+    -- updated_at is deliberately left to set_updated_at_sms_conversation_context
+    -- on the DO UPDATE path: a refreshed hold was written now.
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    v_written := v_written + v_rows;
   END LOOP;
 
   RETURN v_written;
@@ -1060,13 +1182,21 @@ REVOKE ALL ON FUNCTION public.sms_backfill_conversation_context() FROM PUBLIC, a
 GRANT EXECUTE ON FUNCTION public.sms_backfill_conversation_context() TO service_role;
 
 COMMENT ON FUNCTION public.sms_backfill_conversation_context() IS
-  'The Field Line (00639), contract S4: move the legacy sms_conversations state '
-  'onto per-project sms_conversation_context rows, classifying every key by the '
-  'project it belongs to. A project-attributed row never receives another '
-  'studio''s chooser entry, nor a parked reply whose project is still undecided '
-  '(SQ-24 F1); that content lands on the holding row (project_id NULL), which '
-  'no studio policy admits. Idempotent — ON CONFLICT DO NOTHING — and '
-  'service-role only. Returns the number of rows written.';
+  'The Field Line (00639), contract S4 revision 5: move every conversation''s '
+  'legacy sms_conversations.state_context VERBATIM onto its UNATTRIBUTED '
+  'HOLDING ROW in sms_conversation_context (project_id NULL, party_id NULL), '
+  'which no policy admits — service_role only. It never inserts or updates a '
+  'project-attributed row: origin/main''s producers key this state by handset '
+  'rather than by project (field-daily/core.ts:153-170 and :269-274 leave the '
+  'pin on one studio while writing another studio''s menu), so no rule could '
+  'attribute it correctly and none is attempted. Menus are transient and '
+  'choosers are re-asked: P0-06b reads the holding row with the service client, '
+  're-attributes the held pending body and media to the project the person then '
+  'chooses, and deletes the row. First it DELETES attributed rows carrying '
+  'backfilled_at — the output of an earlier version of this migration — so a '
+  'database that ran one converges here; then ON CONFLICT … DO UPDATE replaces '
+  'any held copy, so re-running refreshes rather than preserving stale content. '
+  'Returns the number of holding rows written.';
 
 DO $$ BEGIN PERFORM public.sms_backfill_conversation_context(); END $$;
 
