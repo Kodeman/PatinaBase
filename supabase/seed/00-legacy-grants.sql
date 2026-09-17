@@ -17510,13 +17510,19 @@ END $g$;
 
 -- 00639_field_line_authority.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public.sms_validate_prompt_effect(uuid,text,uuid,jsonb) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00639_field_line_authority.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT) TO service_role;
+  REVOKE ALL ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT, JSONB) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT, JSONB) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -17631,6 +17637,54 @@ END $g$;
 -- 00639_field_line_authority.sql
 DO $g$ BEGIN
   GRANT SELECT ON public.sms_review_queue TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_prompt_message(public.sms_prompts,text,text,uuid) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_prompt_reply_verb(public.sms_prompts,text) FROM PUBLIC,anon,authenticated,service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_apply_prompt(uuid,text,text,uuid,jsonb) FROM PUBLIC,anon,authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_apply_prompt(uuid,text,text,uuid,jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_grant_optin_prompt(uuid,text,text,uuid) FROM PUBLIC,anon,authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_grant_optin_prompt(uuid,text,text,uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_prompt_receipt(text,text,uuid) FROM PUBLIC,anon,authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00639_field_line_authority.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_prompt_receipt(text,text,uuid) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

@@ -506,6 +506,34 @@ CREATE TABLE IF NOT EXISTS public.sms_prompts (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- SQ-51: non-null proposed_effect is the prospective proposal discriminator.
+-- Never reconstruct old proposals from handset context or cancel command refs.
+-- Activation precondition: establish non-use of the rejected proposal producer
+-- from deployment provenance, or halt for a reliable explicit proposal-ID
+-- inventory to cancel/reissue. This migration does not establish prod absence.
+ALTER TABLE public.sms_prompts
+  ADD COLUMN IF NOT EXISTS proposed_effect jsonb,
+  ADD COLUMN IF NOT EXISTS consumed_sid text,
+  ADD COLUMN IF NOT EXISTS consumption_result jsonb;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid='public.sms_prompts'::regclass
+                 AND conname='sms_prompts_receipt_check') THEN
+    ALTER TABLE public.sms_prompts ADD CONSTRAINT sms_prompts_receipt_check CHECK (
+      (consumed_sid IS NULL AND consumption_result IS NULL) OR
+      (consumed_sid IS NOT NULL AND btrim(consumed_sid) <> '' AND answered_at IS NOT NULL
+       AND consumption_result IS NOT NULL AND jsonb_typeof(consumption_result)='object'
+       AND (consumption_result->>'kind' IN ('effect','optin')) IS TRUE
+       AND consumption_result ? 'result'));
+  END IF;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS sms_prompts_consumed_sid_uniq
+  ON public.sms_prompts(sender_number, recipient_phone, consumed_sid)
+  WHERE consumed_sid IS NOT NULL;
+COMMENT ON COLUMN public.sms_prompts.proposed_effect IS
+  'Immutable complete proposed effect, inserted atomically with the prompt. NULL means command-only, never context fallback.';
+COMMENT ON COLUMN public.sms_prompts.consumption_result IS
+  'Write-once {kind:effect|optin,result:...} committed with business effect and answered_at. Cancellation has no receipt.';
+
 -- The party must belong to the prompt's OWN project — a cross-tenant prompt is
 -- not merely unreadable, it cannot be written.
 DO $$
@@ -622,7 +650,8 @@ BEGIN
      OR NEW.version         IS DISTINCT FROM OLD.version
      OR NEW.short_code      IS DISTINCT FROM OLD.short_code
      OR NEW.expires_at      IS DISTINCT FROM OLD.expires_at
-     OR NEW.created_at      IS DISTINCT FROM OLD.created_at THEN
+     OR NEW.created_at      IS DISTINCT FROM OLD.created_at
+     OR NEW.proposed_effect IS DISTINCT FROM OLD.proposed_effect THEN
     RAISE EXCEPTION
       'sms_prompts: the prompt binding (party/project/kind/subject/version/code/expiry) is immutable'
       USING ERRCODE = 'check_violation';
@@ -630,6 +659,13 @@ BEGIN
 
   IF OLD.answered_at IS NOT NULL AND NEW.answered_at IS DISTINCT FROM OLD.answered_at THEN
     RAISE EXCEPTION 'sms_prompts: answered_at is write-once'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF (OLD.consumed_sid IS NOT NULL OR OLD.answered_at IS NOT NULL)
+     AND (NEW.consumed_sid IS DISTINCT FROM OLD.consumed_sid
+          OR NEW.consumption_result IS DISTINCT FROM OLD.consumption_result) THEN
+    RAISE EXCEPTION 'sms_prompts: receipt is write-once; cancellation is not consumption'
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -646,7 +682,7 @@ REVOKE ALL ON FUNCTION public.sms_prompts_guard_binding() FROM PUBLIC, anon, aut
 
 COMMENT ON FUNCTION public.sms_prompts_guard_binding() IS
   'BEFORE UPDATE on sms_prompts (00639): enforces contract S1''s immutable '
-  'binding. Only answered_at (write-once) and code_reserved (true→false) may '
+  'binding and proposal. Receipt/SID/answered_at are write-once together; code_reserved (true→false) may '
   'move, so no code path — service role included — can retarget a live ref.';
 
 DROP TRIGGER IF EXISTS sms_prompts_b_guard_binding ON public.sms_prompts;
@@ -891,6 +927,41 @@ COMMENT ON FUNCTION public.sms_resolve_prompt(TEXT, TEXT, TEXT) IS
 -- project_id) foreign key still refuses a party that belongs to another
 -- studio's project, so a cross-tenant prompt is unwritable through this door as
 -- well as through a direct INSERT.
+-- Shared validation for atomic creation and command consumption. The guarded
+-- apply_field_effect still owns actor authority and actual mutation.
+CREATE OR REPLACE FUNCTION public.sms_validate_prompt_effect(
+  p_project_id uuid, p_kind text, p_subject_id uuid, p_effect jsonb
+) RETURNS void LANGUAGE plpgsql SET search_path=public,pg_temp AS $$
+DECLARE v_target uuid; v_project uuid;
+BEGIN
+  IF jsonb_typeof(p_effect) IS DISTINCT FROM 'object'
+     OR p_effect->>'type' IS DISTINCT FROM p_kind
+     OR p_kind NOT IN ('mark_done','report_delay','flag_blocker','confirm_delivery','note','punch_report',
+                      'confirm_availability','report_arrival','report_departure')
+     OR p_kind IS NULL OR p_effect ? '_project_id'
+     OR jsonb_typeof(p_effect->'target') IS DISTINCT FROM 'object' THEN
+    RAISE EXCEPTION 'sms_prompt: unsupported or mismatched effect' USING ERRCODE='23514';
+  END IF;
+  v_target := (p_effect#>>'{target,id}')::uuid;
+  IF v_target IS NULL OR v_target IS DISTINCT FROM p_subject_id THEN
+    RAISE EXCEPTION 'sms_prompt: immutable subject mismatch' USING ERRCODE='23514';
+  END IF;
+  IF p_effect#>>'{target,kind}' = 'task' THEN
+    SELECT project_id INTO v_project FROM public.project_tasks WHERE id=v_target;
+  ELSIF p_effect#>>'{target,kind}' = 'coordination' THEN
+    SELECT project_id INTO v_project FROM public.client_decisions WHERE id=v_target;
+  ELSE
+    RAISE EXCEPTION 'sms_prompt: unsupported target kind' USING ERRCODE='23514';
+  END IF;
+  IF v_project IS DISTINCT FROM p_project_id THEN
+    RAISE EXCEPTION 'sms_prompt: target must belong to prompt project' USING ERRCODE='23514';
+  END IF;
+END $$;
+REVOKE ALL ON FUNCTION public.sms_validate_prompt_effect(uuid,text,uuid,jsonb) FROM PUBLIC, anon, authenticated, service_role;
+
+-- Drop the old overload: a default ninth argument otherwise makes eight-arg
+-- opt-in/command callers ambiguous. Existing callers retain the return shape.
+DROP FUNCTION IF EXISTS public.sms_create_prompt(uuid,uuid,text,uuid,integer,timestamptz,text,text);
 CREATE OR REPLACE FUNCTION public.sms_create_prompt(
   p_party_id        UUID,
   p_project_id      UUID,
@@ -899,7 +970,8 @@ CREATE OR REPLACE FUNCTION public.sms_create_prompt(
   p_version         INTEGER,
   p_expires_at      TIMESTAMPTZ,
   p_sender_number   TEXT,
-  p_recipient_phone TEXT
+  p_recipient_phone TEXT,
+  p_proposed_effect JSONB DEFAULT NULL
 )
 RETURNS TABLE (id UUID, short_code TEXT)
 LANGUAGE plpgsql
@@ -921,6 +993,10 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  IF p_proposed_effect IS NOT NULL THEN
+    PERFORM public.sms_validate_prompt_effect(p_project_id,p_kind,p_subject_id,p_proposed_effect);
+  END IF;
+
   -- Stated here as well as inside the allocator, because THIS function is where
   -- the guarantee is claimed: the pair is serialized from before the code is
   -- read until the caller's transaction ends, so the prompt is inserted while
@@ -931,22 +1007,22 @@ BEGIN
 
   INSERT INTO public.sms_prompts
     (project_id, party_id, sender_number, recipient_phone, kind, subject_id,
-     version, short_code, expires_at)
+     version, short_code, expires_at, proposed_effect)
   VALUES (p_project_id, p_party_id, v_sender, v_recipient, p_kind, p_subject_id,
           COALESCE(p_version, 1), v_code,
-          COALESCE(p_expires_at, now() + interval '7 days'))
+          COALESCE(p_expires_at, now() + interval '7 days'), p_proposed_effect)
   RETURNING sms_prompts.id, sms_prompts.short_code INTO v_id, v_code;
 
   RETURN QUERY SELECT v_id, v_code;
 END;
 $fn$;
 
-REVOKE ALL ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT)
+REVOKE ALL ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT, JSONB)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT)
+GRANT EXECUTE ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT, JSONB)
   TO service_role;
 
-COMMENT ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT) IS
+COMMENT ON FUNCTION public.sms_create_prompt(UUID, UUID, TEXT, UUID, INTEGER, TIMESTAMPTZ, TEXT, TEXT, JSONB) IS
   'The Field Line (00639), contract S1 revision 5: ask one handset one question '
   'and return the `Ref NN` that answers it — allocation, the 90-day tombstone '
   'read and the prompt INSERT in ONE transaction under ONE advisory lock on '
@@ -1522,3 +1598,172 @@ COMMENT ON VIEW public.sms_review_queue IS
 
 REVOKE ALL   ON public.sms_review_queue FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.sms_review_queue TO authenticated, service_role;
+
+-- SQ-51: internal inbound authentication shared by consumption and recovery.
+-- A verified Twilio request is persisted by the service before these RPCs.
+CREATE OR REPLACE FUNCTION public.sms_prompt_message(
+  p_prompt public.sms_prompts, p_sender text, p_recipient text, p_sms_message_id uuid
+) RETURNS public.sms_messages LANGUAGE plpgsql SET search_path=public,pg_temp AS $$
+DECLARE m public.sms_messages; c public.sms_conversations;
+BEGIN
+  SELECT * INTO m FROM public.sms_messages WHERE id=p_sms_message_id FOR UPDATE;
+  SELECT * INTO c FROM public.sms_conversations WHERE id=m.conversation_id;
+  IF m.id IS NULL OR m.direction IS DISTINCT FROM 'inbound' OR NULLIF(btrim(m.twilio_sid),'') IS NULL
+     OR p_prompt.sender_number IS DISTINCT FROM public.normalize_channel_value('sms',p_sender)
+     OR p_prompt.recipient_phone IS DISTINCT FROM public.normalize_channel_value('sms',p_recipient)
+     OR p_prompt.sender_number IS DISTINCT FROM public.normalize_channel_value('sms',c.twilio_number)
+     OR p_prompt.recipient_phone IS DISTINCT FROM public.normalize_channel_value('sms',c.phone_e164)
+     OR (m.party_id IS NOT NULL AND m.party_id IS DISTINCT FROM p_prompt.party_id)
+     OR (m.project_id IS NOT NULL AND m.project_id IS DISTINCT FROM p_prompt.project_id)
+     OR NOT EXISTS (SELECT 1 FROM public.project_parties pp WHERE pp.id=p_prompt.party_id
+        AND pp.project_id=p_prompt.project_id
+        AND public.normalize_channel_value('sms',pp.phone)=p_prompt.recipient_phone) THEN
+    RAISE EXCEPTION 'sms_prompt: inbound SID/endpoints/party/project mismatch' USING ERRCODE='23514';
+  END IF;
+  RETURN m;
+END $$;
+REVOKE ALL ON FUNCTION public.sms_prompt_message(public.sms_prompts,text,text,uuid) FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE OR REPLACE FUNCTION public.sms_prompt_reply_verb(p_prompt public.sms_prompts,p_body text)
+RETURNS text LANGUAGE plpgsql SET search_path=public,pg_temp AS $$
+DECLARE parts text[];
+BEGIN
+  parts := regexp_match(upper(btrim(p_body)), '^([A-Z]+)(?:[[:space:]]+([0-9]{2,3}))?$');
+  IF parts IS NULL OR (parts[2] IS NOT NULL AND parts[2]<>p_prompt.short_code)
+    OR (parts[2] IS NULL AND (SELECT count(*) FROM public.sms_prompts
+        WHERE sender_number=p_prompt.sender_number AND recipient_phone=p_prompt.recipient_phone
+          AND answered_at IS NULL AND expires_at>clock_timestamp())<>1) THEN
+    RAISE EXCEPTION 'sms_prompt: reply must identify this prompt' USING ERRCODE='23514';
+  END IF;
+  RETURN parts[1];
+END $$;
+REVOKE ALL ON FUNCTION public.sms_prompt_reply_verb(public.sms_prompts,text) FROM PUBLIC,anon,authenticated,service_role;
+
+CREATE OR REPLACE FUNCTION public.sms_apply_prompt(
+  p_prompt_id uuid, p_sender text, p_recipient text, p_sms_message_id uuid,
+  p_effect jsonb DEFAULT NULL
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE p public.sms_prompts; m public.sms_messages; c public.studio_channel_consent;
+  effect jsonb; result jsonb; verb text;
+BEGIN
+  SELECT * INTO p FROM public.sms_prompts WHERE id=p_prompt_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'sms_prompt: unknown prompt' USING ERRCODE='23514'; END IF;
+  m := public.sms_prompt_message(p,p_sender,p_recipient,p_sms_message_id);
+  IF p.kind='optin' THEN RAISE EXCEPTION 'sms_apply_prompt: optin uses its own door' USING ERRCODE='23514'; END IF;
+  IF p.consumed_sid=m.twilio_sid THEN
+    RETURN jsonb_build_object('status','replayed','result',p.consumption_result);
+  END IF;
+  IF p.answered_at IS NOT NULL THEN RETURN jsonb_build_object('status','closed'); END IF;
+  IF p.expires_at<=clock_timestamp() THEN RETURN jsonb_build_object('status','expired'); END IF;
+  verb := public.sms_prompt_reply_verb(p,m.body);
+  IF p.proposed_effect IS NOT NULL THEN
+    IF p_effect IS NOT NULL OR verb NOT IN ('YES','Y','OK') THEN
+      RAISE EXCEPTION 'sms_prompt: proposal requires affirmation, never replacement' USING ERRCODE='23514';
+    END IF;
+    effect := p.proposed_effect;
+  ELSE
+    effect := p_effect;
+    IF ((verb IN ('YES','Y','OK') AND effect->>'type'=p.kind) OR
+      (verb='DONE' AND effect->>'type'='mark_done') OR
+      (verb IN ('HERE','ARRIVED','DELIVERED') AND effect->>'type'='report_arrival') OR
+      (verb IN ('LEAVING','DEPARTED') AND effect->>'type'='report_departure') OR
+      (verb IN ('DELAY','LATE') AND effect->>'type'='report_delay') OR
+      (verb IN ('BLOCKED','BLOCKER') AND effect->>'type'='flag_blocker')) IS NOT TRUE THEN
+      RAISE EXCEPTION 'sms_prompt: conflicting command' USING ERRCODE='23514';
+    END IF;
+  END IF;
+  PERFORM public.sms_validate_prompt_effect(p.project_id,effect->>'type',p.subject_id,effect);
+  SELECT * INTO c FROM public.studio_channel_consent
+    WHERE organization_id=public.project_consent_org(p.project_id)
+      AND channel_kind='sms' AND channel_value=p.recipient_phone FOR UPDATE;
+  IF public.sms_is_suppressed(p.sender_number,p.recipient_phone) OR public.sms_phone_suppressed(p.recipient_phone) THEN
+    RETURN jsonb_build_object('status','suppressed');
+  END IF;
+  IF c.status IS DISTINCT FROM 'granted' OR c.refusal_unanswered IS DISTINCT FROM false THEN
+    RETURN jsonb_build_object('status','not_consented');
+  END IF;
+  result := jsonb_build_object('kind','effect','result',
+    public.apply_field_effect(p.party_id,effect,'sms',m.id));
+  UPDATE public.sms_prompts SET consumed_sid=m.twilio_sid,consumption_result=result,answered_at=clock_timestamp()
+    WHERE id=p.id;
+  RETURN jsonb_build_object('status','applied','result',result);
+END $$;
+REVOKE ALL ON FUNCTION public.sms_apply_prompt(uuid,text,text,uuid,jsonb) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.sms_apply_prompt(uuid,text,text,uuid,jsonb) TO service_role;
+
+-- Recipient acceptance is NOT authenticated studio record_channel_consent.
+-- Only an existing pending, non-refusing record is changed. Never insert a
+-- grant, lift suppression, edit legacy seat consent, or erase refusal evidence.
+CREATE OR REPLACE FUNCTION public.sms_grant_optin_prompt(
+  p_prompt_id uuid, p_sender text, p_recipient text, p_sms_message_id uuid
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE p public.sms_prompts; m public.sms_messages; c public.studio_channel_consent;
+  seat public.project_parties; result jsonb; verb text; accepted_at timestamptz;
+BEGIN
+  SELECT * INTO p FROM public.sms_prompts WHERE id=p_prompt_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'sms_prompt: unknown prompt' USING ERRCODE='23514'; END IF;
+  m := public.sms_prompt_message(p,p_sender,p_recipient,p_sms_message_id);
+  IF p.kind<>'optin' OR p.proposed_effect IS NOT NULL THEN
+    RAISE EXCEPTION 'sms_grant_optin_prompt: optin only' USING ERRCODE='23514';
+  END IF;
+  IF p.consumed_sid=m.twilio_sid THEN
+    RETURN jsonb_build_object('status','replayed','result',p.consumption_result);
+  END IF;
+  IF p.answered_at IS NOT NULL THEN RETURN jsonb_build_object('status','closed'); END IF;
+  IF p.expires_at<=clock_timestamp() THEN RETURN jsonb_build_object('status','expired'); END IF;
+  verb := public.sms_prompt_reply_verb(p,m.body);
+  IF verb NOT IN ('YES','Y') OR upper(btrim(m.body)) !~ ('^(YES|Y)[[:space:]]+'||p.short_code||'$') THEN
+    RAISE EXCEPTION 'sms_prompt: optin requires coded YES/Y' USING ERRCODE='23514';
+  END IF;
+  SELECT * INTO c FROM public.studio_channel_consent
+    WHERE organization_id=public.project_consent_org(p.project_id)
+      AND channel_kind='sms' AND channel_value=p.recipient_phone FOR UPDATE;
+  IF public.sms_is_suppressed(p.sender_number,p.recipient_phone) OR public.sms_phone_suppressed(p.recipient_phone) THEN
+    RETURN jsonb_build_object('status','suppressed');
+  END IF;
+  IF c.status IS DISTINCT FROM 'pending' OR c.refusal_unanswered IS DISTINCT FROM false THEN
+    RETURN jsonb_build_object('status','not_pending');
+  END IF;
+  SELECT * INTO seat FROM public.project_parties WHERE id=p.party_id;
+  IF NULLIF(btrim(COALESCE(c.disclosure_version,seat.sms_consent_disclosure_version)),'') IS NULL THEN
+    RAISE EXCEPTION 'sms_prompt: disclosure evidence required' USING ERRCODE='23514';
+  END IF;
+  accepted_at := clock_timestamp();
+  UPDATE public.studio_channel_consent SET status='granted',consented_at=accepted_at,
+    recorded_at=accepted_at,source='inbound_sms',evidence=m.body,refusal_unanswered=false,
+    origin_project_id=p.project_id,
+    disclosure_version=COALESCE(c.disclosure_version,seat.sms_consent_disclosure_version),
+    recorded_by=COALESCE(c.recorded_by,seat.sms_consent_recorded_by)
+    WHERE organization_id=c.organization_id AND channel_kind='sms' AND channel_value=c.channel_value
+    RETURNING * INTO c;
+  IF c.status IS DISTINCT FROM 'granted' OR c.refusal_unanswered IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'sms_prompt: consent trigger refused acceptance' USING ERRCODE='23514';
+  END IF;
+  result := jsonb_build_object('kind','optin','result',jsonb_build_object(
+    'organization_id',c.organization_id,'project_id',p.project_id,'party_id',p.party_id,
+    'status',c.status,'consented_at',c.consented_at));
+  UPDATE public.sms_prompts SET consumed_sid=m.twilio_sid,consumption_result=result,answered_at=clock_timestamp()
+    WHERE id=p.id;
+  RETURN jsonb_build_object('status','granted','result',result);
+END $$;
+REVOKE ALL ON FUNCTION public.sms_grant_optin_prompt(uuid,text,text,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.sms_grant_optin_prompt(uuid,text,text,uuid) TO service_role;
+
+-- Recover an ambiguous commit BEFORE ordinary SID dedupe/open-ref resolution.
+-- Reuse the persisted inbound message; NULL means no receipt, not success.
+CREATE OR REPLACE FUNCTION public.sms_prompt_receipt(
+  p_sender text,p_recipient text,p_sms_message_id uuid
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+DECLARE p public.sms_prompts; m public.sms_messages;
+BEGIN
+  SELECT * INTO p FROM public.sms_prompts
+    WHERE sender_number=public.normalize_channel_value('sms',p_sender)
+      AND recipient_phone=public.normalize_channel_value('sms',p_recipient)
+      AND consumed_sid=(SELECT twilio_sid FROM public.sms_messages WHERE id=p_sms_message_id)
+    FOR UPDATE;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  m := public.sms_prompt_message(p,p_sender,p_recipient,p_sms_message_id);
+  RETURN jsonb_build_object('status','replayed','prompt_id',p.id,'result',p.consumption_result);
+END $$;
+REVOKE ALL ON FUNCTION public.sms_prompt_receipt(text,text,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.sms_prompt_receipt(text,text,uuid) TO service_role;

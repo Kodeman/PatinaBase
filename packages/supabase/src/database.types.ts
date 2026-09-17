@@ -24203,12 +24203,15 @@ export type Database = {
         Row: {
           answered_at: string | null
           code_reserved: boolean
+          consumed_sid: string | null
+          consumption_result: Json | null
           created_at: string
           expires_at: string
           id: string
           kind: string
           party_id: string
           project_id: string
+          proposed_effect: Json | null
           recipient_phone: string
           sender_number: string
           short_code: string
@@ -24218,12 +24221,15 @@ export type Database = {
         Insert: {
           answered_at?: string | null
           code_reserved?: boolean
+          consumed_sid?: string | null
+          consumption_result?: Json | null
           created_at?: string
           expires_at?: string
           id?: string
           kind: string
           party_id: string
           project_id: string
+          proposed_effect?: Json | null
           recipient_phone: string
           sender_number: string
           short_code: string
@@ -24233,12 +24239,15 @@ export type Database = {
         Update: {
           answered_at?: string | null
           code_reserved?: boolean
+          consumed_sid?: string | null
+          consumption_result?: Json | null
           created_at?: string
           expires_at?: string
           id?: string
           kind?: string
           party_id?: string
           project_id?: string
+          proposed_effect?: Json | null
           recipient_phone?: string
           sender_number?: string
           short_code?: string
@@ -38629,6 +38638,16 @@ export type Database = {
           object_path: string
         }[]
       }
+      sms_apply_prompt: {
+        Args: {
+          p_effect?: Json
+          p_prompt_id: string
+          p_recipient: string
+          p_sender: string
+          p_sms_message_id: string
+        }
+        Returns: Json
+      }
       sms_backfill_conversation_context: { Args: never; Returns: number }
       sms_create_prompt: {
         Args: {
@@ -38636,6 +38655,7 @@ export type Database = {
           p_kind: string
           p_party_id: string
           p_project_id: string
+          p_proposed_effect?: Json
           p_recipient_phone: string
           p_sender_number: string
           p_subject_id: string
@@ -38646,6 +38666,15 @@ export type Database = {
           short_code: string
         }[]
       }
+      sms_grant_optin_prompt: {
+        Args: {
+          p_prompt_id: string
+          p_recipient: string
+          p_sender: string
+          p_sms_message_id: string
+        }
+        Returns: Json
+      }
       sms_is_suppressed: {
         Args: { p_recipient: string; p_sender: string }
         Returns: boolean
@@ -38655,6 +38684,63 @@ export type Database = {
         Returns: string
       }
       sms_phone_suppressed: { Args: { p_recipient: string }; Returns: boolean }
+      sms_prompt_message: {
+        Args: {
+          p_prompt: Database["public"]["Tables"]["sms_prompts"]["Row"]
+          p_recipient: string
+          p_sender: string
+          p_sms_message_id: string
+        }
+        Returns: {
+          applied_effect: Json | null
+          body: string | null
+          claimed_at: string | null
+          confidence: number | null
+          conversation_id: string
+          created_at: string
+          dedupe_key: string | null
+          direction: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          matched_coordination_item_id: string | null
+          matched_task_id: string | null
+          media: Json
+          needs_review: boolean
+          owner_user_id: string | null
+          parsed_intent: Json | null
+          party_id: string | null
+          project_id: string | null
+          recipe: Json | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          site_request_dispatch_outbox_id: string | null
+          template_key: string | null
+          twilio_sid: string | null
+          twilio_status: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sms_messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      sms_prompt_receipt: {
+        Args: {
+          p_recipient: string
+          p_sender: string
+          p_sms_message_id: string
+        }
+        Returns: Json
+      }
+      sms_prompt_reply_verb: {
+        Args: {
+          p_body: string
+          p_prompt: Database["public"]["Tables"]["sms_prompts"]["Row"]
+        }
+        Returns: string
+      }
       sms_reconcile_accepted_send: {
         Args: {
           p_error_code?: string
@@ -38684,6 +38770,15 @@ export type Database = {
           subject_id: string
           version: number
         }[]
+      }
+      sms_validate_prompt_effect: {
+        Args: {
+          p_effect: Json
+          p_kind: string
+          p_project_id: string
+          p_subject_id: string
+        }
+        Returns: undefined
       }
       stage_project_ffe_document_extraction: {
         Args: {
@@ -39476,12 +39571,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39505,11 +39600,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39530,11 +39625,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39555,11 +39650,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39572,11 +39667,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
