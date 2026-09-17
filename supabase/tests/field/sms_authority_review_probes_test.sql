@@ -1,9 +1,9 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- The Field Line · REVIEW PROBES, kept in the repo (00639)
 --
--- SIX probes from two bound Codex reviews of this migration's two rejected
--- candidates. Each one is here, as its reviewer wrote it, so the counterexample
--- ships with the fix and a later change cannot quietly undo it.
+-- EIGHT probes from three bound Codex reviews of this migration's three
+-- rejected candidates. Each one is here, as its reviewer wrote it, so the
+-- counterexample ships with the fix and a later change cannot quietly undo it.
 --
 -- SQ-24, on the FIRST candidate (2060c1320a388da3222ec13072a874537f545d61):
 --
@@ -37,6 +37,19 @@
 --                            un-normalized stored channel_value, so a record at
 --                            '15551230000' stayed granted after a STOP.
 --
+-- SQ-32, on the THIRD candidate (4dcc7f95006c281cb88f9335011f50eb82f0cd3d),
+-- whose loop skipped an idle/empty source even where a STAMPED holding row
+-- already existed:
+--
+--   R1  stale hold         — a conversation held on an earlier run, then
+--                            cleared to idle/{} by a completed confirmation
+--                            (pipeline.ts:1339-1342), kept its obsolete held
+--                            copy, so a rerun did not converge on the
+--                            fresh-slate result (no holding row at all).
+--   R1b same rule, bare    — the identical failure from a plain idle row with a
+--                            pending_body, alongside the two shapes the skip
+--                            legitimately covers.
+--
 -- VERBATIM, with one mechanical adaptation, stated plainly: the reviewer had no
 -- 00639 file to run, so the backfill probe INLINED the whole candidate migration
 -- between its fixture and its assertion. Here the migration is applied by the
@@ -53,6 +66,7 @@
 -- text, unchanged. Sources:
 -- /Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-24/
 -- /Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-30/
+-- /Users/kody/.claude/sidequest/projects/patina-merged-5f06cee3/verification/SQ-32/
 --
 -- How to run (after the migration, in the same transaction):
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -X -q \
@@ -60,7 +74,7 @@
 --     -f supabase/migrations/00639_field_line_authority.sql \
 --     -f supabase/tests/field/sms_authority_review_probes_test.sql -c "ROLLBACK"
 --
--- Each probe owns a SAVEPOINT, so the six fixtures do not see each other and
+-- Each probe owns a SAVEPOINT, so the eight fixtures do not see each other and
 -- the schema under test is left standing for whatever runs next. Run on its
 -- own, the BEGIN opens the transaction and closing the connection discards it.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -527,6 +541,123 @@ DO $$ BEGIN ASSERT NOT EXISTS (SELECT 1 FROM studio_channel_consent WHERE normal
 ROLLBACK TO SAVEPOINT sq30_r3_noncanonical;
 RELEASE SAVEPOINT sq30_r3_noncanonical;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- R1 (SQ-32) · a completed confirmation must not stay held once the legacy row
+--      is cleared to idle/{} (verification/SQ-32/cleared-confirmation.{sql,log})
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The reviewer ran this over the sms_tables_test.sql fixture prefix; the same
+-- fixture block the probes above use is used here, and the sms_messages rows
+-- that prefix also carries are dropped because no statement below reads them.
+-- The two UPDATEs, the two backfill calls, the readback and the assertion are
+-- the reviewer's own, unchanged.
+SAVEPOINT sq32_r1_cleared_confirmation;
+
+SET LOCAL statement_timeout = '120s';
+
+-- ─── fixtures ──────────────────────────────────────────────────────────────
+-- ...0001 = studio A's designer, ...0002 = studio B's designer, ...0003 = an
+-- active non-guest member of studio A (the 00584 co-member path). Each studio
+-- is an outsider to the other.
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab-studio-a@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ab000000-0000-4000-8000-000000000002', 'ab-studio-b@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+  ('ab000000-0000-4000-8000-000000000003', 'ab-a-comember@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+
+INSERT INTO profiles (id, email, full_name, created_at, updated_at)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab-studio-a@test.invalid',   'AB Studio A',   NOW(), NOW()),
+  ('ab000000-0000-4000-8000-000000000002', 'ab-studio-b@test.invalid',   'AB Studio B',   NOW(), NOW()),
+  ('ab000000-0000-4000-8000-000000000003', 'ab-a-comember@test.invalid', 'AB A Co-member', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- Two real studios, so is_studio_comember (00556) resolves the 00584 branch.
+INSERT INTO organizations (id, type, name, slug, status)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000d1', 'design_studio', 'AB Studio A Org', 'ab-studio-a-org', 'active'),
+  ('ab000000-0000-4000-8000-0000000000d2', 'design_studio', 'AB Studio B Org', 'ab-studio-b-org', 'active');
+
+INSERT INTO organization_members (user_id, organization_id, role, status)
+VALUES
+  ('ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-0000000000d1', 'owner',  'active'),
+  ('ab000000-0000-4000-8000-000000000003', 'ab000000-0000-4000-8000-0000000000d1', 'member', 'active'),
+  ('ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-0000000000d2', 'owner',  'active');
+
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000a1', 'AB Studio A Project', 'ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-000000000001', 'ab000000-0000-4000-8000-0000000000d1'),
+  ('ab000000-0000-4000-8000-0000000000a2', 'AB Studio B Project', 'ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-000000000002', 'ab000000-0000-4000-8000-0000000000d2');
+
+-- ONE tile setter, working for both studios, texting from one handset.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone)
+VALUES
+  ('ab000000-0000-4000-8000-0000000000b1', 'ab000000-0000-4000-8000-0000000000a1', 'sub', 'AB Tile (for A)', '5551230000'),
+  ('ab000000-0000-4000-8000-0000000000b2', 'ab000000-0000-4000-8000-0000000000a2', 'sub', 'AB Tile (for B)', '5551230000');
+
+-- One transport row, pinned to studio A. Its state_context is mid-chooser: it
+-- names BOTH studios' projects and parks the unresolved inbound body + media.
+INSERT INTO sms_conversations (id, twilio_number, phone_e164, party_id, active_project_id, state, state_context)
+VALUES ('ab000000-0000-4000-8000-0000000000f1', '+15550000000', '+15551230000',
+        'ab000000-0000-4000-8000-0000000000b1', 'ab000000-0000-4000-8000-0000000000a1',
+        'awaiting_project_choice',
+        jsonb_build_object(
+          'chooser', jsonb_build_array(
+            jsonb_build_object('n', 1, 'project_id', 'ab000000-0000-4000-8000-0000000000a1', 'party_id', 'ab000000-0000-4000-8000-0000000000b1'),
+            jsonb_build_object('n', 2, 'project_id', 'ab000000-0000-4000-8000-0000000000a2', 'party_id', 'ab000000-0000-4000-8000-0000000000b2')
+          ),
+          'pending_body', 'grout is cracked in the guest bath',
+          'pending_media', jsonb_build_array('holding/ab000000-0000-4000-8000-0000000000f1/1.jpg')
+        ));
+
+UPDATE sms_conversations SET state=$q$awaiting_confirmation$q$,state_context=$q${"pending_effect":{"type":"mark_done","_project_id":"ab000000-0000-4000-8000-0000000000a1"},"pending_party_id":"ab000000-0000-4000-8000-0000000000b1"}$q$::jsonb WHERE id=$q$ab000000-0000-4000-8000-0000000000f1$q$;
+SELECT sms_backfill_conversation_context();
+-- Exact post-confirmation transformation of pipeline.ts:1339-1342.
+UPDATE sms_conversations SET state=$q$idle$q$,state_context=state_context-ARRAY[$q$pending_effect$q$,$q$pending_party_id$q$] WHERE id=$q$ab000000-0000-4000-8000-0000000000f1$q$;
+SELECT sms_backfill_conversation_context();
+SELECT c.state AS legacy_state,c.state_context AS legacy_context,x.state AS held_state,x.state_context AS held_context FROM sms_conversations c JOIN sms_conversation_context x ON c.id=x.conversation_id WHERE c.id=$q$ab000000-0000-4000-8000-0000000000f1$q$;
+DO $$ BEGIN ASSERT NOT EXISTS (SELECT 1 FROM sms_conversation_context x JOIN sms_conversations c ON c.id=x.conversation_id WHERE c.id=$q$ab000000-0000-4000-8000-0000000000f1$q$ AND x.backfilled_at IS NOT NULL AND (x.state_context IS DISTINCT FROM c.state_context OR x.state IS DISTINCT FROM c.state)), $q$REVIEW FAIL: completed confirmation remains held after backfill refresh$q$; END $$;
+ROLLBACK TO SAVEPOINT sq32_r1_cleared_confirmation;
+RELEASE SAVEPOINT sq32_r1_cleared_confirmation;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- R1b (SQ-32) · the same rule over a bare legacy row, plus the skip it must not
+--      swallow (verification/SQ-32/cleared-legacy.{sql,log})
+-- ═══════════════════════════════════════════════════════════════════════════
+-- The reviewer's script needs no studio fixture at all: three transport rows
+-- carry the three source shapes. Only the BEGIN/ROLLBACK becomes a SAVEPOINT.
+-- A fourth conversation and its assertion are ADDED, marked below, to measure
+-- the guard the convergence delete is built on.
+SAVEPOINT sq32_r1b_cleared_legacy;
+
+SET LOCAL statement_timeout=30000;
+INSERT INTO sms_conversations(id,twilio_number,phone_e164,state,state_context) VALUES
+($q$ac000000-0000-4000-8000-000000000001$q$,$q$+15550000000$q$,$q$+15553200001$q$,$q$idle$q$,$q${"pending_body":"still nonempty"}$q$::jsonb),
+($q$ac000000-0000-4000-8000-000000000002$q$,$q$+15550000000$q$,$q$+15553200002$q$,$q$awaiting_confirmation$q$,$q${}$q$::jsonb),
+($q$ac000000-0000-4000-8000-000000000003$q$,$q$+15550000000$q$,$q$+15553200003$q$,$q$idle$q$,$q${}$q$::jsonb);
+SELECT sms_backfill_conversation_context();
 DO $$ BEGIN
-  RAISE NOTICE 'sms_authority_review_probes: SQ-24 F1/F2/F3 and SQ-30 R1/R2/R3 all pass against 00639.';
+ASSERT (SELECT count(*) FROM sms_conversation_context WHERE conversation_id IN ($q$ac000000-0000-4000-8000-000000000001$q$,$q$ac000000-0000-4000-8000-000000000002$q$) AND project_id IS NULL)=2,$q$REVIEW FAIL: idle/nonempty and non-idle/empty must both be held$q$;
+ASSERT NOT EXISTS (SELECT 1 FROM sms_conversation_context WHERE conversation_id=$q$ac000000-0000-4000-8000-000000000003$q$),$q$REVIEW FAIL: fresh idle/empty should skip$q$;
+RAISE NOTICE $q$REVIEW PASS: both mixed empty-state cases retained; fresh idle/empty skipped$q$;
+END $$;
+UPDATE sms_conversations SET state=$q$idle$q$,state_context=$q${}$q$::jsonb WHERE id=$q$ac000000-0000-4000-8000-000000000001$q$;
+SELECT sms_backfill_conversation_context();
+SELECT state,state_context,backfilled_at FROM sms_conversation_context WHERE conversation_id=$q$ac000000-0000-4000-8000-000000000001$q$;
+DO $$ BEGIN ASSERT NOT EXISTS (SELECT 1 FROM sms_conversation_context x JOIN sms_conversations c ON c.id=x.conversation_id WHERE c.id=$q$ac000000-0000-4000-8000-000000000001$q$ AND x.backfilled_at IS NOT NULL AND x.state_context IS DISTINCT FROM c.state_context), $q$REVIEW FAIL: cleared idle legacy context leaves stale backfilled pending body$q$; END $$;
+
+-- ADDED, not the reviewer's: the convergence delete is guarded by
+-- backfilled_at IS NOT NULL, so a holding row the RAIL wrote — P0-06b's
+-- service-client state, never stamped — survives a refresh even though its
+-- source conversation reads idle/{}. Without that guard this assertion fails.
+INSERT INTO sms_conversations(id,twilio_number,phone_e164,state,state_context) VALUES
+($q$ac000000-0000-4000-8000-000000000004$q$,$q$+15550000000$q$,$q$+15553200004$q$,$q$idle$q$,$q${}$q$::jsonb);
+INSERT INTO sms_conversation_context(conversation_id,project_id,party_id,state,state_context,backfilled_at) VALUES
+($q$ac000000-0000-4000-8000-000000000004$q$,NULL,NULL,$q$awaiting_project_choice$q$,$q${"pending_body":"live rail state, never backfilled"}$q$::jsonb,NULL);
+SELECT sms_backfill_conversation_context();
+DO $$ BEGIN ASSERT EXISTS (SELECT 1 FROM sms_conversation_context WHERE conversation_id=$q$ac000000-0000-4000-8000-000000000004$q$ AND project_id IS NULL AND backfilled_at IS NULL AND state_context ? $q$pending_body$q$), $q$REVIEW FAIL: unstamped holding row removed by the idle/{} convergence delete$q$; END $$;
+ROLLBACK TO SAVEPOINT sq32_r1b_cleared_legacy;
+RELEASE SAVEPOINT sq32_r1b_cleared_legacy;
+
+DO $$ BEGIN
+  RAISE NOTICE 'sms_authority_review_probes: SQ-24 F1/F2/F3, SQ-30 R1/R2/R3 and SQ-32 R1/R1b all pass against 00639.';
 END $$;

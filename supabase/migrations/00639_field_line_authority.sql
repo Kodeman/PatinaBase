@@ -1130,6 +1130,16 @@ CREATE INDEX IF NOT EXISTS idx_sms_conversation_context_project
 -- copy rather than keeping the old one, so a second run is a refresh, not a
 -- no-op that preserves stale content.
 --
+-- The skip below — a conversation that is idle with an empty context is not
+-- visited — covers a conversation that never had held state. It must NOT also
+-- mean a conversation that WAS held keeps an obsolete copy after its legacy row
+-- was cleared, which is exactly what pipeline.ts:1339-1342 does to it once a
+-- confirmation completes (SQ-32 R1). So a STAMPED holding row whose source now
+-- reads idle/{} is DELETED: source idle/{} ⇒ no holding row, the same result a
+-- fresh slate reaches from that same final source state. Only stamped rows are
+-- reached; a holding row the rail itself wrote carries no backfilled_at and is
+-- left alone, as the attributed sweep above leaves live attributed state alone.
+--
 -- It is a FUNCTION rather than a bare statement so the rule can be exercised
 -- against a fixture after the migration has been applied (supabase/tests/rls/
 -- sms_tables_test.sql case 13 and the review probes), and so P0-06b and the
@@ -1150,6 +1160,20 @@ BEGIN
   DELETE FROM public.sms_conversation_context
    WHERE project_id IS NOT NULL
      AND backfilled_at IS NOT NULL;
+
+  -- Held rows whose source has since been cleared to idle/{} (a completed
+  -- confirmation: pipeline.ts:1339-1342). The loop below skips those
+  -- conversations, so without this a rerun would keep a hold a fresh slate
+  -- would never create. Stamped rows only: live rail state is never stamped.
+  -- `src`, not `c`: `c` is the loop RECORD below and plpgsql would resolve the
+  -- alias to the variable ("record c is not assigned yet").
+  DELETE FROM public.sms_conversation_context x
+   USING public.sms_conversations src
+   WHERE x.conversation_id = src.id
+     AND x.project_id IS NULL
+     AND x.backfilled_at IS NOT NULL
+     AND COALESCE(src.state_context, '{}'::jsonb) = '{}'::jsonb
+     AND COALESCE(src.state, 'idle') = 'idle';
 
   FOR c IN SELECT id, state, state_context, updated_at
              FROM public.sms_conversations
