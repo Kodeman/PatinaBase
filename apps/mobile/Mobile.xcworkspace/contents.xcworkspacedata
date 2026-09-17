@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:Capture/Capture.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:Patina/Patina.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:PatinaDesignKit">
+   </FileRef>
+</Workspace>

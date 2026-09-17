@@ -17,8 +17,8 @@
 		CBB2D0CB2F1D65F8007686CD /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CA2F1D65F8007686CD /* Storage */; };
 		CBB2D0CD2F1D65F8007686CD /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CC2F1D65F8007686CD /* Supabase */; };
 		DE516B1700000000000000A3 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; };
-		DE516B1700000000000000B3 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000B2 /* PatinaDesignKit */; };
 		DE516B1700000000000000A4 /* PatinaDesignKit in Embed Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		DE516B1700000000000000B3 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000B2 /* PatinaDesignKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,11 +71,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		FF01C0F1600000000000A101 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Version.xcconfig; path = Config/Version.xcconfig; sourceTree = "<group>"; };
 		96F46438BB46451D838BDE43 /* PatinaWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PatinaWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CBB2D0162F1D20F7007686CD /* Patina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Patina.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CBB2D0232F1D20F8007686CD /* PatinaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PatinaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CBB2D02D2F1D20F8007686CD /* PatinaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PatinaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF01C0F1600000000000A101 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Version.xcconfig; path = Config/Version.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -99,8 +99,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		26C54B5540028E457738D2DD /* PatinaWidgetShared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = PatinaWidgetShared;
 			sourceTree = "<group>";
 		};
@@ -122,15 +120,11 @@
 		};
 		CBB2D0262F1D20F8007686CD /* PatinaTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = PatinaTests;
 			sourceTree = "<group>";
 		};
 		CBB2D0302F1D20F8007686CD /* PatinaUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = PatinaUITests;
 			sourceTree = "<group>";
 		};
@@ -218,8 +212,8 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				B2B628D89424D556828BAD29 /* PatinaWidget */,
 				26C54B5540028E457738D2DD /* PatinaWidgetShared */,
+				B2B628D89424D556828BAD29 /* PatinaWidget */,
 			);
 			name = PatinaWidget;
 			packageProductDependencies = (
@@ -278,8 +272,8 @@
 				CBB2D0252F1D20F8007686CD /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				CBB2D0262F1D20F8007686CD /* PatinaTests */,
 				26C54B5540028E457738D2DD /* PatinaWidgetShared */,
+				CBB2D0262F1D20F8007686CD /* PatinaTests */,
 			);
 			name = PatinaTests;
 			packageProductDependencies = (
@@ -346,7 +340,7 @@
 			mainGroup = CBB2D00D2F1D20F7007686CD;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "PatinaDesignKit" */,
+				DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "../PatinaDesignKit" */,
 				CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				CBA446952F6C5997005441C3 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 				CBC32DEA2F8687DE006575E7 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
@@ -893,7 +887,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "PatinaDesignKit" */ = {
+		DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "../PatinaDesignKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../PatinaDesignKit;
 		};
