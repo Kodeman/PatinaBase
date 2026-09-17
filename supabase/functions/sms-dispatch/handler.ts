@@ -35,6 +35,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
 import {
+  isUniqueViolation,
   type SendPartySmsResult,
   sendPartySms as realSendPartySms,
   smsConversationNumber,
@@ -211,80 +212,106 @@ async function ensureOptinCode(
     return { error: "prompt_code_unavailable" };
   }
 
-  const { data: open, error: openError } = await supabase
-    .from("sms_prompts")
-    .select("short_code, recipient_phone")
-    .eq("party_id", job.partyId!)
-    .eq("project_id", projectId)
-    .eq("kind", "optin")
-    .is("answered_at", null)
-    .gt("expires_at", now.toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (openError) {
-    console.error("ensureOptinCode: the open-prompt read failed", openError);
-    return { error: "prompt_code_unavailable" };
-  }
-  const existing = open as
-    | { short_code?: string; recipient_phone?: string | null }
-    | null;
-  if (
-    existing?.short_code &&
-    lastTen(existing.recipient_phone) === lastTen(recipient)
-  ) {
-    return { code: String(existing.short_code) };
+  // READ, THEN ALLOCATE — AND READ AGAIN IF SOMEONE ELSE GOT THERE FIRST
+  // (SQ-43 R6). The read and the allocation are two round trips, so two
+  // re-invites for one party (the 00284 trigger and the cron behind it) can
+  // both see no open prompt, both compute the same next generation, and race
+  // into sms_prompts_open_optin_uniq. The loser's 23505 is not a failure: it
+  // means the prompt it wanted now EXISTS, written by the winner a moment ago.
+  // Re-reading finds it and the second invite carries the same code — which is
+  // the whole point of reuse, since the recipient must be asked one question
+  // with one answer. Bounded at two retries; past that something other than a
+  // race is wrong and 503 is the honest answer.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data: open, error: openError } = await supabase
+      .from("sms_prompts")
+      .select("short_code, recipient_phone")
+      .eq("party_id", job.partyId!)
+      .eq("project_id", projectId)
+      .eq("kind", "optin")
+      .is("answered_at", null)
+      .gt("expires_at", now.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (openError) {
+      console.error("ensureOptinCode: the open-prompt read failed", openError);
+      return { error: "prompt_code_unavailable" };
+    }
+    const existing = open as
+      | { short_code?: string; recipient_phone?: string | null }
+      | null;
+    if (
+      existing?.short_code &&
+      lastTen(existing.recipient_phone) === lastTen(recipient)
+    ) {
+      return { code: String(existing.short_code) };
+    }
+
+    // THE NEXT VERSION, NOT VERSION 1 (SQ-37 R6). sms_prompts_open_optin_uniq
+    // is UNIQUE (party_id, version) WHERE kind = 'optin' AND answered_at IS
+    // NULL and expiry is NOT in that predicate, so an UNANSWERED challenge that
+    // has simply run out still occupies version 1 forever. The query above
+    // deliberately ignores expired prompts — that is what makes a day-eight
+    // re-invite a new ask — and allocating version 1 for it then died on 23505,
+    // which is the one outcome where the recipient never hears from us again.
+    // The generation is read across the party's optin prompts in every state,
+    // exactly the scope the index keys on.
+    const { data: latest, error: versionError } = await supabase
+      .from("sms_prompts")
+      .select("version")
+      .eq("party_id", job.partyId!)
+      .eq("kind", "optin")
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (versionError) {
+      console.error(
+        "ensureOptinCode: the prompt generation read failed",
+        versionError,
+      );
+      return { error: "prompt_code_unavailable" };
+    }
+    const priorVersion = Number(
+      (latest as { version?: unknown } | null)?.version ?? 0,
+    );
+    const nextVersion = (Number.isFinite(priorVersion) ? priorVersion : 0) + 1;
+
+    const { data, error } = await supabase.rpc("sms_create_prompt", {
+      p_party_id: job.partyId,
+      p_project_id: projectId,
+      p_kind: "optin",
+      p_subject_id: job.partyId,
+      p_version: nextVersion,
+      p_expires_at: new Date(now.getTime() + PROMPT_TTL_MS).toISOString(),
+      p_sender_number: sender,
+      p_recipient_phone: recipient,
+    });
+    if (error) {
+      if (isUniqueViolation(error)) {
+        // Another issuer holds this generation. Go round: the open-prompt read
+        // at the top of the loop is what picks up the code they allocated.
+        continue;
+      }
+      console.error("ensureOptinCode: sms_create_prompt failed", error);
+      return { error: "prompt_code_unavailable" };
+    }
+    // RETURNS TABLE → an array of { id, short_code }.
+    const code = Array.isArray(data)
+      ? (data[0] as { short_code?: string } | undefined)?.short_code
+      : (data as { short_code?: string } | null)?.short_code;
+    if (!code) {
+      console.error("ensureOptinCode: sms_create_prompt returned no code");
+      return { error: "prompt_code_unavailable" };
+    }
+    return { code: String(code) };
   }
 
-  // THE NEXT VERSION, NOT VERSION 1 (SQ-37 R6). sms_prompts_open_optin_uniq is
-  // UNIQUE (party_id, version) WHERE kind = 'optin' AND answered_at IS NULL and
-  // expiry is NOT in that predicate, so an UNANSWERED challenge that has simply
-  // run out still occupies version 1 forever. The query above deliberately
-  // ignores expired prompts — that is what makes a day-eight re-invite a new
-  // ask — and allocating version 1 for it then died on 23505, which is the one
-  // outcome where the recipient never hears from us again. The generation is
-  // read across the party's optin prompts in every state, exactly the scope the
-  // index keys on.
-  const { data: latest, error: versionError } = await supabase
-    .from("sms_prompts")
-    .select("version")
-    .eq("party_id", job.partyId!)
-    .eq("kind", "optin")
-    .order("version", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (versionError) {
-    console.error("ensureOptinCode: the prompt generation read failed", versionError);
-    return { error: "prompt_code_unavailable" };
-  }
-  const priorVersion = Number(
-    (latest as { version?: unknown } | null)?.version ?? 0,
+  console.error(
+    "ensureOptinCode: the prompt allocation lost its race three times over",
+    { partyId: job.partyId, projectId },
   );
-  const nextVersion = (Number.isFinite(priorVersion) ? priorVersion : 0) + 1;
-
-  const { data, error } = await supabase.rpc("sms_create_prompt", {
-    p_party_id: job.partyId,
-    p_project_id: projectId,
-    p_kind: "optin",
-    p_subject_id: job.partyId,
-    p_version: nextVersion,
-    p_expires_at: new Date(now.getTime() + PROMPT_TTL_MS).toISOString(),
-    p_sender_number: sender,
-    p_recipient_phone: recipient,
-  });
-  if (error) {
-    console.error("ensureOptinCode: sms_create_prompt failed", error);
-    return { error: "prompt_code_unavailable" };
-  }
-  // RETURNS TABLE → an array of { id, short_code }.
-  const code = Array.isArray(data)
-    ? (data[0] as { short_code?: string } | undefined)?.short_code
-    : (data as { short_code?: string } | null)?.short_code;
-  if (!code) {
-    console.error("ensureOptinCode: sms_create_prompt returned no code");
-    return { error: "prompt_code_unavailable" };
-  }
-  return { code: String(code) };
+  return { error: "prompt_code_unavailable" };
 }
 
 export async function handleSmsDispatch(

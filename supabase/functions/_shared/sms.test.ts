@@ -2563,3 +2563,188 @@ Deno.test("R5: a deferred row that did not write is not reported as deferred", a
     "and there is no row for a flush to find",
   );
 });
+
+// ── SQ-43 R1: a claim nobody comes back for ─────────────────────────────────
+/** A flush's deps with a recording wire. */
+function wireDeps(wires: string[], now: Date) {
+  return {
+    getEnv: envOf(LIVE_TWILIO),
+    fetchImpl: ((_url: string, init: RequestInit) => {
+      wires.push(new URLSearchParams(String(init.body)).get("Body") ?? "");
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ sid: `SM${wires.length}`, status: "queued" }),
+          { status: 201 },
+        ),
+      );
+    }) as unknown as typeof fetch,
+    now,
+  };
+}
+
+Deno.test("R1: a crash before the provider call hands the claim back, and the text still goes — once", async () => {
+  // The claim is taken before anything irreversible, which is right; what was
+  // missing is the other half. A worker that died between taking it and
+  // reaching the provider left the row reading 'claimed' with no provider id,
+  // and the flush's own SELECT — 'deferred' only — never looked at it again.
+  // The text was never sent and nothing in the rail said so.
+  const { fake, mints } = linkWorld();
+  await deferDigest(fake, { dedupeKey: "digest:2026-07-08" });
+
+  const realRpc = fake.rpc.bind(fake);
+  let crash = true;
+  // deno-lint-ignore no-explicit-any
+  (fake as any).rpc = (name: string, args: Record<string, unknown>) => {
+    if (name === "create_field_link" && crash) {
+      crash = false;
+      throw new Error("synthetic pre-wire termination");
+    }
+    return realRpc(name, args);
+  };
+
+  const wires: string[] = [];
+  const first = await flushDeferredMessages(
+    fake as never,
+    wireDeps(wires, OPEN),
+  );
+  assertEquals(wires.length, 0, "nothing reached the provider");
+  assertEquals(first.flushed, 0);
+
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(
+    row.twilio_status,
+    "deferred",
+    "the abandoned claim is handed back, not held for good",
+  );
+  assertEquals(row.claimed_at, null, "and the claim stamp is cleared with it");
+  assert(
+    String(row.error_message).startsWith("claim_released:"),
+    `the row says why it was released: ${row.error_message}`,
+  );
+
+  const second = await flushDeferredMessages(
+    fake as never,
+    wireDeps(wires, new Date(OPEN.getTime() + 16 * 60 * 1000)),
+  );
+  assertEquals(second.flushed, 1, "the next flush sends what was never sent");
+  assertEquals(wires.length, 1, "exactly one provider call, in total");
+  assertEquals(mints.length, 1, "and exactly one link minted for it");
+  assertEquals((fake._data.sms_messages ?? []).length, 1);
+  assertEquals(row.twilio_status, "queued");
+});
+
+Deno.test("R1: a claim abandoned with no release at all comes back after the TTL — and a live one is left alone", async () => {
+  // The release above is best effort: a process killed outright writes nothing.
+  // So the flush also takes back a claim that has simply timed out. The line is
+  // the claim TTL, and it matters in both directions — a claim taken a minute
+  // ago belongs to a sender that is still working, and taking it would be the
+  // duplicate text the claim exists to prevent.
+  const { fake } = linkWorld();
+  await deferDigest(fake, { dedupeKey: "digest:2026-07-08" });
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+
+  row.twilio_status = "claimed";
+  row.claimed_at = new Date(OPEN.getTime() - 5 * 60 * 1000).toISOString();
+  const wires: string[] = [];
+  const fresh = await flushDeferredMessages(
+    fake as never,
+    wireDeps(wires, OPEN),
+  );
+  assertEquals(fresh.flushed, 0);
+  assertEquals(wires.length, 0, "a five-minute-old claim is somebody's send");
+  assertEquals(row.twilio_status, "claimed");
+
+  row.claimed_at = new Date(OPEN.getTime() - 20 * 60 * 1000).toISOString();
+  const stale = await flushDeferredMessages(
+    fake as never,
+    wireDeps(wires, OPEN),
+  );
+  assertEquals(stale.flushed, 1, "a twenty-minute-old claim is abandoned");
+  assertEquals(wires.length, 1);
+  assertEquals(row.twilio_status, "queued");
+});
+
+Deno.test("R1: two flushes racing over one abandoned claim still make ONE wire call", async () => {
+  // Re-claiming is the same conditional update the first claim is, filtered on
+  // the stale stamp that was read: of two flushes that both see one timed-out
+  // claim, exactly one takes it.
+  const { fake, mints } = linkWorld();
+  await deferDigest(fake, { dedupeKey: "digest:2026-07-08" });
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  row.twilio_status = "claimed";
+  row.claimed_at = new Date(OPEN.getTime() - 20 * 60 * 1000).toISOString();
+
+  const wires: string[] = [];
+  const deps = wireDeps(wires, OPEN);
+  const [a, b] = await Promise.all([
+    flushDeferredMessages(fake as never, deps),
+    flushDeferredMessages(fake as never, deps),
+  ]);
+  assertEquals(wires.length, 1, "one abandoned row, one provider attempt");
+  assertEquals(a.flushed + b.flushed, 1, "exactly one flush owns the resume");
+  assertEquals(mints.length, 1);
+});
+
+Deno.test("R1: an abandoned claim with nothing to render from is never re-sent from its stored words", async () => {
+  // A row with no recipe can only be re-sent verbatim, and a stored body is
+  // trustworthy AS a body only where the defer path vetted it as one. A claim
+  // sendPartySms took stores the caller's AUDIT copy — the redacted preview
+  // that must never reach a recipient (contract S6, evidence case 12). Those
+  // are left for the sweep to fail honestly, not guessed at here.
+  const { fake } = linkWorld();
+  const sentWires: string[] = [];
+  await sendPartySms(
+    fake as never,
+    {
+      partyId: "p1",
+      body: "Open the private link we sent you.",
+      auditBody: "Patina Site Request private link [redacted]",
+    },
+    wireDeps(sentWires, OPEN),
+  );
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(row.recipe, null, "a literal body stores no recipe");
+  assertEquals(row.body, "Patina Site Request private link [redacted]");
+  // …and now that send is the one that died: its claim stands, unreported.
+  row.twilio_status = "claimed";
+  row.twilio_sid = null;
+  row.claimed_at = new Date(OPEN.getTime() - 20 * 60 * 1000).toISOString();
+
+  const wires: string[] = [];
+  const res = await flushDeferredMessages(fake as never, wireDeps(wires, OPEN));
+  assertEquals(wires.length, 0, "the audit copy never reaches the wire");
+  assertEquals(res.flushed, 0);
+  assertEquals(row.twilio_status, "claimed");
+});
+
+// ── SQ-43 R2: the credential with no URL around it ──────────────────────────
+Deno.test("R2: a caller's audit copy never persists a bare bearer token", async () => {
+  // The redaction watched one door — `/field/<token>` — and the token walks
+  // through the other one on its own. A caller that names it ("Token: <hex>")
+  // wrote a live bearer credential into sms_messages.body, the table 00283
+  // exists to keep tokens out of.
+  const { fake } = linkWorld();
+  const row = await deferDigest(fake, {
+    auditBody: `Token: ${RAW_BEARER}`,
+    vars: { link: `https://client.patina.cloud/field/${RAW_BEARER}` },
+  });
+  assertEquals(row.body, "Token: [redacted]");
+  const stored = JSON.stringify(fake._data.sms_messages ?? []);
+  assert(
+    !/[0-9a-f]{64}/i.test(stored),
+    `no 64-hex run survives anywhere on the row: ${stored}`,
+  );
+  assert(!stored.includes("/field/"), `and no field URL either: ${stored}`);
+});
+
+Deno.test("R2: an audit copy naming the field URL is still redacted", async () => {
+  const { fake } = linkWorld();
+  const row = await deferDigest(fake, {
+    auditBody: `Open https://client.patina.cloud/field/${RAW_BEARER}`,
+  });
+  assertEquals(row.body, "Open https://client.patina.cloud/field/[redacted]");
+  assert(
+    !JSON.stringify(fake._data.sms_messages ?? []).includes(RAW_BEARER),
+    "the token is gone from the row",
+  );
+});

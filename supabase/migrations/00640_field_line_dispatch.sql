@@ -412,26 +412,62 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_n INTEGER;
+  v_requeued INTEGER;
+  v_failed   INTEGER;
 BEGIN
+  -- REQUEUED, NOT FAILED (SQ-43 R1). A claim nobody came back for is a text
+  -- that was never sent — not a text that failed. Marking it 'failed' recorded
+  -- the wrong fact and, worse, ended the send: the trade was simply never
+  -- contacted and the row said the rail had tried. Handing it back to
+  -- 'deferred' with the claim stamp cleared puts it where flushDeferredMessages
+  -- looks, so the next flush re-checks every gate, mints a fresh link and sends
+  -- it. The row KEEPS its logical claim (sms_messages_send_claim_uniq counts
+  -- 'deferred' as live), so this is the same send resuming, never a second one.
+  UPDATE public.sms_messages m
+     SET twilio_status = 'deferred',
+         claimed_at    = NULL,
+         error_message = 'A sender took this claim and never reported an '
+                         'outcome; the send was queued again.'
+   WHERE m.twilio_status = 'claimed'
+     AND m.twilio_sid IS NULL
+     AND m.claimed_at IS NOT NULL
+     AND m.claimed_at < now() - p_older_than
+     AND m.recipe ->> 'template_key' IS NOT NULL;
+  GET DIAGNOSTICS v_requeued = ROW_COUNT;
+
+  -- And what CANNOT be rendered again is still failed, honestly. A row with no
+  -- recipe can only be re-sent verbatim, and its stored body is the caller's
+  -- audit copy — the redacted preview contract S6 forbids putting on the wire.
+  -- Failing it releases the logical claim, so the caller may compose the send
+  -- again with the words it actually meant; it does not guess at them here.
   UPDATE public.sms_messages m
      SET twilio_status = 'failed',
          error_code    = COALESCE(m.error_code, 'claim_abandoned'),
          error_message = COALESCE(m.error_message,
-                                  'The sender took this claim and never reported an outcome.')
+                                  'The sender took this claim and never reported an outcome, '
+                                  'and the row carries no recipe to render a fresh send from.')
    WHERE m.twilio_status = 'claimed'
      AND m.twilio_sid IS NULL
      AND m.claimed_at IS NOT NULL
-     AND m.claimed_at < now() - p_older_than;
-  GET DIAGNOSTICS v_n = ROW_COUNT;
-  RETURN v_n;
+     AND m.claimed_at < now() - p_older_than
+     AND m.recipe ->> 'template_key' IS NULL;
+  GET DIAGNOSTICS v_failed = ROW_COUNT;
+
+  RETURN v_requeued + v_failed;
 END;
 $$;
 
 COMMENT ON FUNCTION public.sms_release_stale_send_claims(INTERVAL) IS
   'The Field Line (00640), contract S5: release send claims that never reported '
   'an outcome — rows still at ''claimed'' with NO provider id after p_older_than '
-  '— so the logical send can be attempted again. It only touches rows with no '
+  '— so the logical send can be attempted again. A row that can be RENDERED '
+  'again (it carries a recipe) goes back to ''deferred'' with its claim stamp '
+  'cleared, which is where flushDeferredMessages looks: the same send resumes, '
+  'gates re-checked and link minted fresh, and it keeps its logical claim so a '
+  'resume is never a second text. A row with no recipe could only be re-sent '
+  'verbatim from a stored body that is an audit preview, so it is failed '
+  'honestly instead, releasing the claim for a caller to compose again. Returns '
+  'how many claims were released, either way. It only touches rows with no '
   'twilio_sid, because a row that has one was accepted by the provider and '
   'belongs to sms_reconcile_accepted_send(). THE RESIDUAL WINDOW IS REAL AND IS '
   'NOT CLOSED HERE: a sender that crashed after Twilio accepted a message but '

@@ -191,6 +191,14 @@ export function fieldLinePhase(deps: SmsDeps): number {
 // same shape with its own token. Either way the path segment IS the credential.
 const FIELD_LINK_TOKEN_RE = /(\/field\/)[A-Za-z0-9._~-]{8,}/g;
 
+// THE SAME CREDENTIAL WITH NO URL AROUND IT (SQ-43 R2). create_field_link hands
+// back a bare 64-hex token, and a caller's own audit copy names it that way
+// ("Token: <hex>"); the URL rule above cannot see it, so the bearer token went
+// into sms_messages.body verbatim — the exact thing the redaction exists to
+// stop, arriving by the one door it did not watch. Nothing a trade is told is
+// 64 hex characters long: a run that shape is a credential, not copy.
+const BARE_CREDENTIAL_RE = /\b[0-9a-fA-F]{64,}\b/g;
+
 /**
  * Strip the credential out of anything that is about to be STORED or LOGGED
  * (contract S6: no raw token in any durable log or view). Until this, a
@@ -199,7 +207,9 @@ const FIELD_LINK_TOKEN_RE = /(\/field\/)[A-Za-z0-9._~-]{8,}/g;
  * that hours-old URL. The link still goes out; it just stops being at rest.
  */
 export function redactFieldLinkTokens(text: string): string {
-  return text.replace(FIELD_LINK_TOKEN_RE, "$1[redacted]");
+  return text
+    .replace(FIELD_LINK_TOKEN_RE, "$1[redacted]")
+    .replace(BARE_CREDENTIAL_RE, "[redacted]");
 }
 
 /**
@@ -1080,7 +1090,7 @@ interface OutboundRow {
 }
 
 /** Postgres unique_violation — the other writer already holds this send. */
-function isUniqueViolation(error: unknown): boolean {
+export function isUniqueViolation(error: unknown): boolean {
   const e = error as { code?: unknown; message?: unknown } | null;
   return String(e?.code ?? "") === "23505" ||
     /duplicate key value/i.test(String(e?.message ?? ""));
@@ -1182,6 +1192,57 @@ async function persistProviderSid(
     console.error("persistProviderSid: the review flag failed too", err);
   }
   return false;
+}
+
+/**
+ * Hand a send claim BACK (contract S5; SQ-43 R1).
+ *
+ * Taking the claim is the moment a row stops being anybody else's: it reads
+ * 'claimed', and no later flush selects it. That is exactly right while this
+ * process is still working on it, and exactly wrong the moment this process
+ * stops — a mint RPC that dies mid-flight, a template read that throws — because
+ * the row then names a text that will never be sent and nothing in the rail
+ * says so. The release is conditional on the row still being ours and still
+ * carrying no provider id, so it can never step on a send that got further than
+ * the throw did. The reason is recorded on the row and in the log, redacted:
+ * whatever threw may have been holding a credential.
+ */
+async function releaseSendClaim(
+  supabase: SupabaseClient,
+  messageId: string,
+  err: unknown,
+): Promise<void> {
+  const reason = redactFieldLinkTokens(
+    err instanceof Error ? err.message : String(err),
+  ).slice(0, 300);
+  console.error(
+    `flushDeferredMessages: sms_messages ${messageId} threw before the ` +
+      `provider was called; releasing the claim — ${reason}`,
+  );
+  try {
+    const { error } = await supabase
+      .from("sms_messages")
+      .update({
+        twilio_status: "deferred",
+        claimed_at: null,
+        error_message: `claim_released: ${reason}`,
+      })
+      .eq("id", messageId)
+      .eq("twilio_status", "claimed")
+      .is("twilio_sid", null);
+    if (error) {
+      console.error(
+        `releaseSendClaim: sms_messages ${messageId} still holds an abandoned ` +
+          "claim; sms_release_stale_send_claims() is the backstop",
+        (error as { message?: string }).message ?? error,
+      );
+    }
+  } catch (releaseErr) {
+    console.error(
+      `releaseSendClaim: the release write for sms_messages ${messageId} threw`,
+      releaseErr,
+    );
+  }
 }
 
 // ── The send path ───────────────────────────────────────────────────────────
@@ -1624,6 +1685,30 @@ function sendStatusFor(sent: boolean, twilioStatus: string): SendStatus {
 const DEFERRED_TTL_MS = 24 * 3600 * 1000;
 
 /**
+ * How long a send claim may be held before a flush treats it as ABANDONED and
+ * takes it back (SQ-43 R1). The same 15 minutes 00640's
+ * sms_release_stale_send_claims() defaults to, because they answer one
+ * question from two directions — the cron's sweep and the flush's own next tick
+ * — and two different answers to "is this claim still alive?" would race.
+ */
+const SMS_CLAIM_TTL_MS = 15 * 60 * 1000;
+
+/** A row the flush may send: a deferred one, or a claim abandoned mid-send. */
+interface FlushRow {
+  id: string;
+  body: string;
+  conversation_id: string;
+  party_id: string | null;
+  project_id: string | null;
+  template_key: string | null;
+  recipe: SendRecipe | null;
+  dedupe_key: string | null;
+  created_at: string;
+  twilio_status: string;
+  claimed_at: string | null;
+}
+
+/**
  * Flush stored 'deferred' outbound rows by sending them now (field-daily). Rows
  * whose phone is still inside quiet hours are left for the next run. Reuses the
  * Twilio primitive and updates the existing row in place (no new insert).
@@ -1666,32 +1751,51 @@ export async function flushDeferredMessages(
   const clientPortalUrl = env(deps, "CLIENT_PORTAL_URL") ??
     "https://client.patina.cloud";
 
-  const { data: rows } = await supabase
+  const FLUSH_COLUMNS = "id, body, conversation_id, party_id, project_id, " +
+    "template_key, recipe, dedupe_key, created_at, twilio_status, claimed_at";
+  const { data: deferredRows } = await supabase
     .from("sms_messages")
-    .select(
-      "id, body, conversation_id, party_id, project_id, template_key, recipe, dedupe_key, created_at",
-    )
+    .select(FLUSH_COLUMNS)
     .eq("direction", "outbound")
     .eq("twilio_status", "deferred");
-  if (!rows || rows.length === 0) return { flushed: 0, skipped: 0 };
+
+  // ── AND THE CLAIMS NOBODY CAME BACK FOR (SQ-43 R1) ──────────────────────
+  // A flush that died between taking the claim and calling the provider left a
+  // row reading 'claimed' with no provider id. The select above only ever asked
+  // for 'deferred', so that row was never looked at again: the text was not
+  // sent, and nothing anywhere said so. It comes back here once the claim TTL
+  // has passed — the flush's own recovery, on its own next tick, rather than a
+  // wait for the cron sweep that is 00640's backstop for the same fact.
+  //
+  // Only a row with a RENDERABLE recipe is taken back. Anything else can be
+  // re-sent only verbatim, and a stored body is trustworthy AS a body only when
+  // the defer path vetted it as one; a row claimed by sendPartySms stores the
+  // caller's AUDIT copy, and putting that on the wire is precisely the
+  // deferred-redaction hazard contract S6 exists to stop. Those are left to
+  // sms_release_stale_send_claims(), which fails them honestly rather than
+  // guessing at what they meant to say.
+  const claimCutoff = new Date(now.getTime() - SMS_CLAIM_TTL_MS).toISOString();
+  const { data: staleRows } = await supabase
+    .from("sms_messages")
+    .select(FLUSH_COLUMNS)
+    .eq("direction", "outbound")
+    .eq("twilio_status", "claimed")
+    .is("twilio_sid", null)
+    .lt("claimed_at", claimCutoff);
+
+  const rows: FlushRow[] = [
+    ...((deferredRows ?? []) as unknown as FlushRow[]),
+    ...((staleRows ?? []) as unknown as FlushRow[]).filter((r) =>
+      !!r.claimed_at && !!r.recipe?.template_key
+    ),
+  ];
+  if (rows.length === 0) return { flushed: 0, skipped: 0 };
 
   let flushed = 0;
   let skipped = 0;
   let suppressed = 0;
   let expired = 0;
-  for (
-    const row of rows as {
-      id: string;
-      body: string;
-      conversation_id: string;
-      party_id: string | null;
-      project_id: string | null;
-      template_key: string | null;
-      recipe: SendRecipe | null;
-      dedupe_key: string | null;
-      created_at: string;
-    }[]
-  ) {
+  for (const row of rows) {
     // Stale beyond 24h — never send; the digest/menu it referenced is dead.
     if (now.getTime() - new Date(row.created_at).getTime() > DEFERRED_TTL_MS) {
       await supabase
@@ -1840,12 +1944,20 @@ export async function flushDeferredMessages(
     // claim stamp, so exactly one writer sees a row come back. Postgres
     // re-evaluates the predicate after taking the row lock, so the loser
     // matches nothing and leaves without touching the provider.
-    const { data: claimed, error: claimError } = await supabase
+    //
+    // A row taken back from an ABANDONED claim is re-claimed the same way, on
+    // the stale stamp it was read with: 'claimed' → 'claimed' with a fresh
+    // claimed_at, filtered on the old one, so of two flushes that both saw the
+    // same timed-out claim exactly one takes it.
+    const reclaiming = row.twilio_status === "claimed";
+    const takeClaim = supabase
       .from("sms_messages")
       .update({ twilio_status: "claimed", claimed_at: now.toISOString() })
       .eq("id", row.id)
-      .eq("twilio_status", "deferred")
-      .is("claimed_at", null)
+      .eq("twilio_status", reclaiming ? "claimed" : "deferred");
+    const { data: claimed, error: claimError } = await (reclaiming
+      ? takeClaim.is("twilio_sid", null).eq("claimed_at", row.claimed_at)
+      : takeClaim.is("claimed_at", null))
       .select("id");
     if (claimError) {
       console.error(
@@ -1866,46 +1978,60 @@ export async function flushDeferredMessages(
     // with the token taken out of it. Sending it would put "[link at send]" in
     // front of a trade on a job site. The recipe is what the row is flushed
     // from, and the link is minted at this moment and no earlier.
+    //
+    // AND FROM HERE TO THE PROVIDER CALL, A THROW MUST NOT KEEP THE CLAIM
+    // (SQ-43 R1). Minting is an RPC and rendering reads a template: either can
+    // die mid-flight, and the claim taken above then held a row no later flush
+    // would ever select again. Anything thrown in this section hands the row
+    // back to 'deferred' and records why. The catch stops BEFORE the provider
+    // call on purpose — a throw after that may be a text already on the wire,
+    // which is sms_reconcile_accepted_send()'s question, not this one's.
     let sendBody = row.body;
-    if (recipe && recipe.template_key) {
-      const rendered = await resolveBody(
-        supabase,
-        {
-          partyId: recipe.party_id ?? row.party_id ?? undefined,
-          projectId: recipe.project_id ?? deferredProjectId ?? undefined,
-          templateKey: recipe.template_key,
-          vars: (recipe.params ?? {}) as Record<string, unknown>,
-        },
-        {
-          phone,
-          projectId: recipe.project_id ?? deferredProjectId,
-          partyId: recipe.party_id ?? row.party_id,
-          displayName: deferredDisplayName,
-        },
-        clientPortalUrl,
-        { mintLink: true },
-      );
-      if (!rendered.body || !rendered.body.trim()) {
+    try {
+      if (recipe && recipe.template_key) {
+        const rendered = await resolveBody(
+          supabase,
+          {
+            partyId: recipe.party_id ?? row.party_id ?? undefined,
+            projectId: recipe.project_id ?? deferredProjectId ?? undefined,
+            templateKey: recipe.template_key,
+            vars: (recipe.params ?? {}) as Record<string, unknown>,
+          },
+          {
+            phone,
+            projectId: recipe.project_id ?? deferredProjectId,
+            partyId: recipe.party_id ?? row.party_id,
+            displayName: deferredDisplayName,
+          },
+          clientPortalUrl,
+          { mintLink: true },
+        );
+        if (!rendered.body || !rendered.body.trim()) {
+          await supabase
+            .from("sms_messages")
+            .update({
+              twilio_status: "failed",
+              error_message: "recipe_render_failed",
+            })
+            .eq("id", row.id);
+          skipped++;
+          continue;
+        }
+        sendBody = rendered.body;
+      } else if (row.body.includes(LINK_PLACEHOLDER)) {
+        // A preview with nothing to render from. Never send the placeholder.
         await supabase
           .from("sms_messages")
           .update({
             twilio_status: "failed",
-            error_message: "recipe_render_failed",
+            error_message: "defer_requires_recipe",
           })
           .eq("id", row.id);
         skipped++;
         continue;
       }
-      sendBody = rendered.body;
-    } else if (row.body.includes(LINK_PLACEHOLDER)) {
-      // A preview with nothing to render from. Never send the placeholder.
-      await supabase
-        .from("sms_messages")
-        .update({
-          twilio_status: "failed",
-          error_message: "defer_requires_recipe",
-        })
-        .eq("id", row.id);
+    } catch (err) {
+      await releaseSendClaim(supabase, row.id, err);
       skipped++;
       continue;
     }

@@ -31,6 +31,11 @@
 --      EXPIRY IS NOT IN THAT PREDICATE: a challenge that simply ran out still
 --      holds its generation, so sms-dispatch must allocate the NEXT version
 --      rather than version 1 again (SQ-37 R6).
+--  11. A CLAIM NOBODY CAME BACK FOR IS A TEXT THAT WAS NEVER SENT (SQ-43 R1).
+--      The sweep REQUEUES what can be rendered again — back to 'deferred',
+--      where flushDeferredMessages looks, keeping its logical claim because it
+--      is the same send resuming — and fails only what cannot, whose stored
+--      body is an audit preview that must never reach a recipient.
 --
 -- How to run (from supabase/, so the \ir below resolves):
 --   psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 \
@@ -65,7 +70,8 @@ VALUES ('d0000000-0000-4000-8000-0000000000a1', 'D0 Project', 'd0000000-0000-400
 INSERT INTO project_parties (id, project_id, party_kind, display_name, phone)
 VALUES
   ('d0000000-0000-4000-8000-0000000000b1', 'd0000000-0000-4000-8000-0000000000a1', 'sub', 'Sal Sub', '5559990001'),
-  ('d0000000-0000-4000-8000-0000000000b2', 'd0000000-0000-4000-8000-0000000000a1', 'gc',  'Gil GC',  '5559990002');
+  ('d0000000-0000-4000-8000-0000000000b2', 'd0000000-0000-4000-8000-0000000000a1', 'gc',  'Gil GC',  '5559990002'),
+  ('d0000000-0000-4000-8000-0000000000b3', 'd0000000-0000-4000-8000-0000000000a1', 'sub', 'Ada Abandoned', '5559990003');
 
 INSERT INTO sms_conversations (id, twilio_number, phone_e164, party_id, active_project_id)
 VALUES ('d0000000-0000-4000-8000-0000000000c1', '+15550000000', '+15559990001',
@@ -111,6 +117,7 @@ DECLARE
   v_state   TEXT;
   v_code    TEXT;
   v_recipe  JSONB;
+  v_flag    BOOLEAN;
   v_n       INTEGER;
   v_sqlstate TEXT;
 BEGIN
@@ -222,19 +229,94 @@ BEGIN
 
   SELECT public.sms_release_stale_send_claims(interval '15 minutes') INTO v_n;
   ASSERT v_n = 1, 'FAIL 8a: exactly the abandoned claim should be released, got ' || v_n;
-  SELECT twilio_status, error_code INTO v_state, v_code
+  SELECT twilio_status, claimed_at IS NULL INTO v_state, v_flag
     FROM public.sms_messages WHERE id = v_id;
-  ASSERT v_state = 'failed' AND v_code = 'claim_abandoned',
-    'FAIL 8b: a released claim reads failed/claim_abandoned, got ' || v_state || '/' || COALESCE(v_code, 'NULL');
+  ASSERT v_state = 'deferred' AND v_flag,
+    'FAIL 8b: a renderable abandoned claim is QUEUED AGAIN, not failed — got ' ||
+    v_state || ', claim stamp cleared = ' || v_flag;
   SELECT twilio_status INTO v_state FROM public.sms_messages WHERE twilio_sid = 'SM_ACCEPTED_2';
   ASSERT v_state = 'claimed',
     'FAIL 8c: a claim the provider ACCEPTED belongs to sms_reconcile_accepted_send, not the sweep';
 
-  -- The released claim is free again — that is the point of releasing it.
-  v_second := pg_temp.claim('d0000000-0000-4000-8000-0000000000b2', 'sms_court_assignment', 'stale:1');
-  ASSERT v_second IS NOT NULL, 'FAIL 8d: a released claim must be retakeable';
+  -- And it is the SAME send resuming, so it keeps the logical claim: a second
+  -- writer on that key still loses. Requeued is not released.
+  v_sqlstate := NULL;
+  BEGIN
+    PERFORM pg_temp.claim('d0000000-0000-4000-8000-0000000000b2', 'sms_court_assignment', 'stale:1');
+  EXCEPTION WHEN unique_violation THEN v_sqlstate := SQLSTATE;
+  END;
+  ASSERT v_sqlstate = '23505',
+    'FAIL 8d: a requeued send still holds its logical claim, got ' ||
+    COALESCE(v_sqlstate, 'no error');
 
   RAISE NOTICE 'sms_dispatch_claim: cases 1–8 passed.';
+END
+$$;
+
+-- ── Case 11: a claim nobody came back for is a text that was never SENT ────
+-- (SQ-43 R1.) A sender that died between taking the claim and reaching the
+-- provider left the row at 'claimed' with no provider id. Marking that 'failed'
+-- recorded the wrong fact and ended the send: the trade was simply never
+-- contacted, and the rail said it had tried. A row the flush can RENDER again
+-- goes back to 'deferred' — where flushDeferredMessages looks — and a row it
+-- cannot is still failed honestly, because its stored body is an audit preview
+-- and putting that on the wire is the hazard contract S6 exists to stop.
+DO $$
+DECLARE
+  v_id      UUID;
+  v_state   TEXT;
+  v_code    TEXT;
+  v_flag    BOOLEAN;
+  v_n       INTEGER;
+  v_second  UUID;
+BEGIN
+  -- Renderable: a recipe with a template to render from.
+  v_id := pg_temp.claim('d0000000-0000-4000-8000-0000000000b3', 'sms_daily_digest',
+                        'abandoned:renderable', 'claimed', NULL, now() - interval '1 hour');
+
+  -- Not renderable: no recipe at all, and a stored body that is the caller's
+  -- AUDIT copy — the redacted preview, not the words that were meant to go out.
+  INSERT INTO public.sms_messages
+    (conversation_id, direction, body, twilio_status, twilio_sid,
+     party_id, project_id, template_key, dedupe_key, claimed_at, recipe)
+  VALUES
+    ('d0000000-0000-4000-8000-0000000000c1', 'outbound',
+     'Patina Site Request private link [redacted]', 'claimed', NULL,
+     'd0000000-0000-4000-8000-0000000000b3', 'd0000000-0000-4000-8000-0000000000a1',
+     NULL, 'abandoned:literal', now() - interval '1 hour', NULL)
+  RETURNING id INTO v_second;
+
+  SELECT public.sms_release_stale_send_claims(interval '15 minutes') INTO v_n;
+  ASSERT v_n = 2, 'FAIL 11a: both abandoned claims should be released, got ' || v_n;
+
+  SELECT twilio_status, claimed_at IS NULL, error_message INTO v_state, v_flag, v_code
+    FROM public.sms_messages WHERE id = v_id;
+  ASSERT v_state = 'deferred' AND v_flag,
+    'FAIL 11b: a renderable abandoned claim is requeued for the flush, got ' ||
+    v_state || ', claim stamp cleared = ' || v_flag;
+  ASSERT v_code LIKE '%queued again%',
+    'FAIL 11c: the row says what happened to it, got ' || COALESCE(v_code, 'NULL');
+
+  SELECT twilio_status, error_code INTO v_state, v_code
+    FROM public.sms_messages WHERE id = v_second;
+  ASSERT v_state = 'failed' AND v_code = 'claim_abandoned',
+    'FAIL 11d: a claim with nothing to render from is failed honestly, got ' ||
+    v_state || '/' || COALESCE(v_code, 'NULL');
+
+  -- Failing it RELEASES the logical claim: the caller may compose the send
+  -- again, with the words it actually meant.
+  ASSERT pg_temp.claim('d0000000-0000-4000-8000-0000000000b3', NULL,
+                       'abandoned:literal') IS NOT NULL,
+    'FAIL 11e: a failed claim must be retakeable';
+
+  -- And nothing the sweep did may reach a row that is still somebody's: a
+  -- claim taken a minute ago is a sender that is still working.
+  PERFORM pg_temp.claim('d0000000-0000-4000-8000-0000000000b3', 'sms_court_assignment',
+                        'abandoned:fresh', 'claimed', NULL, now());
+  SELECT public.sms_release_stale_send_claims(interval '15 minutes') INTO v_n;
+  ASSERT v_n = 0, 'FAIL 11f: a live claim is not abandoned, got ' || v_n;
+
+  RAISE NOTICE 'sms_dispatch_claim: case 11 (abandoned claims resume) passed.';
 END
 $$;
 

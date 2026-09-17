@@ -597,6 +597,65 @@ Deno.test("a challenge that expired UNANSWERED earns the next generation, not a 
   assertEquals(String((fake._data.sms_prompts ?? [])[1].short_code), "43");
 });
 
+Deno.test("R6: two re-invites racing over one expired challenge reuse ONE code", async () => {
+  // The read and the allocation are two round trips, so the day-eight re-invite
+  // has a race inside it: the 00284 trigger and the cron behind it both see no
+  // open prompt, both compute generation 2, and one of them meets the unique
+  // index. The loser used to answer 503 prompt_code_unavailable — a refusal
+  // over a prompt that, by then, EXISTED. It re-reads instead: the winner just
+  // wrote the question, and the second invite asks that same question, with the
+  // same code, because the recipient can only answer one of them (SQ-43 R6).
+  const { fake, allocations } = inviteWorld(["42", "43", "44"]);
+  const sent = sender({ sent: true, status: "sent" });
+  const dayOne = {
+    supabase: fake as never,
+    getEnv: envOf(BASE_ENV),
+    now: new Date("2026-07-08T18:00:00Z"),
+    sendPartySms: sent.fn,
+  };
+  await handleSmsDispatch(post(triggerJob()), dayOne);
+  assertEquals(allocations.length, 1, "version 1, on day one");
+
+  // Both allocations are held until both have chosen their generation, which is
+  // what makes this the race rather than two sends in a row.
+  const versions: number[] = [];
+  const realRpc = fake.rpc.bind(fake);
+  let arrived = 0;
+  let release = () => {};
+  const bothArrived = new Promise<void>((r) => (release = r));
+  // deno-lint-ignore no-explicit-any
+  (fake as any).rpc = async (name: string, args: Record<string, unknown>) => {
+    if (name !== "sms_create_prompt") return await realRpc(name, args);
+    versions.push(Number(args.p_version));
+    if (++arrived === 2) release();
+    await bothArrived;
+    return await realRpc(name, args);
+  };
+
+  const dayEight = { ...dayOne, now: new Date("2026-07-16T18:00:00Z") };
+  const [first, second] = await Promise.all([
+    handleSmsDispatch(post(triggerJob()), dayEight),
+    handleSmsDispatch(post(triggerJob()), dayEight),
+  ]);
+  assertEquals(
+    [first.status, second.status],
+    [200, 200],
+    "the loser re-reads the winner's prompt; it does not refuse the re-invite",
+  );
+  assertEquals(versions, [2, 2], "both chose generation 2 — that is the race");
+  assertEquals(allocations.length, 2, "and exactly one of them allocated it");
+  assertEquals((fake._data.sms_prompts ?? []).length, 2);
+
+  const code = String((fake._data.sms_prompts ?? [])[1].short_code);
+  assertEquals(
+    sent.calls.slice(1).map((c) =>
+      String((c.vars as Record<string, unknown>).code)
+    ),
+    [code, code],
+    "one question, one answer: both invites carry the winner's code",
+  );
+});
+
 Deno.test("an invite whose code cannot be allocated REFUSES rather than shipping 'Reply YES  to confirm'", async () => {
   // The copy asks the recipient to answer with a code. An empty one is a
   // question with no way to answer it, so a prompt rail that cannot answer is
