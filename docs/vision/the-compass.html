@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Compass</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --paper:#FAF7F2; --ink:#2C2926; --mocha:#5C4A3C; --oak:#8B7355; --clay:#C4A57B;
+    --sage:#A8B5A0; --terracotta:#D4A090; --blue:#8B9CAD; --gold:#E8C547;
+    --rule:#E3DCD0; --rule-strong:#C9BFB0; --muted:#7A6E62; --wash:#F3EEE5;
+    --stamp-open:#8B9CAD; --stamp-settled:#A8B5A0; --stamp-gated:#D4A090;
+    --serif:"Playfair Display",Georgia,"Times New Roman",serif;
+    --sans:Inter,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+    --mono:"DM Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1F1C1A; --ink:#F1EBE2; --mocha:#D9CDBE; --oak:#C4A57B; --clay:#C4A57B;
+      --rule:#3A3531; --rule-strong:#57504A; --muted:#A79A8C; --wash:#27231F;
+      --stamp-open:#9FB0C1; --stamp-settled:#B4C1AC; --stamp-gated:#DFA997;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1F1C1A; --ink:#F1EBE2; --mocha:#D9CDBE; --oak:#C4A57B; --clay:#C4A57B;
+    --rule:#3A3531; --rule-strong:#57504A; --muted:#A79A8C; --wash:#27231F;
+    --stamp-open:#9FB0C1; --stamp-settled:#B4C1AC; --stamp-gated:#DFA997;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  .page{max-width:1120px;margin:0 auto;padding:40px 28px 96px;display:grid;grid-template-columns:200px minmax(0,1fr);gap:56px}
+  @media (max-width:820px){.page{grid-template-columns:1fr;gap:24px;padding:24px 18px 72px}}
+
+  /* spine */
+  .spine{position:sticky;top:28px;align-self:start;font-size:13px}
+  @media (max-width:820px){.spine{position:static;border-bottom:1px solid var(--rule);padding-bottom:16px}}
+  .mark{display:flex;flex-direction:column;gap:5px;width:36px;margin-bottom:22px}
+  .mark i{display:block;height:2px;background:var(--ink)}
+  .mark i:nth-child(2){width:78%}.mark i:nth-child(3){width:56%}
+  .spine ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .spine a{text-decoration:none;color:var(--muted);display:flex;gap:10px;align-items:baseline;padding:2px 0}
+  .spine a:hover,.spine a:focus-visible{color:var(--ink);outline:none}
+  .spine a.active{color:var(--ink)}
+  .spine .q{font-family:var(--mono);font-size:11px;color:var(--oak);min-width:18px}
+  .spine .dot{width:6px;height:6px;border-radius:50%;background:var(--clay);margin-left:auto;opacity:0}
+  .spine a.active .dot{opacity:1;animation:breath 3s ease-in-out infinite}
+  @keyframes breath{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.35);opacity:1}}
+  @media (prefers-reduced-motion:reduce){.spine a.active .dot{animation:none;opacity:1}}
+  @media (max-width:820px){.spine ol{flex-direction:row;flex-wrap:wrap;gap:6px 16px}.spine .dot{display:none}}
+  .spine .meta{margin-top:26px;padding-top:14px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.7}
+  @media (max-width:820px){.spine .meta{display:none}}
+
+  /* letterhead */
+  .letterhead{border-bottom:2px solid var(--ink);padding-bottom:22px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap}
+  .letterhead h1{font-family:var(--serif);font-weight:500;font-size:clamp(40px,6vw,60px);line-height:1;margin:0;letter-spacing:-.01em;text-wrap:balance}
+  .letterhead .sub{font-family:var(--serif);font-style:italic;font-size:18px;color:var(--mocha);margin-top:10px}
+  .stamp{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:right;line-height:1.9}
+  .stamp b{color:var(--ink);font-weight:500}
+
+  /* sections */
+  section{padding:40px 0 8px}
+  .eyebrow{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
+  .eyebrow .n{font-family:var(--mono);font-size:12px;color:var(--oak);letter-spacing:.06em}
+  .eyebrow .rule{flex:1;height:1px;background:var(--rule-strong);align-self:center}
+  h2{font-family:var(--serif);font-weight:500;font-size:30px;line-height:1.15;margin:0 0 18px;text-wrap:balance}
+  h3{font-family:var(--sans);font-weight:600;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:26px 0 8px}
+  p{max-width:66ch;margin:0 0 14px}
+  .lede{font-family:var(--serif);font-size:22px;line-height:1.4;color:var(--ink);max-width:30em;margin:0 0 18px}
+  .lede em{font-style:italic;color:var(--mocha)}
+  strong{font-weight:600}
+  .quiet{color:var(--muted)}
+  .supersedes{font-size:13.5px;color:var(--muted);border-left:2px solid var(--rule-strong);padding:2px 0 2px 14px;max-width:62ch;margin-top:16px}
+
+  /* ranked ledger */
+  .ledger{list-style:none;margin:0;padding:0;max-width:720px}
+  .ledger li{display:grid;grid-template-columns:44px minmax(0,1fr);gap:0 14px;padding:14px 0;border-top:1px solid var(--rule)}
+  .ledger li:last-child{border-bottom:1px solid var(--rule)}
+  .ledger .rank{font-family:var(--serif);font-size:26px;line-height:1;color:var(--clay);padding-top:2px}
+  .ledger .t{font-family:var(--serif);font-size:19px;line-height:1.25;margin:0 0 4px}
+  .ledger .d{font-size:14.5px;color:var(--mocha);margin:0;max-width:60ch}
+  .ledger li.hold .t::after{content:"held";font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--stamp-gated);margin-left:10px;vertical-align:middle}
+
+  /* two promises */
+  .promises{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0 36px;max-width:820px}
+  .promise{padding:18px 0;border-top:1px solid var(--rule)}
+  .promise .to{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--oak);margin-bottom:8px}
+  .promise .line{font-family:var(--serif);font-size:22px;line-height:1.3;margin:0 0 8px;text-wrap:balance}
+  .promise p{font-size:14.5px;color:var(--mocha);margin:0}
+
+  /* no list */
+  .nos{columns:2;column-gap:36px;max-width:820px;padding:0;margin:0;list-style:none}
+  @media (max-width:640px){.nos{columns:1}}
+  .nos li{break-inside:avoid;padding:9px 0;border-top:1px solid var(--rule);font-size:14.5px}
+  .nos li b{display:block;font-weight:600;color:var(--ink)}
+  .nos li span{color:var(--mocha)}
+
+  /* rulings table */
+  .tbl{overflow-x:auto;margin-top:6px}
+  table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+  th{font-family:var(--sans);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 12px 8px 0;border-bottom:1px solid var(--rule-strong)}
+  td{padding:12px 12px 12px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+  td.id{font-family:var(--mono);font-size:12px;color:var(--oak);white-space:nowrap}
+  td.q b{display:block;font-weight:600;margin-bottom:2px}
+  td.q span{color:var(--mocha)}
+  .pill{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:3px 7px;border:1px solid currentColor;border-radius:2px;white-space:nowrap}
+  .pill.open{color:var(--stamp-open)}.pill.settled{color:var(--stamp-settled)}.pill.gated{color:var(--stamp-gated)}
+  td.fix{color:var(--mocha)}
+
+  /* feature test */
+  .test{background:var(--wash);padding:22px 24px;max-width:760px;margin-top:6px}
+  .test label.top{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--oak);margin-bottom:8px}
+  .test input[type=text]{width:100%;font:inherit;font-family:var(--serif);font-size:19px;padding:10px 0;border:0;border-bottom:1px solid var(--rule-strong);background:transparent;color:var(--ink)}
+  .test input[type=text]:focus{outline:none;border-bottom-color:var(--clay)}
+  .grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:18px 24px;margin-top:20px}
+  .grid4 .g{font-size:13.5px}
+  .grid4 .g .h{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .grid4 label{display:flex;gap:8px;align-items:flex-start;padding:4px 0;cursor:pointer;color:var(--mocha)}
+  .grid4 input{margin:3px 0 0;accent-color:var(--clay)}
+  .verdict{margin-top:20px;padding-top:16px;border-top:1px solid var(--rule-strong);font-family:var(--serif);font-size:19px;line-height:1.35;min-height:1.4em}
+  .verdict.park{color:var(--terracotta)}.verdict.go{color:var(--sage)}
+  .verdict small{display:block;font-family:var(--sans);font-size:13px;color:var(--muted);margin-top:6px}
+
+  /* colophon */
+  .colophon{margin-top:56px;padding-top:18px;border-top:2px solid var(--ink);font-family:var(--mono);font-size:11.5px;line-height:1.9;color:var(--muted)}
+  .colophon b{color:var(--ink);font-weight:500}
+  :focus-visible{outline:2px solid var(--clay);outline-offset:3px}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <nav class="spine" aria-label="Sections">
+    <div class="mark" aria-hidden="true"><i></i><i></i><i></i></div>
+    <ol>
+      <li><a href="#what"><span class="q">01</span>What Patina is<span class="dot"></span></a></li>
+      <li><a href="#who"><span class="q">02</span>Who we serve<span class="dot"></span></a></li>
+      <li><a href="#money"><span class="q">03</span>How we earn<span class="dot"></span></a></li>
+      <li><a href="#promise"><span class="q">04</span>What we promise<span class="dot"></span></a></li>
+      <li><a href="#apart"><span class="q">05</span>What sets us apart<span class="dot"></span></a></li>
+      <li><a href="#no"><span class="q">—</span>Saying no to<span class="dot"></span></a></li>
+      <li><a href="#rulings"><span class="q">V</span>Open rulings<span class="dot"></span></a></li>
+      <li><a href="#drift"><span class="q">Δ</span>Drift owed<span class="dot"></span></a></li>
+      <li><a href="#test"><span class="q">?</span>The feature test<span class="dot"></span></a></li>
+    </ol>
+    <div class="meta">v0.1 · cut 2026-09-01<br>source docs/vision/VISION.md<br>rulings open 6 · settled 6</div>
+  </nav>
+
+  <main>
+    <header class="letterhead">
+      <div>
+        <h1>The Compass</h1>
+        <div class="sub">What Patina is, and how we'll know when we've wandered.</div>
+      </div>
+      <div class="stamp"><b>v0.1</b> · cut 2026-09-01<br>Kody · Leah<br>a venture of Middle West Studio</div>
+    </header>
+
+    <section id="what">
+      <div class="eyebrow"><span class="n">01</span><span class="rule"></span></div>
+      <h2>What Patina is</h2>
+      <p class="lede"><em>Designer-Taught Intelligence.</em> Patina works alongside real designers to surface the right items and the right work, at the right place and time.</p>
+      <h3>One engine, three surfaces — in strict order</h3>
+      <ol class="ledger">
+        <li><span class="rank">1</span><div><p class="t">The Document</p><p class="d">The studio's working surface. The designer's tool. This is Patina for the next twelve months.</p></div></li>
+        <li><span class="rank">2</span><div><p class="t">The iOS app</p><p class="d">The studio's front door — a marketing and qualification instrument the studio owns. Not a consumer product in its own right.</p></div></li>
+        <li><span class="rank">3</span><div><p class="t">The marketplace</p><p class="d">The till. Patina-grade Midwest makers, sold through designer-led projects.</p></div></li>
+      </ol>
+      <p class="supersedes">Supersedes: "three equal surfaces" (my-company.md, June) · "AI-powered consumer app with lead-gen" (spine, January).</p>
+    </section>
+
+    <section id="who">
+      <div class="eyebrow"><span class="n">02</span><span class="rule"></span></div>
+      <h2>Who we serve</h2>
+      <p class="lede">A growing design studio at the moment it adds its first hands <em>while its workload doubles.</em></p>
+      <p>That's a trigger, not a demographic. The studio owner is delegating for the first time, her own hours are already spoken for twice, and the one thing she can't afford is a new system to learn. Leah's studio first; then a pool of studios like hers, Ring 01 outward. Acquisition is 1:1 through Leah's network — never SEO strangers.</p>
+      <div class="promises">
+        <div class="promise"><div class="to">Homeowners</div><p class="line">The studio's clients.</p><p>Arrive by word of mouth. The first beta cohort is Middle West's active clients. Patina doesn't sell to them.</p></div>
+        <div class="promise"><div class="to">Makers</div><p class="line">The studio's vendors.</p><p>Patina qualifies them — "Patina-grade" — and carries the transaction.</p></div>
+      </div>
+      <p class="supersedes">Neither is Patina's customer in its own right — yet. The studio is. Supersedes "The Aspirational Homeowner" as primary persona.</p>
+    </section>
+
+    <section id="money">
+      <div class="eyebrow"><span class="n">03</span><span class="rule"></span></div>
+      <h2>How we earn</h2>
+      <p class="lede">Two streams. The first real dollar comes from <em>margin on a furniture sale.</em></p>
+      <div class="promises">
+        <div class="promise"><div class="to">Floor</div><p class="line">The studio subscription.</p><p>Studios pay for The Document. Leah's would; others will. Price and tiers: open (V2).</p></div>
+        <div class="promise"><div class="to">Upside</div><p class="line">Margin on furniture.</p><p>A piece sold through a designer-led project carries Patina margin. Whose pocket it comes from: open (V1).</p></div>
+      </div>
+      <h3>The Pledge</h3>
+      <p>Returns a share of <strong>marketplace</strong> margin to the designers who teach the engine. Working read: it rides the upside stream alongside the subscription — whether "you pay us and we pay you" survives Leah's ear is open (V6). Nothing about it goes public or contractual before counsel reviews it.</p>
+      <p class="supersedes">Supersedes: affiliate revenue (spine) · "designers never pay for their own client relationships" (v4 one-pager, August). v4's figures — 18% blended take · 4% client project fee · 25% Pledge — remain the working numbers pending V1.</p>
+    </section>
+
+    <section id="promise">
+      <div class="eyebrow"><span class="n">04</span><span class="rule"></span></div>
+      <h2>What we promise</h2>
+      <div class="promises">
+        <div class="promise"><div class="to">To the studio</div><p class="line">You won't notice Patina.</p><p>It isn't a place you go. It prompts and collects when and where you need it, then gets out of the way. Success is that she doesn't notice — so we never optimize the studio surface for engagement.</p></div>
+        <div class="promise"><div class="to">To the homeowner</div><p class="line">You're engaged every day, on one agreed direction.</p><p>You and your designer are looking at the same settled thing. Fewer surprises. The decision record is the relationship.</p></div>
+      </div>
+      <p class="supersedes" style="border-color:var(--clay)">To both: pricing is one page, public, and stable. No lock-in, no hidden fees. Your data exports.</p>
+    </section>
+
+    <section id="apart">
+      <div class="eyebrow"><span class="n">05</span><span class="rule"></span></div>
+      <h2>What sets us apart — next twelve months, ranked</h2>
+      <ol class="ledger">
+        <li><span class="rank">1</span><div><p class="t">The Document</p><p class="d">One living document per engagement. No dashboards, no task manager, no tab bars. Truth-framing over taste-framing. Her own voice never qualifies.</p></div></li>
+        <li class="hold"><span class="rank">2</span><div><p class="t">The Pledge</p><p class="d">Teaching royalties back to designers — a covenant Houzz, Wayfair, and 1stDibs can't copy without rebuilding their business. <strong>Legal-gated: not for outside eyes until counsel signs off.</strong></p></div></li>
+        <li><span class="rank">3</span><div><p class="t">Patina-grade makers</p><p class="d">Midwest heritage makers, qualified by a designer's standard, provenance carried on every piece.</p></div></li>
+        <li><span class="rank">4</span><div><p class="t">Capture</p><p class="d">Any product into the library in under ten seconds; a room scanned from a phone.</p></div></li>
+        <li><span class="rank">5</span><div><p class="t">The Engine</p><p class="d">Designer-Taught Intelligence — the long-term thesis and the reason this ranking exists. Not the wedge.</p></div></li>
+      </ol>
+      <p class="lede" style="margin-top:22px;font-size:19px">What we refuse, and the customer will notice: <em>we will not lock studios into an expensive platform with hidden fees and unclear pricing.</em></p>
+    </section>
+
+    <section id="no">
+      <div class="eyebrow"><span class="n">—</span><span class="rule"></span></div>
+      <h2>Saying no to</h2>
+      <ul class="nos">
+        <li><b>The "AI" label.</b><span>Non-negotiable. It's Designer-Taught Intelligence.</span></li>
+        <li><b>Consumer-first thinking.</b><span>The homeowner is the studio's client. A consumer push that outruns the studio count is drift.</span></li>
+        <li><b>Engagement metrics</b><span>as a success measure for the studio surface.</span></li>
+        <li><b>Tab / zone / dashboard UI, shadows, red/green, badges.</b><span>One living Document, typography-first.</span></li>
+        <li><b>Funnel-spam growth.</b><span>1:1 and relationship-driven.</span></li>
+        <li><b>Scope creep and side journeys.</b><span>A feature that doesn't serve the studio at its moment waits.</span></li>
+        <li><b>Launching to an empty room.</b><span>Slip rather than demo something broken.</span></li>
+      </ul>
+    </section>
+
+    <section id="rulings">
+      <div class="eyebrow"><span class="n">V</span><span class="rule"></span></div>
+      <h2>Open rulings</h2>
+      <p class="quiet">Until ruled, the docs stay as they are and nothing public changes. Logged in <code>VISION-DECISIONS.md</code>.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>ID</th><th>Question</th><th>Why it matters</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td class="id">V1</td><td class="q"><b>Margin pocket</b><span>Maker's trade discount (v4, 18% carved not stacked) or the studio's own 25% procurement markup?</span></td><td class="fix">Different people pay. Pin before the next maker conversation.</td><td><span class="pill open">open</span></td></tr>
+          <tr><td class="id">V2</td><td class="q"><b>Studio price</b><span>Keep Pro $49 / Studio $149? Any solo tier at all, given the "first hires" trigger?</span></td><td class="fix">Sets the floor stream and the recruiting pitch.</td><td><span class="pill open">open</span></td></tr>
+          <tr><td class="id">V3</td><td class="q"><b>Consumer cohort</b><span>Pause the consumer Founding Circle (0/200) until a second studio is live?</span></td><td class="fix">The marketing engine has been pointed at the wrong door for ten weeks.</td><td><span class="pill open">open</span></td></tr>
+          <tr><td class="id">V4</td><td class="q"><b>Entity</b><span>Stay a venture of Middle West, or separate LLC before Design Chicago?</span></td><td class="fix">Equity, IP chain-of-title, trademarks, Pledge counterparty.</td><td><span class="pill open">open</span></td></tr>
+          <tr><td class="id">V5</td><td class="q"><b>Thesis line</b><span>"Where Time Adds Value" — canon or retire?</span></td><td class="fix">In memory and decks, in no repo file.</td><td><span class="pill open">open</span></td></tr>
+          <tr><td class="id">V6</td><td class="q"><b>Pledge × subscription</b><span>Studios pay a subscription and receive Pledge royalties. Does "you pay us and we pay you" survive Leah's ear and counsel?</span></td><td class="fix">Shapes how the Pledge is described to designers.</td><td><span class="pill open">open</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="drift">
+      <div class="eyebrow"><span class="n">Δ</span><span class="rule"></span></div>
+      <h2>Drift owed</h2>
+      <p class="quiet">Documents this cut contradicts. Each gets a superseded note, not a silent rewrite.</p>
+      <div class="tbl"><table>
+        <thead><tr><th>Document</th><th>Says</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td class="id">my-company.md · Jun</td><td>Three equal surfaces; $49/$149 + 15% + 25%</td><td class="fix">Point "What we are" at VISION.md; strike pricing pending V1/V2</td></tr>
+          <tr><td class="id">Patina-docs spine · Jan</td><td>"AI-powered", consumer-first, affiliate</td><td class="fix">Mark Superseded; link VISION.md</td></tr>
+          <tr><td class="id">Leah Session 05 · Aug</td><td>Designers never pay for own relationships</td><td class="fix">Superseded note → S3</td></tr>
+          <tr><td class="id">Engine brief · Jul</td><td>Engine is the #1 differentiator</td><td class="fix">"Long-term thesis, not the 12-month wedge" → S5</td></tr>
+          <tr><td class="id">Marketing engine plan</td><td>Consumer 200 leads the cohorts</td><td class="fix">Re-order studio-first once V3 rules</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="test">
+      <div class="eyebrow"><span class="n">?</span><span class="rule"></span></div>
+      <h2>The feature test</h2>
+      <p>Before building anything, answer four questions. Serves none of them: a side journey — log it in the decisions file and park it. Serves fewer than three: name what's missing before it gets a slice.</p>
+      <div class="test">
+        <label class="top" for="idea">The idea</label>
+        <input type="text" id="idea" placeholder="e.g. Pinterest import for the Library" autocomplete="off">
+        <div class="grid4">
+          <div class="g"><div class="h">Which surfaces</div>
+            <label><input type="checkbox" data-g="s">The Document</label>
+            <label><input type="checkbox" data-g="s">iOS app (front door)</label>
+            <label><input type="checkbox" data-g="s">Marketplace (till)</label></div>
+          <div class="g"><div class="h">Which studio moment</div>
+            <label><input type="checkbox" data-g="m">First hires, workload doubling</label>
+            <label><input type="checkbox" data-g="m">Delegating for the first time</label>
+            <label><input type="checkbox" data-g="m">Her client's daily check-in</label></div>
+          <div class="g"><div class="h">Which stream</div>
+            <label><input type="checkbox" data-g="r">Subscription (floor)</label>
+            <label><input type="checkbox" data-g="r">Furniture margin (upside)</label></div>
+          <div class="g"><div class="h">Which promise</div>
+            <label><input type="checkbox" data-g="p">Studio won't notice it</label>
+            <label><input type="checkbox" data-g="p">Homeowner: daily, one direction</label>
+            <label><input type="checkbox" data-g="p">Clear pricing, no lock-in</label></div>
+        </div>
+        <div class="verdict" id="verdict" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <footer class="colophon">
+      <b>The Compass</b> · v0.1 · cut 2026-09-01 from a five-question workshop · source <b>docs/vision/VISION.md</b> in patina-merged · log <b>docs/vision/VISION-DECISIONS.md</b> (settled S1–S6 · open V1–V6) · hands Kody · Leah<br>
+      Re-cut when a V-ruling lands or the market teaches something. Drift is scanned by <b>doc-alignment</b> §4b. This page is a mirror of the file; the file wins.
+    </footer>
+  </main>
+</div>
+
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('.spine a'));
+  var secs=links.map(function(a){return document.querySelector(a.getAttribute('href'));});
+  function setActive(){
+    var y=window.scrollY+120, idx=0;
+    secs.forEach(function(s,i){ if(s && s.offsetTop<=y) idx=i; });
+    links.forEach(function(a,i){ a.classList.toggle('active', i===idx); });
+  }
+  window.addEventListener('scroll', setActive, {passive:true}); setActive();
+
+  var boxes=[].slice.call(document.querySelectorAll('.test input[type=checkbox]'));
+  var idea=document.getElementById('idea'), v=document.getElementById('verdict');
+  function judge(){
+    var groups={s:0,m:0,r:0,p:0};
+    boxes.forEach(function(b){ if(b.checked) groups[b.getAttribute('data-g')]++; });
+    var hit=Object.keys(groups).filter(function(k){return groups[k]>0;}).length;
+    var name=idea.value.trim();
+    v.className='verdict';
+    if(!name && hit===0){ v.textContent=''; return; }
+    var label=name?'"'+name+'"':'This';
+    if(hit===0){ v.classList.add('park'); v.innerHTML=label+' serves no surface, moment, stream, or promise.<small>Side journey. Log it in VISION-DECISIONS.md and park it.</small>'; }
+    else if(hit<3){ v.classList.add('park'); v.innerHTML=label+' touches '+hit+' of 4.<small>Thin. Name the studio moment and the stream before it gets a slice.</small>'; }
+    else { v.classList.add('go'); v.innerHTML=label+' passes — '+hit+' of 4.<small>Check it against the ranked surfaces (§01): The Document first.</small>'; }
+  }
+  boxes.forEach(function(b){ b.addEventListener('change', judge); });
+  idea.addEventListener('input', judge);
+})();
+</script>
+
+</body>
+</html>

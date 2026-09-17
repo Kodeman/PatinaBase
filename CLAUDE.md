@@ -12,6 +12,15 @@ Patina connects interior designers with manufacturers for custom home furnishing
 - Prod infra = **Cloudflare**: 4 portals on Workers (OpenNext), services on Containers. The self-hosted Coolify box is **RETIRED** — never deploy, SSH, or point anything at it, whatever older docs say. [retired-deploy-reference-allow: canonical Claude retirement policy]
 - Native: 2 Swift/SwiftUI iOS apps — Patina (client, `apps/mobile/Patina`), Patina Field (designer/trades, `apps/mobile/Capture`) — plus a Plasmo Chrome extension
 
+## What Patina is (vision — `docs/vision/VISION.md` wins over every other doc)
+
+- **Designer-Taught Intelligence** — never "AI". Patina works alongside real designers to surface the right items and the right work at the right place and time.
+- **Surfaces are ranked, not equal:** The Document (designer portal) → iOS app (the studio's front door) → marketplace (the till). The Document is Patina for the next 12 months.
+- **Customer = a growing design studio at the moment it adds its first hands while workload doubles.** Leah's studio first. Homeowners are the *studio's* clients; makers are the *studio's* vendors — neither is Patina's customer yet.
+- **Money = two streams:** studio subscription (floor) + margin on furniture sold through designer-led projects (upside, first dollar). The Pledge rides the upside stream; legal-gated, never in public copy.
+- **Promise:** the studio won't notice Patina; the homeowner is engaged daily on one agreed direction. Never optimize the studio surface for engagement. No lock-in, no hidden fees, pricing on one public page.
+- **Feature test before building:** which surface, which studio moment, which stream, which promise? None → side journey; log it in `docs/vision/VISION-DECISIONS.md` and park it. Open rulings V1–V5 live there — don't resolve them in code.
+
 ## Project skills
 
 Eleven engineering `patina-*` skills in `.claude/skills/` carry the verified procedures and footguns this file only summarizes. Load the matching skill before: DB migrations, edge functions, portal features, local dev, verification, testing, deploys, prod ops, Stripe payments, parallel/multi-agent work, iOS. Index: `.claude/skills/README.md`.
