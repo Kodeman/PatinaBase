@@ -63,6 +63,7 @@ Register ONE campaign under the brand:
 - **~1 recurring message/day** (the digest). No individually-triggered nudge spam. Event-driven sends only for genuine assignments.
 - **Freeform revocation** ("stop texting me") is honored, not just the STOP keyword (Apr 2025 TCPA rules; 10-business-day outer bound, we do it immediately).
 - **Never** put marketing content in this channel — it's registered as operational; mixing jumps the consent bar and risks campaign suspension.
+- **Field Line design:** Follow [the fixed Phase 0 design](../superpowers/specs/2026-09-16-field-line-design.md) for phase boundaries and synthetic-evidence rules.
 
 ## 7. Cost expectations
 
