@@ -22,7 +22,12 @@ Deno.test("field-line fixture harness is isolated and signed", async () => {
     partyId: harness.studios.B.partyId,
     body: "Studio B: fixture message. Msg&data rates may apply. Reply HELP for help, STOP to opt out.",
   });
-  assertEquals(unconsentedB, { sent: false, reason: "not_consented" });
+  // Asserted FIELD BY FIELD, not as a whole object: SendPartySmsResult is an
+  // additive contract (00640 contract S5 added `status`, and later phases may
+  // add more), so a deep-equal here fails on a field that was added correctly
+  // rather than on the refusal this case is about.
+  assertEquals(unconsentedB.sent, false);
+  assertEquals(unconsentedB.reason, "not_consented");
 
   harness.provider.setOutcome({ kind: "fail", code: 30007 });
   harness.mediaStore.interruptNextUpload();

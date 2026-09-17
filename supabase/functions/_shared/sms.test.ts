@@ -108,7 +108,15 @@ Deno.test("the consent gate blocks a record at not_asked and one at opted_out", 
 });
 
 Deno.test("sms_optin_invite is allowed to a pending party", async () => {
+  // `pending` is the RECORD's word (contract S2): the studio asked, and the
+  // recipient has not answered. That is the one door the invite may use.
   const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [{
+      ...grant(),
+      status: "pending",
+      recorded_at: "2026-07-08T17:00:00Z",
+    }],
     project_parties: [party("p1", "pending")],
   });
   const res = await sendPartySms(
@@ -124,6 +132,39 @@ Deno.test("sms_optin_invite is allowed to a pending party", async () => {
     },
   );
   assert(res.sent, "invite should reach a pending party");
+  assertEquals(res.status, "sent");
+});
+
+Deno.test("the invite is refused where NO record has asked anything (S2)", async () => {
+  // The gap 00640 closes. A project with no resolvable studio answers
+  // `unknown` whenever nothing on the number has refused — and before this the
+  // invite gate could not tell that apart from a studio's own `pending`, so the
+  // one send allowed past a non-granted record could reach a number no studio
+  // had ever asked. `unknown` with no record behind it is `not_asked`, and
+  // `not_asked` refuses.
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "pending")],
+  });
+  const res = await sendPartySms(
+    fake as never,
+    {
+      partyId: "p1",
+      templateKey: "sms_optin_invite",
+      body: "Reply YES for updates",
+    },
+    {
+      getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+1" }),
+      now: new Date("2026-07-08T18:00:00Z"),
+    },
+  );
+  assert(!res.sent, "an invite needs a record that asked");
+  assertEquals(res.reason, "not_consented");
+  assertEquals(res.status, "failed");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "a refused invite writes no row",
+  );
 });
 
 Deno.test("quiet hours defer stores the body without sending", async () => {
@@ -1707,5 +1748,818 @@ Deno.test("flush: a touch the database refuses never fails the send", async () =
     ((fake._data.sms_messages ?? [])[0] as { twilio_status: string })
       .twilio_status,
     "dry_run",
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 00640 — the gate order, the link at dispatch, and the send claim
+// (contract S5/S6/S7). Everything below this line is new with this migration.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const FIELD_TOKEN = "aXb9-Kq2Zt7Rm4Ns1Pv6Cw8Dy0Ef3Gh5";
+
+/** A fake whose create_field_link RPC mints once and counts how often. */
+function linkWorld(extra: Record<string, unknown[]> = {}) {
+  const mints: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase({
+    projects: [{
+      id: "proj1",
+      studio_id: "org-alpha",
+      designer_id: "u-designer",
+      name: "Lindqvist",
+    }],
+    organizations: [{
+      id: "org-alpha",
+      name: "Field & Form",
+      type: "design_studio",
+    }],
+    organization_members: [{
+      organization_id: "org-alpha",
+      user_id: "u-designer",
+      status: "active",
+    }],
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+    email_templates: [{
+      slug: "field_digest",
+      is_active: true,
+      html_content:
+        "{{studio_name}}: today on {{project_name}}. Open {{link}} " +
+        "Msg&data rates may apply. Reply HELP for help, STOP to opt out.",
+    }],
+    ...(extra as Record<string, Array<Record<string, unknown>>>),
+  }, {
+    create_field_link: (args) => {
+      mints.push(args);
+      return { data: [{ id: "link-1", token: FIELD_TOKEN }], error: null };
+    },
+  });
+  return { fake, mints };
+}
+
+const QUIET = new Date("2026-07-08T09:00:00Z"); // ~4am Chicago
+const OPEN = new Date("2026-07-08T18:00:00Z"); // ~1pm Chicago
+
+Deno.test("GATE 1: suppression refuses ahead of a granted consent record", async () => {
+  // The carrier's and the recipient's own STOP, as the provider recorded it.
+  // It outranks every ledger, so it is asked FIRST: a studio that records a
+  // fresh invite after a STOP cannot text that number (contract S2/S5).
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  }, {
+    sms_is_suppressed: () => ({ data: true, error: null }),
+  });
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "hello" },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "dry_run",
+        TWILIO_FROM_NUMBER: "+15550000000",
+      }),
+      now: OPEN,
+    },
+  );
+  assert(!res.sent, "a suppressed pair must not be texted");
+  assertEquals(res.reason, "suppressed");
+  assertEquals(res.status, "failed");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "a refused send writes no row",
+  );
+});
+
+Deno.test("GATE 1: an unreadable suppression ledger refuses, it does not fall through", async () => {
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  }, {
+    sms_is_suppressed: () => ({ data: null, error: { message: "denied" } }),
+  });
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "hello" },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "dry_run",
+        TWILIO_FROM_NUMBER: "+15550000000",
+      }),
+      now: OPEN,
+    },
+  );
+  assert(!res.sent, "not knowing is not permission");
+  assertEquals(res.reason, "suppression_unreadable");
+});
+
+Deno.test("GATE 3: FIELD_LINE_PHASE decides whether a new automation may send", async () => {
+  // A browser flag cannot gate a cron, a trigger or an edge function, so the
+  // phase gate is a server env (contract S7). Phase 0 — everything that shipped
+  // before The Field Line — never asks.
+  const base = {
+    SMS_DEV_MODE: "dry_run",
+    TWILIO_FROM_NUMBER: "+15550000000",
+  };
+  const offFake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  });
+  const off = await sendPartySms(
+    offFake as never,
+    { partyId: "p1", body: "hello", automationPhase: 1 },
+    { getEnv: envOf(base), now: OPEN },
+  );
+  assert(!off.sent, "phase 1 must not send while the server says 0");
+  assertEquals(off.reason, "field_line_phase_off");
+  assertEquals((offFake._data.sms_messages ?? []).length, 0);
+
+  const onFake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  });
+  const on = await sendPartySms(
+    onFake as never,
+    { partyId: "p1", body: "hello", automationPhase: 1 },
+    { getEnv: envOf({ ...base, FIELD_LINE_PHASE: "1" }), now: OPEN },
+  );
+  assert(on.sent, "the server turned the phase on");
+
+  const legacyFake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  });
+  const legacy = await sendPartySms(
+    legacyFake as never,
+    { partyId: "p1", body: "hello" },
+    { getEnv: envOf(base), now: OPEN },
+  );
+  assert(legacy.sent, "a phase-0 send never asks the gate");
+});
+
+Deno.test("S6: a quiet-hours defer MINTS NOTHING and stores a recipe, not a token", async () => {
+  // The defect this closes: resolveBody minted the link BEFORE the quiet-hours
+  // gate, so an 8pm digest minted a token, deferred, and the trade woke to a
+  // URL that had been alive since the night before — while the mint itself
+  // revoked the link they were already using.
+  const { fake, mints } = linkWorld();
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", templateKey: "field_digest" },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "off",
+        TWILIO_FROM_NUMBER: "+15550000000",
+        TWILIO_ACCOUNT_SID: "AC",
+        TWILIO_AUTH_TOKEN: "tok",
+      }),
+      fetchImpl: (() => Promise.reject("must not send")) as unknown as
+        typeof fetch,
+      now: QUIET,
+    },
+  );
+  assert(res.deferred, "off-hours stores, it does not send");
+  assertEquals(res.status, "deferred");
+  assertEquals(mints.length, 0, "NOTHING is minted at defer time");
+  // Due at the next moment inside the window, not "now + N hours".
+  assertEquals(res.dueAt, "2026-07-08T13:00:00.000Z");
+
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(row.twilio_status, "deferred");
+  const stored = String(row.body);
+  assert(
+    stored.includes("[link at send]"),
+    `the preview names the link without being one: ${stored}`,
+  );
+  assert(!stored.includes(FIELD_TOKEN), "no token is stored at rest");
+  const recipe = row.recipe as Record<string, unknown>;
+  assertEquals(recipe.template_key, "field_digest");
+  assertEquals(recipe.link_kind, "field");
+  assertEquals(recipe.party_id, "p1");
+  assert(
+    !JSON.stringify(recipe).includes(FIELD_TOKEN),
+    "the recipe carries what to say, never the credential that says it",
+  );
+});
+
+Deno.test("S6: the flush renders FRESH from the recipe and mints at the send", async () => {
+  const { fake, mints } = linkWorld();
+  await sendPartySms(
+    fake as never,
+    { partyId: "p1", templateKey: "field_digest" },
+    {
+      getEnv: envOf({ SMS_DEV_MODE: "off", TWILIO_FROM_NUMBER: "+15550000000" }),
+      now: QUIET,
+    },
+  );
+  const previewBody = String(
+    (fake._data.sms_messages ?? [])[0] as Record<string, unknown>,
+  );
+  assert(previewBody !== "", "deferred row exists");
+
+  let wireBody = "";
+  const result = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({
+      SMS_DEV_MODE: "off",
+      TWILIO_FROM_NUMBER: "+15550000000",
+      TWILIO_ACCOUNT_SID: "AC",
+      TWILIO_AUTH_TOKEN: "tok",
+      SMS_CONVERSATION_NUMBER: "+15550000000",
+    }),
+    fetchImpl: ((_url: string, init: RequestInit) => {
+      wireBody = new URLSearchParams(String(init.body)).get("Body") ?? "";
+      return Promise.resolve(
+        new Response(JSON.stringify({ sid: "SM1", status: "queued" }), {
+          status: 201,
+        }),
+      );
+    }) as unknown as typeof fetch,
+    now: OPEN,
+  });
+
+  assertEquals(result.flushed, 1);
+  assertEquals(mints.length, 1, "minted once, at the moment it actually went");
+  // What went on the wire is the real thing…
+  assert(
+    wireBody.includes(`/field/${FIELD_TOKEN}`),
+    `the flush must send a live link: ${wireBody}`,
+  );
+  assert(
+    !wireBody.includes("[link at send]"),
+    "the stored PREVIEW must never reach the recipient",
+  );
+  assert(wireBody.includes("Field & Form"), "studio name first (contract S8)");
+  assert(
+    wireBody.includes("Msg&data rates may apply. Reply HELP for help, STOP to opt out."),
+    "every outbound body ends with the compliance line (contract S8)",
+  );
+  // …and what the thread keeps is not.
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(row.twilio_status, "queued");
+  assertEquals(row.twilio_sid, "SM1");
+  assert(
+    String(row.body).includes("/field/[redacted]"),
+    `the stored row is redacted: ${row.body}`,
+  );
+  assert(!String(row.body).includes(FIELD_TOKEN), "no token at rest");
+});
+
+Deno.test("S6: no raw token reaches a log line", async () => {
+  const { fake } = linkWorld();
+  const lines: string[] = [];
+  const realLog = console.log;
+  const realError = console.error;
+  console.log = (...a: unknown[]) => lines.push(a.map(String).join(" "));
+  console.error = (...a: unknown[]) => lines.push(a.map(String).join(" "));
+  try {
+    await sendPartySms(
+      fake as never,
+      { partyId: "p1", templateKey: "field_digest" },
+      {
+        getEnv: envOf({
+          SMS_DEV_MODE: "dry_run",
+          TWILIO_FROM_NUMBER: "+15550000000",
+        }),
+        now: OPEN,
+      },
+    );
+  } finally {
+    console.log = realLog;
+    console.error = realError;
+  }
+  assert(
+    !lines.some((l) => l.includes(FIELD_TOKEN)),
+    `a token reached a log line: ${lines.join(" | ")}`,
+  );
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assert(!String(row.body).includes(FIELD_TOKEN), "nor the stored row");
+});
+
+Deno.test("S5: one logical send — the second writer loses the claim", async () => {
+  // createFakeSupabase has no unique indexes and belongs to another ticket this
+  // wave, so the claim is enforced here by the same rule 00640's partial index
+  // states: (party_id, coalesce(template_key,''), dedupe_key) is unique among
+  // outbound rows whose status has not released the claim.
+  const released = new Set([
+    "failed",
+    "undelivered",
+    "canceled",
+    "expired",
+    "suppressed",
+  ]);
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  });
+  const from = fake.from.bind(fake);
+  const claimed = new Proxy(fake, {
+    get(target, prop, receiver) {
+      if (prop !== "from") return Reflect.get(target, prop, receiver);
+      return (table: string) => {
+        const builder = from(table);
+        if (table !== "sms_messages") return builder;
+        const insert = builder.insert.bind(builder);
+        // deno-lint-ignore no-explicit-any
+        (builder as any).insert = (payload: unknown) => {
+          const row = payload as Record<string, unknown>;
+          const held = (target._data.sms_messages ?? []).some((r) =>
+            r.direction === "outbound" && row.party_id != null &&
+            r.party_id === row.party_id &&
+            (r.template_key ?? "") === (row.template_key ?? "") &&
+            row.dedupe_key != null && r.dedupe_key === row.dedupe_key &&
+            !released.has(String(r.twilio_status ?? "claimed"))
+          );
+          if (!held) return insert(payload);
+          const answer = {
+            data: null,
+            error: {
+              code: "23505",
+              message:
+                'duplicate key value violates unique constraint "sms_messages_send_claim_uniq"',
+            },
+          };
+          // deno-lint-ignore no-explicit-any
+          const dup: any = {
+            select: () => dup,
+            single: () => Promise.resolve(answer),
+            maybeSingle: () => Promise.resolve(answer),
+            // deno-lint-ignore no-explicit-any
+            then: (f: any, r: any) => Promise.resolve(answer).then(f, r),
+          };
+          return dup;
+        };
+        return builder;
+      };
+    },
+  });
+
+  const deps = {
+    getEnv: envOf({
+      SMS_DEV_MODE: "dry_run",
+      TWILIO_FROM_NUMBER: "+15550000000",
+    }),
+    now: OPEN,
+  };
+  const first = await sendPartySms(
+    claimed as never,
+    { partyId: "p1", body: "on my way", dedupeKey: "arrival:2026-07-08" },
+    deps,
+  );
+  assert(first.sent, "the first writer sends");
+
+  const second = await sendPartySms(
+    claimed as never,
+    { partyId: "p1", body: "on my way", dedupeKey: "arrival:2026-07-08" },
+    deps,
+  );
+  assert(!second.sent, "the second writer does not send a second text");
+  assertEquals(second.reason, "duplicate_send_claim");
+  assertEquals(second.status, "queued", "losing the claim is not an error");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    1,
+    "one logical send, one row",
+  );
+
+  // A DIFFERENT logical send is untouched by the claim.
+  const other = await sendPartySms(
+    claimed as never,
+    { partyId: "p1", body: "running late", dedupeKey: "delay:2026-07-08" },
+    deps,
+  );
+  assert(other.sent, "a different send has its own claim");
+  assertEquals((fake._data.sms_messages ?? []).length, 2);
+});
+
+Deno.test("S5: one word for what happened — sent, queued, failed", async () => {
+  const world = () =>
+    createFakeSupabase({
+      projects: ORG_ALPHA_PROJECTS,
+      studio_channel_consent: [grant()],
+      project_parties: [party("p1", "granted")],
+    });
+  const live = {
+    SMS_DEV_MODE: "off",
+    TWILIO_FROM_NUMBER: "+15550000000",
+    TWILIO_ACCOUNT_SID: "AC",
+    TWILIO_AUTH_TOKEN: "tok",
+  };
+
+  // A dev dry run has no carrier to wait for: it is gone.
+  const dry = await sendPartySms(world() as never, {
+    partyId: "p1",
+    body: "hi",
+  }, {
+    getEnv: envOf({ ...live, SMS_DEV_MODE: "dry_run" }),
+    now: OPEN,
+  });
+  assertEquals(dry.status, "sent");
+
+  // A provider ACCEPT is 'queued'. It is not delivery and it is never "read".
+  const accepted = await sendPartySms(world() as never, {
+    partyId: "p1",
+    body: "hi",
+  }, {
+    getEnv: envOf(live),
+    fetchImpl: (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ sid: "SM9", status: "queued" }), {
+          status: 201,
+        }),
+      )) as unknown as typeof fetch,
+    now: OPEN,
+  });
+  assertEquals(accepted.status, "queued");
+  assertEquals(accepted.sent, true, "the booleans keep their old meaning");
+
+  // A provider refusal carries Twilio's own code.
+  const failFake = world();
+  const refused = await sendPartySms(failFake as never, {
+    partyId: "p1",
+    body: "hi",
+  }, {
+    getEnv: envOf(live),
+    fetchImpl: (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ code: 21610, message: "unsubscribed" }), {
+          status: 400,
+        }),
+      )) as unknown as typeof fetch,
+    now: OPEN,
+  });
+  assertEquals(refused.status, "failed");
+  assertEquals(refused.provider_code, "21610");
+  const row = (failFake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(row.twilio_status, "failed");
+  assertEquals(row.error_code, "21610");
+});
+
+Deno.test("S6: a defer that could only store the wrong words refuses instead", async () => {
+  // A raw body the audit copy replaces has no recipe to render from, so the
+  // flush would put the redacted PREVIEW on the wire at 8am. The caller that
+  // owns its own outbox (deferToCaller) is unaffected — it re-sends the real
+  // body itself — and that is the path site-request-dispatch uses.
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  });
+  const res = await sendPartySms(
+    fake as never,
+    {
+      partyId: "p1",
+      body: "Open https://client.patina.cloud/field/sr_SECRET_RAW_TOKEN",
+      auditBody: "Patina Site Request private link [redacted]",
+    },
+    {
+      getEnv: envOf({ SMS_DEV_MODE: "off", TWILIO_FROM_NUMBER: "+15550000000" }),
+      now: QUIET,
+    },
+  );
+  assert(!res.sent && !res.deferred, "it is refused, not stored");
+  assertEquals(res.reason, "defer_requires_recipe");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "and nothing is written that a flush could send",
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SQ-37 R1–R5 — what the durable outbox owes a message it has not sent yet.
+// Each of these is a reproduced defect: a deferred row two flushes both sent,
+// a bearer token that survived in the recipe, a phase gate that stopped
+// binding once the row was stored, an accepted send nothing could name, and a
+// 202 for a row that was never written.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A live Twilio configuration, so the provider leg is actually exercised. */
+const LIVE_TWILIO = {
+  SMS_DEV_MODE: "off",
+  TWILIO_FROM_NUMBER: "+15550000000",
+  TWILIO_ACCOUNT_SID: "AC",
+  TWILIO_AUTH_TOKEN: "tok",
+  SMS_CONVERSATION_NUMBER: "+15550000000",
+};
+
+/** A 64-hex field token: the shape the portal actually hands out. */
+const RAW_BEARER = "a".repeat(64);
+
+function mustNotSend(): typeof fetch {
+  return (() =>
+    Promise.reject(
+      new Error("the provider must not be called"),
+    )) as unknown as typeof fetch;
+}
+
+/** Defer one digest for `p1`, and hand back the row it wrote. */
+async function deferDigest(
+  fake: ReturnType<typeof linkWorld>["fake"],
+  input: Record<string, unknown> = {},
+  envExtra: Record<string, string> = {},
+) {
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", templateKey: "field_digest", ...input },
+    {
+      getEnv: envOf({ ...LIVE_TWILIO, ...envExtra }),
+      fetchImpl: mustNotSend(),
+      now: QUIET,
+    },
+  );
+  assert(res.deferred, `quiet hours must store it: ${JSON.stringify(res)}`);
+  return (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+}
+
+Deno.test("R1: two concurrent flushes of one deferred row make exactly ONE wire call", async () => {
+  // The SELECT that opens the flush is not a claim. The field-daily cron and a
+  // manual run — or two overlapping ticks — both read the same 'deferred' row,
+  // and before this both of them texted the trade.
+  const { fake, mints } = linkWorld();
+  await deferDigest(fake, { dedupeKey: "digest:2026-07-08" });
+
+  const wires: string[] = [];
+  const deps = {
+    getEnv: envOf(LIVE_TWILIO),
+    fetchImpl: ((_url: string, init: RequestInit) => {
+      wires.push(new URLSearchParams(String(init.body)).get("Body") ?? "");
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ sid: `SM${wires.length}`, status: "queued" }),
+          { status: 201 },
+        ),
+      );
+    }) as unknown as typeof fetch,
+    now: OPEN,
+  };
+  const [first, second] = await Promise.all([
+    flushDeferredMessages(fake as never, deps),
+    flushDeferredMessages(fake as never, deps),
+  ]);
+
+  assertEquals(wires.length, 1, "one deferred row must have one provider attempt");
+  assertEquals(
+    first.flushed + second.flushed,
+    1,
+    "exactly one flush owns the send",
+  );
+  assertEquals(mints.length, 1, "and exactly one link is minted for it");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    1,
+    "no second row is written either",
+  );
+});
+
+Deno.test("R2: a caller's own raw link never survives in the stored recipe", async () => {
+  // The recipe is read back by a cron hours later. A `link` var — the caller's
+  // or anything else carrying a token — is a bearer credential at rest, which
+  // is the whole reason the stored body is a redacted preview.
+  const { fake } = linkWorld();
+  const row = await deferDigest(fake, {
+    vars: { link: `https://client.patina.cloud/field/${RAW_BEARER}`, foo: "bar" },
+  });
+
+  const recipeJson = JSON.stringify(row.recipe);
+  assert(
+    !/[0-9a-f]{64}/.test(recipeJson),
+    `a raw token survived in the recipe: ${recipeJson}`,
+  );
+  assert(
+    !recipeJson.includes("/field/"),
+    `a field URL survived in the recipe: ${recipeJson}`,
+  );
+  const recipe = row.recipe as Record<string, unknown>;
+  const params = recipe.params as Record<string, unknown>;
+  assertEquals(params.link, undefined, "`link` is never a stored param");
+  assertEquals(params.foo, "bar", "and the rest of the params are kept");
+  assertEquals(
+    recipe.link_kind,
+    "field",
+    "the row still says a link belongs here — the flush mints it fresh",
+  );
+  assert(
+    !/[0-9a-f]{64}/.test(JSON.stringify(fake._data.sms_messages ?? [])),
+    "and no token is anywhere on the row",
+  );
+});
+
+Deno.test("R3: a phase turned off while the row waited stops the flush", async () => {
+  // FIELD_LINE_PHASE is a SERVER gate and the server that flushes is not the
+  // server that deferred. Turning the phase back down is how this rail is
+  // turned off; a row stored while phase 1 was live must not go out from a
+  // server that is back at phase 0.
+  const { fake, mints } = linkWorld();
+  const row = await deferDigest(
+    fake,
+    { automationPhase: 1 },
+    { FIELD_LINE_PHASE: "1" }, // the phase WAS live when the row was stored
+  );
+  assertEquals(
+    (row.recipe as Record<string, unknown>).automation_phase,
+    1,
+    "the declared phase travels with the row",
+  );
+
+  const out = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "0" }),
+    fetchImpl: mustNotSend(),
+    now: OPEN,
+  });
+  assertEquals(out.flushed, 0, "nothing goes out");
+  assertEquals(mints.length, 0, "and nothing is minted for it");
+  assertEquals(row.twilio_status, "deferred", "the row keeps its place in the queue");
+  assertEquals(row.error_message, "field_line_phase_off", "and says why it stayed");
+
+  // The phase comes back up inside the window and the same row goes.
+  const resumed = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }),
+    fetchImpl: (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ sid: "SM1", status: "queued" }), {
+          status: 201,
+        }),
+      )) as unknown as typeof fetch,
+    now: OPEN,
+  });
+  assertEquals(resumed.flushed, 1);
+});
+
+Deno.test("R3: a 'never text' rule written after the defer still stops the send", async () => {
+  // The rule the studio entered last night is not answered by a message
+  // composed the evening before it.
+  const { fake, mints } = linkWorld();
+  const row = await deferDigest(fake);
+  fake._data.studio_contact_rules = [{
+    subject_type: "engagement",
+    subject_id: "p1",
+    channels_forbidden: ["sms"],
+  }];
+
+  const out = await flushDeferredMessages(fake as never, {
+    getEnv: envOf(LIVE_TWILIO),
+    fetchImpl: mustNotSend(),
+    now: OPEN,
+  });
+  assertEquals(out.flushed, 0);
+  assertEquals(out.suppressed, 1);
+  assertEquals(mints.length, 0, "a refused send mints nothing");
+  assertEquals(row.twilio_status, "suppressed");
+  assertEquals(row.error_message, "contact_rule_forbids_sms");
+});
+
+Deno.test("R4: an accepted send whose id cannot be recorded FAILS, it never reads queued", async () => {
+  // The provider has it. Writing the sid is what makes it findable — the status
+  // callback matches on twilio_sid and sms_reconcile_accepted_send() looks it up
+  // by twilio_sid — so a row with a NULL sid is a text nobody can settle.
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  });
+  let sidWrites = 0;
+  const realFrom = fake.from.bind(fake);
+  // deno-lint-ignore no-explicit-any
+  (fake as any).from = (table: string) => {
+    const builder = realFrom(table);
+    if (table !== "sms_messages") return builder;
+    const update = builder.update.bind(builder);
+    // deno-lint-ignore no-explicit-any
+    (builder as any).update = (payload: any) => {
+      if (payload && payload.twilio_sid) {
+        sidWrites++;
+        // deno-lint-ignore no-explicit-any
+        const failed: any = {
+          eq: () => failed,
+          in: () => failed,
+          select: () => failed,
+          // deno-lint-ignore no-explicit-any
+          then: (f: any, r: any) =>
+            Promise.resolve({
+              data: null,
+              error: { code: "08006", message: "connection failure" },
+            }).then(f, r),
+        };
+        return failed;
+      }
+      return update(payload);
+    };
+    return builder;
+  };
+
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "on my way", dedupeKey: "arrival:1" },
+    {
+      getEnv: envOf(LIVE_TWILIO),
+      fetchImpl: (() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ sid: "SM9", status: "queued" }), {
+            status: 201,
+          }),
+        )) as unknown as typeof fetch,
+      now: OPEN,
+    },
+  );
+
+  assertEquals(sidWrites, 2, "written once, retried once");
+  assertEquals(res.sent, false);
+  assertEquals(res.status, "failed");
+  assertEquals(res.reason, "sid_unrecorded");
+  assertEquals(res.twilioSid, "SM9", "the caller is told which message it was");
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(
+    row.twilio_status,
+    "claimed",
+    "a failed sid write must not advance the durable claim to queued",
+  );
+  assertEquals(row.needs_review, true, "it is put in front of a human");
+  assertEquals(row.error_code, "sid_unrecorded");
+});
+
+Deno.test("R4: a delivery callback that lands mid-flight is never walked back", async () => {
+  // Twilio accepted it and the status callback beat our own settle. 'delivered'
+  // is newer than 'queued' and the acceptance must not overwrite it.
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  });
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", body: "on my way" },
+    {
+      getEnv: envOf(LIVE_TWILIO),
+      fetchImpl: (() => {
+        const row = (fake._data.sms_messages ?? [])[0] as
+          | Record<string, unknown>
+          | undefined;
+        if (row) row.twilio_status = "delivered";
+        return Promise.resolve(
+          new Response(JSON.stringify({ sid: "SM9", status: "queued" }), {
+            status: 201,
+          }),
+        );
+      }) as unknown as typeof fetch,
+      now: OPEN,
+    },
+  );
+  assertEquals(res.status, "queued", "the provider said it accepted it");
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(
+    row.twilio_status,
+    "delivered",
+    "and the row keeps the newer delivery the callback recorded",
+  );
+  assertEquals(row.twilio_sid, "SM9", "the provider id still lands");
+});
+
+Deno.test("R5: a deferred row that did not write is not reported as deferred", async () => {
+  // 'deferred' is a promise that a row exists and a later flush will read it.
+  // Answering it for a row that was never written is a text the caller believes
+  // is coming and nothing will ever send.
+  const { fake } = linkWorld();
+  const realFrom = fake.from.bind(fake);
+  const answer = {
+    data: null,
+    error: { code: "08006", message: "connection failure" },
+  };
+  // deno-lint-ignore no-explicit-any
+  (fake as any).from = (table: string) => {
+    const builder = realFrom(table);
+    if (table !== "sms_messages") return builder;
+    // deno-lint-ignore no-explicit-any
+    (builder as any).insert = () => {
+      // deno-lint-ignore no-explicit-any
+      const failed: any = {
+        select: () => failed,
+        single: () => Promise.resolve(answer),
+        maybeSingle: () => Promise.resolve(answer),
+        // deno-lint-ignore no-explicit-any
+        then: (f: any, r: any) => Promise.resolve(answer).then(f, r),
+      };
+      return failed;
+    };
+    return builder;
+  };
+
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", templateKey: "field_digest" },
+    { getEnv: envOf(LIVE_TWILIO), fetchImpl: mustNotSend(), now: QUIET },
+  );
+  assertEquals(res.deferred, false);
+  assertEquals(res.status, "failed");
+  assertEquals(res.reason, "defer_failed");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    0,
+    "and there is no row for a flush to find",
   );
 });

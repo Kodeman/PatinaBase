@@ -17,6 +17,25 @@
 //     enriching studio_name / party_first_name / a fresh field link on demand,
 //   · honors quiet hours (8am–8pm FIELD_TZ) — off-hours sends are stored as
 //     'deferred' and flushed by the next field-daily run,
+//
+// THE GATES RUN IN ONE ORDER, HERE AND IN THE FLUSH (00640, contract S5):
+//   1. suppression — the carrier's and the recipient's own STOP, as the
+//      provider recorded it (public.sms_is_suppressed). It outranks every
+//      ledger, so it is asked first and an unreadable answer refuses.
+//   2. consent — the studio's own record, plus the studio's own contact rule.
+//   3. FIELD_LINE_PHASE — the SERVER's phase gate, because a cron, a row
+//      trigger and an edge function cannot read a browser flag (S7).
+//   4. quiet hours — and a deferred row stores a RECIPE and a redacted
+//      preview, never a token: the link is minted at actual dispatch, by the
+//      flush, and nowhere else (S6).
+//
+// AND THE ROW IS THE CLAIM. The outbound row is written at 'claimed' BEFORE the
+// provider is called, and 00640's partial unique index over (party, template,
+// dedupe key) means two writers racing over one fact meet in the index and one
+// of them sends. The provider's id is then written BEFORE the status flips, so
+// a crash after the accept leaves a row that can be reconciled by sid. None of
+// this is exactly-once carrier delivery — a provider gives at-least-once, and a
+// claim released with no sid may be retried against a carrier that delivered.
 //   · routes through SMS_DEV_MODE (dry_run: no Twilio, synthetic sid; redirect:
 //     real send to SMS_DEV_REDIRECT_NUMBER with a [DEV→…] prefix; else real),
 //   · logs every attempt: find-or-create the (twilio_number, phone) conversation,
@@ -59,7 +78,36 @@ export interface SendPartySmsInput {
   templateKey?: string;
   /** Template variables. */
   vars?: Record<string, unknown>;
+  /**
+   * The caller's name for the LOGICAL send this is (00640, contract S5). Two
+   * writers racing over one fact — a 00284 row trigger and the field-daily
+   * cron behind it — name the same key, and only one of them puts a text on
+   * the wire: the row IS the claim, and the second insert loses it (23505).
+   * Omitted, the send behaves exactly as it did before 00640.
+   */
+  dedupeKey?: string;
+  /**
+   * The Field Line phase this automation belongs to (contract S7). A new
+   * outbound automation declares its phase and the server gate FIELD_LINE_PHASE
+   * decides whether that phase is live — a browser flag cannot gate a cron, a
+   * trigger or an edge function. Safety fixes, and everything that shipped
+   * before The Field Line, leave it unset: phase 0 is always allowed.
+   */
+  automationPhase?: number;
 }
+
+/**
+ * What happened to the send, as one word (00640, contract S5). ADDITIVE to the
+ * `sent` / `deferred` booleans, which field-daily/core.ts:289 and the portal
+ * still read: 'queued' is the honest word for what a provider ACCEPT means and
+ * the booleans have no room for it.
+ *   · 'sent'     — it is gone (a terminal provider status, or a dev dry run).
+ *   · 'queued'   — the provider accepted it, or another writer already holds
+ *                  this logical send. Not delivery. Never "read".
+ *   · 'deferred' — quiet hours; it is stored and `dueAt` says when it is due.
+ *   · 'failed'   — refused by a gate, or the provider said no.
+ */
+export type SendStatus = "sent" | "queued" | "deferred" | "failed";
 
 export interface SendPartySmsResult {
   sent: boolean;
@@ -69,6 +117,13 @@ export interface SendPartySmsResult {
   conversationId?: string;
   twilioSid?: string;
   body?: string;
+  /** ADDITIVE (00640, contract S5) — always set by sendPartySms. */
+  status?: SendStatus;
+  /** When a deferred message becomes due: the next moment inside the window. */
+  dueAt?: string;
+  /** Twilio's own error code (e.g. '21610'), or `http_<status>` when the
+   *  provider answered with something that was not its JSON error shape. */
+  provider_code?: string;
 }
 
 type DevMode = "dry_run" | "redirect" | "off";
@@ -98,6 +153,53 @@ export function hourInTimezone(now: Date, tz: string): number {
 export function isQuietHours(now: Date, tz: string): boolean {
   const hour = hourInTimezone(now, tz);
   return hour < 8 || hour >= 20;
+}
+
+/**
+ * The next moment inside the 8am–8pm window in `tz`, for a deferred message's
+ * `dueAt`. Walked in quarter-hours through the named zone rather than computed
+ * from a UTC offset, because the offset is the thing that moves: a defer on the
+ * night America/Chicago springs forward is due at 8am local, which is not
+ * "now + N hours" for any fixed N.
+ */
+export function nextSendWindowStart(now: Date, tz: string): Date {
+  const STEP_MS = 15 * 60 * 1000;
+  let t = new Date(now.getTime());
+  // Two days of quarter-hours is far more than the widest quiet window; the
+  // bound exists so a bad tz can never spin here.
+  for (let i = 0; i < 4 * 48; i++) {
+    if (!isQuietHours(t, tz)) return t;
+    t = new Date(t.getTime() + STEP_MS);
+  }
+  return t;
+}
+
+/**
+ * The server-side phase gate (contract S7). FIELD_LINE_PHASE is an env/secret
+ * because the things it has to gate — pg_cron, row triggers, edge functions —
+ * cannot read a browser flag. Unset is 0: nothing new automated sends until
+ * someone sets it. Safety fixes (authority, receipts, suppression, the
+ * compliance line) are unconditional and never ask this.
+ */
+export function fieldLinePhase(deps: SmsDeps): number {
+  const raw = env(deps, "FIELD_LINE_PHASE");
+  const n = Number.parseInt(raw ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// A field link is `<portal>/field/<64 hex>`; a site-request guest link is the
+// same shape with its own token. Either way the path segment IS the credential.
+const FIELD_LINK_TOKEN_RE = /(\/field\/)[A-Za-z0-9._~-]{8,}/g;
+
+/**
+ * Strip the credential out of anything that is about to be STORED or LOGGED
+ * (contract S6: no raw token in any durable log or view). Until this, a
+ * {{link}} template's rendered body went into sms_messages.body verbatim — the
+ * table 00283 exists to keep tokens out of — and a deferred row then re-sent
+ * that hours-old URL. The link still goes out; it just stops being at rest.
+ */
+export function redactFieldLinkTokens(text: string): string {
+  return text.replace(FIELD_LINK_TOKEN_RE, "$1[redacted]");
 }
 
 /**
@@ -135,11 +237,35 @@ interface TwilioCreds {
   statusCallbackUrl?: string;
 }
 
+/**
+ * Twilio's OWN error code out of a refused create — 21610 (the recipient
+ * unsubscribed at the carrier), 21614 (not a mobile number), 30034 (the number
+ * is not registered for A2P), and so on. It is the difference between "the
+ * carrier refused this recipient" and "our request was malformed", and until
+ * this the rail kept only a concatenated message string. Falls back to
+ * `http_<status>` when the body is not Twilio's JSON error shape (a proxy page,
+ * an empty 502) so the caller still gets something it can switch on.
+ */
+function twilioErrorCode(body: string, httpStatus: number): string {
+  try {
+    const parsed = JSON.parse(body) as { code?: unknown };
+    const code = parsed?.code;
+    if (typeof code === "number" || (typeof code === "string" && code)) {
+      return String(code);
+    }
+  } catch {
+    // Not JSON — the transport status is the only honest code we have.
+  }
+  return `http_${httpStatus}`;
+}
+
 async function sendViaTwilio(
   creds: TwilioCreds,
   params: { to: string; body: string },
   fetchImpl: typeof fetch,
-): Promise<{ ok: boolean; sid?: string; status?: string; error?: string }> {
+): Promise<
+  { ok: boolean; sid?: string; status?: string; error?: string; code?: string }
+> {
   const url =
     `https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}/Messages.json`;
   const form = new URLSearchParams();
@@ -162,10 +288,45 @@ async function sendViaTwilio(
 
   if (!res.ok) {
     const text = await res.text();
-    return { ok: false, error: `Twilio ${res.status}: ${text}` };
+    return {
+      ok: false,
+      error: `Twilio ${res.status}: ${text}`,
+      code: twilioErrorCode(text, res.status),
+    };
   }
   const data = await res.json();
   return { ok: true, sid: data.sid, status: data.status ?? "queued" };
+}
+
+/**
+ * GATE 1 — THE SUPPRESSION LAYER (contract S2), asked before the consent
+ * record and answering for the (sender number, recipient) pair alone. A STOP
+ * is a fact about a handset and a number, not about a studio: 00639's
+ * sms_suppressions survives adding a new party on a new project, so a studio
+ * that records a fresh invite after a STOP mints a record that cannot send.
+ * That is what closes the `unknown` verdict gap the record alone left open.
+ *
+ * FAIL-CLOSED, and the three answers are three facts: true (suppressed),
+ * false (not), null (the question could not be asked — treat as a refusal,
+ * exactly as channelConsentVerdict treats an unreadable record).
+ */
+export async function smsIsSuppressed(
+  supabase: SupabaseClient,
+  senderNumber: string,
+  recipientPhone: string,
+): Promise<boolean | null> {
+  const { data, error } = await supabase.rpc("sms_is_suppressed", {
+    p_sender: senderNumber,
+    p_recipient: recipientPhone,
+  });
+  if (error) {
+    console.error(
+      "smsIsSuppressed: refusing, the suppression layer could not be read",
+      error,
+    );
+    return null;
+  }
+  return data === true;
 }
 
 // ── Consent resolution ──────────────────────────────────────────────────────
@@ -339,6 +500,14 @@ export async function orgsOfProjects(
 /** What the studio's own consent record says about this number. */
 export type ChannelConsentVerdict = "refuse" | "allow" | "unknown";
 
+export interface ChannelConsentDecision {
+  verdict: ChannelConsentVerdict;
+  /** Did a studio_channel_consent ROW answer, or is this the absence of one? */
+  recordPresent: boolean;
+  /** The answering record's evidence stamp, for the invite's send claim. */
+  recordGeneration: string | null;
+}
+
 /**
  * THE ONLY consent gate (migration 00594, ruling R-AW). Consent is a fact about
  * a (studio, channel value) pair, held in studio_channel_consent — and that
@@ -391,6 +560,34 @@ export async function channelConsentVerdict(
   phone: string,
   projectId: string | null,
 ): Promise<ChannelConsentVerdict> {
+  return (await channelConsentDecision(supabase, phone, projectId)).verdict;
+}
+
+/**
+ * The same question, with the one extra fact the INVITE carve-out needs:
+ * did a studio_channel_consent ROW answer it?
+ *
+ * `unknown` has two sources and they are not the same permission (contract S2,
+ * closing the gap at the phone-global branch below). A studio's own record
+ * reading `pending` IS the double opt-in's first half — the invite went out,
+ * the recipient has not answered — and the invite may go. A project with no
+ * resolvable studio also answers `unknown` whenever nothing on the number has
+ * refused, and that is not a pending invite: it is NO RECORD AT ALL, the
+ * `not_asked` R-AW makes a refusal. Before this, the invite gate could not tell
+ * them apart, so the one send allowed past a non-granted record could reach a
+ * number no studio had ever asked. `recordPresent` is how it tells.
+ *
+ * `recordGeneration` is the record's own evidence stamp (`recorded_at`, else
+ * `updated_at`). The invite's send claim is keyed on it, so one invite goes out
+ * per generation of consent: the fold -> reconsent -> START recovery path
+ * writes a fresh stamp and earns a fresh invite, while a retry of the same
+ * dispatch collides with the claim already held (contract S5).
+ */
+export async function channelConsentDecision(
+  supabase: SupabaseClient,
+  phone: string,
+  projectId: string | null,
+): Promise<ChannelConsentDecision> {
   const { org, failed } = await resolveProjectOrg(supabase, projectId);
 
   // A studio that could not be resolved is not a studio that does not exist
@@ -402,13 +599,13 @@ export async function channelConsentVerdict(
       "channelConsentVerdict: refusing, the owning studio could not be resolved",
       { projectId },
     );
-    return "refuse";
+    return { verdict: "refuse", recordPresent: false, recordGeneration: null };
   }
 
   if (org) {
     const { data: record, error: recordError } = await supabase
       .from("studio_channel_consent")
-      .select("status, refusal_unanswered")
+      .select("status, refusal_unanswered, recorded_at, updated_at")
       .eq("organization_id", org)
       .eq("channel_kind", "sms")
       .eq("channel_value", phone)
@@ -418,26 +615,39 @@ export async function channelConsentVerdict(
         "channelConsentVerdict: refusing, the consent record could not be read",
         recordError,
       );
-      return "refuse";
+      return { verdict: "refuse", recordPresent: false, recordGeneration: null };
     }
     if (!record) {
       // No record is `not_asked`, and `not_asked` refuses (R-AW). The fold ran
       // inside 00594, so every seat that ever carried a verdict has a record
       // behind it; a pair with none was never asked by this studio.
-      return "refuse";
+      return { verdict: "refuse", recordPresent: false, recordGeneration: null };
     }
     const row = record as {
       status: string;
       refusal_unanswered?: boolean | null;
+      recorded_at?: string | null;
+      updated_at?: string | null;
     };
+    const generation = row.recorded_at ?? row.updated_at ?? null;
     // A refusal the recipient has not answered still stands, whatever the
     // status now says (r6 M6-3), so it is read before the status is.
-    if (row.refusal_unanswered === true) return "refuse";
-    if (row.status === "granted") return "allow";
+    if (row.refusal_unanswered === true) {
+      return { verdict: "refuse", recordPresent: true, recordGeneration: generation };
+    }
+    if (row.status === "granted") {
+      return { verdict: "allow", recordPresent: true, recordGeneration: generation };
+    }
     // `pending` is the invite in flight — sendPartySms's invite gate owns it.
-    if (row.status === "pending") return "unknown";
+    if (row.status === "pending") {
+      return {
+        verdict: "unknown",
+        recordPresent: true,
+        recordGeneration: generation,
+      };
+    }
     // `opted_out`, and `not_asked` recorded by the fold: both refuse.
-    return "refuse";
+    return { verdict: "refuse", recordPresent: true, recordGeneration: generation };
   }
 
   // No studio resolves at all — nothing to scope to, so the reduction stays
@@ -469,13 +679,20 @@ export async function channelConsentVerdict(
       "channelConsentVerdict: refusing, the phone-global record scan failed",
       recordScanError,
     );
-    return "refuse";
+    return { verdict: "refuse", recordPresent: false, recordGeneration: null };
   }
   const anyRecordRefuses = (recordRows ?? []).some((r) => {
     const row = r as { status: string; refusal_unanswered?: boolean | null };
     return row.status === "opted_out" || row.refusal_unanswered === true;
   });
-  return anyRecordRefuses ? "refuse" : "unknown";
+  // recordPresent stays FALSE on this branch however many rows the scan saw:
+  // no studio owns this send, so no record has GRANTED or asked anything for
+  // it. The scan can only ever refuse here, never permit (contract S2).
+  return {
+    verdict: anyRecordRefuses ? "refuse" : "unknown",
+    recordPresent: false,
+    recordGeneration: null,
+  };
 }
 
 /**
@@ -664,14 +881,71 @@ async function mintFieldLink(
   return token ? `${clientPortalUrl.replace(/\/$/, "")}/field/${token}` : null;
 }
 
+/** What a deferred row's `body` shows where the link will be. */
+const LINK_PLACEHOLDER = "[link at send]";
+
+// A stored recipe says WHAT TO SAY; it must never be able to say it on its own.
+// These two shapes are the credentials the rail hands out: a `/field/<token>`
+// URL (party field link, site-request guest link) and the bare token inside it.
+const FIELD_LINK_URL_RE = /\/field\//;
+const RAW_TOKEN_RE = /[0-9a-fA-F]{32,}/;
+
+function carriesCredential(value: unknown): boolean {
+  const text = typeof value === "string"
+    ? value
+    : JSON.stringify(value ?? null) ?? "";
+  return FIELD_LINK_URL_RE.test(text) || RAW_TOKEN_RE.test(text);
+}
+
+/**
+ * The params a recipe may KEEP (contract S6). A deferred row sits in
+ * sms_messages for hours and the recipe is read back by a cron, so a caller's
+ * `link` var — or any param that happens to carry a token — would be a bearer
+ * credential at rest, which is the whole thing the redacted preview body was
+ * introduced to stop. It is dropped here and the link is minted again at actual
+ * dispatch; `link_kind` is what the row carries in its place.
+ */
+function safeRecipeParams(
+  vars: Record<string, unknown> | undefined,
+): { params: Record<string, unknown>; droppedLink: boolean } {
+  const params: Record<string, unknown> = {};
+  let droppedLink = false;
+  for (const [key, value] of Object.entries(vars ?? {})) {
+    if (key === "link" || carriesCredential(value)) {
+      droppedLink = true;
+      continue;
+    }
+    params[key] = value;
+  }
+  return { params, droppedLink };
+}
+
+interface RenderedBody {
+  body: string | null;
+  /** 'field' when the template asks for a field link, else null. Recorded on
+   *  the recipe so the flush knows what to mint, without carrying a token. */
+  linkKind: string | null;
+}
+
+/**
+ * Render the body. `mintLink` is the whole of contract S6's ordering fix: the
+ * link is minted at ACTUAL dispatch and nowhere else. This used to be called
+ * before the quiet-hours gate, so an 8pm digest minted a token, deferred, and
+ * the trade woke to a URL that had been alive since the night before — while
+ * the mint itself revoked the link they were already using. Rendering with
+ * `mintLink: false` produces the same copy with a placeholder where the URL
+ * goes: readable in the thread, credential-free at rest, and re-rendered from
+ * the recipe when the message actually goes out.
+ */
 async function resolveBody(
   supabase: SupabaseClient,
   input: SendPartySmsInput,
   recipient: Recipient,
   clientPortalUrl: string,
-): Promise<string | null> {
-  if (input.body) return input.body;
-  if (!input.templateKey) return null;
+  opts: { mintLink: boolean },
+): Promise<RenderedBody> {
+  if (input.body) return { body: input.body, linkKind: null };
+  if (!input.templateKey) return { body: null, linkKind: null };
 
   const { data: tmpl } = await supabase
     .from("email_templates")
@@ -679,12 +953,12 @@ async function resolveBody(
     .eq("slug", input.templateKey)
     .maybeSingle();
   if (!tmpl || (tmpl as { is_active?: boolean }).is_active === false) {
-    return null;
+    return { body: null, linkKind: null };
   }
   const raw = (tmpl as { html_content?: string }).html_content?.trim()
     ? String((tmpl as { html_content: string }).html_content)
     : String((tmpl as { subject_default?: string }).subject_default ?? "");
-  if (!raw) return null;
+  if (!raw) return { body: null, linkKind: null };
 
   const vars: Record<string, unknown> = { ...(input.vars ?? {}) };
 
@@ -712,14 +986,17 @@ async function resolveBody(
     vars.project_name = (proj as { name?: string } | null)?.name ??
       "your project";
   }
+  let linkKind: string | null = null;
   if (
     /\{\{\s*link\s*\}\}/.test(raw) && vars.link == null && recipient.partyId
   ) {
-    vars.link =
-      (await mintFieldLink(supabase, recipient.partyId, clientPortalUrl)) ?? "";
+    linkKind = "field";
+    vars.link = opts.mintLink
+      ? (await mintFieldLink(supabase, recipient.partyId, clientPortalUrl)) ?? ""
+      : LINK_PLACEHOLDER;
   }
 
-  return interpolate(raw, vars);
+  return { body: interpolate(raw, vars), linkKind };
 }
 
 // ── Conversation + message logging ──────────────────────────────────────────
@@ -763,25 +1040,148 @@ async function findOrCreateConversation(
   return (created as { id?: string } | null)?.id ?? null;
 }
 
+/**
+ * The recipe a deferred row is re-rendered from (00640, contract S5/S6).
+ *
+ * It holds WHAT TO SAY, never the credential that says it: a template key, the
+ * params it interpolates, the party and project it belongs to, and — when the
+ * copy carries a link — the KIND of link to mint at send. A token never enters
+ * this object, so a deferred row at rest cannot leak one, and the flush mints
+ * fresh at the moment the text actually goes out.
+ */
+export interface SendRecipe {
+  /** NULL when the caller supplied a literal body: the stored body IS the body. */
+  template_key: string | null;
+  params: Record<string, unknown>;
+  party_id: string | null;
+  project_id: string | null;
+  link_kind: string | null;
+  /**
+   * The phase this automation declared when it was deferred (contract S7). A
+   * deferred row is sent by a LATER process, so the gate has to travel with it:
+   * without this, a phase-1 digest deferred while the phase was live went out
+   * the next morning from a server that had since been turned back to phase 0.
+   */
+  automation_phase: number | null;
+}
+
+interface OutboundRow {
+  conversation_id: string | null;
+  body: string;
+  twilio_sid: string | null;
+  twilio_status: string;
+  party_id: string | null;
+  project_id: string | null;
+  template_key: string | null;
+  site_request_dispatch_outbox_id: string | null;
+  recipe: SendRecipe | null;
+  dedupe_key: string | null;
+  claimed_at: string | null;
+}
+
+/** Postgres unique_violation — the other writer already holds this send. */
+function isUniqueViolation(error: unknown): boolean {
+  const e = error as { code?: unknown; message?: unknown } | null;
+  return String(e?.code ?? "") === "23505" ||
+    /duplicate key value/i.test(String(e?.message ?? ""));
+}
+
+/**
+ * Write the outbound row — which IS the claim on the logical send (contract
+ * S5). `sms_messages_send_claim_uniq` (00640) makes (party, template, dedupe
+ * key) unique while the row is still live, so two writers racing over one fact
+ * — a 00284 row trigger and the field-daily cron behind it — meet in the index
+ * and exactly one of them goes on to call the provider. The loser is told so
+ * (`duplicate: true`); it is not an error and it is not a send.
+ */
 async function insertOutbound(
   supabase: SupabaseClient,
-  row: {
-    conversation_id: string | null;
-    body: string;
-    twilio_sid: string | null;
-    twilio_status: string;
-    party_id: string | null;
-    project_id: string | null;
-    template_key: string | null;
-    site_request_dispatch_outbox_id: string | null;
-  },
-): Promise<string | undefined> {
-  const { data } = await supabase
+  row: OutboundRow,
+): Promise<{ id?: string; duplicate: boolean }> {
+  const { data, error } = await supabase
     .from("sms_messages")
     .insert({ direction: "outbound", ...row })
     .select("id")
     .single();
-  return (data as { id?: string } | null)?.id;
+  if (error) {
+    if (isUniqueViolation(error)) return { duplicate: true };
+    console.error(
+      "insertOutbound: the outbound row could not be written",
+      (error as { message?: string }).message ?? error,
+    );
+    return { duplicate: false };
+  }
+  return { id: (data as { id?: string } | null)?.id, duplicate: false };
+}
+
+/**
+ * The statuses a settle may advance FROM (contract S5). Settlement is
+ * monotonic: only a row this process still holds — 'claimed' when it took the
+ * claim, 'sending' once a provider has it — may be moved to queued/sent/failed.
+ * A delivery callback that landed in the window between the provider accepting
+ * and this write is NEWER than anything we are about to say, and walking it
+ * back turned a delivered text into a queued one.
+ */
+const SETTLEABLE_FROM = ["claimed", "sending"];
+
+/**
+ * Write the provider's id onto the claim row BEFORE any success is reported
+ * (contract S5). Retried once, because the alternative to a second attempt is a
+ * row that names a message already on the wire by nothing at all: the status
+ * callback matches on twilio_sid and sms_reconcile_accepted_send() finds it by
+ * twilio_sid, so a row with a NULL sid is a send nobody can reconcile and
+ * sms_release_stale_send_claims() will hand back for a second carrier attempt.
+ * Answers false when the id could not be recorded at all.
+ */
+async function persistProviderSid(
+  supabase: SupabaseClient,
+  messageId: string,
+  twilioSid: string,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { error } = await supabase
+        .from("sms_messages")
+        .update({ twilio_sid: twilioSid })
+        .eq("id", messageId);
+      if (!error) return true;
+      console.error(
+        `persistProviderSid: attempt ${attempt + 1} could not record the ` +
+          `provider id ${twilioSid} on ${messageId}`,
+        (error as { message?: string }).message ?? error,
+      );
+    } catch (err) {
+      console.error(
+        `persistProviderSid: attempt ${attempt + 1} threw recording the ` +
+          `provider id ${twilioSid} on ${messageId}`,
+        err,
+      );
+    }
+  }
+  // THE AUDIT LOG IS THE ONLY PLACE THIS SID NOW LIVES. Say it once, plainly,
+  // with the row it belongs to, and flag the row for a human: the message is on
+  // the wire and the room cannot see which one it is.
+  console.error(
+    "persistProviderSid: UNRECORDED PROVIDER SEND — the provider accepted " +
+      `${twilioSid} for sms_messages ${messageId} and the id could not be ` +
+      "written. This send needs review; do not retry it blind.",
+  );
+  try {
+    await supabase
+      .from("sms_messages")
+      .update({
+        needs_review: true,
+        error_code: "sid_unrecorded",
+        error_message:
+          `The provider accepted this send as ${twilioSid}; the id could not ` +
+          "be recorded, so nothing can settle it automatically.",
+      })
+      .eq("id", messageId)
+      .in("twilio_status", SETTLEABLE_FROM);
+  } catch (err) {
+    console.error("persistProviderSid: the review flag failed too", err);
+  }
+  return false;
 }
 
 // ── The send path ───────────────────────────────────────────────────────────
@@ -807,57 +1207,73 @@ export async function sendPartySms(
   const redirectNumber = env(deps, "SMS_DEV_REDIRECT_NUMBER") ?? "";
   const isInvite = input.templateKey === "sms_optin_invite";
 
-  // ── Resolve recipient + consent gate ──────────────────────────────────────
+  /** A gate said no. Nothing was rendered, nothing was minted, nothing sent. */
+  const refused = (reason: string): SendPartySmsResult => ({
+    sent: false,
+    status: "failed",
+    reason,
+  });
+
+  // ── Resolve recipient ─────────────────────────────────────────────────────
   const recipient = await resolveRecipient(supabase, input);
-  if (!recipient.phone) {
-    return { sent: false, reason: "no_phone_number" };
-  }
-  // FIRST: the studio's own consent record for this number (00594).
-  const verdict = await channelConsentVerdict(
+  if (!recipient.phone) return refused("no_phone_number");
+
+  // The physical number sms-inbound keys the thread on — never the MG…
+  // Messaging Service SID, which would split it. Resolved BEFORE any gate
+  // because the suppression ledger is keyed on the (sender, recipient) pair,
+  // and fail-closed because a send that cannot be logged must not go.
+  const conversationNumber = smsConversationNumber(deps);
+  if (!conversationNumber) return refused("conversation_number_not_configured");
+
+  // ── GATE 1: suppression ───────────────────────────────────────────────────
+  // FIRST, ahead of consent (contract S5). Suppression is the carrier's and the
+  // recipient's own STOP as the provider recorded it; it outranks anything a
+  // studio's ledger says, so asking consent first could only ever produce a
+  // permitted send the carrier will reject. An unreadable ledger refuses: not
+  // knowing whether a number is suppressed is not permission to text it.
+  const suppressed = await smsIsSuppressed(
+    supabase,
+    conversationNumber,
+    recipient.phone,
+  );
+  if (suppressed === null) return refused("suppression_unreadable");
+  if (suppressed) return refused("suppressed");
+
+  // ── GATE 2: consent ───────────────────────────────────────────────────────
+  // The studio's own consent record for this number (00594), and nothing else.
+  const decision = await channelConsentDecision(
     supabase,
     recipient.phone,
     recipient.projectId,
   );
-  if (verdict === "refuse") {
-    return { sent: false, reason: "opted_out" };
-  }
-  // AND THAT IS THE WHOLE GATE (R-AY, final-run MAJOR-1 / MAJOR-2). There was a
-  // SECOND check here until this pass: PR-x's fail-closed legacy reduction over
-  // project_parties.sms_consent_status, kept "until the backfill is proven".
-  // It is deleted, in both directions, and the two directions are two defects:
-  //   · it REFUSED what the record allows. A number whose record says granted
-  //     over a frozen seat still reading opted_out — the design's own recovery
-  //     path, fold → reconsent → the recipient's own START — printed "Texting"
-  //     on the Call Sheet row, in the Call Sheet vitals, on the Directory row
-  //     and in field_activity_summary while every send came back
-  //     {sent:false, reason:"opted_out"} off this leg;
-  //   · it AUTHORISED what no record allows. On the no-studio branch the
-  //     verdict is `unknown` whenever nothing on the number has refused, and
-  //     this leg then let a frozen `granted` seat send while a frozen
-  //     `not_asked` seat on the same population did not — a frozen column
-  //     deciding a live text, which is exactly what the freeze denies.
-  // A seat carries no fact the record does not (00594 folded every seat in the
-  // same migration; the freeze means none has carried news since), so the
-  // record answers alone: a non-invite needs `allow`, and the invite keeps its
-  // own door below (`unknown` is the invite in flight).
-  // CR3-9: AND THE STUDIO'S OWN RULE. A recorded grant is not permission when
+  if (decision.verdict === "refuse") return refused("opted_out");
+  // AND THE STUDIO'S OWN RULE (CR3-9). A recorded grant is not permission when
   // the studio has written down that this person is never texted, and the rule
   // binds the double-opt-in invite too: "never text" is not "never text except
   // once, to ask".
-  if (await contactRuleForbidsSms(supabase, recipient.partyId, recipient.phone)) {
-    return { sent: false, reason: "contact_rule_forbids_sms" };
+  if (
+    await contactRuleForbidsSms(supabase, recipient.partyId, recipient.phone)
+  ) {
+    return refused("contact_rule_forbids_sms");
   }
-  const studioGranted = verdict === "allow";
+  const studioGranted = decision.verdict === "allow";
   if (!isInvite && !studioGranted) {
     // Only the double-opt-in invite may reach a number the record has not
-    // granted — an unresolvable studio included, which now refuses uniformly
-    // instead of asking the seat.
-    return { sent: false, reason: "not_consented" };
+    // granted — an unresolvable studio included, which refuses uniformly
+    // rather than asking the frozen seat.
+    return refused("not_consented");
+  }
+  if (isInvite && !studioGranted) {
+    // `unknown` IS NOT ONE PERMISSION (contract S2). A studio's own record
+    // reading `pending` is the double opt-in's first half and earns the invite.
+    // A project with no resolvable studio also answers `unknown` whenever
+    // nothing on the number has refused — and that is no record at all, the
+    // `not_asked` R-AW makes a refusal. The invite door opens for the first and
+    // not the second.
+    if (!decision.recordPresent) return refused("not_consented");
   }
   if (isInvite) {
-    if (!input.partyId) {
-      return { sent: false, reason: "consent_evidence_required" };
-    }
+    if (!input.partyId) return refused("consent_evidence_required");
     const { data: proof } = await supabase
       .from("project_parties")
       .select(
@@ -870,24 +1286,17 @@ export async function sendPartySms(
       !proof?.sms_consent_disclosure_version ||
       !String(proof.sms_consent_evidence ?? "").trim()
     ) {
-      return { sent: false, reason: "consent_evidence_required" };
+      return refused("consent_evidence_required");
     }
   }
 
-  // Key the conversation on the physical number sms-inbound keys on — never
-  // the MG… Messaging Service SID, which would split the thread. Checked
-  // fail-closed BEFORE resolveBody() so a misconfigured conversation number
-  // never mints (or revokes) a field-link token for a send that can't be
-  // logged.
-  const conversationNumber = smsConversationNumber(deps);
-  if (!conversationNumber) {
-    return { sent: false, reason: "conversation_number_not_configured" };
-  }
-
-  // ── Resolve body ──────────────────────────────────────────────────────────
-  const body = await resolveBody(supabase, input, recipient, clientPortalUrl);
-  if (!body || !body.trim()) {
-    return { sent: false, reason: "empty_body" };
+  // ── GATE 3: the phase gate ────────────────────────────────────────────────
+  // A new outbound automation declares the phase it belongs to and the SERVER
+  // decides whether that phase is live (contract S7). Phase 0 — everything that
+  // shipped before The Field Line, and every safety fix — never asks.
+  const declaredPhase = input.automationPhase ?? 0;
+  if (declaredPhase > 0 && declaredPhase > fieldLinePhase(deps)) {
+    return refused("field_line_phase_off");
   }
 
   const convId = await findOrCreateConversation(
@@ -897,37 +1306,182 @@ export async function sendPartySms(
     recipient.partyId,
     recipient.projectId,
   );
-  const auditBody = input.auditBody?.trim() || body;
 
-  // ── Quiet hours → defer (store, do not send) ──────────────────────────────
+  // The name of the logical send, for the claim index. A caller that knows it
+  // says so; the invite names its own, keyed on the consent record's evidence
+  // stamp so that a fold → reconsent → START recovery earns a fresh invite and
+  // a retried dispatch does not.
+  const dedupeKey = input.dedupeKey ??
+    (isInvite && decision.recordGeneration
+      ? `optin:${decision.recordGeneration}`
+      : null);
+
+  const templateKey = input.templateKey ?? null;
+  const rendersFromTemplate = !input.body && !!templateKey;
+
+  // ── GATE 4: quiet hours → defer (store, do not send, DO NOT MINT) ─────────
   if (isQuietHours(now, fieldTz)) {
+    const dueAt = nextSendWindowStart(now, fieldTz).toISOString();
+    // Rendered WITHOUT minting: this copy is a PREVIEW for the thread, and the
+    // link it names does not exist yet (contract S6).
+    const preview = await resolveBody(
+      supabase,
+      input,
+      recipient,
+      clientPortalUrl,
+      { mintLink: false },
+    );
+    if (!preview.body || !preview.body.trim()) return refused("empty_body");
+    const previewBody = redactFieldLinkTokens(
+      input.auditBody?.trim() || preview.body,
+    );
+
     if (input.deferToCaller) {
+      // A caller-owned durable outbox retries this same call later; nothing is
+      // stored here, so nothing here has to be re-renderable.
       return {
         sent: false,
         deferred: true,
+        status: "deferred",
         reason: "quiet_hours",
         conversationId: convId ?? undefined,
-        body: auditBody,
+        body: previewBody,
+        dueAt,
       };
     }
-    const messageId = await insertOutbound(supabase, {
+
+    const safeParams = safeRecipeParams(input.vars);
+    const recipe: SendRecipe | null = rendersFromTemplate || declaredPhase > 0
+      ? {
+        template_key: rendersFromTemplate ? templateKey : null,
+        params: safeParams.params,
+        party_id: recipient.partyId,
+        project_id: recipient.projectId,
+        // A caller's own `link` var was just dropped from the params, so the
+        // row has to say that a link still belongs in this copy — the flush
+        // mints it fresh rather than re-sending an hours-old credential.
+        link_kind: preview.linkKind ??
+          (safeParams.droppedLink ? "field" : null),
+        automation_phase: declaredPhase > 0 ? declaredPhase : null,
+      }
+      : null;
+    // A row with no TEMPLATE to render from is flushed by sending the body
+    // stored on it, so the body stored has to BE the body to send. A raw body
+    // that the audit copy replaces, or that redaction would alter, is not:
+    // storing it would put the preview on the wire at 8am. Refuse instead of
+    // sending the wrong words.
+    if (
+      !rendersFromTemplate &&
+      (previewBody !== (input.body ?? "") ||
+        previewBody !== redactFieldLinkTokens(previewBody))
+    ) {
+      return refused("defer_requires_recipe");
+    }
+
+    const claim = await insertOutbound(supabase, {
       conversation_id: convId,
-      body: auditBody,
+      body: previewBody,
       twilio_sid: null,
       twilio_status: "deferred",
       party_id: recipient.partyId,
       project_id: recipient.projectId,
-      template_key: input.templateKey ?? null,
+      template_key: templateKey,
       site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ??
         null,
+      recipe,
+      dedupe_key: dedupeKey,
+      claimed_at: null,
     });
+    if (claim.duplicate) {
+      return {
+        sent: false,
+        status: "queued",
+        reason: "duplicate_send_claim",
+        conversationId: convId ?? undefined,
+      };
+    }
+    if (!claim.id) {
+      // THE INSERT DID NOT LAND. 'deferred' is a promise that a row exists and
+      // a later flush will read it; answering it for a row that was never
+      // written is a text the caller believes is coming and nothing will ever
+      // send (SQ-37 R5, reproduced with a synthetic 08006 on the insert).
+      return {
+        sent: false,
+        deferred: false,
+        status: "failed",
+        reason: "defer_failed",
+        conversationId: convId ?? undefined,
+      };
+    }
     return {
       sent: false,
       deferred: true,
-      messageId,
+      status: "deferred",
+      messageId: claim.id,
       conversationId: convId ?? undefined,
-      body,
+      body: previewBody,
+      dueAt,
     };
+  }
+
+  // ── Render, MINTING THE LINK HERE AND NOWHERE ELSE ────────────────────────
+  const rendered = await resolveBody(
+    supabase,
+    input,
+    recipient,
+    clientPortalUrl,
+    { mintLink: true },
+  );
+  if (!rendered.body || !rendered.body.trim()) return refused("empty_body");
+  const body = rendered.body;
+  // What the thread keeps. Redacted in both directions: a caller's audit copy
+  // is used as given, and a body we rendered has its token taken out of it, so
+  // no stored row and no log line carries a live credential (contract S6).
+  const auditBody = redactFieldLinkTokens(input.auditBody?.trim() || body);
+  // The recipe is durable, so it is credential-free here for exactly the same
+  // reason it is on the deferred row: a row this send claimed can be read back
+  // by the reconciliation sweep long after the link it named has been handed out.
+  const sentParams = safeRecipeParams(input.vars);
+
+  // ── Claim the logical send BEFORE the provider is called ──────────────────
+  const claim = await insertOutbound(supabase, {
+    conversation_id: convId,
+    body: auditBody,
+    twilio_sid: null,
+    twilio_status: "claimed",
+    party_id: recipient.partyId,
+    project_id: recipient.projectId,
+    template_key: templateKey,
+    site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ?? null,
+    recipe: rendersFromTemplate
+      ? {
+        template_key: templateKey,
+        params: sentParams.params,
+        party_id: recipient.partyId,
+        project_id: recipient.projectId,
+        link_kind: rendered.linkKind ??
+          (sentParams.droppedLink ? "field" : null),
+        automation_phase: declaredPhase > 0 ? declaredPhase : null,
+      }
+      : null,
+    dedupe_key: dedupeKey,
+    claimed_at: now.toISOString(),
+  });
+  if (claim.duplicate) {
+    // Another writer holds this send. Not an error, and not a second text.
+    return {
+      sent: false,
+      status: "queued",
+      reason: "duplicate_send_claim",
+      conversationId: convId ?? undefined,
+      body: auditBody,
+    };
+  }
+  const messageId = claim.id;
+  if (!messageId) {
+    // The row IS the claim and the record of the send. Without it a text would
+    // go out that nothing in the room can see, reconcile or stop.
+    return refused("send_not_claimable");
   }
 
   // ── Send (dev-mode aware) ─────────────────────────────────────────────────
@@ -935,6 +1489,7 @@ export async function sendPartySms(
   let twilioStatus = "queued";
   let sent = false;
   let reason: string | undefined;
+  let providerCode: string | undefined;
   let sendBody = body;
 
   if (mode === "dry_run") {
@@ -968,20 +1523,45 @@ export async function sendPartySms(
       } else {
         twilioStatus = "failed";
         reason = r.error;
+        providerCode = r.code;
       }
     }
   }
 
-  const messageId = await insertOutbound(supabase, {
-    conversation_id: convId,
-    body: auditBody,
-    twilio_sid: twilioSid,
-    twilio_status: twilioStatus,
-    party_id: recipient.partyId,
-    project_id: recipient.projectId,
-    template_key: input.templateKey ?? null,
-    site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ?? null,
-  });
+  // THE PROVIDER'S ID IS RECORDED BEFORE THE STATUS FLIPS (contract S5). This
+  // is the crash window the outbox has to survive: the provider has accepted
+  // the message — it is already going out — and this process dies before the
+  // row says so. Writing the sid first means the row still reads 'claimed' and
+  // carries the id, so the status callback settles it by sid and
+  // sms_reconcile_accepted_send() closes it by hand. It does NOT make carrier
+  // delivery exactly-once: a claim released with no sid (the narrower window
+  // between the accept and this write) can be retried, and the carrier may
+  // still deliver twice. At-least-once is what a provider gives.
+  if (twilioSid && !(await persistProviderSid(supabase, messageId, twilioSid))) {
+    // The send happened and we cannot name it. Reporting 'queued' here would
+    // tell the caller a text it can track is on its way, when the row carries
+    // no id to track it by; the honest answer is that this send needs a human.
+    return {
+      sent: false,
+      status: "failed",
+      reason: "sid_unrecorded",
+      messageId,
+      conversationId: convId ?? undefined,
+      twilioSid,
+      body: auditBody,
+    };
+  }
+  const settle: Record<string, unknown> = { twilio_status: twilioStatus };
+  if (providerCode) settle.error_code = providerCode;
+  if (reason) settle.error_message = reason;
+  // Monotonic (contract S5): a delivery callback that arrived while the
+  // provider call was in flight is newer than this acceptance, and the row it
+  // settled is not walked back to 'queued'.
+  await supabase
+    .from("sms_messages")
+    .update(settle)
+    .eq("id", messageId)
+    .in("twilio_status", SETTLEABLE_FROM);
 
   // E13: one out touch per text that actually went. Best effort and never a
   // condition of the send — a record of the contact, not a gate on it. A
@@ -997,7 +1577,9 @@ export async function sendPartySms(
       p_actor_ref: "sms-dispatch",
       p_message_ref: messageId ?? null,
     });
-    if (touchError) console.error("sendPartySms: record_touch failed", touchError.message);
+    if (touchError) {
+      console.error("sendPartySms: record_touch failed", touchError.message);
+    }
   }
 
   if (sent && convId) {
@@ -1016,12 +1598,27 @@ export async function sendPartySms(
 
   return {
     sent,
+    status: sendStatusFor(sent, twilioStatus),
     reason,
+    provider_code: providerCode,
     messageId,
     conversationId: convId ?? undefined,
     twilioSid: twilioSid ?? undefined,
     body: auditBody,
   };
+}
+
+/**
+ * One word for what the provider said (contract S5). A provider ACCEPT is
+ * 'queued' and not 'sent': the carrier has not answered yet, and the status
+ * callback is what turns it into 'sent' or 'undelivered'. Only a terminal
+ * provider status — or a dev dry run, which has no carrier — is 'sent'.
+ */
+function sendStatusFor(sent: boolean, twilioStatus: string): SendStatus {
+  if (!sent) return "failed";
+  return ["sent", "delivered", "dry_run"].includes(twilioStatus)
+    ? "sent"
+    : "queued";
 }
 
 const DEFERRED_TTL_MS = 24 * 3600 * 1000;
@@ -1066,10 +1663,14 @@ export async function flushDeferredMessages(
   const credentialSecret = apiKeySid && apiKeySecret ? apiKeySecret : authToken;
   const statusCallbackUrl = env(deps, "SMS_STATUS_CALLBACK_URL") ?? "";
   const redirectNumber = env(deps, "SMS_DEV_REDIRECT_NUMBER") ?? "";
+  const clientPortalUrl = env(deps, "CLIENT_PORTAL_URL") ??
+    "https://client.patina.cloud";
 
   const { data: rows } = await supabase
     .from("sms_messages")
-    .select("id, body, conversation_id, party_id, template_key, created_at")
+    .select(
+      "id, body, conversation_id, party_id, project_id, template_key, recipe, dedupe_key, created_at",
+    )
     .eq("direction", "outbound")
     .eq("twilio_status", "deferred");
   if (!rows || rows.length === 0) return { flushed: 0, skipped: 0 };
@@ -1084,7 +1685,10 @@ export async function flushDeferredMessages(
       body: string;
       conversation_id: string;
       party_id: string | null;
+      project_id: string | null;
       template_key: string | null;
+      recipe: SendRecipe | null;
+      dedupe_key: string | null;
       created_at: string;
     }[]
   ) {
@@ -1104,12 +1708,38 @@ export async function flushDeferredMessages(
     }
     const { data: conv } = await supabase
       .from("sms_conversations")
-      .select("phone_e164")
+      .select("phone_e164, twilio_number")
       .eq("id", row.conversation_id)
       .maybeSingle();
-    const phone = (conv as { phone_e164?: string } | null)?.phone_e164;
+    const convRow = conv as
+      | { phone_e164?: string; twilio_number?: string }
+      | null;
+    const phone = convRow?.phone_e164;
     if (!phone) {
       skipped++;
+      continue;
+    }
+
+    // ── GATE 1: suppression, first, exactly as the send path orders it ──────
+    // A deferred row waits hours; a STOP the carrier recorded in that time is
+    // the one thing that must never be overtaken by a stored message.
+    const senderNumber = convRow?.twilio_number ?? smsConversationNumber(deps);
+    if (!senderNumber) {
+      skipped++;
+      continue;
+    }
+    const isSuppressed = await smsIsSuppressed(supabase, senderNumber, phone);
+    if (isSuppressed === null) {
+      // Unreadable is not permission. Leave it deferred for the next run.
+      skipped++;
+      continue;
+    }
+    if (isSuppressed) {
+      await supabase
+        .from("sms_messages")
+        .update({ twilio_status: "suppressed", error_message: "suppressed" })
+        .eq("id", row.id);
+      suppressed++;
       continue;
     }
 
@@ -1118,17 +1748,19 @@ export async function flushDeferredMessages(
     // row's party, exactly as sendPartySms does. The seat is read for the
     // PROJECT only: its consent column was this path's second check until this
     // pass and is deleted with sendPartySms's (R-AY, final-run MAJOR-1).
-    let deferredProjectId: string | null = null;
+    let deferredProjectId: string | null = row.project_id ?? null;
+    let deferredDisplayName: string | null = null;
     if (row.party_id) {
       const { data: deferredParty } = await supabase
         .from("project_parties")
-        .select("project_id")
+        .select("project_id, display_name")
         .eq("id", row.party_id)
         .maybeSingle();
       const party = deferredParty as
-        | { project_id?: string | null }
+        | { project_id?: string | null; display_name?: string | null }
         | null;
-      deferredProjectId = party?.project_id ?? null;
+      deferredProjectId = party?.project_id ?? deferredProjectId;
+      deferredDisplayName = party?.display_name ?? null;
     }
     const verdict = await channelConsentVerdict(
       supabase,
@@ -1160,20 +1792,142 @@ export async function flushDeferredMessages(
       continue;
     }
 
+    // ── GATE 3: the studio's own "never text" rule ──────────────────────────
+    // Written down AFTER the row was deferred, it still binds the send that
+    // actually happens: a rule the studio entered last night is not answered by
+    // a message composed the evening before it (SQ-37 R3).
+    if (await contactRuleForbidsSms(supabase, row.party_id, phone)) {
+      await supabase
+        .from("sms_messages")
+        .update({
+          twilio_status: "suppressed",
+          error_message: "contact_rule_forbids_sms",
+        })
+        .eq("id", row.id);
+      suppressed++;
+      continue;
+    }
+
+    const recipe = row.recipe ?? null;
+
+    // ── GATE 4: the phase gate, re-asked at the moment of dispatch ──────────
+    // FIELD_LINE_PHASE is a SERVER gate (contract S7) and the server that
+    // flushes is not the server that deferred. Turning the phase back down is
+    // how this rail is turned off, so a row deferred while phase 1 was live
+    // must not go out at 8am from a server that is back at phase 0. It stays
+    // DEFERRED rather than being failed: the phase may come back up inside the
+    // 24h window, and if it does not the TTL expires the row honestly.
+    const deferredPhase = Number(recipe?.automation_phase ?? 0);
+    if (
+      Number.isFinite(deferredPhase) && deferredPhase > 0 &&
+      deferredPhase > fieldLinePhase(deps)
+    ) {
+      await supabase
+        .from("sms_messages")
+        .update({ error_message: "field_line_phase_off" })
+        .eq("id", row.id);
+      skipped++;
+      continue;
+    }
+
+    // ── TAKE THE ROW EXCLUSIVELY, BEFORE ANYTHING IRREVERSIBLE ─────────────
+    // The gates have all answered yes; from here on this row is going to mint a
+    // link and call a provider, and both of those are things that must happen
+    // once. The SELECT that opened this loop is not a claim — two flushes
+    // (the field-daily cron and a manual run, or two overlapping cron ticks)
+    // both read the same 'deferred' row and both sent it (SQ-37 R1). This
+    // conditional update IS the claim: filtered on the status and the empty
+    // claim stamp, so exactly one writer sees a row come back. Postgres
+    // re-evaluates the predicate after taking the row lock, so the loser
+    // matches nothing and leaves without touching the provider.
+    const { data: claimed, error: claimError } = await supabase
+      .from("sms_messages")
+      .update({ twilio_status: "claimed", claimed_at: now.toISOString() })
+      .eq("id", row.id)
+      .eq("twilio_status", "deferred")
+      .is("claimed_at", null)
+      .select("id");
+    if (claimError) {
+      console.error(
+        "flushDeferredMessages: the send claim could not be taken",
+        (claimError as { message?: string }).message ?? claimError,
+      );
+      skipped++;
+      continue;
+    }
+    if (!Array.isArray(claimed) || claimed.length === 0) {
+      // Another flush holds it. Not an error, and not a second text.
+      skipped++;
+      continue;
+    }
+
+    // ── Render fresh from the recipe — and mint the link HERE ──────────────
+    // `row.body` is a PREVIEW (contract S6): the copy as it read at defer time,
+    // with the token taken out of it. Sending it would put "[link at send]" in
+    // front of a trade on a job site. The recipe is what the row is flushed
+    // from, and the link is minted at this moment and no earlier.
+    let sendBody = row.body;
+    if (recipe && recipe.template_key) {
+      const rendered = await resolveBody(
+        supabase,
+        {
+          partyId: recipe.party_id ?? row.party_id ?? undefined,
+          projectId: recipe.project_id ?? deferredProjectId ?? undefined,
+          templateKey: recipe.template_key,
+          vars: (recipe.params ?? {}) as Record<string, unknown>,
+        },
+        {
+          phone,
+          projectId: recipe.project_id ?? deferredProjectId,
+          partyId: recipe.party_id ?? row.party_id,
+          displayName: deferredDisplayName,
+        },
+        clientPortalUrl,
+        { mintLink: true },
+      );
+      if (!rendered.body || !rendered.body.trim()) {
+        await supabase
+          .from("sms_messages")
+          .update({
+            twilio_status: "failed",
+            error_message: "recipe_render_failed",
+          })
+          .eq("id", row.id);
+        skipped++;
+        continue;
+      }
+      sendBody = rendered.body;
+    } else if (row.body.includes(LINK_PLACEHOLDER)) {
+      // A preview with nothing to render from. Never send the placeholder.
+      await supabase
+        .from("sms_messages")
+        .update({
+          twilio_status: "failed",
+          error_message: "defer_requires_recipe",
+        })
+        .eq("id", row.id);
+      skipped++;
+      continue;
+    }
+
     let twilioSid: string | null = null;
     let twilioStatus = "queued";
-    let sendBody = row.body;
+    let providerCode: string | undefined;
     if (mode === "dry_run") {
       twilioStatus = "dry_run";
       twilioSid = "dev-" + crypto.randomUUID();
     } else {
       const to = mode === "redirect" ? redirectNumber : phone;
-      if (mode === "redirect") sendBody = `[DEV→${phone}] ${row.body}`;
+      if (mode === "redirect") sendBody = `[DEV→${phone}] ${sendBody}`;
       if (
         !accountSid || !credentialSid || !credentialSecret || !fromNumber ||
         (mode === "redirect" && !redirectNumber)
       ) {
-        // Not configured — leave 'deferred' so the next run retries.
+        // Not configured — put it back to 'deferred' so the next run retries.
+        await supabase
+          .from("sms_messages")
+          .update({ twilio_status: "deferred", claimed_at: null })
+          .eq("id", row.id);
         skipped++;
         continue;
       }
@@ -1191,22 +1945,47 @@ export async function flushDeferredMessages(
         // A single attempt only — no retry accumulation on a deferred row.
         await supabase
           .from("sms_messages")
-          .update({ twilio_status: "failed", error_message: r.error ?? "send_failed" })
+          .update({
+            twilio_status: "failed",
+            error_message: r.error ?? "send_failed",
+            error_code: r.code ?? null,
+          })
           .eq("id", row.id);
         skipped++;
         continue;
       }
       twilioSid = r.sid ?? null;
       twilioStatus = r.status ?? "queued";
+      providerCode = r.code;
     }
+    // The provider's id lands BEFORE the status does (contract S5): a crash
+    // here leaves a 'claimed' row carrying the sid, which the status callback
+    // and sms_reconcile_accepted_send() can both settle. Not exactly-once —
+    // a claim released with no sid may still be retried against a carrier that
+    // already delivered.
+    if (twilioSid && !(await persistProviderSid(supabase, row.id, twilioSid))) {
+      // On the wire and unidentifiable. The row stays 'claimed' — it is not a
+      // flush this run may count, and it is certainly not 'queued'.
+      skipped++;
+      continue;
+    }
+    // The thread keeps the words that went out, with the token taken out of
+    // them (contract S6). Not a lifecycle field, so it lands whatever the
+    // status has become since.
     await supabase
       .from("sms_messages")
-      .update({
-        twilio_status: twilioStatus,
-        twilio_sid: twilioSid,
-        body: sendBody,
-      })
+      .update({ body: redactFieldLinkTokens(sendBody) })
       .eq("id", row.id);
+    const settle: Record<string, unknown> = { twilio_status: twilioStatus };
+    if (providerCode) settle.error_code = providerCode;
+    // Monotonic (contract S5), exactly as sendPartySms settles: a delivery
+    // callback that landed while the provider call was in flight is newer than
+    // this acceptance and is never overwritten by it.
+    await supabase
+      .from("sms_messages")
+      .update(settle)
+      .eq("id", row.id)
+      .in("twilio_status", SETTLEABLE_FROM);
 
     // E13: one out touch per text that actually went — and this path sends
     // real texts (W4 r3 MAJOR-5). sendPartySms writes its touch; the flush

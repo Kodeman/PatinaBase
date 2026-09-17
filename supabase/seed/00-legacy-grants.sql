@@ -16682,18 +16682,6 @@ END $g$;
 
 -- 00627_access_grants_and_field_link_window.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.create_field_link(UUID, TIMESTAMPTZ) FROM PUBLIC, anon;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00627_access_grants_and_field_link_window.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.create_field_link(UUID, TIMESTAMPTZ) TO authenticated, service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00627_access_grants_and_field_link_window.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.create_field_link(UUID) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -17643,6 +17631,66 @@ END $g$;
 -- 00639_field_line_authority.sql
 DO $g$ BEGIN
   GRANT SELECT ON public.sms_review_queue TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_field_link(UUID, TIMESTAMPTZ, BOOLEAN) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_field_link(UUID, TIMESTAMPTZ, BOOLEAN) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_field_link(UUID) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_field_link(UUID) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revoke_party_field_links(UUID) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revoke_party_field_links(UUID) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_reconcile_accepted_send(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_reconcile_accepted_send(TEXT, TEXT, TEXT, TEXT) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_release_stale_send_claims(INTERVAL) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00640_field_line_dispatch.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_release_stale_send_claims(INTERVAL) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

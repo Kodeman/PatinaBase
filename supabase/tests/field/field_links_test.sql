@@ -10,7 +10,11 @@
 --   4. A bogus / wrong token resolves to NULL (no leak).
 --   5. revoke_field_link kills the link (resolve → NULL after).
 --   6. An expired token resolves to NULL.
---   7. create_field_link supersedes the prior active token (regenerate).
+--   7. OVERLAP (The Field Line, 00640, contract S6): a ROUTINE mint leaves the
+--      prior unexpired token valid; the engagement-window binding (PR-d, 00627)
+--      still dates every mint and a moved window never extends a token already
+--      in someone's phone; an explicit regenerate (p_revoke_prior := true) still
+--      supersedes; revoke_party_field_links() closes every door at once.
 --   8. Authorization: a non-owner cannot create_field_link, and cannot SELECT the
 --      designer-only token table.
 --
@@ -94,11 +98,16 @@ DO $$
 DECLARE
   v_token   TEXT;
   v_token2  TEXT;
+  v_token3  TEXT;
   v_id      UUID;
+  v_id2     UUID;
   v_hash    TEXT;
   v_dto     JSONB;
   v_count   INTEGER;
   v_raised  BOOLEAN;
+  v_exp     TIMESTAMPTZ;
+  v_exp2    TIMESTAMPTZ;
+  v_n       INTEGER;
 BEGIN
   PERFORM pg_temp.assume_user_role('f1000000-0000-4000-8000-000000000001');
 
@@ -138,14 +147,69 @@ BEGIN
   VALUES ('f1000000-0000-4000-8000-0000000000b1', 'f1000000-0000-4000-8000-0000000000a1', v_hash, now() - interval '1 day');
   ASSERT public.resolve_field_link('rawexpired') IS NULL, 'FAIL 6: an expired link must resolve to NULL';
 
-  -- ── Case 7: regenerate supersedes the prior active token ─────────────────
-  SELECT token INTO v_token FROM public.create_field_link('f1000000-0000-4000-8000-0000000000b1');
-  SELECT token INTO v_token2 FROM public.create_field_link('f1000000-0000-4000-8000-0000000000b1');
-  ASSERT public.resolve_field_link(v_token) IS NULL, 'FAIL 7a: the superseded token must no longer resolve';
+  -- ── Case 7: overlap (00640, contract S6) ─────────────────────────────────
+  -- 00283 shipped "regenerate = revoke + create", and 00627 kept it inside the
+  -- two-argument body — so the AUTOMATED rail inherited it. _shared/sms.ts
+  -- mints for every {{link}} template, which meant the daily digest revoked the
+  -- link the trade was already using, mid-job (deck defect 3). 00640 makes the
+  -- supersede an argument: a routine mint overlaps, a regenerate asks.
+  --
+  -- 7a/7b: two ROUTINE mints, both doors open.
+  SELECT id, token INTO v_id, v_token
+    FROM public.create_field_link('f1000000-0000-4000-8000-0000000000b1');
+  SELECT id, token INTO v_id2, v_token2
+    FROM public.create_field_link('f1000000-0000-4000-8000-0000000000b1');
+  ASSERT public.resolve_field_link(v_token) IS NOT NULL,
+    'FAIL 7a: a routine mint must NOT revoke the prior token — it is in someone''s phone';
   ASSERT public.resolve_field_link(v_token2) IS NOT NULL, 'FAIL 7b: the fresh token must resolve';
   SELECT count(*) INTO v_count FROM public.field_link_tokens
+   WHERE party_id = 'f1000000-0000-4000-8000-0000000000b1'
+     AND status = 'active' AND expires_at > now();
+  ASSERT v_count = 2, 'FAIL 7c: both routine mints should stand live, got ' || v_count;
+
+  -- 7d: the PR-d window binding (00627:583) survived the graft. The seat gets a
+  -- window; the next mint is dated from it, through the end of that day, and a
+  -- caller date does not override it.
+  UPDATE public.project_parties SET on_site_to = current_date + 10
+   WHERE id = 'f1000000-0000-4000-8000-0000000000b1';
+  SELECT id, token INTO v_id, v_token3
+    FROM public.create_field_link('f1000000-0000-4000-8000-0000000000b1',
+                                  '2099-01-01T00:00:00Z'::timestamptz);
+  SELECT expires_at INTO v_exp FROM public.field_link_tokens WHERE id = v_id;
+  ASSERT v_exp = (current_date + 10)::timestamptz + interval '1 day',
+    'FAIL 7d: the engagement window must date the mint and outrank a caller date, got ' || v_exp;
+
+  -- 7e: a MOVED window never extends a token already minted. expires_at is
+  -- derived at mint and stored; nothing recomputes it later.
+  UPDATE public.project_parties SET on_site_to = current_date + 400
+   WHERE id = 'f1000000-0000-4000-8000-0000000000b1';
+  SELECT expires_at INTO v_exp2 FROM public.field_link_tokens WHERE id = v_id;
+  ASSERT v_exp2 = v_exp,
+    'FAIL 7e: moving the seat''s window rewrote an already-minted token, ' || v_exp || ' → ' || v_exp2;
+
+  -- 7f: an EXPLICIT regenerate still supersedes — that is what the portal's
+  -- Regenerate means, and it now has to say so.
+  SELECT token INTO v_token2
+    FROM public.create_field_link('f1000000-0000-4000-8000-0000000000b1',
+                                  NULL::timestamptz, true);
+  ASSERT public.resolve_field_link(v_token) IS NULL,
+    'FAIL 7f1: p_revoke_prior := true must supersede the prior tokens';
+  ASSERT public.resolve_field_link(v_token3) IS NULL,
+    'FAIL 7f2: p_revoke_prior := true must supersede EVERY prior token';
+  ASSERT public.resolve_field_link(v_token2) IS NOT NULL, 'FAIL 7f3: the fresh token must resolve';
+  SELECT count(*) INTO v_count FROM public.field_link_tokens
    WHERE party_id = 'f1000000-0000-4000-8000-0000000000b1' AND status = 'active';
-  ASSERT v_count = 1, 'FAIL 7c: at most one active token per party, got ' || v_count;
+  ASSERT v_count = 1, 'FAIL 7f4: a regenerate leaves exactly one active token, got ' || v_count;
+
+  -- 7g: revoke_party_field_links closes every door at once and says how many.
+  SELECT token INTO v_token3 FROM public.create_field_link('f1000000-0000-4000-8000-0000000000b1');
+  SELECT public.revoke_party_field_links('f1000000-0000-4000-8000-0000000000b1') INTO v_n;
+  ASSERT v_n = 2, 'FAIL 7g1: revoke_party_field_links should have revoked 2 links, got ' || v_n;
+  ASSERT public.resolve_field_link(v_token2) IS NULL, 'FAIL 7g2: revoke-all must kill the older link';
+  ASSERT public.resolve_field_link(v_token3) IS NULL, 'FAIL 7g3: revoke-all must kill the newest link';
+  SELECT count(*) INTO v_count FROM public.field_link_tokens
+   WHERE party_id = 'f1000000-0000-4000-8000-0000000000b1' AND status = 'active';
+  ASSERT v_count = 0, 'FAIL 7g4: revoke-all must leave no active token, got ' || v_count;
 
   PERFORM pg_temp.reset_role();
   RAISE NOTICE 'field_links: cases 1–7 passed.';

@@ -2030,11 +2030,16 @@ BEGIN
     RAISE EXCEPTION '10e a caller date overrode the engagement window, got %', v_exp;
   END IF;
 
-  -- and the mint still supersedes the prior active token
+  -- OVERLAP (The Field Line, 00640, contract S6). This read '10f the mint left
+  -- % active tokens on one seat' and required exactly 1 — 00283's "regenerate =
+  -- revoke + create", which the automated rail inherited: _shared/sms.ts mints
+  -- for every {{link}} template, so the daily digest revoked the link the trade
+  -- was already using (deck defect 3). 00640 makes the supersede an argument
+  -- (p_revoke_prior, default FALSE), so the two ROUTINE mints above both stand.
   SELECT count(*) INTO raised FROM public.field_link_tokens
    WHERE party_id = 'f4000000-0000-4000-8000-000000000001' AND status = 'active';
-  IF raised <> '1' THEN
-    RAISE EXCEPTION '10f the mint left % active tokens on one seat', raised;
+  IF raised <> '2' THEN
+    RAISE EXCEPTION '10f a routine mint revoked a live token: % active on one seat', raised;
   END IF;
 
   -- 00284's authorization guard is untouched: a non-owner authenticated caller
@@ -2085,15 +2090,19 @@ BEGIN
     RAISE EXCEPTION '10k a caller date in the past was stamped: %', v_exp;
   END IF;
 
-  -- the prior token was superseded only by a mint that could succeed
+  -- The prior token is untouched (00640, contract S6). Before the overlap
+  -- change this required 'revoked' and exactly 1 active token — the w1b rule
+  -- was only ever that a mint which CANNOT succeed revokes nothing (the raise
+  -- precedes the supersede, 00627). A routine mint now revokes nothing either,
+  -- so the earlier link the studio copied is still the live door it was.
   SELECT status INTO v_status FROM public.field_link_tokens WHERE id = v_prior;
-  IF v_status <> 'revoked' THEN
-    RAISE EXCEPTION '10l the prior token reads % after a successful mint', v_status;
+  IF v_status <> 'active' THEN
+    RAISE EXCEPTION '10l a routine mint revoked the prior token, which now reads %', v_status;
   END IF;
   SELECT count(*) INTO n FROM public.field_link_tokens
    WHERE party_id = 'f4000000-0000-4000-8000-000000000004' AND status = 'active';
-  IF n <> 1 THEN
-    RAISE EXCEPTION '10m the closed-window seat carries % active tokens', n;
+  IF n <> 2 THEN
+    RAISE EXCEPTION '10m the closed-window seat carries % active tokens, expected both mints', n;
   END IF;
 
   -- no mint anywhere in this block left a live token dated in the past
@@ -2107,7 +2116,7 @@ BEGIN
     RAISE EXCEPTION '10n % live tokens are dated in the past', n;
   END IF;
 
-  RAISE NOTICE '10. create_field_link: the engagement window sets the expiry and outranks a caller date, warranty answers alone, the 90-day fallback survives for a windowless seat and for a CLOSED one, no mint is dated in the past or revokes on behalf of one, and the supersede and 00284''s ownership guard are untouched: passed';
+  RAISE NOTICE '10. create_field_link: the engagement window sets the expiry and outranks a caller date, warranty answers alone, the 90-day fallback survives for a windowless seat and for a CLOSED one, no mint is dated in the past, a ROUTINE mint revokes nothing (00640 overlap, contract S6), and 00284''s ownership guard is untouched: passed';
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════

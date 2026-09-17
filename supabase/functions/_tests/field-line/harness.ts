@@ -21,6 +21,23 @@ export interface FakeProvider {
   fetch: typeof fetch;
 }
 
+/**
+ * Fixture knobs a single evidence case may need. Every one defaults to the
+ * shared world, so a case that passes nothing sees exactly what every other
+ * case sees — the harness stays one fixture, not a per-case fork.
+ */
+export interface FieldLineHarnessOptions {
+  /** Start the fixture clock somewhere other than FIELD_LINE_CLOCK. */
+  now?: Date;
+  /** Added to (and overriding) the fixture env — e.g. FIELD_LINE_PHASE. */
+  env?: Record<string, string>;
+  /** Postgres functions this case needs the fake to answer (e.g. create_field_link). */
+  rpc?: Record<
+    string,
+    (args: Record<string, unknown>) => { data: unknown; error: unknown }
+  >;
+}
+
 export interface FieldLineHarness {
   readonly clock: Date;
   readonly sender: string;
@@ -36,6 +53,13 @@ export interface FieldLineHarness {
     reset(): void;
   };
   env(key: string): string | undefined;
+  /**
+   * Move the fixture clock. A deferred message IS the gap between the moment
+   * quiet hours refused it and the moment the flush picks it up, so a case
+   * that cannot move time cannot exercise one — and the gap that matters most
+   * in America/Chicago is the one the DST change sits inside.
+   */
+  advanceTo(next: Date): void;
   signedInbound(overrides?: Partial<InboundParams>): ReturnType<typeof signedInboundFixture>;
   signedStatus(overrides?: Record<string, string>): ReturnType<typeof signedStatusFixture>;
   processInbound(overrides?: Partial<InboundParams>): Promise<Awaited<ReturnType<typeof fieldLineBindings.processInbound>>>;
@@ -80,7 +104,9 @@ function makeProvider(): FakeProvider {
   };
 }
 
-export function createFieldLineHarness(): FieldLineHarness {
+export function createFieldLineHarness(
+  options: FieldLineHarnessOptions = {},
+): FieldLineHarness {
   const env = new Map<string, string>([
     ["TWILIO_FROM_NUMBER", FIELD_LINE_SENDER],
     ["SMS_CONVERSATION_NUMBER", FIELD_LINE_SENDER],
@@ -88,7 +114,9 @@ export function createFieldLineHarness(): FieldLineHarness {
     ["TWILIO_ACCOUNT_SID", "ACfixture"],
     ["TWILIO_AUTH_TOKEN", "fixture-token"],
     ["FIELD_TZ", "America/Chicago"],
+    ...Object.entries(options.env ?? {}),
   ]);
+  let clock = options.now ?? FIELD_LINE_CLOCK;
   const fake = createFakeSupabase({
     profiles: [
       { id: "studio-a", full_name: "Studio A" },
@@ -110,6 +138,10 @@ export function createFieldLineHarness(): FieldLineHarness {
       { slug: "sms_daily_digest", is_active: true, html_content: "{{studio_name}}: {{menu}} Msg&data rates may apply. Reply HELP for help, STOP to opt out." },
       { slug: "sms_optin_invite", is_active: true, html_content: "{{studio_name}} through Patina. Reply YES to agree. Msg&data rates may apply. Reply HELP for help, STOP to opt out." },
       { slug: "sms_help", is_active: true, html_content: "Studio A: Msg&data rates may apply. Reply HELP for help, STOP to opt out." },
+      // The link-bearing shape: what the rail actually sends a trade, and the
+      // only shape that can show whether the token was minted at send or has
+      // been sitting in a row since the defer (contract S6).
+      { slug: "sms_field_link_digest", is_active: true, html_content: "{{studio_name}}: {{menu}} {{link}} Msg&data rates may apply. Reply HELP for help, STOP to opt out." },
     ],
     project_tasks: [
       { id: "task-a", project_id: "project-a", owner_party_id: "party-a", title: "Install mantel", due_date: "2026-11-01", status: "todo" },
@@ -119,15 +151,28 @@ export function createFieldLineHarness(): FieldLineHarness {
     delivery_events: [],
     sms_conversations: [],
     sms_messages: [],
-  });
+  }, options.rpc ?? {});
   const provider = makeProvider();
-  const deps = { getEnv: (key: string) => env.get(key), fetchImpl: provider.fetch, now: FIELD_LINE_CLOCK };
+  // `now` is read through a getter so advanceTo() moves the clock the bound
+  // entry points see, not a copy taken at construction.
+  const deps = {
+    getEnv: (key: string) => env.get(key),
+    fetchImpl: provider.fetch,
+    get now() {
+      return clock;
+    },
+  };
   const mediaStore = {
     interruptNextUpload(path = "*") { fake._failUploadsFor?.add(path); },
     reset() { fake._failUploadsFor?.clear(); },
   };
   return {
-    clock: FIELD_LINE_CLOCK,
+    get clock() {
+      return clock;
+    },
+    advanceTo(next: Date) {
+      clock = next;
+    },
     sender: FIELD_LINE_SENDER,
     recipient: SHARED_RECIPIENT,
     studios: {
