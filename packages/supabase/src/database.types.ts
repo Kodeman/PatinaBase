@@ -23811,6 +23811,75 @@ export type Database = {
           },
         ]
       }
+      sms_conversation_context: {
+        Row: {
+          backfilled_at: string | null
+          conversation_id: string
+          party_id: string | null
+          paused_until: string | null
+          project_id: string | null
+          state: string
+          state_context: Json
+          updated_at: string
+        }
+        Insert: {
+          backfilled_at?: string | null
+          conversation_id: string
+          party_id?: string | null
+          paused_until?: string | null
+          project_id?: string | null
+          state?: string
+          state_context?: Json
+          updated_at?: string
+        }
+        Update: {
+          backfilled_at?: string | null
+          conversation_id?: string
+          party_id?: string | null
+          paused_until?: string | null
+          project_id?: string | null
+          state?: string
+          state_context?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_conversation_context_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "sms_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_conversation_context_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id", "project_id"]
+          },
+          {
+            foreignKeyName: "sms_conversation_context_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "sms_conversation_context_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "sms_conversation_context_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sms_conversations: {
         Row: {
           active_project_id: string | null
@@ -23897,6 +23966,7 @@ export type Database = {
           matched_task_id: string | null
           media: Json
           needs_review: boolean
+          owner_user_id: string | null
           parsed_intent: Json | null
           party_id: string | null
           project_id: string | null
@@ -23921,6 +23991,7 @@ export type Database = {
           matched_task_id?: string | null
           media?: Json
           needs_review?: boolean
+          owner_user_id?: string | null
           parsed_intent?: Json | null
           party_id?: string | null
           project_id?: string | null
@@ -23945,6 +24016,7 @@ export type Database = {
           matched_task_id?: string | null
           media?: Json
           needs_review?: boolean
+          owner_user_id?: string | null
           parsed_intent?: Json | null
           party_id?: string | null
           project_id?: string | null
@@ -24034,6 +24106,128 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sms_prompts: {
+        Row: {
+          answered_at: string | null
+          code_reserved: boolean
+          created_at: string
+          expires_at: string
+          id: string
+          kind: string
+          party_id: string
+          project_id: string
+          recipient_phone: string
+          sender_number: string
+          short_code: string
+          subject_id: string | null
+          version: number
+        }
+        Insert: {
+          answered_at?: string | null
+          code_reserved?: boolean
+          created_at?: string
+          expires_at?: string
+          id?: string
+          kind: string
+          party_id: string
+          project_id: string
+          recipient_phone: string
+          sender_number: string
+          short_code: string
+          subject_id?: string | null
+          version?: number
+        }
+        Update: {
+          answered_at?: string | null
+          code_reserved?: boolean
+          created_at?: string
+          expires_at?: string
+          id?: string
+          kind?: string
+          party_id?: string
+          project_id?: string
+          recipient_phone?: string
+          sender_number?: string
+          short_code?: string
+          subject_id?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_prompts_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id", "project_id"]
+          },
+          {
+            foreignKeyName: "sms_prompts_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "sms_prompts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "sms_prompts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sms_short_code_reservations: {
+        Row: {
+          recipient_phone: string
+          reserved_until: string
+          sender_number: string
+          short_code: string
+        }
+        Insert: {
+          recipient_phone: string
+          reserved_until: string
+          sender_number: string
+          short_code: string
+        }
+        Update: {
+          recipient_phone?: string
+          reserved_until?: string
+          sender_number?: string
+          short_code?: string
+        }
+        Relationships: []
+      }
+      sms_suppressions: {
+        Row: {
+          lifted_at: string | null
+          reason: string
+          recipient_phone: string
+          sender_number: string
+          suppressed_at: string
+        }
+        Insert: {
+          lifted_at?: string | null
+          reason?: string
+          recipient_phone: string
+          sender_number: string
+          suppressed_at?: string
+        }
+        Update: {
+          lifted_at?: string | null
+          reason?: string
+          recipient_phone?: string
+          sender_number?: string
+          suppressed_at?: string
+        }
+        Relationships: []
       }
       spatial_context: {
         Row: {
@@ -30438,6 +30632,99 @@ export type Database = {
             columns: ["supersedes_entry_id"]
             isOneToOne: false
             referencedRelation: "site_binder_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sms_review_queue: {
+        Row: {
+          body: string | null
+          confidence: number | null
+          conversation_id: string | null
+          created_at: string | null
+          direction: string | null
+          id: string | null
+          matched_coordination_item_id: string | null
+          matched_task_id: string | null
+          media: Json | null
+          owner_user_id: string | null
+          parsed_intent: Json | null
+          party_display_name: string | null
+          party_id: string | null
+          party_kind: string | null
+          project_id: string | null
+          template_key: string | null
+          trade: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "sms_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_messages_matched_coordination_item_id_fkey"
+            columns: ["matched_coordination_item_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_messages_matched_coordination_item_id_fkey"
+            columns: ["matched_coordination_item_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "sms_messages_matched_task_id_fkey"
+            columns: ["matched_task_id"]
+            isOneToOne: false
+            referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_messages_matched_task_id_fkey"
+            columns: ["matched_task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "sms_messages_matched_task_id_fkey"
+            columns: ["matched_task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["waiting_on_task_id"]
+          },
+          {
+            foreignKeyName: "sms_messages_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "sms_messages_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "sms_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -38221,6 +38508,49 @@ export type Database = {
           object_path: string
         }[]
       }
+      sms_backfill_conversation_context: { Args: never; Returns: number }
+      sms_create_prompt: {
+        Args: {
+          p_expires_at: string
+          p_kind: string
+          p_party_id: string
+          p_project_id: string
+          p_recipient_phone: string
+          p_sender_number: string
+          p_subject_id: string
+          p_version: number
+        }
+        Returns: {
+          id: string
+          short_code: string
+        }[]
+      }
+      sms_is_suppressed: {
+        Args: { p_recipient: string; p_sender: string }
+        Returns: boolean
+      }
+      sms_next_short_code: {
+        Args: { p_recipient: string; p_sender: string }
+        Returns: string
+      }
+      sms_phone_suppressed: { Args: { p_recipient: string }; Returns: boolean }
+      sms_release_expired_short_codes: {
+        Args: { p_recipient: string; p_sender: string }
+        Returns: number
+      }
+      sms_resolve_prompt: {
+        Args: { p_code: string; p_recipient: string; p_sender: string }
+        Returns: {
+          expires_at: string
+          id: string
+          kind: string
+          party_id: string
+          project_id: string
+          short_code: string
+          subject_id: string
+          version: number
+        }[]
+      }
       stage_project_ffe_document_extraction: {
         Args: {
           p_actor_id: string
@@ -39012,12 +39342,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39041,11 +39371,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39066,11 +39396,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39091,11 +39421,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -39108,11 +39438,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
