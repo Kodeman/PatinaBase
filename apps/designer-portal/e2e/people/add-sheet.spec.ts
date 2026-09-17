@@ -110,6 +110,11 @@ test.describe("the add sheet writes the studio’s book", () => {
       await page.getByRole("button", { name: "Add person" }).click();
       await page.getByRole("button", { name: "a household member" }).click();
 
+      // The eyebrow names the chosen kind (R-CE — kind clarity).
+      await expect(
+        page.getByRole("dialog").getByText(/add · a household member/i),
+      ).toBeVisible();
+
       // C5 — the studio's own words, never the schema's.
       await expect(page.getByText("client_rep")).toHaveCount(0);
 

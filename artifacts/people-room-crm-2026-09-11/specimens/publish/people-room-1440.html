@@ -1,7 +1,9 @@
-<title>The People Room</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
+<title>The People Room</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -317,6 +319,9 @@
     input:focus-visible, select:focus-visible, textarea:focus-visible { outline-color: Highlight; }
   }
 </style>
+</head>
+<body>
+
 <header class="bar">
   <div class="bar-acts" role="group" aria-label="Specimen states">
     <button type="button" class="act act--tertiary" data-go="state-directory" aria-pressed="true">Directory</button>
@@ -1169,7 +1174,11 @@ const CARRY = [
     note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
   { id: 'F-13', trade: 'cabinetry',           history: PRIOR_JOB, on: true,  consent: true, rule: true },
   { id: 'F-20', trade: 'tile & stone',        history: 'Saved twice, one firm.', on: true },
-  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false }
+  { id: 'L-02', trade: 'general contracting', history: PRIOR_JOB, on: false },
+  // R-BP (W3 r10 F1): the book holds SIX people who worked the Lindqvist
+  // kitchen — Erin Sato, Marrow & Sons' PM, worked the closed job too. She
+  // is listed and left unticked; no rule is invented to hide her.
+  { id: 'F-08', trade: 'project management', history: PRIOR_JOB, on: false }
 ];
 const TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value',
   'Document expiries', 'One history line'];
@@ -1217,7 +1226,7 @@ function renderPick() {
 
   H.push('<div class="field"><label class="t-head field-label" for="f-rolodex">SEARCH THE ROLODEX</label>' +
     '<input class="control" id="f-rolodex" type="text" value="Lindqvist"></div>');
-  H.push('<p class="t-meta" id="pick-count">4 of 5 from the Lindqvist kitchen selected</p>');
+  H.push('<p class="t-meta" id="pick-count">4 of 6 from the Lindqvist kitchen selected</p>');
 
   H.push('<div class="pick-grid">');
   H.push('<div class="pick-list">' + CARRY.map(pickRow).join('') + '</div>');
@@ -1322,7 +1331,7 @@ function renderAdd() {
   const H = [];
   H.push('<div class="crm-card">');
 
-  H.push('<p class="t-head">ADD · TO YOUR ROSTER</p>');
+  H.push('<p class="t-head">ADD · ' + esc(a.kind.toUpperCase()) + '</p>');
   H.push('<h2 class="t-d2">Bring someone in</h2>');
   H.push('<p class="t-meta">' + esc(a.dateline) + '</p>');
 
@@ -1625,3 +1634,6 @@ window.addEventListener('message', function (ev) {
 document.addEventListener('DOMContentLoaded', function () { paint(); fromHash(); });
 if (document.readyState !== 'loading') { paint(); fromHash(); }
 </script>
+</body>
+</html>
+<!-- specimen-complete -->

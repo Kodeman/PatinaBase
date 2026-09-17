@@ -1,7 +1,9 @@
-<title>The People Room</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
+<title>The People Room</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -301,6 +303,9 @@
     .seat:focus-visible, .open-person:focus-visible, .disc:focus-visible { outline-color: Highlight; }
   }
 </style>
+</head>
+<body>
+
 <div class="statebar" id="statebar">
   <div class="sb-acts" role="group" aria-label="Specimen states">
     <button type="button" class="act act--tertiary" data-go="state-directory" aria-pressed="true"><span class="act-label">Directory</span></button>
@@ -1250,7 +1255,7 @@
   function renderAdd() {
     const a = FIXTURE.addSheet;
     const sheet = addSheetFor(addKind);
-    let out = '<p class="t-head eyebrow">ADD · TO YOUR ROSTER</p>';
+    let out = '<p class="t-head eyebrow">ADD · ' + esc(sheet.kind.toUpperCase()) + '</p>';
     out += '<h2 class="t-d2">Bring someone in</h2>';
     out += '<p class="t-meta" style="margin-top:12px">' + esc(a.dateline) + '</p>';
     out += '<div class="narrows" data-narrow="add-kind" role="group" aria-label="What kind of person you are adding">';
@@ -1305,7 +1310,10 @@
       note: 'Opted out by text 3 Dec 2025, on the Lindqvist kitchen.' },
     { id: 'F-13', firm: 'halvorsen',  trade: 'cabinetry',           picked: true,  line: PICK_PRIOR, consent: true, rule: true },
     { id: 'F-20', firm: 'stonehaven', trade: 'tile & stone',        picked: true,  line: 'Saved twice, one firm.' },
-    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR }
+    { id: 'L-02', firm: 'ostrom',     trade: 'general contracting', picked: false, line: PICK_PRIOR },
+    // R-BP (W3 r10 F1): six people worked the Lindqvist kitchen. Erin Sato,
+    // Marrow & Sons' PM, is listed and left unticked.
+    { id: 'F-08', firm: 'marrow',     trade: 'project management',  picked: false, line: PICK_PRIOR }
   ];
   const PICK_TRAVELS = ['Identity', 'Typed channels', 'Contact rule', 'Consent by channel value', 'Document expiries', 'One history line'];
   const PICK_STAYS = ['2025 pricing', '2025 project notes', 'Show to client'];
@@ -1339,7 +1347,7 @@
     out += '<p class="t-head eyebrow">OKONKWO RESIDENCE</p>';
     out += '<h3 class="t-d3">From the rolodex</h3>';
     out += field('f-pick-search', 'SEARCH THE ROLODEX', 'Lindqvist');
-    out += '<p class="t-body-sm note prose vitals" id="pick-count">4 of 5 from the Lindqvist kitchen selected</p>';
+    out += '<p class="t-body-sm note prose vitals" id="pick-count">4 of 6 from the Lindqvist kitchen selected</p>';
     out += '<ul class="crm-list stack">' + PICK_ROWS.map(pickRow).join('') + '</ul>';
     out += '<h3 class="t-head" style="margin-top:48px">What travels</h3><ul>';
     PICK_TRAVELS.forEach(function (t) { out += '<li class="stack-row"><p class="t-body">' + esc(t) + '</p></li>'; });
@@ -1616,3 +1624,6 @@
   }
 }());
 </script>
+</body>
+</html>
+<!-- specimen-complete -->
