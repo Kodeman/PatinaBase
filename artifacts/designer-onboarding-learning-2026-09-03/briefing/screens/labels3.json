@@ -1,0 +1,26 @@
+{
+  "helpPanel": [
+    {
+      "tag": "DIV",
+      "aria": null,
+      "tid": "help-panel-overlay",
+      "text": ""
+    },
+    {
+      "tag": "DIV",
+      "aria": null,
+      "tid": "help-panel-content",
+      "text": "Help\n\nNo articles for this surface yet.\n\nSearch the Help Center to find what you need.\n\nBROWSE ALL HELP →"
+    },
+    {
+      "tag": "DIV",
+      "aria": null,
+      "tid": "help-panel-empty",
+      "text": "No articles for this surface yet.\n\nSearch the Help Center to find what you need."
+    }
+  ],
+  "ledgersPopover": "LEDGERS · SHEETS\nOrders\nAccounts\nHours",
+  "ordersSheet": [
+    "Orders\nORDERS · LEDGER\n?\nPUT BACK · ESC\n\nEvery project's purchase orders, gathered in one studio register.\n\nLEDGER\nTHE WEEK\nRECEIVING\nVENDORS\nTHROUGHPUT\n6\nOPEN\n1\nUNSENT\nPROJECT ·\nALL\nCHEN RESIDENCE\nOLSEN LAKE HOUSE\nPAYMENT ·\nALL\nDUE\nPENDING\nPAID\nSELECT MULTIPLE\n\nAPPARATUS\n\nAP-012\n\nRECEIVED / INSPECT\nReceived and dispositioned\n~May 6\n\nOLSEN LAKE HOUSE · $4,200 · NOT SENT\n\nPDF\nopen document →\n\nCERAMICA STUDIO\n\nCER-0044\n\nIN TRANSIT\nReceived and dispositioned\n~May 25\n\nOLSEN LAKE HOUSE · $1,890 · NOT SENT\n\nPDF\nopen document →\n\nNORDIC ATELIER\n\nNA-2026-041\n\nIN PRODUCTION\nReceived and dispositioned\n~Jul 18\n\nCHEN RESIDENCE · $7,620 · NOT SENT\n\nPDF\nopen document →\n\nPO drafted\n\nDRAFT\nComplete to produce\n—\n\nOLSEN LAKE HOUSE · $3,400 · NOT SENT\n\nSEND →\nopen document →\n\nSAWKILLE CO\n\nSK-087\n\nCONFIRMED\nComplete to produce\n~Aug 2\n\nCHEN RESIDENCE · $2,400 · NOT SENT\n\nPDF\nopen document →\n\nSK-102\n\nIN PRODUCTION\nReceived and dispositioned\n—\n\nCHEN RESIDENCE · $9,600 · NOT SENT\n\nPDF\nopen document →\n\nWOODWARD & SONS\n\nWS-201\n\nRECEIVED / INSPECT\nReceived and dispositioned\n—\n\nOLSEN LAKE HOUSE · $5,100 · NOT SENT\n\nPDF\nopen document →\n\nWS-188\n\nRECEIVED / INSPECT\nReceived and dispositioned\n~May 20\n\nCHEN RESIDENCE · $6,800 · NOT SENT\n\nPDF\nopen document →"
+  ]
+}

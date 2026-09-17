@@ -1,0 +1,92 @@
+{
+  "cornerBadges": {
+    "bottomLeft": [
+      {
+        "tag": "NEXTJS-PORTAL",
+        "id": "",
+        "cls": "",
+        "aria": null,
+        "text": "",
+        "tid": null
+      },
+      {
+        "tag": "A",
+        "id": "",
+        "cls": "inline-flex min-h-11 shrink-0 items-center rounded-[3px] font-heading text-[15px",
+        "aria": null,
+        "text": "PATINA",
+        "tid": null
+      },
+      {
+        "tag": "DIV",
+        "id": "",
+        "cls": "flex min-w-0 items-center gap-2.5",
+        "aria": null,
+        "text": "PATINA",
+        "tid": null
+      },
+      {
+        "tag": "NAV",
+        "id": "",
+        "cls": "doc-elevated fixed inset-x-0 bottom-0 z-40 hidden h-[60px] grid-cols-[1fr_auto_1",
+        "aria": "Studio drawer",
+        "text": "PATINA\nLibrary\nPeople\nThe Scans\nLedgers\n↑\nFind anything\n⌘K\nH",
+        "tid": null
+      }
+    ],
+    "bottomRight": [
+      {
+        "tag": "path",
+        "id": "",
+        "cls": "[object SVGAnimatedString]",
+        "aria": null,
+        "text": "",
+        "tid": null
+      },
+      {
+        "tag": "circle",
+        "id": "",
+        "cls": "[object SVGAnimatedString]",
+        "aria": null,
+        "text": "",
+        "tid": null
+      },
+      {
+        "tag": "svg",
+        "id": "",
+        "cls": "[object SVGAnimatedString]",
+        "aria": null,
+        "text": "",
+        "tid": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "tsqd-open-btn",
+        "aria": "Open Tanstack query devtools",
+        "text": "",
+        "tid": null
+      }
+    ]
+  },
+  "spineFirstDoc": {
+    "tag": "ASIDE",
+    "aria": "Document spine",
+    "tid": null,
+    "text": "←\nPUT DOWN\n\nMarcus Wright\n\nBRIEF\n\nThe brief\nNOTHING YET\nThe record\nNOTHING YET"
+  },
+  "spineNavPresent": 0,
+  "spineProjectDoc": {
+    "tag": "ASIDE",
+    "aria": "Document spine",
+    "text": "←\nPUT DOWN\n\nClient User\n\nPROPOSAL\n\nThe proposal\nNOTHING YET\nScope & engagement\nCORE · STAGE 03\nDesign vision\nNOTHING YET\nThe investment\n$100,000\nThe record\n3 COMPLETE",
+    "items": [
+      "Put down document",
+      "The proposal NOTHING YET",
+      "Scope & engagement CORE · STAGE 03",
+      "Design vision NOTHING YET",
+      "The investment $100,000",
+      "The record 3 COMPLETE"
+    ]
+  }
+}

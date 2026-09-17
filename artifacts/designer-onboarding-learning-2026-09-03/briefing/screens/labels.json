@@ -1,0 +1,147 @@
+{
+  "deskMarginNote": "–This is your Desk. Folders that need you gather here; the rest stays quiet. ⌘K finds anything by name — try “invoice”.",
+  "drawer": "PATINA\nLibrary\nPeople\nThe Scans\nLedgers\n↑\nFind anything\n⌘K\nHANDS FREE\nTHE POST\nLH\nLeah Hartwell\nLEAH HARTWELL",
+  "drawerButtons": [
+    {
+      "text": "PATINA",
+      "aria": null,
+      "href": "/desk"
+    },
+    {
+      "text": "Library",
+      "aria": null,
+      "href": null
+    },
+    {
+      "text": "People",
+      "aria": null,
+      "href": null
+    },
+    {
+      "text": "The Scans",
+      "aria": null,
+      "href": null
+    },
+    {
+      "text": "Ledgers ↑",
+      "aria": null,
+      "href": null
+    },
+    {
+      "text": "Find anything ⌘K",
+      "aria": "Find anything (⌘K), from the studio drawer",
+      "href": null
+    },
+    {
+      "text": "THE POST",
+      "aria": "The Post, 3 unread",
+      "href": null
+    },
+    {
+      "text": "LH Leah Hartwell LEAH HARTWELL",
+      "aria": "Account and settings",
+      "href": null
+    }
+  ],
+  "tourSteps": [
+    {
+      "step": 1,
+      "text": "STEP 1 OF 6\nThe Desk\nOnly what needs your hand lands here — a folder, one need line. Quiet means the work is in motion.\nSkip tour\nNext",
+      "box": {
+        "x": 0,
+        "y": 8,
+        "width": 320,
+        "height": 197.46875
+      }
+    },
+    {
+      "step": 2,
+      "text": "STEP 2 OF 6\nOne client, one document\nEvery client's work lives in one document. When it needs you, it lands here as a folder — pick it up.\nSkip tour\nNext",
+      "box": {
+        "x": 560,
+        "y": 399,
+        "width": 320,
+        "height": 197.46875
+      }
+    },
+    {
+      "step": 3,
+      "text": "STEP 3 OF 6\nRooms and ledgers\nThe Library and People are rooms you walk into. Orders, Accounts, Hours slide over as sheets — Esc puts them back.\nSkip tour\nNext",
+      "box": {
+        "x": 560,
+        "y": 164,
+        "width": 320,
+        "height": 223.0625
+      }
+    },
+    {
+      "step": 4,
+      "text": "STEP 4 OF 6\nThe studio drawer\nThe studio's doors, always at the bottom. Hours log themselves while a document is in hand. The bell opens The Post.\nSkip tour\nNext",
+      "box": {
+        "x": 560,
+        "y": 609,
+        "width": 320,
+        "height": 223.0625
+      }
+    },
+    {
+      "step": 5,
+      "text": "STEP 5 OF 6\nFind anything\n⌘K reaches any folder, person, or book by name — try \"invoice\". It can also ask the Engine.\nSkip tour\nNext",
+      "box": {
+        "x": 969,
+        "y": 52,
+        "width": 320,
+        "height": 197.46875
+      }
+    },
+    {
+      "step": 6,
+      "text": "STEP 6 OF 6\nBegin with a lead\nEvery project begins as a captured lead — a name and a note, under a minute. The Desk takes it from there.\nSkip tour\nTo work",
+      "box": {
+        "x": 633,
+        "y": 52,
+        "width": 320,
+        "height": 197.46875
+      }
+    }
+  ],
+  "commandBarEmpty": "WHERE THE WORK STANDS\nIn procurement · 5\nOLSEN LAKE HOUSE · CHEN RESIDENCE · +3 MORE\nOut for signature · 2\nSAMPLE ACCEPTED PROPOSAL · ASPEN LOFT — LIVING ROOM REFRESH\nIn direction · 3\nCONCURRENCY TARGET DRAFT · CONCURRENCY SOURCE DRAFT · +1 MORE\nIn discovery · 1\nTHE ASHFORDS (NO-LOGIN HOUSEHOLD) · SCHEDULE THE DISCOVERY CALL\nIn brief · 5\nCONSULTATION · FULL ROOM · +3 MORE\nROOMS & LEDGERS\nLibrary\nROOM ↗\nG L\nPeople\nROOM ↗\nG P\nThe Scans\nMEASURED ROOMS, FROM THE FIELD\nG R\nOrders\nLEDGER\nG O\nAccounts\nLEDGER\nG A\nHours\nLEDGER\nG H\nThe Post\nLEDGER\nG T\nBEGIN\nCapture a lead\nBEGIN A BRIEF\nOpen a project\nNO PROPOSAL NEEDED\nDraft a design agreement\nFOR AN EXISTING HOUSEHOLD\nDraw an invoice\nMILESTONES · TIME · FF&E · AD-HOC\nAdd a maker\nA VENDOR ON YOUR ROSTER\nSTUDIO\nBrowse the Help Center\nGUIDES · EVERY SURFACE\nHelp…\nABOUT THIS SURFACE\nTake the walkthrough\nTHE DESK, IN A MINUTE\nThe Desk\nGO HOME\nInterruptions\nBREAK-THROUGH SETTINGS\nSettings\nPROFILE · NOTIFICATIONS · SECURITY\nSign out\nDESIGNER@PATINA.DEV",
+  "commandBarInvoice": "Accounts\nLEDGER\nG A\nDraw an invoice\nMILESTONES · TIME · FF&E · AD-HOC\nAsk about “invoice”\nASK & PLACE",
+  "accountSheetTabs": [
+    "PUT BACK · ESC",
+    "Online",
+    "Away",
+    "Busy",
+    "Offline",
+    "PROFILE",
+    "NOTIFICATIONS",
+    "SECURITY",
+    "DEVICES",
+    "EXTENSION",
+    "CHANGE PHOTO",
+    "SAVE PROFILE",
+    "UPDATE PASSWORD",
+    "⏻ SIGN OUT"
+  ],
+  "accountSheet": "Account\nPUT BACK · ESC\nLH\nLeah Hartwell\n\ndesigner@patina.dev\n\nLEAH HARTWELL · OWNER\n\nSTATUS\n\nOnline\nAway\nBusy\nOffline\nPROFILE\nNOTIFICATIONS\nSECURITY\nDEVICES\nEXTENSION\nLH\nCHANGE PHOTO\nDISPLAY NAME\n\nThe name clients see on proposals, project pages, and emails.\n\nBIO\n\nA short intro shown to homeowners reviewing your work.\n\nSAVE PROFILE\nPassword\n\nYour sign-in credential. Changing it signs you out of other devices.\n\nNEW PASSWORD\n\nAt least 12 characters — a passphrase you've never used works well.\n\nUPDATE PASSWORD\n⏻ SIGN OUT",
+  "helpCenterHeadings": [
+    "Search"
+  ],
+  "10-library": {
+    "title": "The Desk · Patina",
+    "h1": [
+      "Find a piece—or ask about one."
+    ]
+  },
+  "11-people": {
+    "title": "The Desk · Patina",
+    "h1": [
+      "Directory"
+    ]
+  },
+  "14-scans": {
+    "title": "The Desk · Patina",
+    "h1": []
+  },
+  "thePost": "THE POST · THE RECORD\n?\nPUT BACK · ESC\nMARK ALL READ\nLETTERS\nTHE RECORD\nNew file: Service Agreement — Aspen Loft\n14H AGO\n\nPROJECT FILE CHANGED — A project collaborator added Service Agreement — Aspen Loft to Aspen Loft Refresh.\n\nNew file: Floor Plan — Living & Dining\n14H AGO\n\nPROJECT FILE CHANGED — A project collaborator added Floor Plan — Living & Dining to Aspen Loft Refresh.\n\nNew file: FF&E Specification Schedule\n14H AGO\n\nPROJECT FILE CHANGED — A project collaborator added FF&E Specification Schedule to Aspen Loft Refresh."
+}

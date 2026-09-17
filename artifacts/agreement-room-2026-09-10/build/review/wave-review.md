@@ -645,3 +645,213 @@ readiness voice, the notes column and the paper's foot now divide the work the
 way SPEC §5 asks — the fee-floor sentence sits beside Role rates, the outline
 says `needs attention`, and the foot prints nothing it has already said. Every
 held act's reason resolves. All four gates are green at 569 suites / 7120 tests.
+
+---
+---
+
+# Round 3 — final re-review of `b70bdda78`
+
+Same reviewer, third fresh render. I implemented none of it.
+
+| | |
+|---|---|
+| Branch · tip | `agreement-room/galley` · **`b70bdda78`** (was `b2321da62`) |
+| New commits | `25aea376f` (serialized persist, WR-101/102) · `df056c7bf` (merge) · `b70bdda78` (walk D1/D2) |
+| Diff since Round 2 | 5 files, **589+ / 62−** |
+| Render | production build of this worktree at `b70bdda78`, `next start -p 3005`, same flags and env, `designer@patina.dev`. Six throwaway drafts, client linked. **Server killed at the end.** |
+
+**Verdict: PASS**, with one owed P2 (`WR-201`). **No P1s.**
+
+---
+
+## R3 §1 · Gates
+
+**`pnpm --filter @patina/designer-portal type-check`** → `tsc --noEmit`, exit 0, no output.
+
+**`pnpm --filter @patina/designer-portal test`** — full suite
+```
+Test Suites: 570 passed, 570 total
+Tests:       7205 passed, 7205 total
+Snapshots:   1 passed, 1 total
+Ran all test suites.
+```
+exit 0. (R1 568/7106 → R2 569/7120 → **R3 570/7205**.)
+
+**`pnpm --filter @patina/client-portal type-check`** → exit 0, no output.
+**`grep box-shadow` / `grep aged-oak`** over the agreement tree → 0 hits, exit 1.
+
+---
+
+## R3 §2 · Breaking the serializer
+
+Every probe ran with `**/rest/v1/rpc/upsert_agreement_parts` route-delayed 4–5s,
+so a persist was genuinely in the air. Each ends with a **reload**, so the claim
+is about the table, not the page.
+
+**C1 · rapid typing across two folds while a slow persist flies — PASSES.**
+Typed `SVC-1` into Services and closed it (save #1, 4s). Mid-flight: opened
+Terms, typed `TERMS-1`, closed it. Still mid-flight: reopened Services, typed
+`SVC-2 FINAL`, closed it. Three dirty closes collapsed into **two** RPCs
+(`calls: 2`): the first carried `SVC-1`, the second carried **both**
+`SVC-2 FINAL` and `TERMS-1`. Page after: `SVC-2 FINAL` / `TERMS-1`, head record
+a clean `Saved 10 September 2026, 2:45 pm`. **Reload: `SVC-2 FINAL` / `TERMS-1`.**
+The clean record is now truthful — which is exactly what `WR-101` said it was not.
+The `partsRef` change is what makes this work: a queued flight reads the ref, not
+the closure that asked for it.
+
+**C2 · reorder + remove during a flight — PASSES.**
+Typed into Services, closed it (save flies), then mid-flight moved Billing
+cadence up and removed Deliverables from its fold. Page: Deliverables gone,
+cadence above Retainer, `#room-status` `Billing cadence is now part 7 of 9.`,
+record clean. **Reload: the same eight keys in the same order, and `C2 SERVICES`
+on the paper.** Both structural acts and the clause reached the table in two
+RPCs. In Round 2 the removal was still local at this point; it now persists.
+
+**C3 · fold-close then immediate Review & send — PASSES, and this is the sharp one.**
+Closed the Services fold on `C3 THE LATEST CLAUSE` (save flies) and clicked
+`Send the agreement · $5,000.00 retainer` **250 ms later**. The sheet opened after
+**8,039 ms** — after *both* 4-second flights, not the first — and carried the
+latest composition: `Client User receives the **nine** parts … the services, the
+deliverables, the exclusions, **the role rates**, the $24,000.00 ceiling, …`.
+`C3-rpc: 2`. `reviewAndSend` awaits the same chain promise a queued save returns,
+so the sheet cannot open on a stale paper.
+
+**C4 · the original WR-101 attack is now unreachable.** Two overlapping
+`upsert_agreement_parts` calls cannot be issued: `persist()` returns the running
+chain instead of starting a second flight, so the out-of-order landing that lost
+a clause in Round 2 has no way to occur. The `seq !== saveSeq.current` discard and
+`behindThePage = revision !== sentAt || pendingSave` are belt to that braces.
+
+---
+
+## R3 §3 · The walk's two defects
+
+**D1 — the send sheet's terminal act at 390 — CLOSED.** Measured on the live
+sheet at 390 × dSF 2, on a ready agreement:
+
+| | |
+|---|---|
+| panel | left 18, right 372, `scrollWidth` **343** = `clientWidth` **343** |
+| terminal act | left 46, right 335 — **inside the panel on both edges** (`insidePanel: true`) |
+| label | `scrollWidth` **289** = `clientWidth` **289** → `labelNotClipped: true` |
+| computed | `white-space: normal`, `text-overflow: clip`, `overflow: visible` |
+| height | 56px — the label **wraps** to two lines, `Send the agreement ·` / `$5,000.00 retainer` |
+| `Not yet` | left 46, width 289 — stacked full-width above it |
+| document | `scrollWidth` 390 = `clientWidth` 390 |
+
+`390-send-sheet.png` read: nothing clipped, no ellipsis, no left overhang, the
+amount still in the label. The house sheet's "wrap, never truncate" is honoured.
+
+**D2 — seam adds land at the seam — CLOSED.** Opened the picker from the seam
+that follows **Ceiling** and added a blank Clause. Before: `… role_rates,
+ceiling, deposit, retainer …`. After: `… role_rates, **ceiling**,
+**custom.335ec25e-…**, deposit, retainer …` — inserted at index **5**, Ceiling at
+**4**, deposit at **6**; `landedRightAfterCeiling: true`. The outline reads
+`Services · Deliverables · Exclusions · Role rates · Ceiling · **Clause** ·
+Furnishings deposit · …`, and the new part opened as the selected one. The **top**
+seam still inserts at index **0** (`atTop: true`). `1440-d2-seam-after-ceiling.png`.
+
+*(My first D2 attempt did not exercise the fix — the picker's Patina rows are all
+`disabled` with "already on this agreement" on a standard composition, so nothing
+was added. The re-probe used the sheet's `Blank` section, which mints a
+`custom.<uuid>` key. Recorded so the negative result is not mistaken for a pass.)*
+
+---
+
+## R3 §4 · Round 2's findings
+
+| ID | verdict | evidence |
+|---|---|---|
+| **WR-101** — persists not serialized; a reordered landing loses the write and reports `Saved` | **CLOSED** | C1, C2, C3 above. Only one call flies; a queued save carries the ref, not the closure; `dirty` clears only when nothing moved *and* nothing is queued. Three attacks, three reloads, the table matched the page every time. Four new composer tests ride with it. |
+| **WR-102** — `applyTemplate` / materialize replace the composition without bumping `revision` | **PARTIALLY CLOSED** | The **client** half is closed: `replaceParts()` bumps the counter and both call sites use it, so a landing save no longer lays the pre-template composition back over the template — measured, the page kept the template's five parts. The **server** half, which my Round 2 text also named, survives and I have now proved it at runtime: **`WR-201`**. |
+| **WR-103** — the client-link remedy sentence prints nowhere | **STILL OPEN, accepted** | Unchanged and still fine: the voice counts it and the prepared-for line carries `Link a client` as an act. Wants a line in the ship report, not a fix. |
+| **WR-104** — `heldOnPart` still looked up by `part.id` | **CLOSED as a defect** | Not changed, but now carries a comment at `:1207` explaining precisely why it is the one lookup that may stay on the uuid — `readiness` is memoized from the same render's `parts`, so a blocker never outlives the render that filed it. That was the whole of my ask. |
+
+---
+
+## R3 §5 · New finding
+
+| ID | sev | conf | file:line / probe | claim | evidence | proposed fix |
+|---|---|---|---|---|---|---|
+| **WR-201** | **P2** | mechanism **high**, natural reachability **low–med** | `agreement-composer.tsx:706-730` (`applyTemplate`) · probe `T-race`, `T-inDb` | **A save already in the air can still overwrite a Template server-side, and the room reports `Saved`.** The revision guard is a *client* reconciliation; it cannot un-send a request. Typed into Services, closed the fold (save flies, 5s), then laid in the `Consultation / hourly` template mid-flight. `materialize_agreement_template` replaced the part set on the server; `applyTemplate` refetched and `replaceParts` put the template's five parts on the page with `The parts of Consultation / hourly are on this agreement.` and a clean record. The delayed `upsert_agreement_parts` then reached Postgres **after** the materialize and replaced the whole set with the pre-template nine. Its landing correctly took the stale branch, so **the page kept the template** — and the divergence stayed invisible until a reload. | Page after: `["patina.services","patina.role_rates","patina.ceiling","patina.terms","patina.termination"]`, note `The parts of Consultation / hourly are on this agreement.`, `headRecord: "Saved 10 September 2026, 2:49 pm"` — clean. **`T-inDb` after reload: `["patina.services","patina.deliverables","patina.exclusions","patina.role_rates","patina.ceiling","patina.deposit","patina.retainer","patina.cadence","patina.terms"]`** — the original nine. The template is gone from the table. `1440-template-race.png`. | Two lines, using machinery that already exists: at the top of `applyTemplate`, `if (inFlight.current) await inFlight.current;` before `materializeTemplate.mutateAsync(...)` — so no save can be in the air across a materialize. (Refusing the template while a save flies would also work but is worse copy.) **Why P2 and not P1:** the window is one save's round trip, and reaching it needs four picker interactions inside it — realistic only when a save is unusually slow (a large composition, a cold or retrying connection). Unlike `WR-101` the page is not silently wrong in the moment; the loss surfaces on the next load. **If the team thinks a multi-second `upsert_agreement_parts` is plausible in production, treat this as P1** — what it loses is the designer's whole composition, against a record that says `Saved`. |
+
+I found no other new defect. The refusal path's new `revision.current !== sentAt`
+discard in `flight()`'s catch reads correctly to me: a refusal about a
+composition that no longer exists should not be printed, `dirty` is untouched,
+and the next act re-asks. Worth one line in the ship report that a server
+refusal arriving after the designer has typed again is swallowed until the next
+save, which is deliberate.
+
+---
+
+## R3 §6 · Acceptance, final
+
+| Check | R1 | R2 | R3 |
+|---|---|---|---|
+| T1 · 1 held acts `aria-disabled` + resolving reason | partial | PASS | **PASS** |
+| T1 · 2 `--ink-faint` on `--rail` ≥ 4.5:1 | PASS | PASS | **PASS** (5.38:1) |
+| T1 · 3 no `maximum-scale` | PASS | PASS | **PASS** |
+| T1 · 4 no `aged-oak` on `color` | PASS | PASS | **PASS** (0 hits) |
+| T1 · 5 `partDrawsNothing` / body unchanged | PASS | PASS | **PASS** |
+| T1 · 6 consequence = synthesis §5 #25/#26 | FAIL | PASS by ruling | **PASS by ruling** (spec amendment still owed) |
+| T2 · 1 check 18, Δ = 0px | PASS | PASS | **PASS** |
+| T2 · 2 check 13, `scrollWidth <= clientWidth` at 390 | **FAIL** | PASS | **PASS** (390/390, and the send sheet 343/343) |
+| T2 · 3 checks 14/15 keyboard reorder | PASS | PASS | **PASS** (re-proved mid-flight, C2) |
+| T2 · 4 checks 5/6 status region | PASS | PASS | **PASS** |
+| T2 · 5 check 8 held Send | partial | PASS | **PASS** |
+| T2 · 6 check 4 heading order | PASS | PASS | **PASS** |
+| T2 · 7 FS-6 rest row + seam act | PASS | PASS | **PASS** |
+| T2 · 8 consequence above the act, no Preview | PASS | PASS | **PASS** in the room (`WR-13` outside it, owned) |
+| T3 · the four greps | 1 live hit | 1 live hit | **1 live hit** (`WR-13`, declined with an owner) |
+| T3 · one composed consequence in the sheet | PASS | PASS | **PASS** |
+| T3 · caution only when the deposit is unset | PASS | PASS | **PASS** |
+| T3 · held Send reachable by Tab in the sheet | PASS | PASS | **PASS** |
+| R2 · a write during an in-flight save survives to the table | — | PASS | **PASS** |
+| R2 · reorder / remove / hide during a flight survive | — | PASS | **PASS**, and now reach the table (C2) |
+| R2 · two overlapping saves cannot lose a write | — | **FAIL** | **PASS** (C1, C3 — they cannot be issued) |
+| R2 · a composition replaced outside `mutate` bumps the revision | — | **FAIL** | **PASS** client-side; server-side `WR-201` |
+| Walk D1 · send act unclipped at 390 | — | — | **PASS** |
+| Walk D2 · seam adds land at the seam | — | — | **PASS** |
+
+---
+
+## R3 §7 · Screenshots
+
+`/Users/kody/Code/patina-merged/artifacts/agreement-room-2026-09-10/shots/review-r3/`
+— all read, with `probe-r3.json` and `probe-r3b.json` carrying every measurement.
+
+```
+390-send-sheet.png                 (D1 — the act wrapped, inside the panel)
+1440-send-sheet-after-flight.png   (C3 — opened at 8,039 ms, nine parts)
+1440-d2-seam-after-ceiling.png     (D2 — Clause between Ceiling and Furnishings deposit)
+1440-template-race.png             (WR-201 — the page keeps the template the table lost)
+probe-r3.json · probe-r3b.json
+```
+
+---
+
+## R3 §8 · Verdict
+
+**PASS.**
+
+Every P1 raised across three rounds is closed, and I verified each on the
+rendered page against the database, not from a log: 390 does not scroll
+sideways in any state, the fold and its textarea survive a real four-second
+in-flight save as the same DOM nodes, `their signature` is ruled and pinned by
+test, and overlapping saves can no longer be issued — three attacks on the
+serializer (rapid typing across two folds, reorder plus remove mid-flight,
+fold-close then immediate Review & send) all left the table matching the page,
+and the send sheet opened only on the final landing carrying the latest parts.
+Both walk defects are closed with measurements. Δ = 0px still holds at every
+width. Gates green at 570 suites / 7,205 tests.
+
+One P2 is owed and unfixed — **`WR-201`**, a Template that a slow in-flight save
+can still overwrite in the database while the room reports `Saved`. It is a
+two-line fix using the `inFlight` ref the serializer already keeps. I am not
+calling it a P1 because reaching it needs four picker interactions inside one
+save's round trip, and it does not mislead the designer in the moment. It
+should ship with an owner and a line in the ship report, and it should be taken
+before the next wave rather than carried.
+
+The room is otherwise the direction the panel picked, built to its own sheet,
+and it holds up under a keyboard, at 390, and under a bad network.

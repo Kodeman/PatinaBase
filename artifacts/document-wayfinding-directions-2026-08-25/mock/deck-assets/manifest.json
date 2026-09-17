@@ -1,0 +1,82 @@
+{
+ "w1440-desk": {
+  "w": 1180,
+  "h": 1065
+ },
+ "w1440-doc-project-rich": {
+  "w": 1180,
+  "h": 1065
+ },
+ "w1280-doc-project-rich": {
+  "w": 1180,
+  "h": 1198
+ },
+ "m390-doc-project-rich": {
+  "w": 620,
+  "h": 2066
+ },
+ "w1440-spine-detail": {
+  "w": 1180,
+  "h": 737
+ },
+ "w1280-spine-detail": {
+  "w": 1180,
+  "h": 829
+ },
+ "w1440-shelves-block": {
+  "w": 1180,
+  "h": 737
+ },
+ "w1440-shelf-knowledge": {
+  "w": 1180,
+  "h": 737
+ },
+ "w1440-doc-install": {
+  "w": 1180,
+  "h": 1065
+ },
+ "w1440-doc-care": {
+  "w": 1180,
+  "h": 1065
+ },
+ "w1440-money-region": {
+  "w": 948,
+  "h": 900
+ },
+ "w1440-cmdk-typed": {
+  "w": 1180,
+  "h": 737
+ },
+ "w1440-drawer-books": {
+  "w": 1180,
+  "h": 737
+ },
+ "m390-mobile-bar": {
+  "w": 620,
+  "h": 1341
+ },
+ "m390-mobile-spine-sheet": {
+  "w": 620,
+  "h": 1341
+ },
+ "w1440-room-rooms": {
+  "w": 1180,
+  "h": 1065
+ },
+ "wt-speccing-1440": {
+  "w": 1180,
+  "h": 1065
+ },
+ "wt-finalize-head": {
+  "w": 948,
+  "h": 92
+ },
+ "wt-delivery-project-1440": {
+  "w": 1180,
+  "h": 1065
+ },
+ "w1440-red-letter-zone": {
+  "w": 948,
+  "h": 144
+ }
+}

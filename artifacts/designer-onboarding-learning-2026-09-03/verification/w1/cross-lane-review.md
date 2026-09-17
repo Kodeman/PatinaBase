@@ -1,0 +1,66 @@
+# W1 cross-lane review — onboarding/w1-integration
+
+Read-only review of `git -C /Users/kody/Code/patina-merged/.codex/worktrees/agent-onb-w1-integration diff main...HEAD` (61 files, 2430+/399-), after the ort auto-merge of L1–L5 with no manual conflict resolution. No files modified; no destructive git commands run.
+
+## Gates run (evidence)
+
+- `pnpm --filter @patina/help-system type-check` — clean (tsc --noEmit, no output).
+- `pnpm --filter @patina/help-system test` — **24 test files passed, 788 tests passed.**
+- `pnpm --filter @patina/designer-portal type-check` — clean (tsc --noEmit, no output).
+- `pnpm --filter @patina/designer-portal test` — **504 suites passed, 6040 tests passed**, 1 snapshot passed. (Two pre-existing, unrelated `act(...)` console warnings in `rolodex-seed-sheet` and `useReducedMotion` tests — not new, both suites still pass.)
+
+`supabase db reset` / pgTAP was not run (no local Postgres instance available to this review; SQL correctness below is by inspection of the migration and its companion `supabase/tests/rls/00559_first_document_opened_test.sql`, which is well-formed and exercises the right cases).
+
+## Findings
+
+### F1 — Stale `FirstSigninTour` references left in two files L4 itself touched
+- **Severity:** low. **Confidence:** 0.9.
+- **Files:**
+  - `packages/help-system/src/persistence/supabaseAdapter.ts:33` (top-of-file docstring): "localStorage / UserDefaults sweep on first authenticated mount lives in the consumer (designer-portal `FirstSigninTour`, iOS `FirstLaunchTour`)."
+  - `packages/help-system/src/proactive/TourController/tourState.ts:21`: "`apps/designer-portal/src/components/help/first-signin-tour.tsx` for the wiring pattern."
+- Both files are in L4's own modify list (per the plan) and both were touched by this merge, but neither docstring was updated when `first-signin-tour.tsx` was deleted and `help-state-provider.tsx`'s own docstring was rewritten to say "The desk world is the only route group, so this is the one install site." A future reader who follows either comment hits a 404 file. No functional impact — pure doc drift, but avoidable since these exact files were edited in the same lane.
+- Also noted, out of the diff's scope but adjacent: `apps/client-portal/src/components/help/help-state-setup.tsx:13` and several `docs/_archive/handoffs/*.md` / `docs/prds/consolidated/01-designer-portal.md` still name `FirstSigninTour` — these are outside every lane's pathspec (client-portal, archived docs, an already-stale PRD describing the pre-R21 `(portal)` shell) and are pre-existing staleness, not something this merge introduced or was supposed to fix.
+
+### F2 — "Panel" doorway for "The keys" is not instrumented; `KeysOpenSource`/analytics docs claim a source that is never fired, and vice versa
+- **Severity:** medium. **Confidence:** 0.85.
+- **Files:** `apps/designer-portal/src/components/document/help/panel-keys-block.tsx:62-67`, `apps/designer-portal/src/components/document/overlays/keys-sheet.tsx:35` (`KeysOpenSource = 'key' | 'palette' | 'panel'`), `apps/designer-portal/src/app/(document-help)/help/article/the-keys/page.tsx:25` (`safeCapture(HELP_EVENTS.SHORTCUTS_OPENED, { source: 'help_center' })`), `packages/help-system/src/analytics.ts:63` (doc comment: `source: 'key'|'palette'|'panel'|'help_center'`).
+- L1's `PanelKeysBlock` "The keys" link is a bare `next/link` `<Link href="/help/article/the-keys">` — it never calls L5's `openKeys()`, so it never fires `help.shortcuts.opened`. That is actually correct per the plan (L1's spec literally says the panel links to the *route*, not the overlay), but the consequence is that the `'panel'` value in L5's `KeysOpenSource` union is dead code — nothing in the merged tree ever calls `openKeys('panel')` — while the actual third doorway (the Help Center article itself, `/help/article/the-keys`) fires `source: 'help_center'`, a value that exists in `page.tsx` and in the top-of-file analytics.ts comment but is **not** part of the `KeysOpenSource` type L5 defined. Two separate lanes (L1 and L5) each built a "third rung" for the KEYS ladder and the result is a type union and a doc comment that both describe a ladder that doesn't match what's actually wired: real sources are `key`, `palette`, `help_center`; documented/typed sources are `key`, `palette`, `panel` (type) or `key/palette/panel/help_center` (comment, a superset of both, but nothing enforces it).
+- **Failure scenario:** a future analytics consumer trusts `KeysOpenSource` as the exhaustive set of values `help.shortcuts.opened.source` can take (natural assumption for an exported type named that), builds a PostHog breakdown or a TS `switch` on it, and it silently misses/mishandles every `'help_center'` event (the volume-leading one, since it fires on every article page view) while carrying a `'panel'` case that never occurs.
+- Not a build/test break (`safeCapture`'s `props` param is untyped `Record<string, unknown>`, so nothing forces the string literals to line up) — this is a documentation/type-contract drift introduced by two lanes each shipping a "third doorway" independently, not caught because neither lane's own tests assert the union is exhaustive against real call sites.
+
+### F3 — `PanelKeysBlock`'s glossary link is a second, independently-computed copy of `THE_WORDS_HREF`
+- **Severity:** low. **Confidence:** 0.9.
+- **Files:** `apps/designer-portal/src/components/document/help/panel-keys-block.tsx:18-20` (`const GLOSSARY_HREF = \`/help/topic/${encodeURIComponent('designer-portal/document/concept')}\`;`) vs. `apps/designer-portal/src/lib/help-system/keys-reference.ts:40` (`export const THE_WORDS_HREF = ...` — same literal value, computed the same way).
+- L1's `panel-keys-block.tsx` was written before/independently of L5's `keys-reference.ts`, which is the file that explicitly declares itself the canonical constant ("`THE_WORDS_HREF` — ... so the two can never disagree"). The ort merge didn't (and structurally couldn't) notice that L1 needed to import from L5's new module instead of re-deriving the same URL locally. Values currently agree, so there's no user-visible bug today, but the "one source of truth" invariant the codebase explicitly documents for this exact href is violated by these two lanes: a future rename of the concept-shelf prefix in `keys-reference.ts` would silently NOT propagate to the panel's link, reintroducing the "second door to nowhere" failure mode `keys-reference.ts`'s own docstring warns against.
+- **Failure scenario:** someone renames the Ideas & vocabulary shelf's surface-key prefix, updates `THE_WORDS_HREF` in `keys-reference.ts` (and the ⌘K row, and the `/help/article/the-keys` page, all of which import it), ships it, and only discovers weeks later that the contextual help panel's "The words" link (used far more often, since it's visible on every surface) still points at the old, now-topic-less prefix — because `panel-keys-block.tsx` was never touched.
+
+### F4 — No functional regressions found in the four flagged overlap sites
+- `registry.tsx` (L1 `HOST_SURFACES`/`resolveIntroBlurb`/`shortcutsForSurface` + L5's read of `ALL_STUDIO_SURFACES` for `doorwayRows()`): clean, single coherent file, no duplicate exports, `HOST_SURFACES` correctly excluded from `ALL_STUDIO_SURFACES` and `DOCUMENT_SCOPED_SURFACES` per both lanes' invariants.
+- `command-bar.tsx` (L1 `surfaceRow` kind-mapping `s.kind === 'host' ? 'room' : s.kind` + L5's two new `allUtilityRows` entries + L2's pre-existing `openCaptureLead`/walkthrough rows): all coexist; `'help'` was already a valid `PaletteRow['kind']` before this wave, so L5's two new rows don't need a type-union change; the host-kind branch is dead-but-documented (comment explains why) rather than silently wrong.
+- `help-state-provider.tsx` (L4's margin-note backend install + the FirstSigninTour-removal doc rewrite): single coherent install site, `setMarginNoteStateBackend`/`markMarginNoteSeen` wired correctly, `migrateLocalToSupabase(backends, marginNoteBackend)` call matches the two-arg signature added in `supabaseAdapter.ts`.
+- `analytics.ts` (L5's `SHORTCUTS_OPENED`/`GLOSSARY_OPENED`): additive only, no collision with any other lane's event constants (L6 — analytics consolidation — is out of scope for this integration branch per the task list; nothing in this diff conflicts with it).
+- `desk/page.tsx` (L2 anchor/offer-note + L3 members derivation): both changes compose correctly — `otherActiveStudioMembers` is computed once and read by both `deriveSetupSteps` (L3) and is unrelated to, and does not interfere with, the `data-tour-anchor="desk-greeting"` / `clearDeskWalkthroughLater` wiring (L2). No shared variable is fought over.
+- `doc/[id]/page.tsx` (L3's first-hire-opened mount effect vs. anything L2/L4 touch there): L3 is the only lane that modifies this file in this wave; the new effect is additive, self-contained, and gated correctly (owner exclusion, once-per-member guard, `useAuth`/`useOrganizations`/`useOrganizationMembers`/`useMarkFirstDocumentOpened` all real exports). No interaction bug found.
+
+### F5 — Migration 00559 correctness
+- `ALTER TABLE ... ADD COLUMN IF NOT EXISTS first_document_opened_at timestamptz` — additive, non-destructive.
+- `mark_first_document_opened()` is `SECURITY DEFINER`, `SET search_path = public`, guarded by `user_id = auth.uid() AND status = 'active' AND first_document_opened_at IS NULL` — own-row-only, idempotent-by-construction (a second call is a no-op UPDATE matching zero rows). Mirrors the precedent cited (`set_my_member_title`, 00416) for the same "no own-row UPDATE policy on organization_members" reason.
+- `REVOKE ALL ... FROM PUBLIC, anon; GRANT EXECUTE ... TO authenticated;` — present and matches the documented prod hazard (Supabase auto-grants `anon EXECUTE` on newly created functions; this REVOKE is load-bearing, correctly called out in both the migration comment and 00557's precedent).
+- Readability by co-members: confirmed against `supabase/migrations/00321_org_members_comember_select.sql` + `00322_org_members_comember_select_authenticated.sql` — the "Active members can view co-members" SELECT policy (`FOR SELECT TO authenticated USING (public.is_active_org_member(organization_id))`) UNIONs with the own-row policy (00021) and lets any active, non-guest co-member SELECT the full `organization_members` row for their org, including the new `first_document_opened_at` column — so the Desk/Studio-page derivations (L3) that read teammates' `first_document_opened_at` off the shared members list will work under RLS as written, for every co-member except an active `guest`-role member (matches the existing guest-exclusion policy, not a new gap).
+- `supabase/tests/rls/00559_first_document_opened_test.sql` is a real, non-pgTAP psql script (matches the repo's `supabase/tests/rls/*` convention) that asserts: first call stamps, second call doesn't re-stamp, one member's call never touches another member's row, SECURITY DEFINER + anon/PUBLIC lockout via `has_function_privilege`, and a live `assume_anon()` call demonstrating the REVOKE holds. This is thorough and correct by inspection; not executed against a live Postgres in this review.
+
+### F6 — Global Constraints grep, whole diff
+- `box-shadow` / `shadow-*` in added lines: **zero** matches except `shadow-none` (an explicit D4 negation, used correctly on the WelcomeModal and the coachmark popover to override the package's default `shadow-lg`).
+- "badge": two matches, both negations in comments ("not badges", "No badges, no status colour: this is reference, not state") — no actual badge UI added.
+- Exclamation marks in added lines: every hit is a code operator (`!=`, `!.`, negation `!foo`, non-null assertion `!`) or a test regex asserting the *absence* of `!` in copy (`expect(row.label).not.toMatch(/!/)`, keys-reference.test.ts) — zero user-facing exclamation marks in copy.
+- The word "AI" (word-boundary) and "artificial intelligence": zero matches anywhere in added lines.
+- No new red/green status classes, no progress bars, no tab bars introduced.
+
+### F7 — Scope check (files outside the five lanes' stated pathspecs)
+- All 61 changed files map cleanly onto L1–L5's stated file lists in the plan (registry.tsx, command-bar.tsx, desk-walkthrough*, help-state-provider.tsx, margin-note/rail, keys-reference/keys-sheet/keys-shortcut, studio-setup*, the 00559 migration + its RLS test, the generated `database.types.ts` + `hooks/index.ts` additions that necessarily follow the new column/RPC/hook, and the corresponding test files). No stray/unexplained file found. `docs/prds/consolidated/09-help-guidance.md` is touched exactly at the FirstSigninTour-retirement note the plan calls for (L4).
+
+## Verdict
+
+**MERGEABLE.**
+
+No functional regressions, no constraint violations (D4/D8/R94/R96/R125/"no AI"/"no exclamation"), no broken cross-lane wiring; both packages type-check clean and the full test suites are green (788/788 help-system, 6040/6040 designer-portal). F1–F3 are real but low/medium-severity documentation-and-analytics-contract drift from independent lane authorship — worth a fast follow-up commit before Wave 2 content work leans on the `KeysOpenSource` taxonomy, but none of them block shipping W1. No must-fix ids.

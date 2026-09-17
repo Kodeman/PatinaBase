@@ -18,6 +18,7 @@ toggles. Asked for by Kody. Design and architecture only — no repo code change
 - `review/03-adversarial.md` — the adversarial review: 49 findings (7 blocker, 17 major, 21 minor, 4 nit), no severity filter.
 - `review/04-rulings.md` — Fable's synthesis: a ruling on all 49, the direction picked, the waves revised.
 - `review/07-deck-review.md` — the deck review: every number and citation in the mockup and the deck checked back against the architecture and the code.
+- `delivery/` — build program: `RULINGS-K4-K11.md` (Kody's interview rulings), `reviews/` (per-wave adversarial reviews), wave reports.
 
 ## Published
 

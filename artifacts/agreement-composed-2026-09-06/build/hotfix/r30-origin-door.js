@@ -45,7 +45,7 @@ Severity: blocker = the origin agreement still unreachable or unsignable, RLS le
 }
 
 function fixBrief(review, round) {
-  const open = review.findings.filter(f => f.severity === 'blocker' || f.severity === 'major')
+  const open = review.findings
   return `You are the FIX agent for the R30 hotfix (round ${round + 1}). Fix every blocker and major below in ${WT} (branch ${BRANCH}); minors only when trivial.${STANDING}
 FINDINGS:
 ${JSON.stringify(open, null, 1)}
@@ -54,17 +54,20 @@ Re-run the gates (client type-check, test:coverage, threshold e2e) and paste. Co
 
 phase('Build')
 const impl = await agent(IMPL, { label: 'build:r30', phase: 'Build', schema: LANE_SCHEMA, model: 'opus' })
-if (!impl || !impl.shipped) { log('R30 implementer did not ship'); return { stage: 'build', impl } }
+if (!impl || !impl.headSha) { log('R30 implementer returned nothing'); return { stage: 'build', impl } }
+if (!impl.shipped) log('R30 implementer reported shipped=false — proceeding to review on its head anyway; the reviewer judges')
 let head = impl.headSha, review = null, prior = null
 phase('Review')
-for (let round = 0; round < 2; round++) {
+const ROUNDS = (args && args.rounds) || 2
+for (let round = 0; round < ROUNDS; round++) {
   review = await agent(reviewBrief(round, prior), { label: `review:r30 r${round + 1}`, phase: 'Review', schema: REVIEW_SCHEMA, model: 'opus' })
   if (!review) { log('reviewer returned nothing'); break }
   prior = review
   const open = review.findings.filter(f => f.severity === 'blocker' || f.severity === 'major')
   log(`r30 review r${round + 1} → ${review.verdict}, ${open.length} blocker/major of ${review.findings.length}`)
-  if (open.length === 0 || round === 1) break
-  const fix = await agent(fixBrief(review, round), { label: `fix:r30 r${round + 1}`, phase: 'Review', schema: LANE_SCHEMA, model: 'opus' })
+  if (open.length === 0 || round === ROUNDS - 1) break
+  const extra = (args && args.alsoFix && args.alsoFix[round]) || []
+  const fix = await agent(fixBrief({ findings: review.findings.filter(f => f.severity === 'blocker' || f.severity === 'major' || extra.includes(f.id)) }, round), { label: `fix:r30 r${round + 1}`, phase: 'Review', schema: LANE_SCHEMA, model: 'opus' })
   if (fix && fix.headSha) head = fix.headSha
   if (!fix) { log('fixer returned nothing'); break }
 }
