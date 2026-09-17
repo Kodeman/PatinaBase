@@ -16,6 +16,8 @@ function clone<T>(o: T): T {
 interface Controls {
   /** Row ids that must throw (simulating a crashed/failed DB write) on .update(). */
   failUpdateIds: Set<string>;
+  /** Storage paths (or "*") whose next upload returns an interruption error. */
+  failUploadsFor: Set<string>;
 }
 
 class Builder {
@@ -167,6 +169,8 @@ export interface FakeSupabase {
   _storageFiles?: Set<string>;
   /** Test hook: row ids whose next .update() call throws (any table), simulating a write that crashes/never lands. */
   _failUpdateIds?: Set<string>;
+  /** Test hook: storage paths (or "*") whose next .upload() returns an interruption error. */
+  _failUploadsFor?: Set<string>;
 }
 
 export function createFakeSupabase(
@@ -181,7 +185,7 @@ export function createFakeSupabase(
   const failMovesFor = new Set<string>();
   const missingSourceFor = new Set<string>();
   const storageFiles = new Set<string>();
-  const controls: Controls = { failUpdateIds: new Set<string>() };
+  const controls: Controls = { failUpdateIds: new Set<string>(), failUploadsFor: new Set<string>() };
 
   return {
     from: (table: string) => new Builder(store, table, controls),
@@ -193,6 +197,11 @@ export function createFakeSupabase(
         // deno-lint-ignore require-await
         upload: async (path: string) => {
           uploads.push({ bucket, path });
+          if (controls.failUploadsFor.has("*") || controls.failUploadsFor.has(path)) {
+            controls.failUploadsFor.delete(path);
+            controls.failUploadsFor.delete("*");
+            return { data: null, error: { message: "upload interrupted" } };
+          }
           storageFiles.add(`${bucket}:${path}`);
           return { data: { path }, error: null };
         },
@@ -232,5 +241,6 @@ export function createFakeSupabase(
     _missingSourceFor: missingSourceFor,
     _storageFiles: storageFiles,
     _failUpdateIds: controls.failUpdateIds,
+    _failUploadsFor: controls.failUploadsFor,
   };
 }
