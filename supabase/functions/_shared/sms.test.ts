@@ -2748,3 +2748,43 @@ Deno.test("R2: an audit copy naming the field URL is still redacted", async () =
     "the token is gone from the row",
   );
 });
+
+Deno.test("R2: delimiter-bounded bearer tokens never persist in audit copy", async () => {
+  const auditBodies = [
+    `_${RAW_BEARER}_`,
+    `${RAW_BEARER}?x=1`,
+    `(${RAW_BEARER})`,
+    `Token:\n${RAW_BEARER}`,
+  ];
+  const wireText = `Open https://client.patina.cloud/field/${RAW_BEARER}`;
+
+  for (const auditBody of auditBodies) {
+    const { fake: deferredFake } = linkWorld();
+    const deferredRow = await deferDigest(deferredFake, {
+      auditBody,
+      vars: { link: `https://client.patina.cloud/field/${RAW_BEARER}` },
+    });
+    const deferredStored = String(deferredRow.body ?? "");
+    const deferredAuditLog = JSON.stringify(deferredFake._data.sms_messages ?? []);
+    for (const text of [deferredStored, deferredAuditLog]) {
+      assert(!/[0-9a-f]{64}/i.test(text), `no bearer token persists: ${text}`);
+      assert(!text.includes("/field/"), `no field URL persists: ${text}`);
+    }
+
+    const { fake } = linkWorld();
+    const wires: string[] = [];
+    const row = await sendPartySms(
+      fake as never,
+      { partyId: "p1", body: wireText, auditBody },
+      wireDeps(wires, OPEN),
+    );
+    assert(row.sent);
+    assertEquals(wires, [wireText], "the live wire body stays unchanged");
+    const storedBody = String((fake._data.sms_messages ?? [])[0]?.body ?? "");
+    const auditLogText = JSON.stringify(fake._data.sms_messages ?? []);
+    for (const text of [storedBody, auditLogText]) {
+      assert(!/[0-9a-f]{64}/i.test(text), `no bearer token persists: ${text}`);
+      assert(!text.includes("/field/"), `no field URL persists: ${text}`);
+    }
+  }
+});
