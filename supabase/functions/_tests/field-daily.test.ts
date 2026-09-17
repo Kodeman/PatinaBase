@@ -4,6 +4,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   buildDigestMenu,
+  DIGEST_MENU_MAX_SEPTETS,
   runFieldDaily,
   shouldSendDeliveryConfirm,
   type DigestItem,
@@ -13,18 +14,51 @@ import { createFakeSupabase } from "./fake-supabase.ts";
 
 const TODAY = "2026-07-08";
 
+const THREE_ITEMS: DigestItem[] = [
+  { id: "t1", kind: "task", title: "Install vanity", project_id: "p1", due: TODAY },
+  { id: "c1", kind: "coordination", title: "Confirm grout", project_id: "p1", due: null },
+  { id: "t2", kind: "task", title: "Set tile", project_id: "p1", due: "2026-07-01" },
+];
+
+function septets(text: string): number {
+  let n = 0;
+  for (const ch of text) n += "^{}\\[~]|€".includes(ch) ? 2 : 1;
+  return n;
+}
+
 Deno.test("buildDigestMenu numbers items with due labels", () => {
-  const items: DigestItem[] = [
-    { id: "t1", kind: "task", title: "Install vanity", project_id: "p1", due: TODAY },
-    { id: "c1", kind: "coordination", title: "Confirm grout", project_id: "p1", due: null },
-    { id: "t2", kind: "task", title: "Set tile", project_id: "p1", due: "2026-07-01" },
-  ];
-  const { menuText, entries } = buildDigestMenu(items, TODAY);
+  // Room for all three, so this still reads the numbering and the labels.
+  const { menuText, entries } = buildDigestMenu(THREE_ITEMS, TODAY, 1000);
   assertEquals(entries.length, 3);
   assertEquals(entries[0], { n: 1, kind: "task", id: "t1", project_id: "p1" });
   assert(menuText.includes("1) Install vanity (due today)"));
   assert(menuText.includes("2) Confirm grout"));
   assert(menuText.includes("3) Set tile (overdue)"));
+});
+
+Deno.test("buildDigestMenu drops what will not fit and says how many", () => {
+  // 68 septets of menu against the 42 the digest body can pay for (S8).
+  const { menuText, entries } = buildDigestMenu(THREE_ITEMS, TODAY);
+  assert(
+    septets(menuText) <= DIGEST_MENU_MAX_SEPTETS,
+    `the menu is ${septets(menuText)} septets: "${menuText}"`,
+  );
+  assertEquals(menuText, "1) Install vanity (due today) +2 more");
+  // The entries are the lines they were shown, so "2" cannot mean an item
+  // that never appeared in the text.
+  assertEquals(entries.length, 1);
+  assertEquals(entries[0], { n: 1, kind: "task", id: "t1", project_id: "p1" });
+});
+
+Deno.test("buildDigestMenu truncates a first item too long for the budget", () => {
+  const { menuText, entries } = buildDigestMenu(
+    [{ id: "t1", kind: "task", title: "I".repeat(40), project_id: "p1", due: TODAY }],
+    TODAY,
+  );
+  assertEquals(septets(menuText), DIGEST_MENU_MAX_SEPTETS);
+  assertEquals(menuText, `1) ${"I".repeat(24)}... (due today)`);
+  assert(!menuText.includes("…"), "an ellipsis character would force UCS-2");
+  assertEquals(entries.length, 1);
 });
 
 Deno.test("buildDigestMenu is empty for no items (skip signal)", () => {

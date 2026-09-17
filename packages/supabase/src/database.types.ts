@@ -6914,6 +6914,89 @@ export type Database = {
           },
         ]
       }
+      field_delivery_reports: {
+        Row: {
+          arrived_at: string | null
+          availability_at: string | null
+          condition_at: string | null
+          condition_note: string | null
+          condition_ok: boolean | null
+          created_at: string
+          id: string
+          left_at: string | null
+          party_id: string
+          project_id: string
+          proposed_date: string | null
+          proposed_window: string | null
+          subject_id: string
+          subject_kind: string
+          updated_at: string
+        }
+        Insert: {
+          arrived_at?: string | null
+          availability_at?: string | null
+          condition_at?: string | null
+          condition_note?: string | null
+          condition_ok?: boolean | null
+          created_at?: string
+          id?: string
+          left_at?: string | null
+          party_id: string
+          project_id: string
+          proposed_date?: string | null
+          proposed_window?: string | null
+          subject_id: string
+          subject_kind: string
+          updated_at?: string
+        }
+        Update: {
+          arrived_at?: string | null
+          availability_at?: string | null
+          condition_at?: string | null
+          condition_note?: string | null
+          condition_ok?: boolean | null
+          created_at?: string
+          id?: string
+          left_at?: string | null
+          party_id?: string
+          project_id?: string
+          proposed_date?: string | null
+          proposed_window?: string | null
+          subject_id?: string
+          subject_kind?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_delivery_reports_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id", "project_id"]
+          },
+          {
+            foreignKeyName: "field_delivery_reports_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "field_delivery_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "field_delivery_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       field_link_tokens: {
         Row: {
           created_at: string
@@ -31544,6 +31627,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _apply_field_delivery_effect: {
+        Args: {
+          p_effect: Json
+          p_party_id: string
+          p_sms_message_id: string
+          p_source: string
+        }
+        Returns: Json
+      }
       _apply_field_effect_legacy_00399: {
         Args: {
           p_effect: Json
@@ -35135,6 +35227,14 @@ export type Database = {
         Args: { p_value: Json }
         Returns: string[]
       }
+      field_effect_authority_scopes: {
+        Args: { p_effect_type: string }
+        Returns: string[]
+      }
+      field_project_lead_user: {
+        Args: { p_project_id: string }
+        Returns: string
+      }
       file_plan_prints: {
         Args: {
           p_entries: Json
@@ -36470,6 +36570,10 @@ export type Database = {
           company_id: string
           organization_id: string
         }[]
+      }
+      party_holds_field_authority: {
+        Args: { p_on?: string; p_party_id: string; p_scopes: string[] }
+        Returns: boolean
       }
       party_identity_key: {
         Args: {

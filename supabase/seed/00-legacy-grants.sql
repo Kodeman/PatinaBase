@@ -17646,6 +17646,78 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.field_delivery_reports FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.field_delivery_reports TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.field_delivery_reports TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.field_effect_authority_scopes(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.field_effect_authority_scopes(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.party_holds_field_authority(uuid, text[], date) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.party_holds_field_authority(uuid, text[], date) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.field_project_lead_user(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.field_project_lead_user(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._apply_field_delivery_effect(uuid, jsonb, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00641_field_line_effects_templates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

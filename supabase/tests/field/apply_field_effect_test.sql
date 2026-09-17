@@ -17,6 +17,18 @@
 --  10. remaining_count          → reflects the party's still-open work.
 --  11. review_sms_message('apply') applies the parked effect + clears the flag.
 --
+-- The Field Line delivery vocabulary (migration 00641, contract S3):
+--  12. confirm_availability     → the proposed window lands on
+--      field_delivery_reports, and NOTHING is marked received.
+--  13. report_arrival           → arrived_at stamped, condition untouched.
+--  14. report_condition (ok)    → condition_ok true, no review opened.
+--  15. report_condition (not ok)→ condition_ok false + the message opens for
+--      review with owner_user_id = the project lead.
+--  16. report_departure         → left_at stamped.
+--  17. NO AUTHORITY             → a seat with no in-force project_party_authority
+--      grant for the effect's scope is refused with the stable code
+--      `field_effect_no_authority` (SQLSTATE 42501) and writes nothing.
+--
 -- How to run:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
 --     -v ON_ERROR_STOP=1 < supabase/tests/field/apply_field_effect_test.sql
@@ -79,6 +91,27 @@ VALUES
   ('ef000000-0000-4000-8000-0000000000f2', 'ef000000-0000-4000-8000-0000000000f1', 'inbound', 'done with the tile', 'ef000000-0000-4000-8000-0000000000b1', 'ef000000-0000-4000-8000-0000000000a1', NULL, false),
   ('ef000000-0000-4000-8000-0000000000f3', 'ef000000-0000-4000-8000-0000000000f1', 'inbound', 'vanity is in', 'ef000000-0000-4000-8000-0000000000b1', 'ef000000-0000-4000-8000-0000000000a1',
     jsonb_build_object('type', 'mark_done', 'target', jsonb_build_object('kind', 'task', 'id', 'ef000000-0000-4000-8000-0000000000d1')), true);
+
+-- ── Field Line fixtures (00641) ────────────────────────────────────────────
+-- b2 is the same shape of seat as b1 with ONE difference: no authority grant.
+INSERT INTO project_parties (id, project_id, party_kind, display_name, phone)
+VALUES ('ef000000-0000-4000-8000-0000000000b2', 'ef000000-0000-4000-8000-0000000000a1', 'receiver', 'Del Driver', '5559876543');
+
+-- b1 holds the two scopes the delivery effects name; b2 holds none.
+INSERT INTO project_party_authority (engagement_id, scope, effective_from)
+VALUES
+  ('ef000000-0000-4000-8000-0000000000b1', 'schedule',    CURRENT_DATE - 1),
+  ('ef000000-0000-4000-8000-0000000000b1', 'site_access', CURRENT_DATE - 1);
+
+-- The delivery the prompt is about: d6 is b1's, d7 is b2's.
+INSERT INTO project_tasks (id, project_id, title, owner, owner_party_id, status)
+VALUES
+  ('ef000000-0000-4000-8000-0000000000d6', 'ef000000-0000-4000-8000-0000000000a1', 'Deliver sofa',  'receiver', 'ef000000-0000-4000-8000-0000000000b1', 'todo'),
+  ('ef000000-0000-4000-8000-0000000000d7', 'ef000000-0000-4000-8000-0000000000a1', 'Deliver chairs','receiver', 'ef000000-0000-4000-8000-0000000000b2', 'todo');
+
+-- The inbound text a condition report arrives on.
+INSERT INTO sms_messages (id, conversation_id, direction, body, party_id, project_id, parsed_intent, needs_review)
+VALUES ('ef000000-0000-4000-8000-0000000000f4', 'ef000000-0000-4000-8000-0000000000f1', 'inbound', 'one carton is scratched', 'ef000000-0000-4000-8000-0000000000b1', 'ef000000-0000-4000-8000-0000000000a1', NULL, false);
 
 -- ─── assertions ────────────────────────────────────────────────────────────
 DO $$
@@ -212,6 +245,153 @@ BEGIN
 
   PERFORM set_config('request.jwt.claims', NULL, true);
   RAISE NOTICE 'apply_field_effect: case 11 (review_sms_message) passed.';
+END
+$$;
+
+-- ── Cases 12–18: the Field Line delivery vocabulary (00641) ────────────────
+DO $$
+DECLARE
+  v_res      JSONB;
+  v_rep      public.field_delivery_reports;
+  v_status   TEXT;
+  v_done     TIMESTAMPTZ;
+  v_first    TIMESTAMPTZ;
+  v_review   BOOLEAN;
+  v_owner    UUID;
+  v_raised   BOOLEAN;
+  v_detail   TEXT;
+  v_sqlstate TEXT;
+  v_count    INTEGER;
+BEGIN
+  -- ── Case 12: confirm_availability writes the proposed window ─────────────
+  v_res := public.apply_field_effect(
+    'ef000000-0000-4000-8000-0000000000b1',
+    jsonb_build_object(
+      'type', 'confirm_availability',
+      'target', jsonb_build_object('kind', 'task', 'id', 'ef000000-0000-4000-8000-0000000000d6'),
+      'availability', jsonb_build_object('date', '2030-06-18', 'window', '2-4')));
+  SELECT * INTO v_rep FROM field_delivery_reports
+   WHERE party_id = 'ef000000-0000-4000-8000-0000000000b1'
+     AND subject_id = 'ef000000-0000-4000-8000-0000000000d6';
+  ASSERT v_rep.proposed_date = DATE '2030-06-18',
+    'FAIL 12a: proposed_date should be 2030-06-18, got ' || COALESCE(v_rep.proposed_date::text, 'NULL');
+  ASSERT v_rep.proposed_window = '2-4',
+    'FAIL 12b: proposed_window should be 2-4, got ' || COALESCE(v_rep.proposed_window, 'NULL');
+  ASSERT v_rep.availability_at IS NOT NULL, 'FAIL 12c: availability_at should be stamped';
+  ASSERT (v_res->>'applied')::boolean, 'FAIL 12d: result.applied should be true';
+
+  -- ── Case 13: AVAILABILITY IS NOT RECEIPT ─────────────────────────────────
+  SELECT status, completed_at INTO v_status, v_done
+    FROM project_tasks WHERE id = 'ef000000-0000-4000-8000-0000000000d6';
+  ASSERT v_status = 'todo',
+    'FAIL 13a: availability must not close the delivery task, got ' || v_status;
+  ASSERT v_done IS NULL, 'FAIL 13b: availability must not stamp completed_at';
+  ASSERT v_rep.arrived_at IS NULL, 'FAIL 13c: availability must not stamp arrived_at';
+  ASSERT v_rep.condition_ok IS NULL, 'FAIL 13d: availability must not state a condition';
+  ASSERT v_res->>'summary_text' LIKE '%Nothing is marked received%',
+    'FAIL 13e: the confirmation must say nothing is received, got ' || (v_res->>'summary_text');
+
+  -- ── Case 14: report_arrival is distinct from condition, first arrival wins ─
+  v_res := public.apply_field_effect(
+    'ef000000-0000-4000-8000-0000000000b1',
+    jsonb_build_object('type', 'report_arrival',
+      'target', jsonb_build_object('kind', 'task', 'id', 'ef000000-0000-4000-8000-0000000000d6')));
+  SELECT * INTO v_rep FROM field_delivery_reports
+   WHERE party_id = 'ef000000-0000-4000-8000-0000000000b1'
+     AND subject_id = 'ef000000-0000-4000-8000-0000000000d6';
+  ASSERT v_rep.arrived_at IS NOT NULL, 'FAIL 14a: arrived_at should be stamped';
+  ASSERT v_rep.condition_ok IS NULL, 'FAIL 14b: arrival must not state a condition';
+  SELECT status INTO v_status FROM project_tasks WHERE id = 'ef000000-0000-4000-8000-0000000000d6';
+  ASSERT v_status = 'todo', 'FAIL 14c: arrival must not close the task, got ' || v_status;
+  v_first := v_rep.arrived_at;
+  PERFORM public.apply_field_effect(
+    'ef000000-0000-4000-8000-0000000000b1',
+    jsonb_build_object('type', 'report_arrival',
+      'target', jsonb_build_object('kind', 'task', 'id', 'ef000000-0000-4000-8000-0000000000d6')));
+  SELECT arrived_at INTO v_rep.arrived_at FROM field_delivery_reports
+   WHERE party_id = 'ef000000-0000-4000-8000-0000000000b1'
+     AND subject_id = 'ef000000-0000-4000-8000-0000000000d6';
+  ASSERT v_rep.arrived_at = v_first, 'FAIL 14d: a second "here" must not restate when the visit began';
+
+  -- ── Case 15: report_condition (ok) opens no review ───────────────────────
+  v_res := public.apply_field_effect(
+    'ef000000-0000-4000-8000-0000000000b1',
+    jsonb_build_object('type', 'report_condition',
+      'target', jsonb_build_object('kind', 'task', 'id', 'ef000000-0000-4000-8000-0000000000d6'),
+      'condition', jsonb_build_object('ok', true, 'note', 'all good')));
+  SELECT * INTO v_rep FROM field_delivery_reports
+   WHERE party_id = 'ef000000-0000-4000-8000-0000000000b1'
+     AND subject_id = 'ef000000-0000-4000-8000-0000000000d6';
+  ASSERT v_rep.condition_ok, 'FAIL 15a: condition_ok should be true';
+  ASSERT v_rep.condition_note = 'all good',
+    'FAIL 15b: the note should be kept, got ' || COALESCE(v_rep.condition_note, 'NULL');
+  SELECT needs_review INTO v_review FROM sms_messages WHERE id = 'ef000000-0000-4000-8000-0000000000f4';
+  ASSERT NOT v_review, 'FAIL 15c: an ok condition must not open a review';
+
+  -- ── Case 16: report_condition (not ok) opens the review + names the owner ─
+  v_res := public.apply_field_effect(
+    'ef000000-0000-4000-8000-0000000000b1',
+    jsonb_build_object('type', 'report_condition',
+      'target', jsonb_build_object('kind', 'task', 'id', 'ef000000-0000-4000-8000-0000000000d6'),
+      'condition', jsonb_build_object('ok', false, 'note', 'one carton is scratched')),
+    'sms', 'ef000000-0000-4000-8000-0000000000f4');
+  SELECT condition_ok INTO v_rep.condition_ok FROM field_delivery_reports
+   WHERE party_id = 'ef000000-0000-4000-8000-0000000000b1'
+     AND subject_id = 'ef000000-0000-4000-8000-0000000000d6';
+  ASSERT NOT v_rep.condition_ok, 'FAIL 16a: condition_ok should be false';
+  SELECT needs_review, owner_user_id INTO v_review, v_owner
+    FROM sms_messages WHERE id = 'ef000000-0000-4000-8000-0000000000f4';
+  ASSERT v_review, 'FAIL 16b: a not-ok condition must open the message for review';
+  ASSERT v_owner = 'ef000000-0000-4000-8000-000000000001',
+    'FAIL 16c: the review owner should be the project lead, got ' || COALESCE(v_owner::text, 'NULL');
+  SELECT status INTO v_status FROM project_tasks WHERE id = 'ef000000-0000-4000-8000-0000000000d6';
+  ASSERT v_status = 'todo', 'FAIL 16d: a condition report must not close the task, got ' || v_status;
+
+  -- ── Case 17: report_departure ────────────────────────────────────────────
+  v_res := public.apply_field_effect(
+    'ef000000-0000-4000-8000-0000000000b1',
+    jsonb_build_object('type', 'report_departure',
+      'target', jsonb_build_object('kind', 'task', 'id', 'ef000000-0000-4000-8000-0000000000d6')));
+  SELECT left_at INTO v_rep.left_at FROM field_delivery_reports
+   WHERE party_id = 'ef000000-0000-4000-8000-0000000000b1'
+     AND subject_id = 'ef000000-0000-4000-8000-0000000000d6';
+  ASSERT v_rep.left_at IS NOT NULL, 'FAIL 17: left_at should be stamped';
+
+  -- ── Case 18: NO AUTHORITY — the DB refuses, and writes nothing ───────────
+  -- b2 holds no project_party_authority row at all.
+  v_raised := false;
+  BEGIN
+    PERFORM public.apply_field_effect(
+      'ef000000-0000-4000-8000-0000000000b2',
+      jsonb_build_object('type', 'confirm_availability',
+        'target', jsonb_build_object('kind', 'task', 'id', 'ef000000-0000-4000-8000-0000000000d7'),
+        'availability', jsonb_build_object('date', '2030-06-19', 'window', 'morning')));
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_raised := true;
+    GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL, v_sqlstate = RETURNED_SQLSTATE;
+  END;
+  ASSERT v_raised, 'FAIL 18a: a seat with no schedule grant must be refused';
+  ASSERT v_detail = 'field_effect_no_authority',
+    'FAIL 18b: the refusal must carry the stable code, got ' || COALESCE(v_detail, 'NULL');
+  ASSERT v_sqlstate = '42501',
+    'FAIL 18c: the refusal must be insufficient_privilege, got ' || COALESCE(v_sqlstate, 'NULL');
+  SELECT count(*) INTO v_count FROM field_delivery_reports
+   WHERE party_id = 'ef000000-0000-4000-8000-0000000000b2';
+  ASSERT v_count = 0, 'FAIL 18d: a refused effect must write no report row, got ' || v_count;
+
+  -- ── Case 18e: the gate is scoped, not blanket ────────────────────────────
+  -- The same ungranted seat may still say what it is looking at: a condition
+  -- report is a statement of fact and is never refused for want of a grant.
+  v_res := public.apply_field_effect(
+    'ef000000-0000-4000-8000-0000000000b2',
+    jsonb_build_object('type', 'report_condition',
+      'target', jsonb_build_object('kind', 'task', 'id', 'ef000000-0000-4000-8000-0000000000d7'),
+      'condition', jsonb_build_object('ok', false, 'note', 'leg is cracked')));
+  SELECT count(*) INTO v_count FROM field_delivery_reports
+   WHERE party_id = 'ef000000-0000-4000-8000-0000000000b2' AND condition_ok = false;
+  ASSERT v_count = 1, 'FAIL 18e: a condition report needs no grant, got ' || v_count;
+
+  RAISE NOTICE 'apply_field_effect: cases 12-18 (Field Line delivery effects) passed.';
   RAISE NOTICE 'All apply_field_effect assertions passed.';
 END
 $$;
