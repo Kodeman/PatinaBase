@@ -1,8 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
-    "defaultMode": "bypassPermissions",
-    "disableAutoMode": "disable",
     "allow": [
       "Bash(git status*)",
       "Bash(git diff*)",
@@ -24,6 +22,24 @@
       "Bash(deno test *)",
       "Bash(rg *)"
     ],
+    "deny": [
+      "Read(/.env)",
+      "Read(/**/.env)",
+      "Read(/**/.env.*)",
+      "Read(/infra/.env*)",
+      "Edit(/.env)",
+      "Edit(/**/.env)",
+      "Edit(/**/.env.*)",
+      "Bash(git add -A*)",
+      "Bash(git add .*)",
+      "Bash(git add *env*)",
+      "Bash(git commit -a*)",
+      "Bash(git commit --all*)",
+      "Bash(ssh *192.168.1.14*)",
+      "Bash(vercel --prod*)"
+    ],
+    "defaultMode": "bypassPermissions",
+    "disableAutoMode": "disable",
     "ask": [
       "Bash(git push*)",
       "Bash(gh pr create*)",
@@ -44,49 +60,7 @@
       "Bash(npx wrangler deploy*)",
       "Bash(wrangler deploy*)",
       "Bash(./infra/deploy-portal.sh*)"
-    ],
-    "deny": [
-      "Read(/.env)",
-      "Read(/**/.env)",
-      "Read(/**/.env.*)",
-      "Read(/infra/.env*)",
-      "Edit(/.env)",
-      "Edit(/**/.env)",
-      "Edit(/**/.env.*)",
-      "Bash(git add -A*)",
-      "Bash(git add .*)",
-      "Bash(git add *env*)",
-      "Bash(git commit -a*)",
-      "Bash(git commit --all*)",
-      "Bash(ssh *192.168.1.14*)",
-      "Bash(vercel --prod*)"
     ]
-  },
-  "sandbox": {
-    "enabled": true,
-    "failIfUnavailable": true,
-    "autoAllowBashIfSandboxed": false,
-    "filesystem": {
-      "denyRead": [
-        "./.env",
-        "./**/.env",
-        "./**/.env.*",
-        "./infra/.env*",
-        "~/.ssh",
-        "~/.aws/credentials",
-        "~/.config/gcloud"
-      ]
-    },
-    "network": {
-      "allowedDomains": [
-        "registry.npmjs.org",
-        "github.com",
-        "api.github.com",
-        "localhost",
-        "127.0.0.1"
-      ],
-      "allowLocalBinding": true
-    }
   },
   "hooks": {
     "SessionStart": [
@@ -94,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/hooks/patina-hooks.mjs agent SessionStart",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/patina-hooks.mjs\" agent SessionStart",
             "timeout": 10
           }
         ]
@@ -106,7 +80,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/hooks/patina-hooks.mjs agent PreToolUse",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/patina-hooks.mjs\" agent PreToolUse",
             "timeout": 10
           }
         ]
@@ -118,7 +92,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/hooks/patina-hooks.mjs agent PostToolUse",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/patina-hooks.mjs\" agent PostToolUse",
             "timeout": 10
           }
         ]
@@ -129,11 +103,40 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/hooks/patina-hooks.mjs agent Stop",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/patina-hooks.mjs\" agent Stop",
             "timeout": 20
           }
         ]
       }
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": false,
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "github.com",
+        "api.github.com",
+        "localhost",
+        "127.0.0.1"
+      ],
+      "allowLocalBinding": true
+    },
+    "filesystem": {
+      "denyRead": [
+        "./.env",
+        "./**/.env",
+        "./**/.env.*",
+        "./infra/.env*",
+        "~/.ssh",
+        "~/.aws/credentials",
+        "~/.config/gcloud"
+      ]
+    }
+  },
+  "enabledPlugins": {
+    "sidequest@eigenwise-toolshed": true
   }
 }
