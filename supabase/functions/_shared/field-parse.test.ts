@@ -16,6 +16,10 @@ import {
   parseFieldMessage,
   parseFieldMessageDeterministic,
 } from "./field-parse.ts";
+import {
+  buildDigestMenu,
+  DIGEST_MENU_MAX_SEPTETS,
+} from "../field-daily/core.ts";
 
 // A Thursday, so "thursday morning" resolves to the day they texted and
 // "tue 2-4" resolves forward to the 22nd.
@@ -282,4 +286,130 @@ Deno.test("parseFieldMessage answers a delivery text without calling the API", a
   );
   assertEquals(got.intent, "report_arrival");
   assertEquals(calls, 0, "no request should have been made");
+});
+
+
+// ── SQ-40/SQ-41 delta probes ───────────────────────────────────────────────
+// Review SQ-40's full probe set is kept here with relative imports so it runs
+// against this candidate instead of the review worktree.
+
+Deno.test("SQ-41 negated positive remainders return null", () => {
+  for (const body of [
+    "no damage, no good",
+    "no damage, everything is no good",
+    "no damage, looks good? no",
+    "no damage and not good",
+    "no damage, nope",
+    "no damage but no",
+  ]) {
+    assertEquals(parse(body), null, `'${body}' must be read by the model`);
+  }
+});
+
+Deno.test("SQ-41 whole-segment clean remainders remain clean", () => {
+  for (const body of [
+    "no damage, everything good",
+    "no damage, all unwrapped",
+    "no damage. all good",
+  ]) {
+    assertEquals(parse(body)?.condition?.ok, true, `'${body}' remains clean`);
+  }
+});
+
+for (const body of [
+  "no damage but missing a chair",
+  "no damage but one box short",
+  "no damage yet",
+  "if there is no damage i will sign",
+  "no issues except the leg",
+  "no damage. 2 boxes short",
+  "undamaged but wrong colour",
+  "no damage, no good",
+  "no damage, everything is no good",
+  "no damage, looks good? no",
+]) Deno.test(`SQ-40 not clean: ${body}`, () => {
+  const got = parse(body);
+  assert(got?.condition?.ok !== true, JSON.stringify(got));
+});
+
+Deno.test("SQ-40 clean filler and unnegated missing goods", () => {
+  assertEquals(parse("no damage, all unwrapped")?.condition?.ok, true);
+  assertEquals(parse("missing a chair")?.condition?.ok, false);
+});
+
+for (const body of [
+  "2 damaged", "10 no damage", "3 tue 2-4", "1) done", "2.", "OK 12",
+  "DONE 12", "YES 12", "NO 12", "DELAY 12", "CONFIRM 12", "PUNCH 123",
+]) Deno.test(`SQ-40 reserved channel: ${body}`, () => assertEquals(parse(body), null));
+
+for (const body of [
+  "Tue 99-99", "tue 25-26", "tue 4-2pm", "after 99", "tue after 99",
+  "tue 13am-2pm", "tue 2:60-4", "before 0", "tue 4pm-2pm",
+  "tue 2pm-1am", "tue 12pm-11am", "tue 10:60-11", "tue 24-25",
+  "tue 12am-12am",
+]) Deno.test(`SQ-40 invalid/uncertain clock: ${body}`, () => assertEquals(parse(body), null));
+
+for (const body of [
+  "tue 12-1", "tue 11-2", "tue 2-4", "tue 12am-1am", "tue 12pm-1pm",
+  "tue 11am-12pm", "tue 0-1", "tue 23-23:59",
+]) Deno.test(`SQ-40 valid clock: ${body}`, () =>
+  assertEquals(parse(body)?.intent, "confirm_availability")
+);
+
+Deno.test("SQ-40 here still arrives", () =>
+  assertEquals(parse("here")?.intent, "report_arrival")
+);
+
+const septets = (value: string) => Array.from(value).reduce(
+  (count, character) => count + ("^{}\\[~]|€".includes(character) ? 2 : 1),
+  0,
+);
+
+Deno.test("SQ-40 digest matrix: extension titles, labels, item counts, visible entries", () => {
+  assertEquals(DIGEST_MENU_MAX_SEPTETS, 42);
+  for (const count of [1, 2, 3, 9, 10, 99, 100]) {
+    for (const title of ["I".repeat(40), "[".repeat(20), "A", "A ^ B"]) {
+      for (const due of [null, TODAY, "2026-09-01", "2026-09-25"]) {
+        const items = Array.from({ length: count }, (_, index) => ({
+          id: `t${index}`,
+          kind: "task" as const,
+          title,
+          project_id: "p",
+          due,
+        }));
+        const got = buildDigestMenu(items, TODAY);
+        assert(septets(got.menuText) <= 42, JSON.stringify(got));
+        assert(!got.menuText.includes("…"));
+        const visible = [...got.menuText.replace(/\([^)]*\)/g, "").matchAll(/(?:^| )(\d+)\) /g)]
+          .map((match) => +match[1]);
+        assertEquals(got.entries.map((entry) => entry.n), visible);
+        assert(got.entries.length > 0);
+        for (const entry of got.entries) assertEquals(entry.id, items[entry.n - 1].id);
+        if (got.entries.length < count) assert(got.menuText.endsWith(`+${count - got.entries.length} more`));
+      }
+    }
+  }
+});
+
+Deno.test("SQ-40 actual digest single extension-name max renders <=306 septets", async () => {
+  const sql = await Deno.readTextFile(
+    new URL("../../migrations/00641_field_line_effects_templates.sql", import.meta.url),
+  );
+  const quote = String.fromCharCode(39);
+  const closing = sql.match(new RegExp(`v_closing\\s+CONSTANT\\s+text\\s*:=\\s*${quote}([^${quote}]+)${quote}`))![1];
+  const template = sql.match(
+    new RegExp(`\\(${quote}sms_daily_digest${quote},\\s*${quote}[^${quote}]+${quote},\\s*${quote}([^${quote}]+)${quote}`),
+  )![1] + " " + closing;
+  const menu = buildDigestMenu(
+    [{ id: "1", kind: "task", title: "I".repeat(40), project_id: "p", due: TODAY }],
+    TODAY,
+  );
+  const params: Record<string, string> = {
+    studio_name: "[".repeat(12),
+    project_name: "P".repeat(24),
+    menu: menu.menuText,
+    link: "https://client.patina.cloud/field/" + "a".repeat(64),
+  };
+  const rendered = template.replace(/\{\{(\w+)\}\}/g, (_, key) => params[key] ?? "");
+  assertEquals(septets(rendered), 306);
 });

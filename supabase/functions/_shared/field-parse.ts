@@ -191,26 +191,25 @@ const NEGATED_DAMAGE_RE =
 const CONDITIONAL_RE = /\b(if|unless|will|once)\s/;
 
 /**
- * What may be left over after a negation and still leave a clean call: the ok
- * phrases' own words plus the small filler people write around them. Anything
- * else — "but", "yet", a count, a noun — means the negation was one clause of
- * a longer sentence, and a longer sentence is the model's to read.
+ * Approved whole remainder segments after a negated-damage phrase. The two
+ * multi-word fillers are explicit entries, not a positive-phrase word bag.
  */
-const CLEAN_REMAINDER_WORDS = new Set([
-  ...[...CONDITION_OK_PHRASES].flatMap((phrase) => phrase.split(" ")),
-  "all",
-  "everything",
-  "and",
-  "unwrapped",
+const CLEAN_REMAINDER_FILLER_SEGMENTS = new Set([
+  "all", "everything", "unwrapped", "here", "fine", "good", "looks good",
+  "everything good", "all unwrapped",
 ]);
 
-/** True when nothing but ok-words and filler survived the negation strip. */
+const CLEAN_REMAINDER_NEGATION_RE = /\b(?:no|not|never|nothing|nope|none)\b|n['’]t\b/;
+
+/** True when every remainder segment is an approved phrase or filler. */
 function isCleanRemainder(remainder: string): boolean {
-  const words = remainder
-    .replace(/[^a-z0-9' ]+/g, " ")
-    .split(/\s+/)
+  const segments = remainder
+    .split(/[,.;]+|\band\b/)
+    .map((segment) => segment.trim())
     .filter(Boolean);
-  return words.every((w) => CLEAN_REMAINDER_WORDS.has(w));
+  return segments.length > 0 && segments.every((segment) =>
+    CONDITION_OK_PHRASES.has(segment) || CLEAN_REMAINDER_FILLER_SEGMENTS.has(segment)
+  );
 }
 
 const DAYPARTS = new Set([
@@ -392,10 +391,16 @@ export function parseFieldMessageDeterministic(
   // yet. A promise is never a report.
   if (CONDITIONAL_RE.test(norm)) return null;
 
+  const withoutNegation = norm.replace(NEGATED_DAMAGE_RE, " ");
+  if (
+    withoutNegation !== norm &&
+    (CLEAN_REMAINDER_NEGATION_RE.test(withoutNegation) || withoutNegation.includes("?"))
+  ) {
+    return null;
+  }
   if (CONDITION_OK_PHRASES.has(norm)) {
     return { ...base, intent: "report_condition", condition: { ok: true, note } };
   }
-  const withoutNegation = norm.replace(NEGATED_DAMAGE_RE, " ");
   if (withoutNegation !== norm && !isCleanRemainder(withoutNegation)) {
     // "no damage but missing a chair", "no damage yet" — the negation was one
     // clause of a sentence, and the rest of the sentence is what matters. A
