@@ -58,6 +58,169 @@ BEGIN
  RAISE EXCEPTION 'ASSERT expected refusal: %',label;
 END $$;
 
+-- SQ-66: service-parsed command availability, not proposal affirmation.
+SAVEPOINT availability_compatibility;
+INSERT INTO project_parties(id,project_id,party_kind,display_name,phone) VALUES
+ ('51000000-0000-4000-8000-000000000031','51000000-0000-4000-8000-000000000021','sub','Other synthetic trade','+15555100000');
+INSERT INTO project_party_authority(engagement_id,scope,effective_from)
+ VALUES('51000000-0000-4000-8000-000000000030','schedule',CURRENT_DATE-1);
+CREATE FUNCTION pg_temp.availability_payload() RETURNS jsonb LANGUAGE sql AS $$
+ SELECT '{"type":"confirm_availability","target":{"kind":"task","id":"51000000-0000-4000-8000-000000000040"},"note":"available","availability":{"date":"2026-11-03","window":"09:00-11:00"}}'::jsonb;
+$$;
+CREATE FUNCTION pg_temp.raw_message(body text) RETURNS uuid LANGUAGE plpgsql AS $$
+DECLARE i uuid:=gen_random_uuid();
+BEGIN
+ INSERT INTO sms_messages(id,conversation_id,direction,body,twilio_sid)
+ VALUES(i,'51000000-0000-4000-8000-000000000050','inbound',body,'SM'||replace(i::text,'-',''));
+ RETURN i;
+END $$;
+CREATE FUNCTION pg_temp.availability_state() RETURNS jsonb LANGUAGE sql AS $$
+ SELECT jsonb_build_array(
+  (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM project_tasks t),
+  (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM client_decisions t),
+  (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM field_delivery_reports t),
+  (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM sms_messages t),
+  (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM sms_prompts t),
+  (SELECT jsonb_agg(to_jsonb(t) ORDER BY organization_id,channel_value) FROM studio_channel_consent t));
+$$;
+CREATE FUNCTION pg_temp.availability_refuses(p public.sms_prompts,m uuid,e jsonb,label text,expected text DEFAULT '23514')
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE before_state jsonb:=pg_temp.availability_state();
+BEGIN
+ IF expected IN ('suppressed','not_consented','closed','expired') THEN
+  ASSERT pg_temp.apply(p,m,e)->>'status'=expected,label||' refused status';
+ ELSE
+  PERFORM pg_temp.must_fail(format('SELECT pg_temp.apply(%L::sms_prompts,%L,%L)',p,m,e),label,expected);
+ END IF;
+ ASSERT pg_temp.availability_state()=before_state,label||' zero business/message/prompt/consent mutation';
+END $$;
+DO $$ DECLARE p public.sms_prompts; other public.sms_prompts; m uuid; r jsonb; again jsonb; reply_body text; failure text;
+ e jsonb:=pg_temp.availability_payload(); before_tasks jsonb; before_report jsonb;
+BEGIN
+ -- Reserve 10-16 through the real allocator so the original coded input is exact.
+ FOR n IN 1..7 LOOP
+  other:=pg_temp.proposal(); UPDATE sms_prompts SET answered_at=clock_timestamp() WHERE id=other.id;
+ END LOOP;
+ FOREACH reply_body IN ARRAY ARRAY['AVAILABLE 17','Tuesday 9-11'] LOOP
+  p:=pg_temp.proposal('confirm_availability','51000000-0000-4000-8000-000000000040',clock_timestamp()+interval '1 day',false);
+  IF reply_body='AVAILABLE 17' THEN ASSERT p.short_code='17','exact AVAILABLE 17 fixture'; END IF;
+  m:=pg_temp.raw_message(reply_body);
+  SELECT jsonb_agg(to_jsonb(t) ORDER BY id) INTO before_tasks FROM project_tasks t;
+  failure:=NULL;
+  BEGIN
+   SET LOCAL ROLE service_role;
+   r:=pg_temp.apply(p,m,e);
+   RESET ROLE;
+  EXCEPTION WHEN OTHERS THEN failure:=SQLSTATE||' '||SQLERRM;
+  END;
+  ASSERT failure IS NULL,'availability command '||reply_body||' applies original payload: '||COALESCE(failure,'');
+  ASSERT r->>'status'='applied' AND r#>>'{result,kind}'='effect','availability atomic applied result';
+  ASSERT (SELECT count(*)=1 FROM field_delivery_reports),'availability has only original target report';
+  ASSERT (SELECT subject_id=p.subject_id AND party_id=p.party_id AND project_id=p.project_id
+    AND proposed_date='2026-11-03' AND proposed_window='09:00-11:00' AND availability_at IS NOT NULL
+    AND arrived_at IS NULL FROM field_delivery_reports),'availability original target/date/window, no arrival';
+  ASSERT (SELECT jsonb_agg(to_jsonb(t) ORDER BY id)=before_tasks FROM project_tasks t),'availability never changes task completion or due date';
+  ASSERT (SELECT reply_body=sms_messages.body AND applied_effect=r#>'{result,result}' FROM sms_messages WHERE id=m),'availability original inbound body preserved and stamped';
+  SELECT to_jsonb(t) INTO before_report FROM field_delivery_reports t;
+  -- A later prompt must not invalidate a committed same-SID receipt.
+  other:=pg_temp.proposal('confirm_availability','51000000-0000-4000-8000-000000000041',clock_timestamp()+interval '1 day',false);
+  again:=pg_temp.apply(p,m,e);
+  ASSERT again->>'status'='replayed' AND again->'result'=r->'result','availability same SID exact receipt before open-count validation';
+  PERFORM pg_temp.availability_refuses(p,pg_temp.raw_message(reply_body),e,'availability distinct SID','closed');
+  ASSERT (SELECT to_jsonb(t)=before_report FROM field_delivery_reports t),'availability replay never updates report';
+  UPDATE sms_prompts SET answered_at=clock_timestamp() WHERE id=other.id;
+ END LOOP;
+ RAISE NOTICE 'PASS AVAILABLE 17 and Tuesday 9-11 original payload/body, once-only receipt, no task/arrival mutation';
+END $$;
+DO $$ DECLARE p public.sms_prompts; other public.sms_prompts; m uuid; body text; e jsonb:=pg_temp.availability_payload(); saved public.studio_channel_consent;
+BEGIN
+ p:=pg_temp.proposal('confirm_availability','51000000-0000-4000-8000-000000000040',clock_timestamp()+interval '1 day',false);
+ FOREACH body IN ARRAY ARRAY['AVAILABLE 99','AVAILABLE 99 please','AVAILABLE 1','AVAILABLE17 please','AVAILABLE: 17 please',
+  'HERE 99 please','DONE 1 please','YES please','Y please','OK please','NO thanks','DAMAGED please',
+  'ARRIVED please','DELIVERED please','LEAVING please','DEPARTED please','DELAY please','LATE please','BLOCKED please','BLOCKER please',
+  'STOP now','STOPALL now','UNSUBSCRIBE now','CANCEL now','END now','QUIT now','START now','UNSTOP now','HELP now','INFO now',
+  '18','2 damaged','17 Tuesday 9-11','','   ','Tuesday'] LOOP
+  PERFORM pg_temp.availability_refuses(p,pg_temp.raw_message(body),e,'malformed/reserved/menu '||body);
+ END LOOP;
+ m:=pg_temp.raw_message('Tuesday 9-11');
+ PERFORM pg_temp.availability_refuses(p,m,NULL,'missing effect');
+ PERFORM pg_temp.availability_refuses(p,m,'null'::jsonb,'JSON null effect');
+ PERFORM pg_temp.availability_refuses(p,m,e-'type','missing effect type');
+ PERFORM pg_temp.availability_refuses(p,m,e-'availability','missing parser payload');
+ PERFORM pg_temp.availability_refuses(p,pg_temp.raw_message('AVAILABLE '||p.short_code),e-'availability','AVAILABLE without parsed payload');
+ PERFORM pg_temp.availability_refuses(p,pg_temp.raw_message('AVAILABLE'),e-'availability','bare AVAILABLE without parsed payload');
+ PERFORM pg_temp.availability_refuses(p,m,jsonb_set(e,'{type}','"mark_done"'),'freeform conflicting effect');
+ PERFORM pg_temp.availability_refuses(p,m,jsonb_set(e,'{target,id}','"51000000-0000-4000-8000-000000000041"'),'same-project wrong target');
+ PERFORM pg_temp.availability_refuses(p,m,jsonb_set(e,'{target,id}','"51000000-0000-4000-8000-000000000042"'),'foreign target');
+ UPDATE sms_messages SET project_id='51000000-0000-4000-8000-000000000021' WHERE id=m;
+ PERFORM pg_temp.availability_refuses(p,m,e,'foreign message project');
+ m:=pg_temp.raw_message('Tuesday 9-11');
+ UPDATE sms_messages SET party_id='51000000-0000-4000-8000-000000000031' WHERE id=m;
+ PERFORM pg_temp.availability_refuses(p,m,e,'foreign message party');
+ m:=pg_temp.raw_message('Tuesday 9-11');
+ other:=pg_temp.proposal('confirm_availability','51000000-0000-4000-8000-000000000041',clock_timestamp()+interval '1 day',false);
+ PERFORM pg_temp.availability_refuses(p,m,e,'two open prompts never substitute');
+ UPDATE sms_prompts SET answered_at=clock_timestamp() WHERE id=other.id;
+ DELETE FROM project_party_authority WHERE engagement_id=p.party_id AND scope='schedule';
+ PERFORM pg_temp.availability_refuses(p,m,e,'missing schedule grant','42501');
+ INSERT INTO project_party_authority(engagement_id,scope,effective_from) VALUES(p.party_id,'schedule',CURRENT_DATE-1);
+ SELECT * INTO saved FROM studio_channel_consent WHERE organization_id='51000000-0000-4000-8000-000000000010';
+ DELETE FROM studio_channel_consent WHERE organization_id=saved.organization_id;
+ PERFORM pg_temp.availability_refuses(p,m,e,'missing record','not_consented');
+ INSERT INTO studio_channel_consent SELECT (saved).*;
+ INSERT INTO sms_suppressions(sender_number,recipient_phone) VALUES(p.sender_number,p.recipient_phone);
+ PERFORM pg_temp.availability_refuses(p,m,e,'suppressed availability','suppressed');
+ UPDATE sms_suppressions SET lifted_at=clock_timestamp();
+ PERFORM pg_temp.availability_refuses(p,m,e,'lift restores no record grant','not_consented');
+ UPDATE studio_channel_consent SET status='granted',refusal_unanswered=false WHERE organization_id=saved.organization_id;
+ UPDATE sms_prompts SET answered_at=clock_timestamp() WHERE id=p.id;
+ -- Freeform is not a new door for any other kind, even with an availability effect.
+ FOREACH body IN ARRAY ARRAY['note','punch_report','report_delay','report_arrival','report_departure','flag_blocker','mark_done','confirm_delivery','report_condition','optin'] LOOP
+  p:=pg_temp.proposal(body,'51000000-0000-4000-8000-000000000040',clock_timestamp()+interval '1 day',false);
+  PERFORM pg_temp.availability_refuses(p,pg_temp.raw_message('Tuesday 9-11'),e,'freeform cannot consume '||body);
+  UPDATE sms_prompts SET answered_at=clock_timestamp() WHERE id=p.id;
+ END LOOP;
+ RAISE NOTICE 'PASS availability malformed/code/menu, payload/target/party/project, grant/record/suppression and kind-boundary zero-mutation refusals';
+END $$;
+DO $$ DECLARE p public.sms_prompts; i uuid; e jsonb:=pg_temp.availability_payload(); m uuid; r jsonb; body text;
+BEGIN
+ SELECT id INTO i FROM sms_create_prompt('51000000-0000-4000-8000-000000000030','51000000-0000-4000-8000-000000000020',
+  'confirm_availability','51000000-0000-4000-8000-000000000040',900,clock_timestamp()+interval '1 day','+15555109999','+15555100000',e);
+ SELECT * INTO p FROM sms_prompts WHERE id=i;
+ FOREACH body IN ARRAY ARRAY['AVAILABLE '||p.short_code,'Tuesday 9-11'] LOOP
+  PERFORM pg_temp.availability_refuses(p,pg_temp.raw_message(body),NULL,'proposal cannot use '||body);
+ END LOOP;
+ m:=pg_temp.message(p);
+ PERFORM pg_temp.availability_refuses(p,m,jsonb_set(e,'{availability,date}','"2099-01-01"'),'proposal replacement prohibited');
+ r:=pg_temp.apply(p,m);
+ ASSERT r->>'status'='applied','availability original YES proposal still applies';
+ ASSERT (SELECT proposed_date='2026-11-03' AND proposed_window='09:00-11:00' FROM field_delivery_reports),'YES uses original immutable availability';
+ ASSERT (SELECT proposed_effect=e FROM sms_prompts WHERE id=p.id),'availability proposal remains immutable';
+ RAISE NOTICE 'PASS availability proposal AVAILABLE/freeform/replacement refuse; YES original payload remains valid';
+END $$;
+CREATE FUNCTION pg_temp.sq66_fail_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ RAISE EXCEPTION 'synthetic availability write failure' USING ERRCODE='P0001';
+END $$;
+CREATE TRIGGER sq66_fail_receipt BEFORE UPDATE ON sms_prompts FOR EACH ROW
+ WHEN (NEW.consumed_sid IS NOT NULL) EXECUTE FUNCTION pg_temp.sq66_fail_write();
+DO $$ DECLARE p public.sms_prompts; m uuid;
+BEGIN
+ p:=pg_temp.proposal('confirm_availability','51000000-0000-4000-8000-000000000040',clock_timestamp()+interval '1 day',false);
+ m:=pg_temp.raw_message('Tuesday 9-11');
+ PERFORM pg_temp.availability_refuses(p,m,pg_temp.availability_payload(),'availability receipt failure rolls back report and message','P0001');
+END $$;
+DROP TRIGGER sq66_fail_receipt ON sms_prompts;
+CREATE TRIGGER sq66_fail_effect AFTER UPDATE ON field_delivery_reports FOR EACH ROW EXECUTE FUNCTION pg_temp.sq66_fail_write();
+DO $$ DECLARE p public.sms_prompts; m uuid;
+BEGIN
+ SELECT * INTO STRICT p FROM sms_prompts WHERE answered_at IS NULL;
+ m:=pg_temp.raw_message('Tuesday 9-11');
+ PERFORM pg_temp.availability_refuses(p,m,pg_temp.availability_payload(),'availability effect failure rolls back report and receipt','P0001');
+ RAISE NOTICE 'PASS availability SQLSTATE effect/receipt rollback preserves whole report/message/prompt state';
+END $$;
+DROP TRIGGER sq66_fail_effect ON field_delivery_reports;
+ROLLBACK TO SAVEPOINT availability_compatibility;
+
 DO $$ DECLARE p public.sms_prompts; other public.sms_prompts; m uuid; r jsonb; again jsonb;
 BEGIN
  p:=pg_temp.proposal(); m:=pg_temp.message(p);
