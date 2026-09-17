@@ -24,6 +24,67 @@ Register ONE campaign under the brand:
 - **Opt-in description**: "Designer enters the contractor's phone with their verbal agreement; Patina sends a single opt-in invitation; messaging begins only after the contractor replies YES (double opt-in). STOP honored at any time." Include a screenshot of the People Room consent toggle once Wave 5 lands.
 - Opt-in URL: link to a short page describing the flow (add to patina.cloud if the reviewer requires one).
 
+### Widened campaign (Field Line)
+
+Edit the **existing** campaign; do not register a second one. **Do not resubmit before P0-09 deploys** — the sample bodies below are the post-Phase-0 templates, and today's deployed templates do not match them (see "What is not true yet", below).
+
+**Use case:** stays **Low-Volume Mixed**. Do not switch to Standard Mixed for this widening.
+
+**Campaign description** (replace the §2 description with this):
+
+> Operational coordination between an interior design studio and the trades and homeowners on its projects: opt-in invitations, site and delivery coordination, daily open-item digests, selection approvals, and delivery windows. Recipients are the contractors and tradespeople working on the studio's projects and the homeowners who hired the studio. No marketing.
+
+**Message flow (opt-in) — three paths, all double opt-in:**
+
+1. **Trades.** The studio records the tradesperson's verbal agreement against their party row (who, when, by which staff member). That record alone sends exactly **one** invitation — never an operational message. Texting begins only when they reply `YES NN` with the 2-digit code from that invitation. A bare `YES` with more than one outstanding invitation never grants; it asks which.
+2. **Homeowners (clients).** Consent is a **separate, unchecked** checkbox on the studio's kickoff form — never bundled with the agreement signature and never pre-checked. The disclosure text is versioned; the stored consent row carries the version the homeowner actually saw. The same one-invitation / `YES NN` confirmation follows.
+3. **Website.** patina.cloud/signup. The checkbox copy is a frozen compliance artifact held in the PatinaWebsite repo at `src/lib/copy/system-messages.ts`, exported as `SMS_CONSENT_TEXT`. **Paste it into the console verbatim; never reword it**, including for style. As of this writing it reads:
+
+> I agree to receive account and order notification text messages and login verification codes from Patina at the mobile number provided. Message frequency varies. Message and data rates may apply. Reply HELP for help or STOP to cancel at any time. See our Privacy Policy and SMS Terms.
+
+**Sample messages** (paste all five). Every body leads with the studio name, uses plain words, and closes with the canonical rates/HELP/STOP line. "through Patina" appears **only** in the invitation. `Ref NN` is the 2-digit code the reply grammar (`<VERB> NN`) resolves against.
+
+1. **Opt-in invitation (trade)**
+   `Middlewest Studio coordinates the Maple St project through Patina and would like to text you job updates, about 1 msg/day. Reply YES 42 to start. Msg&data rates may apply. Reply HELP for help, STOP to opt out.`
+2. **Daily digest (trade), with Ref codes**
+   `Middlewest Studio - Maple St today: Ref 17 install vanity, Ref 18 confirm grout color. Reply DONE 17, or send a photo or note. Full list: https://client.patina.cloud/f/AbCdEfGh Msg&data rates may apply. Reply HELP for help, STOP to opt out.`
+3. **Delivery confirmation (trade)**
+   `Middlewest Studio - Maple St: the RH sofa (PO-1042) shows delivered today. Ref 23: reply OK 23 if it arrived in good shape, or reply with the problem. Msg&data rates may apply. Reply HELP for help, STOP to opt out.`
+4. **Selection approval (homeowner)**
+   `Middlewest Studio - Maple St: your bath tile selection is ready for your approval. Ref 31: reply APPROVE 31, or reply with a question. See it: https://client.patina.cloud/s/AbCdEfGh Msg&data rates may apply. Reply HELP for help, STOP to opt out.`
+5. **Delivery window (homeowner)**
+   `Middlewest Studio - Maple St: your sofa delivery window is Thu 9-12. Ref 44: reply PICK 44 to take it, or reply with a time that works better. Msg&data rates may apply. Reply HELP for help, STOP to opt out.`
+
+All five are pure GSM-7 basic set (no em dash, no curly quotes, no en dash) and 2 segments each at the representative parameter values shown: 209 / 240 / 214 / 245 / 206 GSM-7 units against the 306-unit two-segment cap. Headroom is as little as 61 units (sample 4), so a long `{{studio_name}}` + `{{project_name}}` pair can push a body to three segments — P0-05 owns enforcing the cap at maximum parameter length.
+
+**Canonical closing line** (one string, defined once in the templates migration; every `sms_%` body ends with it):
+
+> `Msg&data rates may apply. Reply HELP for help, STOP to opt out.`
+
+**Opt-out and help text** (these are the Messaging Service Advanced Opt-Out strings in §3.3; keep the console and the service identical):
+
+- **STOP:** `You're opted out of Patina project texts. No more messages will be sent. Reply START to rejoin.`
+- **HELP:** `Patina relays project updates for your design studio. ~1 msg/day. Reply STOP to opt out. Questions: hello@patina.cloud`
+- STOP suppresses the phone number on this sender number globally, independent of any party row, and survives being added to a new project or studio. START re-asks eligible pending invitations; it never grants consent by itself. Freeform revocation ("stop texting me") is honored the same as the keyword.
+
+**Console fields to edit** (Twilio Console → Messaging → Regulatory Compliance → A2P 10DLC → Campaigns → the existing Low-Volume Mixed campaign → Edit):
+
+| Field | Action |
+|---|---|
+| Use case | leave **Low-Volume Mixed** |
+| Campaign description | replace with the description above |
+| Sample messages 1–5 | replace with the five above (the form takes five) |
+| Message flow / opt-in description | replace with the three-path flow above |
+| Opt-in keywords / confirmation message | `YES`; confirmation is the `sms_optin_confirm` template |
+| Opt-out keywords / message | `STOP`; the STOP string above |
+| Help keywords / message | `HELP`; the HELP string above |
+| Embedded link | **Yes** (`client.patina.cloud` field and selection links) |
+| Embedded phone number | No |
+| Age-gated / direct lending / affiliate marketing | No |
+| Opt-in URL | patina.cloud/signup |
+
+**What is not true yet (why you must not resubmit before P0-09 deploys).** As of migration 00432 the deployed templates do not yet match these samples: `sms_daily_digest`, `sms_court_assignment` and `sms_delivery_confirm` do **not** end with the canonical rates/HELP/STOP line (only `sms_optin_invite` does), `sms_daily_digest` opens with the recipient's first name rather than the studio name, and there is no `Ref NN` grammar, no selection-approval template, and no delivery-window template in the database at all. Submitting these samples against the currently deployed rail would describe messages the system cannot send. Resubmit only after P0-09 has deployed the Phase 0 migrations and the six functions.
+
 ## 3. Number + Messaging Service
 
 1. Buy ONE local 10DLC number (~$1.15/mo). Area code: your primary market.
