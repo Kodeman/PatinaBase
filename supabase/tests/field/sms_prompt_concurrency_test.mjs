@@ -111,6 +111,7 @@ try {
   const test = readFileSync(resolve(root,'supabase/tests/field/sms_prompt_consumption_test.sql'),'utf8');
   sql(test.split('-- FIXTURES BEGIN')[1].split('-- FIXTURES END')[0]);
   await concurrency();
+  await availabilityConcurrency();
   const receipts=sql("SELECT jsonb_agg(jsonb_build_array(id,consumed_sid,consumption_result,answered_at) ORDER BY id) FROM sms_prompts WHERE consumed_sid IS NOT NULL").trim();
   const command=sql(`SELECT id FROM sms_create_prompt('51000000-0000-4000-8000-000000000030',
     '51000000-0000-4000-8000-000000000020','confirm_availability','51000000-0000-4000-8000-000000000041',
@@ -244,4 +245,124 @@ async function concurrency() {
     log('PASS lock-wait crosses expiry: B returns expired without consumption');
   } finally { await Promise.all([a.close(),b.close()]); }
   await observer.close();
+}
+
+async function availabilityConcurrency() {
+  const party='51000000-0000-4000-8000-000000000030', project='51000000-0000-4000-8000-000000000020';
+  const target='51000000-0000-4000-8000-000000000040', otherTarget='51000000-0000-4000-8000-000000000041';
+  const effect=JSON.stringify({type:'confirm_availability',target:{kind:'task',id:target},note:'available',availability:{date:'2026-11-03',window:'09:00-11:00'}});
+  sql(`INSERT INTO project_party_authority(engagement_id,scope,effective_from) VALUES('${party}','schedule',CURRENT_DATE-1);
+    UPDATE studio_channel_consent SET status='granted',refusal_unanswered=false WHERE organization_id='51000000-0000-4000-8000-000000000010';
+    CREATE TABLE public.sq66_availability_writes(subject_id uuid);
+    CREATE FUNCTION public.sq66_count_availability() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      INSERT INTO public.sq66_availability_writes VALUES(NEW.subject_id); RETURN NEW; END $$;
+    CREATE TRIGGER sq66_count_availability AFTER UPDATE ON field_delivery_reports FOR EACH ROW EXECUTE FUNCTION public.sq66_count_availability();`);
+  const observer=new Session();
+  let generation=1000;
+  const create=(subject,expires="clock_timestamp()+interval '1 day'",sender='+15555109999',recipient='+15555100000') =>
+    `SELECT row_to_json(p) FROM sms_create_prompt('${party}','${project}','confirm_availability','${subject}',${++generation},${expires},'${sender}','${recipient}') p`;
+  const message=() => {
+    const id=randomUUID();
+    sql(`INSERT INTO sms_messages(id,conversation_id,direction,body,twilio_sid) VALUES('${id}',
+      '51000000-0000-4000-8000-000000000050','inbound','Tuesday 9-11','SM${id.replaceAll('-','')}')`);
+    return id;
+  };
+  const apply=(p,m) => `SELECT pg_temp.sq66_apply('${p.id}','${m}')`;
+  const prepare=async s => s.query(`CREATE FUNCTION pg_temp.sq66_apply(p uuid,m uuid) RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN
+    RETURN sms_apply_prompt(p,'+1 (555) 510-9999','+1 (555) 510-0000',m,'${effect}'::jsonb);
+    EXCEPTION WHEN OTHERS THEN RETURN jsonb_build_object('sqlstate',SQLSTATE,'error',SQLERRM); END $$`);
+  const blocked=async (owner,waiter,tag,outcome) => {
+    let barrier=false, settled=false; outcome.finally(()=>{settled=true;});
+    const deadline=Date.now()+10000;
+    while(Date.now()<deadline && !settled) {
+      barrier=(await observer.query(`SELECT ${owner}=ANY(pg_blocking_pids(${waiter}))`))==='t';
+      if(barrier) break;
+    }
+    assert.ok(barrier,tag+' issuance/availability serialized by actual pair lock');
+    log(`barrier ${tag}: waiter=${waiter} blocked by owner=${owner}`);
+  };
+  const writes=() => Number(sql('SELECT count(*) FROM sq66_availability_writes').trim());
+  const assertOriginal=(p,m,n,tag) => {
+    assert.equal(writes(),n+1,tag+' exactly one committed availability write');
+    assert.equal(sql(`SELECT count(*)=1 AND bool_and(subject_id='${target}' AND party_id='${party}' AND project_id='${project}'
+      AND proposed_date='2026-11-03' AND proposed_window='09:00-11:00' AND arrived_at IS NULL) FROM field_delivery_reports`).trim(),'t',tag+' original target/date/window only');
+    assert.equal(sql(`SELECT consumed_sid='SM${m.replaceAll('-','')}' AND answered_at IS NOT NULL FROM sms_prompts WHERE id='${p.id}'`).trim(),'t',tag+' original prompt receipt');
+    assert.equal(sql(`SELECT body='Tuesday 9-11' AND applied_effect IS NOT NULL FROM sms_messages WHERE id='${m}'`).trim(),'t',tag+' original inbound body and stamp');
+  };
+  try {
+    for(const first of ['creation','consumption']) {
+      for(const ending of ['COMMIT','ROLLBACK']) {
+        for(const expire of (first==='creation'?[false,true]:[false])) {
+          const tag=`availability ${first}-first/${ending}${expire?'/expiry':''}`;
+          const a=new Session(), b=new Session();
+          try {
+            const p=JSON.parse(sql(create(target,expire?"clock_timestamp()+interval '2 seconds'":undefined)).trim());
+            const m=message(), n=writes();
+            const before=sql(`SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM project_tasks t),
+              (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM client_decisions t))`).trim();
+            await prepare(a); await prepare(b);
+            const pidA=Number(await a.query('SELECT pg_backend_pid()')),pidB=Number(await b.query('SELECT pg_backend_pid()'));
+            await a.query("BEGIN; SET LOCAL statement_timeout='18s'; SET LOCAL idle_in_transaction_session_timeout='18s'");
+            let created, resultA;
+            if(first==='creation') created=JSON.parse(await a.query(create(otherTarget,undefined,'+1 (555) 510-9999','+1 (555) 510-0000')));
+            else {
+              resultA=JSON.parse(await a.query(apply(p,m)));
+              assert.equal(resultA.status,'applied',tag+' first consumption applies');
+            }
+            await b.query("BEGIN; SET LOCAL statement_timeout='18s'");
+            const pending=b.query(first==='creation'?apply(p,m):create(otherTarget));
+            const outcome=pending.then(value=>({value}),error=>({error}));
+            await blocked(pidA,pidB,tag,outcome);
+            if(first==='creation') {
+              // B waits on the pair BEFORE taking the prompt row, not vice versa.
+              await a.query(`SELECT id FROM sms_prompts WHERE id='${p.id}' FOR UPDATE NOWAIT`);
+              if(expire) {
+                let expired=false; const deadline=Date.now()+10000;
+                while(Date.now()<deadline) {
+                  expired=(await observer.query(`SELECT expires_at<clock_timestamp() FROM sms_prompts WHERE id='${p.id}'`))==='t';
+                  if(expired) break;
+                }
+                assert.ok(expired,tag+' observed wall-clock expiry behind issuance lock');
+              }
+            }
+            await a.query(ending);
+            const answer=await outcome; if(answer.error) throw answer.error;
+            const resultB=JSON.parse(answer.value);
+            await b.query('COMMIT');
+            if(first==='creation') {
+              if(expire) assert.equal(resultB.status,'expired',tag+' expiry rechecked after pair lock');
+              else if(ending==='COMMIT') assert.equal(resultB.sqlstate,'23514',tag+' second open prompt refuses freeform');
+              else assert.equal(resultB.status,'applied',tag+' rolled-back issuance leaves original binding');
+              if(expire || ending==='COMMIT') {
+                assert.equal(writes(),n,tag+' refused availability zero writes');
+                assert.equal(sql(`SELECT consumed_sid IS NULL AND answered_at IS NULL FROM sms_prompts WHERE id='${p.id}'`).trim(),'t',tag+' no receipt or closure');
+                assert.equal(sql(`SELECT applied_effect IS NULL AND body='Tuesday 9-11' FROM sms_messages WHERE id='${m}'`).trim(),'t',tag+' no message mutation');
+              } else assertOriginal(p,m,n,tag);
+            } else {
+              created=resultB;
+              if(ending==='COMMIT') {
+                assertOriginal(p,m,n,tag);
+                const replay=JSON.parse(await b.query(apply(p,m)));
+                assert.equal(replay.status,'replayed',tag+' later issuance cannot invalidate replay');
+                assert.deepEqual(replay.result,resultA.result,tag+' exact recorded result');
+                assert.equal(JSON.parse(await b.query(apply(p,message()))).status,'closed',tag+' distinct SID never repeats');
+                assert.equal(writes(),n+1,tag+' retries never duplicate');
+              } else {
+                assert.equal(writes(),n,tag+' rolled-back consumption zero writes');
+                assert.equal(JSON.parse(await b.query(apply(p,m))).sqlstate,'23514',tag+' retry sees two prompts, never retargets');
+                assert.equal(sql(`SELECT consumed_sid IS NULL AND answered_at IS NULL FROM sms_prompts WHERE id='${p.id}'`).trim(),'t',tag+' rolled-back receipt remains absent');
+                assert.equal(sql(`SELECT applied_effect IS NULL FROM sms_messages WHERE id='${m}'`).trim(),'t',tag+' message stamp rolled back');
+              }
+            }
+            assert.equal(sql(`SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM project_tasks t),
+              (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM client_decisions t))`).trim(),before,tag+' tasks and coordination unchanged');
+            assert.equal(sql(`SELECT count(*) FROM field_delivery_reports WHERE subject_id='${otherTarget}'`).trim(),'0',tag+' never substitutes competing target');
+            assert.equal(sql(`SELECT count(*) FROM sms_prompts WHERE id='${created.id}' AND consumed_sid IS NOT NULL`).trim(),'0',tag+' competing prompt never consumed');
+            sql(`UPDATE sms_prompts SET answered_at=clock_timestamp() WHERE answered_at IS NULL AND id IN ('${p.id}','${created.id}')`);
+            log(`PASS ${tag}: original binding, no substitution/duplicate, transactional ${ending.toLowerCase()}`);
+          } finally { await Promise.all([a.close(),b.close()]); }
+        }
+      }
+    }
+  } finally { await observer.close(); }
 }

@@ -1626,16 +1626,31 @@ REVOKE ALL ON FUNCTION public.sms_prompt_message(public.sms_prompts,text,text,uu
 
 CREATE OR REPLACE FUNCTION public.sms_prompt_reply_verb(p_prompt public.sms_prompts,p_body text)
 RETURNS text LANGUAGE plpgsql SET search_path=public,pg_temp AS $$
-DECLARE parts text[];
+DECLARE parts text[]; body text := upper(btrim(p_body));
 BEGIN
-  parts := regexp_match(upper(btrim(p_body)), '^([A-Z]+)(?:[[:space:]]+([0-9]{2,3}))?$');
-  IF parts IS NULL OR (parts[2] IS NOT NULL AND parts[2]<>p_prompt.short_code)
-    OR (parts[2] IS NULL AND (SELECT count(*) FROM public.sms_prompts
-        WHERE sender_number=p_prompt.sender_number AND recipient_phone=p_prompt.recipient_phone
-          AND answered_at IS NULL AND expires_at>clock_timestamp())<>1) THEN
+  -- Exact protocol takes precedence: a wrong code never becomes freeform.
+  parts := regexp_match(body, '^([A-Z]+)(?:[[:space:]]+([0-9]{2,3}))?$');
+  IF parts IS NOT NULL THEN
+    IF parts[2] IS NOT NULL THEN
+      IF parts[2]<>p_prompt.short_code THEN
+        RAISE EXCEPTION 'sms_prompt: reply must identify this prompt' USING ERRCODE='23514';
+      END IF;
+      RETURN parts[1];
+    END IF;
+  ELSIF (p_prompt.kind='confirm_availability' AND p_prompt.proposed_effect IS NULL
+      AND p_prompt.answered_at IS NULL AND p_prompt.expires_at>clock_timestamp()
+      AND body ~ '^[A-Z][^[:space:]]*[[:space:]]+[^[:space:]]'
+      AND body !~ '^(YES|Y|OK|DONE|HERE|ARRIVED|DELIVERED|LEAVING|DEPARTED|DELAY|LATE|BLOCKED|BLOCKER|AVAILABLE|DAMAGED|NO|STOP|STOPALL|UNSUBSCRIBE|CANCEL|END|QUIT|START|UNSTOP|HELP|INFO)([^A-Z]|$)') IS NOT TRUE THEN
     RAISE EXCEPTION 'sms_prompt: reply must identify this prompt' USING ERRCODE='23514';
   END IF;
-  RETURN parts[1];
+  -- Codeless commands/freeform bind only to the current single open prompt.
+  -- sms_apply_prompt holds the creator's pair lock across this check and apply.
+  IF (SELECT count(*) FROM public.sms_prompts
+      WHERE sender_number=p_prompt.sender_number AND recipient_phone=p_prompt.recipient_phone
+        AND answered_at IS NULL AND expires_at>clock_timestamp())<>1 THEN
+    RAISE EXCEPTION 'sms_prompt: reply must identify this prompt' USING ERRCODE='23514';
+  END IF;
+  RETURN parts[1]; -- SQL NULL only for command-only availability freeform.
 END $$;
 REVOKE ALL ON FUNCTION public.sms_prompt_reply_verb(public.sms_prompts,text) FROM PUBLIC,anon,authenticated,service_role;
 
@@ -1645,7 +1660,12 @@ CREATE OR REPLACE FUNCTION public.sms_apply_prompt(
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
 DECLARE p public.sms_prompts; m public.sms_messages; c public.studio_channel_consent;
   effect jsonb; result jsonb; verb text;
+  v_sender text := public.normalize_channel_value('sms',p_sender);
+  v_recipient text := public.normalize_channel_value('sms',p_recipient);
 BEGIN
+  -- Same key/order as sms_create_prompt, before any prompt/message row locks.
+  -- Issuance cannot change the one-open binding while consumption holds it.
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_sender || '|' || v_recipient, 0));
   SELECT * INTO p FROM public.sms_prompts WHERE id=p_prompt_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'sms_prompt: unknown prompt' USING ERRCODE='23514'; END IF;
   m := public.sms_prompt_message(p,p_sender,p_recipient,p_sms_message_id);
@@ -1664,6 +1684,9 @@ BEGIN
   ELSE
     effect := p_effect;
     IF ((verb IN ('YES','Y','OK') AND effect->>'type'=p.kind) OR
+      (verb='AVAILABLE' AND effect->>'type'='confirm_availability') OR
+      (verb IS NULL AND p.kind='confirm_availability' AND p.proposed_effect IS NULL
+        AND effect->>'type'='confirm_availability') OR
       (verb='DONE' AND effect->>'type'='mark_done') OR
       (verb IN ('HERE','ARRIVED','DELIVERED') AND effect->>'type'='report_arrival') OR
       (verb IN ('LEAVING','DEPARTED') AND effect->>'type'='report_departure') OR
