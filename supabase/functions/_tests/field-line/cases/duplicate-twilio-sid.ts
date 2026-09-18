@@ -1,4 +1,4 @@
-import { createFieldLineHarness } from "../harness.ts";
+import { inboundFixture } from "../inbound-fixture.ts";
 import type { GateCase } from "../types.ts";
 
 export const duplicateTwilioSid: GateCase = {
@@ -6,7 +6,7 @@ export const duplicateTwilioSid: GateCase = {
   phase: 0,
   clauses: ["S5"],
   async run() {
-    const harness = createFieldLineHarness();
+    const { h: harness } = inboundFixture();
     const first = await harness.processInbound({ Body: "unrecognized words", MessageSid: "SMfieldDuplicate" });
     const second = await harness.processInbound({ Body: "unrecognized words", MessageSid: "SMfieldDuplicate" });
     const rows = (harness.fake._data.sms_messages ?? []).filter((row) =>

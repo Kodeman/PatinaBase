@@ -75,3 +75,6 @@ for (const gateCase of fieldLineCases) {
     assertEquals(failed, [], `${gateCase.id} fixture assertion failed`);
   });
 }
+
+import "./field-line/inbound-atomic.test.ts";
+import "./field-line/inbound-selection.test.ts";

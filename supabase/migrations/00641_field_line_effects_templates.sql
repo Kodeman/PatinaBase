@@ -553,9 +553,53 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_target_id uuid := NULLIF(p_effect#>>'{target,id}', '')::uuid;
+  v_target_id uuid;
   v_result jsonb;
+  v_message public.sms_messages;
+  v_party public.project_parties;
+  v_conversation public.sms_conversations;
 BEGIN
+  -- One persisted SMS origin is one business operation. Raw callers take only
+  -- message -> business locks. Atomic callers already hold pair -> prompt ->
+  -- message -> consent; this message lock is reentrant and takes no new rail lock.
+  IF p_source = 'sms' AND p_sms_message_id IS NOT NULL THEN
+    SELECT * INTO v_message FROM public.sms_messages WHERE id=p_sms_message_id FOR UPDATE;
+    IF NOT FOUND OR v_message.direction IS DISTINCT FROM 'inbound'
+        OR NULLIF(btrim(v_message.twilio_sid),'') IS NULL THEN
+      RAISE EXCEPTION 'sms_effect: invalid inbound origin' USING ERRCODE='23514';
+    END IF;
+    SELECT * INTO v_party FROM public.project_parties WHERE id=p_party_id;
+    IF NOT FOUND OR v_party.project_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM public.projects WHERE id=v_party.project_id) THEN
+      RAISE EXCEPTION 'sms_effect: invalid actor' USING ERRCODE='42501';
+    END IF;
+    SELECT * INTO v_conversation FROM public.sms_conversations WHERE id=v_message.conversation_id;
+    IF NOT FOUND OR NULLIF(public.normalize_channel_value('sms',v_party.phone),'') IS NULL
+        OR public.normalize_channel_value('sms',v_conversation.phone_e164)
+          IS DISTINCT FROM public.normalize_channel_value('sms',v_party.phone)
+        OR (v_message.party_id IS NOT NULL AND v_message.party_id<>p_party_id)
+        OR (v_message.project_id IS NOT NULL AND v_message.project_id<>v_party.project_id) THEN
+      RAISE EXCEPTION 'sms_effect: origin actor mismatch' USING ERRCODE='42501';
+    END IF;
+    IF v_message.applied_effect IS NOT NULL THEN
+      -- Historical unbound completion can be suppressed by the consumer, but
+      -- cannot disclose a result here. Never infer an actor from a new request.
+      IF v_message.party_id IS DISTINCT FROM p_party_id
+          OR v_message.project_id IS DISTINCT FROM v_party.project_id THEN
+        RAISE EXCEPTION 'sms_effect: completed origin has no trustworthy binding' USING ERRCODE='42501';
+      END IF;
+      IF jsonb_typeof(v_message.applied_effect) IS DISTINCT FROM 'object'
+          OR jsonb_typeof(v_message.applied_effect->'applied') IS DISTINCT FROM 'boolean' THEN
+        RAISE EXCEPTION 'sms_effect: malformed completion' USING ERRCODE='23514';
+      END IF;
+      -- Return-only sentinel; stored result retains its original unmodified shape.
+      -- Replacement target/payload is deliberately not even cast or dispatched.
+      RETURN v_message.applied_effect || jsonb_build_object('_sms_replayed',true);
+    END IF;
+    UPDATE public.sms_messages SET party_id=p_party_id,project_id=v_party.project_id
+      WHERE id=p_sms_message_id;
+  END IF;
+  v_target_id := NULLIF(p_effect#>>'{target,id}', '')::uuid;
   -- The Field Line vocabulary (00641). Registered names route to the delivery
   -- core, which asks project_party_authority before it writes anything.
   IF public.field_effect_authority_scopes(p_effect->>'type') IS NOT NULL THEN
@@ -647,6 +691,10 @@ BEGIN
        'Field SMS - Selection question',
        '{{selection}}',
        '["selection"]'),
+      ('sms_inbound_reply',
+       'Field SMS - Inbound reply',
+       '{{studio_name}}: {{message}}',
+       '["studio_name","message"]'),
 
       ('sms_help',
        'Field SMS - HELP reply',

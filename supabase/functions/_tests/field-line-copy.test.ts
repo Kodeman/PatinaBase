@@ -57,6 +57,7 @@ const MAX_PARAM: Record<string, string> = {
   party_first_name: "F".repeat(12),
   ref: "999",
   code: "999",
+  message: "M".repeat(216),
 };
 
 /** Words that make a text sound like software instead of a person. */
@@ -72,6 +73,7 @@ const EXPECTED_SLUGS = [
   "sms_delivery_confirm",
   "sms_help",
   "sms_selection",
+  "sms_inbound_reply",
 ];
 
 interface Template {

@@ -92,7 +92,9 @@ try {
   // pg_dump omits this extension-owned public shim, while types include it.
   sql(sql("SELECT pg_get_functiondef('graphql_public.graphql(text,text,jsonb,jsonb)'::regprocedure)",admin));
   file('supabase/migrations/00639_field_line_authority.sql');
+  file('supabase/migrations/00641_field_line_effects_templates.sql');
   file('supabase/migrations/00639_field_line_authority.sql');
+  file('supabase/migrations/00641_field_line_effects_templates.sql');
   file('supabase/seed/00-legacy-grants.sql');
   file('supabase/tests/field/sms_prompt_consumption_test.sql');
   file('supabase/seed/00-legacy-grants.sql');
@@ -112,6 +114,7 @@ try {
   sql(test.split('-- FIXTURES BEGIN')[1].split('-- FIXTURES END')[0]);
   await concurrency();
   await availabilityConcurrency();
+  await rawCompletionConcurrency();
   const receipts=sql("SELECT jsonb_agg(jsonb_build_array(id,consumed_sid,consumption_result,answered_at) ORDER BY id) FROM sms_prompts WHERE consumed_sid IS NOT NULL").trim();
   const command=sql(`SELECT id FROM sms_create_prompt('51000000-0000-4000-8000-000000000030',
     '51000000-0000-4000-8000-000000000020','confirm_availability','51000000-0000-4000-8000-000000000041',
@@ -365,4 +368,68 @@ async function availabilityConcurrency() {
       }
     }
   } finally { await observer.close(); }
+}
+
+async function rawCompletionConcurrency() {
+  const observer=new Session();
+  let generation=2000;
+  try {
+    for (const [first,second,effectType] of [['raw','raw','flag_blocker'],['raw','atomic','flag_blocker'],['atomic','raw','flag_blocker'],['raw','raw','note']]) {
+      for (const ending of ['COMMIT','ROLLBACK']) {
+        const tag=`SQ71 ${first}->${second}/${effectType}/${ending}`;
+        const a=new Session(),b=new Session();
+        try {
+          sql("UPDATE studio_channel_consent SET status='granted',refusal_unanswered=false WHERE organization_id='51000000-0000-4000-8000-000000000010'");
+          const effect={type:effectType,target:{kind:'task',id:'51000000-0000-4000-8000-000000000040'},note:tag};
+          const p=JSON.parse(sql(`SELECT row_to_json(p) FROM sms_create_prompt('51000000-0000-4000-8000-000000000030',
+            '51000000-0000-4000-8000-000000000020','${effectType}','51000000-0000-4000-8000-000000000040',
+            ${++generation},clock_timestamp()+interval '1 day','+15555109999','+15555100000','${JSON.stringify(effect)}') p`).trim());
+          const m=randomUUID();
+          sql(`INSERT INTO sms_messages(id,conversation_id,direction,body,twilio_sid) VALUES('${m}',
+            '51000000-0000-4000-8000-000000000050','inbound','YES ${p.short_code}','SM${m.replaceAll('-','')}')`);
+          const call=(kind,replacement=false)=> kind==='atomic'
+            ? `SELECT sms_apply_prompt('${p.id}','+15555109999','+15555100000','${m}')`
+            : `SELECT apply_field_effect('51000000-0000-4000-8000-000000000030','${JSON.stringify(replacement?{...effect,note:'replacement ignored'}:effect)}','sms','${m}')`;
+          const before=Number(sql("SELECT count(*) FROM client_decisions WHERE coordination_kind='rfi'").trim());
+          const pidA=Number(await a.query('SELECT pg_backend_pid()')),pidB=Number(await b.query('SELECT pg_backend_pid()'));
+          await a.query("BEGIN; SET LOCAL statement_timeout='18s'; SET LOCAL idle_in_transaction_session_timeout='18s'");
+          const rA=JSON.parse(await a.query(call(first)));
+          const original=first==='atomic'?rA.result.result:rA;
+          assert.equal(original.applied,effectType!=='note',tag+' first legitimate result');
+          // Simulate a lost response: another reader cannot see A's completion
+          // yet, even though its operation is in progress. NULL cannot prove rollback.
+          assert.equal(await observer.query(`SELECT applied_effect IS NULL AND party_id IS NULL AND project_id IS NULL FROM sms_messages WHERE id='${m}'`),'t',tag+' completion-unknown MVCC read sees unresolved origin');
+          await b.query("BEGIN; SET LOCAL statement_timeout='18s'");
+          let settled=false;
+          const outcome=b.query(call(second,true)).then(value=>({value}),error=>({error})).finally(()=>{settled=true;});
+          let blocked=false;const deadline=Date.now()+10000;
+          while(Date.now()<deadline&&!settled){blocked=(await observer.query(`SELECT ${pidA}=ANY(pg_blocking_pids(${pidB}))`))==='t';if(blocked)break;}
+          assert.ok(blocked,tag+' raw completion contender must block on original message');
+          log(`barrier ${tag}: B=${pidB} blocked by A=${pidA}; unresolved read did not authorize overlap`);
+          await a.query(ending);
+          const answer=await outcome;if(answer.error)throw answer.error;
+          const rB=JSON.parse(answer.value);
+          if(ending==='COMMIT') {
+            if(second==='raw')assert.deepEqual(rB,{...original,_sms_replayed:true},tag+' waiter returns original result only');
+            else assert.deepEqual(rB,{status:'already_completed'},tag+' raw replay cannot close atomic prompt');
+          } else {
+            const saved=second==='raw'?rB:rB.result.result;
+            assert.equal(saved.applied,effectType!=='note',tag+' rollback waiter applies once');
+            assert.equal(saved._sms_replayed,undefined,tag+' rollback waiter is not a replay');
+          }
+          await b.query('COMMIT');
+          const completed=JSON.parse(sql(`SELECT applied_effect FROM sms_messages WHERE id='${m}'`).trim());
+          assert.equal(completed._sms_replayed,undefined,tag+' return-only sentinel never stored');
+          assert.equal(Number(sql("SELECT count(*) FROM client_decisions WHERE coordination_kind='rfi'").trim()),before+(effectType==='flag_blocker'?1:0),tag+' exactly one original business operation');
+          const receipt=JSON.parse(sql(`SELECT jsonb_build_object('answered',answered_at IS NOT NULL,'receipt',consumption_result) FROM sms_prompts WHERE id='${p.id}'`).trim());
+          const atomicWon=ending==='COMMIT'?first==='atomic':second==='atomic';
+          assert.equal(receipt.answered,atomicWon,tag+' only actual atomic winner closes prompt');
+          assert.equal(receipt.receipt!==null,atomicWon,tag+' no misleading raw receipt');
+          const retry=JSON.parse(sql(call('raw',true)).trim());
+          assert.deepEqual(retry,{...completed,_sms_replayed:true},tag+' lost-response retry reuses durable original');
+          log(`PASS ${tag}: original result, one mutation, atomic receipt iff atomic winner`);
+        } finally {await Promise.all([a.close(),b.close()]);}
+      }
+    }
+  } finally {await observer.close();}
 }

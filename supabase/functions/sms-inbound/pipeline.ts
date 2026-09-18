@@ -24,11 +24,14 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseFieldMessage, type FieldParseInput, type FieldParseResult } from "../_shared/field-parse.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
-import { orgsOfProjects, resolveStudioName } from "../_shared/sms.ts";
+import { channelConsentVerdict, orgsOfProjects, resolveStudioName, recoverSmsSelection } from "../_shared/sms.ts";
 import { captureServerEvent } from "../_shared/aesthete-events.ts";
+
+import type { SelectionIntent, SelectionQuestion } from "../_shared/sms-selection.ts";
 
 const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
 const STOP_WORDS = ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"];
+const PLAIN_STOPS = /^(?:stop texting me|wrong number|wrong)[.!]?$/i;
 const START_WORDS = ["START", "UNSTOP"];
 const MENU_TTL_MS = 12 * 3600 * 1000;
 /** How long an explicitly-chosen project stays the conversation's scope. */
@@ -57,6 +60,15 @@ export interface InboundResult {
   twiml: string;
   /** For tests: what the pipeline decided. */
   disposition?: string;
+  /** Ordinary replies are dispatched by index.ts through the shared send gate. */
+  replies?: Array<{ message: string; partyId: string | null; projectId: string | null;
+    templateKey?: string; vars?: Record<string, unknown> }>;
+  selection?: SelectionIntent;
+  messageId?: string;
+  /** A failed receipt/handoff must never replay an already committed effect. */
+  effectApplied?: boolean;
+  /** An atomic RPC may have committed; keep its inbound identity for reconciliation. */
+  retainSid?: boolean;
 }
 
 // ── TwiML ────────────────────────────────────────────────────────────────────
@@ -144,9 +156,14 @@ async function reply(
   partyId: string | null,
   projectId: string | null,
   disposition: string,
+  recipe?: { templateKey: string; vars: Record<string, unknown> },
 ): Promise<InboundResult> {
-  await logOutbound(supabase, conversationId, message, partyId, projectId);
-  return { status: 200, twiml: twimlBody(message), disposition };
+  if (disposition === "help" || disposition === "opted_out") {
+    await logOutbound(supabase, conversationId, message, partyId, projectId);
+    return { status: 200, twiml: twimlBody(message), disposition };
+  }
+  return { status: 200, twiml: twimlBody(message), disposition,
+    replies: [{ message, partyId, projectId, ...recipe }] };
 }
 
 async function renderSms(
@@ -684,6 +701,10 @@ const COORDINATION_CLASS: Record<string, DecisionClass> = {
   rfi: "logistics",
   submittal: "logistics",
   punch: "logistics",
+  confirm_availability: "schedule",
+  report_arrival: "site_access",
+  report_departure: "site_access",
+  report_condition: "logistics",
 };
 
 /** Does this seat hold an in-force grant for the class? PR-n's prepares_only
@@ -741,6 +762,10 @@ async function filedDecisionFacts(
 ): Promise<{ decisionClass: DecisionClass; authorityCheck: AuthorityVerdict }> {
   if (!target) {
     return { decisionClass: "none", authorityCheck: "n/a" };
+  }
+  if (DELIVERY_EFFECTS.includes(intent)) {
+    const decisionClass = COORDINATION_CLASS[intent];
+    return { decisionClass, authorityCheck: await authorityVerdictFor(supabase, partyId, decisionClass, today) };
   }
   if (target.kind !== "coordination") {
     return {
@@ -845,6 +870,46 @@ async function recordConsentTouches(
   }
 }
 
+const DELIVERY_EFFECTS = ["confirm_availability", "report_arrival", "report_condition", "report_departure"];
+
+async function reviewOwner(supabase: SupabaseClient, projectId: string | null, deps: InboundDeps): Promise<string | null> {
+  if (projectId) {
+    const { data, error } = await supabase.rpc("field_project_lead_user", { p_project_id: projectId });
+    if (!error && typeof data === "string") return data;
+    // The RPC's own fallback, also useful during provisioning of the lead seat.
+    const { data: project } = await supabase.from("projects").select("designer_id").eq("id", projectId).maybeSingle();
+    if (project?.designer_id) return project.designer_id;
+  }
+  return (deps.getEnv ?? ((k: string) => Deno.env.get(k)))("FIELD_LINE_TRIAGE_USER") ?? null;
+}
+
+export async function ownedReview(supabase: SupabaseClient, messageId: string, projectId: string | null,
+  partyId: string | null, details: Record<string, unknown>, deps: InboundDeps): Promise<boolean> {
+  try {
+    const owner = await reviewOwner(supabase, projectId, deps);
+    if (!owner) return false;
+    const { data: prior, error: readError } = await supabase.from("sms_messages").select("parsed_intent").eq("id", messageId).maybeSingle();
+    if (readError) return false;
+    const { error } = await supabase.from("sms_messages").update({ needs_review: true,
+      owner_user_id: owner, party_id: partyId, project_id: projectId, parsed_intent: { ...prior?.parsed_intent, ...details } }).eq("id", messageId);
+    if (error) return false;
+    const { data: notification, error: notifyError } = await supabase.functions.invoke("notification-dispatch", { body: {
+      user_id: owner, type: "field_needs_review", channel: "in_app", template_id: "field_sms_review",
+      data: { message_id: messageId, ...details },
+    } });
+    return !notifyError && notification?.success === true &&
+      typeof notification.notification_id === "string" && notification.notification_id.trim().length > 0;
+  } catch (error) {
+    console.error("Owned SMS handoff failed", error);
+    return false;
+  }
+}
+
+async function suppression(supabase: SupabaseClient, sender: string, recipient: string) {
+  const { data, error } = await supabase.rpc("sms_is_suppressed", { p_sender: sender, p_recipient: recipient });
+  return { blocked: !!error || data === true, error };
+}
+
 // ── designer notification (in-band) ──────────────────────────────────────────
 async function notifyDesigner(
   supabase: SupabaseClient,
@@ -875,20 +940,28 @@ async function notifyDesigner(
 async function designerFirstName(
   supabase: SupabaseClient,
   projectId: string | null,
+  deps: InboundDeps,
 ): Promise<string> {
-  if (!projectId) return "your designer";
-  const { data: proj } = await supabase
-    .from("projects").select("designer_id").eq("id", projectId).maybeSingle();
-  const designerId = (proj as { designer_id?: string } | null)?.designer_id;
-  if (!designerId) return "your designer";
-  const { data: pr } = await supabase
-    .from("profiles").select("full_name").eq("id", designerId).maybeSingle();
-  const full = (pr as { full_name?: string } | null)?.full_name;
-  return full ? full.trim().split(/\s+/)[0] : "your designer";
+  const owner = await reviewOwner(supabase, projectId, deps);
+  if (!owner) return "your designer";
+  const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", owner).maybeSingle();
+  return profile?.full_name?.trim().split(/\s+/)[0] || "your designer";
 }
 
 // ── the pipeline (signature already verified; injectable for tests) ──────────
-export async function processInbound(
+export async function processInbound(params: InboundParams, deps: InboundDeps): Promise<InboundResult> {
+  const result = await processInboundCore(params, deps);
+  if (result.status >= 500 && !result.effectApplied && !result.retainSid) {
+    await deps.supabase.from("sms_messages").update({ twilio_sid: null }).eq("twilio_sid", params.MessageSid);
+  }
+  if (result.replies?.length && !result.messageId) {
+    const { data } = await deps.supabase.from("sms_messages").select("id").eq("twilio_sid", params.MessageSid).maybeSingle();
+    result.messageId = data?.id;
+  }
+  return result;
+}
+
+async function processInboundCore(
   params: InboundParams,
   deps: InboundDeps,
 ): Promise<InboundResult> {
@@ -905,10 +978,11 @@ export async function processInbound(
   // ORIGINAL stashed message row, not the meaningless digit-choice reply.
   let effectiveMessageId: string;
   let replayExcludeFromHistory: string | null = null;
+  let resumeSelection: SelectionBinding | undefined;
 
   // (c) idempotency claim on a per-conversation message row.
   const conv = await findOrCreateConversation(supabase, to, from);
-  const { data: claimed } = await supabase
+  const { data: claimed, error: claimError } = await supabase
     .from("sms_messages")
     .upsert(
       {
@@ -921,10 +995,38 @@ export async function processInbound(
       { onConflict: "twilio_sid", ignoreDuplicates: true },
     )
     .select("id");
-  if (!claimed || (claimed as unknown[]).length === 0) {
-    return { status: 200, twiml: twimlBody(), disposition: "duplicate" };
+  if (claimError) return { status: 503, twiml: twimlBody(), disposition: "claim_failed", retainSid: true };
+  let messageId = (claimed as Array<{ id: string }> | null)?.[0]?.id;
+  if (!messageId) {
+    const { data: existing, error } = await supabase.from("sms_messages")
+      .select("id, body, parsed_intent").eq("twilio_sid", params.MessageSid).eq("conversation_id", conv.id)
+      .eq("direction", "inbound").maybeSingle();
+    if (error || !existing) return { status: 503, twiml: twimlBody(), disposition: "receipt_unreadable", retainSid: true };
+    messageId = String(existing.id);
+    const completion = await inboundCompletion(supabase, messageId!, to, from, conv.id);
+    if (completion.status === "unknown") return completionUnknown(messageId!, "receipt_unreadable");
+    if (completion.status === "prompt-completed") return await finishPrompt(supabase, conv, messageId!, completion.receipt.prompt_id!, completion.receipt, deps);
+    if (completion.status === "effect-completed") return completedInbound(messageId!);
+    body = String(existing.body ?? "").trim(); upper = body.toUpperCase();
+    const intent = existing.parsed_intent?.selection_intent;
+    if (intent) {
+      if (intent.inboundMessageId === messageId) {
+        return { status: 200, twiml: twimlBody(), disposition: "selection_recovery",
+          messageId, retainSid: true, selection: intent };
+      }
+      if (intent.kind !== "project_choice" || typeof intent.inboundMessageId !== "string" ||
+          typeof intent.messageId !== "string" || !/^\d+$/.test(body)) return completionUnknown(messageId!);
+      resumeSelection = intent;
+    }
+    // Retrying an uncertain atomic attempt reuses the SAME persisted inbound row.
+    // Concurrent same-SID attempts are serialized by the database helper.
+    if (!resumeSelection && (!existing.parsed_intent?.prompt_id || !["ref", "optin_ref"].includes(existing.parsed_intent.path))) {
+      // A retained unstamped digit may have lost its origin pointer. It must
+      // never guess using the handset's newer question (operator recovery).
+      if (/^\d+$/.test(body) && !existing.parsed_intent) return completionUnknown(messageId!);
+      if (existing.parsed_intent) return { status: 200, twiml: twimlBody(), disposition: "duplicate" };
+    }
   }
-  const messageId = (claimed as Array<{ id: string }>)[0].id;
   effectiveMessageId = messageId;
   await supabase
     .from("sms_conversations")
@@ -937,7 +1039,11 @@ export async function processInbound(
   }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
 
   // (d) COMPLIANCE KEYWORDS — before resolve/MMS/LLM. Phone-global.
-  if (STOP_WORDS.includes(upper)) {
+  const plainStop = PLAIN_STOPS.test(body);
+  if (STOP_WORDS.includes(upper) || plainStop) {
+    const { error: suppressError } = await supabase.from("sms_suppressions").upsert({
+      sender_number: to, recipient_phone: from, reason: "stop", suppressed_at: nowIso, lifted_at: null,
+    }, { onConflict: "sender_number,recipient_phone" });
     // Every studio holding the number — by seat, and by record even with no
     // seat left. A refusal that cannot reach a record leaves that record
     // saying granted, and the send gate honours it.
@@ -993,7 +1099,7 @@ export async function processInbound(
     // acknowledge; Twilio retries, and if the project is still studio-less the
     // loss is loud in the logs instead of silent on the wire.
     if (
-      stopPhoneParties.failed || stopRecordStudios.failed ||
+      suppressError || stopPhoneParties.failed || stopRecordStudios.failed ||
       stopPartyOrgs.failed || stopPartyOrgs.unattributed || stopWrite.failed
     ) {
       console.error(
@@ -1029,44 +1135,47 @@ export async function processInbound(
       messageId,
       nowIso,
     );
-    // Twilio Advanced Opt-Out already auto-replied — do NOT reply.
-    return { status: 200, twiml: twimlBody(), disposition: "opted_out" };
+    if (plainStop) {
+      const projects = [...new Set(stopPhoneParties.parties.map((p) => p.project_id))];
+      const project = projects.length === 1 ? projects[0] : null;
+      if (!await ownedReview(supabase, messageId, project,
+        project ? stopPhoneParties.parties[0]?.id ?? null : null,
+        { path: "keyword", keyword: "stop", body }, deps)) {
+        return { status: 503, twiml: twimlBody(), disposition: "triage_unconfigured" };
+      }
+    }
+    // Advanced Opt-Out marks its own confirmation; otherwise confirm once here.
+    if (params.OptOutType?.toUpperCase() === "STOP") {
+      return { status: 200, twiml: twimlBody(), disposition: "opted_out" };
+    }
+    const studio = stopTargets.length === 1 && stopTargets[0].projectId
+      ? await resolveStudioName(supabase, stopTargets[0].projectId) : null;
+    return await reply(supabase, conv.id, await renderSms(supabase, "sms_inbound_reply", {
+      studio_name: studio ?? "Your design studio", message: "Texts stopped. Reply START to resume.",
+    }), null, null, "opted_out");
   }
   if (START_WORDS.includes(upper)) {
-    // A START is a RE-subscription: it answers a sender that asked. So the
-    // target set is the studios whose own record for this number currently
-    // READS `opted_out` (the refusal it lifts) or `pending` (the invite it
-    // answers) — the VERDICT, through recordVerdict(), not the raw `status`
-    // column (close-out r4 MAJOR-1). A studio at `not_asked`, or with no record
-    // at all, is untouched even when it holds a seat on the number — holding a
-    // seat is not having asked, and granting on a seat manufactured consent for
-    // a studio that never invited this person (R-AJ). R-AJ's narrowing is
-    // unchanged by the verdict fold: a `not_asked` record with no refusal
-    // standing still reads `not_asked` and is still untouched.
-    // The seat-derived arm survives only to carry each
-    // qualifying studio's party rows, which the grant reads for its evidence.
-    // A failed read here logs (loadPhoneParties / studiosHoldingRecord /
-    // studiosHoldingPhone) and grants fewer studios, which leaves the standing
-    // refusal standing — the fail-closed direction, so unlike the STOP branch
-    // this one still answers 200 rather than replaying a re-subscription. The
-    // same goes for studiosHoldingPhone's `unattributed` (close-out r5
-    // BLOCKING-1): a studio-less seat can hold no record, so there is no
-    // refusal for this START to lift and nothing is lost by not granting one.
-    const startOrgs = (await studiosHoldingRecord(supabase, from, [
-      "opted_out",
-      "pending",
-    ])).orgs;
+    // Carrier resume lifts this pair only. It never turns a pending invite into a grant.
+    try {
+    const startRecords = await studiosHoldingRecord(supabase, from, ["opted_out"]);
+    const pendingRecords = await studiosHoldingRecord(supabase, from, ["pending"]);
+    const phoneParties = await loadPhoneParties(supabase, from);
+    const phoneStudios = await studiosHoldingPhone(supabase, phoneParties.parties);
+    if (startRecords.failed || pendingRecords.failed || phoneParties.failed || phoneStudios.failed) {
+      return { status: 503, twiml: twimlBody(), disposition: "consent_read_failed" };
+    }
+    const startOrgs = startRecords.orgs;
+    const pendingOrgs = pendingRecords.orgs;
+    const { error: liftError } = await supabase.from("sms_suppressions")
+      .update({ lifted_at: nowIso }).eq("sender_number", to).eq("recipient_phone", from);
+    const remaining = await suppression(supabase, to, from);
+    if (liftError || remaining.blocked) return { status: 503, twiml: twimlBody(), disposition: "suppression_unreadable" };
     const startOrgSet = new Set(startOrgs);
     const startTargets = withRecordOnlyStudios(
-      (await studiosHoldingPhone(
-        supabase,
-        (await loadPhoneParties(supabase, from)).parties,
-      ))
-        .targets
-        .filter((t) => startOrgSet.has(t.org)),
+      phoneStudios.targets.filter((t) => startOrgSet.has(t.org)),
       startOrgs,
     );
-    await writeChannelConsent(
+    const startWrite = await writeChannelConsent(
       supabase,
       startTargets,
       from, "granted", nowIso, `Inbound ${upper}`,
@@ -1087,21 +1196,84 @@ export async function processInbound(
       messageId,
       nowIso,
     );
-    return { status: 200, twiml: twimlBody(), disposition: "resubscribed" };
+    if (startWrite.failed) return { status: 503, twiml: twimlBody(), disposition: "consent_write_failed" };
+    const pendingTargets = phoneStudios.targets.filter((t) => pendingOrgs.includes(t.org));
+    // sms_create_prompt requires an engagement; never invent one for a record-only studio.
+    const recordOnlyPending = pendingOrgs.filter((org) => !pendingTargets.some((t) => t.org === org));
+    if (recordOnlyPending.length && !await ownedReview(supabase, messageId, null, null,
+      { path: "start_missing_engagement", organizations: recordOnlyPending }, deps)) {
+      return { status: 503, twiml: twimlBody(), disposition: "triage_unconfigured" };
+    }
+    const replies: NonNullable<InboundResult["replies"]> = [];
+    for (const target of pendingTargets) {
+      for (const partyId of target.partyIds) {
+        const { data: seat } = await supabase.from("project_parties").select("project_id").eq("id", partyId).single();
+        if (!seat?.project_id) throw new Error("Pending invite seat unavailable");
+        const { data: prior, error: readError } = await supabase.from("sms_prompts")
+          .select("version").eq("party_id", partyId).eq("kind", "optin").order("version", { ascending: false }).limit(1);
+        if (readError) throw readError;
+        const { error: closeError } = await supabase.from("sms_prompts").update({ answered_at: nowIso })
+          .eq("party_id", partyId).eq("kind", "optin").is("answered_at", null);
+        if (closeError) throw closeError;
+        const { data: created, error } = await supabase.rpc("sms_create_prompt", {
+          p_party_id: partyId, p_project_id: seat.project_id, p_kind: "optin", p_subject_id: null,
+          p_version: Number(prior?.[0]?.version ?? 0) + 1,
+          p_expires_at: new Date(now.getTime() + 7 * 86400000).toISOString(),
+          p_sender_number: to, p_recipient_phone: from,
+        });
+        const prompt = Array.isArray(created) ? created[0] : created;
+        if (error || !prompt?.short_code) {
+          await ownedReview(supabase, messageId, seat.project_id, partyId,
+            { path: "start_challenge", error: error ?? "prompt_not_created" }, deps);
+          return { status: 503, twiml: twimlBody(), disposition: "challenge_failed" };
+        }
+        const names = await loadProjectNames(supabase, [seat.project_id]);
+        const vars = { code: prompt.short_code, studio_name: await resolveStudioName(supabase, seat.project_id),
+          project_name: names[seat.project_id] };
+        replies.push({ message: await renderSms(supabase, "sms_optin_invite", vars), partyId,
+          projectId: seat.project_id, templateKey: "sms_optin_invite", vars });
+      }
+    }
+    return { status: 200, twiml: twimlBody(), disposition: recordOnlyPending.length ? "needs_review" : "resubscribed", replies, messageId };
+    } catch (error) {
+      await ownedReview(supabase, messageId, null, null, { path: "start_failed", error: String(error) }, deps);
+      return { status: 503, twiml: twimlBody(), disposition: "challenge_failed" };
+    }
   }
 
   // Resolve candidate parties (needed for the YES grant's evidence + everything
   // below). The frozen sms_consent_status column is NOT selected: no branch of
   // this rail asks a seat for a verdict any more (R-AY).
-  const { data: partyRows } = await supabase
+  const { data: partyRows, error: partyReadError } = await supabase
     .from("project_parties")
     .select("id, project_id, party_kind, display_name")
     .eq("phone_e164", from);
+  if (partyReadError) return { status: 503, twiml: twimlBody(), disposition: "consent_read_failed" };
   const parties = (partyRows ?? []) as Array<{
     id: string; project_id: string; party_kind: string; display_name: string | null;
   }>;
 
-  if (upper === "YES" || upper === "Y") {
+  if (upper === "YES" || upper === "Y" || /^(?:YES|Y) \d{2,3}$/.test(upper)) {
+    try {
+    const grantSuppression = await suppression(supabase, to, from);
+    if (grantSuppression.blocked) return { status: grantSuppression.error ? 503 : 200,
+      twiml: twimlBody(), disposition: "suppressed" };
+    const code = upper.match(/^(?:YES|Y) (\d{2,3})$/)?.[1];
+    if (code) {
+      const { data, error } = await supabase.rpc("sms_resolve_prompt", { p_sender: to, p_recipient: from, p_code: code });
+      const prompt = Array.isArray(data) ? data[0] : data;
+      if (error) return { status: 503, twiml: twimlBody(), disposition: "ref_unreadable" };
+      if (!prompt) return await closedRefReply(supabase, conv.id, to, from, code, nowIso);
+      if (prompt.kind === "optin") {
+        const attempt = await stampMessage(supabase, messageId, prompt.party_id, prompt.project_id,
+          { path: "optin_ref", prompt_id: prompt.id, version: prompt.version });
+        if (attempt.error) return { status: 503, twiml: twimlBody(), disposition: "prompt_attempt_unrecorded" };
+        return await consumePrompt(supabase, conv, prompt, messageId, to, from, deps);
+
+      }
+      // A field YES NN is not consent; it continues through the ref protocol.
+    }
+    if (!code) {
     // THE RECORD SAYS WHO ASKED, AND THE SEAT SAYS NOTHING (final-run
     // BLOCKING-1, R-AU's rule applied to the other re-subscription keyword).
     // This gate read `parties.some(p => p.sms_consent_status === 'pending')`,
@@ -1118,8 +1290,9 @@ export async function processInbound(
     // record whose verdict is `opted_out` is untouched: a refusal is answered
     // by START, which is the word the party sheet and the STOP auto-reply tell
     // the recipient to send, or by a freshly recorded invite.
-    const yesOrgs = (await studiosHoldingRecord(supabase, from, ["pending"]))
-      .orgs;
+    const yesRecords = await studiosHoldingRecord(supabase, from, ["pending"]);
+    if (yesRecords.failed) return { status: 503, twiml: twimlBody(), disposition: "consent_read_failed" };
+    const yesOrgs = yesRecords.orgs;
     if (yesOrgs.length > 0) {
       // The RECORD is per studio, not per seat, so the target is the studio:
       // its seats on the number are carried only to give the grant its evidence
@@ -1127,16 +1300,19 @@ export async function processInbound(
       // waiting with no seat left on the number is unioned in the way START
       // does it.
       const yesOrgSet = new Set(yesOrgs);
+      const yesStudios = await studiosHoldingPhone(supabase, parties);
+      if (yesStudios.failed || yesStudios.unattributed) return { status: 503, twiml: twimlBody(), disposition: "consent_read_failed" };
       const yesTargets = withRecordOnlyStudios(
-        (await studiosHoldingPhone(supabase, parties)).targets
+        yesStudios.targets
           .filter((t) => yesOrgSet.has(t.org)),
         yesOrgs,
       );
-      await writeChannelConsent(
+      const yesWrite = await writeChannelConsent(
         supabase,
         yesTargets,
         from, "granted", nowIso, `Inbound ${upper}`,
       );
+      if (yesWrite.failed) return { status: 503, twiml: twimlBody(), disposition: "consent_write_failed" };
       await captureServerEvent("sms-inbound", "sms_opt_in", { phone: from }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
       // The confirmation names a job this YES actually answered — a seat held
       // by one of the studios just granted. A record-only studio has no seat to
@@ -1146,14 +1322,15 @@ export async function processInbound(
       const projectNames = answered
         ? await loadProjectNames(supabase, [answered.project_id])
         : {};
-      const confirm = await renderSms(supabase, "sms_optin_confirm", {
+      const confirmVars = {
         party_first_name: answered?.display_name ? answered.display_name.trim().split(/\s+/)[0] : "there",
         studio_name: (answered
           ? await resolveStudioName(supabase, answered.project_id)
           : null) ?? "your studio",
         project_name: (answered ? projectNames[answered.project_id] : null) ??
           "your project",
-      });
+      };
+      const confirm = await renderSms(supabase, "sms_optin_confirm", confirmVars);
       await captureServerEvent("sms-inbound", "sms_parse_outcome",
         { path: "keyword", intent: "opt_in", confidence_bucket: "n/a", disposition: "granted" },
         { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
@@ -1176,7 +1353,13 @@ export async function processInbound(
         answered?.id ?? conv.party_id,
         answered?.project_id ?? conv.active_project_id,
         "granted",
+        { templateKey: "sms_optin_confirm", vars: confirmVars },
       );
+    }
+    }
+    } catch (error) {
+      console.error("Consent response failed", error);
+      return { status: 503, twiml: twimlBody(), disposition: "consent_read_failed" };
     }
     // else: a YES no studio's record is waiting on falls through to the normal
     // parse — including a YES over a standing refusal, which stays refused.
@@ -1198,9 +1381,9 @@ export async function processInbound(
 
   // (e) Unknown phone — polite brush-off + orphan needs_review row.
   if (parties.length === 0) {
-    await supabase.from("sms_messages")
-      .update({ needs_review: true, parsed_intent: { path: "unmatched" } })
-      .eq("id", messageId);
+    if (!await ownedReview(supabase, messageId, null, null, { path: "unmatched", body }, deps)) {
+      return { status: 503, twiml: twimlBody(), disposition: "triage_unconfigured" };
+    }
     return await reply(
       supabase, conv.id,
       "Thanks — this number isn't linked to a project yet. Your designer will follow up.",
@@ -1210,6 +1393,30 @@ export async function processInbound(
 
   const projectIds = [...new Set(parties.map((p) => p.project_id))];
   const projectNames = await loadProjectNames(supabase, projectIds);
+
+  // Gate the ORIGINAL before any MMS, CAS or parse. The digit pointer is
+  // resume provenance only; every attempt still rechecks durable completion
+  // and the shared sender's current authorization/immutable manifest.
+  const choiceBinding = resumeSelection ?? (conv.state === "awaiting_project_choice" && /^\d+$/.test(body)
+    ? conv.state_context?.selection as SelectionBinding | undefined : undefined);
+  if (!choiceBinding && conv.state === "awaiting_project_choice" && /^\d+$/.test(body)) return completionUnknown(messageId);
+  let choiceSource: Record<string, any> | undefined;
+  let choiceQuestion: SelectionQuestion | undefined;
+  if (choiceBinding) {
+    if (choiceBinding.kind !== "project_choice" || !choiceBinding.messageId) return completionUnknown(messageId);
+    const completion = await inboundCompletion(supabase, choiceBinding.inboundMessageId, to, from, conv.id);
+    if (completion.status === "unknown") return completionUnknown(messageId);
+    if (completion.status !== "unresolved") return completedInbound(messageId);
+    choiceSource = completion.source;
+    try {
+      const { data: pointerRows, error: pointerError } = await supabase.from("sms_messages")
+        .update({ parsed_intent: { selection_intent: choiceBinding } }).eq("id", messageId).select("id");
+      if (pointerError || !pointerRows?.length) return completionUnknown(messageId, "selection_pointer_unrecorded");
+    } catch { return completionUnknown(messageId, "selection_pointer_unrecorded"); }
+    const recovered = await recoverSmsSelection(supabase, { ...choiceBinding, phone: from }, deps);
+    if (!recovered.selection?.usable) return { ...selectionUnavailable(recovered), retainSid: true, messageId };
+    choiceQuestion = recovered.selection;
+  }
 
   // (f) MMS — fetch + store to field-media (project if known, else holding).
   // Prefer a FRESH explicit project_pin over the merely-single-project case —
@@ -1227,22 +1434,20 @@ export async function processInbound(
   }
 
   // (g) Deterministic: project-choice → confirmation → numbered menu.
-  if (conv.state === "awaiting_project_choice") {
+  if (choiceBinding && /^\d+$/.test(body)) {
     const choice = firstInt(body);
-    const chooser = (conv.state_context?.chooser ?? []) as Array<{ n: number; project_id: string; party_id: string }>;
-    const pick = chooser.find((c) => c.n === choice);
+    const binding = choiceBinding;
+    const option = choiceQuestion!.manifest.options.find((c) => c.number === choice);
+    const pick = option && { project_id: option.projectId, party_id: option.partyId };
     if (pick) {
       // Merge — never overwrite — state_context: a digest `menu` (or other
       // stashed keys) predating the chooser must survive the resolution.
       const mergedContext = { ...conv.state_context };
       delete mergedContext.chooser;
-      const pendingText = typeof mergedContext.pending_body === "string" ? mergedContext.pending_body : "";
-      let pendingMedia = Array.isArray(mergedContext.pending_media)
-        ? mergedContext.pending_media as Array<{ path: string; content_type: string; twilio_url: string }>
-        : [];
-      const pendingMessageId = typeof mergedContext.pending_message_id === "string"
-        ? mergedContext.pending_message_id
-        : null;
+      delete mergedContext.selection;
+      const pendingText = String(choiceSource!.body ?? "");
+      let pendingMedia = Array.isArray(choiceSource!.media) ? choiceSource!.media as Array<{ path: string; content_type: string; twilio_url: string }> : [];
+      const pendingMessageId = binding.inboundMessageId;
       delete mergedContext.pending_body;
       delete mergedContext.pending_media;
       delete mergedContext.pending_message_id;
@@ -1266,17 +1471,19 @@ export async function processInbound(
       }
       // THE pin: only an explicit chooser pick scopes the conversation.
       mergedContext.project_pin = { project_id: pick.project_id, at: nowIso };
-      // Conditional on the chooser state still being live: two picks racing in
-      // (Twilio retries, double-tap) must not both replay the stashed update.
-      const { data: resolvedRows } = await supabase.from("sms_conversations")
-        .update({ state: "idle", active_project_id: pick.project_id, party_id: pick.party_id, state_context: mergedContext })
-        .eq("id", conv.id)
-        .eq("state", "awaiting_project_choice")
-        .select("id");
-      if (!resolvedRows || (resolvedRows as unknown[]).length === 0) {
-        // Another message already resolved this chooser — do nothing twice.
-        return { status: 200, twiml: twimlBody(), disposition: "project_choice_race" };
+      // Match the read context as well as state: a newer question can have the
+      // same state, but must never lose its manifest or pending origin.
+      if (!resumeSelection || (conv.state_context?.selection as SelectionBinding | undefined)?.inboundMessageId === binding.inboundMessageId) {
+        const { data: resolvedRows, error: resolveError } = await supabase.from("sms_conversations")
+          .update({ state: "idle", active_project_id: pick.project_id, party_id: pick.party_id, state_context: mergedContext })
+          .eq("id", conv.id).eq("state", "awaiting_project_choice")
+          .eq("state_context", JSON.stringify(conv.state_context))
+          .select("id");
+        if (resolveError) return completionUnknown(messageId);
+        if (!resolvedRows?.length) return { status: 200, twiml: twimlBody(), disposition: "project_choice_race", retainSid: true };
       }
+      // A resumed digit may finish its original operation without replacing a
+      // newer question. The local pin below scopes only this parse.
       if (!pendingText && pendingMedia.length === 0) {
         await stampMessage(supabase, effectiveMessageId, pick.party_id, pick.project_id, { path: "menu", disambiguated: true });
         // The message is stamped with a seat and a project one statement
@@ -1316,37 +1523,8 @@ export async function processInbound(
     // Not a valid choice → fall through to fresh parse.
   }
 
-  if (conv.state === "awaiting_confirmation" && (upper === "YES" || upper === "Y" || upper === "OK")) {
-    const pending = conv.state_context?.pending_effect as Record<string, unknown> | undefined;
-    const partyId = (conv.state_context?.pending_party_id as string | undefined) ?? conv.party_id;
-    if (pending && partyId) {
-      const applied = await applyEffect(supabase, partyId, pending, messageId);
-      // The parked effect is FILED here, not where it was parsed, so this is
-      // where CRM-22's check belongs.
-      await recordInboundTouch(
-        supabase, partyId, messageId,
-        await filedDecisionFacts(
-          supabase,
-          (pending as { target?: { kind: string; id: string } }).target,
-          partyId,
-          String((pending as { type?: string }).type ?? ""),
-          nowIso.slice(0, 10),
-        ),
-        nowIso,
-      );
-      // Clear only this branch's own keys — a digest menu or project pin in
-      // state_context must survive the confirmation.
-      const clearedContext = { ...conv.state_context };
-      delete clearedContext.pending_effect;
-      delete clearedContext.pending_party_id;
-      await supabase.from("sms_conversations").update({ state: "idle", state_context: clearedContext }).eq("id", conv.id);
-      const projectId = (pending as { _project_id?: string })._project_id ?? conv.active_project_id;
-      await captureServerEvent("sms-inbound", "sms_parse_outcome",
-        { path: "llm", intent: String((pending as { type?: string }).type), confidence_bucket: "mid", disposition: "applied_confirmed" },
-        { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
-      return await reply(supabase, conv.id, confirmText(applied), partyId, projectId ?? null, "applied_confirmed");
-    }
-  }
+  const refResult = await promptReply(supabase, conv, parties, body, to, from, effectiveMessageId, now, media, deps);
+  if (refResult) return { ...refResult, messageId: effectiveMessageId };
 
   // Numbered menu reply ("DONE 2", "2 done", bare "2") against a fresh menu.
   const menu = (conv.state_context?.menu ?? []) as Array<{ n: number; kind: "task" | "coordination"; id: string; project_id: string }>;
@@ -1362,8 +1540,12 @@ export async function processInbound(
         const applied = await applyEffect(
           supabase, partyId,
           { type: "mark_done", target: { kind: target.kind, id: target.id } },
-          messageId,
+          messageId, to, from, conv.id,
         );
+        if (applied.status === "replayed") return completedInbound(messageId);
+        if (applied.status === "unknown") return completionUnknown(messageId);
+        if (applied.status === "failed") return await effectFailure(supabase, conv.id, messageId, partyId,
+          target.project_id, applied.error, deps);
         await recordInboundTouch(
           supabase, partyId, messageId,
           await filedDecisionFacts(
@@ -1375,7 +1557,7 @@ export async function processInbound(
         await captureServerEvent("sms-inbound", "sms_parse_outcome",
           { path: "menu", intent: "mark_done", confidence_bucket: "n/a", disposition: "applied" },
           { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
-        return await reply(supabase, conv.id, confirmText(applied), partyId, target.project_id, "menu_applied");
+        return { ...await reply(supabase, conv.id, confirmText(applied.result), partyId, target.project_id, "menu_applied"), effectApplied: true };
       }
     }
   }
@@ -1412,31 +1594,31 @@ export async function processInbound(
 
   // Multi-project ambiguity with no resolved target → project chooser.
   if (!targetItem && !activePartyForConv && projectIds.length > 1 && parsed.intent !== "note" && parsed.intent !== "question") {
-    const chooser = projectIds.map((pid, i) => ({
-      n: i + 1,
-      project_id: pid,
-      party_id: parties.find((p) => p.project_id === pid)!.id,
-    }));
-    await supabase.from("sms_conversations")
-      .update({
-        state: "awaiting_project_choice",
-        state_context: { ...conv.state_context, chooser, pending_body: body, pending_media: media, pending_message_id: messageId },
-      })
-      .eq("id", conv.id);
-    const list = chooser.map((c) => `${c.n}) ${projectNames[c.project_id] ?? "Project"}`).join(" ");
-    await captureServerEvent("sms-inbound", "sms_parse_outcome",
-      { path: "llm", intent: parsed.intent, confidence_bucket: bucket, disposition: "project_chooser" },
-      { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
-    return await reply(supabase, conv.id, `Which project? ${list} — reply a number.`, null, null, "project_chooser");
+    return await selectionIntent(supabase, messageId, {
+      kind: "project_choice", inboundMessageId: messageId,
+      options: projectIds.map((projectId) => ({ projectId, partyId: parties.find((p) => p.project_id === projectId)!.id })),
+    });
   }
 
   const effectParty = targetItem?.party_id ?? activePartyForConv?.id ?? parties[0].id;
   const effectProject = targetItem?.project_id ?? activePartyForConv?.project_id ?? parties[0].project_id;
   const effect = buildEffect(parsed, media);
 
+  // Delivery effects require a bound prompt; conditions stay owned review in 0D-A.
+  if (DELIVERY_EFFECTS.includes(parsed.intent)) {
+    if (!await ownedReview(supabase, effectiveMessageId, effectProject, effectParty,
+      { path: "delivery_unbound", ...parsed }, deps)) return { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
+    return await reply(supabase, conv.id, `Passed to ${await designerFirstName(supabase, effectProject, deps)} — they'll get back to you.`,
+      effectParty, effectProject, "needs_review");
+  }
+
   // (i) Confidence gate.
   if (parsed.confidence >= 0.8 && (targetItem || parsed.intent === "punch_report" || parsed.intent === "note")) {
-    const applied = await applyEffect(supabase, effectParty, effect, effectiveMessageId);
+    const applied = await applyEffect(supabase, effectParty, effect, effectiveMessageId, to, from, conv.id);
+    if (applied.status === "replayed") return completedInbound(messageId);
+    if (applied.status === "unknown") return completionUnknown(messageId);
+    if (applied.status === "failed") return await effectFailure(supabase, conv.id, effectiveMessageId, effectParty,
+      effectProject, applied.error, deps);
     await recordInboundTouch(
       supabase, effectParty, effectiveMessageId,
       await filedDecisionFacts(
@@ -1453,17 +1635,31 @@ export async function processInbound(
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "llm", intent: parsed.intent, confidence_bucket: bucket, disposition: "applied" },
       { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
-    return await reply(supabase, conv.id, confirmText(applied), effectParty, effectProject, "applied");
+    return { ...await reply(supabase, conv.id, confirmText(applied.result, parsed.intent), effectParty, effectProject, "applied"), effectApplied: true };
   }
 
   if (parsed.confidence >= 0.5 && targetItem) {
-    // Park the effect, ask a targeted yes/no.
+    const { data: priorPrompts, error: priorError } = await supabase.from("sms_prompts").select("version")
+      .eq("party_id", effectParty).eq("kind", parsed.intent).eq("subject_id", targetItem.id)
+      .order("version", { ascending: false }).limit(1);
+    if (priorError) throw priorError;
+    const { data: created, error: promptError } = await supabase.rpc("sms_create_prompt", {
+      p_party_id: effectParty, p_project_id: effectProject, p_kind: parsed.intent,
+      p_subject_id: targetItem.id, p_version: Number(priorPrompts?.[0]?.version ?? 0) + 1,
+      p_expires_at: new Date(now.getTime() + MENU_TTL_MS).toISOString(),
+      p_sender_number: to, p_recipient_phone: from, p_proposed_effect: effect,
+    });
+    const confirmation = Array.isArray(created) ? created[0] : created;
+    if (promptError || !confirmation?.id) return await effectFailure(supabase, conv.id, effectiveMessageId,
+      effectParty, effectProject, promptError ?? { message: "confirmation_prompt_failed" }, deps);
+    // The proposal is bound to this prompt, never the handset's latest YES.
+
     await supabase.from("sms_conversations")
       .update({
         state: "awaiting_confirmation",
         party_id: effectParty,
         active_project_id: effectProject,
-        state_context: { ...conv.state_context, pending_effect: { ...effect, _project_id: effectProject }, pending_party_id: effectParty },
+        state_context: { ...conv.state_context, pending_prompt_id: confirmation.id },
       })
       .eq("id", conv.id);
     await stampMessage(supabase, effectiveMessageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
@@ -1476,23 +1672,370 @@ export async function processInbound(
     await captureServerEvent("sms-inbound", "sms_parse_outcome",
       { path: "llm", intent: parsed.intent, confidence_bucket: bucket, disposition: "clarify" },
       { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
-    return await reply(supabase, conv.id, clarifyText(parsed, targetItem), effectParty, effectProject, "clarify");
+    return await reply(supabase, conv.id, clarifyText(parsed, targetItem).replace("Reply YES.", `Reply YES ${confirmation.short_code}.`), effectParty, effectProject, "clarify");
   }
 
   // <0.5 or question/unclear → needs_review + designer notify.
-  await supabase.from("sms_messages")
-    .update({ needs_review: true, confidence: parsed.confidence, parsed_intent: { path: "llm", ...parsed }, party_id: effectParty, project_id: effectProject })
-    .eq("id", effectiveMessageId);
+  if (!await ownedReview(supabase, effectiveMessageId, effectProject, effectParty, { path: "llm", ...parsed }, deps)) {
+    return { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
+  }
   await recordInboundTouch(
     supabase, effectParty, effectiveMessageId,
     { decisionClass: "none", authorityCheck: "n/a" }, nowIso,
   );
-  await notifyDesigner(supabase, effectProject, "field_needs_review", { message_id: effectiveMessageId, body });
-  const firstName = await designerFirstName(supabase, effectProject);
+  const firstName = await designerFirstName(supabase, effectProject, deps);
   await captureServerEvent("sms-inbound", "sms_parse_outcome",
     { path: "llm", intent: parsed.intent, confidence_bucket: bucket, disposition: "needs_review" },
     { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
   return await reply(supabase, conv.id, `Passed to ${firstName} — they'll get back to you.`, effectParty, effectProject, "needs_review");
+}
+
+interface SmsPrompt {
+  id: string; party_id: string; project_id: string; kind: string;
+  subject_id: string | null; version: number; short_code: string; expires_at: string;
+  proposed_effect?: Record<string, unknown> | null;
+}
+
+async function promptSubject(supabase: SupabaseClient, prompt: SmsPrompt) {
+  for (const [table, kind] of [["project_tasks", "task"], ["client_decisions", "coordination"]] as const) {
+    const { data, error } = await supabase.from(table).select("id, title")
+      .eq("id", prompt.subject_id).eq("project_id", prompt.project_id).maybeSingle();
+    if (error) throw error;
+    if (data) return { id: data.id as string, title: data.title as string, kind };
+  }
+  return null;
+}
+
+async function closedRefReply(supabase: SupabaseClient, conversationId: string, sender: string,
+  recipient: string, code: string, now: string): Promise<InboundResult> {
+  const { data: old, error } = await supabase.from("sms_prompts").select("*")
+    .eq("sender_number", sender).eq("recipient_phone", recipient).eq("short_code", code)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw error;
+  let latest: SmsPrompt | null = null;
+  if (old) {
+    let query = supabase.from("sms_prompts").select("*").eq("sender_number", sender)
+      .eq("recipient_phone", recipient).eq("party_id", old.party_id).eq("project_id", old.project_id)
+      .eq("kind", old.kind).is("answered_at", null).gt("expires_at", now);
+    query = old.subject_id ? query.eq("subject_id", old.subject_id) : query.is("subject_id", null);
+    const result = await query.order("version", { ascending: false }).limit(1).maybeSingle();
+    if (result.error) throw result.error;
+    latest = result.data;
+  }
+  const subject = latest?.subject_id ? await promptSubject(supabase, latest) : null;
+  const message = latest
+    ? `That one's closed. Latest: Ref ${latest.short_code} — ${subject?.title ?? "text updates"}`
+    : "That one's closed. Please ask your designer for the latest reference.";
+  return await reply(supabase, conversationId, message, old?.party_id ?? null, old?.project_id ?? null, "ref_closed");
+}
+
+async function effectFailure(supabase: SupabaseClient, conversationId: string, messageId: string,
+  partyId: string, projectId: string | null, error: unknown, deps: InboundDeps): Promise<InboundResult> {
+  const failure = error as { code?: string; details?: string; message?: string };
+  const authority = failure.code === "42501" && failure.details === "field_effect_no_authority";
+  const owned = await ownedReview(supabase, messageId, projectId, partyId,
+    { path: "effect_failed", error: failure, authority_check: authority ? "failed_no_authority" : undefined }, deps);
+  if (!owned) return { status: 503, twiml: twimlBody(), disposition: "triage_unconfigured" };
+  const name = await designerFirstName(supabase, projectId, deps);
+  return await reply(supabase, conversationId,
+    authority ? `That needs your designer's approval — ${name} will follow up.`
+      : `Got that, but it didn't save — ${name} will follow up`,
+    partyId, projectId, authority ? "failed_no_authority" : "effect_failed");
+}
+
+async function closePrompt(supabase: SupabaseClient, id: string, at: string): Promise<unknown> {
+  try {
+    const { error } = await supabase.from("sms_prompts").update({ answered_at: at }).eq("id", id).is("answered_at", null);
+    return error;
+  } catch (error) {
+    return { message: String(error) };
+  }
+}
+
+interface PromptConsumption {
+  status: string;
+  prompt_id?: string;
+  result?: { kind: "effect" | "optin"; result: Record<string, unknown> };
+}
+
+async function promptReceipt(supabase: SupabaseClient, sender: string, recipient: string, messageId: string) {
+  try {
+    return await supabase.rpc("sms_prompt_receipt", { p_sender: sender, p_recipient: recipient, p_sms_message_id: messageId });
+  } catch (error) { return { data: null, error }; }
+}
+
+type InboundCompletion =
+  | { status: "prompt-completed"; receipt: PromptConsumption }
+  | { status: "effect-completed" }
+  | { status: "unresolved"; source: Record<string, any> }
+  | { status: "unknown" };
+
+export function completedInbound(messageId: string): InboundResult {
+  return { status: 200, twiml: twimlBody(), disposition: "already_completed", effectApplied: true, retainSid: true, messageId };
+}
+function completionUnknown(messageId: string, disposition = "completion_unknown"): InboundResult {
+  return { status: 503, twiml: twimlBody(), disposition, retainSid: true, messageId };
+}
+
+/** A missing or unreadable origin is not proof of absence. A NULL completion
+ * may resume only because apply_field_effect serializes and rechecks it. */
+export async function inboundCompletion(supabase: SupabaseClient, messageId: string,
+  sender: string, recipient: string, conversationId?: string): Promise<InboundCompletion> {
+  try {
+    const { data: source, error } = await supabase.from("sms_messages")
+      .select("id, conversation_id, direction, twilio_sid, body, media, parsed_intent, applied_effect, party_id, project_id")
+      .eq("id", messageId).maybeSingle();
+    if (error || !source || source.id !== messageId || source.direction !== "inbound" ||
+        !source.twilio_sid?.trim() || (conversationId && source.conversation_id !== conversationId)) return { status: "unknown" };
+    const { data: conv, error: convError } = await supabase.from("sms_conversations")
+      .select("id, phone_e164, twilio_number").eq("id", source.conversation_id).maybeSingle();
+    if (convError || !conv || conv.phone_e164 !== recipient || conv.twilio_number !== sender) return { status: "unknown" };
+    const receipt = await promptReceipt(supabase, sender, recipient, messageId);
+    if (receipt.error) return { status: "unknown" };
+    if (receipt.data != null) {
+      const r = receipt.data;
+      if (r.status !== "replayed" || typeof r.prompt_id !== "string" ||
+          !["effect", "optin"].includes(r.result?.kind) || !r.result?.result || typeof r.result.result !== "object" || Array.isArray(r.result.result) ||
+          (r.result.kind === "effect" && typeof r.result.result.applied !== "boolean") ||
+          (r.result.kind === "optin" && typeof r.result.result.organization_id !== "string")) return { status: "unknown" };
+      return { status: "prompt-completed", receipt: r };
+    }
+    if (source.applied_effect != null) {
+      if (typeof source.applied_effect !== "object" || Array.isArray(source.applied_effect) ||
+          typeof source.applied_effect.applied !== "boolean") return { status: "unknown" };
+      return { status: "effect-completed" };
+    }
+    return { status: "unresolved", source };
+  } catch { return { status: "unknown" }; }
+}
+
+/** Post-write work cannot turn a saved effect into a retryable business action. */
+async function finishPrompt(supabase: SupabaseClient, conv: Conversation, messageId: string,
+  promptId: string, receipt: PromptConsumption, deps: InboundDeps): Promise<InboundResult> {
+  let prompt: SmsPrompt | null = null;
+  try {
+    const { data, error } = await supabase.from("sms_prompts").select("*").eq("id", promptId).single();
+    if (error || !data || !receipt.result) throw error ?? new Error("receipt_binding_unreadable");
+    prompt = data as SmsPrompt;
+    const context = { ...conv.state_context };
+    delete context.ref_clarification;
+    const pending = context.pending_prompt_id === prompt.id;
+    if (pending) { delete context.pending_prompt_id; delete context.pending_party_id; delete context.pending_effect; }
+    const { error: contextError } = await supabase.from("sms_conversations")
+      .update({ state: pending ? "idle" : conv.state, state_context: context }).eq("id", conv.id);
+    if (contextError) throw contextError;
+    if (receipt.result.kind === "optin") {
+      await recordConsentTouches(supabase, [{ org: String(receipt.result.result.organization_id),
+        projectId: prompt.project_id, partyIds: [prompt.party_id] }], null, messageId, (deps.now ?? new Date()).toISOString());
+      const names = await loadProjectNames(supabase, [prompt.project_id]);
+      const vars = { studio_name: await resolveStudioName(supabase, prompt.project_id), project_name: names[prompt.project_id] };
+      return { ...await reply(supabase, conv.id, await renderSms(supabase, "sms_optin_confirm", vars),
+        prompt.party_id, prompt.project_id, "granted", { templateKey: "sms_optin_confirm", vars }), effectApplied: true, messageId };
+    }
+    const subject = await promptSubject(supabase, prompt);
+    await recordInboundTouch(supabase, prompt.party_id, messageId, await filedDecisionFacts(supabase, subject ?? undefined,
+      prompt.party_id, String(receipt.result.result.effect_type ?? prompt.proposed_effect?.type ?? prompt.kind),
+      (deps.now ?? new Date()).toISOString().slice(0, 10)), (deps.now ?? new Date()).toISOString());
+    return { ...await reply(supabase, conv.id, confirmText(receipt.result.result,
+      String(receipt.result.result.effect_type ?? prompt.proposed_effect?.type ?? prompt.kind)), prompt.party_id, prompt.project_id, "ref_applied"), effectApplied: true, messageId };
+  } catch (error) {
+    const owned = await ownedReview(supabase, messageId, prompt?.project_id ?? null, prompt?.party_id ?? null,
+      { path: "prompt_followup_failed", prompt_id: promptId, effect_applied: true, error: String(error) }, deps);
+    const result = owned && prompt ? await reply(supabase, conv.id,
+      `${receipt.result?.kind === "optin" ? "Your consent was recorded" : "Your update was saved"}, but the follow-up needs attention - ${await designerFirstName(supabase, prompt.project_id, deps)} will follow up.`,
+      prompt.party_id, prompt.project_id, "prompt_followup_failed") : { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
+    return { ...result, effectApplied: true, messageId };
+  }
+}
+
+async function consumePrompt(supabase: SupabaseClient, conv: Conversation, prompt: SmsPrompt, messageId: string,
+  sender: string, recipient: string, deps: InboundDeps, effect?: Record<string, unknown>): Promise<InboundResult> {
+  let data: PromptConsumption | null = null;
+  let error: unknown;
+  try {
+    const response = await supabase.rpc(prompt.kind === "optin" ? "sms_grant_optin_prompt" : "sms_apply_prompt", {
+      p_prompt_id: prompt.id, p_sender: sender, p_recipient: recipient, p_sms_message_id: messageId,
+      ...(effect ? { p_effect: effect } : {}),
+    });
+    data = response.data; error = response.error;
+  } catch (err) { error = err; }
+  if (error || !data) {
+    const completion = await inboundCompletion(supabase, messageId, sender, recipient, conv.id);
+    if (completion.status === "prompt-completed") return await finishPrompt(supabase, conv, messageId, completion.receipt.prompt_id!, completion.receipt, deps);
+    if (completion.status === "effect-completed") return completedInbound(messageId);
+    // Known contract/integrity/transaction-abort errors prove rollback. Other
+    // SQLSTATEs (including statement_completion_unknown) remain ambiguous.
+    if (completion.status === "unknown" || !(/^(?:23[0-9A-Z]{3}|42501|P0001|40001|40P01)$/.test(String((error as { code?: string })?.code ?? "")))) {
+      return { status: 503, twiml: twimlBody(), disposition: "prompt_commit_unknown", retainSid: true, messageId };
+    }
+    return await effectFailure(supabase, conv.id, messageId, prompt.party_id, prompt.project_id, error, deps);
+  }
+  if (data.status === "already_completed") return completedInbound(messageId);
+  if (["applied", "granted", "replayed"].includes(data.status) && data.result) {
+    return await finishPrompt(supabase, conv, messageId, prompt.id, data, deps);
+  }
+  if (["closed", "expired"].includes(data.status)) return await closedRefReply(supabase, conv.id, sender, recipient,
+    prompt.short_code, (deps.now ?? new Date()).toISOString());
+  if (["suppressed", "not_consented", "not_pending"].includes(data.status)) {
+    return { status: 200, twiml: twimlBody(), disposition: data.status, messageId };
+  }
+  return { status: 503, twiml: twimlBody(), disposition: "prompt_commit_unknown", retainSid: true, messageId };
+}
+
+/** Codes bind before any parser sees the body. Bare digits belong to menus. */
+async function promptReply(supabase: SupabaseClient, conv: Conversation, parties: Array<{id: string; project_id: string}>,
+  body: string, sender: string, recipient: string, messageId: string, now: Date,
+  media: Array<{path: string; content_type: string; twilio_url: string}>, deps: InboundDeps): Promise<InboundResult | null> {
+  if (/^\d/.test(body)) return null;
+  const clarification = conv.state_context?.ref_clarification as SelectionBinding | undefined;
+  let priorAsked = false;
+  if (clarification && typeof clarification === "object") {
+    const recovered = await recoverSmsSelection(supabase, { ...clarification, phone: recipient }, deps);
+    if (!recovered.selection?.usable) return selectionUnavailable(recovered);
+    priorAsked = true;
+  }
+  const explicit = body.match(/^([a-z]+)\s+(\d{2,3})$/i);
+  const bareVerb = /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|delay)$/i.test(body);
+  const { data: open, error: openError } = await supabase.from("sms_prompts").select("*")
+    .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
+    .gt("expires_at", now.toISOString());
+  if (openError) return { status: 503, twiml: twimlBody(), disposition: "ref_unreadable" };
+  let prompt: SmsPrompt | null = null;
+  if (explicit || ((open ?? []).length === 1)) {
+    const code = explicit?.[2] ?? open![0].short_code;
+    const { data, error } = await supabase.rpc("sms_resolve_prompt", {
+      p_sender: sender, p_recipient: recipient, p_code: code,
+    });
+    if (error) return { status: 503, twiml: twimlBody(), disposition: "ref_unreadable" };
+    prompt = Array.isArray(data) ? data[0] : data;
+    if (!prompt && explicit) return await closedRefReply(supabase, conv.id, sender, recipient, code, now.toISOString());
+  }
+  if (!prompt) {
+    if (!bareVerb && !explicit) return null;
+    if (priorAsked) {
+      const projectId = [...new Set(parties.map((p) => p.project_id))].length === 1 ? parties[0].project_id : null;
+      if (!await ownedReview(supabase, messageId, projectId, projectId ? parties[0].id : null,
+        { path: "ref_ambiguous", body }, deps)) return { status: 503, twiml: twimlBody(), disposition: "triage_unconfigured" };
+      return await reply(supabase, conv.id, "Your message needs a closer look. Your designer will follow up.",
+        projectId ? parties[0].id : null, projectId, "needs_review");
+    }
+    return await selectionIntent(supabase, messageId, {
+      kind: "ref_clarify", inboundMessageId: messageId,
+      options: (open ?? []).filter((p: SmsPrompt) => p.kind !== "optin").map((p: SmsPrompt) => ({
+        partyId: p.party_id, projectId: p.project_id, promptId: p.id,
+      })),
+    });
+  }
+  const party = parties.find((p) => p.id === prompt!.party_id && p.project_id === prompt!.project_id);
+  if (!party || prompt.kind === "optin") {
+    if (!explicit) return null;
+    return await reply(supabase, conv.id, "Please answer the text update invitation with YES and its reference number.",
+      party?.id ?? null, party?.project_id ?? null, "ref_wrong_kind");
+  }
+  const subject = await promptSubject(supabase, prompt);
+  if (!subject) {
+    if (!await ownedReview(supabase, messageId, party.project_id, party.id, { path: "ref_subject_missing", prompt }, deps)) {
+      return { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
+    }
+    return await reply(supabase, conv.id, "That item needs a closer look. Your designer will follow up.", party.id, party.project_id, "needs_review");
+  }
+  const verdict = await channelConsentVerdict(supabase, recipient, party.project_id);
+  const blocked = await suppression(supabase, sender, recipient);
+  if (blocked.blocked || verdict !== "allow") return { status: blocked.error ? 503 : 200, twiml: twimlBody(), disposition: "not_consented" };
+  const verb = (explicit?.[1] ?? body).toUpperCase();
+  const intent = ({ DONE: "mark_done", HERE: "report_arrival", ARRIVED: "report_arrival", DELIVERED: "report_arrival",
+    LEAVING: "report_departure", DEPARTED: "report_departure" } as Record<string, string>)[verb]
+    ?? (["YES", "Y", "OK"].includes(verb) ? prompt.kind : null);
+  let parsed: FieldParseResult = prompt.proposed_effect ? {
+    intent: prompt.proposed_effect.type as FieldParseResult["intent"], target_ref: subject,
+    new_date: null, note: "", confidence: 1,
+  } : intent ? {
+    intent: intent as FieldParseResult["intent"], target_ref: subject, new_date: null, note: body, confidence: 1,
+  } : await (deps.parseFn ?? parseFieldMessage)({ body: explicit?.[1] ?? body,
+    openItems: [{ ...subject, project_name: "", due: null }], recentMessages: [],
+    today: now.toISOString().slice(0, 10), hasMedia: media.length > 0 }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
+  if (prompt.proposed_effect) {
+    const original = prompt.proposed_effect;
+    parsed = { ...parsed, intent: original.type as FieldParseResult["intent"],
+      note: String(original.note ?? ""), new_date: original.new_date as string ?? null,
+      availability: original.availability as FieldParseResult["availability"],
+      condition: original.condition as FieldParseResult["condition"] };
+  }
+  // Parser suggestions never replace the immutable subject or actor of this ref.
+  parsed.target_ref = { kind: subject.kind, id: subject.id };
+  const details = { path: "ref", prompt_id: prompt.id, version: prompt.version, ...parsed };
+  const attempt = await stampMessage(supabase, messageId, party.id, party.project_id, details, parsed.confidence);
+  if (attempt.error) return { status: 503, twiml: twimlBody(), disposition: "prompt_attempt_unrecorded" };
+  const affirmative = ["YES", "Y", "OK"].includes(verb);
+  const commandVerb = /^(?:YES|Y|OK|DONE|HERE|ARRIVED|DELIVERED|LEAVING|DEPARTED|DELAY|LATE|BLOCKED|BLOCKER|AVAILABLE)$/.test(verb);
+  const availabilityReply = !explicit && prompt.kind === "confirm_availability" && (open ?? []).length === 1;
+  if ((prompt.proposed_effect ? !affirmative : !commandVerb && !availabilityReply) || parsed.intent === "report_condition" || parsed.confidence < 0.8 ||
+    (parsed.intent === "confirm_availability" && !parsed.availability) ||
+    ![...DELIVERY_EFFECTS, "mark_done", "report_delay", "flag_blocker", "confirm_delivery", "note", "punch_report"].includes(parsed.intent)) {
+    if (!await ownedReview(supabase, messageId, party.project_id, party.id, details, deps)) {
+      return { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
+    }
+    return await reply(supabase, conv.id, `Passed to ${await designerFirstName(supabase, party.project_id, deps)} — they'll get back to you.`,
+      party.id, party.project_id, "needs_review");
+  }
+  if (media.length) {
+    media = await rehomeHoldingMedia(supabase, media, party.project_id);
+    await supabase.from("sms_messages").update({ media }).eq("id", messageId);
+  }
+  return await consumePrompt(supabase, conv, prompt, messageId, sender, recipient, deps,
+    prompt.proposed_effect ? undefined : buildEffect(parsed, media));
+}
+
+interface SelectionBinding {
+  kind: SelectionIntent["kind"];
+  inboundMessageId: string;
+  messageId: string;
+}
+
+function selectionUnavailable(result: { status?: string; selection?: SelectionQuestion; reason?: string }): InboundResult {
+  const pending = !!result.selection && !result.selection.usable &&
+    ["queued", "deferred"].includes(result.status ?? "failed");
+  // Failed/claimed recovery has done no business work: retry this inbound,
+  // rather than preserving an unstamped SID that would dedupe to success.
+  return { status: pending ? 200 : 503, twiml: twimlBody(),
+    disposition: pending ? "selection_pending" : "selection_unavailable", retainSid: pending };
+}
+
+async function selectionIntent(supabase: SupabaseClient, messageId: string, selection: SelectionIntent): Promise<InboundResult> {
+  const { error } = await stampMessage(supabase, messageId, null, null, { selection_intent: selection });
+  if (error) return { status: 503, twiml: twimlBody(), disposition: "selection_unrecorded" };
+  return { status: 200, twiml: twimlBody(), disposition: selection.kind === "project_choice" ? "project_chooser" : "ref_clarify",
+    messageId, selection, retainSid: true };
+}
+
+/** Bind only a durable shared-sender result. Handset metadata never supplies options. */
+export async function bindInboundSelection(supabase: SupabaseClient, messageId: string,
+  question: SelectionQuestion, outboundId: string): Promise<boolean> {
+  const manifest = question.manifest;
+  if (manifest.inboundMessageId !== messageId) return false;
+  const { data: source, error: sourceError } = await supabase.from("sms_messages")
+    .select("body, media, parsed_intent").eq("id", messageId).single();
+  const { data: conv, error } = await supabase.from("sms_conversations")
+    .select("id, state, state_context").eq("id", manifest.conversationId).single();
+  if (sourceError || error || !source || !conv) return false;
+  // A late duplicate must not resurrect a question already answered.
+  const completion = await inboundCompletion(supabase, messageId, manifest.senderNumber, manifest.recipientPhone, manifest.conversationId);
+  if (completion.status === "unknown") return false;
+  if (completion.status !== "unresolved") return true;
+  if (!source.parsed_intent?.selection_intent) return true;
+  const binding: SelectionBinding = { kind: manifest.kind, inboundMessageId: messageId, messageId: outboundId };
+  const context = { ...conv.state_context };
+  if (manifest.kind === "project_choice") {
+    context.selection = binding;
+    context.pending_body = source.body;
+    context.pending_media = source.media ?? [];
+    context.pending_message_id = messageId;
+  } else context.ref_clarification = binding;
+  const { data: rows, error: updateError } = await supabase.from("sms_conversations")
+    .update({ state: manifest.kind === "project_choice" ? "awaiting_project_choice" : conv.state, state_context: context })
+    .eq("id", conv.id).eq("state", conv.state)
+    .eq("state_context", JSON.stringify(conv.state_context)).select("id");
+  return !updateError && !!rows?.length;
 }
 
 // ── small pure/util helpers ──────────────────────────────────────────────────
@@ -1528,32 +2071,39 @@ function buildEffect(parsed: FieldParseResult, media: Array<{ path: string }>): 
   const base: Record<string, unknown> = { type: parsed.intent, note: parsed.note };
   if (target) base.target = target;
   if (parsed.new_date) base.new_date = parsed.new_date;
+  if (parsed.availability) base.availability = parsed.availability;
+  if (parsed.condition) base.condition = parsed.condition;
   if (media.length > 0) base.media = media.map((m) => m.path);
   // Normalize LLM-only intents to apply_field_effect's vocabulary.
   if (parsed.intent === "question" || parsed.intent === "unclear") base.type = "note";
   return base;
 }
 
-async function applyEffect(
-  supabase: SupabaseClient,
-  partyId: string,
-  effect: Record<string, unknown>,
-  messageId: string,
-): Promise<Record<string, unknown>> {
-  const { data, error } = await supabase.rpc("apply_field_effect", {
-    p_party_id: partyId,
-    p_effect: effect,
-    p_source: "sms",
-    p_sms_message_id: messageId,
-  });
-  if (error) {
-    console.error("apply_field_effect failed:", error);
-    return { summary_text: "Got it — logged.", remaining_count: 0 };
+type EffectOutcome = { status: "saved"; result: Record<string, unknown> } |
+  { status: "replayed" } | { status: "failed"; error: unknown } | { status: "unknown" };
+
+async function applyEffect(supabase: SupabaseClient, partyId: string, effect: Record<string, unknown>,
+  messageId: string, sender: string, recipient: string, conversationId: string): Promise<EffectOutcome> {
+  let failure: unknown;
+  try {
+    const { data, error } = await supabase.rpc("apply_field_effect", {
+      p_party_id: partyId, p_effect: effect, p_source: "sms", p_sms_message_id: messageId,
+    });
+    if (!error && data?._sms_replayed === true) return { status: "replayed" };
+    if (!error && data && typeof data.applied === "boolean") return { status: "saved", result: data };
+    failure = error;
+  } catch (error) { failure = error; }
+  const completion = await inboundCompletion(supabase, messageId, sender, recipient, conversationId);
+  if (completion.status === "effect-completed" || completion.status === "prompt-completed") return { status: "replayed" };
+  if (completion.status === "unresolved" && /^(?:23[0-9A-Z]{3}|42501|P0001|40001|40P01)$/.test(String((failure as { code?: string })?.code ?? ""))) {
+    return { status: "failed", error: failure };
   }
-  return (data as Record<string, unknown>) ?? {};
+  return { status: "unknown" };
 }
 
-function confirmText(applied: Record<string, unknown>): string {
+function confirmText(applied: Record<string, unknown>, intent?: string): string {
+  if (intent === "note" || applied.effect_type === "note") return "Your note was saved.";
+  if (intent === "confirm_delivery" || applied.effect_type === "confirm_delivery") return "Your delivery update was saved.";
   const summary = String(applied.summary_text ?? "Got it.");
   const remaining = Number(applied.remaining_count ?? 0);
   return remaining > 0 ? `${summary} ${remaining} left.` : summary;
@@ -1580,7 +2130,7 @@ async function stampMessage(
   parsed: Record<string, unknown>,
   confidence?: number,
 ) {
-  await supabase.from("sms_messages")
+  return await supabase.from("sms_messages")
     .update({ party_id: partyId, project_id: projectId, parsed_intent: parsed, confidence: confidence ?? null })
     .eq("id", messageId);
 }
