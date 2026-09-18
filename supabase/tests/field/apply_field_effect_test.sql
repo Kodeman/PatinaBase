@@ -113,6 +113,10 @@ VALUES
 INSERT INTO sms_messages (id, conversation_id, direction, body, party_id, project_id, parsed_intent, needs_review)
 VALUES ('ef000000-0000-4000-8000-0000000000f4', 'ef000000-0000-4000-8000-0000000000f1', 'inbound', 'one carton is scratched', 'ef000000-0000-4000-8000-0000000000b1', 'ef000000-0000-4000-8000-0000000000a1', NULL, false);
 
+-- SMS-origin guards require an actual provider identity (triage remains unchanged).
+UPDATE sms_messages SET twilio_sid='SM'||replace(id::text,'-','')
+ WHERE conversation_id='ef000000-0000-4000-8000-0000000000f1';
+
 -- ─── assertions ────────────────────────────────────────────────────────────
 DO $$
 DECLARE

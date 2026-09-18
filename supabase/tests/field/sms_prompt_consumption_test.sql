@@ -491,4 +491,93 @@ BEGIN
  ASSERT NOT has_table_privilege('authenticated','sms_prompts','UPDATE'),'untrusted callers cannot fabricate receipt';
  RAISE NOTICE 'PASS service-only ACLs after seed replay and old overload removal';
 END $$;
+-- SQ-71: one original inbound ID is one operation; applied:false is complete.
+DO $$ DECLARE p public.sms_prompts; other public.sms_prompts; m uuid; fresh uuid;
+  e jsonb; r jsonb; replay jsonb; before_message jsonb; before_task jsonb;
+  n integer; foreign_party uuid := gen_random_uuid();
+BEGIN
+ DELETE FROM sms_suppressions WHERE sender_number='+15555109999' AND recipient_phone='+15555100000';
+ INSERT INTO studio_channel_consent(organization_id,channel_kind,channel_value,status,source,evidence,disclosure_version,recorded_by)
+ VALUES('51000000-0000-4000-8000-000000000010','sms','+15555100000','granted','web_form','Synthetic consent','test-v1','51000000-0000-4000-8000-000000000001')
+ ON CONFLICT(organization_id,channel_kind,channel_value) DO UPDATE SET status='granted',refusal_unanswered=false;
+ p:=pg_temp.proposal('flag_blocker','51000000-0000-4000-8000-000000000041',clock_timestamp()+interval '1 day',false);
+ m:=pg_temp.message(p);
+ e:=jsonb_build_object('type','flag_blocker','target',jsonb_build_object('kind','task','id',p.subject_id),'note','original raw');
+ UPDATE sms_messages SET parsed_intent=jsonb_build_object('selection_intent',jsonb_build_object('inboundMessageId',m)) WHERE id=m;
+ SELECT count(*) INTO n FROM client_decisions WHERE coordination_kind='rfi';
+ r:=apply_field_effect(p.party_id,e,'sms',m);
+ ASSERT (SELECT party_id=p.party_id AND project_id=p.project_id AND applied_effect=r AND parsed_intent ? 'selection_intent' FROM sms_messages WHERE id=m), 'SQ71 transactional origin binding and unmodified completion';
+ SELECT to_jsonb(x) INTO before_message FROM sms_messages x WHERE id=m;
+ replay:=apply_field_effect(p.party_id,e,'sms',m);
+ ASSERT (SELECT count(*)=n+1 FROM client_decisions WHERE coordination_kind='rfi'), 'SQ71 result reuse prevents second RFI before replacement validation';
+ ASSERT replay=r||'{"_sms_replayed":true}'::jsonb, 'SQ71 repeated valid request returns original result only';
+ replay:=apply_field_effect(p.party_id,'{"type":"report_condition","target":{"kind":"coordination","id":"not-a-uuid"}}','sms',m);
+ ASSERT replay=r||'{"_sms_replayed":true}'::jsonb, 'SQ71 replacement payload ignored before casting and exact original result replayed';
+ ASSERT (SELECT count(*)=n+1 FROM client_decisions WHERE coordination_kind='rfi'), 'SQ71 same inbound raw retry creates exactly one RFI';
+ ASSERT (SELECT to_jsonb(x)=before_message FROM sms_messages x WHERE id=m), 'SQ71 replay does not modify original message or store sentinel';
+ ASSERT pg_temp.apply(p,m,e)='{"status":"already_completed"}'::jsonb, 'SQ71 raw then atomic returns exact already_completed';
+ ASSERT (SELECT answered_at IS NULL AND consumed_sid IS NULL AND consumption_result IS NULL FROM sms_prompts WHERE id=p.id), 'SQ71 raw result cannot mint prompt receipt or close prompt';
+ ASSERT sms_prompt_receipt('+15555109999','+15555100000',m) IS NULL, 'SQ71 raw replay has no misleading atomic receipt';
+ -- A new prompt and same original message also cannot adopt the raw result.
+ other:=pg_temp.proposal('flag_blocker','51000000-0000-4000-8000-000000000040',clock_timestamp()+interval '1 day',false);
+ UPDATE sms_messages SET body='YES '||other.short_code WHERE id=m;
+ ASSERT pg_temp.apply(other,m,jsonb_set(e,'{target,id}',to_jsonb(other.subject_id::text)))='{"status":"already_completed"}'::jsonb, 'SQ71 different prompt cannot adopt completed raw result';
+ ASSERT (SELECT answered_at IS NULL AND consumption_result IS NULL FROM sms_prompts WHERE id=other.id), 'SQ71 different prompt remains open';
+ -- Atomic first, raw second: prompt's immutable result is the same stored result.
+ fresh:=pg_temp.message(other);
+ replay:=pg_temp.apply(other,fresh,jsonb_set(e,'{target,id}',to_jsonb(other.subject_id::text)));
+ r:=replay#>'{result,result}';
+ ASSERT apply_field_effect(p.party_id,'{"type":"punch_report","note":"replacement"}','sms',fresh)=r||'{"_sms_replayed":true}'::jsonb, 'SQ71 atomic then raw reuses original effect';
+ ASSERT pg_temp.apply(other,fresh)->>'status'='replayed', 'SQ71 same-prompt stored receipt replay unchanged';
+ -- Notes complete even though no task mutation occurred.
+ fresh:=pg_temp.message(p);r:=apply_field_effect(p.party_id,'{"type":"note","note":"private original"}','sms',fresh);
+ ASSERT r->'applied'='false'::jsonb, 'SQ71 note is applied false';
+ ASSERT apply_field_effect(p.party_id,e,'sms',fresh)=r||'{"_sms_replayed":true}'::jsonb, 'SQ71 applied false is completed and ignores replacement';
+ -- Same phone in a different project/actor cannot read the completed result.
+ INSERT INTO project_parties(id,project_id,party_kind,display_name,phone) VALUES
+ (foreign_party,'51000000-0000-4000-8000-000000000021','sub','Foreign actor','+15555100000');
+ PERFORM pg_temp.must_fail(format('SELECT apply_field_effect(%L,%L::jsonb,%L,%L)',foreign_party,e,'sms',m),'foreign actor cannot disclose original result','42501');
+ fresh:=pg_temp.message(p);UPDATE sms_messages SET applied_effect=r WHERE id=fresh;
+ SELECT to_jsonb(x) INTO before_message FROM sms_messages x WHERE id=fresh;
+ PERFORM pg_temp.must_fail(format('SELECT apply_field_effect(%L,%L::jsonb,%L,%L)',p.party_id,e,'sms',fresh),'historical unbound completion refuses disclosure','42501');
+ ASSERT (SELECT to_jsonb(x)=before_message FROM sms_messages x WHERE id=fresh), 'SQ71 historical completion refusal leaves row unchanged';
+ fresh:=pg_temp.message(p);UPDATE sms_messages SET party_id=p.party_id,project_id=p.project_id,applied_effect='{"applied":"yes"}' WHERE id=fresh;
+ PERFORM pg_temp.must_fail(format('SELECT apply_field_effect(%L,%L::jsonb,%L,%L)',p.party_id,e,'sms',fresh),'malformed completion refuses replay','23514');
+ -- Invalid origins and attribution are refused before any business work.
+ FOREACH fresh IN ARRAY ARRAY[gen_random_uuid(),pg_temp.message(p)] LOOP
+   IF EXISTS(SELECT 1 FROM sms_messages WHERE id=fresh) THEN
+     UPDATE sms_messages SET direction='outbound' WHERE id=fresh;
+   END IF;
+   PERFORM pg_temp.must_fail(format('SELECT apply_field_effect(%L,%L::jsonb,%L,%L)',p.party_id,e,'sms',fresh),'invalid inbound origin','23514');
+ END LOOP;
+ fresh:=pg_temp.message(p);UPDATE sms_messages SET twilio_sid=' ' WHERE id=fresh;
+ PERFORM pg_temp.must_fail(format('SELECT apply_field_effect(%L,%L::jsonb,%L,%L)',p.party_id,e,'sms',fresh),'nonblank SID required','23514');
+ fresh:=pg_temp.message(p);UPDATE sms_messages SET project_id='51000000-0000-4000-8000-000000000021' WHERE id=fresh;
+ PERFORM pg_temp.must_fail(format('SELECT apply_field_effect(%L,%L::jsonb,%L,%L)',p.party_id,e,'sms',fresh),'current project attribution mismatch','42501');
+ fresh:=pg_temp.message(p);UPDATE sms_messages SET party_id=foreign_party WHERE id=fresh;
+ PERFORM pg_temp.must_fail(format('SELECT apply_field_effect(%L,%L::jsonb,%L,%L)',p.party_id,e,'sms',fresh),'current actor attribution mismatch','42501');
+ fresh:=pg_temp.message(p);foreign_party:=gen_random_uuid();
+ INSERT INTO project_parties(id,project_id,party_kind,display_name,phone) VALUES
+ (foreign_party,p.project_id,'sub','Different phone','+15555100001');
+ PERFORM pg_temp.must_fail(format('SELECT apply_field_effect(%L,%L::jsonb,%L,%L)',foreign_party,e,'sms',fresh),'conversation phone mismatches actor','42501');
+ -- Failure after binding must roll back attribution AND business state.
+ SELECT to_jsonb(x) INTO before_message FROM sms_messages x WHERE id=fresh;
+ SELECT to_jsonb(x) INTO before_task FROM project_tasks x WHERE id=p.subject_id;
+ PERFORM pg_temp.must_fail(format('SELECT apply_field_effect(%L,%L::jsonb,%L,%L)',p.party_id,'{"type":"mark_done","target":{"kind":"task","id":"51000000-0000-4000-8000-000000000042"}}','sms',fresh),'cross project rollback','23514');
+ ASSERT (SELECT to_jsonb(x)=before_message FROM sms_messages x WHERE id=fresh), 'SQ71 failed business call rolls back newly bound origin';
+ ASSERT (SELECT to_jsonb(x)=before_task FROM project_tasks x WHERE id=p.subject_id), 'SQ71 failure rolls back business row';
+ -- Non-SMS and no-ID retain their preexisting repeat semantics.
+ fresh:=pg_temp.message(p);SELECT count(*) INTO n FROM client_decisions WHERE coordination_kind='rfi';
+ PERFORM apply_field_effect(p.party_id,e,'field',fresh);PERFORM apply_field_effect(p.party_id,e,'field',fresh);
+ ASSERT (SELECT count(*)=n+2 FROM client_decisions WHERE coordination_kind='rfi'), 'SQ71 non-SMS field callers unchanged';
+ SELECT count(*) INTO n FROM client_decisions WHERE coordination_kind='rfi';
+ PERFORM apply_field_effect(p.party_id,e,'sms',NULL);PERFORM apply_field_effect(p.party_id,e,'sms',NULL);
+ ASSERT (SELECT count(*)=n+2 FROM client_decisions WHERE coordination_kind='rfi'), 'SQ71 no-ID callers unchanged';
+ FOREACH fresh IN ARRAY ARRAY[pg_temp.message(p),pg_temp.message(p)] LOOP
+   SELECT count(*) INTO n FROM client_decisions WHERE coordination_kind='rfi';
+   PERFORM apply_field_effect(p.party_id,e,'triage',fresh);PERFORM apply_field_effect(p.party_id,e,'triage',fresh);
+   ASSERT (SELECT count(*)=n+2 FROM client_decisions WHERE coordination_kind='rfi'), 'SQ71 triage callers unchanged';
+ END LOOP;
+ RAISE NOTICE 'PASS SQ71 per-origin result binding replay rollback actor privacy and raw/atomic controls';
+END $$;
 ROLLBACK;

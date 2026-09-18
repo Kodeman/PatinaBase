@@ -6,6 +6,8 @@
 // and functions.invoke(). Not a Postgres — just enough to exercise
 // send/parse/dispatch logic deterministically and offline.
 
+import { equal } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+
 type Row = Record<string, unknown>;
 type Predicate = (r: Row) => boolean;
 
@@ -33,7 +35,12 @@ class Builder {
   constructor(private store: Record<string, Row[]>, private table: string, private controls: Controls) {}
 
   select(_cols?: string): this { return this; }
-  eq(col: string, val: unknown): this { this.filters.push((r) => r[col] === val); return this; }
+  eq(col: string, val: unknown): this {
+    // PostgREST receives JSONB equality values as serialized JSON, not references.
+    this.filters.push((r) => r[col] != null && typeof r[col] === "object" && typeof val === "string"
+      ? equal(r[col], JSON.parse(val)) : r[col] === val);
+    return this;
+  }
   neq(col: string, val: unknown): this { this.filters.push((r) => r[col] !== val); return this; }
   in(col: string, arr: unknown[]): this { this.filters.push((r) => arr.includes(r[col])); return this; }
   lt(col: string, val: unknown): this { this.filters.push((r) => r[col] != null && (r[col] as never) < (val as never)); return this; }

@@ -1705,8 +1705,13 @@ BEGIN
   IF c.status IS DISTINCT FROM 'granted' OR c.refusal_unanswered IS DISTINCT FROM false THEN
     RETURN jsonb_build_object('status','not_consented');
   END IF;
-  result := jsonb_build_object('kind','effect','result',
-    public.apply_field_effect(p.party_id,effect,'sms',m.id));
+  result := public.apply_field_effect(p.party_id,effect,'sms',m.id);
+  IF result->'_sms_replayed' = 'true'::jsonb THEN
+    -- A raw operation already completed this inbound. It is not an answer to
+    -- this (possibly different) prompt; neither close it nor mint its receipt.
+    RETURN jsonb_build_object('status','already_completed');
+  END IF;
+  result := jsonb_build_object('kind','effect','result',result);
   UPDATE public.sms_prompts SET consumed_sid=m.twilio_sid,consumption_result=result,answered_at=clock_timestamp()
     WHERE id=p.id;
   RETURN jsonb_build_object('status','applied','result',result);
