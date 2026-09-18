@@ -310,7 +310,7 @@ Deno.test("saved effect or consent with failed context follow-up keeps SID and r
     const { h, prompt, effects } = inboundFixture();
     prompt(consent ? { kind: "optin", subject_id: null } : {});
     if (consent) h.fake._data.studio_channel_consent[0].status = "pending";
-    failQuery(h, "sms_conversations", "update");
+    failQuery(h, "sms_conversation_context", "update");
     if (notifyFails) h.fake.functions.invoke = async () => ({ data: null, error: { message: "notify failed" } });
     const params = inbound(h, consent ? "YES 17" : "HERE 17");
     const result = await processInbound(params, deps(h));
@@ -361,8 +361,8 @@ Deno.test("medium-confidence confirmation retains original proposal and immutabl
   assertEquals((effects[0].p_effect as any).target, { kind: "task", id: "task-a" });
   assertEquals((effects[0].p_effect as any).new_date, "2026-11-04");
   assertEquals((effects[0].p_effect as any).note, "delayed");
-  assertEquals(h.fake._data.sms_conversations[0].state, "idle");
-  assertEquals((h.fake._data.sms_conversations[0].state_context as any).pending_effect, undefined);
+  assertEquals(h.fake._data.sms_conversation_context.find(c => c.project_id === "project-a")!.state, "idle");
+  assertEquals((h.fake._data.sms_conversation_context.find(c => c.project_id === "project-a")!.state_context as any).pending_effect, undefined);
 });
 
 Deno.test("one-open freeform reply binds its subject before parsing", async () => {
@@ -445,7 +445,7 @@ Deno.test("thrown postcommit context update and missing owner never release a co
     if (name === "field_project_lead_user") return { data: null, error: null };
     const result = await rpc(name, args);
     if (name === "sms_apply_prompt") {
-      h.fake._failUpdateIds.add(String(h.fake._data.sms_conversations[0].id));
+      failQuery(h, "sms_conversation_context", "update");
       h.fake._data.projects.forEach((p) => p.designer_id = null);
     }
     return result;

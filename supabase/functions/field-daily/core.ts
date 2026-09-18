@@ -64,8 +64,13 @@ const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
 async function mayTextField(
   supabase: SupabaseClient,
   party: { phone_e164: string | null; project_id: string },
+  sender: string | undefined,
 ): Promise<boolean> {
-  if (!party.phone_e164) return false;
+  if (!party.phone_e164 || !sender) return false;
+  const { data: suppressed, error } = await supabase.rpc("sms_is_suppressed", {
+    p_sender: sender, p_recipient: party.phone_e164,
+  });
+  if (error || suppressed !== false) return false;
   const verdict = await channelConsentVerdict(
     supabase,
     party.phone_e164,
@@ -81,6 +86,7 @@ export interface DigestItem {
   title: string;
   project_id: string;
   due: string | null; // YYYY-MM-DD or null
+  ref?: string;
 }
 
 export interface MenuEntry {
@@ -116,6 +122,7 @@ function septetsOf(text: string): number {
  * extension characters spends two septets each and overruns this on its own.
  */
 export const DIGEST_MENU_MAX_SEPTETS = 42;
+export const DIGEST_CLAIM_LEASE_MS = 2 * 60 * 1000;
 
 /** As many of `text`'s characters as `budget` septets will pay for. */
 function truncateToSeptets(text: string, budget: number): string {
@@ -142,6 +149,7 @@ export function buildDigestMenu(
   items: DigestItem[],
   today: string,
   maxSeptets: number = DIGEST_MENU_MAX_SEPTETS,
+  maxItems: number = items.length,
 ): { menuText: string; entries: MenuEntry[] } {
   const entries: MenuEntry[] = [];
   const parts: string[] = [];
@@ -156,9 +164,10 @@ export function buildDigestMenu(
     [shown.join(" "), more > 0 ? `+${more} more` : ""].filter(Boolean).join(" ");
 
   for (const [idx, it] of items.entries()) {
+    if (idx >= maxItems) break;
     const n = idx + 1;
     const head = `${n}) `;
-    const label = labelOf(it);
+    const label = `${labelOf(it)}${it.ref ? ` Ref ${it.ref}` : ""}`;
     const rest = items.length - n;
     let part = `${head}${it.title}${label}`;
 
@@ -218,33 +227,67 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-async function findOrCreateConversation(
-  supabase: SupabaseClient,
-  twilioNumber: string,
-  phone: string,
-  partyId: string,
-  projectId: string,
-): Promise<{ id: string; state_context: Record<string, unknown> } | null> {
-  const { data: existing } = await supabase
-    .from("sms_conversations")
-    .select("id, state_context")
-    .eq("twilio_number", twilioNumber)
-    .eq("phone_e164", phone)
-    .maybeSingle();
-  if ((existing as { id?: string } | null)?.id) {
-    return existing as { id: string; state_context: Record<string, unknown> };
+interface ProjectContext {
+  id: string;
+  party_id: string;
+  project_id: string;
+  state_context: Record<string, unknown>;
+  paused_until: string | null;
+}
+
+async function findOrCreateConversation(supabase: SupabaseClient, twilioNumber: string,
+  phone: string, partyId: string, projectId: string): Promise<ProjectContext | null> {
+  const { data: existing, error: readError } = await supabase.from("sms_conversations").select("id")
+    .eq("twilio_number", twilioNumber).eq("phone_e164", phone).maybeSingle();
+  if (readError) return null;
+  let id = existing?.id;
+  if (!id) {
+    const { data, error } = await supabase.from("sms_conversations").upsert({
+      twilio_number: twilioNumber, phone_e164: phone,
+    }, { onConflict: "twilio_number,phone_e164", ignoreDuplicates: true }).select("id");
+    if (error) return null;
+    id = data?.[0]?.id;
+    if (!id) {
+      const retry = await supabase.from("sms_conversations").select("id")
+        .eq("twilio_number", twilioNumber).eq("phone_e164", phone).maybeSingle();
+      if (retry.error || !retry.data) return null;
+      id = retry.data.id;
+    }
   }
-  const { data: created } = await supabase
-    .from("sms_conversations")
-    .insert({
-      twilio_number: twilioNumber,
-      phone_e164: phone,
-      party_id: partyId,
-      active_project_id: projectId,
-    })
-    .select("id, state_context")
-    .single();
-  return (created as { id: string; state_context: Record<string, unknown> } | null) ?? null;
+  const { error } = await supabase.from("sms_conversation_context").upsert({
+    conversation_id: id, project_id: projectId, party_id: partyId, state: "idle", state_context: {},
+    paused_until: null, backfilled_at: null,
+  }, { onConflict: "conversation_id,project_id", ignoreDuplicates: true });
+  if (error) return null;
+  const context = await supabase.from("sms_conversation_context").select("*")
+    .eq("conversation_id", id).eq("project_id", projectId).eq("party_id", partyId).is("backfilled_at", null).maybeSingle();
+  return context.error || !context.data ? null : { ...context.data, id };
+}
+
+async function saveContext(supabase: SupabaseClient, row: ProjectContext, state: Record<string, unknown>) {
+  const { data, error } = await supabase.from("sms_conversation_context").update({ state_context: state })
+    .eq("conversation_id", row.id).eq("project_id", row.project_id).eq("party_id", row.party_id)
+    .eq("state_context", JSON.stringify(row.state_context)).is("backfilled_at", null).select("conversation_id");
+  if (error || !data?.length) return false;
+  row.state_context = state;
+  return true;
+}
+
+async function promptRef(supabase: SupabaseClient, party: {id: string; project_id: string; phone_e164: string | null},
+  subjectId: string, kind: string, version: number, sender: string, now: Date, ownsClaim?: () => Promise<boolean>) {
+  const { data: existing, error } = await supabase.from("sms_prompts").select("id, short_code")
+    .eq("party_id", party.id).eq("project_id", party.project_id).eq("subject_id", subjectId).eq("kind", kind)
+    .eq("version", version).eq("sender_number", sender).eq("recipient_phone", party.phone_e164)
+    .is("answered_at", null).gt("expires_at", now.toISOString()).order("created_at", {ascending: true}).limit(1);
+  if (error) return null;
+  if (existing?.length) return existing[0];
+  if (ownsClaim && !await ownsClaim()) return null;
+  // Allocation and insertion are one SQL transaction; never fetch a code alone.
+  const created = await supabase.rpc("sms_create_prompt", { p_party_id: party.id, p_project_id: party.project_id,
+    p_subject_id: subjectId, p_kind: kind, p_version: version, p_sender_number: sender,
+    p_recipient_phone: party.phone_e164, p_expires_at: new Date(now.getTime() + 48 * 3600000).toISOString(), p_proposed_effect: null });
+  const prompt = Array.isArray(created.data) ? created.data[0] : created.data;
+  return created.error || !prompt?.id || !/^\d{2,3}$/.test(prompt.short_code) ? null : prompt;
 }
 
 export async function runFieldDaily(
@@ -252,6 +295,9 @@ export async function runFieldDaily(
   deps: FieldDailyDeps = {},
 ): Promise<RunSummary> {
   const now = deps.now ?? new Date();
+  const startedAt = Date.now();
+  const clock = () => new Date(now.getTime() + Date.now() - startedAt);
+  const runId = crypto.randomUUID();
   const today = isoDate(now);
   const cutoff48h = new Date(now.getTime() - 48 * 3600 * 1000).toISOString();
   // Key digest/delivery-confirm conversations on the same physical number
@@ -286,7 +332,7 @@ export async function runFieldDaily(
       summary.parties_skipped++;
       continue;
     }
-    if (!(await mayTextField(supabase, party))) {
+    if (!(await mayTextField(supabase, party, conversationNumber))) {
       summary.parties_skipped++;
       continue;
     }
@@ -297,49 +343,99 @@ export async function runFieldDaily(
       continue;
     }
 
-    // Open owned tasks.
-    const { data: tasks } = await supabase
-      .from("project_tasks")
-      .select("id, title, due_date, project_id, status")
-      .eq("owner_party_id", party.id)
-      .neq("status", "done");
-
-    // Court items pending > 48h.
-    const { data: items } = await supabase
-      .from("client_decisions")
-      .select("id, title, coordination_kind, due_date, project_id, status, created_at")
-      .eq("court_party_id", party.id)
-      .eq("status", "pending")
-      .lt("created_at", cutoff48h);
-
-    const digestItems: DigestItem[] = [
-      ...((tasks ?? []) as Array<{ id: string; title: string; due_date: string | null; project_id: string }>)
-        .map((t) => ({ id: t.id, kind: "task" as const, title: t.title, project_id: t.project_id, due: t.due_date })),
-      ...((items ?? []) as Array<{ id: string; title: string; due_date: string | null; project_id: string }>)
-        .map((c) => ({ id: c.id, kind: "coordination" as const, title: c.title, project_id: c.project_id, due: c.due_date })),
-    ];
-
-    if (digestItems.length === 0) {
+    const conv = await findOrCreateConversation(supabase, conversationNumber, party.phone_e164, party.id, party.project_id);
+    if (!conv || (conv.paused_until && Date.parse(conv.paused_until) > now.getTime())) {
       summary.parties_skipped++;
       continue;
     }
 
-    const { menuText, entries } = buildDigestMenu(digestItems, today);
+    // A daily logical send has one immutable numbered menu, even when tasks
+    // change between retries or while the sender holds a deferred recipe.
+    let menuText = conv.state_context.digest_day === today
+      ? conv.state_context.digest_menu_text as string | undefined : undefined;
+    if (!menuText) {
+      const sameDay = conv.state_context.digest_day === today;
+      const priorClaim = sameDay ? conv.state_context.digest_claim as { run_id: string; lease_until: string } | undefined : undefined;
+      if (priorClaim && Date.parse(priorClaim.lease_until) > clock().getTime()) {
+        summary.parties_skipped++; continue; // Explicit live-owner no-send result.
+      }
+      let digestItems = sameDay ? conv.state_context.digest_items as DigestItem[] | undefined : undefined;
+      if (!digestItems) {
+        // Open owned tasks.
+        const { data: tasks } = await supabase
+          .from("project_tasks")
+          .select("id, title, due_date, project_id, status")
+          .eq("owner_party_id", party.id)
+          .neq("status", "done");
 
-    // Persist the menu so an inbound numbered reply resolves against it.
-    const conv = await findOrCreateConversation(
-      supabase,
-      conversationNumber,
-      party.phone_e164,
-      party.id,
-      party.project_id,
-    );
-    if (conv) {
-      const nextContext = { ...(conv.state_context ?? {}), menu: entries, menu_created_at: now.toISOString() };
-      await supabase
-        .from("sms_conversations")
-        .update({ state_context: nextContext })
-        .eq("id", conv.id);
+        // Court items pending > 48h.
+        const { data: items } = await supabase
+          .from("client_decisions")
+          .select("id, title, coordination_kind, due_date, project_id, status, created_at")
+          .eq("court_party_id", party.id)
+          .eq("status", "pending")
+          .lt("created_at", cutoff48h);
+
+        digestItems = [
+          ...((tasks ?? []) as Array<{ id: string; title: string; due_date: string | null; project_id: string }>)
+            .map((t) => ({ id: t.id, kind: "task" as const, title: t.title, project_id: t.project_id, due: t.due_date })),
+          ...((items ?? []) as Array<{ id: string; title: string; due_date: string | null; project_id: string }>)
+            .map((c) => ({ id: c.id, kind: "coordination" as const, title: c.title, project_id: c.project_id, due: c.due_date })),
+        ];
+
+      }
+      if (digestItems.length === 0) {
+        summary.parties_skipped++;
+        continue;
+      }
+
+      // Own the day and freeze its inputs BEFORE any prompt issuance. An
+      // expired, unrendered claim is recovered through the same exact CAS.
+      const claimedAt = clock();
+      if (!await saveContext(supabase, conv, { ...conv.state_context, digest_day: today,
+        digest_menu_text: null, digest_items: digestItems,
+        digest_claim: { run_id: runId, claimed_at: claimedAt.toISOString(), lease_until: new Date(claimedAt.getTime() + DIGEST_CLAIM_LEASE_MS).toISOString() },
+      })) { summary.parties_skipped++; continue; }
+      const ownsClaim = async () => {
+        const { data, error } = await supabase.from("sms_conversation_context").select("state_context")
+          .eq("conversation_id", conv.id).eq("project_id", conv.project_id).eq("party_id", conv.party_id).maybeSingle();
+        const claim = data?.state_context?.digest_claim;
+        return !error && data?.state_context?.digest_day === today && claim?.run_id === runId &&
+          Date.parse(claim.lease_until) > clock().getTime();
+      };
+      try {
+        // Budget with three-digit refs before allocating; omitted entries cannot
+        // acquire invisible questions. Retries reuse this day's immutable prompts.
+        const visible = buildDigestMenu(digestItems.map(i => ({ ...i, ref: "999" })), today).entries;
+        const referenced: DigestItem[] = [];
+        for (const item of digestItems) {
+          if (!visible.some(v => v.id === item.id && v.kind === item.kind)) continue;
+          const prompt = await promptRef(supabase, party, item.id, "mark_done", Number(today.replaceAll("-", "")), conversationNumber, now, ownsClaim);
+          if (!prompt) break;
+          referenced.push({ ...item, ref: prompt.short_code });
+        }
+        if (referenced.length !== visible.length || !referenced.length) { summary.parties_skipped++; continue; }
+        // Keep omitted-item accounting while preserving the same conservative layout.
+        const renderedItems = digestItems.map(i => ({ ...i, ref: referenced.find(r => r.id === i.id && r.kind === i.kind)?.ref ?? "999" }));
+        const rendered = buildDigestMenu(renderedItems, today, DIGEST_MENU_MAX_SEPTETS, visible.length);
+        const { entries } = rendered;
+        menuText = rendered.menuText;
+        if (entries.some(e => !referenced.some(r => r.id === e.id && r.kind === e.kind))) { summary.parties_skipped++; continue; }
+        const renderedState: Record<string, unknown> = { ...conv.state_context, menu: entries, menu_created_at: now.toISOString(), digest_day: today, digest_menu_text: menuText };
+        delete renderedState.digest_claim;
+        delete renderedState.digest_items;
+        if (!await ownsClaim() || !await saveContext(supabase, conv, renderedState)) {
+          summary.parties_skipped++; continue;
+        }
+      } finally {
+        // Handled failures release only our exact snapshot. A terminated run
+        // leaves the lease for an expired-claim retry to recover missing refs.
+        if ((conv.state_context.digest_claim as {run_id?: string} | undefined)?.run_id === runId) {
+          const released = { ...conv.state_context };
+          delete released.digest_claim;
+          await saveContext(supabase, conv, released);
+        }
+      }
     }
 
     const res = await send(
@@ -349,6 +445,9 @@ export async function runFieldDaily(
         projectId: party.project_id,
         templateKey: "sms_daily_digest",
         vars: { menu: menuText },
+        dedupeKey: `field-daily:${party.id}:${today}`,
+        // Existing digest automation is unconditional (phase zero).
+        automationPhase: 0,
       },
       deps,
     );
@@ -387,7 +486,7 @@ export async function runFieldDaily(
       }>
     ) {
       if (!party.phone_e164) continue;
-      if (!(await mayTextField(supabase, party))) continue;
+      if (!(await mayTextField(supabase, party, conversationNumber))) continue;
       if (!conversationNumber) {
         summary.parties_skipped++;
         continue;
@@ -402,7 +501,9 @@ export async function runFieldDaily(
       );
       const sentList = (conv?.state_context as { delivery_confirms_sent?: unknown } | undefined)
         ?.delivery_confirms_sent;
-      if (!conv || !shouldSendDeliveryConfirm(ev.event_id, sentList)) continue;
+      if (!conv || (conv.paused_until && Date.parse(conv.paused_until) > now.getTime()) || !shouldSendDeliveryConfirm(ev.event_id, sentList)) continue;
+      const prompt = await promptRef(supabase, party, ev.event_id, "confirm_delivery", Number(ev.event_date.replaceAll("-", "")), conversationNumber, now);
+      if (!prompt) continue;
 
       const res = await send(
         supabase,
@@ -410,7 +511,10 @@ export async function runFieldDaily(
           partyId: party.id,
           projectId: party.project_id,
           templateKey: "sms_delivery_confirm",
+          dedupeKey: `field-delivery:${party.id}:${ev.event_id}:${ev.event_date}`,
+          automationPhase: 0,
           vars: {
+            ref: prompt.short_code,
             delivery_window: formatDue(ev.event_date),
             delivery_summary: ev.vendor_name ?? "a delivery",
           },
@@ -420,15 +524,7 @@ export async function runFieldDaily(
       if (res.sent || res.deferred) {
         summary.delivery_confirms_sent++;
         const prior = Array.isArray(sentList) ? (sentList as string[]) : [];
-        await supabase
-          .from("sms_conversations")
-          .update({
-            state_context: {
-              ...(conv.state_context ?? {}),
-              delivery_confirms_sent: [...prior, ev.event_id],
-            },
-          })
-          .eq("id", conv.id);
+        await saveContext(supabase, conv, { ...conv.state_context, delivery_confirms_sent: [...prior, ev.event_id] });
       }
     }
   }

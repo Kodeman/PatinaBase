@@ -37,7 +37,7 @@ Deno.test("selection filters before numbering and consumes only delivered manife
  assertEquals(q.recipe.selection.options,[{partyId:id("party-b"),projectId:id("project-b"),number:1}]);
  assert(!q.body.includes("Studio A"));
  assertEquals(q.recipe.params,{});assert(!q.body.includes("finished the job"),"caller prose never enters the shared question");
- const conv=h.fake._data.sms_conversations[0];
+ const conv=h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!;
  conv.state_context.chooser=[{n:1,party_id:id("party-a"),project_id:id("project-a")}];
  const pending=await processInbound(inbound(h,"1","SMnotAsked"),deps(h));
  assertEquals(pending.disposition,"selection_pending");assertEquals(effects.length,0);
@@ -56,18 +56,18 @@ Deno.test("duplicate origin recovers the same queued question and original numbe
 });
 Deno.test("metadata write failure recovers actual sent row on retry without resending",async()=>{
  const {h}=inboundFixture();const from=h.fake.from.bind(h.fake);let fail=true;
- h.fake.from=(table)=>{const query=from(table);const update=query.update.bind(query);query.update=(patch)=>{
-   if(fail&&table==="sms_conversations"&&patch.state==="awaiting_project_choice"){
+ h.fake.from=(table)=>{const query=from(table);for (const method of ["update","upsert"] as const) { const write=query[method].bind(query);query[method]=(patch,options)=>{
+   if(fail&&table==="sms_conversation_context"&&patch.state==="awaiting_project_choice"){
      const result={data:null,error:{message:"metadata unavailable"}};
      query.select=()=>query;query.eq=()=>query;query.then=(resolve)=>Promise.resolve(result).then(resolve);return query;
-   }return update(patch);
- };return query;};
+   }return write(patch,options);
+ };}return query;};
  const {params,sent}=await ask(h);assertEquals(sent.status,503);const row=question(h);assert(row);
- assert(h.fake._data.sms_conversations[0].state !== "awaiting_project_choice", "failed metadata write cannot mark the chooser asked");
+ assert(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)?.state !== "awaiting_project_choice", "failed metadata write cannot mark the chooser asked");
  fail=false;row.twilio_status="sent";
  const retry=await dispatchInboundReplies(params,await processInbound(params,deps(h)),deps(h));
  assertEquals(retry.status,200);assertEquals(h.provider.requests.length,1);
- assertEquals(h.fake._data.sms_conversations[0].state_context.selection.messageId,row.id);
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context.selection.messageId,row.id);
 });
 Deno.test("unreadable selection recovery is retryable and cannot authorize a new send",async()=>{
  const {h}=inboundFixture();const {params}=await ask(h);const from=h.fake.from.bind(h.fake);

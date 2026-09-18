@@ -34,11 +34,12 @@ export function inboundFixture(effectError?: unknown, now?: Date) {
     record_touch: (args) => { touches.push(args); return { data: null, error: null }; },
   } });
   const from = h.fake.from.bind(h.fake);
+  let messageSequence = 0;
   h.fake.from = (table) => {
     const query = from(table);
     if (table === "sms_messages") {
       const upsert = query.upsert.bind(query);
-      query.upsert = (row, options) => upsert({ created_at: h.clock.toISOString(), ...row }, options);
+      query.upsert = (row, options) => upsert({ created_at: new Date(h.clock.getTime() - 10000 + messageSequence++).toISOString(), ...row }, options);
     }
     return query;
   };

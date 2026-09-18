@@ -26,7 +26,7 @@ class Builder {
   private filters: Predicate[] = [];
   private _order?: { col: string; asc: boolean };
   private _limit?: number;
-  private _op: "select" | "insert" | "update" | "upsert" = "select";
+  private _op: "select" | "insert" | "update" | "upsert" | "delete" = "select";
   private _payload: unknown;
   private _onConflict?: string;
   private _ignoreDup = false;
@@ -57,6 +57,7 @@ class Builder {
   }
   limit(n: number): this { this._limit = n; return this; }
   insert(payload: unknown): this { this._op = "insert"; this._payload = payload; return this; }
+  delete(): this { this._op = "delete"; return this; }
   update(payload: unknown): this { this._op = "update"; this._payload = payload; return this; }
   upsert(payload: unknown, opts?: { onConflict?: string; ignoreDuplicates?: boolean }): this {
     this._op = "upsert";
@@ -110,6 +111,14 @@ class Builder {
     if (this._op === "insert") {
       const items = (Array.isArray(this._payload) ? this._payload : [this._payload]) as Row[];
       const recs = items.map((x) => ({ id: x.id ?? crypto.randomUUID(), ...x }));
+      // Model 00640 sms_messages_send_claim_uniq, not general SQL locking.
+      const liveClaim = (r: Row) => r.direction === "outbound" && r.party_id != null && r.dedupe_key != null &&
+        !["failed", "undelivered", "canceled", "expired", "suppressed"].includes(String(r.twilio_status ?? "claimed"));
+      if (this.table === "sms_messages" && recs.some((r, i) => liveClaim(r) &&
+        [...rows, ...recs.slice(0, i)].some(other => liveClaim(other) && other.party_id === r.party_id &&
+          (other.template_key ?? "") === (r.template_key ?? "") && other.dedupe_key === r.dedupe_key))) {
+        return { data: null, error: { code: "23505", message: "sms_messages_send_claim_uniq" } };
+      }
       rows.push(...recs.map(clone));
       return this.shape(recs.map(clone));
     }
@@ -119,10 +128,11 @@ class Builder {
       const affected: Row[] = [];
       for (const x of items) {
         // onConflict may name a composite key ("a,b,c") — a row matches only
-        // when EVERY named column matches and none of them is null.
+        // when EVERY named column matches. Contexts use NULLS NOT DISTINCT;
+        // other tables retain the ordinary non-null-key behavior.
         const cols = (this._onConflict ?? "").split(",").map((c) => c.trim()).filter(Boolean);
         const dup = cols.length
-          ? rows.find((r) => cols.every((c) => x[c] != null && r[c] === x[c]))
+          ? rows.find((r) => cols.every((c) => (x[c] != null || this.table === "sms_conversation_context") && r[c] === x[c]))
           : undefined;
         if (dup) {
           if (this._ignoreDup) continue; // conflict ignored → not returned
@@ -135,6 +145,12 @@ class Builder {
         }
       }
       return this.shape(affected.map(clone));
+    }
+
+    if (this._op === "delete") {
+      const matched = this.applyFilters(rows);
+      this.store[this.table] = rows.filter(row => !matched.includes(row));
+      return this.shape(matched.map(clone));
     }
 
     // update

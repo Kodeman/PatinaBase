@@ -18,7 +18,7 @@ Deno.test("R1 older medium confirmation retains original date after another prop
 });
 Deno.test("R2 failed handset context write cannot change the persisted proposal", async () => {
  const {h,effects}=inboundFixture(); const from=h.fake.from.bind(h.fake);
- h.fake.from=((table:string)=>{const q:any=from(table);const update=q.update.bind(q);q.update=(p:any)=>{if(table==="sms_conversations" && p.state==="awaiting_confirmation") {q.then=(f:any)=>Promise.resolve({data:null,error:{message:"context write failed"}}).then(f);return q;}return update(p);};return q;}) as any;
+ h.fake.from=((table:string)=>{const q:any=from(table);const update=q.update.bind(q);q.update=(p:any)=>{if(table==="sms_conversation_context" && p.state==="awaiting_confirmation") {q.then=(f:any)=>Promise.resolve({data:null,error:{message:"context write failed"}}).then(f);return q;}return update(p);};return q;}) as any;
  const p=await processInbound(inbound(h,"mantel delayed","SMproposal"),deps(h,proposal("task-a","2026-11-04")));
  const prompt=h.fake._data.sms_prompts[0];
  const result=await processInbound(inbound(h,`YES ${prompt.short_code}`,"SMconfirm"),deps(h));

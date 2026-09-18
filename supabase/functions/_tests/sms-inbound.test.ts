@@ -41,6 +41,31 @@ function createFakeSupabase(...args: Parameters<typeof baseFakeSupabase>): FakeS
     fake._data.studio_channel_consent = [{ organization_id: "org-alpha", channel_kind: "sms", channel_value: conv.phone_e164, status: "granted", refusal_unanswered: false }];
     fake._data.email_templates.push({ slug: "sms_selection", is_active: true, html_content: "{{selection}} Msg&data rates may apply. Reply HELP for help, STOP to opt out." });
   }
+  // These controls describe live (unstamped) context, not migration snapshots.
+  // Separate each menu by its actual project; chooser metadata stays service-only.
+  fake._data.sms_conversation_context ??= [];
+  for (const conv of fake._data.sms_conversations ?? []) {
+    const ctx = conv.state_context as any ?? {};
+    const menus = new Map<string, any[]>();
+    for (const entry of ctx.menu ?? []) menus.set(entry.project_id, [...(menus.get(entry.project_id) ?? []), entry]);
+    const projectId = ctx.project_pin?.project_id ?? conv.active_project_id;
+    const ids = new Set([...menus.keys(), ...(projectId ? [projectId] : [])]);
+    for (const id of ids) fake._data.sms_conversation_context.push({
+      conversation_id: conv.id, project_id: id,
+      party_id: fake._data.project_parties?.find(p=>p.project_id===id && p.phone_e164===conv.phone_e164)?.id ?? conv.party_id,
+      state: conv.state === "awaiting_project_choice" ? "idle" : conv.state,
+      state_context: { ...(menus.has(id) ? { menu: menus.get(id), menu_created_at: ctx.menu_created_at } : {}),
+        ...(ctx.project_pin?.project_id===id ? { project_pin: ctx.project_pin } : {}),
+        ...(ctx.pending_prompt_id ? {pending_prompt_id: ctx.pending_prompt_id} : {}) },
+      paused_until: null, backfilled_at: null,
+    });
+    if (conv.state === "awaiting_project_choice") {
+      const held = { ...ctx }; delete held.menu; delete held.menu_created_at; delete held.project_pin;
+      fake._data.sms_conversation_context.push({ conversation_id: conv.id, project_id: null, party_id: null,
+        state: conv.state, state_context: held, paused_until: null, backfilled_at: null });
+    }
+    delete conv.state; delete conv.state_context;
+  }
   return fake;
 }
 
@@ -603,7 +628,7 @@ Deno.test("LLM 0.5–0.8 parks the effect and asks to confirm", async () => {
   );
   assertEquals(res.disposition, "clarify");
   assertEquals(rpcCalls.length, 0, "must not apply below 0.8");
-  const conv = (fake._data.sms_conversations as Array<{ state: string; state_context: { pending_effect?: unknown } }>)[0];
+  const conv = (fake._data.sms_conversation_context as Array<{ state: string; state_context: { pending_effect?: unknown } }>)[0];
   assertEquals(conv.state, "awaiting_confirmation");
   assertEquals(conv.state_context.pending_effect, undefined, "handset is not proposal authority");
   assertEquals((fake._data.sms_prompts[0].proposed_effect as Record<string, unknown>).type, "mark_done", "complete proposal stored atomically");
@@ -731,10 +756,11 @@ Deno.test("chooser resolution processes the stashed triggering text and preserve
   assertEquals(rpcCalls.length, 1);
   assert(!res.twiml.includes("Text me your update"));
   assert(!res.twiml.includes("Which project?"));
-  const conv = (fake._data.sms_conversations as Array<{ state: string; active_project_id: string; state_context: { menu?: unknown; chooser?: unknown; pending_body?: unknown } }>)[0];
+  const conv = fake._data.sms_conversation_context.find(c => c.project_id === "53100000-0000-4000-8000-000000000004") as any;
   assertEquals(conv.state, "idle");
-  assertEquals(conv.active_project_id, "53100000-0000-4000-8000-000000000004");
-  assert(conv.state_context.menu, "digest menu preserved through the chooser resolution");
+  assertEquals(conv.project_id, "53100000-0000-4000-8000-000000000004");
+  assert((fake._data.sms_conversation_context.find(c => c.project_id === "53100000-0000-4000-8000-000000000003")!.state_context as any).menu, "other project digest menu preserved in its own context");
+  assertEquals(conv.state_context.menu, undefined, "other project menu must not transfer to the picked project");
   assertEquals(conv.state_context.chooser, undefined);
   assertEquals(conv.state_context.pending_body, undefined);
   assertEquals(
@@ -891,7 +917,8 @@ Deno.test("MMS storage path prefers a fresh project_pin over active_project_id a
   );
   const upload = fake._uploads[0];
   assert(upload, "an upload happened");
-  assert(upload.path.startsWith("project/53100000-0000-4000-8000-000000000004/"), `expected proj2 (the pin), got ${upload.path}`);
+  assert(upload.path.startsWith("holding/"), "multi-project media begins unattributed until the ref/pin is resolved");
+  assert(fake._moves.some(m => m.to.startsWith("project/53100000-0000-4000-8000-000000000004/")), "resolved pin rehomes into its own project");
 });
 
 Deno.test("MMS storage path falls back to holding/ when multi-project and no fresh pin", async () => {
@@ -2443,3 +2470,5 @@ import "./field-line/inbound-protocol.test.ts";
 
 import "./field-line/inbound-completion.test.ts";
 import "./field-line/inbound-completion-boundaries.test.ts";
+
+import "./field-line/inbound-project-context.test.ts";

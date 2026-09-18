@@ -30,9 +30,12 @@ function pauseUpdate(h:any, predicate:any) {
  let entered!:()=>void, release!:()=>void;
  const reached=new Promise<void>(r=>entered=r), released=new Promise<void>(r=>release=r);
  const from=h.fake.from.bind(h.fake); let once=true;
- h.fake.from=(table:string)=>{const q=from(table), update=q.update.bind(q);q.update=(patch:any)=>{
+ h.fake.from=(table:string)=>{const q=from(table), update=q.update.bind(q), del=q.delete.bind(q);
+ const wait=()=>{const then=q.then.bind(q);q.then=async(resolve:any,reject:any)=>{entered();await released;return then(resolve,reject);};};
+ q.delete=()=>{del();if(once&&table==="sms_conversation_context"&&predicate({state:"idle"})){once=false;wait();}return q;};
+ q.update=(patch:any)=>{
   update(patch);
-  if(once&&table==="sms_conversations"&&predicate(patch)) {once=false;const then=q.then.bind(q);q.then=async(resolve:any,reject:any)=>{entered();await released;return then(resolve,reject);};}
+  if(once&&table==="sms_conversation_context"&&predicate(patch)) {once=false;const then=q.then.bind(q);q.then=async(resolve:any,reject:any)=>{entered();await released;return then(resolve,reject);};}
   return q;
  };return q;};
  return {reached,release};
@@ -44,9 +47,9 @@ Deno.test("delayed origin binder cannot replace newer delivered chooser after or
  const bp=input(h,"new B blocked","SMraceB");const br=await processInbound(bp,deps(h,ambiguous));assertEquals(br.disposition,"project_chooser");
  await processInbound(input(h,"1","SMraceDigitA"),deps(h,blocker(id("task-a"))));assertEquals(effects.length,1);
  assertEquals((await dispatchInboundReplies(bp,br,deps(h))).status,200);h.fake._data.sms_messages.find((m:any)=>m.recipe?.selection?.inboundMessageId===br.messageId)!.twilio_status="delivered";
- const before=structuredClone(h.fake._data.sms_conversations[0].state_context);
+ const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context);
  gate.release();await old;
- assertEquals(h.fake._data.sms_conversations[0].state_context,before,"delayed completed-A binder must preserve B manifest and pending origin");
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context,before,"delayed completed-A binder must preserve B manifest and pending origin");
  const fresh=await processInbound(input(h,"2","SMraceDigitB"),deps(h,blocker(id("task-b"))));
  assertEquals(fresh.disposition,"applied");
  assertEquals(effects.length,2);
@@ -56,9 +59,9 @@ Deno.test("delayed original digit CAS cannot consume newer delivered chooser",as
  const {h,id,effects}=selectionFixture();const a=await ask(h,"SMcasA");
  const gate=pauseUpdate(h,(p:any)=>p.state==="idle");
  const pick=processInbound(input(h,"1","SMcasDigitA"),deps(h,blocker(id("task-a"))));await gate.reached;
- const b=await ask(h,"SMcasB");const before=structuredClone(h.fake._data.sms_conversations[0].state_context);
+ const b=await ask(h,"SMcasB");const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context);
  gate.release();await pick;
- assertEquals(h.fake._data.sms_conversations[0].state_context,before,"old-A CAS must not delete B manifest and pending origin");
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context,before,"old-A CAS must not delete B manifest and pending origin");
 });
 for(const mutation of ["string-applied","array-result","wrong-sender","wrong-recipient"]) Deno.test("independent unknown authority "+mutation,async()=>{
  const {h}=selectionFixture();const a=await ask(h,"SMunknown-"+mutation);
@@ -67,4 +70,38 @@ for(const mutation of ["string-applied","array-result","wrong-sender","wrong-rec
  const sender=mutation==="wrong-sender"?"+15558880000":h.sender;
  const recipient=mutation==="wrong-recipient"?"+15558881111":h.recipient;
  assertEquals((await inboundCompletion(h.fake,a.origin.id,sender,recipient)).status,"unknown");
+});
+
+Deno.test("binder must not replace B when A completes before context snapshot acquisition",async()=>{
+ const {h,id,effects}=selectionFixture();const a=await ask(h,"SMreadA");
+ const from=h.fake.from.bind(h.fake);let once=true,entered!:()=>void,release!:()=>void;
+ const reached=new Promise<void>(r=>entered=r),released=new Promise<void>(r=>release=r);
+ h.fake.from=(table:string)=>{const q=from(table),select=q.select.bind(q);q.select=(...args:any[])=>{
+   select(...args);if(once&&table==="sms_conversation_context"){once=false;const single=q.maybeSingle.bind(q);q.maybeSingle=async()=>{entered();await released;return single();};}return q;};return q;};
+ const old=bindInboundSelection(h.fake as never,a.origin.id,{manifest:a.row.recipe.selection,usable:true,deliveryStatus:"delivered"},a.row.id);
+ await reached;
+ const bp=input(h,"new B blocked","SMreadB"),br=await processInbound(bp,deps(h,ambiguous));
+ assertEquals(br.disposition,"project_chooser");
+ await processInbound(input(h,"1","SMreadDigitA"),deps(h,blocker(id("task-a"))));assertEquals(effects.length,1);
+ assertEquals((await dispatchInboundReplies(bp,br,deps(h))).status,200);
+ h.fake._data.sms_messages.find((m:any)=>m.recipe?.selection?.inboundMessageId===br.messageId)!.twilio_status="delivered";
+ const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context);
+ release();await old;
+ const after=h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context;
+ const fresh=await processInbound(input(h,"2","SMreadDigitB"),deps(h,blocker(id("task-b"))));
+ console.log(JSON.stringify({before,after,fresh,effects:effects.length}));
+ assertEquals(after,before,"completed A binder preserves newer B across pre-snapshot overlap");
+ assertEquals(fresh.disposition,"applied","fresh B digit applies B, never silently completes A");
+});
+
+
+Deno.test("pending own binder is idempotent but older unresolved binder preserves newer source",async()=>{
+ const {h}=selectionFixture();const a=await ask(h,"SMpendingA");
+ const question={manifest:a.row.recipe.selection,usable:true,deliveryStatus:"delivered"} as any;
+ const before=structuredClone(h.fake._data.sms_conversation_context);
+ assertEquals(await bindInboundSelection(h.fake as never,a.origin.id,question,a.row.id),true);
+ assertEquals(h.fake._data.sms_conversation_context,before,"pending own source rebind is idempotent");
+ await ask(h,"SMpendingB");const fresh=structuredClone(h.fake._data.sms_conversation_context);
+ assertEquals(await bindInboundSelection(h.fake as never,a.origin.id,question,a.row.id),true);
+ assertEquals(h.fake._data.sms_conversation_context,fresh,"older unresolved source cannot overwrite newer B");
 });

@@ -7,6 +7,8 @@ export const duplicateTwilioSid: GateCase = {
   clauses: ["S5"],
   async run() {
     const { h: harness } = inboundFixture();
+    // Isolate SID dedupe from the multi-project chooser recovery contract.
+    harness.fake._data.project_parties = harness.fake._data.project_parties.slice(0, 1);
     const first = await harness.processInbound({ Body: "unrecognized words", MessageSid: "SMfieldDuplicate" });
     const second = await harness.processInbound({ Body: "unrecognized words", MessageSid: "SMfieldDuplicate" });
     const rows = (harness.fake._data.sms_messages ?? []).filter((row) =>

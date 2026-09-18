@@ -28,12 +28,12 @@ for(const order of [["a","b"],["b","a"]]) Deno.test(`completed ${order[0]} never
  await processInbound(input(h,order[0]==="a"?"1":"2","SMfirstDigit"),deps(h,blocker(id("task-"+order[0]))));
  assertEquals(effects.length,1);assert(a.origin.parsed_intent.selection_intent,"injected stamp failure must leave provenance");
  h.advanceTo(new Date(h.clock.getTime()+5*3600000));const b=await ask(h,"SMsecond");
- const before=structuredClone(h.fake._data.sms_conversations[0]);const wires=h.provider.requests.length;
+ const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!);const wires=h.provider.requests.length;
  const retry=await processInbound(a.params,deps(h));assertEquals(retry.disposition,"already_completed");
  await dispatchInboundReplies(a.params,a.result,deps(h));
  const q=await recoverSmsSelection(h.fake,{kind:"project_choice",inboundMessageId:a.origin.id,phone:h.recipient,messageId:a.row.id},deps(h));
  assertEquals(await bindInboundSelection(h.fake,a.origin.id,q.selection!,a.row.id),true);
- assertEquals(h.fake._data.sms_conversations[0],before,"all completion gates leave newer chooser byte-for-byte unchanged");
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!,before,"all completion gates leave newer chooser byte-for-byte unchanged");
  assertEquals(h.provider.requests.length,wires,"completed origin sends no new question");
  assertEquals((await processInbound(input(h,order[0]==="a"?"1":"2","SMfirstDigit"),deps(h))).disposition,"already_completed");
  await processInbound(input(h,order[1]==="a"?"1":"2","SMsecondDigit"),deps(h,blocker(id("task-"+order[1]))));
@@ -42,10 +42,10 @@ for(const order of [["a","b"],["b","a"]]) Deno.test(`completed ${order[0]} never
 Deno.test("applied=false historical unbound completion suppresses before choice media or parser",async()=>{
  const {h,effects}=selectionFixture();const a=await ask(h,"SMnoteOrigin");
  a.origin.applied_effect={applied:false,effect_type:"note",summary_text:"private original"};a.origin.party_id=null;a.origin.project_id=null;
- const before=structuredClone(h.fake._data.sms_conversations[0]);
+ const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!);
  const r=await processInbound({...input(h,"1","SMcompletedDigit"),NumMedia:"1",MediaUrl0:"https://media.invalid/private",MediaContentType0:"image/jpeg"},deps(h));
  assertEquals(r.disposition,"already_completed");assertEquals(r.replies,undefined);assertEquals(effects.length,0);
- assertEquals(h.fake._data.sms_conversations[0].state_context,before.state_context,"completion precedes CAS");
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context,before.state_context,"completion precedes CAS");
  assertEquals(h.provider.requests.length,1,"no media fetch or additional wire");
 });
 for(const corrupt of ["missing","wrong-conversation","outbound","empty-sid","malformed-result","receipt-error","malformed-receipt","source-read-error"]) Deno.test(`completion authority ${corrupt} stays unknown`,async()=>{
@@ -58,10 +58,10 @@ for(const corrupt of ["missing","wrong-conversation","outbound","empty-sid","mal
  if(corrupt==="receipt-error")h.fake.rpc=async(n,args)=>n==="sms_prompt_receipt"?{data:null,error:{message:"read failed"}}:rpc(n,args);
  if(corrupt==="malformed-receipt")h.fake.rpc=async(n,args)=>n==="sms_prompt_receipt"?{data:{status:"replayed"},error:null}:rpc(n,args);
  if(corrupt==="source-read-error") {const from=h.fake.from.bind(h.fake);h.fake.from=(table)=>{const q=from(table);if(table==="sms_messages")q.maybeSingle=async()=>({data:null,error:{message:"unreadable"}});return q;};}
- const before=structuredClone(h.fake._data.sms_conversations[0].state_context);
+ const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context);
  assertEquals((await inboundCompletion(h.fake,a.origin.id,h.sender,h.recipient)).status,"unknown");
  const result=await dispatchInboundReplies(a.params,a.result,deps(h));assertEquals(result.status,503);
- assertEquals(h.fake._data.sms_conversations[0].state_context,before);assertEquals(h.provider.requests.length,1);
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context,before);assertEquals(h.provider.requests.length,1);
 });
 for (const thrown of [false,true]) Deno.test(`digit pointer ${thrown?"thrown":"returned"} failure stops before CAS media and effect; retry never guesses newer origin`,async()=>{
  const {h,effects}=selectionFixture();await ask(h,"SMpointerA");const from=h.fake.from.bind(h.fake);let fail=true;
@@ -71,10 +71,10 @@ for (const thrown of [false,true]) Deno.test(`digit pointer ${thrown?"thrown":"r
  };return q;};
  const digit={...input(h,"1","SMpointerDigit"),NumMedia:"1",MediaUrl0:"https://media.invalid/private",MediaContentType0:"image/jpeg"};
  assertEquals((await processInbound(digit,deps(h))).status,503);assertEquals(effects.length,0);
- assertEquals(h.fake._data.sms_conversations[0].state,"awaiting_project_choice");assertEquals(h.provider.requests.length,1);
- fail=false;await ask(h,"SMpointerB");const before=structuredClone(h.fake._data.sms_conversations[0]);
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state,"awaiting_project_choice");assertEquals(h.provider.requests.length,1);
+ fail=false;await ask(h,"SMpointerB");const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!);
  assertEquals((await processInbound(digit,deps(h))).status,503,"retained unstamped digit requires original-origin/operator recovery");
- assertEquals(h.fake._data.sms_conversations[0],before);assertEquals(effects.length,0);
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!,before);assertEquals(effects.length,0);
 });
 Deno.test("unknown raw response resumes same digit original behind a newer chooser",async()=>{
  const {h,id,effects}=selectionFixture();const a=await ask(h,"SMunknownA","original A blocked");const rpc=h.fake.rpc;let unknown=true;
@@ -83,11 +83,11 @@ Deno.test("unknown raw response resumes same digit original behind a newer choos
  assertEquals(r.status,503);assertEquals(r.replies,undefined);assertEquals(effects.length,0);
  const pointer=h.fake._data.sms_messages.find(m=>m.twilio_sid===digit.MessageSid)!.parsed_intent as any;
  assertEquals(pointer.selection_intent.inboundMessageId,a.origin.id);
- h.advanceTo(new Date(h.clock.getTime()+5*3600000));await ask(h,"SMunknownB");const before=structuredClone(h.fake._data.sms_conversations[0]);unknown=false;
+ h.advanceTo(new Date(h.clock.getTime()+5*3600000));await ask(h,"SMunknownB");const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!);unknown=false;
  let parsedBody="";const result=await processInbound(digit,deps(h,async(i:any)=>{parsedBody=i.body;return blocker(id("task-a"))();}));
  assertEquals(result.disposition,"applied");assertEquals(parsedBody,"original A blocked");
  assertEquals(effects[0].p_sms_message_id,a.origin.id,"same SID follows its durable original pointer");
- assertEquals(h.fake._data.sms_conversations[0].state_context,before.state_context,"resume cannot overwrite newer chooser");
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context,before.state_context,"resume cannot overwrite newer chooser");
  assertEquals((await processInbound(digit,deps(h))).disposition,"already_completed");assertEquals(effects.length,1);
 });
 Deno.test("raw committed lost response reconciles quietly without fresh stamps touches or notifications",async()=>{
@@ -129,13 +129,13 @@ for (const gate of ["dispatcher","binder"]) Deno.test(`completed origin direct $
  const {h}=selectionFixture();const a=await ask(h,"SMdirectA");
  a.origin.applied_effect={applied:true,effect_type:"flag_blocker"};
  h.advanceTo(new Date(h.clock.getTime()+5*3600000));await ask(h,"SMdirectB");
- const before=structuredClone(h.fake._data.sms_conversations[0]),wires=h.provider.requests.length;
+ const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!),wires=h.provider.requests.length;
  if(gate==="dispatcher")assertEquals((await dispatchInboundReplies(a.params,a.result,deps(h))).disposition,"already_completed","completed dispatcher skips sending and rebinding");
  else {
   const q=await recoverSmsSelection(h.fake,{kind:"project_choice",inboundMessageId:a.origin.id,phone:h.recipient,messageId:a.row.id},deps(h));
   assertEquals(await bindInboundSelection(h.fake,a.origin.id,q.selection!,a.row.id),true);
  }
- assertEquals(h.fake._data.sms_conversations[0],before,"completed binder leaves newer chooser byte-for-byte unchanged");
+ assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!,before,"completed binder leaves newer chooser byte-for-byte unchanged");
  assertEquals(h.provider.requests.length,wires,"completed dispatcher performs no additional wire");
 });
 

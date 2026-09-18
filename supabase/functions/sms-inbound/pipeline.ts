@@ -92,7 +92,74 @@ interface Conversation {
   active_project_id: string | null;
   party_id: string | null;
   state: string;
+  // These fields are hydrated only from the service-owned context table.
   state_context: Record<string, unknown>;
+  context?: ConversationContext;
+}
+
+interface ConversationContext {
+  conversation_id: string;
+  project_id: string | null;
+  party_id: string | null;
+  state: string;
+  state_context: Record<string, unknown>;
+  paused_until: string | null;
+  backfilled_at: string | null;
+}
+
+function contextKey(query: any, conversationId: string, projectId: string | null) {
+  query = query.eq("conversation_id", conversationId);
+  return projectId === null ? query.is("project_id", null) : query.eq("project_id", projectId);
+}
+
+async function readContext(supabase: SupabaseClient, conversationId: string, projectId: string | null) {
+  const { data, error } = await contextKey(supabase.from("sms_conversation_context").select("*"), conversationId, projectId).maybeSingle();
+  if (error) throw error;
+  return data as ConversationContext | null;
+}
+
+async function ensureContext(supabase: SupabaseClient, conversationId: string, projectId: string | null, partyId: string | null) {
+  const prior = await readContext(supabase, conversationId, projectId);
+  if (prior) {
+    if (projectId && prior.party_id !== partyId) throw new Error("context_party_changed");
+    return prior;
+  }
+  const { error } = await supabase.from("sms_conversation_context").upsert({
+    conversation_id: conversationId, project_id: projectId, party_id: partyId,
+    state: "idle", state_context: {}, paused_until: null, backfilled_at: null,
+  }, { onConflict: "conversation_id,project_id", ignoreDuplicates: true });
+  if (error) throw error;
+  const row = await readContext(supabase, conversationId, projectId);
+  if (!row) throw new Error("context_not_persisted");
+  if (projectId && row.party_id !== partyId) throw new Error("context_party_changed");
+  return row;
+}
+
+/** Match the entire question snapshot, not merely the state (SQ-73). */
+function contextSnapshot(query: any, row: ConversationContext) {
+  query = contextKey(query, row.conversation_id, row.project_id)
+    .eq("state", row.state).eq("state_context", JSON.stringify(row.state_context));
+  query = row.party_id === null ? query.is("party_id", null) : query.eq("party_id", row.party_id);
+  return row.backfilled_at === null ? query.is("backfilled_at", null) : query.eq("backfilled_at", row.backfilled_at);
+}
+
+function useContext(conv: Conversation, row: ConversationContext | null) {
+  conv.context = row ?? undefined;
+  conv.state = row?.state ?? "idle";
+  conv.state_context = row?.state_context ?? {};
+  conv.active_project_id = row?.project_id ?? null;
+  conv.party_id = row?.party_id ?? null;
+}
+
+async function pausedReview(supabase: SupabaseClient, conversationId: string, projectId: string,
+  partyId: string, messageId: string, deps: InboundDeps): Promise<InboundResult | null> {
+  let context: ConversationContext | null;
+  try { context = await readContext(supabase, conversationId, projectId); }
+  catch { return completionUnknown(messageId, "context_unreadable"); }
+  if (!context?.paused_until || new Date(context.paused_until).getTime() <= (deps.now ?? new Date()).getTime()) return null;
+  const owned = await ownedReview(supabase, messageId, projectId, partyId,
+    { path: "paused", paused_until: context.paused_until }, deps);
+  return { status: owned ? 200 : 503, twiml: twimlBody(), disposition: owned ? "paused" : "handoff_failed", messageId };
 }
 
 async function findOrCreateConversation(
@@ -102,28 +169,28 @@ async function findOrCreateConversation(
 ): Promise<Conversation> {
   const { data: existing } = await supabase
     .from("sms_conversations")
-    .select("id, active_project_id, party_id, state, state_context")
+    .select("id, active_project_id, party_id")
     .eq("twilio_number", twilioNumber)
     .eq("phone_e164", phone)
     .maybeSingle();
-  if ((existing as Conversation | null)?.id) return existing as Conversation;
+  if ((existing as Conversation | null)?.id) return { ...existing, state: "idle", state_context: {} } as Conversation;
 
   const { data: created, error } = await supabase
     .from("sms_conversations")
     .insert({ twilio_number: twilioNumber, phone_e164: phone })
-    .select("id, active_project_id, party_id, state, state_context")
+    .select("id, active_project_id, party_id")
     .single();
   if (error || !created) {
     // Lost a create race — re-read rather than dereference a null row.
     const { data: retry } = await supabase
       .from("sms_conversations")
-      .select("id, active_project_id, party_id, state, state_context")
+      .select("id, active_project_id, party_id")
       .eq("twilio_number", twilioNumber)
       .eq("phone_e164", phone)
       .maybeSingle();
-    return retry as Conversation;
+    return { ...retry, state: "idle", state_context: {} } as Conversation;
   }
-  return created as Conversation;
+  return { ...created, state: "idle", state_context: {} } as Conversation;
 }
 
 async function logOutbound(
@@ -1393,6 +1460,69 @@ async function processInboundCore(
 
   const projectIds = [...new Set(parties.map((p) => p.project_id))];
   const projectNames = await loadProjectNames(supabase, projectIds);
+  try {
+    const { data: rows, error } = await supabase.from("sms_conversation_context").select("*").eq("conversation_id", conv.id);
+    if (error) return completionUnknown(messageId, "context_unreadable");
+    const contexts = (rows ?? []) as ConversationContext[];
+    const holding = contexts.find(c => c.project_id === null && (c.backfilled_at || Object.keys(c.state_context).length > 0));
+    const eligible = contexts.filter(c => c.project_id && !c.backfilled_at && parties.some(p => p.id === c.party_id && p.project_id === c.project_id));
+    const pins = eligible.filter(c => freshProjectPin(c.state_context, now) === c.project_id)
+      .sort((a,b) => String((b.state_context.project_pin as any).at).localeCompare(String((a.state_context.project_pin as any).at)));
+    useContext(conv, holding ?? (projectIds.length === 1 ? eligible.find(c => c.project_id === projectIds[0]) : pins[0]) ?? null);
+  } catch { return completionUnknown(messageId, "context_unreadable"); }
+
+  // A fresh digest supersedes old numeric-choice metadata. Until then a
+  // repeated digit cannot turn a completed legacy root into a new note.
+  const lastHeld = conv.state_context.last_held_choice as { root_id: string; at: string } | undefined;
+  if (!resumeSelection && !conv.context?.backfilled_at && lastHeld && /^\d+$/.test(body) &&
+      (!conv.state_context.menu_created_at || lastHeld.at >= String(conv.state_context.menu_created_at))) {
+    const completed = await inboundCompletion(supabase, lastHeld.root_id, to, from, conv.id);
+    return completed.status === "unknown" || completed.status === "unresolved"
+      ? completionUnknown(messageId) : completedInbound(messageId);
+  }
+
+  // Legacy snapshots are never question authority. Re-ask using the durable
+  // original message only after checking whether its work already completed.
+  if (conv.context?.backfilled_at) {
+    const held = conv.context;
+    const origin = held.state_context.pending_message_id;
+    // A legacy confirmation has no immutable prompt authority. Its target's
+    // terminal state can nevertheless prove there is nothing left to replay.
+    const effect = held.state_context.pending_effect as { type?: string; target?: { kind?: string; id?: string } } | undefined;
+    if (effect?.target?.id && ["mark_done", "confirm_delivery"].includes(effect.type ?? "") &&
+        ["task", "coordination"].includes(effect.target.kind ?? "")) {
+      const { data: target, error } = await supabase.from(effect.target.kind === "task" ? "project_tasks" : "client_decisions")
+        .select("project_id, status").eq("id", effect.target.id).in("project_id", projectIds).maybeSingle();
+      if (error) return completionUnknown(messageId, "held_target_unreadable");
+      if (target && (effect.target.kind === "task" ? target.status === "done" : effect.type === "mark_done" && target.status === "resolved")) {
+        const { error: deleteError } = await contextSnapshot(supabase.from("sms_conversation_context").delete(), held);
+        return deleteError ? completionUnknown(messageId) : { status: 200, twiml: twimlBody(), disposition: "legacy_already_completed", retainSid: true };
+      }
+    }
+    if (typeof origin === "string") {
+      const completion = await inboundCompletion(supabase, origin, to, from, conv.id);
+      if (completion.status === "unknown") return completionUnknown(messageId, "held_origin_unreadable");
+      if (completion.status !== "unresolved") {
+        const { error } = await contextSnapshot(supabase.from("sms_conversation_context").delete(), held);
+        return error ? completionUnknown(messageId) : completedInbound(messageId);
+      }
+      // Never carry the held pending_effect. The next answer scopes the original
+      // body/media and it is parsed afresh against that project's current items.
+      const root = completion.rootSource ?? completion.source;
+      return await selectionIntent(supabase, messageId, {
+        kind: "project_choice", inboundMessageId: messageId,
+        options: projectIds.map(projectId => ({ projectId, partyId: parties.find(p => p.project_id === projectId)!.id })),
+      }, { held_origin_id: root.id, legacy_pending: { body: held.state_context.pending_body ?? root.body, media: held.state_context.pending_media ?? root.media ?? [] } });
+    }
+    // A held menu/confirmation has no recoverable original update. The next
+    // answer chooses a scope only; it must not apply an obsolete YES or digit.
+    const { error } = await stampMessage(supabase, messageId, null, null, { legacy_reask: true });
+    if (error) return completionUnknown(messageId);
+    return await selectionIntent(supabase, messageId, {
+      kind: "project_choice", inboundMessageId: messageId,
+      options: projectIds.map(projectId => ({ projectId, partyId: parties.find(p => p.project_id === projectId)!.id })),
+    }, { legacy_reask: true });
+  }
 
   // Gate the ORIGINAL before any MMS, CAS or parse. The digit pointer is
   // resume provenance only; every attempt still rechecks durable completion
@@ -1401,6 +1531,7 @@ async function processInboundCore(
     ? conv.state_context?.selection as SelectionBinding | undefined : undefined);
   if (!choiceBinding && conv.state === "awaiting_project_choice" && /^\d+$/.test(body)) return completionUnknown(messageId);
   let choiceSource: Record<string, any> | undefined;
+  let choiceRoot: Record<string, any> | undefined;
   let choiceQuestion: SelectionQuestion | undefined;
   if (choiceBinding) {
     if (choiceBinding.kind !== "project_choice" || !choiceBinding.messageId) return completionUnknown(messageId);
@@ -1408,6 +1539,7 @@ async function processInboundCore(
     if (completion.status === "unknown") return completionUnknown(messageId);
     if (completion.status !== "unresolved") return completedInbound(messageId);
     choiceSource = completion.source;
+    choiceRoot = completion.rootSource ?? completion.source;
     try {
       const { data: pointerRows, error: pointerError } = await supabase.from("sms_messages")
         .update({ parsed_intent: { selection_intent: choiceBinding } }).eq("id", messageId).select("id");
@@ -1418,19 +1550,18 @@ async function processInboundCore(
     choiceQuestion = recovered.selection;
   }
 
-  // (f) MMS — fetch + store to field-media (project if known, else holding).
-  // Prefer a FRESH explicit project_pin over the merely-single-project case —
-  // conv.active_project_id is stamped at conversation creation by whoever
-  // texted first and is stale for this purpose (see the pin comment below).
+  // (f) Multi-project MMS stays unattributed until an immutable Ref or an
+  // explicit project choice resolves it; a stale handset pin cannot own it.
   const numMedia = parseInt(params.NumMedia ?? "0", 10) || 0;
-  const bestProject = freshProjectPin(conv.state_context, now) ??
-    (projectIds.length === 1 ? projectIds[0] : null);
+  const bestProject = projectIds.length === 1 ? projectIds[0] : null;
   let media: Array<{ path: string; content_type: string; twilio_url: string }> = [];
   if (numMedia > 0) {
     media = await ingestMedia(params, deps, conv.id, messageId, bestProject);
     if (media.length > 0) {
-      await supabase.from("sms_messages").update({ media }).eq("id", messageId);
+      const { error } = await supabase.from("sms_messages").update({ media }).eq("id", messageId);
+      if (error) return completionUnknown(messageId, "media_unrecorded");
     }
+    if (media.length !== numMedia) return completionUnknown(messageId, "media_incomplete");
   }
 
   // (g) Deterministic: project-choice → confirmation → numbered menu.
@@ -1442,12 +1573,16 @@ async function processInboundCore(
     if (pick) {
       // Merge — never overwrite — state_context: a digest `menu` (or other
       // stashed keys) predating the chooser must survive the resolution.
-      const mergedContext = { ...conv.state_context };
+      const selected = await ensureContext(supabase, conv.id, pick.project_id, pick.party_id);
+      const paused = await pausedReview(supabase, conv.id, pick.project_id, pick.party_id, choiceRoot!.id, deps);
+      if (paused) return paused;
+      const mergedContext = { ...selected.state_context };
       delete mergedContext.chooser;
       delete mergedContext.selection;
-      const pendingText = String(choiceSource!.body ?? "");
-      let pendingMedia = Array.isArray(choiceSource!.media) ? choiceSource!.media as Array<{ path: string; content_type: string; twilio_url: string }> : [];
-      const pendingMessageId = binding.inboundMessageId;
+      const pendingText = choiceSource!.parsed_intent?.legacy_reask ? "" : String(choiceSource!.parsed_intent?.legacy_pending?.body ?? choiceSource!.body ?? "");
+      const savedMedia = choiceSource!.parsed_intent?.legacy_pending?.media ?? choiceSource!.media;
+      let pendingMedia = Array.isArray(savedMedia) ? savedMedia as Array<{ path: string; content_type: string; twilio_url: string }> : [];
+      const pendingMessageId = choiceRoot!.id;
       delete mergedContext.pending_body;
       delete mergedContext.pending_media;
       delete mergedContext.pending_message_id;
@@ -1457,31 +1592,23 @@ async function processInboundCore(
         effectiveMessageId = pendingMessageId;
         replayExcludeFromHistory = pendingMessageId;
       }
-      // Re-home any holding/ media now that a project is known — best effort;
-      // a move failure keeps the holding path rather than failing the reply.
-      if (pendingMedia.length > 0) {
-        pendingMedia = await rehomeHoldingMedia(supabase, pendingMedia, pick.project_id);
-      }
-      // This turn's OWN MMS (ingested above, pre-resolution, so bestProject
-      // couldn't know the project yet and it landed in holding/ too) gets the
-      // same treatment — it must not be stranded just because it rode in on
-      // the digit reply instead of the message that triggered the chooser.
-      if (media.some((m) => m.path.startsWith("holding/"))) {
-        media = await rehomeHoldingMedia(supabase, media, pick.project_id);
-      }
-      // THE pin: only an explicit chooser pick scopes the conversation.
-      mergedContext.project_pin = { project_id: pick.project_id, at: nowIso };
-      // Match the read context as well as state: a newer question can have the
-      // same state, but must never lose its manifest or pending origin.
+      // Consume only the exact held question. Delete it with its identity
+      // predicates, so neither a delayed binder nor an old digit clears B.
       if (!resumeSelection || (conv.state_context?.selection as SelectionBinding | undefined)?.inboundMessageId === binding.inboundMessageId) {
-        const { data: resolvedRows, error: resolveError } = await supabase.from("sms_conversations")
-          .update({ state: "idle", active_project_id: pick.project_id, party_id: pick.party_id, state_context: mergedContext })
-          .eq("id", conv.id).eq("state", "awaiting_project_choice")
-          .eq("state_context", JSON.stringify(conv.state_context))
-          .select("id");
+        if (!conv.context) return completionUnknown(messageId);
+        const { data: resolvedRows, error: resolveError } = await contextSnapshot(
+          supabase.from("sms_conversation_context").delete(), conv.context).select("conversation_id");
         if (resolveError) return completionUnknown(messageId);
         if (!resolvedRows?.length) return { status: 200, twiml: twimlBody(), disposition: "project_choice_race", retainSid: true };
       }
+      mergedContext.project_pin = { project_id: pick.project_id, at: nowIso };
+      if (choiceRoot!.id !== binding.inboundMessageId) mergedContext.last_held_choice = { root_id: choiceRoot!.id, at: nowIso };
+      const { data: pinned, error: pinError } = await contextSnapshot(supabase.from("sms_conversation_context")
+        .update({ state: "idle", party_id: pick.party_id, state_context: mergedContext }), selected).select("conversation_id");
+      if (pinError || !pinned?.length) return completionUnknown(messageId, "project_context_changed");
+      if (pendingMedia.length > 0) pendingMedia = await rehomeHoldingMedia(supabase, pendingMedia, pick.project_id);
+      if (media.some(m => m.path.startsWith("holding/"))) media = await rehomeHoldingMedia(supabase, media, pick.project_id);
+      conv.context = { ...selected, state: "idle", party_id: pick.party_id, state_context: mergedContext };
       // A resumed digit may finish its original operation without replacing a
       // newer question. The local pin below scopes only this parse.
       if (!pendingText && pendingMedia.length === 0) {
@@ -1525,29 +1652,38 @@ async function processInboundCore(
 
   const refResult = await promptReply(supabase, conv, parties, body, to, from, effectiveMessageId, now, media, deps);
   if (refResult) return { ...refResult, messageId: effectiveMessageId };
+  const scopedParty = parties.find(p => p.project_id === conv.context?.project_id) ?? (projectIds.length === 1 ? parties[0] : undefined);
+  if (scopedParty) {
+    const paused = await pausedReview(supabase, conv.id, scopedParty.project_id, scopedParty.id, effectiveMessageId, deps);
+    if (paused) return paused;
+  }
 
+  // A menu is read only from the chosen project row, never from a handset
+  // holding row or another party sharing the number.
   // Numbered menu reply ("DONE 2", "2 done", bare "2") against a fresh menu.
   const menu = (conv.state_context?.menu ?? []) as Array<{ n: number; kind: "task" | "coordination"; id: string; project_id: string }>;
   const menuAge = conv.state_context?.menu_created_at
     ? now.getTime() - new Date(String(conv.state_context.menu_created_at)).getTime()
     : Infinity;
   const menuIdx = menuNumber(body);
-  if (menu.length > 0 && menuAge <= MENU_TTL_MS && menuIdx != null) {
-    const target = menu.find((m) => m.n === menuIdx);
+  if (conv.context?.project_id && menu.length > 0 && menuAge <= MENU_TTL_MS && menuIdx != null) {
+    const target = menu.find((m) => m.n === menuIdx && m.project_id === conv.context!.project_id);
     if (target) {
       const partyId = parties.find((p) => p.project_id === target.project_id)?.id;
       if (partyId) {
+        const paused = await pausedReview(supabase, conv.id, target.project_id, partyId, effectiveMessageId, deps);
+        if (paused) return paused;
         const applied = await applyEffect(
           supabase, partyId,
           { type: "mark_done", target: { kind: target.kind, id: target.id } },
-          messageId, to, from, conv.id,
+          effectiveMessageId, to, from, conv.id,
         );
-        if (applied.status === "replayed") return completedInbound(messageId);
-        if (applied.status === "unknown") return completionUnknown(messageId);
-        if (applied.status === "failed") return await effectFailure(supabase, conv.id, messageId, partyId,
+        if (applied.status === "replayed") return completedInbound(effectiveMessageId);
+        if (applied.status === "unknown") return completionUnknown(effectiveMessageId);
+        if (applied.status === "failed") return await effectFailure(supabase, conv.id, effectiveMessageId, partyId,
           target.project_id, applied.error, deps);
         await recordInboundTouch(
-          supabase, partyId, messageId,
+          supabase, partyId, effectiveMessageId,
           await filedDecisionFacts(
             supabase, { kind: target.kind, id: target.id }, partyId,
             "mark_done", nowIso.slice(0, 10),
@@ -1578,7 +1714,8 @@ async function processInboundCore(
   const candidateItems = await loadCandidateItems(supabase, partiesForItems, projectNames);
   // Don't double-feed the LLM: a replayed stashed message is already `body`;
   // its own row (still in the last-5 history) must be excluded.
-  const recent = await loadRecentMessages(supabase, conv.id, replayExcludeFromHistory);
+  const recent = activePartyForConv || projectIds.length === 1
+    ? await loadRecentMessages(supabase, conv.id, replayExcludeFromHistory, activePartyForConv?.project_id ?? projectIds[0]) : [];
   const parsed = await parseFn({
     body,
     openItems: candidateItems.map((c) => ({ id: c.id, kind: c.kind, title: c.title, project_name: c.project_name, due: c.due })),
@@ -1593,7 +1730,7 @@ async function processInboundCore(
   const bucket = parsed.confidence >= 0.8 ? "high" : parsed.confidence >= 0.5 ? "mid" : "low";
 
   // Multi-project ambiguity with no resolved target → project chooser.
-  if (!targetItem && !activePartyForConv && projectIds.length > 1 && parsed.intent !== "note" && parsed.intent !== "question") {
+  if (!targetItem && !activePartyForConv && projectIds.length > 1) {
     return await selectionIntent(supabase, messageId, {
       kind: "project_choice", inboundMessageId: messageId,
       options: projectIds.map((projectId) => ({ projectId, partyId: parties.find((p) => p.project_id === projectId)!.id })),
@@ -1602,6 +1739,9 @@ async function processInboundCore(
 
   const effectParty = targetItem?.party_id ?? activePartyForConv?.id ?? parties[0].id;
   const effectProject = targetItem?.project_id ?? activePartyForConv?.project_id ?? parties[0].project_id;
+  const paused = await pausedReview(supabase, conv.id, effectProject, effectParty, effectiveMessageId, deps);
+  if (paused) return paused;
+  if (media.length && !replayExcludeFromHistory) media = await rehomeHoldingMedia(supabase, media, effectProject);
   const effect = buildEffect(parsed, media);
 
   // Delivery effects require a bound prompt; conditions stay owned review in 0D-A.
@@ -1629,6 +1769,10 @@ async function processInboundCore(
       nowIso,
     );
     await stampMessage(supabase, effectiveMessageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
+    if (choiceBinding && choiceRoot?.id !== choiceBinding.inboundMessageId) {
+      await stampMessage(supabase, choiceBinding.inboundMessageId, effectParty, effectProject,
+        { ...choiceSource!.parsed_intent, legacy_choice_closed: true });
+    }
     if (parsed.intent === "flag_blocker") {
       await notifyDesigner(supabase, effectProject, "field_blocker", { message_id: effectiveMessageId, note: parsed.note });
     }
@@ -1654,14 +1798,14 @@ async function processInboundCore(
       effectParty, effectProject, promptError ?? { message: "confirmation_prompt_failed" }, deps);
     // The proposal is bound to this prompt, never the handset's latest YES.
 
-    await supabase.from("sms_conversations")
-      .update({
-        state: "awaiting_confirmation",
-        party_id: effectParty,
-        active_project_id: effectProject,
-        state_context: { ...conv.state_context, pending_prompt_id: confirmation.id },
-      })
-      .eq("id", conv.id);
+    const context = await ensureContext(supabase, conv.id, effectProject, effectParty);
+    const { data: parked, error: parkError } = await contextSnapshot(supabase.from("sms_conversation_context").update({
+      state: "awaiting_confirmation", party_id: effectParty,
+      state_context: { ...context.state_context, pending_prompt_id: confirmation.id },
+    }), context).select("conversation_id");
+    // The immutable prompt already owns the proposal. Context is only a
+    // convenience pointer; losing its CAS must not invalidate the offered Ref.
+    if (parkError || !parked?.length) console.warn("confirmation context was not updated", parkError);
     await stampMessage(supabase, effectiveMessageId, effectParty, effectProject, { path: "llm", ...parsed }, parsed.confidence);
     // Nothing is filed until she answers YES, so the touch records the contact
     // and no decision.
@@ -1743,7 +1887,7 @@ async function effectFailure(supabase: SupabaseClient, conversationId: string, m
     partyId, projectId, authority ? "failed_no_authority" : "effect_failed");
 }
 
-async function closePrompt(supabase: SupabaseClient, id: string, at: string): Promise<unknown> {
+export async function closePrompt(supabase: SupabaseClient, id: string, at: string): Promise<unknown> {
   try {
     const { error } = await supabase.from("sms_prompts").update({ answered_at: at }).eq("id", id).is("answered_at", null);
     return error;
@@ -1767,7 +1911,7 @@ async function promptReceipt(supabase: SupabaseClient, sender: string, recipient
 type InboundCompletion =
   | { status: "prompt-completed"; receipt: PromptConsumption }
   | { status: "effect-completed" }
-  | { status: "unresolved"; source: Record<string, any> }
+  | { status: "unresolved"; source: Record<string, any>; rootSource?: Record<string, any> }
   | { status: "unknown" };
 
 export function completedInbound(messageId: string): InboundResult {
@@ -1780,7 +1924,9 @@ function completionUnknown(messageId: string, disposition = "completion_unknown"
 /** A missing or unreadable origin is not proof of absence. A NULL completion
  * may resume only because apply_field_effect serializes and rechecks it. */
 export async function inboundCompletion(supabase: SupabaseClient, messageId: string,
-  sender: string, recipient: string, conversationId?: string): Promise<InboundCompletion> {
+  sender: string, recipient: string, conversationId?: string, visited = new Set<string>()): Promise<InboundCompletion> {
+  if (visited.has(messageId)) return { status: "unknown" };
+  visited.add(messageId);
   try {
     const { data: source, error } = await supabase.from("sms_messages")
       .select("id, conversation_id, direction, twilio_sid, body, media, parsed_intent, applied_effect, party_id, project_id")
@@ -1790,6 +1936,16 @@ export async function inboundCompletion(supabase: SupabaseClient, messageId: str
     const { data: conv, error: convError } = await supabase.from("sms_conversations")
       .select("id, phone_e164, twilio_number").eq("id", source.conversation_id).maybeSingle();
     if (convError || !conv || conv.phone_e164 !== recipient || conv.twilio_number !== sender) return { status: "unknown" };
+    const rootId = source.parsed_intent?.held_origin_id;
+    if (rootId !== undefined) {
+      if (typeof rootId !== "string" || !rootId) return { status: "unknown" };
+      const root = await inboundCompletion(supabase, rootId, sender, recipient, source.conversation_id, visited);
+      if (root.status === "unknown") return root;
+      // Every caller (retry, dispatch, binder, digit) follows the same root.
+      // A chooser can never become a second business-effect source.
+      if (root.status !== "unresolved") return { status: "effect-completed" };
+      return { status: "unresolved", source, rootSource: root.rootSource ?? root.source };
+    }
     const receipt = await promptReceipt(supabase, sender, recipient, messageId);
     if (receipt.error) return { status: "unknown" };
     if (receipt.data != null) {
@@ -1817,12 +1973,13 @@ async function finishPrompt(supabase: SupabaseClient, conv: Conversation, messag
     const { data, error } = await supabase.from("sms_prompts").select("*").eq("id", promptId).single();
     if (error || !data || !receipt.result) throw error ?? new Error("receipt_binding_unreadable");
     prompt = data as SmsPrompt;
-    const context = { ...conv.state_context };
+    const row = await ensureContext(supabase, conv.id, prompt.project_id, prompt.party_id);
+    const context = { ...row.state_context };
     delete context.ref_clarification;
     const pending = context.pending_prompt_id === prompt.id;
     if (pending) { delete context.pending_prompt_id; delete context.pending_party_id; delete context.pending_effect; }
-    const { error: contextError } = await supabase.from("sms_conversations")
-      .update({ state: pending ? "idle" : conv.state, state_context: context }).eq("id", conv.id);
+    const { error: contextError } = await contextSnapshot(supabase.from("sms_conversation_context")
+      .update({ state: pending ? "idle" : row.state, state_context: context }), row);
     if (contextError) throw contextError;
     if (receipt.result.kind === "optin") {
       await recordConsentTouches(supabase, [{ org: String(receipt.result.result.organization_id),
@@ -1932,7 +2089,28 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
     return await reply(supabase, conv.id, "Please answer the text update invitation with YES and its reference number.",
       party?.id ?? null, party?.project_id ?? null, "ref_wrong_kind");
   }
+  const paused = await pausedReview(supabase, conv.id, party.project_id, party.id, messageId, deps);
+  if (paused) return paused;
   const subject = await promptSubject(supabase, prompt);
+  if (!subject && prompt.kind === "confirm_delivery" && !prompt.proposed_effect) {
+    const { data: po, error: poError } = await supabase.from("purchase_orders")
+      .select("id").eq("id", prompt.subject_id).eq("project_id", party.project_id).maybeSingle();
+    if (poError) return completionUnknown(messageId, "delivery_subject_unreadable");
+    if (po) {
+      const verdict = await channelConsentVerdict(supabase, recipient, party.project_id);
+      const blocked = await suppression(supabase, sender, recipient);
+      if (blocked.blocked || verdict !== "allow") return { status: blocked.error ? 503 : 200, twiml: twimlBody(), disposition: "not_consented" };
+      // PO subjects have no apply_prompt authority. Persist human ownership
+      // first; ordinary closure is intentionally not an atomic effect receipt.
+      const details = { path: "ref", prompt_id: prompt.id, ref: prompt.short_code,
+        purchase_order_id: po.id, party_id: party.id, verb: explicit?.[1] ?? body };
+      if (!await ownedReview(supabase, messageId, party.project_id, party.id, details, deps)) return completionUnknown(messageId, "handoff_failed");
+      if (await closePrompt(supabase, prompt.id, now.toISOString())) return completionUnknown(messageId, "delivery_ref_close_failed");
+      const { error } = await stampMessage(supabase, messageId, party.id, party.project_id, { ...details, path: "po_ref_review" });
+      if (error) return completionUnknown(messageId, "delivery_ref_stamp_failed");
+      return await reply(supabase, conv.id, "Your studio will confirm the delivery update.", party.id, party.project_id, "needs_review");
+    }
+  }
   if (!subject) {
     if (!await ownedReview(supabase, messageId, party.project_id, party.id, { path: "ref_subject_missing", prompt }, deps)) {
       return { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
@@ -2001,9 +2179,9 @@ function selectionUnavailable(result: { status?: string; selection?: SelectionQu
     disposition: pending ? "selection_pending" : "selection_unavailable", retainSid: pending };
 }
 
-async function selectionIntent(supabase: SupabaseClient, messageId: string, selection: SelectionIntent): Promise<InboundResult> {
-  const { error } = await stampMessage(supabase, messageId, null, null, { selection_intent: selection });
-  if (error) return { status: 503, twiml: twimlBody(), disposition: "selection_unrecorded" };
+async function selectionIntent(supabase: SupabaseClient, messageId: string, selection: SelectionIntent, details: Record<string, unknown> = {}): Promise<InboundResult> {
+  const { error } = await stampMessage(supabase, messageId, null, null, { ...details, selection_intent: selection });
+  if (error) return { status: 503, twiml: twimlBody(), disposition: "selection_unrecorded", retainSid: true };
   return { status: 200, twiml: twimlBody(), disposition: selection.kind === "project_choice" ? "project_chooser" : "ref_clarify",
     messageId, selection, retainSid: true };
 }
@@ -2014,27 +2192,46 @@ export async function bindInboundSelection(supabase: SupabaseClient, messageId: 
   const manifest = question.manifest;
   if (manifest.inboundMessageId !== messageId) return false;
   const { data: source, error: sourceError } = await supabase.from("sms_messages")
-    .select("body, media, parsed_intent").eq("id", messageId).single();
-  const { data: conv, error } = await supabase.from("sms_conversations")
-    .select("id, state, state_context").eq("id", manifest.conversationId).single();
-  if (sourceError || error || !source || !conv) return false;
-  // A late duplicate must not resurrect a question already answered.
+    .select("id, created_at, body, media, parsed_intent").eq("id", messageId).single();
+  if (sourceError || !source) return false;
+  // Snapshot before completion: a late binder must not acquire a newer
+  // question after proving its own origin unresolved.
+  const conv = await readContext(supabase, manifest.conversationId, null);
   const completion = await inboundCompletion(supabase, messageId, manifest.senderNumber, manifest.recipientPhone, manifest.conversationId);
   if (completion.status === "unknown") return false;
   if (completion.status !== "unresolved") return true;
   if (!source.parsed_intent?.selection_intent) return true;
+  const previousSource = (conv?.state_context?.selection as SelectionBinding | undefined)?.inboundMessageId ??
+    (conv?.state_context?.ref_clarification as SelectionBinding | undefined)?.inboundMessageId ?? conv?.state_context?.pending_message_id;
+  if (previousSource && previousSource !== messageId) {
+    const { data: previous, error } = await supabase.from("sms_messages")
+      .select("id, created_at").eq("id", previousSource).maybeSingle();
+    if (error || !previous || !source.created_at || !previous.created_at) return false;
+    // Source order decides which question wins; the flattened root decides
+    // completion only. Equal timestamps use the immutable inbound ID.
+    if (source.created_at < previous.created_at ||
+        (source.created_at === previous.created_at && source.id <= previous.id)) return true;
+  }
   const binding: SelectionBinding = { kind: manifest.kind, inboundMessageId: messageId, messageId: outboundId };
-  const context = { ...conv.state_context };
+  const context = conv?.backfilled_at ? {} : { ...conv?.state_context };
   if (manifest.kind === "project_choice") {
     context.selection = binding;
-    context.pending_body = source.body;
-    context.pending_media = source.media ?? [];
+    context.pending_body = source.parsed_intent?.legacy_reask ? "" : source.parsed_intent?.legacy_pending?.body ?? source.body;
+    context.pending_media = source.parsed_intent?.legacy_pending?.media ?? source.media ?? [];
     context.pending_message_id = messageId;
+    context.pending_root_id = (completion.rootSource ?? completion.source).id;
   } else context.ref_clarification = binding;
-  const { data: rows, error: updateError } = await supabase.from("sms_conversations")
-    .update({ state: manifest.kind === "project_choice" ? "awaiting_project_choice" : conv.state, state_context: context })
-    .eq("id", conv.id).eq("state", conv.state)
-    .eq("state_context", JSON.stringify(conv.state_context)).select("id");
+  if (!conv) {
+    const { data: inserted, error } = await supabase.from("sms_conversation_context").upsert({
+      conversation_id: manifest.conversationId, project_id: null, party_id: null,
+      state: manifest.kind === "project_choice" ? "awaiting_project_choice" : "idle", state_context: context,
+      paused_until: null, backfilled_at: null,
+    }, { onConflict: "conversation_id,project_id", ignoreDuplicates: true }).select("conversation_id");
+    return !error && !!inserted?.length;
+  }
+  const { data: rows, error: updateError } = await contextSnapshot(supabase.from("sms_conversation_context")
+    .update({ state: manifest.kind === "project_choice" ? "awaiting_project_choice" : conv.state, state_context: context, backfilled_at: null }), conv)
+    .select("conversation_id");
   return !updateError && !!rows?.length;
 }
 
@@ -2046,8 +2243,8 @@ function firstInt(s: string): number | null {
 
 /**
  * A fresh explicit project pin (within PROJECT_PIN_TTL_MS) from a
- * conversation's state_context, or null. Shared by the MMS storage-path
- * choice and the LLM item-scoping logic below — one TTL rule, two call sites.
+ * project context, or null. Only an explicit choice scopes later freeform
+ * parsing; an unscoped MMS remains in holding storage until resolution.
  */
 function freshProjectPin(
   stateContext: Record<string, unknown> | undefined,
@@ -2149,11 +2346,13 @@ async function loadRecentMessages(
   /** Exclude this row (the original stashed message when replaying its text
    * as the current `body`) so the LLM isn't fed the same content twice. */
   excludeId?: string | null,
+  projectId?: string,
 ): Promise<{ direction: string; body: string }[]> {
   const { data } = await supabase
     .from("sms_messages")
     .select("id, direction, body, created_at")
     .eq("conversation_id", conversationId)
+    .eq("project_id", projectId)
     .order("created_at", { ascending: false })
     .limit(5);
   return ((data ?? []) as Array<{ id: string; direction: string; body: string }>)
@@ -2299,9 +2498,13 @@ async function ingestMedia(
   const authToken = getEnv("TWILIO_AUTH_TOKEN");
   const num = parseInt(params.NumMedia ?? "0", 10) || 0;
   const out: Array<{ path: string; content_type: string; twilio_url: string }> = [];
+  const { data: prior, error: priorError } = await deps.supabase.from("sms_messages").select("media").eq("id", messageId).single();
+  if (priorError) throw priorError;
   for (let i = 0; i < num; i++) {
     const url = params[`MediaUrl${i}`];
     if (!url) continue;
+    const stored = Array.isArray(prior?.media) ? prior.media.find((m: {twilio_url: string}) => m.twilio_url === url) : null;
+    if (stored) { out.push(stored); continue; }
     const ct = params[`MediaContentType${i}`] ?? "application/octet-stream";
     try {
       const res = await fetchImpl(url, {
