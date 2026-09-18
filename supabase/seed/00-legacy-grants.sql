@@ -17820,6 +17820,42 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00642_sms_thread_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_take_thread(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00642_sms_thread_ownership.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_take_thread(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00642_sms_thread_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_hand_back_thread(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00642_sms_thread_ownership.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_hand_back_thread(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00642_sms_thread_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sms_extend_pause(uuid, integer) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00642_sms_thread_ownership.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sms_extend_pause(uuid, integer) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
