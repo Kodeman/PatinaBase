@@ -39,6 +39,14 @@ export interface SmsReviewMessage {
   media: unknown[];
   parsed_intent: FieldParsedIntent | null;
   confidence: number | null;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  paused_until: string | null;
+  notified_name: string | null;
+  twilio_status: string | null;
+  error_code: string | null;
+  applied_effect: Record<string, unknown> | null;
+  project_lead_id: string | null;
   created_at: string;
   party: {
     id: string;
@@ -56,17 +64,6 @@ export const smsReviewKeys = {
   all: ['sms-review'] as const,
 };
 
-const REVIEW_SELECT = `
-  id, conversation_id, project_id, party_id, body, media, parsed_intent, confidence, created_at,
-  party:project_parties!party_id(id, display_name, party_kind, trade),
-  project:projects!project_id(id, name)
-`;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function one<T>(v: T | T[] | null | undefined): T | null {
-  return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
-}
-
 /**
  * The field-triage queue: unreviewed inbound texts across my projects, newest
  * first. Resolves each parse's target title so the card can state the proposed
@@ -81,16 +78,37 @@ export function useSmsReviewQueue() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
-        .from('sms_messages')
-        .select(REVIEW_SELECT)
-        .eq('direction', 'inbound')
-        .eq('needs_review', true)
-        .is('reviewed_at', null)
+        .from('sms_review_queue')
+        .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const raw = (data ?? []) as any[];
+
+      if (!raw.length) return [];
+      // The view owns membership/queue filtering. Enrichment never reads the
+      // unattributed holding context, and every pause is joined by BOTH keys.
+      const projectIds = [...new Set(raw.map((row) => row.project_id))];
+      const [projects, messages, contexts, notifications] = await Promise.all([
+        supabase.from('projects').select('id, name, designer_id').in('id', projectIds),
+        supabase.from('sms_messages').select('id, twilio_status, error_code, applied_effect').in('id', raw.map((row) => row.id)),
+        supabase.from('sms_conversation_context').select('conversation_id, project_id, paused_until')
+          .in('project_id', projectIds).in('conversation_id', raw.map((row) => row.conversation_id)),
+        supabase.from('notification_log').select('user_id, metadata').eq('type', 'field_needs_review')
+          .eq('channel', 'in_app').eq('status', 'delivered').in('metadata->>message_id', raw.map((row) => row.id)),
+      ]);
+      for (const result of [projects, messages, contexts, notifications]) if (result.error) throw result.error;
+      const userIds = [...new Set([...raw.map((row) => row.owner_user_id),
+        ...(notifications.data ?? []).map((row: { user_id: string }) => row.user_id)].filter(Boolean))];
+      const profiles = userIds.length
+        ? await supabase.from('profiles').select('id, full_name, display_name').in('id', userIds)
+        : { data: [], error: null };
+      if (profiles.error) throw profiles.error;
+      const name = (id: string | null) => {
+        const profile = profiles.data?.find((row: { id: string }) => row.id === id);
+        return profile?.display_name || profile?.full_name || null;
+      };
 
       // Resolve target titles in two batched reads (task / coordination).
       const taskIds = new Set<string>();
@@ -133,8 +151,20 @@ export function useSmsReviewQueue() {
           parsed_intent: parsed,
           confidence: r.confidence ?? null,
           created_at: r.created_at,
-          party: one(r.party),
-          project: one(r.project),
+          owner_user_id: r.owner_user_id ?? null,
+          owner_name: name(r.owner_user_id),
+          paused_until: contexts.data?.find((row: { conversation_id: string; project_id: string }) =>
+            row.conversation_id === r.conversation_id && row.project_id === r.project_id)?.paused_until ?? null,
+          notified_name: (() => {
+            const notification = notifications.data?.find((row: { metadata?: { message_id?: string } }) => row.metadata?.message_id === r.id);
+            return notification ? (name(notification.user_id)?.split(' ')[0] ?? 'a studio member') : null;
+          })(),
+          twilio_status: messages.data?.find((row: { id: string }) => row.id === r.id)?.twilio_status ?? null,
+          error_code: messages.data?.find((row: { id: string }) => row.id === r.id)?.error_code ?? null,
+          applied_effect: messages.data?.find((row: { id: string }) => row.id === r.id)?.applied_effect ?? null,
+          project_lead_id: projects.data?.find((row: { id: string }) => row.id === r.project_id)?.designer_id ?? null,
+          party: r.party_id ? { id: r.party_id, display_name: r.party_display_name, party_kind: r.party_kind, trade: r.trade } : null,
+          project: projects.data?.find((row: { id: string }) => row.id === r.project_id) ?? null,
           target_title: target?.id ? (titles.get(target.id) ?? null) : null,
           target_kind: (target?.kind as 'task' | 'coordination' | undefined) ?? null,
         };

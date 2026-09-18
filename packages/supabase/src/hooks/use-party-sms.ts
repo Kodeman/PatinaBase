@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { smsReviewKeys } from './use-sms-review';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PARTY SMS + FIELD LINK — the party-profile sheet's data layer (Wave 5)
@@ -26,6 +27,7 @@ export interface PartySmsMessage {
   media: Array<{ path?: string; content_type?: string; twilio_url?: string }>;
   template_key: string | null;
   twilio_status: string | null;
+  error_code?: string | null;
   needs_review: boolean;
   created_at: string;
 }
@@ -52,7 +54,7 @@ export function usePartySmsThread(partyId: string | null | undefined) {
       const { data, error } = await supabase
         .from('sms_messages')
         .select(
-          'id, conversation_id, direction, body, media, template_key, twilio_status, needs_review, created_at',
+          'id, conversation_id, direction, body, media, template_key, twilio_status, error_code, needs_review, created_at',
         )
         .eq('party_id', partyId)
         .order('created_at', { ascending: true });
@@ -70,16 +72,67 @@ export function usePartySmsThread(partyId: string | null | undefined) {
  * edge fn with {partyId, body}; the fn resolves the phone + consent server-side
  * and logs the outbound message. Callers gate the composer on consent='granted'.
  */
+export interface PartySmsResult {
+  id?: string;
+  status: 'sent' | 'queued' | 'deferred' | 'failed';
+  reason?: string;
+  dueAt?: string;
+  provider_code?: string;
+}
+
+/** Never turn an unrecognized transport response into a sent receipt. */
+function dispatchResult(value: unknown): PartySmsResult {
+  const row = value as Record<string, unknown> | null;
+  if (!row || !['sent', 'queued', 'deferred', 'failed'].includes(String(row.status))) {
+    throw new Error("Couldn't confirm the send. Your draft is still here.");
+  }
+  return {
+    status: row.status as PartySmsResult['status'],
+    id: typeof row.id === 'string' ? row.id : typeof row.messageId === 'string' ? row.messageId : undefined,
+    reason: typeof row.reason === 'string' ? row.reason : undefined,
+    dueAt: typeof row.dueAt === 'string' ? row.dueAt : undefined,
+    provider_code: row.provider_code == null ? undefined : String(row.provider_code),
+  };
+}
+
+export function smsResultWords(result: PartySmsResult): string {
+  if (result.status === 'sent') return 'Sent';
+  if (result.status === 'queued') return 'Queued to send';
+  if (result.status === 'deferred') return result.dueAt
+    ? 'Will send at ' + new Date(result.dueAt).toLocaleString()
+    : 'Waiting to send';
+  if (result.provider_code === '30007') return 'Carrier blocked this text.';
+  if (result.provider_code === '21610') return "They've opted out.";
+  if (result.reason === 'opted_out') return "They've opted out.";
+  if (result.reason === 'sid_unrecorded') return "The carrier may have it, but we couldn't save its receipt. Check the thread before sending again.";
+  if (result.reason === 'defer_failed') return "Couldn't save this text for later. Try again.";
+  if (result.reason === 'no_phone_number') return 'Add their phone number first.';
+  if (result.reason === 'not_consented') return "They haven't said yes yet.";
+  if (result.reason === 'suppressed') return "They've asked us to stop.";
+  if (result.reason === 'prompt_code_unavailable') return "Couldn't get them a reply code, try again.";
+  return "The carrier didn't accept it.";
+}
+
 export function useSendPartySms() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ partyId, body }: { partyId: string; body: string }) => {
       const supabase = getSupabase();
-      const { data, error } = await supabase.functions.invoke('sms-dispatch', {
-        body: { partyId, body },
-      });
-      if (error) throw new Error(`useSendPartySms: ${error.message}`);
-      return data as unknown;
+      try {
+        const { data, error } = await supabase.functions.invoke('sms-dispatch', {
+          body: { partyId, body },
+        });
+        if (error) throw error;
+        return dispatchResult(data);
+      } catch (error) {
+        // FunctionsHttpError carries the non-2xx response in context, whether
+        // invoke returns it as error or a wrapper throws it.
+        const response = (error as { context?: { json?: () => Promise<unknown> } })?.context;
+        if (typeof response?.json === 'function') {
+          try { return dispatchResult(await response.json()); } catch { /* unknown response */ }
+        }
+        throw new Error("Couldn't confirm the send. Your draft is still here.");
+      }
     },
     onSuccess: (_data, { partyId }) => {
       void queryClient.invalidateQueries({ queryKey: partySmsKeys.thread(partyId) });
@@ -122,6 +175,8 @@ export function useActiveFieldLink(partyId: string | null | undefined) {
 
 export interface CreateFieldLinkInput {
   partyId: string;
+  /** Explicit regeneration closes the old URLs; routine minting does not. */
+  revokePrior?: boolean;
   /**
    * PR-l — the studio's CHOICE of end date, when it has one to make. The RPC
    * outranks it with the seat's own window where the seat HAS one (the later
@@ -137,8 +192,8 @@ export interface CreateFieldLinkInput {
 }
 
 /**
- * Mint (or regenerate) a field link for a seat. `create_field_link` revokes any
- * prior active token and returns the RAW token exactly once — the caller
+ * Mint (or explicitly regenerate) a field link for a seat. With revokePrior,
+ * create_field_link revokes prior active tokens and returns the RAW token exactly once — the caller
  * shows/copies it now; only sha256(token) is stored. Same RPC serves "Copy
  * field link" and "Regenerate".
  *
@@ -152,12 +207,13 @@ export interface CreateFieldLinkInput {
 export function useCreateFieldLink() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ partyId, expiresAt }: CreateFieldLinkInput) => {
+    mutationFn: async ({ partyId, expiresAt, revokePrior = false }: CreateFieldLinkInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
       const { data, error } = await supabase.rpc('create_field_link', {
         p_party_id: partyId,
         p_expires_at: expiresAt ?? null,
+        p_revoke_prior: revokePrior,
       });
       if (error) throw error;
       // RETURNS TABLE (id, token) → a one-row array.
@@ -241,3 +297,34 @@ export function fieldLinkUrl(token: string): string {
     process.env.NEXT_PUBLIC_CLIENT_PORTAL_URL?.replace(/\/$/, '') ?? 'https://client.patina.cloud';
   return `${base}/field/${token}`;
 }
+
+
+export function smsThreadActionError(error: unknown): string {
+  return (error as { code?: string })?.code === '42501'
+    ? 'Someone else has this one'
+    : "Couldn't save the change. Try again.";
+}
+
+function useSmsThreadAction(action: 'sms_take_thread' | 'sms_hand_back_thread' | 'sms_extend_pause') {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (messageId: string) => {
+      // RPC signatures are supplied by the ownership authority migration.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc(action, {
+        p_message_id: messageId,
+        ...(action === 'sms_extend_pause' ? { p_hours: 4 } : {}),
+      });
+      if (error) throw error;
+      return data as string | null;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: smsReviewKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['party-sms'] });
+    },
+  });
+}
+export function useTakeSmsThread() { return useSmsThreadAction('sms_take_thread'); }
+export function useHandBackSmsThread() { return useSmsThreadAction('sms_hand_back_thread'); }
+export function useExtendSmsPause() { return useSmsThreadAction('sms_extend_pause'); }

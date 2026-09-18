@@ -12,7 +12,7 @@
  */
 
 import { useState } from 'react';
-import { useReviewSmsMessage, type SmsReviewMessage } from '@patina/supabase';
+import { useReviewSmsMessage, useTakeSmsThread, useHandBackSmsThread, useExtendSmsPause, useUser, smsThreadActionError, smsResultWords, type SmsReviewMessage } from '@patina/supabase';
 import { getFieldTradeLabel } from '@patina/types';
 import { describeFieldEffect, isDelayEffect } from '@/lib/document/field-sms';
 import { DateTextInput } from '../date-text-input';
@@ -20,6 +20,17 @@ import { DocumentAction, DocumentActionGroup } from '../document-action';
 
 export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
   const review = useReviewSmsMessage();
+  const take = useTakeSmsThread();
+  const handBack = useHandBackSmsThread();
+  const extend = useExtendSmsPause();
+  const { user } = useUser();
+  const [actionError, setActionError] = useState<string | null>(null);
+  const busy = take.isPending || handBack.isPending || extend.isPending;
+  const act = async (mutation: typeof take) => {
+    setActionError(null);
+    try { await mutation.mutateAsync(message.id); }
+    catch (error) { setActionError(smsThreadActionError(error)); }
+  };
   const parsed = message.parsed_intent;
   const [editedDate, setEditedDate] = useState<string>(
     (parsed?.new_date as string | undefined) ?? '',
@@ -30,7 +41,10 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
     .filter(Boolean)
     .join(' · ');
   const effectLine = describeFieldEffect(parsed, message.target_title);
-  const canApply = !!parsed && !!message.party_id;
+  // Review-only handoffs carry routing facts, not an effect to replay.
+  const reviewOnly = parsed?.type === 'report_condition' || parsed?.intent === 'report_condition' ||
+    parsed?.target?.kind === undefined || parsed?.reason === 'delivery_expected';
+  const canApply = !!parsed && !!message.party_id && !reviewOnly;
   const delay = isDelayEffect(parsed);
 
   const apply = () => {
@@ -63,7 +77,7 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
         className="absolute -top-[26px] left-0 flex h-[26px] items-center rounded-t-[7px] px-3.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-white"
         style={{ background: 'var(--color-golden-hour)' }}
       >
-        Field text · needs review
+        Field text · needs a person
       </div>
 
       <div className="rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 outline outline-[1.5px] outline-offset-[-1.5px] outline-[rgba(232,197,71,0.5)]">
@@ -75,7 +89,24 @@ export function SmsReviewCard({ message }: { message: SmsReviewMessage }) {
           {message.project?.name ? ` · ${message.project.name}` : ''}
         </p>
 
-        {effectLine && (
+        <div className="mt-3 space-y-1 text-[12px] text-[var(--text-muted)]">
+          <p>{message.owner_user_id ? (message.owner_name ?? 'A studio member') : 'Unowned'}</p>
+          <p>{message.applied_effect ? (message.applied_effect.applied === false ? 'Reviewed — no change needed' : 'Changes saved') : 'Saved for a closer look'}</p>
+          {message.twilio_status && ['sent', 'queued', 'deferred'].includes(message.twilio_status) && <p>{smsResultWords({ status: message.twilio_status as 'sent' | 'queued' | 'deferred' })}</p>}
+          {message.twilio_status === 'failed' && <p>{smsResultWords({ status: 'failed', provider_code: message.error_code ?? undefined })}</p>}
+          <p>{message.notified_name ? 'Told ' + message.notified_name : "Nobody’s been told yet"}</p>
+          <p>{message.paused_until && new Date(message.paused_until).getTime() > Date.now()
+            ? 'Automatic replies paused until ' + new Date(message.paused_until).toLocaleString()
+            : 'Automatic replies are not paused'}</p>
+        </div>
+        <DocumentActionGroup surfaceKey="desk" regionKey="field-sms-owner" aria-label="Who is following up" className="mt-3">
+          <DocumentAction actionKey="take-field-text" onClick={() => void act(take)} disabled={busy}>Take it</DocumentAction>
+          <DocumentAction actionKey="hand-back-field-text" onClick={() => void act(handBack)} disabled={busy || !user || message.owner_user_id !== user.id}>Hand back</DocumentAction>
+          <DocumentAction actionKey="extend-field-pause" onClick={() => void act(extend)} disabled={busy || !user || message.owner_user_id !== user.id}>Extend</DocumentAction>
+          {actionError && <p role="alert">{actionError}</p>}
+        </DocumentActionGroup>
+
+        {!reviewOnly && effectLine && (
           <div className="mt-4 border-t border-[var(--border-default)] pt-3.5">
             <p className="font-mono text-[11px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
               Proposed

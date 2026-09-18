@@ -21,12 +21,14 @@
  * Zero shadows (D4); typography-first; the Room beneath never unmounts (D1).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   usePerson,
   usePersonSeat,
   usePartySmsThread,
   useSendPartySms,
+  smsResultWords,
+  type PartySmsResult,
   useActiveFieldLink,
   useCreateFieldLink,
   useRevokeFieldLink,
@@ -219,7 +221,6 @@ export function PartyProfileSheet({
   const { data: activeLink } = useActiveFieldLink(open ? partyId : null);
   const createLink = useCreateFieldLink();
   const revokeLink = useRevokeFieldLink();
-  const send = useSendPartySms();
   const recordConsent = useRecordPartySmsConsent();
 
   // Call Sheet Wave 2 — the promote band (slide 10). Gated on the flag AND on
@@ -281,7 +282,6 @@ export function PartyProfileSheet({
 
   const [mintedUrl, setMintedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [body, setBody] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
 
   // Invite-to-texts (existing parties only — AddPersonSheet owns the
@@ -493,6 +493,7 @@ export function PartyProfileSheet({
       // is never invalidated and the Call Sheet keeps reading "On paper".
       const { token } = await createLink.mutateAsync({
         partyId,
+        revokePrior: true,
         projectId: seatProjectId ?? undefined,
       });
       const url = fieldLinkUrl(token);
@@ -528,14 +529,6 @@ export function PartyProfileSheet({
         e instanceof Error ? e.message : 'Could not revoke the link.',
       );
     }
-  };
-
-  const doSend = () => {
-    if (!partyId || !body.trim()) return;
-    send.mutate(
-      { partyId, body: body.trim() },
-      { onSuccess: () => setBody('') },
-    );
   };
 
   const doInvite = () => {
@@ -838,47 +831,7 @@ export function PartyProfileSheet({
       {/* Composer */}
       <section className="mt-4 border-t border-[var(--color-pearl)] pt-3">
         {granted ? (
-          <>
-            <textarea
-              rows={2}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              aria-label="Send a text"
-              className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
-            />
-            <p
-              id="field-text-reason"
-              className="mt-1 text-[0.7rem] leading-relaxed text-[var(--color-aged-oak)]"
-            >
-              Write the message first — a text with no words is not a text.
-            </p>
-            <DocumentActionRow
-              surfaceKey="people"
-              regionKey="field-text-composer"
-              className="mt-1.5"
-              aria-label="Field text actions"
-            >
-              <DocumentAction
-                actionKey="send-field-text"
-                variant="primary"
-                onClick={doSend}
-                held={!body.trim()}
-                disabled={!body.trim()}
-                aria-describedby="field-text-reason"
-                loading={send.isPending}
-                loadingLabel="Sending…"
-              >
-                Send text
-              </DocumentAction>
-              {send.isError && (
-                <span className="text-[0.7rem] text-[var(--color-terracotta-ink)]">
-                  {send.error instanceof Error
-                    ? send.error.message
-                    : 'Send failed'}
-                </span>
-              )}
-            </DocumentActionRow>
-          </>
+          <PartySmsComposer key={partyId} partyId={partyId} thread={thread} />
         ) : consent === 'pending' ? (
           <p className="rounded-[7px] border border-[var(--color-pearl)] bg-white/50 px-3 py-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
             Invite sent — waiting on their reply. You can text them once they
@@ -1002,5 +955,64 @@ export function PartyProfileSheet({
         )}
       </section>
     </RoomSheet>
+  );
+}
+
+
+/** Keyed by party in the sheet: an in-flight response cannot clear another draft. */
+export function PartySmsComposer({ partyId, thread }: { partyId: string | null; thread?: PartySmsMessage[] }) {
+  const send = useSendPartySms();
+  const [body, setBody] = useState('');
+  const [receipt, setReceipt] = useState<PartySmsResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const draft = useRef<HTMLTextAreaElement>(null);
+  const pending = useRef(false);
+  const deferred = receipt?.status === 'deferred';
+  const deferredMessage = deferred ? thread?.find((message) => message.id === receipt.id) : null;
+  const deferredFailure = deferredMessage && ['failed', 'undelivered', 'suppressed', 'expired'].includes(deferredMessage.twilio_status ?? '')
+    ? smsResultWords({ status: 'failed', provider_code: deferredMessage.error_code ?? undefined,
+        reason: deferredMessage.twilio_status === 'suppressed' ? 'suppressed' : undefined }) : null;
+  useEffect(() => {
+    if (!deferred || !receipt?.id) return;
+    const status = thread?.find((m) => m.id === receipt.id)?.twilio_status;
+    if (status === 'sent' || status === 'queued' || status === 'delivered') {
+      setBody('');
+      setReceipt({ ...receipt, status: status === 'queued' ? 'queued' : 'sent' });
+    }
+  }, [thread, deferred, receipt]);
+  const doSend = async () => {
+    if (!partyId || !body.trim() || pending.current || deferred) return;
+    pending.current = true;
+    setError(null);
+    setReceipt(null);
+    try {
+      const result = await send.mutateAsync({ partyId, body: body.trim() });
+      setReceipt(result);
+      if (result.status === 'sent' || result.status === 'queued') setBody('');
+      else if (result.status === 'failed') draft.current?.focus();
+    } catch {
+      setError("Couldn't confirm the send. Your draft is still here.");
+      draft.current?.focus();
+    } finally { pending.current = false; }
+  };
+  return (
+    <div data-message-id={receipt?.id}>
+      <textarea ref={draft} rows={2} value={body} readOnly={deferred || send.isPending}
+        onChange={(event) => setBody(event.target.value)} aria-label="Send a text"
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            void doSend();
+          }
+        }}
+        className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.82rem] text-[var(--color-charcoal)]" />
+      <DocumentActionRow surfaceKey="people" regionKey="field-text-composer" aria-label="Field text actions">
+        {!deferred && <DocumentAction actionKey="send-field-text" variant="primary" onClick={() => void doSend()}
+          disabled={!body.trim() || send.isPending} loading={send.isPending} loadingLabel="Sending…">Send text</DocumentAction>}
+        {(receipt || error) && <p role={error || receipt?.status === 'failed' ? 'alert' : 'status'}>
+          {error ?? deferredFailure ?? (receipt ? smsResultWords(receipt) : '')}
+        </p>}
+      </DocumentActionRow>
+    </div>
   );
 }

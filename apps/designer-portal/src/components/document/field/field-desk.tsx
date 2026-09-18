@@ -16,9 +16,10 @@
  */
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   useFieldActivity,
+  useUser,
   useSmsReviewQueue,
   type FieldActivityRow,
   type SmsReviewMessage,
@@ -98,6 +99,12 @@ export function FieldDesk({
   withinPulse?: boolean;
 }) {
   const { cards, lines } = population;
+  const { user } = useUser();
+  const [filter, setFilter] = useState<'Mine' | 'Unowned' | 'All'>('All');
+  const visibleCards = cards.filter((message) => filter === 'All' ||
+    (filter === 'Mine' ? !!user && message.owner_user_id === user.id : !message.owner_user_id));
+  const needsLead = cards.some((message) => !message.owner_user_id &&
+    message.project_lead_id === user?.id && Date.now() - Date.parse(message.created_at) > 30 * 60_000);
 
   // R94 — quiet state teaches instead of vanishing. When there is no field work
   // the section stays, in the pencil idiom, naming what will land here so the
@@ -107,7 +114,8 @@ export function FieldDesk({
   // invited per-project inside a document's coordination (there is no global
   // field-parties surface, and no palette-visible act, to point at).
   if (cards.length === 0 && lines.length === 0) {
-    if (population.isError) return null;
+    if (population.isError) return <p role="alert">Couldn’t load the field texts. Try again.</p>;
+    if (population.isLoading) return <p role="status">Loading field texts…</p>;
     return (
       <section
         aria-labelledby="in-the-field"
@@ -141,9 +149,16 @@ export function FieldDesk({
         <span id="in-the-field">In the field</span>
       </SectionEyebrow>
 
-      {cards.length > 0 && (
+      {population.isError && <p role="alert">Couldn’t refresh the field texts. These may have changed.</p>}
+      <div role="group" aria-label="Field text filter" className="mb-4 flex gap-4">
+        {(['Mine', 'Unowned', 'All'] as const).map((label) => <button key={label} type="button"
+          aria-pressed={filter === label} onClick={() => setFilter(label)}>{label}</button>)}
+      </div>
+      {needsLead && <p className="mb-4 text-[12px] text-[var(--text-muted)]">A field text has been waiting for someone for over 30 minutes. Could you take a look?</p>}
+      {visibleCards.length === 0 && <p>No field texts in this view.</p>}
+      {visibleCards.length > 0 && (
         <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2">
-          {cards.map((m) => (
+          {visibleCards.map((m) => (
             <SmsReviewCard key={m.id} message={m} />
           ))}
         </div>

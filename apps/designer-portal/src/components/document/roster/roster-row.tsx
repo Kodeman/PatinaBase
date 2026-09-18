@@ -42,6 +42,8 @@ import {
   useComplianceNotices,
   useRemoveProjectParty,
   useSendPartySms,
+  smsResultWords,
+  type PartySmsResult,
   useSetPartyBid,
   useUpdateProjectParty,
   useTouches,
@@ -272,6 +274,7 @@ export function RosterRow({
 
   const [composing, setComposing] = useState(false);
   const [body, setBody] = useState('');
+  const [smsReceipt, setSmsReceipt] = useState<PartySmsResult | null>(null);
   const [closing, setClosing] = useState(false);
   const [reason, setReason] = useState('');
   /**
@@ -1366,6 +1369,7 @@ export function RosterRow({
                 <textarea
                   rows={2}
                   value={body}
+                  readOnly={smsReceipt?.status === 'deferred' || sendSms.isPending}
                   onChange={(e) => setBody(e.target.value)}
                   aria-label={`Send a text to ${row.name}`}
                   className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.8rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
@@ -1376,16 +1380,19 @@ export function RosterRow({
                   className="mt-1.5"
                   aria-label="Send a text"
                 >
-                  <DocumentAction
+                  {smsReceipt?.status !== 'deferred' && <DocumentAction
                     actionKey="send-roster-text"
                     variant="primary"
                     onClick={() =>
                       void sendSms
                         .mutateAsync({ partyId: seatId, body })
-                        .then(() => {
-                          setBody('');
-                          setComposing(false);
-                          setNote('Sent.');
+                        .then((receipt) => {
+                          setSmsReceipt(receipt);
+                          setNote(smsResultWords(receipt));
+                          if (receipt.status === 'sent' || receipt.status === 'queued') {
+                            setBody('');
+                            setComposing(false);
+                          }
                         })
                         .catch((e: unknown) =>
                           setNote(e instanceof Error ? e.message : 'Send failed.'),
@@ -1400,7 +1407,7 @@ export function RosterRow({
                     loadingLabel="Sending…"
                   >
                     Send
-                  </DocumentAction>
+                  </DocumentAction>}
                 </DocumentActionRow>
                 {/* Direction §5.5: a gated act is `aria-disabled` with a
                     VISIBLE consequence sentence beside it — never `disabled`.

@@ -562,6 +562,11 @@ export type { FieldActivityRow } from "./use-field-activity";
 export {
   usePartySmsThread,
   useSendPartySms,
+  useTakeSmsThread,
+  useHandBackSmsThread,
+  useExtendSmsPause,
+  smsResultWords,
+  smsThreadActionError,
   useActiveFieldLink,
   useCreateFieldLink,
   useRevokeFieldLink,
@@ -571,6 +576,7 @@ export {
 } from "./use-party-sms";
 export type {
   PartySmsMessage,
+  PartySmsResult,
   FieldLinkToken,
   CreateFieldLinkInput,
 } from "./use-party-sms";

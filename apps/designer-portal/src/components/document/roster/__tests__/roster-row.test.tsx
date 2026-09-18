@@ -92,6 +92,7 @@ jest.mock('@patina/supabase', () => ({
   useCloseProjectPartySeat: () => ({ mutateAsync: closeMutate, isPending: false }),
   useRemoveProjectParty: () => ({ mutateAsync: removeMutate, isPending: false }),
   useCreateFieldLink: () => ({ mutateAsync: createLinkMutate, isPending: false }),
+  smsResultWords: jest.requireActual('../../../../../../../packages/supabase/src/hooks/use-party-sms').smsResultWords,
   useSendPartySms: () => ({ mutateAsync: sendSmsMutate, isPending: false }),
   useChannelConsent: () => ({ data: consentResolution }),
   useComplianceDocuments: () => ({ data: complianceDocs }),
@@ -1787,4 +1788,24 @@ describe('RosterRow — the window band (direction §7 P3)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Close this seat/ }));
     expect(container.querySelector('[data-edit-window="seat-dana"]')).toBeNull();
   });
+});
+
+
+it.each(["failed", "deferred", "queued", "sent"])("roster respects the %s send receipt", async (status) => {
+  sendSmsMutate.mockResolvedValue({ id: "out1", status, reason: "suppressed", dueAt: "2026-09-19T14:00:00Z" });
+  ul(<RosterRow row={seatRow()} band="this_week" expanded onToggle={jest.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: /^Text$/ }));
+  const draft = screen.getByRole("textbox", { name: /Send a text to/ });
+  fireEvent.change(draft, { target: { value: "Studio: hello" } });
+  fireEvent.click(screen.getByRole("button", { name: /^Send$/ }));
+  await waitFor(() => expect(sendSmsMutate).toHaveBeenCalledTimes(1));
+  if (status === "failed" || status === "deferred") {
+    await waitFor(() => expect(document.querySelector("[data-roster-row-note]")).not.toBeNull());
+    expect(draft).toBeInTheDocument();
+    expect(draft).toHaveValue("Studio: hello");
+    expect(screen.queryByText("Sent.")).not.toBeInTheDocument();
+    if (status === "deferred") expect(screen.queryByRole("button", { name: /^Send$/ })).not.toBeInTheDocument();
+  } else {
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: /Send a text to/ })).not.toBeInTheDocument());
+  }
 });
