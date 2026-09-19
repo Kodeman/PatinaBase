@@ -128,3 +128,57 @@ export function selectionFixture(now?: Date) {
       const row = fixture.prompt(overrides); Object.assign(row, convert(row)); return row;
     } };
 }
+
+/** Service-role link RPC seam for the stale/forwarded case, not a SQL/RLS oracle.
+ * 00640:104-131 derives expiry at mint; :143-162 only revokes when asked and
+ * persists SHA-256, never the credential. 00283:201-223 resolves hash/status/
+ * expiry and stamps last_used_at: opening does NOT consume or mint a token.
+ * Only the identity portion of the narrow DTO (:291-298) is modeled here;
+ * work-list projections and authenticated mint permissions remain SQL tests.
+ */
+export function fieldLinkFixture(now?: Date) {
+  const fixture = inboundFixture(undefined, now);
+  const { h } = fixture;
+  const rpc = h.fake.rpc;
+  let mints = 0;
+  const hash = async (token: string) => Array.from(new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)),
+  ), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  h.fake._data.field_link_tokens = [];
+  h.fake.rpc = async (name, args = {}) => {
+    const rows = h.fake._data.field_link_tokens;
+    if (name === "create_field_link") {
+      const party = h.fake._data.project_parties.find((p) => p.id === args.p_party_id);
+      if (!party) return { data: null, error: { code: "P0002" } };
+      const lastDay = [party.on_site_to, party.warranty_until].filter(Boolean).map(String).sort().at(-1);
+      const windowEnd = lastDay ? Date.parse(lastDay + "T00:00:00.000Z") + 86400000 : 0;
+      const requested = Date.parse(String(args.p_expires_at ?? ""));
+      const expiry = windowEnd > h.clock.getTime() ? windowEnd
+        : requested > h.clock.getTime() ? requested : h.clock.getTime() + 90 * 86400000;
+      if (args.p_revoke_prior === true) {
+        for (const row of rows) if (row.party_id === party.id && row.project_id === party.project_id && row.status === "active") row.status = "revoked";
+      }
+      const token = (++mints).toString(16).padStart(64, "a");
+      const id = "field-link-" + mints;
+      rows.push({ id, party_id: party.id, project_id: party.project_id,
+        token_hash: await hash(token), expires_at: new Date(expiry).toISOString(),
+        status: "active", last_used_at: null });
+      return { data: [{ id, token }], error: null };
+    }
+    if (name === "resolve_field_link") {
+      if (typeof args.p_token !== "string" || !args.p_token.trim()) return { data: null, error: null };
+      const digest = await hash(args.p_token);
+      const row = rows.find((r) => r.token_hash === digest && r.status === "active" &&
+        (r.expires_at == null || Date.parse(String(r.expires_at)) > h.clock.getTime()));
+      if (!row) return { data: null, error: null };
+      const party = h.fake._data.project_parties.find((p) => p.id === row.party_id);
+      const project = h.fake._data.projects.find((p) => p.id === row.project_id);
+      if (!party || !project) return { data: null, error: null };
+      row.last_used_at = h.clock.toISOString();
+      return { data: { project: { id: project.id, name: project.name },
+        party: { id: party.id, display_name: party.display_name, party_kind: party.party_kind, trade: party.trade ?? null } }, error: null };
+    }
+    return rpc(name, args);
+  };
+  return { ...fixture, get mints() { return mints; } };
+}

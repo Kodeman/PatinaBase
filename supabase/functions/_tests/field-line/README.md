@@ -13,9 +13,9 @@ The gate inventory stays complete even while later tickets own the behavior. A `
 | `start-no-consent` | S2 START re-asks pending records; does not grant pending | P0-06a (implemented) |
 | `duplicate-twilio-sid` | S5 durable/idempotent message handling | P0-02 (implemented) |
 | `rpc-failure-mid-effect` | S3 guarded effects; S5 truthful result | P0-06a (implemented) |
-| `provider-failure-with-code` | S5 provider error code/result shape; S7 server gate | P0-04 |
-| `stale-forwarded-link` | S1 immutable refs; S6 link expiry | P0-05 |
-| `dst-quiet-hours` | S5 deferred result; S6 mint-on-dispatch; S8 canonical copy | P0-04 |
+| `provider-failure-with-code` | S5 provider error code/result shape; S7 server gate | P0-04 (implemented) |
+| `stale-forwarded-link` | S1 immutable refs; S6 link expiry | P0-05 (implemented, phase 0) |
+| `dst-quiet-hours` | S5 deferred result; S6 mint-on-dispatch; S8 canonical copy | P0-04 (implemented) |
 | `unknown-sender-wrong` | S4 service-only unresolved content | P0-06a (implemented) |
 | `old-ref-reply` | S1 original-version late reply behavior | P0-06a (implemented, phase 0) |
 | `interrupted-media-upload` | S4 service-only media; S5 truthful result | P0-06b (implemented, phase 0) |
@@ -34,7 +34,7 @@ The inbound cases share `inbound-fixture.ts`, which adds deterministic prompt, s
 
 The separate local-only oracle is `node supabase/tests/field/sms_prompt_concurrency_test.mjs`. It creates an identity-marked disposable database from a schema-only snapshot (zero copied rows), installs candidate authority, runs SQL rollback and actual two-session lock-barrier assertions, and verifies cleanup. Never point it at production or treat an unchanged shared schema as the candidate. `SQ51_EVIDENCE_DIR` selects its evidence directory; omit `--write-types` for verification.
 
-`stale-forwarded-link` remains a future-case placeholder. `interrupted-media-upload` now runs at phase zero: an initially empty media store retains the successful subset, retries only the missing attachment under the same inbound SID, and rehomes both only after the durable project choice. This consumer repair does not claim a strict all-phase gate.
+`stale-forwarded-link` runs at phase zero: actual shared sends mint fresh links and redact stored previews; old links remain usable across repeated opens until their own immutable expiry, or explicit regeneration revokes them. The service-role fixture mirrors 00640:104–162 and 00283:201–223 (identity DTO only), not PostgreSQL permissions/locking or portal rendering. A reply using the Ref from the forwarded/stale text consumes only the original version and party/project; a closed Ref files nothing. There is no first-open invalidation rule. `interrupted-media-upload` now runs at phase zero: an initially empty media store retains the successful subset, retries only the missing attachment under the same inbound SID, and rehomes both only after the durable project choice. This consumer repair does not claim a strict all-phase gate.
 
 The per-origin repair adds `inbound-completion.test.ts` (the independent older-chooser replay sequence, unchanged apart from imports) and `inbound-completion-boundaries.test.ts`. Completion precedes rebind/media/parser/CAS, even after a failed metadata stamp or a newer chooser; same digit SIDs resume only their saved original pointer. Pointer persistence failure is retryable but may require operator recovery: an unstamped digit never guesses a newer origin. Both SQL completion and prompt receipts include legitimate note `applied:false`; historical unbound results suppress quietly, never disclose.
 
