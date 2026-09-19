@@ -23,7 +23,10 @@ const FUNCTIONS_BASE =
 export async function sendTheLetter(args: {
   adminClient: any;
   callerUser: { id: string; email?: string | null };
+  /** '' when the homeowner gave only a phone (P21). */
   clientEmail: string;
+  /** P21 - her phone. The identity itself when there is no email. */
+  clientPhone?: string | null;
   clientName?: string;
   source: 'direct' | 'referral';
   notes?: string;
@@ -35,6 +38,13 @@ export async function sendTheLetter(args: {
     adminClient, callerUser, clientEmail, clientName, source, notes,
     existingRow, note, projectId,
   } = args;
+  const clientPhone = args.clientPhone?.trim() || null;
+  // P21 - THE IDENTITY, READ ONCE. A letter with no email is addressed by
+  // phone: no account is looked up, none is minted, and nothing is mailed.
+  // Normalizing it is the database's job (normalize_client_invitation_phone,
+  // 00650), so the number reaching the invitation and the number reaching the
+  // consent ledger can never be two different readings of what she typed.
+  const byPhone = !clientEmail;
 
   // R8/R11: projectId is body-supplied and drives both the edge function's
   // studio-identity resolution and the note it seeds into that project — so a
@@ -79,13 +89,21 @@ export async function sendTheLetter(args: {
     }
   }
 
-  const { data: existingProfile, error: existingProfileError } = await adminClient
-    .from('profiles')
-    .select('id')
-    .eq('email', clientEmail)
-    .maybeSingle();
-  if (existingProfileError) {
-    return serverError(`Failed to check for an existing account: ${existingProfileError.message}`);
+  // NOT ASKED FOR A PHONE LETTER. profiles is keyed on the email, so asking it
+  // about a homeowner who has none could only answer about somebody else - and
+  // R13's notice ("you already have an account") cannot apply to a recipient
+  // who, by construction, has no account to hold.
+  let existingProfile: { id: string } | null = null;
+  if (!byPhone) {
+    const { data, error: existingProfileError } = await adminClient
+      .from('profiles')
+      .select('id')
+      .eq('email', clientEmail)
+      .maybeSingle();
+    if (existingProfileError) {
+      return serverError(`Failed to check for an existing account: ${existingProfileError.message}`);
+    }
+    existingProfile = data;
   }
 
   // R13: an account that already exists gets the short notice letter, never a
@@ -103,11 +121,16 @@ export async function sendTheLetter(args: {
     // designer's roster used to fall straight into the insert and hit
     // idx_designer_clients_unique_email (designer_id, client_email) — a 500,
     // and no letter. Reuse the row instead, exactly as the R73 branch does.
+    // A phone letter asks the same question of the column that holds ITS
+    // identity, so writing to the same homeowner twice from the same sheet does
+    // not fork her household. That match is on the phone AS TYPED: nothing
+    // makes (designer_id, client_phone) unique, and the normalized reading
+    // lives in client_phone_e164, which this route cannot compute (00583).
     const { data: onRoster, error: rosterError } = await adminClient
       .from('designer_clients')
       .select('id')
       .eq('designer_id', callerUser.id)
-      .eq('client_email', clientEmail)
+      .eq(byPhone ? 'client_phone' : 'client_email', byPhone ? clientPhone : clientEmail)
       .limit(1)
       .maybeSingle();
     if (rosterError) {
@@ -120,7 +143,8 @@ export async function sendTheLetter(args: {
         .from('designer_clients')
         .insert({
           designer_id: callerUser.id,
-          client_email: clientEmail,
+          client_email: byPhone ? null : clientEmail,
+          client_phone: clientPhone,
           client_name: clientName ?? null,
           source,
           notes: notes ?? null,
@@ -142,19 +166,26 @@ export async function sendTheLetter(args: {
       Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''}`,
       'Content-Type': 'application/json',
     },
+    // `phone` and the 'phone' kind are added ONLY when there is a phone to
+    // reach her on, so an email letter's request body is byte-identical to the
+    // one this route has always sent.
     body: JSON.stringify({
       designerClientId,
       email: clientEmail,
       clientName: clientName ?? null,
       projectId,
       note,
-      kind,
+      kind: byPhone ? 'phone' : kind,
       writerId: callerUser.id,
+      ...(clientPhone ? { phone: clientPhone } : {}),
     }),
   });
   const payload = (await res.json().catch(() => ({}))) as {
     profileId?: string | null;
     kind?: 'invite' | 'notice';
+    /** P21: the scoped link her text will carry. SQ-18 owns the sending. */
+    capabilityUrl?: string | null;
+    deliver?: string;
     error?: string;
   };
   if (!res.ok) {
@@ -176,7 +207,7 @@ export async function sendTheLetter(args: {
     .maybeSingle();
   const writerName =
     callerProfile?.full_name ?? callerProfile?.display_name ?? callerUser.email ?? 'Someone';
-  const label = clientName?.trim() || clientEmail;
+  const label = clientName?.trim() || clientEmail || 'your client';
 
   // lens-4 §B.9: the actor is the designer, not the system. The transport
   // belongs in telemetry, not in a line a studio owner reads.
@@ -184,14 +215,21 @@ export async function sendTheLetter(args: {
     designer_client_id: designerClientId,
     activity_type: 'note',
     title: `${writerName} wrote to ${label}`,
-    description: `Letter sent to ${clientEmail} · ${note ? 'with a note' : 'no note'}`,
+    // A phone letter has not been delivered yet, so the line does not say it
+    // has. Her number is not repeated here; the roster row holds it.
+    description: byPhone
+      ? `Letter written · a text is next · ${note ? 'with a note' : 'no note'}`
+      : `Letter sent to ${clientEmail} · ${note ? 'with a note' : 'no note'}`,
     actor_name: writerName,
     metadata: {
       actor_id: callerUser.id,
-      client_email: clientEmail,
+      client_email: clientEmail || null,
       letter: true,
       kind: payload.kind ?? kind,
       has_note: !!note,
+      // Which identity carried the letter, and that a text is owed. Neither the
+      // phone nor the capability token is written into this log.
+      ...(byPhone ? { identity: 'phone', deliver: payload.deliver ?? null } : {}),
     },
   });
 
@@ -201,5 +239,13 @@ export async function sendTheLetter(args: {
     invited: true,
     alreadyExists: kind === 'notice',
     kind: payload.kind ?? kind,
+    // P21 - the seam SQ-18 picks up. Present only for a phone letter, so an
+    // email letter's response stays exactly the shape it was.
+    ...(byPhone
+      ? {
+          capabilityUrl: payload.capabilityUrl ?? null,
+          deliver: payload.deliver ?? 'sms_pending',
+        }
+      : {}),
   });
 }

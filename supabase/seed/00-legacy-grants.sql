@@ -17916,6 +17916,72 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.client_links FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.client_link_uses FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.client_links TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.client_link_uses TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.create_client_link(uuid, text[], interval) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_client_link(text, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.revoke_client_link(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_client_link(uuid, text[], interval) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_client_link(text, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.revoke_client_link(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00650_field_line_client_identity.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.normalize_client_invitation_phone() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

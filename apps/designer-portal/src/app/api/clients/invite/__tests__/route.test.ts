@@ -138,4 +138,29 @@ describe('POST /api/clients/invite', () => {
     expect(body).toMatchObject({ invited: false, alreadyExists: true, profileId: 'existing-profile-id' });
     expect(inviteUserByEmailMock).not.toHaveBeenCalled();
   });
+
+  // ── P21: the identity guard ───────────────────────────────────────────────
+  it('still refuses a request that names neither an email nor a phone', async () => {
+    const res = await POST(makeRequest({ clientName: 'Nobody' }));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'clientEmail is required' });
+    expect(inviteUserByEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a phone-only client that did not take the letter path, and mints no account', async () => {
+    // Without `letter: true` there is no invitation row to carry her identity,
+    // and every branch below the letter keys on the email — so there is no
+    // version of them to run for her.
+    const res = await POST(makeRequest({ clientPhone: '(608) 555-0143', clientName: 'Nell' }));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: 'A client with only a phone is added through the letter.',
+    });
+    // The point of the refusal: no GoTrue account was invented for her, and no
+    // profile was looked up by an email she does not have.
+    expect(inviteUserByEmailMock).not.toHaveBeenCalled();
+    expect(fromMock).not.toHaveBeenCalledWith('profiles');
+  });
 });

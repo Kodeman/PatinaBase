@@ -4,9 +4,11 @@ import type { ReactElement } from 'react';
 import InvitePage from '../page';
 
 const maybeSingle = jest.fn();
+const rpc = jest.fn();
 jest.mock('@patina/supabase/client', () => ({
   createAdminClient: () => ({
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle }) }) }),
+    rpc,
   }),
 }));
 
@@ -34,7 +36,25 @@ const ROW = {
 
 async function renderPage(row: unknown) {
   maybeSingle.mockResolvedValue({ data: row });
+  // A mailed token that resolves answers before any capability is asked about;
+  // one that does not falls through to a capability nobody minted.
+  rpc.mockResolvedValue({ data: null });
   const ui = await InvitePage({ params: Promise.resolve({ token: 'tok1' }) });
+  render(ui as ReactElement);
+}
+
+/**
+ * P21 — the texted homeowner. Her token is not in the table at all (only its
+ * sha256 is), so the first read misses and `resolve_client_link` is the only
+ * thing that can name her letter; the second read is that letter, by id.
+ */
+async function renderCapability(
+  row: unknown,
+  resolved: unknown = { invitation_id: 'i1' },
+) {
+  maybeSingle.mockResolvedValueOnce({ data: null }).mockResolvedValueOnce({ data: row });
+  rpc.mockResolvedValue({ data: resolved });
+  const ui = await InvitePage({ params: Promise.resolve({ token: 'cap-token' }) });
   render(ui as ReactElement);
 }
 
@@ -80,6 +100,46 @@ it('a revoked or superseded token says only what a lapsed one says', async () =>
 it('an unknown token says nothing about whether it ever existed', async () => {
   await renderPage(null);
   expect(screen.getByText("This letter’s gone stale.")).toBeInTheDocument();
+});
+
+it('P21 — a capability is not asked about while the mailed token answers', async () => {
+  await renderPage(ROW);
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+it('P21 — a texted capability opens the same letter, word for word', async () => {
+  await renderCapability(ROW);
+  expect(rpc).toHaveBeenCalledWith('resolve_client_link', {
+    p_token: 'cap-token',
+    p_action: 'open',
+    p_source: 'client_portal',
+  });
+  // The SAME frozen snapshot, not a second rendering of it.
+  expect(screen.getByTestId('letter-letterhead')).toHaveTextContent('MIDDLE WEST STUDIO');
+  expect(screen.getByTestId('letter-standing')).toHaveTextContent(
+    ROW.rendered_standing_sentence,
+  );
+  // And no session on offer: the email letter's button is not here.
+  expect(screen.getByRole('button', { name: 'Let them know I have it' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Open the project' })).toBeNull();
+});
+
+it('P21 — a capability that resolves to nothing says only what a lapsed one says', async () => {
+  await renderCapability(ROW, null);
+  expect(screen.getByText('This letter’s gone stale.')).toBeInTheDocument();
+  expect(screen.queryByTestId('letter-letterhead')).toBeNull();
+});
+
+it('P21 — a letter already opened still opens for the capability holder', async () => {
+  await renderCapability({ ...ROW, accepted_at: '2026-09-09T00:00:00.000Z' });
+  expect(screen.queryByText('This letter has already been opened.')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Let them know I have it' })).toBeInTheDocument();
+});
+
+it('P21 — the mailed token’s seven days do not lapse a capability', async () => {
+  await renderCapability({ ...ROW, expires_at: '2020-01-01T00:00:00.000Z' });
+  expect(screen.queryByRole('button', { name: 'Send a fresh letter' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Let them know I have it' })).toBeInTheDocument();
 });
 
 it('R13 — a notice opens the house directly, with nothing to accept', async () => {

@@ -64,6 +64,110 @@ beforeEach(() => {
   });
 });
 
+/**
+ * P21 — THE PHONE IDENTITY. A homeowner who gave a phone and no email is
+ * reached by text, so the letter path must not look for an account she has
+ * never had, must not mail anything, and must hand back the scoped link SQ-18
+ * will send.
+ */
+describe('sendTheLetter — the phone identity (P21)', () => {
+  const phoneArgs = {
+    ...baseArgs,
+    clientEmail: '',
+    clientPhone: '(608) 555-0143',
+    projectId: null,
+  };
+
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        profileId: null,
+        kind: 'invite',
+        capabilityUrl: 'https://client.patina.cloud/auth/invite/deadbeef',
+        deliver: 'sms_pending',
+      }),
+    });
+  });
+
+  it('never asks profiles about a homeowner who has no email', async () => {
+    const profiles = chainable({ data: null, error: null });
+    const adminClient = makeAdminClient({
+      profiles,
+      designer_clients: chainable({ data: { id: 'dc-1' }, error: null }),
+      client_activity_log: chainable({ data: null, error: null }),
+    });
+
+    const res = await sendTheLetter({ ...phoneArgs, adminClient });
+
+    expect(res.status).toBe(200);
+    // The ONE profiles read left on this path is the writer's own name for the
+    // activity line. A lookup keyed on the recipient's email could only answer
+    // about somebody else, so it must not happen at all.
+    expect(profiles.eq).toHaveBeenCalledWith('id', 'designer-1');
+    expect(profiles.eq).not.toHaveBeenCalledWith('email', expect.anything());
+  });
+
+  it('asks the roster the question its own identity answers', async () => {
+    const designerClients = chainable({ data: { id: 'dc-1' }, error: null }, { data: null });
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: designerClients,
+      client_activity_log: chainable({ data: null, error: null }),
+    });
+
+    await sendTheLetter({ ...phoneArgs, adminClient });
+
+    expect(designerClients.eq).toHaveBeenCalledWith('client_phone', '(608) 555-0143');
+    expect(designerClients.eq).not.toHaveBeenCalledWith('client_email', '');
+    expect(designerClients.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ client_email: null, client_phone: '(608) 555-0143' }),
+    );
+  });
+
+  it("calls client-invite with the phone kind and returns SQ-18's seam", async () => {
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: chainable({ data: { id: 'dc-1' }, error: null }),
+      client_activity_log: chainable({ data: null, error: null }),
+    });
+
+    const res = await sendTheLetter({ ...phoneArgs, adminClient });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body).toMatchObject({ kind: 'phone', phone: '(608) 555-0143', email: '' });
+
+    expect(res.status).toBe(200);
+    // The link is handed back for SQ-18 to send; NOTHING was mailed here.
+    expect(await res.json()).toMatchObject({
+      capabilityUrl: 'https://client.patina.cloud/auth/invite/deadbeef',
+      deliver: 'sms_pending',
+    });
+  });
+
+  it("leaves an email letter's request and response exactly as they were", async () => {
+    const adminClient = makeAdminClient({ ...downstreamTables() });
+
+    const res = await sendTheLetter({ ...baseArgs, adminClient, projectId: null });
+
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(body).toEqual({
+      designerClientId: 'dc-1',
+      email: 'dave@okonkwo.net',
+      clientName: 'Dave Okonkwo',
+      projectId: null,
+      note: null,
+      kind: 'invite',
+      writerId: 'designer-1',
+    });
+    expect(body).not.toHaveProperty('phone');
+
+    const payload = await res.json();
+    expect(payload).not.toHaveProperty('capabilityUrl');
+    expect(payload).not.toHaveProperty('deliver');
+  });
+});
+
 describe('sendTheLetter — project-access guard', () => {
   it('allows the caller who owns the project (designer_id match)', async () => {
     const adminClient = makeAdminClient({

@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { peopleKeys } from './use-people';
 import { emailDeliveryKeys } from './use-email-delivery';
+import { asWrittenConsentError, consentKeys } from './use-consent';
+import { FIELD_SMS_DISCLOSURE_VERSION } from './use-party-sms';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -554,12 +556,31 @@ export function useClientProjects(clientId: string) {
  * - Linking to existing profiles
  * - Writing an audit row to client_activity_log
  */
+/**
+ * What the ledger will hold about how she said yes (P22). The consent record is
+ * a legal document, so the line says the ordinary thing that actually happened:
+ * a box was ticked, by whom it was ticked for, and on what day. The recorder
+ * and the disclosure version are not written here — `record_channel_invite`
+ * stamps `recorded_by` from auth.uid() and carries the version itself, so
+ * neither can be typed wrong at a call site.
+ */
+function kickoffConsentEvidence(clientName: string | null | undefined): string {
+  const who = clientName?.trim() || 'the client';
+  const day = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  return `Kickoff consent box ticked in Patina when ${who} was added, ${day}.`;
+}
+
 export function useAddClient() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
       clientEmail,
+      clientPhone,
       clientName,
       source = 'direct',
       notes,
@@ -567,8 +588,21 @@ export function useAddClient() {
       letter,
       note,
       projectId,
+      kickoffConsent,
+      organizationId,
+      smsConsentDisclosureVersion,
     }: {
+      /** May be '' when she gave a phone instead (P21). */
       clientEmail: string;
+      /**
+       * P21 — her phone, as the designer typed it. With this and no email the
+       * route takes the letter path with a PHONE identity. Normalizing it is
+       * the database's job on both rails (`normalize_client_invitation_phone`
+       * on the invitation, `normalize_channel_value` inside the consent RPC),
+       * so the number on the letter and the number on the consent record are
+       * one reading of what she typed, never two.
+       */
+      clientPhone?: string;
       clientName?: string;
       source?: 'direct' | 'referral';
       notes?: string;
@@ -585,7 +619,51 @@ export function useAddClient() {
       note?: string;
       /** The house the letter is about, and where the note is seeded (R8). */
       projectId?: string;
+      /**
+       * P22 — she was read the disclosure at kickoff and said yes to texts.
+       * Never defaulted on; the box that sets it is born unchecked.
+       */
+      kickoffConsent?: boolean;
+      /** The studio the consent is recorded FOR. Required with kickoffConsent. */
+      organizationId?: string | null;
+      /** Defaults to FIELD_SMS_DISCLOSURE_VERSION. */
+      smsConsentDisclosureVersion?: string;
     }) => {
+      const phone = clientPhone?.trim() || null;
+
+      // ── THE RECORD, BEFORE THE LETTER (P22) ──────────────────────────────
+      // Through the SAME door the trade path uses (`record_channel_invite`,
+      // 00594), for the same reason: it is the only ledger anything reads the
+      // consent word from, and it is the gate. A number this studio already
+      // holds a refusal for, or one that cannot be normalized to E.164, is
+      // refused HERE — before an invitation row exists and before a capability
+      // is minted for it. A standing grant is left exactly as it stands.
+      //
+      // `project_parties.sms_consent_*` is NOT written: 00594's R-AS froze
+      // those eight columns and `refuse_legacy_consent_write()` refuses a write
+      // to them. The trade path writes none of them either, so this mirrors it
+      // exactly.
+      if (kickoffConsent && phone) {
+        if (!organizationId) {
+          throw new Error(
+            "You aren't in a studio yet, so there's nowhere to record texting consent.",
+          );
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const supabase = getSupabase() as any;
+        const { error: consentError } = await supabase.rpc('record_channel_invite', {
+          p_organization_id: organizationId,
+          p_channel_kind: 'sms',
+          p_channel_value: phone,
+          p_source: 'kickoff_checkbox',
+          p_evidence: kickoffConsentEvidence(clientName),
+          p_disclosure_version:
+            smsConsentDisclosureVersion?.trim() || FIELD_SMS_DISCLOSURE_VERSION,
+          p_origin_project_id: projectId ?? null,
+        });
+        if (consentError) throw asWrittenConsentError(consentError);
+      }
+
       const response = await fetch('/api/clients/invite', {
         method: 'POST',
         credentials: 'include',
@@ -596,8 +674,9 @@ export function useAddClient() {
           source,
           notes,
           invite,
-          // Omitted entirely when off, so the request body is byte-identical
-          // to today's — the assertion the e2e spec rests on.
+          // Both omitted entirely when absent, so an email add's request body
+          // is byte-identical to today's — the assertion the e2e spec rests on.
+          ...(phone ? { clientPhone: phone } : {}),
           ...(letter ? { letter: true, note, projectId } : {}),
         }),
       });
@@ -613,12 +692,19 @@ export function useAddClient() {
         invited: boolean;
         alreadyExists: boolean;
         kind?: 'invite' | 'notice';
+        /** P21, phone letters only: the scoped link her text will carry. */
+        capabilityUrl?: string | null;
+        /** P21, phone letters only: 'sms_pending' — SQ-18 owns the sending. */
+        deliver?: string;
       }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
       queryClient.invalidateQueries({ queryKey: ['client-stats'] });
       queryClient.invalidateQueries({ queryKey: ['client-activity'] });
+      // The consent clause reads its record through this key, exactly as the
+      // trade path invalidates it after recording an invite.
+      queryClient.invalidateQueries({ queryKey: consentKeys.all });
     },
   });
 }
