@@ -118,6 +118,18 @@ export interface OrdinarySmsInput {
    * nobody can still remember asking.
    */
   cadenceClass?: CadenceClass;
+  /**
+   * The client_invitations row a client capability is minted FROM (US-3 P21).
+   * Set it when the template carries `{{link}}` and the link is the homeowner's
+   * letter page rather than a trade's field link.
+   *
+   * It travels in the recipe as `client_invitation_id`, which is exactly what
+   * contract S6 needs: a letter id is not a credential, so a deferred row may
+   * hold it, and the flush mints the capability at the moment it actually sends
+   * instead of re-sending a URL that has been sitting in a table since last
+   * night. The raw token is never stored on either path.
+   */
+  clientInvitationId?: string;
 }
 
 /** The two halves of a party's daily text cadence (contract P5). */
@@ -253,6 +265,49 @@ export function fieldLinePhase(deps: SmsDeps): number {
   const raw = env(deps, "FIELD_LINE_PHASE");
   const n = Number.parseInt(raw ?? "", 10);
   return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * The three templates that only ever go to a HOMEOWNER (US-3 P24, migration
+ * 00652). Naming them here rather than at each call site is what makes the
+ * client gate below unavoidable: any caller of sendPartySms that names one of
+ * these — sendClientSms, client-invite's SMS leg, field-daily's client leg, a
+ * future surface nobody has written yet — is gated by it, and so is the flush
+ * that dispatches one of them hours later.
+ */
+export const CLIENT_SMS_TEMPLATES: readonly string[] = [
+  "sms_client_first_letter",
+  "sms_selection_ready",
+  "sms_window_pick",
+];
+
+/** Is this send a client-kind send, and therefore subject to the P24 gate? */
+export function isClientSmsTemplate(slug: string | null | undefined): boolean {
+  return !!slug && CLIENT_SMS_TEMPLATES.includes(slug);
+}
+
+/**
+ * The actions a client capability minted by the RAIL carries. It must equal
+ * `CLIENT_LINK_ACTIONS` in supabase/functions/client-invite/lib.ts:57 — the
+ * scope apply_client_effect reads its authority out of (00651:488) — and
+ * sms.test.ts imports both and asserts exactly that, because a capability
+ * minted here without the two answering actions could never be upgraded: the
+ * token is hashed at rest, so re-minting is the only way to change a scope and
+ * that invalidates the link already in her phone.
+ *
+ * It is a copy rather than an import because the alternative is pulling the
+ * whole letter-rendering module graph (client-letter, branded-email,
+ * email-assets) into every function that sends a text, for three strings.
+ */
+export const CLIENT_CAPABILITY_ACTIONS: readonly string[] = [
+  "open_letter",
+  "approve_selection",
+  "select_window",
+];
+
+/** The env flag that says the client campaign is approved to text (P24). */
+export function fieldLineCampaignApproved(deps: SmsDeps): boolean {
+  return env(deps, "FIELD_LINE_CAMPAIGN_APPROVED") === "1";
 }
 
 // A field link is `<portal>/field/<64 hex>`; a site-request guest link is the
@@ -421,6 +476,14 @@ interface Recipient {
   projectId: string | null;
   partyId: string | null;
   displayName: string | null;
+  /**
+   * The roster identity of the seat this send is addressed to (00419), when a
+   * seat answered at all. `client` is the homeowner, and the client gate (P24)
+   * turns on it as well as on the template: an acknowledgement the inbound rail
+   * sends her travels as sms_inbound_reply, and it is still a text to a
+   * homeowner on a rail that may not be running.
+   */
+  partyKind: string | null;
 }
 
 /**
@@ -898,7 +961,7 @@ async function resolveRecipient(
   if (input.partyId) {
     const { data: party } = await supabase
       .from("project_parties")
-      .select("id, phone_e164, project_id, display_name")
+      .select("id, phone_e164, project_id, display_name, party_kind")
       .eq("id", input.partyId)
       .maybeSingle();
     return {
@@ -906,19 +969,28 @@ async function resolveRecipient(
       projectId: party?.project_id ?? input.projectId ?? null,
       partyId: input.partyId,
       displayName: party?.display_name ?? null,
+      partyKind: party?.party_kind ?? null,
     };
   }
   // Phone-only path: the seat supplies a name for the body and nothing else.
   const phone = input.phone ?? null;
   let displayName: string | null = null;
+  let partyKind: string | null = null;
   if (phone) {
     const { data: rows } = await supabase
       .from("project_parties")
-      .select("display_name")
+      .select("display_name, party_kind")
       .eq("phone_e164", phone);
     if (rows && rows.length > 0) {
       displayName = (rows[0] as { display_name: string | null }).display_name ??
         null;
+      // One seat or none. Two seats on a number name two people (00650's own
+      // one-match rule), and guessing which of them this send is for is how a
+      // homeowner's gate gets applied to a foreman — or, worse, not applied.
+      if (rows.length === 1) {
+        partyKind = (rows[0] as { party_kind: string | null }).party_kind ??
+          null;
+      }
     }
   }
   return {
@@ -926,6 +998,7 @@ async function resolveRecipient(
     projectId: input.projectId ?? null,
     partyId: null,
     displayName,
+    partyKind,
   };
 }
 
@@ -986,6 +1059,36 @@ async function mintFieldLink(
   return token ? `${clientPortalUrl.replace(/\/$/, "")}/field/${token}` : null;
 }
 
+/**
+ * Mint a fresh CLIENT capability (raw token) and return the letter-page URL.
+ *
+ * The same page the plaintext email token opens (P21): one letter, two ways in.
+ * 00650's create_client_link supersedes the invitation's prior active link, so
+ * this is also what makes a deferred first letter safe — the link that goes out
+ * at 8am is the only live one, and the one minted at 9pm last night is dead.
+ */
+async function mintClientLink(
+  supabase: SupabaseClient,
+  invitationId: string,
+  clientPortalUrl: string,
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc("create_client_link", {
+    p_invitation_id: invitationId,
+    p_actions: CLIENT_CAPABILITY_ACTIONS,
+  });
+  if (error) {
+    console.error("mintClientLink: the capability could not be minted", error);
+    return null;
+  }
+  // RETURNS TABLE → an array of { id, token }.
+  const token = Array.isArray(data)
+    ? data[0]?.token
+    : (data as { token?: string })?.token;
+  return token
+    ? `${clientPortalUrl.replace(/\/$/, "")}/auth/invite/${token}`
+    : null;
+}
+
 /** What a deferred row's `body` shows where the link will be. */
 const LINK_PLACEHOLDER = "[link at send]";
 
@@ -1027,6 +1130,13 @@ function safeRecipeParams(
 
 interface RenderedBody {
   body: string | null;
+  /**
+   * The client capability could not be minted, so there is no letter to point
+   * her at. Distinguished from an empty body because the copy is fine and the
+   * rail is not: the send is refused rather than sent with a hole in it, and
+   * the studio is the one who has to hear about it.
+   */
+  linkFailed?: boolean;
   /** 'field' when the template asks for a field link, else null. Recorded on
    *  the recipe so the flush knows what to mint, without carrying a token. */
   linkKind: string | null;
@@ -1092,13 +1202,39 @@ async function resolveBody(
       "your project";
   }
   let linkKind: string | null = null;
-  if (
-    /\{\{\s*link\s*\}\}/.test(raw) && vars.link == null && recipient.partyId
-  ) {
-    linkKind = "field";
-    vars.link = opts.mintLink
-      ? (await mintFieldLink(supabase, recipient.partyId, clientPortalUrl)) ?? ""
-      : LINK_PLACEHOLDER;
+  if (/\{\{\s*link\s*\}\}/.test(raw) && vars.link == null) {
+    // WHICH link this is, is the caller's letter id (P21). A homeowner's
+    // {{link}} is her letter page on a client_links capability; a trade's is a
+    // /field/ token. Asked in this order because only the client branch carries
+    // an invitation id, and a client seat may well have no field link at all.
+    const invitationId = typeof vars.client_invitation_id === "string"
+      ? vars.client_invitation_id
+      : null;
+    if (invitationId) {
+      linkKind = "client";
+      if (opts.mintLink) {
+        const minted = await mintClientLink(
+          supabase,
+          invitationId,
+          clientPortalUrl,
+        );
+        // A LETTER WITH NO LETTER IN IT IS NOT A TEXT WORTH SENDING. The trade
+        // rail can survive a dropped link — its body still names the job and
+        // the party can reply to the number — but every client template is a
+        // pointer to a page, and "open " followed by nothing reads as a bug to
+        // the one person the studio most wants to sound careful to.
+        if (!minted) return { body: null, linkKind, linkFailed: true };
+        vars.link = minted;
+      } else {
+        vars.link = LINK_PLACEHOLDER;
+      }
+    } else if (recipient.partyId) {
+      linkKind = "field";
+      vars.link = opts.mintLink
+        ? (await mintFieldLink(supabase, recipient.partyId, clientPortalUrl)) ??
+          ""
+        : LINK_PLACEHOLDER;
+    }
   }
 
   return { body: interpolate(raw, vars), linkKind };
@@ -1493,6 +1629,39 @@ export async function sendPartySms(
     provider_code: recovered.provider_code ?? result.provider_code };
 }
 
+/**
+ * THE HOMEOWNER DOOR (US-3 P24). One named entry point for every client-kind
+ * text, so the surfaces that send one — client-invite's SMS leg, field-daily's
+ * client leg — say what they are sending and get the whole gate rather than
+ * assembling it each time.
+ *
+ * It declares phase 2 and refuses a template that is not one of the three, and
+ * everything that actually decides the send lives in sendPartySmsCore where the
+ * flush and every other caller meets it too: the campaign flag, the kickoff
+ * carve-out, and the P1 budget/cadence guard and dead-end detector the trade
+ * rail already spends (a client who is not answering is a person to phone, not
+ * a person to text again).
+ */
+export async function sendClientSms(
+  supabase: SupabaseClient,
+  input: OrdinarySmsInput,
+  deps: SmsDeps = {},
+): Promise<SendPartySmsResult> {
+  if (!isClientSmsTemplate(input.templateKey)) {
+    return { sent: false, status: "failed", reason: "not_a_client_template" };
+  }
+  return await sendPartySms(supabase, {
+    ...input,
+    // Phase 2 is the client rail's own phase; a caller cannot declare it lower
+    // to slip past GATE 3, and GATE 3b asks for phase 2 again regardless.
+    automationPhase: 2,
+    // Every client text is one of her few a day, and the budget is the P1 guard
+    // the trade rail already uses. Stated here so a caller cannot forget it and
+    // silently buy an unpaced rail.
+    cadenceClass: input.cadenceClass ?? "recurring",
+  }, deps);
+}
+
 async function sendPartySmsCore(
   supabase: SupabaseClient,
   input: OrdinarySmsInput,
@@ -1515,6 +1684,22 @@ async function sendPartySmsCore(
   const statusCallbackUrl = env(deps, "SMS_STATUS_CALLBACK_URL") ?? "";
   const redirectNumber = env(deps, "SMS_DEV_REDIRECT_NUMBER") ?? "";
   const isInvite = input.templateKey === "sms_optin_invite";
+  // A CLIENT TEMPLATE (US-3 P24). Decided off the template rather than off a
+  // flag the caller passes, so no caller can opt out of the gate by forgetting
+  // to declare itself. The full client-kind question is asked once the
+  // recipient is known, because the homeowner also receives ordinary replies.
+  const isClientTemplate = isClientSmsTemplate(input.templateKey);
+  // The letter id travels in the vars, and therefore in the recipe, so the
+  // deferred flush mints the capability the same way this send does (S6).
+  if (input.clientInvitationId) {
+    input = {
+      ...input,
+      vars: {
+        ...(input.vars ?? {}),
+        client_invitation_id: input.clientInvitationId,
+      },
+    };
+  }
 
   /** A gate said no. Nothing was rendered, nothing was minted, nothing sent. */
   const refused = (reason: string): SendPartySmsResult => ({
@@ -1526,9 +1711,15 @@ async function sendPartySmsCore(
   // ── Resolve recipient ─────────────────────────────────────────────────────
   if (!selection && input.templateKey === SELECTION_TEMPLATE) return refused("selection_input_required");
   const recipient: Recipient = selection
-    ? { phone: selection.manifest.recipientPhone, partyId: null, projectId: null, displayName: null }
+    ? { phone: selection.manifest.recipientPhone, partyId: null, projectId: null, displayName: null, partyKind: null }
     : await resolveRecipient(supabase, input);
   if (!recipient.phone) return refused("no_phone_number");
+  // A CLIENT-KIND SEND, in full: one of the three client templates, or any text
+  // addressed to a homeowner's seat. The second half is what puts her
+  // acknowledgement replies — sms_inbound_reply, sent by sms-inbound's own
+  // dispatcher — inside the same gate as the letter that prompted them. Both
+  // halves matter: the letter can precede a seat, and a reply names one.
+  const isClientSend = isClientTemplate || recipient.partyKind === "client";
 
   // The physical number sms-inbound keys the thread on — never the MG…
   // Messaging Service SID, which would split it. Resolved BEFORE any gate
@@ -1571,11 +1762,39 @@ async function sendPartySmsCore(
     return refused("contact_rule_forbids_sms");
   }
   const studioGranted = decision.verdict === "allow";
-  if (!isInvite && !studioGranted) {
+  // ── THE KICKOFF TICK, THROUGH THE INVITE CARVE-OUT (P22, SQ-108) ─────────
+  // P22 mandates that kickoff consent be written by the SAME writer the trade
+  // addParty path uses, and that writer — record_channel_invite — records
+  // status='pending'. So channelConsentDecision answers `unknown` with
+  // recordPresent:true for a homeowner who ticked the box at kickoff, and never
+  // 'allow' (SQ-16 SQL case 8b asserts exactly that). A client gate that
+  // required 'allow' could therefore never send a single text: it would be
+  // waiting for a YES to an invite this rail deliberately does not send her,
+  // because the studio asked her in person.
+  //
+  // The permission it takes instead is the invite's own, which is narrower than
+  // it looks: the studio's OWN record must be the one answering (recordPresent),
+  // it must be pending rather than refused, and the record must carry the
+  // written act below. An explicit refusal — opted_out, a STOP, an unanswered
+  // refusal at any status — is `refuse` above and outranks all of it.
+  const clientKickoffCarveOut = isClientSend && !studioGranted &&
+    decision.verdict === "unknown" && decision.recordPresent;
+  if (!isInvite && !clientKickoffCarveOut && !studioGranted) {
     // Only the double-opt-in invite may reach a number the record has not
     // granted — an unresolvable studio included, which refuses uniformly
     // rather than asking the frozen seat.
     return refused("not_consented");
+  }
+  if (isClientSend && !studioGranted && !clientKickoffCarveOut) {
+    // `unknown` with NO record is the phone-global branch: no studio owns this
+    // send, so nothing has asked her anything. Same refusal the invite gets.
+    return refused("not_consented");
+  }
+  if (clientKickoffCarveOut && (!decision.recordSource || !decision.recordedBy)) {
+    // THE SAME WRITTEN ACT THE INVITE STANDS ON (00646, SQ-92 F1): HOW she said
+    // yes and WHO wrote it down. A kickoff tick that nobody signed is not a
+    // kickoff tick; it is a row.
+    return refused("consent_evidence_required");
   }
   if (isInvite && !studioGranted) {
     // `unknown` IS NOT ONE PERMISSION (contract S2). A studio's own record
@@ -1621,6 +1840,23 @@ async function sendPartySmsCore(
   const declaredPhase = input.automationPhase ?? 0;
   if (declaredPhase > 0 && declaredPhase > fieldLinePhase(deps)) {
     return refused("field_line_phase_off");
+  }
+
+  // ── GATE 3b: the client campaign gate (US-3 P24) ──────────────────────────
+  // ANY client-kind send needs both halves, whatever phase it declared and
+  // whatever it declared nothing at all: the rail live at phase 2, and the A2P
+  // campaign approved for this traffic. Both are read from the environment for
+  // the same reason FIELD_LINE_PHASE is — the things that send these texts are
+  // an edge function, a cron and a trigger, none of which can read a browser
+  // flag — and both fail closed: unset is off. Turning the campaign flag off is
+  // how the homeowner rail is stopped mid-flight, so it is asked again at the
+  // deferred flush and a row that fails it there stays deferred without
+  // spending a cadence slot.
+  if (isClientSend) {
+    if (fieldLinePhase(deps) < 2) return refused("field_line_phase_off");
+    if (!fieldLineCampaignApproved(deps)) {
+      return refused("campaign_not_approved");
+    }
   }
 
   const convId = selection?.manifest.conversationId ?? await findOrCreateConversation(
@@ -1747,7 +1983,9 @@ async function sendPartySmsCore(
         // row has to say that a link still belongs in this copy — the flush
         // mints it fresh rather than re-sending an hours-old credential.
         link_kind: preview.linkKind ??
-          (safeParams.droppedLink ? "field" : null),
+          (safeParams.droppedLink
+            ? (input.clientInvitationId ? "client" : "field")
+            : null),
         automation_phase: declaredPhase > 0 ? declaredPhase : null,
         cadence_class: cadenceClass,
       }
@@ -1822,6 +2060,7 @@ async function sendPartySmsCore(
     clientPortalUrl,
     { mintLink: true },
   );
+  if (rendered.linkFailed) return refused("client_link_unavailable");
   if (!rendered.body || !rendered.body.trim()) return refused("empty_body");
   let body = rendered.body;
   // What the thread keeps. Redacted in both directions: a caller's audit copy
@@ -1850,7 +2089,9 @@ async function sendPartySmsCore(
         party_id: recipient.partyId,
         project_id: recipient.projectId,
         link_kind: rendered.linkKind ??
-          (sentParams.droppedLink ? "field" : null),
+          (sentParams.droppedLink
+            ? (input.clientInvitationId ? "client" : "field")
+            : null),
         automation_phase: declaredPhase > 0 ? declaredPhase : null,
       }
       : null),
@@ -2241,23 +2482,37 @@ export async function flushDeferredMessages(
     // pass and is deleted with sendPartySms's (R-AY, final-run MAJOR-1).
     let deferredProjectId: string | null = row.project_id ?? null;
     let deferredDisplayName: string | null = null;
+    let deferredPartyKind: string | null = null;
     if (row.party_id) {
       const { data: deferredParty } = await supabase
         .from("project_parties")
-        .select("project_id, display_name")
+        .select("project_id, display_name, party_kind")
         .eq("id", row.party_id)
         .maybeSingle();
       const party = deferredParty as
-        | { project_id?: string | null; display_name?: string | null }
+        | {
+          project_id?: string | null;
+          display_name?: string | null;
+          party_kind?: string | null;
+        }
         | null;
       deferredProjectId = party?.project_id ?? deferredProjectId;
       deferredDisplayName = party?.display_name ?? null;
+      deferredPartyKind = party?.party_kind ?? null;
     }
-    const verdict = selectionRow ? "allow" : await channelConsentVerdict(
-      supabase,
-      phone,
-      deferredProjectId,
-    );
+    // A CLIENT ROW — one of the three client templates, or a row addressed to a
+    // homeowner's seat. The same question sendPartySms asks, asked of the row
+    // instead of the input, off the same two facts (US-3 P24).
+    const isClientRow = isClientSmsTemplate(row.template_key) ||
+      deferredPartyKind === "client";
+    // The DECISION, not just the verdict: the client carve-out below needs the
+    // one extra fact (did the studio's own record answer, and does it carry the
+    // written act), and channelConsentVerdict is a wrapper over this call, so
+    // reading the decision here costs nothing and cannot drift from it.
+    const decision: ChannelConsentDecision = selectionRow
+      ? { verdict: "allow", recordPresent: true, recordGeneration: null }
+      : await channelConsentDecision(supabase, phone, deferredProjectId);
+    const verdict = decision.verdict;
     if (verdict === "refuse") {
       await supabase
         .from("sms_messages")
@@ -2274,10 +2529,25 @@ export async function flushDeferredMessages(
     // carry what no record grants either.
     const studioGranted = verdict === "allow";
     const isInvite = row.template_key === "sms_optin_invite";
-    if (!isInvite && !studioGranted) {
+    // The kickoff tick, re-asked (P22, SQ-108). record_channel_invite writes
+    // `pending`, so a homeowner who said yes at the walkthrough never reads
+    // 'allow' — and a flush that required one would suppress at 8am every first
+    // letter quiet hours had stored at 9pm. Same three conditions the send path
+    // applies: the studio's own record answered, it is pending rather than
+    // refused, and it carries HOW she said yes and WHO wrote it down.
+    const clientPending = isClientRow && !studioGranted &&
+      verdict === "unknown" && decision.recordPresent;
+    const clientKickoffCarveOut = clientPending &&
+      !!decision.recordSource && !!decision.recordedBy;
+    if (!isInvite && !clientKickoffCarveOut && !studioGranted) {
       await supabase
         .from("sms_messages")
-        .update({ twilio_status: "suppressed", error_message: "not_consented" })
+        .update({
+          twilio_status: "suppressed",
+          error_message: clientPending
+            ? "consent_evidence_required"
+            : "not_consented",
+        })
         .eq("id", row.id);
       suppressed++;
       continue;
@@ -2322,6 +2592,31 @@ export async function flushDeferredMessages(
         .eq("id", row.id);
       skipped++;
       continue;
+    }
+
+    // ── GATE 3b: the client campaign gate, re-asked at dispatch (P24) ───────
+    // The same reason the phase gate above is re-asked, and the same shape: the
+    // server that flushes is not the server that deferred, and turning
+    // FIELD_LINE_CAMPAIGN_APPROVED off is how the homeowner rail is stopped
+    // mid-flight — including for the texts already stored for the morning. The
+    // row stays DEFERRED with the reason and spends NO cadence slot: both the
+    // exclusive claim and GATE 5 are below this, so a refusal here costs the
+    // party nothing and the flag coming back up inside the 24h window still
+    // sends it. If it does not, the TTL expires the row honestly.
+    if (isClientRow) {
+      const clientPhaseOff = fieldLinePhase(deps) < 2;
+      if (clientPhaseOff || !fieldLineCampaignApproved(deps)) {
+        await supabase
+          .from("sms_messages")
+          .update({
+            error_message: clientPhaseOff
+              ? "field_line_phase_off"
+              : "campaign_not_approved",
+          })
+          .eq("id", row.id);
+        skipped++;
+        continue;
+      }
     }
 
     // Read once: the dead-end gate below and the budget claim after the row is
@@ -2477,16 +2772,19 @@ export async function flushDeferredMessages(
             projectId: recipe.project_id ?? deferredProjectId,
             partyId: recipe.party_id ?? row.party_id,
             displayName: deferredDisplayName,
+            partyKind: deferredPartyKind,
           },
           clientPortalUrl,
           { mintLink: true },
         );
-        if (!rendered.body || !rendered.body.trim()) {
+        if (rendered.linkFailed || !rendered.body || !rendered.body.trim()) {
           await supabase
             .from("sms_messages")
             .update({
               twilio_status: "failed",
-              error_message: "recipe_render_failed",
+              error_message: rendered.linkFailed
+                ? "client_link_unavailable"
+                : "recipe_render_failed",
             })
             .eq("id", row.id);
           skipped++;

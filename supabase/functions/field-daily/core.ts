@@ -24,14 +24,28 @@ import {
   flushDeferredMessages,
   localDayInTimezone,
   localMinutesInTimezone,
+  resolveStudioName,
+  sendClientSms,
   sendPartySms,
   smsConversationNumber,
+  type OrdinarySmsInput,
   type SendPartySmsInput,
   type SendPartySmsResult,
   type SmsDeps,
 } from "../_shared/sms.ts";
 
 const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
+
+/**
+ * THE HOMEOWNER'S PACE (US-3 P24). One list of picks a day at most, one nudge
+ * three days later, and then the rail stops talking: a client who has not
+ * answered twice is a person to phone, and the studio is the one to do it.
+ */
+const CLIENT_REMINDER_MS = 72 * 3600 * 1000;
+/** How long her ask stays answerable. Long enough to outlive the one nudge. */
+const CLIENT_ASK_TTL_MS = 7 * 24 * 3600 * 1000;
+/** Picks in one ask. More than this is a phone call, not a text. */
+const CLIENT_BATCH_MAX = 5;
 
 /**
  * When the two trade cards are due, as minutes past local midnight in FIELD_TZ
@@ -273,6 +287,16 @@ export interface FieldDailyDeps extends SmsDeps {
   ) => Promise<SendPartySmsResult>;
   /** Injectable deferred flush (defaults to flushDeferredMessages). */
   flushFn?: (supabase: SupabaseClient, deps: SmsDeps) => Promise<{ flushed: number; skipped: number }>;
+  /**
+   * Injectable client sender (defaults to sendClientSms). Separate from sendFn
+   * because it is a different door with a different gate, and a test that wants
+   * to watch the homeowner's rail should not have to stand in for the crew's.
+   */
+  clientSendFn?: (
+    supabase: SupabaseClient,
+    input: OrdinarySmsInput,
+    deps: SmsDeps,
+  ) => Promise<SendPartySmsResult>;
 }
 
 interface RunSummary {
@@ -286,6 +310,10 @@ interface RunSummary {
   day_of_sent: number;
   /** "Crew on the way" posts written to a project thread this run. */
   crew_posts: number;
+  /** Selection batches presented to a homeowner this run (contract P24). */
+  client_batches_sent: number;
+  /** 72h nudges on an unanswered batch this run. One per batch, ever. */
+  client_reminders_sent: number;
 }
 
 function isoDate(d: Date): string {
@@ -403,6 +431,7 @@ export async function runFieldDaily(
   // sendPartySms uses — never an MG… Messaging Service SID (see _shared/sms.ts).
   const conversationNumber = smsConversationNumber(deps);
   const send = deps.sendFn ?? sendPartySms;
+  const sendClient = deps.clientSendFn ?? sendClientSms;
   const flush = deps.flushFn ?? flushDeferredMessages;
   // The zone the trade rail's hours are named in — the same one quiet hours and
   // the cadence day are read out of.
@@ -417,6 +446,8 @@ export async function runFieldDaily(
     site_cards_sent: 0,
     day_of_sent: 0,
     crew_posts: 0,
+    client_batches_sent: 0,
+    client_reminders_sent: 0,
   };
 
   // ── Consented field parties ───────────────────────────────────────────────
@@ -781,11 +812,361 @@ export async function runFieldDaily(
     }
   }
 
+  // ── The homeowner's picks: one ask a day, one nudge, then quiet (P24) ──────
+  // A studio decides WHAT to ask her; this cron decides only WHEN, and its whole
+  // job is restraint. A homeowner is not a crew: she has no shift, no dispatch
+  // and no obligation to answer a phone at 7am, so her rail has exactly one
+  // question open at a time, presents at most one new list per local day, nudges
+  // it once after three days, and then says nothing at all until she answers or
+  // the studio does something. Every send still meets the same gate the letter
+  // met — phase 2, the campaign flag, her consent record, the pace guard and the
+  // dead-end detector — inside sendClientSms.
+  //
+  // Asked behind the phase gate BEFORE any row is written, for 00639's reason:
+  // a server at phase 0 or 1 that opened batches and burned short codes for
+  // texts it will never send would spend the reservations on silence.
+  if (fieldLinePhase(deps) >= 2 && conversationNumber) {
+    const localToday = localDayInTimezone(now, fieldTz);
+    const { data: clientSeats } = await supabase
+      .from("project_parties")
+      .select("id, phone_e164, project_id, display_name, party_kind")
+      .eq("party_kind", "client");
+
+    for (
+      const seat of (clientSeats ?? []) as Array<{
+        id: string;
+        phone_e164: string | null;
+        project_id: string;
+      }>
+    ) {
+      if (!seat.phone_e164) continue;
+      // The thread, and the pause a handoff may have put on it. A homeowner
+      // whose last message went to her designer is waiting on a person; texting
+      // her a fresh list over the top of that is the loudest possible answer.
+      const conv = await findOrCreateConversation(
+        supabase, conversationNumber, seat.phone_e164, seat.id, seat.project_id,
+      );
+      if (!conv || (conv.paused_until && Date.parse(conv.paused_until) > now.getTime())) continue;
+
+      const { data: openRows } = await supabase
+        .from("client_decision_batches")
+        .select("id, project_id, party_id, version, presented_at, presented_local_day, reminder_sent_at, closed_at")
+        .eq("party_id", seat.id)
+        .is("closed_at", null)
+        .order("presented_at", { ascending: false })
+        .limit(1);
+      const openBatch = (openRows ?? [])[0] as ClientBatch | undefined;
+
+      if (openBatch) {
+        // ONE NUDGE, THEN SILENCE. Not a second list, not a daily reminder:
+        // reminder_sent_at is stamped once and this branch never fires again for
+        // this batch, so an unanswered ask ends in quiet rather than in nagging.
+        if (openBatch.reminder_sent_at) continue;
+        if (Date.parse(openBatch.presented_at) + CLIENT_REMINDER_MS > now.getTime()) continue;
+        const ask = await openClientAsk(supabase, seat, openBatch.id, now);
+        // NO NEW REFERENCE FOR A NUDGE, and none for a list that moved. The
+        // reference she already has is the one she was given (00639 binds the
+        // version at issuance); if the batch has since been re-versioned, a text
+        // pointing at the old reference would only earn her a stale_version
+        // refusal, and re-presenting is the studio's call, not this cron's.
+        if (!ask || ask.version !== openBatch.version) continue;
+        const letter = await liveClientLetter(supabase, seat);
+        if (!letter) continue;
+        const vars = await selectionVars(supabase, seat, openBatch, ask.short_code);
+        if (!vars) continue;
+        const res = await sendClient(supabase, {
+          partyId: seat.id,
+          projectId: seat.project_id,
+          templateKey: "sms_selection_ready",
+          clientInvitationId: letter.id,
+          dedupeKey: `client-batch-reminder:${openBatch.id}`,
+          vars,
+        }, deps);
+        if (!res.sent && !res.deferred) continue;
+        // Stamped AFTER the wire claim, and guarded on still being NULL: the
+        // dedupe key above is what makes a retry harmless, so the honest order
+        // is "the text is claimed, therefore the nudge is spent".
+        await supabase
+          .from("client_decision_batches")
+          .update({ reminder_sent_at: now.toISOString() })
+          .eq("id", openBatch.id)
+          .is("reminder_sent_at", null);
+        summary.client_reminders_sent++;
+        continue;
+      }
+
+      // ONE ASK PER LOCAL DAY, presented or already answered. 00651's partial
+      // unique index enforces one OPEN batch per day; this read is the other
+      // half — a batch she answered this morning still spends the day, so she is
+      // never asked twice between two sunrises.
+      const { data: todays } = await supabase
+        .from("client_decision_batches")
+        .select("id")
+        .eq("party_id", seat.id)
+        .eq("presented_local_day", localToday)
+        .limit(1);
+      if ((todays ?? []).length) continue;
+
+      const letter = await liveClientLetter(supabase, seat);
+      if (!letter) continue;
+      const picks = await presentableDecisions(supabase, seat, letter.designer_client_id);
+      if (!picks.length) continue;
+
+      const batchId = crypto.randomUUID();
+      const { error: batchError } = await supabase
+        .from("client_decision_batches")
+        .insert({
+          id: batchId,
+          project_id: seat.project_id,
+          party_id: seat.id,
+          decision_ids: picks.map((d) => d.id),
+          version: 1,
+          presented_at: now.toISOString(),
+          // THE SENDER COMPUTES THE LOCAL DAY, in the zone the rail is named in
+          // — 00645's convention, for the same reason: twice a year the offset
+          // moves and "now minus six hours" names the wrong date.
+          presented_local_day: localToday,
+          // WHAT SHE WAS SHOWN, as she was shown it. The options can move after
+          // the text goes out (that is what the version bump is for), so the
+          // presented set is written down rather than reconstructed later.
+          presented_snapshot: {
+            presented_at: now.toISOString(),
+            room_id: picks[0].room_id,
+            decisions: picks.map((d) => ({
+              id: d.id,
+              title: d.title,
+              room_id: d.room_id,
+              option_id: d.option_id,
+            })),
+          },
+        });
+      // The index refused it: another tick of this same cron got there first.
+      if (batchError) continue;
+
+      const ask = await promptRef(
+        supabase, seat, batchId, "selection_batch", 1, conversationNumber, now,
+        undefined, new Date(now.getTime() + CLIENT_ASK_TTL_MS),
+      );
+      if (!ask) {
+        await supabase.from("client_decision_batches").delete().eq("id", batchId);
+        continue;
+      }
+      const vars = await selectionVars(supabase, seat, { id: batchId, version: 1 }, ask.short_code);
+      const res = vars
+        ? await sendClient(supabase, {
+          partyId: seat.id,
+          projectId: seat.project_id,
+          templateKey: "sms_selection_ready",
+          clientInvitationId: letter.id,
+          dedupeKey: `client-batch:${batchId}`,
+          vars,
+        }, deps)
+        : null;
+      if (!res || (!res.sent && !res.deferred)) {
+        // NOTHING WENT OUT, SO NOTHING WAS ASKED. A batch and a reference left
+        // standing behind a refused send would tell every later tick that this
+        // homeowner has an open question, silence her for the day, and — after
+        // three days — earn her a nudge about a list she was never sent. So the
+        // two rows this tick wrote are taken back, in the order that never
+        // leaves a prompt pointing at a batch that is gone.
+        await supabase.from("sms_prompts").delete().eq("id", ask.id);
+        await supabase.from("client_decision_batches").delete().eq("id", batchId);
+        continue;
+      }
+      summary.client_batches_sent++;
+    }
+  }
+
   // ── Flush deferred outbound rows ──────────────────────────────────────────
   const flushed = await flush(supabase, deps);
   summary.deferred_flushed = flushed.flushed;
 
   return summary;
+}
+
+interface ClientBatch {
+  id: string;
+  version: number;
+  presented_at: string;
+  reminder_sent_at?: string | null;
+}
+
+/** The reference she already holds for an open batch, if one is still live. */
+async function openClientAsk(
+  supabase: SupabaseClient,
+  seat: { id: string; project_id: string; phone_e164: string | null },
+  batchId: string,
+  now: Date,
+): Promise<{ id: string; short_code: string; version: number } | null> {
+  const { data } = await supabase
+    .from("sms_prompts")
+    .select("id, short_code, version")
+    .eq("party_id", seat.id)
+    .eq("project_id", seat.project_id)
+    .eq("subject_id", batchId)
+    .eq("kind", "selection_batch")
+    .is("answered_at", null)
+    .is("voided_at", null)
+    .gt("expires_at", now.toISOString())
+    .order("version", { ascending: false })
+    .limit(1);
+  const row = (data ?? [])[0] as
+    | { id: string; short_code: string; version: number }
+    | undefined;
+  return row ?? null;
+}
+
+/**
+ * The letter this homeowner is reading from, and the household it speaks for.
+ *
+ * THE SAME PREDICATE apply_client_effect APPLIES (00651:530, contract P14): not
+ * revoked, not superseded. Deliberately NOT the invitation's expires_at — the
+ * capability carries its own lifetime and create_client_link is the authority on
+ * it, so refusing here on a different clock would make the rail and the database
+ * disagree about who may be written to.
+ */
+async function liveClientLetter(
+  supabase: SupabaseClient,
+  seat: { project_id: string; phone_e164: string | null },
+): Promise<{ id: string; designer_client_id: string } | null> {
+  if (!seat.phone_e164) return null;
+  const { data } = await supabase
+    .from("client_invitations")
+    .select("id, designer_client_id, sent_at, revoked_at, superseded_by, phone, project_id")
+    .eq("project_id", seat.project_id)
+    .eq("phone", seat.phone_e164)
+    .is("revoked_at", null)
+    .is("superseded_by", null)
+    .order("sent_at", { ascending: false })
+    .limit(1);
+  const row = (data ?? [])[0] as
+    | { id: string; designer_client_id: string | null }
+    | undefined;
+  return row?.id && row.designer_client_id
+    ? { id: row.id, designer_client_id: row.designer_client_id }
+    : null;
+}
+
+/**
+ * The picks that may be presented as ONE ask, room by room.
+ *
+ * EVERY CLAUSE HERE IS ONE apply_client_effect WILL APPLY (contract P14). A
+ * batch holding a decision SQL refuses is worse than no batch at all: the
+ * refusal is whole-batch, so one ineligible pick loses her the other four and
+ * lands the reply on a designer's desk. So the eligibility test is the SQL's,
+ * stated in the same order — client-court selection, no approval contract to
+ * assent to, and exactly one recommended option, which is what "what she was
+ * shown" means (00651:632).
+ *
+ * The household conjunct is 00652's: a letter speaks for ONE client record, and
+ * a batch is built from that record's decisions only.
+ */
+async function presentableDecisions(
+  supabase: SupabaseClient,
+  seat: { project_id: string },
+  designerClientId: string,
+): Promise<Array<{ id: string; title: string; room_id: string | null; option_id: string }>> {
+  const { data } = await supabase
+    .from("client_decisions")
+    .select("id, title, room_id, status, coordination_kind, court, approval_contract, designer_client_id, project_id, created_at")
+    .eq("project_id", seat.project_id)
+    .eq("designer_client_id", designerClientId)
+    .eq("coordination_kind", "selection")
+    .eq("court", "client")
+    .eq("status", "pending")
+    .is("approval_contract", null)
+    .order("created_at", { ascending: true });
+  const rows = (data ?? []) as Array<{
+    id: string;
+    title: string | null;
+    room_id: string | null;
+  }>;
+  if (!rows.length) return [];
+
+  const { data: optionRows } = await supabase
+    .from("client_decision_options")
+    .select("id, decision_id, is_recommended, sort_order")
+    .in("decision_id", rows.map((r) => r.id));
+  const shown = new Map<string, string[]>();
+  for (
+    const option of (optionRows ?? []) as Array<{
+      id: string;
+      decision_id: string;
+      is_recommended: boolean | null;
+    }>
+  ) {
+    if (option.is_recommended !== true) continue;
+    shown.set(option.decision_id, [...(shown.get(option.decision_id) ?? []), option.id]);
+  }
+  const eligible = rows.flatMap((row) => {
+    const options = shown.get(row.id) ?? [];
+    return options.length === 1
+      ? [{
+        id: row.id,
+        title: row.title ?? "a selection",
+        room_id: row.room_id,
+        option_id: options[0],
+      }]
+      : [];
+  });
+  if (!eligible.length) return [];
+
+  // ONE ROOM PER ASK. "Three picks ready for the living room" is a sentence a
+  // homeowner can act on; the same three spread across her whole house is a
+  // to-do list. The biggest room group goes first and the rest wait for another
+  // day — which the one-a-day rule above turns into an orderly queue.
+  const byRoom = new Map<string, typeof eligible>();
+  for (const pick of eligible) {
+    const key = pick.room_id ?? "";
+    byRoom.set(key, [...(byRoom.get(key) ?? []), pick]);
+  }
+  let chosen: typeof eligible = [];
+  for (const group of byRoom.values()) {
+    if (group.length > chosen.length) chosen = group;
+  }
+  return chosen.slice(0, CLIENT_BATCH_MAX);
+}
+
+/**
+ * The copy's parameters, budgeted. studio_name first and plain words after it —
+ * the homeowner's copy rule, and every body ends in the canonical closing line
+ * the migration appended. {{link}} is NOT set here: the capability is minted at
+ * dispatch off the invitation id (contract S6), so a deferred letter mints its
+ * own link at 8am rather than storing one overnight.
+ */
+async function selectionVars(
+  supabase: SupabaseClient,
+  seat: { id: string; project_id: string },
+  batch: { id: string; version: number },
+  ref: string,
+): Promise<Record<string, unknown> | null> {
+  const { data: batchRow } = await supabase
+    .from("client_decision_batches")
+    .select("id, decision_ids, presented_snapshot, version")
+    .eq("id", batch.id)
+    .maybeSingle();
+  const ids = ((batchRow as { decision_ids?: string[] } | null)?.decision_ids ?? []) as string[];
+  if (!ids.length) return null;
+  const snapshot = (batchRow as { presented_snapshot?: { room_id?: string | null } } | null)
+    ?.presented_snapshot ?? null;
+  let room = "your project";
+  if (snapshot?.room_id) {
+    const { data: roomRow } = await supabase
+      .from("project_rooms")
+      .select("name")
+      .eq("id", snapshot.room_id)
+      .maybeSingle();
+    const name = (roomRow as { name?: string } | null)?.name;
+    if (name && name.trim()) room = name.trim();
+  }
+  return {
+    studio_name: cardParam(
+      await resolveStudioName(supabase, seat.project_id) ?? undefined, 24, "Your studio",
+    ),
+    picks: `${ids.length} pick${ids.length === 1 ? "" : "s"}`,
+    room: cardParam(room, 24, "your project"),
+    ref,
+  };
 }
 
 /**

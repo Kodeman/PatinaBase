@@ -7,6 +7,7 @@ import { processInbound, tradeShape, type InboundParams } from "../sms-inbound/p
 import type { FieldParseResult } from "../_shared/field-parse.ts";
 import { createFakeSupabase as baseFakeSupabase, type FakeSupabase } from "./fake-supabase.ts";
 import { inboundFixture } from "./field-line/inbound-fixture.ts";
+import { clientFixture, CLIENT_PHONE } from "./field-line/client-fixture.ts";
 
 function createFakeSupabase(...args: Parameters<typeof baseFakeSupabase>): FakeSupabase {
   const fake = baseFakeSupabase(...args);
@@ -3097,3 +3098,350 @@ import "./field-line/inbound-completion.test.ts";
 import "./field-line/inbound-completion-boundaries.test.ts";
 
 import "./field-line/inbound-project-context.test.ts";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The homeowner's two answers (US-3 P23/P24)
+// ═══════════════════════════════════════════════════════════════════════════
+// "YES 31" approves the list she was shown, at the version she was shown it.
+// "A 31" / "B 31" / "C 31" records when she can be there. Nothing else she says
+// is acted on, and every refusal apply_client_effect can raise has a decided
+// answer here — that agreement IS contract P14.
+
+const CLIENT_SID = "SMclient";
+
+function clientStamps(f: ReturnType<typeof clientFixture>): Array<Record<string, unknown>> {
+  return (f.h.fake._data.sms_messages ?? []).filter((m: Record<string, unknown>) =>
+    m.direction === "inbound" || m.direction == null
+  );
+}
+
+/** The row the pipeline stamped for her inbound. */
+function clientStamp(f: ReturnType<typeof clientFixture>, sid: string): Record<string, unknown> {
+  const row = (f.h.fake._data.sms_messages ?? []).find((m: Record<string, unknown>) =>
+    m.twilio_sid === sid
+  );
+  assert(row, `no inbound row for ${sid}`);
+  return row as Record<string, unknown>;
+}
+
+Deno.test("YES NN approves the batch she was shown, at the version she was shown it", async () => {
+  const f = clientFixture();
+  const batch = f.batch();
+  const ask = f.ask();
+  const res = await f.inbound("YES 31", CLIENT_SID);
+
+  assertEquals(res.disposition, "client_selection_approved");
+  assertEquals(res.effectApplied, true);
+  assertEquals(batch.closed_at !== null, true, "the ask is closed by the answer");
+  const decision = f.h.fake._data.client_decisions.find((d: Record<string, unknown>) => d.id === "dec-1")!;
+  assertEquals(decision.status, "responded");
+  assertEquals(decision.answer, "opt-1", "the option she was shown is the one applied");
+  assertEquals(decision.selected_by, null, "a seat is never forged into auth.users");
+  assertEquals(ask.answered_at !== null, true, "and her reference is spent");
+  assertEquals(ask.consumed_sid, CLIENT_SID);
+
+  // LOW-4: two decision_events rows exist — ours and 00171's status mirror — and
+  // exactly one of them names the actor. The pipeline reads neither as a second
+  // action; this asserts the shape the fixture models so a future reader of
+  // decision_events cannot mistake the twin for one.
+  const events = f.h.fake._data.decision_events.filter((e: Record<string, unknown>) =>
+    e.decision_id === "dec-1"
+  );
+  assertEquals(events.length, 2, "one actor row and one status mirror");
+  assertEquals(
+    events.filter((e: Record<string, unknown>) => e.actor_party_id === "party-c").length,
+    1,
+    "exactly one row names the party that answered",
+  );
+  assertEquals(
+    events.every((e: Record<string, unknown>) => e.changed_by === null),
+    true,
+    "and nobody's user id is on either",
+  );
+
+  const reply = res.replies?.[0];
+  assert(reply, "she is answered");
+  assert(/confirmed/i.test(String(reply.message)), `plain words: "${reply.message}"`);
+  assertEquals(reply.partyId, "party-c");
+  const stamp = clientStamp(f, CLIENT_SID);
+  assert(!stamp.needs_review, "an answer the rail could apply is nobody's handoff");
+  const parsed = stamp.parsed_intent as Record<string, unknown>;
+  assertEquals(parsed.path, "client_ref");
+  assertEquals(parsed.effect, "approve_selection");
+  assertEquals((parsed.payload as Record<string, unknown>).version, 1);
+  assertEquals(f.effects.length, 0, "and the field effect door was never opened");
+});
+
+Deno.test("the same inbound delivered twice applies once", async () => {
+  const f = clientFixture();
+  f.batch();
+  f.ask();
+  await f.inbound("YES 31", CLIENT_SID);
+  const decision = f.h.fake._data.client_decisions.find((d: Record<string, unknown>) => d.id === "dec-1")!;
+  const firstAnswer = decision.responded_at;
+  const again = await f.inbound("YES 31", CLIENT_SID);
+  assertEquals(again.disposition, "already_completed");
+  assertEquals(again.effectApplied, true);
+  assertEquals(decision.responded_at, firstAnswer, "nothing was applied a second time");
+  assertEquals((again.replies ?? []).length, 0, "and she is not told twice");
+});
+
+Deno.test("an old reference never changes target: a moved list is refused and handed over", async () => {
+  // The batch was re-versioned after the text went out (an option changed). Her
+  // reply is written against a list that no longer exists, so NOTHING is applied
+  // and the ask stays open for the studio to present again.
+  const f = clientFixture();
+  const batch = f.batch();
+  const ask = f.ask();
+  batch.version = 2;
+  const res = await f.inbound("YES 31", CLIENT_SID);
+
+  assertEquals(res.disposition, "client_stale_version");
+  assertEquals(res.effectApplied ?? false, false);
+  assertEquals(batch.closed_at, null, "the ask is still open");
+  assertEquals(ask.answered_at ?? null, null, "and so is her reference");
+  const decision = f.h.fake._data.client_decisions.find((d: Record<string, unknown>) => d.id === "dec-1")!;
+  assertEquals(decision.status, "pending", "no selection was applied");
+  const stamp = clientStamp(f, CLIENT_SID);
+  assertEquals(stamp.needs_review, true, "the studio is told the list needs re-sending");
+  assertEquals(stamp.owner_user_id, "studio-a");
+  const parsed = stamp.parsed_intent as Record<string, unknown>;
+  assertEquals(parsed.refusal, "stale_version");
+  assertEquals((parsed.current as Record<string, unknown>).current_version, 2);
+  const reply = res.replies?.[0];
+  assert(/changed/i.test(String(reply?.message)), `the truth, plainly: "${reply?.message}"`);
+});
+
+Deno.test("A, B and C on a delivery card record availability and nothing else", async () => {
+  for (const [option, expected] of [["A", "Tue 9-12"], ["B", "Thu 1-4"], ["C", null]] as const) {
+    const f = clientFixture();
+    f.ask({
+      id: "prompt-w",
+      kind: "window_pick",
+      subject_id: "delivery-1",
+      short_code: "42",
+      proposed_effect: { options: { A: "Tue 9-12", B: "Thu 1-4" } },
+    });
+    const res = await f.inbound(`${option} 42`, `SMwin${option}`);
+    assertEquals(res.disposition, "client_window_recorded", `[${option}]`);
+    const rows = f.h.fake._data.delivery_availability;
+    assertEquals(rows.length, 1, `[${option}] one availability row`);
+    assertEquals(rows[0].option, option);
+    assertEquals(rows[0].window_label, expected);
+    assertEquals(rows[0].subject_kind, "delivery");
+    assertEquals(rows[0].recorded_by_party_id, "party-c");
+    assertEquals(rows[0].source_sid, `SMwin${option}`);
+    // NOT A CONFIRMATION. Her availability is not the crew saying the sofa
+    // arrived: no field effect is filed, no delivery event is touched, and the
+    // receiver's own sms_delivery_confirm leg is left exactly where it is.
+    assertEquals(f.effects.length, 0, `[${option}] no field effect`);
+    assertEquals((f.h.fake._data.delivery_events ?? []).length, 0, `[${option}] no delivery touched`);
+    const reply = String(res.replies?.[0]?.message ?? "");
+    if (option === "C") {
+      assert(/neither/i.test(reply), `C says what it means: "${reply}"`);
+    } else {
+      assert(reply.includes(expected!), `[${option}] names the window she picked: "${reply}"`);
+    }
+  }
+});
+
+Deno.test("anything else a homeowner says goes to a person, not a parser", async () => {
+  // Two shapes: a word the card never printed on an open reference, and a
+  // sentence with no reference at all.
+  const onRef = clientFixture();
+  onRef.batch();
+  onRef.ask();
+  const odd = await onRef.inbound("MAYBE 31", "SMmaybe");
+  assertEquals(odd.disposition, "needs_review");
+  const oddStamp = clientStamp(onRef, "SMmaybe");
+  assertEquals(oddStamp.needs_review, true);
+  assertEquals((oddStamp.parsed_intent as Record<string, unknown>).path, "client_unreadable");
+  assertEquals(onRef.h.fake._data.client_decisions[0].status, "pending", "nothing applied");
+
+  const freeform = clientFixture();
+  const chat = await freeform.inbound("Can we talk about the rug?", "SMchat");
+  assertEquals(chat.disposition, "needs_review");
+  const chatStamp = clientStamp(freeform, "SMchat");
+  assertEquals(chatStamp.needs_review, true);
+  assertEquals(chatStamp.owner_user_id, "studio-a");
+  assertEquals((chatStamp.parsed_intent as Record<string, unknown>).path, "client_freeform");
+  assertEquals(freeform.effects.length, 0, "the field parser never saw it");
+  assert(
+    /get back to you/i.test(String(chat.replies?.[0]?.message ?? "")),
+    "and she is told a person has it",
+  );
+});
+
+// ── P14: every refusal apply_client_effect can raise has a decided answer ────
+//
+// Each row below breaks the world in ONE way, and asserts three things: she gets
+// a truthful line, nothing is applied, and the studio is handed the thread with
+// the SQLSTATE on the row when the refusal is not one the rail can explain.
+
+Deno.test("P14: the refusal set of apply_client_effect and the pipeline agree", async () => {
+  const cases: Array<{
+    name: string;
+    disposition: string;
+    named: boolean;
+    reply: RegExp;
+    break: (f: ReturnType<typeof clientFixture>) => void;
+  }> = [
+    {
+      name: "no_capability",
+      disposition: "client_no_capability",
+      named: true,
+      reply: /isn't working/i,
+      break: (f) => { f.h.fake._data.client_links = []; },
+    },
+    {
+      name: "capability_wrong_project",
+      disposition: "client_wrong_project",
+      named: true,
+      reply: /another project/i,
+      break: (f) => {
+        const link = f.h.fake._data.client_links[0];
+        link.project_id = "project-b";
+        (link.scope as { project_id: string }).project_id = "project-b";
+      },
+    },
+    {
+      name: "capability_expired_or_revoked",
+      disposition: "client_capability_expired",
+      named: true,
+      reply: /expired/i,
+      break: (f) => { f.h.fake._data.client_links[0].status = "revoked"; },
+    },
+    {
+      name: "letter_revoked",
+      disposition: "client_letter_revoked",
+      named: true,
+      reply: /replaced/i,
+      break: (f) => { f.h.fake._data.client_invitations[0].revoked_at = "2026-10-30T00:00:00.000Z"; },
+    },
+    {
+      name: "letter_superseded",
+      disposition: "client_letter_revoked",
+      named: true,
+      reply: /replaced/i,
+      break: (f) => { f.h.fake._data.client_invitations[0].superseded_by = "inv-d"; },
+    },
+    {
+      name: "batch_not_addressed",
+      disposition: "client_not_addressed",
+      named: true,
+      reply: /isn't yours/i,
+      break: (f) => { f.h.fake._data.client_decision_batches[0].party_id = "party-a"; },
+    },
+    {
+      name: "decision_other_household",
+      disposition: "client_other_household",
+      named: true,
+      reply: /another client/i,
+      break: (f) => { f.h.fake._data.client_decisions[0].designer_client_id = "household-2"; },
+    },
+    {
+      name: "decision_other_project",
+      disposition: "client_effect_failed",
+      named: false,
+      reply: /didn't save/i,
+      break: (f) => { f.h.fake._data.client_decisions[0].project_id = "project-b"; },
+    },
+    {
+      name: "not_a_client_selection",
+      disposition: "client_effect_failed",
+      named: false,
+      reply: /didn't save/i,
+      break: (f) => { f.h.fake._data.client_decisions[0].court = "designer"; },
+    },
+    {
+      name: "approval_contract_not_textable",
+      disposition: "client_effect_failed",
+      named: false,
+      reply: /didn't save/i,
+      break: (f) => { f.h.fake._data.client_decisions[0].approval_contract = "contract-1"; },
+    },
+    {
+      name: "no_single_presented_option",
+      disposition: "client_effect_failed",
+      named: false,
+      reply: /didn't save/i,
+      break: (f) => { f.h.fake._data.client_decision_options[1].is_recommended = true; },
+    },
+    {
+      name: "batch missing",
+      disposition: "client_effect_failed",
+      named: false,
+      reply: /didn't save/i,
+      break: (f) => { f.h.fake._data.client_decision_batches = []; },
+    },
+  ];
+
+  for (const testCase of cases) {
+    const tag = `[${testCase.name}]`;
+    const f = clientFixture();
+    f.batch();
+    f.ask();
+    testCase.break(f);
+    const sid = `SMp14${testCase.name.replace(/\W/g, "")}`;
+    const res = await f.inbound("YES 31", sid);
+    assertEquals(res.disposition, testCase.disposition, `${tag} disposition`);
+    assertEquals(res.effectApplied ?? false, false, `${tag} nothing was applied`);
+    const reply = String(res.replies?.[0]?.message ?? "");
+    assert(testCase.reply.test(reply), `${tag} the line she gets: "${reply}"`);
+    assert(
+      !/42501|23514|22023|capability|scope|batch_|SQLSTATE/i.test(reply),
+      `${tag} she is never shown the plumbing: "${reply}"`,
+    );
+    const stamp = clientStamp(f, sid);
+    assertEquals(stamp.needs_review, true, `${tag} the studio is handed the thread`);
+    assertEquals(stamp.owner_user_id, "studio-a", `${tag} and it has an owner`);
+    const parsed = stamp.parsed_intent as Record<string, unknown>;
+    if (testCase.named) {
+      assertEquals(parsed.path, "client_refused", `${tag} recorded as a named refusal`);
+      assert(parsed.refusal, `${tag} the refusal is named on the row`);
+    } else {
+      assertEquals(parsed.path, "client_effect_failed", `${tag} recorded as a failure`);
+      assert(parsed.sqlstate, `${tag} with the SQLSTATE the database gave`);
+      assert(parsed.sql_message, `${tag} and what it said`);
+    }
+    assertEquals(f.effects.length, 0, `${tag} the field door stayed shut`);
+  }
+});
+
+Deno.test("P14: a closed or expired reference is answered as itself", async () => {
+  const closed = clientFixture();
+  closed.batch({ closed_at: "2026-11-01T13:00:00.000Z" });
+  closed.ask();
+  const closedRes = await closed.inbound("YES 31", "SMclosed");
+  assertEquals(closedRes.disposition, "ref_closed");
+  assertEquals(closed.effects.length, 0);
+  assert(!clientStamp(closed, "SMclosed").needs_review, "a closed ask is nobody's handoff");
+
+  // A reference that ran out is answered as CLOSED, one gate earlier: every read
+  // that decides which prompts are open carries expires_at > now (contract P14),
+  // so sms_resolve_prompt hands back nothing and the rail's own closed-ref reply
+  // names the newest reference she CAN answer. apply_client_effect's `expired`
+  // is therefore only reachable as a race — the reference running out between
+  // that read and the apply — and the branch that answers it exists for exactly
+  // that. Either way nothing is applied and nobody is paged.
+  const expired = clientFixture();
+  const expiredBatch = expired.batch();
+  expired.ask({ expires_at: "2026-10-01T00:00:00.000Z" });
+  const expiredRes = await expired.inbound("YES 31", "SMexpired");
+  assertEquals(expiredRes.disposition, "ref_closed");
+  assertEquals(expiredBatch.closed_at, null, "and the ask is left open");
+  assertEquals(expired.h.fake._data.client_decisions[0].status, "pending");
+  assert(!clientStamp(expired, "SMexpired").needs_review, "a run-out reference pages nobody");
+});
+
+Deno.test("P14: an inbound with no provider id is retried, never guessed at", async () => {
+  // apply_client_effect refuses without a SID because it cannot be made
+  // idempotent; answering 503 keeps the inbound identity and lets Twilio
+  // redeliver, which is the only outcome that applies her answer exactly once.
+  const f = clientFixture();
+  f.batch();
+  f.ask();
+  const res = await f.h.processInbound({ Body: "YES 31", MessageSid: "", From: CLIENT_PHONE });
+  assertEquals(res.status, 503);
+  assertEquals(f.h.fake._data.client_decisions[0].status, "pending", "nothing applied");
+});

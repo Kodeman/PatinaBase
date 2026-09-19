@@ -255,6 +255,8 @@ async function renderSms(
 interface PhoneParty {
   id: string;
   project_id: string;
+  /** The roster identity of the seat (00419). A homeowner is `client`. */
+  party_kind: string | null;
 }
 
 /**
@@ -269,7 +271,7 @@ async function loadPhoneParties(
 ): Promise<{ parties: PhoneParty[]; failed: boolean }> {
   const { data, error } = await supabase
     .from("project_parties")
-    .select("id, project_id")
+    .select("id, project_id, party_kind")
     .eq("phone_e164", phone);
   if (error) {
     console.error("loadPhoneParties: project_parties read failed", {
@@ -1654,8 +1656,32 @@ async function processInboundCore(
     // Not a valid choice → fall through to fresh parse.
   }
 
-  const refResult = await promptReply(supabase, conv, parties, body, to, from, effectiveMessageId, now, media, deps);
+  const refResult = await promptReply(supabase, conv, parties, body, to, from, effectiveMessageId, now, media, deps,
+    params.MessageSid ?? null);
   if (refResult) return { ...refResult, messageId: effectiveMessageId };
+  // ANYTHING ELSE FROM A HOMEOWNER (US-3 P24). Past this line the pipeline is
+  // the field rail: the trade grammar, the LLM parse of a crew update, the
+  // numbered menu of a foreman's open tasks. None of it was written for her,
+  // none of its effects are hers to apply, and a sentence she typed is not a
+  // status report. Every question this rail asks her carries a reference and
+  // was answered above; what is left goes to the person who wrote to her.
+  //
+  // Only when EVERY seat on the number is a client seat. A number that also
+  // holds a trade seat belongs to someone who is both, and their field update
+  // must keep working.
+  if (parties.length > 0 && parties.every((p) => p.party_kind === "client")) {
+    const clientParty = parties.find((p) => p.project_id === conv.context?.project_id) ?? parties[0];
+    if (!await ownedReview(supabase, effectiveMessageId, clientParty.project_id, clientParty.id,
+      { path: "client_freeform", body }, deps)) {
+      return { status: 503, twiml: twimlBody(), disposition: "handoff_failed", messageId: effectiveMessageId };
+    }
+    return {
+      ...await reply(supabase, conv.id,
+        `Passed to ${await designerFirstName(supabase, clientParty.project_id, deps)} — they'll get back to you.`,
+        clientParty.id, clientParty.project_id, "needs_review"),
+      messageId: effectiveMessageId,
+    };
+  }
   const scopedParty = parties.find(p => p.project_id === conv.context?.project_id) ?? (projectIds.length === 1 ? parties[0] : undefined);
   if (scopedParty) {
     const paused = await pausedReview(supabase, conv.id, scopedParty.project_id, scopedParty.id, effectiveMessageId, deps);
@@ -1969,6 +1995,21 @@ export async function inboundCompletion(supabase: SupabaseClient, messageId: str
     if (receipt.error) return { status: "unknown" };
     if (receipt.data != null) {
       const r = receipt.data;
+      // A HOMEOWNER'S RECEIPT IS ITS OWN SHAPE (US-3 P23). apply_client_effect
+      // commits {kind:'effect', result:{effect:'approve_selection'|
+      // 'select_window', …}} — no `applied` boolean, because nothing about her
+      // answer is a field effect. Validated as one it reads as unknown, and the
+      // inbound then never completes: Twilio redelivers against a prompt that is
+      // already answered, for ever, and the row keeps its SID for a
+      // reconciliation that has nothing to reconcile. All this path needs from
+      // her receipt is that it exists.
+      if (
+        r.status === "replayed" && typeof r.prompt_id === "string" &&
+        r.result?.kind === "effect" &&
+        CLIENT_EFFECTS.has(String((r.result.result as { effect?: unknown })?.effect ?? ""))
+      ) {
+        return { status: "effect-completed" };
+      }
       if (r.status !== "replayed" || typeof r.prompt_id !== "string" ||
           !["effect", "optin"].includes(r.result?.kind) || !r.result?.result || typeof r.result.result !== "object" || Array.isArray(r.result.result) ||
           (r.result.kind === "effect" && typeof r.result.result.applied !== "boolean") ||
@@ -2110,6 +2151,288 @@ export function tradeShape(body: string): TradeShape | null {
   return null;
 }
 
+// ── The homeowner's two answers (US-3 P24) ───────────────────────────────────
+
+/** The prompt kinds only a client is ever asked (00652). */
+const CLIENT_PROMPT_KINDS = new Set(["selection_batch", "window_pick"]);
+
+/** The two effects apply_client_effect will apply, and no others (00651). */
+const CLIENT_EFFECTS = new Set(["approve_selection", "select_window"]);
+
+/** The three letters the delivery card prints, and nothing else. */
+const WINDOW_OPTIONS = ["A", "B", "C"];
+
+/**
+ * P14 PARITY — THE REFUSAL SET, AS SQL RAISES IT AND AS THIS FILE READS IT.
+ *
+ * apply_client_effect (00651, repaired by 00652) answers in exactly two ways: a
+ * status word in the returned jsonb, or a raise. Every raise it names is in this
+ * map; anything NOT in it — an unnamed 42501, a 23514 from a malformed batch, a
+ * 22023 from a payload with no version, a bare 23505 when one SID reaches a
+ * second prompt, a transport failure — is handed to the project lead with the
+ * SQLSTATE and the message on the needs_review row, and she gets the one honest
+ * line at the bottom. Every refusal leaves the prompt answerable, so none of
+ * these is ever retried here: a person decides what happens next.
+ *
+ * The reply text is what SHE is told. It never names a capability, a scope, a
+ * table or a code — she has no way to act on any of that, and the person who
+ * does has just been handed the thread.
+ */
+const CLIENT_REFUSALS: Record<string, { reply: string; disposition: string }> = {
+  no_capability: {
+    reply: "That link isn't working any more. Your designer will follow up.",
+    disposition: "client_no_capability",
+  },
+  capability_wrong_project: {
+    reply: "That reference belongs to another project. Your designer will follow up.",
+    disposition: "client_wrong_project",
+  },
+  capability_expired_or_revoked: {
+    reply: "That link has expired. Your designer will send a new one.",
+    disposition: "client_capability_expired",
+  },
+  letter_revoked: {
+    reply: "That letter has been replaced. Your designer will send the new one.",
+    disposition: "client_letter_revoked",
+  },
+  batch_not_addressed: {
+    reply: "That reference isn't yours to answer. Your designer will follow up.",
+    disposition: "client_not_addressed",
+  },
+  // 00652's household binding. Named here for the same reason the five above
+  // are: it is a fact about WHOSE ask this is, and she can be told it plainly.
+  decision_other_household: {
+    reply: "That reference belongs to another client on this project. Your designer will follow up.",
+    disposition: "client_other_household",
+  },
+};
+
+/** The refusal token in a raise's message, if it names one of ours. */
+function clientRefusalOf(error: unknown): string | null {
+  const message = String((error as { message?: unknown } | null)?.message ?? "");
+  for (const token of Object.keys(CLIENT_REFUSALS)) {
+    if (message.includes(token)) return token;
+  }
+  return null;
+}
+
+/**
+ * A HOMEOWNER'S REPLY, THROUGH THE ONE DOOR THAT EXISTS FOR IT (US-3 P23/P24).
+ *
+ * `YES 12` on a presented batch approves every selection in it at the version
+ * the text was sent at; `A 14`, `B 14`, `C 14` on a delivery card record when
+ * she can be there. Nothing else a client says is acted on: it goes to the
+ * project lead.
+ *
+ * FOUR THINGS THIS DELIBERATELY DOES NOT DO.
+ *   · It does not go through sms_apply_prompt. That function's effects are the
+ *     field vocabulary and its actor is a seat with a 00624 grant; a homeowner
+ *     has neither, and apply_client_effect is the only door 00651 built for her.
+ *   · It does not carry the batch version from anywhere but the PROMPT. The
+ *     prompt's version is the batch version the text was sent at, frozen at
+ *     issuance (00639), so an old reference can only ever name an old version —
+ *     which is what makes `stale_version` reachable at all, and it is the whole
+ *     protection: a reply written against a list she saw last week cannot land
+ *     on a list she has never seen.
+ *   · It does not confirm a delivery. `select_window` writes availability and
+ *     the receiver's own confirmation stays where it already is — field-daily's
+ *     sms_delivery_confirm leg, asked of the receiver/gc seats on that project
+ *     (field-daily/core.ts's delivery-window block). Her saying "Tuesday works"
+ *     is not the crew saying "the sofa arrived", and the two asks are on two
+ *     different phones for that reason.
+ *   · It does not read the anonymous twin. One approval writes TWO
+ *     decision_events rows — ours, carrying actor_party_id, and 00171's
+ *     record_decision_status_event_trg row with changed_by and actor_party_id
+ *     both NULL (SQ-110 LOW-4). The party row is the authoritative one; the twin
+ *     is a status mirror and is never counted as a second action.
+ */
+async function clientPromptReply(
+  supabase: SupabaseClient,
+  conv: Conversation,
+  prompt: SmsPrompt,
+  party: { id: string; project_id: string },
+  body: string,
+  code: string | null,
+  sender: string,
+  recipient: string,
+  sourceSid: string | null,
+  messageId: string,
+  now: Date,
+  deps: InboundDeps,
+): Promise<InboundResult> {
+  // The same two reads the trade path makes before it answers anyone, with the
+  // homeowner's consent shape. An explicit refusal — her STOP, a fold the
+  // studio recorded — ends the exchange silently, as it does everywhere else.
+  // `unknown` does NOT: the kickoff box writes `pending` (00594 through
+  // record_channel_invite), which is the state every homeowner on this rail is
+  // in, and refusing there would mean she can be texted and never answered.
+  const blocked = await suppression(supabase, sender, recipient);
+  const verdict = await channelConsentVerdict(supabase, recipient, party.project_id);
+  if (blocked.blocked || verdict === "refuse") {
+    return { status: blocked.error ? 503 : 200, twiml: twimlBody(), disposition: "not_consented" };
+  }
+  const name = await designerFirstName(supabase, party.project_id, deps);
+  const handoff = async (
+    details: Record<string, unknown>,
+    message: string,
+    disposition: string,
+  ): Promise<InboundResult> => {
+    if (!await ownedReview(supabase, messageId, party.project_id, party.id, details, deps)) {
+      return { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
+    }
+    return await reply(supabase, conv.id, message, party.id, party.project_id, disposition);
+  };
+
+  const verb = body.trim().toUpperCase().split(/\s+/)[0] ?? "";
+  let effect: "approve_selection" | "select_window" | null = null;
+  let payload: Record<string, unknown> = {};
+  if (prompt.kind === "selection_batch" && ["YES", "Y", "OK"].includes(verb)) {
+    effect = "approve_selection";
+    // THE PROMPT'S OWN VERSION, never a live read of the batch. 00651 refuses a
+    // mismatch with `stale_version` and leaves the ask open so the rail
+    // re-presents; re-reading the batch here would make every reply current and
+    // delete that protection.
+    payload = { version: prompt.version };
+  } else if (prompt.kind === "window_pick" && WINDOW_OPTIONS.includes(verb)) {
+    effect = "select_window";
+    // The label the card printed for this letter, when the issuer wrote it down
+    // on the prompt. It is a record of what she was offered, so it comes from
+    // the prompt and not from today's schedule.
+    const offered = (prompt.proposed_effect?.options ?? null) as
+      | Record<string, unknown>
+      | null;
+    const label = offered && typeof offered[verb] === "string"
+      ? String(offered[verb])
+      : null;
+    payload = {
+      option: verb,
+      subject_kind: "delivery",
+      ...(label ? { window_label: label } : {}),
+    };
+  }
+  if (!effect) {
+    // ANYTHING ELSE FROM A CLIENT. She answered a question nobody asked her, or
+    // answered it in words the card did not print. There is no parser for this
+    // and there should not be one: a homeowner's sentence goes to a person.
+    return await handoff(
+      { path: "client_unreadable", prompt_id: prompt.id, kind: prompt.kind, body },
+      `Passed to ${name} — they'll get back to you.`,
+      "needs_review",
+    );
+  }
+  if (!sourceSid) {
+    // Without the provider's own id the apply cannot be made idempotent, and
+    // 00651 refuses it outright. Answering nothing and retaining the SID is the
+    // honest outcome: Twilio redelivers and the reply lands once.
+    return { status: 503, twiml: twimlBody(), disposition: "client_sid_missing", retainSid: true };
+  }
+
+  const details = {
+    path: "client_ref",
+    prompt_id: prompt.id,
+    version: prompt.version,
+    effect,
+    payload,
+  };
+  const attempt = await stampMessage(supabase, messageId, party.id, party.project_id, details, 1);
+  if (attempt.error) {
+    return { status: 503, twiml: twimlBody(), disposition: "prompt_attempt_unrecorded" };
+  }
+
+  const { data, error } = await supabase.rpc("apply_client_effect", {
+    p_prompt_id: prompt.id,
+    p_effect: effect,
+    p_payload: payload,
+    p_source_sid: sourceSid,
+  });
+  if (error) {
+    const token = clientRefusalOf(error);
+    const failure = error as { code?: string; message?: string };
+    if (token) {
+      return await handoff(
+        { ...details, path: "client_refused", refusal: token, sqlstate: failure.code ?? null },
+        CLIENT_REFUSALS[token].reply,
+        CLIENT_REFUSALS[token].disposition,
+      );
+    }
+    // Not one of ours: the SQLSTATE and the message go on the row so the person
+    // who picks this up can see what the database actually said.
+    return await handoff(
+      {
+        ...details,
+        path: "client_effect_failed",
+        sqlstate: failure.code ?? null,
+        sql_message: failure.message ?? null,
+      },
+      `Got that, but it didn't save — ${name} will follow up.`,
+      "client_effect_failed",
+    );
+  }
+
+  const result = (Array.isArray(data) ? data[0] : data) as
+    | { status?: string; result?: Record<string, unknown> }
+    | null;
+  const status = result?.status ?? null;
+  if (status === "replayed") {
+    // The same inbound, delivered twice. The first one already committed.
+    return completedInbound(messageId);
+  }
+  if (status === "closed") {
+    // A reference that has been answered or withdrawn. closedRefReply names the
+    // newest reference she CAN answer for the same subject, which is exactly the
+    // re-presented batch when there is one.
+    return code
+      ? await closedRefReply(supabase, conv.id, sender, recipient, code, now.toISOString())
+      : await reply(supabase, conv.id, "That one's already answered.",
+        party.id, party.project_id, "ref_closed");
+  }
+  if (status === "expired") {
+    return await reply(supabase, conv.id,
+      `That one has expired. ${name} will send the current one.`,
+      party.id, party.project_id, "ref_expired");
+  }
+  if (status === "stale_version") {
+    // AN OLD REFERENCE NEVER CHANGES TARGET. The list moved after the text went
+    // out, so nothing is applied and the ask stays open; the studio re-presents
+    // it as a new batch at the new version. She is told the truth and the lead
+    // is told there is a list to send again.
+    return await handoff(
+      { ...details, path: "client_stale_version", refusal: "stale_version", current: result?.result ?? null },
+      `Those have changed since that text — ${name} will send the current ones.`,
+      "client_stale_version",
+    );
+  }
+  if (status !== "applied") {
+    return await handoff(
+      { ...details, path: "client_effect_unknown", status },
+      `Got that, but it didn't save — ${name} will follow up.`,
+      "client_effect_failed",
+    );
+  }
+
+  const applied = (result?.result as { result?: Record<string, unknown> } | null)?.result ?? null;
+  if (effect === "approve_selection") {
+    const count = Number((applied as { decision_count?: unknown } | null)?.decision_count ?? 0);
+    return {
+      ...await reply(supabase, conv.id,
+        count === 1
+          ? `Got it — that pick is confirmed. ${name} will take it from here.`
+          : `Got it — those ${count} picks are confirmed. ${name} will take it from here.`,
+        party.id, party.project_id, "client_selection_approved"),
+      effectApplied: true,
+    };
+  }
+  const label = (applied as { window_label?: unknown } | null)?.window_label;
+  return {
+    ...await reply(supabase, conv.id,
+      verb === "C"
+        ? `Got it — neither of those works. ${name} will find another time.`
+        : `Got it — ${typeof label === "string" && label ? label : `option ${verb}`}. ${name} will confirm.`,
+      party.id, party.project_id, "client_window_recorded"),
+    effectApplied: true,
+  };
+}
+
 /**
  * Reply-to-renew (contract S6 / P11). A party whose engagement link has simply
  * RUN OUT texts anything at all — "can you send that link again", or an update
@@ -2190,7 +2513,11 @@ async function replyToRenew(
 /** Codes bind before any parser sees the body. Bare digits belong to menus. */
 async function promptReply(supabase: SupabaseClient, conv: Conversation, parties: Array<{id: string; project_id: string}>,
   body: string, sender: string, recipient: string, messageId: string, now: Date,
-  media: Array<{path: string; content_type: string; twilio_url: string}>, deps: InboundDeps): Promise<InboundResult | null> {
+  media: Array<{path: string; content_type: string; twilio_url: string}>, deps: InboundDeps,
+  // The provider's own id for THIS inbound. apply_client_effect takes it as
+  // p_source_sid and makes the apply idempotent on it (00651), so the client
+  // branch needs the wire value and not our row id.
+  sourceSid: string | null = null): Promise<InboundResult | null> {
   if (/^\d/.test(body)) return null;
   const clarification = conv.state_context?.ref_clarification as SelectionBinding | undefined;
   let priorAsked = false;
@@ -2322,6 +2649,17 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   }
   const paused = await pausedReview(supabase, conv.id, party.project_id, party.id, messageId, deps);
   if (paused) return paused;
+  // THE HOMEOWNER'S PROMPTS LEAVE HERE (US-3 P23). They are not field cards:
+  // their subject is a batch of decisions or a delivery window, which
+  // promptSubject below cannot resolve — it reads project_tasks, client_decisions
+  // and purchase_orders by the prompt's subject_id — so a client reply carried
+  // past this point would be handed to a designer as "that item needs a closer
+  // look" while the answer sat in the message. It is also a different door:
+  // apply_client_effect, not sms_apply_prompt.
+  if (CLIENT_PROMPT_KINDS.has(prompt.kind)) {
+    return await clientPromptReply(supabase, conv, prompt, party, body,
+      explicit?.[2] ?? null, sender, recipient, sourceSid, messageId, now, deps);
+  }
   const subject = await promptSubject(supabase, prompt);
   if (!subject) {
     if (!await ownedReview(supabase, messageId, party.project_id, party.id, { path: "ref_subject_missing", prompt }, deps)) {

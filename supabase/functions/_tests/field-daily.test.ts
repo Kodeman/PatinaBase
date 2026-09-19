@@ -1026,3 +1026,314 @@ Deno.test("00648: an hourly tick issues a SECOND daily digest in the same local 
     "and burns a second 90-day short code on the same task",
   );
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The homeowner's picks: one ask a day, one nudge, then quiet (US-3 P24)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** 8:00am CST, the day the first list is presented. */
+const CLIENT_DAY = new Date("2026-11-01T14:00:00.000Z");
+const CLIENT_LOCAL_DAY = "2026-11-01";
+const CLIENT_ENV = { FIELD_LINE_PHASE: "2", FIELD_LINE_CAMPAIGN_APPROVED: "1" };
+
+function clientDayWorld(extra: Record<string, unknown[]> = {}) {
+  return createFakeSupabase({
+    projects: [{
+      id: "proj1",
+      studio_id: "org1",
+      designer_id: "designer1",
+      name: "Ash House",
+    }],
+    organizations: [{ id: "org1", name: "Field & Form", type: "design_studio" }],
+    organization_members: [{ organization_id: "org1", user_id: "designer1", status: "active" }],
+    studio_channel_consent: [{
+      organization_id: "org1",
+      channel_kind: "sms",
+      channel_value: "+15550002222",
+      status: "pending",
+      refusal_unanswered: false,
+      source: "kickoff_checkbox",
+      evidence: "Kickoff consent box ticked in Patina.",
+      recorded_at: "2026-10-01T00:00:00.000Z",
+      recorded_by: "designer1",
+      disclosure_version: "field-sms-v1",
+    }],
+    project_parties: [{
+      id: "client1",
+      phone_e164: "+15550002222",
+      project_id: "proj1",
+      party_kind: "client",
+      display_name: "Adaeze",
+    }],
+    client_invitations: [{
+      id: "inv1",
+      project_id: "proj1",
+      phone: "+15550002222",
+      designer_client_id: "household1",
+      revoked_at: null,
+      superseded_by: null,
+      sent_at: "2026-10-01T00:00:00.000Z",
+    }],
+    project_rooms: [{ id: "room1", project_id: "proj1", name: "Living room" }],
+    client_decisions: [{
+      id: "dec1",
+      project_id: "proj1",
+      designer_client_id: "household1",
+      coordination_kind: "selection",
+      court: "client",
+      status: "pending",
+      approval_contract: null,
+      title: "Living room sofa",
+      room_id: "room1",
+      created_at: "2026-10-02T00:00:00.000Z",
+    }],
+    client_decision_options: [
+      { id: "opt1", decision_id: "dec1", is_recommended: true, sort_order: 1 },
+      { id: "opt2", decision_id: "dec1", is_recommended: false, sort_order: 2 },
+    ],
+    client_decision_batches: [],
+    client_links: [],
+    sms_prompts: [],
+    project_tasks: [],
+    delivery_events: [],
+    sms_conversations: [],
+    ...(extra as Record<string, Array<Record<string, unknown>>>),
+  });
+}
+
+function clientRun(
+  fake: ReturnType<typeof clientDayWorld>,
+  now: Date,
+  sent: Array<Record<string, unknown>>,
+  opts: { env?: Record<string, string>; refuse?: boolean } = {},
+) {
+  return runFieldDaily(fake as never, {
+    getEnv: (k) =>
+      ({ TWILIO_FROM_NUMBER: "+15559990000", ...CLIENT_ENV, ...(opts.env ?? {}) } as Record<string, string>)[k],
+    now,
+    sendFn: () => Promise.resolve({ sent: true }),
+    clientSendFn: (_s, input) => {
+      sent.push(input as unknown as Record<string, unknown>);
+      return Promise.resolve(opts.refuse ? { sent: false, status: "failed", reason: "campaign_not_approved" } : { sent: true });
+    },
+    flushFn: () => Promise.resolve({ flushed: 0, skipped: 0 }),
+  });
+}
+
+function batches(fake: ReturnType<typeof clientDayWorld>) {
+  return (fake._data.client_decision_batches ?? []) as Array<Record<string, unknown>>;
+}
+
+Deno.test("P24: one list of picks, presented once, with the reference she answers it with", async () => {
+  const fake = clientDayWorld();
+  const sent: Array<Record<string, unknown>> = [];
+  const summary = await clientRun(fake, CLIENT_DAY, sent);
+
+  assertEquals(summary.client_batches_sent, 1);
+  assertEquals(summary.client_reminders_sent, 0);
+  assertEquals(sent.length, 1);
+  const ask = sent[0];
+  assertEquals(ask.templateKey, "sms_selection_ready");
+  assertEquals(ask.partyId, "client1");
+  assertEquals(ask.clientInvitationId, "inv1", "the letter the capability is minted from");
+  const vars = ask.vars as Record<string, unknown>;
+  assertEquals(vars.picks, "1 pick");
+  assertEquals(vars.room, "Living room", "the room she can picture, not a uuid");
+  assertEquals(vars.studio_name, "Field & Form");
+  assertEquals(vars.link, undefined, "the link is minted at dispatch, never here (S6)");
+
+  const rows = batches(fake);
+  assertEquals(rows.length, 1);
+  assertEquals(rows[0].party_id, "client1");
+  assertEquals(rows[0].decision_ids, ["dec1"]);
+  assertEquals(rows[0].version, 1);
+  assertEquals(rows[0].presented_local_day, CLIENT_LOCAL_DAY, "the SENDER's local day, in FIELD_TZ");
+  assertEquals(rows[0].closed_at ?? null, null);
+  assertEquals(rows[0].reminder_sent_at ?? null, null);
+  const snapshot = rows[0].presented_snapshot as Record<string, unknown>;
+  assertEquals(snapshot.room_id, "room1");
+  assertEquals((snapshot.decisions as Array<Record<string, unknown>>)[0].option_id, "opt1",
+    "what she was shown is written down");
+
+  const prompts = (fake._data.sms_prompts ?? []).filter((row) => row.kind === "selection_batch");
+  assertEquals(prompts.length, 1, "one reference");
+  assertEquals(prompts[0].subject_id, rows[0].id, "and it names the batch");
+  assertEquals(prompts[0].version, 1, "at the version she was shown");
+  assertEquals(vars.ref, prompts[0].short_code, "the text prints that reference");
+});
+
+Deno.test("P24: a second tick the same day says nothing at all", async () => {
+  const fake = clientDayWorld();
+  const first: Array<Record<string, unknown>> = [];
+  await clientRun(fake, CLIENT_DAY, first);
+  const second: Array<Record<string, unknown>> = [];
+  const summary = await clientRun(fake, new Date(CLIENT_DAY.getTime() + 6 * 3600 * 1000), second);
+  assertEquals(second.length, 0, "she is not asked twice in a day");
+  assertEquals(summary.client_batches_sent, 0);
+  assertEquals(summary.client_reminders_sent, 0, "and a nudge is not due for three days");
+  assertEquals(batches(fake).length, 1, "and no second list was opened");
+});
+
+Deno.test("P24: an answered list still spends the day", async () => {
+  // The one-open-per-day index cannot see a batch she has already answered, so
+  // the day is spent by the presented_local_day read instead — or a homeowner who
+  // answers at 9am is asked again at noon.
+  const fake = clientDayWorld();
+  const sent: Array<Record<string, unknown>> = [];
+  await clientRun(fake, CLIENT_DAY, sent);
+  batches(fake)[0].closed_at = "2026-11-01T15:00:00.000Z";
+  fake._data.client_decisions.push({
+    id: "dec2",
+    project_id: "proj1",
+    designer_client_id: "household1",
+    coordination_kind: "selection",
+    court: "client",
+    status: "pending",
+    approval_contract: null,
+    title: "Rug",
+    room_id: "room1",
+    created_at: "2026-10-03T00:00:00.000Z",
+  });
+  fake._data.client_decision_options.push({ id: "opt3", decision_id: "dec2", is_recommended: true, sort_order: 1 });
+  const later: Array<Record<string, unknown>> = [];
+  const summary = await clientRun(fake, new Date(CLIENT_DAY.getTime() + 4 * 3600 * 1000), later);
+  assertEquals(later.length, 0, "the day is spent");
+  assertEquals(summary.client_batches_sent, 0);
+  assertEquals(batches(fake).length, 1);
+});
+
+Deno.test("P24: the nudge comes once at three days, and then there is silence", async () => {
+  const fake = clientDayWorld();
+  const sent: Array<Record<string, unknown>> = [];
+  await clientRun(fake, CLIENT_DAY, sent);
+  const batch = batches(fake)[0];
+  const ref = (fake._data.sms_prompts ?? []).find((row) => row.kind === "selection_batch")!;
+
+  // Day two: nothing.
+  const dayTwo: Array<Record<string, unknown>> = [];
+  await clientRun(fake, new Date(CLIENT_DAY.getTime() + 24 * 3600 * 1000), dayTwo);
+  assertEquals(dayTwo.length, 0, "a day later is not three days later");
+
+  // Day four: one nudge, on the reference she already has.
+  const nudgeAt = new Date(CLIENT_DAY.getTime() + 73 * 3600 * 1000);
+  const nudge: Array<Record<string, unknown>> = [];
+  const summary = await clientRun(fake, nudgeAt, nudge);
+  assertEquals(summary.client_reminders_sent, 1);
+  assertEquals(nudge.length, 1);
+  assertEquals(nudge[0].templateKey, "sms_selection_ready");
+  assertEquals(nudge[0].dedupeKey, `client-batch-reminder:${batch.id}`);
+  assertEquals((nudge[0].vars as Record<string, unknown>).ref, ref.short_code,
+    "the nudge points at the reference she was given, not a new one");
+  assertEquals(
+    (fake._data.sms_prompts ?? []).filter((row) => row.kind === "selection_batch").length,
+    1,
+    "and no second reference is minted for it",
+  );
+  assert(batch.reminder_sent_at, "the nudge is spent");
+  assertEquals(batches(fake).length, 1, "no new list is opened either");
+
+  // And then nothing, ever, for this batch.
+  for (const days of [5, 8, 20]) {
+    const after: Array<Record<string, unknown>> = [];
+    const quiet = await clientRun(fake, new Date(CLIENT_DAY.getTime() + days * 24 * 3600 * 1000), after);
+    assertEquals(after.length, 0, `day ${days}: the rail has stopped talking`);
+    assertEquals(quiet.client_reminders_sent, 0);
+    assertEquals(quiet.client_batches_sent, 0);
+  }
+});
+
+Deno.test("P24: a list that moved earns no nudge", async () => {
+  // Her reference is pinned to the version she was shown. Nudging her about a
+  // list that has since changed would only earn her a stale_version refusal.
+  const fake = clientDayWorld();
+  const sent: Array<Record<string, unknown>> = [];
+  await clientRun(fake, CLIENT_DAY, sent);
+  batches(fake)[0].version = 2;
+  const nudge: Array<Record<string, unknown>> = [];
+  const summary = await clientRun(fake, new Date(CLIENT_DAY.getTime() + 73 * 3600 * 1000), nudge);
+  assertEquals(nudge.length, 0, "nothing is sent");
+  assertEquals(summary.client_reminders_sent, 0);
+  assertEquals(batches(fake)[0].reminder_sent_at ?? null, null, "and the nudge is still unspent");
+});
+
+Deno.test("P24: below phase 2 the homeowner's rail writes nothing at all", async () => {
+  for (const phase of ["", "0", "1"]) {
+    const fake = clientDayWorld();
+    const sent: Array<Record<string, unknown>> = [];
+    const summary = await clientRun(fake, CLIENT_DAY, sent, { env: { FIELD_LINE_PHASE: phase } });
+    assertEquals(sent.length, 0, `phase "${phase}" sends nothing`);
+    assertEquals(summary.client_batches_sent, 0);
+    assertEquals(batches(fake).length, 0, `phase "${phase}" opens no batch`);
+    assertEquals(
+      (fake._data.sms_prompts ?? []).length,
+      0,
+      `phase "${phase}" burns no short code on silence`,
+    );
+  }
+});
+
+Deno.test("P24: a refused send leaves no list and no reference behind", async () => {
+  // A batch standing behind a text that never went would silence her for the
+  // day and then nudge her about a list she was never sent.
+  const fake = clientDayWorld();
+  const sent: Array<Record<string, unknown>> = [];
+  const summary = await clientRun(fake, CLIENT_DAY, sent, { refuse: true });
+  assertEquals(sent.length, 1, "it was attempted");
+  assertEquals(summary.client_batches_sent, 0);
+  assertEquals(batches(fake).length, 0, "and the list was taken back");
+  assertEquals(
+    (fake._data.sms_prompts ?? []).filter((row) => row.kind === "selection_batch").length,
+    0,
+    "with its reference",
+  );
+});
+
+Deno.test("P24: only picks apply_client_effect would apply are ever batched", async () => {
+  // One batch, one household, one room, and every decision in it answerable —
+  // because the refusal on the other side is whole-batch (contract P14).
+  const fake = clientDayWorld();
+  const rows = fake._data.client_decisions;
+  const options = fake._data.client_decision_options;
+  const add = (id: string, decision: Record<string, unknown>, recommended = 1) => {
+    rows.push({
+      id,
+      project_id: "proj1",
+      designer_client_id: "household1",
+      coordination_kind: "selection",
+      court: "client",
+      status: "pending",
+      approval_contract: null,
+      title: id,
+      room_id: "room1",
+      created_at: `2026-10-1${rows.length}T00:00:00.000Z`,
+      ...decision,
+    });
+    for (let i = 0; i < recommended; i++) {
+      options.push({ id: `${id}-opt${i}`, decision_id: id, is_recommended: true, sort_order: i + 1 });
+    }
+  };
+  add("other-household", { designer_client_id: "household2" });
+  add("designer-court", { court: "designer" });
+  add("not-a-selection", { coordination_kind: "question" });
+  add("contract", { approval_contract: "gate-1" });
+  add("already-answered", { status: "responded" });
+  add("two-recommended", {}, 2);
+  add("no-recommended", {}, 0);
+  add("other-room", { room_id: "room2" });
+
+  const sent: Array<Record<string, unknown>> = [];
+  await clientRun(fake, CLIENT_DAY, sent);
+  assertEquals(sent.length, 1);
+  assertEquals(batches(fake)[0].decision_ids, ["dec1"], "one room, one household, one answerable pick");
+});
+
+Deno.test("P24: a homeowner with no live letter is not texted", async () => {
+  for (const broken of [{ revoked_at: "2026-10-30T00:00:00.000Z" }, { superseded_by: "inv2" }]) {
+    const fake = clientDayWorld();
+    Object.assign(fake._data.client_invitations[0], broken);
+    const sent: Array<Record<string, unknown>> = [];
+    await clientRun(fake, CLIENT_DAY, sent);
+    assertEquals(sent.length, 0, `${JSON.stringify(broken)}: nothing is sent`);
+    assertEquals(batches(fake).length, 0, "and no list is opened against a dead letter");
+  }
+});

@@ -18042,6 +18042,24 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00652_field_line_client_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_client_effect(uuid, text, jsonb, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00652_field_line_client_templates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_client_effect(uuid, text, jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00652_field_line_client_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.client_decision_batch_bump_version() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

@@ -29,6 +29,7 @@
 import { createClient, type SupabaseClient } from
   "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "../_shared/send-email.ts";
+import { sendClientSms } from "../_shared/sms.ts";
 import {
   formatFromAddress,
   letterSubject,
@@ -262,6 +263,87 @@ async function mintCapability(
   return { ok: true, url: `${CLIENT_PORTAL_URL}/auth/invite/${token}` };
 }
 
+/**
+ * The seat 00650 froze the capability onto — resolved by the SAME one-match
+ * rule create_client_link applies (00650:274): exactly one party row on this
+ * job carrying this number, or none. Two rows, or none, means the letter has no
+ * seat and the text goes out on the phone alone: it still gets the consent gate
+ * (which resolves the studio from the project), and it simply is not paced,
+ * because a cadence budget is kept per seat and there is no seat to keep one on.
+ */
+async function clientSeatFor(
+  admin: SupabaseClient,
+  projectId: string | null,
+  phone: string | null,
+): Promise<string | null> {
+  if (!projectId || !phone) return null;
+  const { data, error } = await admin
+    .from("project_parties")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("phone_e164", phone);
+  if (error) {
+    console.error("client-invite: the client seat could not be read", error);
+    return null;
+  }
+  const rows = (data ?? []) as Array<{ id: string }>;
+  return rows.length === 1 ? rows[0].id : null;
+}
+
+/**
+ * P24 — THE FIRST LETTER, AS A TEXT, AND NEVER BESIDE A MAGIC LINK.
+ *
+ * This leg exists only for a phone identity, which is the identity that minted
+ * no GoTrue user above: a homeowner never receives both an account invitation
+ * and a text about the same letter, because a phone letter has no account to
+ * invite her to.
+ *
+ * Everything that decides whether the text goes lives in sendClientSms — phase
+ * 2, the campaign flag, her studio's own consent record, the studio's "never
+ * text" rule, the daily budget and the dead-end pause. The link is NOT the URL
+ * this function already minted: sendClientSms mints the capability at the moment
+ * the text is actually dispatched, from the letter id (contract S6), so a send
+ * quiet hours stores for the morning hands her a live link rather than one that
+ * has been sitting in a table all night.
+ *
+ * NON-FATAL. The letter row exists, the capability exists, and the designer's
+ * own record of the letter is complete: a provider that refuses is a thing to
+ * show her in the room, not a reason to answer 502 and have her press Send
+ * again. `deliver` is what the response says about it.
+ */
+async function sendFirstLetterSms(
+  admin: SupabaseClient,
+  args: {
+    invitationId: string;
+    projectId: string | null;
+    phone: string | null;
+  },
+): Promise<{ deliver: string; reason?: string }> {
+  if (!args.phone) return { deliver: "sms_failed", reason: "no_phone_number" };
+  const partyId = await clientSeatFor(admin, args.projectId, args.phone);
+  try {
+    const res = await sendClientSms(admin, {
+      partyId: partyId ?? undefined,
+      phone: args.phone,
+      projectId: args.projectId ?? undefined,
+      templateKey: "sms_client_first_letter",
+      clientInvitationId: args.invitationId,
+      // One first letter per invitation, whichever writer gets there first: a
+      // retry of this POST must not text her twice about the same letter.
+      dedupeKey: `client_first_letter:${args.invitationId}`,
+    });
+    if (res.deferred) return { deliver: "sms_deferred", reason: res.reason };
+    if (res.sent || res.status === "queued") {
+      return { deliver: "sms_sent", reason: res.reason };
+    }
+    console.warn("client-invite: the first letter text was refused", res.reason);
+    return { deliver: "sms_failed", reason: res.reason };
+  } catch (error) {
+    console.error("client-invite: the first letter text threw", error);
+    return { deliver: "sms_failed", reason: "send_threw" };
+  }
+}
+
 interface SendBody {
   designerClientId?: string | null;
   email?: string;
@@ -460,12 +542,43 @@ async function handleSend(req: Request): Promise<Response> {
   // the text that carries it is SQ-18's leg, named on the response as
   // `deliver: 'sms_pending'` rather than left to be inferred.
   let capabilityUrl: string | null = null;
+  let deliver: string | null = null;
+  let deliverReason: string | undefined;
   if (byPhone) {
     const capability = await mintCapability(admin, invitationId);
     if (!capability.ok) {
-      return json({ error: "capability_failed", detail: capability.error }, 502);
+      // SQ-108 LOW-1 — THE MINT IS NOT ATOMIC WITH THE ROW, SO THE ROW IS TAKEN
+      // BACK. The insert above and this mint are two round trips; until now a
+      // mint failure answered 502 and left a live, undelivered letter behind
+      // it, and the designer's retry inserted a second one — two letters on the
+      // record for one send, the newer silently superseding nothing. Nothing
+      // references the row yet (no capability, no text, no standing note), so
+      // deleting it is the whole compensation: the retry inserts one letter,
+      // not a second.
+      const { error: undoErr } = await admin
+        .from("client_invitations")
+        .delete()
+        .eq("id", invitationId);
+      if (undoErr) {
+        console.error(
+          "client-invite: the letter row could not be taken back after a failed mint",
+          undoErr,
+        );
+      }
+      return json({
+        error: "capability_failed",
+        detail: capability.error,
+        rolledBack: !undoErr,
+      }, 502);
     }
     capabilityUrl = capability.url;
+    const smsLeg = await sendFirstLetterSms(admin, {
+      invitationId,
+      projectId,
+      phone,
+    });
+    deliver = smsLeg.deliver;
+    deliverReason = smsLeg.reason;
   } else {
     // notification_log.user_id is NOT NULL (00041) and the account is minted
     // above for every email letter. Stated rather than assumed now that the
@@ -513,7 +626,17 @@ async function handleSend(req: Request): Promise<Response> {
     token,
     profileId,
     kind,
-    ...(byPhone ? { capabilityUrl, deliver: "sms_pending" } : {}),
+    // `deliver` is what happened to the text, not a promise that one is coming:
+    // 'sms_sent', 'sms_deferred' (quiet hours has it stored for the morning) or
+    // 'sms_failed' with the gate's own reason. `capabilityUrl` stays on the
+    // response because the designer-portal route and use-clients.ts still read
+    // it, and both are outside this ticket's files (SQ-108 INFO-7); the route
+    // already stops it reaching the browser
+    // (apps/designer-portal/src/app/api/clients/invite/send-the-letter.ts:232,
+    // asserted at its __tests__/send-the-letter.test.ts:166).
+    ...(byPhone
+      ? { capabilityUrl, deliver, ...(deliverReason ? { deliverReason } : {}) }
+      : {}),
   });
 }
 
@@ -749,9 +872,47 @@ async function resendFrom(
     ctaUrl,
   };
 
-  // The superseded letter's capability dies with it: a link already forwarded
-  // must not outlive the letter it belonged to.
+  // SQ-108 LOW-2 — MINT FIRST, REVOKE SECOND.
+  //
+  // This order was the other way round: supersede, revoke the live capability,
+  // then mint. A mint failure in the middle of that left the homeowner with no
+  // working link at all and no way to ask for one — the hourly floor above
+  // refuses the retry for up to an hour, and the page she would tap to refresh
+  // is behind the link that was just revoked. Minting first means the worst case
+  // is two live capabilities for a moment, and the revoke below closes that;
+  // 00650's create_client_link only supersedes the links of the invitation it is
+  // minting FOR, so the old letter's link is untouched until we revoke it.
+  //
+  // And if the mint fails, the letter she is holding is put back: the new row is
+  // deleted and superseded_by cleared, so the capability we are about to revoke
+  // stays valid against an unsuperseded letter (apply_client_effect refuses a
+  // superseded one — 00651:531). Nothing else references the new row yet.
   if (byPhone) {
+    const capability = await mintCapability(admin, newId);
+    if (!capability.ok) {
+      const { error: unsupersedeErr } = await admin
+        .from("client_invitations")
+        .update({ superseded_by: null })
+        .eq("id", oldId);
+      const { error: undoErr } = await admin
+        .from("client_invitations")
+        .delete()
+        .eq("id", newId);
+      if (unsupersedeErr || undoErr) {
+        console.error(
+          "client-invite: the resend could not be taken back after a failed mint",
+          unsupersedeErr ?? undoErr,
+        );
+      }
+      return json({
+        error: "capability_failed",
+        detail: capability.error,
+        rolledBack: !unsupersedeErr && !undoErr,
+      }, 502);
+    }
+
+    // The superseded letter's capability dies with it: a link already forwarded
+    // must not outlive the letter it belonged to.
     const { data: oldLinks } = await admin
       .from("client_links")
       .select("id")
@@ -763,15 +924,18 @@ async function resendFrom(
       });
       if (revokeErr) console.error("client-invite: revoke of a superseded capability failed", revokeErr);
     }
-    const capability = await mintCapability(admin, newId);
-    if (!capability.ok) {
-      return json({ error: "capability_failed", detail: capability.error }, 502);
-    }
+
+    const smsLeg = await sendFirstLetterSms(admin, {
+      invitationId: newId,
+      projectId: row.project_id ?? null,
+      phone: row.phone ?? null,
+    });
     return json({
       invitationId: newId,
       token,
       capabilityUrl: capability.url,
-      deliver: "sms_pending",
+      deliver: smsLeg.deliver,
+      ...(smsLeg.reason ? { deliverReason: smsLeg.reason } : {}),
     });
   }
 

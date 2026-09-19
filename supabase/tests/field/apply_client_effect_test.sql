@@ -25,6 +25,14 @@
 --  11. One OPEN batch per party per local day.
 --  12. Authorization: service_role only on the function, studio-read /
 --      service-write on both tables, anon nothing.
+--  13. (00652 LOW-1/LOW-5) The generation moves when the presented set moves,
+--      whatever the same statement wrote; it never moves DOWN; and a closed
+--      batch cannot be reopened.
+--  14. (00652 LOW-3) A decision belonging to another household than the letter
+--      → refused, nothing written — including the half-set case that plain
+--      inequality would have admitted.
+--  15. (00652 LOW-6) The capability's two copies of the project must AGREE:
+--      diverge either one and the door is shut.
 --
 -- How to run (P26 — a disposable TEMPLATE template0 clone, NEVER the shared
 -- stack, and never `supabase db reset`):
@@ -947,8 +955,233 @@ BEGIN
   ASSERT n = 0, 'FAIL 12p: an outsider must read no availability at all, saw ' || n;
 
   RAISE NOTICE 'apply_client_effect: case 12 (authorization) passed.';
-  RAISE NOTICE 'All apply_client_effect assertions passed.';
 END
 $case12$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Case 13 — the generation cannot be suppressed, and cannot move down (00652)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Batch f9 is case 11's: open today, at version 1, naming one decision.
+DO $case13$
+DECLARE
+  b     uuid := 'c1700000-0000-4000-8000-0000000000f9';
+  d_new uuid := 'c1700000-0000-4000-8000-000000000d31';
+BEGIN
+  ASSERT pg_temp.batch_version(b) = 1,
+    'FAIL 13a: the batch under test must start at version 1, got '
+      || COALESCE(pg_temp.batch_version(b)::text, '<null>');
+
+  -- THE WRITE THAT SUPPRESSED ITS OWN BUMP. 00651 bumped only when the caller
+  -- left version alone, so exactly this statement — a sender swapping the list
+  -- and restating the version it thought it was presenting — moved what she was
+  -- being asked about and left every reply in flight still answerable.
+  UPDATE public.client_decision_batches
+     SET decision_ids = ARRAY[d_new], version = 1
+   WHERE id = b;
+  ASSERT pg_temp.batch_version(b) = 2,
+    'FAIL 13b: changing the presented set must open the next version whatever '
+      'the same statement wrote, got ' || pg_temp.batch_version(b);
+
+  -- And a generation never moves DOWN: that is the one direction that makes a
+  -- stale reply current again.
+  UPDATE public.client_decision_batches SET version = 1 WHERE id = b;
+  ASSERT pg_temp.batch_version(b) = 2,
+    'FAIL 13c: version may not be written down, got ' || pg_temp.batch_version(b);
+  UPDATE public.client_decision_batches SET version = 99 WHERE id = b;
+  ASSERT pg_temp.batch_version(b) = 2,
+    'FAIL 13d: version may not jump, got ' || pg_temp.batch_version(b);
+  UPDATE public.client_decision_batches SET version = NULL WHERE id = b;
+  ASSERT pg_temp.batch_version(b) = 2,
+    'FAIL 13e: version may not be cleared, got '
+      || COALESCE(pg_temp.batch_version(b)::text, '<null>');
+
+  -- The ONE legal move is the option trigger's +1. It arrives as an ordinary
+  -- UPDATE and cannot be told from a hand-written one by anything but its
+  -- value — and advancing can only ever invalidate a reply in flight, so this
+  -- permissive half fails closed.
+  UPDATE public.client_decision_batches SET version = 3 WHERE id = b;
+  ASSERT pg_temp.batch_version(b) = 3,
+    'FAIL 13f: a +1 step must be allowed, got ' || pg_temp.batch_version(b);
+
+  -- LOW-5 — an answered ask is not reopened. A studio asks again by opening a
+  -- new batch; clearing closed_at would file a second answer for the first one.
+  UPDATE public.client_decision_batches SET closed_at = now() WHERE id = b;
+  BEGIN
+    UPDATE public.client_decision_batches SET closed_at = NULL WHERE id = b;
+    ASSERT false, 'FAIL 13g: reopening a closed batch must be refused';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  ASSERT (SELECT closed_at FROM public.client_decision_batches WHERE id = b) IS NOT NULL,
+    'FAIL 13h: the refused reopen must leave the batch closed';
+
+  RAISE NOTICE 'apply_client_effect: case 13 (version authority) passed.';
+END
+$case13$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Case 14 — a decision from another household on the same house (00652 LOW-3)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- One project can carry two client records — a couple who split, an owner and a
+-- tenant, a landlord and a business. The capability speaks for ONE letter, and
+-- a letter speaks for one household, so a decision filed against the other one
+-- is not hers to answer even though it is on her house.
+DO $case14$
+DECLARE
+  hh2  uuid := 'c1700000-0000-4000-8000-0000000000c2';
+  d5   uuid := 'c1700000-0000-4000-8000-000000000d51';
+  b    uuid := 'c1700000-0000-4000-8000-0000000000fa';
+  p    public.sms_prompts;
+  link uuid;
+  msg  text;
+BEGIN
+  INSERT INTO designer_clients (id, designer_id, client_name, status)
+  VALUES (hh2, 'c1700000-0000-4000-8000-000000000001', 'C17 Other Household', 'active');
+  INSERT INTO public.client_decisions (id, designer_client_id, designer_id,
+    project_id, title, status, coordination_kind, court)
+  VALUES (d5, hh2, 'c1700000-0000-4000-8000-000000000001',
+          'c1700000-0000-4000-8000-0000000000a1', 'Pendant for the other unit',
+          'pending', 'selection', 'client');
+  INSERT INTO public.client_decision_options (id, decision_id, name,
+    is_recommended, sort_order)
+  VALUES ('c1700000-0000-4000-8000-000000000e51', d5, 'Brass', true, 0),
+         ('c1700000-0000-4000-8000-000000000e52', d5, 'Black', false, 1);
+
+  INSERT INTO public.client_decision_batches (id, project_id, party_id,
+    decision_ids, presented_local_day)
+  VALUES (b, 'c1700000-0000-4000-8000-0000000000a1',
+          'c1700000-0000-4000-8000-0000000000b1', ARRAY[d5], CURRENT_DATE);
+
+  SELECT id INTO link FROM public.create_client_link(
+    'c1700000-0000-4000-8000-000000000011',
+    ARRAY['open_letter', 'approve_selection', 'select_window']::text[],
+    interval '90 days');
+  p := pg_temp.ask('61', 'selection_batch',
+    'c1700000-0000-4000-8000-0000000000a1', 'c1700000-0000-4000-8000-0000000000b1',
+    '+15551230000', b);
+
+  BEGIN
+    PERFORM public.apply_client_effect(p.id, 'approve_selection',
+      jsonb_build_object('version', 1), 'SM-c17-household');
+    ASSERT false, 'FAIL 14a: a decision from another household must be refused';
+  EXCEPTION WHEN insufficient_privilege THEN msg := SQLERRM;
+  END;
+  ASSERT msg LIKE '%decision_other_household%',
+    'FAIL 14b: the refusal must name itself, got ' || COALESCE(msg, '<null>');
+  ASSERT (SELECT status FROM public.client_decisions WHERE id = d5) = 'pending',
+    'FAIL 14c: nothing may be applied to another household''s decision';
+  ASSERT (SELECT closed_at FROM public.client_decision_batches WHERE id = b) IS NULL,
+    'FAIL 14d: the batch stays open for the studio to fix';
+  ASSERT (SELECT answered_at FROM public.sms_prompts WHERE id = p.id) IS NULL
+     AND (SELECT consumed_sid FROM public.sms_prompts WHERE id = p.id) IS NULL,
+    'FAIL 14e: a refused reply mints no receipt';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.decision_events
+                      WHERE decision_id = d5),
+    'FAIL 14f: and writes down no decision that did not happen';
+
+  -- IS DISTINCT FROM, not <>. A decision filed against a household, answered by
+  -- a letter that names none, is the same mismatch — and plain inequality is
+  -- NULL there, which 00651 read as "no objection".
+  UPDATE public.client_invitations SET designer_client_id = NULL
+   WHERE id = 'c1700000-0000-4000-8000-000000000011';
+  msg := NULL;
+  BEGIN
+    PERFORM public.apply_client_effect(p.id, 'approve_selection',
+      jsonb_build_object('version', 1), 'SM-c17-halfset');
+    ASSERT false, 'FAIL 14g: a letter naming no household cannot answer one that does';
+  EXCEPTION WHEN insufficient_privilege THEN msg := SQLERRM;
+  END;
+  ASSERT msg LIKE '%decision_other_household%',
+    'FAIL 14h: the half-set mismatch must refuse too, got ' || COALESCE(msg, '<null>');
+  UPDATE public.client_invitations
+     SET designer_client_id = 'c1700000-0000-4000-8000-0000000000c1'
+   WHERE id = 'c1700000-0000-4000-8000-000000000011';
+
+  RAISE NOTICE 'apply_client_effect: case 14 (other household) passed.';
+END
+$case14$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Case 15 — the capability's two copies of the project must agree (LOW-6)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- client_links carries the house twice: the FK column, and the scope written at
+-- mint. 00651 read only the scope, so a row whose column had drifted — a
+-- backfill, a repair script, a future re-parent — would have authorized an
+-- effect on a house the scope did not name. Both copies are read, and either
+-- one disagreeing shuts the door.
+DO $case15$
+DECLARE
+  d6   uuid := 'c1700000-0000-4000-8000-000000000d61';
+  b    uuid := 'c1700000-0000-4000-8000-0000000000fb';
+  p    public.sms_prompts;
+  link uuid;
+  msg  text;
+  r    jsonb;
+BEGIN
+  -- Case 14's ask is over; one OPEN batch per homeowner per local day.
+  UPDATE public.client_decision_batches SET closed_at = now()
+   WHERE id = 'c1700000-0000-4000-8000-0000000000fa';
+  PERFORM pg_temp.present(d6, 'c1700000-0000-4000-8000-0000000000a1',
+    'Hall runner', 'c1700000-0000-4000-8000-000000000e61',
+    'c1700000-0000-4000-8000-000000000e62');
+  INSERT INTO public.client_decision_batches (id, project_id, party_id,
+    decision_ids, presented_local_day)
+  VALUES (b, 'c1700000-0000-4000-8000-0000000000a1',
+          'c1700000-0000-4000-8000-0000000000b1', ARRAY[d6], CURRENT_DATE);
+
+  SELECT id INTO link FROM public.create_client_link(
+    'c1700000-0000-4000-8000-000000000011',
+    ARRAY['open_letter', 'approve_selection', 'select_window']::text[],
+    interval '90 days');
+  p := pg_temp.ask('62', 'selection_batch',
+    'c1700000-0000-4000-8000-0000000000a1', 'c1700000-0000-4000-8000-0000000000b1',
+    '+15551230000', b);
+
+  -- The FK column drifts to the other house; the scope still says this one.
+  UPDATE public.client_links SET project_id = 'c1700000-0000-4000-8000-0000000000a2'
+   WHERE id = link;
+  BEGIN
+    PERFORM public.apply_client_effect(p.id, 'approve_selection',
+      jsonb_build_object('version', 1), 'SM-c17-lowsix-column');
+    ASSERT false, 'FAIL 15a: a capability whose column names another house must be refused';
+  EXCEPTION WHEN insufficient_privilege THEN msg := SQLERRM;
+  END;
+  ASSERT msg LIKE '%capability_wrong_project%',
+    'FAIL 15b: the refusal must name itself, got ' || COALESCE(msg, '<null>');
+  UPDATE public.client_links SET project_id = 'c1700000-0000-4000-8000-0000000000a1'
+   WHERE id = link;
+
+  -- And the other way round: the scope drifts, the column does not.
+  msg := NULL;
+  UPDATE public.client_links
+     SET scope = jsonb_set(scope, '{project_id}',
+                           to_jsonb('c1700000-0000-4000-8000-0000000000a2'::text))
+   WHERE id = link;
+  BEGIN
+    PERFORM public.apply_client_effect(p.id, 'approve_selection',
+      jsonb_build_object('version', 1), 'SM-c17-lowsix-scope');
+    ASSERT false, 'FAIL 15c: a capability whose scope names another house must be refused';
+  EXCEPTION WHEN insufficient_privilege THEN msg := SQLERRM;
+  END;
+  ASSERT msg LIKE '%capability_wrong_project%',
+    'FAIL 15d: the scope copy must be read too, got ' || COALESCE(msg, '<null>');
+  ASSERT (SELECT status FROM public.client_decisions WHERE id = d6) = 'pending',
+    'FAIL 15e: neither divergence may apply anything';
+  UPDATE public.client_links
+     SET scope = jsonb_set(scope, '{project_id}',
+                           to_jsonb('c1700000-0000-4000-8000-0000000000a1'::text))
+   WHERE id = link;
+
+  -- With both copies agreeing, the same words apply.
+  r := public.apply_client_effect(p.id, 'approve_selection',
+    jsonb_build_object('version', 1), 'SM-c17-lowsix-agree');
+  ASSERT r->>'status' = 'applied',
+    'FAIL 15f: an undiverged capability must apply, got ' || COALESCE(r->>'status', '<null>');
+  ASSERT (SELECT status FROM public.client_decisions WHERE id = d6) = 'responded',
+    'FAIL 15g: and the decision she answered is answered';
+
+  RAISE NOTICE 'apply_client_effect: case 15 (both project copies) passed.';
+  RAISE NOTICE 'All apply_client_effect assertions passed.';
+END
+$case15$;
 
 ROLLBACK;
