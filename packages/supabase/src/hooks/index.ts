@@ -586,6 +586,12 @@ export {
   FIELD_SMS_DISCLOSURE_VERSION,
   RESEND_FLOOR_HOURS,
   INVITE_NO_REPLY_HOURS,
+  // Field Line Phase 1 (P1-03): why a text did not arrive.
+  useExplainSmsDelivery,
+  smsDeliveryLines,
+  SMS_CARRIER_CODE_WORDS,
+  SMS_NEW_LINK_WORDS,
+  SMS_NOTHING_TO_EXPLAIN,
 } from "./use-party-sms";
 export type {
   PartySmsMessage,
@@ -598,6 +604,8 @@ export type {
   PartySmsChipState,
   ResendPartyInviteInput,
   ResendPartyInviteResult,
+  SmsDeliveryExplanation,
+  SmsDeliveryOpenPrompt,
 } from "./use-party-sms";
 export {
   usePeopleDirectory,

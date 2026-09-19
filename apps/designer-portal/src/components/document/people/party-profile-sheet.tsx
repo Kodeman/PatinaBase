@@ -45,6 +45,8 @@ import {
   partySmsChipState,
   resendUnavailableReason,
   resendRefusalWords,
+  useExplainSmsDelivery,
+  smsDeliveryLines,
   PARTY_SMS_CHIP_WORDS,
   FIELD_SMS_DISCLOSURE_VERSION,
   type PartyInviteSource,
@@ -319,6 +321,49 @@ function FieldLineResendBand({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * "Why didn’t they get it?" (Phase 1, P1-03) — a DIAGNOSTIC, not a second
+ * inbox. Every line is a fact `explain_sms_delivery` (00647) read off a row
+ * some other owner wrote; asking changes nothing, and there is no act here at
+ * all. Mounted only behind `field-line-trades`, for the same reason the chip
+ * and the resend band are: its hook is new data this sheet would otherwise ask
+ * every surface for.
+ *
+ * TWO THINGS THE COPY WILL NOT DO. `delivered` is the carrier's receipt that a
+ * handset took the text — it is never printed as "read". And "Copy current
+ * link" is not here: the renew path this rail has is INBOUND (00645's
+ * replyToRenew), so a fresh link is something the crew's own reply mints, which
+ * SMS_NEW_LINK_WORDS says in words instead of offering a button that would
+ * hand a live credential to whoever is looking at the screen.
+ */
+function FieldLineDiagnosticCard({ partyId }: { partyId: string | null }) {
+  const { data: explanation, isLoading } = useExplainSmsDelivery(partyId);
+  // An empty answer is what a caller outside the studio sees too, so it is
+  // never printed as a conclusion — but a load in flight is not an answer at
+  // all and says nothing.
+  if (isLoading) return null;
+  const lines = smsDeliveryLines(explanation ?? null);
+  return (
+    <section
+      data-testid="field-line-diagnostic-card"
+      className="mt-5 rounded-[8px] border border-[var(--color-pearl)] bg-white/50 px-4 py-3"
+    >
+      <div className={META}>Why didn’t they get it?</div>
+      <ul className="mt-2 flex flex-col gap-1.5">
+        {lines.map((line) => (
+          <li
+            key={line.key}
+            data-testid={`field-line-diagnostic-${line.key}`}
+            className="text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]"
+          >
+            {line.text}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -1040,6 +1085,9 @@ export function PartyProfileSheet({
           </div>
         )}
       </section>
+
+      {/* Why didn’t they get it? (P1-03) — behind `field-line-trades`. */}
+      {tradesOn && <FieldLineDiagnosticCard key={partyId} partyId={partyId} />}
 
       {/* Composer */}
       <section className="mt-4 border-t border-[var(--color-pearl)] pt-3">
