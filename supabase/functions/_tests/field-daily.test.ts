@@ -798,3 +798,231 @@ Deno.test("P4: no open task due that day means nothing to report against, so no 
   assertEquals(summary.site_cards_sent, 0);
   assertEquals(promptsOfKind(fake, "site_card").length, 0);
 });
+
+import {
+  localDayInTimezone,
+  localMinutesInTimezone,
+} from "../_shared/sms.ts";
+import {
+  DAY_OF_LOCAL_MINUTES,
+  SITE_CARD_LOCAL_MINUTES,
+} from "../field-daily/core.ts";
+
+// ── The two scheduled ticks (00648) ─────────────────────────────────────────
+// 00648 schedules this function twice a day — '0 14 * * *' and '5 23 * * *' —
+// because the site card's floor is 17:00 LOCAL and the single 14:00 UTC job
+// of 00432 is 08:00 or 09:00 local and never reaches it. These tests run
+// core.ts on the exact instants those two expressions produce, in BOTH
+// daylight-saving states of the zone the rail names its hours in, and on the
+// hourly tick 00648 rejected.
+
+/** The zone FIELD_TZ names by default; the tests read the clock through it. */
+const SCHEDULE_TZ = "America/Chicago";
+/** The instant '0 14 * * *' fires on, on a given UTC date. */
+const morningTick = (day: string) => new Date(`${day}T14:00:00.000Z`);
+/** The instant '5 23 * * *' fires on, on a given UTC date. */
+const eveningTick = (day: string) => new Date(`${day}T23:05:00.000Z`);
+/** Quiet hours, the compliance floor every send is held to (08:00–20:00). */
+const QUIET_OPEN = 8 * 60;
+const QUIET_CLOSE = 20 * 60;
+
+/**
+ * One visit day, in each of the two offsets America/Chicago takes. A fixed UTC
+ * hour is a different local hour in each, which is the whole reason a fixed
+ * hour had to be chosen rather than assumed.
+ */
+const DST_STATES = [
+  { label: "CDT, UTC-5", visit: "2026-07-15", eveningBefore: "2026-07-14", askDueAtUtc: "2026-07-15T12:30:00.000Z" },
+  { label: "CST, UTC-6", visit: "2026-12-02", eveningBefore: "2026-12-01", askDueAtUtc: "2026-12-02T13:30:00.000Z" },
+];
+
+/** visitWorld(), but for a visit day the caller names. */
+function visitWorldOn(visit: string) {
+  return createFakeSupabase({
+    projects: [{
+      id: "proj1",
+      studio_id: "org1",
+      designer_id: "designer1",
+      name: "Ash House",
+      site_address: "1421 Williamson St, Madison",
+    }],
+    studio_channel_consent: [{
+      organization_id: "org1",
+      channel_kind: "sms",
+      channel_value: "+15550001111",
+      status: "granted",
+    }],
+    project_parties: [{
+      id: "pty1",
+      phone_e164: "+15550001111",
+      project_id: "proj1",
+      party_kind: "sub",
+      sms_consent_status: "granted",
+      display_name: "Sal",
+      on_site_from: visit,
+      on_site_to: visit,
+    }],
+    project_tasks: [{
+      id: "task1",
+      title: "Install vanity",
+      due_date: visit,
+      project_id: "proj1",
+      owner_party_id: "pty1",
+      status: "todo",
+    }],
+    project_site_access_cards: [{
+      project_id: "proj1",
+      site_hours: "7-11am",
+      site_notes: "Gate is on Ash St, park inside",
+      emergency_lines: ["608-555-0134"],
+    }],
+    comms_threads: [{
+      id: "thread1",
+      project_id: "proj1",
+      kind: "project",
+      created_by: "designer1",
+      created_at: "2026-09-01T00:00:00.000Z",
+    }],
+    comms_messages: [],
+    client_decisions: [],
+    delivery_events: [],
+    sms_conversations: [],
+  });
+}
+
+for (const state of DST_STATES) {
+  Deno.test(`00648: the 23:05 UTC tick issues the site card once (${state.label})`, async () => {
+    const at = eveningTick(state.eveningBefore);
+    // The expression has to clear the card's floor without running past the
+    // hour a crew may be texted at all — in THIS offset, not on average.
+    const localMinutes = localMinutesInTimezone(at, SCHEDULE_TZ);
+    assert(
+      localMinutes >= SITE_CARD_LOCAL_MINUTES,
+      `${at.toISOString()} is ${localMinutes} local minutes, short of the 17:00 floor`,
+    );
+    assert(localMinutes <= QUIET_CLOSE, "and still inside quiet hours, so it goes tonight");
+    assertEquals(localDayInTimezone(at, SCHEDULE_TZ), state.eveningBefore, "the evening before");
+
+    const fake = visitWorldOn(state.visit);
+    const sent: SendPartySmsInput[] = [];
+    const summary = await visitRun(fake, at, sent);
+
+    assertEquals(summary.site_cards_sent, 1);
+    assertEquals(summary.day_of_sent, 0, "nobody is on site tonight");
+    const cards = sent.filter((s) => s.templateKey === "sms_site_card");
+    assertEquals(cards.length, 1);
+    assertEquals(cards[0].dedupeKey, `field-site_card:pty1:${state.visit}`);
+    const prompts = promptsOfKind(fake, "site_card");
+    assertEquals(prompts.length, 1);
+    assertEquals(prompts[0].version, Number(state.visit.replaceAll("-", "")));
+    // The card's question closes when the morning takes it over: 07:30 in the
+    // visit day's OWN offset, which is a different UTC instant in each state.
+    assertEquals(prompts[0].expires_at, state.askDueAtUtc);
+  });
+
+  Deno.test(`00648: the 14:00 UTC tick issues the day-of ask once (${state.label})`, async () => {
+    const at = morningTick(state.visit);
+    const localMinutes = localMinutesInTimezone(at, SCHEDULE_TZ);
+    assert(localMinutes >= DAY_OF_LOCAL_MINUTES, "past the 07:30 floor");
+    assert(
+      localMinutes >= QUIET_OPEN && localMinutes <= QUIET_CLOSE,
+      "and inside quiet hours, so the morning job needs no change",
+    );
+    assertEquals(localDayInTimezone(at, SCHEDULE_TZ), state.visit, "the morning of");
+
+    const fake = visitWorldOn(state.visit);
+    const sent: SendPartySmsInput[] = [];
+    const summary = await visitRun(fake, at, sent);
+
+    assertEquals(summary.day_of_sent, 1);
+    assertEquals(summary.site_cards_sent, 0, "five o'clock is eight hours off");
+    const asks = sent.filter((s) => s.templateKey === "sms_day_of");
+    assertEquals(asks.length, 1);
+    assertEquals(asks[0].dedupeKey, `field-day_of:pty1:${state.visit}`);
+    assertEquals(promptsOfKind(fake, "day_of").length, 1);
+    assertEquals(summary.crew_posts, 1, "and the project thread hears it once");
+  });
+
+  Deno.test(`00648: both scheduled ticks over one visit, each card once (${state.label})`, async () => {
+    // The evening job and the morning job are the same function on the same
+    // rows. Walking the pair end to end is what says the second tick does not
+    // repeat the first: one card, one ask, one thread post, four prompts never.
+    const fake = visitWorldOn(state.visit);
+    const sent: SendPartySmsInput[] = [];
+    await visitRun(fake, eveningTick(state.eveningBefore), sent);
+    await visitRun(fake, morningTick(state.visit), sent);
+
+    assertEquals(promptsOfKind(fake, "site_card").length, 1);
+    assertEquals(promptsOfKind(fake, "day_of").length, 1);
+    assertEquals((fake._data.comms_messages ?? []).length, 1);
+    assertEquals(sent.filter((s) => s.templateKey === "sms_site_card").length, 1);
+    assertEquals(sent.filter((s) => s.templateKey === "sms_day_of").length, 1);
+  });
+}
+
+/**
+ * The same party, with an open task to digest and its site visit far enough out
+ * that no card is due on any tick below. What is under test here is the
+ * phase-0 digest both of 00648's jobs re-enter.
+ */
+const digestWorld = () => visitWorldOn("2099-01-01");
+
+Deno.test("00648: the morning and evening ticks of one day share one digest claim", async () => {
+  // Both of 00648's jobs run the WHOLE function, so the evening tick re-enters
+  // the phase-0 digest the morning already sent. It is the dedupe key that
+  // stops a second menu, and the two ticks are on the same UTC date, so the
+  // key they compute is the same one — the unique send claim on dedupe_key
+  // (_shared/sms.ts:1746) refuses the second before it reaches a provider.
+  const day = "2026-07-15";
+  const fake = digestWorld();
+  const sent: SendPartySmsInput[] = [];
+  await visitRun(fake, morningTick(day), sent);
+  await visitRun(fake, eveningTick(day), sent);
+
+  assertEquals(sent.length, 2, "the function ran twice and composed twice");
+  assertEquals(sent[0].templateKey, "sms_daily_digest");
+  assertEquals(sent[1].templateKey, "sms_daily_digest");
+  assertEquals(sent[0].dedupeKey, `field-daily:pty1:${day}`);
+  assertEquals(sent[1].dedupeKey, sent[0].dedupeKey, "one logical send, so one claim");
+  assertEquals(sent[1].vars?.menu, sent[0].vars?.menu, "and the frozen menu, not a new one");
+  assertEquals(promptsOfKind(fake, "mark_done").length, 1, "no second short code either");
+});
+
+Deno.test("00648: an hourly tick issues a SECOND daily digest in the same local evening", async () => {
+  // This is why 00648 is a second job at a fixed hour and not an hourly
+  // 'field-daily'. The digest's only suppression is keyed on the UTC date
+  // (core.ts:400, :554), and the UTC date turns over at 19:00 CDT / 18:00 CST
+  // — still the same local evening, still inside quiet hours. The 00:05 UTC
+  // tick of an hourly schedule therefore computes a FRESH key for a local day
+  // that has already had its menu, and mints a fresh short code to go with it.
+  const day = "2026-07-15";
+  const fake = digestWorld();
+  const sent: SendPartySmsInput[] = [];
+  await visitRun(fake, eveningTick(day), sent);
+  const hourlyOnly = new Date("2026-07-16T00:05:00.000Z");
+
+  assertEquals(
+    localDayInTimezone(hourlyOnly, SCHEDULE_TZ),
+    localDayInTimezone(eveningTick(day), SCHEDULE_TZ),
+    "the same local day as the tick before it",
+  );
+  const localMinutes = localMinutesInTimezone(hourlyOnly, SCHEDULE_TZ);
+  assert(
+    localMinutes >= QUIET_OPEN && localMinutes <= QUIET_CLOSE,
+    "inside quiet hours, so this one would be delivered, not held",
+  );
+
+  await visitRun(fake, hourlyOnly, sent);
+  assertEquals(sent.length, 2);
+  assertEquals(sent[1].templateKey, "sms_daily_digest");
+  assert(
+    sent[1].dedupeKey !== sent[0].dedupeKey,
+    `an hourly tick reuses the claim: ${sent[0].dedupeKey} vs ${sent[1].dedupeKey}`,
+  );
+  assertEquals(sent[1].dedupeKey, "field-daily:pty1:2026-07-16");
+  assertEquals(
+    promptsOfKind(fake, "mark_done").length,
+    2,
+    "and burns a second 90-day short code on the same task",
+  );
+});
