@@ -7,7 +7,9 @@
  * the only place ownership is proven before a resend is forwarded — these
  * tests pin that the ownership filter is `designer_id = callerUser.id` (not
  * merely `id = invitationId`), and that the edge function's status and JSON
- * body come back to the caller unchanged.
+ * body come back to the caller with everything except the plaintext
+ * capability token (SQ-111 INFO-7 / SQ-116): the fresh text already carries
+ * it, so it has no business reaching this browser.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
@@ -100,17 +102,20 @@ describe('POST /api/clients/invite/resend', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('passes the edge function\'s success status and body through unchanged', async () => {
+  it('passes the edge function\'s success status and body through, minus the capability token', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       status: 200,
-      text: async () => JSON.stringify({ invitationId: 'inv-2', token: 'fresh-token' }),
+      text: async () => JSON.stringify({ invitationId: 'inv-2', token: 'fresh-token', deliver: 'sms_sent' }),
     });
 
     const res = await POST(makeRequest({ invitationId: 'inv-1' }));
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ invitationId: 'inv-2', token: 'fresh-token' });
+    expect(body).toEqual({ invitationId: 'inv-2', deliver: 'sms_sent' });
+    expect(body).not.toHaveProperty('token');
+    expect(body).not.toHaveProperty('capabilityUrl');
+    expect(JSON.stringify(body)).not.toContain('auth/invite');
   });
 
   it('passes a 429 cooldown status and body through unchanged (R10)', async () => {

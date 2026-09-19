@@ -46,8 +46,16 @@ export async function POST(request: NextRequest) {
     body: JSON.stringify({ invitationId, writerId: callerUser.id }),
   });
   const text = await res.text();
-  return new NextResponse(text, {
-    status: res.status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    payload = {};
+  }
+  // SQ-116 (SQ-111 INFO-7) — the capability is the homeowner's own credential
+  // and the mailed leg's send is server-side end to end, so the fresh
+  // token/capability link the edge function mints never reaches this browser.
+  // The route relays only what happened (deliver/status), not what she holds.
+  const { token: _token, capabilityUrl: _capabilityUrl, ...safe } = payload;
+  return NextResponse.json(safe, { status: res.status });
 }
