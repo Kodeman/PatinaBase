@@ -45,9 +45,10 @@ Deno.test("control failed receipt creates owned review without wire fallback", a
 
 Deno.test("R5 notification HTTP success without saved notification is not a handoff", async () => {
  const {h,prompt,effects}=inboundFixture(); prompt({kind:"report_condition"});
+ // Low-confidence condition still requires review; confident conditions now apply.
  // Exact error-success response shape from notification-dispatch/index.ts:202-209.
  h.fake.functions.invoke=async()=>({data:{success:true,channel:"in_app"},error:null});
- const result=await processInbound(inbound(h,"DAMAGED 17"),deps(h,async()=>({intent:"report_condition",target_ref:null,new_date:null,note:"damaged",condition:{ok:false,note:"damaged"},confidence:0.95})));
+ const result=await processInbound(inbound(h,"DAMAGED 17"),deps(h,async()=>({intent:"report_condition",target_ref:null,new_date:null,note:"damaged",condition:{ok:false,note:"damaged"},confidence:0.5})));
  assertEquals(result.status,503,"missing notification persistence must not produce a successful handoff receipt");
 });
 

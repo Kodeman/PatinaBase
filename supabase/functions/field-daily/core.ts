@@ -282,7 +282,8 @@ async function promptRef(supabase: SupabaseClient, party: {id: string; project_i
   if (error) return null;
   if (existing?.length) return existing[0];
   if (ownsClaim && !await ownsClaim()) return null;
-  // Allocation and insertion are one SQL transaction; never fetch a code alone.
+  // SQL deduplicates the frozen YYYYMMDD identity under a transaction lock.
+  // A stale reuse read or expired lease still gets the existing id/code.
   const created = await supabase.rpc("sms_create_prompt", { p_party_id: party.id, p_project_id: party.project_id,
     p_subject_id: subjectId, p_kind: kind, p_version: version, p_sender_number: sender,
     p_recipient_phone: party.phone_e164, p_expires_at: new Date(now.getTime() + 48 * 3600000).toISOString(), p_proposed_effect: null });

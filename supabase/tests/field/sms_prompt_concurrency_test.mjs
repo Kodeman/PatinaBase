@@ -1,7 +1,7 @@
 // Self-contained LOCAL-only oracle. No reset, migration-up, real rows or services.
 // Schema-only snapshot + candidate 00639 + synthetic fixtures in our own database.
 import { spawn, execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
@@ -43,6 +43,10 @@ const file = (path) => {
   }
   return sql(text);
 };
+// Discover the forward authority migration from this candidate worktree.
+const followOn = readdirSync(resolve(root,'supabase/migrations')).filter(n => /^\d+_field_line_po_condition\.sql$/.test(n));
+assert.equal(followOn.length,1,'one PO condition authority migration');
+const installFollowOn = () => file('supabase/migrations/'+followOn[0]);
 const sessions = new Set();
 class Session {
   constructor() {
@@ -93,17 +97,26 @@ try {
   sql(sql("SELECT pg_get_functiondef('graphql_public.graphql(text,text,jsonb,jsonb)'::regprocedure)",admin));
   file('supabase/migrations/00639_field_line_authority.sql');
   file('supabase/migrations/00641_field_line_effects_templates.sql');
+  file('supabase/migrations/00642_sms_thread_ownership.sql');
+  const baseTypes = run('supabase', ['gen','types','typescript','--db-url',url,'--schema','public,graphql_public']);
+  installFollowOn();
   file('supabase/migrations/00639_field_line_authority.sql');
   file('supabase/migrations/00641_field_line_effects_templates.sql');
+  installFollowOn();
   file('supabase/seed/00-legacy-grants.sql');
+  installFollowOn();
   file('supabase/tests/field/sms_prompt_consumption_test.sql');
+  file('supabase/tests/field/sms_po_condition_test.sql');
   file('supabase/seed/00-legacy-grants.sql');
   file('supabase/migrations/00639_field_line_authority.sql');
+  installFollowOn();
   file('supabase/tests/field/sms_prompt_consumption_test.sql');
+  file('supabase/tests/field/sms_po_condition_test.sql');
   file('supabase/tests/field/sms_authority_test.sql');
   file('supabase/tests/field/apply_field_effect_test.sql');
   log('rolled-back consumption assertions passed twice after repeated migration and ACL seed replay; existing authority/effect suites passed');
   const types = run('supabase', ['gen','types','typescript','--db-url',url,'--schema','public,graphql_public'], { timeout: 120000 });
+  assert.equal(types, baseTypes, 'PO condition migration preserves base schema types byte-for-byte');
   const typePath = resolve(root, 'packages/supabase/src/database.types.ts');
   if (process.argv.includes('--write-types')) writeFileSync(typePath, types);
   else assert.equal(readFileSync(typePath,'utf8'), types, 'generated types match candidate database');
@@ -115,11 +128,13 @@ try {
   await concurrency();
   await availabilityConcurrency();
   await rawCompletionConcurrency();
+  await poConcurrency();
   const receipts=sql("SELECT jsonb_agg(jsonb_build_array(id,consumed_sid,consumption_result,answered_at) ORDER BY id) FROM sms_prompts WHERE consumed_sid IS NOT NULL").trim();
   const command=sql(`SELECT id FROM sms_create_prompt('51000000-0000-4000-8000-000000000030',
     '51000000-0000-4000-8000-000000000020','confirm_availability','51000000-0000-4000-8000-000000000041',
     999,clock_timestamp()+interval '1 day','+15555109999','+15555100000')`).trim();
   file('supabase/migrations/00639_field_line_authority.sql');
+  installFollowOn();
   file('supabase/seed/00-legacy-grants.sql');
   assert.equal(sql("SELECT jsonb_agg(jsonb_build_array(id,consumed_sid,consumption_result,answered_at) ORDER BY id) FROM sms_prompts WHERE consumed_sid IS NOT NULL").trim(),receipts,'reapplication preserves every receipt');
   assert.equal(sql(`SELECT answered_at IS NULL AND proposed_effect IS NULL FROM sms_prompts WHERE id='${command}'`).trim(),'t','reapplication leaves command-only refs open');
@@ -432,4 +447,69 @@ async function rawCompletionConcurrency() {
       }
     }
   } finally {await observer.close();}
+}
+
+// PO SQL proof is separate from the fake consumer fixture. Each two-session
+// barrier runs only against our identity-marked schema-only database.
+async function poConcurrency() {
+  const fixture=readFileSync(resolve(root,'supabase/tests/field/sms_po_condition_test.sql'),'utf8');
+  sql(fixture.split('-- PO FIXTURES BEGIN')[1].split('-- PO FIXTURES END')[0]);
+  sql("UPDATE studio_channel_consent SET status='granted',refusal_unanswered=false WHERE organization_id='51000000-0000-4000-8000-000000000010'");
+  const party='51000000-0000-4000-8000-000000000030', project='51000000-0000-4000-8000-000000000020', po='77000000-0000-4000-8000-000000000002';
+  const observer=new Session();
+  async function barrier(a,b,call) {
+    const pa=Number(await a.query('SELECT pg_backend_pid()')),pb=Number(await b.query('SELECT pg_backend_pid()'));
+    let settled=false;
+    const result=b.query(call).then(value=>({value}),error=>({error})).finally(()=>{settled=true;});
+    const deadline=Date.now()+10000;let blocked=false;
+    while(Date.now()<deadline&&!settled) {
+      blocked=(await observer.query('SELECT '+pa+'=ANY(pg_blocking_pids('+pb+'))'))==='t';
+      if(blocked)break;
+    }
+    assert.ok(blocked,'SQ77 real blocking barrier');
+    log('barrier SQ77 B='+pb+' blocked by A='+pa);
+    return {result};
+  }
+  try {
+    for(const ending of ['COMMIT','ROLLBACK']) for(const sameSid of [false,true]) {
+      const tag='SQ77 PO consumption '+ending+'/'+(sameSid?'same':'distinct')+' SID';
+      const a=new Session(),b=new Session();
+      try {
+        const p=JSON.parse(sql(`SELECT row_to_json(p) FROM sms_create_prompt('${party}','${project}','report_condition','${po}',1,clock_timestamp()+interval '1 day','+15555109999','+15555100000') p`).trim());
+        const ma=randomUUID(),mb=sameSid?ma:randomUUID();
+        for(const id of new Set([ma,mb]))sql(`INSERT INTO sms_messages(id,conversation_id,direction,body,twilio_sid) VALUES('${id}','51000000-0000-4000-8000-000000000050','inbound','DAMAGED ${p.short_code}','SM${id.replaceAll('-','')}')`);
+        const effect=JSON.stringify({type:'report_condition',target:{kind:'purchase_order',id:po},condition:{ok:false,note:tag}});
+        const call=m=>`SELECT sms_apply_prompt('${p.id}','+15555109999','+15555100000','${m}','${effect}'::jsonb)`;
+        await a.query("BEGIN;SET LOCAL statement_timeout='18s';SET LOCAL ROLE service_role");
+        await b.query("BEGIN;SET LOCAL statement_timeout='18s';SET LOCAL ROLE service_role");
+        const ra=JSON.parse(await a.query(call(ma)));assert.equal(ra.status,'applied',tag+' A applies');
+        const {result}=await barrier(a,b,call(mb));await a.query(ending);const rb=await result;if(rb.error)throw rb.error;
+        const answer=JSON.parse(rb.value);assert.equal(answer.status,ending==='ROLLBACK'?'applied':sameSid?'replayed':'closed',tag+' B rechecks receipt');
+        await b.query('COMMIT');
+        assert.equal(Number(sql(`SELECT count(*) FROM sms_messages WHERE id IN ('${ma}','${mb}') AND applied_effect IS NOT NULL`).trim()),1,tag+' exactly one completed inbound');
+        assert.equal(sql(`SELECT consumed_sid FROM sms_prompts WHERE id='${p.id}'`).trim(),'SM'+(ending==='COMMIT'?ma:mb).replaceAll('-',''),tag+' immutable winner SID');
+        assert.equal(sql(`SELECT count(*) FROM field_delivery_reports WHERE party_id='${party}' AND subject_kind='purchase_order' AND subject_id='${po}'`).trim(),'1',tag+' one report');
+        assert.equal(sql(`SELECT condition_note FROM field_delivery_reports WHERE subject_kind='purchase_order' AND subject_id='${po}'`).trim(),tag,tag+' original note');
+        log('PASS '+tag+' exactly-one consumption');
+      }finally{await Promise.all([a.close(),b.close()]);}
+    }
+    let day=20261101;
+    for(const kind of ['mark_done','confirm_delivery']) for(const ending of ['COMMIT','ROLLBACK']) {
+      const tag='SQ77 daily issuance '+kind+'/'+ending,version=day++;
+      const subject=kind==='mark_done'?'51000000-0000-4000-8000-000000000040':po;
+      const create=`SELECT row_to_json(p) FROM sms_create_prompt('${party}','${project}','${kind}','${subject}',${version},clock_timestamp()+interval '1 day','+15555109999','+15555100000') p`;
+      const a=new Session(),b=new Session();
+      try {
+        await a.query("BEGIN;SET LOCAL statement_timeout='18s';SET LOCAL ROLE service_role");
+        await b.query("BEGIN;SET LOCAL statement_timeout='18s';SET LOCAL ROLE service_role");
+        const pa=JSON.parse(await a.query(create));const {result}=await barrier(a,b,create);
+        await a.query(ending);const rb=await result;if(rb.error)throw rb.error;const pb=JSON.parse(rb.value);
+        if(ending==='COMMIT')assert.deepEqual(pb,pa,tag+' stalled creator returns existing id/code');
+        await b.query('COMMIT');
+        assert.equal(sql(`SELECT count(*) FROM sms_prompts WHERE party_id='${party}' AND project_id='${project}' AND kind='${kind}' AND subject_id='${subject}' AND version=${version} AND answered_at IS NULL`).trim(),'1',tag+' exactly one open daily ref');
+        assert.deepEqual(JSON.parse(sql(create).trim()),pb,tag+' stale reuse read followed by mint still returns winner');
+        log('PASS '+tag+' one immutable id/code');
+      }finally{await Promise.all([a.close(),b.close()]);}
+    }
+  }finally{await observer.close();}
 }

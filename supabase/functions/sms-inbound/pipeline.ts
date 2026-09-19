@@ -1847,7 +1847,10 @@ async function promptSubject(supabase: SupabaseClient, prompt: SmsPrompt) {
     if (error) throw error;
     if (data) return { id: data.id as string, title: data.title as string, kind };
   }
-  return null;
+  const { data, error } = await supabase.from("purchase_orders").select("id, po_number")
+    .eq("id", prompt.subject_id).eq("project_id", prompt.project_id).maybeSingle();
+  if (error) throw error;
+  return data ? { id: data.id as string, title: data.po_number as string, kind: "purchase_order" as const } : null;
 }
 
 async function closedRefReply(supabase: SupabaseClient, conversationId: string, sender: string,
@@ -2052,7 +2055,7 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
     priorAsked = true;
   }
   const explicit = body.match(/^([a-z]+)\s+(\d{2,3})$/i);
-  const bareVerb = /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|delay)$/i.test(body);
+  const bareVerb = /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|damage|good|fine|delay)$/i.test(body);
   const { data: open, error: openError } = await supabase.from("sms_prompts").select("*")
     .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
     .gt("expires_at", now.toISOString());
@@ -2092,25 +2095,6 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   const paused = await pausedReview(supabase, conv.id, party.project_id, party.id, messageId, deps);
   if (paused) return paused;
   const subject = await promptSubject(supabase, prompt);
-  if (!subject && prompt.kind === "confirm_delivery" && !prompt.proposed_effect) {
-    const { data: po, error: poError } = await supabase.from("purchase_orders")
-      .select("id").eq("id", prompt.subject_id).eq("project_id", party.project_id).maybeSingle();
-    if (poError) return completionUnknown(messageId, "delivery_subject_unreadable");
-    if (po) {
-      const verdict = await channelConsentVerdict(supabase, recipient, party.project_id);
-      const blocked = await suppression(supabase, sender, recipient);
-      if (blocked.blocked || verdict !== "allow") return { status: blocked.error ? 503 : 200, twiml: twimlBody(), disposition: "not_consented" };
-      // PO subjects have no apply_prompt authority. Persist human ownership
-      // first; ordinary closure is intentionally not an atomic effect receipt.
-      const details = { path: "ref", prompt_id: prompt.id, ref: prompt.short_code,
-        purchase_order_id: po.id, party_id: party.id, verb: explicit?.[1] ?? body };
-      if (!await ownedReview(supabase, messageId, party.project_id, party.id, details, deps)) return completionUnknown(messageId, "handoff_failed");
-      if (await closePrompt(supabase, prompt.id, now.toISOString())) return completionUnknown(messageId, "delivery_ref_close_failed");
-      const { error } = await stampMessage(supabase, messageId, party.id, party.project_id, { ...details, path: "po_ref_review" });
-      if (error) return completionUnknown(messageId, "delivery_ref_stamp_failed");
-      return await reply(supabase, conv.id, "Your studio will confirm the delivery update.", party.id, party.project_id, "needs_review");
-    }
-  }
   if (!subject) {
     if (!await ownedReview(supabase, messageId, party.project_id, party.id, { path: "ref_subject_missing", prompt }, deps)) {
       return { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
@@ -2122,7 +2106,7 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   if (blocked.blocked || verdict !== "allow") return { status: blocked.error ? 503 : 200, twiml: twimlBody(), disposition: "not_consented" };
   const verb = (explicit?.[1] ?? body).toUpperCase();
   const intent = ({ DONE: "mark_done", HERE: "report_arrival", ARRIVED: "report_arrival", DELIVERED: "report_arrival",
-    LEAVING: "report_departure", DEPARTED: "report_departure" } as Record<string, string>)[verb]
+    LEAVING: "report_departure", DEPARTED: "report_departure", GOOD: "confirm_delivery", FINE: "confirm_delivery" } as Record<string, string>)[verb]
     ?? (["YES", "Y", "OK"].includes(verb) ? prompt.kind : null);
   let parsed: FieldParseResult = prompt.proposed_effect ? {
     intent: prompt.proposed_effect.type as FieldParseResult["intent"], target_ref: subject,
@@ -2145,9 +2129,11 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   const attempt = await stampMessage(supabase, messageId, party.id, party.project_id, details, parsed.confidence);
   if (attempt.error) return { status: 503, twiml: twimlBody(), disposition: "prompt_attempt_unrecorded" };
   const affirmative = ["YES", "Y", "OK"].includes(verb);
-  const commandVerb = /^(?:YES|Y|OK|DONE|HERE|ARRIVED|DELIVERED|LEAVING|DEPARTED|DELAY|LATE|BLOCKED|BLOCKER|AVAILABLE)$/.test(verb);
+  const commandVerb = /^(?:YES|Y|OK|DONE|HERE|ARRIVED|DELIVERED|LEAVING|DEPARTED|DELAY|LATE|BLOCKED|BLOCKER|AVAILABLE|DAMAGED|DAMAGE|GOOD|FINE)$/.test(verb);
   const availabilityReply = !explicit && prompt.kind === "confirm_availability" && (open ?? []).length === 1;
-  if ((prompt.proposed_effect ? !affirmative : !commandVerb && !availabilityReply) || parsed.intent === "report_condition" || parsed.confidence < 0.8 ||
+  const conditionReply = !explicit && ["report_condition", "confirm_delivery"].includes(prompt.kind) && (open ?? []).length === 1;
+  if ((prompt.proposed_effect ? !affirmative : !commandVerb && !availabilityReply && !conditionReply) || parsed.confidence < 0.8 ||
+    (parsed.intent === "report_condition" && !parsed.condition) ||
     (parsed.intent === "confirm_availability" && !parsed.availability) ||
     ![...DELIVERY_EFFECTS, "mark_done", "report_delay", "flag_blocker", "confirm_delivery", "note", "punch_report"].includes(parsed.intent)) {
     if (!await ownedReview(supabase, messageId, party.project_id, party.id, details, deps)) {

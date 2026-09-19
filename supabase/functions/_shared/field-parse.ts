@@ -24,7 +24,7 @@ export type FieldIntent =
 
 export interface FieldParseResult {
   intent: FieldIntent;
-  target_ref: { kind: "task" | "coordination"; id: string } | null;
+  target_ref: { kind: "task" | "coordination" | "purchase_order"; id: string } | null;
   new_date: string | null; // ISO date (YYYY-MM-DD)
   note: string;
   confidence: number; // 0..1
@@ -37,7 +37,7 @@ export interface FieldParseResult {
 /** A single open work item, compacted for the model's context. */
 export interface OpenItemContext {
   id: string;
-  kind: "task" | "coordination";
+  kind: "task" | "coordination" | "purchase_order";
   title: string;
   project_name: string;
   due: string | null;
@@ -92,7 +92,7 @@ const TOOL = {
         type: ["object", "null"],
         description: "The open item this refers to, or null if none is clearly implicated.",
         properties: {
-          kind: { type: "string", enum: ["task", "coordination"] },
+          kind: { type: "string", enum: ["task", "coordination", "purchase_order"] },
           id: { type: "string" },
         },
         required: ["kind", "id"],
@@ -373,6 +373,7 @@ export function parseFieldMessageDeterministic(
 
   if (GREETINGS.has(norm)) return null;
 
+  // The summary may be short; the authoritative condition note must not be.
   const note = raw.slice(0, 200);
   const base = {
     target_ref: null,
@@ -404,10 +405,10 @@ export function parseFieldMessageDeterministic(
     return null;
   }
   if (CONDITION_OK_PHRASES.has(norm)) {
-    return { ...base, intent: "report_condition", condition: { ok: true, note } };
+    return { ...base, intent: "report_condition", condition: { ok: true, note: raw } };
   }
   if (DAMAGE_RE.test(withoutNegation)) {
-    return { ...base, intent: "report_condition", condition: { ok: false, note } };
+    return { ...base, intent: "report_condition", condition: { ok: false, note: raw } };
   }
   if (withoutNegation !== norm && withoutNegation.trim() && !isCleanRemainder(withoutNegation)) {
     // "no damage yet" — the negation was one clause of a sentence, and the
@@ -416,7 +417,7 @@ export function parseFieldMessageDeterministic(
   }
   if (withoutNegation !== norm) {
     // A bare negated participle is the trade's clean report.
-    return { ...base, intent: "report_condition", condition: { ok: true, note } };
+    return { ...base, intent: "report_condition", condition: { ok: true, note: raw } };
   }
 
   const availability = availabilityOf(norm, input.today);
@@ -552,7 +553,7 @@ export function normalizeParse(
 
   let target: FieldParseResult["target_ref"] = null;
   const rawTarget = raw.target_ref as { kind?: string; id?: string } | null | undefined;
-  if (rawTarget && rawTarget.id && (rawTarget.kind === "task" || rawTarget.kind === "coordination")) {
+  if (rawTarget && rawTarget.id && (rawTarget.kind === "task" || rawTarget.kind === "coordination" || rawTarget.kind === "purchase_order")) {
     // Only trust an id the model was actually shown.
     const known = input.openItems.find((it) => it.id === rawTarget.id && it.kind === rawTarget.kind);
     if (known) target = { kind: rawTarget.kind, id: rawTarget.id };
