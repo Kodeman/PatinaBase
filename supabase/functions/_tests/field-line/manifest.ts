@@ -8,6 +8,7 @@ import { replyToRenew } from "./cases/reply-to-renew.ts";
 import { budgetFoldToDigest } from "./cases/budget-fold-to-digest.ts";
 import { deadEndHandoff } from "./cases/dead-end-handoff.ts";
 import { siteCardDayOf } from "./cases/site-card-day-of.ts";
+import { optinResendEvidence } from "./cases/optin-resend-evidence.ts";
 import { rpcFailureMidEffect } from "./cases/rpc-failure-mid-effect.ts";
 import { staleForwardedLink } from "./cases/stale-forwarded-link.ts";
 import { startNoConsent } from "./cases/start-no-consent.ts";
@@ -38,6 +39,8 @@ export const fieldLineCases: GateCase[] = [
   budgetFoldToDigest,
   deadEndHandoff,
   siteCardDayOf,
+  // The consent gate the resend actually dispatches through (00646).
+  optinResendEvidence,
 ];
 
 export { type GateAssertion, type GateCase } from "./types.ts";

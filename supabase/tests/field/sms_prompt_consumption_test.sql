@@ -260,7 +260,7 @@ BEGIN
  UPDATE sms_messages SET direction='inbound',project_id='51000000-0000-4000-8000-000000000021' WHERE id=m;
  PERFORM pg_temp.must_fail(format('SELECT pg_temp.apply(%L::sms_prompts,%L)',p,m),'foreign message project');
  PERFORM pg_temp.must_fail('SELECT pg_temp.proposal(''report_delay'',''51000000-0000-4000-8000-000000000042'')','foreign target');
- -- Condition is admitted in 00642; payload/tenant/refusals are covered by sms_po_condition_test.sql.
+ -- Condition is admitted in 00643; payload/tenant/refusals are covered by sms_po_condition_test.sql.
  p:=pg_temp.proposal('report_delay','51000000-0000-4000-8000-000000000040',now()-interval '1 second');
  ASSERT pg_temp.apply(p,pg_temp.message(p))->>'status'='expired','expired prompt cannot apply';
  p:=pg_temp.proposal(); UPDATE sms_prompts SET answered_at=now() WHERE id=p.id;
