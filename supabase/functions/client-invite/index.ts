@@ -45,11 +45,13 @@ import {
 import {
   buildSnapshot,
   chooseSigner,
+  CLIENT_LINK_ACTIONS,
   generateToken,
   isServiceRoleCaller,
   RESEND_COOLDOWN_MS,
   resendCooldownRemainingMs,
   resendEligibility,
+  resolveIdentity,
   validateNote,
   validateToken,
   type SignerProfile,
@@ -231,13 +233,45 @@ async function sendLetter(
   return { ok: true };
 }
 
+/**
+ * P21 — mint the scoped capability a phone-only homeowner reaches her letter
+ * with. Inside the send path, right after the invitation row exists: the
+ * capability IS the letter's way in, so a row without one is a letter nobody
+ * can open, and the caller sees the send fail rather than a half-sent letter.
+ *
+ * The raw token is returned to the caller ONCE and stored NOWHERE — not on the
+ * invitation, not in a log line, not in the response's own metadata. Only
+ * sha256(token) is at rest, inside client_links (00650).
+ */
+async function mintCapability(
+  admin: SupabaseClient,
+  invitationId: string,
+): Promise<{ ok: true; url: string } | { ok: false; error?: string }> {
+  const { data, error } = await admin.rpc("create_client_link", {
+    p_invitation_id: invitationId,
+    p_actions: CLIENT_LINK_ACTIONS,
+  });
+  if (error) {
+    console.error("client-invite: capability mint failed", error);
+    return { ok: false, error: error.message };
+  }
+  // RETURNS TABLE (id, token) — PostgREST hands back a one-row array.
+  const row = (Array.isArray(data) ? data[0] : data) as { token?: string } | null;
+  const token = row?.token;
+  if (!token) return { ok: false, error: "capability_returned_no_token" };
+  return { ok: true, url: `${CLIENT_PORTAL_URL}/auth/invite/${token}` };
+}
+
 interface SendBody {
   designerClientId?: string | null;
   email?: string;
+  /** P21: the homeowner's phone. Required when kind is 'phone'. */
+  phone?: string | null;
   clientName?: string | null;
   projectId?: string | null;
   note?: string | null;
-  kind?: "invite" | "notice";
+  /** 'phone' names the IDENTITY, not the letter — see resolveIdentity in lib.ts. */
+  kind?: "invite" | "notice" | "phone";
   writerId?: string;
 }
 
@@ -249,9 +283,12 @@ async function handleSend(req: Request): Promise<Response> {
     return json({ error: "invalid_body" }, 400);
   }
 
-  const email = body.email?.trim().toLowerCase();
+  const identity = resolveIdentity(body);
+  if (!identity.ok) return json({ error: identity.error }, 400);
+  const email = identity.email;
+  const phone = identity.phone;
+  const byPhone = identity.identity === "phone";
   const writerId = body.writerId?.trim();
-  if (!email) return json({ error: "email_required" }, 400);
   if (!writerId) return json({ error: "writer_required" }, 400);
 
   const note = validateNote(body.note);
@@ -259,14 +296,22 @@ async function handleSend(req: Request): Promise<Response> {
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const projectId = body.projectId ?? null;
-  let kind: "invite" | "notice" = body.kind === "notice" ? "notice" : "invite";
+  // A phone letter has nothing to notice: R13's 'notice' means "already has an
+  // account", and a phone-only recipient has no account by construction.
+  let kind: "invite" | "notice" = !byPhone && body.kind === "notice"
+    ? "notice"
+    : "invite";
 
   // ── 1. The account, minted before the send (notification_log.user_id) ────
+  // NOT FOR A PHONE LETTER. There is no email to mint a GoTrue user against and
+  // no session to hand her: her way in is the capability, and P21 is explicit
+  // that a phone-only invitation never calls GoTrue and never gets a user.
   let profileId: string | null = null;
-  if (kind === "invite") {
+  const accountEmail = identity.identity === "email" ? identity.email : null;
+  if (accountEmail && kind === "invite") {
     const { data: gen, error: genErr } = await admin.auth.admin.generateLink({
       type: "invite",
-      email,
+      email: accountEmail,
       options: {
         // 'homeowner' is the ONLY client-supplied role hint handle_new_user
         // honours (00313:47-48); 'client' falls through to the 'designer'
@@ -306,7 +351,7 @@ async function handleSend(req: Request): Promise<Response> {
       // existing relabel to 'homeowner' still runs when she signs in.
       await admin.from("profiles").upsert({
         id: profileId,
-        email,
+        email: accountEmail,
         display_name: body.clientName ?? null,
         full_name: body.clientName ?? null,
         role: "client",
@@ -324,11 +369,11 @@ async function handleSend(req: Request): Promise<Response> {
         );
       }
     }
-  } else {
+  } else if (accountEmail) {
     const { data: existing } = await admin
       .from("profiles")
       .select("id")
-      .eq("email", email)
+      .eq("email", accountEmail)
       .maybeSingle();
     profileId = (existing as { id?: string } | null)?.id ?? null;
     if (!profileId) return json({ error: "notice_requires_existing_profile" }, 400);
@@ -340,13 +385,19 @@ async function handleSend(req: Request): Promise<Response> {
   const token = generateToken();
   const sentAt = new Date();
   const expiresAt = new Date(sentAt.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const ctaUrl = kind === "invite"
+  // A phone letter renders nothing by email, so no CTA is composed into it and
+  // none is frozen: the row carries no cta column, and the way in is the
+  // capability URL minted from the invitation id below.
+  const ctaUrl = !byPhone && kind === "invite"
     ? `${CLIENT_PORTAL_URL}/auth/invite/${token}`
     : `${CLIENT_PORTAL_URL}/`;
 
   const snapshot = buildSnapshot({
     kind,
-    email,
+    // No email to address. Nothing the frozen scalars below print reads this
+    // slot (letterSubject / standingSentence / senderDisplayName all compose
+    // from the names, the studio and the project), and no letter is rendered.
+    email: email ?? "",
     clientName: body.clientName ?? null,
     signerFullName: signer.signerFullName,
     studioName: signer.studioName,
@@ -364,6 +415,10 @@ async function handleSend(req: Request): Promise<Response> {
     .insert({
       token,
       email,
+      // P21: NULL for an email-only letter, exactly as today. Stored in E.164 —
+      // 00650's trigger normalizes it through normalize_phone_e164 and refuses
+      // anything it cannot read as a number.
+      phone,
       designer_id: writerId,
       designer_client_id: body.designerClientId ?? null,
       project_id: projectId,
@@ -391,19 +446,41 @@ async function handleSend(req: Request): Promise<Response> {
 
   if (insErr || !inserted) {
     console.error("client-invite: snapshot insert failed", insErr);
+    // The one refusal the caller can act on: a number the database cannot read.
+    if ((insErr?.message ?? "").includes("invalid_client_phone")) {
+      return json({ error: "invalid_phone" }, 400);
+    }
     return json({ error: "insert_failed", detail: insErr?.message }, 500);
   }
   const invitationId = (inserted as { id: string }).id;
 
   // ── 3. The letter ───────────────────────────────────────────────────────
-  const sent = await sendLetter(admin, {
-    invitationId,
-    snapshot,
-    token,
-    replyTo: signer.signerEmail,
-    userId: profileId,
-  });
-  if (!sent.ok) return json({ error: "send_failed", detail: sent.error }, 502);
+  // A PHONE LETTER IS NOT MAILED, AND NOT TEXTED HERE EITHER. The capability is
+  // minted inside this send path so the link exists the moment the row does;
+  // the text that carries it is SQ-18's leg, named on the response as
+  // `deliver: 'sms_pending'` rather than left to be inferred.
+  let capabilityUrl: string | null = null;
+  if (byPhone) {
+    const capability = await mintCapability(admin, invitationId);
+    if (!capability.ok) {
+      return json({ error: "capability_failed", detail: capability.error }, 502);
+    }
+    capabilityUrl = capability.url;
+  } else {
+    // notification_log.user_id is NOT NULL (00041) and the account is minted
+    // above for every email letter. Stated rather than assumed now that the
+    // account legs are conditional: a send with no account behind it would
+    // fail inside the chokepoint with nothing to tell the designer.
+    if (!profileId) return json({ error: "recipient_profile_missing" }, 500);
+    const sent = await sendLetter(admin, {
+      invitationId,
+      snapshot,
+      token,
+      replyTo: signer.signerEmail,
+      userId: profileId,
+    });
+    if (!sent.ok) return json({ error: "send_failed", detail: sent.error }, 502);
+  }
 
   // ── 4. R8 — the note becomes the house's first standing note ────────────
   // FROZEN byline: a studio that renames itself must not silently relabel a
@@ -431,7 +508,61 @@ async function handleSend(req: Request): Promise<Response> {
     if (noteErr) console.error("client-invite: standing-note seed failed", noteErr);
   }
 
-  return json({ invitationId, token, profileId, kind });
+  return json({
+    invitationId,
+    token,
+    profileId,
+    kind,
+    ...(byPhone ? { capabilityUrl, deliver: "sms_pending" } : {}),
+  });
+}
+
+/**
+ * Resolve a client capability and record the acceptance it stands for. Returns
+ * null when the token is not a live capability, so the caller falls through to
+ * the plaintext token's own verdict and leaks nothing either way.
+ *
+ * IDEMPOTENT ON PURPOSE. The email token is single-use because it mints a
+ * session; a capability mints nothing and lives for its own 90 days, so a
+ * homeowner opening her link a second time is not an error — `accepted_at`
+ * keeps the FIRST time she opened it and the use row records every one.
+ */
+async function acceptByCapability(
+  admin: SupabaseClient,
+  token: string,
+): Promise<Response | null> {
+  const { data, error } = await admin.rpc("resolve_client_link", {
+    p_token: token,
+    p_action: "accept",
+    p_source: "client_portal",
+  });
+  if (error) {
+    console.error("client-invite: capability resolve failed", error);
+    return null;
+  }
+  const resolved = data as { invitation_id?: string } | null;
+  const invitationId = resolved?.invitation_id;
+  if (!invitationId) return null;
+
+  const { data: row } = await admin
+    .from("client_invitations")
+    .select("id, revoked_at, superseded_by, accepted_at")
+    .eq("id", invitationId)
+    .maybeSingle();
+  const inv = row as
+    | { id: string; revoked_at: string | null; superseded_by: string | null }
+    | null;
+  if (!inv) return json({ error: "not_found" }, 404);
+  if (inv.revoked_at || inv.superseded_by) return json({ error: "revoked" }, 403);
+
+  await admin
+    .from("client_invitations")
+    .update({ accepted_at: new Date().toISOString() })
+    .eq("id", inv.id)
+    .is("accepted_at", null);
+
+  // No actionLink, because no session was minted.
+  return json({ accepted: true, invitationId: inv.id });
 }
 
 async function handleAccept(req: Request): Promise<Response> {
@@ -453,6 +584,19 @@ async function handleAccept(req: Request): Promise<Response> {
   if (error) {
     console.error("client-invite: accept lookup failed", error);
     return json({ error: "lookup_failed" }, 500);
+  }
+
+  // P21 — THE CAPABILITY LEG, AND NO SESSION IN IT. The plaintext token is
+  // tried first, so the email path below is untouched; a token that is not one
+  // is offered to resolve_client_link, which answers only for a live, unrevoked,
+  // unexpired capability and writes the use row itself.
+  //
+  // Nothing here calls GoTrue. A phone-only homeowner has no account to sign
+  // into, and minting one off a texted link would be inventing an identity she
+  // never asked for. Acceptance is a FACT on her invitation, not a session.
+  if (!invite) {
+    const accepted = await acceptByCapability(admin, token);
+    if (accepted) return accepted;
   }
 
   const verdict = validateToken(invite as any);
@@ -536,10 +680,15 @@ async function resendFrom(
     );
   }
 
+  // A phone letter is the row with no email on it (P21). Nothing about the
+  // cooldown above changes for it: `last_sent_at` is never stamped because no
+  // email goes out, so the floor reads `sent_at` — one re-mint per hour.
+  const byPhone = !row.email;
+
   const token = generateToken();
   const sentAt = new Date();
   const expiresAt = new Date(sentAt.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const ctaUrl = row.kind === "invite"
+  const ctaUrl = !byPhone && row.kind === "invite"
     ? `${CLIENT_PORTAL_URL}/auth/invite/${token}`
     : `${CLIENT_PORTAL_URL}/`;
 
@@ -548,6 +697,7 @@ async function resendFrom(
     .insert({
       token,
       email: row.email,
+      phone: row.phone ?? null,
       designer_id: row.designer_id,
       designer_client_id: row.designer_client_id,
       project_id: row.project_id,
@@ -598,6 +748,32 @@ async function resendFrom(
     expiresAt: expiresAt.toISOString(),
     ctaUrl,
   };
+
+  // The superseded letter's capability dies with it: a link already forwarded
+  // must not outlive the letter it belonged to.
+  if (byPhone) {
+    const { data: oldLinks } = await admin
+      .from("client_links")
+      .select("id")
+      .eq("invitation_id", oldId)
+      .eq("status", "active");
+    for (const link of (oldLinks ?? []) as Array<{ id: string }>) {
+      const { error: revokeErr } = await admin.rpc("revoke_client_link", {
+        p_link_id: link.id,
+      });
+      if (revokeErr) console.error("client-invite: revoke of a superseded capability failed", revokeErr);
+    }
+    const capability = await mintCapability(admin, newId);
+    if (!capability.ok) {
+      return json({ error: "capability_failed", detail: capability.error }, 502);
+    }
+    return json({
+      invitationId: newId,
+      token,
+      capabilityUrl: capability.url,
+      deliver: "sms_pending",
+    });
+  }
 
   const { data: signerProfile } = await admin
     .from("profiles")

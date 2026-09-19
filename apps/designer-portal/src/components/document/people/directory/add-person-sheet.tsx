@@ -422,6 +422,18 @@ export function AddPersonSheet({
   // Client fields.
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  /**
+   * P21 — the homeowner's own phone. Kept apart from `phone`, which belongs to
+   * the seat branch: one field answering for two different people is how a
+   * trade's number ends up on a client's letter.
+   */
+  const [clientPhone, setClientPhone] = useState("");
+  /**
+   * P22 — she was read the disclosure at kickoff and said yes to texts. BORN
+   * FALSE and never restored from anything: a consent box that remembers is a
+   * consent box that answers for someone who was never asked.
+   */
+  const [kickoffConsent, setKickoffConsent] = useState(false);
   const [invite, setInvite] = useState(true);
   const [note, setNote] = useState("");
   const { value: letterOn, isLoading: letterLoading } = useFeatureFlag(
@@ -807,6 +819,8 @@ export function AddPersonSheet({
     setKind("client");
     setName("");
     setEmail("");
+    setClientPhone("");
+    setKickoffConsent(false);
     setInvite(true);
     setNote("");
     setMakerName("");
@@ -851,32 +865,61 @@ export function AddPersonSheet({
   const submitClient = async () => {
     setError(null);
     const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
+    // The phone field only exists on the letter path, so a studio without the
+    // letter reaches exactly today's refusal on exactly today's one identity.
+    const trimmedPhone = letterOn ? clientPhone.trim() : "";
+    const phoneOnly = !trimmedEmail && !!trimmedPhone;
+    if (!trimmedEmail && !trimmedPhone) {
       setError(
-        "An email brings them onto the roster — and lets you reach them.",
+        letterOn
+          ? "An email or a phone brings them onto the roster — and lets you reach them."
+          : "An email brings them onto the roster — and lets you reach them.",
+      );
+      return;
+    }
+    // A client with only a phone exists only on the letter path: the row that
+    // carries her identity is the letter's own, and nothing else writes one.
+    if (phoneOnly && !invite) {
+      setError(
+        "A client with only a phone is added by sending the letter. Send it, or add an email.",
       );
       return;
     }
     try {
       const result = await addClient.mutateAsync({
         clientEmail: trimmedEmail,
+        ...(trimmedPhone ? { clientPhone: trimmedPhone } : {}),
         clientName: name.trim() || undefined,
         source: "direct",
         invite,
+        // P22 — the consent travels with the add, and the hook records it on
+        // the studio's own ledger BEFORE the letter is written. The version is
+        // the trade path's one constant, not a second one minted here.
+        ...(kickoffConsent && trimmedPhone
+          ? {
+              kickoffConsent: true as const,
+              organizationId,
+              smsConsentDisclosureVersion: FIELD_SMS_DISCLOSURE_VERSION,
+            }
+          : {}),
         ...(letterOn && invite
           ? { letter: true as const, note: note.trim() || undefined }
           : {}),
       });
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
 
-      const label = name.trim() || trimmedEmail;
+      const label = name.trim() || trimmedEmail || trimmedPhone;
       // The server decides whether R13's notice actually fired
       // (`kind === 'notice'`), not the designer's own checkbox — the checkbox
       // only requests a letter; branch A can still link silently underneath.
       const letterActuallySent = result.alreadyExists
         ? result.kind === "notice"
         : invite;
-      const message = letterOn
+      const message = phoneOnly
+        ? // NOT successLine: its sent branch names an address the letter went
+          // to, and nothing has gone anywhere yet. SQ-18 owns the sending.
+          `${label} is on your roster. The letter is written — nothing has been texted yet.`
+        : letterOn
         ? successLine({
             label,
             email: trimmedEmail,
@@ -1548,11 +1591,63 @@ export function AddPersonSheet({
 
           {/* Fail-closed: neither the old string nor the new one renders while
               PostHog is still answering, so a non-pilot studio never sees the
-              letter flash past. */}
+              letter flash past. The phone and its consent box live INSIDE this
+              same branch for the same reason — a studio without the letter has
+              no phone-only path to offer, and its sheet is byte-identical to
+              the one it has today. */}
           {letterLoading ? (
             <div className="mt-4 h-[18px]" aria-hidden />
           ) : letterOn ? (
             <>
+              <label className={`${FIELD_LABEL} mt-4`} htmlFor="client-phone">
+                Phone <span className="opacity-60">(or instead of email)</span>
+              </label>
+              <input
+                id="client-phone"
+                type="tel"
+                value={clientPhone}
+                onChange={(e) => setClientPhone(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void submit();
+                }}
+                className={FIELD_INPUT}
+              />
+
+              {/* P22 — THE KICKOFF CONSENT, AND ONLY BESIDE A NUMBER. The box
+                  appears once there is a phone for it to be about, so a studio
+                  cannot tick "she said yes to texts" on an email-only add and
+                  believe something was recorded. Born unchecked, never
+                  restored, and the accessible name is the short sentence with
+                  the disclosure as its description (QA-R2-5 / C32). */}
+              {clientPhone.trim() !== "" && (
+                <div className="mt-4 flex items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
+                  <input
+                    id="client-kickoff-consent"
+                    type="checkbox"
+                    checked={kickoffConsent}
+                    onChange={(e) => setKickoffConsent(e.target.checked)}
+                    aria-describedby="client-kickoff-consent-note"
+                    className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[var(--color-pearl)] accent-[var(--color-clay)]"
+                  />
+                  <span>
+                    <label
+                      htmlFor="client-kickoff-consent"
+                      className="cursor-pointer"
+                    >
+                      They agreed at kickoff to text updates
+                    </label>
+                    <span
+                      id="client-kickoff-consent-note"
+                      className="mt-0.5 block text-[0.64rem] text-[var(--color-aged-oak)]"
+                    >
+                      Optional and never preselected. They agreed to Patina
+                      project texts (~1/day, rates may apply, reply STOP to
+                      quit).
+                    </span>
+                  </span>
+                </div>
+              )}
+
               <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-[0.74rem] text-[var(--color-mocha)]">
                 <input
                   type="checkbox"
@@ -1576,7 +1671,8 @@ export function AddPersonSheet({
               <LetterLineField
                 facts={{
                   clientName: name.trim() || null,
-                  clientEmail: email.trim() || "no email yet",
+                  clientEmail:
+                    email.trim() || (clientPhone.trim() ? "their phone" : "no email yet"),
                   projectName: null,
                 }}
                 value={note}

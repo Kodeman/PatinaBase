@@ -4,6 +4,8 @@ import { LetterShell, type LetterSnapshotView } from '@/components/letter/letter
 import { OpenLetterForm } from '@/components/letter/OpenLetterForm';
 import { StaleLetterForm } from '@/components/letter/StaleLetterForm';
 
+import { CapabilityLetterForm } from './CapabilityLetterForm';
+
 const CLIENT_PORTAL_URL =
   process.env.NEXT_PUBLIC_CLIENT_PORTAL_URL ?? 'https://client.patina.cloud';
 
@@ -36,6 +38,42 @@ async function loadSnapshot(token: string) {
   return data ?? null;
 }
 
+/**
+ * P21 — THE SECOND DOOR ONTO THE SAME LETTER. A homeowner reached by text holds
+ * no plaintext token: `client_links` stores only a sha256 of hers, so the row
+ * cannot be found by looking for the token at all. `resolve_client_link` is the
+ * one thing that can answer — it hashes what she holds, refuses a revoked,
+ * superseded or lapsed capability, and hands back the invitation id.
+ *
+ * ONE LETTER, NOT TWO. What comes back is the SAME `client_invitations` row the
+ * email token resolves to, read through the same columns, so the words she is
+ * shown are the words frozen at send — not a second rendering of them.
+ *
+ * This resolve stamps `last_used_at` and writes a `client_link_uses` row, and
+ * it does so on GET. That is deliberate: a capability is not single-use (there
+ * is no session to burn and she may open her letter again tomorrow), and on a
+ * consent-sensitive rail the record of every open is worth having.
+ */
+async function loadByCapability(token: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data, error } = await admin.rpc('resolve_client_link', {
+    p_token: token,
+    p_action: 'open',
+    p_source: 'client_portal',
+  });
+  if (error) return null;
+  const invitationId = (data as { invitation_id?: string } | null)?.invitation_id;
+  if (!invitationId) return null;
+
+  const { data: row } = await admin
+    .from('client_invitations')
+    .select(SNAPSHOT_COLUMNS)
+    .eq('id', invitationId)
+    .maybeSingle();
+  return row ?? null;
+}
+
 // The clock is read here rather than in the component body: this page renders
 // once per request, and `react-hooks/purity` bans a clock read during render.
 function hasLapsed(expiresAt: string): boolean {
@@ -63,7 +101,14 @@ function toView(row: Record<string, unknown>): LetterSnapshotView {
 
 export default async function InvitePage({ params }: InvitePageProps) {
   const { token } = await params;
-  const row = await loadSnapshot(token);
+  // The mailed token is tried FIRST and unchanged, so every email letter takes
+  // exactly the path it takes today and costs exactly one read.
+  let row = await loadSnapshot(token);
+  let byCapability = false;
+  if (!row) {
+    row = await loadByCapability(token);
+    byCapability = !!row;
+  }
 
   // An unknown, revoked, or superseded token says exactly what a lapsed one
   // says. The page never confirms whether a token was ever real.
@@ -88,7 +133,12 @@ export default async function InvitePage({ params }: InvitePageProps) {
     );
   }
 
-  if (row.accepted_at) {
+  // NOT ON THE CAPABILITY PATH. Opening the email letter mints a session and
+  // burns the token, so a second visit can only be told it is spent. A
+  // capability mints nothing, lives its own 90 days, and may be opened again -
+  // dead-ending her on "already opened" would take her letter away from her
+  // for no reason.
+  if (!byCapability && row.accepted_at) {
     return (
       <LetterShell snapshot={view}>
         <div>
@@ -104,7 +154,10 @@ export default async function InvitePage({ params }: InvitePageProps) {
     );
   }
 
-  if (hasLapsed(row.expires_at as string)) {
+  // Likewise: `expires_at` is the MAILED token's seven days. A capability
+  // carries its own life, and `resolve_client_link` already refused it above if
+  // that life had run out.
+  if (!byCapability && hasLapsed(row.expires_at as string)) {
     return (
       <LetterShell snapshot={view}>
         <StaleLetterForm token={token} />
@@ -114,7 +167,11 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
   return (
     <LetterShell snapshot={view}>
-      <OpenLetterForm token={token} label={label} />
+      {byCapability ? (
+        <CapabilityLetterForm token={token} />
+      ) : (
+        <OpenLetterForm token={token} label={label} />
+      )}
     </LetterShell>
   );
 }

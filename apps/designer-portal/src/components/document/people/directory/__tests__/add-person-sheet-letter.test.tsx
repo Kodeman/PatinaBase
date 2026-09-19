@@ -273,3 +273,136 @@ describe("flag ON — R12’s rename and the letter", () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// P21 / P22 — the phone identity, and the kickoff consent beside it
+// ═══════════════════════════════════════════════════════════════════════════
+
+function openFor(studio: string | null) {
+  renderWithClient(
+    <AddPersonSheet
+      open
+      initialKind="client"
+      organizationId={studio}
+      onClose={() => {}}
+      onAdded={jest.fn()}
+    />,
+  );
+}
+
+describe("P21 — a homeowner reached by phone", () => {
+  it("offers no phone at all while the letter is off", () => {
+    flagValue = { value: false, isLoading: false };
+    openFor("org-1");
+    expect(screen.queryByLabelText(/^Phone/)).toBeNull();
+    expect(screen.queryByLabelText(/agreed at kickoff/i)).toBeNull();
+  });
+
+  describe("with the letter on", () => {
+    beforeEach(() => {
+      flagValue = { value: true, isLoading: false };
+    });
+
+    it("asks for the consent only once there is a number it is about", () => {
+      openFor("org-1");
+      expect(screen.getByLabelText(/^Phone/)).toBeInTheDocument();
+      // No number yet, so nothing to consent about — and no box to tick that
+      // would record nothing.
+      expect(screen.queryByLabelText(/agreed at kickoff/i)).toBeNull();
+
+      fireEvent.change(screen.getByLabelText(/^Phone/), {
+        target: { value: "(608) 555-0143" },
+      });
+      const box = screen.getByLabelText(/agreed at kickoff/i) as HTMLInputElement;
+      // P22: BORN UNCHECKED.
+      expect(box.checked).toBe(false);
+    });
+
+    it("adds her by phone alone, and records the consent she gave", async () => {
+      openFor("org-1");
+      fireEvent.change(screen.getByLabelText("Full name (optional)"), {
+        target: { value: "Nell Vandermeer" },
+      });
+      fireEvent.change(screen.getByLabelText(/^Phone/), {
+        target: { value: "(608) 555-0143" },
+      });
+      fireEvent.click(screen.getByLabelText(/agreed at kickoff/i));
+      fireEvent.click(
+        screen.getByRole("button", { name: "ADD AND SEND THE LETTER" }),
+      );
+
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+      const args = mutateAsync.mock.calls[0][0];
+      expect(args.clientEmail).toBe("");
+      expect(args.clientPhone).toBe("(608) 555-0143");
+      expect(args.letter).toBe(true);
+      expect(args.kickoffConsent).toBe(true);
+      expect(args.organizationId).toBe("org-1");
+      // The trade path's one constant, not a second one minted here.
+      expect(args.smsConsentDisclosureVersion).toBe("field-sms-v1");
+    });
+
+    it("records nothing when the box is left alone", async () => {
+      openFor("org-1");
+      fireEvent.change(screen.getByLabelText(/^Phone/), {
+        target: { value: "(608) 555-0143" },
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: "ADD AND SEND THE LETTER" }),
+      );
+
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+      const args = mutateAsync.mock.calls[0][0];
+      expect(args).not.toHaveProperty("kickoffConsent");
+      expect(args).not.toHaveProperty("organizationId");
+    });
+
+    it("carries no phone and no consent on an email-only add", async () => {
+      openFor("org-1");
+      fireEvent.change(screen.getByLabelText("Email"), {
+        target: { value: "dave@okonkwo.net" },
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: "ADD AND SEND THE LETTER" }),
+      );
+
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+      const args = mutateAsync.mock.calls[0][0];
+      expect(args).not.toHaveProperty("clientPhone");
+      expect(args).not.toHaveProperty("kickoffConsent");
+    });
+
+    it("refuses a phone-only client whose letter was switched off, and writes nothing", async () => {
+      openFor("org-1");
+      fireEvent.change(screen.getByLabelText(/^Phone/), {
+        target: { value: "(608) 555-0143" },
+      });
+      // Untick the letter: with no email there is no row left to carry her.
+      fireEvent.click(screen.getByLabelText("Send them the letter"));
+      fireEvent.click(
+        screen.getByRole("button", { name: "ADD TO YOUR PEOPLE" }),
+      );
+
+      expect(
+        await screen.findByText(
+          "A client with only a phone is added by sending the letter. Send it, or add an email.",
+        ),
+      ).toBeInTheDocument();
+      expect(mutateAsync).not.toHaveBeenCalled();
+    });
+
+    it("still refuses an add that names neither an email nor a phone", async () => {
+      openFor("org-1");
+      fireEvent.click(
+        screen.getByRole("button", { name: "ADD AND SEND THE LETTER" }),
+      );
+
+      expect(
+        await screen.findByText(
+          "An email or a phone brings them onto the roster — and lets you reach them.",
+        ),
+      ).toBeInTheDocument();
+      expect(mutateAsync).not.toHaveBeenCalled();
+    });
+  });
+});

@@ -7,6 +7,59 @@ import type { ClientLetterSnapshot } from "../_shared/client-letter.ts";
 /** R10: one letter per hour, per invitation. */
 export const RESEND_COOLDOWN_MS = 60 * 60 * 1000;
 
+/**
+ * P21 — WHICH IDENTITY THIS LETTER IS ADDRESSED BY.
+ *
+ * `kind: 'phone'` on the request says "this homeowner gave a phone and no
+ * email". It selects the IDENTITY path, not the letter's kind: the row still
+ * stores kind 'invite' (there is something to open) or 'notice', because that
+ * column names what the letter is, never who the recipient is.
+ *
+ * A phone letter mints no GoTrue user and sends no email. An email letter is
+ * untouched, and may carry a phone alongside its email — storing it changes
+ * nothing about the email leg and is what lets the text go out later (SQ-18).
+ *
+ * The phone itself is NOT normalized here. `normalize_phone_e164` (00281) is
+ * the one implementation of that rule and 00650's trigger applies it on write,
+ * so a second TypeScript copy could only drift. This function checks that
+ * something was typed; the database decides whether it is a phone number.
+ */
+export type LetterIdentity = "email" | "phone";
+
+export type IdentityVerdict =
+  | { ok: true; identity: "email"; email: string; phone: string | null }
+  | { ok: true; identity: "phone"; email: null; phone: string }
+  | { ok: false; error: "email_required" | "phone_required" };
+
+export function resolveIdentity(body: {
+  kind?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}): IdentityVerdict {
+  const email = (body.email ?? "").trim().toLowerCase() || null;
+  const phone = (body.phone ?? "").trim() || null;
+  if (body.kind === "phone") {
+    if (!phone) return { ok: false, error: "phone_required" };
+    return { ok: true, identity: "phone", email: null, phone };
+  }
+  if (!email) return { ok: false, error: "email_required" };
+  return { ok: true, identity: "email", email, phone };
+}
+
+/**
+ * The actions a client capability is minted with. `open_letter` is all this
+ * ticket authorizes; the two answering actions are named here because P23's
+ * `apply_client_effect` reads this exact list out of the scope, and a
+ * capability minted without them could never be upgraded (hash-at-rest means
+ * re-minting is the only way to change a scope, and that invalidates the link
+ * already in her phone).
+ */
+export const CLIENT_LINK_ACTIONS: readonly string[] = [
+  "open_letter",
+  "approve_selection",
+  "select_window",
+];
+
 /** R4: optional, trimmed, 280. Trimming precedes the cap. */
 export function validateNote(
   raw: string | null | undefined,

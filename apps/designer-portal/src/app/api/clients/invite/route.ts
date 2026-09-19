@@ -18,6 +18,12 @@ const CLIENT_PORTAL_URL =
 
 interface InviteRequestBody {
   clientEmail?: string;
+  /**
+   * P21 — a homeowner who gave a phone and no email. With this and no
+   * `clientEmail` the request takes the letter path with a PHONE identity:
+   * no email guard, no profile lookup by email, and no inviteUserByEmail.
+   */
+  clientPhone?: string;
   clientName?: string;
   source?: 'direct' | 'referral';
   notes?: string;
@@ -71,6 +77,8 @@ export async function POST(request: NextRequest) {
   const rawEmail = body.clientEmail;
 
   let clientEmail = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+  const rawPhone = body.clientPhone;
+  const clientPhone = typeof rawPhone === 'string' ? rawPhone.trim() : '';
 
   // ── R73: resolve the existing designer_clients row up front ──────────────
   // Ownership-guarded (designer_id must be the caller). The row's stored
@@ -120,7 +128,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  if (!clientEmail) {
+  // ── The identity guard (P21) ─────────────────────────────────────────────
+  // One of the two has to stand, and with neither the refusal is the one this
+  // route has always given. A phone WITHOUT an email is the new case; an email
+  // request reaches every line below exactly as it did before.
+  if (!clientEmail && !clientPhone) {
     return badRequest('clientEmail is required');
   }
 
@@ -135,6 +147,7 @@ export async function POST(request: NextRequest) {
         adminClient,
         callerUser,
         clientEmail,
+        clientPhone: clientPhone || null,
         clientName,
         source,
         notes,
@@ -142,6 +155,13 @@ export async function POST(request: NextRequest) {
         note: letterVerdict.note,
         projectId: letterVerdict.projectId,
       });
+    }
+    // A phone-only client exists only on the letter path: the row that carries
+    // her identity is client_invitations, and nothing else writes one. Today's
+    // branches below all key on the email — the profile lookup, the GoTrue
+    // invite and the roster row — so there is no version of them to run.
+    if (!clientEmail) {
+      return badRequest('A client with only a phone is added through the letter.');
     }
   } catch (err: any) {
     console.error('[clients/invite] Unexpected error:', err);

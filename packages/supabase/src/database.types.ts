@@ -2603,13 +2603,14 @@ export type Database = {
           designer_full_name: string | null
           designer_given_name: string | null
           designer_id: string
-          email: string
+          email: string | null
           email_log_id: string | null
           expires_at: string
           id: string
           kind: string
           last_sent_at: string | null
           personal_message: string | null
+          phone: string | null
           project_id: string | null
           project_name: string | null
           provider_idempotency_key: string | null
@@ -2636,13 +2637,14 @@ export type Database = {
           designer_full_name?: string | null
           designer_given_name?: string | null
           designer_id: string
-          email: string
+          email?: string | null
           email_log_id?: string | null
           expires_at?: string
           id?: string
           kind?: string
           last_sent_at?: string | null
           personal_message?: string | null
+          phone?: string | null
           project_id?: string | null
           project_name?: string | null
           provider_idempotency_key?: string | null
@@ -2669,13 +2671,14 @@ export type Database = {
           designer_full_name?: string | null
           designer_given_name?: string | null
           designer_id?: string
-          email?: string
+          email?: string | null
           email_log_id?: string | null
           expires_at?: string
           id?: string
           kind?: string
           last_sent_at?: string | null
           personal_message?: string | null
+          phone?: string | null
           project_id?: string | null
           project_name?: string | null
           provider_idempotency_key?: string | null
@@ -2777,6 +2780,116 @@ export type Database = {
             columns: ["writer_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_link_uses: {
+        Row: {
+          action: string | null
+          id: string
+          link_id: string
+          source: string | null
+          used_at: string
+        }
+        Insert: {
+          action?: string | null
+          id?: string
+          link_id: string
+          source?: string | null
+          used_at?: string
+        }
+        Update: {
+          action?: string | null
+          id?: string
+          link_id?: string
+          source?: string | null
+          used_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_link_uses_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "client_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          invitation_id: string
+          last_used_at: string | null
+          party_id: string | null
+          project_id: string | null
+          scope: Json
+          status: string
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          invitation_id: string
+          last_used_at?: string | null
+          party_id?: string | null
+          project_id?: string | null
+          scope: Json
+          status?: string
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          invitation_id?: string
+          last_used_at?: string | null
+          party_id?: string | null
+          project_id?: string | null
+          scope?: Json
+          status?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_links_invitation_id_fkey"
+            columns: ["invitation_id"]
+            isOneToOne: false
+            referencedRelation: "client_invitations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_links_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "client_links_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "client_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -34398,6 +34511,13 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_client_link: {
+        Args: { p_actions?: string[]; p_invitation_id: string; p_ttl?: string }
+        Returns: {
+          id: string
+          token: string
+        }[]
+      }
       create_client_scope_change_request: {
         Args: {
           p_description: string
@@ -37626,6 +37746,10 @@ export type Database = {
         }
       }
       resolve_board_share: { Args: { p_token: string }; Returns: Json }
+      resolve_client_link: {
+        Args: { p_action?: string; p_source?: string; p_token: string }
+        Returns: Json
+      }
       resolve_coordination_item: {
         Args: {
           p_answer?: string
@@ -37860,6 +37984,7 @@ export type Database = {
         }
         Returns: Json
       }
+      revoke_client_link: { Args: { p_link_id: string }; Returns: boolean }
       revoke_document_share: { Args: { p_share_id: string }; Returns: boolean }
       revoke_field_link: { Args: { p_token_id: string }; Returns: boolean }
       revoke_paperwork_link: {
