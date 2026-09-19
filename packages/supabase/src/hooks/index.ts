@@ -573,12 +573,31 @@ export {
   useFieldMediaUrl,
   fieldLinkUrl,
   partySmsKeys,
+  // Field Line Phase 1 (P1-01): the opt-in challenge, and the one resend owner.
+  usePartyOptinChallenge,
+  usePartyPhoneSuppressed,
+  useResendPartyInvite,
+  useQueuePartyInvite,
+  queuePartyInvite,
+  partySmsChipState,
+  resendUnavailableReason,
+  resendRefusalWords,
+  PARTY_SMS_CHIP_WORDS,
+  FIELD_SMS_DISCLOSURE_VERSION,
+  RESEND_FLOOR_HOURS,
+  INVITE_NO_REPLY_HOURS,
 } from "./use-party-sms";
 export type {
   PartySmsMessage,
   PartySmsResult,
   FieldLinkToken,
   CreateFieldLinkInput,
+  PartyInviteSource,
+  PartyInviteEvidence,
+  PartyOptinChallenge,
+  PartySmsChipState,
+  ResendPartyInviteInput,
+  ResendPartyInviteResult,
 } from "./use-party-sms";
 export {
   usePeopleDirectory,

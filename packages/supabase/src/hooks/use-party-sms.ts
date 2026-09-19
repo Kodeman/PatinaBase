@@ -305,6 +305,306 @@ export function smsThreadActionError(error: unknown): string {
     : "Couldn't save the change. Try again.";
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// THE OPT-IN CHALLENGE, AND THE ONE WAY TO ASK AGAIN (Phase 1, P1-01)
+//
+// A consent challenge is an `sms_prompts` row kind='optin' (00639) — the
+// question we asked one handset and the `Ref NN` that answers it. The record
+// (`studio_channel_consent`) is still the only grant; nothing here writes a
+// seat column, and `resend_party_invite` (00644) is the ONLY way to ask again.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** The disclosure the field-SMS opt-in is read against. Stored verbatim on the
+ *  consent record and on the challenge, so what we asked is auditable. */
+export const FIELD_SMS_DISCLOSURE_VERSION = 'field-sms-v1';
+
+/** How the studio heard the yes. 00644's own vocabulary, kept verbatim in the
+ *  evidence; the consent record's `source` column takes the nearest value its
+ *  own check allows. */
+export type PartyInviteSource = 'verbal' | 'form' | 'kickoff';
+
+export interface PartyInviteEvidence {
+  source: PartyInviteSource;
+  /** Defaults to FIELD_SMS_DISCLOSURE_VERSION. */
+  disclosureVersion?: string;
+  /** What happened, in the studio's own words. Required — nothing sends
+   *  without it. */
+  note: string;
+}
+
+/** One opt-in challenge row, as the room reads it. */
+export interface PartyOptinChallenge {
+  id: string;
+  version: number;
+  short_code: string;
+  created_at: string;
+  expires_at: string;
+  answered_at: string | null;
+  /** Set once, by resend_party_invite: this question has been asked again. */
+  resent_at: string | null;
+  /** Withdrawn before it was answered — today only by a corrected phone. */
+  voided_at: string | null;
+}
+
+/** 00644's floor, and the wait the room calls "no reply" — the same numbers the
+ *  RPC enforces, so the disabled reason and the refusal cannot disagree. */
+export const RESEND_FLOOR_HOURS = 24;
+export const INVITE_NO_REPLY_HOURS = 48;
+
+const HOUR_MS = 3_600_000;
+
+/** The latest opt-in challenge for a party (any state). RLS scopes the read to
+ *  the project's team; the chip and the "Send again" reason both read it. */
+export function usePartyOptinChallenge(partyId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['party-optin-challenge', partyId ?? 'none'],
+    enabled: !!partyId,
+    queryFn: async (): Promise<PartyOptinChallenge | null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('sms_prompts')
+        .select('id, version, short_code, created_at, expires_at, answered_at, resent_at, voided_at')
+        .eq('party_id', partyId)
+        .eq('kind', 'optin')
+        .order('version', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as PartyOptinChallenge | null) ?? null;
+    },
+  });
+}
+
+/** Has this handset asked us to stop? Phone-global and independent of any
+ *  studio's record, which is why it is its own question (00639). */
+export function usePartyPhoneSuppressed(phone: string | null | undefined) {
+  return useQuery({
+    queryKey: ['sms-phone-suppressed', phone ?? 'none'],
+    enabled: !!phone,
+    queryFn: async (): Promise<boolean> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('sms_phone_suppressed', {
+        p_recipient: phone,
+      });
+      if (error) throw error;
+      return data === true;
+    },
+  });
+}
+
+/**
+ * The word beside a field party's name. Six states, and each is a different
+ * fact: nobody asked, we asked, we asked and nobody answered, they said yes,
+ * they said no, and the carrier or a STOP has closed the handset entirely.
+ * Suppression outranks every record, exactly as the send gate orders it.
+ */
+export type PartySmsChipState =
+  | 'not_asked'
+  | 'invited'
+  | 'invited_no_reply'
+  | 'texting'
+  | 'opted_out'
+  | 'blocked';
+
+export const PARTY_SMS_CHIP_WORDS: Record<PartySmsChipState, string> = {
+  not_asked: 'Not asked',
+  invited: 'Invited',
+  invited_no_reply: 'Invited · no reply',
+  texting: 'Texting',
+  opted_out: 'Opted out',
+  blocked: 'Blocked',
+};
+
+export function partySmsChipState(input: {
+  /** The verdict off the consent record — never re-derived here. */
+  consent: string | null | undefined;
+  suppressed?: boolean;
+  challenge?: PartyOptinChallenge | null;
+  now?: Date;
+}): PartySmsChipState {
+  if (input.suppressed) return 'blocked';
+  if (input.consent === 'granted') return 'texting';
+  if (input.consent === 'opted_out') return 'opted_out';
+  if (input.consent !== 'pending') return 'not_asked';
+  const challenge = input.challenge;
+  if (!challenge || challenge.voided_at) return 'invited';
+  const asked = new Date(challenge.resent_at ?? challenge.created_at).getTime();
+  const now = (input.now ?? new Date()).getTime();
+  return now - asked >= INVITE_NO_REPLY_HOURS * HOUR_MS ? 'invited_no_reply' : 'invited';
+}
+
+/**
+ * Why "Send again" is not available yet, in words — or null when it is. Read off
+ * the same challenge row 00644 reads, so the disabled reason and the RPC's own
+ * refusal say the same thing.
+ */
+export function resendUnavailableReason(input: {
+  consent: string | null | undefined;
+  phone?: string | null;
+  suppressed?: boolean;
+  challenge?: PartyOptinChallenge | null;
+  now?: Date;
+}): string | null {
+  if (!input.phone) return 'Add their phone number first.';
+  if (input.suppressed) return "They've asked us to stop. Only they can undo that.";
+  if (input.consent === 'granted') return 'They already said yes.';
+  if (input.consent === 'opted_out') return "They've opted out. Only they can rejoin.";
+  if (input.consent !== 'pending') return 'Invite them first.';
+  const challenge = input.challenge;
+  if (!challenge) return 'Invite them first.';
+  if (challenge.answered_at) return 'They already answered.';
+  if (challenge.voided_at) return 'The number changed, so invite them again.';
+  const now = (input.now ?? new Date()).getTime();
+  if (new Date(challenge.expires_at).getTime() <= now) {
+    return 'That ask has run out, so invite them again.';
+  }
+  if (challenge.resent_at) return 'Already asked again once.';
+  const askedAgainAt = new Date(challenge.created_at).getTime() + RESEND_FLOOR_HOURS * HOUR_MS;
+  if (askedAgainAt > now) {
+    return `Asked less than a day ago — you can ask again after ${new Date(
+      askedAgainAt,
+    ).toLocaleString()}.`;
+  }
+  return null;
+}
+
+/** 00644's named refusals, as sentences. An unknown error passes through
+ *  untouched — a sentence invented for it would hide it. */
+const RESEND_SENTENCES: ReadonlyArray<readonly [string, string]> = [
+  ['resend_not_authorized', 'Only this studio can send its own crew an invite again.'],
+  [
+    'resend_evidence_required',
+    'Write down how they said yes before asking again. Nothing is sent without it.',
+  ],
+  ['resend_no_phone_number', 'Add their phone number first.'],
+  ['resend_refused_suppressed', "They've asked us to stop. Only they can undo that."],
+  ['resend_already_granted', 'They already said yes, so there is nothing to ask again.'],
+  ['resend_refused_opted_out', "They've opted out. Only they can rejoin, by replying START."],
+  ['resend_no_invite_on_file', 'Nobody has asked them yet — invite them first.'],
+  ['resend_no_open_challenge', 'There is no question waiting on an answer.'],
+  [
+    'resend_challenge_phone_changed',
+    'The number changed after they were asked. Write down how they said yes on the new number and invite them again.',
+  ],
+  ['resend_challenge_expired', 'That ask has run out, so invite them again.'],
+  ['resend_floor_not_elapsed', 'They were asked less than a day ago. Give them a day.'],
+  ['resend_already_sent', 'They have already been asked again once.'],
+];
+
+export function resendRefusalWords(error: unknown): string {
+  const message = (error as { message?: unknown } | null)?.message;
+  if (typeof message !== 'string') return 'Could not ask again just now. Try again.';
+  for (const [token, sentence] of RESEND_SENTENCES) {
+    if (message.includes(token)) return sentence;
+  }
+  return message;
+}
+
+export interface ResendPartyInviteInput {
+  partyId: string;
+  projectId?: string | null;
+  evidence: PartyInviteEvidence;
+}
+
+export interface ResendPartyInviteResult {
+  status: string;
+  challenge_id?: string;
+  version?: number;
+  next_allowed_at?: string;
+  dispatched?: boolean;
+}
+
+/**
+ * Ask an open opt-in challenge again — the ONE owner of a resend (contract
+ * US-2 P2). Everything that bounds it lives in `resend_party_invite` (00644):
+ * studio membership, the suppression and record gates, the 24h floor, and a
+ * single allowance per challenge version claimed under an advisory lock. So two
+ * clicks a millisecond apart produce one text and one refusal, whatever this
+ * hook's caller does about disabling its own button.
+ */
+export function useResendPartyInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ResendPartyInviteInput): Promise<ResendPartyInviteResult> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('resend_party_invite', {
+        p_party_id: input.partyId,
+        p_evidence: {
+          source: input.evidence.source,
+          disclosure_version: input.evidence.disclosureVersion ?? FIELD_SMS_DISCLOSURE_VERSION,
+          note: input.evidence.note,
+        },
+      });
+      if (error) throw error;
+      return (data ?? { status: 'queued' }) as ResendPartyInviteResult;
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['party-optin-challenge', input.partyId] });
+      void queryClient.invalidateQueries({ queryKey: partySmsKeys.thread(input.partyId) });
+      void queryClient.invalidateQueries({ queryKey: ['channel-consent'] });
+      if (input.projectId) {
+        void queryClient.invalidateQueries({ queryKey: ['project-parties', input.projectId] });
+      }
+    },
+  });
+}
+
+/**
+ * Queue the FIRST invite for a party whose consent record has just landed on an
+ * evidenced `pending`.
+ *
+ * WHY THIS EXISTS. 00284 fired the invite off a PARTY ROW moving to `pending`;
+ * 00594 froze those columns, so since then the double opt-in has had no sender
+ * at all (00594's own note on record_channel_reconsent says so) — the record
+ * went pending and the crew heard nothing. The invite goes out from the act that
+ * recorded the consent instead, declaring automation_phase 1 so the server phase
+ * gate (FIELD_LINE_PHASE, _shared/sms.ts:198) is what decides whether it leaves.
+ *
+ * It never decides WHETHER there is consent to act on: the caller queues this
+ * only after the consent doors accepted the evidence, and sendPartySms re-asks
+ * every gate on its own side.
+ */
+export async function queuePartyInvite(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  input: { partyId: string; projectId?: string | null },
+): Promise<void> {
+  try {
+    await supabase.functions.invoke('sms-dispatch', {
+      body: {
+        partyId: input.partyId,
+        projectId: input.projectId ?? undefined,
+        templateKey: 'sms_optin_invite',
+        type: 'field_optin_invite',
+        automationPhase: 1,
+      },
+    });
+  } catch {
+    // The consent record is written and is the fact that matters; a transport
+    // failure here is not a reason to tell the designer their record was lost.
+    // "Send again" is the way to try the text itself, and it is rate-limited.
+  }
+}
+
+/** The same queue as a mutation, for a surface that owns the act directly. */
+export function useQueuePartyInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { partyId: string; projectId?: string | null }) => {
+      await queuePartyInvite(getSupabase(), input);
+      return true;
+    },
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: ['party-optin-challenge', input.partyId] });
+      void queryClient.invalidateQueries({ queryKey: partySmsKeys.thread(input.partyId) });
+    },
+  });
+}
+
 function useSmsThreadAction(action: 'sms_take_thread' | 'sms_hand_back_thread' | 'sms_extend_pause') {
   const queryClient = useQueryClient();
   return useMutation({

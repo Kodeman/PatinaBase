@@ -24208,15 +24208,21 @@ export type Database = {
           created_at: string
           expires_at: string
           id: string
+          invite_evidence: Json | null
           kind: string
           party_id: string
           project_id: string
           proposed_effect: Json | null
           recipient_phone: string
+          resend_evidence: Json | null
+          resent_at: string | null
+          resent_by: string | null
           sender_number: string
           short_code: string
           subject_id: string | null
           version: number
+          void_reason: string | null
+          voided_at: string | null
         }
         Insert: {
           answered_at?: string | null
@@ -24226,15 +24232,21 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
+          invite_evidence?: Json | null
           kind: string
           party_id: string
           project_id: string
           proposed_effect?: Json | null
           recipient_phone: string
+          resend_evidence?: Json | null
+          resent_at?: string | null
+          resent_by?: string | null
           sender_number: string
           short_code: string
           subject_id?: string | null
           version?: number
+          void_reason?: string | null
+          voided_at?: string | null
         }
         Update: {
           answered_at?: string | null
@@ -24244,15 +24256,21 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
+          invite_evidence?: Json | null
           kind?: string
           party_id?: string
           project_id?: string
           proposed_effect?: Json | null
           recipient_phone?: string
+          resend_evidence?: Json | null
+          resent_at?: string | null
+          resent_by?: string | null
           sender_number?: string
           short_code?: string
           subject_id?: string | null
           version?: number
+          void_reason?: string | null
+          voided_at?: string | null
         }
         Relationships: [
           {
@@ -37539,6 +37557,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      resend_party_invite: {
+        Args: { p_evidence: Json; p_party_id: string }
+        Returns: Json
       }
       resolve_board_item_direction: {
         Args: { p_direction_id: string }

@@ -39,6 +39,15 @@ import {
   useUpdateProjectParty,
   normalizePartyPhoneForCompare,
   fieldLinkUrl,
+  usePartyOptinChallenge,
+  usePartyPhoneSuppressed,
+  useResendPartyInvite,
+  partySmsChipState,
+  resendUnavailableReason,
+  resendRefusalWords,
+  PARTY_SMS_CHIP_WORDS,
+  FIELD_SMS_DISCLOSURE_VERSION,
+  type PartyInviteSource,
   type PartyRole,
   type PartySmsMessage,
   type UpdateProjectPartyPatch,
@@ -115,6 +124,201 @@ function ConsentChip({ status }: { status: string | null | undefined }) {
       />
       {cfg.label}
     </span>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE FIELD LINE BAND (Phase 1, P1-01) — behind `field-line-trades`
+//
+// Both pieces below are MOUNTED ONLY WHEN THE FLAG IS ON. That is not a style
+// choice: their hooks are the only new data this sheet reads, and a sheet that
+// read them unconditionally would ask every surface that mounts it for facts
+// the trades rail has not been turned on for.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** How the studio heard the yes, in the words a designer would use. */
+const RESEND_SOURCE_WORDS: ReadonlyArray<readonly [PartyInviteSource, string]> = [
+  ['verbal', 'They said yes on the phone'],
+  ['form', 'They said yes on a form'],
+  ['kickoff', 'They said yes at the kickoff'],
+];
+
+/**
+ * Six states, six facts. The word comes from the consent record's verdict, the
+ * suppression question and the challenge's own clock — never re-derived from a
+ * seat column, which 00594 froze.
+ */
+function FieldLineConsentChip({
+  consent,
+  phone,
+  partyId,
+}: {
+  consent: string | null | undefined;
+  phone: string | null;
+  partyId: string | null;
+}) {
+  const { data: challenge } = usePartyOptinChallenge(partyId);
+  const { data: suppressed } = usePartyPhoneSuppressed(phone);
+  const state = partySmsChipState({ consent, suppressed, challenge });
+  return (
+    <span
+      data-testid="field-line-consent-chip"
+      className="inline-flex items-center gap-1.5 rounded-[4px] border border-[var(--color-pearl)] px-2 py-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-mocha)]"
+    >
+      {PARTY_SMS_CHIP_WORDS[state]}
+    </span>
+  );
+}
+
+/**
+ * "Send again" — the room's one door onto `resend_party_invite` (00644). The
+ * reason it is held stands beside it in words rather than as a bare disabled
+ * control, and the RPC holds the same line whatever this button does: the floor,
+ * the single allowance per question, and the record's own refusals are all
+ * enforced there, so a double click produces one text and one refusal.
+ */
+function FieldLineResendBand({
+  partyId,
+  projectId,
+  consent,
+  phone,
+  displayName,
+}: {
+  partyId: string | null;
+  projectId: string | null;
+  consent: string | null | undefined;
+  phone: string | null;
+  displayName: string | null;
+}) {
+  const { data: challenge } = usePartyOptinChallenge(partyId);
+  const { data: suppressed } = usePartyPhoneSuppressed(phone);
+  const resend = useResendPartyInvite();
+  const [source, setSource] = useState<PartyInviteSource>('verbal');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [sentAgain, setSentAgain] = useState(false);
+  const inFlight = useRef(false);
+  useEffect(() => {
+    setNote('');
+    setError(null);
+    setSentAgain(false);
+    inFlight.current = false;
+  }, [partyId]);
+
+  const held = resendUnavailableReason({ consent, phone, suppressed, challenge });
+  const askedAt = challenge?.resent_at ?? challenge?.created_at ?? null;
+
+  const doResend = () => {
+    setError(null);
+    if (!partyId) return;
+    if (!note.trim()) {
+      setError('Write down how they said yes before asking again.');
+      return;
+    }
+    // Two presses in one tick read the SAME render's `resend.isPending` (still
+    // false), so the pending flag cannot be the latch — a ref can, and it holds
+    // before React has re-rendered anything. 00644 remains the authority that
+    // matters (an advisory lock and a write-once claim per challenge version, so
+    // two calls yield one text and one refusal); this only keeps the room from
+    // asking twice for one press.
+    if (inFlight.current) return;
+    inFlight.current = true;
+    resend.mutate(
+      { partyId, projectId, evidence: { source, note: note.trim() } },
+      {
+        onSuccess: () => {
+          setSentAgain(true);
+          setNote('');
+        },
+        onError: (e) => setError(resendRefusalWords(e)),
+        onSettled: () => {
+          inFlight.current = false;
+        },
+      },
+    );
+  };
+
+  return (
+    <div data-testid="field-line-resend-band">
+      <p className="text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
+        {askedAt
+          ? `Asked ${fmtDay(askedAt)}. Waiting on their reply — they reply YES to start.`
+          : 'Waiting on their reply — they reply YES to start.'}
+      </p>
+
+      {sentAgain ? (
+        <p className="mt-2 text-[0.7rem] leading-relaxed text-[var(--color-mocha)]">
+          Asked again. {displayName ?? 'They'} will get one more text.
+        </p>
+      ) : (
+        <>
+          <div className="mt-3 rounded border border-[var(--color-pearl)] bg-[var(--color-linen)]/45 p-3">
+            <label htmlFor="field-resend-source" className={META}>
+              How they said yes
+            </label>
+            <select
+              id="field-resend-source"
+              value={source}
+              onChange={(e) => setSource(e.target.value as PartyInviteSource)}
+              className="mb-3 w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            >
+              {RESEND_SOURCE_WORDS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="field-resend-note" className={META}>
+              What happened
+            </label>
+            <textarea
+              id="field-resend-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Where and when they agreed, e.g. said yes on the phone this morning"
+              rows={2}
+              className="w-full resize-none rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
+            />
+            <p className="mt-2 text-[0.62rem] leading-relaxed text-[var(--color-aged-oak)]">
+              Kept with the question: this note, the time, {FIELD_SMS_DISCLOSURE_VERSION}, and
+              who recorded it.
+            </p>
+          </div>
+
+          {error && (
+            <p role="alert" className="mt-2 text-[0.7rem] text-[var(--color-terracotta-ink)]">
+              {error}
+            </p>
+          )}
+
+          <p
+            id="field-resend-reason"
+            className="mt-3 text-[0.7rem] leading-relaxed text-[var(--color-aged-oak)]"
+          >
+            {held ?? 'They get one more text asking them to reply YES.'}
+          </p>
+          <DocumentActionRow
+            surfaceKey="people"
+            regionKey="field-resend-invite"
+            className="mt-3"
+            aria-label="Ask again actions"
+          >
+            <DocumentAction
+              actionKey="resend-party-invite"
+              variant="primary"
+              onClick={doResend}
+              held={!!held}
+              disabled={!!held}
+              aria-describedby="field-resend-reason"
+              loading={resend.isPending}
+              loadingLabel="Sending…"
+            >
+              Send again
+            </DocumentAction>
+          </DocumentActionRow>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -279,6 +483,9 @@ export function PartyProfileSheet({
     !!organizationId &&
     !!linkedParty &&
     (!linkedParty.studio_contact_id || justPromotedPartyId === partyId);
+  // Phase 1's trades rail. Fail-closed: until PostHog answers, this sheet is
+  // exactly the sheet Phase 0 shipped.
+  const { value: tradesOn } = useFeatureFlag('field-line-trades');
 
   const [mintedUrl, setMintedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -587,7 +794,13 @@ export function PartyProfileSheet({
             word. */}
         {/* No identity, no consent chip (R-BE). An absent record is its own
             fact and must not print as a word. */}
-        {seatIdentity ? <ConsentChip status={consent} /> : null}
+        {seatIdentity ? (
+          tradesOn ? (
+            <FieldLineConsentChip consent={consent} phone={phone} partyId={partyId} />
+          ) : (
+            <ConsentChip status={consent} />
+          )
+        ) : null}
       </div>
 
       {/* Promote band (Call Sheet Wave 2, slide 10) — only when this party
@@ -833,10 +1046,21 @@ export function PartyProfileSheet({
         {granted ? (
           <PartySmsComposer key={partyId} partyId={partyId} thread={thread} />
         ) : consent === 'pending' ? (
-          <p className="rounded-[7px] border border-[var(--color-pearl)] bg-white/50 px-3 py-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
-            Invite sent — waiting on their reply. You can text them once they
-            reply YES.
-          </p>
+          tradesOn ? (
+            <FieldLineResendBand
+              key={partyId}
+              partyId={partyId}
+              projectId={seatProjectId}
+              consent={consent}
+              phone={phone}
+              displayName={displayName}
+            />
+          ) : (
+            <p className="rounded-[7px] border border-[var(--color-pearl)] bg-white/50 px-3 py-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
+              Invite sent — waiting on their reply. You can text them once they
+              reply YES.
+            </p>
+          )
         ) : consent === 'opted_out' ? (
           <p className="rounded-[7px] border border-[var(--color-pearl)] bg-white/50 px-3 py-2.5 text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">
             They opted out by text. Only they can rejoin by replying START.
