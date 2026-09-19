@@ -48,6 +48,37 @@ function grant(phone = "+15551230001") {
   };
 }
 
+// THE INVITE'S EVIDENCE IS THE RECORD'S (00646, SQ-92 F1). record_channel_invite
+// / record_channel_consent stamp these on studio_channel_consent; the gate
+// reads `source` and `recorded_by` off exactly that row. Until 00646 it read
+// the seat's frozen sms_consent_* columns, which 00594's
+// refuse_legacy_consent_write_trg means nothing can fill.
+const RECORD_EVIDENCE = {
+  source: "verbal",
+  evidence: "Said yes at the kickoff walkthrough",
+  recorded_at: "2026-07-08T17:00:00Z",
+  disclosure_version: "field-sms-v1",
+  recorded_by: "member-1",
+};
+
+/** A seat as Phase 1 actually finds one: all EIGHT frozen columns NULL. */
+function frozenSeat(id: string) {
+  return {
+    id,
+    phone_e164: "+15551230001",
+    project_id: "proj1",
+    display_name: "Sal Sub",
+    sms_consent_status: null,
+    sms_consented_at: null,
+    sms_opt_out_at: null,
+    sms_consent_source: null,
+    sms_consent_evidence: null,
+    sms_consent_recorded_at: null,
+    sms_consent_recorded_by: null,
+    sms_consent_disclosure_version: null,
+  };
+}
+
 Deno.test("dry_run writes a row and never calls Twilio", async () => {
   const fake = createFakeSupabase({
     projects: ORG_ALPHA_PROJECTS,
@@ -116,8 +147,8 @@ Deno.test("sms_optin_invite is allowed to a pending party", async () => {
     projects: ORG_ALPHA_PROJECTS,
     studio_channel_consent: [{
       ...grant(),
+      ...RECORD_EVIDENCE,
       status: "pending",
-      recorded_at: "2026-07-08T17:00:00Z",
     }],
     project_parties: [party("p1", "pending")],
   });
@@ -935,6 +966,7 @@ Deno.test("a pending record with no refusal behind it still takes the invite", a
       channel_value: "+15551230001",
       status: "pending",
       refusal_unanswered: false,
+      ...RECORD_EVIDENCE,
     }],
   });
   const res = await sendPartySms(fake as never, {
@@ -943,6 +975,154 @@ Deno.test("a pending record with no refusal behind it still takes the invite", a
     body: "Reply YES for updates",
   }, { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS });
   assert(res.sent, "an ordinary pending invite must still go");
+});
+
+// ── the invite's evidence gate reads the RECORD (00646, SQ-92 F1) ───────────
+//
+// The defect this closes: the gate read the seat's sms_consent_source /
+// evidence / recorded_at / disclosure_version, and 00594's
+// refuse_legacy_consent_write_trg refuses every write to them
+// (consent_legacy_column_frozen). So on any stack past 00594 — which is every
+// stack Phase 1 can run on — a seat carries NULLs there and the gate refused
+// EVERY invite, including the one resend_party_invite spends its
+// once-per-challenge allowance on.
+Deno.test("the invite stands on the RECORD's evidence, not the frozen seat", async () => {
+  const fake = createFakeSupabase({
+    // All eight frozen columns NULL — the only shape 00594 permits.
+    project_parties: [frozenSeat("p1")],
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [{
+      ...grant(),
+      ...RECORD_EVIDENCE,
+      status: "pending",
+      refusal_unanswered: false,
+    }],
+  });
+  const res = await sendPartySms(fake as never, {
+    partyId: "p1",
+    templateKey: "sms_optin_invite",
+    body: "Reply YES for updates",
+  }, { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS });
+  assert(res.sent, "a record carrying source + recorded_by opens the invite");
+  assertEquals(res.status, "sent");
+  assertEquals(
+    (fake._data.sms_messages ?? []).length,
+    1,
+    "the send proceeded: the invite row was written",
+  );
+});
+
+// …and it is still a gate. A record nobody signed does not open the invite:
+// `recorded_by` is WHO wrote the consent down, and an unattributed record is
+// exactly what the token has always meant.
+Deno.test("a record with no recorded_by is refused consent_evidence_required", async () => {
+  for (
+    const missing of [
+      { recorded_by: null },
+      { source: null },
+    ]
+  ) {
+    const fake = createFakeSupabase({
+      project_parties: [frozenSeat("p1")],
+      projects: ORG_ALPHA_PROJECTS,
+      studio_channel_consent: [{
+        ...grant(),
+        ...RECORD_EVIDENCE,
+        status: "pending",
+        refusal_unanswered: false,
+        ...missing,
+      }],
+    });
+    const res = await sendPartySms(fake as never, {
+      partyId: "p1",
+      templateKey: "sms_optin_invite",
+      body: "Reply YES for updates",
+    }, { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS });
+    assert(!res.sent, `a record missing ${Object.keys(missing)[0]} must refuse`);
+    assertEquals(res.reason, "consent_evidence_required");
+    assertEquals(res.status, "failed");
+    assertEquals(
+      (fake._data.sms_messages ?? []).length,
+      0,
+      "a refused invite writes no row",
+    );
+  }
+});
+
+// And the seat can no longer refuse what the record grants, either: the four
+// columns the old gate read are NULL above, and a seat carrying the OLD
+// pre-freeze evidence cannot stand in for a record that has none.
+Deno.test("a pre-fold seat's own evidence cannot open the invite", async () => {
+  const fake = createFakeSupabase({
+    // party() carries source / evidence / recorded_at / disclosure_version —
+    // the exact four the retired gate accepted.
+    project_parties: [party("p1", "pending")],
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [{
+      ...grant(),
+      status: "pending",
+      refusal_unanswered: false,
+      recorded_at: "2026-07-08T17:00:00Z",
+    }],
+  });
+  const res = await sendPartySms(fake as never, {
+    partyId: "p1",
+    templateKey: "sms_optin_invite",
+    body: "Reply YES for updates",
+  }, { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS });
+  assert(!res.sent, "the seat's frozen evidence decides nothing");
+  assertEquals(res.reason, "consent_evidence_required");
+});
+
+// And the columns: no read on the whole invite send asks for a frozen
+// sms_consent_* column any more, and the consent record's read is the one that
+// carries the evidence — the gate opens no query of its own for it.
+Deno.test("the invite send reads no frozen sms_consent_ column", async () => {
+  const fake = createFakeSupabase({
+    project_parties: [frozenSeat("p1")],
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [{
+      ...grant(),
+      ...RECORD_EVIDENCE,
+      status: "pending",
+      refusal_unanswered: false,
+    }],
+  });
+  const selects: Array<{ table: string; cols: string }> = [];
+  const from = fake.from.bind(fake);
+  (fake as unknown as { from: (t: string) => unknown }).from = (
+    table: string,
+  ) => {
+    const query = from(table) as { select: (cols?: string) => unknown };
+    const select = query.select.bind(query);
+    query.select = (cols?: string) => {
+      selects.push({ table, cols: cols ?? "*" });
+      return select(cols);
+    };
+    return query;
+  };
+  const res = await sendPartySms(fake as never, {
+    partyId: "p1",
+    templateKey: "sms_optin_invite",
+    body: "Reply YES for updates",
+  }, { getEnv: envOf(CONSENT_ENV), now: OPEN_HOURS });
+  assert(res.sent);
+  assertEquals(
+    selects.filter((s) => s.cols.includes("sms_consent_")),
+    [],
+    "no read on the invite path may ask for a frozen column",
+  );
+  const record = selects.find((s) => s.table === "studio_channel_consent");
+  assert(record, "the consent record is read");
+  assert(
+    record.cols.includes("source") && record.cols.includes("recorded_by"),
+    `the ONE record read carries the evidence: ${record.cols}`,
+  );
+  assertEquals(
+    selects.filter((s) => s.table === "studio_channel_consent").length,
+    1,
+    "…and the gate opens no second read of it",
+  );
 });
 
 // And the recipient's own answer reopens it: the inbound rail writes

@@ -130,9 +130,15 @@ export function createFieldLineHarness(
       { id: "party-a", project_id: "project-a", phone_e164: SHARED_RECIPIENT, party_kind: "sub", display_name: "Riley", sms_consent_status: "granted", sms_consent_source: "fixture", sms_consent_evidence: "fixture consent evidence", sms_consent_recorded_at: "2026-10-01T00:00:00.000Z", sms_consent_disclosure_version: "fixture-v1" },
       { id: "party-b", project_id: "project-b", phone_e164: SHARED_RECIPIENT, party_kind: "sub", display_name: "Riley", sms_consent_status: "granted", sms_consent_source: "fixture", sms_consent_evidence: "fixture consent evidence", sms_consent_recorded_at: "2026-10-01T00:00:00.000Z", sms_consent_disclosure_version: "fixture-v1" },
     ],
+    // A record carries its OWN evidence: record_channel_consent's door refuses
+    // a `pending` or `granted` write without source / evidence /
+    // disclosure_version (00622:160-167) and stamps recorded_by from
+    // auth.uid(). The invite gate reads source + recorded_by off exactly this
+    // row (00646), so a seed without them models a record the database cannot
+    // hold — and the seat's frozen sms_consent_* columns cannot stand in for it.
     studio_channel_consent: [
-      { organization_id: "studio-a", channel_kind: "sms", channel_value: SHARED_RECIPIENT, status: "granted", refusal_unanswered: false },
-      { organization_id: "studio-b", channel_kind: "sms", channel_value: SHARED_RECIPIENT, status: "granted", refusal_unanswered: false },
+      { organization_id: "studio-a", channel_kind: "sms", channel_value: SHARED_RECIPIENT, status: "granted", refusal_unanswered: false, source: "verbal", evidence: "Said yes at the kickoff walkthrough", recorded_at: "2026-10-01T00:00:00.000Z", disclosure_version: "field-sms-v1", recorded_by: "studio-a" },
+      { organization_id: "studio-b", channel_kind: "sms", channel_value: SHARED_RECIPIENT, status: "granted", refusal_unanswered: false, source: "verbal", evidence: "Said yes at the kickoff walkthrough", recorded_at: "2026-10-01T00:00:00.000Z", disclosure_version: "field-sms-v1", recorded_by: "studio-b" },
     ],
     email_templates: [
       { slug: "sms_daily_digest", is_active: true, html_content: "{{studio_name}}: {{menu}} Msg&data rates may apply. Reply HELP for help, STOP to opt out." },

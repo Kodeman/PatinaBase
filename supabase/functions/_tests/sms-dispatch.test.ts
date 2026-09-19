@@ -383,13 +383,21 @@ function inviteWorld(codes: string[] = ["42", "43", "44"]) {
       status: "active",
     }],
     // The record says `pending`: the studio asked, the recipient has not
-    // answered. That is the one door the invite may use (contract S2).
+    // answered. That is the one door the invite may use (contract S2). It
+    // carries its own evidence — source and recorded_by, which
+    // record_channel_consent stamps on every pending write (00622:160-167) —
+    // because that is what the invite gate reads (00646, contract P1); the
+    // seat's frozen sms_consent_* columns beside it decide nothing.
     studio_channel_consent: [{
       organization_id: "org-alpha",
       channel_kind: "sms",
       channel_value: "+15551230001",
       status: "pending",
+      source: "verbal",
+      evidence: "Said yes at the kickoff walkthrough",
       recorded_at: "2026-07-08T17:00:00Z",
+      disclosure_version: "field-sms-v1",
+      recorded_by: "u-designer",
     }],
     project_parties: [{
       id: "p1",

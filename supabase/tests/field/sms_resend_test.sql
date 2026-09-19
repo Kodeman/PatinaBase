@@ -47,7 +47,20 @@ INSERT INTO project_parties(id,project_id,party_kind,display_name,phone) VALUES
  ('64000000-0000-4000-8000-0000000000b6','64000000-0000-4000-8000-000000000021','sub','SQ11 Foreign','+15556440006'),
  ('64000000-0000-4000-8000-0000000000b7','64000000-0000-4000-8000-000000000020','sub','SQ11 Unreachable',NULL),
  ('64000000-0000-4000-8000-0000000000b8','64000000-0000-4000-8000-000000000020','sub','SQ11 Answered','+15556440008'),
- ('64000000-0000-4000-8000-0000000000b9','64000000-0000-4000-8000-000000000020','sub','SQ11 Asked twice','+15556440009');
+ ('64000000-0000-4000-8000-0000000000b9','64000000-0000-4000-8000-000000000020','sub','SQ11 Asked twice','+15556440009'),
+ -- 00646 (SQ-92 F2/F3): c0 corrects its number and corrects it BACK; c1 is
+ -- the same shape with nothing withdrawn, so the void clause is shown to be
+ -- what refuses rather than some other gate, and afterwards c1 carries F3's
+ -- direct writes. c2 is F3's resend, which must SUCCEED with extras stripped.
+ ('64000000-0000-4000-8000-0000000000c0','64000000-0000-4000-8000-000000000020','sub','SQ11 Reverted','+15556440010'),
+ ('64000000-0000-4000-8000-0000000000c1','64000000-0000-4000-8000-000000000020','sub','SQ11 Untouched','+15556440011'),
+ ('64000000-0000-4000-8000-0000000000c2','64000000-0000-4000-8000-000000000020','sub','SQ11 Extra keys','+15556440012');
+
+-- The handset threads the inbound `YES NN` arrives on (00639's endpoint check
+-- reads the conversation's own pair, not the reply's).
+INSERT INTO sms_conversations(id,twilio_number,phone_e164) VALUES
+ ('64000000-0000-4000-8000-0000000000e0','+15556449999','+15556440010'),
+ ('64000000-0000-4000-8000-0000000000e1','+15556449999','+15556440011');
 
 -- The record is the only grant (00594/00622). Every seat below is mid-double-
 -- opt-in (`pending`) except b5, which already said yes.
@@ -63,6 +76,11 @@ VALUES
  ('64000000-0000-4000-8000-000000000010','sms','+15556440005','granted','verbal','Said yes on the phone','field-sms-v1','64000000-0000-4000-8000-000000000001',now()-interval '30 hours'),
  ('64000000-0000-4000-8000-000000000010','sms','+15556440008','pending','verbal','Said yes on the phone','field-sms-v1','64000000-0000-4000-8000-000000000001',now()-interval '30 hours'),
  ('64000000-0000-4000-8000-000000000010','sms','+15556440009','pending','verbal','Said yes on the phone','field-sms-v1','64000000-0000-4000-8000-000000000001',now()-interval '40 hours'),
+ ('64000000-0000-4000-8000-000000000010','sms','+15556440010','pending','verbal','Said yes on the phone','field-sms-v1','64000000-0000-4000-8000-000000000001',now()-interval '30 hours'),
+ -- the number b10 is briefly corrected TO, so the correction is a real edit
+ ('64000000-0000-4000-8000-000000000010','sms','+15556449010','pending','verbal','Said yes on the phone','field-sms-v1','64000000-0000-4000-8000-000000000001',now()-interval '30 hours'),
+ ('64000000-0000-4000-8000-000000000010','sms','+15556440011','pending','verbal','Said yes on the phone','field-sms-v1','64000000-0000-4000-8000-000000000001',now()-interval '30 hours'),
+ ('64000000-0000-4000-8000-000000000010','sms','+15556440012','pending','verbal','Said yes on the phone','field-sms-v1','64000000-0000-4000-8000-000000000001',now()-interval '30 hours'),
  ('64000000-0000-4000-8000-000000000011','sms','+15556440006','pending','verbal','Said yes on the phone','field-sms-v1','64000000-0000-4000-8000-000000000002',now()-interval '30 hours');
 
 -- ─── helpers ───────────────────────────────────────────────────────────────
@@ -437,6 +455,181 @@ DO $$ BEGIN
                   OR sms_consent_recorded_by IS NOT NULL
                   OR sms_consent_disclosure_version IS NOT NULL))=0,
     'H: no consent evidence reached a seat row';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- I · Correct the phone, correct it BACK — the withdrawn challenge is dead
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00646 (SQ-92 F2, probe2b-void-revert.log). A designer fat-fingers the seat's
+-- number and undoes it a second later. 00644's trigger withdrew the open
+-- challenge on the first edit, correctly, and voided_at is write-once, so the
+-- second edit does NOT bring the question back — but the recipient's handset
+-- still holds the original text with the original `Ref NN` printed in it, and
+-- the seat's number is once again the one that challenge was sent to.
+--
+-- Before 00646, `YES 18` from that handset resolved the withdrawn row and
+-- GRANTED consent on the record: a studio's withdrawn question answered
+-- itself. Both doors now refuse it — the resolver returns nothing, and the
+-- grant function, which is callable in its own right, answers `closed`.
+DO $$
+DECLARE
+  v_challenge uuid; v_message uuid; v_result jsonb; v_record jsonb;
+BEGIN
+  v_challenge := pg_temp.challenge('64000000-0000-4000-8000-0000000000c0','+15556440010',
+    interval '30 hours','18');
+
+  UPDATE public.project_parties SET phone='+15556449010'
+   WHERE id='64000000-0000-4000-8000-0000000000c0';
+  ASSERT (SELECT voided_at IS NOT NULL AND void_reason='phone_corrected'
+            FROM public.sms_prompts WHERE id=v_challenge),
+    'I: the correction withdrew the open challenge';
+
+  UPDATE public.project_parties SET phone='+15556440010'
+   WHERE id='64000000-0000-4000-8000-0000000000c0';
+  ASSERT (SELECT voided_at IS NOT NULL AND answered_at IS NULL
+            FROM public.sms_prompts WHERE id=v_challenge),
+    'I: reverting the number does not un-ask the withdrawn question';
+  ASSERT (SELECT normalize_channel_value('sms',phone)='+15556440010'
+            FROM public.project_parties WHERE id='64000000-0000-4000-8000-0000000000c0'),
+    'I: …and the seat is back on the number that challenge was sent to';
+
+  -- The inbound rail's own door: `Ref 18` for this handset resolves to nothing.
+  ASSERT (SELECT count(*) FROM public.sms_resolve_prompt(
+            '+15556449999','+15556440010','18'))=0,
+    'I: a withdrawn challenge is not resolvable by its printed code';
+  -- …and the code is not merely shadowed by a newer row: it is the only one.
+  ASSERT (SELECT count(*) FROM public.sms_prompts
+           WHERE party_id='64000000-0000-4000-8000-0000000000c0')=1,
+    'I: there is exactly one challenge, and it is the withdrawn one';
+
+  -- The grant door, called directly the way sms-inbound calls it.
+  SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.channel_value),'[]') INTO v_record
+    FROM public.studio_channel_consent t;
+  v_message := gen_random_uuid();
+  INSERT INTO public.sms_messages(id,conversation_id,direction,body,twilio_sid)
+  VALUES (v_message,'64000000-0000-4000-8000-0000000000e0','inbound','YES 18',
+          'SM'||replace(v_message::text,'-',''));
+  v_result := public.sms_grant_optin_prompt(v_challenge,'+15556449999','+15556440010',v_message);
+  ASSERT v_result->>'status'='closed',
+    'I: a withdrawn challenge cannot grant, got '||COALESCE(v_result::text,'<null>');
+  ASSERT (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.channel_value),'[]')=v_record
+            FROM public.studio_channel_consent t),
+    'I: and the consent record is byte-for-byte what it was';
+  ASSERT (SELECT answered_at IS NULL AND consumed_sid IS NULL AND consumption_result IS NULL
+            FROM public.sms_prompts WHERE id=v_challenge),
+    'I: the withdrawn row takes no receipt either';
+
+  -- NEGATIVE CONTROL, in the same transaction: the identical reply on an
+  -- identical challenge that was never withdrawn DOES grant. So what refused
+  -- above is voided_at and not the endpoint check, the code, or the record.
+  v_challenge := pg_temp.challenge('64000000-0000-4000-8000-0000000000c1','+15556440011',
+    interval '30 hours','19');
+  v_message := gen_random_uuid();
+  INSERT INTO public.sms_messages(id,conversation_id,direction,body,twilio_sid)
+  VALUES (v_message,'64000000-0000-4000-8000-0000000000e1','inbound','YES 19',
+          'SM'||replace(v_message::text,'-',''));
+  ASSERT (SELECT count(*) FROM public.sms_resolve_prompt(
+            '+15556449999','+15556440011','19'))=1,
+    'I: an open challenge still resolves by its code';
+  v_result := public.sms_grant_optin_prompt(v_challenge,'+15556449999','+15556440011',v_message);
+  ASSERT v_result->>'status'='granted',
+    'I: the same reply on an OPEN challenge grants, got '||COALESCE(v_result::text,'<null>');
+  ASSERT (SELECT status='granted' FROM public.studio_channel_consent
+           WHERE organization_id='64000000-0000-4000-8000-000000000010'
+             AND channel_kind='sms' AND channel_value='+15556440011'),
+    'I: on the record, which is the only grant';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- J · resend_evidence holds evidence, not whatever the caller sent
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00646 (SQ-92 F3). 00644 merged p_evidence wholesale, so a client could park
+-- arbitrary JSON on a consent-evidence row that no designer can edit and no
+-- audit expects. Two halves: the RPC STRIPS (a caller sending an extra still
+-- gets its resend — refusing would be punishing the wrong person), and the
+-- column's CHECK binds every other writer, service role included.
+DO $$
+DECLARE v_challenge uuid; v_result jsonb; v_keys text[]; v_failed boolean;
+BEGIN
+  v_challenge := pg_temp.challenge('64000000-0000-4000-8000-0000000000c2','+15556440012',
+    interval '30 hours','21');
+
+  PERFORM pg_temp.assume_user_role('64000000-0000-4000-8000-000000000001');
+  v_result := public.resend_party_invite('64000000-0000-4000-8000-0000000000c2',
+    pg_temp.evidence() || jsonb_build_object(
+      'recorded_by','64000000-0000-4000-8000-000000000002',  -- forged: overwritten
+      'recorded_at','1999-01-01T00:00:00Z',                  -- forged: overwritten
+      'internal_note','free text nobody asked for',
+      'tracking',jsonb_build_object('campaign','q4'),
+      'admin',true));
+  PERFORM pg_temp.reset_role();
+  ASSERT v_result->>'status'='queued', 'J: an extra key does not cost the designer the resend';
+
+  SELECT array_agg(k ORDER BY k) INTO v_keys
+    FROM public.sms_prompts p, jsonb_object_keys(p.resend_evidence) k
+   WHERE p.id=v_challenge;
+  ASSERT v_keys = ARRAY['disclosure_version','note','recorded_at','recorded_by','source'],
+    'J: the stored object holds ONLY the allowed keys, got '||COALESCE(v_keys::text,'<null>');
+  ASSERT (SELECT (resend_evidence->>'recorded_by')::uuid='64000000-0000-4000-8000-000000000001'
+            AND (resend_evidence->>'recorded_at')::timestamptz > now()-interval '1 minute'
+            AND resend_evidence->>'source'='verbal'
+            AND resend_evidence->>'note'='They said yes on the phone'
+            FROM public.sms_prompts WHERE id=v_challenge),
+    'J: the recorder and the moment are the server''s, not the caller''s';
+
+  -- The CHECK, for every writer that is not the RPC. The resend stamp on this
+  -- row is already spent, so a fresh challenge carries the direct write.
+  v_challenge := pg_temp.challenge('64000000-0000-4000-8000-0000000000c1','+15556440011',
+    interval '30 hours','22');
+  v_failed := false;
+  BEGIN
+    UPDATE public.sms_prompts
+       SET resent_at=now(), resent_by='64000000-0000-4000-8000-000000000001',
+           resend_evidence=jsonb_build_object('source','verbal','disclosure_version','v1',
+             'note','n','recorded_by','64000000-0000-4000-8000-000000000001',
+             'recorded_at',now(),'admin',true)
+     WHERE id=v_challenge;
+  EXCEPTION WHEN check_violation THEN v_failed := true;
+  END;
+  ASSERT v_failed, 'J: an unknown key on resend_evidence is refused by the column';
+
+  -- The same shape WITHOUT the stray key is accepted, so the constraint is
+  -- the key list and not the write.
+  UPDATE public.sms_prompts
+     SET resent_at=now(), resent_by='64000000-0000-4000-8000-000000000001',
+         resend_evidence=jsonb_build_object('source','verbal','disclosure_version','v1',
+           'note','n','recorded_by','64000000-0000-4000-8000-000000000001',
+           'recorded_at',now())
+   WHERE id=v_challenge;
+  ASSERT (SELECT resend_evidence ? 'source' FROM public.sms_prompts WHERE id=v_challenge),
+    'J: …and the allowed five are still writable';
+
+  -- invite_evidence carries the same shape, so it carries the same rule.
+  v_failed := false;
+  BEGIN
+    INSERT INTO public.sms_prompts
+      (project_id,party_id,sender_number,recipient_phone,kind,subject_id,version,
+       short_code,expires_at,invite_evidence)
+    VALUES ('64000000-0000-4000-8000-000000000020','64000000-0000-4000-8000-0000000000c1',
+      '+15556449999','+15556440011','optin',NULL,99,'23',now()+interval '7 days',
+      jsonb_build_object('source','verbal','admin',true));
+  EXCEPTION WHEN check_violation THEN v_failed := true;
+  END;
+  ASSERT v_failed, 'J: and so does the evidence the FIRST ask stood on';
+
+  -- A non-object is not evidence either: the CASE in the CHECK answers false
+  -- rather than raising a type error inside the constraint.
+  v_failed := false;
+  BEGIN
+    INSERT INTO public.sms_prompts
+      (project_id,party_id,sender_number,recipient_phone,kind,subject_id,version,
+       short_code,expires_at,invite_evidence)
+    VALUES ('64000000-0000-4000-8000-000000000020','64000000-0000-4000-8000-0000000000c1',
+      '+15556449999','+15556440011','optin',NULL,98,'24',now()+interval '7 days',
+      '"verbal"'::jsonb);
+  EXCEPTION WHEN check_violation THEN v_failed := true;
+  END;
+  ASSERT v_failed, 'J: a JSON scalar is refused, not raised on';
 END $$;
 
 ROLLBACK;

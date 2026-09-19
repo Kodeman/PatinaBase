@@ -11,8 +11,11 @@
 //     PR-x's fail-closed second check is retired (R-AY, final-run MAJOR-1/2),
 //   · enforces that gate (the record must say granted — EXCEPT sms_optin_invite,
 //     the double-opt-in invite, which is the sole send allowed while the record
-//     reads 'pending', and which still proves its recorded evidence off the
-//     seat; a recorded refusal is NEVER texted),
+//     reads 'pending', and which proves its recorded evidence off THAT SAME
+//     RECORD (00646, SQ-92 F1): the seat's frozen columns were the evidence
+//     read until then, and 00594's freeze trigger means no writer can fill
+//     them, so the gate refused every invite it was ever asked;
+//     a recorded refusal is NEVER texted),
 //   · renders a templateKey against email_templates ({{var}} via interpolate),
 //     enriching studio_name / party_first_name / a fresh field link on demand,
 //   · honors quiet hours (8am–8pm FIELD_TZ) — off-hours sends are stored as
@@ -584,6 +587,14 @@ export interface ChannelConsentDecision {
   recordPresent: boolean;
   /** The answering record's evidence stamp, for the invite's send claim. */
   recordGeneration: string | null;
+  /**
+   * The answering record's own consent evidence — HOW they said yes and WHO
+   * wrote it down (00594's `source` / `recorded_by`). The invite gate is the
+   * one caller (00646, SQ-92 F1). Both are absent on every branch that no
+   * record answered, which is exactly the shape that refuses.
+   */
+  recordSource?: string | null;
+  recordedBy?: string | null;
 }
 
 /**
@@ -660,6 +671,10 @@ export async function channelConsentVerdict(
  * per generation of consent: the fold -> reconsent -> START recovery path
  * writes a fresh stamp and earns a fresh invite, while a retry of the same
  * dispatch collides with the claim already held (contract S5).
+ *
+ * `recordSource` / `recordedBy` are the same record's evidence half, carried
+ * here so the invite gate below asks ONE query rather than opening a second
+ * one of its own (00646, SQ-92 F1).
  */
 export async function channelConsentDecision(
   supabase: SupabaseClient,
@@ -683,7 +698,9 @@ export async function channelConsentDecision(
   if (org) {
     const { data: record, error: recordError } = await supabase
       .from("studio_channel_consent")
-      .select("status, refusal_unanswered, recorded_at, updated_at")
+      .select(
+        "status, refusal_unanswered, recorded_at, updated_at, source, recorded_by",
+      )
       .eq("organization_id", org)
       .eq("channel_kind", "sms")
       .eq("channel_value", phone)
@@ -706,26 +723,32 @@ export async function channelConsentDecision(
       refusal_unanswered?: boolean | null;
       recorded_at?: string | null;
       updated_at?: string | null;
+      source?: string | null;
+      recorded_by?: string | null;
     };
     const generation = row.recorded_at ?? row.updated_at ?? null;
+    // Everything the callers need about the record that ANSWERED, stated once.
+    const answered = {
+      recordPresent: true as const,
+      organizationId: org,
+      recordGeneration: generation,
+      recordSource: row.source ?? null,
+      recordedBy: row.recorded_by ?? null,
+    };
     // A refusal the recipient has not answered still stands, whatever the
     // status now says (r6 M6-3), so it is read before the status is.
     if (row.refusal_unanswered === true) {
-      return { verdict: "refuse", recordPresent: true, organizationId: org, recordGeneration: generation };
+      return { verdict: "refuse", ...answered };
     }
     if (row.status === "granted") {
-      return { verdict: "allow", recordPresent: true, organizationId: org, recordGeneration: generation };
+      return { verdict: "allow", ...answered };
     }
     // `pending` is the invite in flight — sendPartySms's invite gate owns it.
     if (row.status === "pending") {
-      return {
-        verdict: "unknown",
-        recordPresent: true,
-        organizationId: org, recordGeneration: generation,
-      };
+      return { verdict: "unknown", ...answered };
     }
     // `opted_out`, and `not_asked` recorded by the fold: both refuse.
-    return { verdict: "refuse", recordPresent: true, organizationId: org, recordGeneration: generation };
+    return { verdict: "refuse", ...answered };
   }
 
   // No studio resolves at all — nothing to scope to, so the reduction stays
@@ -1564,19 +1587,29 @@ async function sendPartySmsCore(
     if (!decision.recordPresent) return refused("not_consented");
   }
   if (isInvite) {
-    if (!input.partyId) return refused("consent_evidence_required");
-    const { data: proof } = await supabase
-      .from("project_parties")
-      .select(
-        "sms_consent_source, sms_consent_evidence, sms_consent_recorded_at, sms_consent_disclosure_version",
-      )
-      .eq("id", input.partyId)
-      .maybeSingle();
-    if (
-      !proof?.sms_consent_source || !proof?.sms_consent_recorded_at ||
-      !proof?.sms_consent_disclosure_version ||
-      !String(proof.sms_consent_evidence ?? "").trim()
-    ) {
+    // THE EVIDENCE IS THE RECORD'S (00646, contract P1, SQ-92 F1). The invite
+    // is the one send that goes to a number the studio has not been told yes
+    // by, so it must stand on a written act: HOW they said yes (`source`) and
+    // WHO wrote it down (`recorded_by`), both on the studio_channel_consent
+    // row that record_channel_invite / record_channel_consent stamp.
+    //
+    // This read was `project_parties.sms_consent_source/evidence/
+    // recorded_at/disclosure_version` until now — the four columns 00594's
+    // refuse_legacy_consent_write_trg FREEZES. No writer on any surface can
+    // fill them (probe: SQ-92 probe5-gate2-inputs-unwritable.log, which gets
+    // `consent_legacy_column_frozen` on the attempt), so the gate refused
+    // every invite it was ever asked, and Phase 1 would have spent
+    // resend_party_invite's once-per-challenge allowance on a send this line
+    // then refused. No second query is opened for it: the record was already
+    // read above, by the gate that decided this send, so the two halves of one
+    // record cannot be read at two different moments.
+    //
+    // ONLY those two. `evidence` and `disclosure_version` are required by
+    // record_channel_consent's own door for every `pending`/`granted` write
+    // (00622:160-167), so re-asking them here would only re-state that door's
+    // rule; what this gate adds is that an unattributed record — one no member
+    // signed — cannot open the invite.
+    if (!decision.recordSource || !decision.recordedBy) {
       return refused("consent_evidence_required");
     }
   }
@@ -2201,7 +2234,7 @@ export async function flushDeferredMessages(
       validatedSelection = checked.value;
     }
 
-    // Re-check consent — it may have changed since the row was deferred.
+    // ── GATE 2: consent, re-checked — it may have changed since the defer ──
     // The studio's own record for this number, resolved through the deferred
     // row's party, exactly as sendPartySms does. The seat is read for the
     // PROJECT only: its consent column was this path's second check until this
@@ -2250,7 +2283,10 @@ export async function flushDeferredMessages(
       continue;
     }
 
-    // ── GATE 3: the studio's own "never text" rule ──────────────────────────
+    // ── …and the studio's own "never text" rule, inside GATE 2 ─────────────
+    // Numbered as the send path numbers it (SQ-97 LOW-1): the contact rule is
+    // the second half of the consent gate there, not a gate of its own, and
+    // the two paths must read as one order.
     // Written down AFTER the row was deferred, it still binds the send that
     // actually happens: a rule the studio entered last night is not answered by
     // a message composed the evening before it (SQ-37 R3).
@@ -2268,7 +2304,7 @@ export async function flushDeferredMessages(
 
     const recipe = row.recipe ?? null;
 
-    // ── GATE 4: the phase gate, re-asked at the moment of dispatch ──────────
+    // ── GATE 3: the phase gate, re-asked at the moment of dispatch ──────────
     // FIELD_LINE_PHASE is a SERVER gate (contract S7) and the server that
     // flushes is not the server that deferred. Turning the phase back down is
     // how this rail is turned off, so a row deferred while phase 1 was live
@@ -2295,7 +2331,7 @@ export async function flushDeferredMessages(
     const paced = !!cadenceClass && !!row.party_id && !!cadenceProject &&
       !!row.conversation_id;
 
-    // ── The dead-end gate, re-asked at the moment of dispatch (GATE 4) ──────
+    // ── GATE 4: the dead-end gate, re-asked at the moment of dispatch ──────
     // The same reason the phase gate above is re-asked: the server that flushes
     // is not the server that deferred, and what was true last night is not what
     // binds this morning's send. A row folded on day D goes out on D+1 — and by
