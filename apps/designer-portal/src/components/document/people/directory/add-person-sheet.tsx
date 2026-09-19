@@ -55,6 +55,7 @@ import {
   useUpdateStudioContact,
   peopleKeys,
   peopleSeatKeys,
+  FIELD_SMS_DISCLOSURE_VERSION,
   ALL_AUTHORITY_SCOPES,
   AUTHORITY_SCOPE_LABELS,
   isAdminOnlyAuthorityScope,
@@ -426,6 +427,9 @@ export function AddPersonSheet({
   const { value: letterOn, isLoading: letterLoading } = useFeatureFlag(
     "client-invite-letter",
   );
+  // Phase 1's trades rail (P1-01). Fail-closed: off, this sheet is exactly the
+  // sheet Phase 0 shipped, and nothing new is recorded or sent.
+  const { value: tradesOn } = useFeatureFlag("field-line-trades");
   const { data: studioIdentity } = useStudioIdentity({
     designerId: user?.id ?? null,
   });
@@ -1110,6 +1114,7 @@ export function AddPersonSheet({
           textUpdates,
           smsConsentSource: consentSource || undefined,
           smsConsentEvidence: consentEvidence,
+          smsConsentDisclosureVersion: FIELD_SMS_DISCLOSURE_VERSION,
         });
         chain.party = party;
         chain.cardId = party.studio_contact_id ?? null;
@@ -2007,6 +2012,29 @@ export function AddPersonSheet({
             </span>
           </div>
 
+          {/* THE QUICK CAPTURE (Phase 1, P1-01). Most trades say yes on the
+              phone while the designer is standing on the job, and the two
+              fields below are what that yes has to become before anything can
+              be sent. One press writes them: source verbal, what happened, and
+              the day. The recorder is stamped by the write itself (auth.uid()
+              inside record_channel_invite), and the disclosure version travels
+              with it, so neither can be typed wrong here. */}
+          {tradesOn && textUpdates && (
+            <button
+              type="button"
+              data-testid="add-party-said-yes-on-the-phone"
+              onClick={() => {
+                setConsentSource("verbal");
+                setConsentEvidence(
+                  `Said yes on the phone, ${new Date().toLocaleDateString()}.`,
+                );
+              }}
+              className="mt-3 rounded-[7px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[0.74rem] text-[var(--color-mocha)] hover:border-[var(--color-clay)]"
+            >
+              They said yes on the phone
+            </button>
+          )}
+
           {textUpdates && (
             <div className="mt-4 rounded border border-[var(--color-pearl)] bg-[var(--color-linen)]/45 p-3">
               <label className={FIELD_LABEL} htmlFor="add-party-consent-source">
@@ -2065,9 +2093,14 @@ export function AddPersonSheet({
                   beside it all print as `Invited`. Claiming consent here while
                   three faces read Invited for the same number is a face/ledger
                   contradiction on a consent surface. */}
+              {/* Phase 1 answers CR-4's sentence: the record-side dispatch the
+                  comment above was waiting on now exists, so with the rail on
+                  the question really does go out and the true sentence is the
+                  other one. Off, nothing has changed. */}
               <p className="mt-2 text-[0.7rem] leading-relaxed text-[var(--color-mocha)]">
-                {partyName.trim() || "They"} is invited, not consenting. Patina
-                has not sent them anything yet.
+                {tradesOn
+                  ? `${partyName.trim() || "They"} is invited, not consenting. They get one text asking them to reply YES.`
+                  : `${partyName.trim() || "They"} is invited, not consenting. Patina has not sent them anything yet.`}
               </p>
             </div>
           )}

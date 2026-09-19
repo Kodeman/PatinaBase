@@ -11,6 +11,7 @@ import { peopleKeys, peopleSeatKeys, usePeopleSeats } from './use-people';
 import { clientHouseholdKeys } from './use-households';
 import { asWrittenConsentError, consentKeys } from './use-consent';
 import { invalidateProjectWorkflow } from './use-project-workflow';
+import { FIELD_SMS_DISCLOSURE_VERSION, queuePartyInvite } from './use-party-sms';
 
 /**
  * r15 MAJOR (code) — THE HOUSEHOLD BAND SITS OVER THE SEATS THIS FILE WRITES.
@@ -444,6 +445,9 @@ export interface AddProjectPartyInput {
   textUpdates?: boolean;
   smsConsentSource?: 'verbal' | 'written' | 'web_form' | 'other';
   smsConsentEvidence?: string;
+  /** The disclosure the person was read, recorded verbatim on the record.
+   *  Defaults to FIELD_SMS_DISCLOSURE_VERSION. */
+  smsConsentDisclosureVersion?: string;
   /** Lineage into the shared studio rolodex (00417/00418) — set when the row
    *  is added FROM a rolodex pick (Call Sheet Wave 3's rolodex-picker). Omit
    *  or null for an inline add with no rolodex link. Note that omitting it
@@ -537,7 +541,8 @@ export function useAddProjectParty() {
           p_channel_value: consentPhone as string,
           p_source: consentSource,
           p_evidence: consentEvidence,
-          p_disclosure_version: 'field-sms-v1',
+          p_disclosure_version:
+            input.smsConsentDisclosureVersion?.trim() || FIELD_SMS_DISCLOSURE_VERSION,
           p_origin_project_id: input.projectId,
         });
         if (consentError) throw asWrittenConsentRpcError(consentError);
@@ -573,6 +578,19 @@ export function useAddProjectParty() {
         .select()
         .single();
       if (error) throw error;
+
+      // THE INVITE THAT WAS OWED (Phase 1, P1-01). The ⚠ above is answered: the
+      // seat cannot fire the double opt-in any more, so the act that recorded
+      // the consent queues it, declaring automation_phase 1 — the server phase
+      // gate is what decides whether it leaves. Queued AFTER the seat exists,
+      // because the dispatch is about a party; a transport failure is swallowed
+      // inside queuePartyInvite rather than losing the recorded consent.
+      if (wantsText) {
+        await queuePartyInvite(supabase, {
+          partyId: (data as ProjectParty).id,
+          projectId: input.projectId,
+        });
+      }
       return data as ProjectParty;
     },
     onSuccess: (data) => {
@@ -784,6 +802,10 @@ export interface RecordPartySmsConsentInput {
   phone: string | null | undefined;
   smsConsentSource: 'verbal' | 'written' | 'web_form' | 'other';
   smsConsentEvidence: string;
+  /** The disclosure the person was read, recorded verbatim on the record.
+   *  Defaults to FIELD_SMS_DISCLOSURE_VERSION — the portal shows the same
+   *  string it stores, so the two cannot drift. */
+  smsConsentDisclosureVersion?: string;
 }
 
 /**
@@ -838,10 +860,19 @@ export function useRecordPartySmsConsent() {
         p_channel_value: phone,
         p_source: input.smsConsentSource,
         p_evidence: consentEvidence,
-        p_disclosure_version: 'field-sms-v1',
+        p_disclosure_version:
+          input.smsConsentDisclosureVersion?.trim() || FIELD_SMS_DISCLOSURE_VERSION,
         p_origin_project_id: input.projectId,
       });
       if (error) throw asWrittenConsentRpcError(error);
+
+      // Phase 1 (P1-01): the record is written, so the question can go out. The
+      // seat-row trigger that used to do this died with 00594's freeze; the
+      // send declares automation_phase 1 and the server gate decides.
+      await queuePartyInvite(supabase, {
+        partyId: input.partyId,
+        projectId: input.projectId,
+      });
       return data as unknown;
     },
     onSuccess: (_data, input) => {
