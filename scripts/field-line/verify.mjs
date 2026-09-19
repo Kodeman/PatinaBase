@@ -13,6 +13,10 @@ const sqlOracles = [
   "supabase/tests/field/field_links_test.sql",
   "supabase/tests/field/sms_resend_test.sql",
   "supabase/tests/field/sms_prompt_consumption_test.sql",
+  // The homeowner rail (00650-00652): the capability that is her identity, and
+  // the door her reply goes through. Both are transaction-wrapped + ROLLBACK.
+  "supabase/tests/field/client_phone_identity_test.sql",
+  "supabase/tests/field/apply_client_effect_test.sql",
 ];
 
 function usage(reason) {
@@ -63,7 +67,9 @@ if (parsed.error) {
   process.exitCode = 2;
 } else {
   const deno = spawnSync("deno", [
-    "test", "--no-check", "-A", "--config", "supabase/functions/deno.json", gateFile,
+    // --no-lock: this repo checks in no Deno lock, and the run would otherwise
+    // drop a deno.lock in the repo root every time the gate is asked.
+    "test", "--no-check", "-A", "--no-lock", "--config", "supabase/functions/deno.json", gateFile,
   ], { cwd: root, encoding: "utf8", env: process.env });
   const output = `${deno.stdout ?? ""}\n${deno.stderr ?? ""}`;
   const assertions = [];
@@ -130,5 +136,10 @@ function casePhase(caseId) {
     ["dead-end-handoff", 1], ["site-card-day-of", 1],
     // The consent gate the resend dispatches through (00646).
     ["optin-resend-evidence", 1],
+    // The homeowner's rail (00650-00652).
+    ["client-phone-only-capability", 2], ["client-open-is-not-accept", 2],
+    ["client-reply-authority", 2], ["client-payment-boundary", 2],
+    ["client-version-race", 2], ["client-one-ask-a-day", 2],
+    ["client-consent-boundary", 2], ["client-campaign-approval", 2],
   ]).get(caseId) ?? Number.POSITIVE_INFINITY;
 }

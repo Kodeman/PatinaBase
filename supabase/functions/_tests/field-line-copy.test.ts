@@ -288,3 +288,220 @@ Deno.test("each template declares exactly the parameters its body uses", () => {
     );
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The homeowner's copy (migration 00652, US-3 P24)
+// ═══════════════════════════════════════════════════════════════════════════
+// Same four readers as the trade copy, and a fifth: a HOMEOWNER, who never
+// asked for a project-management tool and does not know what a gate, a task or
+// a workspace is. She gets three texts in her whole relationship with the rail
+// — a letter, a list of picks, a delivery window — so each one has to read like
+// a sentence her designer would say out loud.
+//
+// 00652 does not retype the closing line: it READS the shipped one back out of
+// sms_selection and refuses to apply if it cannot find it. So the bodies below
+// are measured against 00641's constant, which is the same line, and the
+// read-back guard itself is asserted rather than assumed.
+
+const CLIENT_MIGRATION = new URL(
+  "../../migrations/00652_field_line_client_templates.sql",
+  import.meta.url,
+);
+const CLIENT_START = "-- <<< FIELD LINE CLIENT COPY BLOCK";
+const CLIENT_END = "-- >>> FIELD LINE CLIENT COPY BLOCK";
+
+/** The homeowner's capability URL, measured the way the trade link is:
+ *  CLIENT_PORTAL_URL + "/auth/invite/" + the 64-hex token create_client_link
+ *  mints (00650:290). 104 septets of the 306 before a word of copy — six more
+ *  than the trade link, which is why it is measured per slug instead of moving
+ *  the global budget: sms_daily_digest is EXACTLY 306 at its own maxima. */
+const CLIENT_LINK = `https://client.patina.cloud/auth/invite/${"a".repeat(64)}`;
+
+const CLIENT_MAX_PARAM: Record<string, string> = {
+  ...MAX_PARAM,
+  link: CLIENT_LINK,
+  studio_name: "S".repeat(24),
+  project_name: "P".repeat(24),
+  // field-daily caps a batch at five picks; two digits is room to spare.
+  picks: "99 picks",
+  room: "R".repeat(24),
+  item_title: "I".repeat(24),
+  option_a: "A".repeat(14),
+  option_b: "B".repeat(14),
+  ref: "999",
+};
+
+const CLIENT_SLUGS = [
+  "sms_client_first_letter",
+  "sms_selection_ready",
+  "sms_window_pick",
+];
+
+/**
+ * THE WORDS A HOMEOWNER IS NEVER SENT. Two kinds: software vocabulary she has
+ * no use for (dashboard, workspace, platform, portal, magic link, AI), and the
+ * rail's own internal nouns and verbs — a "gate" is a thing the code does, a
+ * "task" belongs to the crew, "accept" and "collaborate" and "welcome" are what
+ * a SaaS onboarding says to a user. She is not a user; she is a person whose
+ * living room is being furnished.
+ */
+const HOMEOWNER_BLACKLIST =
+  /\b(gate|gates|task|tasks|dashboard|welcome|accept|accepts|accepted|collaborate|collaboration|workspace|platform|portal|account|accounts|magic[- ]?link|invite|invitation|onboard|onboarding|sign[- ]?in|log[- ]?in)\b/i;
+
+const clientSql = await Deno.readTextFile(CLIENT_MIGRATION);
+const clientBlock = clientSql.slice(
+  clientSql.indexOf(CLIENT_START) + CLIENT_START.length,
+  clientSql.indexOf(CLIENT_END),
+);
+assert(
+  clientBlock.length > 0,
+  "the client copy block markers must bracket the templates",
+);
+
+const CLIENT_TEMPLATES: Template[] = [
+  ...clientBlock.matchAll(
+    /\(\s*'(sms_[a-z_]+)',\s*'((?:[^']|'')*)',\s*'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\s*\)/g,
+  ),
+].map((m) => ({
+  slug: m[1],
+  name: unquote(m[2]),
+  head: unquote(m[3]),
+  vars: JSON.parse(unquote(m[4])) as string[],
+  body: `${unquote(m[3])} ${CLOSING}`,
+}));
+
+function renderClient(body: string): string {
+  return body.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (whole, key: string) => {
+    const value = CLIENT_MAX_PARAM[key];
+    assert(value !== undefined, `no documented maximum for {{${key}}} (${whole})`);
+    return value;
+  });
+}
+
+Deno.test("the three client templates are the ones in 00652", () => {
+  assertEquals(CLIENT_TEMPLATES.map((t) => t.slug).sort(), [...CLIENT_SLUGS].sort());
+});
+
+Deno.test("00652 reads the shipped closing line back instead of retyping it", () => {
+  assert(
+    /FROM\s+public\.email_templates\s+WHERE\s+slug\s*=\s*'sms_selection'/
+      .test(clientSql),
+    "the closing line must come from the template that already carries it",
+  );
+  assert(
+    /RAISE EXCEPTION '00652: the canonical Field Line closing line/.test(clientSql),
+    "a migration that cannot read the closing line must refuse to apply",
+  );
+  for (const t of CLIENT_TEMPLATES) {
+    assert(
+      !t.head.includes(CLOSING) && !/rates may apply/i.test(t.head),
+      `${t.slug} must not carry its own copy of the closing line`,
+    );
+    assert(t.body.endsWith(CLOSING), `${t.slug} must end with the closing line`);
+  }
+});
+
+Deno.test("the studio's name comes first in every client body", () => {
+  for (const t of CLIENT_TEMPLATES) {
+    assert(
+      t.body.startsWith("{{studio_name}}"),
+      `${t.slug} opens with "${t.body.slice(0, 32)}…" — the studio comes first`,
+    );
+  }
+});
+
+Deno.test("no client body names Patina or asks her to join anything", () => {
+  for (const t of CLIENT_TEMPLATES) {
+    assertEquals(
+      /\bPatina\b/.test(t.body),
+      false,
+      `${t.slug} names Patina — her studio is the one writing to her`,
+    );
+    assertEquals(
+      /join/i.test(t.body),
+      false,
+      `${t.slug} asks her to join something`,
+    );
+  }
+});
+
+Deno.test("no client body uses the rail's own vocabulary", () => {
+  for (const t of CLIENT_TEMPLATES) {
+    const hit = t.body.match(HOMEOWNER_BLACKLIST);
+    assertEquals(hit, null, `${t.slug} says "${hit?.[0]}"`);
+    assertEquals(t.body.match(AI_WORD), null, `${t.slug} says "AI"`);
+    // Plain words, and the shortest that will do: no body may be a paragraph.
+    assertEquals(
+      /[;—]/.test(t.head),
+      false,
+      `${t.slug} is punctuated like a document, not a text`,
+    );
+  }
+});
+
+Deno.test("the client grammar is the one the reply parser reads", () => {
+  const letter = CLIENT_TEMPLATES.find((t) => t.slug === "sms_client_first_letter")!;
+  const picks = CLIENT_TEMPLATES.find((t) => t.slug === "sms_selection_ready")!;
+  const window = CLIENT_TEMPLATES.find((t) => t.slug === "sms_window_pick")!;
+  // The letter is a link and nothing else to answer: it asks for no reply, so it
+  // must not print a reference the parser would then have to resolve.
+  assert(letter.body.includes("{{link}}"), "the first letter carries the letter");
+  assertEquals(
+    /\{\{\s*ref\s*\}\}/.test(letter.body),
+    false,
+    "the first letter asks nothing, so it prints no reference",
+  );
+  // "YES NN" is exactly what pipeline.ts binds to approve_selection, and the
+  // link beside it is the same answer by hand.
+  assert(
+    picks.body.includes("Reply YES {{ref}}"),
+    `the picks text must print the S1 reply grammar: "${picks.body}"`,
+  );
+  assert(picks.body.includes("{{link}}"), "she can always open it instead");
+  // A, B or C, and the reference the three letters are answered with.
+  for (const letterOption of ["A", "B", "C"]) {
+    assert(
+      new RegExp(`\\b${letterOption}\\b`).test(window.body),
+      `the delivery card must offer ${letterOption}`,
+    );
+  }
+  assert(
+    window.body.includes("Ref {{ref}}"),
+    `the delivery card must show Ref NN: "${window.body}"`,
+  );
+  assert(
+    /neither/i.test(window.body),
+    "C must be named as what it is: neither of those works",
+  );
+});
+
+Deno.test("every client body is GSM-7 and fits two segments at maximum parameters", () => {
+  for (const t of CLIENT_TEMPLATES) {
+    const rendered = renderClient(t.body);
+    const { count, illegal } = septetsOf(rendered);
+    assertEquals(
+      illegal,
+      [],
+      `${t.slug} carries non-GSM-7 characters ${JSON.stringify(illegal)}`,
+    );
+    assert(
+      count <= TWO_SEGMENTS,
+      `${t.slug} is ${count} septets at maximum parameters (limit ${TWO_SEGMENTS}): "${rendered}"`,
+    );
+  }
+});
+
+Deno.test("each client template declares exactly the parameters its body uses", () => {
+  for (const t of CLIENT_TEMPLATES) {
+    const used = [
+      ...new Set(
+        [...t.body.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]),
+      ),
+    ].sort();
+    assertEquals(
+      [...t.vars].sort(),
+      used,
+      `${t.slug}: the variables column and the body disagree`,
+    );
+  }
+});

@@ -6,13 +6,18 @@ import {
   assertEquals,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
+  CLIENT_CAPABILITY_ACTIONS,
+  CLIENT_SMS_TEMPLATES,
   flushDeferredMessages,
+  isClientSmsTemplate,
   isQuietHours,
   localDayInTimezone,
   localMinutesInTimezone,
   resolveProjectOrg,
+  sendClientSms,
   sendPartySms,
 } from "./sms.ts";
+import { CLIENT_LINK_ACTIONS } from "../client-invite/lib.ts";
 import { createFakeSupabase } from "../_tests/fake-supabase.ts";
 
 function envOf(map: Record<string, string>) {
@@ -3338,5 +3343,442 @@ Deno.test("GATE 4: the flush re-asks the dead end — yesterday's fold never wal
     asked.filter((a) => a.rpc === "sms_claim_party_budget").length,
     2,
     "and a slot is spent only by the attempt that got past the gate",
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The homeowner's rail (US-3 P24)
+// ═══════════════════════════════════════════════════════════════════════════
+// Three gates no other send meets, asked in this order and all fail-closed:
+// phase 2, FIELD_LINE_CAMPAIGN_APPROVED=1, and her consent record. On top of
+// those she pays the same pace the trade pays, and her link is a client
+// capability rather than a /field/ token.
+
+/** The kickoff box, as record_channel_invite actually writes it (SQ-16 case 8):
+ *  status 'pending', with HOW she said yes and WHO wrote it down. */
+const KICKOFF_RECORD = {
+  organization_id: "org-alpha",
+  channel_kind: "sms",
+  channel_value: "+15551230001",
+  status: "pending",
+  source: "kickoff_checkbox",
+  evidence: "Kickoff consent box ticked in Patina, 19 September 2026.",
+  recorded_at: "2026-09-19T15:00:00Z",
+  recorded_by: "member-1",
+  disclosure_version: "field-sms-v1",
+};
+
+const CLIENT_TOKEN = "c".repeat(64);
+
+function clientSeat(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "cp1",
+    phone_e164: "+15551230001",
+    project_id: "proj1",
+    display_name: "Adaeze Okonkwo",
+    party_kind: "client",
+    ...overrides,
+  };
+}
+
+/** The homeowner's world: her seat, her letter, the three client templates. */
+function clientWorld(
+  opts: {
+    consent?: Record<string, unknown> | null;
+    mintFails?: boolean;
+    seat?: Record<string, unknown>;
+    extra?: Record<string, unknown[]>;
+  } = {},
+) {
+  const mints: Array<Record<string, unknown>> = [];
+  const asked: Array<{ rpc: string; args: Record<string, unknown> }> = [];
+  const consent = opts.consent === undefined ? KICKOFF_RECORD : opts.consent;
+  const fake = createFakeSupabase({
+    projects: [{
+      id: "proj1",
+      studio_id: "org-alpha",
+      designer_id: "u-designer",
+      name: "Okonkwo",
+    }],
+    organizations: [{ id: "org-alpha", name: "Field & Form", type: "design_studio" }],
+    organization_members: [{
+      organization_id: "org-alpha",
+      user_id: "u-designer",
+      status: "active",
+    }],
+    studio_channel_consent: consent ? [consent] : [],
+    project_parties: [clientSeat(opts.seat)],
+    client_invitations: [{
+      id: "inv-1",
+      project_id: "proj1",
+      phone: "+15551230001",
+      designer_client_id: "dc-1",
+      revoked_at: null,
+      superseded_by: null,
+      sent_at: "2026-09-19T15:00:00Z",
+    }],
+    email_templates: [
+      {
+        slug: "sms_client_first_letter",
+        is_active: true,
+        html_content:
+          "{{studio_name}} wrote you a letter about {{project_name}}. " +
+          "Read it here: {{link}} Msg&data rates may apply. " +
+          "Reply HELP for help, STOP to stop.",
+      },
+      {
+        slug: "sms_selection_ready",
+        is_active: true,
+        html_content:
+          "{{studio_name}} has {{picks}} ready for {{room}}. " +
+          "Reply YES {{ref}} or open {{link}} Msg&data rates may apply. " +
+          "Reply HELP for help, STOP to stop.",
+      },
+      {
+        slug: "sms_inbound_reply",
+        is_active: true,
+        html_content:
+          "{{studio_name}}: {{message}} Msg&data rates may apply. " +
+          "Reply HELP for help, STOP to stop.",
+      },
+    ],
+    ...(opts.extra as Record<string, Array<Record<string, unknown>>> ?? {}),
+  }, {
+    create_client_link: (args) => {
+      mints.push(args);
+      return opts.mintFails
+        ? { data: null, error: { message: "no_live_letter" } }
+        : { data: [{ id: "cl-1", token: CLIENT_TOKEN }], error: null };
+    },
+    sms_claim_party_budget: (args) => {
+      asked.push({ rpc: "sms_claim_party_budget", args });
+      return { data: { claimed: true }, error: null };
+    },
+    sms_party_prompt_gate: (args) => {
+      asked.push({ rpc: "sms_party_prompt_gate", args });
+      return { data: { allowed: true }, error: null };
+    },
+  });
+  return { fake, mints, asked };
+}
+
+const CLIENT_ENV = {
+  SMS_DEV_MODE: "dry_run",
+  TWILIO_FROM_NUMBER: "+15550000000",
+  SMS_CONVERSATION_NUMBER: "+15550000000",
+  FIELD_LINE_PHASE: "2",
+  FIELD_LINE_CAMPAIGN_APPROVED: "1",
+};
+
+function firstLetter(
+  fake: ReturnType<typeof clientWorld>["fake"],
+  env: Record<string, string> = {},
+  now: Date = OPEN,
+) {
+  return sendClientSms(
+    fake as never,
+    {
+      partyId: "cp1",
+      projectId: "proj1",
+      templateKey: "sms_client_first_letter",
+      clientInvitationId: "inv-1",
+      dedupeKey: "client_first_letter:inv-1",
+    },
+    { getEnv: envOf({ ...CLIENT_ENV, ...env }), now, fetchImpl: mustNotSend() },
+  );
+}
+
+Deno.test("the client templates and capability actions cannot drift", () => {
+  // The three slugs are the three the migration seeds, and the actions are the
+  // ones create_client_link is asked for. A capability is hash-at-rest: a scope
+  // minted without an action can never be widened, only re-minted — which
+  // invalidates the link already in her phone. So the two lists are asserted
+  // equal to their own sources rather than trusted to stay in step.
+  assertEquals([...CLIENT_SMS_TEMPLATES], [
+    "sms_client_first_letter",
+    "sms_selection_ready",
+    "sms_window_pick",
+  ]);
+  assertEquals([...CLIENT_CAPABILITY_ACTIONS], [...CLIENT_LINK_ACTIONS]);
+  assert(isClientSmsTemplate("sms_window_pick"));
+  assert(!isClientSmsTemplate("sms_daily_digest"));
+  assert(!isClientSmsTemplate(null));
+});
+
+Deno.test("sendClientSms refuses to carry anything but the client copy", async () => {
+  const { fake } = clientWorld();
+  const res = await sendClientSms(
+    fake as never,
+    { partyId: "cp1", templateKey: "sms_daily_digest" },
+    { getEnv: envOf(CLIENT_ENV), now: OPEN, fetchImpl: mustNotSend() },
+  );
+  assert(!res.sent);
+  assertEquals(res.reason, "not_a_client_template");
+  assertEquals((fake._data.sms_messages ?? []).length, 0, "and nothing is written");
+});
+
+Deno.test("GATE 3b: the campaign flag is the switch that stops her rail", async () => {
+  // Turning FIELD_LINE_CAMPAIGN_APPROVED off is how a studio, or we, stop every
+  // homeowner text — mid-flight, without a deploy. Unset is off.
+  for (const flag of [undefined, "0", "true", "yes"]) {
+    const { fake, mints } = clientWorld();
+    const res = await firstLetter(
+      fake,
+      flag === undefined
+        ? { FIELD_LINE_CAMPAIGN_APPROVED: "" }
+        : { FIELD_LINE_CAMPAIGN_APPROVED: flag },
+    );
+    assert(!res.sent, `the flag at "${flag}" must not send`);
+    assertEquals(res.reason, "campaign_not_approved");
+    assertEquals((fake._data.sms_messages ?? []).length, 0, "no row");
+    assertEquals(mints.length, 0, "and no capability is minted for it");
+  }
+  const { fake } = clientWorld();
+  assertEquals((await firstLetter(fake)).sent, true, "and 1 is the only yes");
+});
+
+Deno.test("GATE 3b: phase 2 is the client rail's own phase", async () => {
+  for (const phase of ["", "0", "1"]) {
+    const { fake } = clientWorld();
+    const res = await firstLetter(fake, { FIELD_LINE_PHASE: phase });
+    assert(!res.sent, `phase "${phase}" must not send a client text`);
+    assertEquals(res.reason, "field_line_phase_off");
+  }
+});
+
+Deno.test("GATE 2: the kickoff record carries the letter, and nothing else does", async () => {
+  // record_channel_invite writes 'pending', so a client gate that demanded
+  // 'allow' could never send a single text (SQ-16 SQL case 8b). The permission
+  // is the invite's, and just as narrow: the studio's OWN record, pending
+  // rather than refused, carrying the written act.
+  const granted = clientWorld({
+    consent: { ...KICKOFF_RECORD, status: "granted" },
+  });
+  assertEquals((await firstLetter(granted.fake)).sent, true, "a grant sends");
+
+  const pending = clientWorld();
+  assertEquals((await firstLetter(pending.fake)).sent, true, "so does the tick");
+
+  const unsigned = clientWorld({
+    consent: { ...KICKOFF_RECORD, source: null, recorded_by: null },
+  });
+  const unsignedRes = await firstLetter(unsigned.fake);
+  assert(!unsignedRes.sent, "a tick nobody signed is not a tick");
+  assertEquals(unsignedRes.reason, "consent_evidence_required");
+
+  // A studio with a seat on the number and NO record for it is a refusal, not
+  // an unknown: R-AW's `not_asked` reads as refuse, so the letter is stopped
+  // one gate earlier than the evidence check and says so in the same word a
+  // STOP does. Either way nothing reaches her, which is the point.
+  const none = clientWorld({ consent: null });
+  const noneRes = await firstLetter(none.fake);
+  assert(!noneRes.sent, "nobody asked her anything");
+  assertEquals(noneRes.reason, "opted_out");
+
+  const refused = clientWorld({
+    consent: { ...KICKOFF_RECORD, status: "opted_out" },
+  });
+  const refusedRes = await firstLetter(refused.fake);
+  assert(!refusedRes.sent, "her STOP outranks every box anyone ticked");
+  assertEquals(refusedRes.reason, "opted_out");
+});
+
+Deno.test("the letter carries a client capability, never a field link", async () => {
+  const { fake, mints } = clientWorld();
+  const res = await firstLetter(fake);
+  assert(res.sent);
+  assertEquals(mints.length, 1, "exactly one capability per letter");
+  assertEquals(mints[0].p_invitation_id, "inv-1");
+  assertEquals(mints[0].p_actions, [...CLIENT_LINK_ACTIONS]);
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  const body = String(row.body);
+  assert(
+    body.includes(`/auth/invite/${CLIENT_TOKEN}`) || !body.includes(CLIENT_TOKEN),
+    `the letter must point at her page: "${body}"`,
+  );
+  assert(!body.includes("/field/"), "a homeowner is never sent a crew link");
+  assertEquals(
+    (row.recipe as { link_kind?: string })?.link_kind ?? "client",
+    "client",
+    "the row says which kind of link belongs here",
+  );
+});
+
+Deno.test("a letter whose capability cannot be minted is not sent at all", async () => {
+  // "Read it here: " followed by nothing is worse than no text: she cannot act
+  // on it and the studio does not know she cannot.
+  const { fake, mints } = clientWorld({ mintFails: true });
+  const res = await firstLetter(fake);
+  assert(!res.sent, "no link, no letter");
+  assertEquals(res.reason, "client_link_unavailable");
+  assertEquals(mints.length, 1, "it was attempted");
+  assertEquals((fake._data.sms_messages ?? []).length, 0, "and nothing was logged");
+});
+
+Deno.test("an ordinary reply to a homeowner meets the client gate too", async () => {
+  // Her acknowledgement travels as sms_inbound_reply from sms-inbound's own
+  // dispatcher, which knows nothing about client templates. The gate turns on
+  // the SEAT as well, or the campaign flag would stop the letters and leave the
+  // replies going out.
+  const { fake } = clientWorld();
+  const off = await sendPartySms(
+    fake as never,
+    {
+      partyId: "cp1",
+      projectId: "proj1",
+      templateKey: "sms_inbound_reply",
+      vars: { studio_name: "Field & Form", message: "Got it." },
+    },
+    {
+      getEnv: envOf({ ...CLIENT_ENV, FIELD_LINE_CAMPAIGN_APPROVED: "0" }),
+      now: OPEN,
+      fetchImpl: mustNotSend(),
+    },
+  );
+  assert(!off.sent, "the flag is off, so nothing reaches her");
+  assertEquals(off.reason, "campaign_not_approved");
+
+  const { fake: onFake } = clientWorld();
+  const on = await sendPartySms(
+    onFake as never,
+    {
+      partyId: "cp1",
+      projectId: "proj1",
+      templateKey: "sms_inbound_reply",
+      vars: { studio_name: "Field & Form", message: "Got it." },
+    },
+    { getEnv: envOf(CLIENT_ENV), now: OPEN, fetchImpl: mustNotSend() },
+  );
+  assert(on.sent, "and with the rail running she gets an answer");
+});
+
+Deno.test("a trade text is untouched by the campaign flag", async () => {
+  // The flag is the HOMEOWNER rail's switch. A crew digest must not depend on it.
+  const { fake } = linkWorld();
+  const res = await sendPartySms(
+    fake as never,
+    { partyId: "p1", templateKey: "field_digest", automationPhase: 1 },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "dry_run",
+        TWILIO_FROM_NUMBER: "+15550000000",
+        FIELD_LINE_PHASE: "1",
+      }),
+      now: OPEN,
+      fetchImpl: mustNotSend(),
+    },
+  );
+  assert(res.sent, "the crew's rail has its own phase gate and no flag");
+});
+
+Deno.test("P13: the campaign flag is re-asked at the flush, and costs her no slot", async () => {
+  // Quiet hours store the letter at 9pm; the flag can be off by 8am. The row
+  // stays DEFERRED with the reason and spends NO cadence slot — GATE 3b is
+  // asked before the claim, so the flag coming back up inside the 24h window
+  // still sends it.
+  const { fake, mints, asked } = clientWorld();
+  const stored = await sendClientSms(
+    fake as never,
+    {
+      partyId: "cp1",
+      projectId: "proj1",
+      templateKey: "sms_client_first_letter",
+      clientInvitationId: "inv-1",
+      dedupeKey: "client_first_letter:inv-1",
+    },
+    {
+      getEnv: envOf({ ...CLIENT_ENV, ...LIVE_TWILIO, FIELD_LINE_PHASE: "2", FIELD_LINE_CAMPAIGN_APPROVED: "1" }),
+      now: QUIET,
+      fetchImpl: mustNotSend(),
+    },
+  );
+  assert(stored.deferred, `quiet hours must store it: ${JSON.stringify(stored)}`);
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(mints.length, 0, "and mint nothing overnight (contract S6)");
+  assert(
+    !JSON.stringify(row.recipe).includes(CLIENT_TOKEN),
+    "no capability is stored at rest",
+  );
+
+  const budgetBefore = asked.filter((a) => a.rpc === "sms_claim_party_budget").length;
+  const held = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "2", FIELD_LINE_CAMPAIGN_APPROVED: "0" }),
+    fetchImpl: mustNotSend(),
+    now: OPEN,
+  });
+  assertEquals(held.flushed, 0, "nothing goes out while the flag is off");
+  assertEquals(row.twilio_status, "deferred", "the row keeps its place");
+  assertEquals(row.error_message, "campaign_not_approved", "and says why");
+  assertEquals(mints.length, 0, "no capability minted for a refused flush");
+  assertEquals(
+    asked.filter((a) => a.rpc === "sms_claim_party_budget").length,
+    budgetBefore,
+    "and the refusal costs her no cadence slot",
+  );
+
+  const wires: string[] = [];
+  const resumed = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "2", FIELD_LINE_CAMPAIGN_APPROVED: "1" }),
+    fetchImpl: ((_url: string, init: RequestInit) => {
+      wires.push(new URLSearchParams(String(init.body)).get("Body") ?? "");
+      return Promise.resolve(
+        new Response(JSON.stringify({ sid: "SM1", status: "queued" }), { status: 201 }),
+      );
+    }) as unknown as typeof fetch,
+    now: OPEN,
+  });
+  assertEquals(resumed.flushed, 1, "the flag came back up inside the window");
+  assertEquals(mints.length, 1, "and the capability is minted at dispatch");
+  assertEquals(wires.length, 1);
+  assert(
+    wires[0].includes(`/auth/invite/${CLIENT_TOKEN}`),
+    `the wire body carries the link minted this morning: "${wires[0]}"`,
+  );
+  // And the row it went out from still carries none of it (contract R2).
+  assert(
+    !JSON.stringify(fake._data.sms_messages ?? []).includes(CLIENT_TOKEN),
+    "the stored row keeps no credential, even after the send",
+  );
+});
+
+Deno.test("P13: the phase is re-asked at the flush for a client row too", async () => {
+  const { fake } = clientWorld();
+  const stored = await sendClientSms(
+    fake as never,
+    {
+      partyId: "cp1",
+      projectId: "proj1",
+      templateKey: "sms_client_first_letter",
+      clientInvitationId: "inv-1",
+      dedupeKey: "client_first_letter:inv-1",
+    },
+    {
+      getEnv: envOf({ ...CLIENT_ENV, ...LIVE_TWILIO }),
+      now: QUIET,
+      fetchImpl: mustNotSend(),
+    },
+  );
+  assert(stored.deferred);
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  const out = await flushDeferredMessages(fake as never, {
+    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1", FIELD_LINE_CAMPAIGN_APPROVED: "1" }),
+    fetchImpl: mustNotSend(),
+    now: OPEN,
+  });
+  assertEquals(out.flushed, 0);
+  assertEquals(row.twilio_status, "deferred");
+  assertEquals(row.error_message, "field_line_phase_off");
+});
+
+Deno.test("her letter is paced by the same guard the crew's is (P1/P5)", async () => {
+  const { fake, asked } = clientWorld();
+  const res = await firstLetter(fake);
+  assert(res.sent);
+  const claim = asked.find((a) => a.rpc === "sms_claim_party_budget");
+  assert(claim, `the budget was never claimed: ${JSON.stringify(asked)}`);
+  assertEquals(claim.args.p_class, "recurring", "one a day, like a digest");
+  assert(
+    asked.some((a) => a.rpc === "sms_party_prompt_gate"),
+    "and the dead-end detector is asked as well",
   );
 });

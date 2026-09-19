@@ -15,6 +15,18 @@ import { startNoConsent } from "./cases/start-no-consent.ts";
 import { stopThenNewEngagement } from "./cases/stop-then-new-engagement.ts";
 import { twoStudiosOnePhone } from "./cases/two-studios-one-phone.ts";
 import { unknownSenderWrong } from "./cases/unknown-sender-wrong.ts";
+import {
+  clientOpenIsNotAccept,
+  clientPaymentBoundary,
+  clientPhoneOnlyCapability,
+  clientReplyAuthority,
+} from "./cases/client-capability.ts";
+import { clientVersionRace } from "./cases/client-decision-race.ts";
+import {
+  clientCampaignApproval,
+  clientConsentBoundary,
+  clientOneAskADay,
+} from "./cases/client-cadence.ts";
 import type { GateCase } from "./types.ts";
 
 /** The complete evidence inventory. Do not remove a blocked case: strict mode
@@ -41,6 +53,18 @@ export const fieldLineCases: GateCase[] = [
   siteCardDayOf,
   // The consent gate the resend actually dispatches through (00646).
   optinResendEvidence,
+  // The homeowner's rail (00650-00652): the capability that is her whole
+  // identity, the authority her reply carries, the race her reference must lose
+  // safely, the money door that stays shut, the once-a-day cadence, and the two
+  // switches — her consent and the campaign approval — that gate every send.
+  clientPhoneOnlyCapability,
+  clientOpenIsNotAccept,
+  clientReplyAuthority,
+  clientPaymentBoundary,
+  clientVersionRace,
+  clientOneAskADay,
+  clientConsentBoundary,
+  clientCampaignApproval,
 ];
 
 export { type GateAssertion, type GateCase } from "./types.ts";
