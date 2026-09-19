@@ -32,30 +32,21 @@ Deno.test("paused A stores an owned silent review while B's explicit Ref remains
   assertEquals((effects[0].p_effect as any).target.id, "task-b", "A's pin cannot override B's Ref");
 });
 
-Deno.test("PO delivery Ref is owned review only, closes after ownership, and never applies an effect", async () => {
-  for (const concurrent of [false, true]) {
-    const { h, prompt, effects } = inboundFixture();
-    prompt({ kind: "confirm_delivery", subject_id: "po-a" });
-    h.fake._data.purchase_orders = [{ id: "po-a", project_id: "project-a" }];
-    let atomic = 0; const rpc = h.fake.rpc;
-    h.fake.rpc = (name: string, args: any) => { if (name === "sms_apply_prompt") atomic++; return rpc(name, args); };
-    const first = input(h, "OK 17", "SMpo1");
-    const results = await Promise.all([processInbound(first, deps(h)), ...(concurrent ? [processInbound(input(h, "OK 17", "SMpo2"), deps(h))] : [])]);
-    assert(results.some(r => r.disposition === "needs_review"));
-    assertEquals(effects.length, 0); assertEquals(atomic, 0, "PO refs never invoke the atomic business-effect API");
-    assertEquals(h.fake._data.sms_prompts[0].answered_at, h.clock.toISOString());
-    const reviews = h.fake._data.sms_messages.filter((r: any) => r.needs_review);
-    assert(reviews.length >= 1);
-    for (const row of reviews) {
-      assertEquals(row.owner_user_id, "studio-a");
-      assertEquals(row.parsed_intent.ref, "17"); assertEquals(row.parsed_intent.purchase_order_id, "po-a"); assertEquals(row.parsed_intent.party_id, "party-a");
-    }
-    assert(results.flatMap(r => r.replies ?? []).some(r => r.message.includes("will confirm")), "never claim the PO delivery was confirmed");
-    await processInbound(first, deps(h));
-    await processInbound(input(h, "OK 17", "SMpoLater"), deps(h));
-    assertEquals(h.fake._data.sms_messages.filter((r: any) => r.needs_review).length, reviews.length, "closed ref opens no further review");
-    assertEquals(effects.length, 0); assertEquals(atomic, 0);
-  }
+Deno.test("PO delivery Ref atomically consumes once across distinct SIDs and replays its receipt", async () => {
+  const { h, prompt, effects } = inboundFixture();
+  const ref = prompt({ kind: "confirm_delivery", subject_id: "po-a" });
+  h.fake._data.purchase_orders = [{ id: "po-a", project_id: "project-a", po_number: "PO test" }];
+  const first = input(h, "OK 17", "SMpo1");
+  const results = await Promise.all([processInbound(first, deps(h)), processInbound(input(h, "OK 17", "SMpo2"), deps(h))]);
+  assert(results.some(r => r.disposition === "ref_applied"));
+  assertEquals(effects.length, 1, "PO refs use one atomic business effect");
+  assertEquals((effects[0].p_effect as any).target, {kind: "purchase_order", id: "po-a"});
+  assert(ref.consumption_result, "PO prompt retains immutable receipt");
+  const receipt = structuredClone(ref.consumption_result);
+  await processInbound(first, deps(h));
+  await processInbound(input(h, "OK 17", "SMpoLater"), deps(h));
+  assertEquals(effects.length, 1, "retries and closed ref never reapply");
+  assertEquals(ref.consumption_result, receipt);
 });
 
 Deno.test("backfilled holding without active project discards old chooser and preserves body/media through fresh choice", async () => {

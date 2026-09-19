@@ -38666,6 +38666,10 @@ export type Database = {
           short_code: string
         }[]
       }
+      sms_extend_pause: {
+        Args: { p_hours?: number; p_message_id: string }
+        Returns: string
+      }
       sms_grant_optin_prompt: {
         Args: {
           p_prompt_id: string
@@ -38674,6 +38678,10 @@ export type Database = {
           p_sms_message_id: string
         }
         Returns: Json
+      }
+      sms_hand_back_thread: {
+        Args: { p_message_id: string }
+        Returns: undefined
       }
       sms_is_suppressed: {
         Args: { p_recipient: string; p_sender: string }
@@ -38771,6 +38779,7 @@ export type Database = {
           version: number
         }[]
       }
+      sms_take_thread: { Args: { p_message_id: string }; Returns: string }
       sms_validate_prompt_effect: {
         Args: {
           p_effect: Json

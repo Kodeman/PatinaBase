@@ -96,19 +96,19 @@ Deno.test("availability payload survives parsing while the prompt overrides pars
   assertEquals((effects[0].p_effect as Record<string, unknown>).target, { kind: "task", id: "task-a" });
 });
 
-Deno.test("condition payload remains owned review and never calls apply_field_effect", async () => {
+Deno.test("condition payload atomically applies with the immutable task subject", async () => {
   const { h, prompt, effects } = inboundFixture();
   prompt({ kind: "report_condition" });
   const condition = { ok: false, note: "dented corner" };
   const result = await processInbound(inbound(h, "DAMAGED 17"), { ...deps(h), parseFn: async () => ({
     intent: "report_condition", target_ref: null, condition, new_date: null, note: "dented corner", confidence: 0.95,
   }) });
-  assertEquals(result.disposition, "needs_review");
-  assertEquals(effects.length, 0);
-  const row = h.fake._data.sms_messages.find((r) => r.direction === "inbound")!;
-  assertEquals(row.owner_user_id, "studio-a");
-  assertEquals((row.parsed_intent as Record<string, unknown>).condition, condition);
-  assertEquals(h.fake._data.sms_prompts[0].answered_at, null);
+  assertEquals(result.disposition, "ref_applied");
+  assertEquals(effects.length, 1);
+  assertEquals((effects[0].p_effect as any).condition, condition);
+  assertEquals((effects[0].p_effect as any).target, {kind: "task", id: "task-a"});
+  assert(h.fake._data.sms_prompts[0].consumption_result);
+  assertEquals(h.fake._data.sms_prompts[0].answered_at, h.clock.toISOString());
 });
 
 Deno.test("ambiguous no-code verb clarifies once then hands off to owned triage", async () => {

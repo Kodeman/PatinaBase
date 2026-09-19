@@ -1,3 +1,4 @@
+import { conditionReport, poDelivery } from "./cases/condition-po-delivery.ts";
 import { duplicateTwilioSid } from "./cases/duplicate-twilio-sid.ts";
 import { dstQuietHours } from "./cases/dst-quiet-hours.ts";
 import { interruptedMediaUpload } from "./cases/interrupted-media-upload.ts";
@@ -24,6 +25,8 @@ export const fieldLineCases: GateCase[] = [
   dstQuietHours,
   unknownSenderWrong,
   oldRefReply,
+  conditionReport,
+  poDelivery,
   interruptedMediaUpload,
 ];
 
