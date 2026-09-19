@@ -240,14 +240,21 @@ async function sendLetter(
  * capability IS the letter's way in, so a row without one is a letter nobody
  * can open, and the caller sees the send fail rather than a half-sent letter.
  *
- * The raw token is returned to the caller ONCE and stored NOWHERE — not on the
- * invitation, not in a log line, not in the response's own metadata. Only
- * sha256(token) is at rest, inside client_links (00650).
+ * The raw token GOES NOWHERE. Only sha256(token) is at rest, inside
+ * client_links (00650), and this function does not hand the raw value back
+ * either: SQ-111 INFO-7. It used to answer with `${CLIENT_PORTAL_URL}/auth/
+ * invite/<token>`, which travelled out of the edge function, through the
+ * designer portal's route, and into the designer's browser — a live credential
+ * for the homeowner's letter, sitting in someone else's network log, and dead on
+ * arrival anyway because the text's own dispatch-time mint (sendClientSms,
+ * _shared/sms.ts) supersedes this link before anything could use it. The mint
+ * itself stays exactly where it is: a letter row with no capability behind it is
+ * a letter nobody can open, so the send fails here rather than half-succeeding.
  */
 async function mintCapability(
   admin: SupabaseClient,
   invitationId: string,
-): Promise<{ ok: true; url: string } | { ok: false; error?: string }> {
+): Promise<{ ok: true } | { ok: false; error?: string }> {
   const { data, error } = await admin.rpc("create_client_link", {
     p_invitation_id: invitationId,
     p_actions: CLIENT_LINK_ACTIONS,
@@ -256,11 +263,11 @@ async function mintCapability(
     console.error("client-invite: capability mint failed", error);
     return { ok: false, error: error.message };
   }
-  // RETURNS TABLE (id, token) — PostgREST hands back a one-row array.
+  // RETURNS TABLE (id, token) — PostgREST hands back a one-row array. The token
+  // is read only to prove one was minted, and is never returned or logged.
   const row = (Array.isArray(data) ? data[0] : data) as { token?: string } | null;
-  const token = row?.token;
-  if (!token) return { ok: false, error: "capability_returned_no_token" };
-  return { ok: true, url: `${CLIENT_PORTAL_URL}/auth/invite/${token}` };
+  if (!row?.token) return { ok: false, error: "capability_returned_no_token" };
+  return { ok: true };
 }
 
 /**
@@ -541,7 +548,6 @@ async function handleSend(req: Request): Promise<Response> {
   // minted inside this send path so the link exists the moment the row does;
   // the text that carries it is SQ-18's leg, named on the response as
   // `deliver: 'sms_pending'` rather than left to be inferred.
-  let capabilityUrl: string | null = null;
   let deliver: string | null = null;
   let deliverReason: string | undefined;
   if (byPhone) {
@@ -571,7 +577,6 @@ async function handleSend(req: Request): Promise<Response> {
         rolledBack: !undoErr,
       }, 502);
     }
-    capabilityUrl = capability.url;
     const smsLeg = await sendFirstLetterSms(admin, {
       invitationId,
       projectId,
@@ -628,14 +633,13 @@ async function handleSend(req: Request): Promise<Response> {
     kind,
     // `deliver` is what happened to the text, not a promise that one is coming:
     // 'sms_sent', 'sms_deferred' (quiet hours has it stored for the morning) or
-    // 'sms_failed' with the gate's own reason. `capabilityUrl` stays on the
-    // response because the designer-portal route and use-clients.ts still read
-    // it, and both are outside this ticket's files (SQ-108 INFO-7); the route
-    // already stops it reaching the browser
-    // (apps/designer-portal/src/app/api/clients/invite/send-the-letter.ts:232,
-    // asserted at its __tests__/send-the-letter.test.ts:166).
+    // 'sms_failed' with the gate's own reason. That is the whole phone-letter
+    // seam now: NO capability link comes back. The send is server-side end to
+    // end, so nothing downstream needs the homeowner's credential, and the one
+    // caller that used to be handed it (the designer portal's route) only ever
+    // passed it on towards a browser (SQ-111 INFO-7).
     ...(byPhone
-      ? { capabilityUrl, deliver, ...(deliverReason ? { deliverReason } : {}) }
+      ? { deliver, ...(deliverReason ? { deliverReason } : {}) }
       : {}),
   });
 }
@@ -930,10 +934,12 @@ async function resendFrom(
       projectId: row.project_id ?? null,
       phone: row.phone ?? null,
     });
+    // No capability link on the way out (SQ-111 INFO-7): the resend route pipes
+    // this body straight to the designer's browser, and the homeowner's own
+    // credential has no business there. `deliver` says what happened to the text.
     return json({
       invitationId: newId,
       token,
-      capabilityUrl: capability.url,
       deliver: smsLeg.deliver,
       ...(smsLeg.reason ? { deliverReason: smsLeg.reason } : {}),
     });
@@ -979,6 +985,22 @@ async function handleResend(req: Request): Promise<Response> {
 /**
  * The lapsed page's one tap. ALWAYS answers 200 { ok: true } — a page a
  * stranger can open must not become an oracle for which tokens exist.
+ *
+ * TWO DOORS, ONE TAP (SQ-108 LOW-4). The mailed token is a column you can look
+ * up; a capability is a sha256 and nothing else (00650:172), so one lookup
+ * cannot find both. Only the first was tried, so the homeowner reached by text —
+ * the one identity that CANNOT ask her studio through a portal she has no
+ * account on — tapped a button that answered "a fresh letter is on its way" and
+ * re-minted nothing, for the whole 90th day onward.
+ *
+ * `client_link_refresh_target` (00654) is the other side: it hashes what she
+ * holds and names the invitation behind a DEAD capability whose letter is still
+ * the current, unrevoked one. From there it is the same `resendFrom` the mailed
+ * token takes — the same hourly floor, the same frozen letter, a new capability
+ * and the text that carries it.
+ *
+ * The plaintext token is never exposed by either arm: resendFrom's body is read
+ * for its status and discarded, and this leg answers { ok: true } to everything.
  */
 async function handleRefresh(req: Request): Promise<Response> {
   let body: { token?: string };
@@ -997,14 +1019,38 @@ async function handleRefresh(req: Request): Promise<Response> {
     .eq("token", token)
     .maybeSingle();
   const r = row as any;
-  if (
-    r &&
-    !r.accepted_at && !r.revoked_at && !r.superseded_by &&
-    new Date(r.expires_at).getTime() < Date.now()
-  ) {
-    const res = await resendFrom(admin, r.id, null);
+  if (r) {
+    if (
+      !r.accepted_at && !r.revoked_at && !r.superseded_by &&
+      new Date(r.expires_at).getTime() < Date.now()
+    ) {
+      const res = await resendFrom(admin, r.id, null);
+      if (res.status >= 400) {
+        console.warn("client-invite: refresh could not resend", res.status);
+      }
+    }
+    return json({ ok: true });
+  }
+
+  // The capability arm. `accepted_at` is deliberately NOT asked about here: on
+  // this identity it records that she said she has the letter, not a burned
+  // session, and taking her way back in for having answered would be a
+  // punishment for doing the one thing the letter asked. Everything that IS a
+  // refusal — a live capability, a revoked letter, a superseded one — 00654
+  // answers NULL for.
+  const { data: target, error: targetErr } = await admin.rpc(
+    "client_link_refresh_target",
+    { p_token: token },
+  );
+  if (targetErr) {
+    console.error("client-invite: the capability refresh lookup failed", targetErr);
+    return json({ ok: true });
+  }
+  const invitationId = typeof target === "string" && target ? target : null;
+  if (invitationId) {
+    const res = await resendFrom(admin, invitationId, null);
     if (res.status >= 400) {
-      console.warn("client-invite: refresh could not resend", res.status);
+      console.warn("client-invite: capability refresh could not resend", res.status);
     }
   }
   return json({ ok: true });

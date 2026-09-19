@@ -123,14 +123,39 @@ export async function sendTheLetter(args: {
     // and no letter. Reuse the row instead, exactly as the R73 branch does.
     // A phone letter asks the same question of the column that holds ITS
     // identity, so writing to the same homeowner twice from the same sheet does
-    // not fork her household. That match is on the phone AS TYPED: nothing
-    // makes (designer_id, client_phone) unique, and the normalized reading
-    // lives in client_phone_e164, which this route cannot compute (00583).
+    // not fork her household.
+    //
+    // SQ-108 INFO-5 — ONE HOUSEHOLD, HOWEVER SHE TYPED THE NUMBER. That match
+    // used to be on `client_phone` AS TYPED, so "(608) 555-0143" today and
+    // "608-555-0143" next week were two different strings and one homeowner
+    // became two roster rows, each with its own letters and its own activity.
+    // The normalized reading already exists — `client_phone_e164`, kept by
+    // 00583's trigger — and so does the one normalizer that writes it:
+    // `normalize_phone_e164` (00281:81), the same rule
+    // `normalize_client_invitation_phone` puts the letter's own phone through.
+    // So the number is read through THAT function, once, and the roster is
+    // asked about the normalized column. No second reading is written in
+    // TypeScript, where it could only drift from the one the database holds.
+    // A number it cannot read falls back to the typed column: the send is about
+    // to be refused as `invalid_phone` anyway, and matching every unparseable
+    // row against NULL would be worse than matching none.
+    let matchColumn = 'client_email';
+    let matchValue: string | null = clientEmail;
+    if (byPhone) {
+      const { data: normalizedPhone, error: normalizeError } =
+        await adminClient.rpc('normalize_phone_e164', { p_phone: clientPhone });
+      if (normalizeError) {
+        return serverError(`Failed to read that phone number: ${normalizeError.message}`);
+      }
+      const e164 = typeof normalizedPhone === 'string' ? normalizedPhone.trim() : '';
+      matchColumn = e164 ? 'client_phone_e164' : 'client_phone';
+      matchValue = e164 || clientPhone;
+    }
     const { data: onRoster, error: rosterError } = await adminClient
       .from('designer_clients')
       .select('id')
       .eq('designer_id', callerUser.id)
-      .eq(byPhone ? 'client_phone' : 'client_email', byPhone ? clientPhone : clientEmail)
+      .eq(matchColumn, matchValue)
       .limit(1)
       .maybeSingle();
     if (rosterError) {
@@ -183,8 +208,12 @@ export async function sendTheLetter(args: {
   const payload = (await res.json().catch(() => ({}))) as {
     profileId?: string | null;
     kind?: 'invite' | 'notice';
-    /** P21: the scoped link her text will carry. SQ-18 owns the sending. */
-    capabilityUrl?: string | null;
+    /**
+     * P21: what happened to her text — 'sms_sent', 'sms_deferred' (quiet hours
+     * holds it for the morning) or 'sms_failed'. NOT a link: the capability is
+     * the homeowner's own credential and the send is server-side end to end, so
+     * it never comes back here and never reaches a browser (SQ-111 INFO-7).
+     */
     deliver?: string;
     error?: string;
   };
@@ -211,14 +240,24 @@ export async function sendTheLetter(args: {
 
   // lens-4 §B.9: the actor is the designer, not the system. The transport
   // belongs in telemetry, not in a line a studio owner reads.
+  //
+  // SQ-111 INFO-7 — THE LINE SAYS WHAT HAPPENED. It used to say "a text is
+  // next", written when the sending was still SQ-18's to build. The text goes
+  // out inside this same send now, so the line reads the verdict it came back
+  // with rather than promising something that may already have happened, been
+  // held for the morning, or been refused. Her number is not repeated here; the
+  // roster row holds it.
+  const textLine = (deliver: string | undefined): string => {
+    if (deliver === 'sms_sent') return 'sent by text';
+    if (deliver === 'sms_deferred') return 'the text goes out in the morning';
+    return 'the text has not gone out yet';
+  };
   await adminClient.from('client_activity_log').insert({
     designer_client_id: designerClientId,
     activity_type: 'note',
     title: `${writerName} wrote to ${label}`,
-    // A phone letter has not been delivered yet, so the line does not say it
-    // has. Her number is not repeated here; the roster row holds it.
     description: byPhone
-      ? `Letter written · a text is next · ${note ? 'with a note' : 'no note'}`
+      ? `Letter ${textLine(payload.deliver)} · ${note ? 'with a note' : 'no note'}`
       : `Letter sent to ${clientEmail} · ${note ? 'with a note' : 'no note'}`,
     actor_name: writerName,
     metadata: {
@@ -227,8 +266,8 @@ export async function sendTheLetter(args: {
       letter: true,
       kind: payload.kind ?? kind,
       has_note: !!note,
-      // Which identity carried the letter, and that a text is owed. Neither the
-      // phone nor the capability token is written into this log.
+      // Which identity carried the letter, and what happened to the text.
+      // Neither the phone nor the capability token is written into this log.
       ...(byPhone ? { identity: 'phone', deliver: payload.deliver ?? null } : {}),
     },
   });
@@ -239,13 +278,11 @@ export async function sendTheLetter(args: {
     invited: true,
     alreadyExists: kind === 'notice',
     kind: payload.kind ?? kind,
-    // P21 - the seam SQ-18 picks up. Present only for a phone letter, so an
-    // email letter's response stays exactly the shape it was.
-    ...(byPhone
-      ? {
-          capabilityUrl: payload.capabilityUrl ?? null,
-          deliver: payload.deliver ?? 'sms_pending',
-        }
-      : {}),
+    // P21 - what happened to her text, and nothing else. Present only for a
+    // phone letter, so an email letter's response stays exactly the shape it
+    // was. The capability link is gone from here (SQ-111 INFO-7): it is the
+    // homeowner's credential, the send that uses it is server-side, and the one
+    // thing shipping it to the designer's browser could do is leak it.
+    ...(byPhone ? { deliver: payload.deliver ?? 'sms_pending' } : {}),
   });
 }
