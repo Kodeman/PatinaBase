@@ -39,11 +39,23 @@ const baseArgs = {
   note: null,
 };
 
-function makeAdminClient(tables: Record<string, any>) {
+/**
+ * `rpc` answers `normalize_phone_e164` the way 00281:81 does for the numbers
+ * these cases type — the ONE normalizer the roster match now goes through, so
+ * the test asks the route the same question the database would answer.
+ */
+function makeAdminClient(tables: Record<string, any>, rpc?: jest.Mock) {
   return {
     from: jest.fn((table: string) => {
       if (table in tables) return tables[table];
       throw new Error(`Unexpected table in test: ${table}`);
+    }),
+    rpc: rpc ?? jest.fn(async (_fn: string, args: { p_phone?: string }) => {
+      const digits = (args?.p_phone ?? '').replace(/\D/g, '');
+      if (digits.length === 10) return { data: `+1${digits}`, error: null };
+      if (digits.length === 11 && digits.startsWith('1')) return { data: `+${digits}`, error: null };
+      if (digits.length >= 8 && digits.length <= 15) return { data: `+${digits}`, error: null };
+      return { data: null, error: null };
     }),
   };
 }
@@ -84,8 +96,7 @@ describe('sendTheLetter — the phone identity (P21)', () => {
       json: async () => ({
         profileId: null,
         kind: 'invite',
-        capabilityUrl: 'https://client.patina.cloud/auth/invite/deadbeef',
-        deliver: 'sms_pending',
+        deliver: 'sms_sent',
       }),
     });
   });
@@ -108,7 +119,7 @@ describe('sendTheLetter — the phone identity (P21)', () => {
     expect(profiles.eq).not.toHaveBeenCalledWith('email', expect.anything());
   });
 
-  it('asks the roster the question its own identity answers', async () => {
+  it('asks the roster the question its own identity answers, in E.164', async () => {
     const designerClients = chainable({ data: { id: 'dc-1' }, error: null }, { data: null });
     const adminClient = makeAdminClient({
       profiles: chainable({ data: null, error: null }),
@@ -118,14 +129,77 @@ describe('sendTheLetter — the phone identity (P21)', () => {
 
     await sendTheLetter({ ...phoneArgs, adminClient });
 
-    expect(designerClients.eq).toHaveBeenCalledWith('client_phone', '(608) 555-0143');
+    // SQ-108 INFO-5: the number is normalized ONCE, through the same function
+    // the 00583 trigger writes client_phone_e164 with, and the roster is asked
+    // about the normalized column — never the string she happened to type.
+    expect(adminClient.rpc).toHaveBeenCalledWith('normalize_phone_e164', {
+      p_phone: '(608) 555-0143',
+    });
+    expect(designerClients.eq).toHaveBeenCalledWith('client_phone_e164', '+16085550143');
+    expect(designerClients.eq).not.toHaveBeenCalledWith('client_phone', '(608) 555-0143');
     expect(designerClients.eq).not.toHaveBeenCalledWith('client_email', '');
+    // The row still stores the number AS TYPED; the trigger derives the rest.
     expect(designerClients.insert).toHaveBeenCalledWith(
       expect.objectContaining({ client_email: null, client_phone: '(608) 555-0143' }),
     );
   });
 
-  it("calls client-invite with the phone kind and returns SQ-18's seam", async () => {
+  it('resolves two spellings of one number to the SAME household row', async () => {
+    // The defect: "(608) 555-0143" today and "608-555-0143" next week were two
+    // strings, so one homeowner became two roster rows with two sets of letters.
+    const seen: string[] = [];
+    for (const typed of ['(608) 555-0143', '608-555-0143', '+1 608 555 0143', '16085550143']) {
+      const designerClients = chainable({ data: { id: 'dc-new' }, error: null }, { data: null });
+      const adminClient = makeAdminClient({
+        profiles: chainable({ data: null, error: null }),
+        designer_clients: designerClients,
+        client_activity_log: chainable({ data: null, error: null }),
+      });
+
+      await sendTheLetter({ ...phoneArgs, clientPhone: typed, adminClient });
+
+      const match = (designerClients.eq as jest.Mock).mock.calls.find(
+        ([column]: [string]) => column === 'client_phone_e164',
+      );
+      seen.push(match?.[1]);
+    }
+    expect(seen).toEqual(['+16085550143', '+16085550143', '+16085550143', '+16085550143']);
+  });
+
+  it('falls back to the typed column when the number cannot be read at all', async () => {
+    // An unparseable number answers NULL from the normalizer. Matching every row
+    // whose derivation is NULL would be worse than matching none, and the send is
+    // about to be refused as invalid_phone by the invitation's own trigger.
+    const designerClients = chainable({ data: { id: 'dc-new' }, error: null }, { data: null });
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: designerClients,
+      client_activity_log: chainable({ data: null, error: null }),
+    });
+
+    await sendTheLetter({ ...phoneArgs, clientPhone: '12345', adminClient });
+
+    expect(designerClients.eq).toHaveBeenCalledWith('client_phone', '12345');
+    expect(designerClients.eq).not.toHaveBeenCalledWith('client_phone_e164', null);
+  });
+
+  it('surfaces a failed normalizer rather than matching on nothing', async () => {
+    const adminClient = makeAdminClient(
+      {
+        profiles: chainable({ data: null, error: null }),
+        designer_clients: chainable({ data: { id: 'dc-1' }, error: null }, { data: null }),
+        client_activity_log: chainable({ data: null, error: null }),
+      },
+      jest.fn(async () => ({ data: null, error: { message: 'connection reset' } })),
+    );
+
+    const res = await sendTheLetter({ ...phoneArgs, adminClient });
+
+    expect(res.status).toBe(500);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('calls client-invite with the phone kind and reports what the text did', async () => {
     const adminClient = makeAdminClient({
       profiles: chainable({ data: null, error: null }),
       designer_clients: chainable({ data: { id: 'dc-1' }, error: null }),
@@ -138,17 +212,84 @@ describe('sendTheLetter — the phone identity (P21)', () => {
     expect(body).toMatchObject({ kind: 'phone', phone: '(608) 555-0143', email: '' });
 
     expect(res.status).toBe(200);
-    // The link is handed back for SQ-18 to send; NOTHING was mailed here.
-    expect(await res.json()).toMatchObject({
-      capabilityUrl: 'https://client.patina.cloud/auth/invite/deadbeef',
-      deliver: 'sms_pending',
+    // SQ-111 INFO-7 — THE CAPABILITY LINK DOES NOT COME BACK HERE, and above all
+    // does not go on towards a browser: it is the homeowner's own credential, the
+    // send is server-side end to end, and the mint that matters happens at
+    // dispatch. What the designer gets is what happened to the text.
+    const payload = await res.json();
+    expect(payload).toMatchObject({ deliver: 'sms_sent' });
+    expect(payload).not.toHaveProperty('capabilityUrl');
+    expect(JSON.stringify(payload)).not.toContain('auth/invite');
+  });
+
+  it('writes an activity line that says what happened, not what is owed', async () => {
+    const activity = chainable({ data: null, error: null });
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: chainable({ data: { id: 'dc-1' }, error: null }),
+      client_activity_log: activity,
     });
+
+    await sendTheLetter({ ...phoneArgs, adminClient, note: 'Dave — the drawings are in.' });
+
+    expect(activity.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Letter sent by text · with a note',
+        metadata: expect.objectContaining({ identity: 'phone', deliver: 'sms_sent' }),
+      }),
+    );
+  });
+
+  it('says the text is held for the morning when quiet hours held it', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ profileId: null, kind: 'invite', deliver: 'sms_deferred' }),
+    });
+    const activity = chainable({ data: null, error: null });
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: chainable({ data: { id: 'dc-1' }, error: null }),
+      client_activity_log: activity,
+    });
+
+    await sendTheLetter({ ...phoneArgs, adminClient });
+
+    expect(activity.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Letter the text goes out in the morning · no note',
+      }),
+    );
+  });
+
+  it('does not claim a text went out when the gate refused it', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        profileId: null, kind: 'invite', deliver: 'sms_failed', deliverReason: 'consent_not_asked',
+      }),
+    });
+    const activity = chainable({ data: null, error: null });
+    const adminClient = makeAdminClient({
+      profiles: chainable({ data: null, error: null }),
+      designer_clients: chainable({ data: { id: 'dc-1' }, error: null }),
+      client_activity_log: activity,
+    });
+
+    await sendTheLetter({ ...phoneArgs, adminClient });
+
+    const [row] = (activity.insert as jest.Mock).mock.calls[0];
+    expect(row.description).toBe('Letter the text has not gone out yet · no note');
+    expect(row.description).not.toContain('sent by text');
   });
 
   it("leaves an email letter's request and response exactly as they were", async () => {
     const adminClient = makeAdminClient({ ...downstreamTables() });
 
     const res = await sendTheLetter({ ...baseArgs, adminClient, projectId: null });
+
+    // An email letter asks no normalizer anything: its identity is the email, and
+    // its roster match is the column that has always held it.
+    expect(adminClient.rpc).not.toHaveBeenCalled();
 
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(body).toEqual({

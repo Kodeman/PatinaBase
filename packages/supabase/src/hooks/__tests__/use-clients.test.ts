@@ -72,6 +72,8 @@ function setTableResult(table: string, result: BuilderResult): MockBuilder {
 
 const fromCalls: string[] = [];
 
+const rpc = vi.fn();
+
 const supabaseClient = {
   auth: {
     getUser: vi.fn(() =>
@@ -83,6 +85,7 @@ const supabaseClient = {
     if (!builders[table]) builders[table] = makeBuilder();
     return builders[table];
   }),
+  rpc,
 };
 
 vi.mock('@supabase/ssr', () => ({
@@ -97,6 +100,7 @@ vi.mock('@tanstack/react-query', () => ({
 
 // Import AFTER mocks are wired up.
 import {
+  useAddClient,
   useClientProjects,
   useDesignerClientForClientUser,
   useUpdateClientContact,
@@ -107,6 +111,7 @@ beforeEach(() => {
   fromCalls.length = 0;
   supabaseClient.from.mockClear();
   supabaseClient.auth.getUser.mockClear();
+  rpc.mockReset();
 });
 
 describe('useDesignerClientForClientUser — relationship history', () => {
@@ -274,5 +279,145 @@ describe('useUpdateClientContact — a blank phone is no phone', () => {
       method: 'update',
       args: [{ notes: 'Prefers Tuesdays' }],
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SQ-108 INFO-3 — the kickoff consent write had no test at all.
+//
+// P22: the box is born unchecked, and when a studio ticks it the fact goes
+// through `record_channel_invite` (00594) — the SAME door the trade addParty
+// path uses (useRecordPartySmsConsent, asserted at
+// use-coordination-authority.test.ts:373), because that ledger is the only thing
+// the send gate reads a consent word from. This mirrors those assertions for the
+// client branch: the same RPC, the same argument shape, no status named, nothing
+// written to the frozen seat columns, and the record landing BEFORE the letter
+// so a refusal on file stops a letter that would otherwise have been sent.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('useAddClient — the kickoff consent box writes to the studio ledger (P22)', () => {
+  const ORG_ID = 'org-beta';
+
+  function config() {
+    return useAddClient() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+  }
+
+  const input = {
+    clientEmail: '',
+    clientPhone: ' (608) 555-0143 ',
+    clientName: 'Dana Ellsworth',
+    letter: true,
+    note: 'The drawings are in.',
+    projectId: 'proj-1',
+    kickoffConsent: true,
+    organizationId: ORG_ID,
+  };
+
+  beforeEach(() => {
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        designerClientId: 'dc-1',
+        profileId: null,
+        invited: true,
+        alreadyExists: false,
+        kind: 'invite',
+        deliver: 'sms_sent',
+      }),
+    })) as unknown as typeof fetch;
+  });
+
+  it('records the invite on the studio ledger, and names no status', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: null });
+
+    await config().mutationFn(input);
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    const [name, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+    expect(name).toBe('record_channel_invite');
+    expect(args).toEqual({
+      p_organization_id: ORG_ID,
+      p_channel_kind: 'sms',
+      // Her number AS TYPED, trimmed: normalizing is the RPC's own job
+      // (normalize_channel_value, 00593:176), so the letter and the ledger cannot
+      // be keyed on two different readings of one phone.
+      p_channel_value: '(608) 555-0143',
+      p_source: 'kickoff_checkbox',
+      p_evidence: expect.stringContaining('Dana Ellsworth'),
+      p_disclosure_version: 'field-sms-v1',
+      p_origin_project_id: 'proj-1',
+    });
+    // close-review r2 MAJOR-1: record_channel_consent(…, 'pending', …) would
+    // demote a standing grant. This door cannot, and never says the word.
+    expect(args).not.toHaveProperty('p_status');
+  });
+
+  it('touches project_parties — and every other table — not at all', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: null });
+
+    await config().mutationFn(input);
+
+    // 00594's R-AS froze project_parties.sms_consent_*; the trade path writes
+    // none of them, and this path mirrors it exactly. The roster row is the
+    // route's to write, not the hook's.
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+
+  it('records BEFORE the letter, so a refusal on file sends nothing', async () => {
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'channel_opted_out', code: 'P0001' },
+    });
+
+    await expect(config().mutationFn(input)).rejects.toThrow(/already opted out/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("turns an un-textable number into a sentence, before a letter is written", async () => {
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'invalid_channel_value', code: 'P0001' },
+    });
+
+    await expect(config().mutationFn(input)).rejects.toThrow(/can't receive texts/i);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses before the RPC when there is no studio to record against', async () => {
+    await expect(
+      config().mutationFn({ ...input, organizationId: null }),
+    ).rejects.toThrow(/aren't in a studio yet/i);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing to the ledger when the box was left unticked', async () => {
+    // Born unchecked, and absence is not consent: an add with no tick records
+    // nothing and still sends the letter.
+    await config().mutationFn({ ...input, kickoffConsent: false });
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes nothing to the ledger when there is no number to record', async () => {
+    await config().mutationFn({
+      ...input,
+      clientEmail: 'dana@ellsworth.test',
+      clientPhone: '   ',
+    });
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('carries a studio-supplied disclosure version instead of the default', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: null });
+
+    await config().mutationFn({ ...input, smsConsentDisclosureVersion: 'field-sms-v2' });
+
+    const [, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+    expect(args.p_disclosure_version).toBe('field-sms-v2');
   });
 });

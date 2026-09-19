@@ -15,14 +15,32 @@
 import type { ChannelConsentResolution, ConsentSource } from "@patina/supabase";
 import { formatSeatDate } from "./seat-line";
 
-const GRANT_PHRASE: Record<ConsentSource, string> = {
+/**
+ * `kickoff_checkbox` is a source the ledger has held since 00650 but this file
+ * had no words for, so a studio that ticked the kickoff box saw the `other`
+ * fallback, "Recorded consent" — true, and vague about the one consent whose
+ * provenance matters most, because it is the one a studio member recorded on the
+ * homeowner's behalf. It is NOT in the `ConsentSource` union (use-consent.ts:35,
+ * which this file does not own), so it is named here beside it: the union stays
+ * the shape the hooks declare, and this table must still cover every member of
+ * it or the compiler says so.
+ */
+type GrantSource = ConsentSource | "kickoff_checkbox";
+
+const GRANT_PHRASE: Record<GrantSource, string> = {
   verbal: "Verbal consent",
   written: "Written consent",
   web_form: "Consent on a form",
   inbound_sms: "Consent by text",
   other: "Recorded consent",
+  // Plain words for the ordinary thing that happened: the studio was with her,
+  // showed her the disclosure, and ticked the box at kickoff.
+  kickoff_checkbox: "Consent at kickoff",
 };
 
+// No kickoff entry, deliberately: 00650's own comment on the column records that
+// `opt_out_source` never carries that value, because a kickoff box is never a
+// refusal. A refusal arrives some other way, and says so.
 const REFUSAL_PHRASE: Record<ConsentSource, string> = {
   verbal: "Opted out in person",
   written: "Opted out in writing",
@@ -31,6 +49,10 @@ const REFUSAL_PHRASE: Record<ConsentSource, string> = {
   other: "Opted out",
 };
 
+// Takes the narrower table type, which `GRANT_PHRASE` satisfies by carrying one
+// more key than it needs. The lookup is by whatever string the record holds, as
+// it always was: the ledger's CHECK is the authority on that column's values,
+// and an unknown one falls back rather than printing nothing.
 function phraseFor(
   source: ConsentSource | string | null | undefined,
   table: Record<ConsentSource, string>,

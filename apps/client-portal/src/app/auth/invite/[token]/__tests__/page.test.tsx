@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
 import InvitePage from '../page';
@@ -128,6 +128,71 @@ it('P21 — a capability that resolves to nothing says only what a lapsed one sa
   await renderCapability(ROW, null);
   expect(screen.getByText('This letter’s gone stale.')).toBeInTheDocument();
   expect(screen.queryByTestId('letter-letterhead')).toBeNull();
+});
+
+/**
+ * SQ-108 LOW-4 — THE LAPSED CAPABILITY'S ONE TAP.
+ *
+ * A homeowner reached by text has no account and no portal to ask anything in;
+ * this button is the whole of what she can do when her 90 days run out. It must
+ * carry the token SHE holds — the capability, not a mailed token she was never
+ * sent — because that string is all the refresh leg has to find her letter by
+ * (client_link_refresh_target, 00654). Keyed on anything else, the tap answers
+ * "a fresh letter is on its way" and re-mints nothing.
+ */
+describe('P21 — the lapsed capability taps for a fresh letter', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
+  });
+
+  it('posts the capability token she holds to the refresh leg', async () => {
+    // Her capability is dead, so resolve_client_link answers NULL and the page
+    // falls through to the bare stale door — the same door an unknown token gets.
+    maybeSingle.mockResolvedValue({ data: null });
+    rpc.mockResolvedValue({ data: null });
+    const ui = await InvitePage({ params: Promise.resolve({ token: 'lapsed-cap-token' }) });
+    render(ui as ReactElement);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send a fresh letter' }));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe('/api/auth/invite/refresh');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ token: 'lapsed-cap-token' });
+
+    // And she is told the same thing whatever the token was: this page is no
+    // oracle for which tokens are real.
+    expect(await screen.findByText('A fresh letter is on its way.')).toBeInTheDocument();
+  });
+
+  it('asks once, however many times she taps', async () => {
+    maybeSingle.mockResolvedValue({ data: null });
+    rpc.mockResolvedValue({ data: null });
+    const ui = await InvitePage({ params: Promise.resolve({ token: 'lapsed-cap-token' }) });
+    render(ui as ReactElement);
+
+    const button = screen.getByRole('button', { name: 'Send a fresh letter' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+  });
+
+  it('never puts a mailed token in her hand — the refresh carries hers alone', async () => {
+    maybeSingle.mockResolvedValue({ data: null });
+    rpc.mockResolvedValue({ data: null });
+    const ui = await InvitePage({ params: Promise.resolve({ token: 'lapsed-cap-token' }) });
+    const { container } = render(ui as ReactElement);
+
+    // The page printed no snapshot and no other token: the only string it holds
+    // is the one she arrived with.
+    expect(container.innerHTML).not.toContain('tok1');
+    expect(screen.queryByTestId('letter-letterhead')).toBeNull();
+  });
 });
 
 it('P21 — a letter already opened still opens for the capability holder', async () => {
