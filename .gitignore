@@ -128,5 +128,3 @@ artifacts/**/render-check/
 artifacts/ios-daily-return-2026-08-26/mock/calibrate/
 artifacts/ios-daily-return-2026-08-26/mock/kit-demo-*.png
 
-# Retired Coolify box: env snapshots hold credentials, never commit
-infra/coolify/
