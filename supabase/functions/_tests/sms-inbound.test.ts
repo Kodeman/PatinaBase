@@ -3212,25 +3212,53 @@ Deno.test("an old reference never changes target: a moved list is refused and ha
   assert(/changed/i.test(String(reply?.message)), `the truth, plainly: "${reply?.message}"`);
 });
 
+/**
+ * Her delivery card, and the reference it is answered with. The version is the
+ * producer's frozen local YYYYMMDD, because that is what field-daily writes on a
+ * window_pick (00645's convention) and what the reply path reads the card's own
+ * day off. The proposals are seeded through the fixture's `delivery()`, the one
+ * place a window is ever proposed (field_delivery_reports, 00641).
+ */
+const WINDOW_ASK_DAY = 20261101;
+function windowAsk(f: ReturnType<typeof clientFixture>, subjectId: string) {
+  return f.ask({
+    id: "prompt-w",
+    kind: "window_pick",
+    subject_id: subjectId,
+    short_code: "42",
+    version: WINDOW_ASK_DAY,
+  });
+}
+
 Deno.test("A, B and C on a delivery card record availability and nothing else", async () => {
-  for (const [option, expected] of [["A", "Tue 9-12"], ["B", "Thu 1-4"], ["C", null]] as const) {
+  // The labels are the ones the card composes from the fixture's two proposals
+  // (Nov 3 "2-4" and Nov 5 "morning"), and C names no window at all.
+  for (const [option, expected] of [["A", "Nov 3 2-4"], ["B", "Nov 5 morning"], ["C", null]] as const) {
     const f = clientFixture();
-    f.ask({
-      id: "prompt-w",
-      kind: "window_pick",
-      subject_id: "delivery-1",
-      short_code: "42",
-      proposed_effect: { options: { A: "Tue 9-12", B: "Thu 1-4" } },
-    });
+    const truck = f.delivery();
+    windowAsk(f, truck.subjectId);
     const res = await f.inbound(`${option} 42`, `SMwin${option}`);
     assertEquals(res.disposition, "client_window_recorded", `[${option}]`);
     const rows = f.h.fake._data.delivery_availability;
     assertEquals(rows.length, 1, `[${option}] one availability row`);
     assertEquals(rows[0].option, option);
-    assertEquals(rows[0].window_label, expected);
+    assertEquals(rows[0].window_label, expected, `[${option}] the window she was offered`);
     assertEquals(rows[0].subject_kind, "delivery");
+    assertEquals(rows[0].subject_id, truck.subjectId, `[${option}] against the delivery`);
     assertEquals(rows[0].recorded_by_party_id, "party-c");
     assertEquals(rows[0].source_sid, `SMwin${option}`);
+    // HER ANSWER CARRIES NO VERSION. select_window has no stale door in 00651
+    // and wants none: availability against a delivery cannot go out of date the
+    // way a reply to a list of picks can.
+    const payload = (clientStamp(f, `SMwin${option}`).parsed_intent as Record<string, unknown>)
+      .payload as Record<string, unknown>;
+    assertEquals(payload.option, option);
+    assertEquals("version" in payload, false, `[${option}] nothing about it can go stale`);
+    assertEquals(
+      "label_drift" in (clientStamp(f, `SMwin${option}`).parsed_intent as Record<string, unknown>),
+      false,
+      `[${option}] and the label needed no apology`,
+    );
     // NOT A CONFIRMATION. Her availability is not the crew saying the sofa
     // arrived: no field effect is filed, no delivery event is touched, and the
     // receiver's own sms_delivery_confirm leg is left exactly where it is.
@@ -3243,6 +3271,138 @@ Deno.test("A, B and C on a delivery card record availability and nothing else", 
       assert(reply.includes(expected!), `[${option}] names the window she picked: "${reply}"`);
     }
   }
+});
+
+Deno.test("the window recorded for her reply is the one her card printed", async () => {
+  // THE PARITY THE DUPLICATION IS HELD TO. field-daily/core.ts's issueWindowPick
+  // composes the card and sms-inbound/pipeline.ts's offeredWindows composes it
+  // again; this runs BOTH on one fixture and asserts the string recorded for her
+  // reply is the string that went down the wire. If the copy ever drifts from
+  // core.ts, this fails.
+  for (const option of ["A", "B"] as const) {
+    const f = clientFixture();
+    f.delivery();
+    const summary = await f.h.daily();
+    assertEquals(summary.client_window_picks_sent, 1, `[${option}] the card went out`);
+    const ask = (f.h.fake._data.sms_prompts ?? []).find((row: Record<string, unknown>) =>
+      row.kind === "window_pick"
+    )!;
+    assert(ask, `[${option}] there is a reference to answer`);
+    const card = f.h.provider.requests
+      .filter((r) => r.url.includes("/Messages.json"))
+      .map((r) => new URLSearchParams(String(r.init?.body ?? "")))
+      .filter((p) => p.get("To") === CLIENT_PHONE)
+      .map((p) => p.get("Body") ?? "")
+      .find((body) => body.includes("delivery for"))!;
+    assert(card, `[${option}] a card reached her`);
+
+    const res = await f.inbound(`${option} ${ask.short_code}`, `SMparity${option}`);
+    assertEquals(res.disposition, "client_window_recorded", `[${option}]`);
+    const recorded = String(
+      f.h.fake._data.delivery_availability.find((row: Record<string, unknown>) =>
+        row.source_sid === `SMparity${option}`
+      )!.window_label,
+    );
+    assert(
+      card.includes(`Reply A (`) && card.includes(`), or C for neither`),
+      `the card prints both windows: "${card}"`,
+    );
+    assert(
+      card.includes(option === "A" ? `Reply A (${recorded})` : `B (${recorded})`),
+      `[${option}] recorded "${recorded}", card said "${card}"`,
+    );
+  }
+});
+
+Deno.test("proposals that changed since the card record the letter and admit the label is unknown", async () => {
+  // SHE IS NOT RECORDED AGAINST A WINDOW SHE NEVER READ. Each shape below breaks
+  // the card's composition in one way AFTER it went out; her letter is still
+  // recorded, window_label is NULL, and the receipt says why.
+  const shapes: Array<{
+    name: string;
+    break: (f: ReturnType<typeof clientFixture>) => void;
+    drift: string;
+  }> = [
+    {
+      name: "a window withdrawn",
+      drift: "proposals_changed",
+      break: (f) => {
+        f.h.fake._data.field_delivery_reports = f.h.fake._data.field_delivery_reports
+          .filter((row: Record<string, unknown>) => row.id !== "fdr-task-delivery-2");
+      },
+    },
+    {
+      name: "a window re-worded in place after the card",
+      drift: "proposals_changed",
+      break: (f) => {
+        const row = f.h.fake._data.field_delivery_reports
+          .find((r: Record<string, unknown>) => r.id === "fdr-task-delivery-1")!;
+        // apply_field_effect stamps availability_at whenever it rewrites a
+        // proposal (00641:432-436), so a proposal younger than the reference is
+        // one the card cannot have printed.
+        row.proposed_window = "3-5";
+        row.availability_at = "2026-11-01T15:00:00.000Z";
+      },
+    },
+    {
+      name: "two proposals that now print the same words",
+      drift: "proposals_changed",
+      break: (f) => {
+        const row = f.h.fake._data.field_delivery_reports
+          .find((r: Record<string, unknown>) => r.id === "fdr-task-delivery-2")!;
+        row.proposed_date = "2026-11-03";
+        row.proposed_window = "2-4";
+      },
+    },
+  ];
+
+  for (const shape of shapes) {
+    const f = clientFixture();
+    const truck = f.delivery();
+    windowAsk(f, truck.subjectId);
+    shape.break(f);
+    const res = await f.inbound("A 42", "SMdrift");
+    assertEquals(res.disposition, "client_window_recorded", `[${shape.name}] she is still answered`);
+    assertEquals(res.effectApplied, true, `[${shape.name}] and her letter is on the record`);
+    const rows = f.h.fake._data.delivery_availability;
+    assertEquals(rows.length, 1, `[${shape.name}] one availability row`);
+    assertEquals(rows[0].option, "A", `[${shape.name}] the letter she sent`);
+    assertEquals(rows[0].window_label, null, `[${shape.name}] and no invented window`);
+    const parsed = clientStamp(f, "SMdrift").parsed_intent as Record<string, unknown>;
+    assertEquals(parsed.label_drift, shape.drift, `[${shape.name}] the receipt says why`);
+    assertEquals(
+      "window_label" in (parsed.payload as Record<string, unknown>),
+      false,
+      `[${shape.name}] nothing was sent for SQL to record`,
+    );
+    // She is told what she picked in the only words that are still true.
+    assert(
+      /option A/.test(String(res.replies?.[0]?.message ?? "")),
+      `[${shape.name}] "${res.replies?.[0]?.message}"`,
+    );
+  }
+});
+
+Deno.test("a reference that is not a delivery card's cannot name a window either", async () => {
+  // A window_pick whose version is not the producer's frozen YYYYMMDD names no
+  // day to compose against, so there is nothing to read and nothing is guessed.
+  const f = clientFixture();
+  const truck = f.delivery();
+  f.ask({
+    id: "prompt-w",
+    kind: "window_pick",
+    subject_id: truck.subjectId,
+    short_code: "42",
+    version: 1,
+  });
+  const res = await f.inbound("B 42", "SMnoday");
+  assertEquals(res.disposition, "client_window_recorded");
+  assertEquals(f.h.fake._data.delivery_availability[0].option, "B");
+  assertEquals(f.h.fake._data.delivery_availability[0].window_label, null);
+  assertEquals(
+    (clientStamp(f, "SMnoday").parsed_intent as Record<string, unknown>).label_drift,
+    "proposals_changed",
+  );
 });
 
 Deno.test("anything else a homeowner says goes to a person, not a parser", async () => {
