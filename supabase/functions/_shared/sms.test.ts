@@ -3066,3 +3066,97 @@ Deno.test("GATE 5: the flush spends the slot, and hands the row back when it can
   assertEquals(wires.length, 1);
   assertEquals((fake._data.sms_messages ?? [])[0].twilio_status, "queued");
 });
+
+Deno.test("GATE 4: the flush re-asks the dead end — yesterday's fold never walks through today's pause", async () => {
+  // A fold's whole point is that the text arrives TOMORROW, and the server that
+  // flushes is not the run that deferred. By tomorrow the party may have gone
+  // quiet on two prompts, had the thread handed to the project lead and had
+  // prompts PAUSED. Re-asking the phase and the budget but not the dead end let
+  // the fold out through the pause the handoff exists to enforce (SQ-95, LOW).
+  const asked: Array<{ rpc: string; args: Record<string, unknown> }> = [];
+  const gate: Array<Record<string, unknown>> = [
+    // Day D, at the send: the party is answering fine, so the text only folds
+    // because the budget is spent.
+    { allowed: true },
+    // Day D+1, at the flush: two asks went unanswered, and the pause the handoff
+    // wrote is standing.
+    {
+      allowed: false,
+      reason: "paused",
+      paused_until: "2026-07-10T18:00:00.000Z",
+      owner_user_id: "u-designer",
+    },
+  ];
+  const budget: Array<Record<string, unknown>> = [{ claimed: false, reason: "budget" }];
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+    email_templates: [{
+      slug: "field_card",
+      is_active: true,
+      html_content: "{{studio_name}} at the job site today. " +
+        "Msg&data rates may apply. Reply HELP for help, STOP to opt out.",
+    }],
+  }, {
+    sms_party_prompt_gate: (args: Record<string, unknown>) => {
+      asked.push({ rpc: "sms_party_prompt_gate", args });
+      return { data: gate.shift() ?? { allowed: true }, error: null };
+    },
+    sms_claim_party_budget: (args: Record<string, unknown>) => {
+      asked.push({ rpc: "sms_claim_party_budget", args });
+      return { data: budget.shift() ?? { claimed: true }, error: null };
+    },
+  });
+
+  const folded = await sendPartySms(
+    fake as never,
+    {
+      partyId: "p1",
+      templateKey: "field_card",
+      dedupeKey: "card:2026-07-08",
+      automationPhase: 1,
+      cadenceClass: "event",
+    } as never,
+    { getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }), fetchImpl: mustNotSend(), now: OPEN },
+  );
+  assertEquals(folded.status, "deferred");
+  assertEquals(folded.reason, "budget", "day D: over budget, so it waits for the digest");
+
+  // Tomorrow, ~noon Chicago: a new local day, inside the 24h TTL, and the budget
+  // WOULD now say yes. The dead-end gate is therefore the only thing that can
+  // stop this row — if the flush does not ask it, the text goes out.
+  const wires: string[] = [];
+  const nextDay = {
+    ...wireDeps(wires, new Date("2026-07-09T17:00:00Z")),
+    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }),
+  };
+  const held = await flushDeferredMessages(fake as never, nextDay);
+
+  assertEquals(held.flushed, 0, "the pause holds the fold");
+  assertEquals(wires.length, 0, "and nothing reached the provider");
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(row.twilio_status, "deferred", "still waiting, not failed");
+  assertEquals(row.claimed_at, null, "and a refused gate never cost the row its claim");
+  assertEquals(row.error_message, "prompts_paused", "the row says which gate held it");
+  assertEquals(
+    asked.map((a) => a.rpc),
+    ["sms_party_prompt_gate", "sms_claim_party_budget", "sms_party_prompt_gate"],
+    "the flush asked the dead-end gate, once, and never reached the budget",
+  );
+  const flushAsk = asked[2].args;
+  assertEquals(flushAsk.p_party_id, "p1");
+  assertEquals(flushAsk.p_project_id, "proj1");
+  assertEquals(flushAsk.p_conversation_id, row.conversation_id, "about THIS thread");
+
+  // A hold, not a drop: when the pause lifts, the same row goes out — once.
+  const released = await flushDeferredMessages(fake as never, nextDay);
+  assertEquals(released.flushed, 1, "the fold was kept, not thrown away");
+  assertEquals(wires.length, 1);
+  assertEquals((fake._data.sms_messages ?? [])[0].twilio_status, "queued");
+  assertEquals(
+    asked.filter((a) => a.rpc === "sms_claim_party_budget").length,
+    2,
+    "and a slot is spent only by the attempt that got past the gate",
+  );
+});

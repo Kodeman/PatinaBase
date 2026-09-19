@@ -2288,6 +2288,46 @@ export async function flushDeferredMessages(
       continue;
     }
 
+    // Read once: the dead-end gate below and the budget claim after the row is
+    // taken ask about the same paced send, so they read the same two fields.
+    const cadenceClass = recipe?.cadence_class ?? null;
+    const cadenceProject = row.project_id ?? deferredProjectId;
+    const paced = !!cadenceClass && !!row.party_id && !!cadenceProject &&
+      !!row.conversation_id;
+
+    // ── The dead-end gate, re-asked at the moment of dispatch (GATE 4) ──────
+    // The same reason the phase gate above is re-asked: the server that flushes
+    // is not the server that deferred, and what was true last night is not what
+    // binds this morning's send. A row folded on day D goes out on D+1 — and by
+    // then the party may have gone quiet on two prompts, been handed to the
+    // project lead, and had prompts PAUSED for them. Sending the fold anyway
+    // walks straight through the pause that the handoff exists to enforce, and
+    // it is the loudest possible thing to do to someone who has stopped
+    // answering. Asked BEFORE the exclusive claim, because a gate that refuses
+    // should not have cost the row its claim stamp; the row stays DEFERRED with
+    // the reason, exactly as the phase gate leaves it, and the 24h TTL is what
+    // ends it honestly if the pause outlives the window. Asking again cannot
+    // produce a second handoff: 00645's gate compare-and-sets on the streak's
+    // oldest unanswered prompt id, so the one already taken is the one there is.
+    if (paced) {
+      const gate = await partyPromptGate(
+        supabase,
+        row.conversation_id,
+        cadenceProject!,
+        row.party_id!,
+      );
+      if (!gate.allowed) {
+        await supabase
+          .from("sms_messages")
+          .update({
+            error_message: gate.reason === "paused" ? "prompts_paused" : "dead_end",
+          })
+          .eq("id", row.id);
+        skipped++;
+        continue;
+      }
+    }
+
     // ── TAKE THE ROW EXCLUSIVELY, BEFORE ANYTHING IRREVERSIBLE ─────────────
     // The gates have all answered yes; from here on this row is going to mint a
     // link and call a provider, and both of those are things that must happen
@@ -2337,16 +2377,14 @@ export async function flushDeferredMessages(
     // claiming first and then losing the row race burns a slot on a text this
     // process is not going to send, and the party's next real message pays for
     // it.
-    const cadenceClass = recipe?.cadence_class ?? null;
-    const cadenceProject = row.project_id ?? deferredProjectId;
-    if (cadenceClass && row.party_id && cadenceProject) {
+    if (paced) {
       const budget = await claimCadenceSlot(
         supabase,
         row.conversation_id,
-        cadenceProject,
-        row.party_id,
+        cadenceProject!,
+        row.party_id!,
         localDayInTimezone(now, fieldTz),
-        cadenceClass,
+        cadenceClass!,
       );
       if (!budget.claimed) {
         // Hand the row back exactly as it came, still waiting, saying why.

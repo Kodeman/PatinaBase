@@ -39,8 +39,15 @@
 -- NO new table: the cadence and dead-end state are columns on
 -- sms_conversation_context, which already exists, is already RLS-scoped to the
 -- studio, and already carries this conversation's pause. So there is no new
--- table privilege to REVOKE and supabase/seed/00-legacy-grants.sql does not
--- change. The new FUNCTIONS carry the standard service-only ACL below.
+-- table privilege to REVOKE. The new FUNCTIONS carry the standard service-only
+-- ACL below, and supabase/seed/00-legacy-grants.sql DOES change for them: that
+-- sheet restores the legacy blanket GRANT ALL over every public object after
+-- migrations run on a fresh local stack and then replays each migration's own
+-- GRANT/REVOKE in order, so a REVOKE it does not record is simply undone and
+-- both SECURITY DEFINER functions below come back executable by anon. Regenerate
+-- it with `python3 scripts/generate-legacy-grants.py` — never by hand: the last
+-- sheet written wins, so a hand-merged one silently re-grants a neighbouring
+-- migration's REVOKEs along with its own.
 --
 -- NONE OF THESE VERBS SAYS GOODS WERE RECEIVED. A crew arriving, running late,
 -- finding a problem or leaving is a field report about a visit; receiving is
@@ -263,11 +270,13 @@ BEGIN
     RETURNING paused_until INTO v_paused;
     v_handoff := FOUND;
 
-    -- The owned review row. Preferring the party's newest INBOUND message puts
-    -- it in sms_review_queue (00639), which filters on direction; a party who
-    -- has never texted back has only outbound rows, and flagging the newest of
-    -- those is still a row with an owner on it even though the queue view will
-    -- not list it. Exactly-once does NOT depend on this write: the
+    -- The owned review row, preferring the party's newest INBOUND message: the
+    -- designer reads the queue to answer somebody, so the thing they should land
+    -- on is the last thing the party actually said. A party who has never texted
+    -- back has only outbound rows, so the newest of those is flagged instead —
+    -- and section 3b below widens sms_review_queue (00639 filtered on
+    -- direction = 'inbound') so that row IS listed. A handoff nobody can see is
+    -- not a handoff. Exactly-once does NOT depend on this write: the
     -- compare-and-set above is the claim, and this is how a person is told.
     IF v_handoff AND v_owner IS NOT NULL THEN
       SELECT id INTO v_message
@@ -307,6 +316,62 @@ COMMENT ON FUNCTION public.sms_party_prompt_gate(uuid, uuid, uuid, integer, inte
   'project lead ONCE (compare-and-set on the streak''s oldest prompt id) and '
   'pauses prompts for p_pause_hours. A third unanswered prompt creates no '
   'second handoff. Excludes optin and mark_done prompts.';
+
+-- ── 3b. The owned handoff is visible in the designer's queue ─────────────────
+-- 00639 built sms_review_queue as "the Desk's unreviewed INBOUND field texts",
+-- which was the whole story when every needs_review row came from something a
+-- party had said. The dead-end handoff above is the first row that does not: the
+-- rail stops because a party said NOTHING, and a trade who has only ever been
+-- texted has no inbound row to flag, so the gate owns the newest OUTBOUND one.
+-- Under the inbound filter that handoff existed, had an owner, paused the rail —
+-- and appeared to nobody. The designer was told to call someone in a queue that
+-- never showed the someone.
+--
+-- So the queue lists a row that is inbound, OR one that has been given an owner.
+-- An owner is the studio's own act of assignment (00642's sms_take_thread, or
+-- this migration's gate naming the project lead), which is exactly the thing a
+-- queue is for. An outbound row that merely carries needs_review with no owner
+-- is NOT listed: nothing has claimed it, and the queue is a work list, not a log.
+--
+-- Column list identical to 00639's, so packages/supabase/src/database.types.ts
+-- is unchanged. Still SECURITY INVOKER: the project-scoped sms_messages policies
+-- are the only tenant predicate here, and they scope outbound rows exactly as
+-- they scope inbound ones, so widening the direction filter cannot widen a
+-- studio's view past its own projects.
+CREATE OR REPLACE VIEW public.sms_review_queue
+  WITH (security_invoker = true) AS
+SELECT
+  m.id,
+  m.conversation_id,
+  m.project_id,
+  m.party_id,
+  m.owner_user_id,
+  m.direction,
+  m.body,
+  m.media,
+  m.template_key,
+  m.parsed_intent,
+  m.confidence,
+  m.matched_task_id,
+  m.matched_coordination_item_id,
+  m.created_at,
+  pp.display_name AS party_display_name,
+  pp.party_kind,
+  pp.trade
+FROM public.sms_messages m
+LEFT JOIN public.project_parties pp ON pp.id = m.party_id
+WHERE (m.direction = 'inbound' OR m.owner_user_id IS NOT NULL)
+  AND m.needs_review
+  AND m.reviewed_at IS NULL
+  AND m.project_id IS NOT NULL;
+
+COMMENT ON VIEW public.sms_review_queue IS
+  'The Field Line (00639, widened in 00645), contract S4/P5: the Desk''s '
+  'unreviewed field texts needing review — every inbound one, plus any row that '
+  'has been ASSIGNED an owner, which is how a dead-end handoff on a party who '
+  'has only ever been texted reaches the designer it names. SECURITY INVOKER — '
+  'the project-scoped sms_messages policies scope every row, so an unattributed '
+  'message never appears and no studio sees another''s queue.';
 
 -- ── 4. Trade prompt kinds where kinds are enumerated ────────────────────────
 -- 00643's daily-identity lock is what makes a producer that runs twice (a

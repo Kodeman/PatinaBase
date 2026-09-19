@@ -382,12 +382,21 @@ BEGIN
     WHERE conversation_id='64500000-0000-4000-8000-000000000051' AND needs_review
       AND owner_user_id='64500000-0000-4000-8000-000000000001'),
     'exactly one message is flagged for the lead';
-  -- Honest limitation, documented in the function: this party has only ever
-  -- been TEXTED, and 00639's review queue lists inbound work. The row is owned
-  -- either way, and exactly-once never depended on this write.
+  -- This party has only ever been TEXTED, so the flagged row is OUTBOUND, and
+  -- 00639's queue listed inbound work only: the handoff existed, had an owner,
+  -- paused the rail, and appeared to nobody. 00645 widens the view to any row
+  -- that has been ASSIGNED an owner, so the designer the gate named can see the
+  -- thing they are being asked to call about. Tenant scope is asserted as two
+  -- real members in A6b; this is the predicate itself.
   ASSERT (SELECT direction='outbound' FROM public.sms_messages WHERE id=outbound);
-  ASSERT NOT EXISTS (SELECT 1 FROM public.sms_review_queue WHERE id=outbound),
-    'an outbound flag is owned, but the inbound queue does not list it';
+  ASSERT EXISTS (SELECT 1 FROM public.sms_review_queue WHERE id=outbound),
+    'the owned outbound handoff IS listed (00645 widened 00639''s inbound filter)';
+  -- And the queue is still a work list, not a log: a needs_review row nobody has
+  -- claimed is not listed just for being outbound.
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.sms_review_queue q
+     WHERE q.direction='outbound' AND q.owner_user_id IS NULL),
+    'an unowned outbound row is not in anybody''s queue';
 
   -- The next ask meets the pause the handoff itself wrote.
   r := pg_temp.gate();
@@ -419,6 +428,52 @@ BEGIN
   ASSERT (r->>'allowed')::boolean AND (r->>'unanswered')::int=0,
     'a party who answered is not still a dead end: '||r::text;
 END $a6$;
+
+-- ── A6b. The handoff reaches its own studio, and no other ───────────────────
+-- sms_review_queue is SECURITY INVOKER: 00639's project-scoped sms_messages
+-- policies are the ONLY tenant predicate in it, so widening the direction filter
+-- has to be asked as two real members rather than as the superuser who bypasses
+-- RLS. A second studio, with its own active owner, is what "no other" means here.
+INSERT INTO auth.users(id,email) VALUES
+ ('64500000-0000-4000-8000-000000000002','sq12-other@test.invalid');
+INSERT INTO profiles(id,email,full_name) VALUES
+ ('64500000-0000-4000-8000-000000000002','sq12-other@test.invalid','Another studio''s lead')
+ ON CONFLICT DO NOTHING;
+INSERT INTO organizations(id,type,name,slug,status) VALUES
+ ('64500000-0000-4000-8000-000000000011','design_studio','Other studio','sq12-other','active');
+INSERT INTO organization_members(user_id,organization_id,role,status) VALUES
+ ('64500000-0000-4000-8000-000000000002','64500000-0000-4000-8000-000000000011','owner','active');
+
+DO $a6b$
+DECLARE v_handoff uuid; v_claims text := current_setting('request.jwt.claims', true);
+BEGIN
+  SELECT id INTO v_handoff FROM public.sms_messages
+   WHERE conversation_id='64500000-0000-4000-8000-000000000051'
+     AND needs_review AND owner_user_id='64500000-0000-4000-8000-000000000001';
+  ASSERT v_handoff IS NOT NULL, 'A6 left an owned handoff to look for';
+
+  -- The project's own designer, who is the lead the gate named.
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    '{"sub":"64500000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  ASSERT EXISTS (SELECT 1 FROM public.sms_review_queue
+    WHERE id=v_handoff AND direction='outbound'
+      AND owner_user_id='64500000-0000-4000-8000-000000000001'),
+    'the owning studio SEES the dead-end handoff on a party it has only texted';
+  RESET ROLE;
+
+  -- Another studio's owner: same view, same widened predicate, nothing to see.
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    '{"sub":"64500000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+  ASSERT NOT EXISTS (SELECT 1 FROM public.sms_review_queue WHERE id=v_handoff),
+    'another studio does NOT: widening the direction filter widened no tenant';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.sms_review_queue),
+    'and that studio''s queue is empty, not merely missing this row';
+  RESET ROLE;
+
+  PERFORM set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+END $a6b$;
 
 -- ── A7. The copy: GSM-7, two segments at full length, one closing line ──────
 DO $a7$

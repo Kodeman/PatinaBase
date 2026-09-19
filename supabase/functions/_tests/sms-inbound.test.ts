@@ -6,6 +6,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asse
 import { processInbound, tradeShape, type InboundParams } from "../sms-inbound/pipeline.ts";
 import type { FieldParseResult } from "../_shared/field-parse.ts";
 import { createFakeSupabase as baseFakeSupabase, type FakeSupabase } from "./fake-supabase.ts";
+import { inboundFixture } from "./field-line/inbound-fixture.ts";
 
 function createFakeSupabase(...args: Parameters<typeof baseFakeSupabase>): FakeSupabase {
   const fake = baseFakeSupabase(...args);
@@ -2681,6 +2682,99 @@ Deno.test("P11: an unknown sender is never renewed — there is no party to scop
   );
   assert(res.disposition !== "link_renewed", `got ${res.disposition}`);
   assertEquals(mints.length, 0, "an unknown number mints nothing");
+});
+
+// ── LATE NN is minutes only where a card actually asked (SQ-95 check 6) ─────
+//
+// The trade reading of "LATE 20" is an EXCEPTION carved out of Phase 0's live
+// `<VERB> NN` reference grammar, and an exception that fires unconditionally is
+// not an exception — it is a removal. Suppressing the reference match for every
+// LATE body re-attributed "LATE 17" on a closed reference to whatever single
+// prompt happened to be open and handed it to a designer as needs_review, while
+// "DELAY 17" — the synonym both 00641 and 00645 map to report_delay — correctly
+// answered that the reference is closed. The four worlds below are the ones
+// SQ-95's probe walked, pinned at the pipeline level: minutes require BOTH the
+// running rail (FIELD_LINE_PHASE >= 1) and exactly one open site_card/day_of on
+// the pair, so each conjunct has a world that fails only it.
+
+/** The stamped inbound rows — what the designer's review queue would see. */
+function inboundStamps(f: ReturnType<typeof inboundFixture>): Array<Record<string, unknown>> {
+  return (f.h.fake._data.sms_messages ?? []).filter((m: Record<string, unknown>) => m.direction === "inbound");
+}
+
+/** Ref 17 answered yesterday; ref 18 the one open prompt, and not a trade one. */
+function closedRefWorld() {
+  const f = inboundFixture(undefined, undefined, { FIELD_LINE_PHASE: "1" });
+  f.prompt({ answered_at: "2026-10-31T12:00:00.000Z" });
+  f.prompt({ id: "prompt-new", version: 2, short_code: "18", kind: "report_delay" });
+  return f;
+}
+
+Deno.test("R1(a): LATE 17 on a closed reference says so, exactly as DELAY 17 and HERE 17 do", async () => {
+  // Phase 1 is ON here: nothing but the absence of an open card keeps the
+  // number a reference, which is the half of the rule this world isolates.
+  for (const body of ["DELAY 17", "HERE 17", "LATE 17"]) {
+    const tag = `[${body}]`;
+    const f = closedRefWorld();
+    const res = await f.h.processInbound({ Body: body, MessageSid: "SMr1a" + body.replace(/\W/g, "") });
+    assertEquals(res.disposition, "ref_closed", `${tag} a closed reference is answered as closed`);
+    const stamps = inboundStamps(f);
+    assertEquals(stamps.length, 1, `${tag} one inbound row`);
+    assert(!stamps[0].needs_review, `${tag} never becomes the designer's problem`);
+    assertEquals(stamps[0].owner_user_id ?? null, null, `${tag} owns nobody`);
+    assertEquals(f.effects.length, 0, `${tag} files nothing`);
+    const other = (f.h.fake._data.sms_prompts ?? []).find((p: Record<string, unknown>) => p.short_code === "18");
+    assertEquals(other?.answered_at ?? null, null, `${tag} did not answer ref 18 on the party's behalf`);
+  }
+});
+
+Deno.test("R1(b): with two open non-trade prompts, LATE 18 names prompt 18 exactly as DELAY 18 does", async () => {
+  const seen: Array<Record<string, unknown>> = [];
+  for (const body of ["DELAY 18", "LATE 18"]) {
+    const f = inboundFixture(undefined, undefined, { FIELD_LINE_PHASE: "1" });
+    f.prompt({ short_code: "17", kind: "report_delay" });
+    f.prompt({ id: "prompt-new", version: 2, short_code: "18", kind: "report_delay" });
+    const res = await f.h.processInbound({ Body: body, MessageSid: "SMr1b" + body.replace(/\W/g, "") });
+    const parsed = inboundStamps(f)[0]?.parsed_intent as Record<string, unknown> | null;
+    // The code identified the prompt, so the reply was never a clarification.
+    assertEquals(parsed?.path, "ref", `[${body}] resolved a reference`);
+    assertEquals(parsed?.prompt_id, "prompt-new", `[${body}] resolved reference 18`);
+    assertEquals(parsed?.version, 2, `[${body}] and that prompt's version`);
+    seen.push({ disposition: res.disposition, prompt_id: parsed?.prompt_id, version: parsed?.version });
+  }
+  // The claim is not "LATE 18 is handled" — it is "handled IDENTICALLY to DELAY 18".
+  assertEquals(seen[1], seen[0], "LATE NN and DELAY NN read the same reference");
+});
+
+Deno.test("R1(c): at phase 1 with one open site card, LATE 20 is twenty MINUTES on that card", async () => {
+  const f = inboundFixture(undefined, undefined, { FIELD_LINE_PHASE: "1" });
+  // The card's own reference is 21, and no prompt in this world is numbered 20,
+  // so a minutes reading and a reference reading cannot be confused for each other.
+  const card = f.prompt({ id: "prompt-card", short_code: "21", kind: "site_card" });
+  assert(
+    (f.h.fake._data.sms_prompts ?? []).every((p: Record<string, unknown>) => p.short_code !== "20"),
+    "there is no reference 20 in this world",
+  );
+  const res = await f.h.processInbound({ Body: "LATE 20", MessageSid: "SMr1c" });
+  assertEquals(res.disposition, "ref_applied", "the card got the answer it asked for");
+  assertEquals(f.effects.length, 1, "one delay filed");
+  const effect = f.effects[0].p_effect as { type: string; note: string };
+  assertEquals(effect.type, "report_delay");
+  assertEquals(effect.note, "Running about 20 minutes late.", "20 is minutes, and it is in the note");
+  assertEquals(f.effects[0].p_party_id, "party-a");
+  assert(card.answered_at, "the prompt it answered is the card that printed the words");
+});
+
+Deno.test("R1(d): the same world with the rail off reads LATE 20 as reference 20, never as minutes", async () => {
+  // FIELD_LINE_PHASE absent = 0. A site_card row cannot be minted by the phase-0
+  // rail at all, so this world isolates the phase conjunct: even with the card
+  // sitting open, the server that is not running the rail does not read its words.
+  const f = inboundFixture();
+  const card = f.prompt({ id: "prompt-card", short_code: "21", kind: "site_card" });
+  const res = await f.h.processInbound({ Body: "LATE 20", MessageSid: "SMr1d" });
+  assertEquals(res.disposition, "ref_closed", "reference 20 does not exist, and is answered as a reference");
+  assertEquals(f.effects.length, 0, "no delay is filed off a rail that is switched off");
+  assertEquals(card.answered_at ?? null, null, "and the card was not consumed");
 });
 
 // The exact inbound verifier includes Phase 0 reference/transport regressions.

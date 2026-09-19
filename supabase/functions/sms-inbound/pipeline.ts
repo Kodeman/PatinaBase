@@ -24,7 +24,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseFieldMessage, type FieldParseInput, type FieldParseResult } from "../_shared/field-parse.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
-import { channelConsentVerdict, orgsOfProjects, resolveStudioName, recoverSmsSelection, sendPartySms } from "../_shared/sms.ts";
+import { channelConsentVerdict, fieldLinePhase, orgsOfProjects, resolveStudioName, recoverSmsSelection, sendPartySms } from "../_shared/sms.ts";
 import { captureServerEvent } from "../_shared/aesthete-events.ts";
 
 import type { SelectionIntent, SelectionQuestion } from "../_shared/sms-selection.ts";
@@ -2193,27 +2193,40 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
     if (!recovered.selection?.usable) return selectionUnavailable(recovered);
     priorAsked = true;
   }
-  // "LATE 20" on a site card is TWENTY MINUTES, not reference 20 (contract P3).
-  // It is the one trade word whose shape collides with VERB NN, and the card
-  // printed it in those words, so the number is read as minutes and the reply
-  // goes through the codeless door — where the one-open-prompt rule, not a code,
-  // is what keeps a forwarded card from answering someone else's question.
-  const trade = tradeShape(body);
-  const explicit = trade?.verb === "LATE"
-    ? null
-    : body.match(/^([a-z]+)\s+(\d{2,3})$/i);
-  const bareVerb = !!trade ||
-    /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|damage|good|fine|delay)$/i.test(body);
   const { data: open, error: openError } = await supabase.from("sms_prompts").select("*")
     .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
     .gt("expires_at", now.toISOString());
   if (openError) return { status: 503, twiml: twimlBody(), disposition: "ref_unreadable" };
-  let prompt: SmsPrompt | null = null;
   // A trade word binds to the open TRADE prompt even when yesterday's digest is
   // still open beside it: "ON MY WAY" is plainly an answer to the card that
   // asked the crew to say so, and 00645's grammar narrows its own one-open
   // count the same way rather than dropping the guard.
   const tradeOpen = (open ?? []).filter((p: SmsPrompt) => TRADE_PROMPT_KINDS.has(p.kind));
+  const trade = tradeShape(body);
+  // "LATE 20" on a site card is TWENTY MINUTES, not reference 20 (contract P3).
+  // It is the one trade word whose shape collides with VERB NN, and the card
+  // printed it in those words, so the number is read as minutes and the reply
+  // goes through the codeless door — where the one-open-prompt rule, not a code,
+  // is what keeps a forwarded card from answering someone else's question.
+  //
+  // THAT READING IS THE EXCEPTION, AND IT ONLY EXISTS WHERE A CARD ACTUALLY
+  // ASKED. Suppressing the reference match for every LATE body took the verb
+  // away from Phase 0's live ref grammar (SQ-95 check 6): "LATE 17" on a closed
+  // reference was re-attributed to whatever single prompt was open and handed to
+  // a designer as needs_review, where "DELAY 17" — the synonym 00641 and 00645
+  // both map to report_delay — correctly answered that the reference is closed.
+  // 00645's own sms_prompt_reply_verb binds LATE NN to the CODE on anything but
+  // a trade prompt, so the suppression also put TS and SQL in disagreement.
+  // Minutes therefore require both halves of the card's own precondition: the
+  // rail that prints the words is running (FIELD_LINE_PHASE >= 1), and exactly
+  // one site_card/day_of prompt is open on this (sender, recipient) pair.
+  // Otherwise NN is a reference, and is answered as one.
+  const lateIsMinutes = trade?.verb === "LATE" &&
+    fieldLinePhase(deps) >= 1 && tradeOpen.length === 1;
+  const explicit = lateIsMinutes ? null : body.match(/^([a-z]+)\s+(\d{2,3})$/i);
+  const bareVerb = !!trade ||
+    /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|damage|good|fine|delay)$/i.test(body);
+  let prompt: SmsPrompt | null = null;
   if (explicit || ((open ?? []).length === 1) || (trade && tradeOpen.length === 1)) {
     const code = explicit?.[2] ??
       (trade && tradeOpen.length === 1
