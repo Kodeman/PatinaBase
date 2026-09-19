@@ -48,6 +48,16 @@ export interface ClientFixtureOptions {
   noCapability?: boolean;
 }
 
+export interface DeliveryProposal {
+  subjectId?: string;
+  /** 'task' | 'coordination' | 'purchase_order' — 00643's own CHECK. */
+  subjectKind?: "task" | "coordination" | "purchase_order";
+  /** What the studio called the piece. */
+  title?: string;
+  /** The windows it wrote down, in the order it wrote them. */
+  windows?: Array<{ date?: string | null; window?: string | null }>;
+}
+
 export function clientFixture(options: ClientFixtureOptions = {}) {
   const fixture = inboundFixture(undefined, options.now, {
     FIELD_LINE_PHASE: "2",
@@ -194,6 +204,77 @@ export function clientFixture(options: ClientFixtureOptions = {}) {
       recipient_phone: CLIENT_PHONE,
       ...overrides,
     });
+
+  /**
+   * A DELIVERY WITH WINDOWS ON THE RECORD (US-3 P23). The only place the studio
+   * proposes one is field_delivery_reports.proposed_date / proposed_window
+   * (00641), one row per proposal, keyed by the same (subject_kind, subject_id)
+   * pair delivery_availability answers against — so two rows on one subject are
+   * the two windows a card offers.
+   *
+   * OPT-IN ON PURPOSE: the default fixture proposes nothing, because a truck on
+   * the way is a fact about one case and not about every client case, and a seed
+   * here would put a second text in every phase-2 case's tick.
+   */
+  const delivery = (options: DeliveryProposal = {}) => {
+    const subjectKind = options.subjectKind ?? "task";
+    const subjectId = options.subjectId ?? "task-delivery";
+    const title = options.title ?? "Living room sofa";
+    const windows = options.windows ?? [
+      { date: "2026-11-03", window: "2-4" },
+      { date: "2026-11-05", window: "morning" },
+    ];
+    // The subject itself, in the table 00643's CHECK points that kind at: the
+    // card prints what the studio called the piece, so something has to have
+    // been called something. owner_party_id is null for a task, because a
+    // delivery subject is not a crew member's assignment and must not turn up on
+    // anyone's digest.
+    if (subjectKind === "task") {
+      (h.fake._data.project_tasks ??= []).push({
+        id: subjectId,
+        project_id: "project-a",
+        owner_party_id: null,
+        title,
+        due_date: null,
+        status: "todo",
+      });
+    } else if (subjectKind === "coordination") {
+      h.fake._data.client_decisions.push({
+        id: subjectId,
+        project_id: "project-a",
+        designer_client_id: "household-1",
+        coordination_kind: "delivery",
+        court: "studio",
+        status: "pending",
+        title,
+        created_at: "2026-10-02T00:00:00.000Z",
+      });
+    } else {
+      (h.fake._data.purchase_orders ??= []).push({
+        id: subjectId,
+        project_id: "project-a",
+        sidemark: title,
+        po_number: "PO-1",
+      });
+    }
+    const rows = windows.map((proposal, index) => {
+      const row = {
+        id: `fdr-${subjectId}-${index + 1}`,
+        project_id: "project-a",
+        // The report is the crew's, written on the visit; the window inside it
+        // is the studio's offer to her.
+        party_id: "party-a",
+        subject_kind: subjectKind,
+        subject_id: subjectId,
+        proposed_date: proposal.date ?? null,
+        proposed_window: proposal.window ?? null,
+        availability_at: `2026-11-01T1${index}:00:00.000Z`,
+      };
+      (h.fake._data.field_delivery_reports ??= []).push(row);
+      return row;
+    });
+    return { subjectKind, subjectId, title, rows };
+  };
 
   const rpc = h.fake.rpc;
   h.fake.rpc = async (name, args = {}) => {
@@ -538,6 +619,7 @@ export function clientFixture(options: ClientFixtureOptions = {}) {
     ...fixture,
     batch,
     ask,
+    delivery,
     get mints() {
       return mints;
     },
