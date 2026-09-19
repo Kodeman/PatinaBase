@@ -605,6 +605,271 @@ export function useQueuePartyInvite() {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// WHY DIDN'T THEY GET IT? (Phase 1, P1-03)
+//
+// `explain_sms_delivery` (00647) is a DIAGNOSTIC on one seat, not a second
+// inbox: every fact below was written by some other owner, and asking changes
+// nothing. It is studio-member gated on the seat's own project and returns the
+// SAME EMPTY RESULT for a foreign studio, a removed seat, a project attached to
+// no studio and an unknown party — so an empty answer is never proof of
+// anything, and the room says exactly that.
+//
+// The link's EXPIRY is a fact; the link itself is a credential. Nothing here
+// ever holds a token or its hash, and there is no "copy the current link" act:
+// the renew path this rail actually has is INBOUND (replyToRenew, 00645), so
+// the way to a fresh link is words — the crew replies to any text and one comes
+// back.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** One open question on a seat: the ref code a crew texts back, what kind of
+ *  question it is, and when it runs out. Never a token. */
+export interface SmsDeliveryOpenPrompt {
+  ref: string;
+  kind: string;
+  expires_at?: string | null;
+}
+
+/** 00647's row, as the room reads it. */
+export interface SmsDeliveryExplanation {
+  party_id: string;
+  project_id: string | null;
+  /** The verdict off studio_channel_consent — never a frozen seat column. */
+  consent_state: string | null;
+  consent_source: string | null;
+  consent_recorded_at: string | null;
+  suppressed: boolean | null;
+  /** 'stop' | 'carrier' | 'manual' — the difference between they asked us to
+   *  stop and a carrier blocked us. */
+  suppression_reason: string | null;
+  last_attempt_at: string | null;
+  /** Our word: delivered | failed | waiting | sent | expired | stopped |
+   *  not_sent | unknown. `delivered` is the carrier's receipt for a handset and
+   *  is NEVER shown as "read". */
+  last_attempt_status: string | null;
+  /** The provider's own word, verbatim, so a status this rail has never seen is
+   *  shown rather than swallowed. */
+  provider_status: string | null;
+  carrier_code: string | null;
+  deferred_due_at: string | null;
+  link_expires_at: string | null;
+  resent_at: string | null;
+  next_resend_allowed_at: string | null;
+  void_reason: string | null;
+  budget_local_day: string | null;
+  budget_recurring_used: number | null;
+  budget_events_used: number | null;
+  open_prompts: SmsDeliveryOpenPrompt[];
+}
+
+/** The five carrier codes the room has words for. Anything else is shown as the
+ *  provider's own code rather than guessed at. */
+export const SMS_CARRIER_CODE_WORDS: Record<string, string> = {
+  '30003': 'Their phone was off or unreachable.',
+  '30005': 'That number is no longer in service.',
+  '30006': 'That number is a landline.',
+  '30007': 'The carrier blocked it.',
+  '21610': 'They replied STOP.',
+};
+
+/** The one sentence about how to get them a fresh link. There is no portal act
+ *  behind it on purpose: the renew path is inbound (00645's replyToRenew), so
+ *  the crew's own reply is what mints one. */
+export const SMS_NEW_LINK_WORDS =
+  'Send a new link: ask them to reply to any of our texts and a fresh one comes back.';
+
+/** What the room says when the answer is empty — which is also what a caller
+ *  outside the studio sees, so it claims nothing either way. */
+export const SMS_NOTHING_TO_EXPLAIN = 'Nothing to explain yet.';
+
+const PROMPT_KIND_WORDS: Record<string, string> = {
+  optin: 'the yes',
+  site_card: 'the site card',
+  day_of: 'the morning ask',
+};
+
+function when(value: string | null | undefined): string {
+  return value ? new Date(value).toLocaleString() : '';
+}
+
+/**
+ * The card's lines, in plain words, in the order a designer would ask them.
+ * Pure, so the words under test are the shipped ones.
+ */
+export function smsDeliveryLines(
+  explanation: SmsDeliveryExplanation | null | undefined,
+): Array<{ key: string; text: string }> {
+  if (!explanation) return [{ key: 'empty', text: SMS_NOTHING_TO_EXPLAIN }];
+  const e = explanation;
+  const lines: Array<{ key: string; text: string }> = [];
+
+  // 1 · The last thing we tried, in our word — and `delivered` is the carrier
+  // saying a handset took it, which is not the same as anybody reading it.
+  if (!e.last_attempt_status) {
+    lines.push({ key: 'attempt', text: 'We have not texted them yet.' });
+  } else if (e.last_attempt_status === 'delivered') {
+    lines.push({
+      key: 'attempt',
+      // THE CARRIER'S RECEIPT IS NOT A PERSON. `delivered` says a handset took
+      // the text; it says nothing about anybody seeing it, so the word for
+      // seeing it is not in this sentence at all.
+      text: `The last text reached their phone ${when(e.last_attempt_at)} — the carrier took it, which is all anyone knows.`,
+    });
+  } else if (e.last_attempt_status === 'failed') {
+    lines.push({
+      key: 'attempt',
+      text: `The last text did not arrive (${when(e.last_attempt_at)}).`,
+    });
+  } else if (e.last_attempt_status === 'waiting') {
+    lines.push({
+      key: 'attempt',
+      text: e.deferred_due_at
+        ? `The last text is held for quiet hours and goes out ${when(e.deferred_due_at)}.`
+        : 'The last text is held for quiet hours.',
+    });
+  } else if (e.last_attempt_status === 'sent') {
+    lines.push({
+      key: 'attempt',
+      text: `The last text is on its way (${when(e.last_attempt_at)}).`,
+    });
+  } else if (e.last_attempt_status === 'expired') {
+    lines.push({
+      key: 'attempt',
+      text: `The last text waited too long and was dropped (${when(e.last_attempt_at)}).`,
+    });
+  } else if (e.last_attempt_status === 'stopped') {
+    lines.push({
+      key: 'attempt',
+      text: 'The last text was held because this number asked us to stop.',
+    });
+  } else if (e.last_attempt_status === 'not_sent') {
+    lines.push({ key: 'attempt', text: 'The last text was a test and never left.' });
+  } else {
+    lines.push({
+      key: 'attempt',
+      text: `The carrier's last word on it was "${e.provider_status ?? 'unknown'}".`,
+    });
+  }
+
+  // 2 · What the carrier said about the handset itself.
+  if (e.carrier_code) {
+    lines.push({
+      key: 'carrier',
+      text:
+        SMS_CARRIER_CODE_WORDS[e.carrier_code] ??
+        `The carrier sent back code ${e.carrier_code}.`,
+    });
+  }
+
+  // 3 · The record, which is the only grant.
+  if (e.consent_state === 'granted') {
+    lines.push({ key: 'consent', text: 'They said yes to texts.' });
+  } else if (e.consent_state === 'opted_out') {
+    lines.push({
+      key: 'consent',
+      text: 'They are down as opted out. Only they can rejoin, by replying START.',
+    });
+  } else if (e.consent_state === 'pending') {
+    lines.push({
+      key: 'consent',
+      text: 'They were invited and have not replied YES yet.',
+    });
+  } else {
+    lines.push({ key: 'consent', text: 'Nobody has asked them yet.' });
+  }
+
+  // 4 · The handset's own answer, which outranks the record.
+  if (e.suppressed) {
+    lines.push({
+      key: 'suppressed',
+      text:
+        e.suppression_reason === 'carrier'
+          ? 'A carrier has blocked texts to this number.'
+          : e.suppression_reason === 'manual'
+            ? 'This number is on hold, so nothing is sent to it.'
+            : 'They replied STOP, so nothing is sent to this number.',
+    });
+  }
+
+  // 5 · The link's END — never the link.
+  lines.push({
+    key: 'link',
+    text: e.link_expires_at
+      ? `Their link works until ${when(e.link_expires_at)}.`
+      : 'They have no link that works right now.',
+  });
+  lines.push({ key: 'new-link', text: SMS_NEW_LINK_WORDS });
+
+  // 6 · Asking again, and when the rail would allow it.
+  if (e.void_reason) {
+    lines.push({
+      key: 'resend',
+      text: 'The question they were asked was withdrawn, so invite them again.',
+    });
+  } else if (e.resent_at) {
+    lines.push({
+      key: 'resend',
+      text: `Asked again ${when(e.resent_at)}${
+        e.next_resend_allowed_at
+          ? ` — the next one is allowed ${when(e.next_resend_allowed_at)}.`
+          : '.'
+      }`,
+    });
+  }
+
+  // 7 · The day's allowance, on the day the sender counted.
+  if (e.budget_local_day) {
+    const used = (e.budget_recurring_used ?? 0) + (e.budget_events_used ?? 0);
+    lines.push({
+      key: 'budget',
+      text: `${used} text${used === 1 ? '' : 's'} sent to them on ${e.budget_local_day}.`,
+    });
+  }
+
+  // 8 · Every question still waiting on an answer.
+  if (e.open_prompts.length > 0) {
+    lines.push({
+      key: 'open-prompts',
+      text: `Waiting on a reply to ${e.open_prompts
+        .map((p) => `${PROMPT_KIND_WORDS[p.kind] ?? p.kind} (reply ${p.ref})`)
+        .join(', ')}.`,
+    });
+  }
+
+  return lines;
+}
+
+/**
+ * Why a text did not arrive, for one seat. Zero rows is the answer for a caller
+ * outside the studio AND for a seat nothing has happened to, so this resolves
+ * to null and the room says "Nothing to explain yet" for both — it is not an
+ * oracle over another studio's roster.
+ */
+export function useExplainSmsDelivery(partyId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['explain-sms-delivery', partyId ?? 'none'],
+    enabled: !!partyId,
+    queryFn: async (): Promise<SmsDeliveryExplanation | null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('explain_sms_delivery', {
+        p_party_id: partyId,
+      });
+      if (error) throw error;
+      // RETURNS TABLE → a zero- or one-row array.
+      const row = (Array.isArray(data) ? data[0] : data) as
+        | SmsDeliveryExplanation
+        | undefined
+        | null;
+      if (!row) return null;
+      return {
+        ...row,
+        open_prompts: Array.isArray(row.open_prompts) ? row.open_prompts : [],
+      };
+    },
+  });
+}
+
 function useSmsThreadAction(action: 'sms_take_thread' | 'sms_hand_back_thread' | 'sms_extend_pause') {
   const queryClient = useQueryClient();
   return useMutation({

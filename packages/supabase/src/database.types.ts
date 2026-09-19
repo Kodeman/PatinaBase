@@ -35219,6 +35219,31 @@ export type Database = {
         Returns: Json
       }
       expire_stale_upload_intents: { Args: { p_ttl?: string }; Returns: number }
+      explain_sms_delivery: {
+        Args: { p_party_id: string }
+        Returns: {
+          budget_events_used: number
+          budget_local_day: string
+          budget_recurring_used: number
+          carrier_code: string
+          consent_recorded_at: string
+          consent_source: string
+          consent_state: string
+          deferred_due_at: string
+          last_attempt_at: string
+          last_attempt_status: string
+          link_expires_at: string
+          next_resend_allowed_at: string
+          open_prompts: Json
+          party_id: string
+          project_id: string
+          provider_status: string
+          resent_at: string
+          suppressed: boolean
+          suppression_reason: string
+          void_reason: string
+        }[]
+      }
       export_designer_taste: { Args: { p_designer_id: string }; Returns: Json }
       extend_and_reopen_client_decision: {
         Args: {
