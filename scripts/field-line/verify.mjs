@@ -11,6 +11,8 @@ const sqlOracles = [
   "supabase/tests/field/sms_authority_test.sql",
   "supabase/tests/field/apply_field_effect_test.sql",
   "supabase/tests/field/field_links_test.sql",
+  "supabase/tests/field/sms_resend_test.sql",
+  "supabase/tests/field/sms_prompt_consumption_test.sql",
 ];
 
 function usage(reason) {
@@ -126,5 +128,7 @@ function casePhase(caseId) {
     // The trade rail (00645).
     ["reply-to-renew", 1], ["budget-fold-to-digest", 1],
     ["dead-end-handoff", 1], ["site-card-day-of", 1],
+    // The consent gate the resend dispatches through (00646).
+    ["optin-resend-evidence", 1],
   ]).get(caseId) ?? Number.POSITIVE_INFINITY;
 }
