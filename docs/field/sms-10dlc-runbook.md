@@ -115,11 +115,13 @@ All five are pure GSM-7 basic set (no em dash, no curly quotes, no en dash) and 
 4. Text a freeform delay ("can't get the valve till Tuesday") → verify applied+confirmation or Desk review card.
 5. Text STOP → verify opt-out recorded (party consent chip flips) → START to restore.
 6. Unset SMS_DEV_MODE.
-7. **Cron/quiet-hours timing check**: `field-daily` runs at **14:00 UTC** — `00432_twilio_activation_hardening.sql:79-91` unscheduled the old 13:00 UTC job and re-scheduled it at `0 14 * * *` (08:00 CST / 09:00 CDT, always inside the 08:00–20:00 America/Chicago window), and no later migration touches that cron. `FIELD_TZ` is set on Strata. Nothing to change at cutover; this line was stale and is corrected here.
+7. **Cron/quiet-hours timing check**: `field-daily` runs at **14:00 UTC** — `00432_twilio_activation_hardening.sql:79-91` unscheduled the old 13:00 UTC job and re-scheduled it at `0 14 * * *` (08:00 CST / 09:00 CDT, always inside the 08:00–20:00 America/Chicago window), and no later migration touches that cron. `FIELD_TZ` is set on Strata. Nothing to change at cutover; this line was stale and is corrected here. This schedule is read from the migration file, not a live `cron.job` readback (see the activation record below).
 
 ### Phase 0 activation record
 
-**Date:** 2026-09-19 (UTC). **Target:** Supabase Cloud "Strata", project ref `bkvcixdmuyejfzcijpdg`. **Source commit:** `a86ffe986` (main). **Migration head:** `00643_field_line_po_condition.sql`. **Owner approval:** Phase 0 approved 2026-09-19. **Outcome: Phase 0 schema and functions are live; new outbound automation is OFF** because `FIELD_LINE_PHASE` is absent and `_shared/sms.ts:199` reads an absent value as phase 0.
+**Date:** 2026-09-19 (UTC). **Target:** Supabase Cloud "Strata", project ref `bkvcixdmuyejfzcijpdg`. **Source commit:** `a86ffe986` (main). **Migration head:** `00643_field_line_po_condition.sql`. **Owner approval:** Phase 0 approved 2026-09-19, given in the orchestration session and recorded in the US-1 story log; reviewed in SQ-90 comment `c_mu7sxgag_75ff69` on SQ-10. **Outcome: Phase 0 schema and functions are live; new outbound automation is OFF** because `FIELD_LINE_PHASE` is absent and `_shared/sms.ts:199` reads an absent value as phase 0 — see "What the phase gate does not cover" below for what this outcome does *not* mean.
+
+The evidence files referenced throughout this record (`verification/SQ-10/*`) capture raw command output only; they are not themselves a claim of correctness beyond what that output shows.
 
 **Push before deploy (ordering is load-bearing: `00639` stamps and deletes project-attributed `sms_conversation_context` rows, so it must land before the new consumers run).**
 
@@ -132,7 +134,7 @@ All five are pure GSM-7 basic set (no em dash, no curly quotes, no en dash) and 
 | Deploy `field-daily` | `supabase functions deploy field-daily --project-ref …` | 02:43:16 → 02:43:18 |
 | Deploy `field-login-token` | `supabase functions deploy field-login-token --project-ref …` | 02:43:18 → 02:43:21 |
 
-`--include-all` is mandatory: remote's max version is the timestamp `20260910152111`, so a `006xx` file classifies as `missing-remote` and a plain `db push` errors out having applied nothing. The dry-run planned exactly `00639, 00640, 00641, 00642, 00643` with `seeds:[]` and `roles:[]`; the apply logged the same five in the same order. `supabase migration list --linked --project-ref …` afterwards shows zero unapplied local and zero remote-only migrations (596 rows), with `00460` (waitlist consent) and `00432` still paired.
+`--include-all` is mandatory: remote's max version is the timestamp `20260910152111`, so a `006xx` file classifies as `missing-remote` and a plain `db push` errors out having applied nothing. The dry-run planned exactly `00639, 00640, 00641, 00642, 00643` with `seeds:[]` and `roles:[]`; the apply logged the same five in the same order. `supabase migration list --linked --project-ref …` afterwards shows zero unapplied local and zero remote-only migrations (596 rows), with `00460` (waitlist consent) and `00432` still paired. That `--include-all` is required is inferred from this successful apply, not from a documented CLI rule; P0-08's read-only preflight established the need because the remote max version was `20260910152111`, below every `006xx` file.
 
 **Function versions (before → after).**
 
@@ -161,9 +163,11 @@ Also absent, each with a safe in-code default and none of them introduced by thi
 
 **Rollback, per step.**
 
-- **Functions:** the CLI has no version rollback — redeploy the previous code from main `b8dd4b7f`, which is what v39 / v31 / v9 / v28 / v25 were built from (`supabase functions deploy <fn> --project-ref bkvcixdmuyejfzcijpdg` from that checkout). Redeploying is also what disables any behavior that `00640`/`00641` only enable through function code.
+- **Functions:** the CLI has no version rollback — redeploy the five functions from the last pre-Field-Line tip of main, `e0598724e` (`supabase functions deploy <fn> --project-ref bkvcixdmuyejfzcijpdg` from that checkout). Exact per-version build commits for v39 / v31 / v9 / v28 / v25 were not recorded at deploy time; `e0598724e` is the last commit git shows as unchanged, for each function's directory and `_shared`, since before its respective pre-Phase-0 deploy (sms-dispatch/sms-inbound/field-daily's last touching commits predate their 2026-09-16 17:28–17:30Z deploys; sms-status's predates its 2026-08-12 deploy; field-login-token's predates its 2026-07-10 deploy; none of `_shared`'s later commits fall in any of those windows). It is also the last commit known to be schema-compatible with the migrations applied on Strata before `00639` (`00594`'s `refuse_legacy_consent_write_trg` through `00635`). Redeploying is also what disables any behavior that `00640`/`00641` only enable through function code.
 - **Schema (`00639`–`00643`):** leave it in place. There is no CLI down-migration, the authority/RLS/suppression work is an unconditional safety fix meant to survive a phase drop, and the practical kill switch is the phase gate, not the schema — the gate stays off because `FIELD_LINE_PHASE` is absent (= 0). If a specific object must go, it goes as a forward migration.
-- **Cron:** no change was made (`00432` already owns the 14:00 UTC schedule). If it ever must stop: `SELECT cron.unschedule('field-daily');`
+- **Cron:** no change was made (`00432` already owns the 14:00 UTC schedule, per `supabase/migrations/00432_*.sql:79-93`; no later migration re-schedules it, and the live `cron.job` row was not read back during activation). If it ever must stop: `SELECT cron.unschedule('field-daily');`
+
+**What the phase gate does not cover.** `FIELD_LINE_PHASE` being absent (phase 0, per `fieldLinePhase()` in `_shared/sms.ts:198-201`) only blocks a caller that declares `automationPhase > 0` — GATE 3 at `_shared/sms.ts:1415-1416` refuses only that case (a deferred send re-checks the same gate at flush against the persisted `automation_phase` field, `_shared/sms.ts:2044`). `field-daily/core.ts:451` (the daily digest) and `:516` (delivery confirmation) both declare `automationPhase: 0`, so they keep running on the existing 14:00 UTC cron regardless of `FIELD_LINE_PHASE`, and `sms-inbound` v32 is live on the public webhook (`verify_jwt=false`). None of this is new: these are the pre-existing rail paths that were already live at v28 (`field-daily`) and v31 (`sms-inbound`) before Phase 0. The only lever over them is redeploying older function code or `SELECT cron.unschedule('field-daily');` — the phase gate itself does not touch them.
 
 ## 6. Standing compliance rules (enforced in code; do not defeat)
 
