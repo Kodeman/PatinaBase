@@ -2223,7 +2223,26 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   // Otherwise NN is a reference, and is answered as one.
   const lateIsMinutes = trade?.verb === "LATE" &&
     fieldLinePhase(deps) >= 1 && tradeOpen.length === 1;
-  const explicit = lateIsMinutes ? null : body.match(/^([a-z]+)\s+(\d{2,3})$/i);
+  const refMatch = body.match(/^([a-z]+)\s+(\d{2,3})$/i);
+  // TWO cards open and a trade word carrying a number — "LATE 20" with a site
+  // card at 20 and the morning ask at 22 — is neither reading (SQ-97 MINOR-1).
+  // Minutes it cannot be: nothing says WHICH card is running late. A reference
+  // it cannot be either: 00645's sms_prompt_reply_verb keys its trade branch on
+  // the resolved prompt's KIND, never reaching its own VERB NN code check, and
+  // then demands exactly one open trade prompt — so the apply that TS would
+  // send raises 23514 and lands the crew's answer on a designer's desk as a
+  // handoff. Reading the digits as a reference here therefore CANNOT complete;
+  // the honest answer is the one the codeless door already gives for an
+  // ambiguous body, which is to ask which prompt is meant and list them.
+  // Nulling the reference match is what routes it there: with no code, no
+  // single open prompt and no single open card, nothing binds, and the block
+  // below asks. No effect is built, no apply is called, nobody is paged.
+  // Only LATE NN and PROBLEM NN reach this at all — "HERE 20" and "DONE 20" are
+  // not trade shapes, and SQL answers them by code before it ever counts open
+  // cards, so they keep resolving by reference exactly as they do today.
+  const tradeAmbiguous = !!trade && !!refMatch &&
+    tradeOpen.length > 1 && fieldLinePhase(deps) >= 1;
+  const explicit = lateIsMinutes || tradeAmbiguous ? null : refMatch;
   const bareVerb = !!trade ||
     /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|damage|good|fine|delay)$/i.test(body);
   let prompt: SmsPrompt | null = null;
