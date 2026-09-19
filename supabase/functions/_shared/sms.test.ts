@@ -3782,3 +3782,55 @@ Deno.test("her letter is paced by the same guard the crew's is (P1/P5)", async (
     "and the dead-end detector is asked as well",
   );
 });
+
+Deno.test("a handset holding a client seat is gated as hers, whichever seat answers first", async () => {
+  // SQ-111 INFO-1. A phone-only send names no seat, so the number can answer
+  // with several: a foreman who is also the homeowner, or a household phone
+  // written on two rows. The classification used to give up at two rows and
+  // leave partyKind null, which turned the client gate OFF for exactly the
+  // ambiguous case. It now fails closed — ANY client seat on the number makes
+  // the send hers — and it does so whatever order the rows come back in.
+  const trade = { id: "tp1", phone_e164: "+15551230001", project_id: "proj1", display_name: "Marcus Bell", party_kind: "vendor" };
+  const client = clientSeat();
+  const phoneOnly = (fake: ReturnType<typeof clientWorld>["fake"]) =>
+    sendPartySms(
+      fake as never,
+      {
+        phone: "+15551230001",
+        projectId: "proj1",
+        templateKey: "sms_inbound_reply",
+        vars: { studio_name: "Field & Form", message: "Got it." },
+      },
+      {
+        getEnv: envOf({ ...CLIENT_ENV, FIELD_LINE_CAMPAIGN_APPROVED: "0" }),
+        now: OPEN,
+        fetchImpl: mustNotSend(),
+      },
+    );
+
+  for (const [order, seats] of [
+    ["client first", [client, trade]],
+    ["trade first", [trade, client]],
+  ] as const) {
+    const { fake } = clientWorld({
+      // A grant, so the only thing that can stop this send is the client gate.
+      consent: { ...KICKOFF_RECORD, status: "granted" },
+      extra: { project_parties: [...seats] },
+    });
+    const res = await phoneOnly(fake);
+    assert(!res.sent, `[${order}] her gate applies to the number she shares`);
+    assertEquals(res.reason, "campaign_not_approved", order);
+    assertEquals((fake._data.sms_messages ?? []).length, 0, `[${order}] and no row was written`);
+  }
+
+  // The control: two seats and NO client among them is not her number, so the
+  // flag does not reach it and the trade text goes.
+  const { fake: tradeOnly } = clientWorld({
+    consent: { ...KICKOFF_RECORD, status: "granted" },
+    extra: {
+      project_parties: [trade, { ...trade, id: "tp2", display_name: "Sam Okafor", party_kind: "gc" }],
+    },
+  });
+  const sent = await phoneOnly(tradeOnly);
+  assert(sent.sent, `two trade seats answer to no client flag: ${JSON.stringify(sent)}`);
+});

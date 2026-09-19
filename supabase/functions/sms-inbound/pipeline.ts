@@ -24,7 +24,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseFieldMessage, type FieldParseInput, type FieldParseResult } from "../_shared/field-parse.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
-import { channelConsentVerdict, fieldLinePhase, orgsOfProjects, resolveStudioName, recoverSmsSelection, sendPartySms } from "../_shared/sms.ts";
+import { channelConsentDecision, channelConsentVerdict, fieldLineCampaignApproved, fieldLinePhase, orgsOfProjects, resolveStudioName, recoverSmsSelection, sendPartySms } from "../_shared/sms.ts";
 import { captureServerEvent } from "../_shared/aesthete-events.ts";
 
 import type { SelectionIntent, SelectionQuestion } from "../_shared/sms-selection.ts";
@@ -1669,11 +1669,33 @@ async function processInboundCore(
   // Only when EVERY seat on the number is a client seat. A number that also
   // holds a trade seat belongs to someone who is both, and their field update
   // must keep working.
-  if (parties.length > 0 && parties.every((p) => p.party_kind === "client")) {
+  //
+  // AND ONLY WHILE HER RAIL IS ACTUALLY LIVE (SQ-111 LOW-1). This branch is
+  // phase 2's own behaviour, and the acknowledgement it composes is itself a
+  // client-kind send — GATE 3b refuses `sms_inbound_reply` to a `client` seat
+  // below phase 2. Running it at phase 0/1 would therefore take a pre-existing
+  // client seat (00419) off the trade rail it has always been on and give it a
+  // handoff and silence instead. Below phase 2 the branch does not run at all:
+  // that seat falls through to exactly the path it took before the client rail
+  // existed. STOP/START/HELP are answered as TwiML above (:1115) and are not
+  // affected by either arm of this.
+  if (parties.length > 0 && parties.every((p) => p.party_kind === "client") && fieldLinePhase(deps) >= 2) {
     const clientParty = parties.find((p) => p.project_id === conv.context?.project_id) ?? parties[0];
+    // THE FLAG IS DOWN: THE HANDOFF STILL HAPPENS, AND SAYS SO. Turning
+    // FIELD_LINE_CAMPAIGN_APPROVED off stops every text to her (P24), this
+    // acknowledgement included — so composing one would only produce a refusal
+    // at dispatch. What must not happen is her message disappearing: the
+    // needs_review row names the gate that withheld the answer, so the person
+    // who reads it knows she is waiting on a reply the rail cannot send.
+    const replyAllowed = fieldLineCampaignApproved(deps);
     if (!await ownedReview(supabase, effectiveMessageId, clientParty.project_id, clientParty.id,
-      { path: "client_freeform", body }, deps)) {
+      replyAllowed
+        ? { path: "client_freeform", body }
+        : { path: "client_freeform", body, reply_withheld: "campaign_not_approved" }, deps)) {
       return { status: 503, twiml: twimlBody(), disposition: "handoff_failed", messageId: effectiveMessageId };
+    }
+    if (!replyAllowed) {
+      return { status: 200, twiml: twimlBody(), disposition: "client_reply_withheld", messageId: effectiveMessageId };
     }
     return {
       ...await reply(supabase, conv.id,
@@ -2262,14 +2284,40 @@ async function clientPromptReply(
 ): Promise<InboundResult> {
   // The same two reads the trade path makes before it answers anyone, with the
   // homeowner's consent shape. An explicit refusal — her STOP, a fold the
-  // studio recorded — ends the exchange silently, as it does everywhere else.
-  // `unknown` does NOT: the kickoff box writes `pending` (00594 through
-  // record_channel_invite), which is the state every homeowner on this rail is
-  // in, and refusing there would mean she can be texted and never answered.
+  // studio recorded — ends the TEXTING silently, as it does everywhere else.
+  // A bare `unknown` does NOT refuse: the kickoff box writes `pending` (00594
+  // through record_channel_invite), which is the state every homeowner on this
+  // rail is in, and refusing there would mean she can be texted and never
+  // answered. What it takes is the carve-out's own evidence, below.
   const blocked = await suppression(supabase, sender, recipient);
-  const verdict = await channelConsentVerdict(supabase, recipient, party.project_id);
-  if (blocked.blocked || verdict === "refuse") {
-    return { status: blocked.error ? 503 : 200, twiml: twimlBody(), disposition: "not_consented" };
+  if (blocked.error) return { status: 503, twiml: twimlBody(), disposition: "not_consented" };
+  // THE DECISION, NOT JUST THE VERDICT — the same permission GATE 2 gives a
+  // client-kind SEND (sms.ts: allow, or the kickoff carve-out's pending record
+  // carrying HOW she said yes and WHO wrote it down). Asked the same way here so
+  // the two cannot drift: a record the send gate would refuse cannot be the
+  // authority for an effect either.
+  const decision = await channelConsentDecision(supabase, recipient, party.project_id);
+  const consentCarries = decision.verdict === "allow" ||
+    (decision.verdict === "unknown" && decision.recordPresent &&
+      !!decision.recordSource && !!decision.recordedBy);
+  if (blocked.blocked || !consentCarries) {
+    // NOT A DROP (SQ-111 LOW-3). Nothing is applied and NOTHING IS TEXTED BACK —
+    // a refused consent must not be answered by a text, which is the whole
+    // refusal — but she did write to the studio, and the only record of that was
+    // the raw inbound row nobody reads. The thread goes to the person who owns
+    // the project with the reason in plain words on it.
+    const refusal = blocked.blocked
+      ? "suppressed"
+      : decision.verdict === "refuse"
+      ? "opted_out"
+      : decision.recordPresent
+      ? "consent_evidence_required"
+      : "not_consented";
+    if (!await ownedReview(supabase, messageId, party.project_id, party.id,
+      { path: "client_consent_refused", refusal, prompt_kind: prompt.kind, body }, deps)) {
+      return { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
+    }
+    return { status: 200, twiml: twimlBody(), disposition: "not_consented" };
   }
   const name = await designerFirstName(supabase, party.project_id, deps);
   const handoff = async (
