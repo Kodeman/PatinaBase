@@ -607,6 +607,77 @@ Deno.test("a challenge that expired UNANSWERED earns the next generation, not a 
   assertEquals(String((fake._data.sms_prompts ?? [])[1].short_code), "43");
 });
 
+Deno.test("a WITHDRAWN challenge is never reprinted — the re-invite mints a NEW code", async () => {
+  // SQ-101's MAJOR residue. 00644 withdraws the open challenge when the seat's
+  // phone is corrected, and CORRECT-THEN-REVERT leaves a withdrawn row pointing
+  // back at the seat's own number: the void happens on the way out (A -> B), and
+  // on the way back (B -> A) sms_void_stale_optin_challenges() skips the row it
+  // already voided (its UPDATE filters voided_at IS NULL, and voided_at is
+  // write-once under the guard anyway). expires_at is immutable under that same
+  // guard, so the withdrawn row keeps a future expiry and a NULL answered_at —
+  // the exact shape this reader used to reuse. 00646 then refuses that code at
+  // sms_resolve_prompt and sms_grant_optin_prompt, so reprinting it asks the
+  // person a question nobody can answer until the seven-day TTL runs out.
+  const { fake, allocations } = inviteWorld(["42", "43"]);
+  const sent = sender({ sent: true, status: "sent" });
+  const deps = {
+    supabase: fake as never,
+    getEnv: envOf(BASE_ENV),
+    now: new Date("2026-07-08T18:00:00Z"),
+    sendPartySms: sent.fn,
+  };
+  const first = await handleSmsDispatch(post(triggerJob()), deps);
+  assertEquals(first.status, 200, "the first ask goes out");
+  assertEquals(allocations.length, 1);
+  const withdrawn = (fake._data.sms_prompts ?? [])[0];
+  assertEquals(String(withdrawn.short_code), "42", "challenge v1 is Ref 42");
+
+  // What the trigger writes, and only what it writes: voided_at + void_reason.
+  Object.assign(withdrawn, {
+    voided_at: "2026-07-08T18:15:00.000Z",
+    void_reason: "phone_corrected",
+  });
+  assertEquals(withdrawn.answered_at ?? null, null, "nothing answered it");
+  assert(
+    String(withdrawn.expires_at) > "2026-07-08T18:30:00.000Z",
+    `the withdrawn challenge has NOT run out: ${withdrawn.expires_at}`,
+  );
+  assertEquals(
+    String(withdrawn.recipient_phone),
+    "+15551230001",
+    "and the revert left it pointing back at the seat's own number",
+  );
+
+  const reinvite = await handleSmsDispatch(post(triggerJob()), {
+    ...deps,
+    now: new Date("2026-07-08T18:30:00Z"),
+  });
+  assertEquals(reinvite.status, 200, "the re-invite goes out");
+  assertEquals(
+    allocations.length,
+    2,
+    "a withdrawn challenge is a new ask, not a reuse",
+  );
+  assertEquals(
+    Number(allocations[1].p_version),
+    2,
+    "and it takes the NEXT generation — version 1 is still held by the voided row",
+  );
+  const printed = String(
+    (sent.calls.at(-1)!.vars as Record<string, unknown>).code,
+  );
+  assertEquals(printed, "43", "the copy carries the freshly minted code");
+  assert(
+    printed !== "42",
+    "the WITHDRAWN code is never reprinted — 00646's grant refuses it",
+  );
+  assertEquals(
+    (fake._data.sms_prompts ?? []).map((p) => String(p.short_code)),
+    ["42", "43"],
+    "two challenges: the withdrawn one, and the answerable one",
+  );
+});
+
 Deno.test("R6: two re-invites racing over one expired challenge reuse ONE code", async () => {
   // The read and the allocation are two round trips, so the day-eight re-invite
   // has a race inside it: the 00284 trigger and the cron behind it both see no
