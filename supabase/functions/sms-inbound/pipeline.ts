@@ -1871,9 +1871,15 @@ async function closedRefReply(supabase: SupabaseClient, conversationId: string, 
   if (error) throw error;
   let latest: SmsPrompt | null = null;
   if (old) {
+    // The point of this read is to hand back a code the sender CAN answer, so
+    // its predicate has to be the one sms_resolve_prompt will apply to that
+    // answer — and since 00646 that includes voided_at IS NULL. 00644's void
+    // trigger stamps only voided_at (expires_at is immutable), so without this
+    // clause a withdrawn challenge still reads as the newest live prompt and
+    // "Latest: Ref NN" names the one code the grant now refuses (SQ-101).
     let query = supabase.from("sms_prompts").select("*").eq("sender_number", sender)
       .eq("recipient_phone", recipient).eq("party_id", old.party_id).eq("project_id", old.project_id)
-      .eq("kind", old.kind).is("answered_at", null).gt("expires_at", now);
+      .eq("kind", old.kind).is("answered_at", null).is("voided_at", null).gt("expires_at", now);
     query = old.subject_id ? query.eq("subject_id", old.subject_id) : query.is("subject_id", null);
     const result = await query.order("version", { ascending: false }).limit(1).maybeSingle();
     if (result.error) throw result.error;
@@ -2193,9 +2199,17 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
     if (!recovered.selection?.usable) return selectionUnavailable(recovered);
     priorAsked = true;
   }
+  // THIS SET IS sms_resolve_prompt's PREDICATE, MINUS THE CODE (contract P14).
+  // Everything below counts it — the one-open-prompt codeless door, tradeOpen,
+  // refPrompt, the clarify options — so a row in here that SQL will not resolve
+  // makes TS and SQL disagree on how many questions are open. Since 00646 that
+  // predicate carries voided_at IS NULL, and 00644's void trigger stamps only
+  // voided_at (expires_at is immutable), so a withdrawn opt-in challenge would
+  // otherwise sit here inflating the count: a bare DONE beside one live prompt
+  // would ask which is meant, where sms_resolve_prompt sees exactly one (SQ-101).
   const { data: open, error: openError } = await supabase.from("sms_prompts").select("*")
     .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
-    .gt("expires_at", now.toISOString());
+    .is("voided_at", null).gt("expires_at", now.toISOString());
   if (openError) return { status: 503, twiml: twimlBody(), disposition: "ref_unreadable" };
   // A trade word binds to the open TRADE prompt even when yesterday's digest is
   // still open beside it: "ON MY WAY" is plainly an answer to the card that

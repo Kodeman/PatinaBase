@@ -2777,6 +2777,88 @@ Deno.test("R1(d): the same world with the rail off reads LATE 20 as reference 20
   assertEquals(card.answered_at ?? null, null, "and the card was not consumed");
 });
 
+// ── A WITHDRAWN prompt is not a question, so it is never offered back ───────
+//
+// SQ-101's residues. 00644 withdraws an open challenge by stamping voided_at and
+// nothing else: expires_at is immutable under sms_prompts_guard_binding, so a
+// withdrawn row keeps a future expiry beside its NULL answered_at. 00646 taught
+// sms_resolve_prompt and sms_grant_optin_prompt to skip exactly that shape, so
+// every TS read that decides which prompts are open has to skip it too — or the
+// pipeline offers, counts and binds codes SQL will not resolve (contract P14).
+
+/** The withdrawn stamp, written the way 00644's trigger writes it. */
+const WITHDRAWN = { voided_at: "2026-11-01T09:00:00.000Z", void_reason: "phone_corrected" };
+/** A challenge that ran out unanswered: what makes the texted code a closed ref. */
+const RAN_OUT = { short_code: "17", version: 1, expires_at: "2026-10-25T14:00:00.000Z" };
+/** The challenge shape 00644's void trigger acts on: kind optin, no subject. */
+const CHALLENGE = { kind: "optin", subject_id: null };
+
+Deno.test("with only a withdrawn challenge left, the closed-ref reply offers nothing rather than a dead code", async () => {
+  // SQ-101's MINOR residue, in the shape the rail actually produces. The first
+  // challenge ran out unanswered, the re-invite's replacement was WITHDRAWN when
+  // the seat's phone was corrected and reverted, and the crew — still holding the
+  // first text — answers with its code. sms_resolve_prompt has nothing for that
+  // code, so the reply is a closed-ref reply; without the voided_at clause the
+  // `latest` read hands back Ref 19, which 00646's grant refuses, so the one
+  // number in the reply is the one number that cannot work.
+  const f = inboundFixture(undefined, undefined, { FIELD_LINE_PHASE: "1" });
+  f.prompt({ ...CHALLENGE, ...RAN_OUT });
+  f.prompt({ ...CHALLENGE, id: "prompt-void", version: 2, short_code: "19", ...WITHDRAWN });
+  const res = await f.h.processInbound({ Body: "HERE 17", MessageSid: "SMvoidonly" });
+  assertEquals(res.disposition, "ref_closed", "a closed reference is answered as closed");
+  assert(
+    res.twiml.includes("Please ask your designer for the latest reference"),
+    `nothing live means no reference to offer: ${res.twiml}`,
+  );
+  assert(!res.twiml.includes("Ref 19"), `and certainly not the withdrawn one: ${res.twiml}`);
+  assertEquals(f.effects.length, 0, "and nothing was applied");
+});
+
+Deno.test("a withdrawn challenge never wins the closed-ref reply's `latest` ordering", async () => {
+  // The other half of the same clause. On the opt-in rail a withdrawn row cannot
+  // currently OUTRANK a live sibling — sms_void_stale_optin_challenges() closes
+  // every open challenge on the seat at once, and version/expires_at are both
+  // immutable under sms_prompts_guard_binding, so anything minted afterwards
+  // takes a higher generation. This world pins the ordering anyway: whoever
+  // writes voided_at next, `order by version desc` must step over it and offer
+  // the newest code a reply can still resolve.
+  const f = inboundFixture(undefined, undefined, { FIELD_LINE_PHASE: "1" });
+  f.prompt({ ...CHALLENGE, ...RAN_OUT });
+  f.prompt({ ...CHALLENGE, id: "prompt-live", version: 2, short_code: "18" });
+  f.prompt({ ...CHALLENGE, id: "prompt-void", version: 3, short_code: "19", ...WITHDRAWN });
+  const res = await f.h.processInbound({ Body: "HERE 17", MessageSid: "SMvoidlatest" });
+  assertEquals(res.disposition, "ref_closed");
+  assert(
+    res.twiml.includes("Latest: Ref 18"),
+    `the newest ANSWERABLE challenge is the one offered: ${res.twiml}`,
+  );
+  assert(
+    !res.twiml.includes("Ref 19"),
+    `the withdrawn code is never handed back: ${res.twiml}`,
+  );
+});
+
+Deno.test("P14: a withdrawn challenge does not make a bare answer ambiguous", async () => {
+  // The open-prompt set in promptReply IS sms_resolve_prompt's predicate minus
+  // the code, and everything downstream counts it. A withdrawn opt-in challenge
+  // sitting in it made the codeless door see TWO open questions where SQL sees
+  // one, so a bare "HERE" against the single live prompt asked which was meant.
+  const f = inboundFixture();
+  const live = f.prompt({ short_code: "18" });
+  f.prompt({
+    id: "prompt-void", version: 2, short_code: "19", kind: "optin",
+    subject_id: "party-a", ...WITHDRAWN,
+  });
+  const res = await f.h.processInbound({ Body: "HERE", MessageSid: "SMvoidbare" });
+  assertEquals(res.disposition, "ref_applied", "the one live prompt is the one answered");
+  assertEquals(f.effects.length, 1, "one arrival filed");
+  assertEquals((f.effects[0].p_effect as { type: string }).type, "report_arrival");
+  assert(live.answered_at, "and it is the live prompt that was consumed");
+  const voided = (f.h.fake._data.sms_prompts ?? [])
+    .find((p: Record<string, unknown>) => p.id === "prompt-void")!;
+  assertEquals(voided.answered_at ?? null, null, "the withdrawn challenge was not touched");
+});
+
 // ── Two open cards: digits in a trade word are a question, not an answer ────
 //
 // SQ-97 MINOR-1. At phase 1 with a site card at 20 and the morning ask at 22

@@ -230,6 +230,20 @@ async function ensureOptinCode(
       .eq("project_id", projectId)
       .eq("kind", "optin")
       .is("answered_at", null)
+      // A WITHDRAWN CHALLENGE IS NOT A QUESTION TO REPRINT (SQ-101, 00646).
+      // 00644's void trigger stamps voided_at and nothing else — expires_at is
+      // immutable under sms_prompts_guard_binding — so a withdrawn row still
+      // looks unanswered and unexpired here. Its own comment reasoned that a
+      // voided row is always a stale-phone row this reader already passes over
+      // on the digits; correct-then-REVERT breaks that: the void happens on the
+      // way out (phone A -> B), and on the way back (B -> A) the trigger skips
+      // the row it already voided, leaving a withdrawn challenge whose
+      // recipient_phone matches the seat again. Reusing its short_code prints a
+      // code 00646's sms_resolve_prompt and sms_grant_optin_prompt now refuse,
+      // so the person is asked a question nobody can answer until the TTL runs
+      // out. Skipping it falls through to the allocation below, which takes the
+      // next generation and asks a fresh, answerable one.
+      .is("voided_at", null)
       .gt("expires_at", now.toISOString())
       .order("created_at", { ascending: false })
       .limit(1)
