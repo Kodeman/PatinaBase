@@ -2223,7 +2223,52 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   // Otherwise NN is a reference, and is answered as one.
   const lateIsMinutes = trade?.verb === "LATE" &&
     fieldLinePhase(deps) >= 1 && tradeOpen.length === 1;
-  const explicit = lateIsMinutes ? null : body.match(/^([a-z]+)\s+(\d{2,3})$/i);
+  const refMatch = body.match(/^([a-z]+)\s+(\d{2,3})$/i);
+  // Whether NN is a live reference at all, and if so what KIND of prompt it
+  // names, is already sitting in `open`: same pair, same unanswered-and-unexpired
+  // predicate sms_resolve_prompt uses. Reading it here costs no extra query.
+  const refPrompt = refMatch
+    ? (open ?? []).find((p: SmsPrompt) => p.short_code === refMatch[2]) ?? null
+    : null;
+  // TWO cards open and a trade word carrying a number — "LATE 20" with a site
+  // card at 20 and the morning ask at 22 — is neither reading (SQ-97 MINOR-1).
+  // Minutes it cannot be: nothing says WHICH card is running late. A reference
+  // it cannot be either: 00645's sms_prompt_reply_verb keys its trade branch on
+  // the resolved prompt's KIND, never reaching its own VERB NN code check, and
+  // then demands exactly one open trade prompt — so the apply that TS would
+  // send raises 23514 and lands the crew's answer on a designer's desk as a
+  // handoff. Reading the digits as a reference here therefore CANNOT complete;
+  // the honest answer is the one the codeless door already gives for an
+  // ambiguous body, which is to ask which prompt is meant and list them.
+  // Nulling the reference match is what routes it there: with no code, no
+  // single open prompt and no single open card, nothing binds, and the block
+  // below asks. No effect is built, no apply is called, nobody is paged.
+  // Only LATE NN and PROBLEM NN reach this at all — "HERE 20" and "DONE 20" are
+  // not trade shapes, and SQL answers them by code before it ever counts open
+  // cards, so they keep resolving by reference exactly as they do today.
+  //
+  // AND NEITHER DOES "LATE 17" WHEN 17 IS A LIVE NON-CARD REFERENCE. Nothing is
+  // ambiguous there: the crew named a prompt that is open and is not a card, and
+  // both readings agree on it. 00645's sms_prompt_reply_verb resolves that
+  // prompt by its code and hands back verb LATE without ever counting open
+  // cards, so the reference completes on the SQL side too; "DELAY 17" — the
+  // synonym 00641 and 00645 both map to report_delay — already binds exactly
+  // that reference here; and phase 0 reads it as a reference as well. Clarifying
+  // LATE NN where DELAY NN answers is the asymmetry SQ-95 check 6 rejected and
+  // SQ-96 R1(b) pinned, and SQ-99 check 3 found it back on the two-card path.
+  //
+  // PROBLEM NN naming a live non-card reference is deliberately NOT exempt.
+  // sms_prompt_reply_verb accepts it, but 00645's sms_apply_prompt admits verb
+  // PROBLEM only for site_card/day_of, so binding the reference would send an
+  // apply SQL refuses with 23514 and page a designer. Asking which prompt is
+  // meant is the safe side of that gap. (The gap itself — TS applying PROBLEM NN
+  // on a non-card reference where SQL refuses, reachable on main whenever one or
+  // no card is open — is pre-existing and belongs to SQ-14's notes, not here.)
+  const lateNamesLiveRef = trade?.verb === "LATE" && !!refPrompt &&
+    !TRADE_PROMPT_KINDS.has(refPrompt.kind);
+  const tradeAmbiguous = !!trade && !!refMatch && !lateNamesLiveRef &&
+    tradeOpen.length > 1 && fieldLinePhase(deps) >= 1;
+  const explicit = lateIsMinutes || tradeAmbiguous ? null : refMatch;
   const bareVerb = !!trade ||
     /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|damage|good|fine|delay)$/i.test(body);
   let prompt: SmsPrompt | null = null;

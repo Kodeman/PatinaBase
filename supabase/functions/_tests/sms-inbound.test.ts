@@ -2777,6 +2777,237 @@ Deno.test("R1(d): the same world with the rail off reads LATE 20 as reference 20
   assertEquals(card.answered_at ?? null, null, "and the card was not consumed");
 });
 
+// ── Two open cards: digits in a trade word are a question, not an answer ────
+//
+// SQ-97 MINOR-1. At phase 1 with a site card at 20 and the morning ask at 22
+// both open on the pair, "LATE 20" was read as BOTH readings at once: the code
+// picked the card, and the trade reading then filed twenty minutes against it.
+// 00645's sms_prompt_reply_verb reads it as NEITHER — its trade branch keys on
+// the resolved prompt's KIND, so it never reaches its own VERB NN code check,
+// and it then demands exactly one open trade prompt — so that apply came back
+// 23514 and the crew's answer landed on a designer's desk as a handoff. The
+// pipeline now asks which card, before a code is bound and before an effect
+// exists. The boundary is narrow on purpose: "HERE 20" is not a trade shape,
+// and SQL answers it by code before it ever counts open cards.
+
+/** A site card at 20 and the morning ask at 22, both open on the same pair. */
+function twoCardWorld(env: Record<string, string> = { FIELD_LINE_PHASE: "1" }) {
+  const f = inboundFixture(undefined, undefined, env);
+  const card = f.prompt({ id: "prompt-card", short_code: "20", kind: "site_card" });
+  const dayOf = f.prompt({ id: "prompt-dayof", version: 2, short_code: "22", kind: "day_of" });
+  return { f, card, dayOf };
+}
+
+/** Asked, not answered: nothing applied, nobody paged, both cards still open. */
+function assertClarified(f: ReturnType<typeof inboundFixture>, cards: Array<Record<string, unknown>>,
+  res: { disposition?: string }, tag: string) {
+  assertEquals(res.disposition, "ref_clarify", `${tag} asks which prompt is meant`);
+  const stamps = inboundStamps(f);
+  assertEquals(stamps.length, 1, `${tag} one inbound row`);
+  const parsed = stamps[0].parsed_intent as Record<string, unknown> | null;
+  assertEquals(parsed?.path ?? null, null, `${tag} bound no reference`);
+  const selection = (parsed?.selection_intent ?? null) as { options?: Array<{ promptId: string }> } | null;
+  assertEquals((selection?.options ?? []).map((o) => o.promptId).sort(), ["prompt-card", "prompt-dayof"],
+    `${tag} both open cards are offered`);
+  assert(!stamps[0].needs_review, `${tag} never becomes the designer's problem`);
+  assertEquals(stamps[0].owner_user_id ?? null, null, `${tag} owns nobody`);
+  assertEquals(f.effects.length, 0, `${tag} files nothing`);
+  for (const card of cards) assertEquals(card.answered_at ?? null, null, `${tag} ${card.id} is still waiting`);
+}
+
+Deno.test("P1-06(a): two open cards and LATE 20 asks which card, and applies nothing", async () => {
+  // 20 IS an open code here, which is exactly what used to make this apply:
+  // the reference read it as the card and the trade read it as minutes, and
+  // 00645 would have refused the pair of readings it never makes.
+  const { f, card, dayOf } = twoCardWorld();
+  const res = await f.h.processInbound({ Body: "LATE 20", MessageSid: "SMp106a" });
+  assertClarified(f, [card, dayOf], res, "[LATE 20]");
+});
+
+Deno.test("P1-06(b): two open cards and LATE 30 asks too, rather than calling 30 a dead reference", async () => {
+  // No prompt is numbered 30. Answering "that reference is closed" would be an
+  // answer to a question the crew did not ask: with two cards open, 30 was
+  // never a reference in the first place. The ambiguity is the same ambiguity.
+  const { f, card, dayOf } = twoCardWorld();
+  assert((f.h.fake._data.sms_prompts ?? []).every((p: Record<string, unknown>) => p.short_code !== "30"),
+    "there is no reference 30 in this world");
+  const res = await f.h.processInbound({ Body: "LATE 30", MessageSid: "SMp106b" });
+  assertClarified(f, [card, dayOf], res, "[LATE 30]");
+});
+
+Deno.test("P1-06(c): one open card still reads LATE 20 as minutes, even when its own code is 20", async () => {
+  const f = inboundFixture(undefined, undefined, { FIELD_LINE_PHASE: "1" });
+  const card = f.prompt({ id: "prompt-card", short_code: "20", kind: "site_card" });
+  const res = await f.h.processInbound({ Body: "LATE 20", MessageSid: "SMp106c" });
+  assertEquals(res.disposition, "ref_applied", "the card got the answer it asked for");
+  assertEquals(f.effects.length, 1, "one delay filed");
+  const effect = f.effects[0].p_effect as { type: string; note: string };
+  assertEquals(effect.type, "report_delay");
+  assertEquals(effect.note, "Running about 20 minutes late.", "20 is minutes, and it is in the note");
+  assert(card.answered_at, "the card that printed the words is the one consumed");
+});
+
+Deno.test("P1-06(d): with the rail off, the same two cards read LATE NN as a reference", async () => {
+  // Phase 0 is untouched: NN names a prompt. LATE 22 is the proof that it is a
+  // reference and not minutes — no minutes reading could ever pick the second card.
+  for (const [body, promptId] of [["LATE 20", "prompt-card"], ["LATE 22", "prompt-dayof"]]) {
+    const tag = `[${body}]`;
+    const { f, card, dayOf } = twoCardWorld({});
+    const res = await f.h.processInbound({ Body: body, MessageSid: "SMp106d" + promptId });
+    assertEquals(res.disposition, "ref_applied", `${tag} the reference was answered`);
+    const parsed = inboundStamps(f)[0]?.parsed_intent as Record<string, unknown> | null;
+    assertEquals(parsed?.path, "ref", `${tag} resolved a reference`);
+    assertEquals(parsed?.prompt_id, promptId, `${tag} NN is the code, and 22 can only be the day_of`);
+    assertEquals([card, dayOf].filter((p) => p.answered_at).map((p) => p.id), [promptId],
+      `${tag} only the prompt it named was consumed`);
+  }
+});
+
+Deno.test("P1-06(e): HERE 20 with two open cards still resolves by reference, matching 00645", async () => {
+  // Not a trade shape ("HERE" alone is; "HERE 20" is not), so sms_prompt_reply_verb
+  // takes its VERB NN branch and returns on the matching code WITHOUT counting
+  // open cards. TS must not clarify a shape SQL answers.
+  const { f, card, dayOf } = twoCardWorld();
+  const res = await f.h.processInbound({ Body: "HERE 20", MessageSid: "SMp106e" });
+  assertEquals(res.disposition, "ref_applied", "the code identified the card");
+  const parsed = inboundStamps(f)[0]?.parsed_intent as Record<string, unknown> | null;
+  assertEquals(parsed?.path, "ref");
+  assertEquals(parsed?.prompt_id, "prompt-card");
+  assertEquals((f.effects[0]?.p_effect as { type: string }).type, "report_arrival");
+  assert(card.answered_at, "card 20 was consumed");
+  assertEquals(dayOf.answered_at ?? null, null, "and card 22 was left alone");
+});
+
+Deno.test("P1-06(f): PROBLEM 20 with two open cards asks as well, because 00645 refuses it too", async () => {
+  // The other trade word that can carry digits: 00645 reads ^PROBLEM(...)$ as a
+  // trade reply on either card's kind, so it reaches the same one-open-card
+  // count and the same 23514. Same refusal, same answer here.
+  const { f, card, dayOf } = twoCardWorld();
+  const res = await f.h.processInbound({ Body: "PROBLEM 20", MessageSid: "SMp106f" });
+  assertClarified(f, [card, dayOf], res, "[PROBLEM 20]");
+});
+
+// ── …but a live NON-card reference is not ambiguous, and LATE must not lose it ──
+//
+// SQ-99 check 3, on SQ-98's rejected 5f9c697db. The clarify above was keyed on
+// "a trade word carrying digits with two cards open" and never asked what the
+// digits NAME. On one handset serving two projects — a site card at 20, the
+// morning ask at 22, and yesterday's delay prompt still open at 17 — "LATE 17"
+// therefore stopped answering a reference that "DELAY 17", the synonym 00641 and
+// 00645 both map to report_delay, still answers, and that 00645's
+// sms_prompt_reply_verb also answers (it resolves 17 by code and returns verb
+// LATE without ever counting open cards). That is the asymmetry class SQ-95
+// check 6 rejected and SQ-96 R1(b) pinned. The four worlds below are SQ-99's
+// probe world, at both phases, with the synonym asserted equal rather than
+// merely "handled".
+//
+// PROBLEM 17 is deliberately NOT exempted: sms_apply_prompt admits verb PROBLEM
+// only for site_card/day_of, so binding that reference would send an apply SQL
+// refuses with 23514. (g2) pins the safe direction AND the absence of the apply.
+
+/** SQ-99's probe world: a card on project-a, the morning ask on project-b, and
+ *  a live non-card reference 17 open on the same handset. */
+function twoCardsAndLiveRefWorld(env: Record<string, string> = { FIELD_LINE_PHASE: "1" }) {
+  const f = inboundFixture(undefined, undefined, env);
+  const card = f.prompt({ id: "prompt-card", short_code: "20", kind: "site_card" });
+  const dayOf = f.prompt({ id: "prompt-dayof", version: 2, short_code: "22", kind: "day_of",
+    project_id: "project-b", party_id: "party-b" });
+  const ref = f.prompt({ id: "prompt-digest", version: 3, short_code: "17", kind: "report_delay" });
+  return { f, card, dayOf, ref };
+}
+
+/** No trade word maps LATE or DELAY to an intent on a NON-card prompt, so both
+ *  bodies reach the LLM parser, and the harness's own parser answers everything
+ *  with confidence 0 — which turns every bound reference into a handoff and
+ *  would hide exactly the difference these cases are about. A deployed parser
+ *  reads both words as a delay, so this pinned stub does, identically for both.
+ *  Stubbing the parse and calling processInbound directly is this file's own
+ *  idiom (the llmScenario cases above); nothing else about the call changes. */
+const pinnedDelayParse = (): Promise<FieldParseResult> => Promise.resolve({
+  intent: "report_delay", target_ref: null, new_date: null,
+  note: "Running late.", confidence: 1,
+});
+
+async function inboundWithPinnedParse(f: ReturnType<typeof inboundFixture>, body: string, sid: string) {
+  const signed = await f.h.signedInbound({ Body: body, MessageSid: sid });
+  return await processInbound(signed.inbound, {
+    supabase: f.h.fake as never, getEnv: f.h.env, fetchImpl: f.h.provider.fetch,
+    now: f.h.clock, parseFn: pinnedDelayParse,
+  });
+}
+
+Deno.test("P1-06(g): two open cards and LATE 17 still answers the live non-card reference 17", async () => {
+  const { f, card, dayOf, ref } = twoCardsAndLiveRefWorld();
+  const res = await inboundWithPinnedParse(f, "LATE 17", "SMp106g");
+  assertEquals(res.disposition, "ref_applied", "the reference the crew named was answered");
+  const stamp = inboundStamps(f)[0];
+  const parsed = stamp?.parsed_intent as Record<string, unknown> | null;
+  assertEquals(parsed?.path, "ref", "it resolved a reference, it did not ask a question");
+  assertEquals(parsed?.prompt_id, "prompt-digest", "17 is the code, and prompt 17 is not a card");
+  assertEquals(parsed?.version, 3, "and that prompt's version");
+  assertEquals(f.effects.length, 1, "one delay filed");
+  assertEquals((f.effects[0].p_effect as { type: string }).type, "report_delay");
+  assertEquals(f.effects[0].p_party_id, "party-a", "against the party whose prompt 17 is");
+  assert(ref.answered_at, "prompt 17 was consumed");
+  assertEquals(card.answered_at ?? null, null, "the site card was left alone");
+  assertEquals(dayOf.answered_at ?? null, null, "and so was the other project's morning ask");
+  assert(!stamp.needs_review, "nobody was paged");
+  assertEquals(stamp.owner_user_id ?? null, null, "and nobody owns it");
+});
+
+Deno.test("P1-06(g-syn): DELAY 17 in that world is read identically, so the synonym asymmetry is gone", async () => {
+  const seen: Array<Record<string, unknown>> = [];
+  for (const body of ["DELAY 17", "LATE 17"]) {
+    const { f } = twoCardsAndLiveRefWorld();
+    const res = await inboundWithPinnedParse(f, body, "SMp106gsyn" + body.replace(/\W/g, ""));
+    const parsed = inboundStamps(f)[0]?.parsed_intent as Record<string, unknown> | null;
+    seen.push({ disposition: res.disposition, path: parsed?.path ?? null,
+      prompt_id: parsed?.prompt_id ?? null, version: parsed?.version ?? null,
+      effects: f.effects.map((e) => (e.p_effect as { type: string }).type),
+      needs_review: !!inboundStamps(f)[0]?.needs_review });
+  }
+  // The claim is not "LATE 17 is handled" — it is "handled IDENTICALLY to DELAY 17".
+  assertEquals(seen[1], seen[0], "LATE 17 and DELAY 17 read the same live reference");
+  assertEquals(seen[0].disposition, "ref_applied", "and both of them answered it");
+});
+
+Deno.test("P1-06(g2): PROBLEM 17 in that world still asks, and sends no apply 00645 would refuse", async () => {
+  const { f, card, dayOf, ref } = twoCardsAndLiveRefWorld();
+  const rpcNames: string[] = [];
+  const rpc = f.h.fake.rpc;
+  f.h.fake.rpc = (name: string, args?: Record<string, unknown>) => {
+    rpcNames.push(name);
+    return rpc(name, args);
+  };
+  const res = await inboundWithPinnedParse(f, "PROBLEM 17", "SMp106g2");
+  assertEquals(res.disposition, "ref_clarify", "PROBLEM 17 asks which prompt is meant");
+  const stamps = inboundStamps(f);
+  assertEquals(stamps.length, 1, "one inbound row");
+  const parsed = stamps[0].parsed_intent as Record<string, unknown> | null;
+  assertEquals(parsed?.path ?? null, null, "it bound no reference");
+  const selection = (parsed?.selection_intent ?? null) as { options?: Array<{ promptId: string }> } | null;
+  assertEquals((selection?.options ?? []).map((o) => o.promptId).sort(),
+    ["prompt-card", "prompt-dayof", "prompt-digest"], "every open prompt is offered");
+  assert(!stamps[0].needs_review, "never becomes the designer's problem");
+  assertEquals(stamps[0].owner_user_id ?? null, null, "owns nobody");
+  assertEquals(f.effects.length, 0, "files nothing");
+  assertEquals(rpcNames.filter((n) => n === "sms_apply_prompt"), [],
+    "and no apply is sent, so 00645 never raises 23514 on it");
+  for (const p of [card, dayOf, ref]) assertEquals(p.answered_at ?? null, null, `${p.id} is still waiting`);
+});
+
+Deno.test("P1-06(g3): with the rail off, LATE 17 in that world reads the reference exactly as before", async () => {
+  // FIELD_LINE_PHASE absent = 0, which is what both new terms sit behind.
+  const { f, card, dayOf, ref } = twoCardsAndLiveRefWorld({});
+  const res = await inboundWithPinnedParse(f, "LATE 17", "SMp106g3");
+  assertEquals(res.disposition, "ref_applied", "Phase 0 reference grammar is untouched");
+  const parsed = inboundStamps(f)[0]?.parsed_intent as Record<string, unknown> | null;
+  assertEquals(parsed?.prompt_id, "prompt-digest", "NN is the code at phase 0 too");
+  assertEquals(f.effects.length, 1, "one delay filed");
+  assert(ref.answered_at, "prompt 17 was consumed");
+  assertEquals([card, dayOf].filter((p) => p.answered_at).map((p) => p.id), [], "no card was touched");
+});
+
 // The exact inbound verifier includes Phase 0 reference/transport regressions.
 import "./field-line/inbound-protocol.test.ts";
 
