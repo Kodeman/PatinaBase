@@ -692,8 +692,6 @@ export function useAddClient() {
         invited: boolean;
         alreadyExists: boolean;
         kind?: 'invite' | 'notice';
-        /** P21, phone letters only: the scoped link her text will carry. */
-        capabilityUrl?: string | null;
         /** P21, phone letters only: 'sms_pending' — SQ-18 owns the sending. */
         deliver?: string;
       }>;
