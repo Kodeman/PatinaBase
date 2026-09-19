@@ -1896,6 +1896,8 @@ interface SmsPrompt {
   id: string; party_id: string; project_id: string; kind: string;
   subject_id: string | null; version: number; short_code: string; expires_at: string;
   proposed_effect?: Record<string, unknown> | null;
+  /** When the reference was minted — the moment its card was composed. */
+  created_at?: string | null;
 }
 
 async function promptSubject(supabase: SupabaseClient, prompt: SmsPrompt) {
@@ -2238,6 +2240,175 @@ function clientRefusalOf(error: unknown): string | null {
   return null;
 }
 
+// ── THE TWO WINDOWS HER CARD OFFERED (US-3 P23) ─────────────────────────────
+//
+// She replies with a POSITION — "A" — and the record of what she can be home for
+// should say WHICH WINDOW that was, in the words she read. So the card has to be
+// composed again from the same source it was composed from.
+//
+// SOURCE OF TRUTH: field-daily/core.ts's issueWindowPick. Its
+// proposedDeliveryWindows decides WHICH two windows a delivery offers and its
+// windowLabel decides IN WHICH WORDS; the rule from here down is a copy of both,
+// and if the two ever disagree core.ts is right. They are held together by
+// sms-inbound.test.ts's parity test, which sends a real card through
+// field-daily and then asserts the label recorded for her reply is the string
+// that card printed — one fixture, both halves.
+//
+// WHY A COPY. core.ts exports none of this (cardParam is the one piece it
+// exports), no edge function in this tree imports another function's module —
+// everything shared lives in _shared/ — and neither core.ts nor _shared/sms.ts
+// is this change's to touch. So the rule is duplicated rather than extracted,
+// with core.ts named as its authority.
+//
+// WHY THE PROMPT CANNOT SIMPLY CARRY THE LABELS (SQ-112 finding 2). The read
+// that used to stand here took them from prompt.proposed_effect.options, which
+// is always NULL for a window_pick: sms_create_prompt validates a non-null
+// p_proposed_effect through sms_validate_prompt_effect (00643:14-26), which
+// raises 23514 unless the effect's type is one of the ten TRADE kinds, and
+// 00644's sms_prompts_guard_binding makes the column immutable after insert. The
+// issuer cannot write the labels down, and so that read was dead on arrival.
+
+/** A GSM-7 extension character costs two septets; everything else costs one. */
+const GSM7_EXTENDED = "^{}\\[~]|€";
+/** The GSM-7 default alphabet; anything outside it would force UCS-2. */
+const GSM7_BASIC =
+  "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?" +
+  "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+/** What one window may spend on her card (field-daily/core.ts). */
+const WINDOW_LABEL_SEPTETS = 14;
+
+function septetsOf(text: string): number {
+  let count = 0;
+  for (const ch of text) count += GSM7_EXTENDED.includes(ch) ? 2 : 1;
+  return count;
+}
+
+function cardParam(value: unknown, maxSeptets: number, fallback: string): string {
+  const text = String(value ?? "")
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/[—–]/g, "-").replace(/…/g, "...")
+    .replace(/\s+/g, " ").trim();
+  let out = "";
+  let size = 0;
+  for (const ch of text) {
+    const cost = GSM7_EXTENDED.includes(ch) ? 2 : GSM7_BASIC.includes(ch) ? 1 : 0;
+    if (cost === 0) continue;
+    if (size + cost > maxSeptets) break;
+    out += ch;
+    size += cost;
+  }
+  out = out.replace(/[\s,.;:-]+$/, "").trim();
+  return out || fallback;
+}
+
+function formatDue(iso: string): string {
+  const [y, m, d] = iso.split("-").map((x) => parseInt(x, 10));
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  if (!y || !m || !d) return iso;
+  return `${months[m - 1]} ${d}`;
+}
+
+function windowLabel(day: string | null, words: string | null): string | null {
+  const dayText = day ? formatDue(day) : "";
+  const full = [dayText, (words ?? "").trim()].filter(Boolean).join(" ");
+  if (!full) return null;
+  const fitted = septetsOf(full) <= WINDOW_LABEL_SEPTETS
+    ? cardParam(full, WINDOW_LABEL_SEPTETS, "")
+    : cardParam(dayText || full, WINDOW_LABEL_SEPTETS, "");
+  return fitted || null;
+}
+
+/**
+ * The day the card was composed on, read off the reference itself. field-daily
+ * freezes the producer's local YYYYMMDD as the prompt's version (00645's
+ * convention), which is what makes this reconstruction stable: the cutoff below
+ * is the day she was ASKED, not today, so a window that has since gone by still
+ * composes the same label it did then.
+ */
+function versionLocalDay(version: number): string | null {
+  const text = String(version);
+  if (!/^\d{8}$/.test(text)) return null;
+  const month = Number(text.slice(4, 6));
+  const day = Number(text.slice(6, 8));
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+}
+
+interface OfferedWindows {
+  /** A then B, exactly as the card printed them, or empty. */
+  options: string[];
+  /** Why there is nothing to record, when there is nothing to record. */
+  drift: "proposals_changed" | "reports_unreadable" | null;
+}
+
+/**
+ * Compose her card's two options again from field_delivery_reports — the one
+ * place a delivery window is ever PROPOSED (00641), keyed by the same
+ * (subject_kind, subject_id) pair her answer is recorded against.
+ *
+ * WHAT IS NOT GUESSED AT. A proposal written AFTER her card went out was not on
+ * the record when it was composed, so it is left out: otherwise a window added
+ * this morning would slide into position A and she would be recorded against a
+ * time she never read. If what is left no longer composes two distinct labels —
+ * a proposal withdrawn, re-worded in place, or two that now print the same
+ * words — the labels she was shown are simply not recoverable, and the caller
+ * records the letter alone rather than inventing one.
+ */
+async function offeredWindows(
+  supabase: SupabaseClient,
+  prompt: SmsPrompt,
+): Promise<OfferedWindows> {
+  const askedOn = versionLocalDay(prompt.version);
+  if (!askedOn || !prompt.subject_id) return { options: [], drift: "proposals_changed" };
+  const { data, error } = await supabase
+    .from("field_delivery_reports")
+    .select("subject_kind, subject_id, proposed_date, proposed_window, availability_at, project_id")
+    .eq("project_id", prompt.project_id)
+    .eq("subject_id", prompt.subject_id);
+  if (error) return { options: [], drift: "reports_unreadable" };
+  type Report = {
+    subject_kind: string | null;
+    proposed_date: string | null;
+    proposed_window: string | null;
+    availability_at: string | null;
+  };
+  const sentAt = prompt.created_at ? String(prompt.created_at) : null;
+  const groups = new Map<string, Report[]>();
+  for (const row of (data ?? []) as Report[]) {
+    if (!row.subject_kind) continue;
+    if (!row.proposed_date && !row.proposed_window) continue;
+    // Written after the card, so the card cannot have printed it.
+    if (sentAt && row.availability_at && String(row.availability_at) > sentAt) continue;
+    groups.set(row.subject_kind, [...(groups.get(row.subject_kind) ?? []), row]);
+  }
+
+  // core.ts, proposedDeliveryWindows: chronological, a day already behind her is
+  // not a choice, two proposals printing the same words are one choice, and
+  // fewer than two is not a card at all.
+  const pairs: string[][] = [];
+  for (const group of groups.values()) {
+    const sorted = [...group].sort((a, b) =>
+      (a.proposed_date ?? "9999-99-99").localeCompare(b.proposed_date ?? "9999-99-99") ||
+      String(a.availability_at ?? "").localeCompare(String(b.availability_at ?? ""))
+    );
+    const options: string[] = [];
+    for (const row of sorted) {
+      if (row.proposed_date && row.proposed_date < askedOn) continue;
+      const label = windowLabel(row.proposed_date, row.proposed_window);
+      if (!label || options.includes(label)) continue;
+      options.push(label);
+      if (options.length === 2) break;
+    }
+    if (options.length === 2) pairs.push(options);
+  }
+  // One subject_id in two subject kinds is not a shape this database can reach
+  // (00641's unique index, and a uuid names a row in one table), but two
+  // different pairs would mean guessing which card she holds. It fails closed.
+  const distinct = new Set(pairs.map((pair) => JSON.stringify(pair)));
+  if (distinct.size !== 1) return { options: [], drift: "proposals_changed" };
+  return { options: pairs[0], drift: null };
+}
+
 /**
  * A HOMEOWNER'S REPLY, THROUGH THE ONE DOOR THAT EXISTS FOR IT (US-3 P23/P24).
  *
@@ -2334,6 +2505,8 @@ async function clientPromptReply(
   const verb = body.trim().toUpperCase().split(/\s+/)[0] ?? "";
   let effect: "approve_selection" | "select_window" | null = null;
   let payload: Record<string, unknown> = {};
+  /** Set only when the window she picked cannot be named (offeredWindows). */
+  let labelDrift: string | null = null;
   if (prompt.kind === "selection_batch" && ["YES", "Y", "OK"].includes(verb)) {
     effect = "approve_selection";
     // THE PROMPT'S OWN VERSION, never a live read of the batch. 00651 refuses a
@@ -2343,15 +2516,21 @@ async function clientPromptReply(
     payload = { version: prompt.version };
   } else if (prompt.kind === "window_pick" && WINDOW_OPTIONS.includes(verb)) {
     effect = "select_window";
-    // The label the card printed for this letter, when the issuer wrote it down
-    // on the prompt. It is a record of what she was offered, so it comes from
-    // the prompt and not from today's schedule.
-    const offered = (prompt.proposed_effect?.options ?? null) as
-      | Record<string, unknown>
-      | null;
-    const label = offered && typeof offered[verb] === "string"
-      ? String(offered[verb])
-      : null;
+    // WHICH WINDOW "A" WAS. Her card's two options, composed again from the
+    // proposals it was composed from (offeredWindows, above) — not from today's
+    // schedule, because the record has to say what SHE read. "C" is "neither of
+    // those" and names no window, so it asks nothing.
+    //
+    // NO VERSION GOES IN THIS PAYLOAD. select_window has no stale door in 00651
+    // and needs none: her answer is availability against a delivery, not a
+    // decision against a list that can move underneath it.
+    let label: string | null = null;
+    if (verb !== "C") {
+      const offered = await offeredWindows(supabase, prompt);
+      label = offered.options[WINDOW_OPTIONS.indexOf(verb)] ?? null;
+      // The letter is still hers to record; the words are simply not recoverable.
+      if (!label) labelDrift = offered.drift ?? "proposals_changed";
+    }
     payload = {
       option: verb,
       subject_kind: "delivery",
@@ -2381,6 +2560,10 @@ async function clientPromptReply(
     version: prompt.version,
     effect,
     payload,
+    // The receipt says so when the window she picked could not be named, because
+    // an availability row with no label is otherwise indistinguishable from one
+    // the rail never tried to label.
+    ...(labelDrift ? { label_drift: labelDrift } : {}),
   };
   const attempt = await stampMessage(supabase, messageId, party.id, party.project_id, details, 1);
   if (attempt.error) {
