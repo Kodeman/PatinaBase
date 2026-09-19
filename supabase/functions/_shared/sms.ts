@@ -984,13 +984,29 @@ async function resolveRecipient(
     if (rows && rows.length > 0) {
       displayName = (rows[0] as { display_name: string | null }).display_name ??
         null;
-      // One seat or none. Two seats on a number name two people (00650's own
-      // one-match rule), and guessing which of them this send is for is how a
-      // homeowner's gate gets applied to a foreman — or, worse, not applied.
-      if (rows.length === 1) {
-        partyKind = (rows[0] as { party_kind: string | null }).party_kind ??
-          null;
-      }
+      // WHICH SEAT THE CLASSIFICATION PICKS, STATED (SQ-111 INFO-1). A phone-only
+      // send names no seat, so the number may answer with several — a handset
+      // that holds a trade seat and a client seat on the same project is one
+      // person who is both. It resolves in this order, whatever order the rows
+      // came back in:
+      //   · ANY client seat on the number → `client`. The client gate (P24) is
+      //     the fail-closed reading: a text to a shared handset can reach the
+      //     homeowner, so it is gated as hers. The cost is a phone-only trade
+      //     text to that handset waiting for phase 2 as well; the benefit is
+      //     that her rail can never be bypassed by adding a second seat.
+      //   · otherwise one seat → that seat's kind.
+      //   · otherwise (two or more non-client seats) → null, as before: nothing
+      //     the client gate turns on is in question.
+      // A send that names a seat (input.partyId) never reaches here and is
+      // classified off that seat alone.
+      const kinds = rows.map((row) =>
+        (row as { party_kind: string | null }).party_kind ?? null
+      );
+      partyKind = kinds.includes("client")
+        ? "client"
+        : rows.length === 1
+        ? kinds[0]
+        : null;
     }
   }
   return {

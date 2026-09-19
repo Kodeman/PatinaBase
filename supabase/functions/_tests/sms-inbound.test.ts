@@ -3445,3 +3445,95 @@ Deno.test("P14: an inbound with no provider id is retried, never guessed at", as
   assertEquals(res.status, 503);
   assertEquals(f.h.fake._data.client_decisions[0].status, "pending", "nothing applied");
 });
+
+// ── SQ-114: the rail she is on is not always running ─────────────────────────
+//
+// The all-client freeform branch and the consent pre-check are BOTH phase-2
+// behaviour, and the acknowledgement each of them composes is itself a
+// client-kind send. Three states have to be told apart: the rail live (above),
+// the rail not live yet, and the rail stopped by its own switch.
+
+Deno.test("below phase 2 a client seat keeps the rail it has always been on", async () => {
+  // A `client` seat can predate this rail by a year (00419) — and at phase 0/1
+  // GATE 3b refuses every text to one, the pipeline's own acknowledgement
+  // included. Taking her off the trade path here would trade the line she used
+  // to get for a handoff and silence, so below phase 2 the client branch does
+  // not run: her message goes down exactly the path it went down before the
+  // homeowner rail existed.
+  const f = clientFixture({ env: { FIELD_LINE_PHASE: "1" } });
+  const res = await f.inbound("Can we talk about the rug?", "SMphase1");
+  const stamp = clientStamp(f, "SMphase1");
+  const parsed = stamp.parsed_intent as Record<string, unknown>;
+  assertEquals(parsed.path, "llm", `the pre-client path took it: ${JSON.stringify(parsed)}`);
+  assertEquals(res.disposition, "needs_review");
+  assert(
+    /get back to you/i.test(String(res.replies?.[0]?.message ?? "")),
+    `and it answers her as it always did: "${res.replies?.[0]?.message}"`,
+  );
+  assertEquals(f.effects.length, 0, "no effect either way");
+});
+
+Deno.test("with the campaign flag down her message is handed over, naming the gate", async () => {
+  // FIELD_LINE_CAMPAIGN_APPROVED down is how the homeowner rail is stopped
+  // mid-flight (P24). Nothing may be texted to her — but her message must not
+  // vanish: the needs_review row says which gate withheld the answer, so the
+  // person reading it knows she is waiting.
+  const f = clientFixture({ env: { FIELD_LINE_CAMPAIGN_APPROVED: "0" } });
+  const res = await f.inbound("Can we talk about the rug?", "SMflagdown");
+  assertEquals(res.disposition, "client_reply_withheld");
+  assertEquals((res.replies ?? []).length, 0, "no text is composed for a gate that refuses it");
+  const stamp = clientStamp(f, "SMflagdown");
+  assertEquals(stamp.needs_review, true, "a person still has it");
+  assertEquals(stamp.owner_user_id, "studio-a");
+  const parsed = stamp.parsed_intent as Record<string, unknown>;
+  assertEquals(parsed.path, "client_freeform");
+  assertEquals(parsed.reply_withheld, "campaign_not_approved", "and the row names the gate");
+  assertEquals(f.effects.length, 0);
+});
+
+Deno.test("a reply her consent no longer carries is handed over, never answered", async () => {
+  // Two shapes of refusal, and one control. In both refusals NOTHING is applied
+  // and NOTHING is texted back — answering a withdrawn consent by text is the
+  // one thing that must not happen — and in both the thread is handed to the
+  // person who owns the project with the reason on it (SQ-111 LOW-3: it used to
+  // be dropped with no handoff at all).
+  const refusals: Array<[string, string, (f: ReturnType<typeof clientFixture>) => void]> = [
+    ["opted_out", "SMoptout", (f) => {
+      f.h.fake._data.studio_channel_consent
+        .find((row: Record<string, unknown>) => row.channel_value === CLIENT_PHONE)!.status = "opted_out";
+    }],
+    ["consent_evidence_required", "SMunsigned", (f) => {
+      const row = f.h.fake._data.studio_channel_consent
+        .find((r: Record<string, unknown>) => r.channel_value === CLIENT_PHONE)!;
+      delete row.source;
+      delete row.recorded_by;
+    }],
+  ];
+  for (const [refusal, sid, breakIt] of refusals) {
+    const f = clientFixture();
+    const batch = f.batch();
+    const ask = f.ask();
+    breakIt(f);
+    const res = await f.inbound("YES 31", sid);
+    assertEquals(res.disposition, "not_consented", refusal);
+    assertEquals((res.replies ?? []).length, 0, `[${refusal}] she is not answered by text`);
+    assertEquals(f.h.fake._data.client_decisions[0].status, "pending", `[${refusal}] nothing applied`);
+    assertEquals(batch.closed_at, null, `[${refusal}] the ask is untouched`);
+    assertEquals(ask.answered_at ?? null, null, `[${refusal}] and so is her reference`);
+    const stamp = clientStamp(f, sid);
+    assertEquals(stamp.needs_review, true, `[${refusal}] a person has it`);
+    assertEquals(stamp.owner_user_id, "studio-a", `[${refusal}] and it has an owner`);
+    const parsed = stamp.parsed_intent as Record<string, unknown>;
+    assertEquals(parsed.path, "client_consent_refused", refusal);
+    assertEquals(parsed.refusal, refusal, `[${refusal}] the row says which refusal it was`);
+    assertEquals(parsed.prompt_kind, "selection_batch", `[${refusal}] and what she was answering`);
+  }
+
+  // The kickoff tick, witnessed: the same reply applies and she IS answered.
+  const ok = clientFixture();
+  ok.batch();
+  ok.ask();
+  const good = await ok.inbound("YES 31", "SMconsented");
+  assertEquals(good.disposition, "client_selection_approved");
+  assertEquals(ok.h.fake._data.client_decisions[0].status, "responded");
+});
