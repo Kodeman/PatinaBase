@@ -19,6 +19,10 @@ The gate inventory stays complete even while later tickets own the behavior. A `
 | `unknown-sender-wrong` | S4 service-only unresolved content | P0-06a (implemented) |
 | `old-ref-reply` | S1 original-version late reply behavior | P0-06a (implemented, phase 0) |
 | `interrupted-media-upload` | S4 service-only media; S5 truthful result | P0-06b (implemented, phase 0) |
+| `reply-to-renew` | S6 mint-on-dispatch for a lapsed link; P11 refusals | P1-02 (implemented, phase 1) |
+| `budget-fold-to-digest` | S5 folded-not-dropped result; S7 server-side cadence | P1-02 (implemented, phase 1) |
+| `dead-end-handoff` | S4 one owned handoff for two unanswered prompts | P1-02 (implemented, phase 1) |
+| `site-card-day-of` | S1 immutable per-visit refs; S3 field reports only | P1-02 (implemented, phase 1) |
 
 Run the fixture gate directly:
 
@@ -51,6 +55,12 @@ Stamped legacy holding JSON is never applied as an effect or copied into a proje
 Daily digest refs are minted by transactional `sms_create_prompt`, never by a separate allocator. Only budget-visible items get refs. The 42-septet menu includes three-digit refs; the real sender fixture asserts exactly 306 GSM-7 septets with maximum names/link and extension characters. Same-day retries reuse the recorded menu even if tasks change, and the fake models 00640 live-send INSERT uniqueness. Concurrent fixture allocation is not SQL-locking proof. Suppression/pause prevent allocation, and existing daily/delivery automation stays phase zero.
 
 PO delivery and condition refs now use atomic `sms_apply_prompt` with immutable SID/result receipts (00643). The validator binds purchase_orders.project_id to the prompt and actor's project. PO confirmation/arrival writes only field_delivery_reports.arrived_at; condition writes condition_ok/note/at and assigns damage review. It never writes purchase_orders, receiving_inspections, delivery_events (a read-only aggregate view), or time entries. The receiving page's report projection is a later portal task. The condition-report and po-delivery phase-zero fixture cases now run; real SQL rollback and eight added lock barriers separately prove tenant refusal, receipt replay and exactly-one consumption/issuance.
+
+## The trade rail (00645, phase 1)
+
+Four cases run only at phase 1 and are skipped below it, because the behavior they describe is gated on `FIELD_LINE_PHASE`. `reply-to-renew` gives a party whose engagement links have all simply expired one fresh scoped link on any reply, and refuses it for a revoked newest token, a suppressed pair and STOP; it moves the second studio's seat to its own handset, because a shared number is asked which project first and that ambiguity is `two-studios-one-phone`'s subject, not this one's. `budget-fold-to-digest` spends the per-party daily event budget (three) and shows the fourth text becoming a stored `deferred` row reading `budget` that the flush re-asks the budget for, so it leaves on the first flush of the zone's next local day. `dead-end-handoff` shows two unanswered prompts producing exactly one owned handoff and a pause that refuses the third ask, with an answer reopening the rail. `site-card-day-of` runs the daily twice — 6pm the evening before and 8am on the visit day — and asserts one site card then one morning ask, each bound to that visit's own task and `YYYYMMDD`, both GSM-7 inside two segments and ending in the canonical closing line, `ON MY WAY` / `LATE 20` / `PROBLEM …` / `DONE` filing arrival, delay, a not-ok condition and departure and **never** a delivery receipt, and "crew on the way" written as one system post on the project thread with no homeowner text.
+
+These four model 00645's two new RPCs (`sms_claim_party_budget`, `sms_party_prompt_gate`) through the harness's RPC seam: they are evidence about the rail that is written against those contracts, not about PostgreSQL locking. The atomic budget claim under two sessions, the FIELD_TZ day boundary across a DST transition and the reply-verb/effect matrix are asserted in SQL by `supabase/tests/field/sms_trade_prompts_test.sql`. Both new gates in `sendPartySms` fail **open**: an unreadable or absent budget/dead-end answer sends the text, because a cadence is politeness and only consent and suppression are permission.
 
 ### Future consumers / evidence limits
 

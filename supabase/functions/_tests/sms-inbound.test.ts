@@ -3,9 +3,10 @@
 // Run: deno test --no-check -A supabase/functions/_tests/sms-inbound.test.ts
 
 import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { processInbound, type InboundParams } from "../sms-inbound/pipeline.ts";
+import { processInbound, tradeShape, type InboundParams } from "../sms-inbound/pipeline.ts";
 import type { FieldParseResult } from "../_shared/field-parse.ts";
 import { createFakeSupabase as baseFakeSupabase, type FakeSupabase } from "./fake-supabase.ts";
+import { inboundFixture } from "./field-line/inbound-fixture.ts";
 
 function createFakeSupabase(...args: Parameters<typeof baseFakeSupabase>): FakeSupabase {
   const fake = baseFakeSupabase(...args);
@@ -2463,6 +2464,317 @@ Deno.test("an inbound YES files a touch only for the studio whose invite it answ
   assertEquals(res.disposition, "granted");
   assertEquals(touches.length, 1);
   assertEquals(touches[0].p_subject_id, "53100000-0000-4000-8000-000000000002", "the seat whose studio was actually granted");
+});
+
+
+// ── The trade rail's reading and its renewal (00645, contract P3/S6/P11) ────
+
+const PROJ = "53100000-0000-4000-8000-000000000003";
+const PARTY = "53100000-0000-4000-8000-000000000001";
+const TRADE_PHONE = "+15551110777";
+
+Deno.test("P3: the trade words are read exactly as the cards print them", () => {
+  const cases: Array<[string, string, string]> = [
+    ["ON MY WAY", "HERE", "report_arrival"],
+    ["on my way!", "HERE", "report_arrival"],
+    ["HERE", "HERE", "report_arrival"],
+    ["here.", "HERE", "report_arrival"],
+    ["LATE 20", "LATE", "report_delay"],
+    ["late 45 min", "LATE", "report_delay"],
+    ["Late 5 minutes", "LATE", "report_delay"],
+    ["PROBLEM", "PROBLEM", "report_condition"],
+    ["PROBLEM gate is locked", "PROBLEM", "report_condition"],
+    ["problem: no water on site", "PROBLEM", "report_condition"],
+    ["DONE", "DONE", "report_departure"],
+    ["done!", "DONE", "report_departure"],
+  ];
+  for (const [body, verb, intent] of cases) {
+    const shape = tradeShape(body);
+    assert(shape, `"${body}" is one of the printed words`);
+    assertEquals(shape!.verb, verb, body);
+    assertEquals(shape!.intent, intent, body);
+    // NONE of these is a receipt for goods. That is the whole point of reading
+    // them here instead of letting a parser decide.
+    assert(
+      !["confirm_delivery", "mark_done"].includes(shape!.intent),
+      `"${body}" must never say goods arrived or work is closed`,
+    );
+  }
+
+  // The number after LATE is MINUTES, in the note, and it schedules nothing.
+  const late = tradeShape("LATE 20")!;
+  assertEquals(late.note, "Running about 20 minutes late.");
+  assertEquals(late.condition, undefined);
+
+  // A problem is a not-ok condition carrying what the crew actually said.
+  const problem = tradeShape("PROBLEM gate is locked")!;
+  assertEquals(problem.condition, { ok: false, note: "gate is locked" });
+  assertEquals(problem.note, "gate is locked");
+  // And with nothing after it, the rail says so rather than filing an empty note.
+  assertEquals(tradeShape("PROBLEM")!.condition, {
+    ok: false,
+    note: "Something is wrong on site.",
+  });
+
+  // Everything else is NOT a trade word, and still reaches the reader it always did.
+  for (
+    const body of [
+      "late",
+      "late tomorrow",
+      "LATE 1234",
+      "problematic",
+      "done deal",
+      "DONE 2",
+      "here we go",
+      "YES 17",
+      "20",
+      "on my way to the other job",
+      "",
+    ]
+  ) {
+    assertEquals(tradeShape(body), null, `"${body}" is not a printed word`);
+  }
+});
+
+/** A consenting field party on one project, plus a mint counter. */
+function renewWorld(tokens: Array<Record<string, unknown>>) {
+  const mints: Array<Record<string, unknown>> = [];
+  const fake = createFakeSupabase(
+    baseSeed({
+      project_parties: [{
+        id: PARTY,
+        phone_e164: TRADE_PHONE,
+        project_id: PROJ,
+        party_kind: "sub",
+        display_name: "Sal Sub",
+        sms_consent_status: "granted",
+      }],
+      studio_channel_consent: [{
+        organization_id: "org-alpha",
+        channel_kind: "sms",
+        channel_value: TRADE_PHONE,
+        status: "granted",
+        refusal_unanswered: false,
+      }],
+      field_link_tokens: tokens,
+    }),
+    {
+      create_field_link: (args: Record<string, unknown>) => {
+        mints.push(args);
+        return { data: [{ id: `link-${mints.length}`, token: "b".repeat(64) }], error: null };
+      },
+    },
+  );
+  return { fake, mints };
+}
+
+// 1pm in America/Chicago: inside the send window, so a renewal that is
+// allowed actually goes out instead of waiting for the morning.
+const RENEW_NOW = new Date("2026-09-18T18:00:00.000Z");
+
+const RENEW_DEPS = {
+  now: RENEW_NOW,
+  getEnv: (key: string) => key === "FIELD_LINE_PHASE" ? "1" : NO_POSTHOG(key),
+  parseFn: async (): Promise<FieldParseResult> => ({
+    intent: "note",
+    target_ref: null,
+    new_date: null,
+    note: "fixture",
+    confidence: 0,
+  }),
+};
+
+/** The wire, for the one test here that actually sends. */
+function renewWire(sent: string[]) {
+  return {
+    getEnv: (key: string) =>
+      ({
+        FIELD_LINE_PHASE: "1",
+        SMS_DEV_MODE: "off",
+        TWILIO_FROM_NUMBER: TO,
+        SMS_CONVERSATION_NUMBER: TO,
+        TWILIO_ACCOUNT_SID: "ACfixture",
+        TWILIO_AUTH_TOKEN: "fixture-token",
+      } as Record<string, string>)[key] ?? NO_POSTHOG(key),
+    fetchImpl: ((_url: string, init: RequestInit) => {
+      sent.push(new URLSearchParams(String(init.body)).get("Body") ?? "");
+      return Promise.resolve(
+        new Response(JSON.stringify({ sid: `SM${sent.length}`, status: "queued" }), { status: 201 }),
+      );
+    }) as unknown as typeof fetch,
+    parseFn: RENEW_DEPS.parseFn,
+    now: RENEW_NOW,
+  };
+}
+
+/** The lapsed token every renewal probe below starts from. */
+const LAPSED = {
+  id: "expired",
+  party_id: PARTY,
+  project_id: PROJ,
+  token_hash: "d".repeat(64),
+  status: "active",
+  expires_at: "2026-08-01T00:00:00.000Z",
+  created_at: "2026-07-01T00:00:00.000Z",
+};
+
+Deno.test("S6: a lapsed link is renewed on any reply, once, with the link minted at send", async () => {
+  // The positive control for the two refusals below: this world CAN renew, so
+  // when it does not, the refusal is what stopped it.
+  const { fake, mints } = renewWorld([{ ...LAPSED }]);
+  fake._data.email_templates.push({
+    slug: "sms_field_link_renew",
+    is_active: true,
+    html_content:
+      "{{studio_name}}: here is your {{project_name}} link. {{link}} " +
+      "Msg&data rates may apply. Reply HELP for help, STOP to opt out.",
+  });
+  const sent: string[] = [];
+  const res = await processInbound(
+    params({ From: TRADE_PHONE, Body: "can you send that link again", MessageSid: "SMrenew1" }),
+    { supabase: fake as never, ...renewWire(sent) },
+  );
+  assertEquals(res.disposition, "link_renewed");
+  assertEquals(mints.length, 1, "exactly one link, minted at the moment it was dialled");
+  assertEquals(mints[0].p_party_id, PARTY);
+  assertEquals(sent.length, 1, "and exactly one text");
+  assert(sent[0].includes("b".repeat(64)), `the live wire carries the token: ${sent[0]}`);
+  const stored = JSON.stringify(fake._data.sms_messages ?? []);
+  assert(!stored.includes("b".repeat(64)), "and the stored thread copy does not");
+});
+
+Deno.test("S6: a link that still works is never re-minted by a reply", async () => {
+  // Renewal cures a LAPSE. A party who can already open their link is not
+  // missing anything, and a fresh credential for every "thanks" is a credential
+  // factory nobody asked for.
+  const { fake, mints } = renewWorld([{
+    id: "live",
+    party_id: PARTY,
+    project_id: PROJ,
+    token_hash: "c".repeat(64),
+    status: "active",
+    expires_at: "2027-01-01T00:00:00.000Z",
+    created_at: "2026-08-01T00:00:00.000Z",
+  }]);
+  const res = await processInbound(
+    params({ From: TRADE_PHONE, Body: "thanks", MessageSid: "SMlivelink" }),
+    { supabase: fake as never, ...RENEW_DEPS },
+  );
+  assert(res.disposition !== "link_renewed", `got ${res.disposition}`);
+  assertEquals(mints.length, 0, "nothing was minted for a working link");
+});
+
+Deno.test("P11: an unknown sender is never renewed — there is no party to scope a link to", async () => {
+  // A link is scoped to a party on a project. A number the studio has no seat
+  // for cannot be given one, whatever it asks for and whoever forwarded it.
+  const { fake, mints } = renewWorld([{
+    id: "expired",
+    party_id: PARTY,
+    project_id: PROJ,
+    token_hash: "d".repeat(64),
+    status: "active",
+    expires_at: "2026-08-01T00:00:00.000Z",
+    created_at: "2026-07-01T00:00:00.000Z",
+  }]);
+  const res = await processInbound(
+    params({ From: "+15550009999", Body: "can you resend my link", MessageSid: "SMstranger" }),
+    { supabase: fake as never, ...RENEW_DEPS },
+  );
+  assert(res.disposition !== "link_renewed", `got ${res.disposition}`);
+  assertEquals(mints.length, 0, "an unknown number mints nothing");
+});
+
+// ── LATE NN is minutes only where a card actually asked (SQ-95 check 6) ─────
+//
+// The trade reading of "LATE 20" is an EXCEPTION carved out of Phase 0's live
+// `<VERB> NN` reference grammar, and an exception that fires unconditionally is
+// not an exception — it is a removal. Suppressing the reference match for every
+// LATE body re-attributed "LATE 17" on a closed reference to whatever single
+// prompt happened to be open and handed it to a designer as needs_review, while
+// "DELAY 17" — the synonym both 00641 and 00645 map to report_delay — correctly
+// answered that the reference is closed. The four worlds below are the ones
+// SQ-95's probe walked, pinned at the pipeline level: minutes require BOTH the
+// running rail (FIELD_LINE_PHASE >= 1) and exactly one open site_card/day_of on
+// the pair, so each conjunct has a world that fails only it.
+
+/** The stamped inbound rows — what the designer's review queue would see. */
+function inboundStamps(f: ReturnType<typeof inboundFixture>): Array<Record<string, unknown>> {
+  return (f.h.fake._data.sms_messages ?? []).filter((m: Record<string, unknown>) => m.direction === "inbound");
+}
+
+/** Ref 17 answered yesterday; ref 18 the one open prompt, and not a trade one. */
+function closedRefWorld() {
+  const f = inboundFixture(undefined, undefined, { FIELD_LINE_PHASE: "1" });
+  f.prompt({ answered_at: "2026-10-31T12:00:00.000Z" });
+  f.prompt({ id: "prompt-new", version: 2, short_code: "18", kind: "report_delay" });
+  return f;
+}
+
+Deno.test("R1(a): LATE 17 on a closed reference says so, exactly as DELAY 17 and HERE 17 do", async () => {
+  // Phase 1 is ON here: nothing but the absence of an open card keeps the
+  // number a reference, which is the half of the rule this world isolates.
+  for (const body of ["DELAY 17", "HERE 17", "LATE 17"]) {
+    const tag = `[${body}]`;
+    const f = closedRefWorld();
+    const res = await f.h.processInbound({ Body: body, MessageSid: "SMr1a" + body.replace(/\W/g, "") });
+    assertEquals(res.disposition, "ref_closed", `${tag} a closed reference is answered as closed`);
+    const stamps = inboundStamps(f);
+    assertEquals(stamps.length, 1, `${tag} one inbound row`);
+    assert(!stamps[0].needs_review, `${tag} never becomes the designer's problem`);
+    assertEquals(stamps[0].owner_user_id ?? null, null, `${tag} owns nobody`);
+    assertEquals(f.effects.length, 0, `${tag} files nothing`);
+    const other = (f.h.fake._data.sms_prompts ?? []).find((p: Record<string, unknown>) => p.short_code === "18");
+    assertEquals(other?.answered_at ?? null, null, `${tag} did not answer ref 18 on the party's behalf`);
+  }
+});
+
+Deno.test("R1(b): with two open non-trade prompts, LATE 18 names prompt 18 exactly as DELAY 18 does", async () => {
+  const seen: Array<Record<string, unknown>> = [];
+  for (const body of ["DELAY 18", "LATE 18"]) {
+    const f = inboundFixture(undefined, undefined, { FIELD_LINE_PHASE: "1" });
+    f.prompt({ short_code: "17", kind: "report_delay" });
+    f.prompt({ id: "prompt-new", version: 2, short_code: "18", kind: "report_delay" });
+    const res = await f.h.processInbound({ Body: body, MessageSid: "SMr1b" + body.replace(/\W/g, "") });
+    const parsed = inboundStamps(f)[0]?.parsed_intent as Record<string, unknown> | null;
+    // The code identified the prompt, so the reply was never a clarification.
+    assertEquals(parsed?.path, "ref", `[${body}] resolved a reference`);
+    assertEquals(parsed?.prompt_id, "prompt-new", `[${body}] resolved reference 18`);
+    assertEquals(parsed?.version, 2, `[${body}] and that prompt's version`);
+    seen.push({ disposition: res.disposition, prompt_id: parsed?.prompt_id, version: parsed?.version });
+  }
+  // The claim is not "LATE 18 is handled" — it is "handled IDENTICALLY to DELAY 18".
+  assertEquals(seen[1], seen[0], "LATE NN and DELAY NN read the same reference");
+});
+
+Deno.test("R1(c): at phase 1 with one open site card, LATE 20 is twenty MINUTES on that card", async () => {
+  const f = inboundFixture(undefined, undefined, { FIELD_LINE_PHASE: "1" });
+  // The card's own reference is 21, and no prompt in this world is numbered 20,
+  // so a minutes reading and a reference reading cannot be confused for each other.
+  const card = f.prompt({ id: "prompt-card", short_code: "21", kind: "site_card" });
+  assert(
+    (f.h.fake._data.sms_prompts ?? []).every((p: Record<string, unknown>) => p.short_code !== "20"),
+    "there is no reference 20 in this world",
+  );
+  const res = await f.h.processInbound({ Body: "LATE 20", MessageSid: "SMr1c" });
+  assertEquals(res.disposition, "ref_applied", "the card got the answer it asked for");
+  assertEquals(f.effects.length, 1, "one delay filed");
+  const effect = f.effects[0].p_effect as { type: string; note: string };
+  assertEquals(effect.type, "report_delay");
+  assertEquals(effect.note, "Running about 20 minutes late.", "20 is minutes, and it is in the note");
+  assertEquals(f.effects[0].p_party_id, "party-a");
+  assert(card.answered_at, "the prompt it answered is the card that printed the words");
+});
+
+Deno.test("R1(d): the same world with the rail off reads LATE 20 as reference 20, never as minutes", async () => {
+  // FIELD_LINE_PHASE absent = 0. A site_card row cannot be minted by the phase-0
+  // rail at all, so this world isolates the phase conjunct: even with the card
+  // sitting open, the server that is not running the rail does not read its words.
+  const f = inboundFixture();
+  const card = f.prompt({ id: "prompt-card", short_code: "21", kind: "site_card" });
+  const res = await f.h.processInbound({ Body: "LATE 20", MessageSid: "SMr1d" });
+  assertEquals(res.disposition, "ref_closed", "reference 20 does not exist, and is answered as a reference");
+  assertEquals(f.effects.length, 0, "no delay is filed off a rail that is switched off");
+  assertEquals(card.answered_at ?? null, null, "and the card was not consumed");
 });
 
 // The exact inbound verifier includes Phase 0 reference/transport regressions.

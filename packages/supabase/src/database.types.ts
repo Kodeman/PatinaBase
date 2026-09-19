@@ -23897,7 +23897,13 @@ export type Database = {
       sms_conversation_context: {
         Row: {
           backfilled_at: string | null
+          budget_events_used: number
+          budget_local_day: string | null
+          budget_recurring_used: number
           conversation_id: string
+          dead_end_at: string | null
+          dead_end_owner_user_id: string | null
+          dead_end_prompt_id: string | null
           party_id: string | null
           paused_until: string | null
           project_id: string | null
@@ -23907,7 +23913,13 @@ export type Database = {
         }
         Insert: {
           backfilled_at?: string | null
+          budget_events_used?: number
+          budget_local_day?: string | null
+          budget_recurring_used?: number
           conversation_id: string
+          dead_end_at?: string | null
+          dead_end_owner_user_id?: string | null
+          dead_end_prompt_id?: string | null
           party_id?: string | null
           paused_until?: string | null
           project_id?: string | null
@@ -23917,7 +23929,13 @@ export type Database = {
         }
         Update: {
           backfilled_at?: string | null
+          budget_events_used?: number
+          budget_local_day?: string | null
+          budget_recurring_used?: number
           conversation_id?: string
+          dead_end_at?: string | null
+          dead_end_owner_user_id?: string | null
+          dead_end_prompt_id?: string | null
           party_id?: string | null
           paused_until?: string | null
           project_id?: string | null
@@ -38671,6 +38689,16 @@ export type Database = {
         Returns: Json
       }
       sms_backfill_conversation_context: { Args: never; Returns: number }
+      sms_claim_party_budget: {
+        Args: {
+          p_class: string
+          p_conversation_id: string
+          p_local_day: string
+          p_party_id: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       sms_create_prompt: {
         Args: {
           p_expires_at: string
@@ -38712,6 +38740,16 @@ export type Database = {
       sms_next_short_code: {
         Args: { p_recipient: string; p_sender: string }
         Returns: string
+      }
+      sms_party_prompt_gate: {
+        Args: {
+          p_conversation_id: string
+          p_party_id: string
+          p_pause_hours?: number
+          p_project_id: string
+          p_threshold?: number
+        }
+        Returns: Json
       }
       sms_phone_suppressed: { Args: { p_recipient: string }; Returns: boolean }
       sms_prompt_message: {

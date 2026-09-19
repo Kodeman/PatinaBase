@@ -20,7 +20,10 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   channelConsentVerdict,
+  fieldLinePhase,
   flushDeferredMessages,
+  localDayInTimezone,
+  localMinutesInTimezone,
   sendPartySms,
   smsConversationNumber,
   type SendPartySmsInput,
@@ -29,6 +32,27 @@ import {
 } from "../_shared/sms.ts";
 
 const FIELD_KINDS = ["gc", "sub", "installer", "receiver"];
+
+/**
+ * When the two trade cards are due, as minutes past local midnight in FIELD_TZ
+ * (contract P4): the site card the EVENING BEFORE a visit, the ask the MORNING
+ * OF. Both are floors, not instants — any tick after the hour that has not
+ * already sent the card sends it, so a missed tick catches up instead of
+ * dropping the day.
+ *
+ * NOTE FOR OPERATIONS: at phase 1 this cron needs to run more than once a day.
+ * 00284 schedules it at 13:00 UTC, which is 07:00 or 08:00 in America/Chicago
+ * depending on the season and never 17:00, so a single daily tick reaches the
+ * morning window only during daylight time and the evening window never. The
+ * cron's own schedule is 00284's to change; the hours below are the contract's.
+ *
+ * And the morning ask is DUE at 07:30 but will not be SENT before 08:00: quiet
+ * hours (8am–8pm) is a compliance floor the rail applies to every send, so a
+ * 07:30 tick stores the row and the flush puts it on the wire at eight. That is
+ * the floor working, not a bug to route around.
+ */
+export const SITE_CARD_LOCAL_MINUTES = 17 * 60;
+export const DAY_OF_LOCAL_MINUTES = 7 * 60 + 30;
 
 /**
  * May this party be texted an ordinary (non-invite) field message?
@@ -103,6 +127,41 @@ function septetsOf(text: string): number {
   let count = 0;
   for (const ch of text) count += GSM7_EXTENDED.includes(ch) ? 2 : 1;
   return count;
+}
+
+/** The GSM-7 default alphabet; anything outside it would force UCS-2. */
+const GSM7_BASIC =
+  "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?" +
+  "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+
+/**
+ * A site card parameter: the studio's own words, kept inside the septet budget
+ * the template documents. Site notes and addresses are free text a person typed,
+ * so this TRUNCATES rather than refusing — a card with a shortened note still
+ * gets the crew to the right door, and a card that refused to send gets them
+ * nowhere. Anything outside GSM-7 is dropped, because one stray character pushes
+ * the whole message into UCS-2 and a two-segment budget into three.
+ */
+export function cardParam(
+  value: unknown,
+  maxSeptets: number,
+  fallback: string,
+): string {
+  const text = String(value ?? "")
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/[—–]/g, "-").replace(/…/g, "...")
+    .replace(/\s+/g, " ").trim();
+  let out = "";
+  let size = 0;
+  for (const ch of text) {
+    const cost = GSM7_EXTENDED.includes(ch) ? 2 : GSM7_BASIC.includes(ch) ? 1 : 0;
+    if (cost === 0) continue;
+    if (size + cost > maxSeptets) break;
+    out += ch;
+    size += cost;
+  }
+  out = out.replace(/[\s,.;:-]+$/, "").trim();
+  return out || fallback;
 }
 
 /**
@@ -221,6 +280,12 @@ interface RunSummary {
   delivery_confirms_sent: number;
   parties_skipped: number;
   deferred_flushed: number;
+  /** Site cards put on the wire this run (contract P4). */
+  site_cards_sent: number;
+  /** Morning asks put on the wire this run (contract P4). */
+  day_of_sent: number;
+  /** "Crew on the way" posts written to a project thread this run. */
+  crew_posts: number;
 }
 
 function isoDate(d: Date): string {
@@ -273,8 +338,40 @@ async function saveContext(supabase: SupabaseClient, row: ProjectContext, state:
   return true;
 }
 
+/**
+ * The instant a named local clock time falls on, on a named local day, in a
+ * named zone. Walked forward in quarter-hours through the zone for the same
+ * reason nextSendWindowStart is: 17:00 local is not a fixed distance from any
+ * UTC hour, and the two nights a year it moves are exactly the nights a crew is
+ * least able to shrug off a text that came at the wrong time.
+ *
+ * Returns null when the day cannot be found (a malformed date), which callers
+ * treat as "no expiry I can justify" rather than guessing one.
+ */
+export function localMomentOnDay(
+  day: string,
+  minutes: number,
+  tz: string,
+): Date | null {
+  const midnightUtc = Date.parse(`${day}T00:00:00.000Z`);
+  if (!Number.isFinite(midnightUtc)) return null;
+  const STEP_MS = 15 * 60 * 1000;
+  // Start a day early: for any zone west of UTC the local day begins after the
+  // UTC one, and for any zone east of it, before.
+  let t = midnightUtc - 24 * 3600 * 1000;
+  for (let i = 0; i <= 2 * 96; i++, t += STEP_MS) {
+    const at = new Date(t);
+    if (
+      localDayInTimezone(at, tz) === day &&
+      localMinutesInTimezone(at, tz) >= minutes
+    ) return at;
+  }
+  return null;
+}
+
 async function promptRef(supabase: SupabaseClient, party: {id: string; project_id: string; phone_e164: string | null},
-  subjectId: string, kind: string, version: number, sender: string, now: Date, ownsClaim?: () => Promise<boolean>) {
+  subjectId: string, kind: string, version: number, sender: string, now: Date, ownsClaim?: () => Promise<boolean>,
+  expiresAt?: Date) {
   const { data: existing, error } = await supabase.from("sms_prompts").select("id, short_code")
     .eq("party_id", party.id).eq("project_id", party.project_id).eq("subject_id", subjectId).eq("kind", kind)
     .eq("version", version).eq("sender_number", sender).eq("recipient_phone", party.phone_e164)
@@ -286,7 +383,8 @@ async function promptRef(supabase: SupabaseClient, party: {id: string; project_i
   // A stale reuse read or expired lease still gets the existing id/code.
   const created = await supabase.rpc("sms_create_prompt", { p_party_id: party.id, p_project_id: party.project_id,
     p_subject_id: subjectId, p_kind: kind, p_version: version, p_sender_number: sender,
-    p_recipient_phone: party.phone_e164, p_expires_at: new Date(now.getTime() + 48 * 3600000).toISOString(), p_proposed_effect: null });
+    p_recipient_phone: party.phone_e164,
+    p_expires_at: (expiresAt ?? new Date(now.getTime() + 48 * 3600000)).toISOString(), p_proposed_effect: null });
   const prompt = Array.isArray(created.data) ? created.data[0] : created.data;
   return created.error || !prompt?.id || !/^\d{2,3}$/.test(prompt.short_code) ? null : prompt;
 }
@@ -306,12 +404,19 @@ export async function runFieldDaily(
   const conversationNumber = smsConversationNumber(deps);
   const send = deps.sendFn ?? sendPartySms;
   const flush = deps.flushFn ?? flushDeferredMessages;
+  // The zone the trade rail's hours are named in — the same one quiet hours and
+  // the cadence day are read out of.
+  const fieldTz = (deps.getEnv ?? ((k: string) => Deno.env.get(k)))("FIELD_TZ") ??
+    "America/Chicago";
 
   const summary: RunSummary = {
     digests_sent: 0,
     delivery_confirms_sent: 0,
     parties_skipped: 0,
     deferred_flushed: 0,
+    site_cards_sent: 0,
+    day_of_sent: 0,
+    crew_posts: 0,
   };
 
   // ── Consented field parties ───────────────────────────────────────────────
@@ -530,9 +635,201 @@ export async function runFieldDaily(
     }
   }
 
+  // ── Site visits: the card the evening before, the ask in the morning ──────
+  // A scheduled site visit is a field party the project expects on site on a
+  // day (project_parties.on_site_from/on_site_to, 00624) with an open task of
+  // theirs due that day — the work they are coming to do. The task is also what
+  // the prompt is ABOUT: a reply has to report arrival, delay, a problem or
+  // departure AGAINST something, and 00639 binds that subject immutably at
+  // issuance. No task due that day means nothing to report against, so no card.
+  //
+  // Asked BEFORE any prompt is allocated, because a phase-0 server that issued
+  // short codes for cards it will never send would burn 00639's 90-day
+  // reservations on silence.
+  if (fieldLinePhase(deps) >= 1) {
+    const localMinutes = localMinutesInTimezone(now, fieldTz);
+    const localToday = localDayInTimezone(now, fieldTz);
+    // Tomorrow is the LOCAL day after today's LOCAL day, incremented as a
+    // calendar date and not by adding 24 hours to an instant: on the night the
+    // zone shifts, 24 hours is 23 or 25 local ones and lands on the wrong date.
+    const [ty, tm, td] = localToday.split("-").map(Number);
+    const localTomorrow = new Date(Date.UTC(ty, tm - 1, td + 1))
+      .toISOString().slice(0, 10);
+    const due: Array<{ kind: "site_card" | "day_of"; day: string }> = [];
+    if (localMinutes >= SITE_CARD_LOCAL_MINUTES) {
+      due.push({ kind: "site_card", day: localTomorrow });
+    }
+    if (localMinutes >= DAY_OF_LOCAL_MINUTES) {
+      due.push({ kind: "day_of", day: localToday });
+    }
+
+    for (const card of due) {
+      const { data: onSite } = await supabase
+        .from("project_parties")
+        .select("id, phone_e164, project_id, party_kind, on_site_from, on_site_to")
+        .in("party_kind", FIELD_KINDS)
+        .lte("on_site_from", card.day)
+        .gte("on_site_to", card.day);
+
+      for (
+        const party of (onSite ?? []) as Array<{
+          id: string;
+          phone_e164: string | null;
+          project_id: string;
+        }>
+      ) {
+        if (!party.phone_e164 || !conversationNumber) continue;
+        if (!(await mayTextField(supabase, party, conversationNumber))) continue;
+        const conv = await findOrCreateConversation(
+          supabase, conversationNumber, party.phone_e164, party.id, party.project_id,
+        );
+        if (!conv || (conv.paused_until && Date.parse(conv.paused_until) > now.getTime())) continue;
+
+        const { data: tasks } = await supabase
+          .from("project_tasks")
+          .select("id, title, due_date, project_id, status")
+          .eq("owner_party_id", party.id)
+          .eq("due_date", card.day)
+          .neq("status", "done")
+          .order("id", { ascending: true })
+          .limit(1);
+        const visitTask = (tasks ?? [])[0] as { id: string } | undefined;
+        if (!visitTask) continue;
+
+        const version = Number(card.day.replaceAll("-", ""));
+        // ONE OPEN TRADE PROMPT AT A TIME. The card and the morning ask both end
+        // in codeless words ("HERE", "ON MY WAY"), and a codeless reply binds to
+        // a single open prompt — so the card's question has to be closed by the
+        // time the morning takes the question over. The card expires exactly when
+        // the ask is due; the ask expires the following morning, by which time
+        // the visit is over.
+        const [ny, nm, nd] = card.day.split("-").map(Number);
+        const dayAfter = new Date(Date.UTC(ny, nm - 1, nd + 1)).toISOString().slice(0, 10);
+        const expiresAt = localMomentOnDay(
+          card.kind === "site_card" ? card.day : dayAfter,
+          DAY_OF_LOCAL_MINUTES,
+          fieldTz,
+        );
+        if (!expiresAt) continue;
+        const prompt = await promptRef(
+          supabase, party, visitTask.id, card.kind, version, conversationNumber, now,
+          undefined, expiresAt,
+        );
+        if (!prompt) continue;
+
+        const { data: project } = await supabase
+          .from("projects").select("site_address").eq("id", party.project_id).maybeSingle();
+        const { data: accessCard } = await supabase
+          .from("project_site_access_cards")
+          .select("site_hours, site_notes, emergency_lines")
+          .eq("project_id", party.project_id)
+          .maybeSingle();
+        const lines = (accessCard as { emergency_lines?: unknown } | null)?.emergency_lines;
+        const firstLine = Array.isArray(lines)
+          ? lines.map((l) => typeof l === "string" ? l : String((l as { phone?: unknown })?.phone ?? ""))
+            .find((l) => l.trim().length > 0)
+          : undefined;
+
+        const vars: Record<string, unknown> = {
+          site_address: cardParam(
+            (project as { site_address?: string } | null)?.site_address, 36, "the job site",
+          ),
+          visit_window: cardParam(
+            (accessCard as { site_hours?: string } | null)?.site_hours, 11, "all day",
+          ),
+          // The number they are already texting is a number they can call, and
+          // it is the studio's. No emergency line configured is not a reason to
+          // print nothing where a phone number belongs.
+          contact: cardParam(firstLine, 24, conversationNumber),
+        };
+        if (card.kind === "site_card") {
+          vars.visit_day = cardParam(formatDue(card.day), 10, "tomorrow");
+          vars.access_note = cardParam(
+            (accessCard as { site_notes?: string } | null)?.site_notes, 32,
+            "Check in at the front",
+          );
+        }
+
+        const res = await send(
+          supabase,
+          {
+            partyId: party.id,
+            projectId: party.project_id,
+            templateKey: card.kind === "site_card" ? "sms_site_card" : "sms_day_of",
+            dedupeKey: `field-${card.kind}:${party.id}:${card.day}`,
+            automationPhase: 1,
+            // One of the three event texts a party gets in a day (contract P5).
+            cadenceClass: "event",
+            vars,
+          },
+          deps,
+        );
+        if (!res.sent && !res.deferred) continue;
+        if (card.kind === "site_card") summary.site_cards_sent++;
+        else summary.day_of_sent++;
+
+        // The crew is on the way, and the room that needs to know is the
+        // PROJECT THREAD — the studio and the client read it in the portal.
+        // NO HOMEOWNER TEXT: this loop only ever writes to field parties
+        // (FIELD_KINDS above), and the client's copy of this fact is this post.
+        // The thread is never created here: comms_threads.created_by is a real
+        // person and a cron is not one.
+        if (card.kind === "day_of" && await postCrewOnTheWay(
+          supabase, conv, party.project_id, card.day, now,
+        )) summary.crew_posts++;
+      }
+    }
+  }
+
   // ── Flush deferred outbound rows ──────────────────────────────────────────
   const flushed = await flush(supabase, deps);
   summary.deferred_flushed = flushed.flushed;
 
   return summary;
+}
+
+/**
+ * Record "crew on the way" on the project's own thread, once per visit day.
+ * Portal-visible, written as a system message (no human author), and idempotent
+ * through the same conversation-context CAS the delivery confirms dedupe with.
+ */
+async function postCrewOnTheWay(
+  supabase: SupabaseClient,
+  conv: ProjectContext,
+  projectId: string,
+  day: string,
+  now: Date,
+): Promise<boolean> {
+  const priorRaw = (conv.state_context as { crew_posts_sent?: unknown }).crew_posts_sent;
+  const prior = Array.isArray(priorRaw) ? priorRaw.map(String) : [];
+  if (prior.includes(day)) return false;
+  const { data: thread, error: threadError } = await supabase
+    .from("comms_threads")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("kind", "project")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (threadError) return false;
+  const threadId = (thread ?? [])[0]?.id as string | undefined;
+  if (!threadId) return false;
+  // Claim the day BEFORE writing the post: a post written twice is two
+  // notifications for one fact, and a claim taken for a post that then failed
+  // to write is one missing line in a thread a person is reading anyway.
+  if (!await saveContext(supabase, conv, {
+    ...conv.state_context,
+    crew_posts_sent: [...prior, day],
+  })) return false;
+  const { error } = await supabase.from("comms_messages").insert({
+    thread_id: threadId,
+    sender_id: null,
+    system: true,
+    body: `Crew on the way for ${formatDue(day)}.`,
+    created_at: now.toISOString(),
+  });
+  if (error) {
+    console.error("postCrewOnTheWay: the project thread post failed", error);
+    return false;
+  }
+  return true;
 }

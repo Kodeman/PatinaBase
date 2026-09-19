@@ -106,7 +106,19 @@ export interface OrdinarySmsInput {
    * before The Field Line, leave it unset: phase 0 is always allowed.
    */
   automationPhase?: number;
+  /**
+   * Which half of the party's daily cadence this send spends (contract P5):
+   * `recurring` is the one digest a day the opt-in promised, `event` is
+   * something that actually happened and there are three of those. Left unset
+   * the send spends nothing and is never folded — a REPLY TO A PERSON is not
+   * automation, and putting a receipt in tomorrow's digest answers a question
+   * nobody can still remember asking.
+   */
+  cadenceClass?: CadenceClass;
 }
+
+/** The two halves of a party's daily text cadence (contract P5). */
+export type CadenceClass = "recurring" | "event";
 
 /**
  * What happened to the send, as one word (00640, contract S5). ADDITIVE to the
@@ -163,10 +175,49 @@ export function hourInTimezone(now: Date, tz: string): number {
   return hour;
 }
 
+/**
+ * Minutes since local midnight in a named timezone. The trade rail's two cards
+ * are scheduled to the half hour (17:00 the evening before, 07:30 the morning
+ * of), which an hour alone cannot express.
+ */
+export function localMinutesInTimezone(now: Date, tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (type: string) =>
+    parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+  return (get("hour") % 24) * 60 + get("minute");
+}
+
 /** True when `now` is OUTSIDE the 8am–8pm send window in `tz` (defer). */
 export function isQuietHours(now: Date, tz: string): boolean {
   const hour = hourInTimezone(now, tz);
   return hour < 8 || hour >= 20;
+}
+
+/**
+ * The calendar day (YYYY-MM-DD) `now` falls on in a named timezone — the unit a
+ * daily cadence is counted in (contract P5).
+ *
+ * Read out of the named zone rather than derived from a UTC offset, for the
+ * same reason nextSendWindowStart walks the zone: the offset is the thing that
+ * moves. On the night America/Chicago springs forward the local day is 23 hours
+ * long and on the night it falls back it is 25, so "now minus six hours, in
+ * UTC" names the wrong day twice a year — once in each direction — and a party
+ * whose day was computed that way is either texted twice or not at all.
+ */
+export function localDayInTimezone(now: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 /**
@@ -1096,6 +1147,14 @@ export interface SendRecipe {
    * the next morning from a server that had since been turned back to phase 0.
    */
   automation_phase: number | null;
+  /**
+   * The cadence half this send spends (contract P5), travelling with the row for
+   * the same reason the phase does: the budget is spent at DISPATCH, and the
+   * process that dispatches a deferred row is not the one that deferred it.
+   * Absent on every row written before this file, which is exactly right —
+   * nothing spends a budget it never declared.
+   */
+  cadence_class?: CadenceClass | null;
 }
 
 interface OutboundRow {
@@ -1110,6 +1169,7 @@ interface OutboundRow {
   recipe: SendRecipe | null;
   dedupe_key: string | null;
   claimed_at: string | null;
+  error_message?: string | null;
 }
 
 /** Postgres unique_violation — the other writer already holds this send. */
@@ -1265,6 +1325,119 @@ async function releaseSendClaim(
       `releaseSendClaim: the release write for sms_messages ${messageId} threw`,
       releaseErr,
     );
+  }
+}
+
+/**
+ * Spend one slot of this party's daily cadence (contract P5). The claim is
+ * 00645's single conditional upsert, so this is one round trip and the decision
+ * it returns has already been serialized against every other sender.
+ *
+ * FAILS OPEN, deliberately and unlike every gate above it. Suppression, consent
+ * and the phase gate answer "is this text ALLOWED" and an unreadable answer
+ * there is not permission. A cadence budget answers "is this text the fourth
+ * one today" — it is politeness, not consent — and a rail that goes silent
+ * because one RPC is unreachable has failed the crew standing at a locked gate
+ * worse than a fourth text ever could. An absent function (a server one
+ * migration behind) reads as `null` from the client and is the same case.
+ */
+async function claimCadenceSlot(
+  supabase: SupabaseClient,
+  conversationId: string,
+  projectId: string,
+  partyId: string,
+  localDay: string,
+  cadenceClass: CadenceClass,
+): Promise<{ claimed: boolean; asked: boolean }> {
+  try {
+    const { data, error } = await supabase.rpc("sms_claim_party_budget", {
+      p_conversation_id: conversationId,
+      p_project_id: projectId,
+      p_party_id: partyId,
+      p_local_day: localDay,
+      p_class: cadenceClass,
+    });
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | { claimed?: unknown }
+      | null;
+    if (error || !row || typeof row.claimed !== "boolean") {
+      if (error) {
+        console.error(
+          "claimCadenceSlot: the cadence budget could not be spent; sending",
+          (error as { message?: string }).message ?? error,
+        );
+      }
+      return { claimed: true, asked: false };
+    }
+    return { claimed: row.claimed, asked: true };
+  } catch (err) {
+    console.error("claimCadenceSlot threw; sending", err);
+    return { claimed: true, asked: false };
+  }
+}
+
+/** What 00645's dead-end gate said about a party. */
+interface PromptGateVerdict {
+  allowed: boolean;
+  reason?: string;
+  handoff?: boolean;
+  pausedUntil?: string;
+  ownerUserId?: string;
+}
+
+/**
+ * Ask 00645 whether this party may be asked another question (contract P4).
+ * Two prompts nobody answered is a person, not a delivery problem: the rail
+ * stops and the project lead gets the thread, once.
+ *
+ * Fails OPEN for the same reason the cadence claim does — this is a courtesy
+ * gate, not a consent gate, and suppression and consent have already answered
+ * above. A false "dead end" would silence a party who is answering fine.
+ */
+async function partyPromptGate(
+  supabase: SupabaseClient,
+  conversationId: string,
+  projectId: string,
+  partyId: string,
+): Promise<PromptGateVerdict> {
+  try {
+    const { data, error } = await supabase.rpc("sms_party_prompt_gate", {
+      p_conversation_id: conversationId,
+      p_project_id: projectId,
+      p_party_id: partyId,
+    });
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | {
+        allowed?: unknown;
+        reason?: unknown;
+        handoff?: unknown;
+        paused_until?: unknown;
+        owner_user_id?: unknown;
+      }
+      | null;
+    if (error || !row || typeof row.allowed !== "boolean") {
+      if (error) {
+        console.error(
+          "partyPromptGate: the dead-end gate could not be read; sending",
+          (error as { message?: string }).message ?? error,
+        );
+      }
+      return { allowed: true };
+    }
+    return {
+      allowed: row.allowed,
+      reason: typeof row.reason === "string" ? row.reason : undefined,
+      handoff: row.handoff === true,
+      pausedUntil: typeof row.paused_until === "string"
+        ? row.paused_until
+        : undefined,
+      ownerUserId: typeof row.owner_user_id === "string"
+        ? row.owner_user_id
+        : undefined,
+    };
+  } catch (err) {
+    console.error("partyPromptGate threw; sending", err);
+    return { allowed: true };
   }
 }
 
@@ -1442,9 +1615,66 @@ async function sendPartySmsCore(
     selection: selection.manifest,
   } : null;
 
-  // ── GATE 4: quiet hours → defer (store, do not send, DO NOT MINT) ─────────
-  if (isQuietHours(now, fieldTz)) {
-    const dueAt = nextSendWindowStart(now, fieldTz).toISOString();
+  // Only an automation that declared a cadence class is subject to the two
+  // gates below, and only while its phase is live. A receipt, an invite, a
+  // selection question and every phase-0 send declare none and are untouched:
+  // this is the trade rail's pacing, not a new rule about texting.
+  const cadenceClass = input.cadenceClass ?? null;
+  const paced = declaredPhase > 0 && !!cadenceClass && !!convId &&
+    !!recipient.partyId && !!recipient.projectId;
+
+  // ── GATE 4: a dead end has an owner, not another text (contract P4) ───────
+  // Two questions this party never answered is not a delivery problem to retry
+  // — it is a person to call. The gate hands the thread to the project lead
+  // ONCE and pauses prompts for the party; the pause it wrote is what refuses
+  // every send after it, including the one that tripped it.
+  if (paced) {
+    const gate = await partyPromptGate(
+      supabase,
+      convId!,
+      recipient.projectId!,
+      recipient.partyId!,
+    );
+    if (!gate.allowed) {
+      return {
+        ...refused(gate.reason === "paused" ? "prompts_paused" : "dead_end"),
+        conversationId: convId ?? undefined,
+        dueAt: gate.pausedUntil,
+      };
+    }
+  }
+
+  // ── GATE 5: the party's daily cadence budget (contract P5) ────────────────
+  // Spent HERE, where the text is actually about to go out, and not above:
+  // quiet hours stores the row for the morning and the flush spends the slot
+  // then, on the day it really sends. Claiming in both places spends two slots
+  // for one text and folded the party's next real message for nothing.
+  let foldReason: "budget" | null = null;
+  if (paced && !isQuietHours(now, fieldTz)) {
+    const claim = await claimCadenceSlot(
+      supabase,
+      convId!,
+      recipient.projectId!,
+      recipient.partyId!,
+      localDayInTimezone(now, fieldTz),
+      cadenceClass!,
+    );
+    // Over budget is not a refusal: the text is stored deferred and reaches the
+    // party with the next digest, which is what folding it means.
+    if (!claim.claimed) foldReason = "budget";
+  }
+
+  // ── GATE 6: quiet hours, or a folded over-budget text → defer ─────────────
+  // (store, do not send, DO NOT MINT)
+  if (foldReason || isQuietHours(now, fieldTz)) {
+    const dueAt = foldReason
+      // Tomorrow, in the send window, in the named zone: the fold is waiting for
+      // a new LOCAL day to reset the counters, and the flush re-asks the claim.
+      ? nextSendWindowStart(
+        new Date(now.getTime() + 24 * 60 * 60 * 1000),
+        fieldTz,
+      ).toISOString()
+      : nextSendWindowStart(now, fieldTz).toISOString();
     // Rendered WITHOUT minting: this copy is a PREVIEW for the thread, and the
     // link it names does not exist yet (contract S6).
     const preview = selection ? { body: selection.body, linkKind: null } : await resolveBody(
@@ -1466,7 +1696,7 @@ async function sendPartySmsCore(
         sent: false,
         deferred: true,
         status: "deferred",
-        reason: "quiet_hours",
+        reason: foldReason ?? "quiet_hours",
         conversationId: convId ?? undefined,
         body: previewBody,
         dueAt,
@@ -1486,6 +1716,7 @@ async function sendPartySmsCore(
         link_kind: preview.linkKind ??
           (safeParams.droppedLink ? "field" : null),
         automation_phase: declaredPhase > 0 ? declaredPhase : null,
+        cadence_class: cadenceClass,
       }
       : null);
     // A row with no TEMPLATE to render from is flushed by sending the body
@@ -1514,6 +1745,8 @@ async function sendPartySmsCore(
       recipe,
       dedupe_key: dedupeKey,
       claimed_at: null,
+      // Why this row is waiting, in the column this rail already says it in.
+      error_message: foldReason,
     });
     if (claim.duplicate) {
       return {
@@ -1540,6 +1773,7 @@ async function sendPartySmsCore(
       sent: false,
       deferred: true,
       status: "deferred",
+      reason: foldReason ?? undefined,
       messageId: claim.id,
       conversationId: convId ?? undefined,
       body: previewBody,
@@ -2054,6 +2288,46 @@ export async function flushDeferredMessages(
       continue;
     }
 
+    // Read once: the dead-end gate below and the budget claim after the row is
+    // taken ask about the same paced send, so they read the same two fields.
+    const cadenceClass = recipe?.cadence_class ?? null;
+    const cadenceProject = row.project_id ?? deferredProjectId;
+    const paced = !!cadenceClass && !!row.party_id && !!cadenceProject &&
+      !!row.conversation_id;
+
+    // ── The dead-end gate, re-asked at the moment of dispatch (GATE 4) ──────
+    // The same reason the phase gate above is re-asked: the server that flushes
+    // is not the server that deferred, and what was true last night is not what
+    // binds this morning's send. A row folded on day D goes out on D+1 — and by
+    // then the party may have gone quiet on two prompts, been handed to the
+    // project lead, and had prompts PAUSED for them. Sending the fold anyway
+    // walks straight through the pause that the handoff exists to enforce, and
+    // it is the loudest possible thing to do to someone who has stopped
+    // answering. Asked BEFORE the exclusive claim, because a gate that refuses
+    // should not have cost the row its claim stamp; the row stays DEFERRED with
+    // the reason, exactly as the phase gate leaves it, and the 24h TTL is what
+    // ends it honestly if the pause outlives the window. Asking again cannot
+    // produce a second handoff: 00645's gate compare-and-sets on the streak's
+    // oldest unanswered prompt id, so the one already taken is the one there is.
+    if (paced) {
+      const gate = await partyPromptGate(
+        supabase,
+        row.conversation_id,
+        cadenceProject!,
+        row.party_id!,
+      );
+      if (!gate.allowed) {
+        await supabase
+          .from("sms_messages")
+          .update({
+            error_message: gate.reason === "paused" ? "prompts_paused" : "dead_end",
+          })
+          .eq("id", row.id);
+        skipped++;
+        continue;
+      }
+    }
+
     // ── TAKE THE ROW EXCLUSIVELY, BEFORE ANYTHING IRREVERSIBLE ─────────────
     // The gates have all answered yes; from here on this row is going to mint a
     // link and call a provider, and both of those are things that must happen
@@ -2091,6 +2365,42 @@ export async function flushDeferredMessages(
       // Another flush holds it. Not an error, and not a second text.
       skipped++;
       continue;
+    }
+
+    // ── GATE 5: the cadence budget, spent at the moment of dispatch ─────────
+    // Every row that waited spends its slot HERE — the ones quiet hours stored
+    // last night and the ones folded yesterday for being over budget — and the
+    // question is asked of TODAY'S local day. A folded row's counters have since
+    // reset, so it goes out with this morning's digest; a row that is over
+    // budget again is simply not sent yet and the 24h TTL above is what ends it
+    // honestly. AFTER the exclusive claim, because spending a slot is durable:
+    // claiming first and then losing the row race burns a slot on a text this
+    // process is not going to send, and the party's next real message pays for
+    // it.
+    if (paced) {
+      const budget = await claimCadenceSlot(
+        supabase,
+        row.conversation_id,
+        cadenceProject!,
+        row.party_id!,
+        localDayInTimezone(now, fieldTz),
+        cadenceClass!,
+      );
+      if (!budget.claimed) {
+        // Hand the row back exactly as it came, still waiting, saying why.
+        await supabase
+          .from("sms_messages")
+          .update({
+            twilio_status: "deferred",
+            claimed_at: null,
+            error_message: "budget",
+          })
+          .eq("id", row.id)
+          .eq("twilio_status", "claimed")
+          .is("twilio_sid", null);
+        skipped++;
+        continue;
+      }
     }
 
     // ── Render fresh from the recipe — and mint the link HERE ──────────────

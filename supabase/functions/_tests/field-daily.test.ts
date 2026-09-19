@@ -600,3 +600,201 @@ for(const phase of ["pre-mint","rpc-response","post-mint-owner-read"]) Deno.test
  const closedAtBeforeReply=advertised.answered_at;const reply=await processInbound(input(h,"DONE "+advertised.short_code,"SMrecoveryReply"),deps(h));console.log(JSON.stringify({phase,wire,reply,prompts:h.fake._data.sms_prompts}));
  assertEquals(closedAtBeforeReply,null,"the one advertised recovery Ref must remain OPEN after old owner finishes");
 });
+
+// ── Site visits: the card the evening before, the ask the morning of ────────
+
+const VISIT = "2026-11-01";
+/** 6:00pm CDT the evening before — the hour the card is due. */
+const EVENING = new Date("2026-10-31T23:00:00.000Z");
+/** 8:00am CST on the visit day, after the fall-back. */
+const MORNING = new Date("2026-11-01T14:00:00.000Z");
+
+function visitWorld() {
+  return createFakeSupabase({
+    projects: [{
+      id: "proj1",
+      studio_id: "org1",
+      designer_id: "designer1",
+      name: "Ash House",
+      site_address: "1421 Williamson St, Madison",
+    }],
+    studio_channel_consent: [{
+      organization_id: "org1",
+      channel_kind: "sms",
+      channel_value: "+15550001111",
+      status: "granted",
+    }],
+    project_parties: [{
+      id: "pty1",
+      phone_e164: "+15550001111",
+      project_id: "proj1",
+      party_kind: "sub",
+      sms_consent_status: "granted",
+      display_name: "Sal",
+      on_site_from: VISIT,
+      on_site_to: VISIT,
+    }],
+    project_tasks: [{
+      id: "task1",
+      title: "Install vanity",
+      due_date: VISIT,
+      project_id: "proj1",
+      owner_party_id: "pty1",
+      status: "todo",
+    }],
+    project_site_access_cards: [{
+      project_id: "proj1",
+      site_hours: "7-11am",
+      site_notes: "Gate is on Ash St, park inside",
+      emergency_lines: ["608-555-0134"],
+    }],
+    comms_threads: [{
+      id: "thread1",
+      project_id: "proj1",
+      kind: "project",
+      created_by: "designer1",
+      created_at: "2026-09-01T00:00:00.000Z",
+    }],
+    comms_messages: [],
+    client_decisions: [],
+    delivery_events: [],
+    sms_conversations: [],
+  });
+}
+
+function visitRun(
+  fake: ReturnType<typeof visitWorld>,
+  now: Date,
+  sent: SendPartySmsInput[],
+  env: Record<string, string> = { FIELD_LINE_PHASE: "1" },
+) {
+  return runFieldDaily(fake as never, {
+    getEnv: (k) =>
+      ({ TWILIO_FROM_NUMBER: "+15559990000", ...env } as Record<string, string>)[k],
+    now,
+    sendFn: (_s, input) => { sent.push(input); return Promise.resolve({ sent: true }); },
+    flushFn: () => Promise.resolve({ flushed: 0, skipped: 0 }),
+  });
+}
+
+function promptsOfKind(fake: ReturnType<typeof visitWorld>, kind: string) {
+  return (fake._data.sms_prompts ?? []).filter((p) => p.kind === kind);
+}
+
+Deno.test("P4: one site card the evening before, bound to that visit's own task", async () => {
+  const fake = visitWorld();
+  const sent: SendPartySmsInput[] = [];
+  const summary = await visitRun(fake, EVENING, sent);
+
+  assertEquals(summary.site_cards_sent, 1);
+  assertEquals(summary.day_of_sent, 0, "the morning ask is not due at 6pm");
+  assertEquals(summary.crew_posts, 0, "and nobody is on the way yet");
+
+  const card = sent.find((s) => s.templateKey === "sms_site_card");
+  assert(card, `a site card was sent: ${JSON.stringify(sent.map((s) => s.templateKey))}`);
+  assertEquals(card!.automationPhase, 1, "a new automation declares its phase");
+  assertEquals(card!.cadenceClass, "event", "and pays for a slot of the daily cadence");
+  assertEquals(card!.dedupeKey, `field-site_card:pty1:${VISIT}`);
+  assertEquals(card!.partyId, "pty1");
+  assertEquals(card!.vars?.site_address, "1421 Williamson St, Madison");
+  assertEquals(card!.vars?.visit_window, "7-11am");
+  assertEquals(card!.vars?.access_note, "Gate is on Ash St, park inside");
+  assertEquals(card!.vars?.contact, "608-555-0134");
+  assertEquals(card!.vars?.visit_day, "Nov 1");
+
+  const prompts = promptsOfKind(fake, "site_card");
+  assertEquals(prompts.length, 1);
+  assertEquals(prompts[0].subject_id, "task1", "the work they are coming to do");
+  assertEquals(prompts[0].version, 20261101, "and the day it is for, frozen");
+  // ONE OPEN TRADE PROMPT: the card's question closes exactly when the morning
+  // ask takes it over — 7:30am CST, which is 13:30Z and not 12:30Z. A fixed
+  // offset would expire it an hour into the visit.
+  assertEquals(prompts[0].expires_at, "2026-11-01T13:30:00.000Z");
+});
+
+Deno.test("P4: the morning ask, the crew-on-the-way POST, and no homeowner text", async () => {
+  const fake = visitWorld();
+  const sent: SendPartySmsInput[] = [];
+  const summary = await visitRun(fake, MORNING, sent);
+
+  assertEquals(summary.day_of_sent, 1);
+  assertEquals(summary.site_cards_sent, 0, "5pm has not come round again");
+  assertEquals(summary.crew_posts, 1);
+
+  const ask = sent.find((s) => s.templateKey === "sms_day_of");
+  assert(ask, `the morning ask was sent: ${JSON.stringify(sent.map((s) => s.templateKey))}`);
+  assertEquals(ask!.automationPhase, 1);
+  assertEquals(ask!.cadenceClass, "event");
+  assertEquals(ask!.dedupeKey, `field-day_of:pty1:${VISIT}`);
+  assertEquals(ask!.vars?.visit_day, undefined, "the morning does not say 'tomorrow'");
+  assertEquals(ask!.vars?.access_note, undefined);
+  assertEquals(ask!.vars?.contact, "608-555-0134");
+
+  const prompts = promptsOfKind(fake, "day_of");
+  assertEquals(prompts.length, 1);
+  assertEquals(prompts[0].subject_id, "task1");
+  assertEquals(prompts[0].version, 20261101);
+  assertEquals(prompts[0].expires_at, "2026-11-02T13:30:00.000Z", "open until the next morning");
+
+  // The client's copy of this fact is a PORTAL POST on the project's own thread.
+  // No text goes to a homeowner: this loop only ever texts field parties.
+  const posts = fake._data.comms_messages ?? [];
+  assertEquals(posts.length, 1);
+  assertEquals(posts[0].thread_id, "thread1");
+  assertEquals(posts[0].system, true);
+  assertEquals(posts[0].sender_id, null, "a cron is not a person");
+  assertEquals(posts[0].body, "Crew on the way for Nov 1.");
+  assertEquals(
+    sent.filter((s) => String(s.templateKey).includes("crew")).length,
+    0,
+    "and nothing about it is texted",
+  );
+});
+
+Deno.test("P4: a second run reuses the same ref and posts nothing twice", async () => {
+  // Two ticks an hour apart, or a retry after a failure: one visit still has one
+  // question and one thread post.
+  const fake = visitWorld();
+  const sent: SendPartySmsInput[] = [];
+  await visitRun(fake, MORNING, sent);
+  const firstId = promptsOfKind(fake, "day_of")[0].id;
+  const again = await visitRun(fake, new Date("2026-11-01T15:00:00.000Z"), sent);
+
+  assertEquals(promptsOfKind(fake, "day_of").length, 1, "the same open ref, not a second");
+  assertEquals(promptsOfKind(fake, "day_of")[0].id, firstId);
+  assertEquals(again.crew_posts, 0, "the day was already claimed");
+  assertEquals((fake._data.comms_messages ?? []).length, 1);
+});
+
+Deno.test("P4: phase 0 schedules no cards, mints no refs and posts nothing", async () => {
+  // The whole loop is behind the server's phase gate (contract S7), asked BEFORE
+  // a ref is allocated: a phase-0 server must not burn 00639's reservations on
+  // cards it will never send.
+  const fake = visitWorld();
+  const sent: SendPartySmsInput[] = [];
+  const summary = await visitRun(fake, EVENING, sent, {});
+
+  assertEquals(summary.site_cards_sent, 0);
+  assertEquals(summary.day_of_sent, 0);
+  assertEquals(summary.crew_posts, 0);
+  assertEquals(promptsOfKind(fake, "site_card").length, 0);
+  assertEquals(promptsOfKind(fake, "day_of").length, 0);
+  assertEquals((fake._data.comms_messages ?? []).length, 0);
+  assertEquals(
+    sent.filter((s) => ["sms_site_card", "sms_day_of"].includes(String(s.templateKey))).length,
+    0,
+  );
+  assert(summary.digests_sent >= 0, "the phase-0 digest is untouched by any of this");
+});
+
+Deno.test("P4: no open task due that day means nothing to report against, so no card", async () => {
+  // A reply has to report arrival, a delay or a problem AGAINST something, and
+  // 00639 binds that subject at issuance. A visit with no work on it is not a
+  // question the rail knows how to ask.
+  const fake = visitWorld();
+  (fake._data.project_tasks as Array<{ status: string }>)[0].status = "done";
+  const sent: SendPartySmsInput[] = [];
+  const summary = await visitRun(fake, EVENING, sent);
+  assertEquals(summary.site_cards_sent, 0);
+  assertEquals(promptsOfKind(fake, "site_card").length, 0);
+});

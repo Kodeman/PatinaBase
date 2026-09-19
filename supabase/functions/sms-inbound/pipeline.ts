@@ -24,7 +24,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseFieldMessage, type FieldParseInput, type FieldParseResult } from "../_shared/field-parse.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
-import { channelConsentVerdict, orgsOfProjects, resolveStudioName, recoverSmsSelection } from "../_shared/sms.ts";
+import { channelConsentVerdict, fieldLinePhase, orgsOfProjects, resolveStudioName, recoverSmsSelection, sendPartySms } from "../_shared/sms.ts";
 import { captureServerEvent } from "../_shared/aesthete-events.ts";
 
 import type { SelectionIntent, SelectionQuestion } from "../_shared/sms-selection.ts";
@@ -34,6 +34,10 @@ const STOP_WORDS = ["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"];
 const PLAIN_STOPS = /^(?:stop texting me|wrong number|wrong)[.!]?$/i;
 const START_WORDS = ["START", "UNSTOP"];
 const MENU_TTL_MS = 12 * 3600 * 1000;
+/** The prompts whose own copy prints the trade words (00645). */
+const TRADE_PROMPT_KINDS = new Set(["site_card", "day_of"]);
+/** The one-line "here is your link" reply (00645). */
+const RENEW_TEMPLATE = "sms_field_link_renew";
 /** How long an explicitly-chosen project stays the conversation's scope. */
 const PROJECT_PIN_TTL_MS = 4 * 3600 * 1000;
 
@@ -1658,6 +1662,12 @@ async function processInboundCore(
     if (paused) return paused;
   }
 
+  // Reply-to-renew, after the ref verbs above have had the message and after a
+  // paused thread has been left to the person who owns it: a party with no
+  // working link gets one back before anything else is attempted.
+  const renewed = await replyToRenew(supabase, scopedParty, body, to, from, effectiveMessageId, now, deps);
+  if (renewed) return renewed;
+
   // A menu is read only from the chosen project row, never from a handset
   // holding row or another party sharing the number.
   // Numbered menu reply ("DONE 2", "2 done", bare "2") against a fresh menu.
@@ -2042,6 +2052,135 @@ async function consumePrompt(supabase: SupabaseClient, conv: Conversation, promp
   return { status: 503, twiml: twimlBody(), disposition: "prompt_commit_unknown", retainSid: true, messageId };
 }
 
+/** What a trade word means, before any prompt is known (contract P3). */
+interface TradeShape {
+  verb: string;
+  intent: string;
+  note: string;
+  condition?: { ok: boolean; note: string };
+}
+
+/**
+ * The words the site card and the morning ask actually print, read exactly as a
+ * crew would write them back (contract P3): ON MY WAY, LATE 20, PROBLEM the
+ * gate is locked, HERE, DONE.
+ *
+ * NONE OF THESE SAYS GOODS WERE RECEIVED. Arriving, running late, finding a
+ * problem and leaving are reports about a visit; a receipt is a delivery effect
+ * against a purchase order and no word here produces one. DONE means the crew
+ * has left — a departure — and it means that only on a trade prompt: everywhere
+ * else DONE still closes a task, which is what every digest has always asked.
+ */
+export function tradeShape(body: string): TradeShape | null {
+  const text = body.trim();
+  if (/^on\s+my\s+way[.!]*$/i.test(text) || /^here[.!]*$/i.test(text)) {
+    return { verb: "HERE", intent: "report_arrival", note: text };
+  }
+  const late = text.match(/^late\s+(\d{1,3})\s*(?:min|mins|minutes)?[.!]*$/i);
+  if (late) {
+    const minutes = Number(late[1]);
+    return {
+      verb: "LATE",
+      intent: "report_delay",
+      note: `Running about ${minutes} minutes late.`,
+    };
+  }
+  const problem = text.match(/^problem(?:[\s:,;.-]+([\s\S]+))?$/i);
+  if (problem) {
+    const note = problem[1]?.trim() || "Something is wrong on site.";
+    return {
+      verb: "PROBLEM",
+      intent: "report_condition",
+      note,
+      // A problem is a not-ok condition, which is what opens the message for
+      // review and names an owner (00641's delivery core). The crew does not
+      // have to know that; they just have to be able to say "problem".
+      condition: { ok: false, note },
+    };
+  }
+  if (/^done[.!]*$/i.test(text)) {
+    return { verb: "DONE", intent: "report_departure", note: text };
+  }
+  return null;
+}
+
+/**
+ * Reply-to-renew (contract S6 / P11). A party whose engagement link has simply
+ * RUN OUT texts anything at all — "can you send that link again", or an update
+ * they cannot file because they have nowhere to file it — and gets one line with
+ * a fresh link. Nothing else about their message is acted on: the inbound row is
+ * already in the thread for the studio to read, and the next thing they send
+ * has a working link behind it.
+ *
+ * Four refusals, and each one matters more than the convenience:
+ *   · an UNKNOWN sender gets nothing. A link is scoped to a party on a project,
+ *     and there is no party here to scope it to.
+ *   · a SUPPRESSED pair gets nothing. STOP is answered above this and is not
+ *     reopened by a text arriving after it.
+ *   · a party whose studio has not GRANTED consent gets nothing.
+ *   · a REVOKED link is not renewed. Expiry is a lapse and a reply is the ask
+ *     that cures it; revocation is a decision a person made about this party's
+ *     access, and no inbound text overturns it. So the newest token has to be an
+ *     active one that simply passed its own expiry.
+ *
+ * The link itself is minted by sendPartySms at the moment of dispatch, through
+ * create_field_link (00640) and its default of NOT revoking prior tokens —
+ * there is nothing left to revoke here, and S6's rule that a credential is
+ * created when the text actually goes out is the whole reason this is a template
+ * with {{link}} in it rather than a URL pasted into a body.
+ */
+async function replyToRenew(
+  supabase: SupabaseClient,
+  party: { id: string; project_id: string } | undefined,
+  body: string,
+  sender: string,
+  recipient: string,
+  messageId: string,
+  now: Date,
+  deps: InboundDeps,
+): Promise<InboundResult | null> {
+  if (!party || !body.trim()) return null;
+  const blocked = await suppression(supabase, sender, recipient);
+  if (blocked.blocked) return null;
+  if (await channelConsentVerdict(supabase, recipient, party.project_id) !== "allow") return null;
+
+  const { data: links, error } = await supabase
+    .from("field_link_tokens")
+    .select("status, expires_at, created_at")
+    .eq("party_id", party.id)
+    .order("created_at", { ascending: false });
+  if (error) return null;
+  const rows = (links ?? []) as Array<
+    { status?: string | null; expires_at?: string | null; created_at?: string | null }
+  >;
+  // A party who was never given a link is not renewing one.
+  if (rows.length === 0) return null;
+  const nowMs = now.getTime();
+  const expiry = (row: { expires_at?: string | null }) =>
+    row.expires_at ? Date.parse(row.expires_at) : NaN;
+  // Still holding one that works: say nothing, let the message be read normally.
+  if (rows.some((l) => l.status === "active" && expiry(l) > nowMs)) return null;
+  const newest = rows[0];
+  if (newest.status !== "active" || !(expiry(newest) <= nowMs)) return null;
+
+  const sent = await sendPartySms(supabase, {
+    partyId: party.id,
+    projectId: party.project_id,
+    phone: recipient,
+    templateKey: RENEW_TEMPLATE,
+    dedupeKey: `renew:${messageId}`,
+    automationPhase: 1,
+  }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl, now: deps.now });
+  // Phase off, no consent, quiet-hours refusal, a missing template: none of
+  // those is a reason to swallow the party's message. Fall through and parse it.
+  if (!["sent", "queued", "deferred"].includes(sent.status ?? "failed")) return null;
+  await stampMessage(supabase, messageId, party.id, party.project_id, {
+    path: "link_renew",
+    renewed_message_id: sent.messageId ?? null,
+  });
+  return { status: 200, twiml: twimlBody(), disposition: "link_renewed", messageId };
+}
+
 /** Codes bind before any parser sees the body. Bare digits belong to menus. */
 async function promptReply(supabase: SupabaseClient, conv: Conversation, parties: Array<{id: string; project_id: string}>,
   body: string, sender: string, recipient: string, messageId: string, now: Date,
@@ -2054,15 +2193,45 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
     if (!recovered.selection?.usable) return selectionUnavailable(recovered);
     priorAsked = true;
   }
-  const explicit = body.match(/^([a-z]+)\s+(\d{2,3})$/i);
-  const bareVerb = /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|damage|good|fine|delay)$/i.test(body);
   const { data: open, error: openError } = await supabase.from("sms_prompts").select("*")
     .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
     .gt("expires_at", now.toISOString());
   if (openError) return { status: 503, twiml: twimlBody(), disposition: "ref_unreadable" };
+  // A trade word binds to the open TRADE prompt even when yesterday's digest is
+  // still open beside it: "ON MY WAY" is plainly an answer to the card that
+  // asked the crew to say so, and 00645's grammar narrows its own one-open
+  // count the same way rather than dropping the guard.
+  const tradeOpen = (open ?? []).filter((p: SmsPrompt) => TRADE_PROMPT_KINDS.has(p.kind));
+  const trade = tradeShape(body);
+  // "LATE 20" on a site card is TWENTY MINUTES, not reference 20 (contract P3).
+  // It is the one trade word whose shape collides with VERB NN, and the card
+  // printed it in those words, so the number is read as minutes and the reply
+  // goes through the codeless door — where the one-open-prompt rule, not a code,
+  // is what keeps a forwarded card from answering someone else's question.
+  //
+  // THAT READING IS THE EXCEPTION, AND IT ONLY EXISTS WHERE A CARD ACTUALLY
+  // ASKED. Suppressing the reference match for every LATE body took the verb
+  // away from Phase 0's live ref grammar (SQ-95 check 6): "LATE 17" on a closed
+  // reference was re-attributed to whatever single prompt was open and handed to
+  // a designer as needs_review, where "DELAY 17" — the synonym 00641 and 00645
+  // both map to report_delay — correctly answered that the reference is closed.
+  // 00645's own sms_prompt_reply_verb binds LATE NN to the CODE on anything but
+  // a trade prompt, so the suppression also put TS and SQL in disagreement.
+  // Minutes therefore require both halves of the card's own precondition: the
+  // rail that prints the words is running (FIELD_LINE_PHASE >= 1), and exactly
+  // one site_card/day_of prompt is open on this (sender, recipient) pair.
+  // Otherwise NN is a reference, and is answered as one.
+  const lateIsMinutes = trade?.verb === "LATE" &&
+    fieldLinePhase(deps) >= 1 && tradeOpen.length === 1;
+  const explicit = lateIsMinutes ? null : body.match(/^([a-z]+)\s+(\d{2,3})$/i);
+  const bareVerb = !!trade ||
+    /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|damage|good|fine|delay)$/i.test(body);
   let prompt: SmsPrompt | null = null;
-  if (explicit || ((open ?? []).length === 1)) {
-    const code = explicit?.[2] ?? open![0].short_code;
+  if (explicit || ((open ?? []).length === 1) || (trade && tradeOpen.length === 1)) {
+    const code = explicit?.[2] ??
+      (trade && tradeOpen.length === 1
+        ? tradeOpen[0].short_code
+        : open![0].short_code);
     const { data, error } = await supabase.rpc("sms_resolve_prompt", {
       p_sender: sender, p_recipient: recipient, p_code: code,
     });
@@ -2104,15 +2273,21 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   const verdict = await channelConsentVerdict(supabase, recipient, party.project_id);
   const blocked = await suppression(supabase, sender, recipient);
   if (blocked.blocked || verdict !== "allow") return { status: blocked.error ? 503 : 200, twiml: twimlBody(), disposition: "not_consented" };
-  const verb = (explicit?.[1] ?? body).toUpperCase();
-  const intent = ({ DONE: "mark_done", HERE: "report_arrival", ARRIVED: "report_arrival", DELIVERED: "report_arrival",
+  // The trade reading applies only to the prompt whose own copy printed those
+  // words. Resolved to anything else, the body is read exactly as it was before.
+  const tradePrompt = trade && TRADE_PROMPT_KINDS.has(prompt.kind) ? trade : null;
+  const verb = tradePrompt?.verb ?? (explicit?.[1] ?? body).toUpperCase();
+  const intent = tradePrompt?.intent
+    ?? ({ DONE: "mark_done", HERE: "report_arrival", ARRIVED: "report_arrival", DELIVERED: "report_arrival",
     LEAVING: "report_departure", DEPARTED: "report_departure", GOOD: "confirm_delivery", FINE: "confirm_delivery" } as Record<string, string>)[verb]
     ?? (["YES", "Y", "OK"].includes(verb) ? prompt.kind : null);
   let parsed: FieldParseResult = prompt.proposed_effect ? {
     intent: prompt.proposed_effect.type as FieldParseResult["intent"], target_ref: subject,
     new_date: null, note: "", confidence: 1,
   } : intent ? {
-    intent: intent as FieldParseResult["intent"], target_ref: subject, new_date: null, note: body, confidence: 1,
+    intent: intent as FieldParseResult["intent"], target_ref: subject, new_date: null,
+    note: tradePrompt?.note ?? body, confidence: 1,
+    ...(tradePrompt?.condition ? { condition: tradePrompt.condition } : {}),
   } : await (deps.parseFn ?? parseFieldMessage)({ body: explicit?.[1] ?? body,
     openItems: [{ ...subject, project_name: "", due: null }], recentMessages: [],
     today: now.toISOString().slice(0, 10), hasMedia: media.length > 0 }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
@@ -2129,7 +2304,7 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   const attempt = await stampMessage(supabase, messageId, party.id, party.project_id, details, parsed.confidence);
   if (attempt.error) return { status: 503, twiml: twimlBody(), disposition: "prompt_attempt_unrecorded" };
   const affirmative = ["YES", "Y", "OK"].includes(verb);
-  const commandVerb = /^(?:YES|Y|OK|DONE|HERE|ARRIVED|DELIVERED|LEAVING|DEPARTED|DELAY|LATE|BLOCKED|BLOCKER|AVAILABLE|DAMAGED|DAMAGE|GOOD|FINE)$/.test(verb);
+  const commandVerb = /^(?:YES|Y|OK|DONE|HERE|ARRIVED|DELIVERED|LEAVING|DEPARTED|DELAY|LATE|BLOCKED|BLOCKER|AVAILABLE|DAMAGED|DAMAGE|GOOD|FINE|PROBLEM)$/.test(verb);
   const availabilityReply = !explicit && prompt.kind === "confirm_availability" && (open ?? []).length === 1;
   const conditionReply = !explicit && ["report_condition", "confirm_delivery"].includes(prompt.kind) && (open ?? []).length === 1;
   if ((prompt.proposed_effect ? !affirmative : !commandVerb && !availabilityReply && !conditionReply) || parsed.confidence < 0.8 ||

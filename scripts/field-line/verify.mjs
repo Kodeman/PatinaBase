@@ -116,6 +116,15 @@ function casePhase(caseId) {
     ["two-studios-one-phone", 0], ["stop-then-new-engagement", 0], ["start-no-consent", 0],
     ["duplicate-twilio-sid", 0], ["rpc-failure-mid-effect", 0], ["provider-failure-with-code", 0],
     ["stale-forwarded-link", 0], ["dst-quiet-hours", 0], ["unknown-sender-wrong", 0],
-    ["old-ref-reply", 1], ["interrupted-media-upload", 1],
+    // Every id below carries the phase its own GateCase declares — Node cannot
+    // import the TypeScript manifest, so this map mirrors it, and an id missing
+    // here reads as Infinity, i.e. a skip strict mode would never notice. These
+    // four were exactly that: two read 1 while declaring 0, and the 00643 pair
+    // was absent altogether.
+    ["old-ref-reply", 0], ["interrupted-media-upload", 0],
+    ["condition-report", 0], ["po-delivery", 0],
+    // The trade rail (00645).
+    ["reply-to-renew", 1], ["budget-fold-to-digest", 1],
+    ["dead-end-handoff", 1], ["site-card-day-of", 1],
   ]).get(caseId) ?? Number.POSITIVE_INFINITY;
 }
