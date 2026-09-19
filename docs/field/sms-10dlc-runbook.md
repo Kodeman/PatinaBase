@@ -105,7 +105,7 @@ All five are pure GSM-7 basic set (no em dash, no curly quotes, no en dash) and 
 | `SMS_CONVERSATION_NUMBER` | The physical E.164 number used to key `sms_conversations`. **REQUIRED** when `TWILIO_FROM_NUMBER` is a Messaging Service `MG…` SID — outbound and inbound conversations both key on this number |
 | `SMS_INBOUND_PUBLIC_URL` | Exact public URL registered in step 3.4 |
 | `SMS_DEV_MODE` | unset in prod; `dry_run` local/e2e; `redirect` + `SMS_DEV_REDIRECT_NUMBER` for staging rehearsal |
-| `CLAUDE_API_KEY` | already provisioned (companion/aesthete) |
+| `CLAUDE_API_KEY` | **NOT provisioned on Strata** (verified by name 2026-09-19; it is not in the 46 edge-function secret names). `_shared/field-parse.ts:489` reads it for the model fallback, so its absence is fail-safe, not broken: with no key `parseFieldMessage` returns `intent:"unclear"`, `confidence:0` and the reply routes to designer review. The deterministic phrase layer (`parseFieldMessageDeterministic`) needs no key and is unaffected. Provision it only when model parsing is wanted. |
 
 ## 5. Go-live smoke (SMS_DEV_MODE=redirect → your phone)
 
@@ -115,7 +115,55 @@ All five are pure GSM-7 basic set (no em dash, no curly quotes, no en dash) and 
 4. Text a freeform delay ("can't get the valve till Tuesday") → verify applied+confirmation or Desk review card.
 5. Text STOP → verify opt-out recorded (party consent chip flips) → START to restore.
 6. Unset SMS_DEV_MODE.
-7. **Cron/quiet-hours timing check**: `field-daily` runs at 13:00 UTC — ~8am CDT in summer but 7am CST in winter, which the quiet-hours gate defers into the next day's run. At cutover either move the cron to 14:00 UTC or set `FIELD_TZ` so the digest lands inside the 8am–8pm window year-round.
+7. **Cron/quiet-hours timing check**: `field-daily` runs at **14:00 UTC** — `00432_twilio_activation_hardening.sql:79-91` unscheduled the old 13:00 UTC job and re-scheduled it at `0 14 * * *` (08:00 CST / 09:00 CDT, always inside the 08:00–20:00 America/Chicago window), and no later migration touches that cron. `FIELD_TZ` is set on Strata. Nothing to change at cutover; this line was stale and is corrected here.
+
+### Phase 0 activation record
+
+**Date:** 2026-09-19 (UTC). **Target:** Supabase Cloud "Strata", project ref `bkvcixdmuyejfzcijpdg`. **Source commit:** `a86ffe986` (main). **Migration head:** `00643_field_line_po_condition.sql`. **Owner approval:** Phase 0 approved 2026-09-19. **Outcome: Phase 0 schema and functions are live; new outbound automation is OFF** because `FIELD_LINE_PHASE` is absent and `_shared/sms.ts:199` reads an absent value as phase 0.
+
+**Push before deploy (ordering is load-bearing: `00639` stamps and deletes project-attributed `sms_conversation_context` rows, so it must land before the new consumers run).**
+
+| Step | Command | Start → end (UTC) |
+|---|---|---|
+| Schema push | `supabase db push --linked --project-ref bkvcixdmuyejfzcijpdg --include-all` | 02:42:38 → 02:42:43 |
+| Deploy `sms-dispatch` | `supabase functions deploy sms-dispatch --project-ref …` | 02:43:06 → 02:43:10 |
+| Deploy `sms-inbound` | `supabase functions deploy sms-inbound --project-ref …` | 02:43:10 → 02:43:13 |
+| Deploy `sms-status` | `supabase functions deploy sms-status --project-ref …` | 02:43:13 → 02:43:16 |
+| Deploy `field-daily` | `supabase functions deploy field-daily --project-ref …` | 02:43:16 → 02:43:18 |
+| Deploy `field-login-token` | `supabase functions deploy field-login-token --project-ref …` | 02:43:18 → 02:43:21 |
+
+`--include-all` is mandatory: remote's max version is the timestamp `20260910152111`, so a `006xx` file classifies as `missing-remote` and a plain `db push` errors out having applied nothing. The dry-run planned exactly `00639, 00640, 00641, 00642, 00643` with `seeds:[]` and `roles:[]`; the apply logged the same five in the same order. `supabase migration list --linked --project-ref …` afterwards shows zero unapplied local and zero remote-only migrations (596 rows), with `00460` (waitlist consent) and `00432` still paired.
+
+**Function versions (before → after).**
+
+| Function | Before | After | `verify_jwt` |
+|---|---|---|---|
+| `sms-dispatch` | v39 | **v40** | true |
+| `sms-inbound` | v31 | **v32** | false |
+| `sms-status` | v9 | **v10** | false |
+| `field-daily` | v28 | **v29** | true |
+| `field-login-token` | v25 | **v26** | true |
+| `client-invite` | v46 | v46 (**not deployed**) | true |
+
+`client-invite` is deliberately excluded: on this base it is the homeowner First Letter over email, outside the Phase 0 SMS set, and redeploying it would put a live email path at risk for no Phase 0 benefit.
+
+**Secrets — nothing was written, set, unset, or changed.** 46 names before and 46 identical names after. Confirmed **present** among the names the five functions read: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET`, `TWILIO_FROM_NUMBER`, `SMS_CONVERSATION_NUMBER`, `SMS_INBOUND_PUBLIC_URL`, `SMS_STATUS_CALLBACK_URL`, `FIELD_TZ`, `CLIENT_PORTAL_URL`, `DESIGNER_PORTAL_URL`, `POSTHOG_HOST`.
+
+Expected **absent**, each confirmed absent and each left alone:
+
+- `FIELD_LINE_PHASE` — **absent**, which is the off position. This is the phase gate of contract S7; absent reads as `0`, so no new outbound automation can send even with the schema and functions live.
+- `SMS_DEV_MODE` — absent, correct for production (`devMode()` falls through to `off`, i.e. real sends only, no dev redirect).
+- `SMS_DEV_REDIRECT_NUMBER` — absent, correct for production.
+
+Also absent, each with a safe in-code default and none of them introduced by this activation: `FIELD_LOGIN_TOKEN_TTL_SECONDS` (defaults to 3600), `CLAUDE_API_KEY` (see §4), `POSTHOG_KEY` (`_shared/aesthete-events.ts` degrades to a structured log line), `EMAIL_BUSINESS_ADDRESS` (`_shared/render-template.ts:53` has a literal default).
+
+**No smoke was sent.** The §5 redirect rehearsal above was deliberately **not** run on Strata: no allowlisted recipient was provided and `SMS_DEV_MODE` is unset there, so a "rehearsal" send would have gone to a real handset. The refusal-without-an-allowlisted-recipient behavior is already proven synthetically (P0-11 step 5). No production SQL was run and no Twilio or PostHog API was called.
+
+**Rollback, per step.**
+
+- **Functions:** the CLI has no version rollback — redeploy the previous code from main `b8dd4b7f`, which is what v39 / v31 / v9 / v28 / v25 were built from (`supabase functions deploy <fn> --project-ref bkvcixdmuyejfzcijpdg` from that checkout). Redeploying is also what disables any behavior that `00640`/`00641` only enable through function code.
+- **Schema (`00639`–`00643`):** leave it in place. There is no CLI down-migration, the authority/RLS/suppression work is an unconditional safety fix meant to survive a phase drop, and the practical kill switch is the phase gate, not the schema — the gate stays off because `FIELD_LINE_PHASE` is absent (= 0). If a specific object must go, it goes as a forward migration.
+- **Cron:** no change was made (`00432` already owns the 14:00 UTC schedule). If it ever must stop: `SELECT cron.unschedule('field-daily');`
 
 ## 6. Standing compliance rules (enforced in code; do not defeat)
 
