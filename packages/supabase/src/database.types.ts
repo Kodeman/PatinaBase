@@ -2016,6 +2016,80 @@ export type Database = {
         }
         Relationships: []
       }
+      client_decision_batches: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          created_by: string | null
+          decision_ids: string[]
+          id: string
+          party_id: string
+          presented_at: string
+          presented_local_day: string
+          presented_snapshot: Json | null
+          project_id: string
+          reminder_sent_at: string | null
+          version: number
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_ids: string[]
+          id?: string
+          party_id: string
+          presented_at?: string
+          presented_local_day?: string
+          presented_snapshot?: Json | null
+          project_id: string
+          reminder_sent_at?: string | null
+          version?: number
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          decision_ids?: string[]
+          id?: string
+          party_id?: string
+          presented_at?: string
+          presented_local_day?: string
+          presented_snapshot?: Json | null
+          project_id?: string
+          reminder_sent_at?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_decision_batches_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id", "project_id"]
+          },
+          {
+            foreignKeyName: "client_decision_batches_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "client_decision_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "client_decision_batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_decision_options: {
         Row: {
           approval_outcome: string | null
@@ -4724,6 +4798,7 @@ export type Database = {
       }
       decision_events: {
         Row: {
+          actor_party_id: string | null
           changed_by: string | null
           created_at: string
           decision_id: string
@@ -4733,6 +4808,7 @@ export type Database = {
           reason: string | null
         }
         Insert: {
+          actor_party_id?: string | null
           changed_by?: string | null
           created_at?: string
           decision_id: string
@@ -4742,6 +4818,7 @@ export type Database = {
           reason?: string | null
         }
         Update: {
+          actor_party_id?: string | null
           changed_by?: string | null
           created_at?: string
           decision_id?: string
@@ -4751,6 +4828,20 @@ export type Database = {
           reason?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "decision_events_actor_party_id_fkey"
+            columns: ["actor_party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "decision_events_actor_party_id_fkey"
+            columns: ["actor_party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "decision_events_decision_id_fkey"
             columns: ["decision_id"]
@@ -4967,6 +5058,88 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_availability: {
+        Row: {
+          id: string
+          option: string
+          party_id: string
+          project_id: string
+          recorded_at: string
+          recorded_by_party_id: string | null
+          source_sid: string
+          subject_id: string | null
+          subject_kind: string
+          window_label: string | null
+        }
+        Insert: {
+          id?: string
+          option: string
+          party_id: string
+          project_id: string
+          recorded_at?: string
+          recorded_by_party_id?: string | null
+          source_sid: string
+          subject_id?: string | null
+          subject_kind: string
+          window_label?: string | null
+        }
+        Update: {
+          id?: string
+          option?: string
+          party_id?: string
+          project_id?: string
+          recorded_at?: string
+          recorded_by_party_id?: string | null
+          source_sid?: string
+          subject_id?: string | null
+          subject_kind?: string
+          window_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_availability_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id", "project_id"]
+          },
+          {
+            foreignKeyName: "delivery_availability_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "delivery_availability_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "delivery_availability_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_availability_recorded_by_party_id_fkey"
+            columns: ["recorded_by_party_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id"]
+          },
+          {
+            foreignKeyName: "delivery_availability_recorded_by_party_id_fkey"
+            columns: ["recorded_by_party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
             referencedColumns: ["id"]
           },
         ]
@@ -33571,6 +33744,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      apply_client_effect: {
+        Args: {
+          p_effect: string
+          p_payload: Json
+          p_prompt_id: string
+          p_source_sid: string
+        }
+        Returns: Json
       }
       apply_decision: {
         Args: {
