@@ -22,6 +22,7 @@ import {
   clientReplyAuthority,
 } from "./cases/client-capability.ts";
 import { clientVersionRace } from "./cases/client-decision-race.ts";
+import { clientWindowPickIssued } from "./cases/client-window-pick.ts";
 import {
   clientCampaignApproval,
   clientConsentBoundary,
@@ -65,6 +66,9 @@ export const fieldLineCases: GateCase[] = [
   clientOneAskADay,
   clientConsentBoundary,
   clientCampaignApproval,
+  // The delivery she is the only one who can answer about (00641's proposal
+  // columns, 00652's card).
+  clientWindowPickIssued,
 ];
 
 export { type GateAssertion, type GateCase } from "./types.ts";

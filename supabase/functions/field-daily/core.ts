@@ -8,6 +8,8 @@
 //     and sends sms_daily_digest (with a fresh field link),
 //   · sends sms_delivery_confirm to receiver/gc parties for deliveries in the
 //     next 48h (deduped via state_context.delivery_confirms_sent),
+//   · at phase 2, presents a homeowner one list of picks a day and one delivery
+//     window card per delivery, both through sendClientSms's own gate,
 //   · flushes any 'deferred' outbound rows.
 // Parties with nothing to say are skipped (A2P-friendly — one predictable msg),
 // and so are parties whose consent the gate refuses — both counted in
@@ -46,6 +48,15 @@ const CLIENT_REMINDER_MS = 72 * 3600 * 1000;
 const CLIENT_ASK_TTL_MS = 7 * 24 * 3600 * 1000;
 /** Picks in one ask. More than this is a phone call, not a text. */
 const CLIENT_BATCH_MAX = 5;
+/**
+ * What her delivery card may spend on the two things only the studio's own data
+ * can fill: the item arriving, and each of the two windows. These are the exact
+ * maxima field-line-copy.test.ts measures sms_window_pick's body at, so the
+ * producer is held to the same numbers the copy is proved against rather than to
+ * a second opinion about them.
+ */
+const DELIVERY_TITLE_SEPTETS = 24;
+const WINDOW_LABEL_SEPTETS = 14;
 
 /**
  * When the two trade cards are due, as minutes past local midnight in FIELD_TZ
@@ -314,6 +325,10 @@ interface RunSummary {
   client_batches_sent: number;
   /** 72h nudges on an unanswered batch this run. One per batch, ever. */
   client_reminders_sent: number;
+  /** Delivery-window cards put to a homeowner this run (contract P23/P24). */
+  client_window_picks_sent: number;
+  /** Spent, unanswerable selection lists closed this run (SQ-111 LOW-2). */
+  client_batches_closed: number;
 }
 
 function isoDate(d: Date): string {
@@ -448,6 +463,8 @@ export async function runFieldDaily(
     crew_posts: 0,
     client_batches_sent: 0,
     client_reminders_sent: 0,
+    client_window_picks_sent: 0,
+    client_batches_closed: 0,
   };
 
   // ── Consented field parties ───────────────────────────────────────────────
@@ -812,7 +829,7 @@ export async function runFieldDaily(
     }
   }
 
-  // ── The homeowner's picks: one ask a day, one nudge, then quiet (P24) ──────
+  // ── The homeowner's two questions: her picks, and a delivery window (P24) ──
   // A studio decides WHAT to ask her; this cron decides only WHEN, and its whole
   // job is restraint. A homeowner is not a crew: she has no shift, no dispatch
   // and no obligation to answer a phone at 7am, so her rail has exactly one
@@ -840,6 +857,17 @@ export async function runFieldDaily(
       }>
     ) {
       if (!seat.phone_e164) continue;
+      // ELIGIBILITY BEFORE ANY ROW IS WRITTEN (SQ-111 LOW-4). A live letter is
+      // what makes a client seat textable at all — every send below is addressed
+      // to the homeowner reading one — so it is asked here, before
+      // findOrCreateConversation, rather than three reads later. A seat this
+      // studio has never written to leaves no thread and no context row behind,
+      // which is what "the cron decides only WHEN" means: a seat nobody has
+      // written to is not a conversation. (The other half of that finding, the
+      // project's phase, is the fieldLinePhase() gate above: the rail is live
+      // per server, not per project.)
+      const letter = await liveClientLetter(supabase, seat);
+      if (!letter) continue;
       // The thread, and the pause a handoff may have put on it. A homeowner
       // whose last message went to her designer is waiting on a person; texting
       // her a fresh list over the top of that is the loudest possible answer.
@@ -847,6 +875,17 @@ export async function runFieldDaily(
         supabase, conversationNumber, seat.phone_e164, seat.id, seat.project_id,
       );
       if (!conv || (conv.paused_until && Date.parse(conv.paused_until) > now.getTime())) continue;
+
+      // ── The delivery window, asked before her picks ───────────────────────
+      // Her one paced text a day goes to the question with a truck behind it: a
+      // list of selections keeps until tomorrow, and the pace guard (P1) folds
+      // whichever of the two is second into the next send window rather than
+      // piling both on her in one afternoon.
+      if (
+        await issueWindowPick(
+          supabase, seat, conversationNumber, localToday, fieldTz, now, sendClient, deps,
+        )
+      ) summary.client_window_picks_sent++;
 
       const { data: openRows } = await supabase
         .from("client_decision_batches")
@@ -861,7 +900,33 @@ export async function runFieldDaily(
         // ONE NUDGE, THEN SILENCE. Not a second list, not a daily reminder:
         // reminder_sent_at is stamped once and this branch never fires again for
         // this batch, so an unanswered ask ends in quiet rather than in nagging.
-        if (openBatch.reminder_sent_at) continue;
+        if (openBatch.reminder_sent_at) {
+          // AND THEN THE LIST IS LET GO (SQ-111 LOW-2). Only apply_client_effect
+          // ever closed a batch, so a list she never answered stayed open for
+          // good — and the one-open-batch-per-day index made that silence
+          // permanent: every later day's INSERT lost to a row from a week ago.
+          // Once her nudge is spent AND the reference has run out, the ask can no
+          // longer be answered by text, so the batch is closed and those picks
+          // are free to be presented again on a later day.
+          //
+          // No reason is recorded WITH it, because there is no column to record
+          // one in: client_decision_batches carries closed_at and nothing beside
+          // it, and presented_snapshot is 00652's record of the words she was
+          // sent (a close note in there would rewrite what the reminder quotes).
+          // The reason is readable anyway — an expired, unanswered prompt and
+          // decisions still 'pending' is exactly this close, and an applied one
+          // leaves a receipt on the prompt (00639's consumption_result).
+          if (!await openClientAsk(supabase, seat, openBatch.id, now)) {
+            const { data: closed } = await supabase
+              .from("client_decision_batches")
+              .update({ closed_at: now.toISOString() })
+              .eq("id", openBatch.id)
+              .is("closed_at", null)
+              .select("id");
+            if (closed?.length) summary.client_batches_closed++;
+          }
+          continue;
+        }
         if (Date.parse(openBatch.presented_at) + CLIENT_REMINDER_MS > now.getTime()) continue;
         const ask = await openClientAsk(supabase, seat, openBatch.id, now);
         // NO NEW REFERENCE FOR A NUDGE, and none for a list that moved. The
@@ -870,8 +935,6 @@ export async function runFieldDaily(
         // pointing at the old reference would only earn her a stale_version
         // refusal, and re-presenting is the studio's call, not this cron's.
         if (!ask || ask.version !== openBatch.version) continue;
-        const letter = await liveClientLetter(supabase, seat);
-        if (!letter) continue;
         const vars = await selectionVars(supabase, seat, openBatch, ask.short_code);
         if (!vars) continue;
         const res = await sendClient(supabase, {
@@ -907,8 +970,6 @@ export async function runFieldDaily(
         .limit(1);
       if ((todays ?? []).length) continue;
 
-      const letter = await liveClientLetter(supabase, seat);
-      if (!letter) continue;
       const picks = await presentableDecisions(supabase, seat, letter.designer_client_id);
       if (!picks.length) continue;
 
@@ -1014,6 +1075,285 @@ async function openClientAsk(
     | { id: string; short_code: string; version: number }
     | undefined;
   return row ?? null;
+}
+
+/**
+ * ONE DELIVERY WINDOW, PUT TO HER AS A CHOICE (US-3 P23/P24).
+ *
+ * WHERE THE WINDOWS COME FROM. Nothing in this database has ever held "the two
+ * windows for a delivery": 00284's {{delivery_window}} is a rendered date on the
+ * crew's confirm card, not an offer, and there is no other column of the kind.
+ * The one place a window is PROPOSED is field_delivery_reports.proposed_date /
+ * proposed_window — 00641's own words for those two columns are "a PROPOSAL,
+ * written where the studio can read it... never a write to project_tasks
+ * .due_date" — and they are keyed by exactly the (subject_kind, subject_id) pair
+ * her answer is recorded against in delivery_availability (00651:702). So that
+ * is what this reads, and it never invents a window: two distinct proposals on
+ * one delivery are the A and B her card prints, C is "neither of those", and a
+ * delivery carrying fewer than two is not asked about at all. Whoever writes the
+ * proposals — the crew answering the trade rail today, a pair the designer types
+ * on the delivery tomorrow — the shape read here does not change.
+ *
+ * WHAT HER ANSWER IS. Availability, and nothing else (P23). This function only
+ * asks; apply_client_effect writes the one delivery_availability row, and the
+ * receiver's "the goods are here" stays where it was, on sms_delivery_confirm.
+ *
+ * Returns true when a card was put on the wire (or stored for the send window).
+ */
+async function issueWindowPick(
+  supabase: SupabaseClient,
+  seat: { id: string; project_id: string; phone_e164: string | null },
+  sender: string,
+  localToday: string,
+  fieldTz: string,
+  now: Date,
+  sendClient: NonNullable<FieldDailyDeps["clientSendFn"]>,
+  deps: FieldDailyDeps,
+): Promise<boolean> {
+  // ONE OPEN DELIVERY QUESTION AT A TIME, and so never a second one about the
+  // same delivery. Asked before anything is read or minted, because a second
+  // card is worse than a late one: two live references for one truck make her
+  // pick which card to answer.
+  const { data: open } = await supabase
+    .from("sms_prompts")
+    .select("id")
+    .eq("party_id", seat.id)
+    .eq("project_id", seat.project_id)
+    .eq("kind", "window_pick")
+    .is("answered_at", null)
+    .is("voided_at", null)
+    .gt("expires_at", now.toISOString())
+    .limit(1);
+  if ((open ?? []).length) return false;
+
+  const candidates = await proposedDeliveryWindows(supabase, seat.project_id, localToday);
+  if (!candidates.length) return false;
+
+  // NO CAPABILITY, NO QUESTION (contract P14, the same discipline the batch
+  // eligibility follows). This card carries no {{link}} — there is nothing to
+  // read, only something to say — so unlike her letter and her picks it mints
+  // nothing at dispatch: the capability her reply is authorized by has to exist
+  // already, or apply_client_effect refuses the answer with no_capability and she
+  // is left holding a card that does nothing.
+  const { data: links } = await supabase
+    .from("client_links")
+    .select("id, party_id, project_id, status, expires_at, scope")
+    .eq("party_id", seat.id)
+    .eq("project_id", seat.project_id)
+    .eq("status", "active")
+    .gt("expires_at", now.toISOString());
+  const capable = ((links ?? []) as Array<{ scope?: { project_id?: string; actions?: string[] } }>)
+    // 00652's predicate: the FK column and the scope's own copy must agree, and
+    // the scope has to name the act.
+    .some((row) =>
+      (row.scope?.actions ?? []).includes("select_window") &&
+      (row.scope?.project_id ?? null) === seat.project_id
+    );
+  if (!capable) return false;
+
+  // WHAT SHE HAS ALREADY SAID. Her answer is one delivery_availability row
+  // against the delivery's subject_id; the prompt that carried it expires, so
+  // without this read a passed expiry would ask her the same thing again.
+  // subject_kind is not part of the test because the reply path records hers as
+  // 'delivery' whatever kind the report itself carries (sms-inbound/pipeline.ts).
+  const { data: answered } = await supabase
+    .from("delivery_availability")
+    .select("subject_id, party_id, project_id")
+    .eq("party_id", seat.id)
+    .eq("project_id", seat.project_id);
+  const alreadySaid = new Set(
+    ((answered ?? []) as Array<{ subject_id: string }>).map((row) => row.subject_id),
+  );
+
+  for (const candidate of candidates) {
+    if (alreadySaid.has(candidate.subjectId)) continue;
+    const title = await deliveryTitle(
+      supabase, seat.project_id, candidate.subjectKind, candidate.subjectId,
+    );
+    // A delivery whose subject has since been deleted names nothing she could
+    // picture, and "delivery for your delivery" is not a sentence.
+    if (!title) continue;
+    const prompt = await promptRef(
+      supabase, seat, candidate.subjectId, "window_pick",
+      // The daily producer's frozen YYYYMMDD (00645's convention), so a second
+      // tick of the same day reuses this reference instead of burning another
+      // 90-day short code on the same question.
+      Number(localToday.replaceAll("-", "")), sender, now, undefined,
+      windowAskExpiry(candidate.lastDay, now, fieldTz),
+    );
+    if (!prompt) return false;
+    const res = await sendClient(supabase, {
+      partyId: seat.id,
+      projectId: seat.project_id,
+      templateKey: "sms_window_pick",
+      // Keyed on the reference, which is the ask: a retry within the day meets
+      // the same prompt and the same claim, and a card for a later delivery is a
+      // different logical send.
+      dedupeKey: `client-window:${prompt.id}`,
+      vars: {
+        studio_name: cardParam(
+          await resolveStudioName(supabase, seat.project_id) ?? undefined, 24, "Your studio",
+        ),
+        item_title: cardParam(title, DELIVERY_TITLE_SEPTETS, "the delivery"),
+        option_a: candidate.options[0],
+        option_b: candidate.options[1],
+        ref: prompt.short_code,
+      },
+    }, deps);
+    if (res.sent || res.deferred) return true;
+    // NOTHING WENT OUT, SO NOTHING WAS ASKED — the batch leg's rule, for the
+    // batch leg's reason: a reference standing behind a refused card would tell
+    // every later tick she has an open delivery question and silence the ask
+    // until it expired.
+    await supabase.from("sms_prompts").delete().eq("id", prompt.id);
+    return false;
+  }
+  return false;
+}
+
+interface WindowCandidate {
+  /** 'task' | 'coordination' | 'purchase_order' (00643's own CHECK). */
+  subjectKind: string;
+  subjectId: string;
+  /** The two labels her card prints, chronologically — A first. */
+  options: [string, string];
+  /** The later of the two proposed days, when either carried one. */
+  lastDay: string | null;
+}
+
+/**
+ * The deliveries on one project that a homeowner could still choose between:
+ * two DISTINCT windows the studio has on the record, neither of them already
+ * behind her. Nearest first, so that if the pace guard pays for one question
+ * today it is the one with the least time left.
+ */
+async function proposedDeliveryWindows(
+  supabase: SupabaseClient,
+  projectId: string,
+  localToday: string,
+): Promise<WindowCandidate[]> {
+  const { data } = await supabase
+    .from("field_delivery_reports")
+    .select("subject_kind, subject_id, proposed_date, proposed_window, availability_at, project_id")
+    .eq("project_id", projectId);
+  type Report = {
+    subject_kind: string | null;
+    subject_id: string | null;
+    proposed_date: string | null;
+    proposed_window: string | null;
+    availability_at: string | null;
+  };
+  const groups = new Map<string, Report[]>();
+  for (const row of (data ?? []) as Report[]) {
+    // A report row exists for every visit; only the ones carrying a proposal are
+    // an offer of a window.
+    if (!row.subject_kind || !row.subject_id) continue;
+    if (!row.proposed_date && !row.proposed_window) continue;
+    const key = `${row.subject_kind} ${row.subject_id}`;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+
+  const candidates: WindowCandidate[] = [];
+  for (const group of groups.values()) {
+    // Chronological, because "A (Nov 3), B (Nov 5)" is a sentence and the other
+    // order is a puzzle. A proposal with no day at all ("weekdays after 1") is a
+    // rule rather than a date, so it sorts last.
+    const sorted = [...group].sort((a, b) =>
+      (a.proposed_date ?? "9999-99-99").localeCompare(b.proposed_date ?? "9999-99-99") ||
+      String(a.availability_at ?? "").localeCompare(String(b.availability_at ?? ""))
+    );
+    const options: string[] = [];
+    const days: string[] = [];
+    for (const row of sorted) {
+      // A DAY THAT HAS GONE IS NOT A CHOICE. Asking her to pick between two
+      // windows already behind her is worse than not asking at all.
+      if (row.proposed_date && row.proposed_date < localToday) continue;
+      const label = windowLabel(row.proposed_date, row.proposed_window);
+      // Two proposals that print the same words are one choice, not two.
+      if (!label || options.includes(label)) continue;
+      options.push(label);
+      if (row.proposed_date) days.push(row.proposed_date);
+      if (options.length === 2) break;
+    }
+    if (options.length < 2) continue;
+    candidates.push({
+      subjectKind: sorted[0].subject_kind!,
+      subjectId: sorted[0].subject_id!,
+      options: [options[0], options[1]],
+      lastDay: days.length ? days[days.length - 1] : null,
+    });
+  }
+  return candidates.sort((a, b) =>
+    (a.lastDay ?? "9999-99-99").localeCompare(b.lastDay ?? "9999-99-99")
+  );
+}
+
+/**
+ * One window, in as many words as her card can pay for. A day and its hours
+ * usually fit; when the studio's own words do not, the DAY is what survives
+ * whole, because "Nov 3" never reads like a mistake and "Thu afterno" does.
+ */
+function windowLabel(day: string | null, words: string | null): string | null {
+  const dayText = day ? formatDue(day) : "";
+  const full = [dayText, (words ?? "").trim()].filter(Boolean).join(" ");
+  if (!full) return null;
+  const fitted = septetsOf(full) <= WINDOW_LABEL_SEPTETS
+    ? cardParam(full, WINDOW_LABEL_SEPTETS, "")
+    : cardParam(dayText || full, WINDOW_LABEL_SEPTETS, "");
+  return fitted || null;
+}
+
+/**
+ * What is arriving, in the words the studio wrote on it. The three subjects
+ * 00643's CHECK admits for a delivery report, and no invention: a subject that
+ * is gone, or of a kind this does not know, answers null and is not asked about.
+ */
+async function deliveryTitle(
+  supabase: SupabaseClient,
+  projectId: string,
+  subjectKind: string,
+  subjectId: string,
+): Promise<string | null> {
+  const table = subjectKind === "task"
+    ? "project_tasks"
+    : subjectKind === "coordination"
+    ? "client_decisions"
+    : subjectKind === "purchase_order"
+    ? "purchase_orders"
+    : null;
+  if (!table) return null;
+  const { data } = await supabase
+    .from(table)
+    // A purchase order answers with its sidemark — what the studio called the
+    // piece — before its number, which means nothing to the person expecting it.
+    .select(
+      table === "purchase_orders" ? "id, sidemark, po_number, project_id" : "id, title, project_id",
+    )
+    .eq("id", subjectId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  const row = data as
+    | { title?: string | null; sidemark?: string | null; po_number?: string | null }
+    | null;
+  const words = String(row?.title ?? row?.sidemark ?? row?.po_number ?? "").trim();
+  return words || null;
+}
+
+/**
+ * How long a delivery card stays answerable: her own ask TTL, but never past the
+ * end of the later day she was offered. An answer that arrives after both
+ * windows have gone is not availability any more, it is a note — and the prompt
+ * that outlived its subject would still be the one open question a codeless
+ * reply binds to.
+ */
+function windowAskExpiry(lastDay: string | null, now: Date, fieldTz: string): Date {
+  const ttl = new Date(now.getTime() + CLIENT_ASK_TTL_MS);
+  if (!lastDay) return ttl;
+  const [y, m, d] = lastDay.split("-").map(Number);
+  if (!y || !m || !d) return ttl;
+  const dayAfter = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  const end = localMomentOnDay(dayAfter, 0, fieldTz);
+  return end && end.getTime() < ttl.getTime() ? end : ttl;
 }
 
 /**

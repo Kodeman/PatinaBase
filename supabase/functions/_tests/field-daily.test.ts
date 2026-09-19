@@ -1232,8 +1232,9 @@ Deno.test("P24: the nudge comes once at three days, and then there is silence", 
   assert(batch.reminder_sent_at, "the nudge is spent");
   assertEquals(batches(fake).length, 1, "no new list is opened either");
 
-  // And then nothing, ever, for this batch.
-  for (const days of [5, 8, 20]) {
+  // And then nothing, ever, for this batch — including the tick that lets the
+  // spent list go (SQ-111 LOW-2: closing it is not an occasion for a text).
+  for (const days of [5, 8]) {
     const after: Array<Record<string, unknown>> = [];
     const quiet = await clientRun(fake, new Date(CLIENT_DAY.getTime() + days * 24 * 3600 * 1000), after);
     assertEquals(after.length, 0, `day ${days}: the rail has stopped talking`);
@@ -1335,5 +1336,382 @@ Deno.test("P24: a homeowner with no live letter is not texted", async () => {
     await clientRun(fake, CLIENT_DAY, sent);
     assertEquals(sent.length, 0, `${JSON.stringify(broken)}: nothing is sent`);
     assertEquals(batches(fake).length, 0, "and no list is opened against a dead letter");
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The delivery window, put to her as a choice (US-3 P23/P24)
+// ═══════════════════════════════════════════════════════════════════════════
+// The windows themselves are not this cron's invention and not this cron's to
+// write: field_delivery_reports.proposed_date/proposed_window is where a window
+// is PROPOSED (00641), keyed by the same (subject_kind, subject_id) pair her
+// answer is recorded against in delivery_availability (00651). Two distinct
+// proposals on one delivery are the A and B her card prints; C is "neither".
+
+/** The delivery she is asked about: one subject, with a name she can picture. */
+const DELIVERY_SUBJECT = "task-delivery";
+
+/** Her capability, in the shape create_client_link mints one (00650). */
+const CLIENT_CAPABILITY = {
+  id: "cl1",
+  invitation_id: "inv1",
+  project_id: "proj1",
+  party_id: "client1",
+  token_hash: "f".repeat(64),
+  status: "active",
+  expires_at: "2027-02-01T00:00:00.000Z",
+  created_at: "2026-10-01T00:00:00.000Z",
+  scope: {
+    project_id: "proj1",
+    party_id: "client1",
+    invitation_id: "inv1",
+    actions: ["open_letter", "approve_selection", "select_window"],
+  },
+};
+
+/** A window the field proposed on the delivery, as apply_field_effect writes it. */
+function report(overrides: Record<string, unknown> = {}) {
+  return {
+    project_id: "proj1",
+    party_id: "recv1",
+    subject_kind: "task",
+    subject_id: DELIVERY_SUBJECT,
+    proposed_date: "2026-11-03",
+    proposed_window: "2-4",
+    availability_at: "2026-11-01T12:00:00.000Z",
+    ...overrides,
+  };
+}
+
+const SECOND_WINDOW = { party_id: "gc1", proposed_date: "2026-11-05", proposed_window: "morning" };
+
+function windowWorld(
+  reports: Array<Record<string, unknown>>,
+  extra: Record<string, unknown[]> = {},
+) {
+  return clientDayWorld({
+    project_tasks: [{
+      id: DELIVERY_SUBJECT,
+      project_id: "proj1",
+      title: "Living room sofa",
+      status: "todo",
+      owner_party_id: null,
+      due_date: null,
+    }],
+    client_links: [CLIENT_CAPABILITY],
+    field_delivery_reports: reports,
+    delivery_availability: [],
+    ...extra,
+  });
+}
+
+function windowPrompts(fake: ReturnType<typeof clientDayWorld>) {
+  return (fake._data.sms_prompts ?? []).filter((row) => row.kind === "window_pick");
+}
+
+Deno.test("P23: one delivery card, A and B in the studio's own words", async () => {
+  const fake = windowWorld([report(), report(SECOND_WINDOW)]);
+  const sent: Array<Record<string, unknown>> = [];
+  const summary = await clientRun(fake, CLIENT_DAY, sent);
+
+  assertEquals(summary.client_window_picks_sent, 1);
+  // The delivery is asked first: her picks keep until tomorrow, the truck does not.
+  assertEquals(sent.map((s) => s.templateKey), ["sms_window_pick", "sms_selection_ready"]);
+  const card = sent[0];
+  assertEquals(card.partyId, "client1");
+  assertEquals(card.projectId, "proj1");
+  assertEquals(
+    card.clientInvitationId,
+    undefined,
+    "the card carries no {{link}}, so nothing is minted for it",
+  );
+  const vars = card.vars as Record<string, unknown>;
+  assertEquals(vars.studio_name, "Field & Form", "studio name first (P24)");
+  assertEquals(vars.item_title, "Living room sofa", "what is arriving, not a uuid");
+  assertEquals(vars.option_a, "Nov 3 2-4", "the nearer window is A");
+  assertEquals(vars.option_b, "Nov 5 morning");
+
+  const prompts = windowPrompts(fake);
+  assertEquals(prompts.length, 1, "one reference");
+  assertEquals(prompts[0].subject_id, DELIVERY_SUBJECT, "and it names the delivery");
+  assertEquals(prompts[0].version, 20261101, "frozen at the sender's local day");
+  assertEquals(vars.ref, prompts[0].short_code, "the card prints that reference");
+  assertEquals(card.dedupeKey, `client-window:${prompts[0].id}`);
+  assertEquals(
+    prompts[0].expires_at,
+    "2026-11-06T06:00:00.000Z",
+    "answerable until the end of the later window's local day, and no longer",
+  );
+  assertEquals(
+    fake._data.delivery_availability,
+    [],
+    "asking records nothing: only her reply writes availability (P23)",
+  );
+});
+
+Deno.test("P23: one open card per delivery, however often the cron runs", async () => {
+  const fake = windowWorld([report(), report(SECOND_WINDOW)]);
+  const first: Array<Record<string, unknown>> = [];
+  await clientRun(fake, CLIENT_DAY, first);
+  const minted = windowPrompts(fake)[0];
+
+  for (const hours of [6, 30, 54]) {
+    const later: Array<Record<string, unknown>> = [];
+    const summary = await clientRun(fake, new Date(CLIENT_DAY.getTime() + hours * 3600 * 1000), later);
+    assertEquals(summary.client_window_picks_sent, 0, `+${hours}h: she is asked once`);
+    assertEquals(
+      later.filter((s) => s.templateKey === "sms_window_pick").length,
+      0,
+      `+${hours}h: nothing more went out about this delivery`,
+    );
+    assertEquals(windowPrompts(fake).length, 1, `+${hours}h: no second short code is burned`);
+    assertEquals(windowPrompts(fake)[0].id, minted.id, `+${hours}h: the same reference stands`);
+  }
+});
+
+Deno.test("P23: a delivery with no two windows on the record is not asked about", async () => {
+  const cases: Array<[string, Array<Record<string, unknown>>]> = [
+    ["nothing proposed at all", []],
+    ["one window is not a choice", [report()]],
+    ["a visit with no proposal", [report({ proposed_date: null, proposed_window: null })]],
+    ["the same words twice", [report(), report({ party_id: "gc1" })]],
+    ["both days already behind her", [
+      report({ proposed_date: "2026-10-20" }),
+      report({ party_id: "gc1", proposed_date: "2026-10-22", proposed_window: "morning" }),
+    ]],
+    ["two windows, but on two different deliveries", [
+      report(),
+      report({ party_id: "gc1", subject_id: "task-other", proposed_date: "2026-11-05", proposed_window: "morning" }),
+    ]],
+    ["a subject this cron cannot name", [
+      report({ subject_id: "gone" }),
+      report({ party_id: "gc1", subject_id: "gone", proposed_date: "2026-11-05", proposed_window: "morning" }),
+    ]],
+  ];
+  for (const [label, reports] of cases) {
+    const fake = windowWorld(reports);
+    const sent: Array<Record<string, unknown>> = [];
+    const summary = await clientRun(fake, CLIENT_DAY, sent);
+    assertEquals(summary.client_window_picks_sent, 0, label);
+    assertEquals(
+      sent.filter((s) => s.templateKey === "sms_window_pick").length,
+      0,
+      `${label}: nothing went out`,
+    );
+    assertEquals(windowPrompts(fake).length, 0, `${label}: and no short code was burned on silence`);
+  }
+});
+
+Deno.test("P23: a delivery she has already answered is not asked again", async () => {
+  // Her reference expires; the availability row does not. Without reading it a
+  // passed expiry would ask her the same question a second time.
+  const fake = windowWorld([report(), report(SECOND_WINDOW)], {
+    delivery_availability: [{
+      id: "avail1",
+      project_id: "proj1",
+      party_id: "client1",
+      subject_kind: "delivery",
+      subject_id: DELIVERY_SUBJECT,
+      option: "A",
+      window_label: "Nov 3 2-4",
+      source_sid: "SMher",
+    }],
+  });
+  const sent: Array<Record<string, unknown>> = [];
+  const summary = await clientRun(fake, CLIENT_DAY, sent);
+  assertEquals(summary.client_window_picks_sent, 0);
+  assertEquals(sent.filter((s) => s.templateKey === "sms_window_pick").length, 0);
+  assertEquals(windowPrompts(fake).length, 0);
+});
+
+Deno.test("P23: no live capability, no question (contract P14)", async () => {
+  // This card mints nothing at dispatch, so a reply it invited would be refused
+  // with no_capability — which is a card that does nothing.
+  const cases: Array<[string, unknown[]]> = [
+    ["no capability at all", []],
+    ["revoked", [{ ...CLIENT_CAPABILITY, status: "revoked" }]],
+    ["expired", [{ ...CLIENT_CAPABILITY, expires_at: "2026-10-15T00:00:00.000Z" }]],
+    ["a scope that cannot answer this", [{
+      ...CLIENT_CAPABILITY,
+      scope: { ...CLIENT_CAPABILITY.scope, actions: ["open_letter"] },
+    }]],
+    ["a scope that speaks for another house", [{
+      ...CLIENT_CAPABILITY,
+      scope: { ...CLIENT_CAPABILITY.scope, project_id: "proj2" },
+    }]],
+  ];
+  for (const [label, links] of cases) {
+    const fake = windowWorld([report(), report(SECOND_WINDOW)], { client_links: links });
+    const sent: Array<Record<string, unknown>> = [];
+    const summary = await clientRun(fake, CLIENT_DAY, sent);
+    assertEquals(summary.client_window_picks_sent, 0, label);
+    assertEquals(windowPrompts(fake).length, 0, `${label}: and no reference is left standing`);
+  }
+});
+
+Deno.test("P23: a refused card leaves no reference behind", async () => {
+  const fake = windowWorld([report(), report(SECOND_WINDOW)]);
+  const sent: Array<Record<string, unknown>> = [];
+  const summary = await clientRun(fake, CLIENT_DAY, sent, { refuse: true });
+  assertEquals(sent[0].templateKey, "sms_window_pick", "it was attempted");
+  assertEquals(summary.client_window_picks_sent, 0);
+  assertEquals(
+    windowPrompts(fake).length,
+    0,
+    "and the reference was taken back, so no later tick thinks she was asked",
+  );
+});
+
+Deno.test("P23: below phase 2 the delivery card writes nothing at all", async () => {
+  for (const phase of ["", "0", "1"]) {
+    const fake = windowWorld([report(), report(SECOND_WINDOW)]);
+    const sent: Array<Record<string, unknown>> = [];
+    const summary = await clientRun(fake, CLIENT_DAY, sent, { env: { FIELD_LINE_PHASE: phase } });
+    assertEquals(sent.length, 0, `phase "${phase}" sends nothing`);
+    assertEquals(summary.client_window_picks_sent, 0);
+    assertEquals(windowPrompts(fake).length, 0, `phase "${phase}" burns no short code`);
+    assertEquals(
+      (fake._data.sms_conversations ?? []).length,
+      0,
+      `phase "${phase}" does not even open a thread`,
+    );
+  }
+});
+
+Deno.test("P23: her window card and the crew's delivery confirm stay two questions", async () => {
+  // The reply half is SQ-18's and stays there: she answers A/B/C and
+  // apply_client_effect writes availability; the receiver's "it is here" is the
+  // trade rail's own sms_delivery_confirm. Issuing her card touches neither.
+  const fake = windowWorld([report(), report(SECOND_WINDOW)], {
+    project_parties: [
+      { id: "client1", phone_e164: "+15550002222", project_id: "proj1", party_kind: "client", display_name: "Adaeze" },
+      { id: "recv1", phone_e164: "+15550003333", project_id: "proj1", party_kind: "receiver", display_name: "Dock" },
+    ],
+    studio_channel_consent: [
+      {
+        organization_id: "org1", channel_kind: "sms", channel_value: "+15550002222",
+        status: "pending", refusal_unanswered: false, source: "kickoff_checkbox",
+        evidence: "Kickoff consent box ticked in Patina.", recorded_at: "2026-10-01T00:00:00.000Z",
+        recorded_by: "designer1", disclosure_version: "field-sms-v1",
+      },
+      {
+        organization_id: "org1", channel_kind: "sms", channel_value: "+15550003333",
+        status: "granted", refusal_unanswered: false, source: "verbal",
+        evidence: "Said yes at the walkthrough.", recorded_at: "2026-10-01T00:00:00.000Z",
+        recorded_by: "designer1", disclosure_version: "field-sms-v1",
+      },
+    ],
+    delivery_events: [{
+      event_id: "po1", project_id: "proj1", vendor_name: "Ash Mill",
+      event_date: "2026-11-02", event_type: "delivery_expected",
+    }],
+  });
+  const trade: Array<Record<string, unknown>> = [];
+  const client: Array<Record<string, unknown>> = [];
+  const summary = await runFieldDaily(fake as never, {
+    getEnv: (k) => ({ TWILIO_FROM_NUMBER: "+15559990000", ...CLIENT_ENV } as Record<string, string>)[k],
+    now: CLIENT_DAY,
+    sendFn: (_s, input) => {
+      trade.push(input as unknown as Record<string, unknown>);
+      return Promise.resolve({ sent: true });
+    },
+    clientSendFn: (_s, input) => {
+      client.push(input as unknown as Record<string, unknown>);
+      return Promise.resolve({ sent: true });
+    },
+    flushFn: () => Promise.resolve({ flushed: 0, skipped: 0 }),
+  });
+
+  assertEquals(summary.delivery_confirms_sent, 1);
+  assertEquals(summary.client_window_picks_sent, 1);
+  const confirm = trade.find((t) => t.templateKey === "sms_delivery_confirm")!;
+  assertEquals(confirm.partyId, "recv1", "the receiver confirms the goods, as she never does");
+  assertEquals(client.map((c) => c.templateKey), ["sms_window_pick", "sms_selection_ready"]);
+  const prompts = (fake._data.sms_prompts ?? []);
+  assertEquals(
+    prompts.filter((p) => p.kind === "confirm_delivery").map((p) => p.party_id),
+    ["recv1"],
+  );
+  assertEquals(windowPrompts(fake).map((p) => p.party_id), ["client1"]);
+  assertEquals(fake._data.delivery_availability, [], "and nothing was recorded on her behalf");
+});
+
+// ── SQ-111 LOW-2: a spent list is let go, so the rail is not silenced ────────
+
+Deno.test("P24: a spent, unanswerable list is closed once, and those picks come back", async () => {
+  const fake = clientDayWorld();
+  const sent: Array<Record<string, unknown>> = [];
+  await clientRun(fake, CLIENT_DAY, sent);
+  const batch = batches(fake)[0];
+  const ask = (fake._data.sms_prompts ?? []).find((row) => row.kind === "selection_batch")!;
+
+  // The nudge at three days, then her reference runs out unanswered.
+  await clientRun(fake, new Date(CLIENT_DAY.getTime() + 73 * 3600 * 1000), []);
+  assert(batch.reminder_sent_at, "the nudge is spent");
+  assertEquals(batch.closed_at ?? null, null, "and while she can still answer, the list stands");
+
+  const expired = new Date(Date.parse(String(ask.expires_at)) + 3600 * 1000);
+  const closing = await clientRun(fake, expired, []);
+  assertEquals(closing.client_batches_closed, 1);
+  assertEquals(closing.client_batches_sent, 0, "closing it is not an occasion for a text");
+  assertEquals(batch.closed_at, expired.toISOString());
+
+  // Closed once, not once per tick — and the picks she never answered are free
+  // again, on the next tick after the one that let the old list go.
+  const fresh: Array<Record<string, unknown>> = [];
+  const again = await clientRun(fake, new Date(expired.getTime() + 3600 * 1000), fresh);
+  assertEquals(again.client_batches_closed, 0, "the spent list is closed once, not once a tick");
+  assertEquals(again.client_batches_sent, 1, "and she is asked again, on a new list");
+  assertEquals(fresh.length, 1);
+  assertEquals(batches(fake).length, 2);
+  assertEquals(batches(fake)[1].decision_ids, ["dec1"], "the picks she never answered");
+  assertEquals(batches(fake)[1].version, 1, "at a fresh generation of its own");
+});
+
+Deno.test("P24: a list she answered is not closed twice, and one she can still answer is left alone", async () => {
+  const fake = clientDayWorld();
+  await clientRun(fake, CLIENT_DAY, []);
+  const batch = batches(fake)[0];
+  const ask = (fake._data.sms_prompts ?? []).find((row) => row.kind === "selection_batch")!;
+
+  // She answered: apply_client_effect closed the batch and stamped the prompt.
+  ask.answered_at = "2026-11-02T15:00:00.000Z";
+  batch.closed_at = "2026-11-02T15:00:00.000Z";
+  const answered = await clientRun(fake, new Date(CLIENT_DAY.getTime() + 8 * 24 * 3600 * 1000), []);
+  assertEquals(answered.client_batches_closed, 0, "an answered list is already closed");
+  assertEquals(batch.closed_at, "2026-11-02T15:00:00.000Z", "and its own timestamp stands");
+
+  // A nudged list whose reference is still live is still hers to answer.
+  const live = clientDayWorld();
+  await clientRun(live, CLIENT_DAY, []);
+  await clientRun(live, new Date(CLIENT_DAY.getTime() + 73 * 3600 * 1000), []);
+  const still = await clientRun(live, new Date(CLIENT_DAY.getTime() + 96 * 3600 * 1000), []);
+  assertEquals(still.client_batches_closed, 0);
+  assertEquals(batches(live)[0].closed_at ?? null, null);
+});
+
+// ── SQ-111 LOW-4: an ineligible seat leaves no rows at all ──────────────────
+
+Deno.test("P24: a client seat with no live letter leaves no thread behind", async () => {
+  for (
+    const broken of [
+      { revoked_at: "2026-10-30T00:00:00.000Z" },
+      { superseded_by: "inv2" },
+      { phone: "+15550009999" },
+    ]
+  ) {
+    const fake = windowWorld([report(), report(SECOND_WINDOW)]);
+    Object.assign(fake._data.client_invitations[0], broken);
+    const sent: Array<Record<string, unknown>> = [];
+    const summary = await clientRun(fake, CLIENT_DAY, sent);
+    assertEquals(sent.length, 0, `${JSON.stringify(broken)}: nothing is sent`);
+    assertEquals(summary.client_window_picks_sent, 0);
+    assertEquals(
+      (fake._data.sms_conversations ?? []).length,
+      0,
+      `${JSON.stringify(broken)}: and no conversation row is created for her`,
+    );
+    assertEquals((fake._data.sms_conversation_context ?? []).length, 0);
+    assertEquals((fake._data.sms_prompts ?? []).length, 0);
   }
 });
