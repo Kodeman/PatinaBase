@@ -8,6 +8,8 @@ import {
 import {
   flushDeferredMessages,
   isQuietHours,
+  localDayInTimezone,
+  localMinutesInTimezone,
   resolveProjectOrg,
   sendPartySms,
 } from "./sms.ts";
@@ -2787,4 +2789,280 @@ Deno.test("R2: delimiter-bounded bearer tokens never persist in audit copy", asy
       assert(!text.includes("/field/"), `no field URL persists: ${text}`);
     }
   }
+});
+
+// ── The trade rail's pacing: GATE 4 (dead end) and GATE 5 (budget) ──────────
+
+/** Every cadence/dead-end question this send asked, in order. */
+function pacedWorld(
+  answers: {
+    budget?: Array<Record<string, unknown> | null>;
+    gate?: Array<Record<string, unknown> | null>;
+    budgetError?: unknown;
+  } = {},
+) {
+  const asked: Array<{ rpc: string; args: Record<string, unknown> }> = [];
+  const budget = [...(answers.budget ?? [])];
+  const gate = [...(answers.gate ?? [])];
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+  }, {
+    sms_claim_party_budget: (args: Record<string, unknown>) => {
+      asked.push({ rpc: "sms_claim_party_budget", args });
+      return {
+        data: budget.length ? budget.shift() ?? null : { claimed: true },
+        error: answers.budgetError ?? null,
+      };
+    },
+    sms_party_prompt_gate: (args: Record<string, unknown>) => {
+      asked.push({ rpc: "sms_party_prompt_gate", args });
+      return {
+        data: gate.length ? gate.shift() ?? null : { allowed: true },
+        error: null,
+      };
+    },
+  });
+  return { fake, asked };
+}
+
+const PACED_ENV = {
+  SMS_DEV_MODE: "dry_run",
+  TWILIO_FROM_NUMBER: "+15550000000",
+  SMS_CONVERSATION_NUMBER: "+15550000000",
+  FIELD_LINE_PHASE: "1",
+};
+
+/** A paced phase-1 event text for `p1`. */
+function pacedSend(
+  fake: ReturnType<typeof pacedWorld>["fake"],
+  now: Date,
+  input: Record<string, unknown> = {},
+) {
+  return sendPartySms(
+    fake as never,
+    {
+      partyId: "p1",
+      body: "Studio A at the job site today.",
+      automationPhase: 1,
+      cadenceClass: "event",
+      ...input,
+    } as never,
+    { getEnv: envOf(PACED_ENV), now, fetchImpl: mustNotSend() },
+  );
+}
+
+Deno.test("P5: the day the counters reset is the ZONE's day, never UTC's", () => {
+  // The cadence is "so many texts a DAY", and a day in America/Chicago is 23 or
+  // 25 hours long twice a year. Read with a fixed offset, the fall-back night
+  // hands a party a free extra text and the spring-forward night eats one.
+  const TZ = "America/Chicago";
+
+  // Fall back: 2:00 CDT becomes 1:00 CST on 2026-11-01. The local hour 1:30
+  // happens TWICE, and both times it is still the same local day.
+  assertEquals(localDayInTimezone(new Date("2026-11-01T05:30:00Z"), TZ), "2026-11-01");
+  assertEquals(localMinutesInTimezone(new Date("2026-11-01T06:30:00Z"), TZ), 90);
+  assertEquals(localDayInTimezone(new Date("2026-11-01T06:30:00Z"), TZ), "2026-11-01");
+  assertEquals(localMinutesInTimezone(new Date("2026-11-01T07:30:00Z"), TZ), 90);
+  assertEquals(localDayInTimezone(new Date("2026-11-01T07:30:00Z"), TZ), "2026-11-01");
+
+  // And the reason a fixed offset cannot be used: 24 hours after 00:30 local on
+  // the fall-back day is 23:30 local ON THE SAME DAY. A "+1 day" that adds
+  // 86,400,000 ms would have reset this party's counters a day early.
+  assertEquals(localDayInTimezone(new Date("2026-11-02T05:30:00Z"), TZ), "2026-11-01");
+  assertEquals(localDayInTimezone(new Date("2026-11-02T06:30:00Z"), TZ), "2026-11-02");
+
+  // Spring forward: 2:00 CST becomes 3:00 CDT on 2026-03-08. 23:30 the evening
+  // before is still the 7th, and the local clock skips 02:00–02:59 entirely.
+  assertEquals(localDayInTimezone(new Date("2026-03-08T05:30:00Z"), TZ), "2026-03-07");
+  assertEquals(localMinutesInTimezone(new Date("2026-03-08T05:30:00Z"), TZ), 23 * 60 + 30);
+  assertEquals(localDayInTimezone(new Date("2026-03-08T08:30:00Z"), TZ), "2026-03-08");
+  assertEquals(localMinutesInTimezone(new Date("2026-03-08T08:30:00Z"), TZ), 3 * 60 + 30);
+});
+
+Deno.test("GATE 5: an over-budget event text is FOLDED into the next digest", async () => {
+  // Not dropped and not refused: stored, with the reason on the row, due after
+  // the local day turns over — which is when the party's counters reset and the
+  // flush can spend the slot (contract P5/S5).
+  const { fake, asked } = pacedWorld({
+    budget: [{ claimed: false, reason: "budget", local_day: "2026-07-08" }],
+  });
+  const res = await pacedSend(fake, OPEN, { dedupeKey: "card:2026-07-08" });
+
+  assert(!res.sent, "an over-budget text does not go out now");
+  assertEquals(res.status, "deferred");
+  assertEquals(res.reason, "budget");
+  assertEquals(
+    asked.map((a) => a.rpc),
+    ["sms_party_prompt_gate", "sms_claim_party_budget"],
+    "the dead-end gate is asked before a slot is spent",
+  );
+  const claim = asked[1].args;
+  assertEquals(claim.p_local_day, "2026-07-08", "the CALLER's local day");
+  assertEquals(claim.p_class, "event");
+  assertEquals(claim.p_party_id, "p1");
+  assertEquals(claim.p_project_id, "proj1");
+
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(row.twilio_status, "deferred");
+  assertEquals(row.error_message, "budget", "the row says why it waited");
+  assertEquals(
+    (row.recipe as { cadence_class?: string }).cadence_class,
+    "event",
+    "the flush needs the class to re-ask the budget",
+  );
+  // Tomorrow, in the named zone's send window: this hour tomorrow is already
+  // inside it, so that is the moment it becomes eligible.
+  assertEquals(String(res.dueAt).slice(0, 10), "2026-07-09");
+  assertEquals(
+    localMinutesInTimezone(new Date(String(res.dueAt)), "America/Chicago"),
+    13 * 60,
+  );
+});
+
+Deno.test("GATE 5: an unreadable budget SENDS — pacing is politeness, not consent", async () => {
+  // A server one migration behind answers `null`; an unreachable one answers an
+  // error. Either way the crew gets the text: suppression and consent are the
+  // gates that mean "not allowed", and they were asked above this one.
+  for (
+    const answers of [
+      { budget: [null] },
+      { budget: [null], budgetError: { message: "function does not exist" } },
+      { budget: [{ claimed: "no" } as unknown as Record<string, unknown>] },
+    ]
+  ) {
+    const { fake, asked } = pacedWorld(answers);
+    const res = await pacedSend(fake, OPEN);
+    assert(res.sent, `an unanswerable budget must not silence the rail: ${JSON.stringify(answers)}`);
+    assertEquals(asked.filter((a) => a.rpc === "sms_claim_party_budget").length, 1);
+  }
+});
+
+Deno.test("GATE 4: a dead end pauses the rail and is handed off ONCE", async () => {
+  // 00645 does the counting and the compare-and-set; what this asserts is that
+  // the sender obeys both answers and writes NO ROW for either — a dead end is
+  // not a message waiting to be sent, it is a phone call somebody has to make.
+  const { fake, asked } = pacedWorld({
+    gate: [
+      {
+        allowed: false,
+        reason: "dead_end",
+        handoff: true,
+        unanswered: 2,
+        paused_until: "2026-07-09T18:00:00.000Z",
+        owner_user_id: "u-designer",
+      },
+      {
+        allowed: false,
+        reason: "paused",
+        paused_until: "2026-07-09T18:00:00.000Z",
+        owner_user_id: "u-designer",
+      },
+    ],
+  });
+
+  const second = await pacedSend(fake, OPEN, { dedupeKey: "ask-2" });
+  assert(!second.sent);
+  assertEquals(second.reason, "dead_end");
+  assertEquals(second.dueAt, "2026-07-09T18:00:00.000Z", "the caller learns when the pause lifts");
+
+  const third = await pacedSend(fake, OPEN, { dedupeKey: "ask-3" });
+  assert(!third.sent);
+  assertEquals(
+    third.reason,
+    "prompts_paused",
+    "the pause the handoff wrote is what refuses every ask after it",
+  );
+
+  assertEquals(
+    asked.filter((a) => a.rpc === "sms_claim_party_budget").length,
+    0,
+    "a refused ask never spends a slot",
+  );
+  assertEquals((fake._data.sms_messages ?? []).length, 0, "and stores nothing");
+});
+
+Deno.test("GATES 4+5: a send that declared no cadence class asks neither", async () => {
+  // Receipts, invites, selection questions and every phase-0 automation are not
+  // the trade rail's paced prompts. They were never gated before and are not now.
+  const { fake, asked } = pacedWorld();
+  const plain = await pacedSend(fake, OPEN, { cadenceClass: undefined });
+  assert(plain.sent);
+
+  const phaseZero = await pacedSend(fake, OPEN, {
+    automationPhase: undefined,
+    dedupeKey: "legacy",
+  });
+  assert(phaseZero.sent, "a phase-0 send is untouched");
+  assertEquals(asked, [], "no cadence class, no questions");
+});
+
+Deno.test("GATE 5: the flush spends the slot, and hands the row back when it cannot", async () => {
+  // Quiet hours stored this last night WITHOUT spending anything. The slot is
+  // spent at dispatch, so the flush asks — and if the party is over budget
+  // again this morning, the row goes back exactly as it came, still waiting.
+  const asked: Array<Record<string, unknown>> = [];
+  let claimed = false;
+  const fake = createFakeSupabase({
+    projects: ORG_ALPHA_PROJECTS,
+    studio_channel_consent: [grant()],
+    project_parties: [party("p1", "granted")],
+    email_templates: [{
+      slug: "field_card",
+      is_active: true,
+      html_content:
+        "{{studio_name}} at the job site today. " +
+        "Msg&data rates may apply. Reply HELP for help, STOP to opt out.",
+    }],
+  }, {
+    sms_claim_party_budget: (args: Record<string, unknown>) => {
+      asked.push(args);
+      const answer = claimed ? { claimed: true } : { claimed: false, reason: "budget" };
+      claimed = true;
+      return { data: answer, error: null };
+    },
+  });
+
+  const deferred = await sendPartySms(
+    fake as never,
+    {
+      partyId: "p1",
+      templateKey: "field_card",
+      dedupeKey: "card:quiet",
+      automationPhase: 1,
+      cadenceClass: "event",
+    } as never,
+    { getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }), fetchImpl: mustNotSend(), now: QUIET },
+  );
+  assert(deferred.deferred, `quiet hours stores it: ${JSON.stringify(deferred)}`);
+  assertEquals(asked.length, 0, "quiet hours spends NOTHING — the flush will");
+  assertEquals(
+    (fake._data.sms_messages ?? [])[0].error_message,
+    null,
+    "a row that waited for the morning carries no fold reason",
+  );
+
+  // First flush: the budget says no. The row is handed back, not failed.
+  const wires: string[] = [];
+  const openDeps = {
+    ...wireDeps(wires, OPEN),
+    getEnv: envOf({ ...LIVE_TWILIO, FIELD_LINE_PHASE: "1" }),
+  };
+  const refused = await flushDeferredMessages(fake as never, openDeps);
+  assertEquals(refused.flushed, 0);
+  assertEquals(wires.length, 0, "no wire call for a folded row");
+  const row = (fake._data.sms_messages ?? [])[0] as Record<string, unknown>;
+  assertEquals(row.twilio_status, "deferred", "still waiting");
+  assertEquals(row.claimed_at, null, "and claimed by nobody");
+  assertEquals(row.error_message, "budget");
+  assertEquals(asked.length, 1, "the slot is asked for at DISPATCH");
+  assertEquals(asked[0].p_local_day, "2026-07-08");
+  assertEquals(asked[0].p_class, "event");
+
+  // Second flush: the counters have room, so it goes — once.
+  const sent = await flushDeferredMessages(fake as never, openDeps);
+  assertEquals(sent.flushed, 1);
+  assertEquals(wires.length, 1);
+  assertEquals((fake._data.sms_messages ?? [])[0].twilio_status, "queued");
 });

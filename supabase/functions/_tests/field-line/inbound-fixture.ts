@@ -1,12 +1,12 @@
 import { createFieldLineHarness, type FieldLineHarness } from "./harness.ts";
 
 /** RPC tables model the migrated contracts; no SQL, provider or clock escapes this fixture. */
-export function inboundFixture(effectError?: unknown, now?: Date) {
+export function inboundFixture(effectError?: unknown, now?: Date, env: Record<string, string> = {}) {
   const effects: Record<string, unknown>[] = [];
   const touches: Record<string, unknown>[] = [];
   let h: FieldLineHarness;
   let code = 20;
-  h = createFieldLineHarness({ now, env: { FIELD_LINE_TRIAGE_USER: "triage-owner" }, rpc: {
+  h = createFieldLineHarness({ now, env: { FIELD_LINE_TRIAGE_USER: "triage-owner", ...env }, rpc: {
     sms_is_suppressed: (args) => ({ data: (h.fake._data.sms_suppressions ?? []).some((row) =>
       row.sender_number === args.p_sender && row.recipient_phone === args.p_recipient && row.lifted_at == null), error: null }),
     sms_resolve_prompt: (args) => ({ data: (h.fake._data.sms_prompts ?? []).filter((row) =>
@@ -101,9 +101,21 @@ export function inboundFixture(effectError?: unknown, now?: Date) {
   // Seed the actual migration literals rather than maintaining a second copy of text.
   const sql = Deno.readTextFileSync(new URL("../../../migrations/00641_field_line_effects_templates.sql", import.meta.url));
   const closing = sql.match(/v_closing\s+CONSTANT\s+text\s*:=\s*'([^']*)'/)![1];
+  // 00645's two cards and its renew line are seeded from ITS block, with the
+  // same closing 00641 defines — the fixture never writes the copy it asserts.
+  const tradeSql = Deno.readTextFileSync(new URL("../../../migrations/00645_field_line_trade_prompts.sql", import.meta.url));
+  const templateRow = (m: RegExpMatchArray) =>
+    ({ slug: m[1], is_active: true, html_content: `${m[3].replace(/''/g, "'")} ${closing}` });
+  const TUPLE = /\(\s*'(sms_[a-z_]+)',\s*'((?:[^']|'')*)',\s*'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\s*\)/g;
   const block = sql.slice(sql.indexOf("-- <<< FIELD LINE COPY BLOCK"));
-  h.fake._data.email_templates = [...block.matchAll(/\(\s*'(sms_[a-z_]+)',\s*'((?:[^']|'')*)',\s*'((?:[^']|'')*)',\s*'((?:[^']|'')*)'\s*\)/g)]
-    .map((m) => ({ slug: m[1], is_active: true, html_content: `${m[3].replace(/''/g, "'")} ${closing}` }));
+  const tradeBlock = tradeSql.slice(
+    tradeSql.indexOf("-- <<< FIELD LINE TRADE COPY BLOCK"),
+    tradeSql.indexOf("-- >>> FIELD LINE TRADE COPY BLOCK"),
+  );
+  h.fake._data.email_templates = [
+    ...[...block.matchAll(TUPLE)].map(templateRow),
+    ...[...tradeBlock.matchAll(TUPLE)].map(templateRow),
+  ];
   const prompt = (overrides: Record<string, unknown> = {}) => {
     const row = { id: "prompt-a", party_id: "party-a", project_id: "project-a", kind: "report_arrival",
       subject_id: "task-a", short_code: "17", version: 1, expires_at: "2026-11-02T14:00:00.000Z",
@@ -136,8 +148,8 @@ export function selectionFixture(now?: Date) {
  * Only the identity portion of the narrow DTO (:291-298) is modeled here;
  * work-list projections and authenticated mint permissions remain SQL tests.
  */
-export function fieldLinkFixture(now?: Date) {
-  const fixture = inboundFixture(undefined, now);
+export function fieldLinkFixture(now?: Date, env: Record<string, string> = {}) {
+  const fixture = inboundFixture(undefined, now, env);
   const { h } = fixture;
   const rpc = h.fake.rpc;
   let mints = 0;
