@@ -126,7 +126,7 @@ it('P21 — a texted capability opens the same letter, word for word', async () 
 
 it('P21 — a capability that resolves to nothing says only what a lapsed one says', async () => {
   await renderCapability(ROW, null);
-  expect(screen.getByText('This letter\u2019s gone stale.')).toBeInTheDocument();
+  expect(screen.getByText('This letter’s gone stale.')).toBeInTheDocument();
   expect(screen.queryByTestId('letter-letterhead')).toBeNull();
 });
 
@@ -136,7 +136,7 @@ it('P21 — a letter already opened still opens for the capability holder', asyn
   expect(screen.getByRole('button', { name: 'Let them know I have it' })).toBeInTheDocument();
 });
 
-it('P21 — the mailed token\u2019s seven days do not lapse a capability', async () => {
+it('P21 — the mailed token’s seven days do not lapse a capability', async () => {
   await renderCapability({ ...ROW, expires_at: '2020-01-01T00:00:00.000Z' });
   expect(screen.queryByRole('button', { name: 'Send a fresh letter' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Let them know I have it' })).toBeInTheDocument();
