@@ -115,6 +115,7 @@ Deno.test("provider failure stays retryable and records only a generic safe erro
     sent: boolean;
     providerMessageId?: string;
     error?: string;
+    terminal?: boolean;
   } | undefined;
   let loggedReason = "";
   const res = await handleSiteRequestDispatch(
