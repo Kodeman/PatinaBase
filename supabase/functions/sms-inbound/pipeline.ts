@@ -778,6 +778,11 @@ const COORDINATION_CLASS: Record<string, DecisionClass> = {
   report_arrival: "site_access",
   report_departure: "site_access",
   report_condition: "logistics",
+  // An hours report is the same kind of fact a condition report is (contract
+  // S1): something that happened on site, told by the person it happened to.
+  // No authority scope answers for it, because nothing is being approved —
+  // a designer decides what to do with it from the Desk, not from this table.
+  report_hours: "logistics",
 };
 
 /** Does this seat hold an in-force grant for the class? PR-n's prepares_only
@@ -842,7 +847,12 @@ async function filedDecisionFacts(
   }
   if (target.kind !== "coordination") {
     return {
-      decisionClass: intent === "report_delay" ? "schedule" : "logistics",
+      // The class the table above declares for the effect, where it declares
+      // one — report_hours is logistics there, which is what this default was
+      // already giving it — so the class is read from the one table rather than
+      // decided a second time here.
+      decisionClass: COORDINATION_CLASS[intent] ??
+        (intent === "report_delay" ? "schedule" : "logistics"),
       authorityCheck: intent === "report_delay"
         ? await authorityVerdictFor(supabase, partyId, "schedule", today)
         : "n/a",
@@ -2051,7 +2061,16 @@ export async function inboundCompletion(supabase: SupabaseClient, messageId: str
 
 /** Post-write work cannot turn a saved effect into a retryable business action. */
 async function finishPrompt(supabase: SupabaseClient, conv: Conversation, messageId: string,
-  promptId: string, receipt: PromptConsumption, deps: InboundDeps): Promise<InboundResult> {
+  promptId: string, receipt: PromptConsumption, deps: InboundDeps,
+  /**
+   * The words for a receipt only the caller can write, ASKED FOR ONLY AFTER the
+   * effect is filed (contract S7). An hours receipt names the site and the
+   * designer, neither of which is in apply_field_effect's result, and composing
+   * it before the apply would be the one thing P0-3 forbids: a true-sounding
+   * sentence about a fact that may not have landed. Anything this throws lands
+   * in the catch below, where a saved effect says so in its own words.
+   */
+  composeReceipt?: () => Promise<string>): Promise<InboundResult> {
   let prompt: SmsPrompt | null = null;
   try {
     const { data, error } = await supabase.from("sms_prompts").select("*").eq("id", promptId).single();
@@ -2077,8 +2096,10 @@ async function finishPrompt(supabase: SupabaseClient, conv: Conversation, messag
     await recordInboundTouch(supabase, prompt.party_id, messageId, await filedDecisionFacts(supabase, subject ?? undefined,
       prompt.party_id, String(receipt.result.result.effect_type ?? prompt.proposed_effect?.type ?? prompt.kind),
       (deps.now ?? new Date()).toISOString().slice(0, 10)), (deps.now ?? new Date()).toISOString());
-    return { ...await reply(supabase, conv.id, confirmText(receipt.result.result,
-      String(receipt.result.result.effect_type ?? prompt.proposed_effect?.type ?? prompt.kind)), prompt.party_id, prompt.project_id, "ref_applied"), effectApplied: true, messageId };
+    const receiptText = composeReceipt ? await composeReceipt() : confirmText(receipt.result.result,
+      String(receipt.result.result.effect_type ?? prompt.proposed_effect?.type ?? prompt.kind));
+    return { ...await reply(supabase, conv.id, receiptText,
+      prompt.party_id, prompt.project_id, "ref_applied"), effectApplied: true, messageId };
   } catch (error) {
     const owned = await ownedReview(supabase, messageId, prompt?.project_id ?? null, prompt?.party_id ?? null,
       { path: "prompt_followup_failed", prompt_id: promptId, effect_applied: true, error: String(error) }, deps);
@@ -2090,7 +2111,8 @@ async function finishPrompt(supabase: SupabaseClient, conv: Conversation, messag
 }
 
 async function consumePrompt(supabase: SupabaseClient, conv: Conversation, prompt: SmsPrompt, messageId: string,
-  sender: string, recipient: string, deps: InboundDeps, effect?: Record<string, unknown>): Promise<InboundResult> {
+  sender: string, recipient: string, deps: InboundDeps, effect?: Record<string, unknown>,
+  composeReceipt?: () => Promise<string>): Promise<InboundResult> {
   let data: PromptConsumption | null = null;
   let error: unknown;
   try {
@@ -2102,7 +2124,7 @@ async function consumePrompt(supabase: SupabaseClient, conv: Conversation, promp
   } catch (err) { error = err; }
   if (error || !data) {
     const completion = await inboundCompletion(supabase, messageId, sender, recipient, conv.id);
-    if (completion.status === "prompt-completed") return await finishPrompt(supabase, conv, messageId, completion.receipt.prompt_id!, completion.receipt, deps);
+    if (completion.status === "prompt-completed") return await finishPrompt(supabase, conv, messageId, completion.receipt.prompt_id!, completion.receipt, deps, composeReceipt);
     if (completion.status === "effect-completed") return completedInbound(messageId);
     // Known contract/integrity/transaction-abort errors prove rollback. Other
     // SQLSTATEs (including statement_completion_unknown) remain ambiguous.
@@ -2113,7 +2135,7 @@ async function consumePrompt(supabase: SupabaseClient, conv: Conversation, promp
   }
   if (data.status === "already_completed") return completedInbound(messageId);
   if (["applied", "granted", "replayed"].includes(data.status) && data.result) {
-    return await finishPrompt(supabase, conv, messageId, prompt.id, data, deps);
+    return await finishPrompt(supabase, conv, messageId, prompt.id, data, deps, composeReceipt);
   }
   if (["closed", "expired"].includes(data.status)) return await closedRefReply(supabase, conv.id, sender, recipient,
     prompt.short_code, (deps.now ?? new Date()).toISOString());
@@ -2173,6 +2195,36 @@ export function tradeShape(body: string): TradeShape | null {
     return { verb: "DONE", intent: "report_departure", note: text };
   }
   return null;
+}
+
+// ── The evening's one question, answered in a number (contract S7) ──────────
+//
+// sms_hours_prompt asks "how many hours today", so the answer is a number and
+// nothing else: "6", "6.5", "6,5", "6 hrs", "6.5 18". Every other rule on this
+// rail leaves bare digits to the digest menu, and they still belong to it — what
+// makes a number HOURS is that something asked for one, which is a report_hours
+// prompt of this party's standing open (or a two-digit code that names one). With
+// no such prompt open, hoursReply() returns null and the body goes exactly where
+// it went before.
+//
+// The unit — h / hr / hrs / hours — is optional and carries no meaning: the
+// question named a unit, and a crew typing it back is agreeing, not qualifying.
+// A comma is a decimal point: half the keyboards this rail texts put one there.
+const HOURS_REPLY =
+  /^\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:h|hr|hrs|hours)?\s*(?:ref\s*)?(\d{2})?\s*$/i;
+/** The prompt kind that asks for hours, and the only kind a number answers. */
+const HOURS_PROMPT_KIND = "report_hours";
+/** A day nobody worked, and the longest day this rail takes on a text alone. */
+const HOURS_MIN = 0;
+const HOURS_MAX = 16;
+
+/** The number and the reference in an hours reply, or null if it is not one. */
+export function hoursShape(
+  body: string,
+): { hours: number; code: string | null } | null {
+  const match = body.match(HOURS_REPLY);
+  if (!match) return null;
+  return { hours: Number(match[1].replace(",", ".")), code: match[2] ?? null };
 }
 
 // ── The homeowner's two answers (US-3 P24) ───────────────────────────────────
@@ -2741,7 +2793,120 @@ async function replyToRenew(
   return { status: 200, twiml: twimlBody(), disposition: "link_renewed", messageId };
 }
 
-/** Codes bind before any parser sees the body. Bare digits belong to menus. */
+/** The street the hours receipt names — the field the visit cards also print. */
+async function siteAddress(supabase: SupabaseClient, projectId: string): Promise<string> {
+  const { data } = await supabase.from("projects").select("site_address").eq("id", projectId).maybeSingle();
+  const address = String((data as { site_address?: string } | null)?.site_address ?? "")
+    .replace(/\s+/g, " ").trim();
+  // The same words the day-of card falls back to when nobody typed an address.
+  return address || "the job site";
+}
+
+/**
+ * A NUMBER, AND THE QUESTION THAT ASKED FOR ONE (contract S7).
+ *
+ * Reached for every body that starts with a digit, and answers null for all but
+ * one of them: unless this party has an open report_hours prompt (or the code
+ * names one), nothing here fires and the number goes to the digest menu, the
+ * chooser, or the parser exactly as it did before. That null IS the
+ * compatibility guarantee, so the gate is asked before anything else happens.
+ *
+ * Where a question IS open:
+ *   · a code names it, or — with one open — no code needs to. Two open and no
+ *     code is not an answer: nothing says which site, so the codeless door's own
+ *     reply asks, and lists the references to answer with.
+ *   · a code that is NOT one of this party's open hours questions is answered as
+ *     the stale reference it is, never read as hours against another question.
+ *   · a number nobody can book (out of the 0–16 range) gets the range and the
+ *     reference back, and the prompt is LEFT OPEN: consuming the question over
+ *     an unusable number would lose the crew's day.
+ *   · an answer that lands goes through the same apply and the same truthful
+ *     receipt every other reference does (P0-3): the sentence naming the hours
+ *     is composed only after sms_apply_prompt says they were filed.
+ */
+async function hoursReply(
+  supabase: SupabaseClient,
+  conv: Conversation,
+  parties: Array<{ id: string; project_id: string }>,
+  body: string,
+  sender: string,
+  recipient: string,
+  messageId: string,
+  now: Date,
+  deps: InboundDeps,
+): Promise<InboundResult | null> {
+  const shape = hoursShape(body);
+  if (!shape) return null;
+  // The same open set promptReply reads below, for the same reason (contract
+  // P14): it is sms_resolve_prompt's predicate minus the code, so a code bound
+  // from it is a code SQL will resolve, and a count taken from it is the count
+  // 00645's codeless door takes.
+  const { data: open, error: openError } = await supabase.from("sms_prompts").select("*")
+    .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
+    .is("voided_at", null).gt("expires_at", now.toISOString());
+  // A READ THAT FAILED IS NOT PROOF NOTHING WAS ASKED. Falling through would
+  // hand the number to the digest menu, which would close somebody's task on the
+  // strength of a failed query; Twilio redelivers instead.
+  if (openError) return { status: 503, twiml: twimlBody(), disposition: "ref_unreadable" };
+  const asked = ((open ?? []) as SmsPrompt[]).filter((p) =>
+    p.kind === HOURS_PROMPT_KIND &&
+    parties.some((party) => party.id === p.party_id && party.project_id === p.project_id));
+  if (asked.length === 0) return null;
+  let prompt: SmsPrompt;
+  if (shape.code) {
+    const named = asked.find((p) => p.short_code === shape.code);
+    if (!named) {
+      return await closedRefReply(supabase, conv.id, sender, recipient, shape.code, now.toISOString());
+    }
+    prompt = named;
+  } else if (asked.length === 1) {
+    prompt = asked[0];
+  } else {
+    return await selectionIntent(supabase, messageId, {
+      kind: "ref_clarify", inboundMessageId: messageId,
+      options: ((open ?? []) as SmsPrompt[]).filter((p) => p.kind !== "optin").map((p) => ({
+        partyId: p.party_id, projectId: p.project_id, promptId: p.id,
+      })),
+    });
+  }
+  // Guaranteed by `asked`: the prompt's seat is one of this number's own.
+  const party = parties.find((p) => p.id === prompt.party_id && p.project_id === prompt.project_id)!;
+  const paused = await pausedReview(supabase, conv.id, party.project_id, party.id, messageId, deps);
+  if (paused) return paused;
+  const verdict = await channelConsentVerdict(supabase, recipient, party.project_id);
+  const blocked = await suppression(supabase, sender, recipient);
+  // Asked before the range reply below as well as before the apply: a refused
+  // pair is not answered at all, not even to correct them.
+  if (blocked.blocked || verdict !== "allow") {
+    return { status: blocked.error ? 503 : 200, twiml: twimlBody(), disposition: "not_consented" };
+  }
+  if (!Number.isFinite(shape.hours) || shape.hours < HOURS_MIN || shape.hours > HOURS_MAX) {
+    return await reply(supabase, conv.id,
+      `That's more hours than a day holds. Reply with a number between ${HOURS_MIN} and ${HOURS_MAX} — Ref ${prompt.short_code}`,
+      party.id, party.project_id, "hours_out_of_range");
+  }
+  const subject = await promptSubject(supabase, prompt);
+  if (!subject) {
+    if (!await ownedReview(supabase, messageId, party.project_id, party.id, { path: "ref_subject_missing", prompt }, deps)) {
+      return { status: 503, twiml: twimlBody(), disposition: "handoff_failed" };
+    }
+    return await reply(supabase, conv.id, "That item needs a closer look. Your designer will follow up.",
+      party.id, party.project_id, "needs_review");
+  }
+  const target = { kind: subject.kind, id: subject.id };
+  const details = { path: "hours", prompt_id: prompt.id, version: prompt.version,
+    intent: HOURS_PROMPT_KIND, hours: shape.hours, target_ref: target };
+  const attempt = await stampMessage(supabase, messageId, party.id, party.project_id, details, 1);
+  if (attempt.error) return { status: 503, twiml: twimlBody(), disposition: "prompt_attempt_unrecorded" };
+  return await consumePrompt(supabase, conv, prompt, messageId, sender, recipient, deps,
+    { type: HOURS_PROMPT_KIND, target, hours: shape.hours },
+    async () =>
+      `Got it — ${shape.hours} hours at ${await siteAddress(supabase, party.project_id)}. ` +
+      `${await designerFirstName(supabase, party.project_id, deps)} will confirm.`);
+}
+
+/** Codes bind before any parser sees the body. Bare digits belong to menus —
+ *  except the one a report_hours prompt asked for (contract S7, hoursReply). */
 async function promptReply(supabase: SupabaseClient, conv: Conversation, parties: Array<{id: string; project_id: string}>,
   body: string, sender: string, recipient: string, messageId: string, now: Date,
   media: Array<{path: string; content_type: string; twilio_url: string}>, deps: InboundDeps,
@@ -2749,7 +2914,9 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   // p_source_sid and makes the apply idempotent on it (00651), so the client
   // branch needs the wire value and not our row id.
   sourceSid: string | null = null): Promise<InboundResult | null> {
-  if (/^\d/.test(body)) return null;
+  if (/^\d/.test(body)) {
+    return await hoursReply(supabase, conv, parties, body, sender, recipient, messageId, now, deps);
+  }
   const clarification = conv.state_context?.ref_clarification as SelectionBinding | undefined;
   let priorAsked = false;
   if (clarification && typeof clarification === "object") {

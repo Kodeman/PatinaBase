@@ -78,6 +78,17 @@ const WINDOW_LABEL_SEPTETS = 14;
  */
 export const SITE_CARD_LOCAL_MINUTES = 17 * 60;
 export const DAY_OF_LOCAL_MINUTES = 7 * 60 + 30;
+/**
+ * When the day's hours are asked for (contract S8): five o'clock, after the crew
+ * has packed up and while the day is still today to them. A floor like the two
+ * above, so a missed tick asks late rather than not at all.
+ *
+ * Five and not half past, because the tick has to clear it in both offsets:
+ * 00648's evening tick ('5 23 * * *') is 18:05 local in CDT and 17:05 in CST, so
+ * a 17:30 floor would be cleared all summer and never once through the winter —
+ * the same ask going quiet for half the year. Five o'clock clears in both.
+ */
+export const HOURS_PROMPT_LOCAL_MINUTES = 17 * 60;
 
 /**
  * May this party be texted an ordinary (non-invite) field message?
@@ -329,6 +340,11 @@ interface RunSummary {
   client_window_picks_sent: number;
   /** Spent, unanswerable selection lists closed this run (SQ-111 LOW-2). */
   client_batches_closed: number;
+  /**
+   * Evening hours questions put to a crew this run (contract S8). Named the way
+   * the contract names it, beside siblings this file spells with underscores.
+   */
+  hoursPromptsSent: number;
 }
 
 function isoDate(d: Date): string {
@@ -465,6 +481,7 @@ export async function runFieldDaily(
     client_reminders_sent: 0,
     client_window_picks_sent: 0,
     client_batches_closed: 0,
+    hoursPromptsSent: 0,
   };
 
   // ── Consented field parties ───────────────────────────────────────────────
@@ -1035,6 +1052,106 @@ export async function runFieldDaily(
         continue;
       }
       summary.client_batches_sent++;
+    }
+  }
+
+  // ── The evening's one question: how many hours (contract S8) ──────────────
+  // A crew that was on site today is asked ONCE, at the end of it, for the one
+  // fact nobody else can supply: how long they were there. Their number is a
+  // PROPOSAL — the designer accepts it, rejects it, or books it to a teammate
+  // from the Desk — so this asks and files nothing. It is not payroll, and the
+  // reply is not a time entry.
+  //
+  // The population is the morning ask's, on today's local day: a party the
+  // project expects on site today (00624's on_site window) with an open task of
+  // theirs due today. That task is also what the question is ABOUT — an hours
+  // report has to be hours ON something, and 00639 binds that subject immutably
+  // at issuance — so no task due today means no question. FIELD_KINDS is what
+  // keeps a homeowner out of it: a client has no hours to report.
+  //
+  // Asked BEHIND THE PHASE GATE BEFORE ANY ROW IS WRITTEN, for 00639's reason:
+  // a server below phase 3 that minted short codes for texts it will never send
+  // would spend 90-day reservations on silence.
+  if (
+    fieldLinePhase(deps) >= 3 && conversationNumber &&
+    localMinutesInTimezone(now, fieldTz) >= HOURS_PROMPT_LOCAL_MINUTES
+  ) {
+    const localToday = localDayInTimezone(now, fieldTz);
+    const { data: onSite } = await supabase
+      .from("project_parties")
+      .select("id, phone_e164, project_id, party_kind, on_site_from, on_site_to")
+      .in("party_kind", FIELD_KINDS)
+      .lte("on_site_from", localToday)
+      .gte("on_site_to", localToday);
+
+    for (
+      const party of (onSite ?? []) as Array<{
+        id: string;
+        phone_e164: string | null;
+        project_id: string;
+      }>
+    ) {
+      if (!party.phone_e164) continue;
+      if (!(await mayTextField(supabase, party, conversationNumber))) continue;
+      const conv = await findOrCreateConversation(
+        supabase, conversationNumber, party.phone_e164, party.id, party.project_id,
+      );
+      if (!conv || (conv.paused_until && Date.parse(conv.paused_until) > now.getTime())) continue;
+
+      const { data: tasks } = await supabase
+        .from("project_tasks")
+        .select("id, title, due_date, project_id, status")
+        .eq("owner_party_id", party.id)
+        .eq("due_date", localToday)
+        .neq("status", "done")
+        .order("id", { ascending: true })
+        .limit(1);
+      const visitTask = (tasks ?? [])[0] as { id: string } | undefined;
+      if (!visitTask) continue;
+
+      // Open until the next morning's ask takes the rail back — the boundary the
+      // day-of card already uses, and by then the day is over and a correction is
+      // a phone call. It also leaves at most ONE hours question open per party at
+      // a time, which is what lets a bare number answer without a reference.
+      const [ny, nm, nd] = localToday.split("-").map(Number);
+      const dayAfter = new Date(Date.UTC(ny, nm - 1, nd + 1)).toISOString().slice(0, 10);
+      const expiresAt = localMomentOnDay(dayAfter, DAY_OF_LOCAL_MINUTES, fieldTz);
+      if (!expiresAt) continue;
+      // EXACT ONE PER PARTY + TASK + DAY: the frozen YYYYMMDD version is the
+      // identity the existing issuance rule deduplicates, so a second tick or a
+      // retry reuses this question and its code rather than asking twice.
+      const prompt = await promptRef(
+        supabase, party, visitTask.id, "report_hours",
+        Number(localToday.replaceAll("-", "")), conversationNumber, now, undefined, expiresAt,
+      );
+      if (!prompt) continue;
+
+      const { data: project } = await supabase
+        .from("projects").select("site_address").eq("id", party.project_id).maybeSingle();
+      // One shared send path: quiet hours, the daily cadence, the budget, the
+      // suppression list and the consent record are all asked inside it, and the
+      // phase it declares is refused by the gate above phase 3 (sms.ts).
+      const res = await send(
+        supabase,
+        {
+          partyId: party.id,
+          projectId: party.project_id,
+          templateKey: "sms_hours_prompt",
+          dedupeKey: `field-hours:${party.id}:${localToday}`,
+          automationPhase: 3,
+          // One of the three event texts a party gets in a day (contract P5).
+          cadenceClass: "event",
+          vars: {
+            studio: (await resolveStudioName(supabase, party.project_id)) ?? "your studio",
+            address: cardParam(
+              (project as { site_address?: string } | null)?.site_address, 36, "the job site",
+            ),
+            code: prompt.short_code,
+          },
+        },
+        deps,
+      );
+      if (res.sent || res.deferred) summary.hoursPromptsSent++;
     }
   }
 
