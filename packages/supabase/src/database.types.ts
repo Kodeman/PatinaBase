@@ -7351,6 +7351,310 @@ export type Database = {
           },
         ]
       }
+      field_time_report_decisions: {
+        Row: {
+          attributed_time_entry_id: string | null
+          attributed_user_id: string | null
+          created_at: string
+          decided_at: string
+          decided_by: string | null
+          decision: string
+          id: string
+          report_id: string
+          version: number
+        }
+        Insert: {
+          attributed_time_entry_id?: string | null
+          attributed_user_id?: string | null
+          created_at?: string
+          decided_at?: string
+          decided_by?: string | null
+          decision: string
+          id?: string
+          report_id: string
+          version: number
+        }
+        Update: {
+          attributed_time_entry_id?: string | null
+          attributed_user_id?: string | null
+          created_at?: string
+          decided_at?: string
+          decided_by?: string | null
+          decision?: string
+          id?: string
+          report_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_time_report_decisions_attributed_time_entry_id_fkey"
+            columns: ["attributed_time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "project_time_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_report_decisions_attributed_time_entry_id_fkey"
+            columns: ["attributed_time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "project_unbilled_time"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_report_decisions_attributed_time_entry_id_fkey"
+            columns: ["attributed_time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entry_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_report_decisions_attributed_user_id_fkey"
+            columns: ["attributed_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_report_decisions_attributed_user_id_fkey"
+            columns: ["attributed_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_report_decisions_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_report_decisions_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_report_decisions_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "field_time_report_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_report_decisions_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "field_time_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      field_time_reports: {
+        Row: {
+          attributed_time_entry_id: string | null
+          attributed_user_id: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          note: string | null
+          organization_id: string | null
+          party_id: string
+          project_id: string
+          prompt_id: string
+          reported_at: string
+          reported_hours: number
+          source_message_id: string | null
+          status: string
+          task_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          attributed_time_entry_id?: string | null
+          attributed_user_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          note?: string | null
+          organization_id?: string | null
+          party_id: string
+          project_id: string
+          prompt_id: string
+          reported_at: string
+          reported_hours: number
+          source_message_id?: string | null
+          status?: string
+          task_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          attributed_time_entry_id?: string | null
+          attributed_user_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          note?: string | null
+          organization_id?: string | null
+          party_id?: string
+          project_id?: string
+          prompt_id?: string
+          reported_at?: string
+          reported_hours?: number
+          source_message_id?: string | null
+          status?: string
+          task_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_time_reports_attributed_time_entry_id_fkey"
+            columns: ["attributed_time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "project_time_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_attributed_time_entry_id_fkey"
+            columns: ["attributed_time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "project_unbilled_time"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_attributed_time_entry_id_fkey"
+            columns: ["attributed_time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entry_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_attributed_user_id_fkey"
+            columns: ["attributed_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_attributed_user_id_fkey"
+            columns: ["attributed_user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id", "project_id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: true
+            referencedRelation: "sms_prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "sms_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "sms_review_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["waiting_on_task_id"]
+          },
+        ]
+      }
       founding_designer_applications: {
         Row: {
           auth_user_id: string | null
@@ -30163,6 +30467,94 @@ export type Database = {
         }
         Relationships: []
       }
+      field_time_report_queue: {
+        Row: {
+          id: string | null
+          note: string | null
+          organization_id: string | null
+          party_id: string | null
+          party_name: string | null
+          project_id: string | null
+          project_name: string | null
+          reported_at: string | null
+          reported_hours: number | null
+          task_id: string | null
+          task_title: string | null
+          version: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_time_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "people_directory_seats"
+            referencedColumns: ["seat_id", "project_id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_party_project_fkey"
+            columns: ["party_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "field_time_reports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["waiting_on_task_id"]
+          },
+        ]
+      }
       fulfillment_order_status_v: {
         Row: {
           client_name: string | null
@@ -31982,6 +32374,15 @@ export type Database = {
           p_party_id: string
           p_sms_message_id?: string
           p_source?: string
+        }
+        Returns: Json
+      }
+      _apply_field_hours_effect: {
+        Args: {
+          p_effect: Json
+          p_party_id: string
+          p_sms_message_id: string
+          p_source: string
         }
         Returns: Json
       }
@@ -35619,6 +36020,15 @@ export type Database = {
       field_project_lead_user: {
         Args: { p_project_id: string }
         Returns: string
+      }
+      field_time_report_decide: {
+        Args: {
+          p_attribute_to_user_id?: string
+          p_decision: string
+          p_expected_version: number
+          p_report_id: string
+        }
+        Returns: Json
       }
       file_plan_prints: {
         Args: {
