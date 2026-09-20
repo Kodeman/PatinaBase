@@ -4,6 +4,8 @@ import {
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  type DispatchCompletion,
+  dispatchCompletionStatus,
   handleSiteRequestDispatch,
   type SiteRequestDispatchContext,
   type SiteRequestDispatchDeps,
@@ -139,7 +141,12 @@ Deno.test("provider failure stays retryable and records only a generic safe erro
     sent: false,
     providerMessageId: undefined,
     error: "sms_provider_error",
+    terminal: false,
   });
+  // The retry path is unchanged: the outbox is asked for 'retry', never the
+  // terminal word, and the designer is honestly told it is still queued.
+  assertEquals(dispatchCompletionStatus(completion!), "retry");
+  assertEquals((await res.json()).queued, true);
 });
 
 Deno.test("completion retries after provider acceptance instead of falsely failing", async () => {
@@ -218,9 +225,111 @@ Deno.test("lifecycle sweeps retryable SMS and batched designer push outboxes", a
     expiredCount: 0,
     dispatchesSent: 1,
     dispatchesQueued: 0,
+    dispatchesRefused: 0,
     deliveryNotificationsSent: 1,
     deliveryNotificationsQueued: 0,
   });
+});
+
+// ── Gate refusals are policy decisions, not carrier weather (SQ-118) ────────
+// sendPartySms refuses with a REASON when a gate says no. Retrying re-asks the
+// same gate forever, so each of these must finish the outbox row instead, keep
+// the word sms.ts used, and tell the designer which gate refused.
+const REFUSALS = [
+  "campaign_not_approved",
+  "client_link_unavailable",
+  "consent_evidence_required",
+  "contact_rule_forbids_sms",
+  "dead_end",
+  "empty_body",
+  "field_line_phase_off",
+  "no_phone_number",
+  "not_consented",
+  "not_invitable",
+  "opted_out",
+  "prompts_paused",
+  "selection_input_required",
+  "suppressed",
+];
+
+async function refuse(reason: string) {
+  let completion: DispatchCompletion | undefined;
+  let loggedReason = "";
+  const res = await handleSiteRequestDispatch(
+    request("send"),
+    deps({
+      sendSms: () => Promise.resolve({ sent: false, reason }),
+      logNotification: (_context, _action, result) => {
+        loggedReason = result.reason ?? "";
+        return Promise.resolve();
+      },
+      completeDispatch: (_id, result) => {
+        completion = result;
+        return Promise.resolve({ status: "cancelled" });
+      },
+    }),
+  );
+  return { res, completion, loggedReason };
+}
+
+for (const reason of REFUSALS) {
+  Deno.test(`${reason} ends the outbox row and names the refusal`, async () => {
+    const { res, completion, loggedReason } = await refuse(reason);
+    // Terminal, with the outbox's own permanent status and no retry.
+    assertEquals(completion?.terminal, true);
+    assertEquals(dispatchCompletionStatus(completion!), "cancelled");
+    // Verbatim: never collapsed into the provider's generic word.
+    assertEquals(completion?.error, reason);
+    assertEquals(loggedReason, reason);
+    // The designer is told it was refused and why — not that it is queued.
+    assertEquals(res.status, 409);
+    const body = await res.json();
+    assertEquals(body, {
+      ok: false,
+      error: "send_refused",
+      reason,
+      status: "draft",
+    });
+    assertEquals(body.queued, undefined);
+  });
+}
+
+Deno.test("quiet-hours deferral is still the outbox's own retry, not a refusal", async () => {
+  let completion: DispatchCompletion | undefined;
+  const res = await handleSiteRequestDispatch(
+    request("send"),
+    deps({
+      sendSms: () =>
+        Promise.resolve({ sent: false, deferred: true, reason: "quiet_hours" }),
+      completeDispatch: (_id, result) => {
+        completion = result;
+        return Promise.resolve({ status: "retry" });
+      },
+    }),
+  );
+  assertEquals(completion?.terminal, false);
+  assertEquals(dispatchCompletionStatus(completion!), "retry");
+  assertEquals(completion?.error, "quiet_hours");
+  assertEquals(res.status, 202);
+  assertEquals((await res.json()).queued, true);
+});
+
+Deno.test("a refused sweep row is counted as refused, never as queued", async () => {
+  const res = await handleSiteRequestDispatch(
+    request("lifecycle"),
+    deps({
+      callerRole: () => "service_role",
+      pendingDispatches: () => Promise.resolve([OUTBOX_ID]),
+      sendSms: () =>
+        Promise.resolve({ sent: false, reason: "field_line_phase_off" }),
+      completeDispatch: () => Promise.resolve({ status: "cancelled" }),
+    }),
+  );
+  assertEquals(res.status, 200);
+  const body = await res.json();
+  assertEquals(body.dispatchesRefused, 1);
+  assertEquals(body.dispatchesQueued, 0);
+  assertEquals(body.dispatchesSent, 0);
 });
 
 Deno.test("consent and lifecycle remain service-role only", async () => {

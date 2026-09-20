@@ -8,6 +8,7 @@ import { isQuietHours, sendPartySms } from "../_shared/sms.ts";
 import {
   type DeliveryNotificationContext,
   DISPATCH_RPC_BY_ACTION,
+  dispatchCompletionStatus,
   handleSiteRequestDispatch,
   type SiteRequestDispatchContext,
   type SiteRequestDispatchDeps,
@@ -130,7 +131,7 @@ const deps: SiteRequestDispatchDeps = {
       "site_request_complete_dispatch",
       {
         p_outbox_id: outboxId,
-        p_status: result.sent ? "sent" : "retry",
+        p_status: dispatchCompletionStatus(result),
         p_provider_message_id: result.providerMessageId ?? null,
         p_error: result.error ?? null,
         p_now: new Date().toISOString(),
