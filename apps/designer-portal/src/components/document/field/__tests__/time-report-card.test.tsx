@@ -12,6 +12,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const mockRpc = jest.fn();
 const mockFrom = jest.fn();
 const flags = { timeReports: true };
+/**
+ * The viewer's own studio standing, as `useOrganizations` reports it: active
+ * memberships only, role and all. `undefined` data is the read that has not
+ * answered yet — the state the card must not guess a door from.
+ */
+const standing: {
+  orgs: { id: string; membership: { role: string } }[] | undefined;
+  isError: boolean;
+} = { orgs: undefined, isError: false };
 
 jest.mock("../../../../../../../packages/supabase/src/client", () => ({
   createBrowserClient: () => ({ rpc: mockRpc, from: mockFrom }),
@@ -24,6 +33,11 @@ jest.mock("@patina/supabase", () => ({
     "../../../../../../../packages/supabase/src/hooks/use-project-team",
   ),
   useUser: () => ({ user: { id: "me" } }),
+  useOrganizations: () => ({
+    data: standing.orgs,
+    isLoading: standing.orgs === undefined && !standing.isError,
+    isError: standing.isError,
+  }),
   useSmsReviewQueue: () => ({ data: [], isLoading: false, isError: false }),
   useFieldActivity: () => ({ data: [], isLoading: false, isError: false }),
   useReviewSmsMessage: () => ({ mutate: jest.fn(), isPending: false }),
@@ -153,6 +167,10 @@ beforeEach(() => {
   mockRpc.mockReset();
   mockFrom.mockReset();
   flags.timeReports = true;
+  // Default viewer: a principal of the studio this report belongs to, the only
+  // standing the database lets book somebody else's hour.
+  standing.orgs = [{ id: "org1", membership: { role: "owner" } }];
+  standing.isError = false;
   stubTables([report()]);
 });
 
@@ -212,6 +230,10 @@ it("books to a teammate on this job only, and names them in the decision", async
   expect(
     screen.queryByRole("button", { name: "Dana Okonkwo" }),
   ).not.toBeInTheDocument();
+  // A principal is offered the picker, not the book-to-me shortcut.
+  expect(
+    screen.queryByRole("button", { name: "Book to me" }),
+  ).not.toBeInTheDocument();
 
   fireEvent.click(teammate);
   await waitFor(() =>
@@ -240,6 +262,123 @@ it("asks for another look when the report moved underneath the card", async () =
   );
   expect(
     screen.queryByText("Couldn’t save — try again."),
+  ).not.toBeInTheDocument();
+});
+
+// ── 00601's refusal, and the nothing-hours one (R3 N2, story log #9) ───────
+// Both arrive from BENEATH field_time_report_decide's own checks, so the card
+// only ever sees them as a raise: 42501 with no token of its own, and 23514
+// whose message says there is no hour to book.
+
+it("says who may book somebody else's hour, with no retry hint", async () => {
+  mockRpc.mockResolvedValue({
+    data: null,
+    // classify_project_time_entry_authority (00601): insufficient_privilege,
+    // and deliberately no stable DETAIL token to match on.
+    error: {
+      code: "42501",
+      message: "a time entry is logged by the person who worked the hour",
+      details: null,
+      hint: null,
+    },
+  });
+  render(<TimeReportCard report={report()} />, { wrapper });
+  fireEvent.click(screen.getByRole("button", { name: "Book to a teammate" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Priya Natarajan" }),
+  );
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Only a studio owner or admin can book hours to someone else. You can book them to yourself.",
+  );
+  // Nothing tells her to try again — the same press refuses the same way.
+  expect(screen.queryByText(/try again/)).not.toBeInTheDocument();
+  // The decision rolled back whole, so the claim is still on screen to decide.
+  expect(
+    screen.getByText(
+      "Sal reported 6.5 hours at Rough-in plumbing on Fri 18 September",
+      { selector: "p" },
+    ),
+  ).toBeInTheDocument();
+});
+
+it("keeps the old words for a 42501 that is decide()'s own membership refusal", async () => {
+  mockRpc.mockResolvedValue({
+    data: null,
+    error: {
+      code: "42501",
+      message:
+        "field_time_report_decide: field_time_report_forbidden — me is not on this report's project",
+      details: "field_time_report_forbidden",
+      hint: null,
+    },
+  });
+  render(<TimeReportCard report={report()} />, { wrapper });
+  fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Couldn’t save — try again.",
+  );
+  expect(screen.queryByText(/studio owner or admin/)).not.toBeInTheDocument();
+});
+
+it("says a nothing-hours report has no hour to book", async () => {
+  mockRpc.mockResolvedValue({
+    data: null,
+    error: {
+      code: "23514",
+      message:
+        "field_time_report_decide: field_time_report_bad_attribution — a report of 0.00 hours has no hour to book",
+      details: "field_time_report_bad_attribution",
+      hint: "Accept it as reported, or reject it: project_time_entries holds positive durations only.",
+    },
+  });
+  render(<TimeReportCard report={report({ reported_hours: 0 })} />, {
+    wrapper,
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Book to a teammate" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Priya Natarajan" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "There’s no hour to book on this one — accept it or mark it not right.",
+  );
+});
+
+it("offers Book to me, not the picker, to a member who is not a principal", async () => {
+  // Owning a DIFFERENT studio is no standing over this report's hours: the
+  // fold is scoped to the org the report itself names.
+  standing.orgs = [
+    { id: "org1", membership: { role: "member" } },
+    { id: "org-other", membership: { role: "owner" } },
+  ];
+  mockRpc.mockResolvedValue({ data: { status: "accepted" }, error: null });
+  render(<TimeReportCard report={report()} />, { wrapper });
+
+  expect(
+    screen.queryByRole("button", { name: "Book to a teammate" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Book to me" }));
+  await waitFor(() =>
+    expect(mockRpc).toHaveBeenCalledWith("field_time_report_decide", {
+      p_report_id: "r1",
+      p_decision: "accepted",
+      p_expected_version: 3,
+      p_attribute_to_user_id: "me",
+    }),
+  );
+});
+
+it("offers neither booking door until the membership read has answered", () => {
+  standing.orgs = undefined;
+  render(<TimeReportCard report={report()} />, { wrapper });
+  // Accept and Not right never wait on standing; the booking door does, because
+  // guessing it would put somebody's real hour one mis-click away.
+  expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Book to a teammate" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Book to me" }),
   ).not.toBeInTheDocument();
 });
 
