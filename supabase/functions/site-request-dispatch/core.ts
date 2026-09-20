@@ -48,6 +48,30 @@ export interface DispatchSmsResult {
   twilioSid?: string;
 }
 
+/** What this worker tells the outbox about one attempt. */
+export interface DispatchCompletion {
+  sent: boolean;
+  providerMessageId?: string;
+  error?: string;
+  /**
+   * The send was REFUSED by a gate, not dropped by a carrier. The outbox is
+   * finished with this row: there is nothing for a later attempt to do.
+   */
+  terminal?: boolean;
+}
+
+/**
+ * The `p_status` word site_request_complete_dispatch takes (00374:3033).
+ * 'cancelled' is the terminal permanent-failure status the outbox already
+ * carries (00374:308-309 CHECK, and what site_request_revoke_access /
+ * site_request_close write); no new enum value is introduced here.
+ */
+export function dispatchCompletionStatus(
+  result: { sent: boolean; terminal?: boolean },
+): "sent" | "cancelled" | "retry" {
+  return result.sent ? "sent" : result.terminal ? "cancelled" : "retry";
+}
+
 export interface DeliveryNotificationContext {
   outbox_id: string;
   request_id: string;
@@ -70,7 +94,7 @@ export interface SiteRequestDispatchDeps {
   claimDispatch(outboxId: string): Promise<SiteRequestDispatchContext | null>;
   completeDispatch(
     outboxId: string,
-    result: { sent: boolean; providerMessageId?: string; error?: string },
+    result: DispatchCompletion,
   ): Promise<Record<string, unknown>>;
   pendingDispatches(now?: string): Promise<string[]>;
   shouldDefer(): boolean;
@@ -175,26 +199,91 @@ function consentBody(context: SiteRequestDispatchContext): string {
   return `${context.designer_name} would like to send you a Patina Site Request for ${context.site_name}. Reply YES to receive the private link. Reply STOP to opt out.`;
 }
 
-function safeFailureReason(result: DispatchSmsResult): string {
-  const safe = new Set([
-    "quiet_hours",
-    "no_phone_number",
-    "opted_out",
-    "not_consented",
-    "not_invitable",
-    "empty_body",
-    "twilio_not_configured",
-    "sms_dispatch_error",
-  ]);
-  return result.reason && safe.has(result.reason)
-    ? result.reason
-    : "sms_provider_error";
+/**
+ * REFUSALS — a gate in _shared/sms.ts said no. Nothing was rendered, nothing
+ * was minted, nothing reached a carrier. Only the studio, the recipient, or an
+ * operator can change any of these answers, so a retry re-asks the same gate
+ * forever while the designer's request reads "queued". The outbox goes
+ * terminal instead and the refusal is named.
+ *
+ * Every word is one sendPartySms actually returns (sms.ts `refused(...)`):
+ *   · suppressed / opted_out / not_consented / consent_evidence_required /
+ *     contact_rule_forbids_sms — GATE 1 STOP and the GATE 2 consent gates.
+ *   · field_line_phase_off / campaign_not_approved — GATE 3 and GATE 3b, the
+ *     Field Line phase and the A2P campaign flag (US-3 P24). A site-request
+ *     assignee who also holds a client seat is a client-kind send.
+ *   · prompts_paused / dead_end — GATE 4, a person to call, not a text.
+ *   · no_phone_number / empty_body / not_invitable / selection_input_required /
+ *     client_link_unavailable — the send has no recipient, no body, or no
+ *     capability to carry.
+ */
+const REFUSAL_REASONS = new Set([
+  "campaign_not_approved",
+  "client_link_unavailable",
+  "consent_evidence_required",
+  "contact_rule_forbids_sms",
+  "dead_end",
+  "empty_body",
+  "field_line_phase_off",
+  "no_phone_number",
+  "not_consented",
+  "not_invitable",
+  "opted_out",
+  "prompts_paused",
+  "selection_input_required",
+  "suppressed",
+]);
+
+/**
+ * Failures a later attempt can genuinely clear: quiet hours and a spent daily
+ * budget (this outbox IS the caller-owned retry `deferToCaller` defers to), a
+ * read or write that did not land, configuration that can be provisioned, and
+ * a logical send another writer is already holding.
+ */
+const RETRYABLE_REASONS = new Set([
+  "budget",
+  "conversation_number_not_configured",
+  "defer_failed",
+  "duplicate_send_claim",
+  "quiet_hours",
+  "sid_unrecorded",
+  "sms_dispatch_error",
+  "sms_provider_error",
+  "suppression_unreadable",
+  "twilio_not_configured",
+]);
+
+interface DispatchFailure {
+  reason: string;
+  terminal: boolean;
+}
+
+/**
+ * One word for why this attempt did not send, and whether anything is left to
+ * try. Only words from the two sets above are ever echoed: a provider error is
+ * free text that can carry the raw field-link token, so an unrecognized reason
+ * collapses to the generic retryable word exactly as it always has.
+ */
+function classifyFailure(result: DispatchSmsResult): DispatchFailure {
+  const reason = result.reason;
+  if (result.deferred) {
+    // Stored for the window, not refused: never terminal, whatever it says.
+    return {
+      reason: reason && RETRYABLE_REASONS.has(reason) ? reason : "quiet_hours",
+      terminal: false,
+    };
+  }
+  if (reason && REFUSAL_REASONS.has(reason)) return { reason, terminal: true };
+  if (reason && RETRYABLE_REASONS.has(reason)) {
+    return { reason, terminal: false };
+  }
+  return { reason: "sms_provider_error", terminal: false };
 }
 
 async function completeWithRetry(
   deps: SiteRequestDispatchDeps,
   outboxId: string,
-  result: { sent: boolean; providerMessageId?: string; error?: string },
+  result: DispatchCompletion,
 ): Promise<Record<string, unknown>> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -207,12 +296,18 @@ async function completeWithRetry(
   throw lastError ?? new Error("dispatch_completion_failed");
 }
 
+/** What one outbox row did: it went, it is waiting, or a gate refused it. */
+interface DispatchOutcome {
+  sent: boolean;
+  queued: boolean;
+  /** The refusal, when a gate said no and nothing is left to retry. */
+  refused?: string;
+}
+
 async function dispatchClaimed(
   deps: SiteRequestDispatchDeps,
   context: SiteRequestDispatchContext,
-): Promise<
-  { sent: boolean; queued: boolean; context: SiteRequestDispatchContext }
-> {
+): Promise<DispatchOutcome & { context: SiteRequestDispatchContext }> {
   const action = context.action;
   let body: string;
   let templateKey: string;
@@ -249,27 +344,27 @@ async function dispatchClaimed(
   } catch {
     result = { sent: false, reason: "sms_dispatch_error" };
   }
-  const safeResult = result.sent
-    ? result
-    : { ...result, reason: safeFailureReason(result) };
+  const failure = result.sent ? null : classifyFailure(result);
+  const safeResult = failure ? { ...result, reason: failure.reason } : result;
   await deps.logNotification(context, action, safeResult).catch(() =>
     undefined
   );
   const completion = await completeWithRetry(deps, context.outbox_id!, {
     sent: result.sent,
     providerMessageId: result.twilioSid ?? result.messageId,
-    error: result.sent ? undefined : safeFailureReason(result),
+    error: failure?.reason,
+    terminal: failure?.terminal,
   });
   const finalized = result.sent && completion.status === "sent";
-  return { sent: finalized, queued: !finalized, context };
+  return failure?.terminal
+    ? { sent: false, queued: false, refused: failure.reason, context }
+    : { sent: finalized, queued: !finalized, context };
 }
 
 async function processOutbox(
   deps: SiteRequestDispatchDeps,
   outboxId: string,
-): Promise<
-  { sent: boolean; queued: boolean; context?: SiteRequestDispatchContext }
-> {
+): Promise<DispatchOutcome & { context?: SiteRequestDispatchContext }> {
   const claimed = await deps.claimDispatch(outboxId);
   if (!claimed) return { sent: false, queued: true };
   return dispatchClaimed(deps, claimed);
@@ -279,14 +374,23 @@ async function sweep(
   deps: SiteRequestDispatchDeps,
   now?: string,
 ): Promise<
-  { sent: number; queued: number; pushSent: number; pushQueued: number }
+  {
+    sent: number;
+    queued: number;
+    refused: number;
+    pushSent: number;
+    pushQueued: number;
+  }
 > {
   let sent = 0;
   let queued = 0;
+  let refused = 0;
   if (!deps.shouldDefer()) {
     for (const id of await deps.pendingDispatches(now)) {
       const result = await processOutbox(deps, id);
-      result.sent ? sent += 1 : queued += 1;
+      if (result.sent) sent += 1;
+      else if (result.refused) refused += 1;
+      else queued += 1;
     }
   }
 
@@ -304,7 +408,7 @@ async function sweep(
     await deps.completeDeliveryNotification(id, result);
     result.sent ? pushSent += 1 : pushQueued += 1;
   }
-  return { sent, queued, pushSent, pushQueued };
+  return { sent, queued, refused, pushSent, pushQueued };
 }
 
 export async function handleSiteRequestDispatch(
@@ -363,6 +467,7 @@ export async function handleSiteRequestDispatch(
         expiredCount: lifecycle.expired_count,
         dispatchesSent: processed.sent,
         dispatchesQueued: processed.queued,
+        dispatchesRefused: processed.refused,
         deliveryNotificationsSent: processed.pushSent,
         deliveryNotificationsQueued: processed.pushQueued,
       });
@@ -381,6 +486,17 @@ export async function handleSiteRequestDispatch(
       return json({ ok: true, status: prepared.status, queued: true }, 202);
     }
     const result = await processOutbox(deps, prepared.outbox_id);
+    if (result.refused) {
+      // A gate refused this text. It is not queued, nothing will retry it, and
+      // the designer is told which gate said no rather than being left to read
+      // a policy decision as a flaky carrier.
+      return json({
+        ok: false,
+        error: "send_refused",
+        reason: result.refused,
+        status: prepared.status,
+      }, 409);
+    }
     const finalStatus = result.context?.action === "consent-invite"
       ? "awaiting_consent"
       : ["send", "resend", "consent-granted"].includes(
