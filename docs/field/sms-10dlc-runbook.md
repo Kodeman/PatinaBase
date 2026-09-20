@@ -300,6 +300,75 @@ The pre-change code is whatever was live at v20. `supabase/functions/site-reques
 
 **Rollback.** Redeploy from `66ff5354d` (the v21 source commit): `git -C <checkout of 66ff5354d> && supabase functions deploy site-request-dispatch --project-ref bkvcixdmuyejfzcijpdg`. This reverts the outbox status/response-code change and returns policy refusals to the `retry`/`202 {queued:true}` behavior recorded in the v21 entry above. No schema rollback is involved — this deploy applied no migration.
 
+### Phase 3 activation record
+
+**Date:** 2026-09-20 (UTC). **Target:** Supabase Cloud "Strata", project ref `bkvcixdmuyejfzcijpdg`. **Source commit:** `c18bb7ab7b13ab050f9bf39cb34fe6779b1e90ce` — `origin/main`, and the exact commit SQ-22's Phase 3 proof ran against. The activation worktree was `git reset --hard` onto it as its first git action and `git status --porcelain` then printed nothing; local `main` was one commit ahead (`e8e1f791b`, the US-6 hours-judgment module), which is **not** in this deploy. **Migration head:** `00653_field_time_reports.sql`. **Owner approval:** 2026-09-20, over the SQ-22 Phase 3 proof's GO — strict fixture proof **53 passed / 0 failed / 8 skipped at `--phase 3` and the same at `--phase 2`**, CI-form type-checked `deno test` on `_tests/field-line` **93 / 0**, `tests/field/field_time_reports_test.sql` **6 / 6** sections on a `template0` clone (zero `project_time_entries` rows from a party reply, duplicate claim `23505`, non-member `42501`, exactly one entry after explicit member-checked attribution), portal `time-report-card` **13 / 13**.
+
+**Outcome: `00653` is applied and the two Phase 3 functions are live, and nothing new can send or book an hour.** `FIELD_LINE_PHASE` is still absent, so `fieldLinePhase()` reads `0`: `field-daily/core.ts:1076-1077` never reaches the hours block (the gate is asked **before** any prompt row is created), GATE 3 (`_shared/sms.ts:1856-1858`) would refuse the `automationPhase: 3` send at `:1139-1141` anyway, and `sms-inbound/pipeline.ts`'s `hoursReply()` (`:2832`, dispatched at `:2923`) only fires for a party that already has an **open `report_hours` prompt**, which nothing can create. As at Phase 0 and Phase 1/2, that sentence does **not** mean nothing sends: "What the phase gate does not cover" in the Phase 0 record applies verbatim — the phase-0 digest and delivery-confirm paths keep running on both cron ticks.
+
+Raw command output is in `verification/SQ-135/` (`00-worktree-reset-and-env.log`, `01-migration-list-before.log`, `02-functions-list-before.log`, `03-secrets-list-before.log`, `04-db-push-dry-run.log`, `05-db-push.log`, `06-migration-list-after-push.log`, `07-deploy-set-computation.log`, `08-import-chain-evidence.log`, `09-cross-function-references-are-comments.log`, `10-deploy-sms-inbound.log`, `11-deploy-field-daily.log`, `12-functions-list-after.log`, `13-secrets-list-after.log`, `14-before-after-comparison.log`). As at Phase 0 those files are output, not a claim of correctness beyond what the output shows.
+
+**Steps, in order, with UTC timestamps.** Every command ran from the pinned activation worktree, never the shared checkout. `--linked` resolved Strata there from a copy of the shared checkout's gitignored `supabase/.temp` link metadata (no `supabase link` was run, and the tree stayed clean).
+
+| # | Command | Start → End (UTC) | Exit | Capture |
+|---|---|---|---|---|
+| 0 | `git reset --hard c18bb7ab7…` + `git rev-parse HEAD` + `git status --porcelain` | 20:57:16 → 20:57:24 | 0 | `00` |
+| 1 | `supabase migration list --linked --project-ref …` (before) | 20:58:47 → 20:58:51 | 0 | `01` |
+| 1 | `supabase functions list --project-ref …` (before) | 20:59:04 → 20:59:06 | 0 | `02` |
+| 1 | `supabase secrets list --project-ref …` (before, names only) | 20:59:38 → 20:59:40 | 0 | `03` |
+| 2 | `supabase db push --linked --project-ref … --include-all --dry-run` | 20:59:48 → 20:59:52 | 0 | `04` |
+| 2 | `supabase db push --linked --project-ref … --include-all` | 21:00:28 → 21:00:32 | 0 | `05` |
+| 2 | `supabase migration list --linked --project-ref …` (after push) | 21:00:39 → 21:00:43 | 0 | `06` |
+| 3 | deploy-set computation (read-only `git diff` + `grep`) | 21:02:26 → 21:03:15 | 0 | `07`, `08`, `09` |
+| 3 | `supabase functions deploy sms-inbound --project-ref …` | 21:03:41 → 21:03:46 | 0 | `10` |
+| 3 | `supabase functions deploy field-daily --project-ref …` | 21:03:51 → 21:03:54 | 0 | `11` |
+| 4 | `supabase functions list --project-ref …` (after) | 21:04:02 → 21:04:04 | 0 | `12` |
+| 4 | `supabase secrets list --project-ref …` (after, names only) | 21:04:09 → 21:04:11 | 0 | `13` |
+| 4 | before → after comparison, computed from `02`/`03`/`12`/`13` | 21:04:31 | — | `14` |
+
+**Push (one file).** The dry-run planned **exactly** `00653_field_time_reports.sql` with `"seeds":[],"roles":[]`, and the apply logged that one file. `--include-all` is still mandatory for the reason the Phase 0 record gives (remote's max version is the timestamp `20260910152111`, so every `006xx` file classifies as `missing-remote`). **Output digests** (sha256, so the record is checkable against the capture): the result line `{"upToDate":false,…"message":"Finished supabase db push."}` hashes to `6c52796e23076d805197cc995249c9cab277c7a1a8654d319f25bbeb37512ae7`, and the single `Applying migration 00653_field_time_reports.sql...` line to `0f02846c18ce55e874796e0e2466a3e4f0360677e477b24071bfbaf8310d47c5`. The two deploy result lines hash to `2b4c50f1f189b4c714bc0c3bf9fea7d93f589b9386bda2ca802b61ade7e92aa2` (`sms-inbound`) and `5eb8e7f488e568311650e665a71d142a8f589904cbbdc9d025ca4021a082c418` (`field-daily`).
+
+**Migrations (before → after),** from `supabase migration list --linked --project-ref …`:
+
+| | Rows | Local-only (unapplied) | Remote-only |
+|---|---|---|---|
+| Before | 606 | `00653` **and nothing else** | 0 |
+| After | 606 | **0** | 0 |
+
+`00654_client_letter_phone_status.sql` was already paired before this push (Phase 1 + Phase 2 applied it out of order, which is why `00653` was the lone gap), and there is still no `00649`.
+
+**Deploy set: `sms-inbound`, then `field-daily` — computed, not assumed.** `git diff --name-only e08be484e..c18bb7ab7 -- supabase/functions` — `e08be484e` being the `site-request-dispatch` redeploy source recorded above, which that record shows is functions-identical to the Phase 1 + Phase 2 activation source `5bb66eaea` — minus `_tests/` and `*.test.ts`, leaves six runtime files; **no `_shared` file changed in the range**, so no other function's bundle moved. The only runtime import chains into the two changed Field Line files are same-directory: `sms-inbound/index.ts:17` → `./pipeline.ts`, `field-daily/index.ts:8` → `./core.ts`. Every other mention of those two paths outside `_tests/` is prose (`stripe-event-processor/core.ts:5`, `cowork-intake-bridge/core.ts:4`, `_shared/sms.ts:140`, three comments inside `pipeline.ts`), verified with `grep -rnE '^import .*\.\./(field-daily|sms-inbound)/'`, which matches nothing outside `_tests/`.
+
+Two runtime files in that diff were **deliberately not deployed**, each on stated evidence rather than assumption:
+
+- **`site-request-dispatch/{index,core}.ts`** — already live at this source's bytes. `git diff --stat 44ca7dff4..c18bb7ab7 -- supabase/functions/site-request-dispatch` touches **only `core.test.ts`**, and `44ca7dff4` is the v22 deploy source in the record above, so the running v22 bundle already carries the pinned runtime code. Untouched here: still **v22**, `updated_at` 2026-09-20T00:46:49.206Z.
+- **`fulfillment-po/{core,index}.ts`** — changed in the range, but the whole diff is two **type assertions** from SQ-124's type-only repair (`const encodeBase64 = encode as (…) => string` in `core.ts`, `result.bytes as unknown as BodyInit` in `index.ts`); no runtime statement changed, and `fulfillment-po` is outside the Field Line feature this activation is authorized for. **Residue:** its deployed bundle therefore predates those two commits. It needs no deploy for behavior, but nothing here refreshed it — redeploy it on its own ticket if a future change to that function makes the drift matter.
+
+**Function versions (before → after).** Deployed one at a time, in the order below, each `supabase functions deploy <fn> --project-ref bkvcixdmuyejfzcijpdg`, each exit 0. 85 functions before and 85 after, and the **only two** version/`verify_jwt`/status deltas in the whole list are these two (`14`). `verify_jwt` is unchanged because it comes from `supabase/config.toml` (`sms-inbound` is declared `false` at `config.toml:340-341`; `field-daily` has no entry and takes the `true` default). The before column matched the Phase 1 + Phase 2 record exactly — nothing had drifted on Strata between the two activations.
+
+| Function | Before | After | `verify_jwt` |
+|---|---|---|---|
+| `sms-inbound` | v33 (`updated_at` 2026-09-20T00:08:00.967Z) | **v34** (2026-09-20T21:03:46.162Z) | false (unchanged) |
+| `field-daily` | v30 (2026-09-20T00:08:19.468Z) | **v31** (2026-09-20T21:03:54.410Z) | true (unchanged) |
+
+**Secrets — nothing was written, set, unset, or changed.** **46** names before and the **identical 46** names after, compared as sorted sets (`added: []`, `removed: []`). Names only were read; no value was printed.
+
+Confirmed **absent after the run**, each deliberately:
+
+- `FIELD_LINE_PHASE` — absent, read as `0` by `fieldLinePhase()` (`_shared/sms.ts:264-267`). Setting it to `3` is what would open Phase 3: `field-daily`'s evening hours ask (`core.ts:1076-1077`, sending `sms_hours_prompt` with `automationPhase: 3` at `:1139-1141`, counted as `hoursPromptsSent` at `:1154`, and only after `HOURS_PROMPT_LOCAL_MINUTES = 17 * 60` local (`core.ts:91`) on the 23:05 UTC tick) and, downstream of a prompt existing, the numeric reply path in `sms-inbound/pipeline.ts`. **The owner has not named a value, so it was not set.**
+- `FIELD_LINE_CAMPAIGN_APPROVED` — absent. Unchanged from Phase 1 / Phase 2: GATE 3b still refuses every client-kind send. Phase 3's hours ask is trade-only, so this flag is not what gates it.
+- `SMS_DEV_MODE` and `SMS_DEV_REDIRECT_NUMBER` — both absent, correct for production. Their absence was re-checked as a HALT condition; neither was ever set, and **no redirect was unset as a smoke step**.
+- `FIELD_LINE_TRIAGE_USER` — still absent and **left alone**, as the Phase 1 + Phase 2 record describes (`sms-inbound/pipeline.ts`'s last-resort review owner stays null, so a projectless inbound gets no owned review card). Reported, not provisioned.
+
+**What was deliberately not done.** No smoke send (no allowlisted recipient, `SMS_DEV_MODE` unset on Strata, so a "rehearsal" would reach a real handset — same reasoning as Phase 0 and Phase 1/2). No `cron.job` readback: that needs production SQL, which this activation did not run — `00648` remains the authority for both ticks (`0 14 * * *` and `5 23 * * *`), and neither was re-scheduled or unscheduled here. No flag was set or unset. No Twilio and no PostHog API call: the portal flag **`field-line-time-reports` is off/unset** on the PostHog side (owner's surface, untouched here). No production SQL, and no Supabase project other than `bkvcixdmuyejfzcijpdg`.
+
+**Rail state, in one line.** `00653` is applied and `sms-inbound` v34 / `field-daily` v31 are live, but the evening hours ask and the numeric reply path only run when `FIELD_LINE_PHASE >= 3`, which is absent, and the Desk's reported-hours card only shows behind the PostHog flag `field-line-time-reports` (`field-desk.tsx:108`), which is off — so Phase 3 is inert on Strata until the owner names both.
+
+**Rollback.**
+
+- **Functions:** the CLI has no version rollback; rolling back means redeploying older code as a *new* version. The code live on these two before this activation came from `5bb66eaea579958696d065d09d227d8da424c890` (the Phase 1 + Phase 2 source, which cut v33 / v30 at 00:08Z and was not superseded for either function since): `supabase functions deploy sms-inbound --project-ref bkvcixdmuyejfzcijpdg` and the same for `field-daily`, from a checkout of that commit.
+- **Schema (`00653`):** leave it in place, for the same reason the Phase 0 and Phase 1/2 records give — the practical kill switch is the phase gate, not the schema, and `00653` ships **no** down script (grepped for `rollback` / `down migration` / `to reverse`: no match). Its two ledger tables carry no INSERT/UPDATE/DELETE policy for `authenticated`, so with the phase off nothing writes them at all. If a specific object must go, it goes as a forward migration: drop `field_time_report_decide` (`00653:870`) and the `field_time_report_queue` view (`:1101`), then `_apply_field_hours_effect` (`:585`) with `apply_field_effect`'s branch restored over (`:758`), then the `field_time_report_decisions` (`:513`) and `field_time_reports` (`:365`) tables, and restore `00643`'s `sms_validate_prompt_effect` body and `00645`'s `sms_create_prompt` / `sms_prompt_reply_verb` / `sms_apply_prompt` bodies over `00653:65`, `:108`, `:195`, `:277` — which also removes `report_hours` from the reply grammar.
+
 ## 6. Standing compliance rules (enforced in code; do not defeat)
 
 - **Double opt-in** before any operational message; consent recorded per phone across all party rows.
