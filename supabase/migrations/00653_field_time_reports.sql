@@ -885,6 +885,8 @@ DECLARE
   v_minutes  integer;
   v_entry_id uuid;
   v_version  integer;
+  v_frozen   integer;
+  v_day      date;
   v_now      timestamptz := now();
 BEGIN
   IF p_decision IS NULL OR p_decision NOT IN ('accepted', 'rejected') THEN
@@ -991,10 +993,34 @@ BEGIN
     SELECT pp.display_name INTO v_party
       FROM public.project_parties pp WHERE pp.id = v_report.party_id;
 
+    -- ── WHICH DAY THE HOUR BELONGS TO ──────────────────────────────────────
+    -- The VISIT's local day, frozen on the ask at issuance: the daily producer
+    -- writes it into sms_prompts.version as YYYYMMDD, which is the identity
+    -- this file's daily lock deduplicates on (:156 admits the range;
+    -- field-daily/core.ts:1124 passes Number(localToday) for the field zone).
+    -- reported_at cannot answer the question on its own: the evening ask rides
+    -- the 23:05 UTC tick, so a reply sent after 19:00 CDT (18:00 CST) is
+    -- already tomorrow in UTC and would book the hour a calendar day late.
+    SELECT sp.version INTO v_frozen
+      FROM public.sms_prompts sp WHERE sp.id = v_report.prompt_id;
+    IF v_frozen BETWEEN 10000101 AND 99991231 THEN
+      v_day := to_date(v_frozen::text, 'YYYYMMDD');
+    ELSE
+      -- An ask that carries no frozen day (version 1, a direct /field caller's).
+      -- The reply's own UTC day is then the only day on offer: HT-13-a declined
+      -- a studio timezone column and there still is none (00607:262), so there
+      -- is no project zone to read reported_at in.
+      v_day := (v_report.reported_at AT TIME ZONE 'UTC')::date;
+    END IF;
+
     -- EXACTLY ONE row, and only the columns a reported day can honestly fill.
-    -- started_at is noon UTC of the reported day, which is HT-13-a's ruled
+    -- started_at is noon UTC of that visit day, which is HT-13-a's ruled
     -- convention for a DATE-ONLY entry (00608:44) — the studio timezone was
     -- declined there, so a day is a day at both offsets a US studio takes.
+    -- source is 'field_visit': 00595:65-67 assigns that value to hours a visit
+    -- produced ("offered by Patina Field's visit review when a visit closes")
+    -- and reserves 'field_manual' for "an hour that is not a visit", which this
+    -- hour, bound to the visit's own task, is not.
     -- billable is left at the table's default and no rate is named: pricing is
     -- 00601's classifier's, and payroll and invoicing are not in this story.
     INSERT INTO public.project_time_entries (
@@ -1004,10 +1030,10 @@ BEGIN
       v_report.project_id,
       v_report.task_id,
       p_attribute_to_user_id,
-      (((v_report.reported_at AT TIME ZONE 'UTC')::date + time '12:00') AT TIME ZONE 'UTC'),
+      ((v_day + time '12:00') AT TIME ZONE 'UTC'),
       v_minutes,
       'Reported by text by ' || COALESCE(v_party, 'the trade'),
-      'field_manual'
+      'field_visit'
     )
     RETURNING id INTO v_entry_id;
   END IF;
@@ -1059,7 +1085,10 @@ COMMENT ON FUNCTION public.field_time_report_decide(uuid, text, integer, uuid) I
   'compare-and-swap (field_time_report_stale), and one audit row every time. '
   'It writes EXACTLY ONE project_time_entries row, and only when the caller '
   'names a profile-backed member of the project to book the hours to '
-  '(field_time_report_bad_attribution otherwise); with no attribution it '
+  '(field_time_report_bad_attribution otherwise) — dated noon UTC of the '
+  'visit''s local day as frozen on the ask (sms_prompts.version, YYYYMMDD), '
+  'falling back to the reply''s own UTC day only for an ask that carries none, '
+  'and sourced ''field_visit'' per 00595:65-67; with no attribution it '
   'writes none, ever. authenticated only — service_role has no auth.uid() and '
   'this decision is a person''s.';
 
