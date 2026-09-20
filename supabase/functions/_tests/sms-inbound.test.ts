@@ -727,7 +727,7 @@ Deno.test("a stale project_pin (>4h) falls back to the chooser", async () => {
   assertEquals(res.disposition, "project_chooser");
   assertEquals(rpcCalls.length, 0);
   assertEquals(res.selection?.kind, "project_choice");
-  assertEquals(res.selection.options.length, 2, "typed intent awaits the shared sender");
+  assertEquals(res.selection?.options.length, 2, "typed intent awaits the shared sender");
 });
 
 Deno.test("chooser resolution processes the stashed triggering text and preserves state_context.menu", async () => {

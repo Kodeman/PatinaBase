@@ -36,11 +36,11 @@ Deno.test("resolved older chooser origin retry cannot replay after a newer choos
 });
 Deno.test("post-effect attribution failure cannot revive resolved older chooser on retry",async()=>{
  const {h,id,effects}=selectionFixture(new Date("2026-11-01T14:00:00Z"));
- const rpc=h.fake.rpc;h.fake.rpc=async(name,args)=>{const result=await rpc(name,args);if(name==="apply_field_effect"&&!result.error){const m=h.fake._data.sms_messages.find(x=>x.id===args.p_sms_message_id);m.applied_effect={...result.data,applied:true};}return result;};
+ const rpc=h.fake.rpc;h.fake.rpc=async(name,args={})=>{const result=await rpc(name,args);if(name==="apply_field_effect"&&!result.error){const m=h.fake._data.sms_messages.find(x=>x.id===args.p_sms_message_id)!;m.applied_effect={...(result.data as Record<string,unknown>),applied:true};}return result;};
  async function ask(body:string,sid:string){const p=input(h,body,sid);const r=await processInbound(p,deps(h,ambiguous));assertEquals(r.disposition,"project_chooser");const d=await dispatchInboundReplies(p,r,deps(h));assertEquals(d.status,200);const q=h.fake._data.sms_messages.find((x:any)=>x.template_key==="sms_selection"&&x.recipe.selection.inboundMessageId===r.messageId)!;assert(q);q.twilio_status="delivered";return p;}
  async function choose(n:string,sid:string,target:string){const r=await processInbound(input(h,n,sid),deps(h,async()=>({intent:"flag_blocker",target_ref:{kind:"task",id:id(target)},new_date:null,note:"blocked",confidence:0.95})));assertEquals(r.disposition,"applied");}
  const first=await ask("mantel blocked","SMA-origin");
- const from=h.fake.from.bind(h.fake);let failStamp=true;h.fake.from=(table)=>{const q=from(table);const update=q.update.bind(q);q.update=(patch)=>{if(failStamp&&table==="sms_messages"&&patch.parsed_intent?.path==="llm"){failStamp=false;q.eq=()=>q;q.then=(resolve)=>Promise.resolve({data:null,error:{message:"post-effect attribution write lost"}}).then(resolve);return q;}return update(patch);};return q;};
+ const from=h.fake.from.bind(h.fake);let failStamp=true;h.fake.from=(table)=>{const q=from(table);const update=q.update.bind(q);q.update=(patch:Record<string,any>)=>{if(failStamp&&table==="sms_messages"&&patch.parsed_intent?.path==="llm"){failStamp=false;q.eq=()=>q;q.then=(resolve)=>Promise.resolve({data:null,error:{message:"post-effect attribution write lost"}}).then(resolve);return q;}return update(patch);};return q;};
  await choose("1","SMA-choice","task-a");assertEquals(effects.length,1);
  h.advanceTo(new Date("2026-11-01T19:00:00Z"));await ask("tile blocked","SMB-origin");await choose("2","SMB-choice","task-b");assertEquals(effects.length,2);
  const before=structuredClone(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!);

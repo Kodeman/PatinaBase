@@ -1,5 +1,26 @@
 import { createFieldLineHarness, type FieldLineHarness } from "./harness.ts";
 
+/**
+ * A prompt row as this fixture writes one, with the index signature the RPCs
+ * need: sms_apply_prompt stamps consumed_sid and consumption_result onto the same
+ * row afterwards, and a test that reads those back is reading fields the literal
+ * the fixture wrote never declared.
+ */
+export interface FixturePromptRow extends Record<string, unknown> {
+  id: string;
+  party_id: string;
+  project_id: string;
+  kind: string;
+  subject_id: string;
+  short_code: string;
+  version: number;
+  expires_at: string;
+  answered_at: string | null;
+  sender_number: string;
+  recipient_phone: string;
+  created_at: string;
+}
+
 /** RPC tables model the migrated contracts; no SQL, provider or clock escapes this fixture. */
 export function inboundFixture(effectError?: unknown, now?: Date, env: Record<string, string> = {}) {
   const effects: Record<string, unknown>[] = [];
@@ -39,7 +60,8 @@ export function inboundFixture(effectError?: unknown, now?: Date, env: Record<st
     const query = from(table);
     if (table === "sms_messages") {
       const upsert = query.upsert.bind(query);
-      query.upsert = (row, options) => upsert({ created_at: new Date(h.clock.getTime() - 10000 + messageSequence++).toISOString(), ...row }, options);
+      query.upsert = (row, options) =>
+        upsert({ created_at: new Date(h.clock.getTime() - 10000 + messageSequence++).toISOString(), ...(row as Record<string, unknown>) }, options);
     }
     return query;
   };
@@ -85,7 +107,7 @@ export function inboundFixture(effectError?: unknown, now?: Date, env: Record<st
         const applied = await h.fake.rpc("apply_field_effect", { p_party_id: p.party_id,
           p_effect: p.proposed_effect ?? args.p_effect, p_source: "sms", p_sms_message_id: message.id });
         if (applied.error) return applied;
-        if (applied.data?._sms_replayed) return { data: { status: "already_completed" }, error: null };
+        if ((applied.data as Record<string, unknown> | null)?._sms_replayed) return { data: { status: "already_completed" }, error: null };
         result = { kind: "effect", result: applied.data };
       }
       Object.assign(p, { consumed_sid: message.twilio_sid, consumption_result: result, answered_at: h.clock.toISOString() });
@@ -116,10 +138,11 @@ export function inboundFixture(effectError?: unknown, now?: Date, env: Record<st
     ...[...block.matchAll(TUPLE)].map(templateRow),
     ...[...tradeBlock.matchAll(TUPLE)].map(templateRow),
   ];
-  const prompt = (overrides: Record<string, unknown> = {}) => {
+  const prompt = (overrides: Record<string, unknown> = {}): FixturePromptRow => {
     const row = { id: "prompt-a", party_id: "party-a", project_id: "project-a", kind: "report_arrival",
       subject_id: "task-a", short_code: "17", version: 1, expires_at: "2026-11-02T14:00:00.000Z",
-      answered_at: null, sender_number: h.sender, recipient_phone: h.recipient, created_at: h.clock.toISOString(), ...overrides };
+      answered_at: null, sender_number: h.sender, recipient_phone: h.recipient, created_at: h.clock.toISOString(),
+      ...overrides } as FixturePromptRow;
     (h.fake._data.sms_prompts ??= []).push(row);
     return row;
   };
