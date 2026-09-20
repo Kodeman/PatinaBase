@@ -23,6 +23,8 @@ import {
 } from "./cases/client-capability.ts";
 import { clientVersionRace } from "./cases/client-decision-race.ts";
 import { clientWindowPickIssued } from "./cases/client-window-pick.ts";
+import { hoursPromptGate } from "./cases/hours-prompt-gate.ts";
+import { hoursReplyProposal } from "./cases/hours-reply-proposal.ts";
 import {
   clientCampaignApproval,
   clientConsentBoundary,
@@ -69,6 +71,11 @@ export const fieldLineCases: GateCase[] = [
   // The delivery she is the only one who can answer about (00641's proposal
   // columns, 00652's card).
   clientWindowPickIssued,
+  // The crew's own hours (00653): the evening question the phase gate decides
+  // whether to ask at all, and the number that comes back as a proposal —
+  // never as a time entry.
+  hoursPromptGate,
+  hoursReplyProposal,
 ];
 
 export { type GateAssertion, type GateCase } from "./types.ts";
