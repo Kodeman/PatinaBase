@@ -461,11 +461,19 @@ BEGIN
   v_task := pg_temp.visit('Plain accept day');
   p := pg_temp.ask(v_task); r_plain := pg_temp.propose(p,v_task,'6.25');
   v_task := pg_temp.visit('Booked day');
-  p := pg_temp.ask(v_task); r_book := pg_temp.propose(p,v_task,'6.5');
+  -- SQ-126 N1: this ask carries the visit's LOCAL day frozen as YYYYMMDD, the
+  -- way field-daily issues it. Its reply lands below at 2026-11-03 01:30Z —
+  -- 19:30 CST on Nov 2 — so the UTC day and the visit day are different days.
+  p := pg_temp.ask(v_task,20261102); r_book := pg_temp.propose(p,v_task,'6.5');
   v_task := pg_temp.visit('Nothing day');
   p := pg_temp.ask(v_task); r_zero := pg_temp.propose(p,v_task,'0');
   v_task := pg_temp.visit('Teammate rule day');
+  -- The fallback leg: version 1 is not a frozen day (a direct /field caller's
+  -- ask), so this one's hour is dated by its reply's own UTC day.
   p := pg_temp.ask(v_task); r_rule := pg_temp.propose(p,v_task,'4');
+  -- Both replies came in at the same instant, late on the visit's evening.
+  UPDATE field_time_reports SET reported_at = timestamptz '2026-11-03 01:30+00'
+   WHERE id IN (r_book, r_rule);
   SELECT count(*) INTO v_entries_before FROM project_time_entries;
   ASSERT v_entries_before=0,'SQ20 five proposals, no timesheet rows';
   -- Every claim made so far, here and in the sections above, is still open.
@@ -558,12 +566,15 @@ BEGIN
      AND v_entry.task_id=v_report.task_id
      AND v_entry.duration_minutes=390
      AND v_entry.notes='Reported by text by Synthetic trade'
-     AND v_entry.source='field_manual'
+     AND v_entry.source='field_visit'
      AND v_entry.invoice_id IS NULL
-     AND (v_entry.started_at AT TIME ZONE 'UTC')::date
-         = (v_report.reported_at AT TIME ZONE 'UTC')::date
      AND (v_entry.started_at AT TIME ZONE 'UTC')::time = time '12:00',
-    'SQ20 the booked hour is the teammate''s, on the visit, at noon UTC of the reported day (HT-13-a)';
+    'SQ20 the booked hour is the teammate''s, on the visit, at noon UTC (HT-13-a), sourced as a visit''s hour';
+  -- SQ-126 N1: the day is the visit's frozen local day, NOT the UTC day the
+  -- reply landed on. Those are different days here, so this can fail.
+  ASSERT (v_report.reported_at AT TIME ZONE 'UTC')::date = date '2026-11-03'
+     AND (v_entry.started_at AT TIME ZONE 'UTC')::date = date '2026-11-02',
+    'SQ126 N1 a 19:30 CST reply books the hour on the visit day frozen on the ask, not the next UTC day';
   ASSERT v_report.attributed_user_id='20000000-0000-4000-8000-000000000002'
      AND v_report.attributed_time_entry_id=v_entry.id
      AND v_report.status='accepted' AND v_report.version=2,
@@ -604,6 +615,14 @@ BEGIN
     ='20000000-0000-4000-8000-000000000002',
     'SQ20 a teammate can book the hour to herself';
   PERFORM pg_temp.unassume();
+  -- SQ-126 N1, the fallback: this ask carried version 1, so it froze no day and
+  -- the reply's own UTC day is the only day on offer — one day later than the
+  -- booking above, from the very same reported instant.
+  SELECT e.* INTO v_entry FROM project_time_entries e
+   WHERE e.id=(SELECT attributed_time_entry_id FROM field_time_reports WHERE id=r_rule);
+  ASSERT (v_entry.started_at AT TIME ZONE 'UTC')::date = date '2026-11-03'
+     AND (v_entry.started_at AT TIME ZONE 'UTC')::time = time '12:00',
+    'SQ126 N1 an ask with no frozen day books the hour on the reply''s own UTC day';
   ASSERT (SELECT count(*) FROM project_time_entries)=2,
     'SQ20 two bookings, two entries, and not one more';
   RAISE NOTICE 'PASS SQ20 S4 decide: forbidden/stale/decided/bad attribution refused, exactly one entry per booking, every decision audited';
