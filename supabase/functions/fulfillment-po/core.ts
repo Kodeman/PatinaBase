@@ -15,7 +15,11 @@
 // another po.transmitted event (corrections append, spec §5.3).
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { encode as encodeBase64 } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
+import { encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
+// std@0.168's encode reads a Uint8Array view directly (it checks for one before
+// wrapping), but types its input as ArrayBuffer | string, which TS 6 no longer
+// accepts a view for. Say what it really takes; the call is unchanged.
+const encodeBase64 = encode as (data: ArrayBuffer | Uint8Array | string) => string;
 import { buildFulfillmentPoPdf, type FulfillmentPoPdfData } from '../_shared/fulfillment-po-pdf.ts';
 import { sendCompliantEmail, type ComplianceSendResult } from '../_shared/send-email.ts';
 

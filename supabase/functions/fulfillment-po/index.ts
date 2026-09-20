@@ -88,7 +88,11 @@ Deno.serve(async (req: Request) => {
     );
 
     if (result.kind === 'pdf') {
-      return new Response(result.bytes, {
+      // The dom lib this deno.json loads types BodyInit's BufferSource without the
+      // ArrayBufferLike generic, so TS 6 rejects a Uint8Array view that Response
+      // accepts at runtime. Name the body type; the bytes are handed over as-is.
+      const pdfBody = result.bytes as unknown as BodyInit;
+      return new Response(pdfBody, {
         status: 200,
         headers: {
           ...corsHeaders,

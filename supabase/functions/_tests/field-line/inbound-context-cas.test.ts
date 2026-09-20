@@ -5,6 +5,7 @@ import { processInbound, inboundCompletion, bindInboundSelection } from "../../s
 import { dispatchInboundReplies } from "../../sms-inbound/index.ts";
 import { recoverSmsSelection } from "../../_shared/sms.ts";
 import { selectionFixture, inboundFixture } from "./inbound-fixture.ts";
+import { asClient } from "../fake-supabase.ts";
 const deps=(h:any,parseFn:any=async()=>{assert(false,"completed origin must not invoke parser");})=>({supabase:h.fake,now:h.clock,getEnv:h.env,fetchImpl:h.provider.fetch,parseFn});
 const input=(h:any,Body:string,MessageSid:string)=>({From:h.recipient,To:h.sender,Body,MessageSid,NumMedia:"0"});
 const ambiguous=async()=>({intent:"mark_done",target_ref:null,new_date:null,note:"done",confidence:0.7});
@@ -69,7 +70,7 @@ for(const mutation of ["string-applied","array-result","wrong-sender","wrong-rec
  if(mutation==="array-result")a.origin.applied_effect=[];
  const sender=mutation==="wrong-sender"?"+15558880000":h.sender;
  const recipient=mutation==="wrong-recipient"?"+15558881111":h.recipient;
- assertEquals((await inboundCompletion(h.fake,a.origin.id,sender,recipient)).status,"unknown");
+ assertEquals((await inboundCompletion(asClient(h.fake),a.origin.id,sender,recipient)).status,"unknown");
 });
 
 Deno.test("binder must not replace B when A completes before context snapshot acquisition",async()=>{

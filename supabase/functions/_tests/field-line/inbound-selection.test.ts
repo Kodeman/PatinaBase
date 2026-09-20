@@ -2,6 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asse
 import { processInbound } from "../../sms-inbound/pipeline.ts";
 import { dispatchInboundReplies } from "../../sms-inbound/index.ts";
 import { selectionFixture as inboundFixture } from "./inbound-fixture.ts";
+import { jsonObject, readField } from "./cases/helpers.ts";
 const deps = (h: any, parseFn: any = async () => { throw Error("unexpected parser"); }) => ({supabase:h.fake,now:h.clock,getEnv:h.env,fetchImpl:h.provider.fetch,parseFn});
 const inbound = (h: any, Body: string, MessageSid = "SMprobe") => ({From:h.recipient,To:h.sender,Body,MessageSid,NumMedia:"0"});
 const proposal = (id: string, date: string) => async () => ({intent:"report_delay",target_ref:{kind:"task",id},new_date:date,note:`original ${id}`,confidence:0.65});
@@ -38,7 +39,7 @@ Deno.test("selection filters before numbering and consumes only delivered manife
  assert(!q.body.includes("Studio A"));
  assertEquals(q.recipe.params,{});assert(!q.body.includes("finished the job"),"caller prose never enters the shared question");
  const conv=h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!;
- conv.state_context.chooser=[{n:1,party_id:id("party-a"),project_id:id("project-a")}];
+ jsonObject<{chooser?:unknown}>(conv.state_context,"handset state_context").chooser=[{n:1,party_id:id("party-a"),project_id:id("project-a")}];
  const pending=await processInbound(inbound(h,"1","SMnotAsked"),deps(h));
  assertEquals(pending.disposition,"selection_pending");assertEquals(effects.length,0);
  q.twilio_status="delivered";
@@ -56,8 +57,8 @@ Deno.test("duplicate origin recovers the same queued question and original numbe
 });
 Deno.test("metadata write failure recovers actual sent row on retry without resending",async()=>{
  const {h}=inboundFixture();const from=h.fake.from.bind(h.fake);let fail=true;
- h.fake.from=(table)=>{const query=from(table);for (const method of ["update","upsert"] as const) { const write=query[method].bind(query);query[method]=(patch,options)=>{
-   if(fail&&table==="sms_conversation_context"&&patch.state==="awaiting_project_choice"){
+ h.fake.from=(table)=>{const query=from(table);for (const method of ["update","upsert"] as const) { const write=query[method].bind(query);query[method]=(patch,options?:{onConflict?:string;ignoreDuplicates?:boolean})=>{
+   if(fail&&table==="sms_conversation_context"&&readField(patch,"state")==="awaiting_project_choice"){
      const result={data:null,error:{message:"metadata unavailable"}};
      query.select=()=>query;query.eq=()=>query;query.then=(resolve)=>Promise.resolve(result).then(resolve);return query;
    }return write(patch,options);
@@ -67,7 +68,7 @@ Deno.test("metadata write failure recovers actual sent row on retry without rese
  fail=false;row.twilio_status="sent";
  const retry=await dispatchInboundReplies(params,await processInbound(params,deps(h)),deps(h));
  assertEquals(retry.status,200);assertEquals(h.provider.requests.length,1);
- assertEquals(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context.selection.messageId,row.id);
+ assertEquals(jsonObject<{selection:{messageId:unknown}}>(h.fake._data.sms_conversation_context.find((c:any)=>c.project_id===null)!.state_context,"handset state_context").selection.messageId,row.id);
 });
 Deno.test("unreadable selection recovery is retryable and cannot authorize a new send",async()=>{
  const {h}=inboundFixture();const {params}=await ask(h);const from=h.fake.from.bind(h.fake);

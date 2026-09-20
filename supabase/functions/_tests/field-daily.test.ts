@@ -9,7 +9,7 @@ import {
   shouldSendDeliveryConfirm,
   type DigestItem,
 } from "../field-daily/core.ts";
-import type { SendPartySmsInput } from "../_shared/sms.ts";
+import type { OrdinarySmsInput, SendPartySmsInput } from "../_shared/sms.ts";
 import { createFakeSupabase as baseFakeSupabase } from "./fake-supabase.ts";
 function createFakeSupabase(...args: Parameters<typeof baseFakeSupabase>) {
   const fake = baseFakeSupabase(...args);

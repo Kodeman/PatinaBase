@@ -8,6 +8,9 @@ export const interruptedMediaUpload: GateCase = {
   id: "interrupted-media-upload", phase: 0, clauses: ["S4", "S5"],
   async run() {
     const { h, id, effects } = selectionFixture();
+    // The fake declares its media store optional (a test hook); createFakeSupabase
+    // always wires one, so name that before reading its size.
+    assert(h.fake._storageFiles, "the fake exposes its media store");
     assertEquals(h.fake._storageFiles.size, 0, "media store starts empty");
     h.mediaStore.interruptNextUpload();
     let parses = 0;
