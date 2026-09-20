@@ -13,7 +13,10 @@
  *   · Not right — rejected, with the claim kept for the record.
  *   · Book to a teammate — the designer names a profile-backed person on this
  *     job, and only then does the hour land on that person's time. Explicit by
- *     construction: nothing derives a teammate from the party.
+ *     construction: nothing derives a teammate from the party. Offered to a
+ *     principal of this report's studio, because writing somebody else's hour
+ *     is an owner/admin act (00601); everyone else is offered "Book to me",
+ *     which is the hour she may always write.
  *
  * Every decision carries the version the designer was looking at, so two
  * people acting on the same card is a refusal she can see, not a silent
@@ -24,7 +27,9 @@
 import { useState } from "react";
 import {
   useDecideFieldTimeReport,
+  useOrganizations,
   useProjectTeamMembers,
+  useUser,
   type FieldTimeReportRow,
 } from "@patina/supabase";
 import { fmtFieldDate } from "@/lib/document/field-sms";
@@ -110,6 +115,29 @@ export function TimeReportCard({ report }: { report: FieldTimeReportRow }) {
   const decide = useDecideFieldTimeReport();
   const [picking, setPicking] = useState(false);
 
+  /**
+   * Whose hour may she write? Somebody else's is the act of an owner or admin
+   * of the studio that owns the work — 00601's classifier refuses anyone else
+   * with a bare SQLSTATE, and the whole decision rolls back. So the card offers
+   * the door the database will open: the teammate picker to a principal of THIS
+   * report's studio, and "Book to me" to everyone else, who may always book her
+   * own hour. Same org-scoped membership fold the Room and the roster use
+   * (household-band.tsx isPrincipal, :327), on the studio the report names; no
+   * second read, because useOrganizations is one query the Desk already holds.
+   */
+  const { data: myOrgs, isError: myOrgsFailed } = useOrganizations();
+  const myRole = (myOrgs ?? []).find((org) => org.id === report.organization_id)
+    ?.membership?.role;
+  const isPrincipal = myRole === "owner" || myRole === "admin";
+  /**
+   * The membership read has ANSWERED — well or badly. `data` alone never
+   * arrives on a failed read, so a card that waited on it would wait forever;
+   * and offering either door before the answer would offer the wrong one, which
+   * on a mis-click is somebody's real hour. Accept and Not right never wait.
+   */
+  const standingSettled = myOrgs !== undefined || myOrgsFailed;
+  const myUserId = useUser().user?.id ?? null;
+
   const who = report.party_name?.trim() || "Someone on the crew";
   const where =
     report.task_title?.trim() || report.project_name?.trim() || "the job";
@@ -153,7 +181,7 @@ export function TimeReportCard({ report }: { report: FieldTimeReportRow }) {
           </p>
         )}
         <p className="mt-3 text-[12px] text-[var(--text-muted)]">
-          Nothing is on anyone’s hours until you book it to a teammate.
+          Nothing is on anyone’s hours until you book it.
         </p>
 
         <DocumentActionGroup
@@ -180,18 +208,30 @@ export function TimeReportCard({ report }: { report: FieldTimeReportRow }) {
           >
             Not right
           </DocumentAction>
-          <DocumentAction
-            actionKey="attribute-reported-hours"
-            variant="secondary"
-            onClick={() => setPicking((open) => !open)}
-            disabled={decide.isPending}
-            aria-expanded={picking}
-          >
-            Book to a teammate
-          </DocumentAction>
+          {isPrincipal && (
+            <DocumentAction
+              actionKey="attribute-reported-hours"
+              variant="secondary"
+              onClick={() => setPicking((open) => !open)}
+              disabled={decide.isPending}
+              aria-expanded={picking}
+            >
+              Book to a teammate
+            </DocumentAction>
+          )}
+          {standingSettled && !isPrincipal && myUserId && (
+            <DocumentAction
+              actionKey="attribute-reported-hours-to-me"
+              variant="secondary"
+              onClick={() => send("accepted", myUserId)}
+              disabled={decide.isPending}
+            >
+              Book to me
+            </DocumentAction>
+          )}
         </DocumentActionGroup>
 
-        {picking && (
+        {picking && isPrincipal && (
           <TeammatePicker
             projectId={report.project_id}
             pending={decide.isPending}
@@ -199,20 +239,16 @@ export function TimeReportCard({ report }: { report: FieldTimeReportRow }) {
           />
         )}
 
-        {decide.stale && (
+        {/* One refusal, in the hook's plain words (stale, a nothing-hours
+            report, somebody else's hour she may not write, or anything else).
+            The report stays on screen either way: a refused decision rolled
+            back, so there is still something here to decide. */}
+        {decide.errorWords && (
           <p
             role="alert"
             className="mt-3 text-[11px] text-[var(--color-terracotta-ink)]"
           >
-            This one changed — take another look.
-          </p>
-        )}
-        {decide.isError && !decide.stale && (
-          <p
-            role="alert"
-            className="mt-3 text-[11px] text-[var(--color-terracotta-ink)]"
-          >
-            Couldn’t save — try again.
+            {decide.errorWords}
           </p>
         )}
       </div>

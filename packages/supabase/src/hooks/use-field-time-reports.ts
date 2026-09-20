@@ -76,16 +76,58 @@ export interface DecideFieldTimeReportInput {
   attributeToUserId?: string | null;
 }
 
+/** One of a PostgREST error's text fields, when it carries one. */
+function errorField(error: unknown, key: string): string {
+  if (!error || typeof error !== "object") return "";
+  const value = (error as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
+
+/** True when the refusal names this token anywhere a PostgREST error speaks. */
+function carriesToken(error: unknown, token: string): boolean {
+  return ["message", "details", "hint", "code"].some((key) =>
+    errorField(error, key).includes(token),
+  );
+}
+
 /** True when a decision lost the version race (US-4 S4, SQLSTATE 40001). */
 export function isFieldTimeReportStale(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const fields = error as Record<string, unknown>;
-  return ["message", "details", "hint", "code"].some((key) => {
-    const value = fields[key];
-    return (
-      typeof value === "string" && value.includes("field_time_report_stale")
-    );
-  });
+  return carriesToken(error, "field_time_report_stale");
+}
+
+/**
+ * What the database refused, in words the designer can act on.
+ *
+ *  · field_time_report_stale (40001) — two people decided the same card.
+ *  · 'no hour to book' (23514, DETAIL field_time_report_bad_attribution) — a
+ *    nothing-hours report can be accepted or rejected, never booked, because
+ *    project_time_entries holds positive durations only (00177:20). Booking is
+ *    not one of her answers here, so the words say which two are.
+ *  · 42501 — 00601's classifier: another person's user_id on an hour is the act
+ *    of an owner or admin OF THE STUDIO THAT OWNS THE WORK
+ *    (is_org_admin_or_owner of projects.studio_id). It raises
+ *    insufficient_privilege with NO token of its own, so the bare SQLSTATE is
+ *    the whole signal — minus decide()'s own membership refusal, which shares
+ *    the code but DOES carry field_time_report_forbidden. The decision rolled
+ *    back whole and the report is still proposed, so there is no retry hint:
+ *    trying again changes nothing, and booking the hour to herself does.
+ *  · anything else keeps the old words, including a non-member attribution
+ *    target (field_time_report_bad_attribution).
+ */
+function decideErrorWords(error: unknown): string {
+  if (isFieldTimeReportStale(error)) {
+    return "This one changed — take another look.";
+  }
+  if (carriesToken(error, "no hour to book")) {
+    return "There’s no hour to book on this one — accept it or mark it not right.";
+  }
+  if (
+    errorField(error, "code") === "42501" &&
+    !carriesToken(error, "field_time_report_forbidden")
+  ) {
+    return "Only a studio owner or admin can book hours to someone else. You can book them to yourself.";
+  }
+  return "Couldn’t save — try again.";
 }
 
 /**
@@ -93,7 +135,10 @@ export function isFieldTimeReportStale(error: unknown): boolean {
  * field_time_report_decide (SECURITY DEFINER — it authorizes auth.uid() against
  * the project, refuses a decided report, refuses a stale version, and refuses a
  * non-member attribution). `stale` is true when the row moved under the
- * designer, so the card can ask her to take another look at the refreshed one.
+ * designer, so the card can ask her to take another look at the refreshed one;
+ * `errorWords` says what any refusal was, in words she can act on — including
+ * the two the database raises past this RPC's own checks (00601's 42501 on
+ * somebody else's hour, and a nothing-hours report that cannot be booked).
  */
 export function useDecideFieldTimeReport() {
   const queryClient = useQueryClient();
@@ -136,5 +181,7 @@ export function useDecideFieldTimeReport() {
   return {
     ...mutation,
     stale: mutation.isError && isFieldTimeReportStale(mutation.error),
+    /** The refusal in plain words, or null while nothing has been refused. */
+    errorWords: mutation.isError ? decideErrorWords(mutation.error) : null,
   };
 }
