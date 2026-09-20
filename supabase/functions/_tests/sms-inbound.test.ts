@@ -3761,6 +3761,49 @@ Deno.test("S7: a number and its reference file the hours, in every spelling a cr
   }
 });
 
+Deno.test("S7: the reference reads at both widths a handset is issued", async () => {
+  // sms_next_short_code hands out 10–99 for a (sender, recipient) pair and then
+  // 100–999 once those are gone (00639:803-843) — and the handset that exhausts
+  // two digits is exactly the one with several jobs open, whose crew has no other
+  // way to say WHICH site their hours belong to (R3 BLOCKING-1). Both worlds hold
+  // a three-digit and a two-digit question open at once, so what binds is the
+  // code that was typed and never the count or the width.
+  const cases = [
+    { body: "6.5 123", party: "party-a", task: "task-a", spent: "prompt-hours-a",
+      standing: "prompt-hours-b", receipt: "Got it — 6.5 hours at 1421 Williamson St. Dana will confirm." },
+    { body: "6.5 12", party: "party-b", task: "task-b", spent: "prompt-hours-b",
+      standing: "prompt-hours-a", receipt: "Got it — 6.5 hours at 88 Birch Ln. Casey will confirm." },
+  ];
+  for (const { body, party, task, spent, standing, receipt } of cases) {
+    const tag = `[${body}]`;
+    const f = hoursWorld();
+    // The other site's receipt has to be nameable too, or "which one answered"
+    // could not be read off the words the crew gets back.
+    const birch = f.h.fake._data.projects.find((p: Record<string, unknown>) => p.id === "project-b")!;
+    birch.site_address = "88 Birch Ln";
+    const lead = f.h.fake._data.profiles.find((p: Record<string, unknown>) => p.id === "studio-b")!;
+    lead.full_name = "Casey Designer";
+    const three = hoursAsk(f, { short_code: "123" });
+    const two = hoursAsk(f, {
+      id: "prompt-hours-b", short_code: "12",
+      party_id: "party-b", project_id: "project-b", subject_id: "task-b",
+    });
+    const answered = spent === "prompt-hours-a" ? three : two;
+    const untouched = standing === "prompt-hours-a" ? three : two;
+    const res = await f.h.processInbound({ Body: body, MessageSid: "SMwidth" + body.replace(/\W/g, "") });
+
+    assertEquals(res.disposition, "ref_applied", `${tag} the code names a live question`);
+    assertEquals(f.effects.length, 1, `${tag} one report filed`);
+    assertEquals(f.effects[0].p_party_id, party, `${tag} by the seat that code belongs to`);
+    assertEquals(f.effects[0].p_effect, {
+      type: "report_hours", target: { kind: "task", id: task }, hours: 6.5,
+    }, `${tag} against that question's own visit`);
+    assert(answered.answered_at, `${tag} the question the code named is spent`);
+    assertEquals(untouched.answered_at ?? null, null, `${tag} and the other width's still stands`);
+    assert(res.twiml.includes(receipt), `${tag} the receipt names its own site: ${res.twiml}`);
+  }
+});
+
 Deno.test("S7: with one question open a bare number needs no reference", async () => {
   for (const body of ["8", "8 hours", "0", "16"]) {
     const tag = `[${body}]`;
@@ -3847,6 +3890,37 @@ Deno.test("S7: a reference that is not an open hours question is answered as the
   assertEquals(f.effects.length, 0, "nothing is filed");
   assertEquals(open.answered_at ?? null, null, "and tonight's question was not answered for them");
   assertEquals(spent.answered_at, "2026-10-31T23:40:00.000Z", "yesterday's stands as it was");
+});
+
+Deno.test("S7: a three-digit reference no open question owns is answered as a reference", async () => {
+  // Reading three digits does not mean trusting them: a wide code that names a
+  // closed question, or none at all, takes the same old-ref and unknown-ref doors
+  // a two-digit one does, and tonight's hours are never filed on the strength of
+  // the wrong reference.
+  const stale = hoursWorld();
+  const yesterday = hoursAsk(stale, {
+    id: "prompt-hours-old", short_code: "123", answered_at: "2026-10-31T23:40:00.000Z",
+  });
+  const tonight = hoursAsk(stale);
+  const closed = await stale.h.processInbound({ Body: "6.5 123", MessageSid: "SMstale3" });
+  assertEquals(closed.disposition, "ref_closed");
+  assert(closed.twiml.includes("Latest: Ref 18"), `the live question is offered back: ${closed.twiml}`);
+  assertEquals(stale.effects.length, 0, "nothing is filed");
+  assertEquals(tonight.answered_at ?? null, null, "tonight's question was not answered for them");
+  assertEquals(yesterday.answered_at, "2026-10-31T23:40:00.000Z", "yesterday's stands as it was");
+
+  // A width this handset was never issued at all: no prompt row, so nothing to
+  // offer back, and the unknown-ref words stand.
+  const unknown = hoursWorld();
+  const open = hoursAsk(unknown);
+  const res = await unknown.h.processInbound({ Body: "6.5 456", MessageSid: "SMunknown3" });
+  assertEquals(res.disposition, "ref_closed");
+  assert(
+    res.twiml.includes("ask your designer for the latest reference"),
+    `the unknown-reference words: ${res.twiml}`,
+  );
+  assertEquals(unknown.effects.length, 0, "and nothing is filed on a code nobody issued");
+  assertEquals(open.answered_at ?? null, null, "the open question is untouched");
 });
 
 Deno.test("S7: an apply that failed says so, and never mints an hours receipt", async () => {
