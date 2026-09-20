@@ -557,6 +557,18 @@ export type {
   FieldParsedIntent,
   ReviewSmsInput,
 } from "./use-sms-review";
+// Field Line Phase 3 — hours a trade party reported by text, as proposals the
+// designer accepts, rejects, or books to a teammate.
+export {
+  useFieldTimeReportQueue,
+  useDecideFieldTimeReport,
+  isFieldTimeReportStale,
+  fieldTimeReportKeys,
+} from "./use-field-time-reports";
+export type {
+  FieldTimeReportRow,
+  DecideFieldTimeReportInput,
+} from "./use-field-time-reports";
 export { useFieldActivity, fieldActivityKeys } from "./use-field-activity";
 export type { FieldActivityRow } from "./use-field-activity";
 export {
