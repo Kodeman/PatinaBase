@@ -727,7 +727,7 @@ Deno.test("a stale project_pin (>4h) falls back to the chooser", async () => {
   assertEquals(res.disposition, "project_chooser");
   assertEquals(rpcCalls.length, 0);
   assertEquals(res.selection?.kind, "project_choice");
-  assertEquals(res.selection.options.length, 2, "typed intent awaits the shared sender");
+  assertEquals(res.selection?.options.length, 2, "typed intent awaits the shared sender");
 });
 
 Deno.test("chooser resolution processes the stashed triggering text and preserves state_context.menu", async () => {
@@ -3696,4 +3696,227 @@ Deno.test("a reply her consent no longer carries is handed over, never answered"
   const good = await ok.inbound("YES 31", "SMconsented");
   assertEquals(good.disposition, "client_selection_approved");
   assertEquals(ok.h.fake._data.client_decisions[0].status, "responded");
+});
+
+// ── The hours reply: a number, and the question that asked for one (S7) ──────
+//
+// sms_hours_prompt asks how many hours, so the answer is a number — and a number
+// is the one body this rail has always given to the digest menu. The rule that
+// keeps both true is that nothing reads a number as hours unless a report_hours
+// prompt of this party's is open (or a code names one). These worlds walk that
+// rule from both sides: what a live question makes of a number, and what the
+// absence of one leaves exactly as it was.
+
+/** Two crews' worth of world: an open hours question, named and addressed. */
+function hoursWorld(effectError?: unknown) {
+  const f = inboundFixture(effectError, undefined, { FIELD_LINE_PHASE: "3" });
+  // The receipt names the site the hours are for and the designer who will
+  // confirm them, so both have to be findable in the world that answers.
+  const project = f.h.fake._data.projects.find((p: Record<string, unknown>) => p.id === "project-a")!;
+  project.site_address = "1421 Williamson St";
+  const designer = f.h.fake._data.profiles.find((p: Record<string, unknown>) => p.id === "studio-a")!;
+  designer.full_name = "Dana Designer";
+  return f;
+}
+
+/** The question the evening asked party-a, and its reference. */
+function hoursAsk(f: ReturnType<typeof inboundFixture>, overrides: Record<string, unknown> = {}) {
+  return f.prompt({
+    id: "prompt-hours-a", kind: "report_hours", short_code: "18",
+    subject_id: "task-a", version: 20261101, ...overrides,
+  });
+}
+
+Deno.test("S7: a number and its reference file the hours, in every spelling a crew types", async () => {
+  // Four spellings of the same answer, each against TWO open questions — the
+  // party's own on project-a and another on project-b — so the code is doing the
+  // binding and not the count.
+  for (const body of ["6.5 18", "6,5 18", "6.5 hrs 18", "6.5 ref 18"]) {
+    const tag = `[${body}]`;
+    const f = hoursWorld();
+    const ask = hoursAsk(f);
+    const other = f.prompt({
+      id: "prompt-hours-b", kind: "report_hours", short_code: "19",
+      party_id: "party-b", project_id: "project-b", subject_id: "task-b", version: 20261101,
+    });
+    const res = await f.h.processInbound({ Body: body, MessageSid: "SMhours" + body.replace(/\W/g, "") });
+
+    assertEquals(res.disposition, "ref_applied", `${tag} the question it answered is closed`);
+    assertEquals(f.effects.length, 1, `${tag} one report filed`);
+    assertEquals(f.effects[0].p_party_id, "party-a", `${tag} by the seat the reference belongs to`);
+    assertEquals(f.effects[0].p_effect, {
+      type: "report_hours", target: { kind: "task", id: "task-a" }, hours: 6.5,
+    }, `${tag} hours travel as a number, with the visit's own task`);
+    assert(ask.answered_at, `${tag} the question is spent`);
+    assertEquals(other.answered_at ?? null, null, `${tag} and the other site's is untouched`);
+    // The receipt is composed only after the apply says the hours are filed.
+    assert(
+      res.twiml.includes("Got it — 6.5 hours at 1421 Williamson St. Dana will confirm."),
+      `${tag} the receipt says what was filed and who decides: ${res.twiml}`,
+    );
+    // A fact reported, not a decision taken: logistics, with no scope to check.
+    const touch = f.touches[f.touches.length - 1];
+    assertEquals(touch.p_decision_class, "logistics", `${tag} the class the contract names`);
+    assertEquals(touch.p_authority_check, "n/a", `${tag} and nothing was approved`);
+  }
+});
+
+Deno.test("S7: with one question open a bare number needs no reference", async () => {
+  for (const body of ["8", "8 hours", "0", "16"]) {
+    const tag = `[${body}]`;
+    const f = hoursWorld();
+    const ask = hoursAsk(f);
+    const res = await f.h.processInbound({ Body: body, MessageSid: "SMbare" + body.replace(/\W/g, "") });
+    assertEquals(res.disposition, "ref_applied", `${tag} answered`);
+    assertEquals(f.effects.length, 1, `${tag} one report filed`);
+    assertEquals((f.effects[0].p_effect as { hours: number }).hours, Number(body.split(" ")[0]), tag);
+    assert(ask.answered_at, `${tag} against the one open question`);
+  }
+});
+
+Deno.test("S7: two questions open and no reference asks which, and files nothing", async () => {
+  // One phone, two jobs, two evenings' questions. Nothing in "6.5" says which
+  // site, so the codeless door's own answer stands: ask, and list the references.
+  const f = hoursWorld();
+  const a = hoursAsk(f);
+  const b = f.prompt({
+    id: "prompt-hours-b", kind: "report_hours", short_code: "19",
+    party_id: "party-b", project_id: "project-b", subject_id: "task-b", version: 20261101,
+  });
+  const res = await f.h.processInbound({ Body: "6.5", MessageSid: "SMwhichone" });
+
+  assertEquals(res.disposition, "ref_clarify");
+  const offered = res.selection?.kind === "ref_clarify" ? res.selection.options : [];
+  assertEquals(
+    offered.map((o) => o.promptId).sort(),
+    ["prompt-hours-a", "prompt-hours-b"],
+    "both questions are offered",
+  );
+  assertEquals(f.effects.length, 0, "and nothing is filed on a guess");
+  assertEquals(a.answered_at ?? null, null, "both are still waiting");
+  assertEquals(b.answered_at ?? null, null);
+});
+
+Deno.test("S7: a number no day holds is refused, and the question stays open", async () => {
+  // Out of range and unusable are the same answer: the range and the reference
+  // come back, and the prompt is NOT consumed — a crew whose "20" closed their
+  // question would have no way left to report the eight hours they worked.
+  for (const body of ["20", "99", "16.01", "20 ref 18"]) {
+    const tag = `[${body}]`;
+    const f = hoursWorld();
+    const ask = hoursAsk(f);
+    const res = await f.h.processInbound({ Body: body, MessageSid: "SMrange" + body.replace(/\W/g, "") });
+    assertEquals(res.disposition, "hours_out_of_range", tag);
+    assert(res.twiml.includes("between 0 and 16"), `${tag} the range is named: ${res.twiml}`);
+    assert(res.twiml.includes("Ref 18"), `${tag} and so is the question: ${res.twiml}`);
+    assertEquals(f.effects.length, 0, `${tag} nothing is filed`);
+    assertEquals(ask.answered_at ?? null, null, `${tag} and the question is still answerable`);
+    const stamps = inboundStamps(f);
+    assert(!stamps[0].needs_review, `${tag} nobody is paged over a typo`);
+  }
+});
+
+Deno.test("S7: a sentence with a number in it is not an hours answer", async () => {
+  // The grammar is a number and nothing else. "6 hrs of drywall today" is a crew
+  // telling their designer something, so the open question changes nothing about
+  // where it goes. The control is the same sentence with no question open: on
+  // this two-job phone both land on the unbound-freeform path, and the claim is
+  // that they land on the SAME one.
+  const body = "6 hrs of drywall today";
+  const control = await hoursWorld().h.processInbound({ Body: body, MessageSid: "SMsentencectl" });
+  const f = hoursWorld();
+  const ask = hoursAsk(f);
+  const res = await f.h.processInbound({ Body: body, MessageSid: "SMsentence" });
+
+  assertEquals(res.disposition, control.disposition, "the sentence goes where it always went");
+  assertEquals(res.twiml, control.twiml, "and is answered in the same words");
+  assertEquals(f.effects.length, 0, "no hours are invented from a sentence");
+  assertEquals(ask.answered_at ?? null, null, "and the question still stands");
+});
+
+Deno.test("S7: a reference that is not an open hours question is answered as the stale one it is", async () => {
+  // Yesterday's question, answered yesterday, with tonight's open beside it. The
+  // number is not filed against tonight's on the strength of the wrong code.
+  const f = hoursWorld();
+  const spent = hoursAsk(f, { id: "prompt-hours-old", short_code: "17", answered_at: "2026-10-31T23:40:00.000Z" });
+  const open = hoursAsk(f);
+  const res = await f.h.processInbound({ Body: "6.5 17", MessageSid: "SMstalehours" });
+
+  assertEquals(res.disposition, "ref_closed");
+  assert(res.twiml.includes("Latest: Ref 18"), `the live question is offered back: ${res.twiml}`);
+  assertEquals(f.effects.length, 0, "nothing is filed");
+  assertEquals(open.answered_at ?? null, null, "and tonight's question was not answered for them");
+  assertEquals(spent.answered_at, "2026-10-31T23:40:00.000Z", "yesterday's stands as it was");
+});
+
+Deno.test("S7: an apply that failed says so, and never mints an hours receipt", async () => {
+  // P0-3: the receipt naming the hours is composed only after the RPC says they
+  // were filed. A refusal leaves the question open and hands the message over.
+  const f = hoursWorld({ code: "23514", message: "field_time_report_duplicate" });
+  const ask = hoursAsk(f);
+  const res = await f.h.processInbound({ Body: "6.5 18", MessageSid: "SMhoursfail" });
+
+  assertEquals(res.disposition, "effect_failed");
+  assert(!res.twiml.includes("Got it"), `no receipt for an unfiled report: ${res.twiml}`);
+  assert(!res.twiml.includes("hours at"), `and no hours are read back: ${res.twiml}`);
+  assert(res.twiml.includes("didn't save"), `the honest line instead: ${res.twiml}`);
+  assertEquals(ask.answered_at ?? null, null, "the question is not spent on a failure");
+  const stamps = inboundStamps(f);
+  assertEquals(stamps[0].needs_review, true, "a person has it");
+  assertEquals(stamps[0].owner_user_id, "studio-a", "and it has an owner");
+});
+
+Deno.test("S7: with no hours question open, a number is the digest menu it has always been", async () => {
+  // THE COMPATIBILITY CLAIM. A bare number on a fresh menu still closes the item
+  // it numbers, and no prompt RPC is asked about it.
+  const now = new Date("2026-07-08T18:00:00Z");
+  const rpcCalls: Array<Record<string, unknown>> = [];
+  const asked: string[] = [];
+  const fake: FakeSupabase = createFakeSupabase(
+    baseSeed({
+      project_parties: [
+        { id: "53100000-0000-4000-8000-000000000001", phone_e164: "+15551110002", project_id: "53100000-0000-4000-8000-000000000003", party_kind: "sub", sms_consent_status: "granted" },
+      ],
+      sms_conversations: [
+        {
+          id: "53100000-0000-4000-8000-000000000005", twilio_number: TO, phone_e164: "+15551110002", state: "idle",
+          active_project_id: "53100000-0000-4000-8000-000000000003", party_id: "53100000-0000-4000-8000-000000000001",
+          state_context: { menu: [{ n: 1, kind: "task", id: "task1", project_id: "53100000-0000-4000-8000-000000000003" }], menu_created_at: now.toISOString() },
+        },
+      ],
+    }),
+    { apply_field_effect: (args) => { rpcCalls.push(args); return { data: { applied: true, summary_text: 'Marked "Vanity" done.', remaining_count: 2 }, error: null }; } },
+  );
+  const rpc = fake.rpc;
+  fake.rpc = async (name, args = {}) => { asked.push(name); return await rpc(name, args); };
+  const res = await processInbound(
+    params({ From: "+15551110002", Body: "1", MessageSid: "SMbaremenu" }),
+    { supabase: fake as never, getEnv: NO_POSTHOG, now },
+  );
+  assertEquals(res.disposition, "menu_applied");
+  assertEquals(rpcCalls.length, 1);
+  const effect = rpcCalls[0].p_effect as { type: string; target: { id: string } };
+  assertEquals(effect.type, "mark_done");
+  assertEquals(effect.target.id, "task1");
+  assert(res.twiml.includes("2 left"));
+  assertEquals(
+    asked.filter((n) => n.includes("prompt")),
+    [],
+    `no prompt RPC is asked about a menu digit: ${asked.join(",")}`,
+  );
+});
+
+Deno.test("S7: an open question of another kind does not capture a number either", async () => {
+  // The gate is the KIND, not the presence of a question: an arrival card open
+  // beside a number leaves the number exactly where it was before phase 3 — which
+  // is what a world with no question open answers, byte for byte.
+  const control = await hoursWorld().h.processInbound({ Body: "6.5", MessageSid: "SMnothoursctl" });
+  const f = hoursWorld();
+  const arrival = f.prompt({ short_code: "18" });
+  const res = await f.h.processInbound({ Body: "6.5", MessageSid: "SMnothours" });
+
+  assertEquals(res.disposition, control.disposition, "the number is not an answer to a card");
+  assertEquals(res.twiml, control.twiml, "and nothing new is said back");
+  assertEquals(f.effects.length, 0);
+  assertEquals(arrival.answered_at ?? null, null, "and the card is still open");
 });

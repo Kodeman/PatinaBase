@@ -7,6 +7,7 @@
 // send/parse/dispatch logic deterministically and offline.
 
 import { equal } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type Row = Record<string, unknown>;
 type Predicate = (r: Row) => boolean;
@@ -110,7 +111,7 @@ class Builder {
 
     if (this._op === "insert") {
       const items = (Array.isArray(this._payload) ? this._payload : [this._payload]) as Row[];
-      const recs = items.map((x) => ({ id: x.id ?? crypto.randomUUID(), ...x }));
+      const recs = items.map((x): Row => ({ id: x.id ?? crypto.randomUUID(), ...x }));
       // Model 00640 sms_messages_send_claim_uniq, not general SQL locking.
       const liveClaim = (r: Row) => r.direction === "outbound" && r.party_id != null && r.dedupe_key != null &&
         !["failed", "undelivered", "canceled", "expired", "suppressed"].includes(String(r.twilio_status ?? "claimed"));
@@ -266,4 +267,15 @@ export function createFakeSupabase(
     _failUpdateIds: controls.failUpdateIds,
     _failUploadsFor: controls.failUploadsFor,
   };
+}
+
+/**
+ * The fake where a real client is asked for. The SupabaseClient type comes from
+ * an unpinned esm.sh specifier, so its generic arity moves under us (today it
+ * wants five arguments), and a fake that models four tables will never satisfy
+ * the two dozen members of the real one. One cast, named here, instead of the
+ * same cast rewritten at every call site.
+ */
+export function asClient(fake: FakeSupabase): SupabaseClient {
+  return fake as unknown as SupabaseClient;
 }

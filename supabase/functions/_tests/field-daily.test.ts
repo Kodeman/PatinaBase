@@ -9,7 +9,7 @@ import {
   shouldSendDeliveryConfirm,
   type DigestItem,
 } from "../field-daily/core.ts";
-import type { SendPartySmsInput } from "../_shared/sms.ts";
+import type { OrdinarySmsInput, SendPartySmsInput } from "../_shared/sms.ts";
 import { createFakeSupabase as baseFakeSupabase } from "./fake-supabase.ts";
 function createFakeSupabase(...args: Parameters<typeof baseFakeSupabase>) {
   const fake = baseFakeSupabase(...args);
@@ -690,7 +690,7 @@ Deno.test("P4: one site card the evening before, bound to that visit's own task"
   assertEquals(summary.day_of_sent, 0, "the morning ask is not due at 6pm");
   assertEquals(summary.crew_posts, 0, "and nobody is on the way yet");
 
-  const card = sent.find((s) => s.templateKey === "sms_site_card");
+  const card = sent.find((s): s is OrdinarySmsInput => s.templateKey === "sms_site_card");
   assert(card, `a site card was sent: ${JSON.stringify(sent.map((s) => s.templateKey))}`);
   assertEquals(card!.automationPhase, 1, "a new automation declares its phase");
   assertEquals(card!.cadenceClass, "event", "and pays for a slot of the daily cadence");
@@ -721,7 +721,7 @@ Deno.test("P4: the morning ask, the crew-on-the-way POST, and no homeowner text"
   assertEquals(summary.site_cards_sent, 0, "5pm has not come round again");
   assertEquals(summary.crew_posts, 1);
 
-  const ask = sent.find((s) => s.templateKey === "sms_day_of");
+  const ask = sent.find((s): s is OrdinarySmsInput => s.templateKey === "sms_day_of");
   assert(ask, `the morning ask was sent: ${JSON.stringify(sent.map((s) => s.templateKey))}`);
   assertEquals(ask!.automationPhase, 1);
   assertEquals(ask!.cadenceClass, "event");
@@ -1714,4 +1714,206 @@ Deno.test("P24: a client seat with no live letter leaves no thread behind", asyn
     assertEquals((fake._data.sms_conversation_context ?? []).length, 0);
     assertEquals((fake._data.sms_prompts ?? []).length, 0);
   }
+});
+
+// ── The evening's one question: how many hours (contract S8) ─────────────────
+//
+// Phase 3 adds ONE text to a day that already has a card in it: at half past
+// five, a crew that was on site today is asked for its hours, and the number
+// they send back is a proposal a designer decides on. These worlds pin the gate
+// (a phase-2 server asks nobody, and spends no reference), the shape of the ask
+// (one per party and task, on the contract's template, phase and cadence), the
+// re-run (a second tick asks nothing again), and who is never asked at all.
+
+import { HOURS_PROMPT_LOCAL_MINUTES } from "../field-daily/core.ts";
+
+/** 5pm CST on the visit day — the exact minute the hours floor opens. */
+const HOURS_EVENING = new Date("2026-11-01T23:00:00.000Z");
+/** The morning the question closes: 07:30 in the NEXT day's own offset. */
+const HOURS_EXPIRES = "2026-11-02T13:30:00.000Z";
+
+/** visitWorld(), plus the studio's own name for the text to open with. */
+function hoursWorld() {
+  const fake = visitWorld();
+  (fake._data.profiles ??= []).push({ id: "designer1", full_name: "Dana Designer" });
+  return fake;
+}
+
+/** runFieldDaily at a phase, keeping the create-prompt ARGUMENTS, not just rows. */
+function hoursRun(
+  fake: ReturnType<typeof visitWorld>,
+  now: Date,
+  sent: SendPartySmsInput[],
+  env: Record<string, string> = { FIELD_LINE_PHASE: "3" },
+) {
+  const created: Array<Record<string, unknown>> = [];
+  const rpc = fake.rpc;
+  fake.rpc = async (name, params = {}) => {
+    if (name === "sms_create_prompt") created.push(params);
+    return await rpc(name, params);
+  };
+  return {
+    created,
+    summary: runFieldDaily(fake as never, {
+      getEnv: (k) =>
+        ({ TWILIO_FROM_NUMBER: "+15559990000", ...env } as Record<string, string>)[k],
+      now,
+      sendFn: (_s, input) => { sent.push(input); return Promise.resolve({ sent: true }); },
+      flushFn: () => Promise.resolve({ flushed: 0, skipped: 0 }),
+    }),
+  };
+}
+
+Deno.test("S8: the hours floor is five o'clock, and the shipped tick clears it all year", () => {
+  assertEquals(HOURS_PROMPT_LOCAL_MINUTES, 17 * 60);
+  assertEquals(
+    localMinutesInTimezone(HOURS_EVENING, SCHEDULE_TZ),
+    HOURS_PROMPT_LOCAL_MINUTES,
+    "the world below sits exactly on the floor, not past it",
+  );
+  assertEquals(localDayInTimezone(HOURS_EVENING, SCHEDULE_TZ), VISIT, "on the visit day itself");
+  // WHY FIVE AND NOT HALF PAST. 00648's evening tick is '5 23 * * *', which is
+  // 18:05 local in CDT and 17:05 in CST. A floor above 17:05 would let the ask
+  // go out all summer and never once through the winter, so both offsets are
+  // pinned here: if either drops below the floor, the crews stop being asked.
+  for (const [label, tick] of [
+    ["CDT", new Date("2026-07-08T23:05:00.000Z")],
+    ["CST", new Date("2026-11-04T23:05:00.000Z")],
+  ] as const) {
+    assert(
+      localMinutesInTimezone(tick, SCHEDULE_TZ) >= HOURS_PROMPT_LOCAL_MINUTES,
+      `${label}: the shipped evening tick clears the floor (` +
+        `${localMinutesInTimezone(tick, SCHEDULE_TZ)} minutes local)`,
+    );
+  }
+});
+
+Deno.test("S8: at phase 2 the evening asks nobody for hours and mints no reference", async () => {
+  // The gate is asked BEFORE a row is written, so a phase-2 server has neither an
+  // hours question nor a short code spent on one. The morning ask going out on
+  // the same tick is the control: the tick ran, and only the hours ask is off.
+  const fake = hoursWorld();
+  const sent: SendPartySmsInput[] = [];
+  const run = hoursRun(fake, HOURS_EVENING, sent, { FIELD_LINE_PHASE: "2" });
+  const summary = await run.summary;
+
+  assertEquals(summary.hoursPromptsSent, 0);
+  assertEquals(promptsOfKind(fake, "report_hours").length, 0, "no reference is reserved");
+  assertEquals(sent.filter((s) => s.templateKey === "sms_hours_prompt").length, 0);
+  assertEquals(
+    run.created.filter((c) => c.p_kind === "report_hours").length,
+    0,
+    "sms_create_prompt was never asked for one",
+  );
+  assertEquals(summary.day_of_sent, 1, "and the phase-1 rail on this tick is untouched");
+});
+
+Deno.test("S8: at phase 3 one hours question per party and task, on the contract's terms", async () => {
+  const fake = hoursWorld();
+  const sent: SendPartySmsInput[] = [];
+  const run = hoursRun(fake, HOURS_EVENING, sent);
+  const summary = await run.summary;
+
+  assertEquals(summary.hoursPromptsSent, 1);
+  const asks = sent.filter((s): s is OrdinarySmsInput =>
+    s.templateKey === "sms_hours_prompt"
+  );
+  assertEquals(asks.length, 1, `one hours ask: ${JSON.stringify(sent.map((s) => s.templateKey))}`);
+  assertEquals(asks[0].automationPhase, 3, "a new automation declares its phase");
+  assertEquals(asks[0].cadenceClass, "event", "and pays for a slot of the daily cadence");
+  assertEquals(asks[0].dedupeKey, `field-hours:pty1:${VISIT}`);
+  assertEquals(asks[0].partyId, "pty1");
+  assertEquals(asks[0].projectId, "proj1");
+  // The studio's own name first, the site the hours are for, and the reference.
+  assertEquals(asks[0].vars?.studio, "Dana Designer");
+  assertEquals(asks[0].vars?.address, "1421 Williamson St, Madison");
+  const prompts = promptsOfKind(fake, "report_hours");
+  assertEquals(prompts.length, 1);
+  assertEquals(asks[0].vars?.code, prompts[0].short_code, "the code they were given");
+
+  assertEquals(prompts[0].subject_id, "task1", "bound to the visit's own task");
+  assertEquals(prompts[0].version, 20261101, "and the day it is for, frozen");
+  assertEquals(prompts[0].expires_at, HOURS_EXPIRES, "open until the next morning takes over");
+  const create = run.created.find((c) => c.p_kind === "report_hours")!;
+  // NO STORED PROPOSAL. The hours travel in the REPLY (contract S1, the way a
+  // condition note does), and 00645's sms_apply_prompt refuses an incoming
+  // effect on a prompt that already carries one of its own.
+  assertEquals(create.p_proposed_effect, null);
+  assertEquals(create.p_subject_id, "task1");
+  assertEquals(create.p_version, 20261101);
+});
+
+Deno.test("S8: a second evening tick asks nothing again", async () => {
+  const fake = hoursWorld();
+  const sent: SendPartySmsInput[] = [];
+  // 00640's claim, modelled: the dedupe key IS the logical send, and a second
+  // writer of the same key loses it and puts nothing on the wire.
+  const claimed = new Set<string>();
+  const run = (now: Date) =>
+    runFieldDaily(fake as never, {
+      getEnv: (k) =>
+        ({ TWILIO_FROM_NUMBER: "+15559990000", FIELD_LINE_PHASE: "3" } as Record<string, string>)[k],
+      now,
+      sendFn: (_s, input) => {
+        const key = String(input.dedupeKey);
+        if (claimed.has(key)) return Promise.resolve({ sent: false });
+        claimed.add(key);
+        sent.push(input);
+        return Promise.resolve({ sent: true });
+      },
+      flushFn: () => Promise.resolve({ flushed: 0, skipped: 0 }),
+    });
+
+  const first = await run(HOURS_EVENING);
+  const firstId = promptsOfKind(fake, "report_hours")[0].id;
+  const again = await run(new Date(HOURS_EVENING.getTime() + 3600 * 1000));
+
+  assertEquals(first.hoursPromptsSent, 1);
+  assertEquals(again.hoursPromptsSent, 0, "the second tick puts nothing on the wire");
+  const prompts = promptsOfKind(fake, "report_hours");
+  assertEquals(prompts.length, 1, "the same open reference, not a second");
+  assertEquals(prompts[0].id, firstId);
+  assertEquals(sent.filter((s) => s.templateKey === "sms_hours_prompt").length, 1);
+});
+
+Deno.test("S8: a homeowner is never asked for hours", async () => {
+  // A client seat with everything a crew's has — on site today, an open task due
+  // today, a consent record on the same studio — and it is still never asked:
+  // FIELD_KINDS is the population this block reads, and `client` is not in it.
+  const fake = hoursWorld();
+  (fake._data.project_parties as Array<Record<string, unknown>>).push({
+    id: "pty-client",
+    phone_e164: "+15550002222",
+    project_id: "proj1",
+    party_kind: "client",
+    display_name: "Nora",
+    on_site_from: VISIT,
+    on_site_to: VISIT,
+  });
+  (fake._data.studio_channel_consent as Array<Record<string, unknown>>).push({
+    organization_id: "org1",
+    channel_kind: "sms",
+    channel_value: "+15550002222",
+    status: "granted",
+  });
+  (fake._data.project_tasks as Array<Record<string, unknown>>).push({
+    id: "task-client",
+    title: "Pick a pull",
+    due_date: VISIT,
+    project_id: "proj1",
+    owner_party_id: "pty-client",
+    status: "todo",
+  });
+
+  const sent: SendPartySmsInput[] = [];
+  const summary = await hoursRun(fake, HOURS_EVENING, sent).summary;
+
+  assertEquals(summary.hoursPromptsSent, 1, "the crew is asked");
+  const prompts = promptsOfKind(fake, "report_hours");
+  assertEquals(prompts.length, 1);
+  assertEquals(prompts[0].party_id, "pty1", "and the seat asked is the trade one");
+  assertEquals(
+    sent.filter((s) => s.templateKey === "sms_hours_prompt").map((s) => s.partyId),
+    ["pty1"],
+  );
 });

@@ -63,8 +63,8 @@ Deno.test("backfilled holding without active project discards old chooser and pr
   const dispatched = await dispatchInboundReplies(p, result, deps(h));
   assertEquals(dispatched.status, 200);
   const fresh = h.fake._data.sms_messages.find((m:any) => m.id === result.messageId)!;
-  assertEquals(fresh.parsed_intent.held_origin_id, "54000000-0000-4000-8000-000000000002");
-  assert(result.messageId !== fresh.parsed_intent.held_origin_id, "fresh question never borrows the expired root timestamp");
+  assertEquals((fresh.parsed_intent as any).held_origin_id, "54000000-0000-4000-8000-000000000002");
+  assert(result.messageId !== (fresh.parsed_intent as any).held_origin_id, "fresh question never borrows the expired root timestamp");
   const question = h.fake._data.sms_messages.find((m: any) => m.recipe?.selection)!; question.twilio_status = "delivered";
   assertEquals(held.backfilled_at, null, "live question is no longer stamped as a migration snapshot");
   const done = await processInbound(input(h, "1", "SMlegacyPick"), deps(h, async (x: any) => {
@@ -74,14 +74,14 @@ Deno.test("backfilled holding without active project discards old chooser and pr
   assertEquals(done.disposition, "applied"); assertEquals(effects.length, 1); assertEquals(effects[0].p_party_id, id("party-a"));
   assertEquals((effects[0].p_effect as any).type, "note", "parsed fresh, never replay old pending_effect");
   assertEquals(effects[0].p_sms_message_id, "54000000-0000-4000-8000-000000000002", "only the root owns the effect receipt");
-  assertEquals(fresh.parsed_intent.legacy_choice_closed, true);
+  assertEquals((fresh.parsed_intent as any).legacy_choice_closed, true);
   assertEquals(fresh.applied_effect, undefined, "chooser is never a second effect source");
   assertEquals((await processInbound(input(h, "1", "SMlegacyPick"), deps(h))).disposition, "already_completed");
   assertEquals((await processInbound(input(h, "1", "SMlegacyPickAgain"), deps(h))).disposition, "already_completed");
   assertEquals(effects.length, 1);
   assertEquals(h.fake._data.sms_conversation_context.some((c: any) => c.project_id === null), false);
   const context = h.fake._data.sms_conversation_context.find((c: any) => c.project_id === id("project-a"))!;
-  assertEquals(context.state_context.menu, undefined, "old held menu never becomes project authority");
+  assertEquals((context.state_context as any).menu, undefined, "old held menu never becomes project authority");
   assertEquals((effects[0].p_effect as any).media, [`project/${id("project-a")}/sms/54000000-0000-4000-8000-000000000002/0.jpg`]);
 });
 
@@ -113,7 +113,7 @@ Deno.test("re-ask of a re-ask flattens the root pointer and completed root block
   const secondParams = input(h, "another old digit", "SMsecondReask");
   const second = await processInbound(secondParams, deps(h));
   const current = h.fake._data.sms_messages.find((m:any) => m.id === second.messageId)!;
-  assertEquals(current.parsed_intent.held_origin_id, rootId, "pointer stays at root, never at prior chooser");
+  assertEquals((current.parsed_intent as any).held_origin_id, rootId, "pointer stays at root, never at prior chooser");
   const firstQuestion = h.fake._data.sms_messages.find((m:any) => m.recipe?.selection?.inboundMessageId === first.messageId)!;
   const beforeBinder = structuredClone(h.fake._data.sms_conversation_context);
   const wires = h.provider.requests.length;
@@ -121,8 +121,8 @@ Deno.test("re-ask of a re-ask flattens the root pointer and completed root block
   assertEquals((await dispatchInboundReplies(secondParams, second, deps(h))).disposition, "already_completed");
   assertEquals(h.provider.requests.length, wires, "dispatch checks root before sending a new chooser");
   assertEquals(await bindInboundSelection(h.fake as never, first.messageId!, {
-    manifest: firstQuestion.recipe.selection, usable: true, deliveryStatus: "delivered",
-  }, firstQuestion.id), true);
+    manifest: (firstQuestion.recipe as any).selection, usable: true, deliveryStatus: "delivered",
+  }, String(firstQuestion.id)), true);
   assertEquals(h.fake._data.sms_conversation_context, beforeBinder, "late binder checks completed root before any context CAS");
   assertEquals((await processInbound(secondParams, deps(h))).disposition, "already_completed", "retry reads root, not fresh chooser completion");
   held.backfilled_at = h.clock.toISOString(); held.state_context = { pending_message_id: rootId };
