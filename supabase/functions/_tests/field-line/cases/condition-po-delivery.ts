@@ -4,7 +4,7 @@ import {
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { inboundFixture } from "../inbound-fixture.ts";
 import { processInbound } from "../../../sms-inbound/pipeline.ts";
-import { parseFieldMessage } from "../../../_shared/field-parse.ts";
+import { realParseFn } from "./helpers.ts";
 import type { GateCase } from "../types.ts";
 
 export const conditionReport: GateCase = {
@@ -117,6 +117,6 @@ function realInbound(h: ReturnType<typeof inboundFixture>["h"], Body: string) {
     now: h.clock,
     getEnv: h.env,
     fetchImpl: h.provider.fetch,
-    parseFn: parseFieldMessage,
+    parseFn: realParseFn,
   });
 }

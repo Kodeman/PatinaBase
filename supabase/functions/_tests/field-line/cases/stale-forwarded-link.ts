@@ -1,8 +1,22 @@
 import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { fieldLinkFixture } from "../inbound-fixture.ts";
 import type { GateCase } from "../types.ts";
+import { jsonObject } from "./helpers.ts";
 
 const RAW_TOKEN = /[0-9a-f]{64}/i;
+
+/** The fixture's resolver returns an untyped payload; name what this case reads. */
+const linkDto = (data: unknown) =>
+  jsonObject<{ project: { id: unknown }; party: { id: unknown } }>(data, "resolved field link");
+
+/** The token create_field_link minted, off the same untyped RPC payload. */
+function mintedToken(result: { data: unknown }): string {
+  const rows = result.data;
+  if (!Array.isArray(rows)) {
+    throw new Error(`create_field_link returned no rows: ${JSON.stringify(rows)}`);
+  }
+  return jsonObject<{ token: string }>(rows[0], "minted field link").token;
+}
 
 export const staleForwardedLink: GateCase = {
   id: "stale-forwarded-link", phase: 0, clauses: ["S1", "S6"],
@@ -43,7 +57,7 @@ export const staleForwardedLink: GateCase = {
         assert(!RAW_TOKEN.test(JSON.stringify(response)), "resolver returns no bearer credential");
         return response.data;
       };
-      assertEquals((await open(old.token)).party.id, "party-a");
+      assertEquals(linkDto(await open(old.token)).party.id, "party-a");
 
       const latest = prompt({ id: "prompt-new", kind: "report_delay", short_code: "18", version: 2,
         proposed_effect: { ...originalEffect, new_date: "2026-11-06", note: "replacement proposal" } });
@@ -59,17 +73,17 @@ export const staleForwardedLink: GateCase = {
       assertEquals(rows[0].expires_at, oldExpiry, "moving the engagement window never extends the prior token");
       assertEquals(rows[1].expires_at, "2026-11-03T00:00:00.000Z");
       for (let attempt = 0; attempt < 2; attempt++) {
-        const dto = await open(old.token);
+        const dto = linkDto(await open(old.token));
         assertEquals(dto.project.id, "project-a", "repeated post-mint opens preserve the old link's project");
         assertEquals(dto.party.id, "party-a");
       }
       assertEquals(rows[0].last_used_at, h.clock.toISOString(), "open stamps usage without consuming the link");
-      assertEquals((await open(fresh.token)).project.id, "project-a");
+      assertEquals(linkDto(await open(fresh.token)).project.id, "project-a");
 
       if (stale) {
         h.advanceTo(new Date("2026-11-02T00:00:00.000Z"));
         assertEquals(await open(old.token), null, "S6 expired old link is refused at its own immutable expiry");
-        assertEquals((await open(fresh.token)).party.id, "party-a", "newer link keeps its own later expiry");
+        assertEquals(linkDto(await open(fresh.token)).party.id, "party-a", "newer link keeps its own later expiry");
       }
       // Reply grammar is VERB NN, not the forwarded URL/body. Extract NN from
       // the actual old wire copy, as the recipient would, not from the latest prompt.
@@ -110,8 +124,8 @@ export const staleForwardedLink: GateCase = {
       assertEquals(regenerated.error, null);
       assertEquals(await open(old.token), null, "explicit regeneration refuses the old link");
       assertEquals(await open(fresh.token), null, "explicit regeneration revokes every prior active link for this party");
-      assertEquals((await open(regenerated.data[0].token)).party.id, "party-a");
-      assertEquals((await open(other.data[0].token)).project.id, "project-b", "regeneration does not revoke another party/project");
+      assertEquals(linkDto(await open(mintedToken(regenerated))).party.id, "party-a");
+      assertEquals(linkDto(await open(mintedToken(other))).project.id, "project-b", "regeneration does not revoke another party/project");
       assertEquals(await open("not-a-token"), null, "unknown and expired/revoked links have the same leak-free refusal");
       assertEquals(await open(null), null);
     }

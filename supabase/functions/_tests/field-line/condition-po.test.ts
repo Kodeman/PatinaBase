@@ -1,8 +1,10 @@
 import { conditionReport, poDelivery } from "./cases/condition-po-delivery.ts";
-Deno.test("condition fixture uses real parser and atomic prompt receipt", () =>
-  conditionReport.run());
-Deno.test("PO delivery fixture uses atomic authority and truthful validator refusal", () =>
-  poDelivery.run());
+Deno.test("condition fixture uses real parser and atomic prompt receipt", async () => {
+  await conditionReport.run();
+});
+Deno.test("PO delivery fixture uses atomic authority and truthful validator refusal", async () => {
+  await poDelivery.run();
+});
 
 import {
   assert,
@@ -10,7 +12,7 @@ import {
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { inboundFixture } from "./inbound-fixture.ts";
 import { processInbound } from "../../sms-inbound/pipeline.ts";
-import { parseFieldMessage } from "../../_shared/field-parse.ts";
+import { realParseFn } from "./cases/helpers.ts";
 
 for (const length of [2001, 2000]) {
   Deno.test(`PO condition ${length}-character reply preserves full note and SQL length outcome`, async () => {
@@ -62,7 +64,7 @@ for (const length of [2001, 2000]) {
       now: h.clock,
       getEnv: h.env,
       fetchImpl: h.provider.fetch,
-      parseFn: parseFieldMessage,
+      parseFn: realParseFn,
     });
     assert(submitted, "condition reaches atomic prompt authority");
     assertEquals(
@@ -150,7 +152,7 @@ Deno.test("task reply payload bytes retain main command contract", async () => {
       now: h.clock,
       getEnv: h.env,
       fetchImpl: h.provider.fetch,
-      parseFn: parseFieldMessage,
+      parseFn: realParseFn,
     });
     assertEquals(result.disposition, "ref_applied");
     assertEquals(
