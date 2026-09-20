@@ -690,7 +690,7 @@ Deno.test("P4: one site card the evening before, bound to that visit's own task"
   assertEquals(summary.day_of_sent, 0, "the morning ask is not due at 6pm");
   assertEquals(summary.crew_posts, 0, "and nobody is on the way yet");
 
-  const card = sent.find((s) => s.templateKey === "sms_site_card");
+  const card = sent.find((s): s is OrdinarySmsInput => s.templateKey === "sms_site_card");
   assert(card, `a site card was sent: ${JSON.stringify(sent.map((s) => s.templateKey))}`);
   assertEquals(card!.automationPhase, 1, "a new automation declares its phase");
   assertEquals(card!.cadenceClass, "event", "and pays for a slot of the daily cadence");
@@ -721,7 +721,7 @@ Deno.test("P4: the morning ask, the crew-on-the-way POST, and no homeowner text"
   assertEquals(summary.site_cards_sent, 0, "5pm has not come round again");
   assertEquals(summary.crew_posts, 1);
 
-  const ask = sent.find((s) => s.templateKey === "sms_day_of");
+  const ask = sent.find((s): s is OrdinarySmsInput => s.templateKey === "sms_day_of");
   assert(ask, `the morning ask was sent: ${JSON.stringify(sent.map((s) => s.templateKey))}`);
   assertEquals(ask!.automationPhase, 1);
   assertEquals(ask!.cadenceClass, "event");
