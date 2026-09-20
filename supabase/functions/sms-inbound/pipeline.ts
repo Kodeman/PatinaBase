@@ -2203,15 +2203,20 @@ export function tradeShape(body: string): TradeShape | null {
 // nothing else: "6", "6.5", "6,5", "6 hrs", "6.5 18". Every other rule on this
 // rail leaves bare digits to the digest menu, and they still belong to it — what
 // makes a number HOURS is that something asked for one, which is a report_hours
-// prompt of this party's standing open (or a two-digit code that names one). With
+// prompt of this party's standing open (or a code that names one). With
 // no such prompt open, hoursReply() returns null and the body goes exactly where
 // it went before.
 //
 // The unit — h / hr / hrs / hours — is optional and carries no meaning: the
 // question named a unit, and a crew typing it back is agreeing, not qualifying.
 // A comma is a decimal point: half the keyboards this rail texts put one there.
+// The reference is two OR three digits, like every other ref this file reads
+// (:1339, :1344, :2965) and like 00653's own numeric body: sms_next_short_code
+// hands out 10–99 first and 100–999 once a handset has exhausted them
+// (00639:803-843), and the handset that exhausts them is exactly the busy one
+// whose hours have to be filable (R3 BLOCKING-1).
 const HOURS_REPLY =
-  /^\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:h|hr|hrs|hours)?\s*(?:ref\s*)?(\d{2})?\s*$/i;
+  /^\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:h|hr|hrs|hours)?\s*(?:ref\s*)?(\d{2,3})?\s*$/i;
 /** The prompt kind that asks for hours, and the only kind a number answers. */
 const HOURS_PROMPT_KIND = "report_hours";
 /** A day nobody worked, and the longest day this rail takes on a text alone. */
