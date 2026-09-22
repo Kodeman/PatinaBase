@@ -135,7 +135,7 @@ Recovery binders acquire the exact context snapshot before reading durable root 
 
 ### US-6 off-grammar hours replies — `_shared/hours-judgment.ts`
 
-The evening hours ask (contract S7, migration 00653) is answered in a number and nothing else: `HOURS_REPLY` in `supabase/functions/sms-inbound/pipeline.ts:2218` reads `6`, `6.5`, `6,5`, `6 hrs`, `6.5 42`. A crew that writes “about 6 and a half” is answering the question and is not read. `supabase/functions/_shared/hours-judgment.ts` is the typed-judgment reader for exactly those bodies, built as a standalone module with no pipeline caller yet (see the blocker below).
+The evening hours ask (contract S7, migration 00653) is answered in a number and nothing else: `HOURS_REPLY` in `supabase/functions/sms-inbound/pipeline.ts:2218` reads `6`, `6.5`, `6,5`, `6 hrs`, `6.5 42`. A crew that writes “about 6 and a half” is answering the question and is not read. `supabase/functions/_shared/hours-judgment.ts` is the typed-judgment reader for exactly those bodies, and `sms-inbound/pipeline.ts` calls it to send one **confirm-by-digit** reply (see below).
 
 Shape, copied from `_shared/field-parse.ts`: injectable `{fetchImpl, getEnv, model, timeoutMs}`, plain `fetch` plus `AbortController`, every failure answered with a value and nothing thrown.
 
@@ -149,9 +149,22 @@ Shape, copied from `_shared/field-parse.ts`: injectable `{fetchImpl, getEnv, mod
 
 `TYPESAFE_API_KEY` is read through `getEnv` only. There is no `supabase/functions/.env.example` in this repo, so the key is documented here rather than in an env sample; in production it is set with `supabase secrets set` (gated), by name only.
 
-#### Why the pipeline is not wired to it yet (blocker, 2026-09-20)
+#### How the pipeline is wired: confirm by digit (Kody's ruling, 2026-09-20)
 
-A confident free-text reading **cannot** currently be applied through the existing consumption door, and the fix is a SQL semantics decision rather than an edge-function change.
+A confident free-text reading **cannot** be applied through the existing consumption door, and teaching the database to accept one is a SQL semantics decision nobody needs to make for the crew to be understood. So the judgment does not file: it answers with one line the crew can agree to in the grammar that already works.
+
+`hoursFreeTextConfirm` (`sms-inbound/pipeline.ts`) is reached from `promptReply` — from the digit-leading branch for a body `HOURS_REPLY` misses, and after the reference rules for every other body — and answers `null` for all but one shape of message:
+
+- **The gate.** It fires only where this (sender, recipient) pair has an open `report_hours` prompt of its own party's standing (`hoursReply`'s predicate), and only for a body that no other rule on this rail reads: not `HOURS_REPLY`, not a menu digit, not a `tradeShape` verb, not a reserved keyword (`STOP`/`START`/`HELP`/`INFO`/`YES`/`OK`/`NO` and the bare commands), not `VERB NN`. With no hours ask open there is **no request at all** and the body goes exactly where it went before.
+- **The state it sends** is the ruling's own list: the message body, the ask's words with the studio and street stripped (`HOURS_ASK_TEXT`), the visit's task title, and the day the ask was frozen to — `sms_prompts.version` read as `YYYYMMDD` (00653:148-156; an ask carrying version `1` cannot have its day named, so no confirm is sent for it). A pair under suppression or without a granted consent record is never asked, and never answered differently either.
+- **On `{kind:"hours"}`** it sends ONE templated reply and leaves the prompt open: `consumePrompt` is not called and no effect is built. The copy carries the hours, the ask's day label and the exact characters to send back — `6.5`, plus ` Ref NN` when more than one hours ask is open (the count `hoursReply` and 00653:265-269 both take). That token is checked against `hoursShape` before it is printed, so the confirm can only ask for something this rail will read.
+- **More than one open and `which_prompt` unclear** falls to the codeless door's own answer — `ref_clarify`, the same reply a bare number gets for the same ambiguity.
+- **One confirm per question.** The prompt id is recorded in `sms_conversation_context.state_context.hours_confirmed`, beside the menu and pending state that jsonb already holds (no new table, no new column). A second off-grammar body against a question already confirmed defers before the judgment is asked anything.
+- **On `{kind:"defer"}`** it returns `null` and the body takes today's path, which beside one open ask is the designer handoff it already got.
+
+Evidence: `supabase/functions/_tests/field-line/cases/hours-free-text-confirm.ts` (phase 3, clauses S7/S1) — the confirm, the token's round trip through `HOURS_REPLY` into one `report_hours` proposal, the reference-bearing token booking against *that* question, `ref_clarify`, all ten defer reasons, the loop guard, the three zero-request paths, and what the outbound request carries.
+
+The SQL facts that make a filing impossible, unchanged and deliberately left alone:
 
 `consumePrompt` (`pipeline.ts:2119`) calls `sms_apply_prompt`, which at `supabase/migrations/00653_field_time_reports.sql:298` calls `sms_prompt_reply_verb(p, m.body)` against the **stored inbound body** re-read by `p_sms_message_id`. TypeScript cannot substitute that body, and rewriting it would falsify the 10DLC record. `sms_prompt_reply_verb` refuses both reachable free-text shapes for a `report_hours` prompt:
 
@@ -160,6 +173,6 @@ A confident free-text reading **cannot** currently be applied through the existi
 
 So the only body `sms_apply_prompt` accepts for a `report_hours` prompt is exactly the `HOURS_REPLY` grammar the regex path already handles; a judged free-text reply routed through `consumePrompt` would land on `effectFailure` as a designer handoff, never as a `proposed` `field_time_reports` row. 00653 is the newest definition of both functions.
 
-The phase-3 fixture does **not** model this. `supabase/functions/_tests/field-line/inbound-fixture.ts:93-94` derives `verb` as the first whitespace token of the body and uses it only for the `proposed_effect` / `YES`-`Y`-`OK` guard; there is no reply-grammar check and no `(verb, effect)` pairing. A fixture case asserting “confident free-text produces one `proposed` effect” would therefore pass while production raises `23514`. Any wiring ticket must teach the fixture the grammar before the fixture can be its oracle.
+The phase-3 fixture does **not** model this grammar. `supabase/functions/_tests/field-line/inbound-fixture.ts:93-94` derives `verb` as the first whitespace token of the body and uses it only for the `proposed_effect` / `YES`-`Y`-`OK` guard; there is no reply-grammar check and no `(verb, effect)` pairing. A fixture case asserting “confident free-text produces one `proposed` effect” would pass there while production raised `23514` — which is exactly why the confirm-by-digit design is the wiring: **no free-text body is ever sent to `sms_apply_prompt`**, so the gap the fixture cannot see is never reached, and the only body the apply receives is the number the crew texts back. `hours-free-text-confirm.ts` says so in its header and asserts the apply is called once, by the token.
 
-A fix is not one line. It needs `report_hours` added to the `00653:251` freeform admission so a multi-token body yields verb `NULL`; a route for a lone all-caps token to yield `NULL` rather than its own word; and a ruling on the one-open-prompt guard at `00653:265-269`, which with `v_hours` false demands exactly one open prompt of **any** kind and so contradicts the `which_prompt` disambiguation across more than one open hours ask. That is a new migration plus a semantics ruling, and it is tracked as its own ticket rather than folded into the module.
+Admitting judged free text in SQL was the rejected alternative (Kody, 2026-09-20: the database would be trusting hours this rail supplied). It would need `report_hours` added to the `00653:251` freeform admission so a multi-token body yields verb `NULL`; a route for a lone all-caps token to yield `NULL` rather than its own word; and a ruling on the one-open-prompt guard at `00653:265-269`, which with `v_hours` false demands exactly one open prompt of **any** kind and so contradicts the `which_prompt` disambiguation across more than one open hours ask. That is a new migration plus a semantics ruling, and nothing in the confirm path depends on it.
