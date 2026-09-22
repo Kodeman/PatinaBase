@@ -1,0 +1,1279 @@
+<title>The Second House</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f2ead9;
+    --paper-raised:#e9dfc9;
+    --paper-deep:#e2d6bc;
+    --ink:#2a241c;
+    --ink-soft:#645a49;
+    --ink-faint:#8c8170;
+    --hairline:#d8c9a9;
+    --hairline-strong:#c1af86;
+    --accent:#5e6b46;
+    --accent-soft:#8a9270;
+    --font-display:'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'DM Mono', 'SF Mono', 'Fira Code', monospace;
+    --measure:70ch;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1c1913;
+      --paper-raised:#242019;
+      --paper-deep:#2b261d;
+      --ink:#ece3d2;
+      --ink-soft:#b3a892;
+      --ink-faint:#84796a;
+      --hairline:#3c3628;
+      --hairline-strong:#4d4530;
+      --accent:#9caa7c;
+      --accent-soft:#7f8c63;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1c1913;
+    --paper-raised:#242019;
+    --paper-deep:#2b261d;
+    --ink:#ece3d2;
+    --ink-soft:#b3a892;
+    --ink-faint:#84796a;
+    --hairline:#3c3628;
+    --hairline-strong:#4d4530;
+    --accent:#9caa7c;
+    --accent-soft:#7f8c63;
+    color-scheme:dark;
+  }
+
+  *{ box-sizing:border-box; }
+  body{ background:var(--paper); color:var(--ink); margin:0; }
+  #deck-root{
+    font-family:var(--font-body);
+    color:var(--ink);
+    background:var(--paper);
+    line-height:1.55;
+  }
+  h1,h2,h3{ font-family:var(--font-display); font-weight:600; text-wrap:balance; margin:0; }
+  em, .voice{ font-family:var(--font-display); font-style:italic; font-weight:500; }
+  p{ margin:0 0 0.9em 0; }
+  p:last-child{ margin-bottom:0; }
+  a{ color:var(--accent); }
+  .measure{ max-width:var(--measure); }
+  strong{ font-weight:600; }
+
+  .eyebrow{
+    font-family:var(--font-mono);
+    text-transform:uppercase;
+    font-size:0.72rem;
+    color:var(--ink-faint);
+    display:flex;
+    align-items:center;
+    gap:0.6em;
+  }
+  .eyebrow::before{ content:''; display:inline-block; width:1.1em; height:1px; background:var(--ink-faint); flex:none; }
+  .eyebrow.cat-diagnosis{ letter-spacing:0.06em; }
+  .eyebrow.cat-proposal{ letter-spacing:0.24em; color:var(--accent); }
+  .eyebrow.cat-decisions{ letter-spacing:0.42em; color:var(--ink); }
+  .eyebrow.cat-appendix{ letter-spacing:0.14em; font-style:italic; }
+  .eyebrow.cat-studio{ letter-spacing:0.1em; color:var(--accent); font-style:italic; }
+
+  kbd{
+    font-family:var(--font-mono);
+    font-size:0.82em;
+    background:var(--paper-raised);
+    border:1px solid var(--hairline-strong);
+    border-radius:3px;
+    padding:0.08em 0.42em;
+    color:var(--ink);
+  }
+
+  hr.hairline{ border:none; border-top:1px solid var(--hairline); margin:1.1em 0; }
+
+  /* ---------- slide mechanics ---------- */
+  #deck{ position:relative; }
+  .slide{
+    min-height:100vh;
+    width:100%;
+    padding:6.5vh 7vw 8vh;
+    display:none;
+    flex-direction:column;
+    justify-content:center;
+    gap:1.4rem;
+  }
+  .slide.active{ display:flex; }
+  .slide-inner{ max-width:1180px; margin:0 auto; width:100%; }
+  .slide-head{ display:flex; flex-direction:column; gap:0.5rem; margin-bottom:0.9rem; }
+  .slide-head h2{ font-size:clamp(1.7rem, 3.2vw, 2.5rem); }
+  .slide-kicker{ font-family:var(--font-mono); font-size:0.78rem; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.06em; }
+
+  .source{
+    font-family:var(--font-mono);
+    font-size:0.68rem;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    border-top:1px solid var(--hairline);
+    padding-top:0.6rem;
+    margin-top:1.4rem;
+  }
+
+  /* read-as-page mode */
+  body.read-mode #deck{ display:block; }
+  body.read-mode .slide{ display:flex !important; min-height:auto; padding:5vh 7vw; border-bottom:1px solid var(--hairline); }
+  body.read-mode .slide:last-child{ border-bottom:none; }
+  body.read-mode .nav-ui{ display:none; }
+  body.read-mode .clickzone{ display:none; }
+
+  /* controls */
+  .nav-ui{ position:fixed; z-index:40; font-family:var(--font-mono); }
+  .counter{
+    bottom:1.4rem; right:1.6rem;
+    font-size:0.8rem; color:var(--ink-faint);
+    background:var(--paper); padding:0.2em 0.5em;
+    letter-spacing:0.04em;
+  }
+  .arrows{ bottom:1.3rem; right:6rem; display:flex; gap:0.4rem; }
+  .arrow-btn{
+    font-family:var(--font-mono);
+    background:var(--paper-raised);
+    border:1px solid var(--hairline-strong);
+    color:var(--ink);
+    width:2.1rem; height:2.1rem;
+    cursor:pointer;
+    font-size:0.9rem;
+  }
+  .arrow-btn:hover{ background:var(--paper-deep); }
+  .clickzone{ position:fixed; top:0; bottom:0; width:6%; z-index:20; cursor:pointer; background:transparent; border:none; }
+  .clickzone.left{ left:0; }
+  .clickzone.right{ right:0; }
+  .hint{
+    top:1.4rem; left:1.6rem; font-size:0.72rem; color:var(--ink-faint);
+    letter-spacing:0.04em;
+  }
+
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* index overlay */
+  #indexOverlay{
+    position:fixed; inset:0; z-index:60;
+    background:var(--paper);
+    padding:6vh 8vw;
+    overflow-y:auto;
+  }
+  #indexOverlay[hidden]{ display:none; }
+  #indexOverlay h3{ font-size:1.6rem; margin-bottom:0.3rem; }
+  .index-legend{ font-family:var(--font-mono); font-size:0.75rem; color:var(--ink-faint); margin-bottom:1.6rem; display:flex; gap:1.6rem; flex-wrap:wrap; }
+  .index-list{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:0.15rem 2rem; }
+  .index-list li{ border-bottom:1px solid var(--hairline); padding:0.5rem 0; }
+  .index-list button{
+    all:unset; cursor:pointer; display:flex; gap:0.8rem; align-items:baseline; width:100%;
+    font-family:var(--font-body);
+  }
+  .index-list button:hover .idx-title{ color:var(--accent); }
+  .idx-num{ font-family:var(--font-mono); color:var(--ink-faint); font-size:0.78rem; min-width:1.6em; }
+  .idx-title{ font-size:0.98rem; }
+
+  /* generic layout helpers */
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:2.4rem; }
+  .grid-2-wide{ display:grid; grid-template-columns:1.15fr 1fr; gap:2.4rem; }
+  .grid-3{ display:grid; grid-template-columns:repeat(3,1fr); gap:1.8rem; }
+  .grid-4{ display:grid; grid-template-columns:repeat(4,1fr); gap:1.2rem; }
+  @media (max-width:980px){ .grid-2,.grid-2-wide,.grid-3,.grid-4{ grid-template-columns:1fr; gap:1.4rem; } }
+
+  .card{ border:1px solid var(--hairline); padding:1.05rem 1.15rem; background:var(--paper-raised); }
+  .card h4{ font-family:var(--font-mono); text-transform:uppercase; font-size:0.72rem; letter-spacing:0.06em; color:var(--ink-soft); margin-bottom:0.5rem; }
+  .card p{ font-size:0.92rem; }
+  .card .move-id{ font-family:var(--font-mono); font-size:0.68rem; color:var(--accent); letter-spacing:0.05em; display:block; margin-bottom:0.3rem; }
+
+  .pull{
+    border-left:2px solid var(--accent);
+    padding-left:1.2rem;
+    font-family:var(--font-display); font-style:italic; font-weight:500;
+    font-size:1.25rem; color:var(--ink);
+  }
+  .pull cite{ display:block; font-style:normal; font-family:var(--font-mono); font-size:0.7rem; text-transform:uppercase; color:var(--ink-faint); margin-top:0.5rem; letter-spacing:0.04em; }
+
+  figure{ margin:0; }
+  figcaption{ font-family:var(--font-mono); font-size:0.72rem; color:var(--ink-faint); margin-top:0.5rem; text-transform:uppercase; letter-spacing:0.03em; }
+
+  .scrollbox{ overflow-x:auto; max-width:100%; }
+  table{ border-collapse:collapse; width:100%; font-size:0.9rem; }
+  th,td{ text-align:left; padding:0.5rem 0.9rem 0.5rem 0; border-bottom:1px solid var(--hairline); vertical-align:top; }
+  th{ font-family:var(--font-mono); text-transform:uppercase; font-size:0.68rem; letter-spacing:0.04em; color:var(--ink-faint); font-weight:500; }
+  td code, .path{ font-family:var(--font-mono); font-size:0.84em; color:var(--ink-soft); }
+  table.rows td:first-child{ width:46%; }
+  .num{ font-variant-numeric:tabular-nums; }
+  .blank{ color:var(--accent); font-family:var(--font-mono); }
+
+  ol.numbered, ul.plain{ margin:0; padding-left:1.3em; }
+  ol.numbered li, ul.plain li{ margin-bottom:0.5em; }
+  ul.plain{ list-style:none; padding-left:0; }
+  ul.plain li{ padding-left:1.1em; position:relative; }
+  ul.plain li::before{ content:'—'; position:absolute; left:0; color:var(--ink-faint); }
+  ul.tight li{ margin-bottom:0.34em; }
+  .small{ font-size:0.9rem; }
+  .smaller{ font-size:0.84rem; }
+  .soft{ color:var(--ink-soft); }
+
+  .tag{ font-family:var(--font-mono); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-faint); border:1px solid var(--hairline-strong); padding:0.1em 0.45em; white-space:nowrap; }
+
+  .cover-slide{ justify-content:center; }
+  .cover-title{ font-size:clamp(2.6rem, 6vw, 4.6rem); line-height:1.05; }
+  .cover-sub{ font-family:var(--font-display); font-style:italic; font-size:1.25rem; color:var(--ink-soft); max-width:40ch; }
+  .cover-meta{ font-family:var(--font-mono); font-size:0.76rem; letter-spacing:0.05em; color:var(--ink-faint); max-width:62ch; line-height:1.7; }
+
+  .bet{
+    font-family:var(--font-display); font-weight:500;
+    font-size:clamp(1.6rem, 3.8vw, 2.9rem); line-height:1.2;
+    max-width:24ch;
+  }
+
+  svg text{ font-family:var(--font-mono); }
+  .diagram-box{ fill:var(--paper-raised); stroke:var(--hairline-strong); stroke-width:1; }
+  .diagram-line{ stroke:var(--ink-faint); stroke-width:1; }
+  .diagram-label{ fill:var(--ink); font-size:11px; }
+  .diagram-sub{ fill:var(--ink-faint); font-size:9px; }
+
+  .decision-item{ padding:0.7rem 0; border-bottom:1px solid var(--hairline); display:grid; grid-template-columns:2.2em 1fr; gap:0.8rem; }
+  .decision-item:last-child{ border-bottom:none; }
+  .decision-num{ font-family:var(--font-mono); color:var(--accent); font-size:0.92rem; }
+  .decision-q{ font-weight:600; margin-bottom:0.15rem; }
+  .decision-opts{ color:var(--ink-soft); font-size:0.9rem; }
+
+  .kv{ display:grid; grid-template-columns:auto 1fr; gap:0.3em 1em; font-size:0.92rem; }
+  .kv dt{ font-family:var(--font-mono); text-transform:uppercase; font-size:0.66rem; color:var(--ink-faint); align-self:start; padding-top:0.25em; letter-spacing:0.05em; }
+  .kv dd{ margin:0; }
+
+  .two-col-list{ column-count:2; column-gap:2.4rem; font-size:0.92rem; }
+  @media (max-width:900px){ .two-col-list{ column-count:1; } }
+  .two-col-list li{ break-inside:avoid; margin-bottom:0.5em; }
+
+  .studio-slide{ font-size:1.04rem; }
+  .studio-slide .ask{ border-top:1px solid var(--hairline); padding-top:0.7rem; margin-top:0.7rem; }
+  .studio-slide .ask .when{ font-family:var(--font-mono); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-faint); display:block; margin-bottom:0.15rem; }
+
+  @media (max-width:700px){
+    .slide{ padding:4.5vh 16px 7vh; min-height:auto; gap:1rem; }
+    .slide-head h2{ font-size:1.5rem; }
+    .cover-title{ font-size:2.2rem; }
+    table{ font-size:0.84rem; }
+    th,td{ padding:0.45rem 0.7rem 0.45rem 0; }
+    table.rows td:first-child{ width:auto; }
+    .arrows{ right:1.6rem; bottom:3.4rem; }
+    .hint{ display:none; }
+    .clickzone{ display:none; }
+    #indexOverlay{ padding:5vh 16px; }
+  }
+
+  @media (prefers-reduced-motion: no-preference){
+    .slide.active{ animation:fadein 0.18s ease; }
+  }
+  @keyframes fadein{ from{ opacity:0.4; } to{ opacity:1; } }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation:none !important; transition:none !important; }
+  }
+
+  @media print{
+    .nav-ui, .clickzone, #indexOverlay{ display:none !important; }
+    .slide{ display:flex !important; min-height:auto; page-break-after:always; break-after:page; padding:1.4cm 1.2cm; }
+    .slide:last-child{ page-break-after:auto; break-after:auto; }
+    .card{ background:none; border:1px solid #999; }
+    body, #deck-root{ background:#fff; color:#000; }
+  }
+</style>
+
+<div id="deck-root">
+<div id="deck">
+
+<!-- 1 -->
+<section class="slide active" id="slide-1" data-title="Cover">
+  <div class="slide-inner cover-slide" style="display:flex; flex-direction:column; gap:1.5rem; min-height:70vh; justify-content:center;">
+    <div class="eyebrow cat-proposal">Patina · for Leadership and the Beta Studios · 22 September 2026</div>
+    <h1 class="cover-title">The Second<br>House</h1>
+    <p class="cover-sub">Why a studio sets Patina up and then drives the job somewhere else — and the program to earn the next piece of work.</p>
+    <hr class="hairline" style="max-width:24rem;">
+    <div class="cover-meta">
+      Prepared by Claude Fable and GPT-6 Astra with a team of 29 agents. Every claim is traced to a file, a query, or a URL; what could not be verified is marked.
+      <br><br>
+      This is a program for one studio, and a decision about whether to earn a second.
+    </div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" id="slide-2" data-title="The ask, in Kody's words">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>The ask, in Kody&rsquo;s words</h2>
+    </div>
+    <div class="grid-2-wide">
+      <div>
+        <p class="pull">&ldquo;They come into the designer portal, get excited to set things up, then pop back out into their manual ways to drive jobs. Studios need to feel like they are saving time by coming to Patina, not having to learn a whole new system.&rdquo;
+          <cite>The problem statement, as given</cite>
+        </p>
+      </div>
+      <div>
+        <p class="measure">What <em>hooked</em> is allowed to mean here is already settled. VISION §4: <em>you won&rsquo;t notice Patina</em>. Success is time saved and fewer surprises. Never engagement — no dashboards, no streaks, no returning-user target on the studio surface.</p>
+        <p class="measure">So this deck measures a removed task, not a returning user. And it says the substitution out loud: this is not a hook program. It is the program that finds out whether a hook is possible for the one studio we have.</p>
+        <p class="measure">The ask has two halves. <strong>Saving time</strong> we can measure in minutes on one real bill. <strong>Not learning a whole new system</strong> we measure by counting what she had to be told.</p>
+      </div>
+    </div>
+    <div class="source">VISION §4 · completeness-critic §3 · program-final §Diagnosis</div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" id="slide-3" data-title="How we worked">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>How we worked</h2>
+    </div>
+    <div class="grid-2-wide" style="align-items:start;">
+      <figure>
+        <svg viewBox="0 0 560 352" width="100%" role="img" aria-label="Eight research lanes feed four opposed proposals, which are critiqued across model families, then merged by Astra, red-teamed by Fable, finalized by Astra, verified nine times against the code, and read once more by a completeness critic">
+          <rect class="diagram-box" x="150" y="6" width="260" height="38"/>
+          <text class="diagram-label" x="280" y="22" text-anchor="middle">EIGHT RESEARCH LANES</text>
+          <text class="diagram-sub" x="280" y="36" text-anchor="middle">reports 01–08 · every claim tiered</text>
+
+          <line class="diagram-line" x1="280" y1="44" x2="280" y2="58"/>
+          <line class="diagram-line" x1="71" y1="58" x2="489" y2="58"/>
+          <line class="diagram-line" x1="71" y1="58" x2="71" y2="72"/>
+          <line class="diagram-line" x1="211" y1="58" x2="211" y2="72"/>
+          <line class="diagram-line" x1="349" y1="58" x2="349" y2="72"/>
+          <line class="diagram-line" x1="489" y1="58" x2="489" y2="72"/>
+
+          <rect class="diagram-box" x="6" y="72" width="130" height="52"/>
+          <text class="diagram-label" x="71" y="90" text-anchor="middle">A1 · BRING</text>
+          <text class="diagram-label" x="71" y="103" text-anchor="middle">THE JOB IN</text>
+          <text class="diagram-sub" x="71" y="117" text-anchor="middle">GPT-6 ASTRA</text>
+
+          <rect class="diagram-box" x="146" y="72" width="130" height="52"/>
+          <text class="diagram-label" x="211" y="90" text-anchor="middle">A2 · THE NEXT</text>
+          <text class="diagram-label" x="211" y="103" text-anchor="middle">STEP, PREPARED</text>
+          <text class="diagram-sub" x="211" y="117" text-anchor="middle">GPT-6 ASTRA</text>
+
+          <rect class="diagram-box" x="284" y="72" width="130" height="52"/>
+          <text class="diagram-label" x="349" y="90" text-anchor="middle">F1 · ONE REAL</text>
+          <text class="diagram-label" x="349" y="103" text-anchor="middle">JOB, TOGETHER</text>
+          <text class="diagram-sub" x="349" y="117" text-anchor="middle">CLAUDE FABLE</text>
+
+          <rect class="diagram-box" x="424" y="72" width="130" height="52"/>
+          <text class="diagram-label" x="489" y="90" text-anchor="middle">F2 · NOTHING</text>
+          <text class="diagram-label" x="489" y="103" text-anchor="middle">TO LEARN</text>
+          <text class="diagram-sub" x="489" y="117" text-anchor="middle">CLAUDE FABLE</text>
+
+          <line class="diagram-line" x1="71" y1="124" x2="71" y2="140"/>
+          <line class="diagram-line" x1="211" y1="124" x2="211" y2="140"/>
+          <line class="diagram-line" x1="349" y1="124" x2="349" y2="140"/>
+          <line class="diagram-line" x1="489" y1="124" x2="489" y2="140"/>
+          <line class="diagram-line" x1="71" y1="140" x2="489" y2="140"/>
+          <line class="diagram-line" x1="280" y1="140" x2="280" y2="152"/>
+
+          <rect class="diagram-box" x="120" y="152" width="320" height="36"/>
+          <text class="diagram-label" x="280" y="168" text-anchor="middle">CROSS-FAMILY CRITIQUE</text>
+          <text class="diagram-sub" x="280" y="181" text-anchor="middle">each proposal read by the other family</text>
+
+          <line class="diagram-line" x1="280" y1="188" x2="280" y2="202"/>
+
+          <rect class="diagram-box" x="6" y="202" width="172" height="38"/>
+          <text class="diagram-label" x="92" y="219" text-anchor="middle">MERGE</text>
+          <text class="diagram-sub" x="92" y="232" text-anchor="middle">Astra</text>
+          <line class="diagram-line" x1="178" y1="221" x2="194" y2="221"/>
+          <rect class="diagram-box" x="194" y="202" width="172" height="38"/>
+          <text class="diagram-label" x="280" y="219" text-anchor="middle">RED TEAM</text>
+          <text class="diagram-sub" x="280" y="232" text-anchor="middle">Fable</text>
+          <line class="diagram-line" x1="366" y1="221" x2="382" y2="221"/>
+          <rect class="diagram-box" x="382" y="202" width="172" height="38"/>
+          <text class="diagram-label" x="468" y="219" text-anchor="middle">FINAL PROGRAM</text>
+          <text class="diagram-sub" x="468" y="232" text-anchor="middle">Astra</text>
+
+          <line class="diagram-line" x1="280" y1="240" x2="280" y2="254"/>
+          <rect class="diagram-box" x="120" y="254" width="320" height="38"/>
+          <text class="diagram-label" x="280" y="271" text-anchor="middle">NINE VERIFICATION PASSES</text>
+          <text class="diagram-sub" x="280" y="284" text-anchor="middle">every premise re-read against the code</text>
+
+          <line class="diagram-line" x1="280" y1="292" x2="280" y2="306"/>
+          <rect class="diagram-box" x="120" y="306" width="320" height="38"/>
+          <text class="diagram-label" x="280" y="323" text-anchor="middle">COMPLETENESS CRITIC</text>
+          <text class="diagram-sub" x="280" y="336" text-anchor="middle">what the program was silent about</text>
+        </svg>
+      </figure>
+      <div>
+        <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">The eight lanes</h3>
+        <ul class="plain tight small">
+          <li>01 · the first-session path, screen by screen</li>
+          <li>02 · the manual-workflow gap</li>
+          <li>03 · production evidence</li>
+          <li>04 · internal prior art and rulings</li>
+          <li>05 · competitor activation</li>
+          <li>06 · activation playbooks and literature</li>
+          <li>07 · studio ethnography</li>
+          <li>08 · the gap critique of lanes 01–07</li>
+        </ul>
+        <hr class="hairline">
+        <p class="small"><strong>Evidence tiers, used on every line:</strong> VERIFIED — we read or ran it. INFERRED — assembled from verified parts, and labelled. UNAVAILABLE — named, not reached.</p>
+        <p class="small soft">Every factual premise survived verification. That is not the same as every premise being verified: two passes came back &ldquo;partly,&rdquo; and one cost estimate was refuted outright.</p>
+      </div>
+    </div>
+    <div class="source">completeness-critic §1 · program-final §Evidence and delivery</div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide" id="slide-4" data-title="The finding that changes the question">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>The finding that changes the question</h2>
+    </div>
+    <div class="grid-2">
+      <div>
+        <p class="measure">Production holds <strong>five organizations</strong>. Every one traces to Kody, to Middle West, or to a named throwaway probe. All five are on the free tier; no studio in production has ever been on a paid one.</p>
+        <p class="measure">The &ldquo;retained studio-manager seat&rdquo; the data seemed to reward is <strong>Kody</strong>, on a middlewest.studio address. The two dormant &ldquo;designer&rdquo; seats are a tester login and one unnamed Middle West invite. <strong>Zero</strong> designer applications, zero founding applications, zero prospects.</p>
+        <p class="measure">So the studios in the problem statement are not in any dataset or document in this repository. Drop-off cannot be quantified from production. Middle West Studio is the only real case.</p>
+      </div>
+      <div>
+        <div class="scrollbox">
+          <table>
+            <thead><tr><th>Seat</th><th>Reading</th><th>Who it is</th></tr></thead>
+            <tbody>
+              <tr><td class="path">ce3aee90</td><td>the principal, 32 days to first project</td><td>Leah</td></tr>
+              <tr><td class="path">19e7ae9b</td><td>&ldquo;the strongest seat in prod&rdquo;</td><td>Kody</td></tr>
+              <tr><td class="path">86cdd0aa</td><td>signed in, opened a document, gone</td><td>a QA login</td></tr>
+              <tr><td class="path">1a94f78f</td><td>set up, never drove a job</td><td>unnamed — the one seat nobody can name</td></tr>
+              <tr><td class="path">69063af4</td><td>&ldquo;opted out immediately&rdquo;</td><td>a drip smoke-test account</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small" style="margin-top:1rem;"><strong>The honest consequence:</strong> we can study one studio well, and we can verify exactly what the product asks of her. We did both.</p>
+      </div>
+    </div>
+    <div class="source">03 §1–§2 · 08 G1–G2</div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide" id="slide-5" data-title="Middle West Studio, in rows">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>Middle West Studio, in rows</h2>
+      <div class="slide-kicker">Seven weeks, as production records them</div>
+    </div>
+    <div class="scrollbox">
+      <table class="rows">
+        <tbody>
+          <tr><td>Studio created</td><td class="num">3 August 2026</td></tr>
+          <tr><td>Days to Leah&rsquo;s first project</td><td class="num">32</td></tr>
+          <tr><td>Projects in Patina</td><td class="num">1</td></tr>
+          <tr><td>Houses live today</td><td><span class="blank">—</span> &nbsp;Ask Leah first.</td></tr>
+          <tr><td>Where each house lives</td><td><span class="blank">—</span> &nbsp;Record the tool and the file.</td></tr>
+          <tr><td>Invoices; prepared by Leah / by Kody&rsquo;s seat</td><td class="num">10; <span class="blank">—</span> / <span class="blank">—</span> &nbsp;Attribution unresolved.</td></tr>
+          <tr><td>Proposals</td><td class="num">6; 1 out. Real-client acceptance unverified.</td></tr>
+          <tr><td>Products / contacts / field captures</td><td class="num">0 / 0 / 0</td></tr>
+          <tr><td>Leah&rsquo;s sign-in days</td><td class="num">26 — a floor, not a goal.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="voice" style="font-size:1.2rem; margin-top:1.2rem;">Two empty cells. The program exists to fill them.</p>
+    <div class="source">03 §2 · 08 G2–G3 · program-final §Middle West Studio, in rows</div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide" id="slide-6" data-title="What the first session asks before it gives">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>What the first session asks before it gives</h2>
+      <div class="slide-kicker">Each rung read in the code this month</div>
+    </div>
+    <div class="scrollbox">
+      <table>
+        <tbody>
+          <tr>
+            <td style="width:42%"><strong>The studio is named after the person, and never asked.</strong></td>
+            <td>The provisioner takes the first non-null of business name, display name, full name, the email local part. The invite only ever writes the person&rsquo;s name. The setup checklist then hard-codes that row as done — a studio row cannot exist without a name — so she is never asked to name her studio. <span class="path">00295 · studio-setup.ts</span></td>
+          </tr>
+          <tr>
+            <td><strong>A sendable design agreement costs roughly 12–16 inputs and 3 decisions, across 4 surfaces.</strong></td>
+            <td>Capture a lead (2 required) → Accept · begin → five Discovery essentials → a direction → compose the agreement to its floor. <span class="path">capture-lead-sheet.tsx · discovery-readiness.ts · readiness.ts</span></td>
+          </tr>
+          <tr>
+            <td><strong>On the rate-card road, the database refuses to send until five preconditions hold.</strong></td>
+            <td>An exact client relationship; service terms; role rates whenever a rate-card part is present; a ceiling whenever it bills time; a named fee. Four of the five are studio setup nobody pointed at. Readiness is composition-dependent, not five universal chores. <span class="path">00575:655-690</span></td>
+          </tr>
+          <tr>
+            <td><strong>The walkthrough teaches the ceremonial path and never names the fast ones.</strong></td>
+            <td>Six coachmarks ending on &ldquo;Begin with a lead.&rdquo; Unnamed: <em>Open a project</em> — four fields — and <kbd>⌘K</kbd> <em>Draft a design agreement</em>, which opens an empty agreement for an existing household. <span class="path">desk-walkthrough.tsx · open-project-sheet.tsx</span></td>
+          </tr>
+          <tr>
+            <td><strong>The setup checklist has six rows, and not one is about work already running.</strong></td>
+            <td>Name and brand the studio; set your title; invite your crew; review an empty rolodex; open one project; have the first hire open a document. Its closing line: &ldquo;The marks follow the work.&rdquo; Right for the ongoing studio, wrong for the arriving one. <span class="path">studio-setup-checklist.tsx</span></td>
+          </tr>
+          <tr>
+            <td><strong>The drip: 17 emails on a seven-day floor that run to completion after the seat goes dark.</strong></td>
+            <td>Two seats reached step 25 and &ldquo;completed&rdquo; a six-week curriculum after they had already left. One seat has an email queued 25 days after it went quiet. <span class="path">copy-deck.md · 00561</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="source">01 §1–§3, §7–§9 · 03 §3 · program-final §Corrections retained from v1</div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide" id="slide-7" data-title="What she can't bring in, and can't take out">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>What she can&rsquo;t bring in, and can&rsquo;t take out</h2>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h4>In</h4>
+        <ul class="plain tight small">
+          <li>The only bulk import in the whole portal is a vendor product spreadsheet, and it lands in the Library, not in a project.</li>
+          <li>No contacts import. No clients, no projects, no hours, no calendar.</li>
+          <li>No third-party data integration of any kind — no Drive, Dropbox, Gmail, Calendar, QuickBooks, Houzz, Studio Designer, Mydoma, Programa.</li>
+          <li>The Chrome clipper is pinned <span class="path">under_review</span> in production with no install URL, and capture refuses Pinterest and the other pinboards outright.</li>
+          <li>A furniture vendor&rsquo;s quote reply has nowhere to land: the request table has no response columns, and the reply-to is her own mailbox.</li>
+          <li>Patina Field&rsquo;s share sheet is an empty directory with no build target.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Out</h4>
+        <ul class="plain tight small">
+          <li>A 14-column hours CSV, escaped and formula-guarded.</li>
+          <li>A QuickBooks Online vendor-bills CSV, one row per purchase-order payment.</li>
+          <li>A client-facing PDF of the schedule that deliberately omits her own cost basis — trade price, markup and margin are never loaded into the render model.</li>
+          <li>No invoice register. No payments. No client roster. No library export.</li>
+          <li>The per-user data export returns profile, preferences, communications and invitations — not invoices, payments or clients.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="voice" style="font-size:1.15rem; margin-top:1.2rem;">VISION promises &ldquo;your data exports.&rdquo; Not yet true.</p>
+    <div class="source">02 §1.1–§1.6, §1.11–§1.15 · 01 §5 · program-final P3</div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide" id="slide-8" data-title="Already built, no door">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>Already built, no door</h2>
+    </div>
+    <div class="grid-2">
+      <div>
+        <ul class="plain small">
+          <li><strong>The FF&amp;E PDF extractor.</strong> Server-side, staged-then-committed, at name / quantity / room / category breadth, with atomic commit and idempotency. Zero callers in the portal. The PDF bytes go to Anthropic; the schema carries no money.</li>
+          <li><strong>The paperwork door — where the other party does the data entry.</strong> Trades answer a request on their own single-use form in the client portal. It is used for exactly one document type.</li>
+          <li><strong>The Field Line SMS rail</strong> reads trades&rsquo; hours replies inside a consent fence. The Desk card that would show them sits behind an off flag.</li>
+          <li><strong>Product URL capture</strong> already lives in the schedule&rsquo;s add sheet — one link at a time, server-side, behind hard guards.</li>
+          <li><strong>Hours already reach the invoice.</strong> &ldquo;Bill week&rdquo; opens the composer with the week&rsquo;s unbilled entries pre-ticked; the draft claims them on creation.</li>
+        </ul>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center;">
+        <p class="voice" style="font-size:1.45rem;">The next wave is mostly doors, not engines.</p>
+        <hr class="hairline">
+        <p class="small soft">Two of the four proposals asked to build a bridge that already ships. The verification passes caught it. That is the case for opening what exists before commissioning anything new.</p>
+      </div>
+    </div>
+    <div class="source">02 §1.3, §1.4, §1.8, §1.12 · critique-A2 §4.1 · program-final §Corrections</div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide" id="slide-9" data-title="What Patina generates instead of removes">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>What Patina generates instead of removes</h2>
+    </div>
+    <div class="scrollbox">
+      <table>
+        <tbody>
+          <tr><td style="width:34%"><strong>156 of 158 weekly pulses</strong></td><td>are unsent drafts, manufactured over 11 weeks by an active Friday cron. Two ever went out.</td></tr>
+          <tr><td><strong>23 of 45 proposals</strong></td><td>never leave draft.</td></tr>
+          <tr><td><strong>18 invoice-attention notices</strong></td><td>are still sitting queued.</td></tr>
+          <tr><td><strong>The activation funnel views report 0 and 4200%</strong></td><td>because they filter event names the activation bridge never writes. The designer funnel is hard-wired to read zero forever; the conversion funnel silently drops a step and compares the wrong two rows.</td></tr>
+          <tr><td><strong><span class="path">last_active_at</span> is empty on all 42 profiles</strong></td><td>along with engagement score and distinct id. Across 400 notification rows, no email open and no click has ever been recorded.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="voice" style="font-size:1.2rem; margin-top:1.2rem;">Nothing can score a fix before-and-after today. Measurement is a precondition, not a follow-up.</p>
+    <div class="source">03 §5–§6 · 08 G9</div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="slide" id="slide-10" data-title="The outside view: what held up">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>The outside view: what held up</h2>
+    </div>
+    <div class="grid-3">
+      <div class="card">
+        <h4>Mechanism</h4>
+        <p>Switching cost and incumbent habit, not misunderstanding. Kim &amp; Kankanhalli (2009) found switching costs the central mediator of resistance to a new system. Polites &amp; Karahanna (2012) found inertia — habit plus sunk cost — <em>fully</em> mediates it: people do not weigh the new tool and prefer the old one; they never really weigh it.</p>
+        <p>The commercial literature converges independently on &ldquo;quiet reversion&rdquo;: staff keep using spreadsheets beside the new system when it adds re-entry without an immediate personal payoff.</p>
+      </div>
+      <div class="card">
+        <h4>Patterns that move switchers</h4>
+        <ul class="plain tight smaller">
+          <li>Never start from zero — her own data in the product fast. Notion&rsquo;s own principle: the quicker users see their own data, the faster they understand the value.</li>
+          <li>A human 1:1 first session. Superhuman made a 30–60 minute call mandatory for years, then graduated out of it on its own schedule.</li>
+          <li>Progressive disclosure over setup wizards (NN/g): surface help beside each step instead of front-loading it.</li>
+          <li>Checklists rarely finish, and guidance converges on three-to-five items; past five, completion is reported to fall. Patina&rsquo;s has six.</li>
+          <li>Streaks and badges backfire on weekly-cadence tools, and are read as a symptom that activation was never solved.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Incumbents</h4>
+        <ul class="plain tight smaller">
+          <li>Paid migration — Studio Designer&rsquo;s desktop-to-cloud move is a $4,000 line item — still draws &ldquo;steep learning curve&rdquo; reviews.</li>
+          <li>DesignFiles ships phase templates so a studio can &ldquo;skip the setup&rdquo;; Programa&rsquo;s web clipper turns sourcing itself into data entry.</li>
+          <li>HoneyBook ingests the studio&rsquo;s existing brochures, proposals, questionnaires and old contracts and builds the templates from them.</li>
+          <li>QuickBooks offers assisted migration — free, capacity-gated, capped at one guided session.</li>
+          <li>Easy-in, hard-out erodes trust even in a tool people otherwise love.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="source">05 · 06 §2, §4, §5, §7–§8, §11–§12 — web sources, not Patina data; vendor figures omitted</div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide" id="slide-11" data-title="In designers' own words">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>In designers&rsquo; own words</h2>
+    </div>
+    <div class="grid-2">
+      <div>
+        <p class="pull">&ldquo;If your process only exists in your head, it&rsquo;s not really a process — it&rsquo;s a habit.&rdquo;<cite>IDCO Studio</cite></p>
+        <hr class="hairline">
+        <p class="pull">&ldquo;You spend 45 minutes hunting for that chair again — only to discover it&rsquo;s been discontinued.&rdquo;<cite>Programa</cite></p>
+      </div>
+      <div>
+        <p class="pull">&ldquo;It would&rsquo;ve been quicker to do it myself… this isn&rsquo;t a hiring problem. It&rsquo;s a systems problem.&rdquo;<cite>Interior Designers Hub</cite></p>
+        <hr class="hairline">
+        <p class="pull">&ldquo;My clients can find this confusing.&rdquo;<cite>Kristen S., Capterra reviewer, on a client portal</cite></p>
+      </div>
+    </div>
+    <div class="source">07 §3, §quotes 1, 3, 8, 15 — Reddit and LinkedIn were unreachable; these are trade blogs and named reviews</div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide" id="slide-12" data-title="Diagnosis">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-diagnosis">Diagnosis</div>
+      <h2>Why she pops out</h2>
+    </div>
+    <div class="grid-2-wide">
+      <div>
+        <p class="measure" style="font-size:1.08rem;">She doesn&rsquo;t pop out because she failed to learn Patina. She pops out because her live jobs are still somewhere else, and Patina&rsquo;s first hour asks for setup, a lead-to-discovery ceremony, and a curriculum while giving back nothing she can hand to a client or a vendor.</p>
+        <p class="measure small soft">Patina has not yet demonstrated that it removes recurring work for an independent growing studio. That is the honest starting position, and it is why the first test must cross from work <em>outside</em> Patina rather than repeat a successful act on the house already in it.</p>
+      </div>
+      <div>
+        <h3 style="font-size:1rem; margin-bottom:0.5rem;">Still competing, and not ruled out</h3>
+        <ul class="plain tight small">
+          <li><strong>Switching effort</strong> — the re-entry cost of bringing a live job in.</li>
+          <li><strong>Missing functionality</strong> — Leah&rsquo;s one recorded departure went back to the old portal seeking completeness, not fleeing friction.</li>
+          <li><strong>Reliability</strong> — whether the figures can be trusted without checking them twice.</li>
+          <li><strong>Delegation</strong> — no willing non-founder colleague has been established.</li>
+          <li><strong>Unclear commercial terms</strong> — no pricing page exists anywhere a studio can see, and the Pledge band renders to every studio unflagged, against VISION §3.</li>
+        </ul>
+        <p class="smaller soft" style="margin-top:0.8rem;">If completeness is the operative one, the finding will be &ldquo;she finished the bill and still keeps the book elsewhere, because the rest of the house is not in Patina.&rdquo; That is a different program.</p>
+      </div>
+    </div>
+    <div class="source">08 G3–G5 · completeness-critic §3 · program-final §The honest diagnosis</div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide" id="slide-13" data-title="Four lenses">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-proposal">Program</div>
+      <h2>Four lenses, opposed on purpose</h2>
+    </div>
+    <div class="scrollbox">
+      <table>
+        <thead><tr><th style="width:20%">Lens</th><th style="width:38%">The bet</th><th>What survived critique and verification</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>A1 · Bring the job in</strong><br><span class="tag">Astra</span></td>
+            <td>Her existing work is inside Patina within the first hour, with no retyping.</td>
+            <td>The working-set session; an honest FF&amp;E door at the breadth the field already has; export decoupled from it and taken first.</td>
+          </tr>
+          <tr>
+            <td><strong>A2 · The system does the next step</strong><br><span class="tag">Astra</span></td>
+            <td>After any real action, Patina already has the next paper drafted, in her inbox or on her phone.</td>
+            <td>Learn-first; the vendor-quote landing — the one door that genuinely does not exist; one candidate per obligation, never a queue.</td>
+          </tr>
+          <tr>
+            <td><strong>F1 · One real job, together</strong><br><span class="tag">Fable</span></td>
+            <td>Move the payoff from week six to minute forty-five by making the setting-up call a working session that ends with a sent artifact.</td>
+            <td>The session script; naming the studio at the invite; the follow-through line and the case record.</td>
+          </tr>
+          <tr>
+            <td><strong>F2 · Nothing to learn</strong><br><span class="tag">Fable</span></td>
+            <td>Subtraction. Ask nothing until the job needs it.</td>
+            <td>Front door = the job in flight; setup at the moment of need; honest exports; pull the Pledge band; the drip reduced to one question.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small soft" style="margin-top:1rem;"><strong>Refuted by the code, not by argument:</strong> A2&rsquo;s hours-to-invoice bridge already ships through &ldquo;Bill week.&rdquo; A1&rsquo;s product URL capture already ships. A2&rsquo;s Field Line correction replies already fire inside the consent fence. Three proposed builds were already in production.</p>
+    <div class="source">proposal-A1 · proposal-A2 · proposal-F1 · proposal-F2 · critique-A1 §1 · critique-A2 §4.1</div>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="slide" id="slide-14" data-title="Where Fable and Astra agreed">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-proposal">Program</div>
+      <h2>Where Fable and Astra agreed</h2>
+    </div>
+    <div class="grid-2-wide">
+      <div>
+        <ol class="numbered small">
+          <li><strong>Learn first.</strong> Nobody has watched Leah run a job.</li>
+          <li><strong>The front door is the job in flight</strong>, not a lead ceremony.</li>
+          <li><strong>The setting-up call becomes a working session</strong> on a real obligation.</li>
+          <li><strong>Setup is asked at the moment it blocks a real act</strong>, and not before.</li>
+          <li><strong>Honest exports before asking for reliance.</strong></li>
+          <li><strong>Pull the Pledge band now.</strong> Removing legal-gated copy needs no counsel; adding it does.</li>
+          <li><strong>No tours, samples, checklists, streaks.</strong></li>
+          <li><strong>Open the FF&amp;E door only once a schedule has been observed.</strong></li>
+        </ol>
+      </div>
+      <div>
+        <h3 style="font-size:1rem; margin-bottom:0.5rem;">Where they still disagree — kept for leadership</h3>
+        <ul class="plain tight small">
+          <li><strong>Attribution.</strong> One ownership query is not proof of who prepared an invoice. The designer id is stamped from the project or a roster-owning member, not the caller, and the invoice row has no author column. If coverage is unavailable, the answer stays unknown rather than crediting Leah with Kody&rsquo;s work.</li>
+          <li><strong>Zero products does not prove zero schedules.</strong> The sequencing is accepted — billing first, schedule export conditional — but not the impossibility claim. Observation may reveal an external schedule; that earns a fresh decision, not a preselected importer.</li>
+          <li><strong>&ldquo;Zero signed&rdquo; cannot be certified.</strong> Twenty <span class="path">accepted</span> rows exist and the status vocabulary does not prove the absence of a signature. The row says <em>real-client acceptance unverified</em>.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="source">program-final §Disagreements for leadership · redteam-fable §2</div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide" id="slide-15" data-title="The bet">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-proposal">Program</div>
+    </div>
+    <p class="bet">Make the next invoice on a house outside Patina easier to finish, then earn the next one — without making the studio keep two books.</p>
+    <hr class="hairline" style="margin-top:1.6rem;">
+    <div class="grid-4" style="margin-top:0.6rem;">
+      <div><div class="slide-kicker">Surface</div><p class="small">The Document.</p></div>
+      <div><div class="slide-kicker">Moment</div><p class="small">An existing house entering shared work.</p></div>
+      <div><div class="slide-kicker">Stream</div><p class="small">The subscription floor.</p></div>
+      <div><div class="slide-kicker">Promise</div><p class="small">Less re-entry. No lock-in.</p></div>
+    </div>
+    <p class="small soft" style="margin-top:1.4rem; max-width:70ch;"><strong>Why invoicing:</strong> it is the only loop we have observed with enough cadence to give two natural occurrences inside two weeks. That is an observation about ten records over seven weeks — not a proven habit of Leah&rsquo;s, and not a forecast of when a bill falls due.</p>
+    <div class="source">program-final §The bet, P5 · completeness-critic §4.3 · 07 §3 (billing is not the studio&rsquo;s top-ranked pain)</div>
+  </div>
+</section>
+
+<!-- 16 -->
+<section class="slide" id="slide-16" data-title="Wave 1 · Watch one obligation cross the door">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-proposal">Program · Wave 1 · 23–30 September</div>
+      <h2>Watch one obligation cross the door</h2>
+    </div>
+    <div class="grid-4">
+      <div class="card">
+        <span class="move-id">P1 · S</span>
+        <h4>Watch the actual job</h4>
+        <p>Open with: <em>how many houses are live, and where do you keep each one?</em> Ask why the one house in Patina is there. Then watch the last comparable invoice assembled in its normal tool, before demonstrating anything.</p>
+        <p>Keep a restricted case record: house aliases, the actual operator, minutes, corrections, founder help — and a <strong>told</strong> column, one line for each thing Kody had to say for her to proceed. That column is the learning-a-new-system instrument.</p>
+      </div>
+      <div class="card">
+        <span class="move-id">P5 · S</span>
+        <h4>Finish the next invoice, on another house</h4>
+        <p>Leah picks a genuinely due bill on a house currently outside Patina. <em>Open a project</em> → draw → issue and send when she ordinarily would. No lead ceremony, no reconstructed history, no duplicate receivable.</p>
+        <p>Kody logs every intervention instead of quietly preparing the paper. The founder-seat rule applies: list every write from Kody&rsquo;s Middle West seat during the window.</p>
+      </div>
+      <div class="card">
+        <span class="move-id">P2a · S</span>
+        <h4>Remove the false promise, quiet the trial</h4>
+        <p>Pull the Pledge band from the Accounts book and the commission line from three email templates, through a forward migration and a designer-portal deploy. Correct preview text too.</p>
+        <p>Pause the two active Middle West onboarding enrollments before their 25 September due step — one of which is Kody&rsquo;s own seat — preserving step history and a resume date.</p>
+      </div>
+      <div class="card">
+        <span class="move-id">H1 · S</span>
+        <h4>Retire the misleading readouts</h4>
+        <p>Retire <span class="path">designer_funnel</span> and <span class="path">conversion_funnel</span> — and <span class="path">consumer_funnel</span>, which carries the identical defect — along with their admin display.</p>
+        <p>Where a dependent must remain, return an explicit <em>unavailable</em>, never a false zero. This is not an analytics rebuild and not a gate on Leah.</p>
+      </div>
+    </div>
+    <div class="source">program-final Wave 1 · completeness-critic §1 · 03 §3, §5</div>
+  </div>
+</section>
+
+<!-- 17 -->
+<section class="slide" id="slide-17" data-title="What Wave 1 actually authorizes">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-decisions">Decisions</div>
+      <h2>What Wave 1 actually authorizes</h2>
+      <div class="slide-kicker">Say the mutations in the same breath as &ldquo;observe&rdquo;</div>
+    </div>
+    <div class="grid-2">
+      <div>
+        <h3 style="font-size:1rem; margin-bottom:0.5rem;">Four production changes</h3>
+        <ol class="numbered small">
+          <li>A forward template migration, plus a designer-portal deploy for the Accounts band.</li>
+          <li>Two <span class="path">sequence_enrollments</span> row updates — pause, with a recorded resume.</li>
+          <li>A view drop for the retired funnels.</li>
+          <li>An admin-portal deploy to remove their display. That portal&rsquo;s build enforces types, so the deletions are not independently landable.</li>
+        </ol>
+        <h3 style="font-size:1rem; margin:1rem 0 0.5rem;">One external send</h3>
+        <p class="small">An outside-house invoice means <strong>inviting Leah&rsquo;s homeowner to Patina and emailing them the invoice</strong>. The invoice hooks refuse a project without a client, and the picker only yields one for a household that already holds a profile — which means a real invitation first. The First Letter&rsquo;s accept leg is unverified in production. This trial is not quiet.</p>
+      </div>
+      <div class="card">
+        <h4>Kody&rsquo;s week, totalled</h4>
+        <p>P2a — a migration, a portal deploy, an inventory of adjacent copy, two enrollment mutations to verify.</p>
+        <p>H1 — six files, one migration, two deploys, and a SQL test that casts the views unguarded and will abort on drop.</p>
+        <p>P4, if pulled forward — the strictest-typed portal.</p>
+        <p>Plus the three-hour observation cap. All of it lands on one engineer, in one week. The program never totalled it; this slide does.</p>
+        <p class="smaller soft">The three-hour cap is a proposed capacity limit, not an observed cost.</p>
+      </div>
+    </div>
+    <div class="source">completeness-critic §0.1, §4.12, §4.18 · 08 G8 · program-final Wave 1</div>
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="slide" id="slide-18" data-title="Wave 2 · Earn the second house">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-proposal">Program · Wave 2 · the next natural occurrence</div>
+      <h2>Earn the second house</h2>
+    </div>
+    <p class="measure small">Repeat P5 without founder preparation, on the admitted house or another genuinely incoming one. House one cannot substitute for the outside-house test. If no second opportunity occurs, say so. <strong>A created project is not adoption</strong> — the row must show the obligation, the effort, the duplicate work retired, and the voluntary next choice.</p>
+    <div class="grid-3" style="margin-top:1rem;">
+      <div class="card">
+        <span class="move-id">P3 · M</span>
+        <h4>Return the billing work she actually has</h4>
+        <p>A studio invoices / payments / clients spreadsheet with a manifest of scope, exclusions and missing values. The export that exists today is hours and vendor bills. Distinguish failed and refunded payments from collected money; keep other studios out of it.</p>
+      </div>
+      <div class="card">
+        <span class="move-id">P4 · S</span>
+        <h4>Name the studio at the invite</h4>
+        <p>Carry the approved studio name as the business name in the same upsert that grants designer status. Never rename an existing studio on re-invitation. Widen the teammate persona to <span class="path">@middlewest.studio</span> after a live flag read. Hygiene before the next invite — it earns no adoption claim.</p>
+      </div>
+      <div class="card">
+        <span class="move-id">P2b · M</span>
+        <h4>Pilot terms before any non-Leah studio</h4>
+        <p>Cost, duration, assistance, return package, cancellation — in plain words, before a referred studio entrusts real paperwork. The number is leadership&rsquo;s to approve, never a busy owner&rsquo;s to invent.</p>
+      </div>
+    </div>
+    <div class="source">program-final Wave 2 · completeness-critic §1 (P3 re-premised) · 02 §1.6</div>
+  </div>
+</section>
+
+<!-- 19 -->
+<section class="slide" id="slide-19" data-title="Wave 3 · Earn an intake build">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-proposal">Program · Wave 3 · October or later · conditional</div>
+      <h2>Earn an intake build</h2>
+    </div>
+    <p class="measure small">No schedule feature is on Leah&rsquo;s critical path. Referred-studio appointments are requests through her network, not a cohort that exists.</p>
+    <div class="grid-2" style="margin-top:0.8rem;">
+      <div class="card">
+        <span class="move-id">P3f · M · conditional</span>
+        <h4>Return a schedule only when one is entrusted</h4>
+        <p>If observation reveals a schedule the studio wants in Patina, return it as a studio-private spreadsheet with the selected originals and a scope manifest — trade cost, client price and markup preserved separately, and the client PDF&rsquo;s privacy boundary intact.</p>
+        <p class="smaller soft">The deferred export, not an empty file offered to Leah now.</p>
+      </div>
+      <div class="card">
+        <span class="move-id">P6 · M–L · conditional</span>
+        <h4>One observed source door over the dormant extractor</h4>
+        <p>PDF or spreadsheet — one, chosen from what the observation actually found, at name / quantity / room / category breadth. Reserved for a referred studio after two real examples establish repeated transcription.</p>
+        <p>For PDF: a plain-language statement that the document goes to Anthropic, permission asked, a non-processing alternative offered, retention defined, and per-studio document and spend caps. Designer-Taught Intelligence never excuses concealing a processor.</p>
+        <p class="smaller soft">Cost re-tagged M–L, not M: dead-batch correction semantics are in scope — a row that can never be cleared today blocks its batch from ever committing, and re-upload returns the same dead batch.</p>
+      </div>
+    </div>
+    <div class="source">program-final Wave 3 · completeness-critic §1 (P6 cost refuted) · 02 §1.3</div>
+  </div>
+</section>
+
+<!-- 20 -->
+<section class="slide" id="slide-20" data-title="If P1 shows… then build…">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-proposal">Program</div>
+      <h2>If P1 shows… then build…</h2>
+    </div>
+    <div class="scrollbox">
+      <table>
+        <thead><tr><th style="width:38%">If the observation finds</th><th>Then the thing that comes down off the shelf</th></tr></thead>
+        <tbody>
+          <tr><td>The houses live in a <strong>spreadsheet</strong></td><td>P6 as the spreadsheet door, plus P3f&rsquo;s schedule export first — adopted rows must return usefully before anything relies on them.</td></tr>
+          <tr><td>They live in her <strong>inbox and vendor PDFs</strong></td><td>The vendor-quote landing. Concierge first, forwarding later, and no mailbox authorization at any point.</td></tr>
+          <tr><td>They live in her <strong>head and her phone</strong></td><td>F2&rsquo;s front-door reorder — &ldquo;A job already running? Open a project.&rdquo; — setup asked at the moment of need, and the Field share sheet.</td></tr>
+          <tr><td>The blocker is the <strong>price</strong></td><td>P2b now, ahead of anything else.</td></tr>
+          <tr><td>She wants <strong>completeness</strong> — the old-portal flight repeating</td><td>The exact missing capability, scoped on its own. Not an importer by default.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="voice" style="font-size:1.15rem; margin-top:1.2rem;">These are the solutions on the shelf. The observation picks which one comes down.</p>
+    <div class="source">program-final P1, P6, P3f, P2b · proposal-F2 L1–L5 · proposal-A2 move 2 · 08 G4</div>
+  </div>
+</section>
+
+<!-- 21 -->
+<section class="slide" id="slide-21" data-title="How we measure, without a dashboard">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-proposal">Program</div>
+      <h2>How we measure, without a dashboard</h2>
+    </div>
+    <div class="grid-2">
+      <div>
+        <h3 style="font-size:1rem; margin-bottom:0.5rem;">Measure a removed task</h3>
+        <ul class="plain tight small">
+          <li>Normal-method active minutes, against <em>all</em> studio time in Patina: setup, search, entry, review, correction, support, export, duplicate maintenance.</li>
+          <li>First use kept separate from repeat. Setup is never amortised against imaginary future work.</li>
+          <li>Kody&rsquo;s time shown separately from hers; machine wait separate from human effort.</li>
+          <li>Remembered baselines are estimates, and are labelled as estimates.</li>
+          <li>Never recreate collectible work for a stopwatch.</li>
+          <li>Where the invoice went afterwards, and the minutes that took, counted as duplicate work in the net.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="font-size:1rem; margin-bottom:0.5rem;">The &lsquo;told&rsquo; count</h3>
+        <p class="small">Every thing Kody had to say for her to proceed, with the surface it concerned. The honest readout sentence is: <em>she had to be told N things to finish one bill.</em> That is the only observable form of &ldquo;learning a whole new system.&rdquo;</p>
+        <h3 style="font-size:1rem; margin:1rem 0 0.5rem;">Continuation rule</h3>
+        <p class="small">Two natural comparable opportunities with positive net savings; the later one without founder preparation; no financial or privacy error; and a voluntary repeat choice. Anything less is not continuation.</p>
+        <p class="small soft">One studio establishes a case, not retention causality. No opportunity is not churn. Project creation is not saved work. Nothing here becomes a studio-facing tile, target or streak.</p>
+        <p class="voice" style="font-size:1.15rem;">Ask at the end: &ldquo;What did this remove from your day?&rdquo;</p>
+      </div>
+    </div>
+    <div class="source">program-final §Measure a removed task · completeness-critic §6.2–§6.3 · 03 §4–§5</div>
+  </div>
+</section>
+
+<!-- 22 -->
+<section class="slide" id="slide-22" data-title="For the studios: Bring one piece of work">
+  <div class="slide-inner studio-slide">
+    <div class="slide-head">
+      <div class="eyebrow cat-studio">For the studios · draft, pending copy approval</div>
+      <h2>Bring one piece of work</h2>
+    </div>
+    <div class="grid-2-wide">
+      <div>
+        <p>We want to see whether Patina leaves you with less to do.</p>
+        <p>Keep the tools that work. You don&rsquo;t need to tidy a spreadsheet or write instructions for us. Screen-share is enough, and nothing goes to a client unless you decide it&rsquo;s ready.</p>
+        <p class="smaller soft">A bill is the smallest thing that has to leave a studio most weeks. That is why we start there — not because it is the hardest part of your job.</p>
+      </div>
+      <div>
+        <div class="ask">
+          <span class="when">Thirty minutes</span>
+          How many houses are live, and where do you keep each one? Pick one outside Patina and show us how you prepare its next bill.
+        </div>
+        <div class="ask">
+          <span class="when">When that bill is due</span>
+          Thirty minutes on it together. You choose the work and tell us what finished looks like; Kody takes notes. Bring a colleague only if they&rsquo;d normally do this job.
+        </div>
+        <div class="ask">
+          <span class="when">At the next bill</span>
+          Do it the way you&rsquo;d normally choose, without Kody preparing it. What felt easier? What still had to be done twice?
+        </div>
+        <div class="ask">
+          <span class="when">Ten minutes</span>
+          Open the files we return, without Patina. Could you carry on from them? This month we put that packet together by hand, so tell us what&rsquo;s missing.
+        </div>
+      </div>
+    </div>
+    <p class="small" style="margin-top:1.2rem;">No pricing question is hidden in these asks. Before a referred studio shares paperwork, we&rsquo;ll state the approved cost, assistance and end date plainly.</p>
+    <div class="source">Draft · program-final §Beta discussion brief · pending decisions 2 and 3 opposite: if the bill is on a house outside Patina, the homeowner receives an invitation and an invoice, and that sentence belongs in this brief before it is sent</div>
+  </div>
+</section>
+
+<!-- 23 -->
+<section class="slide" id="slide-23" data-title="Decisions for leadership">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-decisions">Decisions</div>
+      <h2>Decisions for leadership</h2>
+      <div class="slide-kicker">This week</div>
+    </div>
+    <div class="decision-item">
+      <div class="decision-num">01</div>
+      <div>
+        <div class="decision-q">Name the studios behind the problem statement — or accept that Leah is the case.</div>
+        <div class="decision-opts">Dates, what they were shown, what they went back to. They are in no dataset and no document we could find.</div>
+      </div>
+    </div>
+    <div class="decision-item">
+      <div class="decision-num">02</div>
+      <div>
+        <div class="decision-q">Homeowner in, or out.</div>
+        <div class="decision-opts">An outside-house invoice invites a real client of Leah&rsquo;s. Approve it as a named step — accepting that this is also the First Letter&rsquo;s first real test — or end the trial at <em>issue</em> with a defined return record. Print does not serve drafts, so that record must be defined first.</div>
+      </div>
+    </div>
+    <div class="decision-item">
+      <div class="decision-num">03</div>
+      <div>
+        <div class="decision-q">Authorize P2a, H1, and the founder-seat rule.</div>
+        <div class="decision-opts">Pledge and commission copy out; two enrollment pauses with a resume date; the funnels retired. And the seat rule <em>including</em> an &ldquo;independence unverified&rdquo; outcome — otherwise the second-occurrence claim is graded by the person it is about.</div>
+      </div>
+    </div>
+    <div class="decision-item">
+      <div class="decision-num">04</div>
+      <div>
+        <div class="decision-q">Approve the three-hour cap, and Kody&rsquo;s totalled week.</div>
+        <div class="decision-opts">Engineering moves plus observation, on one calendar.</div>
+      </div>
+    </div>
+    <hr class="hairline">
+    <div class="grid-2">
+      <div>
+        <div class="slide-kicker">Before any non-Leah studio</div>
+        <p class="small">Pilot terms and the V2 number. P3&rsquo;s billing export. P4&rsquo;s arrival hygiene. The brief opposite goes to Leah only until those exist.</p>
+      </div>
+      <div>
+        <div class="slide-kicker">Untouched by this trial</div>
+        <p class="small">V1 the margin pocket. V2 the price. V6 the Pledge against the subscription. This program produces no pricing evidence; V2 waits on a separate conversation. No phone surface is in it either — the SMS rail is the only field surface today.</p>
+      </div>
+    </div>
+    <div class="source">program-final §Leadership decisions · completeness-critic §5, B10, B11</div>
+  </div>
+</section>
+
+<!-- 24 -->
+<section class="slide" id="slide-24" data-title="What this deck does not claim">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-decisions">Decisions</div>
+      <h2>What this deck does not claim</h2>
+    </div>
+    <ul class="plain small two-col-list">
+      <li>That any beta studio besides Leah exists in the data. Every other seat is Kody, a QA login, or unnamed.</li>
+      <li>Any time-saved figure, projected or measured. Nothing has been timed.</li>
+      <li>That invoicing is Leah&rsquo;s habit. Ten invoices is a union across three members including Kody, and the database has no author column.</li>
+      <li>That the trial is quiet. One homeowner receives an invitation and an invoice.</li>
+      <li>That zero proposals were ever signed. Twenty <span class="path">accepted</span> rows exist; the status vocabulary proves nothing either way.</li>
+      <li>That &ldquo;your data exports&rdquo; is true today. No invoice, payment or client register export exists.</li>
+      <li>Any vendor statistic. None survived verification — not the admin-time share, the tool count, the reconciliation hours, or any onboarding lift.</li>
+      <li>That the two-letter label for machine intelligence belongs anywhere in the product or in this deck. Where the engine is meant we say Designer-Taught Intelligence; Anthropic is named plainly as a processor.</li>
+    </ul>
+    <div class="source">completeness-critic §4 · 08 G10 · VISION §6</div>
+  </div>
+</section>
+
+<!-- 25 -->
+<section class="slide" id="slide-25" data-title="Good ideas that did not make the program">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-decisions">Decisions</div>
+      <h2>Good ideas that did not make the program</h2>
+    </div>
+    <div class="scrollbox">
+      <table>
+        <tbody>
+          <tr><td style="width:44%">More tours, samples, progress mechanics</td><td>Contrary to standing rulings, and unrelated to removed work.</td></tr>
+          <tr><td>Rebuilding hours billing, Field correction, or product URL capture</td><td>They already ship. Existing paths, not new value.</td></tr>
+          <tr><td>Automatic billing cutoffs, payment next-action, approval-to-PO</td><td>No observed obligation or authority justifies them here.</td></tr>
+          <tr><td>Vendor quote landing, and mail forwarding</td><td>Genuine gaps — but receiving, identity and attachment handling need an observed case first.</td></tr>
+          <tr><td>Both import formats, money extraction, whole-book contacts, historical receivables</td><td>Excessive scope and reconciliation cost. Contact import keeps its own standing ruling.</td></tr>
+          <tr><td>Whole-studio archive, phone share extension, calendar sync</td><td>Not prerequisites for an invoice experiment.</td></tr>
+          <tr><td>A mandatory send, or a second-house target</td><td>No manufactured work. Restore the second-house evidence row, not a quota.</td></tr>
+          <tr><td>Blanket concierge admin, or a global drip shutdown</td><td>Founder-heavy counts prove neither need. The bounded seat rule and two paused enrollments stand instead.</td></tr>
+          <tr><td>Funnel repair as a gate</td><td>Case records serve now; H1 gives the misleading readouts a same-week owner instead of indefinite deferral.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="source">program-final §Good ideas that did not make this program</div>
+  </div>
+</section>
+
+<!-- 26 -->
+<section class="slide" id="slide-26" data-title="Appendix: sources and method">
+  <div class="slide-inner">
+    <div class="slide-head">
+      <div class="eyebrow cat-appendix">Appendix</div>
+      <h2>Sources and method</h2>
+    </div>
+    <div class="grid-2">
+      <div>
+        <div class="slide-kicker">The files</div>
+        <p class="smaller path" style="margin-top:0.4rem;">artifacts/studio-hook-2026-09-22/research/<br>
+        01-first-session-path.md · 02-manual-workflow-gap.md · 03-prod-evidence.md · 04-prior-art-internal.md · 05-competitor-activation.md · 06-activation-playbooks.md · 07-studio-ethnography.md · 08-gap-critique.md</p>
+        <p class="smaller path">artifacts/studio-hook-2026-09-22/design/<br>
+        proposal-A1.html · proposal-A2.html · proposal-F1.md · proposal-F2.md · critique-A1.md · critique-A2.md · program-v1.html · redteam-fable.md · program-final.html · completeness-critic.md</p>
+        <p class="smaller path">docs/vision/VISION.md · docs/vision/VISION-DECISIONS.md</p>
+        <hr class="hairline">
+        <div class="slide-kicker">The roster</div>
+        <p class="smaller" style="margin-top:0.4rem;">Eight researchers on Opus and Sonnet, one per lane. A Fable gap critic reading all seven. Four proposers — A1 and A2 on GPT-6 Astra, F1 and F2 on Claude Fable. Critics assigned across families, never to their own author. Merge by Astra, red team by Fable, final program by Astra. Nine verifiers on Opus, one per premise cluster. A completeness critic on Fable, in a separate context from every author.</p>
+      </div>
+      <div>
+        <div class="slide-kicker">Evidence quality, by lane</div>
+        <ul class="plain tight smaller" style="margin-top:0.4rem;">
+          <li><strong>01</strong> — code read, not run. No browser walk, no live flags, no production query.</li>
+          <li><strong>02</strong> — code and schema read; zero production row counts; every minute figure inferred and labelled.</li>
+          <li><strong>03</strong> — read-only Management API with server-enforced read-only; SELECT only; no mutation attempted. PostHog unauthenticated, so two insights were not pulled; per-studio analysis is structurally impossible there, as no studio grouping exists.</li>
+          <li><strong>04</strong> — file-based only.</li>
+          <li><strong>05 and 07</strong> — web sources. Reddit and LinkedIn feed posts unreachable across repeated attempts; two named competitor products do not exist; review-site quotes preserved with their own disclosure.</li>
+          <li><strong>06</strong> — search-only; primary papers not read in full; the weakest-tier figures flagged and left unquoted here.</li>
+          <li><strong>08</strong> — the seven lanes cross-read against project memory and the code, which is how every production seat was finally named.</li>
+        </ul>
+        <p class="smaller soft" style="margin-top:0.8rem;">No production mutation, deploy, send, flag change or ruling was made in the course of this work.</p>
+      </div>
+    </div>
+    <div class="source">All paths relative to the repository root</div>
+  </div>
+</section>
+
+</div>
+</div>
+
+<!-- index overlay -->
+<div id="indexOverlay" hidden role="dialog" aria-label="Slide index">
+  <h3>Index</h3>
+  <div class="index-legend">
+    <span><span class="eyebrow cat-diagnosis" style="display:inline;">— </span>Diagnosis</span>
+    <span><span class="eyebrow cat-proposal" style="display:inline;">— </span>Program</span>
+    <span><span class="eyebrow cat-decisions" style="display:inline;">— </span>Decisions</span>
+    <span><span class="eyebrow cat-appendix" style="display:inline;">— </span>Appendix</span>
+  </div>
+  <ul class="index-list" id="indexList"></ul>
+</div>
+
+<!-- nav controls -->
+<div class="nav-ui hint">Press <kbd>i</kbd> for index · <kbd>r</kbd> to read as a page · ← → to move</div>
+<div class="nav-ui counter" id="counter">01 / 26</div>
+<div class="nav-ui arrows">
+  <button class="arrow-btn" id="prevBtn" aria-label="Previous slide">←</button>
+  <button class="arrow-btn" id="nextBtn" aria-label="Next slide">→</button>
+</div>
+<button class="clickzone left" id="clickLeft" aria-label="Previous slide"></button>
+<button class="clickzone right" id="clickRight" aria-label="Next slide"></button>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var total = slides.length;
+  var counter = document.getElementById('counter');
+  var indexOverlay = document.getElementById('indexOverlay');
+  var indexList = document.getElementById('indexList');
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+  function currentIndex(){
+    for (var i = 0; i < total; i++){
+      if (slides[i].classList.contains('active')) return i;
+    }
+    return 0;
+  }
+
+  function go(i, pushHash){
+    if (i < 0 || i >= total) return;
+    slides.forEach(function(s){ s.classList.remove('active'); });
+    slides[i].classList.add('active');
+    counter.textContent = pad(i+1) + ' / ' + pad(total);
+    if (pushHash !== false){
+      history.replaceState(null, '', '#' + (i+1));
+    }
+    window.scrollTo(0, 0);
+  }
+
+  function next(){ go(Math.min(currentIndex()+1, total-1)); }
+  function prev(){ go(Math.max(currentIndex()-1, 0)); }
+
+  document.getElementById('nextBtn').addEventListener('click', next);
+  document.getElementById('prevBtn').addEventListener('click', prev);
+  document.getElementById('clickLeft').addEventListener('click', prev);
+  document.getElementById('clickRight').addEventListener('click', next);
+
+  function buildIndex(){
+    indexList.innerHTML = '';
+    slides.forEach(function(s, i){
+      var li = document.createElement('li');
+      var btn = document.createElement('button');
+      var num = document.createElement('span');
+      num.className = 'idx-num';
+      num.textContent = pad(i+1);
+      var ttl = document.createElement('span');
+      ttl.className = 'idx-title';
+      ttl.textContent = s.getAttribute('data-title');
+      btn.appendChild(num);
+      btn.appendChild(ttl);
+      btn.addEventListener('click', function(){
+        go(i);
+        toggleIndex(false);
+      });
+      li.appendChild(btn);
+      indexList.appendChild(li);
+    });
+  }
+  buildIndex();
+
+  function toggleIndex(force){
+    var show = force !== undefined ? force : indexOverlay.hasAttribute('hidden');
+    if (show){ indexOverlay.removeAttribute('hidden'); }
+    else { indexOverlay.setAttribute('hidden',''); }
+  }
+
+  function toggleReadMode(){
+    document.body.classList.toggle('read-mode');
+  }
+
+  document.addEventListener('keydown', function(e){
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (document.body.classList.contains('read-mode') && e.key !== 'r' && e.key !== 'R' && e.key !== 'i' && e.key !== 'I') return;
+    switch(e.key){
+      case 'ArrowRight':
+      case 'PageDown':
+      case ' ':
+        e.preventDefault(); next(); break;
+      case 'ArrowLeft':
+      case 'PageUp':
+        e.preventDefault(); prev(); break;
+      case 'i':
+      case 'I':
+        toggleIndex(); break;
+      case 'r':
+      case 'R':
+        toggleReadMode(); break;
+      case 'Escape':
+        if (!indexOverlay.hasAttribute('hidden')) toggleIndex(false);
+        break;
+    }
+  });
+
+  var hash = parseInt(location.hash.replace('#',''), 10);
+  if (hash && hash >= 1 && hash <= total){
+    go(hash - 1, false);
+  } else {
+    go(0, false);
+  }
+
+  window.addEventListener('hashchange', function(){
+    var h = parseInt(location.hash.replace('#',''), 10);
+    if (h && h >= 1 && h <= total) go(h - 1, false);
+  });
+})();
+</script>
