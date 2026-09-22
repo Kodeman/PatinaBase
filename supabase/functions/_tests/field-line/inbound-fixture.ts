@@ -1,4 +1,25 @@
+import { fieldLineBindings } from "./adapters.ts";
+import { signedInboundFixture } from "./fixtures.ts";
 import { createFieldLineHarness, type FieldLineHarness } from "./harness.ts";
+
+/** Where _shared/hours-judgment.ts posts, as it addresses it. */
+const TYPESAFE_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
+
+/**
+ * THE JUDGMENT'S OWN TRANSPORT (US-6).
+ *
+ * judgeHoursReply reaches TypeSafe through deps.fetchImpl — the same seam
+ * field-parse and the provider are injected through — so a case that answers
+ * the judgment, or proves nothing was asked of it, owns that seam here.
+ * `requests` holds the parsed body of every call the pipeline actually made,
+ * which is how a case asserts BOTH that no request was made at all and that
+ * what left the rail carried no identity.
+ */
+export interface TypesafeSeam {
+  requests: Array<Record<string, unknown>>;
+  /** Answers the next call. Unset is a 500, i.e. the module's `http` defer. */
+  answer: ((request: Record<string, unknown>) => Response) | null;
+}
 
 /**
  * A prompt row as this fixture writes one, with the index signature the RPCs
@@ -138,6 +159,29 @@ export function inboundFixture(effectError?: unknown, now?: Date, env: Record<st
     ...[...block.matchAll(TUPLE)].map(templateRow),
     ...[...tradeBlock.matchAll(TUPLE)].map(templateRow),
   ];
+  // The harness builds its deps around its own provider fetch, so injecting a
+  // fetch that knows the judgment's endpoint means re-making that one call with
+  // the harness's own values — the clock still read through a getter so
+  // advanceTo() moves it, and the same parseFn stub every other case sees.
+  // Every request that is not TypeSafe's still reaches the provider unchanged.
+  const typesafe: TypesafeSeam = { requests: [], answer: null };
+  const fetchImpl: typeof fetch = (input, init) => {
+    if (!String(input).startsWith(TYPESAFE_ENDPOINT)) return h.provider.fetch(input, init);
+    const request = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    typesafe.requests.push(request);
+    return Promise.resolve(typesafe.answer?.(request) ??
+      new Response("{}", { status: 500, headers: { "Content-Type": "application/json" } }));
+  };
+  h.processInbound = async (overrides = {}) => {
+    const signed = await signedInboundFixture({ To: h.sender, From: h.recipient, ...overrides });
+    return await fieldLineBindings.processInbound(signed.inbound, {
+      supabase: h.fake as never,
+      getEnv: h.env,
+      fetchImpl,
+      get now() { return h.clock; },
+      parseFn: async () => ({ intent: "note", target_ref: null, new_date: null, note: "fixture", confidence: 0 }),
+    });
+  };
   const prompt = (overrides: Record<string, unknown> = {}): FixturePromptRow => {
     const row = { id: "prompt-a", party_id: "party-a", project_id: "project-a", kind: "report_arrival",
       subject_id: "task-a", short_code: "17", version: 1, expires_at: "2026-11-02T14:00:00.000Z",
@@ -146,7 +190,7 @@ export function inboundFixture(effectError?: unknown, now?: Date, env: Record<st
     (h.fake._data.sms_prompts ??= []).push(row);
     return row;
   };
-  return { h, effects, touches, prompt };
+  return { h, effects, touches, prompt, typesafe };
 }
 
 /** Real UUIDs at the shared selection validator boundary; no validation bypass. */

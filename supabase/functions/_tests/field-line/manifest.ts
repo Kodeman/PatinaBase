@@ -25,6 +25,7 @@ import { clientVersionRace } from "./cases/client-decision-race.ts";
 import { clientWindowPickIssued } from "./cases/client-window-pick.ts";
 import { hoursPromptGate } from "./cases/hours-prompt-gate.ts";
 import { hoursReplyProposal } from "./cases/hours-reply-proposal.ts";
+import { hoursFreeTextConfirm } from "./cases/hours-free-text-confirm.ts";
 import {
   clientCampaignApproval,
   clientConsentBoundary,
@@ -76,6 +77,9 @@ export const fieldLineCases: GateCase[] = [
   // never as a time entry.
   hoursPromptGate,
   hoursReplyProposal,
+  // The same question answered in words (US-6): a judged reading says the
+  // number back and asks for it, and files nothing until the crew sends it.
+  hoursFreeTextConfirm,
 ];
 
 export { type GateAssertion, type GateCase } from "./types.ts";

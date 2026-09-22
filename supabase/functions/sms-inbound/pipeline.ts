@@ -23,6 +23,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseFieldMessage, type FieldParseInput, type FieldParseResult } from "../_shared/field-parse.ts";
+import { judgeHoursReply } from "../_shared/hours-judgment.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
 import { channelConsentDecision, channelConsentVerdict, fieldLineCampaignApproved, fieldLinePhase, orgsOfProjects, resolveStudioName, recoverSmsSelection, sendPartySms } from "../_shared/sms.ts";
 import { captureServerEvent } from "../_shared/aesthete-events.ts";
@@ -2910,6 +2911,228 @@ async function hoursReply(
       `${await designerFirstName(supabase, party.project_id, deps)} will confirm.`);
 }
 
+// ── THE SAME QUESTION, ANSWERED IN WORDS (US-6, Kody 2026-09-20) ────────────
+//
+// A crew that types "about 6 and a half" has answered tonight's ask, and the
+// number grammar above cannot read it. _shared/hours-judgment.ts can — and this
+// is the whole of what that reading is allowed to do: SAY THE NUMBER BACK AND
+// ASK FOR IT.
+//
+// WHY A CONFIRM AND NOT A FILING. sms_apply_prompt re-reads the STORED inbound
+// body and runs sms_prompt_reply_verb over it (00653:298). For a report_hours
+// prompt that grammar admits the number and nothing else, so a judged free-text
+// reply pushed through consumePrompt raises 23514 and lands on a designer's desk
+// instead of a proposal (the design doc's US-6 section carries the two shapes).
+// Rather than teach the database to trust hours this rail supplied, the judgment
+// answers with one line the crew can agree to in the grammar that already works.
+// Nothing is consumed, no effect is built, the question stays open, and the
+// trade's "6.5" comes back through hoursReply exactly as a first "6.5" would.
+
+/**
+ * The evening ask in its own words, minus the studio and the street
+ * sms_hours_prompt prints (00653's copy block). The judgment is told WHAT was
+ * asked; who asked it, and of whom, never leaves this rail.
+ */
+const HOURS_ASK_TEXT = "How many hours today? Reply with a number, like 6 or 6.5.";
+
+/** Control words this pipeline answers above, and never reads as an answer. */
+const HOURS_RESERVED = new Set([...STOP_WORDS, ...START_WORDS, "HELP", "INFO", "YES", "Y", "OK", "NO"]);
+
+/** The bare words that are already a command on this rail (promptReply). */
+const HOURS_BARE_VERB =
+  /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|damage|good|fine|delay)$/i;
+
+const HOURS_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * ONE CONFIRM PER QUESTION, MARKED WHERE THE PENDING STATE ALREADY LIVES.
+ * sms_conversation_context.state_context is the jsonb this rail already keeps
+ * the digest menu, the pending body and the clarification binding in, so the
+ * ids of the questions already confirmed ride there beside them. No new table,
+ * no new column, and nothing here changes the shape any other reader expects.
+ */
+const HOURS_CONFIRMED_KEY = "hours_confirmed";
+
+/** The questions this conversation has already had a confirm for. */
+function hoursConfirmed(row: ConversationContext | null): string[] {
+  const value = row?.state_context?.[HOURS_CONFIRMED_KEY];
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+}
+
+/**
+ * The day an ask was frozen to, read off its version — the YYYYMMDD every daily
+ * producer writes there (00653's identity lock, :148-156). A prompt whose
+ * version is not a day cannot have its day named, and a confirm that cannot
+ * name the day it is about is not sent at all.
+ */
+function hoursAskDay(version: unknown): { iso: string; label: string } | null {
+  const value = Number(version);
+  if (!Number.isInteger(value) || value < 10000101 || value > 99991231) return null;
+  const month = Math.floor(value / 100) % 100;
+  const day = value % 100;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return { iso: `${Math.floor(value / 10000)}-${pad(month)}-${pad(day)}`, label: `${HOURS_MONTHS[month - 1]} ${day}` };
+}
+
+/**
+ * THE ONE SENTENCE A JUDGED READING SENDS. It carries the number that was read,
+ * the day it belongs to, and the exact characters to send back — which are the
+ * characters HOURS_REPLY reads, so agreeing costs the crew one short text and
+ * takes the ordinary path. Plain words, one GSM-7 segment, and no account of
+ * how the reading was arrived at.
+ */
+function hoursConfirmText(hours: number, dayLabel: string, token: string): string {
+  return `Reading that as ${hours} ${hours === 1 ? "hour" : "hours"} on ${dayLabel}. Reply ${token} to file it.`;
+}
+
+/**
+ * A free-text answer to an open hours ask, or null.
+ *
+ * NULL IS THE COMPATIBILITY GUARANTEE, exactly as it is in hoursReply. Every
+ * body with a reading of its own is refused here before a single query, and a
+ * defer — no key, no candidate span, a refusal, a timeout, a reading the model
+ * is not sure of — leaves the body on the path it was already on. Nothing below
+ * runs at all unless this number has an hours question open.
+ */
+async function hoursFreeTextConfirm(
+  supabase: SupabaseClient,
+  conv: Conversation,
+  parties: Array<{ id: string; project_id: string }>,
+  body: string,
+  sender: string,
+  recipient: string,
+  messageId: string,
+  now: Date,
+  deps: InboundDeps,
+  /** promptReply's own open set, where it has already been read. */
+  loaded?: SmsPrompt[],
+): Promise<InboundResult | null> {
+  const text = body.trim();
+  // The number grammar, a digest pick, a trade word, a control word, a bare
+  // command, and VERB NN — which is a reference and answers by its code.
+  if (hoursShape(text)) return null;
+  if (menuNumber(text) !== null) return null;
+  if (tradeShape(text)) return null;
+  if (HOURS_RESERVED.has(text.toUpperCase())) return null;
+  if (HOURS_BARE_VERB.test(text)) return null;
+  if (/^[a-z]+\s+\d{2,3}$/i.test(text)) return null;
+
+  let open = loaded;
+  if (!open) {
+    const { data, error } = await supabase.from("sms_prompts").select("*")
+      .eq("sender_number", sender).eq("recipient_phone", recipient).is("answered_at", null)
+      .is("voided_at", null).gt("expires_at", now.toISOString());
+    // A failed read is not this reader's to answer. Returning null leaves the
+    // body on exactly the path it was on, and that path's own read decides.
+    if (error) return null;
+    open = (data ?? []) as SmsPrompt[];
+  }
+  // hoursReply's own predicate: an hours question of this number's own standing.
+  const asked = open.filter((p) => p.kind === HOURS_PROMPT_KIND &&
+    parties.some((party) => party.id === p.party_id && party.project_id === p.project_id));
+  if (asked.length === 0) return null;
+
+  // ONE CONFIRM PER QUESTION (HOURS_CONFIRMED_KEY). A second free-text body
+  // against a question already confirmed is not answered again: it defers to
+  // the path it would have taken, which is where the first one would have gone.
+  const { data: contexts, error: contextError } = await supabase
+    .from("sms_conversation_context").select("*").eq("conversation_id", conv.id);
+  if (contextError) return null;
+  const rows = (contexts ?? []) as ConversationContext[];
+  const live = asked.filter((p) => {
+    const row = rows.find((r) => r.project_id === p.project_id) ?? null;
+    // A paused thread belongs to the person who paused it.
+    if (row?.paused_until && new Date(row.paused_until).getTime() > now.getTime()) return false;
+    return !hoursConfirmed(row).includes(p.id);
+  });
+  if (live.length === 0) return null;
+
+  // A pair that may not be texted is not asked to confirm anything, and is not
+  // answered differently either: today's path gives its own answer.
+  const blocked = await suppression(supabase, sender, recipient);
+  if (blocked.blocked || blocked.error) return null;
+  const allowed: SmsPrompt[] = [];
+  for (const prompt of live) {
+    if (await channelConsentVerdict(supabase, recipient, prompt.project_id) === "allow") allowed.push(prompt);
+  }
+  if (allowed.length === 0) return null;
+
+  // The visit each open ask is about, in words the judgment can tell apart, and
+  // the day each was frozen to. The ask whose words frame the question is the
+  // newest; WHICH open ask the body answers is what `which_prompt` is for, and
+  // it is asked only when there is more than one.
+  const about = new Map<string, { title: string; day: { iso: string; label: string } }>();
+  try {
+    for (const prompt of allowed) {
+      const subject = await promptSubject(supabase, prompt);
+      const day = hoursAskDay(prompt.version);
+      if (!subject || !day) return null;
+      about.set(prompt.id, { title: subject.title, day });
+    }
+  } catch { return null; }
+  const newest = [...allowed].sort((a, b) =>
+    String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0];
+  const framing = about.get(newest.id)!;
+
+  const judgment = await judgeHoursReply({
+    body,
+    askText: HOURS_ASK_TEXT,
+    taskTitle: framing.title,
+    askDay: framing.day.iso,
+    openPrompts: allowed.map((p) => ({
+      code: p.short_code, label: `${about.get(p.id)!.title}, ${about.get(p.id)!.day.label}`,
+    })),
+  }, { getEnv: deps.getEnv, fetchImpl: deps.fetchImpl });
+  if (judgment.kind !== "hours") return null;
+
+  let target: SmsPrompt | undefined;
+  if (allowed.length === 1) target = allowed[0];
+  else if (judgment.promptCode) target = allowed.find((p) => p.short_code === judgment.promptCode);
+  else {
+    // More than one evening open and nothing saying which: the codeless door's
+    // own answer, which is the one the number grammar gives for the same body.
+    return await selectionIntent(supabase, messageId, {
+      kind: "ref_clarify", inboundMessageId: messageId,
+      options: open.filter((p) => p.kind !== "optin").map((p) => ({
+        partyId: p.party_id, projectId: p.project_id, promptId: p.id,
+      })),
+    });
+  }
+  if (!target) return null;
+
+  // THE TOKEN HAS TO ROUND-TRIP, or the confirm asks for something this rail
+  // would refuse. A reference rides with it exactly when a bare number would be
+  // ambiguous — more than one hours ask open, the count hoursReply takes and
+  // 00653:265-269 takes with it.
+  const needsRef = asked.length > 1;
+  // "Ref NN" as every other card on this rail prints a reference (00653's own
+  // copy block). HOURS_REPLY reads `ref` case-insensitively, and the guard
+  // below is what proves it rather than trusting that it does.
+  const token = `${judgment.hours}${needsRef ? ` Ref ${target.short_code}` : ""}`;
+  const round = hoursShape(token);
+  if (!round || round.hours !== judgment.hours ||
+      round.code !== (needsRef ? target.short_code : null)) return null;
+
+  const details = { path: "hours_confirm", prompt_id: target.id, version: target.version,
+    intent: HOURS_PROMPT_KIND, hours: judgment.hours };
+  const attempt = await stampMessage(supabase, messageId, target.party_id, target.project_id, details, judgment.confidence);
+  if (attempt.error) return null;
+  // Written BEFORE the confirm goes out: a marker that failed to save would let
+  // the next free-text body earn a second confirm.
+  let row: ConversationContext;
+  try { row = await ensureContext(supabase, conv.id, target.project_id, target.party_id); }
+  catch { return null; }
+  const context = { ...row.state_context,
+    [HOURS_CONFIRMED_KEY]: [...hoursConfirmed(row), target.id] };
+  const { error: markError } = await contextSnapshot(
+    supabase.from("sms_conversation_context").update({ state_context: context }), row);
+  if (markError) return null;
+  return await reply(supabase, conv.id,
+    hoursConfirmText(judgment.hours, about.get(target.id)!.day.label, token),
+    target.party_id, target.project_id, "hours_confirm");
+}
+
 /** Codes bind before any parser sees the body. Bare digits belong to menus —
  *  except the one a report_hours prompt asked for (contract S7, hoursReply). */
 async function promptReply(supabase: SupabaseClient, conv: Conversation, parties: Array<{id: string; project_id: string}>,
@@ -2920,7 +3143,15 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   // branch needs the wire value and not our row id.
   sourceSid: string | null = null): Promise<InboundResult | null> {
   if (/^\d/.test(body)) {
-    return await hoursReply(supabase, conv, parties, body, sender, recipient, messageId, now, deps);
+    // The number the question asked for, and every reading today's grammar has.
+    if (hoursShape(body)) {
+      return await hoursReply(supabase, conv, parties, body, sender, recipient, messageId, now, deps);
+    }
+    // "6 and a half" leads with a digit and is not that number: hoursReply
+    // answers null for it before it queries anything. The judgment is the only
+    // reader that can say it is still an answer, under the same open-question
+    // gate — and answers null itself for every body that is not one.
+    return await hoursFreeTextConfirm(supabase, conv, parties, body, sender, recipient, messageId, now, deps);
   }
   const clarification = conv.state_context?.ref_clarification as SelectionBinding | undefined;
   let priorAsked = false;
@@ -3015,6 +3246,14 @@ async function promptReply(supabase: SupabaseClient, conv: Conversation, parties
   const explicit = lateIsMinutes || tradeAmbiguous ? null : refMatch;
   const bareVerb = !!trade ||
     /^(?:yes|y|ok|done|here|arrived|delivered|leaving|departed|available|damaged|damage|good|fine|delay)$/i.test(body);
+  // A FREE-TEXT ANSWER TO TONIGHT'S HOURS ASK (US-6), asked after every rule
+  // above has had the body and before anything binds it to a prompt. It fires
+  // only where a report_hours question is open and only for a body none of
+  // those rules reads; a defer returns null and the block below runs exactly as
+  // it did before.
+  const judged = await hoursFreeTextConfirm(supabase, conv, parties, body, sender, recipient,
+    messageId, now, deps, (open ?? []) as SmsPrompt[]);
+  if (judged) return judged;
   let prompt: SmsPrompt | null = null;
   if (explicit || ((open ?? []).length === 1) || (trade && tradeOpen.length === 1)) {
     const code = explicit?.[2] ??
