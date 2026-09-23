@@ -3,7 +3,9 @@
 **Ticket** SQ-151 · **Date** 2026-09-23 · **Merge commit** `4ebaa804b133cfa3cba7a76f8ae05035742c34e3` (main)
 **Authorization** Kody's in-session "Go" to the orchestrator's message that the GO "also serves as the 'ship' for Deploy 1"; R-SH3 authorizes the Wave 1 prod mutations. Deploy 2 is **not** covered.
 
-## Outcome: PARTIAL — stopped at step 3b, nothing rolled forward
+## Outcome: COMPLETE — step 3b finished in attempt 3, after SQ-157 fixed the chunk gate (§9)
+
+> **Amended 2026-09-23, attempt 3.** §§1–8 are the attempt-2 record and are kept verbatim, including the PARTIAL verdict and the §6 risk as they stood then. §9 supersedes both: admin-portal is deployed as `044936f8-9b87-4134-9085-7bd5bf39e7b8`, so Deploy 1 is complete and the §6 risk is closed.
 
 | # | Step | Result |
 |---|---|---|
@@ -14,7 +16,7 @@
 | 4 | Probes | designer **GREEN**; admin **not reachable** (3b never deployed); invite send **substituted** (see §5) |
 | 5 | This report | written, committed |
 
-**Live prod state right now:** Strata carries 00655/00656/00657; designer portal serves the Wave 1 build; **admin portal is still `45f1094c` from 2026-09-02**. That combination is degraded — see §6.
+**Live prod state at the end of attempt 2 (superseded by §9):** Strata carries 00655/00656/00657; designer portal serves the Wave 1 build; **admin portal is still `45f1094c` from 2026-09-02**. That combination is degraded — see §6.
 
 ---
 
@@ -253,3 +255,132 @@ Blast radius is one page behind super_admin (Kody is the only super_admin), no d
 - Signed-in prod walks: designer accounts book (no Pledge band, studio earnings intact); admin analytics once shipped.
 - A live designer-invite send to a Patina mailbox, from a signed-in admin, if the rendered-copy walk is still wanted (§4c).
 - `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_API_TIMEOUT` survive as runtime property accesses in an admin chunk and are undeclared in `wrangler.jsonc`, so the gate never checks them — pre-existing, unexamined here.
+
+---
+
+## 9 · Admin portal — attempt 3. GREEN, version `044936f8-9b87-4134-9085-7bd5bf39e7b8`
+
+**What changed since attempt 2.** The Phase 2.6 refusal in §3b was a false positive: the gate grepped for the bare variable *name*. SQ-157 narrowed it to the runtime property-access forms only (`\.env\.NAME` and `env["NAME"]`/`env['NAME']`, word-bounded), so a string literal that merely mentions a var's name — admin's settings/flags UI copy — no longer trips it. That fix is on main at `70576fb30`, merged as `9e61fc6c9060a0d4dc31b5a1df8982d7eeb0274b`. No product code and no other gate changed; the PostHog value check is untouched.
+
+**Main checkout preflight.** `/Users/kody/Code/patina-merged` on `main` at `9e61fc6c9060a0d4dc31b5a1df8982d7eeb0274b`. `git status --porcelain` showed exactly the expected drift and nothing else:
+
+```
+ M docs/field/sms-10dlc-runbook.md
+?? docs/field/sms-10dlc-campaign-update-ticket.md
+?? scripts/field-line/twilio-campaign-update.mjs
+```
+
+No git write command was run in that checkout.
+
+**Command.** The Supabase trio plus `SUPABASE_ORIGIN_RUNTIME` exported from `apps/admin-portal/wrangler.jsonc`'s committed **production** `vars` block, then the script unmodified — the same standing override §7.3 used for designer, and what Phase 0/0b exist for. `apps/*/.env.local` was neither read nor edited.
+
+```
+export NEXT_PUBLIC_SUPABASE_URL=https://bkvcixdmuyejfzcijpdg.supabase.co
+export NEXT_PUBLIC_SUPABASE_ANON_KEY=<wrangler.jsonc production anon key>
+export NEXT_PUBLIC_SUPABASE_STORAGE_KEY=sb-bkvcixdmuyejfzcijpdg-auth-token
+export SUPABASE_ORIGIN_RUNTIME=https://bkvcixdmuyejfzcijpdg.supabase.co
+./infra/deploy-portal.sh admin
+```
+
+Preflight resolved as intended:
+
+```
+==> [0/3] Preflight OK: NEXT_PUBLIC_SUPABASE_URL=https://bkvcixdmuyejfzcijpdg.supabase.co
+==> [0/3] Preflight OK: runtime-origin path resolves (SUPABASE_ORIGIN_RUNTIME=https://bkvcixdmuyejfzcijpdg.supabase.co)
+==> [0b/3] Preflight OK: 12 NEXT_PUBLIC_* vars exported (Supabase trio left to Phase 0 + Next's loader)
+```
+
+**Harness note, not a build failure.** The first invocation died in Phase 1 with `x Git error: /Users/kody/Code/patina-merged/apps/designer-portal/.env.local: Operation not permitted (os error 1)` — Turborepo hashes every workspace file, and this session's sandbox denies reads of `.env*`. The identical command re-run with that one command's sandbox lifted proceeded normally. Nothing in the repo or the script changed between the two runs.
+
+### 9a · Phase 2.6 chunk gate — PASSED
+
+```
+==> [2.5/3] handler.mjs size: 16460867 bytes
+==> [2.6/3] Chunk gate: 348 client chunks; checking every exported NEXT_PUBLIC_* name
+    all 12 exported var names fully inlined (0 survivors)
+==> [2.6/3] Chunk gate: resolved PostHog key literal present in 2 chunk(s)
+```
+
+The six names that blocked attempt 2 — `NEXT_PUBLIC_ENV`, `NEXT_PUBLIC_ENABLE_MFA`, `NEXT_PUBLIC_ENABLE_DUAL_CONTROL`, `NEXT_PUBLIC_ENABLE_IMPERSONATION`, `NEXT_PUBLIC_ENABLE_ANALYTICS`, `NEXT_PUBLIC_ENABLE_DEBUG` — are still in the bundle as quoted UI copy, exactly as §3b diagnosed; the narrowed gate correctly ignores them. Zero survivors means no build carries a real `x.env.NEXT_PUBLIC_*` access, so the flags-dark failure mode the gate exists to catch is still covered.
+
+### 9b · Phase 3 — deployed
+
+```
+Uploaded patina-admin-portal (42.67 sec)
+Deployed patina-admin-portal triggers (0.86 sec)
+Current Version ID: 044936f8-9b87-4134-9085-7bd5bf39e7b8
+==> Done: admin portal deployed to production.
+EXIT=0
+```
+
+`npx wrangler deployments list` from `apps/admin-portal` — the list is oldest-first, so the **bottom** row is the new one:
+
+```
+Created:     2026-09-02T19:31:50.034Z          <- previous (the degraded build of §6)
+Version(s):  (100%) 45f1094c-6af7-4027-aa6a-1a77e6dc2c15
+
+Created:     2026-09-23T16:13:22.651Z          <- BOTTOM ROW, this deploy
+Version(s):  (100%) 044936f8-9b87-4134-9085-7bd5bf39e7b8
+                 Created:  2026-09-23T16:13:18.738Z
+```
+
+### 9c · Probes
+
+**Served analytics chunk carries the retired-readout copy.** `GET https://admin.patina.cloud/_next/static/chunks/app/(dashboard)/analytics/page-5cbcd5df013cf50d.js` → `200`, 15845 bytes.
+
+| Check | Result |
+|---|---|
+| `Unavailable — funnel readouts retired 2026-09.` | **1 hit** (the required state) |
+| `Decision bottlenecks` (positive control — proves this is the analytics chunk) | 1 hit |
+| sha256 served | `6125aa8af26dc378c5abf8f013e317478ab5ce4a939d8a262328af80684cde79` |
+| sha256 of the artifact built in this run | `6125aa8af26dc378c5abf8f013e317478ab5ce4a939d8a262328af80684cde79` |
+
+Byte-identical, so what Cloudflare serves is this build and not a cached predecessor.
+
+**Endpoint.** Unauthenticated `GET https://admin.patina.cloud/api/admin/decision-analytics` → `401 {"error":"Unauthorized"}`. It reaches `getAuthenticatedAdmin` and stops there — **not** the `500` the old build returned on the dropped view. Liveness alongside it: `/api/version` → `200`; `/analytics` → `307` to `/auth/signin?callbackUrl=%2Fanalytics`.
+
+**The signed-in 200 was not directly observed, and it is owed.** Admin sign-in is magic-link or password for `kody@kochaver.com`; no password and no mailbox is available to this session, and minting a session from the service-role key would be a fifth prod mutation of exactly the kind §7.6 refused. What stands in its place is structural proof that nothing between the `401` and a `200` can fail:
+
+| Evidence | Result |
+|---|---|
+| `conversion_funnel` in the deployed `handler.mjs` | **0** |
+| `designer_funnel` / `consumer_funnel` in it | **0** / **0** |
+| `get_decision_bottleneck_phases_admin` in it | 1 — the only DB read the route makes |
+| `funnel readouts retired 2026-09` in it | 1 (the server-rendered unavailable state) |
+| Strata: `SELECT proname, pronargs FROM pg_proc WHERE proname='get_decision_bottleneck_phases_admin'` | `pronargs = 0`, and the route calls it with no params — signatures agree |
+| Strata: `SELECT count(*) FROM public.get_decision_bottleneck_phases_admin()` | `1` row, no error |
+
+The route builds `{ bottleneckPhases }` and no `funnel` key, so the funnel slot renders its explicit unavailable sentence rather than a zeroed chart, and the bottleneck readout returns real rows. Both queries in the old build's `Promise.all` are gone; one 0-arg RPC remains and it resolves against live Strata.
+
+**Env sanity on the built bundle** (the override, re-checked because `.env.local` in that checkout is local-pointed):
+
+| Pattern | Chunks |
+|---|---|
+| `127.0.0.1:54321` | 0 |
+| `localhost:54321` | 0 |
+| `localhost:5432` | 0 |
+| `bkvcixdmuyejfzcijpdg.supabase.co` | 1 |
+| PostHog key literal | 2 (gate line above) |
+
+### 9d · §6 risk — closed
+
+The 2026-09-02 build that read the dropped `conversion_funnel` view is no longer serving; `45f1094c` was replaced by `044936f8` at 16:13:22Z. The endpoint no longer 500s, and the bottleneck readout it used to take down with it is intact.
+
+### 9e · Deploy 1, final state
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Preflight | GREEN (§1) |
+| 2 | Strata `00655`/`00656`/`00657` + assertions | GREEN (§2) |
+| 3a | designer-portal | GREEN — `b61988c8-a7a1-4813-a619-44eaedef2166` (§3a) |
+| 3b | admin-portal | **GREEN — `044936f8-9b87-4134-9085-7bd5bf39e7b8`** (§9) |
+| 4 | Probes | GREEN, with the signed-in admin walk owed (§9c) |
+| 5 | This report | written, amended, committed |
+
+No edge function, service, worker or Vault value was touched in attempt 3. The retired Coolify box was never contacted. No other prod change was made.
+
+### 9f · Still owed to Kody
+
+- **Signed-in walk of `admin.patina.cloud/analytics`** — confirm the Conversion funnel panel reads "Unavailable — funnel readouts retired 2026-09." and the Decision bottlenecks chart renders (§9c).
+- Everything in §8 other than its first bullet, which this section closes.
+- `apps/*/.env.local` in `/Users/kody/Code/patina-merged` is still local-pointed; every portal deploy from that checkout needs the §7.3 override until those files are repointed.
