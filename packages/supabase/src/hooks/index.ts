@@ -1259,9 +1259,6 @@ export {
   useEngagementScoreDistribution,
   useTopEngagedUsers,
   useActiveUsersByPlatform,
-  useConversionFunnel,
-  useDesignerFunnel,
-  useConsumerFunnel,
 } from "./use-insights";
 export type {
   InsightsOverview,
@@ -1270,7 +1267,6 @@ export type {
   EngagementTierDistribution,
   TopEngagedUser,
   PlatformActiveUsers,
-  FunnelStep,
 } from "./use-insights";
 export {
   // Notification Preferences
