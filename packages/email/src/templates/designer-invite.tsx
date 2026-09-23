@@ -31,11 +31,6 @@ export const DesignerInvite: React.FC = () => (
       set up, and your opinion will shape what we build next.
     </Text>
 
-    <Text style={letterParagraph}>
-      One promise up front, stated plainly: a quarter of our commission goes back to the designers who teach the
-      system. When Patina earns, you earn.
-    </Text>
-
     <Text style={letterParagraph}>The practical part:</Text>
 
     <Text style={bullet}>
