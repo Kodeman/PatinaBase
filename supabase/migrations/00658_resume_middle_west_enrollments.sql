@@ -104,7 +104,7 @@ BEGIN
       v_ok;
   END IF;
 
-  RAISE NOTICE '00658: % enrollment(s) flipped paused->active this run; both Middle West seats are active with next_step_at >= %.',
-    v_resumed, v_resume;
+  RAISE NOTICE '00658: % enrollment(s) flipped paused->active this run; both Middle West seats are active.',
+    v_resumed;
 END
 $mig$;

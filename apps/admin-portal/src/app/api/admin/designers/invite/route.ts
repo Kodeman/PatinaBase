@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
 
   const displayName = body.displayName?.trim() || undefined;
   const businessName = body.businessName?.trim() || undefined;
+  if (businessName && businessName.length > 255) {
+    return badRequest('businessName must be 255 characters or fewer');
+  }
   const roleName = body.role?.trim() || undefined;
 
   try {

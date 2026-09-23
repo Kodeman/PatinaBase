@@ -12,10 +12,10 @@ export function resolveBusinessNameForUpsert(
   requestedBusinessName: string | undefined,
 ): { businessName?: string; businessNameKept: boolean } {
   const existing = existingBusinessName?.trim();
-  if (existing) {
-    return { businessNameKept: true };
-  }
   const requested = requestedBusinessName?.trim();
+  if (existing) {
+    return { businessNameKept: Boolean(requested) };
+  }
   return requested
     ? { businessName: requested, businessNameKept: false }
     : { businessNameKept: false };

@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Mail, User } from 'lucide-react';
+import { Building2, Mail, User } from 'lucide-react';
 import { useInviteDesigner } from '@/hooks/use-designers';
 import { toast } from 'sonner';
 
@@ -83,7 +83,7 @@ export function InviteDesignerDialog({ open, onOpenChange }: InviteDesignerDialo
 
       toast.success(`Invitation sent to ${result.email}`, {
         description: result.businessNameKept
-          ? 'They already have a studio name on file — it was kept as-is.'
+          ? 'They will receive the branded designer invite letter by email. Their existing studio name was kept.'
           : 'They will receive the branded designer invite letter by email.',
       });
 
@@ -146,12 +146,18 @@ export function InviteDesignerDialog({ open, onOpenChange }: InviteDesignerDialo
 
           <div className="space-y-2">
             <Label htmlFor="designer-business-name">Studio Name (optional)</Label>
-            <Input
-              id="designer-business-name"
-              type="text"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-            />
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="designer-business-name"
+                type="text"
+                placeholder="Studio name (optional)"
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                maxLength={255}
+                className="pl-10"
+              />
+            </div>
             <p className="text-sm text-muted-foreground">
               If they already have a studio name on file, it stays as-is — this never
               overwrites it.
