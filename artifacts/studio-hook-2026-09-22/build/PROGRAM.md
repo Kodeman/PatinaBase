@@ -91,7 +91,7 @@ Dispatch shape: Wave 1 = four concurrent tickets, review, deploy; Wave 2 = three
 - Exact house count and per-house location (R-SH5) — at the sit-down.
 - QuickBooks re-key answer (R-SH6) — at the sit-down; gates the second P3 sheet only.
 - Jurisdiction ruling for the pilot terms (Minnesota vs Madison, WI).
-- "Ship" for Deploy 1 and, separately, for Deploy 2 — **Deploy 1 consumed 2026-09-23** (COMPLETE 17:21Z: Strata 00655–00657, designer Worker b61988c8, admin Worker 044936f8). Only the Deploy 2 "Ship" is still owed.
+- "Ship" for Deploy 1 and, separately, for Deploy 2 — **Deploy 1 consumed 2026-09-23** (COMPLETE 17:21Z: Strata 00655–00657, designer Worker b61988c8, admin Worker 044936f8). **Deploy 2 consumed 2026-09-23** (COMPLETE 23:36Z: Strata 00658–00659, designer-invite fn, admin Worker c32a8f0e, designer Worker 13a0ff18; report `wave2/DEPLOY-2-REPORT.md`). Both ships are consumed.
 
 ## 8. Risks named up front
 
