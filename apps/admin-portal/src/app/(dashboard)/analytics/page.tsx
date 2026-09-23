@@ -6,7 +6,6 @@ import { usePipelineMetrics } from '@/hooks/use-pipeline';
 import { useApplicationsMetrics } from '@/hooks/use-dashboard-metrics';
 import { useDecisionAnalytics } from '@/hooks/use-decision-analytics';
 import { BottleneckChart } from '@/components/analytics/bottleneck-chart';
-import { FunnelChart } from '@/components/analytics/funnel-chart';
 import {
   PageHeader,
   MetricBlock,
@@ -283,15 +282,12 @@ export default function AnalyticsPage() {
         </Section>
 
         <Section title="Conversion funnel">
-          {decisionAnalytics.isLoading && !decisionAnalytics.data ? (
-            <p className="type-body-small text-[var(--text-muted)]">Loading…</p>
-          ) : decisionAnalytics.data ? (
-            <FunnelChart rows={decisionAnalytics.data.funnel} />
-          ) : (
-            <p className="type-body-small italic text-[var(--text-muted)]">
-              No funnel data available.
-            </p>
-          )}
+          {/* The three funnel views behind this readout were dropped in migration
+              00657. The slot states that plainly rather than rendering an empty
+              chart, which would read as a real zero. */}
+          <p className="type-body-small italic text-[var(--text-muted)] py-8 text-center">
+            Unavailable — funnel readouts retired 2026-09.
+          </p>
         </Section>
       </div>
     </div>

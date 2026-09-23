@@ -16,12 +16,8 @@ const getWaitlistTable = () => (getSupabase() as any).from('waitlist');
 const getEngagementEventsTable = () => (getSupabase() as any).from('engagement_events');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getEngagementScoresView = () => (getSupabase() as any).from('user_engagement_scores');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getConversionFunnelView = () => (getSupabase() as any).from('conversion_funnel');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getDesignerFunnelView = () => (getSupabase() as any).from('designer_funnel');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getConsumerFunnelView = () => (getSupabase() as any).from('consumer_funnel');
+// The three funnel views were dropped in migration 00657 (2026-09) along with
+// their admin readout, so there are no accessors or hooks for them here any more.
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -67,13 +63,6 @@ export interface TopEngagedUser {
 export interface PlatformActiveUsers {
   platform: string;
   count: number;
-}
-
-export interface FunnelStep {
-  step: string;
-  stepOrder: number;
-  count: number;
-  conversionRate: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -325,68 +314,3 @@ export function useActiveUsersByPlatform(days: number = 30) {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// FUNNEL HOOKS
-// ═══════════════════════════════════════════════════════════════════════════
-
-function mapFunnelRows(data: Record<string, unknown>[]): FunnelStep[] {
-  return data
-    .map((row) => ({
-      step: row.step as string,
-      stepOrder: row.step_order as number,
-      count: (row.users_at_step as number) ?? (row.count as number) ?? 0,
-      conversionRate: (row.conversion_rate_percent as number) ?? 0,
-    }))
-    .sort((a, b) => a.stepOrder - b.stepOrder);
-}
-
-/**
- * Main conversion funnel (all users)
- */
-export function useConversionFunnel() {
-  return useQuery({
-    queryKey: ['insights-conversion-funnel'],
-    queryFn: async () => {
-      const { data, error } = await getConversionFunnelView()
-        .select('*')
-        .order('step_order', { ascending: true });
-
-      if (error) throw error;
-      return mapFunnelRows(data || []);
-    },
-  });
-}
-
-/**
- * Designer-specific funnel
- */
-export function useDesignerFunnel() {
-  return useQuery({
-    queryKey: ['insights-designer-funnel'],
-    queryFn: async () => {
-      const { data, error } = await getDesignerFunnelView()
-        .select('*')
-        .order('step_order', { ascending: true });
-
-      if (error) throw error;
-      return mapFunnelRows(data || []);
-    },
-  });
-}
-
-/**
- * Consumer-specific funnel
- */
-export function useConsumerFunnel() {
-  return useQuery({
-    queryKey: ['insights-consumer-funnel'],
-    queryFn: async () => {
-      const { data, error } = await getConsumerFunnelView()
-        .select('*')
-        .order('step_order', { ascending: true });
-
-      if (error) throw error;
-      return mapFunnelRows(data || []);
-    },
-  });
-}
