@@ -11,8 +11,13 @@ import {
   recoveryFinalReturnPath,
 } from '@patina/supabase';
 import { PortalAuthNotice, PortalAuthSuccess } from '@patina/design-system';
+import {
+  pilotTermsAcceptanceRequired,
+  recordPilotTermsAcceptance,
+} from '@/lib/pilot-terms';
 import { DESIGNER_AUTH_DESTINATION, DesignerAuthShell } from '../auth-shell';
 import { callbackDestination } from '../auth-journey';
+import { PilotTermsStep } from '../pilot-terms-step';
 
 function CallbackContent() {
   const searchParams = useSearchParams();
@@ -23,10 +28,11 @@ function CallbackContent() {
   const callbackFragment = useRef<
     ReturnType<typeof consumeAuthCallbackFragment> | undefined
   >(undefined);
-  const [result, setResult] = useState<'working' | 'success' | 'failed'>(
-    'working',
-  );
+  const [result, setResult] = useState<
+    'working' | 'success' | 'pilot-terms' | 'failed'
+  >('working');
   const [error, setError] = useState<string | null>(null);
+  const [pilotTermsUserId, setPilotTermsUserId] = useState<string | null>(null);
   const callbackUrl = searchParams.get('callbackUrl');
   const next = searchParams.get('next');
   const queryType = searchParams.get('type');
@@ -63,6 +69,7 @@ function CallbackContent() {
     }
 
     let active = true;
+    const supabase = createBrowserClient();
     const recoveryTokenHash = fragment.recoveryTokenHash;
     const callbackKey =
       recoveryTokenHash !== undefined
@@ -76,7 +83,7 @@ function CallbackContent() {
         // Reuse this single exchange across React Strict Mode's effect replay;
         // a PKCE code can only be exchanged once.
         promise: finalizeAuthCallback({
-          supabase: createBrowserClient(),
+          supabase,
           code,
           recovery,
           recoveryTokenHash,
@@ -85,14 +92,25 @@ function CallbackContent() {
       };
     }
     void callbackRun.current.promise
-      .then((callback) => {
+      .then(async (callback) => {
         if (!active) return;
         if (callback.status === 'failed') {
           setError(callback.failure.message);
           setResult('failed');
           return;
         }
-        setResult('success');
+        // P2b: the designer-invite leg lands here. A profile newer than the
+        // terms with no acceptance on file reads them once before her desk
+        // opens; everyone else goes straight through. A password recovery is
+        // never interrupted.
+        const userId = callback.session?.user?.id ?? null;
+        const needsPilotTerms =
+          !recovery && userId !== null
+            ? await pilotTermsAcceptanceRequired(supabase, userId)
+            : false;
+        if (!active) return;
+        setPilotTermsUserId(userId);
+        setResult(needsPilotTerms ? 'pilot-terms' : 'success');
       })
       .catch(() => {
         if (active) {
@@ -126,7 +144,19 @@ function CallbackContent() {
 
   return (
     <DesignerAuthShell>
-      {result === 'success' ? (
+      {result === 'pilot-terms' ? (
+        <PilotTermsStep
+          onAccept={async () => {
+            if (pilotTermsUserId) {
+              await recordPilotTermsAcceptance(
+                createBrowserClient(),
+                pilotTermsUserId,
+              );
+            }
+            window.location.replace(destination);
+          }}
+        />
+      ) : result === 'success' ? (
         <PortalAuthSuccess
           destinationHref={destination}
           onContinue={() => window.location.replace(destination)}

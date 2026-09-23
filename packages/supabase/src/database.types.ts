@@ -14670,6 +14670,8 @@ export type Database = {
           original_source: string | null
           original_utm: Json | null
           phone: string | null
+          pilot_terms_accepted_at: string | null
+          pilot_terms_version: string | null
           posthog_distinct_id: string | null
           role: string
           sms_opt_in: boolean
@@ -14712,6 +14714,8 @@ export type Database = {
           original_source?: string | null
           original_utm?: Json | null
           phone?: string | null
+          pilot_terms_accepted_at?: string | null
+          pilot_terms_version?: string | null
           posthog_distinct_id?: string | null
           role?: string
           sms_opt_in?: boolean
@@ -14754,6 +14758,8 @@ export type Database = {
           original_source?: string | null
           original_utm?: Json | null
           phone?: string | null
+          pilot_terms_accepted_at?: string | null
+          pilot_terms_version?: string | null
           posthog_distinct_id?: string | null
           role?: string
           sms_opt_in?: boolean
