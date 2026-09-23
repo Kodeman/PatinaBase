@@ -362,15 +362,20 @@ BEGIN
   ASSERT has_column_privilege('authenticated'::name, 'public.vendors'::regclass, 'notes', 'SELECT'),
     'authenticated must keep the vendor trade file';
 
-  -- the four SECURITY DEFINER views (they bypass profiles RLS by construction)
+  -- the SECURITY DEFINER views (they bypass profiles RLS by construction)
   ASSERT NOT has_table_privilege('anon'::name, 'public.user_engagement_scores'::regclass, 'SELECT'),
     'anon must not read user_engagement_scores (id, email, role)';
-  ASSERT NOT has_table_privilege('anon'::name, 'public.consumer_funnel'::regclass,  'SELECT'),
-    'anon must not read consumer_funnel';
-  ASSERT NOT has_table_privilege('anon'::name, 'public.designer_funnel'::regclass,  'SELECT'),
-    'anon must not read designer_funnel';
-  ASSERT NOT has_table_privilege('anon'::name, 'public.conversion_funnel'::regclass,'SELECT'),
-    'anon must not read conversion_funnel';
+  -- consumer_funnel, designer_funnel and conversion_funnel were the other three
+  -- of the original four. 00657 dropped them (studio-hook Deploy 1, row H1), and
+  -- a dropped view takes its ACL with it — so the reach these lines guarded is
+  -- now structural, not granted. Assert absence instead: `::regclass` on a
+  -- relation that no longer exists aborts the whole script at plan time.
+  ASSERT to_regclass('public.consumer_funnel')   IS NULL,
+    'consumer_funnel still exists — 00657 was meant to drop it';
+  ASSERT to_regclass('public.designer_funnel')   IS NULL,
+    'designer_funnel still exists — 00657 was meant to drop it';
+  ASSERT to_regclass('public.conversion_funnel') IS NULL,
+    'conversion_funnel still exists — 00657 was meant to drop it';
   ASSERT has_table_privilege('service_role'::name, 'public.user_engagement_scores'::regclass, 'SELECT'),
     'service_role must keep user_engagement_scores';
 
@@ -2054,12 +2059,14 @@ BEGIN
   -- there makes the whole of §(a) decorative.
   ASSERT NOT has_table_privilege('authenticated'::name, 'public.user_engagement_scores'::regclass, 'SELECT'),
     'authenticated can still read user_engagement_scores (id, email, role) through a definer view';
-  ASSERT NOT has_table_privilege('authenticated'::name, 'public.consumer_funnel'::regclass, 'SELECT'),
-    'authenticated can still read consumer_funnel';
-  ASSERT NOT has_table_privilege('authenticated'::name, 'public.designer_funnel'::regclass, 'SELECT'),
-    'authenticated can still read designer_funnel';
-  ASSERT NOT has_table_privilege('authenticated'::name, 'public.conversion_funnel'::regclass, 'SELECT'),
-    'authenticated can still read conversion_funnel';
+  -- The three funnel views of RF3-17 are gone as of 00657 (see the anon block
+  -- above); absence, not a revoked grant, is what keeps authenticated out now.
+  ASSERT to_regclass('public.consumer_funnel')   IS NULL,
+    'consumer_funnel still exists — 00657 was meant to drop it';
+  ASSERT to_regclass('public.designer_funnel')   IS NULL,
+    'designer_funnel still exists — 00657 was meant to drop it';
+  ASSERT to_regclass('public.conversion_funnel') IS NULL,
+    'conversion_funnel still exists — 00657 was meant to drop it';
 
   -- RF3-19: the two authority tables. Neither has ever carried a write POLICY
   -- (00021 creates exactly two policies on them, both SELECT), so every write

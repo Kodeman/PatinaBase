@@ -30230,24 +30230,6 @@ export type Database = {
         }
         Relationships: []
       }
-      consumer_funnel: {
-        Row: {
-          count: number | null
-          step: string | null
-          step_order: number | null
-        }
-        Relationships: []
-      }
-      conversion_funnel: {
-        Row: {
-          conversion_rate_percent: number | null
-          step: string | null
-          step_order: number | null
-          users_at_previous_step: number | null
-          users_at_step: number | null
-        }
-        Relationships: []
-      }
       coordination_court_summary: {
         Row: {
           court: string | null
@@ -30292,14 +30274,6 @@ export type Database = {
           purchase_order_id: string | null
           vendor_id: string | null
           vendor_name: string | null
-        }
-        Relationships: []
-      }
-      designer_funnel: {
-        Row: {
-          count: number | null
-          step: string | null
-          step_order: number | null
         }
         Relationships: []
       }
@@ -34815,6 +34789,7 @@ export type Database = {
           state: string
         }[]
       }
+      client_link_refresh_target: { Args: { p_token: string }; Returns: string }
       client_pick: {
         Args: { p_ceremony_id: string; p_slot_id: string }
         Returns: Json
