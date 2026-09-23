@@ -1,0 +1,135 @@
+[report]
+title = Patina studio billing export
+sheets = invoices, invoice_lines, payments, clients, manifest
+snapshot_at = 2026-09-23T17:50:42.099Z
+snapshot_date = 2026-09-23
+money_units = every *_minor column is integer minor units as stored; *_decimal is the same money as a number
+timestamps = UTC ISO-8601 as stored; issue_date and due_date are stored calendar dates
+
+[scope]
+studio_id = b0000000-0000-0000-0000-000000000001
+studio_name = Local Dev Studio
+rule = invoices.studio_id = studio_id — the tenant leg on top of the co-member RLS (00316/00584), which is member-scoped, not tenant-scoped (00632:30-37)
+includes = studio invoices with no project (project_id IS NULL, 00571) alongside project invoices; drafts and voided invoices are included and labelled
+clients_rule = a client record is included only through an unambiguous studio authorization path: payer of an included invoice, client of a project of this studio, or member of a household of this studio
+not_included = no FF&E or schedule export, no QuickBooks mapping sheet, no whole-studio archive; invoices.internal_notes and client notes are withheld
+
+[counts]
+invoices_rows = 1
+invoice_lines_rows = 0
+payments_rows = 0
+clients_rows = 1
+
+[exclusions]
+invoices_with_null_studio_id = 2
+invoices_with_null_studio_id_note = readable by this viewer under co-member RLS but carrying no tenant stamp (00318 added the column; 00513: numbering falls back to the per-designer counter only when an invoice has no studio) — excluded from this studio-scoped file
+invoices_of_another_studio = 0
+invoices_of_another_studio_note = readable here because is_studio_comember() matches any shared organization — never written to this file
+fetched_rows_dropped_null_studio = 0
+fetched_rows_dropped_other_studio = 0
+client_records_without_studio_path = 5
+invoice_lines_without_included_invoice = 0
+payments_without_included_invoice = 0
+projects_read_naming_another_studio = 0
+
+[reconciliation]
+total_billed_minor = 406000
+collected_minor_from_payment_rows = 0
+amount_paid_minor_from_invoice_counters = 0
+balance_minor = 406000
+invoices_where_the_two_disagree = 0
+note = collected counts succeeded payment rows only; pending, failed, refunded and requires_refund money is carried in its own column and never as collected
+
+[missing_values]
+invoices.invoice_id = 0
+invoices.invoice_number = 0
+invoices.status = 0
+invoices.payment_status = 0
+invoices.currency = 0
+invoices.issue_date = 0
+invoices.due_date = 0
+invoices.payment_terms_days = 0
+invoices.subtotal_minor = 0
+invoices.subtotal_decimal = 0
+invoices.tax_rate = 0
+invoices.tax_minor = 0
+invoices.tax_decimal = 0
+invoices.total_minor = 0
+invoices.total_decimal = 0
+invoices.amount_paid_minor = 0
+invoices.amount_paid_decimal = 0
+invoices.collected_minor = 0
+invoices.collected_decimal = 0
+invoices.pending_minor = 0
+invoices.failed_minor = 0
+invoices.refunded_minor = 0
+invoices.requires_refund_minor = 0
+invoices.balance_minor = 0
+invoices.balance_decimal = 0
+invoices.client_id = 0
+invoices.client_name = 0
+invoices.household_id = 1
+invoices.household_name = 1
+invoices.project_id = 0
+invoices.project_name = 0
+invoices.studio_id = 0
+invoices.designer_id = 0
+invoices.designer_name = 0
+invoices.title = 1
+invoices.memo = 0
+invoices.sent_at = 0
+invoices.paid_at = 1
+invoices.voided_at = 1
+invoices.created_at = 0
+invoice_lines.line_id = 0
+invoice_lines.invoice_id = 0
+invoice_lines.invoice_number = 0
+invoice_lines.sort_order = 0
+invoice_lines.kind = 0
+invoice_lines.description = 0
+invoice_lines.quantity = 0
+invoice_lines.unit_amount_minor = 0
+invoice_lines.unit_amount_decimal = 0
+invoice_lines.amount_minor = 0
+invoice_lines.amount_decimal = 0
+invoice_lines.currency = 0
+invoice_lines.milestone_id = 0
+invoice_lines.ffe_item_id = 0
+invoice_lines.created_at = 0
+payments.payment_id = 0
+payments.invoice_id = 0
+payments.invoice_number = 0
+payments.payment_status = 0
+payments.is_collected = 0
+payments.method = 0
+payments.amount_minor = 0
+payments.amount_decimal = 0
+payments.surcharge_minor = 0
+payments.surcharge_decimal = 0
+payments.currency = 0
+payments.received_at = 0
+payments.created_at = 0
+payments.reference = 0
+payments.recorded_by = 0
+payments.stripe_payment_intent_id = 0
+payments.stripe_checkout_session_id = 0
+payments.client_id = 0
+payments.household_id = 0
+payments.project_id = 0
+clients.client_record_id = 0
+clients.client_id = 0
+clients.client_name = 0
+clients.client_email = 0
+clients.client_phone = 1
+clients.lifecycle_status = 0
+clients.source = 1
+clients.household_id = 1
+clients.household_name = 1
+clients.household_member_count = 1
+clients.household_threshold_minor = 1
+clients.household_threshold_decimal = 1
+clients.designer_id = 0
+clients.designer_name = 0
+clients.studio_authorization_path = 0
+clients.created_at = 0
+clients.updated_at = 0

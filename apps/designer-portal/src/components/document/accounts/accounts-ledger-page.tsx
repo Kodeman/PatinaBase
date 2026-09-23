@@ -18,6 +18,7 @@ import { DeliveryWord } from '../delivery-word';
 import { Stamp } from '../stamp';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
+import { AccountsExportAction } from './accounts-export';
 import { openInvoiceComposer, openInvoiceFolio } from './invoice-overlays';
 
 // Laid-paper palette (R96) — matches the Invoice folio's re-inked stamps
@@ -84,6 +85,10 @@ export function AccountsLedgerPage({
           Draw an invoice
         </DocumentAction>
       </DocumentActionGroup>
+
+      {/* P3 — and the book learns to LEAVE: the studio's own billing register
+          as one spreadsheet, so "your data exports" is a fact. */}
+      <AccountsExportAction />
 
       {invoices.length === 0 ? (
         /* The zero-invoice state (help-desk Wave 1, copy §E.3) — the old
