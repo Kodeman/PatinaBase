@@ -569,12 +569,16 @@ CHUNK_TOTAL="$(find "$CHUNKS_DIR" -name '*.js' -type f | wc -l | tr -d ' ')"
 echo "==> [2.6/3] Chunk gate: ${CHUNK_TOTAL} client chunks; checking every exported NEXT_PUBLIC_* name"
 
 # Every var Phase 0b exported must have been INLINED, not left as a property
-# access — the PostHog key is only the one whose failure was visible.
+# access — the PostHog key is only the one whose failure was visible. Match
+# only runtime property-access forms (dotted `x.env.NAME` or bracket
+# `env["NAME"]`/`env['NAME']`, word-bounded) so a string literal that merely
+# mentions the var's name (e.g. a settings-page description) doesn't false-
+# positive the gate.
 NAME_SURVIVOR_KEYS=""
 for gate_name in $EXPORTED_VAR_NAMES; do
   # `grep -rl` exits 1 on no match; under `set -e`/pipefail that would abort
   # the script before we can report the (good) zero count.
-  gate_hits="$(grep -rl "$gate_name" "$CHUNKS_DIR" 2>/dev/null | wc -l | tr -d ' ' || true)"
+  gate_hits="$(grep -rlE "\.env\.${gate_name}([^A-Za-z0-9_]|$)|env\[[\"']${gate_name}[\"']\]" "$CHUNKS_DIR" 2>/dev/null | wc -l | tr -d ' ' || true)"
   if [ "$gate_hits" -ne 0 ]; then
     NAME_SURVIVOR_KEYS="$NAME_SURVIVOR_KEYS $gate_name"
     echo "    ${gate_name}: name survives in ${gate_hits} chunk(s)"
@@ -582,12 +586,12 @@ for gate_name in $EXPORTED_VAR_NAMES; do
 done
 
 if [ -n "$NAME_SURVIVOR_KEYS" ]; then
-  echo "ERROR: refusing to deploy ${PORTAL} portal — client chunks still contain the" >&2
-  echo "       literal NAME of these vars, i.e. the build left them as runtime" >&2
-  echo "       property accesses (a.env.NEXT_PUBLIC_X) instead of inlining values:" >&2
+  echo "ERROR: refusing to deploy ${PORTAL} portal — client chunks still contain" >&2
+  echo "       runtime property accesses for these vars (a.env.NEXT_PUBLIC_X or" >&2
+  echo "       env[\"NEXT_PUBLIC_X\"]) instead of inlined values:" >&2
   echo "      ${NAME_SURVIVOR_KEYS}" >&2
   for gate_name in $NAME_SURVIVOR_KEYS; do
-    grep -rl "$gate_name" "$CHUNKS_DIR" 2>/dev/null | sed "s/^/         ${gate_name}: /" >&2 || true
+    grep -rlE "\.env\.${gate_name}([^A-Za-z0-9_]|$)|env\[[\"']${gate_name}[\"']\]" "$CHUNKS_DIR" 2>/dev/null | sed "s/^/         ${gate_name}: /" >&2 || true
   done
   exit 1
 fi
