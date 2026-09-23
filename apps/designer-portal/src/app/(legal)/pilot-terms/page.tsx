@@ -17,16 +17,16 @@ export default function PilotTermsPage() {
       <Section heading="What this covers">
         <p>
           A studio comes into Patina by introduction. These terms are for that
-          pilot — the first ninety days, on the house you choose to run through
-          Patina. Patina&rsquo;s{' '}
+          pilot — the first ninety days. Patina&rsquo;s{' '}
           <a
             href="/terms"
             className="underline decoration-[var(--border-default)] hover:text-[var(--color-charcoal)]"
           >
             Terms of Service
           </a>{' '}
-          still apply to the service itself; where the two speak to the same
-          thing during the pilot, this page does.
+          still apply to the service itself. On fees and on how long the pilot
+          runs, this page speaks for the pilot; on everything else, the Terms of
+          Service stand.
         </p>
       </Section>
 
@@ -60,9 +60,8 @@ export default function PilotTermsPage() {
       <Section heading="Taking your work back out">
         <p>
           Your invoices, your payments, and your clients come back to you as a
-          spreadsheet whenever you ask — during the pilot, at the end of it, or
-          after. Email us and we send it. Nothing is held back, and you
-          don&rsquo;t have to be a customer to ask.
+          spreadsheet whenever you ask during the pilot. Email us and we send
+          it. Stopping, below, says how long that stays true after you stop.
         </p>
       </Section>
 

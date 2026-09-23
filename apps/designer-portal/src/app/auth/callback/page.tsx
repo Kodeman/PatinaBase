@@ -12,6 +12,7 @@ import {
 } from '@patina/supabase';
 import { PortalAuthNotice, PortalAuthSuccess } from '@patina/design-system';
 import {
+  isDesignerInviteCallbackLeg,
   pilotTermsAcceptanceRequired,
   recordPilotTermsAcceptance,
 } from '@/lib/pilot-terms';
@@ -99,13 +100,19 @@ function CallbackContent() {
           setResult('failed');
           return;
         }
-        // P2b: the designer-invite leg lands here. A profile newer than the
-        // terms with no acceptance on file reads them once before her desk
-        // opens; everyone else goes straight through. A password recovery is
-        // never interrupted.
+        // P2b: the designer-invite leg lands here. On that leg alone, a
+        // designer newer than the terms with no acceptance on file reads them
+        // once before her desk opens; every other callback — recovery, a
+        // signed-in pass-through, any other destination — goes straight
+        // through without even a profile read.
         const userId = callback.session?.user?.id ?? null;
         const needsPilotTerms =
-          !recovery && userId !== null
+          userId !== null &&
+          isDesignerInviteCallbackLeg({
+            method: callback.method,
+            recovery,
+            next,
+          })
             ? await pilotTermsAcceptanceRequired(supabase, userId)
             : false;
         if (!active) return;
@@ -147,12 +154,15 @@ function CallbackContent() {
       {result === 'pilot-terms' ? (
         <PilotTermsStep
           onAccept={async () => {
-            if (pilotTermsUserId) {
-              await recordPilotTermsAcceptance(
-                createBrowserClient(),
-                pilotTermsUserId,
-              );
+            // The desk opens only after the stamp is confirmed written; a
+            // throw here keeps the designer on the step.
+            if (!pilotTermsUserId) {
+              throw new Error('No session to record a pilot-terms acceptance');
             }
+            await recordPilotTermsAcceptance(
+              createBrowserClient(),
+              pilotTermsUserId,
+            );
             window.location.replace(destination);
           }}
         />
