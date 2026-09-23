@@ -1,6 +1,7 @@
 export interface InviteDesignerRequest {
   email: string;
   displayName?: string;
+  businessName?: string;
   personalObservation: string;
   role?: string;
 }
@@ -8,6 +9,8 @@ export interface InviteDesignerRequest {
 export interface InviteDesignerResponse {
   userId: string;
   email: string;
+  /** True when the invited email already had a non-empty business_name on file — it was kept, not overwritten. */
+  businessNameKept?: boolean;
 }
 
 /** Helper to make JSON API calls to Next.js API routes (mirrors services/users.ts). */

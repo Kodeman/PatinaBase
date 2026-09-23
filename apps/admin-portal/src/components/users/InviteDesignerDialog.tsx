@@ -33,6 +33,7 @@ interface InviteDesignerDialogProps {
 export function InviteDesignerDialog({ open, onOpenChange }: InviteDesignerDialogProps) {
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [businessName, setBusinessName] = useState('');
   const [personalObservation, setPersonalObservation] = useState('');
   const [errors, setErrors] = useState<{ email?: string; personalObservation?: string }>({});
 
@@ -59,6 +60,7 @@ export function InviteDesignerDialog({ open, onOpenChange }: InviteDesignerDialo
   const resetForm = () => {
     setEmail('');
     setDisplayName('');
+    setBusinessName('');
     setPersonalObservation('');
     setErrors({});
   };
@@ -75,11 +77,14 @@ export function InviteDesignerDialog({ open, onOpenChange }: InviteDesignerDialo
       const result = await inviteDesigner.mutateAsync({
         email: email.trim().toLowerCase(),
         displayName: displayName.trim() || undefined,
+        businessName: businessName.trim() || undefined,
         personalObservation: personalObservation.trim(),
       });
 
       toast.success(`Invitation sent to ${result.email}`, {
-        description: 'They will receive the branded designer invite letter by email.',
+        description: result.businessNameKept
+          ? 'They already have a studio name on file — it was kept as-is.'
+          : 'They will receive the branded designer invite letter by email.',
       });
 
       onOpenChange(false);
@@ -137,6 +142,20 @@ export function InviteDesignerDialog({ open, onOpenChange }: InviteDesignerDialo
                 className="pl-10"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="designer-business-name">Studio Name (optional)</Label>
+            <Input
+              id="designer-business-name"
+              type="text"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+            />
+            <p className="text-sm text-muted-foreground">
+              If they already have a studio name on file, it stays as-is — this never
+              overwrites it.
+            </p>
           </div>
 
           <div className="space-y-2">

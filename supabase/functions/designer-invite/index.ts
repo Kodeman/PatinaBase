@@ -16,10 +16,13 @@
 //      landing at `${DESIGNER_PORTAL_URL}/auth/callback?next=/desk`. If the
 //      email already has an account (generateLink invite fails), fall back
 //      to a magiclink so an existing user can still be onboarded.
-//   4. Upsert profiles.is_designer = true + display_name, and insert the
-//      user_roles grant (the 00290 trigger also flips is_designer from this
-//      insert — belt-and-suspenders since the upsert here is synchronous
-//      with the response).
+//   4. Upsert profiles.is_designer = true + display_name + business_name,
+//      and insert the user_roles grant (the 00290 trigger also flips
+//      is_designer from this insert — belt-and-suspenders since the upsert
+//      here is synchronous with the response). business_name is NEVER
+//      overwritten on a re-invite — if the profile already carries one, the
+//      invite-time value is dropped and `businessNameKept: true` is
+//      returned so the caller can say the existing name was kept.
 //   5. Render the branded email from email_templates (slug 'designer-invite')
 //      via the shared renderer. FAILS LOUD (500) if the template row is
 //      missing or inactive — never falls back to an unbranded send.
@@ -44,6 +47,7 @@ import {
 import { renderTemplateFromDb } from '../_shared/render-template.ts';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { capturePosthogEvent } from '../_shared/posthog.ts';
+import { resolveBusinessNameForUpsert } from './lib.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -57,6 +61,7 @@ const FOUNDING_INVITE_SEQUENCE_NAME = 'Founding Invite';
 interface InviteBody {
   email?: string;
   display_name?: string;
+  business_name?: string;
   personal_observation?: string;
   role?: string;
 }
@@ -180,6 +185,7 @@ async function handleInvite(req: Request): Promise<Response> {
   }
 
   const displayName = body.display_name?.trim() || undefined;
+  const businessName = body.business_name?.trim() || undefined;
   const roleName = body.role?.trim() || DEFAULT_ROLE_NAME;
 
   const { data: role, error: roleError } = await admin
@@ -231,8 +237,27 @@ async function handleInvite(req: Request): Promise<Response> {
   const actionLink: string | undefined = genData.properties?.action_link;
 
   // ── Upsert profile + role grant ──────────────────────────────────────────
+  // business_name is never overwritten on a re-invite: if the target profile
+  // already carries a non-empty business_name (e.g. an existing account
+  // picked up via the magiclink fallback above), the invite-time value is
+  // dropped and businessNameKept is reported back so the caller can say so.
+  const { data: existingProfile, error: existingProfileError } = await admin
+    .from('profiles')
+    .select('business_name')
+    .eq('id', userId)
+    .maybeSingle();
+  if (existingProfileError) {
+    console.error('designer-invite: existing profile lookup failed', existingProfileError);
+    return json({ error: 'profile_lookup_failed' }, 500);
+  }
+  const { businessName: businessNameToSet, businessNameKept } = resolveBusinessNameForUpsert(
+    existingProfile?.business_name,
+    businessName,
+  );
+
   const profileUpsert: Record<string, unknown> = { id: userId, is_designer: true };
   if (displayName) profileUpsert.display_name = displayName;
+  if (businessNameToSet) profileUpsert.business_name = businessNameToSet;
   const { error: profileError } = await admin.from('profiles').upsert(profileUpsert);
   if (profileError) {
     console.error('designer-invite: profile upsert failed', profileError);
@@ -294,6 +319,7 @@ async function handleInvite(req: Request): Promise<Response> {
   return json({
     userId,
     email,
+    businessNameKept,
     ...(includeActionLink ? { actionLink } : {}),
   });
 }

@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
   let body: {
     email?: string;
     displayName?: string;
+    businessName?: string;
     personalObservation?: string;
     role?: string;
   };
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
   }
 
   const displayName = body.displayName?.trim() || undefined;
+  const businessName = body.businessName?.trim() || undefined;
   const roleName = body.role?.trim() || undefined;
 
   try {
@@ -58,6 +60,7 @@ export async function POST(request: NextRequest) {
         body: {
           email,
           display_name: displayName,
+          business_name: businessName,
           personal_observation: personalObservation,
           role: roleName,
         },
@@ -67,7 +70,9 @@ export async function POST(request: NextRequest) {
     if (inviteError) {
       return serverError(inviteError.message ?? 'Failed to send designer invite');
     }
-    const result = inviteData as { userId?: string; email?: string } | null;
+    const result = inviteData as
+      | { userId?: string; email?: string; businessNameKept?: boolean }
+      | null;
     if (!result?.userId) {
       return serverError('designer-invite returned no user id');
     }
@@ -83,7 +88,11 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      data: { userId: result.userId, email: result.email ?? email },
+      data: {
+        userId: result.userId,
+        email: result.email ?? email,
+        businessNameKept: result.businessNameKept ?? false,
+      },
     });
   } catch (err: any) {
     return serverError(err.message ?? 'Failed to invite designer');
