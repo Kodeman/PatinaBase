@@ -620,9 +620,9 @@
     <hr class="rule">
     <div class="grid g4">
       <div class="card"><h4>Smallest useful version</h4><p>One flag&#8209;gated route in the designer portal that posts a PDF to the deployed function and renders the staged rows for per&#8209;row confirmation. <strong>No commit path, no new model, no iOS work.</strong></p></div>
-      <div class="card"><h4>Effort &amp; dependency</h4><p><strong>S&ndash;M.</strong> A route, an upload, a review table. Depends on nothing that is not already deployed. The <em>second</em> step &mdash; Field's camera posting a tag photo to the same extractor &mdash; is a separate, later decision.</p></div>
+      <div class="card"><h4>Effort &amp; dependency</h4><p><strong>S&ndash;M.</strong> A route, an upload, a review table. Depends on nothing that is not already deployed. The <em>second</em> step &mdash; Field's camera posting a tag photo &mdash; is <strong>not</strong> the same extractor: <code>project-ffe-document-extract</code> validates <code>application/pdf</code> and rejects anything else, so an image branch is a separate server ticket, not a client one.</p></div>
       <div class="card"><h4>Principal uncertainty</h4><p>Whether extraction is accurate enough on real vendor paperwork to be worth reviewing rather than retyping. That is exactly what the first experiment measures &mdash; slide&nbsp;17. Deployment, credentials and current ACLs are also assumed, not confirmed.</p></div>
-      <div class="card"><h4>Success criterion</h4><p>Field&#8209;level exact&#8209;match against a hand&#8209;keyed gold set: <strong>&ge;95% on SKU and price, &ge;90% on maker.</strong> Below that, per&#8209;row confirmation stays mandatory forever &mdash; which is the safe default anyway.</p></div>
+      <div class="card"><h4>Success criterion</h4><p>Measured against the fields the function actually returns &mdash; <code>name, quantity, roomName, category</code> and page provenance. <strong>&ge;95% row recall, &ge;90% on room and category.</strong> <em>Corrected 2026-09-23:</em> this slide previously asked for &ge;95% on SKU and price. Those fields do not exist in <code>ExtractionRow</code>, and the extractor's prompt explicitly refuses pricing &mdash; so that criterion was unmeasurable. Extending the row is a server ticket; extracting price needs a policy ruling, because refusing it was deliberate. Below the bar, per&#8209;row confirmation stays mandatory forever &mdash; which is the safe default anyway.</p></div>
     </div>
   </div>
 </section>
@@ -847,15 +847,15 @@
     <div class="grid g3" style="margin-top:1.1rem">
       <div class="card accent">
         <h4>Build first: the extractor's front door</h4>
-        <p>One route, on the surface the company ranks first, using a function that is already deployed, ACL&#8209;hardened and SQL&#8209;tested. It affects <strong>the designer portal now and Patina Field next</strong> &mdash; the same server extractor can later accept a captured tag photo, which is a strictly cheaper path to opportunity&nbsp;7 than an on&#8209;device model.</p>
+        <p>One route, on the surface the company ranks first, using a function that is already deployed, ACL&#8209;hardened and SQL&#8209;tested. It affects <strong>the designer portal now and Patina Field next</strong> &mdash; the server extractor can be <em>taught</em> to accept a captured tag photo &mdash; it is PDF&#8209;only today &mdash; which is still a strictly cheaper path to opportunity&nbsp;7 than an on&#8209;device model.</p>
       </div>
       <div class="card">
         <h4>The experiment, and its bar</h4>
-        <p>Run it against <strong>three real Middle West vendor PDFs</strong> hand&#8209;keyed into a gold set first. Measure field&#8209;level exact match: <strong>&ge;95% SKU, &ge;95% price, &ge;90% maker.</strong> Time a full reviewed draft against manual entry &mdash; upload and waiting included, not just inference.</p>
+        <p>Run it against <strong>three real Middle West vendor PDFs</strong> hand&#8209;keyed into a gold set first. Measure exact match on what ships today &mdash; <strong>&ge;95% row recall, &ge;90% room and category</strong>. Run the maker/SKU/price question <em>alongside</em>, in a scratch harness with an extended schema, so the answer arrives without committing the deployed contract. Time a full reviewed draft against manual entry &mdash; upload and waiting included, not just inference.</p>
       </div>
       <div class="card flag">
         <h4>The uncertainty to validate before anything else</h4>
-        <p><strong>Can a model read this studio's paperwork accurately enough to be worth reviewing?</strong> If a frontier model reading a clean vendor PDF cannot clear 95% on SKU and price, then Apple's ~3B on&#8209;device model reading a phone photo of a creased tag on a job site certainly cannot &mdash; and the company learns that for the price of one route, instead of an SDK upgrade, a CI bump, a floor cut and a permanent second code path.</p>
+        <p><strong>Can a model read this studio's paperwork accurately enough to be worth reviewing?</strong> If a frontier model reading a clean vendor PDF cannot clear the bar on the rows and the maker/SKU probe, then Apple's ~3B on&#8209;device model reading a phone photo of a creased tag on a job site certainly cannot &mdash; and the company learns that for the price of one route, instead of an SDK upgrade, a CI bump, a floor cut and a permanent second code path.</p>
       </div>
     </div>
     <p style="margin-top:1rem"><strong>Two questions only Kody and Leah can answer, and both gate work above:</strong> which phones the crew actually carry (the house census, already owed), and what the studio would genuinely send to someone on a roof.</p>
