@@ -49,8 +49,10 @@
 --   match set ever grew to include it. Naming its id in this file would only
 --   add a redundant check while putting a seat we must never write to into the
 --   text of a migration that writes -- so it is left out on purpose. The
---   transactional test for this migration does seed that third seat and asserts
---   it comes through untouched.
+--   "exactly 2" count assertion in the DO block below is the guard: if the
+--   match set ever grew to include a third row, that assertion fails and the
+--   migration aborts. Deploy 1's post-push probe (SQ-151) confirms the two
+--   rows are paused.
 --
 -- Idempotent: the UPDATE only affects rows still 'active', so a rerun is a
 -- no-op and appends no second history entry. No DELETE. Resume is a separate
