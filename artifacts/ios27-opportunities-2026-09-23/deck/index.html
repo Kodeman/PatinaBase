@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Promises Already Made</title>
+<meta name="description" content="Patina and Patina Field: what iOS 27 actually makes possible across the two apps, what the challenge round overturned, and what to build first.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#faf7f2;
+    --paper-raised:#f5f2ed;
+    --paper-deep:#ece7dd;
+    --ink:#2c2926;
+    --ink-soft:#5c4a3c;
+    --ink-faint:#8b7355;
+    --hairline:#e5e2dd;
+    --hairline-strong:#c8c3bb;
+    --clay:#c4a57b;
+    --clay-ink:#82612f;
+    --field:#4e6b5a;
+    --field-ink:#38513f;
+    --flag:#9c5340;
+    --font-display:'Playfair Display', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-mono:'DM Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --measure:68ch;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#211e1b; --paper-raised:#2c2926; --paper-deep:#353029;
+      --ink:#f2ede6; --ink-soft:#dfd2c0; --ink-faint:#c7b99f;
+      --hairline:#3c3630; --hairline-strong:#524c45;
+      --clay:#c4a57b; --clay-ink:#d8bb8e; --field:#8fae99; --field-ink:#a8c4b1; --flag:#de8a7b;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#211e1b; --paper-raised:#2c2926; --paper-deep:#353029;
+    --ink:#f2ede6; --ink-soft:#dfd2c0; --ink-faint:#c7b99f;
+    --hairline:#3c3630; --hairline-strong:#524c45;
+    --clay:#c4a57b; --clay-ink:#d8bb8e; --field:#8fae99; --field-ink:#a8c4b1; --flag:#de8a7b;
+    color-scheme:dark;
+  }
+
+  *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  @media (prefers-reduced-motion: reduce){ html{ scroll-behavior:auto; } }
+  body{ background:var(--paper); color:var(--ink); margin:0; font-family:var(--font-body); line-height:1.55; }
+  h1,h2,h3,h4{ font-family:var(--font-display); font-weight:600; text-wrap:balance; margin:0; }
+  em,.voice{ font-family:var(--font-display); font-style:italic; font-weight:500; }
+  p{ margin:0 0 .9em 0; max-width:var(--measure); }
+  p:last-child{ margin-bottom:0; }
+  a{ color:var(--clay-ink); }
+  a:hover{ color:var(--ink); }
+  strong{ font-weight:600; }
+  :focus-visible{ outline:2px solid var(--clay-ink); outline-offset:3px; border-radius:2px; }
+
+  .skip{ position:absolute; left:-9999px; top:0; background:var(--paper-raised); color:var(--ink);
+         padding:.7em 1.1em; z-index:200; border:1px solid var(--hairline-strong); border-radius:4px; }
+  .skip:focus{ left:1rem; top:1rem; }
+
+  .eyebrow{ font-family:var(--font-mono); text-transform:uppercase; font-size:.7rem; letter-spacing:.14em;
+            color:var(--ink-faint); display:flex; align-items:center; gap:.6em; margin-bottom:.7rem; }
+  .eyebrow::before{ content:''; width:1.4em; height:1px; background:var(--ink-faint); flex:none; }
+
+  .slide{ min-height:100vh; width:100%; padding:6vh 6vw 9vh; display:none; flex-direction:column; justify-content:center; }
+  .slide.active{ display:flex; }
+  .slide-inner{ max-width:1160px; margin:0 auto; width:100%; }
+  .slide h2{ font-size:clamp(1.5rem, 3vw, 2.3rem); margin-bottom:.35em; }
+  .lede{ font-size:clamp(1rem,1.3vw,1.11rem); color:var(--ink-soft); max-width:var(--measure); }
+  hr.rule{ border:none; border-top:1px solid var(--hairline); margin:1.4rem 0; }
+
+  .cover-title{ font-size:clamp(2.6rem,7vw,5rem); line-height:1.02; letter-spacing:-.015em; margin:.2em 0 .45em; }
+  .cover-sub{ font-size:clamp(1.02rem,1.6vw,1.26rem); color:var(--ink-soft); max-width:48ch; }
+  .cover-meta{ font-family:var(--font-mono); font-size:.75rem; color:var(--ink-faint); line-height:1.75; margin-top:2rem; max-width:62ch; }
+
+  .grid{ display:grid; gap:1.05rem; margin-top:1.25rem; }
+  .g2{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .g3{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .g4{ grid-template-columns:repeat(4,minmax(0,1fr)); }
+  @media (max-width:900px){ .g2,.g3,.g4{ grid-template-columns:minmax(0,1fr); } }
+  .grid > *{ min-width:0; }
+  .card{ background:var(--paper-raised); border:1px solid var(--hairline); border-radius:6px; padding:1.05rem 1.15rem; }
+  .card h3{ font-size:1rem; margin-bottom:.45rem; }
+  .card h4{ font-size:.92rem; margin-bottom:.35rem; }
+  .card p, .card ul{ font-size:.88rem; color:var(--ink-soft); max-width:none; }
+  .card.accent{ border-left:3px solid var(--clay); }
+  .card.field-accent{ border-left:3px solid var(--field); }
+  .card.flag{ border-left:3px solid var(--flag); }
+
+  ul,ol{ margin:.2em 0 .9em; padding-left:1.15em; max-width:var(--measure); }
+  li{ margin-bottom:.34em; }
+  .card ul{ padding-left:1.05em; }
+
+  .tw{ overflow-x:auto; margin-top:1rem; -webkit-overflow-scrolling:touch; }
+  table{ border-collapse:collapse; width:100%; font-size:.83rem; min-width:520px; }
+  th,td{ text-align:left; padding:.5em .68em; border-bottom:1px solid var(--hairline); vertical-align:top; }
+  thead th{ font-family:var(--font-mono); font-size:.67rem; text-transform:uppercase; letter-spacing:.09em;
+            color:var(--ink-faint); border-bottom:1px solid var(--hairline-strong); font-weight:500; }
+  tbody tr:hover{ background:var(--paper-raised); }
+  tr.pick td{ background:var(--paper-deep); }
+  tr.pick td:first-child{ box-shadow:inset 3px 0 0 var(--clay); }
+  td.num, th.num{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  .chip{ display:inline-block; font-family:var(--font-mono); font-size:.63rem; text-transform:uppercase;
+         letter-spacing:.09em; padding:.2em .5em; border-radius:3px; border:1px solid var(--hairline-strong);
+         color:var(--ink-soft); white-space:nowrap; }
+  .chip.client{ border-color:var(--clay); color:var(--clay-ink); }
+  .chip.field{ border-color:var(--field); color:var(--field-ink); }
+  .chip.shared{ border-color:var(--hairline-strong); color:var(--ink); }
+  .chip.new{ border-color:var(--clay-ink); color:var(--clay-ink); }
+  .chip.guess{ border-style:dashed; border-color:var(--clay-ink); color:var(--clay-ink); }
+  .chip.warn{ border-color:var(--flag); color:var(--flag); }
+
+  .tag-ev,.tag-inf,.tag-un{ font-family:var(--font-mono); font-size:.61rem; text-transform:uppercase;
+       letter-spacing:.08em; padding:.1em .38em; border-radius:2px; white-space:nowrap; }
+  .tag-ev{ color:var(--field-ink); border:1px solid var(--field); }
+  .tag-inf{ color:var(--ink-faint); border:1px solid var(--hairline-strong); }
+  .tag-un{ color:var(--flag); border:1px solid var(--flag); }
+
+  code,.mono{ font-family:var(--font-mono); font-size:.86em; background:var(--paper-deep);
+              padding:.08em .34em; border-radius:3px; overflow-wrap:anywhere; }
+  .src a, .card a{ overflow-wrap:anywhere; }
+  .card code{ font-size:.79em; }
+
+  .pull{ font-family:var(--font-display); font-style:italic; font-size:clamp(1.05rem,1.9vw,1.42rem);
+         color:var(--ink); border-left:3px solid var(--clay); padding-left:1.1rem; margin:1.25rem 0; max-width:54ch; }
+  .attrib{ font-family:var(--font-mono); font-style:normal; font-size:.66rem; color:var(--ink-faint); display:block; margin-top:.5rem; }
+  .src{ font-family:var(--font-mono); font-size:.65rem; color:var(--ink-faint); margin-top:1rem; line-height:1.8; max-width:none; }
+  .src a{ color:var(--ink-faint); }
+
+  .phones{ display:flex; gap:1.5rem; flex-wrap:wrap; margin-top:1.1rem; align-items:stretch; }
+  .phone{ flex:1 1 250px; max-width:290px; display:flex; flex-direction:column; }
+  .phone-label{ font-family:var(--font-mono); font-size:.65rem; text-transform:uppercase; letter-spacing:.1em;
+                color:var(--ink-faint); margin-bottom:.5rem; display:flex; gap:.45em; align-items:center; flex-wrap:wrap; }
+  .screen{ border:1px solid var(--hairline-strong); border-radius:16px; background:var(--paper-raised);
+           padding:.85rem .8rem; font-size:.73rem; min-height:325px; flex:1; display:flex; flex-direction:column; gap:.45rem; }
+  .screen .s-eyebrow{ font-family:var(--font-mono); font-size:.55rem; text-transform:uppercase; letter-spacing:.11em; color:var(--ink-faint); }
+  .screen .s-title{ font-family:var(--font-display); font-size:1rem; font-weight:600; }
+  .screen p{ font-size:.72rem; color:var(--ink-soft); margin:.2rem 0 0; }
+  .row{ display:flex; justify-content:space-between; align-items:baseline; gap:.5rem;
+        padding:.38rem 0; border-bottom:1px solid var(--hairline); }
+  .row:last-of-type{ border-bottom:none; }
+  .row .k{ color:var(--ink-faint); font-size:.67rem; }
+  .row .v{ text-align:right; }
+  .btn{ text-align:center; padding:.42rem; border-radius:5px; font-size:.71rem; font-weight:500; }
+  .btn.primary{ background:var(--ink); color:var(--paper); }
+  .btn.ghost{ border:1px solid var(--hairline-strong); color:var(--ink-soft); }
+  .spacer{ flex:1; }
+  .legend{ display:flex; gap:1rem; flex-wrap:wrap; font-size:.75rem; color:var(--ink-soft); margin-top:.9rem; }
+
+  .nav-ui{ position:fixed; bottom:1rem; right:1rem; display:flex; gap:.4rem; z-index:100; align-items:center; }
+  .nav-btn{ font-family:var(--font-mono); font-size:.8rem; background:var(--paper-raised); color:var(--ink);
+            border:1px solid var(--hairline-strong); border-radius:4px; width:2.1rem; height:2.1rem; cursor:pointer; }
+  .nav-btn:hover{ background:var(--paper-deep); }
+  .counter{ font-family:var(--font-mono); font-size:.72rem; color:var(--ink-faint); padding:0 .5rem;
+            min-width:4.6rem; text-align:center; }
+  .progress{ position:fixed; top:0; left:0; height:2px; background:var(--clay); z-index:101; transition:width .2s ease; }
+  @media (prefers-reduced-motion: reduce){ .progress{ transition:none; } }
+  #toc{ position:fixed; inset:0; background:var(--paper); z-index:150; overflow-y:auto; padding:5vh 6vw; }
+  #toc[hidden]{ display:none; }
+  #toc ol{ columns:2; column-gap:2.5rem; max-width:1000px; font-size:.9rem; }
+  @media (max-width:760px){ #toc ol{ columns:1; } }
+  #toc li{ break-inside:avoid; margin-bottom:.5em; }
+  #toc button{ background:none; border:none; color:var(--ink); font:inherit; text-align:left; cursor:pointer; padding:.15em 0; }
+  #toc button:hover{ color:var(--clay-ink); text-decoration:underline; }
+
+  @media print{
+    .nav-ui,.progress,#toc,.skip{ display:none !important; }
+    .slide{ display:flex !important; min-height:auto; page-break-after:always; break-after:page; padding:1.1cm 1cm; }
+    .slide:last-child{ page-break-after:auto; break-after:auto; }
+    body{ background:#fff; color:#000; }
+    .card,.screen{ background:none; border:1px solid #999; }
+    .tw{ overflow:visible; } table{ min-width:0; font-size:7.6pt; }
+    a{ color:#000; text-decoration:underline; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="progress" id="progress"></div>
+<main id="main">
+
+<!-- 1 ============================================================ -->
+<section class="slide active" data-title="Cover">
+  <div class="slide-inner">
+    <div class="eyebrow">Patina &middot; iOS 27 opportunity review &middot; 23 September 2026</div>
+    <h1 class="cover-title">Promises<br>Already Made</h1>
+    <p class="cover-sub">Both apps tell users they can do things the code does not do. The company has also built and paid for intelligence that nothing calls. iOS&nbsp;27 is real, verified, and genuinely useful &mdash; and it is not the binding constraint.</p>
+    <hr class="rule" style="max-width:22rem">
+    <div class="cover-meta">
+      Claude Fable led the review; GPT&#8209;6 Astra researched Apple independently and attacked the result; a third context red&#8209;teamed it. <strong>They overturned two of my three recommendations.</strong> What survives is in here, with the corrections shown.<br><br>
+      Read with <strong>&rarr;</strong> / <strong>&larr;</strong>, or press <strong>I</strong> for the index.
+    </div>
+  </div>
+</section>
+
+<!-- 2 ============================================================ -->
+<section class="slide" data-title="How this was made">
+  <div class="slide-inner">
+    <div class="eyebrow">Method</div>
+    <h2>Two model families, and a real argument</h2>
+    <p class="lede">The disagreements are in this deck rather than smoothed out of it, because the disagreements are where the value was.</p>
+    <div class="grid g3">
+      <div class="card accent">
+        <h3>Claude Fable &mdash; the review</h3>
+        <p>Led the app read and the product direction. Four agents read both apps, the shared package and the backend: ~3,000 Swift files, the migrations, the edge functions, the portal. Produced a ten&#8209;item long list and a shortlist of three.</p>
+      </div>
+      <div class="card field-accent">
+        <h3>GPT&#8209;6 Astra &mdash; the check</h3>
+        <p>Researched Apple's shipped capabilities independently, then attacked the shortlist on five axes: weak user value, unsupported API assumptions, excess complexity, unnecessary divergence, and where an ordinary screen beats a model.</p>
+      </div>
+      <div class="card flag">
+        <h3>A separate red team</h3>
+        <p>A third context, which had not written the shortlist, re&#8209;verified every load&#8209;bearing claim first&#8209;hand. It found one of them factually wrong, and found a stronger opportunity that was not on the list.</p>
+      </div>
+    </div>
+    <hr class="rule">
+    <div class="grid g3">
+      <div class="card">
+        <h4>Three labels, used throughout</h4>
+        <p>
+          <span class="tag-ev">Evidence</span> read in a file or an official Apple page, cited.<br><br>
+          <span class="tag-inf">Inference</span> concluded from evidence.<br><br>
+          <span class="tag-un">Unverified</span> could not be confirmed &mdash; never load&#8209;bearing.
+        </p>
+      </div>
+      <div class="card">
+        <h4>Three audiences, colour&#8209;coded</h4>
+        <p>
+          <span class="chip client">Patina</span> the client app, for a homeowner.<br><br>
+          <span class="chip field">Field</span> Patina Field, for designers and trades.<br><br>
+          <span class="chip shared">Shared</span> both, or the seam between them.
+        </p>
+      </div>
+      <div class="card">
+        <h4>What was not done</h4>
+        <p>No application code was changed &mdash; this is a read&#8209;only evaluation. Neither app was run on a device. Every behavioural claim comes from source or from Apple's published material; the handful that need a device or a user are marked as such.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 ============================================================ -->
+<section class="slide" data-title="The product family today">
+  <div class="slide-inner">
+    <div class="eyebrow">The family today</div>
+    <h2>Two apps, two audiences, one backend</h2>
+    <p class="lede">Not a consumer app and a pro app. The two halves of a designer&#8209;led project &mdash; the homeowner's side and the studio's side &mdash; sharing a database and almost nothing else. Both are strong. Both leak at the same seam.</p>
+    <div class="grid g2">
+      <div class="card accent">
+        <div class="phone-label"><span class="chip client">Patina</span> <code>cloud.patina.app</code> &middot; iOS 26.0 floor</div>
+        <h3>The homeowner's side</h3>
+        <p><strong>Who.</strong> A homeowner who is a designer's client. Guest browsing is first&#8209;class; sign&#8209;in is required only to send a design request. App Store category: shopping.</p>
+        <p><strong>What.</strong> Four hand&#8209;rolled tabs &mdash; Today, Spaces, Pieces, Studio &mdash; plus a Companion in a fifth non&#8209;tab slot. LiDAR room capture, a style quiz, saved pieces, then approve / sign / pay / track what the studio does.</p>
+        <p><strong>Scale.</strong> 479 app source files, 2,735 test cases, 674 commits in 60 days.</p>
+      </div>
+      <div class="card field-accent">
+        <div class="phone-label"><span class="chip field">Patina Field</span> <code>cloud.patina.field</code> &middot; iOS 18.0 floor</div>
+        <h3>The studio's side</h3>
+        <p><strong>Who.</strong> Invite&#8209;only &mdash; sign&#8209;in refuses to create an account, because designers are provisioned through the portal. A <em>workspace</em> is an organisation. There is a fourth door: an unauthenticated <strong>guest</strong> (a sub, a GC) who arrives on a texted link and sees only the site&#8209;request screens.</p>
+        <p><strong>What.</strong> Two peer realms, camera and work. Turn a showroom object into a structured, located <em>specimen</em>; run a LiDAR site scan onto a project; receive goods; hold a roster; log hours; send site requests.</p>
+        <p><strong>Scale.</strong> 272 source files plus a 114&#8209;file SDK&#8209;free CaptureKit; 79 screen ids; a generated Xcode project.</p>
+      </div>
+      <div class="card">
+        <h4>What is genuinely good</h4>
+        <ul>
+          <li><strong>Field's offline model is first&#8209;class.</strong> Five durable queues, client&#8209;minted UUIDs as idempotency keys, and a store that degrades loudly rather than silently. <em>"The door MUST work offline: never an empty list, never a spinner, never a disabled control."</em></li>
+          <li><strong>Field's recognition grammar.</strong> Every machine&#8209;proposed value carries a provenance chip and is confirmed or corrected by a human &mdash; with one hole, on slide&nbsp;9.</li>
+          <li><strong>Patina's copy discipline</strong> &mdash; a test&#8209;enforced lexicon, plus sentence&#8209;case, contrast and tap&#8209;target suites &mdash; and its <strong>permission choreography</strong>: a purpose&#8209;built primer before every system prompt, with a real alternative on denial.</li>
+        </ul>
+      </div>
+      <div class="card flag">
+        <h4>Where users stall</h4>
+        <ul>
+          <li><span class="chip field">Field</span> <strong>Six built screens are unreachable in a Release build</strong> &mdash; Settings, Account, sign&#8209;out, workspace switch, the QR approver, the photo&#8209;import fallback. A signed&#8209;in designer has no exit.</li>
+          <li><span class="chip field">Field</span> <strong>No push, and no local notifications.</strong> The app whose user stands on a job site cannot be told anything.</li>
+          <li><span class="chip client">Patina</span> <strong>The whole studio rail is online&#8209;only.</strong> Invoices, decisions, proposals, threads, documents and orders have no local model; offline they are six identical "try that again" cards.</li>
+          <li><span class="chip client">Patina</span> <strong>Non&#8209;LiDAR users get the worst path</strong> &mdash; manual room entry, which once shipped pre&#8209;filled dimensions that read as measured fact.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="src">Sources: <code>Patina/ContentView.swift:236</code> &middot; <code>Patina.xcodeproj/project.pbxproj:678</code> &middot; <code>SupabaseSessionService.swift:182&ndash;201</code> &middot; <code>CaptureDeepLink.swift:25&ndash;33, 250&ndash;256</code> &middot; <code>Capture/Capture.entitlements</code> &middot; <code>CaptureProjectCache.swift:5&ndash;6</code> &middot; <code>PatinaSchema.swift:26&ndash;38</code> &middot; <code>generate_project.rb:17</code></p>
+  </div>
+</section>
+
+<!-- 5 ============================================================ -->
+<section class="slide" data-title="Alignment audit">
+  <div class="slide-inner">
+    <div class="eyebrow">Consistency &middot; 40 differences classified</div>
+    <h2>They share pigments and typefaces. They share almost nothing else.</h2>
+    <p class="lede">The convergence is real and deliberate &mdash; Field re&#8209;points every colour token at the shared package and registers the shared fonts process&#8209;wide. It stopped at colour and type.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Layer</th><th>Shared?</th><th class="num">Patina</th><th class="num">Field</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr><td>Colour values</td><td>Yes, by alias</td><td class="num">&mdash;</td><td class="num">20 aliases</td><td><span class="chip">intentional</span></td></tr>
+          <tr><td>Font families</td><td>Yes</td><td class="num">&mdash;</td><td class="num">&mdash;</td><td><span class="chip">intentional</span></td></tr>
+          <tr><td>Type ramp</td><td><strong>No</strong></td><td class="num">40 tokens</td><td class="num">10 tokens</td><td><span class="chip warn">drift</span></td></tr>
+          <tr><td>Spacing scale call sites</td><td><strong>No</strong></td><td class="num">243</td><td class="num"><strong>0</strong></td><td><span class="chip warn">drift</span></td></tr>
+          <tr><td>Corner&#8209;radius call sites</td><td><strong>No</strong></td><td class="num">54</td><td class="num"><strong>0</strong></td><td><span class="chip warn">drift</span></td></tr>
+          <tr><td>Haptics manager</td><td><strong>No</strong></td><td class="num">56</td><td class="num"><strong>0</strong></td><td><span class="chip warn">drift</span></td></tr>
+          <tr><td>Shared components adopted</td><td>Partial</td><td class="num">9 of 13</td><td class="num">4 of 13</td><td><span class="chip warn">4 dead</span></td></tr>
+          <tr><td>Navigation chrome</td><td><strong>No</strong></td><td class="num">bar hidden &times;17</td><td class="num">stock bar &times;23</td><td><span class="chip warn">drift</span></td></tr>
+          <tr><td>Approval mark (<code>PatinaStamp</code>)</td><td><strong>No</strong></td><td class="num">18 refs</td><td class="num"><strong>0</strong></td><td><span class="chip warn">drift</span></td></tr>
+          <tr><td>Lexicon</td><td><strong>No</strong></td><td class="num">test&#8209;enforced</td><td class="num">no copy tests</td><td><span class="chip warn">drift</span></td></tr>
+          <tr><td>Deployment floor</td><td><strong>No</strong></td><td class="num">iOS 26.0</td><td class="num">iOS 18.0</td><td><span class="chip warn">drift</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid g2" style="margin-top:1rem">
+      <div class="card">
+        <h4>Of 40 catalogued differences, 6 are intentional</h4>
+        <p>Worth keeping: a camera&#8209;first shell against a browse&#8209;first shell; a dense underlined field slot against a filled box; the dashed chip for an unconfirmed guess; two registers of permission copy; the domain split; and &mdash; the one deliberate alignment &mdash; both apps call home <em>Today</em>. The other 34 are drift.</p>
+      </div>
+      <div class="card flag">
+        <h4>Two measured defects, not opinions</h4>
+        <p>Field uses <code>goldenHour</code> and <code>warning</code> as solid fills under ink that flips with the colour scheme. Computed against the cited hex values that is <strong>1.39:1</strong> and <strong>1.93:1</strong> in dark mode. Patina solved the same problem by using a status colour only as a 14% wash. <span class="tag-inf">Inference</span> from evidence &mdash; confirm on a device.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 ============================================================ -->
+<section class="slide" data-title="One word, three meanings">
+  <div class="slide-inner">
+    <div class="eyebrow">Terminology &middot; the prerequisite nobody budgets for</div>
+    <h2>The same thing has four names, and one word has three meanings</h2>
+    <p class="lede">Normally a tidiness complaint. The moment anything is exposed to Shortcuts, Spotlight or a control, entity names become the API that the system speaks.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>The real thing</th><th>Patina</th><th>Patina Field</th><th>Designer portal</th></tr></thead>
+        <tbody>
+          <tr><td>A furnishing</td><td><strong>piece</strong> <span class="mono">370</span></td><td><strong>specimen</strong> <span class="mono">1,017</span></td><td>line / piece</td></tr>
+          <tr><td>The physical place</td><td>house / space / room</td><td>site / venue / room</td><td>room</td></tr>
+          <tr><td>The designer's firm</td><td><strong>Studio</strong></td><td>studio <em>and</em> <strong>workspace</strong></td><td>studio</td></tr>
+          <tr><td>The client's own hub</td><td><strong>"Your Studio"</strong></td><td>&mdash;</td><td>&mdash;</td></tr>
+          <tr><td>The vendor</td><td>maker</td><td>maker / vendor</td><td>vendor</td></tr>
+          <tr><td>The landing screen</td><td>Today</td><td>Today</td><td>The Desk</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pull">In the client app, &ldquo;Your Studio&rdquo; is the homeowner's own tab. One screen away, &ldquo;Studio: Walbridge Studio&rdquo; is the design firm. A homeowner has no way to tell which one is hers.</div>
+    <div class="grid g2">
+      <div class="card">
+        <h4>Cheaper than it looks</h4>
+        <p>Field carries 1,017 <code>specimen</code> identifiers &mdash; but the <strong>user&#8209;facing</strong> subset is roughly eight strings. The expensive half is internal and can stay. Patina already has the machinery: a <code>NounConsistencyTests</code> suite pinning the lexicon per&#8209;site. Field has 51 test files and no copy test at all.</p>
+      </div>
+      <div class="card accent">
+        <h4>Why it goes early anyway</h4>
+        <p>It is a one&#8209;week job with no model, no SDK and no device risk, and everything later &mdash; a control, a shortcut, an extracted schedule row, a shared record shown to a homeowner &mdash; inherits whichever vocabulary is in place when it ships.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 ============================================================ -->
+<section class="slide" data-title="iOS 27, verified">
+  <div class="slide-inner">
+    <div class="eyebrow">Verified 23 September 2026 against developer.apple.com</div>
+    <h2>iOS 27 shipped nine days ago, and it is substantial</h2>
+    <p class="lede">iOS&nbsp;27.0 (build 24A437) released <strong>14 September 2026</strong>; announced at WWDC26 on 8 June. Xcode&nbsp;27 with Swift&nbsp;6.4. Runs on iPhone&nbsp;11 and later &mdash; the interesting parts do not.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Capability</th><th>Status</th><th>API &amp; framework</th><th>Gate</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Multimodal prompting</strong> &mdash; images into the on-device model</td><td><span class="chip new">new in 27</span></td><td><code>Attachment</code> &middot; FoundationModels</td><td>Apple Intelligence device</td></tr>
+          <tr><td><strong>Vision tools the model can call</strong></td><td><span class="chip new">new in 27</span></td><td><code>OCRTool</code>, <code>BarcodeReaderTool</code> &middot; <strong>Vision</strong></td><td>AI device &middot; <strong>no Simulator</strong></td></tr>
+          <tr><td><strong>Spotlight RAG over your own content</strong></td><td><span class="chip new">new in 27</span></td><td><code>SpotlightSearchTool</code> &middot; CoreSpotlight</td><td>see slide 7</td></tr>
+          <tr><td><strong>Private Cloud Compute model</strong></td><td><span class="chip new">new in 27</span></td><td><code>PrivateCloudComputeLanguageModel</code></td><td>entitlement &middot; &lt;2M downloads</td></tr>
+          <tr><td><strong>Dynamic Profiles</strong> &mdash; swap model/tools mid&#8209;session</td><td><span class="chip new">new in 27</span></td><td><code>DynamicProfile</code></td><td>&mdash;</td></tr>
+          <tr><td><strong>Any LLM behind one API</strong></td><td><span class="chip new">new in 27</span></td><td><code>LanguageModel</code> protocol</td><td>&mdash;</td></tr>
+          <tr><td><strong>Evaluations</strong> &mdash; test non&#8209;deterministic features</td><td><span class="chip new">new in 27</span></td><td><code>Evaluations</code></td><td>&mdash;</td></tr>
+          <tr><td><strong>App Intents</strong> &mdash; undo, cancel, long&#8209;running</td><td><span class="chip new">expanded</span></td><td><code>UndoableIntent</code> &hellip;</td><td>&mdash;</td></tr>
+          <tr><td>Guided generation &mdash; typed output</td><td><span class="chip">iOS 26</span></td><td><code>@Generable</code>, <code>@Guide</code></td><td>Apple Intelligence device</td></tr>
+          <tr><td>On&#8209;device transcription</td><td><span class="chip">iOS 26</span></td><td><code>SpeechTranscriber</code> &middot; Speech</td><td><strong>no AI gate</strong></td></tr>
+          <tr><td>Controls &mdash; Control Center, Lock Screen, Action Button</td><td><span class="chip">iOS 18</span></td><td><code>ControlWidget</code> &middot; WidgetKit</td><td>&mdash;</td></tr>
+          <tr><td>Capture from the Lock Screen</td><td><span class="chip">iOS 18</span></td><td><code>LockedCameraCapture</code> + <code>CameraCaptureIntent</code></td><td>separate extension, <strong>no network</strong></td></tr>
+          <tr><td>RoomPlan / ARKit</td><td><span class="chip">no 27 change</span></td><td>&mdash;</td><td>LiDAR</td></tr>
+          <tr><td>On&#8209;device text embeddings for apps</td><td><span class="chip warn">nothing new</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+          <tr><td>Image Playground / Writing Tools</td><td><span class="chip warn">no new 3rd&#8209;party API</span></td><td>&mdash;</td><td>&mdash;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="src">
+      <a href="https://developer.apple.com/news/releases/">Releases</a> &middot;
+      <a href="https://developer.apple.com/ios/whats-new/">What's new in iOS 27</a> &middot;
+      <a href="https://developer.apple.com/documentation/updates/foundationmodels">Foundation Models updates</a> &middot;
+      <a href="https://developer.apple.com/documentation/vision/ocrtool">OCRTool</a> &middot;
+      <a href="https://developer.apple.com/documentation/foundationmodels/attachment">Attachment</a> &middot;
+      <a href="https://developer.apple.com/documentation/corespotlight/spotlightsearchtool">SpotlightSearchTool</a> &middot;
+      <a href="https://developer.apple.com/documentation/lockedcameracapture/creating-a-camera-experience-for-the-lock-screen">LockedCameraCapture</a>
+    </p>
+  </div>
+</section>
+
+<!-- 8 ============================================================ -->
+<section class="slide" data-title="Five gates">
+  <div class="slide-inner">
+    <div class="eyebrow">Constraints &middot; read before believing any demo</div>
+    <h2>Five gates that decide what is actually buildable</h2>
+    <div class="grid g2">
+      <div class="card flag">
+        <h3>1. The toolchain gate &mdash; the one nobody costed</h3>
+        <p>This machine runs <strong>Xcode&nbsp;26.6 (17F113)</strong> and the only installed iOS SDK is <strong>26.5</strong>. <code>Attachment</code>, <code>OCRTool</code> and <code>BarcodeReaderTool</code> are iOS&nbsp;27 SDK symbols and <strong>cannot be compiled here today</strong>. The repo's iOS CI gates run on <code>macos-15</code>, an image that does not ship Xcode&nbsp;26, let alone 27.</p>
+        <p>So any iOS&nbsp;27 feature's true prerequisite list opens with an Xcode upgrade and a CI runner&#8209;image bump &mdash; before a line of product code. <span class="tag-ev">Evidence</span> <code>xcodebuild -version</code>, <code>.github/workflows/policy-quality.yml:95,104</code></p>
+      </div>
+      <div class="card flag">
+        <h3>2. The device gate</h3>
+        <p>Apple Intelligence needs <strong>A17&nbsp;Pro or newer</strong>: iPhone&nbsp;15&nbsp;Pro / Pro&nbsp;Max, iPhone&nbsp;Air, iPhone&nbsp;16 and later. <em>Not</em> all iPhone&nbsp;15s. It also needs the model downloaded, Apple Intelligence enabled, and a supported language.</p>
+        <p>Third&#8209;party estimates put the eligible base near 40&ndash;55%; Apple publishes no figure. But that number is irrelevant here: there are <strong>zero third&#8209;party studios in production</strong>. The real population is Leah's crew and her trades &mdash; a census question, not a statistic, and nobody has asked it.</p>
+      </div>
+      <div class="card flag">
+        <h3>3. The sandbox gate</h3>
+        <p>Spotlight semantic&#8209;index retrieval is <strong>limited to your own app sandbox</strong>. Two apps from the same developer &mdash; even sharing an App Group &mdash; cannot retrieve each other's indexed entities. Apple stated this directly in the WWDC26 Apple&nbsp;Intelligence Group Lab; <code>Transferable</code> is the sanctioned cross&#8209;app path.</p>
+        <p><strong>Consequence:</strong> "ask across both apps" is not buildable on the index. Cross&#8209;surface retrieval stays server&#8209;side.</p>
+      </div>
+      <div class="card">
+        <h3>4. The context gate</h3>
+        <p><code>SpotlightSearchTool</code> defaults to a guidance level Apple says <em>"works best with Private Cloud Compute models."</em> Without a <code>focused(_:)</code> guide, Apple warns plainly: <strong>"Spotlight search exceeds the context window of the model and can't return results."</strong> The on&#8209;device window is roughly 8K and hardware&#8209;dependent &mdash; read <code>contextSize</code> at runtime rather than assuming.</p>
+      </div>
+      <div class="card">
+        <h3>5. The schema gate</h3>
+        <p>App Intents schema domains are a fixed list &mdash; Audio, Calendar, Camera, Clock, Mail, Maps, Messages, Notes, Phone, Photos, Reminders, and system&nbsp;/&nbsp;in&#8209;app search. There is no domain for furniture, projects or field work.</p>
+        <p>A custom intent still reaches <strong>Shortcuts, Spotlight, the Action Button and Control Center</strong>. What it does not get is free Siri phrasing. "Just say it to Siri" for a specimen would be over&#8209;claiming.</p>
+      </div>
+      <div class="card accent">
+        <h3>Two pieces of good news</h3>
+        <p><strong>Patina qualifies for free PCC today</strong> &mdash; Small Business Program, under 2M first&#8209;time downloads, plus the entitlement. TestFlight installs do not count.</p>
+        <p><strong>There is no iOS 27 SDK deadline.</strong> Apple's Upcoming Requirements page still mandates only the iOS&nbsp;26 SDK. Adopting 27 is a choice, not a compliance date &mdash; which means gate&nbsp;1 can be scheduled rather than rushed.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9 ============================================================ -->
+<section class="slide" data-title="Zero adoption, two promises">
+  <div class="slide-inner">
+    <div class="eyebrow">The starting point</div>
+    <h2>Neither app has adopted any of it &mdash; and both already promised it</h2>
+    <div class="grid g2">
+      <div>
+        <div class="tw" style="margin-top:0">
+          <table>
+            <thead><tr><th>Framework</th><th class="num">Patina</th><th class="num">Field</th></tr></thead>
+            <tbody>
+              <tr><td><code>FoundationModels</code></td><td class="num">0</td><td class="num">0</td></tr>
+              <tr><td><code>AppIntent</code> / <code>AppEntity</code></td><td class="num">0</td><td class="num">0</td></tr>
+              <tr><td><code>CoreSpotlight</code></td><td class="num">0</td><td class="num">0</td></tr>
+              <tr><td><code>CoreML</code> / <code>NaturalLanguage</code></td><td class="num">0</td><td class="num">0</td></tr>
+              <tr><td><code>SpeechAnalyzer</code> / <code>SpeechTranscriber</code></td><td class="num">0</td><td class="num">0</td></tr>
+              <tr><td><code>ControlWidget</code></td><td class="num">0</td><td class="num">0</td></tr>
+              <tr><td><code>Speech</code> (legacy <code>SFSpeechRecognizer</code>)</td><td class="num">0</td><td class="num">2</td></tr>
+              <tr><td><code>Vision</code></td><td class="num">1</td><td class="num">3</td></tr>
+              <tr><td><code>WidgetKit</code></td><td class="num">5</td><td class="num"><strong>0</strong></td></tr>
+              <tr><td>Push / notifications</td><td class="num">yes</td><td class="num"><strong>0</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="card field-accent">
+          <h3><span class="chip field">Field</span> promises an entry that does not exist</h3>
+          <p>Onboarding's stated job is <em>"teach the fastest entry &mdash; the Action Button,"</em> and Pro devices are shown <em>"Action Button &rarr; Capture, without even unlocking to the app."</em></p>
+          <p>Three things are wrong, all confirmed in source:</p>
+          <ul>
+            <li>The <strong>Set up</strong> button calls <code>onSetHardwareEntry</code>, which defaults to an empty closure and is never passed at the live call site.</li>
+            <li><code>hardwareEntry</code> defaults to <code>.actionButton</code> and is also never passed &mdash; so an SE or an iPhone&nbsp;14 <strong>is told to map a button it does not have.</strong> The non&#8209;Pro branch exists and is never taken.</li>
+            <li>"Without even unlocking" needs <code>LockedCameraCapture</code>, a separate extension with no network and no App Group access &mdash; Field's entire shared&#8209;store workflow cannot run there.</li>
+          </ul>
+        </div>
+        <div class="card accent" style="margin-top:.9rem">
+          <h3><span class="chip client">Patina</span> promises a voice</h3>
+          <p>The microphone string reads <em>"Have a voice conversation with Patina about your space and style."</em> There is <strong>no <code>Speech</code> import and no <code>AVAudioEngine</code> anywhere in the app</strong> &mdash; and the Companion's view model already implements the whole conversation while the only view that constructs it calls one method.</p>
+        </div>
+      </div>
+    </div>
+    <p class="src">Sources: <code>ReadyScreen.swift:18,23,99</code> &middot; <code>OnboardingFlowView.swift:102</code> &middot; <code>Patina.xcodeproj/project.pbxproj:681,685</code> &middot; <code>CompanionViewModel.swift</code></p>
+  </div>
+</section>
+
+<!-- 10 ============================================================ -->
+<section class="slide" data-title="What the challenge overturned">
+  <div class="slide-inner">
+    <div class="eyebrow">The challenge round</div>
+    <h2>Three things I had wrong</h2>
+    <p class="lede">My shortlist was a tag reader, an entry point and a design&#8209;system move. Astra and the red team dismantled two of the three. Each correction below was re&#8209;verified first&#8209;hand before it went in this deck.</p>
+    <div class="grid g3">
+      <div class="card flag">
+        <h4>1. The Live Activity is not running</h4>
+        <p>I wrote that Field starts a Live Activity that nothing renders. <strong>False.</strong> <code>Capture/Info.plist</code> contains exactly two keys and <code>NSSupportsLiveActivities</code> is not one, so <code>areActivitiesEnabled</code> is false and the controller returns at its guard. Nothing is requested.</p>
+        <p>This cuts both ways: the gap is <em>bigger</em> (two missing pieces), and the first fix is <em>much smaller</em> &mdash; one generator line, after which you learn on a device whether the payload is even correct.</p>
+      </div>
+      <div class="card flag">
+        <h4>2. The floor bump was wrong twice</h4>
+        <p>I said the tag reader needs Field's floor raised 18&nbsp;&rarr;&nbsp;26. <strong>Insufficient:</strong> the multimodal surface is iOS&nbsp;<em>27</em>, not 26. <strong>Unnecessary:</strong> weak linking plus <code>@available</code> reaches a 26/27 API from an 18.0 floor. The device cut buys nothing and strands users.</p>
+      </div>
+      <div class="card flag">
+        <h4>3. The provenance chip does not persist</h4>
+        <p>My third item promoted Field's provenance grammar to family law. But <code>SmartGuessSheet.accept()</code> &mdash; the single <strong>"Looks right"</strong> tap &mdash; rewrites every unchanged value to <code>.manual</code>, defined in the enum as <em>"typed by the designer."</em> The dashed chip is erased on acceptance.</p>
+        <p>With four eyeball&#8209;checkable classifications that is fine. Route a model&#8209;generated SKU and trade price through it and you have a machine that turns a guess into a designer's typed value in one tap, with no trail.</p>
+      </div>
+    </div>
+    <div class="pull">Exporting that grammar to a second app would have exported the hole with it. Fix <code>accept()</code> first &mdash; that is a few lines inside one file, and it is the entire safety argument.</div>
+    <div class="grid g2">
+      <div class="card">
+        <h4>Also flagged, and accepted</h4>
+        <p><strong>Badges are refused by name.</strong> The vision document's list of refused UI includes badges and red/green status. <code>ProvenanceBadge</code> is a badge with a three&#8209;colour status palette. It may have earned a local exception inside Field's recognition sheets; promoting it to shared law makes a refused pattern into house rule.</p>
+        <p><strong>"The Engine is resting" is not a universal failure line.</strong> It belongs to one endpoint. An expired session, a denied camera and a failed upload are different failures and deserve truthful, operation&#8209;specific copy. The no&#8209;"AI" rule stays; the single sentence does not generalise.</p>
+      </div>
+      <div class="card">
+        <h4>What survived the challenge</h4>
+        <p>The evidence base held: every count, every file reference, the zero&#8209;adoption table, the terminology collision, the contrast defects, the six unreachable screens, the missing push rail, and the verified Apple capability matrix. <strong>What did not hold was my ranking</strong> &mdash; and both reviewers, independently and from different evidence, pointed at the same replacement.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 ============================================================ -->
+<section class="slide" data-title="The pattern">
+  <div class="slide-inner">
+    <div class="eyebrow">The finding that reorganised the deck</div>
+    <h2>The constraint is not capability. It is callers.</h2>
+    <p class="lede">Once you see it, the shortlist ranks itself.</p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Already built and paid for</th><th>State</th><th>What is missing</th></tr></thead>
+        <tbody>
+          <tr class="pick"><td><strong>PDF &rarr; FF&amp;E extractor</strong> <code>project-ffe-document-extract</code></td><td>Deployed, ACL&#8209;hardened, exercised by two SQL test files</td><td><strong>Zero callers.</strong> No portal, app or cron invokes it</td></tr>
+          <tr><td>Aesthete Engine &mdash; embeddings + taste refit</td><td>Running behind the database</td><td>No iOS app calls it; a grep for <code>aesthete</code> in <code>apps/mobile/</code> finds only tests</td></tr>
+          <tr><td>Product catalogue</td><td>15 rows; <strong>1</strong> visible to a tester; <strong>0</strong> with images</td><td>Content. <code>get_aesthete_matches</code> returns zero rows for every tester</td></tr>
+          <tr><td>Companion conversation &mdash; view model + edge function</td><td>Fully implemented; model pinned to <code>claude-sonnet-4-20250514</code></td><td>No UI ever opens it</td></tr>
+          <tr><td>Field Live Activity controller + attributes</td><td>Written, payload frozen</td><td>A plist key, then an extension</td></tr>
+          <tr><td><code>CaptureWidgets/</code> &middot; <code>CaptureShareExtension/</code></td><td>Empty directories</td><td>Any target at all</td></tr>
+          <tr><td>Field onboarding's hardware entry</td><td>Screen ships; branch logic exists</td><td>Two arguments at one call site</td></tr>
+          <tr><td>Six Field screens including sign&#8209;out</td><td>Built and tested</td><td>A route a Release build will accept</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid g2" style="margin-top:1rem">
+      <div class="card accent">
+        <h4>Why this outranks new capability</h4>
+        <p>Eight things are finished and unreachable. A ninth &mdash; an on&#8209;device model behind a hardware gate, on an SDK that is not installed, on CI that cannot build it &mdash; treats the symptom. The cheapest way to raise this product's intelligence is to plug in the intelligence already bought.</p>
+      </div>
+      <div class="card flag">
+        <h4>The uncomfortable corollary</h4>
+        <p>The company's stated moat is <em>Designer&#8209;Taught Intelligence</em>. Apple's model is taught by Apple: it never learns from Leah and cannot be corrected. Meanwhile Field already records <code>.edited</code> every time a designer fixes a guess &mdash; a keyword table that grew from those corrections would be the product term, literally. <span class="tag-inf">Inference</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 ============================================================ -->
+<section class="slide" data-title="Opportunity matrix">
+  <div class="slide-inner">
+    <div class="eyebrow">Ten opportunities, re&#8209;ranked after the challenge</div>
+    <h2>The long list, and which app each one serves</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th class="num">#</th><th>Opportunity</th><th>Serves</th><th>Enabler</th><th>Effort</th><th>Risk</th></tr></thead>
+        <tbody>
+          <tr class="pick"><td class="num"><strong>1</strong></td><td><strong>The vendor PDF reaches the Document</strong> &mdash; a front door for the extractor that already exists</td><td><span class="chip shared">Shared</span></td><td>Already deployed &mdash; needs a caller</td><td>S&ndash;M</td><td>Low</td></tr>
+          <tr class="pick"><td class="num"><strong>2</strong></td><td><strong>Field can be reached</strong> &mdash; the jobsite app gets a notification rail</td><td><span class="chip field">Field</span></td><td>APNs + the rail Patina already uses</td><td>S&ndash;M</td><td>Low</td></tr>
+          <tr class="pick"><td class="num"><strong>3</strong></td><td><strong>The agreed direction stays readable</strong> &mdash; the client app survives no signal</td><td><span class="chip client">Patina</span></td><td>SwiftData + conventional caching</td><td>M</td><td>Low</td></tr>
+          <tr><td class="num">4</td><td>Stop the lies, then render &mdash; two arguments, one plist key, then an extension</td><td><span class="chip field">Field</span></td><td><code>ControlWidget</code> (iOS 18), ActivityKit</td><td>XS &rarr; M</td><td>Low</td></tr>
+          <tr><td class="num">5</td><td>One vocabulary &mdash; canonical names across both apps and the portal</td><td><span class="chip shared">Shared</span></td><td>Prerequisite for 1, 2, 4</td><td>S</td><td>Low</td></tr>
+          <tr><td class="num">6</td><td>The voice that was promised &mdash; <code>SpeechTranscriber</code> replaces server&#8209;fallback dictation</td><td><span class="chip field">Field</span> <span class="chip client">Patina</span></td><td>Speech (iOS 26, <strong>no AI gate</strong>)</td><td>S&ndash;M</td><td>Low</td></tr>
+          <tr><td class="num">7</td><td>The tag, read once &mdash; the on&#8209;device model replaces a rotting keyword table</td><td><span class="chip field">Field</span></td><td><code>Attachment</code> + <code>OCRTool</code> (iOS 27)</td><td>M&ndash;L</td><td><strong>High</strong></td></tr>
+          <tr><td class="num">8</td><td>The receiving eye &mdash; compare delivered goods to the specimen and packing slip</td><td><span class="chip field">Field</span></td><td>Multimodal + barcode</td><td>M</td><td>Med</td></tr>
+          <tr><td class="num">9</td><td>Ask your own library &mdash; natural&#8209;language recall over captures</td><td><span class="chip field">Field</span></td><td><code>IndexedEntity</code> + Spotlight RAG</td><td>M&ndash;L</td><td><strong>High</strong></td></tr>
+          <tr><td class="num">10</td><td>Fill the catalogue &mdash; 1 visible product with 0 images is the real ceiling on recommendations</td><td><span class="chip client">Patina</span></td><td>Content, not code</td><td>?</td><td>&mdash;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid g2" style="margin-top:1rem">
+      <div class="card">
+        <h4>Why #7 fell from first to seventh</h4>
+        <p>Not because it is bad &mdash; because it is expensive and unproven, in that order. It needs an SDK that is not installed, a CI image that does not exist here, a hardware gate over an uncounted population, and it would route commercial facts through the provenance hole on slide&nbsp;9. It is an experiment, and slide&nbsp;16 sequences it as one.</p>
+      </div>
+      <div class="card">
+        <h4>Why #10 has no effort estimate</h4>
+        <p>Because it is not an engineering item, and pretending otherwise is how it stays unfixed. Every recommendation surface in the client app is downstream of a catalogue with one visible product and no images. No iOS capability on this list changes that. <span class="tag-ev">Evidence</span> prod&#8209;verified</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 ============================================================ -->
+<section class="slide" data-title="Top 1 — The vendor PDF">
+  <div class="slide-inner">
+    <div class="eyebrow">Opportunity 1 &middot; <span style="color:var(--ink)">Shared &mdash; the portal first, then Field's camera</span></div>
+    <h2>The vendor PDF reaches the Document</h2>
+    <div class="grid g2">
+      <div>
+        <h3 style="font-size:1rem;margin-bottom:.4rem">The problem</h3>
+        <p>A vendor sends a quote or an acknowledgement as a PDF. Somebody at the studio retypes it into the FF&amp;E schedule &mdash; maker, SKU, finish, quantity, trade price, lead time &mdash; line by line. It is the least designerly hour in the week and it sits on the surface the company ranks first.</p>
+        <p>Meanwhile <code>project-ffe-document-extract</code> already exists: it authenticates the caller, verifies the uploaded source manifest and hash, runs the extraction, validates the result, and stages the rows through <code>stage_project_ffe_document_extraction</code>. It is registered in <code>config.toml</code>, ACL&#8209;hardened by two migrations, and exercised by two SQL test files.</p>
+        <div class="pull" style="font-size:1rem;margin:.9rem 0">Across the whole repository, not one portal, app or cron job calls it.<span class="attrib">verified 23 Sep 2026 &mdash; the only non&#8209;Supabase hit is a generated type</span></div>
+      </div>
+      <div>
+        <div class="card accent">
+          <h4>The improved experience</h4>
+          <p>She drops the PDF on the project. The schedule shows the extracted rows staged beside the page they came from &mdash; each row with the excerpt that produced it, each field editable, nothing committed. She confirms row by row. What she confirms lands in the Document as the one canonical record.</p>
+        </div>
+        <div class="card" style="margin-top:.9rem">
+          <h4>Why this is the strongest item on the list</h4>
+          <ul>
+            <li><strong>It is the only item on surface&nbsp;#1</strong>, the Document &mdash; which the company's own strategy calls "Patina for the next 12 months."</li>
+            <li>It touches the margin stream directly: a furniture schedule is where the money is described.</li>
+            <li>No Xcode upgrade, no CI bump, no deployment floor, no hardware gate. It works on every device both apps support <em>today</em>, because the model runs on the server the company already pays for.</li>
+            <li>It keeps the intelligence server&#8209;side, where the company's actual asset lives, instead of forking it along an app boundary.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <hr class="rule">
+    <div class="grid g4">
+      <div class="card"><h4>Smallest useful version</h4><p>One flag&#8209;gated route in the designer portal that posts a PDF to the deployed function and renders the staged rows for per&#8209;row confirmation. <strong>No commit path, no new model, no iOS work.</strong></p></div>
+      <div class="card"><h4>Effort &amp; dependency</h4><p><strong>S&ndash;M.</strong> A route, an upload, a review table. Depends on nothing that is not already deployed. The <em>second</em> step &mdash; Field's camera posting a tag photo to the same extractor &mdash; is a separate, later decision.</p></div>
+      <div class="card"><h4>Principal uncertainty</h4><p>Whether extraction is accurate enough on real vendor paperwork to be worth reviewing rather than retyping. That is exactly what the first experiment measures &mdash; slide&nbsp;17. Deployment, credentials and current ACLs are also assumed, not confirmed.</p></div>
+      <div class="card"><h4>Success criterion</h4><p>Field&#8209;level exact&#8209;match against a hand&#8209;keyed gold set: <strong>&ge;95% on SKU and price, &ge;90% on maker.</strong> Below that, per&#8209;row confirmation stays mandatory forever &mdash; which is the safe default anyway.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 14 ============================================================ -->
+<section class="slide" data-title="Top 2 — Field can be reached">
+  <div class="slide-inner">
+    <div class="eyebrow">Opportunity 2 &middot; <span style="color:var(--field-ink)">Patina Field</span></div>
+    <h2>The jobsite app cannot be told anything</h2>
+    <div class="grid g2">
+      <div>
+        <h3 style="font-size:1rem;margin-bottom:.4rem">The problem</h3>
+        <p>Patina Field's user is the person furthest from a desk: on a site, on a roof, in a van, in a showroom. <code>Capture.entitlements</code> declares app&#8209;groups, Sign&nbsp;in&nbsp;with&nbsp;Apple and associated&#8209;domains &mdash; and nothing else. A search across the entire Capture tree for <code>aps-environment</code>, <code>UNUserNotificationCenter</code> or <code>registerForRemoteNotifications</code> returns <strong>zero</strong>.</p>
+        <p>Not "push is unfinished." The app has no notification capability at all, local or remote. The studio's only channel to that person today is SMS.</p>
+        <h3 style="font-size:1rem;margin:.9rem 0 .4rem">The improved experience</h3>
+        <p>A designer changes a spec at 4pm. The installer holding Field sees one line: <em>the Harper dining table spec changed &mdash; open it.</em> Tapping it opens that record. That is the whole feature.</p>
+      </div>
+      <div>
+        <div class="card field-accent">
+          <h4>Why this ranks second</h4>
+          <p>It is the only item that adds a capability the app <strong>cannot do at all</strong>, for the user with the least alternative. Everything else on the list makes an existing thing better.</p>
+          <p>And it is cheap: an entitlement, a <code>UNUserNotificationCenter</code> registration, and a token upload onto the device&#8209;token rail the client app already uses. No new backend.</p>
+        </div>
+        <div class="card flag" style="margin-top:.9rem">
+          <h4>The discipline this needs</h4>
+          <ul>
+            <li><strong>Name one real missed instruction first.</strong> Not "Field has no push" &mdash; one actual assigned request or changed spec that Leah's crew missed this month. If nobody can name one, this drops down the list.</li>
+            <li>Narrow, permissioned, deduplicated. A notification centre or an engagement campaign is a different, worse product.</li>
+            <li>Push is never the source of truth. It links to the record; the in&#8209;app pending&#8209;work view stays authoritative.</li>
+            <li>Nothing external is sent automatically &mdash; the house rule that drafts land <code>awaiting_review</code> applies here too.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <hr class="rule">
+    <div class="grid g4">
+      <div class="card"><h4>Smallest useful version</h4><p>One notification type, for the one missed&#8209;instruction case the studio names. Opt&#8209;in, deep&#8209;linked to the record, deduplicated.</p></div>
+      <div class="card"><h4>Effort &amp; dependency</h4><p><strong>S&ndash;M.</strong> Entitlement, registration, token upload. Hard dependency: <strong>the six unreachable screens</strong> &mdash; a user who cannot reach Settings cannot turn notifications off. Fix that first.</p></div>
+      <div class="card"><h4>Principal uncertainty</h4><p>Content, not engineering. What does a studio actually send to someone on a roof? That is a five&#8209;minute conversation with Leah &mdash; and it is a conversation the company already owes.</p></div>
+      <div class="card"><h4>Success criterion</h4><p>Median time from a designer's change to the field acting on it, against today's SMS baseline. Plus the guard&#8209;rail: opt&#8209;out rate under 10%.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 15 ============================================================ -->
+<section class="slide" data-title="Top 3 — The agreed direction">
+  <div class="slide-inner">
+    <div class="eyebrow">Opportunity 3 &middot; <span style="color:var(--clay-ink)">Patina, the client app</span></div>
+    <h2>The agreed direction stays readable</h2>
+    <div class="grid g2">
+      <div>
+        <h3 style="font-size:1rem;margin-bottom:.4rem">The problem</h3>
+        <p>The client app's promise is that the homeowner is engaged daily on one agreed direction. But <code>PatinaSchema</code>'s nine local models cover rooms, scans, saved items and the style profile &mdash; and <strong>not one</strong> of decisions, proposals, documents, invoices, threads or orders.</p>
+        <p>Every studio surface is a live fetch. In a basement, on a plane, on hotel wifi, the entire studio half of the app becomes six identical "try that again" cards. The one thing the homeowner is supposed to carry with her is the one thing she cannot open.</p>
+        <div class="pull" style="font-size:1rem;margin:.9rem 0">The studio's side is built to survive no signal. The homeowner's side is not &mdash; and she is the one away from a desk.</div>
+      </div>
+      <div>
+        <div class="card accent">
+          <h4>The improved experience</h4>
+          <p>She opens the app with no bars. The last thing the designer shared is there &mdash; the direction, its revision, the decision being asked of her &mdash; marked plainly with when it was last fetched and a route back to the live record. Nothing consequential is approved from cache: tapping <strong>Approve</strong> revalidates first, and says so if it cannot.</p>
+        </div>
+        <div class="card" style="margin-top:.9rem">
+          <h4>Why this, and not a badge or a chatbot</h4>
+          <p>The vision document is explicit that the client app is the studio's front door, not a consumer product in its own right. That rules out an independent shopping feed or a conversation surface &mdash; and it rules <em>in</em> reliable access to what the designer actually shared, which is the app's entire job.</p>
+          <p>It also needs no model, no Apple Intelligence gate and no new SDK &mdash; and it gives the client app meaningful coverage on the strength of its own evidence rather than for symmetry.</p>
+        </div>
+      </div>
+    </div>
+    <hr class="rule">
+    <div class="grid g4">
+      <div class="card"><h4>Smallest useful version</h4><p><strong>One record:</strong> the current shared direction plus the next requested decision, cached per user, read&#8209;only, with visible freshness. Not the whole studio rail.</p></div>
+      <div class="card"><h4>Effort &amp; dependency</h4><p><strong>M.</strong> A schema version bump with a real migration stage (the existing ones are empty), a cache write on successful fetch, and a freshness line in the UI.</p></div>
+      <div class="card"><h4>Principal uncertainty</h4><p>How stale is too stale for a design decision, and what the app should do when cached content has been superseded. That is a product ruling, not an engineering one &mdash; and it should be Leah's.</p></div>
+      <div class="card"><h4>Success criterion</h4><p>Share of client sessions that reach the shared direction without an error state, measured against today. Plus zero approvals committed from unrevalidated cache &mdash; enforced, not hoped for.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 16 ============================================================ -->
+<section class="slide" data-title="Paired concept screens">
+  <div class="slide-inner">
+    <div class="eyebrow">The same interaction, in both apps</div>
+    <h2>One grammar, two registers</h2>
+    <p class="lede">Review, correct, approve, recover &mdash; the four moments that decide whether a suggestion is trustworthy. Field already has the pattern; the client app has none; and the pattern needs one fix before it travels.</p>
+    <div class="legend">
+      <span><span class="chip">existing</span> ships today, drawn from source</span>
+      <span><span class="chip new">proposed</span> concept</span>
+      <span><span class="chip guess">dashed</span> = suggested, not yet confirmed</span>
+    </div>
+    <div class="phones">
+      <div class="phone">
+        <div class="phone-label"><span class="chip field">Field</span> <span class="chip">existing</span> N5</div>
+        <div class="screen">
+          <div class="s-eyebrow">From the photo &middot; confirm or fix</div>
+          <div class="s-title">Review guesses</div>
+          <div class="row"><span class="k">Category</span><span class="v">Seating <span class="chip guess">guess</span></span></div>
+          <div class="row"><span class="k">Material</span><span class="v">Oak <span class="chip guess">guess</span></span></div>
+          <div class="row"><span class="k">Style</span><span class="v">&mdash;</span></div>
+          <div class="row"><span class="k">Colour</span><span class="v">&mdash;</span></div>
+          <div class="spacer"></div>
+          <div class="btn ghost">Edit all</div>
+          <div class="btn primary">Looks right</div>
+          <p style="font-size:.63rem;color:var(--flag)">One tap rewrites all four to &ldquo;typed by the designer.&rdquo;</p>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="phone-label"><span class="chip field">Field</span> <span class="chip new">proposed</span> the fix</div>
+        <div class="screen">
+          <div class="s-eyebrow">From the quote &middot; confirm each line</div>
+          <div class="s-title">Review the schedule</div>
+          <div class="row"><span class="k">Maker</span><span class="v">Fieldstone <span class="chip guess">p.2</span></span></div>
+          <div class="row"><span class="k">SKU</span><span class="v">4471&#8209;WO <span class="chip guess">p.2</span></span></div>
+          <div class="row"><span class="k">Trade</span><span class="v">$1,840 <span class="chip guess">p.3</span></span></div>
+          <div class="row"><span class="k">Lead time</span><span class="v">&mdash; <span class="chip">not found</span></span></div>
+          <div class="spacer"></div>
+          <div class="btn ghost">Show the page</div>
+          <div class="btn primary">Confirm this line</div>
+          <p style="font-size:.63rem">Origin kept separately from review state. Unknowns stay unknown.</p>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="phone-label"><span class="chip client">Patina</span> <span class="chip new">proposed</span></div>
+        <div class="screen">
+          <div class="s-eyebrow">Shared by Walbridge Studio &middot; 2 days ago</div>
+          <div class="s-title">The dining room</div>
+          <p>The direction you and Nora agreed, with one thing she needs from you.</p>
+          <div class="row"><span class="k">Revision</span><span class="v">3</span></div>
+          <div class="row"><span class="k">She's asking</span><span class="v">The table finish</span></div>
+          <div class="row"><span class="k">Last fetched</span><span class="v">Tue, 4:12pm</span></div>
+          <div class="spacer"></div>
+          <div class="btn ghost">See the room</div>
+          <div class="btn primary">Choose a finish</div>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="phone-label"><span class="chip shared">Both</span> <span class="chip new">proposed</span> recovery</div>
+        <div class="screen">
+          <div class="s-eyebrow">&nbsp;</div>
+          <div class="s-title">Saved on this phone</div>
+          <p>This hasn't reached the studio yet. Nothing is lost &mdash; it will go as soon as there's signal.</p>
+          <div class="row"><span class="k">Held since</span><span class="v">3:40pm</span></div>
+          <div class="row"><span class="k">Last tried</span><span class="v">4:02pm</span></div>
+          <div class="spacer"></div>
+          <div class="btn primary">Try now</div>
+          <p style="font-size:.63rem">Names the operation that failed &mdash; not one house sentence for every failure.</p>
+        </div>
+      </div>
+    </div>
+    <div class="grid g3" style="margin-top:1.1rem">
+      <div class="card">
+        <h4>What must match</h4>
+        <p>Suggested and confirmed are visibly different states. Origin is preserved separately from review state, so confirming never rewrites a value's history. Unknown stays unknown rather than being filled. Nothing consequential commits without a person's nod.</p>
+      </div>
+      <div class="card">
+        <h4>What is justly different</h4>
+        <p>The register, and the information. Field is instrumental and dense, and shows the evidence: the page, the crop, the scanned code. Patina is warm and first&#8209;person, and shows <em>what the designer shared</em> &mdash; never the studio's internal extraction uncertainty or trade prices.</p>
+      </div>
+      <div class="card flag">
+        <h4>The one thing not to do</h4>
+        <p>Do not promote <code>ProvenanceBadge</code> into the shared design package. It is a domain enum named after Field's screen numbers, it carries a colour&#8209;coded status palette the vision document refuses, and the client app has nothing to badge. Share a <em>presentation</em> component that takes a label and a style; leave the taxonomy where it belongs.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 17 ============================================================ -->
+<section class="slide" data-title="Feasibility and fallbacks">
+  <div class="slide-inner">
+    <div class="eyebrow">Feasibility &middot; privacy &middot; degradation</div>
+    <h2>What happens when it fails, and where iOS 27 still belongs</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Condition</th><th>1 &middot; Vendor PDF</th><th>2 &middot; Field reachable</th><th>3 &middot; Direction readable</th></tr></thead>
+        <tbody>
+          <tr><td>Any iPhone either app supports today</td><td colspan="3"><strong>All three work. No Apple Intelligence gate, no SDK upgrade, no floor change.</strong></td></tr>
+          <tr><td>No signal</td><td>Upload queues; review is server&#8209;side</td><td>Delivered on reconnect</td><td><strong>This is the feature</strong></td></tr>
+          <tr><td>Extraction or delivery fails</td><td>Rows stay staged; manual entry unchanged</td><td>In&#8209;app pending view stays authoritative</td><td>Cache shown with its age</td></tr>
+          <tr><td>A confidently wrong value</td><td colspan="3"><strong>Per&#8209;row confirmation, evidence shown beside the value, origin preserved. Unknowns are not filled.</strong></td></tr>
+          <tr><td>Privacy posture</td><td>Server&#8209;side, same trust boundary as the portal</td><td>Token on an existing rail; no content in the payload</td><td>Per&#8209;user cache, cleared on sign&#8209;out</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <hr class="rule">
+    <div class="grid g3">
+      <div class="card accent">
+        <h4>Where iOS 27 does belong &mdash; sequenced, not shelved</h4>
+        <p>Once the toolchain lands, the narrow version of the tag reader is a genuine experiment: <strong>category only</strong>, as a third implementation behind the existing <code>SmartGuessService</code> protocol seam, measured against the Vision heuristic on a labelled set. No floor bump, no price fields, no commercial values.</p>
+        <p>And <code>SpeechTranscriber</code> (iOS&nbsp;26, no AI gate) is a clean win whenever it is scheduled: Field's voice notes currently fall back to Apple's <em>servers</em> where on&#8209;device recognition is unsupported, which means a private note about a client's budget can leave the device today.</p>
+      </div>
+      <div class="card flag">
+        <h4>The failure mode worth naming</h4>
+        <p><code>@Generable</code> guarantees the <em>shape</em>, not the values. Published structured&#8209;output benchmarking shows models at &ge;96% on structure dropping to <strong>0.69&ndash;0.83 value accuracy</strong>. A specimen draft has four near&#8209;synonymous string fields &mdash; colorway, materialNote, finish, note &mdash; which is the documented worst case for field confusion.</p>
+        <p>A structurally perfect, confidently wrong spec sheet is worse than none, because it looks finished.</p>
+      </div>
+      <div class="card">
+        <h4>What OCR and barcodes already give you, free</h4>
+        <p>Field already runs <code>VNRecognizeText</code> and a code scanner, producing <code>.ocr</code> and <code>.code</code> &mdash; the two most trustworthy sources in the enum, because they are verbatim reads with no generative step. Routing the same photo through a model collapses both into one <code>.smartGuess</code>.</p>
+        <p>The cheapest real win here is not a model: the N5 sheet currently calls its guess service with <strong>empty OCR and code arrays</strong>. It has a missing&#8209;input problem before it has a model problem.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 18 ============================================================ -->
+<section class="slide" data-title="Roadmap and first build">
+  <div class="slide-inner">
+    <div class="eyebrow">Sequence &amp; decision</div>
+    <h2>What to build first, and what to prove before building more</h2>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Phase</th><th>Work</th><th>Serves</th></tr></thead>
+        <tbody>
+          <tr><td><strong>0 &mdash; Stop the lies</strong><br><span class="mono">days</span></td><td>Pass <code>onSetHardwareEntry</code> and a device&#8209;derived <code>hardwareEntry</code> at <code>OnboardingFlowView:102</code>; correct the "without unlocking" copy. Reach Settings / Account / sign&#8209;out in Release. Fix <code>accept()</code> so a suggestion is not promoted to "typed." Two dark&#8209;mode contrast fills.</td><td><span class="chip field">Field</span></td></tr>
+          <tr><td><strong>1 &mdash; Foundations</strong><br><span class="mono">~1 week</span></td><td>Canonical entity names across both apps and the portal. A copy&#8209;test suite for Field. Converge the three <code>supabase-swift</code> pins (2.40 / 2.51 / 2.55).</td><td><span class="chip shared">Shared</span></td></tr>
+          <tr class="pick"><td><strong>2 &mdash; The first experiment</strong><br><span class="mono">~1 week</span></td><td><strong>One flag&#8209;gated portal route posting a PDF to the deployed extractor</strong>, rendering staged rows for per&#8209;row confirmation. No commit path, no new model, no iOS work.</td><td><span class="chip shared">Shared</span></td></tr>
+          <tr><td><strong>3 &mdash; Reach the field</strong><br><span class="mono">1&ndash;2 weeks</span></td><td>APNs entitlement, registration, token upload; one notification type for the one missed&#8209;instruction case the studio names.</td><td><span class="chip field">Field</span></td></tr>
+          <tr><td><strong>4 &mdash; Hold the direction</strong><br><span class="mono">2&ndash;3 weeks</span></td><td>Cache the shared direction and the next requested decision, with visible freshness and revalidation before approval.</td><td><span class="chip client">Patina</span></td></tr>
+          <tr><td><strong>5 &mdash; Render, then adopt</strong><br><span class="mono">scheduled</span></td><td><code>NSSupportsLiveActivities</code> and a device check; then the widget extension costed on its own. Xcode&nbsp;27 plus a CI runner image. Then <code>SpeechTranscriber</code>, then the narrow tag experiment.</td><td><span class="chip field">Field</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid g3" style="margin-top:1.1rem">
+      <div class="card accent">
+        <h4>Build first: the extractor's front door</h4>
+        <p>One route, on the surface the company ranks first, using a function that is already deployed, ACL&#8209;hardened and SQL&#8209;tested. It affects <strong>the designer portal now and Patina Field next</strong> &mdash; the same server extractor can later accept a captured tag photo, which is a strictly cheaper path to opportunity&nbsp;7 than an on&#8209;device model.</p>
+      </div>
+      <div class="card">
+        <h4>The experiment, and its bar</h4>
+        <p>Run it against <strong>three real Middle West vendor PDFs</strong> hand&#8209;keyed into a gold set first. Measure field&#8209;level exact match: <strong>&ge;95% SKU, &ge;95% price, &ge;90% maker.</strong> Time a full reviewed draft against manual entry &mdash; upload and waiting included, not just inference.</p>
+      </div>
+      <div class="card flag">
+        <h4>The uncertainty to validate before anything else</h4>
+        <p><strong>Can a model read this studio's paperwork accurately enough to be worth reviewing?</strong> If a frontier model reading a clean vendor PDF cannot clear 95% on SKU and price, then Apple's ~3B on&#8209;device model reading a phone photo of a creased tag on a job site certainly cannot &mdash; and the company learns that for the price of one route, instead of an SDK upgrade, a CI bump, a floor cut and a permanent second code path.</p>
+      </div>
+    </div>
+    <p style="margin-top:1rem"><strong>Two questions only Kody and Leah can answer, and both gate work above:</strong> which phones the crew actually carry (the house census, already owed), and what the studio would genuinely send to someone on a roof.</p>
+  </div>
+</section>
+
+<!-- 19 ============================================================ -->
+<section class="slide" data-title="Sources">
+  <div class="slide-inner">
+    <div class="eyebrow">Sources</div>
+    <h2>Where every claim came from</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h4>Apple &mdash; official, fetched 23 September 2026</h4>
+        <p style="font-size:.8rem;line-height:1.85">
+          <a href="https://developer.apple.com/news/releases/">Releases</a> &mdash; iOS 27.0 build 24A437, Xcode 27<br>
+          <a href="https://developer.apple.com/ios/whats-new/">What's new in iOS 27</a><br>
+          <a href="https://developer.apple.com/documentation/updates/foundationmodels">Foundation Models updates</a><br>
+          <a href="https://developer.apple.com/documentation/foundationmodels/attachment">Attachment</a> &middot;
+          <a href="https://developer.apple.com/documentation/vision/ocrtool">OCRTool</a> &middot;
+          <a href="https://developer.apple.com/documentation/vision/barcodereadertool">BarcodeReaderTool</a><br>
+          <a href="https://developer.apple.com/documentation/foundationmodels/generating-swift-data-structures-with-guided-generation">Guided generation</a><br>
+          <a href="https://developer.apple.com/documentation/foundationmodels/systemlanguagemodel">SystemLanguageModel</a><br>
+          <a href="https://developer.apple.com/documentation/corespotlight/spotlightsearchtool">SpotlightSearchTool</a><br>
+          <a href="https://developer.apple.com/documentation/widgetkit/creating-controls-to-perform-actions-across-the-system">Controls across the system</a><br>
+          <a href="https://developer.apple.com/documentation/lockedcameracapture/creating-a-camera-experience-for-the-lock-screen">LockedCameraCapture</a><br>
+          <a href="https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities">Live Activities</a><br>
+          <a href="https://developer.apple.com/documentation/Speech/bringing-advanced-speech-to-text-capabilities-to-your-app">SpeechAnalyzer / SpeechTranscriber</a><br>
+          <a href="https://developer.apple.com/documentation/appintents/app-schema-domains">App schema domains</a><br>
+          <a href="https://developer.apple.com/private-cloud-compute/">PCC eligibility</a> &middot;
+          <a href="https://developer.apple.com/news/upcoming-requirements/">Upcoming requirements</a><br>
+          <a href="https://support.apple.com/en-us/121115">Apple Intelligence devices &amp; languages</a><br>
+          WWDC26 <a href="https://developer.apple.com/videos/play/wwdc2026/241/">241</a>,
+          <a href="https://developer.apple.com/videos/play/wwdc2026/240/">240</a>,
+          <a href="https://developer.apple.com/videos/play/wwdc2026/237/">237</a>,
+          <a href="https://developer.apple.com/videos/play/wwdc2026/8011/">Group Lab</a>
+        </p>
+      </div>
+      <div class="card">
+        <h4>Patina &mdash; repository, read&#8209;only</h4>
+        <p style="font-size:.8rem;line-height:1.85">
+          <code>supabase/functions/project-ffe-document-extract/index.ts</code><br>
+          <code>supabase/migrations/00437_ffe_service_boundaries.sql:163</code><br>
+          <code>supabase/migrations/00444_ffe_service_acl_replay_hardening.sql:22</code><br>
+          <code>supabase/tests/ffe/service_boundaries_test.sql:283</code><br>
+          <code>Capture/Capture.entitlements</code> &middot; <code>Capture/Info.plist</code><br>
+          <code>Capture/Services/LiveActivity/CaptureLiveActivityController.swift:38</code><br>
+          <code>Capture/Features/Onboarding/ReadyScreen.swift:18,23,99</code><br>
+          <code>Capture/Features/Onboarding/OnboardingFlowView.swift:102</code><br>
+          <code>Features/Recognition/SmartGuess/SmartGuessSheet.swift:209,262&ndash;299</code><br>
+          <code>CaptureKit/Domain/CaptureEnums.swift:45&ndash;54</code><br>
+          <code>CaptureKit/Recognition/RecognitionServices.swift:156</code><br>
+          <code>CaptureKit/Design/ProvenanceBadge.swift</code><br>
+          <code>Capture/scripts/generate_project.rb:17</code><br>
+          <code>Patina/Core/Persistence/PatinaSchema.swift:26&ndash;38</code><br>
+          <code>PatinaDesignKit/.../PatinaEmptyState.swift:98</code> (A3&#8209;01)<br>
+          <code>supabase/functions/companion-message/index.ts:252</code><br>
+          <code>.github/workflows/policy-quality.yml:95,104</code><br>
+          <code>docs/vision/VISION.md</code>
+        </p>
+      </div>
+    </div>
+    <p class="src" style="margin-top:1.3rem">Full agent reports &mdash; two app reviews, a 40&#8209;item consistency audit, a shared&#8209;architecture map, an independent Apple verification pass, Astra's five&#8209;axis challenge and the red team's line&#8209;by&#8209;line rebuttal &mdash; are committed beside this file under <code>artifacts/ios27-opportunities-2026-09-23/research/</code>.</p>
+  </div>
+</section>
+
+</main>
+
+<nav class="nav-ui" aria-label="Slide navigation">
+  <button class="nav-btn" id="tocBtn" aria-label="Open slide index" title="Index (I)">&#9776;</button>
+  <button class="nav-btn" id="prevBtn" aria-label="Previous slide">&larr;</button>
+  <span class="counter" id="counter" aria-live="polite"></span>
+  <button class="nav-btn" id="nextBtn" aria-label="Next slide">&rarr;</button>
+</nav>
+
+<div id="toc" hidden role="dialog" aria-modal="true" aria-label="Slide index">
+  <div class="eyebrow">Index</div>
+  <h2 style="margin-bottom:1.2rem">Promises Already Made</h2>
+  <ol id="tocList"></ol>
+  <p style="margin-top:2rem"><button class="nav-btn" id="tocClose" aria-label="Close index" style="width:auto;padding:0 .9rem">Close</button></p>
+</div>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var toc = document.getElementById('toc');
+  var tocList = document.getElementById('tocList');
+
+  function show(n){
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function(s, k){ s.classList.toggle('active', k === i); });
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+    window.scrollTo(0, 0);
+    if (location.hash !== '#' + (i + 1)) history.replaceState(null, '', '#' + (i + 1));
+  }
+  function openToc(on){
+    toc.hidden = !on;
+    if (on) { var b = tocList.querySelector('button'); if (b) b.focus(); }
+    else { document.getElementById('tocBtn').focus(); }
+  }
+
+  slides.forEach(function(s, k){
+    var li = document.createElement('li');
+    var b = document.createElement('button');
+    b.textContent = (k + 1) + '. ' + (s.dataset.title || ('Slide ' + (k + 1)));
+    b.addEventListener('click', function(){ show(k); openToc(false); });
+    li.appendChild(b); tocList.appendChild(li);
+  });
+
+  document.getElementById('nextBtn').addEventListener('click', function(){ show(i + 1); });
+  document.getElementById('prevBtn').addEventListener('click', function(){ show(i - 1); });
+  document.getElementById('tocBtn').addEventListener('click', function(){ openToc(toc.hidden); });
+  document.getElementById('tocClose').addEventListener('click', function(){ openToc(false); });
+
+  document.addEventListener('keydown', function(e){
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+    if (e.key === 'Escape' && !toc.hidden) { openToc(false); return; }
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); show(i + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(i - 1); }
+    else if (e.key === 'Home') { e.preventDefault(); show(0); }
+    else if (e.key === 'End') { e.preventDefault(); show(slides.length - 1); }
+    else if (e.key === 'i' || e.key === 'I') { e.preventDefault(); openToc(toc.hidden); }
+  });
+
+  var start = parseInt((location.hash || '#1').slice(1), 10);
+  show(isNaN(start) ? 0 : start - 1);
+})();
+</script>
+</body>
+</html>
