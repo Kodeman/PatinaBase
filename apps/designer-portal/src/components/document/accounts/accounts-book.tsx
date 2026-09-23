@@ -9,16 +9,15 @@
  *
  * Three pages in the R28 grammar — DM-mono links, never tabs: LEDGER (every
  * invoice), RECEIVABLES (A/R aging + the dunning chase, the Desk's act surface),
- * EARNINGS (design fees + commissions; the Aesthete fold lands here in slice 5).
+ * EARNINGS (design fees + commissions).
  * The opening front-matter (I23) states Revenue · A/R · margin. STUDIO EYES
  * ONLY — this book never reaches the client mirror.
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   useArAging,
-  useEarnings,
   useEarningsStats,
   useInvoices,
   useDesignerTeachingStats,
@@ -26,7 +25,6 @@ import {
 import { LedgerFrontMatter } from '../ledger-front-matter';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
 import { collectedCents } from '@/lib/document/account-summary';
-import { pledgeFromCommission, pledgeYtdReturned, type PledgeEvent } from '@/lib/document/pledge';
 import { fmtUsd } from '@/lib/document/format';
 import { openLedger, type OpenLedgerContext } from '../command-bar';
 import { AccountsLedgerPage } from './accounts-ledger-page';
@@ -61,22 +59,9 @@ export function AccountsBook({
   const { aging } = useArAging();
   const { data: earnings } = useEarningsStats();
   const margin = useStudioMargin();
-  // R37 — the Aesthete fold: the Pledge is computed from real Via-Patina
-  // commission events (25%, confirmed); teaching stats feed the front-matter lens.
-  const { data: commissionEarnings } = useEarnings({ sourceType: 'product_commission' });
+  // R37 — teaching stats feed the front-matter lens.
   const { data: teaching } = useDesignerTeachingStats();
 
-  const pledgeEvents = useMemo<PledgeEvent[]>(
-    () =>
-      (commissionEarnings ?? []).map((e) =>
-        pledgeFromCommission(e.net_amount ?? 0, e.earned_at ?? e.created_at ?? '', e.proposal?.title),
-      ),
-    [commissionEarnings],
-  );
-  const pledgeYtd = useMemo(
-    () => pledgeYtdReturned(pledgeEvents, new Date().getFullYear()),
-    [pledgeEvents],
-  );
   const taughtCount = (teaching as { products_taught?: number } | null)?.products_taught ?? 0;
 
   // page is a free string on the shared context — narrow it to this book.
@@ -167,8 +152,6 @@ export function AccountsBook({
           >
             <span className="text-[var(--color-clay-ink)]">teaching</span>
             <span className="text-[var(--color-charcoal)]">{taughtCount} taught</span>
-            <span>·</span>
-            <span className="text-[var(--color-charcoal)]">{fmtUsd(pledgeYtd)} returned</span>
             <span className="text-[var(--color-clay-ink)] opacity-70">→ Library ↗</span>
           </button>
 
@@ -187,7 +170,7 @@ export function AccountsBook({
             />
           )}
           {page === 'earnings' && (
-            <AccountsEarningsPage stats={earnings} pledgeEvents={pledgeEvents} pledgeYtd={pledgeYtd} />
+            <AccountsEarningsPage stats={earnings} />
           )}
         </>
       )}

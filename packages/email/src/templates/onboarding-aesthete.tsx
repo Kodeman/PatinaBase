@@ -28,12 +28,6 @@ export const OnboardingAesthete: React.FC = () => (
       feel sorted by you instead of by everyone.
     </Text>
 
-    <Text style={paragraph}>
-      And here is the part I&apos;ll always state plainly: a quarter of our commission goes back to the
-      designers who teach the system. Teaching Aesthete your taste is real work, and it&apos;s paid work. When
-      Patina gets smarter, the designers who taught it share in what it earns.
-    </Text>
-
     <Text style={paragraph}>Give Aesthete ten minutes with your least favorite trend.</Text>
 
     <div style={buttonContainer}>
