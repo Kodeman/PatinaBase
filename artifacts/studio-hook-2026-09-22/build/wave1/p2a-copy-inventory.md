@@ -86,10 +86,30 @@ not a promise: nothing here says Patina shares its commission with anyone.
 > book". Read to the letter, that would also delete the `Via-Patina commissions`
 > earnings line. I did not, on the grounds that deleting it destroys a real figure in
 > the studio's own ledger while removing no promise — and the ticket's own NON-GOALS
-> bar removing the accounting model beyond what renders a promise. The literal gate
-> **is** met for `accounts-book.tsx` (0 hits for Pledge, commission and share). It is
-> met for the three templates. It is not met for `accounts-earnings-page.tsx`, by this
-> one word, in the "income the studio earned" sense. One line to change if overruled.
+> bar removing the accounting model beyond what renders a promise. The literal gate is
+> **not** met for `accounts-book.tsx`: it is 0 hits for *Pledge*, but `commission` and
+> `share` each survive once, both in comments (`:12` "EARNINGS (design fees +
+> commissions)."; `:67` "// page is a free string on the shared context — narrow it to
+> this book." — "shared" is a substring hit on "share", not the word itself, and
+> neither renders). It is met for the three templates. It is not met for
+> `accounts-earnings-page.tsx`, by the `commission` word, in the "income the studio
+> earned" sense. Lines to change if overruled.
+
+---
+
+## 6. Additional studio-earnings disposition rows (SQ-153 F5/F7)
+
+Four more sites render `commission` in the studio's-own-earnings sense (band one,
+"What you earn" / account notifications / preferences), not the Pledge promise. Each
+is **kept: describes the studio's own via-Patina earnings mechanics, not the Pledge
+promise (orchestrator ruling R-SH12, 2026-09-23)**:
+
+| File | Hit | Disposition |
+|---|---|---|
+| `apps/designer-portal/src/components/document/account-band.tsx:359` | `est. commissions {fmtUsd(data.estCommissionCents)}` | kept: describes the studio's own via-Patina earnings mechanics, not the Pledge promise (orchestrator ruling R-SH12, 2026-09-23) |
+| `apps/designer-portal/src/app/preferences/page.tsx:53` | `{ key: 'type_commission_earned', label: 'Commission earned' }` | kept: describes the studio's own via-Patina earnings mechanics, not the Pledge promise (orchestrator ruling R-SH12, 2026-09-23) |
+| `apps/designer-portal/src/components/document/account/account-notifications-page.tsx:34` | `blurb: 'A design fee or commission is recorded.'` | kept: describes the studio's own via-Patina earnings mechanics, not the Pledge promise (orchestrator ruling R-SH12, 2026-09-23) |
+| `apps/designer-portal/src/components/document/accounts/accounts-earnings-page.tsx:68` | `<EarnLine label="Via-Patina commissions" value={bySource.product_commission} />` | kept: describes the studio's own via-Patina earnings mechanics, not the Pledge promise (orchestrator ruling R-SH12, 2026-09-23) |
 
 ---
 
