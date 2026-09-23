@@ -27,6 +27,10 @@ jest.mock('@patina/supabase', () => ({
   useChaseInvoice: () => ({ mutateAsync: jest.fn(), isPending: false }),
   invoiceDaysOverdue: (inv: { due_date: string | null }) =>
     inv.due_date === '2026-08-18' ? 18 : -9,
+  // P3 — the ledger head carries the billing-export act, which asks which
+  // studio it would hand over. No membership here means no studio to export,
+  // so the act is not offered and these rows are the whole page.
+  useOrganizations: () => ({ data: [], isError: false }),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
