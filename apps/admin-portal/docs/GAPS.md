@@ -189,7 +189,7 @@
 | Daily-room engagement charts | code | ✅ | `/analytics/daily-room` | — | — |
 | Designer-application metrics | code | ✅ | Surfaced on `/analytics` via `useApplicationsMetrics` (designer + maker pending/in-review counts). Decision-bottleneck + funnel charts also live on the page. | — | — |
 | Decision-bottleneck analytics RPC | mig | ✅ | New `get_decision_bottleneck_phases_admin()` RPC (mig 00110) aggregates across all designers. Stacked BarChart on `/analytics` shows overdue/pending/responded per phase. Backed by `/api/admin/decision-analytics`. | — | — |
-| Conversion-funnel view | mig 00107 | ✅ | BarChart with conversion-rate labels on `/analytics`. Reads `conversion_funnel` view directly. | — | — |
+| Conversion-funnel view | mig 00107 | ✅ | BarChart with conversion-rate labels on `/analytics`. Read `conversion_funnel` view directly. **`designer_funnel`, `conversion_funnel`, and `consumer_funnel` were retired 2026-09-23 (migration 00657, H1); this readout now shows "Unavailable".** | — | — |
 
 ---
 

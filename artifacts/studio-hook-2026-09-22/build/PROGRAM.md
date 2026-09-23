@@ -31,7 +31,7 @@ Make the next invoice on a house outside Patina easier to finish than in QuickBo
 | Move | What lands | Owner model | Size |
 |---|---|---|---|
 | **P2a** copy out | Forward seed migration updating the live `email_templates` rows for `designer-invite`, `milestone-first-payment`, `onboarding-aesthete` (source `.tsx` in `packages/email/src/templates/` kept in step); preview text corrected; **both** Pledge figures removed from `accounts-book.tsx` (the band and the second figure at ~:169); inventory of adjacent welcome/help copy with a disposition per hit — known hits to start from: `components/document/accounts/accounts-earnings-page.tsx`, `lib/document/pledge.ts`, and 11 `Pledge` mentions across `apps/designer-portal/src`. Historical seeds 00293/00310/00404 untouched. Deploy = `./infra/deploy-portal.sh designer-portal` (redeploying `designer-invite` is a no-op for copy). | Opus | S |
-| **Pauses** | Migration (or reviewed SQL in the same deploy) setting `sequence_enrollments.status='paused'` on `19e7ae9b` (Kody's seat) and `1a94f78f`, `next_step_at` pushed past the window, step history preserved, resume note "after Deploy 2". QA seat `86cdd0aa` untouched and disclosed. | Opus (same ticket as P2a) | S |
+| **Pauses** | Migration (or reviewed SQL in the same deploy) setting `sequence_enrollments.status='paused'` on the enrollment rows for user `19e7ae9b` (Kody's seat, enrollment `24f71966`) and user `1a94f78f` (enrollment `82a64492`), `next_step_at` pushed past the window, step history preserved, resume note "after Deploy 2". QA enrollment `9ad7029e` (user `86cdd0aa`) untouched and disclosed. | Opus (same ticket as P2a) | S |
 | **H1** retire readouts | Drop `designer_funnel`, `conversion_funnel`, `consumer_funnel`; remove `FunnelStepRow` + `funnel-chart.tsx` + their admin display; dependents return explicit *unavailable*, never zero; guard or delete the `::regclass` casts in `supabase/tests/rls/00555_ios_round_one_security.test.sql:368-373, 2057-2062`. Admin-portal build enforces types, so this is one atomic ticket. Deploy = admin-portal via `deploy-portal.sh`. | Opus | S–M |
 | **P1 instruments** | `build/observation/case-record.md` template (house aliases, operator, minutes, corrections, founder help, **told** column); `build/observation/founder-seat-snapshot.sql` read-only SELECTs over Middle West business rows for start / repeat start / readout, run through the Management API `read_only:true`; invoice-attribution SQL (union across three members, `studio_id IS NULL` rows included, per 00318/00513). No code ships to the portals. | Sonnet | S |
 | **P5 readiness** | Read-only checks before the trial: Kody's Middle West seat role domain (must satisfy 00511:3392 / 00578:2250 for *Open the project*); the household→client picker path; First Letter accept leg smoke on a staging client (no real send). Output = a go/no-go note, not code. | Opus (read-only) | S |
@@ -91,7 +91,7 @@ Dispatch shape: Wave 1 = four concurrent tickets, review, deploy; Wave 2 = three
 - Exact house count and per-house location (R-SH5) — at the sit-down.
 - QuickBooks re-key answer (R-SH6) — at the sit-down; gates the second P3 sheet only.
 - Jurisdiction ruling for the pilot terms (Minnesota vs Madison, WI).
-- "Ship" for Deploy 1 and, separately, for Deploy 2.
+- "Ship" for Deploy 1 and, separately, for Deploy 2 — **Deploy 1 consumed 2026-09-23** (COMPLETE 17:21Z: Strata 00655–00657, designer Worker b61988c8, admin Worker 044936f8). Only the Deploy 2 "Ship" is still owed.
 
 ## 8. Risks named up front
 

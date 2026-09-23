@@ -3736,7 +3736,7 @@
       "changeNote": null,
       "confidence": "high",
       "walkCandidate": false,
-      "notes": "Re-scored FULL\u2192XFRM (strict): the old page's period filter and dated all-source transaction list are gone, so 'equivalent-or-better depth' fails \u2014 but the reconception (two-band reading, aggregates not a dashboard) is exactly what R36/R37 rule. XFRM~FULL, so this is a precision correction, not a downgrade.",
+      "notes": "Re-scored FULL\u2192XFRM (strict): the old page's period filter and dated all-source transaction list are gone, so 'equivalent-or-better depth' fails \u2014 but the reconception (two-band reading, aggregates not a dashboard) is exactly what R36/R37 rule. XFRM~FULL, so this is a precision correction, not a downgrade. UPDATE 2026-09-23: the 'What teaching returns' Pledge band was removed from the Accounts book (program The Second House, ruling R-SH3, P2a) \u2014 this row's two-band description is historical.",
       "shard": "BIL",
       "verdict": "CONFIRMED",
       "finalStatus": "XFRM",
