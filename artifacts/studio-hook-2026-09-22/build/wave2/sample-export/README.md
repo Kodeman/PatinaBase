@@ -29,3 +29,26 @@ The Jest fixtures in
 carry the cases this seed has no rows for: a second studio's invoices, lines and
 payments; a payer whose name resolves only through the 00588 roster ladder;
 failed and refunded money beside collected.
+
+## These two files predate the SQ-169 repair
+
+The .xlsx and the manifest text above were written by the builder as it stood at
+candidate `0cb4a747c`. SQ-169 (the SQ-166 review's F1–F9/F12 fixes) changed the
+column set and the manifest keys, so the shipped builder now writes one column
+and seven keys these two files do not have. **Neither file was regenerated** —
+the generator is a read-only script against the local Postgres and re-running it
+is not a trivial step, so the stale artefact is left labelled rather than
+half-refreshed. What a regenerated file would add:
+
+- `invoices` gains **`credit_minor`** (after `balance_decimal`), and
+  `balance_minor` / `balance_decimal` are now **signed** — a negative balance is
+  a credit the studio holds, which `Math.max(total - paid, 0)` used to read as 0.
+- `manifest` gains, under `report`, `money_balance` and `currency`; under
+  `exclusions`, `projects_named_by_an_invoice_outside_this_studio` and
+  `projects_naming_another_studio_note`; under `reconciliation`,
+  `total_billed_excluding_void_draft_minor`, `voided_or_draft_billed_minor`,
+  `voided_or_draft_invoices`, `total_billed_note`, `credit_minor` and
+  `balance_note`.
+- Nothing is removed, and no row that was in the file leaves it: on this seed the
+  figures above would all read 0 (one sent invoice, no credit, nothing voided or
+  draft, no project outside the studio).

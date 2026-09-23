@@ -32,6 +32,16 @@
  * co-member's roster rows for her OTHER studios reach none of those and are
  * excluded, not swept in by union; the manifest says how many.
  *
+ * A PROJECT is the other place a foreign row can arrive, and it is not enough to
+ * drop the foreign INVOICES: an invoice of this studio may itself NAME a project
+ * of another one (00578:8730-8746 adopts an origin deposit onto a project
+ * without requiring the studios to match). So the lookup table this builder
+ * dereferences for a project's name, its client and its payer holds ONLY this
+ * studio's projects, and a foreign one is counted — by the caller's head-only
+ * query and by this builder — and never named. The same reasoning reaches the
+ * 00588 payer ladder's last step, which is the one step no payer id anchors:
+ * see the divergence note on `resolveInvoicePayerName`.
+ *
  * ── THE 00318/00513 DISCLOSURE ───────────────────────────────────────────
  * `invoices.studio_id` is nullable: numbering falls back to the per-designer
  * `invoice_counters` "only when an invoice has no studio (a project without a
@@ -195,6 +205,11 @@ export interface StudioBillingSource {
   nullStudioInvoiceCount: number;
   /** …and whose studio_id names a DIFFERENT studio. */
   otherStudioInvoiceCount: number;
+  /** A head-only count of the projects an INCLUDED invoice names that this
+   *  studio's own projects read did not return — another studio's, or none's.
+   *  The rows are never fetched (that read carries the tenant leg), so this
+   *  figure is the whole disclosure. */
+  invoiceProjectsOutsideStudioCount: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -227,6 +242,7 @@ export const INVOICE_COLUMNS = [
   "requires_refund_minor",
   "balance_minor",
   "balance_decimal",
+  "credit_minor",
   "client_id",
   "client_name",
   "household_id",
@@ -333,6 +349,37 @@ function decimal(cents: number | null | undefined): number {
   return Math.round(cents ?? 0) / 100;
 }
 
+/**
+ * The currencies whose minor unit is 1/100 of the major one — the only ones
+ * `decimal()` can divide by 100 and be right.
+ *
+ * `invoices.currency` is `TEXT NOT NULL DEFAULT 'USD'` with no CHECK
+ * (00014:353, 00178), so nothing in the schema stops a JPY (0-decimal) or KWD
+ * (3-decimal) row from being written; on such a row every `*_decimal` column
+ * would be wrong by a factor of 100 or 10 while the `*_minor` columns stayed
+ * exact. The export therefore ABORTS on one rather than shipping a bookkeeper a
+ * file whose two money columns disagree.
+ */
+export const TWO_DECIMAL_CURRENCIES = ["USD", "CAD", "EUR", "GBP"] as const;
+
+const TWO_DECIMAL_SET: ReadonlySet<string> = new Set(TWO_DECIMAL_CURRENCIES);
+
+/**
+ * The distinct currency codes in these rows that `decimal()` cannot honestly
+ * convert, in the order first seen. Empty means the file's `*_decimal` columns
+ * are sound. A blank/absent code is the column's own `'USD'` default.
+ */
+export function unsupportedCurrencyCodes(
+  rows: readonly Pick<RawInvoiceRow, "currency">[],
+): string[] {
+  const bad: string[] = [];
+  for (const row of rows) {
+    const code = (trimmed(row.currency) ?? "USD").toUpperCase();
+    if (!TWO_DECIMAL_SET.has(code) && !bad.includes(code)) bad.push(code);
+  }
+  return bad;
+}
+
 function trimmed(value: string | null | undefined): string | null {
   const s = (value ?? "").trim();
   return s === "" ? null : s;
@@ -373,6 +420,8 @@ export function resolveInvoicePayerName(
   project: RawProjectRow | null,
   rosterByDesigner: Map<string, RawClientRecordRow[]>,
   profileById: Map<string, RawProfileRef>,
+  /** The households THIS studio owns — step 4's tenant leg; see step 4. */
+  studioHouseholdIds: ReadonlySet<string>,
 ): string | null {
   // 00588:161 — the payer is the invoice's own client, else the project's.
   const payerId = invoice.client_id ?? project?.client_id ?? null;
@@ -411,8 +460,24 @@ export function resolveInvoicePayerName(
   // carries no client). Resolves only when the designer's roster holds
   // EXACTLY ONE named email-only row; `HAVING count(*) = 1` over the named
   // rows, so two candidates name nobody rather than guess.
+  //
+  // THE ONE DELIBERATE DIVERGENCE FROM 00588. There the candidate set is the
+  // designer's WHOLE roster, and there that is correct: `resolve_invoice_link`
+  // answers for a single invoice behind a single bearer token, where designer
+  // scope IS the boundary. Here the boundary is the STUDIO, and a co-member's
+  // roster carries her other studios' rows too (00316/00584 is member-scoped) —
+  // every step above is anchored by a payer id this studio's own invoice or
+  // project named, but step 4 has no payer to anchor it. Unfiltered it prints
+  // ANOTHER studio's household name into this studio's file: the very row the
+  // clients sheet below refuses for having no studio authorization path. So a
+  // candidate must also carry a household this studio owns.
   const named = roster
-    .filter((r) => r.client_id === null)
+    .filter(
+      (r) =>
+        r.client_id === null &&
+        r.household_id !== null &&
+        studioHouseholdIds.has(r.household_id),
+    )
     .map((r) => trimmed(r.client_name))
     .filter((n): n is string => n !== null);
   return named.length === 1 ? named[0] : null;
@@ -550,13 +615,22 @@ export interface StudioBillingManifest {
     clientRecordsNoStudioPath: number;
     linesOrphaned: number;
     paymentsOrphaned: number;
+    /** Foreign project rows that still reached the builder, dropped here. */
     projectsForeignStudio: number;
+    /** …and the caller's head-only count of the same class, never fetched. */
+    projectsNamedByInvoiceOutsideStudio: number;
   };
   reconciliation: {
     totalBilledMinor: number;
+    /** …with voided and draft invoices taken out. */
+    totalBilledLiveMinor: number;
+    voidedOrDraftBilledMinor: number;
+    voidedOrDraftInvoices: number;
     collectedMinor: number;
     amountPaidCounterMinor: number;
+    /** Signed: negative is a credit. `creditMinor` carries it unsigned. */
     balanceMinor: number;
+    creditMinor: number;
     invoicesWherePaidCounterDisagrees: number;
   };
   missingValues: { sheet: string; column: string; missing: number }[];
@@ -629,23 +703,38 @@ export function buildStudioBillingExport(
   }
 
   // ── 3. Lookups. ───────────────────────────────────────────────────────
-  const projectById = new Map(source.projects.map((p) => [p.id, p]));
-  const projectsForeignStudio = source.projects.filter(
-    (p) => p.studio_id !== studioId,
-  ).length;
+  // THE TENANT LEG ON PROJECTS. A studio's own invoice can name a project of
+  // ANOTHER studio: `set_invoice_studio_id` makes `invoices.studio_id`
+  // immutable once set (00578:8750-8757), but its origin-deposit adoption
+  // (00578:8730-8746) moves a project-less invoice onto `agreement.project_id`
+  // without requiring that project's studio to match, and a later project move
+  // does the same. So `projectById` holds ONLY this studio's projects. A foreign
+  // project is COUNTED and then unreachable — nothing downstream can dereference
+  // it for a name, a client or a payer, and so neither the `project_name` cell
+  // nor a clients-sheet row can carry another studio's house.
+  const studioProjects = source.projects.filter(
+    (p) => p.studio_id === studioId,
+  );
+  const projectsForeignStudio = source.projects.length - studioProjects.length;
+  const projectById = new Map(studioProjects.map((p) => [p.id, p]));
 
   const householdById = new Map(
     source.households
       .filter((h) => h.organization_id === studioId)
       .map((h) => [h.id, h]),
   );
+  const studioHouseholdIds: ReadonlySet<string> = new Set(householdById.keys());
 
+  // Seeded only from rows that PASSED a tenant leg. Every read of this map is
+  // keyed on a payer id this studio's own invoice or project named, so a wider
+  // seed writes nothing today — but the map is the one place a later edit could
+  // reach a foreign profile by id, and it costs a word to close.
   const profileById = new Map<string, RawProfileRef>();
   const noteProfile = (p: RawProfileRef | null | undefined) => {
     if (p?.id && !profileById.has(p.id)) profileById.set(p.id, p);
   };
-  source.invoices.forEach((i) => noteProfile(i.client));
-  source.projects.forEach((p) => noteProfile(p.client));
+  invoices.forEach((i) => noteProfile(i.client));
+  studioProjects.forEach((p) => noteProfile(p.client));
   source.clientRecords.forEach((c) => noteProfile(c.client));
 
   const rosterByDesigner = new Map<string, RawClientRecordRow[]>();
@@ -666,9 +755,8 @@ export function buildStudioBillingExport(
     if (payer) invoicePayerIds.add(payer);
   }
   const studioProjectClientIds = new Set<string>();
-  for (const p of source.projects) {
-    if (p.studio_id === studioId && p.client_id)
-      studioProjectClientIds.add(p.client_id);
+  for (const p of studioProjects) {
+    if (p.client_id) studioProjectClientIds.add(p.client_id);
   }
 
   const authorizationPath = (
@@ -719,9 +807,13 @@ export function buildStudioBillingExport(
 
   // ── 5. invoices ────────────────────────────────────────────────────────
   let totalBilledMinor = 0;
+  let totalBilledLiveMinor = 0;
+  let voidedOrDraftBilledMinor = 0;
+  let voidedOrDraftInvoices = 0;
   let collectedMinor = 0;
   let amountPaidCounterMinor = 0;
   let balanceMinor = 0;
+  let creditMinor = 0;
   let invoicesWherePaidCounterDisagrees = 0;
 
   const invoiceRows: SheetCell[][] = invoices.map((inv) => {
@@ -731,14 +823,28 @@ export function buildStudioBillingExport(
     const sums = sumPayments(paymentsByInvoice.get(inv.id) ?? []);
     const totalCents = minor(inv.total_cents);
     const paidCents = minor(inv.amount_paid_cents);
-    const balance = Math.max(totalCents - paidCents, 0);
+    // SIGNED, and a negative balance is a CREDIT — money the studio holds
+    // beyond what it billed. `Math.max(total - paid, 0)` read that as 0 and the
+    // overpayment then appeared in no column at all. `credit_minor` carries the
+    // same figure unsigned, so neither a sum down the balance column nor a
+    // search for credits can miss it.
+    const balance = totalCents - paidCents;
+    const credit = balance < 0 ? -balance : 0;
+    // 00178:36 — status is one of draft/sent/partially_paid/paid/void.
+    const voidedOrDraft =
+      inv.status === "void" || inv.status === "draft" || Boolean(inv.voided_at);
     const payerId = inv.client_id ?? project?.client_id ?? null;
     const household = payerHousehold(inv.designer_id, payerId);
 
     totalBilledMinor += totalCents;
+    if (voidedOrDraft) {
+      voidedOrDraftBilledMinor += totalCents;
+      voidedOrDraftInvoices += 1;
+    } else totalBilledLiveMinor += totalCents;
     collectedMinor += sums.collected;
     amountPaidCounterMinor += paidCents;
     balanceMinor += balance;
+    creditMinor += credit;
     if (sums.collected !== paidCents) invoicesWherePaidCounterDisagrees += 1;
 
     return [
@@ -767,9 +873,16 @@ export function buildStudioBillingExport(
       sums.requiresRefund,
       balance,
       decimal(balance),
+      credit,
       text(inv.client_id),
       text(
-        resolveInvoicePayerName(inv, project, rosterByDesigner, profileById),
+        resolveInvoicePayerName(
+          inv,
+          project,
+          rosterByDesigner,
+          profileById,
+          studioHouseholdIds,
+        ),
       ),
       text(household?.id ?? null),
       text(household?.display_name ?? null),
@@ -892,12 +1005,18 @@ export function buildStudioBillingExport(
       linesOrphaned,
       paymentsOrphaned,
       projectsForeignStudio,
+      projectsNamedByInvoiceOutsideStudio:
+        source.invoiceProjectsOutsideStudioCount,
     },
     {
       totalBilledMinor,
+      totalBilledLiveMinor,
+      voidedOrDraftBilledMinor,
+      voidedOrDraftInvoices,
       collectedMinor,
       amountPaidCounterMinor,
       balanceMinor,
+      creditMinor,
       invoicesWherePaidCounterDisagrees,
     },
   );
@@ -908,7 +1027,15 @@ export function buildStudioBillingExport(
       {
         name: "manifest",
         header: MANIFEST_COLUMNS,
-        rows: manifest.entries.map((e) => [e.section, e.key, e.value]),
+        // Through the same guard every other sheet's text goes through. The
+        // manifest is not a sheet of stored values — `studio_name` is the
+        // studio's own free text — and a cell that arrives here raw executes
+        // when the bookkeeper opens the file, on the one sheet she reads first.
+        rows: manifest.entries.map((e) => [
+          text(e.section),
+          text(e.key),
+          typeof e.value === "string" ? text(e.value) : e.value,
+        ]),
       },
     ],
     manifest,
@@ -954,6 +1081,18 @@ function buildManifest(
       key: "money_units",
       value:
         "every *_minor column is integer minor units as stored; *_decimal is the same money as a number",
+    },
+    {
+      section: "report",
+      key: "money_balance",
+      value:
+        "balance_minor is SIGNED (total_minor - amount_paid_minor), so a negative balance is a credit the studio is holding; credit_minor carries that same figure unsigned and is 0 on every other row",
+    },
+    {
+      section: "report",
+      key: "currency",
+      value:
+        "every *_decimal column is the *_minor figure divided by 100; the export refuses to write a file holding a currency whose minor unit is not 1/100 (USD, CAD, EUR and GBP are accepted) rather than print two money columns that disagree",
     },
     {
       section: "report",
@@ -1050,9 +1189,41 @@ function buildManifest(
       value: exclusions.projectsForeignStudio,
     },
     {
+      section: "exclusions",
+      key: "projects_named_by_an_invoice_outside_this_studio",
+      value: exclusions.projectsNamedByInvoiceOutsideStudio,
+    },
+    {
+      section: "exclusions",
+      key: "projects_naming_another_studio_note",
+      value:
+        "an invoice of this studio can name a project of another one, or of none (00578:8730-8746 adopts an origin deposit onto a project without requiring the studios to match) — such a project's name, client and payer are never written to this file; only the count is",
+    },
+    {
       section: "reconciliation",
       key: "total_billed_minor",
       value: reconciliation.totalBilledMinor,
+    },
+    {
+      section: "reconciliation",
+      key: "total_billed_excluding_void_draft_minor",
+      value: reconciliation.totalBilledLiveMinor,
+    },
+    {
+      section: "reconciliation",
+      key: "voided_or_draft_billed_minor",
+      value: reconciliation.voidedOrDraftBilledMinor,
+    },
+    {
+      section: "reconciliation",
+      key: "voided_or_draft_invoices",
+      value: reconciliation.voidedOrDraftInvoices,
+    },
+    {
+      section: "reconciliation",
+      key: "total_billed_note",
+      value:
+        "total_billed_minor counts EVERY invoice in the file — drafts and voided ones included, each labelled in the status column — and total_billed_excluding_void_draft_minor + voided_or_draft_billed_minor = total_billed_minor",
     },
     {
       section: "reconciliation",
@@ -1068,6 +1239,17 @@ function buildManifest(
       section: "reconciliation",
       key: "balance_minor",
       value: reconciliation.balanceMinor,
+    },
+    {
+      section: "reconciliation",
+      key: "credit_minor",
+      value: reconciliation.creditMinor,
+    },
+    {
+      section: "reconciliation",
+      key: "balance_note",
+      value:
+        "balance_minor is the SIGNED sum down the invoices sheet, so total_billed_minor - amount_paid_minor_from_invoice_counters = balance_minor exactly; credit_minor is the part of it that overpayment put below zero",
     },
     {
       section: "reconciliation",

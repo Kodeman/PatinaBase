@@ -8,10 +8,17 @@
  * a second studio reads that studio's invoices too (00632:30-37). Browser row
  * selection is never the authorization — it is the second leg on top of it.
  *
- * Every read pages to the end (`.range()`, ordered by a stable key: PostgREST
- * caps a page at 1000 rows and an export that stopped at the cap would be a
- * silent omission). Any failing read aborts the whole export and names the step
- * — a partial billing file that looks complete is worse than no file.
+ * Every read pages to the end by KEYSET — `.order('id')` with `id > lastId` —
+ * and not by offset: a `.range(from, to)` window shifts under a concurrent
+ * insert, so a row can be skipped or repeated at a page boundary, and these
+ * primary keys are random uuids, so a shifted window is not even adjacent.
+ * Paging stops on an EMPTY page and never on a short one: a server whose
+ * `db-max-rows` is below our page size would otherwise end the read on page one
+ * and truncate the file in silence — the exact omission this module exists to
+ * prevent. Any failing read aborts the whole export and names the step: a
+ * partial billing file that looks complete is worse than no file, and so is one
+ * whose two money columns disagree, which is why an unsupported currency aborts
+ * the same way.
  *
  * WRITE. SheetJS, lazy-imported exactly as the Library import sheet imports it
  * (`components/document/rooms/library/import-sheet.tsx:102`), so the ~400 KB
@@ -23,6 +30,8 @@ import { createBrowserClient } from "@patina/supabase";
 import {
   buildStudioBillingExport,
   studioBillingExportFilename,
+  unsupportedCurrencyCodes,
+  TWO_DECIMAL_CURRENCIES,
   type BillingExportSheet,
   type RawClientRecordRow,
   type RawHouseholdRow,
@@ -37,7 +46,9 @@ type AnyRecord = any;
 
 const getSupabase = () => createBrowserClient() as AnyRecord;
 
-/** PostgREST's own page ceiling. */
+/** Rows asked for per page. PostgREST's default `db-max-rows` ceiling; a lower
+ *  one just means more, smaller pages, because the loop stops on an empty page
+ *  rather than on a short one. */
 const PAGE = 1000;
 /** Ids per `.in(...)` — a URL, not a statement, so the list is chunked. */
 const IN_CHUNK = 150;
@@ -59,19 +70,35 @@ type PageResult = {
 };
 
 /** Read every page of one query. `build` is called per page so each page is a
- *  fresh builder — a PostgREST query builder is single-use. */
+ *  fresh builder — a PostgREST query builder is single-use — and is handed the
+ *  last id of the previous page as its cursor (`null` on the first). See the
+ *  header for why the cursor is a key and not an offset, and why the loop ends
+ *  on an empty page. */
 async function pageAll(
   step: string,
-  build: (from: number, to: number) => PromiseLike<PageResult>,
+  build: (afterId: string | null) => PromiseLike<PageResult>,
 ): Promise<AnyRecord[]> {
   const rows: AnyRecord[] = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build(from, from + PAGE - 1);
+  let cursor: string | null = null;
+  for (;;) {
+    const { data, error } = await build(cursor);
     if (error) throw new StudioBillingExportError(step, error.message);
     const page = data ?? [];
+    if (page.length === 0) return rows;
     rows.push(...page);
-    if (page.length < PAGE) return rows;
+    // Ascending by id, so the last row is the high-water mark and `id > cursor`
+    // always advances — the loop cannot repeat a page. A row with no id to key
+    // on cannot be paged past, and stopping beats spinning.
+    const lastId = page[page.length - 1]?.id;
+    if (typeof lastId !== "string") return rows;
+    cursor = lastId;
   }
+}
+
+/** The keyset cursor. Applied BEFORE `.order()`/`.limit()` on purpose: those
+ *  hand back a PostgREST TRANSFORM builder, which carries no filter methods. */
+function afterId(query: AnyRecord, cursor: string | null): AnyRecord {
+  return cursor === null ? query : query.gt("id", cursor);
 }
 
 function chunk<T>(values: T[], size: number): T[][] {
@@ -128,14 +155,29 @@ export async function fetchStudioBillingExport(
 
   // 1. The invoices — the tenant leg, and the only door the children come
   //    through. Ordered by a stable key so the pages do not overlap or skip.
-  const invoices = (await pageAll("invoices", (from, to) =>
-    supabase
-      .from("invoices")
-      .select(INVOICE_SELECT)
-      .eq("studio_id", studioId)
+  const invoices = (await pageAll("invoices", (cursor) =>
+    afterId(
+      supabase
+        .from("invoices")
+        .select(INVOICE_SELECT)
+        .eq("studio_id", studioId),
+      cursor,
+    )
       .order("id")
-      .range(from, to),
+      .limit(PAGE),
   )) as RawInvoiceRow[];
+
+  // Before anything else is read: `*_decimal` divides the minor unit by 100, and
+  // `invoices.currency` is TEXT with no CHECK (00014:353), so a 0- or 3-decimal
+  // currency would make every decimal column in the file wrong while the minor
+  // columns stayed exact. That is a file whose own two money columns disagree, so
+  // it aborts with a named step exactly as a failing read does.
+  const unsupported = unsupportedCurrencyCodes(invoices);
+  if (unsupported.length > 0)
+    throw new StudioBillingExportError(
+      "the currency check",
+      `this book holds ${unsupported.join(", ")}, and the export writes decimal money only for currencies with a 1/100 minor unit (${TWO_DECIMAL_CURRENCIES.join(", ")})`,
+    );
 
   // 2. The two disclosures. Counted, never read: they are not this studio's
   //    rows, and the manifest owes the studio the figures, not the data.
@@ -168,71 +210,85 @@ export async function fetchStudioBillingExport(
   const payments: RawPaymentRow[] = [];
   for (const ids of chunk(invoiceIds, IN_CHUNK)) {
     lines.push(
-      ...((await pageAll("invoice_line_items", (from, to) =>
-        supabase
-          .from("invoice_line_items")
-          .select(
-            "id, invoice_id, kind, milestone_id, ffe_item_id, description, quantity, unit_amount_cents, amount_cents, sort_order, created_at",
-          )
-          .in("invoice_id", ids)
+      ...((await pageAll("invoice_line_items", (cursor) =>
+        afterId(
+          supabase
+            .from("invoice_line_items")
+            .select(
+              "id, invoice_id, kind, milestone_id, ffe_item_id, description, quantity, unit_amount_cents, amount_cents, sort_order, created_at",
+            )
+            .in("invoice_id", ids),
+          cursor,
+        )
           .order("id")
-          .range(from, to),
+          .limit(PAGE),
       )) as RawLineRow[]),
     );
     payments.push(
-      ...((await pageAll("invoice_payments", (from, to) =>
-        supabase
-          .from("invoice_payments")
-          .select(
-            "id, invoice_id, amount_cents, surcharge_cents, method, status, reference, received_at, created_at, recorded_by, stripe_payment_intent_id, stripe_checkout_session_id",
-          )
-          .in("invoice_id", ids)
+      ...((await pageAll("invoice_payments", (cursor) =>
+        afterId(
+          supabase
+            .from("invoice_payments")
+            .select(
+              "id, invoice_id, amount_cents, surcharge_cents, method, status, reference, received_at, created_at, recorded_by, stripe_payment_intent_id, stripe_checkout_session_id",
+            )
+            .in("invoice_id", ids),
+          cursor,
+        )
           .order("id")
-          .range(from, to),
+          .limit(PAGE),
       )) as RawPaymentRow[]),
     );
   }
 
-  // 4. Projects: this studio's own (a client of one is an authorization path),
-  //    plus any project an included invoice names that the first read missed —
-  //    `invoices.studio_id` is a snapshot of the ISSUING studio and need not
-  //    equal the project's, and the file must still be able to print the
-  //    project's name. The builder counts any that name another studio.
-  const projects = (await pageAll("projects", (from, to) =>
-    supabase
-      .from("projects")
-      .select(PROJECT_SELECT)
-      .eq("studio_id", studioId)
+  // 4. Projects: this studio's own, and ONLY those — the tenant leg is on this
+  //    read too. `invoices.studio_id` is a snapshot of the ISSUING studio and
+  //    need not equal the project's (00578:8730-8746 adopts an origin deposit
+  //    onto a project without requiring them to match), and the file prints a
+  //    project's name, its client and its payer. So a project this studio does
+  //    not own is never FETCHED; what an included invoice names and this read
+  //    did not return is COUNTED instead, head-only, and the manifest carries
+  //    the figure. Counted, not read, is the whole disclosure.
+  const projects = (await pageAll("projects", (cursor) =>
+    afterId(
+      supabase
+        .from("projects")
+        .select(PROJECT_SELECT)
+        .eq("studio_id", studioId),
+      cursor,
+    )
       .order("id")
-      .range(from, to),
+      .limit(PAGE),
   )) as RawProjectRow[];
   const seenProjectIds = new Set(projects.map((p) => p.id));
   const missingProjectIds = invoiceProjectIds.filter(
     (id) => !seenProjectIds.has(id),
   );
+  let invoiceProjectsOutsideStudioCount = 0;
   for (const ids of chunk(missingProjectIds, IN_CHUNK)) {
-    projects.push(
-      ...((await pageAll("projects (named by an invoice)", (from, to) =>
+    invoiceProjectsOutsideStudioCount += await countOnly(
+      "projects (named by an invoice, outside this studio)",
+      () =>
         supabase
           .from("projects")
-          .select(PROJECT_SELECT)
-          .in("id", ids)
-          .order("id")
-          .range(from, to),
-      )) as RawProjectRow[]),
+          .select("id", { count: "exact", head: true })
+          .in("id", ids),
     );
   }
 
   // 5. This studio's households — the only household rows the file may key on.
-  const households = (await pageAll("client_households", (from, to) =>
-    supabase
-      .from("client_households")
-      .select(
-        "id, organization_id, designer_id, display_name, member_person_ids, co_threshold_cents, created_at",
-      )
-      .eq("organization_id", studioId)
+  const households = (await pageAll("client_households", (cursor) =>
+    afterId(
+      supabase
+        .from("client_households")
+        .select(
+          "id, organization_id, designer_id, display_name, member_person_ids, co_threshold_cents, created_at",
+        )
+        .eq("organization_id", studioId),
+      cursor,
+    )
       .order("id")
-      .range(from, to),
+      .limit(PAGE),
   )) as RawHouseholdRow[];
 
   // 6. Client records. `designer_clients` has no studio column, so the read is
@@ -247,13 +303,16 @@ export async function fetchStudioBillingExport(
   };
   for (const ids of chunk(designerIds, IN_CHUNK)) {
     noteClientRecords(
-      (await pageAll("designer_clients", (from, to) =>
-        supabase
-          .from("designer_clients")
-          .select(CLIENT_RECORD_SELECT)
-          .in("designer_id", ids)
+      (await pageAll("designer_clients", (cursor) =>
+        afterId(
+          supabase
+            .from("designer_clients")
+            .select(CLIENT_RECORD_SELECT)
+            .in("designer_id", ids),
+          cursor,
+        )
           .order("id")
-          .range(from, to),
+          .limit(PAGE),
       )) as RawClientRecordRow[],
     );
   }
@@ -262,13 +321,16 @@ export async function fetchStudioBillingExport(
     IN_CHUNK,
   )) {
     noteClientRecords(
-      (await pageAll("designer_clients (household)", (from, to) =>
-        supabase
-          .from("designer_clients")
-          .select(CLIENT_RECORD_SELECT)
-          .in("household_id", ids)
+      (await pageAll("designer_clients (household)", (cursor) =>
+        afterId(
+          supabase
+            .from("designer_clients")
+            .select(CLIENT_RECORD_SELECT)
+            .in("household_id", ids),
+          cursor,
+        )
           .order("id")
-          .range(from, to),
+          .limit(PAGE),
       )) as RawClientRecordRow[],
     );
   }
@@ -285,6 +347,7 @@ export async function fetchStudioBillingExport(
     households,
     nullStudioInvoiceCount,
     otherStudioInvoiceCount,
+    invoiceProjectsOutsideStudioCount,
   });
 }
 
