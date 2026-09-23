@@ -224,7 +224,7 @@ Hub, Campaigns (list/new/`[id]`/`[id]/edit`), Templates (list/new/`[id]` with bl
 
 ⚠ **Two runbook-flagged trigger gaps still open**: security-alert on new-device sign-in (template exists, trigger unwired) and project-milestone → client-confirmation email (unwired).
 
-⚠ **Engagement-tracking plan: DB layer built, downstream consumers unverified**: `waitlist` (00036), `engagement_events` (00037), `handle_new_user` (00039), the `calculate_engagement_score()` function + `user_engagement_scores` view (00037), and the `conversion_funnel`/`designer_funnel`/`consumer_funnel` role views (00038, `conversion_funnel` fixed in 00107) all exist in the schema. What is NOT verified/built: the PostHog→`engagement_events` sync, any surface that reads the scores/funnels, and iOS/planning-app tracking.
+⚠ **Engagement-tracking plan: DB layer built, downstream consumers unverified**: `waitlist` (00036), `engagement_events` (00037), `handle_new_user` (00039), the `calculate_engagement_score()` function + `user_engagement_scores` view (00037), and the `conversion_funnel`/`designer_funnel`/`consumer_funnel` role views (00038, `conversion_funnel` fixed in 00107) existed in the schema. **The three `designer_funnel`/`conversion_funnel`/`consumer_funnel` views were retired 2026-09-23 (migration 00657, H1); admin analytics readouts that depended on them now show "Unavailable".** What is NOT verified/built: the PostHog→`engagement_events` sync, any surface that reads the scores/funnels, and iOS/planning-app tracking.
 
 ⚠ **SMS inert in prod**: `sms-dispatch` is creds-gated and returns "not configured" unless `TWILIO_*` secrets are set — not configured on prod as of this reconciliation.
 

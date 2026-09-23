@@ -11235,3 +11235,13 @@ and pushed to Sanity. Done is deploy + probes + a walk script — Kody's signed-
 separately.
 
 *Entries add: R151 · last id = R152*
+
+### R153 · Pledge band removed from the Accounts book — 2026-09-23
+
+**Program The Second House, ruling R-SH3, P2a.** R5's Aesthete destiny (above) put the 25% Pledge
+on the studio's own account book as a rendered line. That line — the Pledge band and its second
+figure on `accounts-book.tsx` — is **removed** as of 2026-09-23, along with the matching commission
+copy in the `designer-invite`, `milestone-first-payment`, and `onboarding-aesthete` email templates.
+R5's original text stands above as history; this entry records the supersession.
+
+*Entries add: R153 · last id = R153*
