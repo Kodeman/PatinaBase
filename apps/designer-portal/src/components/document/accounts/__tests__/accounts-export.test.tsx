@@ -19,6 +19,7 @@
 
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import * as XLSX from "xlsx";
 
 import { AccountsExportAction } from "../accounts-export";
 import { selectViewerStudioId } from "@/hooks/use-viewer-studio";
@@ -26,6 +27,10 @@ import { selectViewerStudioId } from "@/hooks/use-viewer-studio";
 const STUDIO = "studio-a-0000-0000-0000-000000000001";
 const STUDIO_NAME = "Middle West Studio";
 const DESIGNER = "designer-0000-0000-0000-000000000001";
+/** A second studio, so the FETCH's own tenant legs have something to exclude. */
+const OTHER_STUDIO = "studio-b-0000-0000-0000-000000000002";
+const FOREIGN_PROJECT_NAME = "OTHER STUDIO FETCH HOUSE";
+const FOREIGN_HOUSEHOLD_NAME = "OTHER STUDIO FETCH HOUSEHOLD";
 
 type Row = Record<string, unknown>;
 
@@ -128,8 +133,28 @@ const TABLES: Record<string, Row[]> = {
         email: "adaeze@example.com",
       },
     },
+    // Another studio's house. The fetch's `.eq("studio_id", …)` on projects is
+    // what must keep it out of the read; the fake honours `.eq`.
+    {
+      id: "proj-9",
+      name: FOREIGN_PROJECT_NAME,
+      studio_id: OTHER_STUDIO,
+      client_id: "client-9",
+      client: null,
+    },
   ],
-  client_households: [],
+  client_households: [
+    // Another studio's household — the fetch's `.eq("organization_id", …)` leg.
+    {
+      id: "hh-9",
+      organization_id: OTHER_STUDIO,
+      designer_id: DESIGNER,
+      display_name: FOREIGN_HOUSEHOLD_NAME,
+      member_person_ids: ["client-1"],
+      co_threshold_cents: 250_000,
+      created_at: "2026-07-01T00:00:00Z",
+    },
+  ],
   designer_clients: [
     {
       id: "dc-1",
@@ -144,8 +169,9 @@ const TABLES: Record<string, Row[]> = {
       created_at: "2026-07-01T00:00:00Z",
       updated_at: "2026-09-01T00:00:00Z",
     },
-    // The co-member's roster row with no path into this studio: excluded, and
-    // the count of it is what the withheld sentence must carry.
+    // This designer's OWN roster row with no path into this studio — no
+    // household, and a person no invoice or project of this studio names.
+    // Excluded, and the count of it is what the withheld sentence must carry.
     {
       id: "dc-2",
       designer_id: DESIGNER,
@@ -246,14 +272,48 @@ jest.mock("@patina/supabase", () => ({
 
 /** Every filename handed to the browser to save. */
 let saved: string[] = [];
+/** Every workbook handed to the browser, as the blob the save built. */
+let savedBooks: Blob[] = [];
+
+/** The workbook that actually reached the browser: every string cell in it, and
+ *  the manifest sheet as key → value. jsdom's Blob has no `arrayBuffer()`, so
+ *  the bytes come back through `FileReader`. */
+async function writtenBook(blob: Blob) {
+  const bytes = await new Promise<Uint8Array>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(blob);
+  });
+  const book = XLSX.read(bytes, { type: "array" });
+  const strings: string[] = [];
+  const manifest = new Map<string, unknown>();
+  for (const name of book.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[name], {
+      header: 1,
+      raw: true,
+    });
+    for (const row of rows) {
+      for (const cell of row) if (typeof cell === "string") strings.push(cell);
+      // manifest columns are section, key, value.
+      if (name === "manifest" && typeof row[1] === "string")
+        manifest.set(row[1], row[2]);
+    }
+  }
+  return { strings, manifest };
+}
 
 beforeEach(() => {
   failOn = null;
   saved = [];
+  savedBooks = [];
   selectViewerStudioId(null);
   Object.defineProperty(URL, "createObjectURL", {
     writable: true,
-    value: jest.fn(() => "blob:sq169"),
+    value: jest.fn((blob: Blob) => {
+      savedBooks.push(blob);
+      return "blob:sq169";
+    }),
   });
   Object.defineProperty(URL, "revokeObjectURL", {
     writable: true,
@@ -298,8 +358,13 @@ it("says what left the studio and what was withheld, and writes the file", async
   expect(sentence).toHaveTextContent(
     /1 invoice you can read carry no studio and are not in this file/,
   );
-  expect(sentence).toHaveTextContent(/1 client record/);
-  expect(sentence).toHaveTextContent(/work and were left out/);
+  // The counter behind this clause is every roster row with no studio path, the
+  // designer's own studio-less leads included, so the clause must not tell her
+  // they belong to another studio.
+  expect(sentence).toHaveTextContent(
+    "1 client record carries no path to this studio's work and was left out",
+  );
+  expect(sentence).not.toHaveTextContent(/another studio's work/);
   expect(sentence).toHaveTextContent(/the manifest says so/);
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
@@ -308,6 +373,30 @@ it("says what left the studio and what was withheld, and writes the file", async
       /^patina-studio-billing-middle-west-studio-\d{4}-\d{2}-\d{2}\.xlsx$/,
     ),
   ]);
+});
+
+it("never READS another studio's project or household, so neither reaches the file", async () => {
+  render(<AccountsExportAction />);
+  await take();
+
+  await screen.findByRole("status");
+  expect(savedBooks).toHaveLength(1);
+  const { strings, manifest } = await writtenBook(savedBooks[0]);
+
+  // Neither name is anywhere in the workbook — not a cell, not part of one.
+  const everyCell = strings.join("\u0000");
+  expect(everyCell).not.toContain(FOREIGN_PROJECT_NAME);
+  expect(everyCell).not.toContain(FOREIGN_HOUSEHOLD_NAME);
+  // And this is the FETCH's leg rather than the builder's second one: the figure
+  // counts foreign projects the read RETURNED, so it is 0 only because
+  // `.eq("studio_id", …)` kept proj-9 out of the read. Drop that leg and the
+  // builder still withholds the name, but this reads 1.
+  expect(manifest.get("projects_read_naming_another_studio")).toBe(0);
+  // Its sibling disclosure, taken from the ids this studio's own read missed and
+  // so unaffected by what RLS lets the viewer count.
+  expect(manifest.get("projects_named_by_an_invoice_outside_this_studio")).toBe(
+    0,
+  );
 });
 
 it("writes nothing when a read fails, and names the step that failed", async () => {

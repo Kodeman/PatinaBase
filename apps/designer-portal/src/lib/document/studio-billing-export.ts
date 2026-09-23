@@ -725,10 +725,13 @@ export function buildStudioBillingExport(
   );
   const studioHouseholdIds: ReadonlySet<string> = new Set(householdById.keys());
 
-  // Seeded only from rows that PASSED a tenant leg. Every read of this map is
-  // keyed on a payer id this studio's own invoice or project named, so a wider
-  // seed writes nothing today — but the map is the one place a later edit could
-  // reach a foreign profile by id, and it costs a word to close.
+  // Seeded from the DESIGNER-ROSTER UNION as well as this studio's own invoices
+  // and projects: `source.clientRecords` is unfiltered by studio (see the header
+  // and step 6 of the fetch), so this map can hold a profile whose only roster
+  // row sits in a co-member's other-studio engagement. Safe because the map has
+  // exactly ONE read (:431), keyed on a payer id this studio's own invoice or
+  // project named — a profile no such id points at is never written. A second
+  // read keyed on anything else would have to carry its own tenant leg.
   const profileById = new Map<string, RawProfileRef>();
   const noteProfile = (p: RawProfileRef | null | undefined) => {
     if (p?.id && !profileById.has(p.id)) profileById.set(p.id, p);
@@ -1249,7 +1252,7 @@ function buildManifest(
       section: "reconciliation",
       key: "balance_note",
       value:
-        "balance_minor is the SIGNED sum down the invoices sheet, so total_billed_minor - amount_paid_minor_from_invoice_counters = balance_minor exactly; credit_minor is the part of it that overpayment put below zero",
+        "balance_minor is the SIGNED sum down the invoices sheet, so total_billed_minor - amount_paid_minor_from_invoice_counters = balance_minor exactly; balance_minor, collected_minor_from_payment_rows and amount_paid_minor_from_invoice_counters each COUNT voided and draft invoices, and the invoices sheet's status column is the filter that excludes them — a receivable figure that leaves them out is a sum down that sheet filtered on status; credit_minor is not a part of balance_minor but the overpayment the studio holds on its books, the per-invoice amounts paid beyond the total summed unsigned, so what is still owed to the studio is balance_minor + credit_minor",
     },
     {
       section: "reconciliation",

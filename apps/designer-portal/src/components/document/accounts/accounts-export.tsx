@@ -52,11 +52,15 @@ function withheldSentence(manifest: StudioBillingManifest): string | null {
         invoicesNullStudio === 1 ? "" : "s"
       } you can read carry no studio and are not in this file`,
     );
+  // The counter is every roster row with NO studio path — a co-member's row in
+  // another studio's engagement AND the designer's own studio-less lead (00588's
+  // email-only shape, `client_id` and `household_id` both null). So the sentence
+  // says what was measured and does not name a second studio.
   if (clientRecordsNoStudioPath > 0)
     parts.push(
-      `${clientRecordsNoStudioPath} client record${
-        clientRecordsNoStudioPath === 1 ? "" : "s"
-      } belong to another studio's work and were left out`,
+      clientRecordsNoStudioPath === 1
+        ? "1 client record carries no path to this studio's work and was left out"
+        : `${clientRecordsNoStudioPath} client records carry no path to this studio's work and were left out`,
     );
   if (parts.length === 0) return null;
   return `${parts.join("; ")} — the manifest says so.`;

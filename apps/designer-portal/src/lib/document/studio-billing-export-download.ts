@@ -247,8 +247,8 @@ export async function fetchStudioBillingExport(
   //    onto a project without requiring them to match), and the file prints a
   //    project's name, its client and its payer. So a project this studio does
   //    not own is never FETCHED; what an included invoice names and this read
-  //    did not return is COUNTED instead, head-only, and the manifest carries
-  //    the figure. Counted, not read, is the whole disclosure.
+  //    did not return is COUNTED instead, from the ids themselves, and the
+  //    manifest carries the figure. Counted, not read, is the whole disclosure.
   const projects = (await pageAll("projects", (cursor) =>
     afterId(
       supabase
@@ -264,17 +264,13 @@ export async function fetchStudioBillingExport(
   const missingProjectIds = invoiceProjectIds.filter(
     (id) => !seenProjectIds.has(id),
   );
-  let invoiceProjectsOutsideStudioCount = 0;
-  for (const ids of chunk(missingProjectIds, IN_CHUNK)) {
-    invoiceProjectsOutsideStudioCount += await countOnly(
-      "projects (named by an invoice, outside this studio)",
-      () =>
-        supabase
-          .from("projects")
-          .select("id", { count: "exact", head: true })
-          .in("id", ids),
-    );
-  }
+  // The figure is LOCAL: how many project ids an included invoice named that
+  // this studio's own read did not return. Asking the DB to count those ids
+  // instead returned 0 whenever RLS hid the foreign project from this viewer —
+  // which is the usual case — so the disclosure read 0 while the invoices sheet
+  // carried a project_id with a blank project_name. A disclosure that RLS can
+  // silence is worse than none.
+  const invoiceProjectsOutsideStudioCount = missingProjectIds.length;
 
   // 5. This studio's households — the only household rows the file may key on.
   const households = (await pageAll("client_households", (cursor) =>
