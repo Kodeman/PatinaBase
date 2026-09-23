@@ -16,9 +16,12 @@
 --   read on the sign-in leg where a second table would mean a second round
 --   trip. NULL is the whole "has not accepted" state — there is no default to
 --   backfill and nothing to migrate: every existing profile is correctly
---   un-accepted, and the portal's gate additionally skips anyone who already
---   holds an active studio membership, so no member of an existing studio is
---   ever interrupted by the step.
+--   un-accepted. The portal's gate is `pilot_terms_accepted_at IS NULL AND
+--   created_at >= 2026-09-23T00:00Z`, evaluated on the designer-invite callback
+--   leg alone, so no member of an existing studio is ever interrupted by the
+--   step. Age, not studio membership, is the test: 00295's
+--   provision_studio_on_designer creates an owner membership at invite time, so
+--   a membership test could never fire.
 --
 -- Version string: the portal writes '2026-09-free-90' (the free, 90-day terms
 --   published at /pilot-terms). The column is free text rather than an enum so

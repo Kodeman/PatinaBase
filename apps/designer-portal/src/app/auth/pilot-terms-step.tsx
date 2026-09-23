@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PILOT_TERMS_PATH } from '@/lib/pilot-terms';
 
 /**
@@ -15,10 +15,22 @@ export function PilotTermsStep({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+
+  // The step replaces a redirect rather than arriving as a new page, so nothing
+  // announces it. Move focus to the heading so a screen reader reads the step
+  // instead of the sign-in notice it displaced.
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
 
   return (
     <div className="grid border-t-2 border-t-[#5E7059] pt-[15px]">
-      <h2 className="font-heading text-[30px] font-medium leading-[1.1] tracking-[-0.03em] text-[#2C2926] [text-wrap:balance]">
+      <h2
+        ref={heading}
+        tabIndex={-1}
+        className="font-heading text-[30px] font-medium leading-[1.1] tracking-[-0.03em] text-[#2C2926] [text-wrap:balance] focus:outline-none"
+      >
         Before your desk opens.
       </h2>
       <p className="mt-[8px] text-[14px] leading-[1.6] text-[#65594E]">
@@ -37,6 +49,7 @@ export function PilotTermsStep({
         className="mt-[10px] inline-flex min-h-[44px] items-center text-[14px] font-semibold text-[#2C2926] underline decoration-[#8B7355] underline-offset-4 transition-colors duration-150 ease-[cubic-bezier(0.25,1,0.5,1)] hover:decoration-[#2C2926] focus:outline-none focus:ring-2 focus:ring-[#5C4A3C] focus:ring-offset-2 motion-reduce:transition-none"
       >
         Read the pilot terms
+        <span className="sr-only"> (opens in a new tab)</span>
       </a>
       {error && (
         <p
@@ -56,7 +69,7 @@ export function PilotTermsStep({
           // for the desk, and re-enabling the button mid-navigation invites a
           // second write.
           void onAccept().catch(() => {
-            setError('We could not record that. Please try again.');
+            setError('That didn’t save. Try again.');
             setPending(false);
           });
         }}
