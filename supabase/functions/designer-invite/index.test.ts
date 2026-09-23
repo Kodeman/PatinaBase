@@ -22,10 +22,14 @@ Deno.test("existing profile with business_name — unchanged, kept flag reported
     resolveBusinessNameForUpsert("Already On File Studio", "New Name Typed At Invite"),
     { businessNameKept: true },
   );
-  // Even a blank invite-time value doesn't clear an existing name.
+});
+
+Deno.test("existing profile, nothing requested at invite — unchanged, not kept", () => {
+  // Nothing was typed at invite, so nothing was dropped — kept only reports
+  // a requested name that got discarded in favor of the existing one.
   assertEquals(
     resolveBusinessNameForUpsert("Already On File Studio", undefined),
-    { businessNameKept: true },
+    { businessNameKept: false },
   );
 });
 

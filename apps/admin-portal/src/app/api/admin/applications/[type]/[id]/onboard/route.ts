@@ -92,6 +92,7 @@ export async function POST(
             display_name: displayName,
             personal_observation: personalObservation,
             role: body.roleName,
+            business_name: application.company?.trim() || undefined,
           },
         },
       );
