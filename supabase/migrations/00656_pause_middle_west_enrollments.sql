@@ -59,27 +59,41 @@
 
 DO $mig$
 DECLARE
-  v_prefixes text[] := ARRAY['19e7ae9b', '1a94f78f'];
-  v_resume   timestamptz := '2026-10-15T15:00:00Z';
-  v_ids      uuid[];
-  v_found    int;
-  v_paused   int;
-  v_ok       int;
+  v_prefixes      text[] := ARRAY['19e7ae9b', '1a94f78f'];
+  v_resume        timestamptz := '2026-10-15T15:00:00Z';
+  v_sequence_name text := 'Designer Onboarding';
+  v_ids           uuid[];
+  v_found         int;
+  v_paused        int;
+  v_ok            int;
 BEGIN
-  -- 1. Resolve the target rows from the recorded user_id prefixes. Any status,
-  --    so the count assertion holds on a rerun too.
+  -- 1. Resolve the target rows from the recorded user_id prefixes, restricted
+  --    to the Designer Onboarding sequence (00292 looks this sequence up by
+  --    name = 'Designer Onboarding' AND status = 'active'; 00050 seeds it).
+  --    Any enrollment status, so the count assertion holds on a rerun too.
   SELECT array_agg(e.id), count(*)
     INTO v_ids, v_found
   FROM public.sequence_enrollments e
-  WHERE EXISTS (
-    SELECT 1 FROM unnest(v_prefixes) AS p
-    WHERE e.user_id::text LIKE p || '%'
-  );
+  JOIN public.automated_sequences s ON s.id = e.sequence_id
+  WHERE s.name = v_sequence_name
+    AND EXISTS (
+      SELECT 1 FROM unnest(v_prefixes) AS p
+      WHERE e.user_id::text LIKE p || '%'
+    );
 
-  IF v_found IS DISTINCT FROM 2 THEN
+  -- A fresh/local DB has zero sequence_enrollments rows (00050 seeds only
+  -- the sequence itself, not enrollments) — that is a legitimate no-op, not
+  -- an error; prod carries exactly these two rows, so any other count is
+  -- still refused loudly.
+  IF v_found = 0 THEN
+    RAISE NOTICE
+      '00656: no Designer Onboarding enrollments found for the Middle West seats (%) — no-op (fresh/local DB).',
+      array_to_string(v_prefixes, ', ');
+    RETURN;
+  ELSIF v_found <> 2 THEN
     RAISE EXCEPTION
       '00656: expected exactly 2 enrollments for the Middle West seats (%), found % — refusing to guess.',
-      array_to_string(v_prefixes, ', '), COALESCE(v_found, 0);
+      array_to_string(v_prefixes, ', '), v_found;
   END IF;
 
   -- 2. Pause. current_step is untouched; step_history is appended to.

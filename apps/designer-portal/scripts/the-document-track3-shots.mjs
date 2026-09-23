@@ -173,16 +173,6 @@ const openAccounts = async (pageKey) => {
 };
 await shot('accounts-ledger', async () => { await openAccounts('ledger'); });
 await shot('accounts-receivables', async () => { await openAccounts('receivables'); await page.waitForTimeout(500); });
-// The Aesthete fold (F2) — the twinned Pledge with the provisional commons number
-await shot('aesthete-fold', async () => {
-  await openAccounts('earnings');
-  await page.waitForSelector('text=/given to the commons/', { timeout: 8000 });
-  await page.evaluate(() => {
-    const s = [...document.querySelectorAll('*')].find((n) => n.children.length === 0 && n.textContent?.trim() === 'given to the commons');
-    s?.scrollIntoView({ block: 'center' });
-  });
-  await page.waitForTimeout(500);
-});
 
 // ════════ THE DESK (the overdue receivable need) ════════
 await shot('desk-receivable', async () => {
