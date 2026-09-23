@@ -70,8 +70,8 @@ describe('Designer auth middleware', () => {
     );
   });
 
-  describe('legal pages (/privacy, /terms)', () => {
-    it.each(['/privacy', '/terms'])(
+  describe('legal pages (/privacy, /terms, /pilot-terms)', () => {
+    it.each(['/privacy', '/terms', '/pilot-terms'])(
       'passes a signed-out visitor through %s without a signin redirect',
       async (pathname) => {
         (createMiddlewareClient as jest.Mock).mockReturnValue({
@@ -87,7 +87,7 @@ describe('Designer auth middleware', () => {
       },
     );
 
-    it.each(['/privacy', '/terms'])(
+    it.each(['/privacy', '/terms', '/pilot-terms'])(
       'does not bounce a signed-in designer away from %s',
       async (pathname) => {
         const response = await middleware(request(pathname));

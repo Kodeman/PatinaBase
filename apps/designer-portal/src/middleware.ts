@@ -59,7 +59,9 @@ export async function middleware(req: NextRequest) {
   // Web Store listing. Same public-not-landing treatment as /preferences:
   // reachable signed out, and not bounced away from when signed in.
   const isLegalPage =
-    req.nextUrl.pathname === '/privacy' || req.nextUrl.pathname === '/terms';
+    req.nextUrl.pathname === '/privacy' ||
+    req.nextUrl.pathname === '/terms' ||
+    req.nextUrl.pathname === '/pilot-terms';
   const isPublicPage = isLandingPage || isPreferencesPage || isLegalPage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
