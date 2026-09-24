@@ -181,8 +181,10 @@ Deno.test('buildScheduleModel — pricing visible by default surfaces prices + t
   assertEquals(l0.supplierName, 'Acme Furnishings');
 
   // subtotal + document total both equal Σ lineTotalCents
-  assertEquals(model.sections[0].subtotalCents, 200000);
-  assertEquals(model.documentTotalCents, 200000);
+  assertEquals(model.sections[0].subtotal, { currency: 'USD', cents: 200000 });
+  assertEquals(model.documentTotal, { currency: 'USD', cents: 200000 });
+  // A line with no currency reads as USD.
+  assertEquals(l0.currency, 'USD');
 });
 
 // ─── buildScheduleModel — pricing off strips prices AND totals ───────────────
@@ -197,14 +199,15 @@ Deno.test('buildScheduleModel — pricing off strips every price and every total
   );
 
   assertEquals(model.showPricing, false);
-  assertEquals(model.documentTotalCents, undefined);
+  assertEquals('documentTotal' in model, false);
 
   for (const section of model.sections) {
-    assertEquals(section.subtotalCents, undefined);
+    assertEquals('subtotal' in section, false);
     for (const l of section.lines) {
       assertEquals(l.clientPriceCents, undefined);
       // Key ABSENT, not merely undefined-valued.
       assertEquals('clientPriceCents' in l, false);
+      assertEquals('currency' in l, false);
     }
   }
 });
@@ -234,7 +237,167 @@ Deno.test('buildScheduleModel — supplier off strips supplier, keeps pricing', 
   // Pricing entirely unaffected by the supplier flag.
   assertEquals(model.showPricing, true);
   assertEquals(model.sections[0].lines[0].clientPriceCents, 120000);
-  assertEquals(model.documentTotalCents, 170000);
+  assertEquals(model.documentTotal, { currency: 'USD', cents: 170000 });
+});
+
+// ─── Currency: a total never adds across currencies (SQ-212) ─────────────────
+
+Deno.test('buildScheduleModel — each price keeps its own currency; one-currency totals stay sums', () => {
+  const model = buildScheduleModel(
+    [
+      {
+        roomName: 'Living Room',
+        lines: [
+          line({ currency: 'EUR' }),
+          line({ name: 'Rug', currency: 'eur', lineTotalCents: 80000, clientUnitCents: 80000 }),
+        ],
+      },
+    ],
+    {},
+  );
+  assertEquals(model.sections[0].lines.map((l) => l.currency), ['EUR', 'EUR']);
+  assertEquals(model.sections[0].subtotal, { currency: 'EUR', cents: 200000 });
+  assertEquals(model.documentTotal, { currency: 'EUR', cents: 200000 });
+});
+
+Deno.test('buildScheduleModel — mixed currencies refuse the total and list the codes, sorted', () => {
+  const model = buildScheduleModel(
+    [
+      { roomName: 'Living Room', lines: [line({ currency: 'USD' }), line({ name: 'Rug' })] },
+      {
+        roomName: 'Bedroom',
+        lines: [
+          line({ name: 'Bed', currency: 'GBP' }),
+          line({ name: 'Lamp', currency: 'EUR' }),
+          // A null amount adds nothing and names no currency.
+          line({ name: 'TBD', currency: 'JPY', lineTotalCents: null, clientUnitCents: null }),
+        ],
+      },
+    ],
+    {},
+  );
+  // One all-USD room still totals (missing currency = USD).
+  assertEquals(model.sections[0].subtotal, { currency: 'USD', cents: 240000 });
+  assertEquals(model.sections[1].subtotal, { mixed: ['EUR', 'GBP'] });
+  assertEquals(model.documentTotal, { mixed: ['EUR', 'GBP', 'USD'] });
+});
+
+// All-USD output is byte-for-byte what it was before SQ-212. The hashes were
+// taken from main @ d0254134a (pre-change) rendering these exact inputs. The
+// only masked bytes are react-pdf's wall-clock CreationDate and the trailer
+// ID derived from it; they differ on every render, before and after.
+async function normalizedPdfSha256(bytes: Uint8Array): Promise<string> {
+  const text = new TextDecoder('latin1').decode(bytes)
+    .replace(/\(D:[^)]*\)/g, '(D:)')
+    .replace(/\/ID \[<[0-9a-f]+> <[0-9a-f]+>\]/gi, '/ID []');
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    Uint8Array.from(text, (c) => c.charCodeAt(0)),
+  );
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+const usdGoldenSections = [
+  {
+    roomName: 'Living Room',
+    lines: [
+      line(),
+      line({ name: 'Rug', clientUnitCents: 80050, lineTotalCents: 160100, quantity: 2 }),
+    ],
+  },
+  {
+    roomName: 'Bedroom',
+    lines: [
+      line({ name: 'Bed', clientUnitCents: null, lineTotalCents: null }),
+      line({ name: 'Lamp', clientUnitCents: 999, lineTotalCents: 999 }),
+    ],
+  },
+];
+const goldenHeader = {
+  studioName: 'Studio Patina',
+  projectName: 'Maple Residence',
+  title: 'Specification',
+};
+
+Deno.test('all-USD schedule PDF is byte-for-byte the pre-SQ-212 output', async () => {
+  for (
+    const [visibility, expected] of [
+      [{}, '517e48fd6e0f979d967bc1ea099138ebf6e898227d8da4dd3ab064770ccc3715'],
+      [{ pricing: false }, 'ecaa54181760846bcf1381cc1f9b578d3a19c7b10a50ffdd68eb82560e20c284'],
+    ] as const
+  ) {
+    const bytes = await renderSpecSchedulePdf(
+      buildScheduleModel(usdGoldenSections, visibility),
+      goldenHeader,
+    );
+    assertEquals(await normalizedPdfSha256(bytes), expected);
+  }
+});
+
+Deno.test('all-USD item PDF is byte-for-byte the pre-SQ-212 output', async () => {
+  const model = buildItemModel(
+    {
+      studioName: 'Studio Patina',
+      projectName: 'Maple Residence',
+      name: 'Eames Lounge Chair',
+      code: 'FF-01',
+      category: 'Seating',
+      roomName: 'Living Room',
+      quantity: 2,
+      leadLabel: '6–8 wks',
+      itemType: 'fixed',
+      specs: 'Black leather.',
+      customFields: [],
+      sourceUrl: null,
+      capturedBy: null,
+      recordPct: null,
+      brand: null,
+      imageUrls: [],
+      clientUnitCents: 700000,
+    },
+    {},
+  );
+  assertEquals(
+    await normalizedPdfSha256(await renderSpecItemPdf(model)),
+    'a996ffe1bee685e1d3779dff4a3e85f6772d510f41008bc27febbc710b729cd3',
+  );
+});
+
+Deno.test('mixed-currency schedule PDF prints each price in its currency and never a sum', async () => {
+  const model = buildScheduleModel(
+    [
+      {
+        roomName: 'Living Room',
+        lines: [
+          line({ currency: 'EUR' }),
+          line({ name: 'Rug', clientUnitCents: 80000, lineTotalCents: 80000 }),
+        ],
+      },
+    ],
+    {},
+  );
+  const pdf = await inspectRenderedPdf(await renderSpecSchedulePdf(model, goldenHeader));
+  const strings = pdf.text.map((t) => t.str);
+  renderedText(pdf, '€1,200.00');
+  renderedText(pdf, '$800.00');
+  // Section subtotal and document total both refuse the sum (the note may
+  // wrap across text runs, so compare the joined page text).
+  const joined = strings.join(' ').replace(/\s+/g, ' ');
+  assertEquals(
+    joined.split('Mixed currencies — total unavailable (EUR, USD)').length - 1,
+    2,
+    `Expected the mixed note twice, got ${JSON.stringify(strings)}`,
+  );
+  for (const sum of ['$2,000.00', '€2,000.00', '2,000.00']) {
+    assertEquals(strings.some((s) => s.includes(sum)), false, `rendered a cross-currency sum ${sum}`);
+  }
+});
+
+Deno.test('item PDF prints the client price in the row currency', async () => {
+  const model = buildItemModel({ ...itemBase, currency: 'GBP' }, {});
+  assertEquals(model.currency, 'GBP');
+  const pdf = await inspectRenderedPdf(await renderSpecItemPdf(model));
+  renderedText(pdf, '£7,000.00');
 });
 
 // ─── money-never-trade — structural, not a filter ───────────────────────────

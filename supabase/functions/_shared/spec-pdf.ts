@@ -27,6 +27,15 @@ import {
   Text,
   View,
 } from 'npm:@react-pdf/renderer@4.3.0';
+import {
+  type CurrencyTotal,
+  DEFAULT_CURRENCY,
+  formatMinorUnits,
+  isMixed,
+  mixedCurrenciesText,
+  rowCurrency,
+  sumByCurrency,
+} from './currency-totals.ts';
 
 const h = React.createElement;
 
@@ -57,6 +66,7 @@ export interface SpecLineInput {
   leadLabel: string | null; // caller-computed (bucket label pre-sale, eta date post-sale)
   clientUnitCents: number | null; // unit_sell_price OR unit_price_cents — CLIENT price
   lineTotalCents: number | null; // line_total_cents
+  currency?: string | null; // project_ffe_items.currency; missing reads as USD
   supplierName: string | null; // vendor_name
   itemType: 'fixed' | 'allowance' | 'tbd';
   recordVerified: boolean; // computeRecordPct === 100
@@ -74,18 +84,19 @@ export interface SpecLine {
   quantity: number;
   leadLabel: string | null;
   clientPriceCents?: number;
+  currency?: string; // present exactly when clientPriceCents is
   supplierName?: string;
 }
 
 export interface SpecSection {
   roomName: string;
   lines: SpecLine[];
-  subtotalCents?: number; // present only when pricing is visible
+  subtotal?: CurrencyTotal; // present only when pricing is visible
 }
 
 export interface SpecScheduleModel {
   sections: SpecSection[];
-  documentTotalCents?: number; // present only when pricing is visible
+  documentTotal?: CurrencyTotal; // present only when pricing is visible
   verifiedCount: number;
   totalCount: number;
   showPricing: boolean;
@@ -99,11 +110,14 @@ export interface SpecScheduleModel {
  *   · showPricing  = visibility.pricing         !== false
  *   · showSupplier = visibility.supplierIdentity !== false
  *   · clientPriceCents on a line is set ONLY when showPricing (and the input
- *     unit price is non-null); otherwise the key is ABSENT.
+ *     unit price is non-null); otherwise the key is ABSENT. `currency` rides
+ *     with it (the row's own currency, USD when missing).
  *   · supplierName on a line is set ONLY when showSupplier AND the input name
  *     is truthy; otherwise ABSENT.
- *   · subtotalCents / documentTotalCents are set ONLY when showPricing (= Σ of
- *     lineTotalCents, treating null as 0); otherwise ABSENT.
+ *   · subtotal / documentTotal are set ONLY when showPricing; otherwise ABSENT.
+ *     Each is Σ lineTotalCents in one currency, or `{ mixed }` when the lines
+ *     span several — a total never adds across currencies (SQ-212). A null
+ *     lineTotalCents adds nothing and names no currency.
  *   · verifiedCount / totalCount count input lines across every section.
  * Trade / markup / margin are never read or emitted.
  */
@@ -116,17 +130,12 @@ export function buildScheduleModel(
 
   let verifiedCount = 0;
   let totalCount = 0;
-  let documentTotalCents = 0;
+  const lineTotal = (input: SpecLineInput) => input.lineTotalCents;
 
   const outSections: SpecSection[] = sections.map((section) => {
-    let subtotalCents = 0;
     const lines: SpecLine[] = section.lines.map((input) => {
       totalCount += 1;
       if (input.recordVerified) verifiedCount += 1;
-
-      const lineTotal = input.lineTotalCents ?? 0;
-      subtotalCents += lineTotal;
-      documentTotalCents += lineTotal;
 
       const line: SpecLine = {
         code: input.code,
@@ -138,6 +147,7 @@ export function buildScheduleModel(
       // pricing is off (never write an undefined value).
       if (showPricing && input.clientUnitCents != null) {
         line.clientPriceCents = input.clientUnitCents;
+        line.currency = rowCurrency(input);
       }
       if (showSupplier && input.supplierName) {
         line.supplierName = input.supplierName;
@@ -146,7 +156,7 @@ export function buildScheduleModel(
     });
 
     const out: SpecSection = { roomName: section.roomName, lines };
-    if (showPricing) out.subtotalCents = subtotalCents;
+    if (showPricing) out.subtotal = sumByCurrency(section.lines, lineTotal);
     return out;
   });
 
@@ -157,7 +167,12 @@ export function buildScheduleModel(
     showPricing,
     showSupplier,
   };
-  if (showPricing) model.documentTotalCents = documentTotalCents;
+  if (showPricing) {
+    model.documentTotal = sumByCurrency(
+      sections.flatMap((section) => section.lines),
+      lineTotal,
+    );
+  }
   return model;
 }
 
@@ -191,6 +206,7 @@ export interface SpecItemModel {
   };
   imageUrls: string[];
   clientPriceCents?: number; // present ONLY when pricing is visible
+  currency?: string; // present exactly when clientPriceCents is
 }
 
 /** Raw fields the edge fn normalizes before building the item model. */
@@ -214,6 +230,7 @@ export interface SpecItemInput {
   brand: string | null;
   imageUrls: string[];
   clientUnitCents: number | null; // CLIENT unit price
+  currency?: string | null; // project_ffe_items.currency; missing reads as USD
 }
 
 /** Host portion of a source URL, or null when absent / unparseable. */
@@ -268,6 +285,7 @@ export function buildItemModel(
   };
   if (showPricing && input.clientUnitCents != null) {
     model.clientPriceCents = input.clientUnitCents;
+    model.currency = rowCurrency(input);
   }
   return model;
 }
@@ -845,6 +863,9 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   subtotalAmount: { flex: 2, textAlign: 'right', fontWeight: 700 },
+  // A mixed-currency note needs room the figure cell doesn't have.
+  subtotalSpacerMixed: { flex: 4 },
+  subtotalAmountMixed: { flex: 7 },
   subtotalSupplierPad: { flex: 3 },
   totals: { marginTop: 12, flexDirection: 'row', justifyContent: 'flex-end' },
   totalsBlock: { width: 220 },
@@ -893,13 +914,21 @@ const styles = StyleSheet.create({
 
 // ─── Helpers (same shapes as po-pdf.ts) ──────────────────────────────────────
 
-function fmt(cents: number): string {
+/** A price in its own currency. USD keeps the legacy format byte for byte. */
+function fmt(cents: number, currency: string = DEFAULT_CURRENCY): string {
+  if (currency !== DEFAULT_CURRENCY) return formatMinorUnits(cents, currency);
   return `$${
     (cents / 100).toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })
   }`;
+}
+
+/** A total as printed: its figure, or the mixed-currency note (never a sum). */
+function fmtTotal(total: CurrencyTotal | undefined): string {
+  if (!total) return fmt(0);
+  return isMixed(total) ? mixedCurrenciesText(total.mixed) : fmt(total.cents, total.currency);
 }
 
 // Same shape as po-pdf.ts fmtDate. Exported so the edge fn formats the
@@ -1017,7 +1046,7 @@ function ItemDocument(model: SpecItemModel) {
           View,
           { style: styles.block },
           h(Text, { style: styles.label }, 'Client Price'),
-          h(Text, { style: styles.priceValue }, fmt(model.clientPriceCents)),
+          h(Text, { style: styles.priceValue }, fmt(model.clientPriceCents, model.currency)),
         )
         : null,
       // Footer
@@ -1098,7 +1127,7 @@ function ScheduleDocument(
                   ? h(
                     Text,
                     { style: styles.cellPrice },
-                    line.clientPriceCents != null ? fmt(line.clientPriceCents) : '-',
+                    line.clientPriceCents != null ? fmt(line.clientPriceCents, line.currency) : '-',
                   )
                   : null,
                 model.showSupplier
@@ -1115,11 +1144,23 @@ function ScheduleDocument(
               ? h(
                 View,
                 { style: styles.subtotalRow },
-                h(Text, { style: styles.subtotalSpacer }, 'Subtotal'),
                 h(
                   Text,
-                  { style: styles.subtotalAmount },
-                  fmt(section.subtotalCents ?? 0),
+                  {
+                    style: section.subtotal && isMixed(section.subtotal)
+                      ? [styles.subtotalSpacer, styles.subtotalSpacerMixed]
+                      : styles.subtotalSpacer,
+                  },
+                  'Subtotal',
+                ),
+                h(
+                  Text,
+                  {
+                    style: section.subtotal && isMixed(section.subtotal)
+                      ? [styles.subtotalAmount, styles.subtotalAmountMixed]
+                      : styles.subtotalAmount,
+                  },
+                  fmtTotal(section.subtotal),
                 ),
                 model.showSupplier ? h(Text, { style: styles.subtotalSupplierPad }, '') : null,
               )
@@ -1139,7 +1180,7 @@ function ScheduleDocument(
               View,
               { style: styles.totalsTotal },
               h(Text, null, 'Total'),
-              h(Text, null, fmt(model.documentTotalCents ?? 0)),
+              h(Text, null, fmtTotal(model.documentTotal)),
             ),
           ),
         )

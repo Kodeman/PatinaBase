@@ -112,6 +112,7 @@ interface NormItem {
   leadLabel: string | null;
   clientUnitCents: number | null;
   lineTotalCents: number | null;
+  currency: string | null; // project_ffe_items.currency; null reads as USD
   supplierName: string | null;
   itemType: 'fixed' | 'allowance' | 'tbd';
   productId: string | null;
@@ -519,6 +520,7 @@ Deno.serve(async (req: Request) => {
           leadLabel: leadBucketLabel(r.lead_time_weeks ?? null),
           clientUnitCents: r.unit_sell_price ?? null,
           lineTotalCents: r.line_total_cents ?? null,
+          currency: null,
           supplierName: r.vendor_name ?? null,
           itemType: normItemType(r.item_type),
           productId: r.product_id ?? null,
@@ -535,7 +537,7 @@ Deno.serve(async (req: Request) => {
           .select(
             `
           id, name, doc_code, ffe_category, project_room_id, quantity,
-          unit_price_cents, line_total_cents, custom_fields, product_id,
+          unit_price_cents, line_total_cents, currency, custom_fields, product_id,
           vendor_name, item_type, eta, sort_order, notes,
           room:project_rooms!project_room_id(name, sort_order)
         `,
@@ -552,6 +554,7 @@ Deno.serve(async (req: Request) => {
           leadLabel: r.eta ? fmtDate(r.eta) : null,
           clientUnitCents: r.unit_price_cents ?? null,
           lineTotalCents: r.line_total_cents ?? null,
+          currency: r.currency ?? null,
           supplierName: r.vendor_name ?? null,
           itemType: normItemType(r.item_type),
           productId: r.product_id ?? null,
@@ -609,6 +612,7 @@ Deno.serve(async (req: Request) => {
           leadLabel: n.leadLabel,
           clientUnitCents: n.clientUnitCents,
           lineTotalCents: n.lineTotalCents,
+          currency: n.currency,
           supplierName: n.supplierName,
           itemType: n.itemType,
           recordVerified: recordPctFor(n.productId) === 100,
@@ -683,6 +687,7 @@ Deno.serve(async (req: Request) => {
           brand: product?.brand ?? null,
           imageUrls,
           clientUnitCents: item.clientUnitCents,
+          currency: item.currency,
         };
         const model = buildItemModel(input, visibility);
         prepared = {
