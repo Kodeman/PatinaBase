@@ -1,0 +1,402 @@
+[
+  {
+    "old": "Specimen",
+    "new": "Piece",
+    "kind": "persisted-key",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Domain/Specimen.swift:48",
+    "w1": true,
+    "needsRuling": false,
+    "note": "@Model public final class Specimen. The class name IS the SwiftData entity name in the on-disk store, so this is a persisted-schema rename, not a free type rename. The file header declares FROZEN SCHEMA and there is no VersionedSchema/SchemaMigrationPlan in this app. If the container fails to open, CaptureStore.walk sets the store aside and comes back empty, taking queued unsynced captures, unsent margin/punch/degrade notes and unsynced billable FieldVisitCloseRecord rows with it. W1 must land a VersionedSchema or an @Attribute(originalName:)-equivalent entity alias and prove it against a store WRITTEN BY THE SHIPPED BUILD. CaptureStoreMigrationTests is not that proof - see lexicon.md section 6."
+  },
+  {
+    "old": "CapturePhoto.specimen",
+    "new": "CapturePhoto.piece",
+    "kind": "persisted-key",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Domain/Specimen.swift:271 (public var specimen: Specimen?), inverse of Specimen.photos @Relationship(deleteRule: .cascade, inverse: \\CapturePhoto.specimen)",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Persisted SwiftData relationship attribute name, not a plain property. Renaming it renames a column in the store. Carries the same set-aside risk as the entity rename and must be covered by the same migration proof."
+  },
+  {
+    "old": "CaptureMeasurement.specimen",
+    "new": "CaptureMeasurement.piece",
+    "kind": "persisted-key",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Domain/Specimen.swift:307, inverse of Specimen.measurements",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Same as CapturePhoto.specimen. Persisted relationship attribute name."
+  },
+  {
+    "old": "capture.routingSpecimenId",
+    "new": "capture.routingSpecimenId",
+    "kind": "persisted-key",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Route/S1AssignVenueScreen.swift:55; Capture/Features/Route/S2CreateProjectScreen.swift:24",
+    "w1": true,
+    "needsRuling": false,
+    "note": "KEEP THE WIRE STRING. @AppStorage UserDefaults key. A phone mid-route at upgrade has this key written; renaming it loses the in-flight routing target and the capture lands unrouted. Rename the Swift property routingSpecimenId -> routingPieceId and leave the string literal exactly as-is. Both declaration sites must stay identical - they are two views bound to one key."
+  },
+  {
+    "old": "screen.C3.specimen-forms",
+    "new": "screen.C3.specimen-forms",
+    "kind": "analytics-event",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Support/CaptureScreenID.swift:26 (case c3Specimen)",
+    "w1": true,
+    "needsRuling": false,
+    "note": "KEEP THE WIRE STRING; rename the case to c3Piece only. CaptureScreenID.rawValue is the PostHog screen-name taxonomy (analytics.screen(CaptureScreenID.x.rawValue) at 10+ call sites) AND the frozen accessibilityIdentifier XCUITest/MobAI drives AND the field://screen/<id> deep-link token (CaptureDeepLink.swift:42-45) AND the screenshot filename emitted by scripts/capture-shots.sh:27 and consumed by scripts/capture-run.sh:11,16, docs/design/ios-alignment-program/index.html:523 and .agents/skills/patina-ios-verification/SKILL.md:63. Precedent: NounConsistencyTests pins AppRoute.crossRoom.analyticsScreenName == \"All Items\" while the display name moved."
+  },
+  {
+    "old": "screen.C5.specimen-sheet",
+    "new": "screen.C5.specimen-sheet",
+    "kind": "analytics-event",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Support/CaptureScreenID.swift:28 (case c5SpecimenSheet)",
+    "w1": true,
+    "needsRuling": false,
+    "note": "KEEP THE WIRE STRING; rename the case to c5PieceSheet only. Same four consumers as screen.C3.specimen-forms. Applied as accessibilityIdentifier at SpecimenSheetScreen.swift:50 and :370."
+  },
+  {
+    "old": "specimen",
+    "new": "specimen",
+    "kind": "persisted-key",
+    "scope": "supabase",
+    "site": "supabase/migrations/00530_field_capture_notes_and_routing.sql:40,42,309,310,313 (field_captures.capture_kind DEFAULT + CHECK + RPC branches)",
+    "w1": false,
+    "needsRuling": false,
+    "note": "OUT OF W1 SCOPE AND MUST NOT CHANGE. Live Strata column value: capture_kind text NOT NULL DEFAULT 'specimen' CHECK (capture_kind IN ('specimen','note','context')). Field's Specimen.captureKindRaw is nil for exactly this case - the server default supplies 'specimen'. Renaming it is a production migration plus a backfill plus edge-function, portal and test-fixture changes (supabase/tests/field/field_capture_note_routing_test.sql:291,361; packages/supabase/src/hooks/__tests__/use-project-visits.test.ts:27; apps/designer-portal/src/components/document/__tests__/visits-block.test.tsx:161). Field's Swift-side rename does not touch it."
+  },
+  {
+    "old": "SpecimenCategory",
+    "new": "PieceCategory",
+    "kind": "type",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Domain/CaptureEnums.swift:33",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. String-backed enum, but none of its 16 raw values contains the noun (seating, table, lighting, ... unknown) and Specimen.categoryRaw stores the raw value, not the type name. Type name only."
+  },
+  {
+    "old": "SpecimenQuery",
+    "new": "PieceQuery",
+    "kind": "type",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Persistence/CaptureStore.swift:24",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. In-memory query value, never encoded or persisted."
+  },
+  {
+    "old": "SpecimenCapturePolicy",
+    "new": "PieceCapturePolicy",
+    "kind": "type",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Domain/SpecimenCapturePolicy.swift:15,32",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. Pure policy enum, no raw values."
+  },
+  {
+    "old": "SpecimenCaptureNextStep",
+    "new": "PieceCaptureNextStep",
+    "kind": "type",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Domain/SpecimenCapturePolicy.swift:8",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. Equatable/Sendable enum, no raw values."
+  },
+  {
+    "old": "SpecimenFieldRow",
+    "new": "PieceFieldRow",
+    "kind": "type",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Design/SpecimenFieldRow.swift:9",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. SwiftUI View. File rename required. Capture.xcodeproj/project.pbxproj carries 24 specimen-bearing lines (PBXFileReference/PBXBuildFile entries, e.g. :603 for Specimen+Accessors.swift) - regenerate them with scripts/generate_project.rb, never hand-edit."
+  },
+  {
+    "old": "SpecimenSheetScreen",
+    "new": "PieceSheetScreen",
+    "kind": "type",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Specimen/SpecimenSheetScreen.swift:17",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. Also rename the containing directory Capture/Features/Specimen/ -> Capture/Features/Piece/."
+  },
+  {
+    "old": "SpecimenPhotoStrip",
+    "new": "PiecePhotoStrip",
+    "kind": "type",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Specimen/SpecimenSheetScreen.swift:274",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. SwiftUI View."
+  },
+  {
+    "old": "SpecimenPhotoThumb",
+    "new": "PiecePhotoThumb",
+    "kind": "type",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Specimen/SpecimenSheetScreen.swift:300",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. SwiftUI View."
+  },
+  {
+    "old": "SpecimenMissingView",
+    "new": "PieceMissingView",
+    "kind": "type",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Specimen/SpecimenSheetScreen.swift:358",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. SwiftUI View. Renders the user-visible string 'That specimen is no longer here.' at :364 - that string is its own row."
+  },
+  {
+    "old": "V3SpecimenDetailScreen",
+    "new": "V3PieceDetailScreen",
+    "kind": "type",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Session/V3SpecimenDetailScreen.swift:14",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. File rename required. The V3 screen id itself is CaptureScreenID.v3Detail = 'screen.V3.detail' - it does NOT contain the noun, so nothing frozen moves here."
+  },
+  {
+    "old": "RouteMissingSpecimen",
+    "new": "RouteMissingPiece",
+    "kind": "type",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Route/RouteSessionUI.swift:254",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. Its rendered copy at :260 already reads 'This capture is no longer here' - it does not contain the noun and must not be touched."
+  },
+  {
+    "old": "SpecimenProvenanceTests",
+    "new": "PieceProvenanceTests",
+    "kind": "type",
+    "scope": "apps/mobile/Capture/CaptureTests",
+    "site": "CaptureTests/CaptureLifecycleTests.swift:61",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. Swift Testing suite name."
+  },
+  {
+    "old": "ProgressiveSpecimenPolicyTests",
+    "new": "ProgressivePiecePolicyTests",
+    "kind": "type",
+    "scope": "apps/mobile/Capture/CaptureTests",
+    "site": "CaptureTests/CaptureLifecycleTests.swift:565",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. Swift Testing suite name."
+  },
+  {
+    "old": "specimen",
+    "new": "piece",
+    "kind": "symbol",
+    "scope": "apps/mobile/Capture",
+    "site": "1243 bare lowercase occurrences across 97 Swift files - local lets, parameter labels, property names, doc comments",
+    "w1": true,
+    "needsRuling": false,
+    "note": "The bulk of the rename. Free EXCEPT the three persisted rows above (CapturePhoto.specimen, CaptureMeasurement.specimen) and except inside any string literal, which is never in scope for a blanket symbol pass. W1 must do this with a compiler-aware rename, not sed: 'specimen' appears inside string literals, inside Swift Testing @Test function names, and as a substring of 'specimens'."
+  },
+  {
+    "old": "Specimen",
+    "new": "Piece",
+    "kind": "symbol",
+    "scope": "apps/mobile/Capture",
+    "site": "290 bare capitalised occurrences - type references to the @Model, generic parameters, [Specimen] arrays",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Follows the entity rename. Free at the reference sites; the risk lives entirely at the declaration (row 1)."
+  },
+  {
+    "old": "specimenID",
+    "new": "pieceID",
+    "kind": "symbol",
+    "scope": "apps/mobile/Capture",
+    "site": "64 occurrences; also specimenIDs (2), sampleSpecimenID (2), playingSpecimenID (8), routingSpecimenId (7)",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. routingSpecimenId is the Swift property bound to the frozen @AppStorage key - rename the property, not the key (see the capture.routingSpecimenId row)."
+  },
+  {
+    "old": "currentSpecimen",
+    "new": "currentPiece",
+    "kind": "symbol",
+    "scope": "apps/mobile/Capture",
+    "site": "29 occurrences",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free."
+  },
+  {
+    "old": "specimens",
+    "new": "pieces",
+    "kind": "symbol",
+    "scope": "apps/mobile/Capture",
+    "site": "25 occurrences; also sessionSpecimens (2), localCaptureSpecimens (2)",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. Must be renamed before the singular, or a naive singular pass corrupts it."
+  },
+  {
+    "old": "cardSpecimen",
+    "new": "cardPiece",
+    "kind": "symbol",
+    "scope": "apps/mobile/Capture",
+    "site": "21 occurrences; also scopedSpecimen (4), sourceSpecimen (2), specimenA (5), c3Specimen (4), c5SpecimenSheet (4), specimenDestination (2), openSpecimen (6), specimenNotFound (4), specimenSheet (15)",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. specimenSheet is both a CaptureSheet case and its registryKey literal - see the registry rows. specimenNotFound is the LocalSyncError case whose errorDescription IS user-visible; see its own row."
+  },
+  {
+    "old": "lastSpecimenTitle",
+    "new": "lastPieceTitle",
+    "kind": "symbol",
+    "scope": "apps/mobile/Capture",
+    "site": "10 occurrences",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Free. Verified not to be an @AppStorage or UserDefaults key - the only two @AppStorage keys in Capture are capture.routingSource and capture.routingSpecimenId."
+  },
+  {
+    "old": "specimen",
+    "new": "piece",
+    "kind": "symbol",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Navigation/RouteRegistry.swift:44 (CaptureRoute.specimen -> \"specimen\") and :72 (CaptureSheet.specimenSheet -> \"specimenSheet\")",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Safe to rename the string despite looking like a key. registryKey is produced and consumed by the SAME expression (r.registerRoute(CaptureRoute.specimen.registryKey) in CaptureCoreScreens.swift:19,23), it is never persisted, and the only place the raw token surfaces is the developer MissingScreen(token:) fallback. Rename the enum case and the literal together or the registry silently falls through to MissingScreen."
+  },
+  {
+    "old": "specimen-",
+    "new": "piece-",
+    "kind": "symbol",
+    "scope": "apps/mobile/Capture/CaptureKit",
+    "site": "CaptureKit/CaptureKit/Navigation/CaptureNavigation.swift:87 (case .specimenSheet(let u): return \"specimen-\\(u)\")",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Safe. Transient SwiftUI sheet identity, recomputed every presentation, never persisted."
+  },
+  {
+    "old": "Tap to capture, hold for a multi-shot specimen",
+    "new": "Tap to capture, hold for a multi-shot piece",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Capture/ViewfinderControls.swift:251",
+    "w1": true,
+    "needsRuling": true,
+    "note": "VoiceOver accessibilityHint on the shutter. Needs a human read before it ships - 'a multi-shot piece' is not obviously the sentence Patina wants. Suggested alternative: 'Tap to capture, hold to add more shots to this piece.'"
+  },
+  {
+    "old": "Add to specimen",
+    "new": "Add to piece",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Recognition/Tag/TagOCRSheet.swift:101 and :154",
+    "w1": true,
+    "needsRuling": true,
+    "note": "Primary button title on the tag-OCR sheet, two states of the same sheet. Both must move together. Needs a human read: 'Add to piece' reads thin; 'Add to this piece' is the likely copy."
+  },
+  {
+    "old": "Pull existing shots into a specimen",
+    "new": "Pull existing shots into a piece",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Resilience/ResilienceScreens.swift:86",
+    "w1": true,
+    "needsRuling": true,
+    "note": "Subtitle on the photo-import resilience row. Needs a human read."
+  },
+  {
+    "old": "Review this specimen",
+    "new": "Review this piece",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Root/RootView.swift:221",
+    "w1": true,
+    "needsRuling": true,
+    "note": "Companion action hint. Needs a human read."
+  },
+  {
+    "old": "Specimen",
+    "new": "Piece",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Specimen/SpecimenSheetScreen.swift:38 (.navigationTitle)",
+    "w1": true,
+    "needsRuling": true,
+    "note": "The C5 sheet's navigation title - the single most visible occurrence of the noun in Field. Needs a human read."
+  },
+  {
+    "old": "That specimen is no longer here.",
+    "new": "That piece is no longer here.",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Specimen/SpecimenSheetScreen.swift:364",
+    "w1": true,
+    "needsRuling": true,
+    "note": "Empty state in SpecimenMissingView. Needs a human read. Note the sibling at RouteSessionUI.swift:260 already says 'This capture is no longer here' - two near-identical sentences with two different nouns, which is itself worth a copy decision."
+  },
+  {
+    "old": "Specimen \\(id) not found in the local store.",
+    "new": "Piece \\(id) not found in the local store.",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Services/Sync/LocalCaptureSyncService.swift:32 (LocalSyncError.specimenNotFound errorDescription)",
+    "w1": true,
+    "needsRuling": true,
+    "note": "THE EIGHTH STRING - the delivery plan (research/10-dependency-map.md:380) classifies this as 'a log line' and excludes it. That is wrong: LocalSyncError conforms to LocalizedError, error.localizedDescription is written into Specimen.lastSyncError (LocalCaptureSyncService.swift:266,273,684,795,842,876) and rendered from there by the sync-status surface via Specimen+Accessors.swift:61,79. Its sibling cases are plainly designer-facing copy ('Not signed in - captures stay queued until you connect.'). Secondary hazard: the sentence is PERSISTED into lastSyncError, so a row written before the rename keeps the old noun on glass after the upgrade. Needs a human read, and 'not found in the local store' is engineer-speak regardless of the noun."
+  },
+  {
+    "old": "Specimen sheet",
+    "new": "Piece sheet",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Capture",
+    "site": "Capture/Features/Specimen/SpecimenSheetScreen.swift:374 (#Preview name)",
+    "w1": true,
+    "needsRuling": false,
+    "note": "Xcode-canvas only, never on a device. Listed for completeness so a W1 sweep does not leave it and trip a later lexicon grep; no human read needed."
+  },
+  {
+    "old": "Studio",
+    "new": "Studio",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Capture",
+    "site": "glossary entry - 34 studio-bearing copy and wire sites surveyed across Capture",
+    "w1": false,
+    "needsRuling": false,
+    "note": "D3 clause 2 recorded, no code change. In Field, 'studio' already means the firm at every site surveyed (ConnectWorkspaceScreen.swift:190,191,335; ViewfinderModel.swift:697; S5InboxTerminalScreen.swift:52; SiteScanSetupScreen.swift:218; WorkDashboardScreen.swift:182; FieldRosterRules.swift:219; FieldCopyAudit.swift:31; and the studio_* Supabase tables). No contradiction found in Field. Nothing for W1 to do."
+  },
+  {
+    "old": "Studio",
+    "new": "Projects",
+    "kind": "user-visible-string",
+    "scope": "apps/mobile/Patina",
+    "site": "Patina/Features/Navigation/PatinaTab.swift:20 (case studio), :30 (title \"Studio\"), :42 (canonicalName \"Your Studio\"); App/Coordinators/Coordinator.swift:87 (AppRoute.studio), :149 (displayName \"Your Studio\")",
+    "w1": false,
+    "needsRuling": true,
+    "note": "CONTRADICTION FOUND - OUT OF W1 SCOPE, DO NOT CHANGE. D3 clause 3 says 'Projects' is the homeowner-facing tab name in the Patina client app. The shipped tab bar is Today / Spaces / Pieces / Studio; there is no Projects tab. 'Projects' exists only as a screen title one level down (Coordinator.swift:153 AppRoute.projectList displayName 'Projects'), reached from the Studio hub. The Studio tab also uses 'Studio' for the HOMEOWNER's own hub ('Your Studio begins with a project.', StudioHubView.swift:153), which collides with D3 clause 2's 'Studio means the firm'. Resolving this is a separate ticket and needs a ruling on which of the four tabs becomes Projects. It also carries its own analytics-event hazard: AppRoute.studio has its own PostHog screen name, and NounConsistencyTests already pins the rule that the analytics name must not move when the display name does."
+  },
+  {
+    "old": "CapturedPiece",
+    "new": "CapturedPiece",
+    "kind": "type",
+    "scope": "apps/mobile/Capture",
+    "site": "no current site - reserved term",
+    "w1": false,
+    "needsRuling": true,
+    "note": "D3 clause 1's second half - 'the captured-in-the-field variant -> CapturedPiece' - has no unambiguous target in the code. Everything in apps/mobile/Capture is captured-in-the-field, so a literal reading would make the @Model itself CapturedPiece rather than Piece, contradicting clause 1's first half. This table takes the LITERAL reading of the first clause (Specimen -> Piece) and reserves CapturedPiece as the disambiguating term for the two places where a captured piece must be told apart from a catalog piece: (a) the sibling client app already owns Piece as the marketplace/house noun (PatinaTab.pieces 'Browse pieces', PieceAct, PiecesTabRoot, AppRoute.pieceDetail), and (b) the server's field_captures.capture_kind = 'specimen'. Kody must confirm the reading before W1 renames 1,856 identifiers; if the intent was Specimen -> CapturedPiece, every Piece* row in this table shifts. See lexicon.md section 7."
+  }
+]
