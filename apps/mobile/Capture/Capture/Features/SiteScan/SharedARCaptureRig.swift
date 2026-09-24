@@ -21,7 +21,7 @@
 //  OS SUPPORT MATRIX (pinned — SC-05/SC-17 "OS churn"; also
 //  docs/design/field-capture/capture-os-support-matrix.md)
 //
-//    • Deployment floor            iOS 18.0 (Capture target IPHONEOS_DEPLOYMENT_TARGET).
+//    • Deployment floor            iOS 26.0 (Capture target IPHONEOS_DEPLOYMENT_TARGET).
 //    • RoomPlan / RoomCaptureView  Requires iOS 17+ AND a LiDAR device. Gated by
 //                                  `RoomCaptureSession.isSupported` upstream
 //                                  (`SupabaseSiteScanService.isSupported`); a
