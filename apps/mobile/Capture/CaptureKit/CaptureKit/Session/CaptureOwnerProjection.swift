@@ -38,7 +38,7 @@ public enum CaptureOwnerProjectionPolicy {
         runsRealServices: Bool,
         userID: String?,
         workspaceID: String?
-    ) -> Specimen? {
+    ) -> Piece? {
         switch resolve(
             runsRealServices: runsRealServices,
             userID: userID,
@@ -60,7 +60,7 @@ public enum CaptureOwnerProjectionPolicy {
         runsRealServices: Bool,
         userID: String?,
         workspaceID: String?
-    ) -> Specimen? {
+    ) -> Piece? {
         switch resolve(
             runsRealServices: runsRealServices,
             userID: userID,

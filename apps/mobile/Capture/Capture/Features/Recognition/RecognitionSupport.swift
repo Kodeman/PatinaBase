@@ -14,7 +14,7 @@ enum RecognitionImageLoader {
     /// The still recognition works from: the specimen's primary photo if it has
     /// one, otherwise a fresh frame off the camera seam (mocked in CP0/previews).
     @MainActor
-    static func captureImage(for specimen: Specimen,
+    static func captureImage(for specimen: Piece,
                              store: CaptureStore,
                              camera: any CameraService) async -> CaptureImage {
         if let photo = specimen.primaryPhoto {

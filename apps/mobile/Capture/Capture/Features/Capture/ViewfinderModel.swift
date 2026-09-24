@@ -101,7 +101,7 @@ final class ViewfinderModel {
     var capturing: Bool = false
     var isHolding: Bool = false          // C4 multi-shot in progress
     var holdCount: Int = 0
-    var cardSpecimen: Specimen?          // C3 card subject (nil = no card)
+    var cardSpecimen: Piece?          // C3 card subject (nil = no card)
     var lastError: String?
 
     var quickSaveTitle: String {
@@ -631,7 +631,7 @@ final class ViewfinderModel {
 
     // MARK: Plumbing
 
-    private func makeDraft() -> Specimen? {
+    private func makeDraft() -> Piece? {
         guard localListScope != .unavailable else {
             reportOwnerUnavailable()
             return nil
@@ -680,7 +680,7 @@ final class ViewfinderModel {
         return draft
     }
 
-    private func currentSpecimen(id: UUID) -> Specimen? {
+    private func currentSpecimen(id: UUID) -> Piece? {
         CaptureOwnerProjectionPolicy.specimen(
             id: id,
             store: store,
@@ -711,7 +711,7 @@ final class ViewfinderModel {
             workspaceID: session.workspaceID)
     }
 
-    private func captureFrame(into draft: Specimen, primary: Bool) async {
+    private func captureFrame(into draft: Piece, primary: Bool) async {
         do {
             if torchOn { camera.setTorch(.on) }
             let frame = try await camera.capture()
@@ -727,7 +727,7 @@ final class ViewfinderModel {
                 order: draft.photos.count,
                 captureModeRaw: frame.mode.rawValue
             )
-            photo.specimen = draft
+            photo.piece = draft
             draft.photos.append(photo)
             if frame.isLowLight { isLowLight = true }
             lastError = nil
@@ -736,7 +736,7 @@ final class ViewfinderModel {
         }
     }
 
-    private func discard(_ draft: Specimen) {
+    private func discard(_ draft: Piece) {
         store.delete(draft)
         try? store.save()
     }
@@ -746,7 +746,7 @@ final class ViewfinderModel {
     /// so the shutter does not block on it, and the fields land when it
     /// completes; `setValue` still refuses to let a guess clobber anything a tag,
     /// a scan, a measure or the designer set.
-    private func applySmartGuess(to draft: Specimen) {
+    private func applySmartGuess(to draft: Piece) {
         guard let photo = draft.primaryPhoto else { return }
         let mediaURL = store.mediaURL(for: photo.filename)
         let width = photo.width
@@ -770,7 +770,7 @@ final class ViewfinderModel {
 
     /// Auto-flag near-identical frames so the multi-shot set stays clean (F-02
     /// edge). Heuristic stand-in: same pixel dimensions as a kept frame.
-    private func flagNearDuplicates(in draft: Specimen) {
+    private func flagNearDuplicates(in draft: Piece) {
         var seen = Set<String>()
         for photo in draft.photos.sorted(by: { $0.order < $1.order }) {
             let key = "\(photo.width)x\(photo.height)"

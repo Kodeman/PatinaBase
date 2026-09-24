@@ -204,14 +204,19 @@ struct TagOCRSheet: View {
 
     private func merge(defaultSource: ProvenanceSource) {
         guard let specimen = currentSpecimen() else { return }
+        // A corrected read records the read it replaced (`proposed`), in the
+        // field's own stored form.
         if !maker.isEmpty {
-            specimen.setValue(maker, for: .maker, source: source(for: maker, original: makerOriginal, fallback: defaultSource))
+            specimen.setValue(maker, for: .maker, source: source(for: maker, original: makerOriginal, fallback: defaultSource),
+                              proposed: makerOriginal)
         }
         if !sku.isEmpty {
-            specimen.setValue(sku, for: .sku, source: source(for: sku, original: skuOriginal, fallback: defaultSource))
+            specimen.setValue(sku, for: .sku, source: source(for: sku, original: skuOriginal, fallback: defaultSource),
+                              proposed: skuOriginal)
         }
         if !price.isEmpty, let cents = Self.centsFromPrice(price) {
-            specimen.setValue(String(cents), for: .price, source: source(for: price, original: priceOriginal, fallback: defaultSource))
+            specimen.setValue(String(cents), for: .price, source: source(for: price, original: priceOriginal, fallback: defaultSource),
+                              proposed: Self.centsFromPrice(priceOriginal).map(String.init))
             specimen.currencyCode = specimen.currencyCode ?? "USD"
         }
         try? store.save()
@@ -219,7 +224,7 @@ struct TagOCRSheet: View {
         coordinator?.present(.specimenSheet(specimenID))
     }
 
-    private func currentSpecimen() -> Specimen? {
+    private func currentSpecimen() -> Piece? {
         CaptureOwnerProjectionPolicy.specimen(
             id: specimenID,
             store: store,

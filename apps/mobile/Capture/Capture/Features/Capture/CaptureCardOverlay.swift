@@ -18,7 +18,7 @@ import SwiftUI
 import CaptureKit
 
 struct CaptureCardOverlay: View {
-    let specimen: Specimen
+    let specimen: Piece
     let saveTitle: String
     let onSave: () -> Void
     let onAddDetail: () -> Void
@@ -88,10 +88,12 @@ struct CaptureCardOverlay: View {
 
             guessRow(label: "Category",
                      value: categoryLabel,
-                     source: specimen.provenance(for: .category))
+                     source: specimen.provenance(for: .category),
+                     confirmed: specimen.isConfirmed(.category))
             guessRow(label: "Material",
                      value: specimen.materialNote ?? "—",
-                     source: specimen.provenance(for: .material))
+                     source: specimen.provenance(for: .material),
+                     confirmed: specimen.isConfirmed(.material))
 
             Button(action: onPlacement) {
                 HStack(spacing: 8) {
@@ -207,14 +209,15 @@ struct CaptureCardOverlay: View {
 
     /// `source` is nil when nothing has filled the field — the read couldn't
     /// place it and nobody typed one. Badge only what actually has a source.
-    private func guessRow(label: String, value: String, source: ProvenanceSource?) -> some View {
+    private func guessRow(label: String, value: String, source: ProvenanceSource?,
+                          confirmed: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(label)
                     .font(CaptureType.eyebrow).textCase(.uppercase)
                     .foregroundStyle(CaptureColor.inkSoft)
                 Spacer()
-                if let source { ProvenanceBadge(source) }
+                if let source { ProvenanceBadge(source, confirmed: confirmed) }
             }
             Text(value)
                 .font(CaptureType.title2)

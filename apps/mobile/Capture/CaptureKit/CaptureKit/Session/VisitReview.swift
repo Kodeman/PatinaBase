@@ -197,7 +197,7 @@ public extension VisitReviewRow {
     /// terminal field_captures.status for it, because introducing one would
     /// silently revoke studio read (field_captures_org_inbox_select keys on
     /// status='inbox', 00233:175-186).
-    init(specimen: Specimen) {
+    init(specimen: Piece) {
         let words = (specimen.voiceTranscript ?? specimen.voicePartialTranscript ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(

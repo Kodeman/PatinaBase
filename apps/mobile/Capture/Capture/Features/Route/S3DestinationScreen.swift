@@ -18,7 +18,7 @@ import CaptureKitMocks
 #endif
 
 struct S3DestinationScreen: View {
-    let specimen: Specimen?
+    let specimen: Piece?
     let store: CaptureStore
     let sync: any CaptureSyncService
     let session: any SessionProviding
@@ -45,7 +45,7 @@ struct S3DestinationScreen: View {
 }
 
 private struct S3Content: View {
-    let specimen: Specimen
+    let specimen: Piece
     let store: CaptureStore
     let sync: any CaptureSyncService
     let session: any SessionProviding

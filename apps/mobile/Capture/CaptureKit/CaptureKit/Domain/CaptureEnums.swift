@@ -40,17 +40,19 @@ public enum FieldKey: String, Codable, CaseIterable, Sendable {
     case title, maker, sku, colorway, material, price, sourceURL, category, note, dimensions
 }
 
-/// How a field's value was obtained — drives the V3/C5 provenance badge colour.
+/// How a field's value was obtained: its ORIGIN, which confirming never rewrites
+/// (confirmation is its own fact, `Piece.confirm`). Drives the V3/C5 provenance
+/// badge colour.
 /// verdigris = value/success, brass = recognised data, rust = friction/edge.
 public enum ProvenanceSource: String, Codable, CaseIterable, Sendable {
-    case manual          // typed by the designer
+    case manual          // a human typed it into a field no machine had proposed a value for
     case ocr             // N1 tag/label OCR
     case code            // N2 barcode/QR
     case measure         // N3 AR / manual measure
     case voice           // N4 voice transcript
-    case smartGuess      // N5 vision/heuristic guess (unconfirmed)
+    case smartGuess      // N5 vision/heuristic guess, confirmed or not (`Piece.isConfirmed`)
     case imported        // E3 share-sheet / photos import
-    case edited          // a recognised/measured value the designer changed
+    case edited          // a human replaced a proposed value; `Piece.proposedValue(for:)` keeps it
 }
 
 /// Library (keep) vs inbox (triage) — S3 destination decision.

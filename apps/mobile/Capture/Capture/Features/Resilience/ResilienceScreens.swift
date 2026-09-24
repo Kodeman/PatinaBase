@@ -220,7 +220,7 @@ struct PhotoImportSheet: View {
                     isPrimary: order == 0,
                     order: order,
                     captureModeRaw: CameraMode.photo.rawValue)
-                photo.specimen = draft
+                photo.piece = draft
                 draft.photos.append(photo)
                 order += 1
             }
@@ -247,7 +247,7 @@ struct PhotoImportSheet: View {
         openSpecimen(draft.id, scope: creationScope)
     }
 
-    private func makeDraft(in scope: CaptureLocalListScope) -> Specimen? {
+    private func makeDraft(in scope: CaptureLocalListScope) -> Piece? {
         switch scope {
         case .globalFixtures:
             creationError = nil

@@ -128,7 +128,7 @@ public enum FieldWriteGate {
     /// The server id both lanes hang off, or nil when it does not exist yet.
     /// `hasConfirmedCaptureReceipt` is the same predicate the placement lane
     /// waits on (Specimen+Accessors.swift).
-    public static func fieldCaptureID(for specimen: Specimen) -> UUID? {
+    public static func fieldCaptureID(for specimen: Piece) -> UUID? {
         guard specimen.hasConfirmedCaptureReceipt,
               let raw = specimen.remoteId?
                   .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -147,7 +147,7 @@ public enum FieldWriteGate {
     /// visit on `Specimen` as `visitKind`/`captureSessionID` rather than a
     /// single id, and this file must not pick one of those for the caller.
     public static func shouldAutoFileMarginNote(
-        for specimen: Specimen,
+        for specimen: Piece,
         projectID: String?,
         insideVisit: Bool
     ) -> Bool {

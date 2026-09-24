@@ -19,7 +19,7 @@ struct SyncStatusScreen: View {
     let analytics: any CaptureAnalytics
     let coordinator: CaptureCoordinator
 
-    @State private var rows: [Specimen] = []
+    @State private var rows: [Piece] = []
     @State private var scanRows: [FieldScanPendingUpload] = []
     @State private var snapshot = SyncSnapshot(queued: 0, uploading: 0, failed: 0)
     @State private var retryRequest = 0
@@ -246,7 +246,7 @@ struct SyncStatusScreen: View {
         }
     }
 
-    private func row(_ s: Specimen) -> some View {
+    private func row(_ s: Piece) -> some View {
         let status = rowStatus(for: s.transferState)
         return HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
@@ -457,7 +457,7 @@ struct SyncStatusScreen: View {
         updateCompanion()
     }
 
-    private func captureOutbox() -> [Specimen] {
+    private func captureOutbox() -> [Piece] {
         switch localListScope {
         case .globalFixtures:
             return store.outbox()
@@ -674,7 +674,7 @@ struct SyncStatusScreen: View {
         return message
     }
 
-    private func weight(_ s: Specimen) -> Int {
+    private func weight(_ s: Piece) -> Int {
         switch s.transferState.phase {
         case .uploading, .awaitingConfirmation: return 0
         case .retryableFailure, .rejected: return 1
@@ -683,7 +683,7 @@ struct SyncStatusScreen: View {
         }
     }
 
-    private func summary(_ s: Specimen) -> String {
+    private func summary(_ s: Piece) -> String {
         var parts: [String] = []
         if !s.photos.isEmpty { parts.append("\(s.photos.count) photo\(s.photos.count == 1 ? "" : "s")") }
         if !s.measurements.isEmpty { parts.append("measured") }
@@ -737,13 +737,13 @@ import CaptureKitMocks
 #Preview {
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
-    @MainActor func make(_ title: String, status: CaptureStatus, photos: Int = 1, configure: (Specimen) -> Void = { _ in }) {
+    @MainActor func make(_ title: String, status: CaptureStatus, photos: Int = 1, configure: (Piece) -> Void = { _ in }) {
         let s = store.newDraft()
         s.title = title
         s.status = status
         for i in 0..<photos {
             let p = CapturePhoto(filename: "\(title)-\(i).heic", width: 1170, height: 1560, isPrimary: i == 0, order: i)
-            p.specimen = s
+            p.piece = s
             s.photos.append(p)
         }
         configure(s)

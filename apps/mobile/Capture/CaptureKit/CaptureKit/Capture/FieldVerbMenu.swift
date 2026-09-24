@@ -131,7 +131,7 @@ public struct FieldVerbFacts: Equatable, Sendable {
     /// `partiesSettled` has no default here: it is a fact about the host's
     /// fetch, not about the specimen, and a surface that forgets to say gets
     /// the race rather than a compiler error.
-    public init(specimen: Specimen, partiesSettled: Bool) {
+    public init(specimen: Piece, partiesSettled: Bool) {
         self.init(
             hasProject: specimen.venue?.projectId?.isEmpty == false,
             noteRequested: specimen.marginNoteId != nil,

@@ -52,7 +52,7 @@ public enum FieldTrayScopeBuilder {
 /// screen, so it's testable without a SwiftUI host — CaptureTests links
 /// CaptureKit only, no app target.
 public enum FieldTrayUnplacedFilter {
-    public static func excluding(_ unplaced: [Specimen], visibleIn items: [Specimen]) -> [Specimen] {
+    public static func excluding(_ unplaced: [Piece], visibleIn items: [Piece]) -> [Piece] {
         let shown = Set(items.map(\.id))
         return unplaced.filter { !shown.contains($0.id) }
     }

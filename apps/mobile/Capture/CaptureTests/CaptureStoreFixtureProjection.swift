@@ -5,13 +5,18 @@
 //  in `CaptureStore.schema`, keyed by its unique attribute, each row a map from
 //  STORED ATTRIBUTE NAME to that attribute's JSON value.
 //
-//  This file is shared, byte for byte, by two builds. The seed harness that
-//  wrote `Fixtures/Store-0.1-6` ran it inside Patina Field 0.1 (6) (source
-//  b1447ba7d) to record what the shipped build put on disk; the migration test
-//  runs it inside the current build to read the same store back. The keys are
-//  string literals on purpose: they are the names SwiftData stores, and a
-//  Swift-side rename that forgets to carry the stored name across still has to
-//  answer to the key the shipped build wrote.
+//  The seed harness that wrote `Fixtures/Store-0.1-6` ran this projection
+//  inside Patina Field 0.1 (6) (source b1447ba7d) to record what the shipped
+//  build put on disk; the migration test runs it inside the current build to
+//  read the same store back. The keys are string literals on purpose: they are
+//  the names 0.1 (6) stored, and a Swift-side rename that forgets to carry the
+//  stored name across still has to answer to the key the shipped build wrote.
+//
+//  One rename is deliberate. V2 stores 0.1 (6)'s `Specimen` rows as `Piece`,
+//  and the photo and measurement `specimen` relationship as `piece`
+//  (`CaptureSchemaV2`). This file projects them back under the shipped names,
+//  so the V1 manifest checks the V1→V2 stage attribute by attribute. That is
+//  the only difference from the seed's copy.
 //
 //  The file holds a projection and nothing else: no seeding, no assertions.
 
@@ -23,12 +28,17 @@ import SwiftData
 enum StoreFixtureProjection {
     typealias Row = [String: String]
 
-    /// The SwiftData entity names, which are what a store on a phone holds.
+    /// The SwiftData entity names 0.1 (6) stored, which key the manifest.
     static let entityNames = [
         "Specimen", "CapturePhoto", "CaptureMeasurement", "CaptureProjectRef",
         "ScanUploadRecord", "SiteRequestOutboxRecord", "FieldVisitCloseRecord",
         "TimeEntryOutboxRecord"
     ]
+
+    /// The entity a shipped name is stored as today (V1→V2 renamed one).
+    static func storedEntityName(_ shipped: String) -> String {
+        shipped == "Specimen" ? "Piece" : shipped
+    }
 
     /// JSON, sorted keys, so two runs of either build print the same text.
     /// Dates encode as `timeIntervalSinceReferenceDate`, which is exactly what
@@ -44,7 +54,7 @@ enum StoreFixtureProjection {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    static func specimen(_ row: Specimen) -> Row {
+    static func specimen(_ row: Piece) -> Row {
         [
             "id": value(row.id),
             "clientToken": value(row.clientToken),
@@ -147,7 +157,7 @@ enum StoreFixtureProjection {
             "order": value(row.order),
             "captureModeRaw": value(row.captureModeRaw),
             "createdAt": value(row.createdAt),
-            "specimen": value(row.specimen?.id)
+            "specimen": value(row.piece?.id)
         ]
     }
 
@@ -159,7 +169,7 @@ enum StoreFixtureProjection {
             "millimeters": value(row.millimeters),
             "sourceRaw": value(row.sourceRaw),
             "createdAt": value(row.createdAt),
-            "specimen": value(row.specimen?.id)
+            "specimen": value(row.piece?.id)
         ]
     }
 
@@ -269,7 +279,7 @@ enum StoreFixtureProjection {
             return Dictionary(uniqueKeysWithValues: rows.map { (key($0), project($0)) })
         }
         return [
-            "Specimen": try keyed(Specimen.self, key: { $0.id.uuidString }, project: specimen),
+            "Specimen": try keyed(Piece.self, key: { $0.id.uuidString }, project: specimen),
             "CapturePhoto": try keyed(CapturePhoto.self, key: { $0.id.uuidString }, project: photo),
             "CaptureMeasurement": try keyed(CaptureMeasurement.self,
                                             key: { $0.id.uuidString }, project: measurement),

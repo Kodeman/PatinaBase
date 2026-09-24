@@ -83,8 +83,8 @@ final class WorkDashboardModel {
     private(set) var captures: [FieldCaptureActivity] = []
     private(set) var scanUploads: [FieldScanPendingUpload] = []
     private(set) var visitState: CaptureVisitState = .none
-    private(set) var unplaced: [Specimen] = []
-    private(set) var visitCaptures: [Specimen] = []
+    private(set) var unplaced: [Piece] = []
+    private(set) var visitCaptures: [Piece] = []
 
     init(container: AppContainer) {
         projectsService = container.projects
@@ -251,7 +251,7 @@ final class WorkDashboardModel {
         }
     }
 
-    private func localCaptureSpecimens() -> [Specimen] {
+    private func localCaptureSpecimens() -> [Piece] {
         switch localListScope {
         case .globalFixtures:
             return store.search(SpecimenQuery())

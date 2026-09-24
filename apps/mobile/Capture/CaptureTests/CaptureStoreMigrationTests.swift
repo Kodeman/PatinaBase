@@ -7,7 +7,8 @@
 //  written by Patina Field 0.1 (6) (source b1447ba7d) through the app's own
 //  write paths — see that folder's README for exactly what it holds. It is
 //  opened through `CaptureMigrationPlan`, as every container is: the store
-//  0.1 (6) wrote must be `CaptureSchemaV1` exactly. If this build cannot open
+//  0.1 (6) wrote must be `CaptureSchemaV1` exactly, and it opens through the
+//  V1→V2 stage that renames Specimen to Piece. If this build cannot open
 //  it, the ladder moves it into a recovery folder and comes back empty
 //  (`CaptureStore.openRung` — "Moved unopenable store at …"), and on a phone
 //  what it moves aside is unsynced captures, queued uploads and billable hours.
@@ -110,16 +111,21 @@ struct CaptureStoreMigrationTests {
         #expect(!FileManager.default.fileExists(
             atPath: CaptureStore.recoveryDirectory(beside: fixture.storeURL).path))
         #expect(FileManager.default.fileExists(atPath: fixture.storeURL.path))
+        // The V1→V2 carry finished: its rows are in the store, its file is gone.
+        #expect(!FileManager.default.fileExists(
+            atPath: PieceMigrationCarry.carryURL(beside: fixture.storeURL).path))
     }
 
-    /// The container schema is the newest version the plan carries, so the
-    /// fixture above really was opened as V1.
+    /// The container schema is the newest version the plan carries, and the
+    /// fixture, which is V1, has a stage to reach it.
     @Test func theStoreSchemaIsTheNewestVersionInThePlan() throws {
-        let newest = try #require(CaptureMigrationPlan.schemas.last)
-        #expect(ObjectIdentifier(newest) == ObjectIdentifier(CaptureSchemaV1.self))
+        let schemas = CaptureMigrationPlan.schemas.map(ObjectIdentifier.init)
+        #expect(schemas == [ObjectIdentifier(CaptureSchemaV1.self), ObjectIdentifier(CaptureSchemaV2.self)])
+        #expect(CaptureMigrationPlan.stages.count == 1)
         #expect(CaptureSchemaV1.versionIdentifier == Schema.Version(1, 0, 0))
+        #expect(CaptureSchemaV2.versionIdentifier == Schema.Version(2, 0, 0))
         #expect(Set(CaptureStore.schema.entities.map(\.name))
-            == Set(StoreFixtureProjection.entityNames))
+            == Set(StoreFixtureProjection.entityNames.map(StoreFixtureProjection.storedEntityName)))
     }
 
     // MARK: - Every row, every attribute
@@ -164,23 +170,126 @@ struct CaptureStoreMigrationTests {
             """)
     }
 
+    /// The fixture leaves 26 of Specimen's attributes nil in every row, so it
+    /// cannot see a V1→V2 carry that drops one of them. This V1 row sets every
+    /// attribute to something other than its default, and each one must read
+    /// back from the Piece it became.
+    @Test func aV1RowWithEveryAttributeSetBecomesAPieceIntact() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("capture-store-v1-full-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("v1.store")
+        let at = Date(timeIntervalSinceReferenceDate: 780_000_000.25)
+        let photoID = UUID()
+        let measurementID = UUID()
+
+        let written: [String: Any]
+        do {
+            let v1 = try ModelContainer(for: Schema(versionedSchema: CaptureSchemaV1.self),
+                                        configurations: [ModelConfiguration(url: url)])
+            let s = CaptureSchemaV1.Specimen(
+                createdAt: at, captureSessionID: UUID(), owner: Self.ownerA,
+                categoryRaw: "seating", destinationRaw: "inbox", statusRaw: "failed",
+                lifecycleRaw: "rejected")
+            s.title = "Lina Lounge Chair"; s.maker = "Holloway & Co."; s.sku = "LQ-3S"
+            s.colorway = "Bone"; s.materialNote = "Oak / bouclé"; s.finish = "Oiled"
+            s.priceTradeCents = 312_000; s.priceRetailCents = 450_000; s.currencyCode = "GBP"
+            s.sourceURL = "https://example.com/lina"; s.note = "left arm scuffed"
+            s.materials = ["oak"]; s.colors = ["bone"]; s.styleTags = ["mid-century"]
+            s.voiceTranscript = "a chair"; s.voicePartialTranscript = "a ch"
+            s.voiceAudioFilename = "a.m4a"; s.voiceAudioSegmentsRaw = ["a.m4a", "b.m4a"]
+            s.voiceAudioRemotePathsRaw = ["r/a.m4a"]; s.voiceTranscriptSourceRaw = "speech"
+            s.captureKindRaw = "note"; s.voiceDurationSeconds = 12.5
+            s.scannedCodes = ["0123456789012"]; s.catalogMatchRemoteId = "cat-1"
+            s.provenanceRaw = ["maker": "ocr", "title": "manual"]
+            s.guessConfidenceRaw = ["material": 0.4]
+            s.venue = VenueStamp(projectId: "p-1", projectName: "Maple St", projectRoomId: "r-1",
+                                 room: "Den", shelf: "B2", latitude: 51.5, longitude: -0.1,
+                                 accuracyMeters: 8, placemarkName: "Showroom", placeId: "pl-1",
+                                 capturedAt: at, timezoneIdentifier: "Europe/London")
+            s.remoteId = "fc-1"; s.committedProductId = "prod-1"; s.lastSyncError = "timeout"
+            s.retryCount = 3; s.uploadProgress = 40
+            s.placementProjectId = "p-1"; s.placementRoomId = "r-1"; s.placementSlotId = "slot-1"
+            s.placementCategory = "seating"; s.placementStateRaw = "failed"
+            s.placementFFEItemId = "ffe-1"; s.placementSpecId = "spec-1"
+            s.placementLastError = "conflict"; s.placementRetryCount = 2
+            s.marginNoteId = "mn-1"; s.marginNoteBodyRaw = "check the arm"
+            s.marginNoteStateRaw = "refused"; s.marginNoteLastError = "403"; s.marginNoteRetryCount = 1
+            s.punchTaskId = "pt-1"; s.punchTaskPartyId = "party-1"; s.punchTaskOwnerRaw = "gc"
+            s.punchTaskStateRaw = "writing"; s.punchTaskLastError = "offline"; s.punchTaskRetryCount = 4
+            s.degradeNoteId = "dn-1"; s.degradeNoteBodyRaw = "no room"; s.degradeNoteStateRaw = "pending"
+            s.degradeNoteLastError = "none"; s.degradeNoteRetryCount = 5
+            s.fieldWriteAttentionRaw = "attention"
+            s.visitKindRaw = "site"; s.visitKitRaw = "measure"; s.visitLabel = "Walkthrough"
+            s.visitStartedAt = at; s.visitEndedAt = at.addingTimeInterval(3600)
+            s.noteSettingRaw = "always"
+            s.suggestedProjectID = "p-2"; s.suggestedProjectRoomID = "r-2"
+            s.suggestionBasisRaw = "venue"; s.suggestionConfidence = 0.7
+            s.suggestionReasonRaw = "same showroom"
+            s.placementReplayPending = true; s.placementEventEmitted = true
+            let photo = CaptureSchemaV1.CapturePhoto(id: photoID, filename: "p.heic", width: 4,
+                                                     height: 3, isPrimary: true, order: 1)
+            let measurement = CaptureSchemaV1.CaptureMeasurement(id: measurementID, axisRaw: "width",
+                                                                 millimeters: 812)
+            v1.mainContext.insert(s)
+            photo.specimen = s
+            measurement.specimen = s
+            s.updatedAt = at.addingTimeInterval(60)
+            try v1.mainContext.save()
+            let row = try JSONEncoder().encode(PieceMigrationCarry.Row(s))
+            written = try #require(try JSONSerialization.jsonObject(with: row) as? [String: Any])
+        }
+
+        let migrated = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: url))
+        let piece = try #require(try migrated.mainContext.fetch(FetchDescriptor<Piece>()).first)
+        let read = StoreFixtureProjection.specimen(piece)
+        let untouched = StoreFixtureProjection.specimen(Piece())
+        var differences: [String] = []
+        for (attribute, value) in read.sorted(by: { $0.key < $1.key })
+        where attribute != "photos" && attribute != "measurements" {
+            guard let wrote = written[attribute] else {
+                differences.append("\(attribute): the carry has no such field")
+                continue
+            }
+            let wroteText = String(decoding: try JSONSerialization.data(
+                withJSONObject: wrote, options: [.fragmentsAllowed, .sortedKeys]), as: UTF8.self)
+            if !StoreFixtureProjection.sameValue(wroteText, value) {
+                differences.append("\(attribute): wrote \(wroteText), read \(value)")
+            }
+            if attribute != "id", attribute != "clientToken",
+               StoreFixtureProjection.sameValue(value, untouched[attribute] ?? "") {
+                differences.append("\(attribute): still its default, so this proves nothing")
+            }
+        }
+        #expect(differences.isEmpty, "\(differences.joined(separator: "\n"))")
+        #expect(read.count > 80)
+        #expect(piece.ownerUserID == Self.ownerA.userID)
+        #expect(piece.ownerWorkspaceID == Self.ownerA.workspaceID)
+        #expect(piece.photos.map(\.id) == [photoID])
+        #expect(piece.photos.first?.piece?.id == piece.id)
+        #expect(piece.measurements.map(\.id) == [measurementID])
+        #expect(piece.measurements.first?.piece?.id == piece.id)
+        #expect(!FileManager.default.fileExists(atPath: PieceMigrationCarry.carryURL(beside: url).path))
+    }
+
     // MARK: - Relationships and the media they name
 
     @Test func photosMeasurementsAndMediaStillBelongToTheirCaptures() throws {
         let fixture = try Self.openFixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let written = fixture.manifest.rows
-        let specimens = try fixture.store.context.fetch(FetchDescriptor<Specimen>())
+        let specimens = try fixture.store.context.fetch(FetchDescriptor<Piece>())
         #expect(specimens.count == written["Specimen"]?.count)
 
         var referenced: Set<String> = []
         for specimen in specimens {
             for photo in specimen.photos {
-                #expect(photo.specimen?.id == specimen.id)
+                #expect(photo.piece?.id == specimen.id)
                 referenced.insert(photo.filename)
             }
             for measurement in specimen.measurements {
-                #expect(measurement.specimen?.id == specimen.id)
+                #expect(measurement.piece?.id == specimen.id)
             }
             if let audio = specimen.voiceAudioFilename { referenced.insert(audio) }
             referenced.formUnion(specimen.voiceAudioSegmentsRaw ?? [])
@@ -221,7 +330,7 @@ struct CaptureStoreMigrationTests {
         let fixture = try Self.openFixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = fixture.store.context
-        let specimens = try context.fetch(FetchDescriptor<Specimen>())
+        let specimens = try context.fetch(FetchDescriptor<Piece>())
 
         let ownedByA = specimens.filter {
             Self.ownerA.matches(userID: $0.ownerUserID, workspaceID: $0.ownerWorkspaceID)
@@ -305,7 +414,7 @@ struct CaptureStoreMigrationTests {
         let context = fixture.store.context
         let writeStates: Set<String> = ["pending", "writing", "failed", "refused", "unwritable", "written"]
 
-        let specimens = try context.fetch(FetchDescriptor<Specimen>())
+        let specimens = try context.fetch(FetchDescriptor<Piece>())
         #expect(Set(specimens.map(\.statusRaw))
             == ["draft", "ready", "queued", "uploading", "failed", "committed"])
         #expect(Set(specimens.map(\.lifecycleRaw))

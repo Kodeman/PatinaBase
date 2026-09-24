@@ -269,7 +269,7 @@ struct SettingsScreen: View {
         )
     }
 
-    private func localSearch(_ query: SpecimenQuery) -> [Specimen] {
+    private func localSearch(_ query: SpecimenQuery) -> [Piece] {
         switch localListScope {
         case .globalFixtures:
             return store.search(query)

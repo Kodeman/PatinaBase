@@ -575,8 +575,8 @@ enum FieldVisitEndCounts {
         workspaceID: String?,
         now: Date = Date()
     ) -> FieldVisitCounts {
-        let visitCaptures: [Specimen]
-        let allUnfiled: [Specimen]
+        let visitCaptures: [Piece]
+        let allUnfiled: [Piece]
         let pendingScans: Int
         switch CaptureOwnerProjectionPolicy.resolve(
             runsRealServices: runsRealServices, userID: userID, workspaceID: workspaceID

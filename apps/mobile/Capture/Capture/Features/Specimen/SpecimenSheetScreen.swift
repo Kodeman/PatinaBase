@@ -17,7 +17,7 @@ import UIKit
 struct SpecimenSheetScreen: View {
     let store: CaptureStore
     let coordinator: CaptureCoordinator
-    let specimen: Specimen      // @Model — Observation tracks the fields read in body
+    let specimen: Piece      // @Model — Observation tracks the fields read in body
 
     @Environment(\.dismiss) private var dismiss
     @State private var showMoreDetails = false
@@ -81,14 +81,16 @@ struct SpecimenSheetScreen: View {
                              source: specimen.provenance(for: .maker),
                              placeholder: "Vendor / brand")
             SpecimenFieldRow("Material", value: scalarBinding(.material) { specimen.materialNote },
-                             source: specimen.provenance(for: .material))
+                             source: specimen.provenance(for: .material),
+                             confirmed: specimen.isConfirmed(.material))
 
             DisclosureGroup(isExpanded: $showMoreDetails) {
                 VStack(spacing: 0) {
                     SpecimenFieldRow("SKU", value: scalarBinding(.sku) { specimen.sku },
                                      source: specimen.provenance(for: .sku))
                     SpecimenFieldRow("Colorway", value: scalarBinding(.colorway) { specimen.colorway },
-                                     source: specimen.provenance(for: .colorway))
+                                     source: specimen.provenance(for: .colorway),
+                                     confirmed: specimen.isConfirmed(.colorway))
                     SpecimenFieldRow("Finish", value: finishBinding,
                                      source: .manual)
                     SpecimenFieldRow("Trade price", value: priceBinding,
@@ -273,7 +275,7 @@ struct SpecimenSheetScreen: View {
 
 struct SpecimenPhotoStrip: View {
     let store: CaptureStore
-    let specimen: Specimen
+    let specimen: Piece
 
     private var photos: [CapturePhoto] { specimen.photos.sorted { $0.order < $1.order } }
 
@@ -388,8 +390,8 @@ struct SpecimenMissingView: View {
     specimen.addMeasurement(axis: .depth, millimeters: 762, source: .arkit)
     specimen.addMeasurement(axis: .height, millimeters: 864, source: .arkit)
     let primary = CapturePhoto(filename: "p1.heic", isPrimary: true, order: 0)
-    primary.specimen = specimen; specimen.photos.append(primary)
+    primary.piece = specimen; specimen.photos.append(primary)
     let side = CapturePhoto(filename: "p2.heic", order: 1)
-    side.specimen = specimen; specimen.photos.append(side)
+    side.piece = specimen; specimen.photos.append(side)
     return SpecimenSheetScreen(store: store, coordinator: CaptureCoordinator(), specimen: specimen)
 }

@@ -300,7 +300,7 @@ public final class CaptureProjectCache {
             guard let id, !id.isEmpty else { return }
             ids.insert(id)
         }
-        for specimen in (try? store.context.fetch(FetchDescriptor<Specimen>())) ?? [] {
+        for specimen in (try? store.context.fetch(FetchDescriptor<Piece>())) ?? [] {
             remember(specimen.venue?.projectId)
             remember(specimen.placementProjectId)
         }

@@ -271,7 +271,7 @@ struct PunchTaskWriteTests {
     // MARK: - The lane
 
     @Test func aRefusedTaskClosesTheLaneSoItDegradesInsteadOfLooping() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
         #expect(specimen.needsPunchTask)
 
@@ -281,7 +281,7 @@ struct PunchTaskWriteTests {
     }
 
     @Test func requestingATaskRecordsTheCourtItWasAimedAt() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
 
         #expect(specimen.punchTaskId == taskID.uuidString)
@@ -297,7 +297,7 @@ struct PunchTaskWriteTests {
         // contractor. Lookup-before-write cannot save it — the gateway looks up
         // the NEW id, which has never been written. The margin lane has carried
         // this guard since it was written; this lane assigned unconditionally.
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
         specimen.requestPunchTask(taskID: UUID(), owner: "gc", partyID: "party-gc2")
 
@@ -306,7 +306,7 @@ struct PunchTaskWriteTests {
     }
 
     @Test func aWrittenPunchLaneReOpensForADeliberateSecondItem_andTheMenuSaysSo() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
         specimen.markPunchTaskWritten()
 
@@ -330,13 +330,13 @@ struct PunchTaskWriteTests {
         // owner_party_id reaches neither the trigger (00284:169) nor the daily
         // digest. PunchTaskComposer.punch already made it unrepresentable; the
         // lane accepted it and let it survive a relaunch.
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: nil)
 
         #expect(specimen.punchTaskOwnerRaw == "designer")
         #expect(specimen.punchTaskPartyId == nil)
 
-        let blank = Specimen()
+        let blank = Piece()
         blank.requestPunchTask(taskID: taskID, owner: "gc", partyID: "   ")
 
         #expect(blank.punchTaskOwnerRaw == "designer")
@@ -344,7 +344,7 @@ struct PunchTaskWriteTests {
     }
 
     @Test func aPunchLaneThatSpendsItsRetriesClosesInsteadOfLoopingForever() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.requestPunchTask(taskID: taskID, owner: "designer", partyID: nil)
         for attempt in 1...FieldWriteGate.retryCeiling {
             specimen.markPunchTaskFailed("boom \(attempt)")
@@ -357,7 +357,7 @@ struct PunchTaskWriteTests {
     }
 
     @Test func markingAnUnopenedPunchLaneIsANoOp() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.markPunchTaskFailed("earlier")
         specimen.markPunchTaskRefused("also earlier")
 

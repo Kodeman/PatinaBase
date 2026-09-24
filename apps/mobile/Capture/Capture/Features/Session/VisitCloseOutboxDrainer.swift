@@ -140,7 +140,7 @@ final class VisitCloseOutboxDrainer {
         try? store.save()
     }
 
-    private func captures(for record: FieldVisitCloseRecord) -> [Specimen] {
+    private func captures(for record: FieldVisitCloseRecord) -> [Piece] {
         switch CaptureOwnerProjectionPolicy.resolve(
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,

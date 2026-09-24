@@ -262,7 +262,7 @@ struct FieldVerbMenuTests {
     // MARK: - Against a real Specimen
 
     @Test func theFactsReadTheSpecimenTheCardIsShowing() {
-        let specimen = Specimen()
+        let specimen = Piece()
         #expect(FieldVerbFacts(specimen: specimen, partiesSettled: true).hasProject == false)
 
         specimen.venue = VenueStamp(projectId: "proj-1")
@@ -283,7 +283,7 @@ struct FieldVerbMenuTests {
     /// are the one place a dictated number reaches a business table, and the
     /// whole flow must leave the measurement list empty.
     @Test func noVerbEverInventsAMeasurement() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.venue = VenueStamp(projectId: "proj-1")
         specimen.voiceTranscript = "The alcove reads 42.5 short."
         var menu = FieldVerbMenu()
@@ -301,7 +301,7 @@ struct FieldVerbMenuTests {
         #expect(specimen.punchTaskId != nil)
     }
 
-    private func apply(_ action: FieldVerbAction, to specimen: Specimen) {
+    private func apply(_ action: FieldVerbAction, to specimen: Piece) {
         switch action {
         case .note:
             specimen.requestMarginNote(noteID: UUID())
@@ -321,8 +321,8 @@ struct FieldVerbMenuTests {
 /// a statement about `Specimen`. The rendering is compile-gated only.
 @MainActor
 struct CaptureCardConfirmUnchangedTests {
-    private func confirmedCard() -> Specimen {
-        let specimen = Specimen()
+    private func confirmedCard() -> Piece {
+        let specimen = Piece()
         specimen.venue = VenueStamp(projectId: "proj-1", projectName: "Maple St", room: "Living")
         specimen.setValue("seating", for: .category, source: .smartGuess)
         specimen.setValue("Oak / bouclé", for: .material, source: .manual)

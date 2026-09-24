@@ -462,7 +462,7 @@ struct ProjectCacheTests {
         store.context.insert(ScanUploadRecord(
             bundlePath: "SiteScans/site-scan-1", scanID: "s1", roomID: "r1",
             name: "Living", projectID: "p-scanned", projectRoomID: nil, owner: owner))
-        #expect((try store.context.fetch(FetchDescriptor<Specimen>())).isEmpty)
+        #expect((try store.context.fetch(FetchDescriptor<Piece>())).isEmpty)
         try store.save()
 
         let service = StubProjectsService()

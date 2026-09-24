@@ -12,31 +12,31 @@ import Testing
 
 struct VisitReviewRowMappingTests {
     @Test func aSpecimenWithNoPhotosAndNoWordsIsNeitherAPhotoNorANote() {
-        let row = VisitReviewRow(specimen: Specimen())
+        let row = VisitReviewRow(specimen: Piece())
         #expect(row.hasPhoto == false)
         #expect(row.hasTranscript == false)
     }
 
     @Test func aSpokenNoteCarriesItsTranscript() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.voiceTranscript = "the alcove reads about forty-two"
         #expect(VisitReviewRow(specimen: specimen).hasTranscript)
     }
 
     @Test func aPartialTranscriptStillCountsAsWords() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.voicePartialTranscript = "the alcove reads"
         #expect(VisitReviewRow(specimen: specimen).hasTranscript)
     }
 
     @Test func blankWordsDoNotCountAsANote() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.voiceTranscript = "   \n "
         #expect(VisitReviewRow(specimen: specimen).hasTranscript == false)
     }
 
     @Test func aCaptureIsPlacedWhenItHasAProject_becauseFiledMeansProjectIDIsNotNull() {
-        let specimen = Specimen()
+        let specimen = Piece()
         #expect(VisitReviewRow(specimen: specimen).isPlaced == false)
 
         specimen.venue = VenueStamp(projectId: "b2222222-2222-4222-8222-222222222222")
@@ -44,7 +44,7 @@ struct VisitReviewRowMappingTests {
     }
 
     @Test func theRowKeepsTheSpecimenIDSoTheScreenCanActOnIt() {
-        let specimen = Specimen()
+        let specimen = Piece()
         #expect(VisitReviewRow(specimen: specimen).specimenID == specimen.id)
     }
 }

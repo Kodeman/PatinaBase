@@ -18,15 +18,15 @@ struct V1SessionTrayScreen: View {
     let analytics: any CaptureAnalytics
     let sync: any CaptureSyncService
 
-    @State private var items: [Specimen] = []
-    @State private var unplaced: [Specimen] = []
+    @State private var items: [Piece] = []
+    @State private var unplaced: [Piece] = []
     @State private var scope: FieldTrayScope = .unplacedOnly
     @State private var placedJustNow: Set<UUID> = []
     @State private var player = VoiceSegmentPlayer()
     @State private var playingSpecimenID: UUID?
     private let sessionContext = CaptureSessionContextStore.shared
 
-    private var groups: [(venue: String, items: [Specimen])] {
+    private var groups: [(venue: String, items: [Piece])] {
         let grouped = Dictionary(grouping: items) { specimen in
             specimen.venue?.placemarkName ?? "This visit"
         }
@@ -43,13 +43,13 @@ struct V1SessionTrayScreen: View {
     /// are answered, and `place(…)` leaves `suggested_*` standing, so a
     /// leftover question must not be allowed to reorder answered work. The
     /// unplaced section below carries its own FieldTraySuggestionOrder.
-    private func ordered(_ specimens: [Specimen]) -> [Specimen] {
+    private func ordered(_ specimens: [Piece]) -> [Piece] {
         specimens.sorted { $0.createdAt > $1.createdAt }
     }
 
     /// The unplaced tray leads with the strongest question — the confidence
     /// decides the sequence and is never shown (Task 27).
-    private var unplacedGroups: [(venue: String, items: [Specimen])] {
+    private var unplacedGroups: [(venue: String, items: [Piece])] {
         let grouped = Dictionary(grouping: unplaced) { specimen in
             specimen.venue?.placemarkName ?? "This visit"
         }
@@ -134,7 +134,7 @@ struct V1SessionTrayScreen: View {
         }
     }
 
-    private func venueSection(_ venue: String, _ specimens: [Specimen]) -> some View {
+    private func venueSection(_ venue: String, _ specimens: [Piece]) -> some View {
         let doneCount = specimens.filter { $0.destination != .undecided }.count
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -159,7 +159,7 @@ struct V1SessionTrayScreen: View {
         }
     }
 
-    private func row(_ specimen: Specimen) -> some View {
+    private func row(_ specimen: Piece) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             rowBody(specimen)
             placedSyncingLine(specimen)
@@ -173,7 +173,7 @@ struct V1SessionTrayScreen: View {
     /// stuck — and clears itself the moment `reload()` finds the record
     /// complete (Task 27's placement call site is where it's raised).
     @ViewBuilder
-    private func placedSyncingLine(_ specimen: Specimen) -> some View {
+    private func placedSyncingLine(_ specimen: Piece) -> some View {
         if placedJustNow.contains(specimen.id), specimen.transferState.phase != .complete {
             Text("placed · syncing")
                 .font(CaptureType.footnote)
@@ -185,7 +185,7 @@ struct V1SessionTrayScreen: View {
     /// The suggestion is ASKED, never asserted, and its basis is always in words.
     /// Only an unplaced capture is ever asked — a placed one has her answer.
     @ViewBuilder
-    private func suggestionRow(_ specimen: Specimen) -> some View {
+    private func suggestionRow(_ specimen: Piece) -> some View {
         if specimen.isUnplaced,
            let reason = specimen.suggestionReason,
            let projectID = specimen.suggestedProjectID {
@@ -209,7 +209,7 @@ struct V1SessionTrayScreen: View {
     /// She answered the question, so the answer becomes the FACT.
     /// NEVER `route_field_capture`: that RPC hardcodes destination 'library'
     /// (00235:332) and would mint a product out of a damaged baseboard.
-    private func accept(_ specimen: Specimen, projectID: String) {
+    private func accept(_ specimen: Piece, projectID: String) {
         specimen.place(projectID: projectID,
                        projectRoomID: specimen.suggestedProjectRoomID,
                        room: nil)
@@ -236,7 +236,7 @@ struct V1SessionTrayScreen: View {
         Task { await sync.enqueue(specimen.id) }
     }
 
-    private func rowBody(_ specimen: Specimen) -> some View {
+    private func rowBody(_ specimen: Piece) -> some View {
         let playable = playableSegments(specimen)
         return HStack(spacing: 12) {
             Button {
@@ -288,7 +288,7 @@ struct V1SessionTrayScreen: View {
     /// gated on the array alone offered Play and then played nothing, with no
     /// message. Playing the remote object instead is wave 4 (portal playback);
     /// until then the control is simply absent once the audio has left.
-    private func playableSegments(_ specimen: Specimen) -> [URL] {
+    private func playableSegments(_ specimen: Piece) -> [URL] {
         (specimen.voiceAudioSegmentsRaw ?? []).compactMap { name in
             let url = store.mediaURL(for: name)
             let values = try? url.resourceValues(
@@ -372,7 +372,7 @@ struct V1SessionTrayScreen: View {
         // tray empties on placement, not on sync — minus anything already
         // showing under the visit, so a capture from this visit never
         // renders twice.
-        let allUnfiled: [Specimen]
+        let allUnfiled: [Piece]
         switch localListScope {
         case .globalFixtures:
             items = visitState.context.map { store.session(visitID: $0.visitID) } ?? []

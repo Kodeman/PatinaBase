@@ -10,13 +10,16 @@ public struct SpecimenFieldRow: View {
     private let label: String
     @Binding private var value: String
     private let source: ProvenanceSource?
+    private let confirmed: Bool
     private let placeholder: String
 
     public init(_ label: String, value: Binding<String>,
-                source: ProvenanceSource? = nil, placeholder: String = "—") {
+                source: ProvenanceSource? = nil, confirmed: Bool = false,
+                placeholder: String = "—") {
         self.label = label
         self._value = value
         self.source = source
+        self.confirmed = confirmed
         self.placeholder = placeholder
     }
 
@@ -28,7 +31,7 @@ public struct SpecimenFieldRow: View {
                     .textCase(.uppercase)
                     .foregroundStyle(CaptureColor.inkSoft)
                 Spacer()
-                if let source { ProvenanceBadge(source) }
+                if let source { ProvenanceBadge(source, confirmed: confirmed) }
             }
             TextField(placeholder, text: $value)
                 .font(CaptureType.body)

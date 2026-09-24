@@ -15,7 +15,7 @@ import CaptureKitMocks
 #endif
 
 struct S1AssignVenueScreen: View {
-    let specimen: Specimen?
+    let specimen: Piece?
     let store: CaptureStore
     let location: any LocationService
     let session: any SessionProviding
@@ -44,7 +44,7 @@ struct S1AssignVenueScreen: View {
 }
 
 private struct S1Content: View {
-    let specimen: Specimen
+    let specimen: Piece
     let store: CaptureStore
     let location: any LocationService
     let session: any SessionProviding

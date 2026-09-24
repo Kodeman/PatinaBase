@@ -395,8 +395,8 @@ struct VisitCloseOrchestratorTests {
 
     // MARK: - The name the Hours entry carries (FC-R3)
 
-    private func capture(label: String?, room: String?, offset: TimeInterval) -> Specimen {
-        let specimen = Specimen()
+    private func capture(label: String?, room: String?, offset: TimeInterval) -> Piece {
+        let specimen = Piece()
         specimen.visitLabel = label
         specimen.createdAt = now.addingTimeInterval(offset - 130 * 60)
         if let room { specimen.venue = VenueStamp(room: room) }
