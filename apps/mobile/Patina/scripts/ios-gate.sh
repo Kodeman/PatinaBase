@@ -43,8 +43,14 @@ PROJECT_DIR_REL="${PROJECT_DIR#"$REPO_ROOT"/}"       # apps/mobile/Patina
 # produces transient failures the Daily Return already paid for.
 DERIVED="$PROJECT_DIR/.build/DerivedData"
 
-# ---- pretty-printer (optional) ------------------------------------------------
+# ---- every xcodebuild in this file goes through here --------------------------
+# The bootstrap call lives INSIDE the funnel, not in main(), so no tier can be
+# added later that reaches xcodebuild without it. It restores the two gitignored
+# files a fresh worktree cannot compile without (Secrets.swift and
+# Generated/GitCommit.swift) and is a no-op once they exist — see
+# scripts/bootstrap-worktree.sh for why the "Stamp Git SHA" phase cannot do it.
 run_xcb() {
+  "$SCRIPT_DIR/bootstrap-worktree.sh"
   if command -v xcbeautify >/dev/null 2>&1; then
     set -o pipefail; "$@" | xcbeautify
   else

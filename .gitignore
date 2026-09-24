@@ -56,6 +56,11 @@ apps/mobile/Patina/Patina/App/Configuration/Secrets.swift
 # on every Debug build; Release builds leave sha empty)
 apps/mobile/Patina/Patina/Generated/GitCommit.swift
 
+# Both of the two paths above are compile-time required, so a fresh checkout
+# cannot build until apps/mobile/Patina/scripts/bootstrap-worktree.sh recreates
+# them. The gate and the archive script both call it; run it by hand if you are
+# driving xcodebuild or Xcode.app yourself.
+
 # iOS xcuserdata — per-user Xcode state, not source of truth
 apps/mobile/Patina/Patina.xcodeproj/project.xcworkspace/xcuserdata/
 apps/mobile/Patina/Patina.xcodeproj/xcuserdata/
