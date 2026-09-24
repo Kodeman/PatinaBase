@@ -21598,6 +21598,7 @@ export type Database = {
           id: string
           inspected_at: string
           inspected_by: string
+          inspected_local_date: string | null
           notes: string | null
           outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
           photo_asset_ids: string[]
@@ -21609,6 +21610,7 @@ export type Database = {
           id?: string
           inspected_at?: string
           inspected_by: string
+          inspected_local_date?: string | null
           notes?: string | null
           outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
           photo_asset_ids?: string[]
@@ -21620,6 +21622,7 @@ export type Database = {
           id?: string
           inspected_at?: string
           inspected_by?: string
+          inspected_local_date?: string | null
           notes?: string | null
           outcome?: Database["public"]["Enums"]["receiving_inspection_outcome"]
           photo_asset_ids?: string[]

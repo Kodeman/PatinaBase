@@ -72,10 +72,40 @@ export interface ConsentSentenceFacts {
   projectName?: string | null;
 }
 
+/**
+ * `YYYY-MM-DD` of an instant ON THE VIEWER'S OWN CALENDAR (ruling D9).
+ *
+ * `consented_at` / `opt_out_at` are timestamptz, and PostgREST answers them
+ * in UTC. Slicing that string printed the UTC day, so a consent given at 7 pm
+ * in Los Angeles read as the next day. Field prints the phone's own day
+ * (`FieldConsentSentence.shortDate`, SQ-191); this is the same rule for the
+ * browser. A bare `YYYY-MM-DD` has no zone to convert and passes through.
+ * `timeZone` is left unset in the app, which is the viewer's own zone.
+ */
+export function viewerDay(
+  value: string | null | undefined,
+  timeZone?: string,
+): string | null {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(at);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 /** The sentence, or `null` where the record cannot say one honestly. */
 export function consentSentence(facts: ConsentSentenceFacts): string | null {
   const refused = facts.status === "opted_out";
-  const date = formatSeatDate(refused ? facts.optOutAt : facts.consentedAt);
+  const date = formatSeatDate(
+    viewerDay(refused ? facts.optOutAt : facts.consentedAt),
+  );
   if (!date) return null;
   const phrase = refused
     ? phraseFor(facts.optOutSource, REFUSAL_PHRASE, "Opted out")
