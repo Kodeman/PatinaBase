@@ -413,7 +413,17 @@ describe('releaseSummary', () => {
           clientLineTotalCents: 680000,
         },
       ]),
-    ).toEqual({ lineCount: 3, roomCount: 2, totalCents: 2330000 });
+    ).toEqual({ lineCount: 3, roomCount: 2, total: { currency: 'USD', cents: 2330000 } });
+  });
+
+  it('never adds two currencies into one total', () => {
+    const base = { name: 'Line', roomId: 'r1', roomName: 'Primary', quantity: 1 };
+    expect(
+      releaseSummary([
+        { ...base, id: 'a', clientLineTotalCents: 100000, currency: 'USD' },
+        { ...base, id: 'b', clientLineTotalCents: 184000, currency: 'EUR' },
+      ]),
+    ).toEqual({ lineCount: 2, roomCount: 1, total: { mixed: ['EUR', 'USD'] } });
   });
 });
 

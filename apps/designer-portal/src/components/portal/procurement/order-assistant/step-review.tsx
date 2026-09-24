@@ -17,12 +17,15 @@ import {
   formatConfigurationSnapshotForClipboard,
 } from "@/components/document/rooms/piece/custom-commission-model";
 import {
-  formatDollars,
+  formatTradeMoney,
+  formatTradeTotal,
   itemTradeCents,
+  tradeTotal,
   type OrderAssistantFFEItem,
   type OrderAssistantProject,
   type OrderAssistantVendor,
 } from "./types";
+import { rowCurrency } from "@/lib/currency-totals";
 
 /** Studio ship-to surface is out of scope for Wave 1.4; PRD shows a static placeholder. */
 export const SHIP_TO_PLACEHOLDER = "Middlewest Studio · Madison WI";
@@ -40,14 +43,13 @@ export function formatItemDetailsForClipboard(
     if (item.room) lines.push(`   Room: ${item.room}`);
     lines.push(`   Ship to: ${SHIP_TO_PLACEHOLDER}`);
     // Vendor-facing amounts are TRADE cost (00186) — never client prices.
-    lines.push(`   ${formatDollars(itemTradeCents(item))}`);
+    lines.push(`   ${formatTradeMoney(itemTradeCents(item), rowCurrency(item))}`);
     formatConfigurationSnapshotForClipboard(item, "vendor").forEach((line) =>
       lines.push(`   ${line}`),
     );
     lines.push("");
   });
-  const total = items.reduce((sum, i) => sum + itemTradeCents(i), 0);
-  lines.push(`Total: ${formatDollars(total)}`);
+  lines.push(`Total: ${formatTradeTotal(tradeTotal(items))}`);
   return lines.join("\n");
 }
 

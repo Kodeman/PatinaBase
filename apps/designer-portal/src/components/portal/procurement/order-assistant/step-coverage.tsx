@@ -22,8 +22,8 @@ import Link from 'next/link';
 import type { FfeInvoiceCoverageMap, FfeItemCoverage } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
 import {
-  formatDollars,
-  itemTradeCents,
+  formatTradeTotal,
+  tradeTotal,
   type OrderAssistantFFEItem,
 } from './types';
 
@@ -185,10 +185,7 @@ export function StepCoverage({
 
   // Some items uncovered — golden-hour warning panel (NOT the terracotta
   // error treatment: this is a judgment call, not a failure).
-  const uncoveredCents = uncovered.reduce(
-    (sum, u) => sum + itemTradeCents(u.item),
-    0,
-  );
+  const uncoveredTotal = tradeTotal(uncovered.map((u) => u.item));
   // R21 dissolve: the invoice composer is a sheet raised from the Accounts book,
   // not a route. The doorway opens the book scoped to this project; the
   // preselected-line context (`ffeItemIds`) has no doorway key yet and is a
@@ -221,7 +218,7 @@ export function StepCoverage({
         paid client invoice
       </p>
       <p className="mt-1 text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
-        Ordering now means fronting {formatDollars(uncoveredCents)} of vendor cost
+        Ordering now means fronting {formatTradeTotal(uncoveredTotal)} of vendor cost
         from studio funds until the client pays. You can invoice the client first,
         or proceed if the timeline calls for it.
       </p>

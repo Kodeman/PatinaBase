@@ -6,12 +6,15 @@ const mockRefetch = jest.fn();
 const amendmentSheet = jest.fn();
 let mockInvoiceId: string | null = null;
 let mockQueryState: 'ready' | 'loading' | 'error' = 'ready';
+let mockAccountOverride: Record<string, unknown> = {};
 
 const mockAccountData = () => ({
   budgetCents: 50_000,
   totalAmountCents: 50_000,
   designFeeCents: 5_000,
   committedCents: 0,
+  committed: { currency: 'USD', cents: 0 },
+  margin: { currency: 'USD', cents: 0 },
   clientValueCents: 0,
   tradeCostCents: 0,
   tradeCoverage: { withTrade: 0, total: 0 },
@@ -33,6 +36,7 @@ const mockAccountData = () => ({
       sort_order: 0,
     },
   ],
+  ...mockAccountOverride,
 });
 
 jest.mock('@/hooks/use-account-page', () => ({
@@ -214,5 +218,74 @@ describe('AccountBand invoice handoff', () => {
       ),
     ).toBe(false);
     errorSpy.mockRestore();
+  });
+});
+
+describe('AccountBand currencies (SQ-207)', () => {
+  beforeEach(() => {
+    mockInvoiceId = null;
+    mockQueryState = 'ready';
+  });
+  afterEach(() => {
+    mockAccountOverride = {};
+  });
+
+  const usdRoom = {
+    roomId: 'r1',
+    roomName: 'Living',
+    allocatedCents: 500_000,
+    committedCents: 420_000,
+    committed: { currency: 'USD', cents: 420_000 },
+    varianceCents: 80_000,
+    varianceMixed: null,
+    categories: [{ name: 'fixed', committedCents: 420_000, committed: { currency: 'USD', cents: 420_000 } }],
+  };
+
+  it('prints an all-USD account exactly as before', () => {
+    mockAccountOverride = {
+      committedCents: 420_000,
+      committed: { currency: 'USD', cents: 420_000 },
+      clientValueCents: 420_000,
+      tradeCostCents: 300_000,
+      margin: { currency: 'USD', cents: 420_000 },
+      marginPct: 29,
+      estCommissionCents: 120_000,
+      tradeCoverage: { withTrade: 1, total: 1 },
+      rooms: [usdRoom],
+    };
+    const { container } = render(<AccountBand projectId="project-1" />);
+    const head = screen.getByRole('button', { name: /The accounts/ });
+    expect(head).toHaveTextContent('$500 budget · $4,200 committed · 29% margin');
+    fireEvent.click(head);
+    expect(screen.getByText('$800 under')).toBeInTheDocument();
+    expect(screen.getByText('fixed $4,200')).toBeInTheDocument();
+    expect(container).toHaveTextContent('Trade $3,000 → client $4,200 · 29% margin');
+    expect(container).toHaveTextContent('est. commissions $1,200');
+    expect(container).not.toHaveTextContent('Mixed currencies');
+  });
+
+  it('refuses to add committed lines across currencies', () => {
+    const mixed = { mixed: ['EUR', 'USD'] };
+    mockAccountOverride = {
+      committed: mixed,
+      margin: mixed,
+      rooms: [
+        {
+          ...usdRoom,
+          committedCents: 0,
+          committed: mixed,
+          varianceCents: 0,
+          varianceMixed: ['EUR', 'USD'],
+          categories: [{ name: 'fixed', committedCents: 0, committed: mixed }],
+        },
+      ],
+    };
+    render(<AccountBand projectId="project-1" />);
+    const head = screen.getByRole('button', { name: /The accounts/ });
+    expect(head).toHaveTextContent('Mixed currencies — total unavailable (EUR, USD) committed');
+    fireEvent.click(head);
+    expect(screen.getByText(/Margin: Mixed currencies — total unavailable \(EUR, USD\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/under|over$/)).not.toBeInTheDocument();
+    expect(screen.getByText('fixed Mixed currencies — total unavailable (EUR, USD)')).toBeInTheDocument();
   });
 });

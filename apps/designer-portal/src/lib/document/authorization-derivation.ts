@@ -18,6 +18,8 @@
  * lines back to unreleased, and the instrument that replaces it is № 5.
  */
 
+import { sumByCurrency, type CurrencyTotal } from '@/lib/currency-totals';
+
 /** Commercial states an instrument can hold (the send/sign machine). */
 export type InstrumentState =
   | 'draft'
@@ -452,21 +454,24 @@ export interface ReleaseLine {
   roomName: string;
   quantity: number;
   clientLineTotalCents: number;
+  /** The line's ISO-4217 currency (00661); missing reads as USD. */
+  currency?: string | null;
 }
 
-/** The running composition: what is ticked, stated as arithmetic. */
+/** The running composition: what is ticked, stated as arithmetic. The total
+ *  never adds two currencies (SQ-207) — it is one currency's sum or the list. */
 export function releaseSummary(lines: readonly ReleaseLine[]): {
   lineCount: number;
   roomCount: number;
-  totalCents: number;
+  total: CurrencyTotal;
 } {
   const rooms = new Set<string>();
-  let totalCents = 0;
-  for (const line of lines) {
-    rooms.add(line.roomId ?? '__throughout__');
-    totalCents += centsOf(line.clientLineTotalCents);
-  }
-  return { lineCount: lines.length, roomCount: rooms.size, totalCents };
+  for (const line of lines) rooms.add(line.roomId ?? '__throughout__');
+  return {
+    lineCount: lines.length,
+    roomCount: rooms.size,
+    total: sumByCurrency(lines, (line) => centsOf(line.clientLineTotalCents)),
+  };
 }
 
 /** The deposit share the signed agreement carries, or null until it resolves. */

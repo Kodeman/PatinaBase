@@ -12,6 +12,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
+import { isMixed, sumByCurrency } from '@/lib/currency-totals';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -23,12 +24,16 @@ interface ItemSlice {
   trade_price_cents: number | null;
   quantity: number | null;
   status: string;
+  currency: string | null;
 }
 
 export interface StudioMargin {
   clientValueCents: number;
   tradeCostCents: number;
   marginPct: number | null;
+  /** The currencies committed trade-priced lines span, when more than one;
+   *  the figures above are then 0/null. */
+  mixedCurrencies: string[] | null;
   coverage: { withTrade: number; total: number };
 }
 
@@ -39,21 +44,24 @@ export function useStudioMargin() {
       const supabase = getSupabase();
       const { data, error } = await supabase
         .from('project_ffe_items')
-        .select('unit_price_cents, trade_price_cents, quantity, status');
+        .select('unit_price_cents, trade_price_cents, quantity, status, currency');
       if (error) throw error;
 
       const committed = ((data ?? []) as ItemSlice[]).filter((i) =>
         COMMITTED_STATUSES.has(i.status),
       );
       const withTrade = committed.filter((i) => i.trade_price_cents != null);
-      const clientValueCents = withTrade.reduce(
-        (s, i) => s + (i.unit_price_cents ?? 0) * (i.quantity ?? 1),
-        0,
+      // A blended margin across currencies would divide a sum of mixed
+      // units — unavailable instead (SQ-207).
+      const clientValue = sumByCurrency(
+        withTrade,
+        (i) => (i.unit_price_cents ?? 0) * (i.quantity ?? 1),
       );
-      const tradeCostCents = withTrade.reduce(
-        (s, i) => s + (i.trade_price_cents ?? 0) * (i.quantity ?? 1),
-        0,
-      );
+      const mixedCurrencies = isMixed(clientValue) ? clientValue.mixed : null;
+      const clientValueCents = isMixed(clientValue) ? 0 : clientValue.cents;
+      const tradeCostCents = mixedCurrencies
+        ? 0
+        : withTrade.reduce((s, i) => s + (i.trade_price_cents ?? 0) * (i.quantity ?? 1), 0);
       const marginPct =
         clientValueCents > 0
           ? Math.round(((clientValueCents - tradeCostCents) / clientValueCents) * 100)
@@ -63,6 +71,7 @@ export function useStudioMargin() {
         clientValueCents,
         tradeCostCents,
         marginPct,
+        mixedCurrencies,
         coverage: { withTrade: withTrade.length, total: committed.length },
       };
     },

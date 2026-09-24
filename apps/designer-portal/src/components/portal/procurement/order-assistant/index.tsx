@@ -53,14 +53,16 @@ import {
   clientVendorEmailHint,
 } from '@/components/portal/procurement/po-send-actions';
 import { Button, IconButton } from '@/components/ui/controls';
+import { isMixed } from '@/lib/currency-totals';
 import {
   formatDollars,
-  itemTradeCents,
+  formatTradeTotal,
   nextStep,
   parseDollarsToCents,
   prevStep,
   stepSequence,
   STEP_LABELS,
+  tradeTotal,
   type OrderAssistantProps,
   type OrderAssistantStep,
   type OrderAssistantVendor,
@@ -99,10 +101,11 @@ export function OrderAssistant(props: OrderAssistantProps) {
   // Vendor TRADE total — Σ COALESCE(trade, unit) × qty (00186), matching the
   // server-computed `purchase_orders.total_cents`. Drives the header display,
   // the deposit prefills, and the custom-milestones sum validation.
-  const totalCents = useMemo(
-    () => ffeItems.reduce((sum, i) => sum + itemTradeCents(i), 0),
-    [ffeItems]
-  );
+  // SQ-207: a batch spanning currencies has no total — the header states the
+  // currencies, and the numeric total (deposit prefills) reads 0. The PO link
+  // refuses a non-USD line server-side (00661).
+  const batchTotal = useMemo(() => tradeTotal(ffeItems), [ffeItems]);
+  const totalCents = isMixed(batchTotal) ? 0 : batchTotal.cents;
 
   // Every caller now passes real project_ffe_items rows (the By Vendor view's
   // synthetic display-only draft-PO rows were retired in W3-T3a), so all ids
@@ -165,10 +168,10 @@ export function OrderAssistant(props: OrderAssistantProps) {
   );
   // Fronted vendor cost for analytics — the TRADE total of uncovered items
   // (what ordering now pulls from studio funds ahead of client payment).
-  const uncoveredCents = useMemo(
-    () => uncovered.reduce((sum, u) => sum + itemTradeCents(u.item), 0),
-    [uncovered]
-  );
+  const uncoveredCents = useMemo(() => {
+    const total = tradeTotal(uncovered.map((u) => u.item));
+    return isMixed(total) ? 0 : total.cents;
+  }, [uncovered]);
   // True once the designer proceeded past the gate with uncovered items —
   // stamped onto poCreated as `coverage_overridden`.
   const [coverageOverridden, setCoverageOverridden] = useState(false);
@@ -708,7 +711,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
         : isSubmitStep && isCatalog
           ? gateIsUncovered
             ? 'Proceed anyway — order via Patina'
-            : `One-click order via Patina · ${formatDollars(totalCents)}`
+            : `One-click order via Patina · ${formatTradeTotal(batchTotal)}`
           : isSubmitStep
             ? `Confirm ${ffeItems.length} ordered`
             : gateIsUncovered
@@ -756,7 +759,9 @@ export function OrderAssistant(props: OrderAssistantProps) {
                   </div>
                   <div className="mt-0.5 truncate font-heading text-[1rem] font-medium text-[var(--text-primary)]">
                     {ffeItems.length} item{ffeItems.length !== 1 ? 's' : ''} ·{' '}
-                    {formatDollars(totalCents)} total
+                    {isMixed(batchTotal)
+                      ? formatTradeTotal(batchTotal)
+                      : `${formatTradeTotal(batchTotal)} total`}
                   </div>
                   <div className="type-meta-small text-[var(--text-muted)]">
                     {project.name}

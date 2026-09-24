@@ -1929,10 +1929,6 @@ const mockProjectFinancials: Record<string, Array<{
   ],
 };
 
-function getProjectFinancials(projectId: string) {
-  return clone(mockProjectFinancials[projectId] || []);
-}
-
 // ── Opus v2: Time tracking per project ──
 
 const mockTimeTracking: Record<string, {
@@ -2257,7 +2253,6 @@ export const mockData = {
   getProjectListMetrics,
   getProjectRooms,
   getProjectFFEItems,
-  getProjectFinancials,
   getProjectTimeTracking,
   getProjectKeyMetrics,
 };

@@ -37,6 +37,13 @@ import {
 } from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import {
+  formatCurrencyTotal,
+  formatMoney,
+  isMixed,
+  rowCurrency,
+  sumByCurrency,
+} from '@/lib/currency-totals';
+import {
   useOverrideBudgetCheckpoint,
   useProjectBillingAuthority,
   usePublishBudgetCheckpoint,
@@ -160,7 +167,7 @@ export function ReviewReleaseSheet({
   );
 
   const percent = chosenPercent ?? agreementPercent;
-  const { lineCount, roomCount, totalCents } = releaseSummary(lines);
+  const { lineCount, roomCount, total } = releaseSummary(lines);
 
   const rooms = useMemo(() => {
     const grouped = new Map<string, { name: string; lines: ReleaseLine[] }>();
@@ -333,11 +340,8 @@ export function ReviewReleaseSheet({
             </h4>
             <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
               {room.lines.length} {room.lines.length === 1 ? 'line' : 'lines'} ·{' '}
-              {fmtUsd(
-                room.lines.reduce(
-                  (sum, line) => sum + line.clientLineTotalCents,
-                  0,
-                ),
+              {formatCurrencyTotal(
+                sumByCurrency(room.lines, (line) => line.clientLineTotalCents),
               )}
             </span>
           </div>
@@ -374,7 +378,7 @@ export function ReviewReleaseSheet({
                     {line.quantity}
                   </td>
                   <td className="whitespace-nowrap py-1.5 text-right font-heading text-[12.5px] font-medium text-[var(--color-charcoal)]">
-                    {fmtUsd(line.clientLineTotalCents)}
+                    {formatMoney(line.clientLineTotalCents, rowCurrency(line))}
                   </td>
                 </tr>
               ))}
@@ -385,16 +389,19 @@ export function ReviewReleaseSheet({
 
       {/* Five figures, one band — money is stated, never boxed. */}
       <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-2 border-l-[3px] border-[var(--color-sage)] py-2 pl-3 sm:grid-cols-3">
-        <Figure label="authorization total" value={fmtUsd(totalCents)} />
-        {percent !== null && (
+        <Figure label="authorization total" value={formatCurrencyTotal(total)} />
+        {percent !== null && !isMixed(total) && (
           <>
             <Figure
               label={`deposit at ${percent}%`}
-              value={fmtUsd(depositCents(totalCents, percent))}
+              value={formatMoney(depositCents(total.cents, percent), total.currency)}
             />
             <Figure
               label="balance on delivery"
-              value={fmtUsd(totalCents - depositCents(totalCents, percent))}
+              value={formatMoney(
+                total.cents - depositCents(total.cents, percent),
+                total.currency,
+              )}
             />
           </>
         )}

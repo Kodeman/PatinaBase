@@ -24,6 +24,7 @@ import {
 } from '@patina/supabase';
 import { LedgerFrontMatter } from '../ledger-front-matter';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
+import { mixedCurrenciesText } from '@/lib/currency-totals';
 import { collectedCents } from '@/lib/document/account-summary';
 import { fmtUsd } from '@/lib/document/format';
 import { openLedger, type OpenLedgerContext } from '../command-bar';
@@ -83,7 +84,11 @@ export function AccountsBook({
         { label: 'A/R', value: fmtUsd(aging.totalBalanceCents) },
         {
           label: 'margin',
-          value: margin.data?.marginPct != null ? `${margin.data.marginPct}%` : '—',
+          value: margin.data?.mixedCurrencies
+            ? mixedCurrenciesText(margin.data.mixedCurrencies)
+            : margin.data?.marginPct != null
+              ? `${margin.data.marginPct}%`
+              : '—',
         },
       ]
     : [];
