@@ -33,7 +33,7 @@ import { SmsReviewCard } from '../sms-review-card';
 import { FieldDesk } from '../field-desk';
 import { useSendPartySms, useCreateFieldLink, useSmsReviewQueue, type SmsReviewMessage } from '@patina/supabase';
 
-function wrapper({ children }: { children: React.ReactNode }) {
+function Wrapper({ children }: { children: React.ReactNode }) {
   const [client] = React.useState(() => new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }));
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
@@ -45,7 +45,7 @@ const message = (overrides: Partial<SmsReviewMessage> = {}): SmsReviewMessage =>
   notified_name: null, twilio_status: 'received', error_code: null, applied_effect: null, project_lead_id: 'me', ...overrides,
 });
 function composer() {
-  const rendered = render(<PartySmsComposer partyId="party1" />, { wrapper });
+  const rendered = render(<PartySmsComposer partyId="party1" />, { wrapper: Wrapper });
   const draft = screen.getByRole('textbox', { name: 'Send a text' });
   fireEvent.change(draft, { target: { value: 'Studio: hello' } });
   return { ...rendered, draft };
@@ -94,7 +94,7 @@ it.each([
 });
 it('handles a thrown FunctionsHttpError as a typed failure, not unknown success', async () => {
   mockInvoke.mockRejectedValue({ context: { json: async () => ({ id: 'failed1', status: 'failed', reason: 'suppressed' }) } });
-  const { result } = renderHook(() => useSendPartySms(), { wrapper });
+  const { result } = renderHook(() => useSendPartySms(), { wrapper: Wrapper });
   await act(async () => expect(result.current.mutateAsync({ partyId: 'p', body: 'draft' })).resolves.toMatchObject({ id: 'failed1', status: 'failed', reason: 'suppressed' }));
 });
 it.each([null, { success: true }, { status: 'unexpected' }])('never clears on an unknown response %j', async (data) => {
@@ -125,7 +125,7 @@ it('keeps a draft and focuses after a network error', async () => {
 });
 it('regeneration explicitly revokes the prior field link', async () => {
   mockRpc.mockResolvedValue({ data: [{ id: 'link', token: 'one-time' }], error: null });
-  const { result } = renderHook(() => useCreateFieldLink(), { wrapper });
+  const { result } = renderHook(() => useCreateFieldLink(), { wrapper: Wrapper });
   await act(async () => { await result.current.mutateAsync({ partyId: 'party1', revokePrior: true }); });
   expect(mockRpc).toHaveBeenCalledWith('create_field_link', { p_party_id: 'party1', p_expires_at: null, p_revoke_prior: true });
 });
@@ -135,13 +135,13 @@ it.each([
   ['Extend', 'sms_extend_pause', { p_message_id: 'm1', p_hours: 4 }],
 ])('%s calls its message-bound authority RPC', async (label, rpc, args) => {
   mockRpc.mockResolvedValue({ data: 'ok', error: null });
-  render(<SmsReviewCard message={message()} />, { wrapper });
+  render(<SmsReviewCard message={message()} />, { wrapper: Wrapper });
   fireEvent.click(screen.getByRole('button', { name: label }));
   await waitFor(() => expect(mockRpc).toHaveBeenCalledWith(rpc, args));
 });
 it('keeps ownership and pause unchanged on 42501, without a false notification failure', async () => {
   mockRpc.mockResolvedValue({ data: null, error: { code: '42501' } });
-  render(<SmsReviewCard message={message({ paused_until: '2099-01-01T00:00:00Z' })} />, { wrapper });
+  render(<SmsReviewCard message={message({ paused_until: '2099-01-01T00:00:00Z' })} />, { wrapper: Wrapper });
   fireEvent.click(screen.getByRole('button', { name: 'Hand back' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Someone else has this one');
   expect(screen.getByText('Leah')).toBeInTheDocument();
@@ -151,14 +151,14 @@ it('keeps ownership and pause unchanged on 42501, without a false notification f
   expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
 });
 it('shows persisted notification and save receipts, not inferred send success', () => {
-  render(<SmsReviewCard message={message({ notified_name: 'Leah', applied_effect: { applied: false } })} />, { wrapper });
+  render(<SmsReviewCard message={message({ notified_name: 'Leah', applied_effect: { applied: false } })} />, { wrapper: Wrapper });
   expect(screen.getByText('Told Leah')).toBeInTheDocument();
   expect(screen.getByText('Reviewed — no change needed')).toBeInTheDocument();
   expect(screen.queryByText('Sent')).not.toBeInTheDocument();
 });
 it('filters Mine / Unowned / All and quietly nudges only the project lead after 30 minutes', () => {
   const cards = [message({ id: 'mine', body: 'Mine text' }), message({ id: 'free', owner_user_id: null, body: 'Unowned text' }), message({ id: 'theirs', owner_user_id: 'other', body: 'Other text' })];
-  const { rerender } = render(<FieldDesk population={{ cards, lines: [], isLoading: false, isError: false }} />, { wrapper });
+  const { rerender } = render(<FieldDesk population={{ cards, lines: [], isLoading: false, isError: false }} />, { wrapper: Wrapper });
   expect(screen.getByText(/Could you take a look/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Mine', exact: true }));
   expect(screen.getByText('“Mine text”')).toBeInTheDocument(); expect(screen.queryByText('“Unowned text”')).not.toBeInTheDocument();
@@ -171,7 +171,7 @@ it('filters Mine / Unowned / All and quietly nudges only the project lead after 
   expect(screen.queryByText(/Could you take a look/)).not.toBeInTheDocument();
 });
 it('shows load failures rather than an empty success state', () => {
-  render(<FieldDesk population={{ cards: [], lines: [], isLoading: false, isError: true }} />, { wrapper });
+  render(<FieldDesk population={{ cards: [], lines: [], isLoading: false, isError: true }} />, { wrapper: Wrapper });
   expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load the field texts');
 });
 it('reads the authoritative view and matches pause to the message project, not just handset', async () => {
@@ -188,7 +188,7 @@ it('reads the authoritative view and matches pause to the message project, not j
     for (const method of ['select', 'in', 'eq', 'order']) q[method] = jest.fn(() => q);
     return q;
   });
-  const { result } = renderHook(() => useSmsReviewQueue(), { wrapper });
+  const { result } = renderHook(() => useSmsReviewQueue(), { wrapper: Wrapper });
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
   expect(mockFrom).toHaveBeenCalledWith('sms_review_queue');
   expect(mockFrom).not.toHaveBeenCalledWith('sms_conversations');
@@ -217,6 +217,6 @@ it("keeps a failed deferred id locked rather than creating a resend", async () =
   expect(screen.queryByRole("button", { name: "Send text" })).not.toBeInTheDocument();
 });
 it("does not nudge a lead before 30 minutes", () => {
-  render(<FieldDesk population={{ cards: [message({ owner_user_id: null, created_at: new Date().toISOString() })], lines: [], isLoading: false, isError: false }} />, { wrapper });
+  render(<FieldDesk population={{ cards: [message({ owner_user_id: null, created_at: new Date().toISOString() })], lines: [], isLoading: false, isError: false }} />, { wrapper: Wrapper });
   expect(screen.queryByText(/Could you take a look/)).not.toBeInTheDocument();
 });

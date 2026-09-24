@@ -72,7 +72,7 @@ import { TimeReportCard } from "../time-report-card";
 import { FieldDesk } from "../field-desk";
 import type { FieldTimeReportRow } from "@patina/supabase";
 
-function wrapper({ children }: { children: React.ReactNode }) {
+function Wrapper({ children }: { children: React.ReactNode }) {
   const [client] = React.useState(
     () =>
       new QueryClient({
@@ -176,7 +176,7 @@ beforeEach(() => {
 
 it("states the claim in plain words, with the hours and the task", () => {
   render(<TimeReportCard report={report({ note: "gate was locked at 7" })} />, {
-    wrapper,
+    wrapper: Wrapper,
   });
   expect(
     screen.getByText(
@@ -189,7 +189,7 @@ it("states the claim in plain words, with the hours and the task", () => {
 
 it("Accept decides accepted at this version, with no attribution", async () => {
   mockRpc.mockResolvedValue({ data: { status: "accepted" }, error: null });
-  render(<TimeReportCard report={report()} />, { wrapper });
+  render(<TimeReportCard report={report()} />, { wrapper: Wrapper });
   fireEvent.click(screen.getByRole("button", { name: "Accept" }));
   await waitFor(() =>
     expect(mockRpc).toHaveBeenCalledWith("field_time_report_decide", {
@@ -203,7 +203,7 @@ it("Accept decides accepted at this version, with no attribution", async () => {
 
 it("Not right decides rejected at this version", async () => {
   mockRpc.mockResolvedValue({ data: { status: "rejected" }, error: null });
-  render(<TimeReportCard report={report()} />, { wrapper });
+  render(<TimeReportCard report={report()} />, { wrapper: Wrapper });
   fireEvent.click(screen.getByRole("button", { name: "Not right" }));
   await waitFor(() =>
     expect(mockRpc).toHaveBeenCalledWith("field_time_report_decide", {
@@ -217,7 +217,7 @@ it("Not right decides rejected at this version", async () => {
 
 it("books to a teammate on this job only, and names them in the decision", async () => {
   mockRpc.mockResolvedValue({ data: { status: "accepted" }, error: null });
-  render(<TimeReportCard report={report()} />, { wrapper });
+  render(<TimeReportCard report={report()} />, { wrapper: Wrapper });
   fireEvent.click(screen.getByRole("button", { name: "Book to a teammate" }));
 
   const teammate = await screen.findByRole("button", {
@@ -255,7 +255,7 @@ it("asks for another look when the report moved underneath the card", async () =
       details: null,
     },
   });
-  render(<TimeReportCard report={report()} />, { wrapper });
+  render(<TimeReportCard report={report()} />, { wrapper: Wrapper });
   fireEvent.click(screen.getByRole("button", { name: "Accept" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "This one changed — take another look.",
@@ -282,7 +282,7 @@ it("says who may book somebody else's hour, with no retry hint", async () => {
       hint: null,
     },
   });
-  render(<TimeReportCard report={report()} />, { wrapper });
+  render(<TimeReportCard report={report()} />, { wrapper: Wrapper });
   fireEvent.click(screen.getByRole("button", { name: "Book to a teammate" }));
   fireEvent.click(
     await screen.findByRole("button", { name: "Priya Natarajan" }),
@@ -313,7 +313,7 @@ it("keeps the old words for a 42501 that is decide()'s own membership refusal", 
       hint: null,
     },
   });
-  render(<TimeReportCard report={report()} />, { wrapper });
+  render(<TimeReportCard report={report()} />, { wrapper: Wrapper });
   fireEvent.click(screen.getByRole("button", { name: "Accept" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Couldn’t save — try again.",
@@ -333,7 +333,7 @@ it("says a nothing-hours report has no hour to book", async () => {
     },
   });
   render(<TimeReportCard report={report({ reported_hours: 0 })} />, {
-    wrapper,
+    wrapper: Wrapper,
   });
   fireEvent.click(screen.getByRole("button", { name: "Book to a teammate" }));
   fireEvent.click(
@@ -352,7 +352,7 @@ it("offers Book to me, not the picker, to a member who is not a principal", asyn
     { id: "org-other", membership: { role: "owner" } },
   ];
   mockRpc.mockResolvedValue({ data: { status: "accepted" }, error: null });
-  render(<TimeReportCard report={report()} />, { wrapper });
+  render(<TimeReportCard report={report()} />, { wrapper: Wrapper });
 
   expect(
     screen.queryByRole("button", { name: "Book to a teammate" }),
@@ -370,7 +370,7 @@ it("offers Book to me, not the picker, to a member who is not a principal", asyn
 
 it("offers neither booking door until the membership read has answered", () => {
   standing.orgs = undefined;
-  render(<TimeReportCard report={report()} />, { wrapper });
+  render(<TimeReportCard report={report()} />, { wrapper: Wrapper });
   // Accept and Not right never wait on standing; the booking door does, because
   // guessing it would put somebody's real hour one mis-click away.
   expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
@@ -383,7 +383,7 @@ it("offers neither booking door until the membership read has answered", () => {
 });
 
 it("mounts the hours population on the Desk when there is something to decide", async () => {
-  render(<FieldDesk population={{ ...emptyDesk }} />, { wrapper });
+  render(<FieldDesk population={{ ...emptyDesk }} />, { wrapper: Wrapper });
   expect(
     await screen.findByRole("heading", { name: "Hours reported by text" }),
   ).toBeInTheDocument();
@@ -397,7 +397,7 @@ it("mounts the hours population on the Desk when there is something to decide", 
 
 it("reads nothing and shows no hours section while the flag is off", () => {
   flags.timeReports = false;
-  render(<FieldDesk population={{ ...emptyDesk }} />, { wrapper });
+  render(<FieldDesk population={{ ...emptyDesk }} />, { wrapper: Wrapper });
   // The Desk itself rendered; the hours population simply is not there, and
   // the queue was never even read.
   expect(
@@ -411,7 +411,7 @@ it("reads nothing and shows no hours section while the flag is off", () => {
 
 it("shows nothing when the queue is empty, flag on", async () => {
   stubTables([]);
-  render(<FieldDesk population={{ ...emptyDesk }} />, { wrapper });
+  render(<FieldDesk population={{ ...emptyDesk }} />, { wrapper: Wrapper });
   await waitFor(() =>
     expect(mockFrom).toHaveBeenCalledWith("field_time_report_queue"),
   );
