@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # capture-gate.sh — build / test / lint gate for Patina Field Capture.
-# Usage: scripts/capture-gate.sh [build|test|lint|fcr3|p4|all]   (default: all)
+# Usage: scripts/capture-gate.sh [build|test|ui|lint|fcr3|p4|all]   (default: all)
 #
-# The build/test/all tiers require CAPTURE_SIM_UDID — this lane's own simulator
+# The build/test/ui/all tiers require CAPTURE_SIM_UDID — this lane's own simulator
 # clone. See sim_destination(); this gate does not guess.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -42,7 +42,7 @@ sim_destination() {
   printf '%s\n' \
     "✘ CAPTURE_SIM_UDID is unset." \
     "" \
-    "The build/test/all tiers need an explicit simulator udid: this lane's OWN" \
+    "The build/test/ui/all tiers need an explicit simulator udid: this lane's OWN" \
     "clone. Never a shared device, never 'booted', and never a device name —" \
     "Field runs two concurrent lanes, and a name resolves to the same device in" \
     "both, so one lane's test run installs over the other's." \
@@ -96,6 +96,21 @@ test_() {
     -sdk iphonesimulator -destination "$dest" \
     -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
   echo "✔ tests"
+}
+
+# XCUITest, app-hosted. The CaptureKit scheme has no app to host a UI test, so
+# this runs the Capture scheme narrowed to CaptureUITests (that scheme also
+# carries the CaptureTests logic bundle, which test_() already runs).
+ui() {
+  local dest
+  # Before generate(), and `|| return $?` tested — see build().
+  dest="$(sim_destination)" || return $?
+  generate
+  xcodebuild test -project Capture.xcodeproj -scheme Capture \
+    -only-testing:CaptureUITests \
+    -sdk iphonesimulator -destination "$dest" \
+    -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
+  echo "✔ ui tests"
 }
 
 # Pinned so `--strict` means the same thing on every machine and runner.
@@ -247,9 +262,10 @@ EOF
 case "$CMD" in
   build) build ;;
   test)  test_ ;;
+  ui)    ui ;;
   lint)  lint ;;
   fcr3)  fcr3_sweep ;;
   p4)    principle4_sweep ;;
-  all)   build; test_; lint; fcr3_sweep; principle4_sweep ;;
-  *) echo "usage: $0 [build|test|lint|fcr3|p4|all]"; exit 2 ;;
+  all)   build; test_; ui; lint; fcr3_sweep; principle4_sweep ;;
+  *) echo "usage: $0 [build|test|ui|lint|fcr3|p4|all]"; exit 2 ;;
 esac

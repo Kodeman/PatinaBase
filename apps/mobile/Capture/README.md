@@ -117,13 +117,14 @@ project first, so edits to any `.swift` file are picked up automatically.
 # which resolves to the same simulator in every concurrent lane:
 export CAPTURE_SIM_UDID="$(xcrun simctl clone <source-udid> field-<lane>)"
 
-# VERIFY — build + unit tests + lint (CI gate)
-scripts/capture-gate.sh            # or: build | test | lint
-
-# UI TESTS (XCUITest, app-hosted — NOT part of capture-gate.sh)
-xcodebuild test -project Capture.xcodeproj -scheme Capture \
-  -sdk iphonesimulator -destination "platform=iOS Simulator,id=$CAPTURE_SIM_UDID" \
-  -only-testing:CaptureUITests CODE_SIGNING_ALLOWED=NO
+# VERIFY — build + unit tests + UI tests + lint + copy sweeps (CI gate)
+scripts/capture-gate.sh            # all, or one tier:
+                                   #   build  app build (unsigned)
+                                   #   test   CaptureKit logic bundle (CaptureTests)
+                                   #   ui     XCUITest, app-hosted (CaptureUITests)
+                                   #   lint   SwiftLint --strict, pinned version
+                                   #   fcr3   FC-R3 copy sweep ("inbox", "AI")
+                                   #   p4     Principle 4 sweep (suggestion_confidence)
 
 # RUN — generate → build → boot sim → install → launch
 scripts/capture-run.sh                    # real entry (viewfinder / onboarding)

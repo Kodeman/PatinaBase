@@ -134,7 +134,7 @@ pbxproj_intact() { [[ "$(hash_of "$FIX/Capture.xcodeproj/project.pbxproj")" == "
 # CAPTURE_SIM is set on purpose: the old NAME variable must no longer satisfy it.
 unset CAPTURE_SIM_UDID
 export CAPTURE_SIM="iPhone 17"
-for entry in "capture-gate.sh build" "capture-gate.sh test" "capture-gate.sh all" \
+for entry in "capture-gate.sh build" "capture-gate.sh test" "capture-gate.sh ui" "capture-gate.sh all" \
              "capture-run.sh" "capture-run.sh C5.specimen-sheet" \
              "capture-shots.sh" "capture-shots.sh C5"; do
   printf '  %-34s (CAPTURE_SIM_UDID unset)\n' "$entry"
@@ -158,7 +158,7 @@ export CAPTURE_SIM_UDID="$FAKE_UDID"
 export CAPTURE_SHOTS_DIR="$WORK/shots" CAPTURE_SHOT_SETTLE=0
 DEST="$(printf -- '-destination\tplatform=iOS Simulator,id=%s\t' "$FAKE_UDID")"
 DERIVED="$(printf -- '-derivedDataPath\t%s/.build/DerivedData\t' "$FIX")"
-for entry in "capture-gate.sh build" "capture-gate.sh test" \
+for entry in "capture-gate.sh build" "capture-gate.sh test" "capture-gate.sh ui" \
              "capture-run.sh C5.specimen-sheet" "capture-shots.sh C5"; do
   printf '  %-34s (CAPTURE_SIM_UDID set)\n' "$entry"
   # shellcheck disable=SC2086
@@ -169,6 +169,10 @@ for entry in "capture-gate.sh build" "capture-gate.sh test" \
   log_has xcodebuild "$DEST"; check $? "destination is platform=iOS Simulator,id=\$CAPTURE_SIM_UDID"
   log_has xcodebuild "$DERIVED"; check $? "-derivedDataPath is this checkout's .build/DerivedData"
   case "$entry" in
+    "capture-gate.sh ui")
+      log_has xcodebuild "$(printf -- '-scheme\tCapture\t-only-testing:CaptureUITests\t')"
+      check $? "runs CaptureUITests through the Capture scheme"
+      ;;
     capture-run.sh*|capture-shots.sh*)
       log_has xcrun "$(printf 'simctl\tinstall\t%s\t' "$FAKE_UDID")"
       check $? "installs onto \$CAPTURE_SIM_UDID"
