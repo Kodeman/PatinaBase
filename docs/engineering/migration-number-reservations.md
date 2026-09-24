@@ -317,3 +317,28 @@ Consequence for other programs: the applied-on-prod sequence will **not** be con
 (00489–00492 land on prod only when that lane pushes them), so keep following discipline
 rule 2 — re-check `list_migrations` immediately before every land rather than inferring a
 floor from the file numbering.
+
+## 00660–00664 — T6, Document & Delivery Contracts (iOS 27 program)
+
+Reserved 2026-09-23 by W0-16. Verified free at reservation time: `main` tip is
+00659; `build/studio-hook-2026-09-22` holds nothing above 00657; and
+`git log --all` occupies no number at or above 00660.
+
+00660 `ffe_extract_image_branch` — the extractor's non-PDF branch. Widens
+`get_project_ffe_extract_upload`'s `content_type` filter (00437), adds `'photo'`
+to `project_ffe_import_batches.source_kind` (00434) and derives `source_kind`
+from the upload rather than the `'pdf'` literal.
+
+00661 `ffe_extract_commercial_confirmation` — ruling D7's maker/SKU/price/
+currency, staged as unconfirmed envelopes that the existing `validation_errors`
+commit gate refuses until a per-row designer decision supplies the value.
+**Blocked** on where a confirmed non-USD currency persists — `project_ffe_items`
+has no currency column.
+
+00662 `device_push_tokens_bundle` — the per-token bundle column `apns-send`
+needs to address Patina Field. 00663 holds its revert, written first: this
+program ships no feature flags, so the revert migration is the only way back.
+00664 spare, per discipline rule 2.
+
+Registration itself needs **no** migration: 00455 already accepts
+`media_kind = 'source_document'` and all four content types.
