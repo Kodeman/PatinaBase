@@ -24,7 +24,7 @@ import {
   releaseSummary,
   type ReleaseLine,
 } from '@/lib/document/authorization-derivation';
-import { fmtUsd } from '@/lib/document/format';
+import { formatCurrencyTotal, formatMoney, isMixed } from '@/lib/currency-totals';
 import { useProjectBillingAuthority } from '@/hooks/use-commercial-documents';
 import { DocumentAction, DocumentActionRow } from '../document-action';
 
@@ -40,7 +40,7 @@ export function CompositionBar({
   onPutBack: () => void;
 }) {
   const authority = useProjectBillingAuthority(projectId);
-  const { lineCount, roomCount, totalCents } = releaseSummary(lines);
+  const { lineCount, roomCount, total } = releaseSummary(lines);
   const percent = furnishingsDepositPercent(authority.data);
 
   if (typeof document === 'undefined') return null;
@@ -48,7 +48,7 @@ export function CompositionBar({
   const counts = [
     `${lineCount} ${lineCount === 1 ? 'line' : 'lines'}`,
     `${roomCount} ${roomCount === 1 ? 'room' : 'rooms'}`,
-    fmtUsd(totalCents),
+    formatCurrencyTotal(total),
   ];
 
   return createPortal(
@@ -61,9 +61,9 @@ export function CompositionBar({
       <div className="mx-auto flex w-full max-w-[1180px] flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
         <p className="min-w-0 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
           {counts.join(' · ')}
-          {percent !== null && (
+          {percent !== null && !isMixed(total) && (
             <span className="text-[var(--text-muted)]">
-              {' · '}deposit {fmtUsd(depositCents(totalCents, percent))} at{' '}
+              {' · '}deposit {formatMoney(depositCents(total.cents, percent), total.currency)} at{' '}
               {percent}%
             </span>
           )}

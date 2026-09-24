@@ -72,6 +72,14 @@ import {
   type TradeLineHold,
 } from '@/lib/document/authorization-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
+import {
+  DEFAULT_CURRENCY,
+  formatCurrencyTotal,
+  formatMoney,
+  isMixed,
+  rowCurrency,
+  sumByCurrency,
+} from '@/lib/currency-totals';
 import { Stamp, type StampTone } from './stamp';
 import { RowWash, useRowWash, type RowWashTone } from './row-wash';
 import { LineUnfold } from './line-unfold';
@@ -400,7 +408,9 @@ function FFELine({
   const line = vendorLine(item, stamp, showRoom);
   const billing = coverageNote(item, coverage);
   const price =
-    item.line_total_cents != null ? fmtUsd(item.line_total_cents) : '—';
+    item.line_total_cents != null
+      ? formatMoney(item.line_total_cents, rowCurrency(item))
+      : '—';
   const thumbSrc = ffeThumbSrc(item);
   const washTone = ffeWashTone(stamp.kind);
   const tone = ffeStampTone(stamp.kind);
@@ -594,18 +604,20 @@ function RoomHeading({
   heldRoomId: string | null;
   toggleRoom: (roomId: string) => void;
 }) {
-  const committed = rows
-    .filter((r) => COMMITTED.has(r.stamp.kind))
-    .reduce((s, r) => s + (r.item.line_total_cents ?? 0), 0);
+  // SQ-207 — each figure is one currency's sum, or the mixed-currency note.
+  const lineTotals = (subset: LineRow[]) =>
+    formatCurrencyTotal(
+      sumByCurrency(
+        subset.map((r) => r.item as FFERow),
+        (item) => item.line_total_cents ?? 0,
+      ),
+    );
+  const committed = lineTotals(rows.filter((r) => COMMITTED.has(r.stamp.kind)));
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const state = deriveRoomState(rows.map((r) => roomStateRowFromStamp(r.stamp)));
 
-  const releasedCents = rows
-    .filter((r) => r.auth.track !== 'none')
-    .reduce((s, r) => s + (r.item.line_total_cents ?? 0), 0);
-  const notYetCents = rows
-    .filter((r) => r.auth.track === 'none')
-    .reduce((s, r) => s + (r.item.line_total_cents ?? 0), 0);
+  const released = lineTotals(rows.filter((r) => r.auth.track !== 'none'));
+  const notYet = lineTotals(rows.filter((r) => r.auth.track === 'none'));
 
   // R33 F5 — one schedule, one vocabulary: rooms speak the section's word.
   // "Placed" retires until it can truthfully mean installed.
@@ -613,13 +625,13 @@ function RoomHeading({
     ? `${selectedCount} of ${eligibleCount}`
     : [
         budgetCents > 0
-          ? `committed ${fmtUsd(committed)} of ${fmtUsd(budgetCents)}`
+          ? `committed ${committed} of ${fmtUsd(budgetCents)}`
           : null,
         rows.length > 0
           ? `${underway} of ${rows.length} underway`
           : 'no lines yet',
         showAuthorization && rows.length > 0
-          ? `${fmtUsd(releasedCents)} released · ${fmtUsd(notYetCents)} not yet`
+          ? `${released} released · ${notYet} not yet`
           : null,
       ]
         .filter(Boolean)
@@ -1002,14 +1014,18 @@ function FFESectionBody({
           // figure that gets released and signed, never a lower one.
           clientLineTotalCents:
             signableCents(row.item) ?? row.item.line_total_cents ?? 0,
+          currency: rowCurrency(row.item),
         }))
     : [];
   // Counted the way publish_budget_checkpoint counts, so the drift read on
-  // the release sheet compares like with like.
-  const currentScheduledCents = rows.reduce(
-    (sum, row) => sum + scheduledContributionCents(row.item),
-    0,
+  // the release sheet compares like with like. The checkpoint is USD-only
+  // (00661), so a schedule carrying any other currency has no drift read.
+  const scheduled = sumByCurrency(
+    rows.map((row) => row.item as FFERow),
+    (item) => scheduledContributionCents(item),
   );
+  const currentScheduledCents =
+    !isMixed(scheduled) && scheduled.currency === DEFAULT_CURRENCY ? scheduled.cents : null;
 
   const meta =
     mode === 'install'

@@ -77,6 +77,17 @@ describe('CompositionBar', () => {
     );
   });
 
+  it('never adds two currencies: the total and the deposit give way to the note', () => {
+    mockAuthority = { data: { furnishingsDepositPercent: 50 } };
+    renderBar({ lines: [lines[0], { ...lines[2], currency: 'EUR' }] });
+    const bar = screen.getByTestId('composition-bar');
+    expect(bar).toHaveTextContent(
+      '2 lines · 2 rooms · Mixed currencies — total unavailable (EUR, USD)',
+    );
+    expect(bar).not.toHaveTextContent(/deposit/i);
+    expect(bar).not.toHaveTextContent('$19,100');
+  });
+
   it('reads a singular line and room without pluralising', () => {
     renderBar({ lines: [lines[0]] });
     expect(screen.getByTestId('composition-bar')).toHaveTextContent(

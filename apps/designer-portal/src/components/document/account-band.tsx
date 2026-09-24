@@ -22,6 +22,12 @@ import {
 } from '@/hooks/use-account-page';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
+import {
+  formatCurrencyTotal,
+  formatMoney,
+  isMixed,
+  mixedCurrenciesText,
+} from '@/lib/currency-totals';
 import { DateTextInput } from './date-text-input';
 import { openLedger } from './command-bar';
 import { openInvoiceComposer, openInvoiceFolio } from './accounts/invoice-overlays';
@@ -259,7 +265,7 @@ export function AccountBand({
 
   const collapsedLine = [
     `${fmtUsd(data.budgetCents)} budget`,
-    `${fmtUsd(data.committedCents)} committed`,
+    `${formatCurrencyTotal(data.committed)} committed`,
     data.marginPct != null ? `${data.marginPct}% margin` : null,
   ]
     .filter(Boolean)
@@ -315,23 +321,29 @@ export function AccountBand({
                   {r.allocatedCents > 0 ? fmtUsd(r.allocatedCents) : '—'}
                 </span>
                 <span className="text-right font-mono text-[11px] text-[var(--color-charcoal)]">
-                  {fmtUsd(r.committedCents)}
+                  {formatCurrencyTotal(r.committed)}
                 </span>
-                <span
-                  className="text-right font-mono text-[11px]"
-                  style={{
-                    color: r.varianceCents >= 0 ? SAGE_INK : TERRACOTTA_INK,
-                  }}
-                >
-                  {r.varianceCents >= 0
-                    ? fmtUsd(r.varianceCents) + ' under'
-                    : fmtUsd(-r.varianceCents) + ' over'}
-                </span>
+                {r.varianceMixed ? (
+                  <span className="text-right font-mono text-[11px] text-[var(--text-muted)]">
+                    {mixedCurrenciesText(r.varianceMixed)}
+                  </span>
+                ) : (
+                  <span
+                    className="text-right font-mono text-[11px]"
+                    style={{
+                      color: r.varianceCents >= 0 ? SAGE_INK : TERRACOTTA_INK,
+                    }}
+                  >
+                    {r.varianceCents >= 0
+                      ? fmtUsd(r.varianceCents) + ' under'
+                      : fmtUsd(-r.varianceCents) + ' over'}
+                  </span>
+                )}
               </div>
               {r.categories.length > 0 && (
                 <p className="mt-px font-mono text-[11px] lowercase tracking-[0.03em] text-[var(--text-muted)]">
                   {r.categories
-                    .map((c) => `${c.name.replace(/_/g, ' ')} ${fmtUsd(c.committedCents)}`)
+                    .map((c) => `${c.name.replace(/_/g, ' ')} ${formatCurrencyTotal(c.committed)}`)
                     .join(' · ')}
                 </p>
               )}
@@ -340,9 +352,12 @@ export function AccountBand({
 
           {/* The margin line — trade vs client, with the coverage note. */}
           <p className="mt-2 text-[11px] text-[var(--color-charcoal)]">
-            {data.marginPct != null ? (
+            {isMixed(data.margin) ? (
+              `Margin: ${mixedCurrenciesText(data.margin.mixed)}.`
+            ) : data.marginPct != null ? (
               <>
-                Trade {fmtUsd(data.tradeCostCents)} → client {fmtUsd(data.clientValueCents)} ·{' '}
+                Trade {formatMoney(data.tradeCostCents, data.margin.currency)} → client{' '}
+                {formatMoney(data.clientValueCents, data.margin.currency)} ·{' '}
                 <span style={{ color: SAGE_INK }}>{data.marginPct}% margin</span>
               </>
             ) : (
@@ -357,7 +372,9 @@ export function AccountBand({
           {/* The designer-earnings block → Accounts (stub target OK, R26). */}
           <p className="mt-1.5 text-[11px] text-[var(--color-charcoal)]">
             Design fee {fmtUsd(data.designFeeCents)} · est. commissions{' '}
-            {fmtUsd(data.estCommissionCents)}
+            {isMixed(data.margin)
+              ? mixedCurrenciesText(data.margin.mixed)
+              : formatMoney(data.estCommissionCents, data.margin.currency)}
             {/* I107 — the clay underline is retired: a tertiary word takes its
                 rule on hover, and the ↗ rides outside the score as a glyph, so
                 the rule marks the word and not the doorway. */}

@@ -1407,7 +1407,6 @@ export {
   useUpdateProjectPhaseStatus,
   useProjectPaymentMilestones,
   useUpdatePaymentMilestoneStatus,
-  useProjectFinancials,
 } from "./use-project-v2";
 export {
   useArchiveProjectSelection,

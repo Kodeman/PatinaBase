@@ -178,6 +178,26 @@ describe('ReviewReleaseSheet', () => {
     expect(screen.getAllByText('$11,650')).toHaveLength(2);
   });
 
+  it('prices each line in its own currency and refuses a mixed total', () => {
+    renderSheet({
+      lines: [lines[0], { ...lines[1], currency: 'EUR' }, lines[2]],
+    });
+    // The line carries its own currency; its room cannot be summed.
+    expect(screen.getByText('€4,200')).toBeInTheDocument();
+    expect(
+      screen.getByText(/2 lines · Mixed currencies — total unavailable \(EUR, USD\)/),
+    ).toBeInTheDocument();
+    // The one-currency room still states its figure.
+    expect(screen.getByText(/1 line · \$6,800/)).toBeInTheDocument();
+    // The authorization total gives way to the note, and no deposit is figured.
+    expect(screen.getByText('authorization total')).toBeInTheDocument();
+    expect(
+      screen.getByText('Mixed currencies — total unavailable (EUR, USD)'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('deposit at 50%')).not.toBeInTheDocument();
+    expect(screen.queryByText('$23,300')).not.toBeInTheDocument();
+  });
+
   it('prefills the deposit chip from the agreement, and says whose default it is', () => {
     renderSheet();
     expect(screen.getByRole('button', { name: '50%' })).toHaveAttribute(

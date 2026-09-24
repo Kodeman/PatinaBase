@@ -145,6 +145,7 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
           quantity: it.quantity ?? 1,
           unit_price_cents: it.unit_price_cents ?? null,
           trade_price_cents: it.trade_price_cents ?? null,
+          currency: it.currency ?? null,
           blocked: it.blocked,
           blocked_by_decision_id: it.blocked_by_decision_id ?? null,
           blocked_reason: it.blocked_reason,

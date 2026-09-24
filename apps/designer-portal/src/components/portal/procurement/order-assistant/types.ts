@@ -7,6 +7,13 @@
  */
 
 import type { PaymentPattern } from '@patina/supabase';
+import {
+  DEFAULT_CURRENCY,
+  formatCurrencyTotal,
+  formatMoney,
+  sumByCurrency,
+  type CurrencyTotal,
+} from '@/lib/currency-totals';
 
 // ─── Shared types ──────────────────────────────────────────────────────────
 
@@ -55,6 +62,8 @@ export interface OrderAssistantFFEItem {
   quantity?: number;
   unit_price_cents?: number | null;
   trade_price_cents?: number | null;
+  /** The line's ISO-4217 currency (00661); missing reads as USD. */
+  currency?: string | null;
   /**
    * Three-layer catalog layer of the underlying product, when known.
    * Drives the routing-mode badge in the assistant header and (in
@@ -238,4 +247,19 @@ export function itemTradeCents(
   const unit = item.trade_price_cents ?? item.unit_price_cents;
   if (unit === null || unit === undefined) return item.line_total_cents;
   return unit * (item.quantity ?? 1);
+}
+
+/** Σ itemTradeCents in one currency, or the currencies the items span (SQ-207). */
+export function tradeTotal(items: readonly OrderAssistantFFEItem[]): CurrencyTotal {
+  return sumByCurrency(items, itemTradeCents);
+}
+
+/** An amount in its currency: USD prints through formatDollars, unchanged. */
+export function formatTradeMoney(cents: number, currency: string): string {
+  return currency === DEFAULT_CURRENCY ? formatDollars(cents) : formatMoney(cents, currency);
+}
+
+/** A trade total, or the mixed-currency note in place of a sum. */
+export function formatTradeTotal(total: CurrencyTotal): string {
+  return formatCurrencyTotal(total, formatTradeMoney);
 }

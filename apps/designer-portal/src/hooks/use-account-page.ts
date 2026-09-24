@@ -10,6 +10,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { invalidateMarginSurfaces } from './use-margin-items';
+import {
+  DEFAULT_CURRENCY,
+  isMixed,
+  sumByCurrency,
+  totalCurrencies,
+  type CurrencyTotal,
+} from '@/lib/currency-totals';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -35,6 +42,7 @@ interface ItemSlice {
   status: string;
   project_room_id: string | null;
   item_type: string | null;
+  currency: string | null;
 }
 
 export interface RoomVariance {
@@ -42,8 +50,13 @@ export interface RoomVariance {
   roomName: string;
   allocatedCents: number;
   committedCents: number;
+  /** The room's committed lines in their currency, or the currencies they span. */
+  committed: CurrencyTotal;
   varianceCents: number; // allocated - committed; >= 0 renders sage, < 0 terracotta
-  categories: { name: string; committedCents: number }[];
+  /** Set when the variance would subtract a non-USD commitment from the USD
+   *  allocation: the currencies involved. varianceCents is 0 then. */
+  varianceMixed: string[] | null;
+  categories: { name: string; committedCents: number; committed: CurrencyTotal }[];
 }
 
 export interface AccountPageData {
@@ -51,6 +64,12 @@ export interface AccountPageData {
   totalAmountCents: number;
   designFeeCents: number;
   committedCents: number;
+  /** Committed lines in their currency, or the currencies they span (SQ-207).
+   *  committedCents is 0 when this is mixed. */
+  committed: CurrencyTotal;
+  /** The margin figures' currency, or the currencies they span. clientValue,
+   *  tradeCost and estCommission are 0 and marginPct null when mixed. */
+  margin: CurrencyTotal;
   /** Client-side value of committed lines (unit price × qty). */
   clientValueCents: number;
   /** Trade cost of committed lines that carry one. */
@@ -86,7 +105,7 @@ export function useAccountPage(projectId: string | null) {
             .single(),
           supabase
             .from('project_ffe_items')
-            .select('line_total_cents, trade_price_cents, unit_price_cents, quantity, status, project_room_id, item_type')
+            .select('line_total_cents, trade_price_cents, unit_price_cents, quantity, status, project_room_id, item_type, currency')
             .eq('project_id', projectId),
           supabase
             .from('project_rooms')
@@ -107,16 +126,17 @@ export function useAccountPage(projectId: string | null) {
       const all = (items ?? []) as ItemSlice[];
       const committed = all.filter((i) => COMMITTED_STATUSES.has(i.status));
 
-      const committedCents = committed.reduce((s, i) => s + (i.line_total_cents ?? 0), 0);
+      const committedTotal = sumByCurrency(committed, (i) => i.line_total_cents ?? 0);
+      const committedCents = centsOf(committedTotal);
       const withTrade = committed.filter((i) => i.trade_price_cents != null);
-      const clientValueCents = withTrade.reduce(
-        (s, i) => s + (i.unit_price_cents ?? 0) * (i.quantity ?? 1),
-        0,
+      const clientValue = sumByCurrency(
+        withTrade,
+        (i) => (i.unit_price_cents ?? 0) * (i.quantity ?? 1),
       );
-      const tradeCostCents = withTrade.reduce(
-        (s, i) => s + (i.trade_price_cents ?? 0) * (i.quantity ?? 1),
-        0,
-      );
+      const clientValueCents = centsOf(clientValue);
+      const tradeCostCents = isMixed(clientValue)
+        ? 0
+        : withTrade.reduce((s, i) => s + (i.trade_price_cents ?? 0) * (i.quantity ?? 1), 0);
       const marginPct =
         clientValueCents > 0
           ? Math.round(((clientValueCents - tradeCostCents) / clientValueCents) * 100)
@@ -125,13 +145,12 @@ export function useAccountPage(projectId: string | null) {
       const roomRows: RoomVariance[] = [
         ...((rooms ?? []) as any[]).map((room) => {
           const inRoom = committed.filter((i) => i.project_room_id === room.id);
-          const roomCommitted = inRoom.reduce((s, i) => s + (i.line_total_cents ?? 0), 0);
+          const allocatedCents = (room.budget_cents as number) ?? 0;
           return {
             roomId: room.id as string,
             roomName: room.name as string,
-            allocatedCents: (room.budget_cents as number) ?? 0,
-            committedCents: roomCommitted,
-            varianceCents: ((room.budget_cents as number) ?? 0) - roomCommitted,
+            allocatedCents,
+            ...committedAgainst(inRoom, allocatedCents),
             categories: categorize(inRoom),
           };
         }),
@@ -140,13 +159,11 @@ export function useAccountPage(projectId: string | null) {
         (i) => !i.project_room_id || !roomRows.some((r) => r.roomId === i.project_room_id),
       );
       if (unassigned.length > 0) {
-        const c = unassigned.reduce((s, i) => s + (i.line_total_cents ?? 0), 0);
         roomRows.push({
           roomId: null,
           roomName: 'Throughout',
           allocatedCents: 0,
-          committedCents: c,
-          varianceCents: -c,
+          ...committedAgainst(unassigned, 0),
           categories: categorize(unassigned),
         });
       }
@@ -156,6 +173,8 @@ export function useAccountPage(projectId: string | null) {
         totalAmountCents: project?.total_amount_cents ?? project?.budget_cents ?? 0,
         designFeeCents: project?.design_fee_cents ?? 0,
         committedCents,
+        committed: committedTotal,
+        margin: clientValue,
         clientValueCents,
         tradeCostCents,
         tradeCoverage: { withTrade: withTrade.length, total: committed.length },
@@ -168,14 +187,40 @@ export function useAccountPage(projectId: string | null) {
   });
 }
 
-function categorize(items: ItemSlice[]): { name: string; committedCents: number }[] {
-  const map = new Map<string, number>();
+/** A total's cents, or 0 when it spans currencies — never a cross-currency sum. */
+function centsOf(total: CurrencyTotal): number {
+  return isMixed(total) ? 0 : total.cents;
+}
+
+/** A room's committed figure, and its variance against the USD allocation. */
+function committedAgainst(
+  items: ItemSlice[],
+  allocatedCents: number,
+): Pick<RoomVariance, 'committedCents' | 'committed' | 'varianceCents' | 'varianceMixed'> {
+  const committed = sumByCurrency(items, (i) => i.line_total_cents ?? 0);
+  const committedCents = centsOf(committed);
+  const comparable = !isMixed(committed) && committed.currency === DEFAULT_CURRENCY;
+  return {
+    committedCents,
+    committed,
+    varianceCents: comparable ? allocatedCents - committedCents : 0,
+    varianceMixed: comparable
+      ? null
+      : [...new Set([...totalCurrencies(committed), DEFAULT_CURRENCY])].sort(),
+  };
+}
+
+function categorize(items: ItemSlice[]): RoomVariance['categories'] {
+  const map = new Map<string, ItemSlice[]>();
   for (const i of items) {
     const key = i.item_type ?? 'other';
-    map.set(key, (map.get(key) ?? 0) + (i.line_total_cents ?? 0));
+    map.set(key, [...(map.get(key) ?? []), i]);
   }
   return [...map.entries()]
-    .map(([name, committedCents]) => ({ name, committedCents }))
+    .map(([name, inCategory]) => {
+      const committed = sumByCurrency(inCategory, (i) => i.line_total_cents ?? 0);
+      return { name, committedCents: centsOf(committed), committed };
+    })
     .sort((a, b) => b.committedCents - a.committedCents);
 }
 
