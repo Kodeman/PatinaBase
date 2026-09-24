@@ -22,7 +22,10 @@
 # `archive` is in neither — it needs an authenticated Xcode account, network
 # round trips to App Store Connect and a distribution keychain that can prompt.
 #
-# The unit/ui tiers require IOS_GATE_UDID. See sim_destination().
+# The unit/ui/all tiers require IOS_GATE_UDID. See sim_destination().
+# That guard is pinned by scripts/ios-gate-guard.test.sh, which needs no
+# simulator, no Xcode and no network:
+#   bash apps/mobile/Patina/scripts/ios-gate-guard.test.sh
 #
 # Exit non-zero on any failure. Designed to be safe to run from any CWD.
 set -euo pipefail
@@ -54,13 +57,22 @@ run_xcb() {
 # ff-w1-* plus the protected review device 973D1724-90BF-4A0A-B02D-481D561547B3
 # present will happily run one lane's tests on another lane's clone. That is the
 # program's Hard Rule 1, broken by the gate that enforces it.
+#
+# Echoes the destination and RETURNS a status — it must never `exit`. This is only
+# ever run as `$(sim_destination)`, where an `exit` kills the command
+# substitution's subshell and not the gate. The assignment then carries status 2,
+# but bash suppresses `set -e` inside a function invoked from a NON-FINAL position
+# of an `&&` list — so `all` (where cmd_test is followed by cmd_lint_delta) sailed
+# straight past the failed assignment into `xcodebuild test -destination ""`, while
+# `unit`/`ui` (cmd_test last) aborted and made the guard look sound.
+# Every caller must therefore test the status. ios-gate-guard.test.sh pins this.
 sim_destination() {
   if [[ -n "${IOS_GATE_UDID:-}" ]]; then
     echo "platform=iOS Simulator,id=$IOS_GATE_UDID"; return 0
   fi
-  echo "ERROR: IOS_GATE_UDID is unset. The unit/ui tiers need an explicit clone udid." >&2
+  echo "ERROR: IOS_GATE_UDID is unset. The unit/ui/all tiers need an explicit clone udid." >&2
   echo "       export IOS_GATE_UDID=<this lane's own clone>  (never 'booted')"        >&2
-  exit 2
+  return 2
 }
 
 cmd_build() {
@@ -73,7 +85,10 @@ cmd_build() {
 }
 
 cmd_test() {
-  local target="$1"; local dest; dest="$(sim_destination)"
+  local target="$1"; local dest
+  # `|| return` is load-bearing, not defensive: it is the only thing that stops
+  # this function in tiers where errexit is suppressed (see sim_destination).
+  dest="$(sim_destination)" || return $?
   echo "▶ test $target ($dest)"
   run_xcb xcodebuild test \
     -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
