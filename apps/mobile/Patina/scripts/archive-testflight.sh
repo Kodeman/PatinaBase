@@ -245,6 +245,21 @@ EOF
   exit 1
 fi
 
+# Existence is not enough. ios-gate.sh runs scripts/bootstrap-worktree.sh, which
+# creates this file from the template with an EMPTY anon key — so in a fresh
+# worktree where the gate ran first, the file exists and the check above passes.
+# An archive with no anon key reaches TestFlight and cannot authenticate.
+if ! grep -Eq 'supabaseAnonKey[[:space:]]*=[[:space:]]*"[^"]+"' "$SECRETS_SWIFT"; then
+  cat >&2 <<EOF
+archive-testflight.sh: $SECRETS_SWIFT has an empty supabaseAnonKey
+
+It was probably created by scripts/bootstrap-worktree.sh, which copies the
+template's empty key so dev builds compile. A shipping build needs the real
+key — fill in supabaseAnonKey and re-run.
+EOF
+  exit 1
+fi
+
 # Runs AFTER the guard above, so it can only ever restore the other gitignored
 # compile-time file, Patina/Generated/GitCommit.swift. Without it a fresh
 # checkout fails to compile — see scripts/bootstrap-worktree.sh.
