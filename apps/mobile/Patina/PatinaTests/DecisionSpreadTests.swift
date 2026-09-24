@@ -325,15 +325,14 @@ struct DecisionSpreadTests {
         #expect(arrival.contains("navigationTransition(.zoom(sourceID: decisionId, in: namespace))"))
         #expect(arrival.contains("matchedTransitionSource(id: decisionId, in: namespace)"))
 
-        // Both roots publish the namespace, or one of the two lands on a
-        // zoom with no source and pushes plainly.
-        for root in ["Patina/ContentView.swift",
-                     "Patina/Features/Navigation/HouseFirstRoot.swift"] {
-            let code = SourceScan.code(in: try SourcePin.read(root))
-            #expect(code.contains("@Namespace private var decisionZoom"),
-                    "\((root as NSString).lastPathComponent) declares no namespace")
-            #expect(code.contains(".environment(\\.decisionZoomNamespace, decisionZoom)"),
-                    "\((root as NSString).lastPathComponent) publishes no namespace")
-        }
+        // The root publishes the namespace, or the arrival lands on a zoom
+        // with no source and pushes plainly.
+        let root = SourceScan.code(
+            in: try SourcePin.read("Patina/Features/Navigation/HouseFirstRoot.swift")
+        )
+        #expect(root.contains("@Namespace private var decisionZoom"),
+                "HouseFirstRoot declares no namespace")
+        #expect(root.contains(".environment(\\.decisionZoomNamespace, decisionZoom)"),
+                "HouseFirstRoot publishes no namespace")
     }
 }

@@ -43,26 +43,23 @@ struct PurchaseActionBarTests {
         #expect(bar(.askDesigner(firstName: "Leah")).act.reason == nil)
     }
 
-    @Test("no relationship, flag or gate combination can produce a Buy label for a live client")
+    @Test("no relationship or gate combination can produce a Buy label for a live client")
     func liveClientNeverGetsABuyLabel() {
         let live: [DesignerRelationship] = [
             .lead(leadId: UUID(), designerId: UUID(), studioName: "Hartwell Studio"),
             .project(projectId: UUID(), designerId: UUID(), studioName: nil)
         ]
         for relationship in live {
-            for flag in [true, false] {
-                for resolved in [true, false] {
-                    let act = PieceActResolver.act(
-                        product: PurchaseFixture.piece(),
-                        relationship: relationship,
-                        designerName: "Leah Hartwell",
-                        directOrdersEnabled: flag,
-                        relationshipIsResolved: resolved
-                    )
-                    let label = bar(act).act.primaryLabel
-                    #expect(!label.hasPrefix("Buy"))
-                    #expect(label == "Ask Leah to source this")
-                }
+            for resolved in [true, false] {
+                let act = PieceActResolver.act(
+                    product: PurchaseFixture.piece(),
+                    relationship: relationship,
+                    designerName: "Leah Hartwell",
+                    relationshipIsResolved: resolved
+                )
+                let label = bar(act).act.primaryLabel
+                #expect(!label.hasPrefix("Buy"))
+                #expect(label == "Ask Leah to source this")
             }
         }
     }

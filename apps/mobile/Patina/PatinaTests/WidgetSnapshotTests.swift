@@ -20,7 +20,6 @@ struct WidgetSnapshotTests {
     /// Reloads are counted rather than delivered; no widget is installed.
     private func fallbackStore(
         reloads: ReloadCounter = ReloadCounter(),
-        flagOn: Bool = true,
         ownerId: String? = "owner-1"
     ) -> RecordSnapshotStore {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -29,7 +28,6 @@ struct WidgetSnapshotTests {
             appGroupIdentifier: "group.does.not.exist.\(UUID().uuidString)",
             fallbackDirectory: directory,
             reloadWidgets: { kind in reloads.record(kind) },
-            flagIsOn: { flagOn },
             ownerId: { ownerId }
         )
     }
@@ -99,7 +97,6 @@ struct WidgetSnapshotTests {
         let snapshot = try #require(store.loadWidgetSnapshot())
         #expect(snapshot.houseLine == "Living Room")
         #expect(snapshot.refreshedAt == referenceDate)
-        #expect(snapshot.flagOn)
     }
 
     /// GAP7B-05 amends this: MOVED rows, in order, **that have somewhere to
@@ -132,7 +129,7 @@ struct WidgetSnapshotTests {
         #expect(json["hasMoreNeedsYou"] == nil)
         #expect(json["badge"] == nil)
         #expect(json["count"] == nil)
-        #expect(Set(json.keys) == ["movedRows", "houseLine", "sinceDate", "refreshedAt", "flagOn", "ownerId"])
+        #expect(Set(json.keys) == ["movedRows", "houseLine", "sinceDate", "refreshedAt", "ownerId"])
 
         // And no NEEDS YOU row's identifier slipped in through the projection.
         let text = try #require(String(data: data, encoding: .utf8))
@@ -170,7 +167,6 @@ struct WidgetSnapshotTests {
             let houseLine: String?
             let sinceDate: Date?
             let refreshedAt: Date
-            let flagOn: Bool
             let ownerId: String?
         }
 
@@ -186,7 +182,6 @@ struct WidgetSnapshotTests {
         #expect(mirror.movedRows[0].route == MirrorRoute(kind: "thread", id: "t1"))
         #expect(mirror.houseLine == "Living Room")
         #expect(mirror.sinceDate == referenceDate.addingTimeInterval(-604_800))
-        #expect(mirror.flagOn)
         #expect(mirror.ownerId == "owner-1")
     }
 
@@ -215,13 +210,6 @@ struct WidgetSnapshotTests {
         let snapshot = try #require(store.loadWidgetSnapshot())
         #expect(snapshot.sinceDate == built.window.start)
         #expect(snapshot.sinceDate != snapshot.refreshedAt)
-    }
-
-    @Test("the flag the widget reads is the one the mirror resolved, not a guess")
-    func flagOnComesFromTheMirror() throws {
-        let off = fallbackStore(flagOn: false)
-        off.save(record(), now: referenceDate)
-        #expect(try #require(off.loadWidgetSnapshot()).flagOn == false)
     }
 
     // MARK: - Fallback

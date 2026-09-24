@@ -234,7 +234,7 @@ struct TabNavigationModelTests {
 
     // MARK: - The tour's auto-start gate (R6)
 
-    /// The tour describes Today. On the flag-off root `navigationPath.isEmpty`
+    /// The tour describes Today. On the retired flag-off root `navigationPath.isEmpty`
     /// asks the whole question, because there is one stack; on this root that
     /// path is inert and permanently empty, so the gate read `true` while
     /// another tab was on screen and the tour auto-started over Pieces after

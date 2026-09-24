@@ -152,8 +152,7 @@ struct StudioHubProjectionTests {
         let code = SourceScan.code(in: source)
         #expect(code.contains("@Environment(\\.isTabRoot) private var isTabRoot"),
                 "the hub cannot tell a tab root from a pushed copy of itself")
-        #expect(code.contains("guard coordinator.isHouseFirstRoot, isTabRoot else { return true }"))
-        #expect(!code.contains("!coordinator.isHouseFirstRoot || coordinator.tabs.selected == .projects"),
+        #expect(code.contains("guard isTabRoot else { return true }"),
                 "a hub pushed over Today is still read as a hub she is not looking at")
         #expect(code.contains("guard isOnStudio else { return }"),
                 "an unselected tab root still refetches eight sources")

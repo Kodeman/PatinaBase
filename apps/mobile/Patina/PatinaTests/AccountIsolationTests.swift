@@ -298,7 +298,7 @@ struct AccountIsolationTests {
     func theSignOutClearsThePreviousAccountsNavigationStack() throws {
         let source = try SourcePin.read("Patina/App/Coordinators/AppCoordinator.swift")
         let clears = Self.endedSessionBody(in: source)?
-            .contains("navigationPath = NavigationPath()") ?? false
+            .contains("for tab in PatinaTab.allCases { tabs.popToRoot(tab) }") ?? false
         #expect(clears, "C2-06 owes AppCoordinator its ended-session stack clear (l1b-notes-out.md O2)")
     }
 

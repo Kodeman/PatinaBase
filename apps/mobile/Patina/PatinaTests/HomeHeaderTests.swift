@@ -19,11 +19,8 @@ struct HomeHeaderTests {
     /// in it and speak "4 waiting" to VoiceOver — the app's in-product
     /// attention badge, which VISION §6 refuses. The springboard badge is kept;
     /// inside the app the NEEDS YOU eyebrow carries the truth as rows.
-    @Test("the Studio control names the door and carries no count")
+    @Test("the header carries no count")
     func theStudioControlCarriesNoCount() throws {
-        #expect(StudioControlLabel.title == "Projects")
-        #expect(StudioControlLabel.voiceOverName == "Your Projects")
-
         let header = try SourcePin.readCode("Patina/Features/Home/Views/DailyGreetingHeader.swift")
         #expect(!header.contains("attentionCount"),
                 "the header still reads the attention count")
@@ -31,12 +28,7 @@ struct HomeHeaderTests {
                 "VoiceOver still speaks the retired count")
         // `iosb2-M3`: R5 retires the tab badge "and any in-product numeric
         // badge", so the bell's count went too. Clay survives on this header
-        // as the unread DOT's fill — a mark, not a number — which is why the
-        // capsule pin is still scoped to the Studio control's own block.
-        let studio = try #require(header.range(of: "private var studioControl: some View {"))
-        let afterStudio = String(header[studio.lowerBound...].prefix(600))
-        #expect(!afterStudio.contains("PatinaColors.clayInk"),
-                "the count capsule's fill is still drawn on the Studio control")
+        // as the unread DOT's fill — a mark, not a number.
         // And nowhere on the header does a number get drawn.
         #expect(!header.contains("Capsule().fill(PatinaColors.clayInk)"),
                 "an in-product count capsule is still drawn (R5)")
@@ -76,31 +68,4 @@ struct HomeHeaderTests {
         #expect(source.contains("badges.studioHint"))
     }
 
-    /// M1 draws this header as date over greeting and a belled dot. The pill
-    /// is B-1's fallback door "if the flag never flips", so it draws on the
-    /// flag-off root and not where the bar carries the Studio tab — and the
-    /// tour anchor it hosts travels with it rather than being left mounted on
-    /// a control that is not there.
-    @Test("the Studio pill is the root-without-a-bar’s door, and only that root’s")
-    func theStudioPillIsGatedOffWhereTheBarDraws() throws {
-        let header = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
-        #expect(header.contains("var showsStudioControl: Bool = true"))
-        #expect(header.contains("if showsStudioControl {"))
-        // The anchor is inside the gate, not beside it.
-        let gated = try #require(header.range(of: "if showsStudioControl {"))
-        let anchor = try #require(header.range(of: ".firstLaunchTourAnchor(.profileMonogram)"))
-        #expect(gated.lowerBound < anchor.lowerBound)
-
-        let home = try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift")
-        #expect(home.contains("showsStudioControl: !coordinator.isHouseFirstRoot"))
-    }
-
-    /// SP-19: 44 pt. The Studio control replaced the bare monogram on the
-    /// screen every session opens on, so it is held to the ruled target.
-    @Test("the Studio control is a 44 pt target")
-    func theStudioControlMeetsTheTarget() throws {
-        let source = try SourcePin.read("Patina/Features/Home/Views/DailyGreetingHeader.swift")
-        #expect(source.contains("minHeight: 44"))
-        #expect(!source.contains("minHeight: 36"))
-    }
 }

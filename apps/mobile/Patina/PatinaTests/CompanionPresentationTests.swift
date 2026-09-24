@@ -129,10 +129,6 @@ struct CompanionPresentationTests {
         #expect(CompanionConstants.minimumTouchTarget >= 44)
         #expect(CompanionConstants.springResponse >= 0.42)
         #expect(CompanionConstants.springResponse <= 0.52)
-        #expect(CompanionHearthMetrics.reservedHeight == 120)
-        #expect(CompanionHearthMetrics.reservesRootHearth(for: .heroFrame))
-        #expect(!CompanionHearthMetrics.reservesRootHearth(for: .scanFlow(reason: .fresh)))
-        #expect(!CompanionHearthMetrics.reservesRootHearth(for: .styleQuiz))
         #expect(CompanionConstants.contentFollowDelay > 0)
     }
 

@@ -57,33 +57,12 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
         BadgeCountService.shared
     }
 
-    /// One tour model per root, and this view hosts only the flag-off root's.
-    ///
-    /// `FirstLaunchTour` publishes its model down its own subtree. On the
-    /// house-first root Today is one of four sibling stacks and B-8's step 3
-    /// points at the bar, so the host has to sit above all four —
-    /// `HouseFirstRoot` owns it there. Hosting it here as well would put a
+    /// This view does not host the first-launch tour. `FirstLaunchTour`
+    /// publishes its model down its own subtree; Today is one of four sibling
+    /// stacks and B-8's step 3 points at the bar, so the host sits above all
+    /// four — `HouseFirstRoot` owns it. Hosting it here as well would put a
     /// second model over Today's anchors and split the tour in half.
-    /// `isHouseFirstRoot` is the flag read once at launch and held
-    /// (`AppCoordinator`), not a live re-read.
-    ///
-    /// Only the HOST is gated. Both hosts run the same step list (R4): the
-    /// sentences B-8 replaces were untrue on this root too, and the second list
-    /// existed only to keep a step alive whose anchor no view has mounted since
-    /// W2.
-    @ViewBuilder
     var body: some View {
-        if coordinator.isHouseFirstRoot {
-            screenBody
-        } else {
-            // `navigationPath` is the flag-off root's single stack.
-            FirstLaunchTour(canAutoStart: coordinator.navigationPath.isEmpty) {
-                screenBody
-            }
-        }
-    }
-
-    private var screenBody: some View {
         ZStack(alignment: .bottom) {
             PatinaColors.Background.primary.ignoresSafeArea()
 
@@ -289,7 +268,6 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     // Round one: no ios-app/* help articles exist, so the `?`
                     // would open on an empty panel (C5-02). W2 restores it.
                     onHelpTap: nil,
-                    onStudioTap: { coordinator.navigate(to: .profile) },
                     onBellTap: { coordinator.navigate(to: .notifications) },
                     // C2-07: one count, from the one service every surface
                     // reads. Today's private view model still drives the push
@@ -299,11 +277,7 @@ struct DailyRoomView: View { // swiftlint:disable:this type_body_length
                     unreadCount: BadgeCountService.shared.unreadNotificationCount,
                     // R-02: the same service says whether that zero is a fact
                     // or an unanswered query.
-                    unreadCountIsKnown: BadgeCountService.shared.hasLoaded,
-                    // M1's header is date, greeting and a bell. The pill is
-                    // B-1's fallback door for the root without a bar; where
-                    // the bar draws, the Studio tab IS the door.
-                    showsStudioControl: !coordinator.isHouseFirstRoot
+                    unreadCountIsKnown: BadgeCountService.shared.hasLoaded
                 )
 
                 if blocks.contains(.record) {

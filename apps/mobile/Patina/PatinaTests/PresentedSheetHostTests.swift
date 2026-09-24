@@ -59,18 +59,17 @@ struct PresentedSheetHostTests {
         #expect(Set(Self.allCases.map(\.id)).count == Self.allCases.count)
     }
 
-    /// The load-bearing structure. `ContentView` chooses `HouseFirstRoot()` or
-    /// the legacy stack inside `mainContent`; the driver has to sit ABOVE that
-    /// choice, on the root `ZStack`, or one of the two roots loses every
-    /// coordinator-driven modal it has — which is exactly the shape `W1-B-02`
-    /// describes even though it is not what the build does.
-    @Test("the one sheet driver is hosted above the root the flag chooses")
+    /// The load-bearing structure. `ContentView` mounts `HouseFirstRoot()`
+    /// inside `mainContent`; the driver has to sit ABOVE it, on the root
+    /// `ZStack`, or the root loses every coordinator-driven modal it has —
+    /// which is exactly the shape `W1-B-02` describes.
+    @Test("the one sheet driver is hosted above the root")
     func theSheetDriverIsAboveBothRoots() throws {
         let source = try SourcePin.read("Patina/ContentView.swift")
         let driver = try #require(source.range(of: ".sheet(item: Binding("))
-        let rootChoice = try #require(source.range(of: "if coordinator.isHouseFirstRoot {"))
-        #expect(driver.lowerBound < rootChoice.lowerBound,
-                "the sheet driver moved inside a root branch (W1-B-02)")
+        let root = try #require(source.range(of: "private var mainContent: some View {"))
+        #expect(driver.lowerBound < root.lowerBound,
+                "the sheet driver moved inside the root (W1-B-02)")
         // …and there is exactly one of it.
         #expect(source.components(separatedBy: ".sheet(item: Binding(").count - 1 == 1)
     }

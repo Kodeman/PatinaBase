@@ -70,36 +70,20 @@ struct CompanionBarSlotTests {
         #expect(root.contains("StrataMarkView"))
     }
 
-    // MARK: - The floating dock retires where the bar carries it
-
-    @Test
-    func theRestingDockIsHiddenOnTheHouseFirstRootOnly() throws {
-        let code = SourceScan.code(in: try SourcePin.read(Self.overlayPath))
-
-        #expect(
-            code.contains("coordinator.isHouseFirstRoot, !state.isExpanded"),
-            "the floating dock still draws over the bar on the house-first root"
-        )
-        // The retirement is gated on the root, so nothing about the flag-off
-        // root's resting orb changed.
-        #expect(code.contains("return .resting"))
-    }
+    // MARK: - The floating dock is retired; the bar carries the Companion
 
     @Test
     func theRetirementCannotSwallowTheExpandedPanel() throws {
-        // Ordering pin: `.expanded` must resolve BEFORE the house-first
+        // Ordering pin: `.expanded` must resolve BEFORE the dock's
         // retirement, or expanding the panel from the bar returns `.hidden`
         // and the Companion is stranded with no door at all.
         let code = SourceScan.code(in: try SourcePin.read(Self.overlayPath))
-        guard
-            let expanded = code.range(of: "if state.isExpanded { return .expanded }"),
-            let retired = code.range(of: "coordinator.isHouseFirstRoot, !state.isExpanded")
-        else {
-            Issue.record("displayMode no longer carries both branches")
+        guard let expanded = code.range(of: "if state.isExpanded { return .expanded }") else {
+            Issue.record("displayMode no longer resolves the expanded panel")
             return
         }
-
-        #expect(expanded.lowerBound < retired.lowerBound)
+        let rest = code[expanded.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(rest.hasPrefix("return .hidden"), "the dock's retirement is no longer what follows .expanded")
     }
 
     @Test
@@ -113,22 +97,9 @@ struct CompanionBarSlotTests {
     }
 
     @Test
-    func theHearthYieldPolicyRetiresWithTheDockItWasWrittenFor() throws {
-        // `n1-notes.md` §2b: the one-argument form keeps every W1b caller's
-        // answer; the overlay is the one caller that knows which root it is on.
-        let code = SourceScan.code(in: try SourcePin.read(Self.overlayPath))
-
-        guard let call = code.range(of: "yieldsToPinnedFooter(") else {
-            Issue.record("the overlay no longer consults the yield policy at all")
-            return
-        }
-        #expect(String(code[call.lowerBound...].prefix(160)).contains("houseFirst: coordinator.isHouseFirstRoot"))
-    }
-
-    @Test
     func theBarSlotDoesNotReserveTheHearthAsWell() throws {
         // B-2: the 83 pt bar REPLACES the 120 pt Hearth. Reserving both would
-        // put 203 pt of dead space under every screen on the flag-on root.
+        // put 203 pt of dead space under every screen.
         let root = SourceScan.code(in: try SourcePin.read(Self.rootPath))
 
         #expect(!root.contains("companionHearthReservation"))
@@ -148,15 +119,10 @@ struct CompanionBarSlotTests {
         #expect(coordinator.contains("func handleIntentWithResponse("))
 
         // And it still routes: an intent that names a tab-root destination
-        // reaches it on the house-first root without the Companion knowing a
-        // tab exists.
-        let houseFirst = AppCoordinator(houseFirstRoot: true)
+        // reaches it without the Companion knowing a tab exists.
+        let houseFirst = AppCoordinator()
         houseFirst.handleIntent(.showRooms)
         #expect(houseFirst.tabs.selected == .spaces)
-
-        let legacy = AppCoordinator(houseFirstRoot: false)
-        legacy.handleIntent(.showRooms)
-        #expect(legacy.currentScreen == .yourSpaces)
     }
 
     @Test

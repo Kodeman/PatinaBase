@@ -216,9 +216,7 @@ struct HomeMountTests {
     func theRecordIsUnflagged() throws {
         let source = try home()
         let mount = try #require(source.range(of: "HouseRecordCard("))
-        // What matters is that the MOUNT is not inside a flag branch — not
-        // that the string is absent from the whole file, which W3 will
-        // legitimately break when it mounts the tab bar off `houseFirst`.
+        // What matters is that the MOUNT is not inside a flag branch.
         let preceding = String(source[..<mount.lowerBound].suffix(400))
         #expect(preceding.contains("blocks.contains(.record)"))
         #expect(!preceding.contains("FeatureFlags"))

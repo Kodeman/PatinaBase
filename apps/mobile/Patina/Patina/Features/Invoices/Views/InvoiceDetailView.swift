@@ -39,7 +39,7 @@ struct InvoiceDetailView: View {
             // last section; the bar's clearance travels with the footer.
             .padding(.bottom, isPayFooterPinned
                      ? 24
-                     : MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
+                     : MoneyScreenMetrics.bottomClearance)
         }
         // GAP2-24: on first paint the CTA frame was {y:875, h:52} on an 874 pt
         // screen — entirely below the fold, on a screen a tester reaches from
@@ -52,9 +52,7 @@ struct InvoiceDetailView: View {
             if let invoice = viewModel.invoice, isPayFooterPinned {
                 payFooter(invoice)
                     .padding(.top, 12)
-                    .padding(.bottom, MoneyScreenMetrics.bottomClearance(
-                        houseFirst: coordinator.isHouseFirstRoot
-                    ))
+                    .padding(.bottom, MoneyScreenMetrics.bottomClearance)
                     .background(PatinaColors.Background.primary)
             }
         }

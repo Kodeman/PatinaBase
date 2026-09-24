@@ -11,9 +11,9 @@
 //  time (`shots/GAP7/41-widget-flag-off.png`).
 //
 //  D5: "Ship the widget in build 1, fixed: it renders its snapshot regardless
-//  of `house-widget` (the flag gates in-app promotion only)." So the flag stays
-//  on the wire — W2 may re-gate promotion with it — and stops deciding whether
-//  a widget somebody has already placed draws what the app gave it.
+//  of `house-widget`." The flag is now retired and the app no longer writes
+//  `flagOn`; these payloads keep the key because files older builds left in
+//  the App Group still carry it, and they must still draw.
 //
 //  The placeholder is now about the ACCOUNT, not the flag: a payload with no
 //  owner is the signed-out placeholder (B-16), and that is the only thing the
@@ -47,7 +47,6 @@ struct WidgetFlagOffRenderingTests {
         }
         """)
 
-        #expect(!payload.flagOn)
         #expect(!payload.isPlaceholder)
         #expect(payload.drawableRows.count == 1)
         #expect(payload.drawableRows.first?.title == "Meadow Linen Sectional shipped.")
@@ -65,7 +64,6 @@ struct WidgetFlagOffRenderingTests {
         }
         """)
 
-        #expect(!payload.flagOn)
         #expect(payload.drawableRows.count == 1)
     }
 
@@ -96,30 +94,4 @@ struct WidgetFlagOffRenderingTests {
         #expect(payload.isEmpty)
     }
 
-    /// The app must keep writing the flag — D5 moved what it gates, it did not
-    /// delete it — so W2 can turn in-app promotion on without a schema change.
-    @Test("the app still records the flag it resolved")
-    func theFlagIsStillOnTheWire() throws {
-        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("patina.tests.flagoff.\(UUID().uuidString)")
-        let store = RecordSnapshotStore(
-            appGroupIdentifier: "group.does.not.exist.\(UUID().uuidString)",
-            fallbackDirectory: directory,
-            reloadWidgets: { _ in },
-            flagIsOn: { false },
-            ownerId: { "owner-1" }
-        )
-        store.save(
-            HouseRecord(
-                needsYou: [], moved: [],
-                window: DateInterval(start: Self.refreshed.addingTimeInterval(-600), end: Self.refreshed),
-                lastSeenAt: nil, hasMoreNeedsYou: false, hasMoreMoved: false
-            ),
-            houseLine: nil, now: Self.refreshed
-        )
-
-        let snapshot = try #require(store.loadWidgetSnapshot())
-        #expect(!snapshot.flagOn)
-        #expect(snapshot.ownerId == "owner-1")
-    }
 }

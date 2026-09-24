@@ -80,18 +80,10 @@ struct PatinaApp: App {
             forgetAllFirstLaunchTourState()
         }
         // Initialize PostHog analytics (skip during UI testing, and skip when
-        // the analytics kill switch is off — Debug). It runs first because
-        // `FeatureFlags` reads the payload its SDK persisted, and the
-        // coordinator below reads `FeatureFlags`.
+        // the analytics kill switch is off — Debug).
         if !Self.isUITesting && AppConfiguration.analyticsEnabled {
             PostHogService.shared.initialize()
         }
-
-        // Resolve every feature flag once, before the root is chosen, and hold
-        // the answer for the session. This MUST stay above the coordinator:
-        // `AppCoordinator.init` reads `house-first` here and holds it in a
-        // `let`, and that `let` is what picks the root in `ContentView`.
-        FeatureFlags.shared.resolveAtLaunch()
 
         _coordinator = State(initialValue: AppCoordinator())
 

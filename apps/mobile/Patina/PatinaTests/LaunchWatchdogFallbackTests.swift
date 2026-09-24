@@ -126,7 +126,7 @@ struct LaunchWatchdogFallbackTests {
     /// written separately — one number, one place.
     @Test("a fresh coordinator’s splash deadline is that floor")
     func theInitialDeadlineIsTheFloor() {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         let remaining = coordinator.splashMinimumDeadline.timeIntervalSinceNow
         #expect(remaining <= LaunchWatchdog.splashFloor(isAuthStateReady: false))
         #expect(remaining > 0)

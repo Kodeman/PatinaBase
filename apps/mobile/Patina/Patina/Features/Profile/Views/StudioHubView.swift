@@ -419,12 +419,9 @@ private extension StudioHubView {
         section.kind.badgeLabel(count: sectionBadgeCount(section))
     }
 
-    /// Whether the Studio is the surface she is looking at. The flag-off root
-    /// has no tabs — the hub is pushed there, and mounting is arriving — so it
-    /// is always true.
+    /// Whether the Studio is the surface she is looking at.
     ///
-    /// `W3R3-M1`: so is a PUSHED hub under the house-first bar. Today's "See
-    /// all that needs you" and the Companion's "Your studio" push this screen
+    /// `W3R3-M1`: a PUSHED hub always is. Today's "See all that needs you" and the Companion's "Your studio" push this screen
     /// onto the Today stack, where `tabs.selected == .today`; reading the tab
     /// alone the guard called that "not looking at the Studio" and returned,
     /// so the load was never asked for and the placeholder never resolved.
@@ -433,7 +430,7 @@ private extension StudioHubView {
     /// A pushed instance is torn down when she leaves, so its appearance IS
     /// her arrival.
     var isOnStudio: Bool {
-        guard coordinator.isHouseFirstRoot, isTabRoot else { return true }
+        guard isTabRoot else { return true }
         return coordinator.tabs.selected == .projects
     }
 

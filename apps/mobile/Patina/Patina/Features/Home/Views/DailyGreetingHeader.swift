@@ -5,23 +5,6 @@
 
 import SwiftUI
 
-/// The labelled `Studio` control that replaced the bare monogram (B §2; the
-/// graft synthesis §5 takes from Direction A). Named so its copy is a fact a
-/// test can hold rather than a string buried in a view.
-///
-/// `P-24` / **R5**: the control no longer carries a count. The clay capsule
-/// beside the word, and the "N waiting" VoiceOver value that spoke the same
-/// number, were the app's in-product attention badge — a numeric count chip,
-/// which VISION §6 refuses. The springboard (home-screen) badge is kept as the
-/// permitted re-engagement instrument, and inside the app the NEEDS YOU eyebrow
-/// on the Record is what carries the truth, in rows a client can act on rather
-/// than a number she can only feel.
-enum StudioControlLabel {
-    /// The canonical surface name in full, for VoiceOver (C4 / B-7).
-    static let voiceOverName = "Your Projects"
-    static let title = "Projects"
-}
-
 struct DailyGreetingHeader: View {
     let dateString: String
     /// `TimeOfDay.current.greeting` — the complete token set the app has
@@ -35,9 +18,6 @@ struct DailyGreetingHeader: View {
     /// default — preserves source compatibility with existing previews
     /// and tests) the affordance is omitted entirely.
     var onHelpTap: (() -> Void)? = nil
-    /// Tap handler for the Studio control. When non-nil the control becomes a
-    /// `Button` the parent wires to `coordinator.navigate(to: .profile)`.
-    var onStudioTap: (() -> Void)? = nil
     /// PT-3-7: tap handler for the bell (notifications) glyph. When non-nil
     /// a bell button is rendered next to the help glyph with an unread-count
     /// badge; tapping routes to `coordinator.navigate(to: .notifications)`.
@@ -49,22 +29,13 @@ struct DailyGreetingHeader: View {
     /// answered. A count of zero that nobody fetched is not "none", and
     /// VoiceOver was being told it was.
     var unreadCountIsKnown: Bool = true
-    /// Whether this header draws the Studio pill at all.
-    ///
-    /// B-1 makes the pill the fallback door "if the flag never flips", and M1
-    /// draws this header as date over greeting and a belled dot — no monogram,
-    /// one Studio door. On the house-first root the bar carries that door, so
-    /// `DailyRoomView` passes `false` and the pill (with the tour anchor it
-    /// hosts, which moves to the bar with it) does not draw.
-    var showsStudioControl: Bool = true
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// C-06 / GAP1B-03. The greeting shares one horizontal band with the bell,
-    /// the help glyph and the Studio pill, so its width is whatever the
-    /// cluster leaves — about 150 pt. At XXXL the serif h4 broke inside words
-    /// ("Good / afternoo / n."), at AX-XXXL into six fragments, while the
-    /// Studio chip truncated to "Stu…". Above
+    /// C-06 / GAP1B-03. The greeting shares one horizontal band with the
+    /// control cluster, so its width is whatever the cluster leaves. At XXXL
+    /// the serif h4 broke inside words ("Good / afternoo / n."), at AX-XXXL
+    /// into six fragments. Above
     /// `.accessibility1` the band splits: the greeting takes the full content
     /// width and the cluster gets its own row underneath.
     static func stacksControls(at size: DynamicTypeSize) -> Bool {
@@ -78,7 +49,6 @@ struct DailyGreetingHeader: View {
                     titleColumn
                     HStack(spacing: 4) {
                         controlCluster
-                        anchoredStudioControl
                         Spacer(minLength: 0)
                     }
                 }
@@ -87,7 +57,6 @@ struct DailyGreetingHeader: View {
                     titleColumn
                     Spacer()
                     controlCluster
-                    anchoredStudioControl
                 }
             }
         }
@@ -104,25 +73,6 @@ struct DailyGreetingHeader: View {
         // work use, and the block the bubble is about ("This is Today") is the
         // whole header band rather than two of its three lines.
         .firstLaunchTourAnchor(.homeGreeting)
-    }
-
-    /// The Studio pill and its tour anchor, in ONE place.
-    ///
-    /// Both layout branches draw it, and
-    /// `FirstLaunchTourTests.everyDefaultStepAnchorHasExactlyOneProductionMountPerRoot`
-    /// requires exactly one mount of `.profileMonogram` in this file — two
-    /// branches each carrying the modifier would be two popovers for one step.
-    @ViewBuilder
-    private var anchoredStudioControl: some View {
-        if showsStudioControl {
-            studioControl
-                // First-launch tour anchor — Step 3 popover attaches to the
-                // same slot the monogram held; the control there is now
-                // labelled. The anchor travels with the
-                // control: on the house-first root the door is the bar's Studio
-                // tab and the anchor is mounted there instead.
-                .firstLaunchTourAnchor(.profileMonogram)
-        }
     }
 
     private var titleColumn: some View {
@@ -213,32 +163,6 @@ struct DailyGreetingHeader: View {
             }
         }
     }
-
-    /// The Studio control: the surface's name, where a bare initial used to
-    /// sit. A monogram said who you are; this says where the door goes
-    /// (B §2, synthesis §5). `P-24` / R5 took the count off it.
-    @ViewBuilder
-    private var studioControl: some View {
-        let control = Text(StudioControlLabel.title)
-            .font(PatinaTypography.uiSmall)
-            .foregroundStyle(PatinaColors.Text.primary)
-            .lineLimit(1)
-            .padding(.horizontal, PatinaSpacing.xsm)
-            .frame(minHeight: 44)
-            .background(Capsule().fill(PatinaColors.Background.secondary))
-
-        if let onStudioTap {
-            Button(action: onStudioTap) {
-                control.contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(StudioControlLabel.voiceOverName)
-            .accessibilityHint("Opens your projects.")
-            .accessibilityIdentifier("DailyRoomView.StudioButton")
-        } else {
-            control
-        }
-    }
 }
 
 /// PT-3-7, as `P-24` / **R5** leaves it: the bell says *something* is unread,
@@ -274,7 +198,6 @@ private struct UnreadMark: View {
             dateString: "WEDNESDAY · APR 7",
             greeting: "Good evening.",
             onHelpTap: {},
-            onStudioTap: {},
             onBellTap: {},
             unreadCount: 3
         )

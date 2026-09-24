@@ -147,65 +147,6 @@ struct CompanionSheetDriverTests {
         #expect(inset.upperBound < viewThatFits.lowerBound)
     }
 
-    // MARK: - w5: the orb yields at accessibility text sizes
-    //
-    // Walk 4 finding 1: on the flag-off root at an accessibility size the
-    // 64 pt dock's frame (y=748…812, x=169…233) sat wholly inside the
-    // editorial story card (y=711…961) and won the hit test, so a tap meant
-    // for the story opened the Companion. The dock is the flag-off root's only
-    // nav surface, and the ruling for this already exists — W1b's
-    // `yieldsToPinnedFooter`: the dock steps aside to the 44 pt corner mark
-    // rather than trying to solve an overlap with an inset. Same yield, same
-    // reason, one more condition.
-
-    @Test("at an accessibility text size the dock yields to the corner mark")
-    func theDockYieldsAtAccessibilityTextSizes() {
-        #expect(CompanionHearthMetrics.yieldsToAccessibilityText(.accessibility1))
-        #expect(CompanionHearthMetrics.yieldsToAccessibilityText(.accessibility5))
-        // `.xxxLarge` is the largest NON-accessibility size, and walk 4 proved
-        // the rail behaves correctly there — the yield must not reach it.
-        #expect(CompanionHearthMetrics.yieldsToAccessibilityText(.xxxLarge) == false)
-        #expect(CompanionHearthMetrics.yieldsToAccessibilityText(.large) == false)
-    }
-
-    /// The reservation has to shrink with the dock or the surface pays 120 pt
-    /// for a 72 pt mark — which is the story card and the house rail losing
-    /// space they need at exactly the text size that needs it most.
-    @Test("the reservation shrinks to the mark it now reserves for")
-    func theReservationFollowsTheYield() {
-        #expect(CompanionHearthMetrics.reservation(accessibilityText: false)
-                == CompanionHearthMetrics.reservedHeight)
-        #expect(CompanionHearthMetrics.reservation(accessibilityText: true)
-                == CompanionHearthMetrics.minimalDockHeight)
-        #expect(CompanionHearthMetrics.minimalDockHeight
-                < CompanionHearthMetrics.reservedHeight)
-        // The mark plus `minimalView`'s own lift, and nothing else — no
-        // caption row, because the corner mark has no caption.
-        #expect(CompanionHearthMetrics.minimalDockHeight
-                == CompanionHearthMetrics.minimalDiameter
-                    + CompanionHearthMetrics.overlayBottomInset)
-    }
-
-    /// The two halves must read the same environment value. When they
-    /// disagree the surface either keeps dead space under a dock that yielded
-    /// or hands its taps to a dock that did not.
-    @Test("the overlay and the reservation yield on the same rule")
-    func theOverlayAndTheReservationAgree() throws {
-        let overlay = try SourcePin.read(
-            "Patina/Features/Companion/Views/CompanionOverlay.swift"
-        )
-        #expect(overlay.contains("@Environment(\\.dynamicTypeSize) private var dynamicTypeSize"))
-        #expect(overlay.contains(
-            "if CompanionHearthMetrics.yieldsToAccessibilityText(dynamicTypeSize) { return .minimal }"
-        ))
-
-        let reservation = try SourcePin.read(
-            "Patina/Design/Components/CompanionSafeArea.swift"
-        )
-        #expect(reservation.contains("@Environment(\\.dynamicTypeSize) private var dynamicTypeSize"))
-        #expect(reservation.contains("CompanionHearthMetrics.reservation("))
-    }
-
     /// Yielding must not cost VoiceOver the one thing the collapsed Hearth
     /// announced — `collapsedView` hides the caption at accessibility sizes on
     /// the promise that "the same context remains available as the Companion

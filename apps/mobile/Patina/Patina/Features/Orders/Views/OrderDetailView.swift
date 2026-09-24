@@ -58,9 +58,7 @@ struct OrderDetailView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.bottom, MoneyScreenMetrics.bottomClearance(
-                houseFirst: coordinator.isHouseFirstRoot
-            ))
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         .patinaScreen(title: nil)

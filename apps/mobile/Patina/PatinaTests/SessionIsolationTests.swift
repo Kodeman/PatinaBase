@@ -366,7 +366,6 @@ struct SessionIsolationTests {
         out["AuthService.swift"] = "the seam — it decides the reset, it is not reset by it"
         out["GuestSessionStore.swift"] = "cleared by AuthService on every real session"
         out["LocalStoreClaim.swift"] = "drives the SP-06 claim sheet across the same boundary"
-        out["FeatureFlags.swift"] = "resolved once per launch; a device answer, not an account’s"
         out["PatinaURLSession.swift"] =
             "a connection pool, not a cache of rows — W1-C-11's recovery drops it on a stall"
         return out

@@ -80,10 +80,9 @@ struct DecisionSheetDetentTests {
         )
         #expect(code.contains("safeAreaInset(edge: .bottom"),
                 "the Pay button is still below the fold at rest (GAP2-24)")
-        // The footer clears whatever owns the bottom edge — the bar on the
-        // house-first root D1 ships, the dock on the flag-off fallback. It is
-        // the same seam the scroll content takes, never a second constant.
-        #expect(code.contains("MoneyScreenMetrics.bottomClearance(houseFirst:"),
+        // The footer clears the bar. It is the same seam the scroll content
+        // takes, never a second constant.
+        #expect(code.contains("MoneyScreenMetrics.bottomClearance"),
                 "the pinned footer does not clear the bar (B-28)")
     }
 }

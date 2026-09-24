@@ -23,9 +23,7 @@ struct OrderedListView: View {
                 header
                 content
             }
-            .padding(.bottom, MoneyScreenMetrics.bottomClearance(
-                houseFirst: coordinator.isHouseFirstRoot
-            ))
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         .patinaScreen(title: nil)

@@ -48,7 +48,6 @@ struct HouseWidgetPayloadTests {
         }
         """)
 
-        #expect(snapshot.flagOn)
         #expect(snapshot.houseLine == "Aspen Loft")
         #expect(snapshot.movedRows.count == 1)
         #expect(snapshot.movedRows.first?.title == "Leah asked about the rug colour.")
@@ -139,15 +138,11 @@ struct HouseWidgetPayloadTests {
         #expect(snapshot.drawableRows.first?.title == "Row 0")
     }
 
-    // MARK: - The flag
+    // MARK: - Files older builds wrote
 
-    /// **Rewritten by D5 (2026-09-02).** This test used to assert that
-    /// `flagOn: false` drew nothing — which is exactly the behaviour
-    /// `GAP7B-02` filed: `house-widget` is off for round one, so a tester who
-    /// placed the widget read "Open Patina to see your house." forever with
-    /// real rows in the file. D5: the flag gates in-app promotion, not what a
-    /// placed widget draws. What it still gates is on the wire, and asserted.
-    @Test("the flag off no longer stops a placed widget from drawing")
+    /// Builds before the `house-widget` flag was retired wrote a `flagOn` key.
+    /// The decoder ignores it, so a file an older build left behind still draws.
+    @Test("a file carrying the retired flagOn key still draws")
     func theFlagOffStillDraws() throws {
         let snapshot = try decode("""
         {
@@ -158,7 +153,6 @@ struct HouseWidgetPayloadTests {
         }
         """)
 
-        #expect(!snapshot.flagOn)
         #expect(!snapshot.isPlaceholder)
         #expect(snapshot.drawableRows.count == 1)
     }
@@ -179,14 +173,14 @@ struct HouseWidgetPayloadTests {
 
     @Test("a fresh payload carries no apology")
     func aFreshPayloadSaysNothingAboutItself() {
-        let snapshot = HouseWidgetPayload(flagOn: true, refreshedAt: Self.refreshed, movedRows: [])
+        let snapshot = HouseWidgetPayload(refreshedAt: Self.refreshed, movedRows: [])
         let line = snapshot.refreshedLine(now: Self.refreshed.addingTimeInterval(60 * 60), locale: Self.posix)
         #expect(line == nil)
     }
 
     @Test("past six hours the widget says when it was refreshed")
     func aStalePayloadSaysSo() throws {
-        let snapshot = HouseWidgetPayload(flagOn: true, refreshedAt: Self.refreshed, movedRows: [])
+        let snapshot = HouseWidgetPayload(refreshedAt: Self.refreshed, movedRows: [])
         let line = try #require(
             snapshot.refreshedLine(now: Self.refreshed.addingTimeInterval(8 * 60 * 60), locale: Self.posix)
         )
@@ -199,7 +193,7 @@ struct HouseWidgetPayloadTests {
     @Test("the empty variant is M6b’s line, with the day from the window")
     func theEmptyLineNamesTheDayTheWindowNames() {
         let snapshot = HouseWidgetPayload(
-            flagOn: true, refreshedAt: Self.refreshed, movedRows: [],
+            refreshedAt: Self.refreshed, movedRows: [],
             sinceDate: Self.thursday, ownerId: "owner-1"
         )
         #expect(snapshot.emptyLine(locale: Self.posix, timeZone: Self.utc) == "Nothing moved since Thursday.")
@@ -209,7 +203,7 @@ struct HouseWidgetPayloadTests {
 
     @Test("without a window the copy claims no day")
     func withoutAWindowNoDayIsInvented() {
-        let snapshot = HouseWidgetPayload(flagOn: true, refreshedAt: Self.refreshed, movedRows: [])
+        let snapshot = HouseWidgetPayload(refreshedAt: Self.refreshed, movedRows: [])
         #expect(snapshot.emptyLine(locale: Self.posix, timeZone: Self.utc) == "Nothing moved.")
         #expect(snapshot.eyebrow(locale: Self.posix, timeZone: Self.utc) == "What moved")
     }
@@ -252,7 +246,7 @@ struct HouseWidgetPayloadTests {
         encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(
             HouseWidgetPayload(
-                flagOn: true, refreshedAt: Self.refreshed,
+                refreshedAt: Self.refreshed,
                 movedRows: [HouseWidgetPayloadRow(id: "order:direct:abc", title: "Shipped.", date: Self.refreshed)],
                 ownerId: "owner-1"
             )

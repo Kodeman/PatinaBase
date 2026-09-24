@@ -2,13 +2,9 @@
 //  HouseFirstRootTests.swift
 //  PatinaTests
 //
-//  R2: the root is chosen once, from `house-first`, and held. The flag-off root
-//  stays exactly what W2 left — one stack, the Hearth reservation, the floating
-//  Companion, and the Record on `DailyRoomView`.
-//
-//  The coordinator-level tests here construct a real `AppCoordinator` through
-//  its internal `init(houseFirstRoot:)` seam, so the flag itself never has to
-//  be mutated and the two roots can be exercised in the same run.
+//  The four-tab root is the only root. D5 retired the `house-first` flag and
+//  the single-stack root it fell back to, so these tests exercise a real
+//  `AppCoordinator` driving `TabNavigationModel`.
 //
 
 import Foundation
@@ -21,62 +17,13 @@ struct HouseFirstRootTests {
 
     private static let roomId = UUID()
 
-    // MARK: - The root is chosen once, and held
+    // MARK: - The root
 
     @Test
-    func theFlagChoosesTheRoot() {
-        #expect(AppCoordinator(houseFirstRoot: true).isHouseFirstRoot)
-        #expect(!AppCoordinator(houseFirstRoot: false).isHouseFirstRoot)
-    }
-
-    @Test
-    func theChoiceIsALetAndCannotChangeMidSession() throws {
-        // A `let` cannot be reassigned, so this is a source pin rather than a
-        // behavioural one: the point is that nothing re-reads the flag after
-        // launch, which is what R2 means by "evaluated once at launch and held".
-        let source = try SourcePin.read("Patina/App/Coordinators/AppCoordinator.swift")
-        #expect(source.contains("public let isHouseFirstRoot: Bool"))
-
-        let readsOfTheFlag = source.components(separatedBy: "FeatureFlags.shared.isOn").count - 1
-        #expect(readsOfTheFlag == 1, "the coordinator reads house-first exactly once, in init")
-    }
-
-    @Test
-    func theFlagIsResolvedBeforeTheCoordinatorIsBuilt() throws {
-        // `AppCoordinator.init` reads the flag, so `resolveAtLaunch()` has to
-        // have run by then — otherwise every launch resolves the root off.
-        let source = try SourcePin.read("Patina/PatinaApp.swift")
-        let resolve = try #require(source.range(of: "FeatureFlags.shared.resolveAtLaunch()"))
-        let build = try #require(source.range(of: "State(initialValue: AppCoordinator())"))
-        #expect(
-            resolve.lowerBound < build.lowerBound,
-            "resolveAtLaunch() must precede AppCoordinator() in PatinaApp.init"
-        )
-    }
-
-    @Test
-    func contentViewPicksTheRootFromTheCoordinator() throws {
-        let source = try SourcePin.read("Patina/ContentView.swift")
-        #expect(source.contains("if coordinator.isHouseFirstRoot {"))
+    func contentViewMountsTheFourTabRoot() throws {
+        let source = SourceScan.code(in: try SourcePin.read("Patina/ContentView.swift"))
         #expect(source.contains("HouseFirstRoot()"))
-        #expect(
-            !SourceScan.code(in: source).contains("FeatureFlags"),
-            "ContentView must not read the flag itself — the coordinator holds the answer"
-        )
-    }
-
-    // MARK: - The flag-off root is untouched
-
-    @Test
-    func theFlagOffRootStillCarriesTheW2Shape() throws {
-        let source = try SourcePin.read("Patina/ContentView.swift")
-        #expect(source.contains("private var legacyMainContent: some View {"))
-        // One stack, the 120 pt Hearth reservation, the floating Companion,
-        // and the Record's home surface — all still there.
-        #expect(source.contains("NavigationStack(path: Binding("))
-        #expect(source.contains(".companionHearthReservation(isActive: reservesRootCompanionHearth)"))
-        #expect(source.contains("CompanionOverlay()"))
-        #expect(source.contains("DailyRoomView()"))
+        #expect(!source.contains("NavigationStack(path:"), "a second root stack came back beside the tabs")
     }
 
     @Test
@@ -88,82 +35,41 @@ struct HouseFirstRootTests {
         #expect(!source.contains(".companionSafeArea()"))
     }
 
-    /// B-2's retirement, as a policy rather than as a deletion: the Hearth's
-    /// answers are still exactly W1b's on the flag-off root, and retired on the
-    /// flag-on one. The flag is a parameter, not a lookup, so the policy stays
-    /// pure and every existing caller keeps the W1b answer by default —
-    /// `CompanionOverlay` and `MoneyScreenChrome` belong to other lanes and
-    /// were not edited (see `waves/w3/n1-notes.md` §2, §3).
     @Test
-    func theHearthPolicyIsRetiredOnTheHouseFirstRoot() {
-        #expect(CompanionHearthMetrics.reservesRootHearth(for: .heroFrame, houseFirst: true) == false)
-        #expect(CompanionHearthMetrics.reservesRootHearth(for: .heroFrame, houseFirst: false))
-        #expect(CompanionHearthMetrics.reservesRootHearth(for: .heroFrame))
-
-        #expect(CompanionHearthMetrics.yieldsToPinnedFooter(
-            for: .invoiceDetail(invoiceId: "i"), houseFirst: true) == false)
-        #expect(CompanionHearthMetrics.yieldsToPinnedFooter(
-            for: .invoiceDetail(invoiceId: "i"), houseFirst: false))
-        #expect(CompanionHearthMetrics.yieldsToPinnedFooter(for: .invoiceDetail(invoiceId: "i")))
-
+    func aPushedScreenClearsTheBarsRow() {
         // R3, corrected against the running app: the bar is DRAWN over the
         // stacks, not reserved out of them — a `safeAreaInset` on the root does
         // not reach a `NavigationStack`'s pushed destinations, on either root.
         // So a pushed screen still clears the bar's own row itself; 8 pt would
         // have put a money footer 41 pt under the bar.
-        #expect(CompanionHearthMetrics.pinnedFooterClearance(houseFirst: true)
+        #expect(CompanionHearthMetrics.pinnedFooterClearance
                 == CompanionHearthMetrics.barRowHeight + 8)
-        #expect(CompanionHearthMetrics.pinnedFooterClearance(houseFirst: false)
-                == CompanionHearthMetrics.dockHeight + 8)
         // The Design layer's copy of the bar's row height is the bar's own.
         #expect(CompanionHearthMetrics.barRowHeight == PatinaTabBar<EmptyView>.itemHeight)
     }
 
     @Test
-    func theBarIsEightyThreePointsAndReplacesTheHundredAndTwenty() {
+    func theBarIsEightyThreePoints() {
         // M1 §6 / B-2: 49 pt of row over the 34 pt home-indicator safe area.
         #expect(PatinaTabBar<EmptyView>.itemHeight == 49)
         #expect(PatinaTabBar<EmptyView>.barHeight == 83)
-        #expect(CompanionHearthMetrics.reservedHeight == 120)
-    }
-
-    @Test
-    func theFlagOffCoordinatorStillUsesTheSingleStack() {
-        let coordinator = AppCoordinator(houseFirstRoot: false)
-        coordinator.navigate(to: .invoiceDetail(invoiceId: "invoice-1"))
-
-        #expect(coordinator.navigationPath.count == 1)
-        #expect(coordinator.currentScreen == .invoiceDetail(invoiceId: "invoice-1"))
-        #expect(coordinator.tabs.stack(for: .projects).isEmpty, "the tab model is inert on the off root")
-    }
-
-    @Test
-    func goBackOnTheFlagOffRootStillPopsTheSingleStack() {
-        let coordinator = AppCoordinator(houseFirstRoot: false)
-        coordinator.navigate(to: .projectList)
-        coordinator.navigate(to: .projectDetail(projectId: "project-1"))
-        coordinator.goBack()
-
-        #expect(coordinator.navigationPath.count == 1)
-        #expect(coordinator.currentScreen == .projectList)
     }
 
     // MARK: - In-app navigation on the house-first root
 
     @Test
     func anInAppTapPushesOntoTheTabYouAreOn() {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.navigate(to: .invoiceDetail(invoiceId: "invoice-1"))
 
         #expect(coordinator.tabs.selected == .today)
         #expect(coordinator.tabs.stack(for: .today) == [.invoiceDetail(invoiceId: "invoice-1")])
         #expect(coordinator.currentScreen == .invoiceDetail(invoiceId: "invoice-1"))
-        #expect(coordinator.navigationPath.isEmpty, "the single-stack path is inert on this root")
     }
 
     @Test
     func goBackPopsTheSelectedTab() {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.selectTab(.projects)
         coordinator.navigate(to: .projectList)
         coordinator.navigate(to: .projectDetail(projectId: "project-1"))
@@ -179,7 +85,7 @@ struct HouseFirstRootTests {
     /// was pushed — standard iOS, and the reason a second tap exists.
     @Test
     func aTabWithAStackRevealsItsStackTopAndRetappingRevealsTheRoot() {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.openExternal(.invoiceDetail(invoiceId: "invoice-1"))
         coordinator.selectTab(.today)
 
@@ -198,7 +104,7 @@ struct HouseFirstRootTests {
     func theStudioTabReportsItsOwnScreen() {
         #expect(RouteTabTable.rootRoute(for: .projects) == .studio)
 
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.selectTab(.projects)
         coordinator.syncCurrentScreen(to: coordinator.tabs.visibleRoute)
 
@@ -210,7 +116,7 @@ struct HouseFirstRootTests {
         // name did not, so dashboards keep reading one series.
         #expect(AppRoute.studio.displayName == PatinaTab.projects.canonicalName)
         #expect(AppRoute.studio.displayName == "Your Projects")
-        // And `.profile` is untouched — still the flag-off monogram's door.
+        // And `.profile` is untouched.
         #expect(AppRoute.profile.analyticsScreenName == "Profile")
         #expect(RouteTabTable.tab(for: .profile) == .projects)
     }
@@ -242,7 +148,7 @@ struct HouseFirstRootTests {
 
     @Test
     func selectingATabMovesTheVisibleRouteWithIt() {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.selectTab(.pieces)
 
         #expect(coordinator.tabs.selected == .pieces)
@@ -251,7 +157,7 @@ struct HouseFirstRootTests {
 
     @Test
     func syncCurrentScreenFollowsAPopSwiftUIPerformedItself() {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.navigate(to: .projectDetail(projectId: "project-1"))
         #expect(coordinator.currentScreen == .projectDetail(projectId: "project-1"))
 
@@ -262,20 +168,11 @@ struct HouseFirstRootTests {
         #expect(coordinator.companionContext.currentScreen == .heroFrame)
     }
 
-    @Test
-    func syncCurrentScreenIsInertOnTheFlagOffRoot() {
-        let coordinator = AppCoordinator(houseFirstRoot: false)
-        coordinator.navigate(to: .budget)
-        coordinator.syncCurrentScreen(to: .heroFrame)
-
-        #expect(coordinator.currentScreen == .budget)
-    }
-
     // MARK: - Outside entries land on the right tab
 
     @Test
     func aPushTapLandsOnTheRoutesOwnTab() {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.openExternal(.invoiceDetail(invoiceId: "invoice-1"))
 
         #expect(coordinator.tabs.selected == .projects)
@@ -296,7 +193,7 @@ struct HouseFirstRootTests {
             ("piece", .pieces)
         ]
         for (entity, tab) in cases {
-            let coordinator = AppCoordinator(houseFirstRoot: true)
+            let coordinator = AppCoordinator()
             guard let route = NotificationRouter.route(forEntityType: entity, entityId: "id-1") else {
                 Issue.record("\(entity) resolved to no route")
                 continue
@@ -309,20 +206,11 @@ struct HouseFirstRootTests {
 
     @Test
     func aRoomDeepLinkLandsOnSpaces() {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.openExternal(.roomProject(roomId: Self.roomId))
 
         #expect(coordinator.tabs.selected == .spaces)
         #expect(coordinator.tabs.visibleRoute == .roomProject(roomId: Self.roomId))
-    }
-
-    @Test
-    func anOutsideEntryOnTheFlagOffRootIsJustNavigate() {
-        let coordinator = AppCoordinator(houseFirstRoot: false)
-        coordinator.openExternal(.decisionDetail(decisionId: "decision-1"))
-
-        #expect(coordinator.navigationPath.count == 1)
-        #expect(coordinator.currentScreen == .decisionDetail(decisionId: "decision-1"))
     }
 
     // MARK: - Nothing bypasses the coordinator
@@ -371,77 +259,17 @@ struct HouseFirstRootTests {
         #expect(offenders.isEmpty, "navigate(to:) must go through the coordinator — \(offenders)")
     }
 
-    /// MJ-1: the two roots dispatch the same route to the same screen.
-    ///
-    /// `HouseFirstRoot` carries a second copy of `ContentView`'s dispatcher —
-    /// duplicated on purpose, so the flag-off root's body is not edited at all.
-    /// Both switches are exhaustive, so a NEW route breaks both; nothing
-    /// otherwise catches a CHANGED destination, and one root quietly rendering
-    /// a different screen for the same route turns `house-first` from a layout
-    /// flag into a behaviour flag. This compares the six bodies verbatim, with
-    /// comments and whitespace normalised away.
+    /// Only the root binds a navigation path. A second would be a stack the
+    /// coordinator cannot see, which is how a route ends up on screen with no
+    /// companion context and no analytics behind it.
     @Test
-    func theTwoRootsDispatchTheSameDestinations() throws {
-        let legacy = try SourcePin.read("Patina/ContentView.swift")
-        let houseFirst = try SourcePin.read("Patina/Features/Navigation/HouseFirstRoot.swift")
-
-        let dispatchers = [
-            "destinationView",
-            "roomsDestination",
-            "discoveryDestination",
-            "styleDestination",
-            "workCoreDestination",
-            "workDocumentsDestination"
-        ]
-
-        for name in dispatchers {
-            let legacyBody = Self.dispatcherBody(name, in: legacy)
-            let houseFirstBody = Self.dispatcherBody(name, in: houseFirst)
-            #expect(legacyBody != nil, "ContentView has no \(name)(for:)")
-            #expect(houseFirstBody != nil, "HouseFirstRoot has no \(name)(for:)")
-            #expect(
-                legacyBody == houseFirstBody,
-                "\(name)(for:) differs between the two roots:\n\(legacyBody ?? "")\n---\n\(houseFirstBody ?? "")"
-            )
-        }
-    }
-
-    /// The body of `func <name>(for route: AppRoute) -> some View { … }`, with
-    /// whole-line comments dropped and every run of whitespace collapsed, so
-    /// only the dispatch itself is compared. `nil` when the function is absent.
-    private static func dispatcherBody(_ name: String, in source: String) -> String? {
-        let code = SourceScan.code(in: source)
-        guard let marker = code.range(of: "func \(name)(for route: AppRoute) -> some View {") else {
-            return nil
-        }
-        var depth = 1
-        var body = ""
-        var index = marker.upperBound
-        while index < code.endIndex, depth > 0 {
-            let character = code[index]
-            if character == "{" { depth += 1 }
-            if character == "}" {
-                depth -= 1
-                if depth == 0 { break }
-            }
-            body.append(character)
-            index = code.index(after: index)
-        }
-        guard depth == 0 else { return nil }   // ran off the end unbalanced
-        return body.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-    }
-
-    /// Only the two roots bind a root navigation path. A third would be a stack
-    /// the coordinator cannot see, which is how a route ends up on screen with
-    /// no companion context and no analytics behind it.
-    @Test
-    func onlyTheTwoRootsOwnANavigationPath() throws {
+    func onlyTheRootOwnsANavigationPath() throws {
         var owners: [String] = []
         for path in SourcePin.swiftFiles(under: "Patina") {
             let source = try String(contentsOfFile: path, encoding: .utf8)
             guard source.contains("NavigationStack(path:") else { continue }
             owners.append((path as NSString).lastPathComponent)
         }
-        #expect(Set(owners) == ["ContentView.swift", "HouseFirstRoot.swift"], "found \(owners)")
+        #expect(Set(owners) == ["HouseFirstRoot.swift"], "found \(owners)")
     }
 }

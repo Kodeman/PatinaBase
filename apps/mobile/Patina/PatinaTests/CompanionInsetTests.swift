@@ -41,35 +41,16 @@ struct CompanionInsetTests {
 
     // MARK: - The metric
 
-    @Test("the modifier’s two answers are the shared metric, not a third constant")
-    func theModifierDerivesFromTheHearthMetric() {
-        for houseFirst in [true, false] {
-            #expect(CompanionBottomClearance.height(houseFirst: houseFirst, rootReserves: false)
-                    == CompanionHearthMetrics.pinnedFooterClearance(houseFirst: houseFirst))
-        }
-        // And the two answers really are different — a modifier that returned
-        // one number for both roots would satisfy the line above and still be
-        // the bug (`shots/w3-n1-07-money-footer-under-bar.png`).
-        #expect(CompanionBottomClearance.height(houseFirst: true, rootReserves: false)
-                < CompanionBottomClearance.height(houseFirst: false, rootReserves: false))
-    }
-
-    @Test("the clearance does not stack on top of the root’s own reservation")
-    func theClearanceKnowsWhenTheRootAlreadyReserved() {
-        // `pinnedFooterClearance` is documented as the figure a PUSHED screen
-        // needs, *because* a root `safeAreaInset` does not reach a
-        // NavigationStack's destinations. On a flag-off TAB ROOT the
-        // reservation is exactly what does reach the scroll view, so adding the
-        // pushed-screen figure on top of it is dead space, not clearance
-        // (`RL1C-19`).
-        #expect(CompanionBottomClearance.height(houseFirst: false, rootReserves: true)
-                < CompanionBottomClearance.height(houseFirst: false, rootReserves: false))
-        #expect(CompanionBottomClearance.height(houseFirst: false, rootReserves: true)
-                == CompanionHearthMetrics.clearanceAir)
-        // The house-first root reserves nothing at all (B-2: the bar is drawn
-        // over the screen), so nothing is subtracted there whatever is asked.
-        #expect(CompanionBottomClearance.height(houseFirst: true, rootReserves: false)
-                == CompanionHearthMetrics.pinnedFooterClearance(houseFirst: true))
+    /// The modifier pads by the shared metric — the bar's row plus the air
+    /// every pinned act reserves — not a third constant.
+    @Test("the modifier’s clearance is the shared metric, not a third constant")
+    func theModifierDerivesFromTheHearthMetric() throws {
+        #expect(CompanionHearthMetrics.pinnedFooterClearance
+                == CompanionHearthMetrics.barRowHeight + CompanionHearthMetrics.clearanceAir)
+        let source = SourceScan.code(
+            in: try SourcePin.read("Patina/Design/Components/CompanionSafeArea.swift")
+        )
+        #expect(source.contains("CompanionHearthMetrics.pinnedFooterClearance"))
     }
 
     // MARK: - The call sites
@@ -87,9 +68,7 @@ struct CompanionInsetTests {
     // MARK: - The scan
 
     /// `Features/RoomScan/**` is excluded and the exclusion is the point:
-    /// the scan flow reserves no Hearth at all
-    /// (`CompanionHearthMetrics.reservesRootHearth(for: .scanFlow) == false`,
-    /// pinned by `CompanionPresentationTests`), so its 110/120/180/190 pt
+    /// the scan flow draws no Companion chrome, so its 110/120/180/190 pt
     /// paddings clear the Whisper Bar and the shutter button — its own chrome,
     /// not the Companion's. Routing them through a Companion metric would be a
     /// wrong number dressed as a right one.

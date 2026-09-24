@@ -43,7 +43,7 @@ struct WidgetProjectionTests {
     private func snapshot(moved: [HouseRecordRow]) -> WidgetSnapshot {
         WidgetSnapshot(
             record: record(moved: moved), houseLine: "Aspen Loft",
-            refreshedAt: referenceDate, flagOn: true, ownerId: "owner-1"
+            refreshedAt: referenceDate, ownerId: "owner-1"
         )
     }
 
@@ -73,7 +73,7 @@ struct WidgetProjectionTests {
             row(id: "order:direct:abc", kind: .orderMoved, route: .orderDetail(orderId: "direct:abc"))
         ])
         let projected = WidgetSnapshot(
-            record: source, houseLine: nil, refreshedAt: referenceDate, flagOn: true, ownerId: "owner-1"
+            record: source, houseLine: nil, refreshedAt: referenceDate, ownerId: "owner-1"
         )
 
         for widgetRow in projected.movedRows {

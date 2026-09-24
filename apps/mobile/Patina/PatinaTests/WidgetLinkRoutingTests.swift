@@ -110,7 +110,7 @@ struct WidgetLinkRoutingTests {
 
     @Test("the plain door lands on Today and pops it to root")
     func todayLandsOnTheTodayTab() throws {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.openExternal(.invoiceDetail(invoiceId: "invoice-1"))
         #expect(coordinator.tabs.selected == .projects)
 
@@ -181,29 +181,13 @@ struct WidgetLinkRoutingTests {
             }
             #expect(resolved == expected)
 
-            let coordinator = AppCoordinator(houseFirstRoot: true)
+            let coordinator = AppCoordinator()
             coordinator.openExternal(resolved)
             #expect(
                 coordinator.tabs.selected == RouteTabTable.tab(for: expected),
                 "\(expected) should open \(RouteTabTable.tab(for: expected).title)"
             )
         }
-    }
-
-    @Test("on the flag-off root the same door pushes on the single stack")
-    func theFlagOffRootPushesOnOneStack() {
-        let record = Self.record(moved: [
-            Self.row(id: "order:direct:abc", route: .orderDetail(orderId: "direct:abc"))
-        ])
-        let coordinator = AppCoordinator(houseFirstRoot: false)
-        guard let resolved = route("patina://record/order:direct:abc", in: record) else {
-            Issue.record("the row’s route did not resolve")
-            return
-        }
-        coordinator.openExternal(resolved)
-
-        #expect(coordinator.navigationPath.count == 1)
-        #expect(coordinator.currentScreen == .orderDetail(orderId: "direct:abc"))
     }
 
     // MARK: - The cold doors (w3/steward.md §4)
@@ -215,7 +199,7 @@ struct WidgetLinkRoutingTests {
     /// own door in the round-trip suite it belongs to.
     @Test("a widget tap during launch is queued, not dropped")
     func aTapDuringLaunchIsQueued() throws {
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         // A freshly built coordinator is `.launching` until the splash deadline
         // elapses and `AuthService` reports — exactly the cold-launch window a
         // widget tap arrives in.

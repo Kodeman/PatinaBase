@@ -164,7 +164,6 @@ struct RecordSnapshotCompatibilityTests {
             appGroupIdentifier: "group.cloud.patina.tests.\(UUID().uuidString)",
             fallbackDirectory: directory,
             reloadWidgets: { _ in },
-            flagIsOn: { false },
             ownerId: { nil },
             clearOwner: {},
             stampOwner: { _ in }
