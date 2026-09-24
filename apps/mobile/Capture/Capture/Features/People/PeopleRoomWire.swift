@@ -87,7 +87,7 @@ struct SeatRow: Decodable {
     var personSeatLine: FieldPersonSeatLine {
         let window = [onSiteFrom, onSiteTo]
             .compactMap(ProjectsWireDate.parse)
-            .map(FieldPeopleDates.short)
+            .map(FieldPeopleDates.shortDay)
             .joined(separator: " to ")
         let words = [FieldPeopleVocabulary.kind(partyKind), trade,
                      window.isEmpty ? nil : window]

@@ -11,10 +11,17 @@ import Testing
 @testable import CaptureKit
 @testable import CaptureKitMocks
 
+/// A Postgres `date`, exactly as the wire hands it to the phone
+/// (`ProjectsWireDate.parse` → `FieldPeopleDates.day`).
 private func day(_ string: String) -> Date {
+    FieldPeopleDates.day(string) ?? .distantPast
+}
+
+/// Midnight in the phone's own zone. For instants — a card's `changed_at`, the
+/// cache's own stamp — which `FieldPeopleDates` prints in `TimeZone.current`.
+private func localDay(_ string: String) -> Date {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(identifier: "America/Chicago")
     formatter.dateFormat = "yyyy-MM-dd"
     return formatter.date(from: string) ?? .distantPast
 }
@@ -36,11 +43,10 @@ private func seat(
 
 struct FieldRosterGroupingTests {
     /// The fixture's own week: Monday 19 to Sunday 25 October 2026.
-    private let week = FieldRosterWeek.containing(day("2026-10-20"))
+    private let week = FieldRosterWeek.containing(localDay("2026-10-20"))
 
     @Test func weekRunsMondayToSunday() {
-        var calendar = Calendar.current
-        calendar.firstWeekday = 2
+        let calendar = FieldPeopleDates.dayCalendar
         #expect(calendar.component(.weekday, from: week.start) == 2)
         #expect(week.duration == 7 * 24 * 60 * 60)
         #expect(week.start <= day("2026-10-20"))
@@ -193,7 +199,7 @@ struct FieldSiteAccessRulesTests {
         let line = FieldSiteAccessRules.headLine(
             keyHolderName: "Ngozi Eze",
             gateControl: "Luis Ochoa controls the gate.",
-            changedAt: day("2026-10-16"))
+            changedAt: localDay("2026-10-16"))
         #expect(line == "Key held by Ngozi Eze. Luis Ochoa controls the gate. Changed 16 Oct 2026.")
     }
 }
@@ -430,13 +436,13 @@ struct PeopleRoomCacheTests {
     }
 
     @Test func theOfflineLineIsInkAndNotASpinner() {
-        let now = day("2026-10-20")
+        let now = localDay("2026-10-20")
         #expect(FieldPeopleDates.lastLoaded(now, now: now) == "Last loaded just now")
         #expect(FieldPeopleDates.lastLoaded(now.addingTimeInterval(-600), now: now)
                 == "Last loaded 10 minutes ago")
         #expect(FieldPeopleDates.lastLoaded(now.addingTimeInterval(-7_200), now: now)
                 == "Last loaded 2 hours ago")
-        #expect(FieldPeopleDates.lastLoaded(day("2026-10-16"), now: now)
+        #expect(FieldPeopleDates.lastLoaded(localDay("2026-10-16"), now: now)
                 == "Last loaded 16 Oct 2026")
     }
 }
@@ -504,5 +510,32 @@ struct FieldLinkExpiryTests {
         #expect(!closed.isJobWindow)
         #expect(closed.endsAt == now.addingTimeInterval(90 * 86_400))
         #expect(closed.endsAt > now)
+    }
+}
+
+// MARK: - A Postgres `date` is the same day on every phone
+
+struct FieldCalendarDayTests {
+    /// Each phone's zone is pinned here, not taken from the runner, so all four
+    /// run on every machine. West of UTC is where the day used to slip.
+    @Test(arguments: ["America/Los_Angeles", "America/Chicago", "UTC", "Pacific/Auckland"])
+    func aBareDateReadsAsTheSameDayOnEveryPhone(zone: String) throws {
+        var phone = Calendar(identifier: .gregorian)
+        phone.timeZone = try #require(TimeZone(identifier: zone))
+        let wire = try #require(FieldPeopleDates.day("2027-08-13"))
+
+        #expect(FieldPeopleDates.longDay(wire) == "13 August 2027")
+        #expect(FieldPeopleDates.shortDay(wire) == "13 Aug 2027")
+        #expect(FieldPeopleDates.mediumDay(wire).contains("13"))
+        #expect(FieldLinkExpiry.resolve(windowEnd: wire, now: day("2026-10-20")).sentence
+                == "Ends with the job, 13 August 2027.")
+
+        // Noon on the 13th where this phone is: its own date is the wire's day,
+        // and the roster's week holds it.
+        let noonThere = try #require(phone.date(from: DateComponents(
+            year: 2027, month: 8, day: 13, hour: 12)))
+        #expect(FieldPeopleDates.today(noonThere, in: phone) == wire)
+        let week = FieldRosterWeek.containing(noonThere, calendar: phone)
+        #expect(week.start <= wire && wire < week.end)
     }
 }

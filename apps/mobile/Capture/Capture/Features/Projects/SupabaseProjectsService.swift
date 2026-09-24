@@ -218,21 +218,15 @@ enum ProjectsWireDate {
 
     private static let isoPlain = ISO8601DateFormatter()
 
-    /// Bare `DATE` columns. POSIX locale + UTC so device settings can't skew
-    /// parsing; a due *date* has no meaningful wall-clock time.
-    private static let dateOnly: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
+    /// A bare `DATE` comes back as a calendar day (`FieldPeopleDates.day`), and
+    /// must be printed with that calendar's `shortDay` / `longDay` /
+    /// `mediumDay` — never with an instant's formatter, which prints it in the
+    /// phone's zone and reads a day early west of UTC.
     static func parse(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
         return isoFractional.date(from: raw)
             ?? isoPlain.date(from: raw)
-            ?? dateOnly.date(from: raw)
+            ?? FieldPeopleDates.day(raw)
     }
 }
 

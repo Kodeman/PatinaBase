@@ -354,7 +354,7 @@ struct RosterRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let from = seat.onSiteFrom, seat.offJobAt == nil {
-                Text("Starts \(FieldPeopleDates.short(from))")
+                Text("Starts \(FieldPeopleDates.shortDay(from))")
                     .font(CaptureType.footnote)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
