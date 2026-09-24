@@ -134,7 +134,7 @@ struct HouseFirstRootTests {
 
         #expect(coordinator.navigationPath.count == 1)
         #expect(coordinator.currentScreen == .invoiceDetail(invoiceId: "invoice-1"))
-        #expect(coordinator.tabs.stack(for: .studio).isEmpty, "the tab model is inert on the off root")
+        #expect(coordinator.tabs.stack(for: .projects).isEmpty, "the tab model is inert on the off root")
     }
 
     @Test
@@ -164,13 +164,13 @@ struct HouseFirstRootTests {
     @Test
     func goBackPopsTheSelectedTab() {
         let coordinator = AppCoordinator(houseFirstRoot: true)
-        coordinator.selectTab(.studio)
+        coordinator.selectTab(.projects)
         coordinator.navigate(to: .projectList)
         coordinator.navigate(to: .projectDetail(projectId: "project-1"))
 
         coordinator.goBack()
 
-        #expect(coordinator.tabs.stack(for: .studio) == [.projectList])
+        #expect(coordinator.tabs.stack(for: .projects) == [.projectList])
         #expect(coordinator.tabs.visibleRoute == .projectList)
     }
 
@@ -183,12 +183,12 @@ struct HouseFirstRootTests {
         coordinator.openExternal(.invoiceDetail(invoiceId: "invoice-1"))
         coordinator.selectTab(.today)
 
-        coordinator.selectTab(.studio)
+        coordinator.selectTab(.projects)
         #expect(coordinator.tabs.visibleRoute == .invoiceDetail(invoiceId: "invoice-1"))
 
-        coordinator.selectTab(.studio)
-        #expect(coordinator.tabs.visibleRoute == RouteTabTable.rootRoute(for: .studio))
-        #expect(coordinator.tabs.stack(for: .studio).isEmpty)
+        coordinator.selectTab(.projects)
+        #expect(coordinator.tabs.visibleRoute == RouteTabTable.rootRoute(for: .projects))
+        #expect(coordinator.tabs.stack(for: .projects).isEmpty)
     }
 
     /// BL-1's debt, paid (R2). The Studio tab has a route of its own, so what
@@ -196,20 +196,23 @@ struct HouseFirstRootTests {
     /// entry into the tab is the name that is on glass — not Profile's.
     @Test
     func theStudioTabReportsItsOwnScreen() {
-        #expect(RouteTabTable.rootRoute(for: .studio) == .studio)
+        #expect(RouteTabTable.rootRoute(for: .projects) == .studio)
 
         let coordinator = AppCoordinator(houseFirstRoot: true)
-        coordinator.selectTab(.studio)
+        coordinator.selectTab(.projects)
         coordinator.syncCurrentScreen(to: coordinator.tabs.visibleRoute)
 
         #expect(coordinator.currentScreen == .studio)
         #expect(coordinator.companionContext.currentScreen == .studio)
         // What PostHog is told IS what the screen is called (C4 / B-7 a).
         #expect(AppRoute.studio.analyticsScreenName == "Your Studio")
-        #expect(AppRoute.studio.analyticsScreenName == PatinaTab.studio.canonicalName)
+        // D3: the name on glass moved to "Your Projects"; the PostHog screen
+        // name did not, so dashboards keep reading one series.
+        #expect(AppRoute.studio.displayName == PatinaTab.projects.canonicalName)
+        #expect(AppRoute.studio.displayName == "Your Projects")
         // And `.profile` is untouched — still the flag-off monogram's door.
         #expect(AppRoute.profile.analyticsScreenName == "Profile")
-        #expect(RouteTabTable.tab(for: .profile) == .studio)
+        #expect(RouteTabTable.tab(for: .profile) == .projects)
     }
 
     /// The bar's fifth slot may be a control only once something acts on
@@ -275,8 +278,8 @@ struct HouseFirstRootTests {
         let coordinator = AppCoordinator(houseFirstRoot: true)
         coordinator.openExternal(.invoiceDetail(invoiceId: "invoice-1"))
 
-        #expect(coordinator.tabs.selected == .studio)
-        #expect(coordinator.tabs.stack(for: .studio) == [.invoiceDetail(invoiceId: "invoice-1")])
+        #expect(coordinator.tabs.selected == .projects)
+        #expect(coordinator.tabs.stack(for: .projects) == [.invoiceDetail(invoiceId: "invoice-1")])
         #expect(coordinator.tabs.stack(for: .today).isEmpty)
         #expect(coordinator.currentScreen == .invoiceDetail(invoiceId: "invoice-1"))
     }
@@ -284,12 +287,12 @@ struct HouseFirstRootTests {
     @Test
     func everyPushEntityTypeLandsOnItsTabThroughTheCoordinator() {
         let cases: [(String, PatinaTab)] = [
-            ("project", .studio),
-            ("proposal", .studio),
-            ("decision", .studio),
-            ("invoice", .studio),
-            ("design_request", .studio),
-            ("thread", .studio),
+            ("project", .projects),
+            ("proposal", .projects),
+            ("decision", .projects),
+            ("invoice", .projects),
+            ("design_request", .projects),
+            ("thread", .projects),
             ("piece", .pieces)
         ]
         for (entity, tab) in cases {

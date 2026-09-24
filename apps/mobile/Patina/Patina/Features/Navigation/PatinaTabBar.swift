@@ -109,7 +109,7 @@ public struct PatinaTabBar<Trailing: View>: View {
         .accessibilityLabel(tab.canonicalName)
         .accessibilityAddTraits(tab == selected ? [.isSelected] : [])
 
-        if tab == .studio {
+        if tab == .projects {
             control.firstLaunchTourAnchor(.profileMonogram)
         } else {
             control

@@ -257,7 +257,7 @@ struct LoadStateHonestyTests {
             "a decisions fetch that failed emptied the Awaiting you section"
         )
         #expect(hub.failedSources == ["decisions"])
-        #expect(hub.loadMessage == "Some Studio details couldn’t be refreshed. What loaded is still shown.")
+        #expect(hub.loadMessage == "Some project details couldn’t be refreshed. What loaded is still shown.")
     }
 
     @Test
@@ -301,7 +301,7 @@ struct LoadStateHonestyTests {
         hub.restoredFloorAt = { nil }  // nothing held AND no floor (W1-B-16)
         hub.apply(try hubResult(everythingFailed: true))
         #expect(hub.stalenessLine == nil)
-        #expect(hub.loadMessage == "We couldn’t gather your Studio. Check your connection and try again.")
+        #expect(hub.loadMessage == "We couldn’t gather your projects. Check your connection and try again.")
     }
 
     @Test

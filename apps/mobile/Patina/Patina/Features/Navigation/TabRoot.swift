@@ -78,6 +78,6 @@ struct PiecesTabRoot: View {
 struct StudioTabRoot: View {
     var body: some View {
         ProfileView()
-            .tabRoot(.studio)
+            .tabRoot(.projects)
     }
 }

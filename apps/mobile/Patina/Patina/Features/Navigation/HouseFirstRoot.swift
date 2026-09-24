@@ -132,7 +132,7 @@ public struct HouseFirstRoot: View {
             SpacesTabRoot()
         case .pieces:
             PiecesTabRoot()
-        case .studio:
+        case .projects:
             StudioTabRoot()
         }
     }

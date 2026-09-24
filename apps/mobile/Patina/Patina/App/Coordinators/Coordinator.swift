@@ -145,8 +145,9 @@ public enum AppRoute: Hashable {
         case .arPlacement: return "AR Placement"
         case .profile: return "Profile"
         // C4 / B-7 (a): the canonical name of the destination the bar's
-        // `Studio` label opens, in full. `analyticsScreenName` falls out of it.
-        case .studio: return "Your Studio"
+        // `Projects` label opens, in full (D3). `analyticsScreenName` keeps
+        // the pre-D3 "Your Studio".
+        case .studio: return "Your Projects"
         case .notifications: return "Notifications"
         case .designerConsultation: return "Designer"
         case .designRequests: return "Design Request"
@@ -201,6 +202,10 @@ public extension AppRoute {
         // same reason `.table` and `.roomSavedItems` do, one row above.
         case .crossRoom:
             return "All Items"
+        // D3 renamed the tab's `displayName` to "Your Projects"; the PostHog
+        // screen name stays put, for the same reason.
+        case .studio:
+            return "Your Studio"
         default:
             return displayName
         }

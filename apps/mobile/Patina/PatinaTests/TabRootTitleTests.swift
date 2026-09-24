@@ -27,7 +27,7 @@ struct TabRootTitleTests {
     func eachTabRootCarriesItsCanonicalName() {
         #expect(PatinaTab.spaces.canonicalName == "Your Spaces")
         #expect(PatinaTab.pieces.canonicalName == "Browse pieces")
-        #expect(PatinaTab.studio.canonicalName == "Your Studio")
+        #expect(PatinaTab.projects.canonicalName == "Your Projects")
         #expect(PatinaTab.today.canonicalName == "Today")
     }
 
@@ -39,10 +39,10 @@ struct TabRootTitleTests {
 
         #expect(source.contains(".tabRoot(.spaces)"))
         #expect(source.contains(".tabRoot(.pieces)"))
-        #expect(source.contains(".tabRoot(.studio)"))
+        #expect(source.contains(".tabRoot(.projects)"))
         #expect(source.contains("navigationTitle(tab.canonicalName)"))
 
-        for literal in ["\"Your Spaces\"", "\"Browse pieces\"", "\"Your Studio\""] {
+        for literal in ["\"Your Spaces\"", "\"Browse pieces\"", "\"Your Projects\""] {
             #expect(
                 !source.contains(literal),
                 "\(literal) is re-typed in TabRoot.swift; it must come from PatinaTab.canonicalName"
@@ -100,7 +100,7 @@ struct TabRootTitleTests {
         let profile = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")
         #expect(profile.contains("StudioHubView()"))
         // And the canonical name is read, never re-typed.
-        #expect(profile.contains("PatinaTab.studio.canonicalName"))
-        #expect(!profile.contains("\"Your Studio\""))
+        #expect(profile.contains("PatinaTab.projects.canonicalName"))
+        #expect(!profile.contains("\"Your Projects\""))
     }
 }

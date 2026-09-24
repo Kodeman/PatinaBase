@@ -192,7 +192,7 @@ public struct CompanionContext: Equatable {
         case .profile:
             return "Your profile"
         case .studio:
-            return "Your Studio"
+            return "Your Projects"
         case .notifications:
             return "Notifications"
         case .designerConsultation:

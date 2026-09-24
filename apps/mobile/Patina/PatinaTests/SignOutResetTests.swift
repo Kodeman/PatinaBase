@@ -96,11 +96,11 @@ struct SignOutResetTests {
         let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
         coordinator.forcePhaseForTesting(.main)
         coordinator.openExternal(.invoiceDetail(invoiceId: "inv-1"))
-        let depth = coordinator.tabs.stack(for: .studio).count
+        let depth = coordinator.tabs.stack(for: .projects).count
 
         coordinator.forcePhaseForTesting(.main)
 
-        #expect(coordinator.tabs.stack(for: .studio).count == depth)
+        #expect(coordinator.tabs.stack(for: .projects).count == depth)
     }
 
     // MARK: - What ends with the session outside this object (round 2)

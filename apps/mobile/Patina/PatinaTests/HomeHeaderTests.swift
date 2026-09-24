@@ -21,8 +21,8 @@ struct HomeHeaderTests {
     /// inside the app the NEEDS YOU eyebrow carries the truth as rows.
     @Test("the Studio control names the door and carries no count")
     func theStudioControlCarriesNoCount() throws {
-        #expect(StudioControlLabel.title == "Studio")
-        #expect(StudioControlLabel.voiceOverName == "Your Studio")
+        #expect(StudioControlLabel.title == "Projects")
+        #expect(StudioControlLabel.voiceOverName == "Your Projects")
 
         let header = try SourcePin.readCode("Patina/Features/Home/Views/DailyGreetingHeader.swift")
         #expect(!header.contains("attentionCount"),

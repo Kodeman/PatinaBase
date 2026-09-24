@@ -28,8 +28,8 @@ struct TabNavigationModelTests {
 
         model.navigate(to: .invoiceDetail(invoiceId: "invoice-1"))
 
-        #expect(model.selected == .studio)
-        #expect(model.stack(for: .studio) == [.invoiceDetail(invoiceId: "invoice-1")])
+        #expect(model.selected == .projects)
+        #expect(model.stack(for: .projects) == [.invoiceDetail(invoiceId: "invoice-1")])
         #expect(model.stack(for: .today).isEmpty)
         #expect(model.visibleRoute == .invoiceDetail(invoiceId: "invoice-1"))
     }
@@ -68,7 +68,7 @@ struct TabNavigationModelTests {
         #expect(model.stack(for: .today).isEmpty)
         #expect(model.visibleRoute == .heroFrame)
         // Studio kept what was on it — going home is not a reset.
-        #expect(model.stack(for: .studio).count == 1)
+        #expect(model.stack(for: .projects).count == 1)
     }
 
     // MARK: - push(_:) — the in-app tap
@@ -84,7 +84,7 @@ struct TabNavigationModelTests {
 
         #expect(model.selected == .today)
         #expect(model.stack(for: .today) == [.invoiceDetail(invoiceId: "invoice-1")])
-        #expect(model.stack(for: .studio).isEmpty)
+        #expect(model.stack(for: .projects).isEmpty)
     }
 
     @Test
@@ -128,13 +128,13 @@ struct TabNavigationModelTests {
     func selectingAnotherTabKeepsBothStacks() {
         let model = TabNavigationModel()
         model.navigate(to: .roomProject(roomId: Self.roomId))
-        model.select(.studio)
+        model.select(.projects)
         model.push(.budget)
         model.select(.spaces)
 
         #expect(model.selected == .spaces)
         #expect(model.stack(for: .spaces) == [.roomProject(roomId: Self.roomId)])
-        #expect(model.stack(for: .studio) == [.budget])
+        #expect(model.stack(for: .projects) == [.budget])
         #expect(model.visibleRoute == .roomProject(roomId: Self.roomId))
     }
 
@@ -174,13 +174,13 @@ struct TabNavigationModelTests {
     func popOnlyTouchesTheSelectedTab() {
         let model = TabNavigationModel()
         model.navigate(to: .roomProject(roomId: Self.roomId))
-        model.select(.studio)
+        model.select(.projects)
         model.push(.budget)
         model.push(.documentList)
 
         model.pop()
 
-        #expect(model.stack(for: .studio) == [.budget])
+        #expect(model.stack(for: .projects) == [.budget])
         #expect(model.stack(for: .spaces) == [.roomProject(roomId: Self.roomId)])
     }
 
