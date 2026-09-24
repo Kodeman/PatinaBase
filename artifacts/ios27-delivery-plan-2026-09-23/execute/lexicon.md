@@ -170,6 +170,10 @@ must be told apart from a catalog piece —
 That is 1,856 identifiers' worth of difference, so it wants Kody's confirmation before W1 starts
 rather than after.
 
+**RULED 2026-09-24 (D3a): the literal reading stands.** `Specimen` → `Piece` throughout Field;
+`CapturedPiece` is reserved for the places a field capture must be told apart from a catalog piece.
+`lexicon.json` is correct as written.
+
 ## 8. `Studio` and `Projects` — surveyed, listed, not changed
 
 **Field is clean.** Every `studio` site in `apps/mobile/Capture` already means the firm:

@@ -405,6 +405,15 @@ consequence the program now carries.
 | **D7** | Extractor pricing | **Allow maker, SKU, price and currency, each with per-row confirmation.** *(overrode: keep the prohibition)* | The prompt's explicit refusal at `lib.ts:73` is deliberately reversed. `ExtractionRow`, its strict-key validator and the prompt all change. Phase 2 grows a **money-field gold set**, and per-row confirmation becomes load-bearing rather than a safety net — measured value accuracy for generated fields is 0.69–0.83. |
 | **D8** | Rename scope | **Take the full 1,856-occurrence rename now.** | W1 stands as one exclusive Field lane, `L`, on pure critical path. |
 
+**Follow-on rulings — Kody, 2026-09-24** (raised by W0 findings):
+
+| # | Question | Ruling |
+|---|---|---|
+| **D3a** | What `CapturedPiece` names | **`Specimen` → `Piece` throughout Field.** `CapturedPiece` only where a field capture must be told apart from a catalog piece (the client app's `Pieces` surfaces). Wire strings, including `capture_kind = 'specimen'`, stay. `lexicon.json` stands as written. |
+| **D7a** | Where a confirmed non-USD price persists | **A `currency` column (ISO-4217, default `USD`) on `project_ffe_items`**, reserved as 00661. |
+| **D7b** | Does D7 reach back to 00515 | **Yes.** Enrichment's auto-prefilled `vendor_name`/`sku` becomes a suggestion that needs confirming, under the same per-row confirmation rule as the extractor. |
+| **D9** | Which day a delivery belongs to (SQ-193) | **The inspecting phone's local day.** Field sends it with the inspection. The 00184 trigger uses it and falls back to the UTC day for older clients. The net-30 `due_date` follows. |
+
 **Toolchain gate: CLEARED 2026-09-23.** Xcode 27.0 (27A266a), iOS 27.0 SDK, Swift 6.4 verified
 installed. The CI runner image is still `macos-15` and remains a W0 item.
 
