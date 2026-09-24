@@ -88,7 +88,7 @@ public struct StubSmartGuessService: SmartGuessService {
     public init() {}
     public func guess(image: CaptureImage, ocr: [OCRObservation], codes: [ScannedCode]) async -> SmartGuess {
         SmartGuess(category: .seating, categoryConfidence: 0.72, fields: [
-            FieldSuggestion(key: .category, value: SpecimenCategory.seating.rawValue, confidence: 0.72),
+            FieldSuggestion(key: .category, value: PieceCategory.seating.rawValue, confidence: 0.72),
             FieldSuggestion(key: .material, value: "Oak / bouclé", confidence: 0.6)
         ])
     }
@@ -96,13 +96,13 @@ public struct StubSmartGuessService: SmartGuessService {
 
 public final class InMemoryCaptureSyncService: CaptureSyncService {
     public init() {}
-    public func enqueue(_ specimenID: UUID) async {}
+    public func enqueue(_ pieceID: UUID) async {}
     public func drain() async {}
-    public func commit(_ specimenID: UUID) async throws -> CommitReceipt {
+    public func commit(_ pieceID: UUID) async throws -> CommitReceipt {
         CommitReceipt(remoteId: UUID().uuidString, productId: UUID().uuidString,
                       destination: .library, created: true)
     }
-    public func route(_ specimenID: UUID, to destination: CaptureDestination) async throws {}
+    public func route(_ pieceID: UUID, to destination: CaptureDestination) async throws {}
     public var snapshots: AsyncStream<SyncSnapshot> {
         AsyncStream { $0.yield(SyncSnapshot(queued: 0, uploading: 0, failed: 0)); $0.finish() }
     }

@@ -110,8 +110,8 @@ struct FieldRosterGroupingTests {
     }
 
     /// The Okonkwo fixture stands in its own week, so the Simulator shows the
-    /// bands the specimen argues for.
-    @Test func theFixtureBandsTheWayTheSpecimenDoes() {
+    /// bands the piece argues for.
+    @Test func theFixtureBandsTheWayThePieceDoes() {
         let grouped = FieldRosterGrouping.grouped(
             PeopleRoomFixtures.roster.seats,
             week: FieldRosterWeek.containing(PeopleRoomFixtures.roster.asOf))

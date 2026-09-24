@@ -3,13 +3,13 @@
 //
 //  S4 · Saved — success. The terminal success state, confirmed with a satisfying
 //  success haptic. Shows where it landed and the two real next moves: inspect the
-//  specimen (V3), or keep working the room (back to the viewfinder).
+//  piece (V3), or keep working the room (back to the viewfinder).
 
 import SwiftUI
 import CaptureKit
 
 struct S4SavedTerminalScreen: View {
-    let specimen: Piece?
+    let piece: Piece?
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 
@@ -63,10 +63,10 @@ struct S4SavedTerminalScreen: View {
                         coordinator.dismissSheet()
                         coordinator.navigate(to: .librarySearch)
                     }
-                } else if specimen != nil {
+                } else if piece != nil {
                     RouteActionButton("View", systemImage: "doc.text.magnifyingglass", kind: .secondary) {
-                        if let id = specimen?.id {
-                            coordinator.navigate(to: .specimen(id))
+                        if let id = piece?.id {
+                            coordinator.navigate(to: .piece(id))
                         }
                         coordinator.dismissSheet()
                     }
@@ -94,7 +94,7 @@ struct S4SavedTerminalScreen: View {
     }
 
     private var transfer: CaptureTransferState {
-        specimen?.transferState ?? .local
+        piece?.transferState ?? .local
     }
 
     private var isConfirmed: Bool {
@@ -103,7 +103,7 @@ struct S4SavedTerminalScreen: View {
 
     private var confirmedDestination: CaptureDestination? {
         CaptureRouteSafetyPolicy.confirmedDestination(
-            recordedDestination: specimen?.destination ?? .undecided,
+            recordedDestination: piece?.destination ?? .undecided,
             transfer: transfer)
     }
 
@@ -170,7 +170,7 @@ struct S4SavedTerminalScreen: View {
         case .inbox: parts.append("Held")
         case .undecided, nil: break
         }
-        if let venue = specimen?.venue {
+        if let venue = piece?.venue {
             if let project = venue.projectName { parts.append(project) }
             if let room = venue.room { parts.append(room) }
             if let placemark = venue.placemarkName { parts.append("from \(placemark)") }
@@ -179,7 +179,7 @@ struct S4SavedTerminalScreen: View {
     }
 
     private var analyticsDestination: String {
-        (confirmedDestination ?? specimen?.destination ?? .undecided).rawValue
+        (confirmedDestination ?? piece?.destination ?? .undecided).rawValue
     }
 }
 
@@ -188,7 +188,7 @@ import CaptureKitMocks
 
 #Preview {
     let demo = RoutePreviewData.make()
-    return S4SavedTerminalScreen(specimen: demo.specimen, coordinator: CaptureCoordinator(),
+    return S4SavedTerminalScreen(piece: demo.piece, coordinator: CaptureCoordinator(),
                                  analytics: MockCaptureAnalytics())
 }
 #endif

@@ -2,7 +2,7 @@
 //  Capture
 //
 //  N5 — on-device smart field guess. Runs Apple Vision's VNClassifyImageRequest
-//  over the still, maps the top labels to a SpecimenCategory via a keyword table,
+//  over the still, maps the top labels to a PieceCategory via a keyword table,
 //  then folds in OCR text and scanned codes for material / colour hints. Vision
 //  classification compiles AND runs on the iphonesimulator SDK (an empty frame
 //  simply yields .unknown), so no availability gate is needed.
@@ -34,7 +34,7 @@ public struct HeuristicSmartGuessService: SmartGuessService {
 
     // MARK: - Vision category classification
 
-    private func classifyCategory(_ image: CaptureImage) -> (SpecimenCategory, Double) {
+    private func classifyCategory(_ image: CaptureImage) -> (PieceCategory, Double) {
         guard let cg = cgImage(from: image.data) else { return (.unknown, 0) }
         let request = VNClassifyImageRequest()
         let handler = VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:])

@@ -3,7 +3,7 @@
 //
 //  N2 · Barcode / QR scan. Reads a 1D/2D code off the piece or its tag and
 //  surfaces a catalog-match card. "Use match" adopts the record (source .code)
-//  and opens the specimen sheet; "Not this" keeps scanning. No catalog match
+//  and opens the piece sheet; "Not this" keeps scanning. No catalog match
 //  keeps the code on the record as a reference and continues.
 
 import SwiftUI
@@ -11,7 +11,7 @@ import UIKit
 import CaptureKit
 
 struct CodeScanSheet: View {
-    let specimenID: UUID
+    let pieceID: UUID
     let store: CaptureStore
     let session: any SessionProviding
     let codeService: DataScannerCodeService
@@ -135,28 +135,28 @@ struct CodeScanSheet: View {
     }
 
     private func useMatch() {
-        guard let scanned, let specimen = currentSpecimen() else { return }
+        guard let scanned, let piece = currentPiece() else { return }
         let tag = codeTag(scanned)
-        if !specimen.scannedCodes.contains(tag) { specimen.scannedCodes.append(tag) }
+        if !piece.scannedCodes.contains(tag) { piece.scannedCodes.append(tag) }
         if let title = catalogTitle {
-            specimen.setValue(title, for: .title, source: .code)
-            specimen.catalogMatchRemoteId = scanned.payload
+            piece.setValue(title, for: .title, source: .code)
+            piece.catalogMatchRemoteId = scanned.payload
         }
-        if case .gtin(let g) = scanned.kind, specimen.sku == nil {
-            specimen.setValue(g, for: .sku, source: .code)
+        if case .gtin(let g) = scanned.kind, piece.sku == nil {
+            piece.setValue(g, for: .sku, source: .code)
         }
         if case .url(let url) = scanned.kind {
-            specimen.setValue(url.absoluteString, for: .sourceURL, source: .code)
+            piece.setValue(url.absoluteString, for: .sourceURL, source: .code)
         }
-        specimen.touch()
+        piece.touch()
         try? store.save()
         analytics.event("N2.use-match", ["matched": String(catalogTitle != nil)])
-        coordinator?.present(.specimenSheet(specimenID))
+        coordinator?.present(.pieceSheet(pieceID))
     }
 
-    private func currentSpecimen() -> Piece? {
-        CaptureOwnerProjectionPolicy.specimen(
-            id: specimenID,
+    private func currentPiece() -> Piece? {
+        CaptureOwnerProjectionPolicy.piece(
+            id: pieceID,
             store: store,
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
@@ -178,9 +178,9 @@ import CaptureKitMocks
 #Preview("N2 · Scan") {
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
-    let specimen = store.newDraft()
+    let piece = store.newDraft()
     return CodeScanSheet(
-        specimenID: specimen.id,
+        pieceID: piece.id,
         store: store,
         session: MockSessionProviding(),
         codeService: DataScannerCodeService(),

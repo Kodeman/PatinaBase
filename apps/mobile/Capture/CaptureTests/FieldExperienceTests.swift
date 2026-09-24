@@ -51,7 +51,7 @@ struct FieldRealmHistoryTests {
 
     @Test func navigationStackReplacementTargetsOneRealm() {
         var history = FieldRealmHistory()
-        history.replacePath([.session, .specimen(UUID())], for: .camera)
+        history.replacePath([.session, .piece(UUID())], for: .camera)
         history.replacePath([.leadList], for: .work)
 
         #expect(history.path(for: .camera).count == 2)

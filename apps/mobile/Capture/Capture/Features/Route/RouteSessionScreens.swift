@@ -5,7 +5,7 @@
 //  Review: V1–V3) into the RouteRegistry. The integration owner adds one line in
 //  ScreenRegistry: RouteSessionScreens.register(into:container:coordinator:).
 //  Each builder captures the container's store/services + the coordinator and
-//  resolves its specimen fresh on every present.
+//  resolves its piece fresh on every present.
 
 import Foundation
 import SwiftUI
@@ -22,8 +22,8 @@ enum RouteSessionScreens {
         let session = container.session
         let projects = container.projects
 
-        func currentSpecimen(_ id: UUID) -> Piece? {
-            CaptureOwnerProjectionPolicy.specimen(
+        func currentPiece(_ id: UUID) -> Piece? {
+            CaptureOwnerProjectionPolicy.piece(
                 id: id,
                 store: store,
                 runsRealServices: AppConfiguration.runsRealServices,
@@ -35,16 +35,16 @@ enum RouteSessionScreens {
             AnyView(V1SessionTrayScreen(store: store, session: session,
                                         coordinator: coordinator, analytics: analytics, sync: sync))
         }
-        r.registerRoute(CaptureRoute.specimen(UUID()).registryKey) { route in
-            guard case let .specimen(id) = route else { return AnyView(EmptyView()) }
-            return AnyView(V3SpecimenDetailScreen(
-                specimen: currentSpecimen(id), store: store, coordinator: coordinator))
+        r.registerRoute(CaptureRoute.piece(UUID()).registryKey) { route in
+            guard case let .piece(id) = route else { return AnyView(EmptyView()) }
+            return AnyView(V3PieceDetailScreen(
+                piece: currentPiece(id), store: store, coordinator: coordinator))
         }
 
         r.registerSheet(CaptureSheet.assignVenue(UUID()).registryKey) { sheet in
             guard case let .assignVenue(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S1AssignVenueScreen(
-                specimen: currentSpecimen(id), store: store,
+                piece: currentPiece(id), store: store,
                 location: location, session: session,
                 projects: projects,
                 coordinator: coordinator, analytics: analytics))
@@ -57,19 +57,19 @@ enum RouteSessionScreens {
         r.registerSheet(CaptureSheet.destination(UUID()).registryKey) { sheet in
             guard case let .destination(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S3DestinationScreen(
-                specimen: currentSpecimen(id), store: store,
+                piece: currentPiece(id), store: store,
                 sync: sync, session: session,
                 coordinator: coordinator, analytics: analytics))
         }
         r.registerSheet(CaptureSheet.savedTerminal(UUID()).registryKey) { sheet in
             guard case let .savedTerminal(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S4SavedTerminalScreen(
-                specimen: currentSpecimen(id), coordinator: coordinator, analytics: analytics))
+                piece: currentPiece(id), coordinator: coordinator, analytics: analytics))
         }
         r.registerSheet(CaptureSheet.inboxTerminal(UUID()).registryKey) { sheet in
             guard case let .inboxTerminal(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S5InboxTerminalScreen(
-                specimen: currentSpecimen(id), coordinator: coordinator, analytics: analytics))
+                piece: currentPiece(id), coordinator: coordinator, analytics: analytics))
         }
 
         r.registerSheet(CaptureSheet.cullDeck.registryKey) { _ in

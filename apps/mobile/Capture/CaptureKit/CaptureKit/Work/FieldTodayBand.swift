@@ -17,7 +17,7 @@ public struct FieldTodayBand: Equatable, Sendable {
 
     public let visit: VisitRow
     /// FC-R6: `project_id == nil`, regardless of sync state — includes `.committed`
-    /// rows. Callers pass a list already filtered by `Specimen.isUnplaced`; this
+    /// rows. Callers pass a list already filtered by `Piece.isUnplaced`; this
     /// type never re-derives placement and never consults sync state itself.
     public let unplacedCount: Int
     public let queuedCount: Int
@@ -68,7 +68,7 @@ public struct FieldTodayBand: Equatable, Sendable {
 }
 
 public enum FieldTodayBandBuilder {
-    // @MainActor — it reads Specimen, which is a SwiftData @Model.
+    // @MainActor — it reads Piece, which is a SwiftData @Model.
     // The 7-parameter shape is the Interfaces-block contract Wave 4's Task 0
     // reads — do not collapse it into a struct to satisfy the linter.
     @MainActor
@@ -82,10 +82,10 @@ public enum FieldTodayBandBuilder {
                              now: Date) -> FieldTodayBand {
         // A "note" is a capture with a transcript or audio and no photo; a
         // "capture" is everything else in the visit.
-        let notes = visitCaptures.filter { specimen in
-            specimen.photos.isEmpty
-                && ((specimen.voiceTranscript?.isEmpty == false)
-                    || specimen.voiceAudioFilename?.isEmpty == false)
+        let notes = visitCaptures.filter { piece in
+            piece.photos.isEmpty
+                && ((piece.voiceTranscript?.isEmpty == false)
+                    || piece.voiceAudioFilename?.isEmpty == false)
         }.count
         let captures = visitCaptures.count - notes
 

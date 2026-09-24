@@ -15,7 +15,7 @@ public struct CaptureSyncAttributes: ActivityAttributes {
         public var queued: Int
         public var uploading: Int
         public var failed: Int
-        public var lastSpecimenTitle: String?
+        public var lastPieceTitle: String?
         /// Visit facts. Wave 5 renders them; the shape lands now because it is
         /// free only until a widget target exists. Optional is also what lets an
         /// Activity started by the previous build decode in this one.
@@ -23,12 +23,12 @@ public struct CaptureSyncAttributes: ActivityAttributes {
         public var elapsedSeconds: Int?
         public var captureCount: Int?
         public init(queued: Int, uploading: Int, failed: Int,
-                    lastSpecimenTitle: String? = nil,
+                    lastPieceTitle: String? = nil,
                     visitLabel: String? = nil,
                     elapsedSeconds: Int? = nil,
                     captureCount: Int? = nil) {
             self.queued = queued; self.uploading = uploading
-            self.failed = failed; self.lastSpecimenTitle = lastSpecimenTitle
+            self.failed = failed; self.lastPieceTitle = lastPieceTitle
             self.visitLabel = visitLabel; self.elapsedSeconds = elapsedSeconds
             self.captureCount = captureCount
         }
@@ -38,5 +38,15 @@ public struct CaptureSyncAttributes: ActivityAttributes {
     public init(sessionStartedAt: Date, venueLabel: String? = nil) {
         self.sessionStartedAt = sessionStartedAt
         self.venueLabel = venueLabel
+    }
+}
+
+extension CaptureSyncAttributes.ContentState {
+    /// `lastPieceTitle` keeps its old wire key: a running Activity's state
+    /// was encoded by the build that started it.
+    enum CodingKeys: String, CodingKey {
+        case queued, uploading, failed
+        case lastPieceTitle = "lastSpecimenTitle"
+        case visitLabel, elapsedSeconds, captureCount
     }
 }

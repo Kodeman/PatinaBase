@@ -8,7 +8,7 @@
 //  onto the card every capture already shows after the shutter.
 //
 //  Nothing here writes. A tap returns the ACTION its host performs against
-//  Specimen's own request lanes (`requestMarginNote` / `requestPunchTask`), so
+//  Piece's own request lanes (`requestMarginNote` / `requestPunchTask`), so
 //  the wave-4 write path stays exactly as it shipped and was reviewed.
 //
 //  FC-R16 is honoured by omission and pinned by test: there is no action here
@@ -88,7 +88,7 @@ public enum FieldVerbPhase: Equatable, Sendable {
     case filed
 }
 
-/// The specimen facts the menu reads, lifted off `Specimen` so the whole state
+/// The piece facts the menu reads, lifted off `Piece` so the whole state
 /// machine is testable without a SwiftData store.
 public struct FieldVerbFacts: Equatable, Sendable {
     public let hasProject: Bool
@@ -129,16 +129,16 @@ public struct FieldVerbFacts: Equatable, Sendable {
     }
 
     /// `partiesSettled` has no default here: it is a fact about the host's
-    /// fetch, not about the specimen, and a surface that forgets to say gets
+    /// fetch, not about the piece, and a surface that forgets to say gets
     /// the race rather than a compiler error.
-    public init(specimen: Piece, partiesSettled: Bool) {
+    public init(piece: Piece, partiesSettled: Bool) {
         self.init(
-            hasProject: specimen.venue?.projectId?.isEmpty == false,
-            noteRequested: specimen.marginNoteId != nil,
-            punchRequested: specimen.punchTaskId != nil,
-            punchState: specimen.punchTaskState,
-            punchOwnerRaw: specimen.punchTaskOwnerRaw,
-            punchPartyID: specimen.punchTaskPartyId,
+            hasProject: piece.venue?.projectId?.isEmpty == false,
+            noteRequested: piece.marginNoteId != nil,
+            punchRequested: piece.punchTaskId != nil,
+            punchState: piece.punchTaskState,
+            punchOwnerRaw: piece.punchTaskOwnerRaw,
+            punchPartyID: piece.punchTaskPartyId,
             partiesSettled: partiesSettled)
     }
 }

@@ -185,21 +185,21 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
     }
 }
 
-// MARK: - Builder (Specimen + children → payload)
+// MARK: - Builder (Piece + children → payload)
 
 public extension FieldCapturePayload {
-    /// Map a `Specimen` (and its cascade children) into the wire envelope.
+    /// Map a `Piece` (and its cascade children) into the wire envelope.
     ///
     /// `clientToken` is intentionally absent — it is the RPC's `p_client_capture_id`
     /// argument, not a payload field. Photo `path` comes from each
     /// `CapturePhoto.remotePath` (set at upload); a not-yet-uploaded photo simply
     /// omits its path.
-    init(specimen s: Piece, device: Device) {
+    init(piece s: Piece, device: Device) {
         self.title = s.title?.nonEmpty
         self.notes = s.note?.nonEmpty
         // Emit the raw category unless it is the sentinel "unknown".
-        self.category = s.categoryRaw == SpecimenCategory.unknown.rawValue ? nil : s.categoryRaw.nonEmpty
-        self.subcategory = nil // no Specimen source in the frozen schema
+        self.category = s.categoryRaw == PieceCategory.unknown.rawValue ? nil : s.categoryRaw.nonEmpty
+        self.subcategory = nil // no Piece source in the frozen schema
         self.measurements = Self.buildMeasurements(s.measurements)
         self.tag = Self.buildTag(s)
         self.barcode = Self.buildBarcode(s)

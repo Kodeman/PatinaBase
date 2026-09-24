@@ -127,10 +127,10 @@ public struct FieldSuggestion: Sendable {
     }
 }
 public struct SmartGuess: Sendable {
-    public let category: SpecimenCategory
+    public let category: PieceCategory
     public let categoryConfidence: Double
     public let fields: [FieldSuggestion]
-    public init(category: SpecimenCategory, categoryConfidence: Double, fields: [FieldSuggestion]) {
+    public init(category: PieceCategory, categoryConfidence: Double, fields: [FieldSuggestion]) {
         self.category = category; self.categoryConfidence = categoryConfidence; self.fields = fields
     }
 }
@@ -147,7 +147,7 @@ public extension SmartGuess {
             guard suggestion.confidence > 0 else { return false }
             guard !suggestion.value.isEmpty else { return false }
             if suggestion.key == .category,
-               suggestion.value == SpecimenCategory.unknown.rawValue { return false }
+               suggestion.value == PieceCategory.unknown.rawValue { return false }
             return true
         }
     }

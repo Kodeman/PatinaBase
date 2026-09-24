@@ -250,7 +250,7 @@ struct SettingsScreen: View {
     // MARK: derived
 
     private func projectOptions() -> [String] {
-        let names = localSearch(SpecimenQuery()).compactMap { $0.venue?.projectName }
+        let names = localSearch(PieceQuery()).compactMap { $0.venue?.projectName }
         var set = Array(Set(names)).sorted()
         if !AppConfiguration.runsRealServices,
            !defaultProject.isEmpty,
@@ -269,7 +269,7 @@ struct SettingsScreen: View {
         )
     }
 
-    private func localSearch(_ query: SpecimenQuery) -> [Piece] {
+    private func localSearch(_ query: PieceQuery) -> [Piece] {
         switch localListScope {
         case .globalFixtures:
             return store.search(query)

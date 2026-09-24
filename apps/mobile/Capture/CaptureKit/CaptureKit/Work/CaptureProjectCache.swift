@@ -79,7 +79,7 @@ public enum CaptureProjectCachePolicy {
     }
 
     /// Which cached rows to delete — **candidates**, not a verdict: Task 3 subtracts
-    /// anything a `Specimen` or an S1/S2 flow still owns (R18) before it deletes.
+    /// anything a `Piece` or an S1/S2 flow still owns (R18) before it deletes.
     /// Never evicts a project touched inside `evictAfter`, one never touched at all,
     /// or one awaiting sync. Rows past `maxCachedProjects` ARE evicted even when just
     /// visited (R19) — an unbounded cache on a phone is the worse failure.
@@ -300,9 +300,9 @@ public final class CaptureProjectCache {
             guard let id, !id.isEmpty else { return }
             ids.insert(id)
         }
-        for specimen in (try? store.context.fetch(FetchDescriptor<Piece>())) ?? [] {
-            remember(specimen.venue?.projectId)
-            remember(specimen.placementProjectId)
+        for piece in (try? store.context.fetch(FetchDescriptor<Piece>())) ?? [] {
+            remember(piece.venue?.projectId)
+            remember(piece.placementProjectId)
         }
         for scan in (try? store.context.fetch(FetchDescriptor<ScanUploadRecord>())) ?? [] {
             remember(scan.projectID)

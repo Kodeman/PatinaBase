@@ -76,12 +76,12 @@ enum CaptureDeepLink {
         coordinator.switchRealm(realm(for: id), reset: true)
 
         func withSample(_ action: (UUID) -> Void) {
-            guard let sampleID = sampleSpecimenID(store: store, session: session) else { return }
+            guard let sampleID = samplePieceID(store: store, session: session) else { return }
             action(sampleID)
         }
 
         switch id {
-        case .c1Viewfinder, .c2Framing, .c3Specimen, .c4MultiShot,
+        case .c1Viewfinder, .c2Framing, .c3Piece, .c4MultiShot,
              .e1AppIcon, .e2SystemEntry, .r1LowLight,
              // C6 is a camera MODE of C1, not a route or a sheet, so there is
              // nothing to present for it — `ViewfinderScreen` reads the harness
@@ -97,7 +97,7 @@ enum CaptureDeepLink {
         // H1 is a SHEET too, for the same reason: without this the sweep would
         // file a PNG of whatever the realm was showing under `screen.H1.log-time`.
         case .h1LogTime:        coordinator.present(.logTime)
-        case .c5SpecimenSheet:  withSample { coordinator.present(.specimenSheet($0)) }
+        case .c5PieceSheet:  withSample { coordinator.present(.pieceSheet($0)) }
         case .n1TagOCR:         withSample { coordinator.present(.ocr($0)) }
         case .n2Scan:           withSample { coordinator.present(.code($0)) }
         case .n3Measure:        withSample { coordinator.present(.measure($0)) }
@@ -113,7 +113,7 @@ enum CaptureDeepLink {
         case .s5Inbox:          withSample { coordinator.present(.inboxTerminal($0)) }
         case .v1SessionTray:    coordinator.navigate(to: .session)
         case .v2Cull:           coordinator.present(.cullDeck)
-        case .v3Detail:         withSample { coordinator.navigate(to: .specimen($0)) }
+        case .v3Detail:         withSample { coordinator.navigate(to: .piece($0)) }
         case .u1Sync:           coordinator.navigate(to: .syncStatus)
         case .u2LibrarySearch:  coordinator.navigate(to: .librarySearch)
         case .t1Settings:       coordinator.navigate(to: .settings)
@@ -144,24 +144,24 @@ enum CaptureDeepLink {
     }
 
     @MainActor
-    private static func sampleSpecimenID(
+    private static func samplePieceID(
         store: CaptureStore,
         session: any SessionProviding
     ) -> UUID? {
-        let specimen: Piece?
+        let piece: Piece?
         switch CaptureOwnerProjectionPolicy.resolve(
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
             workspaceID: session.workspaceID
         ) {
         case .globalFixtures:
-            specimen = store.session().first ?? store.newDraft()
+            piece = store.session().first ?? store.newDraft()
         case .owner(let owner):
-            specimen = store.session(owner: owner).first ?? store.newDraft(owner: owner)
+            piece = store.session(owner: owner).first ?? store.newDraft(owner: owner)
         case .unavailable:
-            specimen = nil
+            piece = nil
         }
-        return specimen?.id
+        return piece?.id
     }
 
     /// V4 reviews a visit, so the harness needs one. The visit a local capture
@@ -173,17 +173,17 @@ enum CaptureDeepLink {
         store: CaptureStore,
         session: any SessionProviding
     ) -> UUID {
-        let specimens: [Piece]
+        let pieces: [Piece]
         switch CaptureOwnerProjectionPolicy.resolve(
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
             workspaceID: session.workspaceID
         ) {
-        case .globalFixtures:   specimens = store.session()
-        case .owner(let owner): specimens = store.session(owner: owner)
-        case .unavailable:      specimens = []
+        case .globalFixtures:   pieces = store.session()
+        case .owner(let owner): pieces = store.session(owner: owner)
+        case .unavailable:      pieces = []
         }
-        if let visitID = specimens.compactMap(\.captureSessionID).first { return visitID }
+        if let visitID = pieces.compactMap(\.captureSessionID).first { return visitID }
         return CaptureSessionContextStore.shared.visitState(
             identity: CaptureSessionIdentity(userID: session.userID,
                                              workspaceID: session.workspaceID)

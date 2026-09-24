@@ -9,7 +9,7 @@
 //  §1/§4 route it to the Inbox, so there is no `notes/` in the v1 bundle).
 //
 //  BLESSABLE PROVENANCE CONTRACT (logged for the portal Inbox UI, item 12+): the
-//  address rides the EXISTING `Specimen.provenanceRaw` → `FieldCapturePayload.provenance`
+//  address rides the EXISTING `Piece.provenanceRaw` → `FieldCapturePayload.provenance`
 //  → `field_captures.provenance` JSONB path — additive, NO migration and NO change to
 //  the frozen payload wire contract. Keys are namespaced under `siteScanContext.*`;
 //  the 4×4 camera pose is a row-major comma-joined string (16 values, nil on non-Pro).
@@ -62,7 +62,7 @@ public struct ContextCaptureProvenance: Equatable, Sendable {
         static let capturedAt = "siteScanContext.capturedAt"
     }
 
-    /// Flatten to the `[String:String]` provenance map stored on the Specimen.
+    /// Flatten to the `[String:String]` provenance map stored on the Piece.
     public func provenanceEntries() -> [String: String] {
         var map: [String: String] = [Key.source: Self.sourceValue, Key.capturedAt: capturedAt]
         if let scanSessionId { map[Key.scanId] = scanSessionId }

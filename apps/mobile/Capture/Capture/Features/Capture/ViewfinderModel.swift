@@ -70,7 +70,7 @@ final class ViewfinderModel {
     /// untouched — an already-saved capture waits on Today.
     func visitDoorClosed(now: Date = Date()) {
         refreshVisit(now: now)
-        guard let draft = cardSpecimen,
+        guard let draft = cardPiece,
               FieldInHandPlacement.adopt(visitState, into: draft) else { return }
         try? store.save()
         // The card just gained a project, so the punch verb just gained a court.
@@ -101,11 +101,11 @@ final class ViewfinderModel {
     var capturing: Bool = false
     var isHolding: Bool = false          // C4 multi-shot in progress
     var holdCount: Int = 0
-    var cardSpecimen: Piece?          // C3 card subject (nil = no card)
+    var cardPiece: Piece?          // C3 card subject (nil = no card)
     var lastError: String?
 
     var quickSaveTitle: String {
-        switch cardSpecimen?.destination {
+        switch cardPiece?.destination {
         case .library: return "Save to library"
         case .inbox: return "Hold for later"
         default: return "Choose destination"
@@ -266,7 +266,7 @@ final class ViewfinderModel {
     /// The banner's copy is "No signal · saving on device" with queuedCount
     /// presented as QUEUED, so it must be the outbox depth — the same source
     /// LocalCaptureSyncService feeds to CaptureSyncAttributes.queued — not
-    /// sessionCount, which counts specimens in the current visit (:47, :133-137).
+    /// sessionCount, which counts pieces in the current visit (:47, :133-137).
     /// A designer with 12 already-synced captures and nothing queued must not
     /// be told "12 queued".
     ///
@@ -301,7 +301,7 @@ final class ViewfinderModel {
     // MARK: Shutter press → single tap vs. multi-shot hold
 
     func pressChanged() {
-        guard !pressActive, cardSpecimen == nil, !capturing else { return }
+        guard !pressActive, cardPiece == nil, !capturing else { return }
         pressActive = true
         guard mode == .photo else { return }
         holdTriggerTask?.cancel()
@@ -328,24 +328,24 @@ final class ViewfinderModel {
     private func captureSingle() async {
         // VOICE has no frame. This guard — not `nextStep(for:)`'s mapping — is
         // what keeps the shutter honest now that `.voice` is a selectable pill.
-        guard SpecimenCapturePolicy.producesPhoto(mode) else { return }
-        guard cardSpecimen == nil, !capturing, !isHolding else { return }
+        guard PieceCapturePolicy.producesPhoto(mode) else { return }
+        guard cardPiece == nil, !capturing, !isHolding else { return }
         capturing = true
         defer { capturing = false }
         CaptureHaptics.impact(.light)
 
         guard let draft = makeDraft() else { return }
         await captureFrame(into: draft, primary: true)
-        guard let currentDraft = currentSpecimen(id: draft.id) else { return }
+        guard let currentDraft = currentPiece(id: draft.id) else { return }
         guard !currentDraft.photos.isEmpty else { discard(currentDraft); return }
 
         applySmartGuess(to: currentDraft)
         try? store.save()
         refreshSessionCount()
         analytics.event("capture", ["mode": mode.rawValue])
-        switch SpecimenCapturePolicy.nextStep(for: mode) {
+        switch PieceCapturePolicy.nextStep(for: mode) {
         case .quickConfirm:
-            cardSpecimen = currentDraft
+            cardPiece = currentDraft
             await loadCardParties()
         case .tagOCR:
             coordinator.present(.ocr(currentDraft.id))
@@ -359,8 +359,8 @@ final class ViewfinderModel {
     // MARK: Multi-shot (C4) → C5 sheet on release
 
     private func beginMultiShot() async {
-        guard SpecimenCapturePolicy.producesPhoto(mode) else { return }
-        guard !isHolding, cardSpecimen == nil else { return }
+        guard PieceCapturePolicy.producesPhoto(mode) else { return }
+        guard !isHolding, cardPiece == nil else { return }
         guard let draft = makeDraft() else { return }
 
         isHolding = true
@@ -383,7 +383,7 @@ final class ViewfinderModel {
         CaptureHaptics.impact(.medium)
         guard let id = multiShotID else { return }
         multiShotID = nil
-        guard let draft = currentSpecimen(id: id) else { return }
+        guard let draft = currentPiece(id: id) else { return }
         guard !draft.photos.isEmpty else { discard(draft); return }
 
         flagNearDuplicates(in: draft)
@@ -391,29 +391,29 @@ final class ViewfinderModel {
         try? store.save()
         refreshSessionCount()
         analytics.event("capture.multishot", ["frames": String(draft.photos.count)])
-        coordinator.present(.specimenSheet(id))
+        coordinator.present(.pieceSheet(id))
     }
 
     // MARK: C3 card actions
 
     func saveFromCard() {
-        guard let specimen = cardSpecimen else { return }
+        guard let piece = cardPiece else { return }
         endCardNote()
         CaptureHaptics.success()
-        let id = specimen.id
-        cardSpecimen = nil
-        if specimen.destination == .undecided {
+        let id = piece.id
+        cardPiece = nil
+        if piece.destination == .undecided {
             let resolved = FieldDestinationPolicy.destination(for: visitState)
             if resolved == .undecided {
                 // No visit: S3 still owns the choice.
-                specimen.status = .ready
+                piece.status = .ready
                 try? store.save()
                 coordinator.present(.destination(id))
                 return
             }
-            specimen.destination = resolved
-            specimen.status = .ready
-            specimen.touch()
+            piece.destination = resolved
+            piece.status = .ready
+            piece.touch()
             try? store.save()
         }
         Task { @MainActor in
@@ -429,13 +429,13 @@ final class ViewfinderModel {
                 // `route` throws below and hands off to S3, S3's `choose(_:)`
                 // sees the flag and skips its own emission instead of double-
                 // counting this one capture.
-                specimen.placementEventEmitted = true
+                piece.placementEventEmitted = true
                 try? store.save()
                 analytics.emit(FieldVisitTelemetry.placement(
-                    specimen, basis: visitState.isVisit ? "visit" : "manual",
+                    piece, basis: visitState.isVisit ? "visit" : "manual",
                     source: .capture))
-                try await sync.route(id, to: specimen.destination)
-                coordinator.present(specimen.destination == .library
+                try await sync.route(id, to: piece.destination)
+                coordinator.present(piece.destination == .library
                     ? .savedTerminal(id)
                     : .inboxTerminal(id))
             } catch {
@@ -446,16 +446,16 @@ final class ViewfinderModel {
     }
 
     func addDetailFromCard() {
-        guard let specimen = cardSpecimen else { return }
+        guard let piece = cardPiece else { return }
         endCardNote()
-        let id = specimen.id
-        cardSpecimen = nil
-        coordinator.present(.specimenSheet(id))         // C5 full sheet
+        let id = piece.id
+        cardPiece = nil
+        coordinator.present(.pieceSheet(id))         // C5 full sheet
     }
 
     func dismissCard() {
         endCardNote()
-        cardSpecimen = nil
+        cardPiece = nil
         CaptureHaptics.selection()
     }
 
@@ -481,7 +481,7 @@ final class ViewfinderModel {
     func loadCardParties() async {
         let previouslySettled = cardPartiesSettled
         cardPartiesSettled = false
-        guard let projectID = cardSpecimen?.venue?.projectId,
+        guard let projectID = cardPiece?.venue?.projectId,
               !projectID.isEmpty else {
             // No project means no court to fetch, so there is nothing to wait
             // for — and the menu shows `needsProject` rather than the verb.
@@ -490,7 +490,7 @@ final class ViewfinderModel {
             return
         }
         let loaded = (try? await siteRequests.fieldParties(projectID: projectID)) ?? []
-        guard cardSpecimen?.venue?.projectId == projectID else {
+        guard cardPiece?.venue?.projectId == projectID else {
             // The card moved on mid-flight; leave the newer load to settle it.
             cardPartiesSettled = previouslySettled
             return
@@ -499,7 +499,7 @@ final class ViewfinderModel {
         cardPartiesSettled = true
     }
 
-    /// Mints the lane on the specimen's own request accessor and saves. The
+    /// Mints the lane on the piece's own request accessor and saves. The
     /// wave-4 write path is untouched.
     ///
     /// The card's capture is usually still a DRAFT, and both rows carry
@@ -511,13 +511,13 @@ final class ViewfinderModel {
     /// → `route` → drain → `performFieldWritesIfNeeded` — and an already
     /// committed capture is enqueued exactly as N5 enqueues it.
     func performVerb(_ action: FieldVerbAction) {
-        guard let specimen = cardSpecimen else { return }
+        guard let piece = cardPiece else { return }
         switch action {
         case .note:
-            specimen.requestMarginNote(noteID: UUID())
-            analytics.event("C3.make-note", ["id": specimen.id.uuidString])
+            piece.requestMarginNote(noteID: UUID())
+            analytics.event("C3.make-note", ["id": piece.id.uuidString])
         case .punchTask(let owner, let partyID, let intent):
-            specimen.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
+            piece.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
             // `verb` is additive and the event name is unchanged. Ruling 2 makes
             // a courtless punch a designer-owned row, identical to a plain task
             // in every other property — so without this the taxonomy cannot see
@@ -526,8 +526,8 @@ final class ViewfinderModel {
         }
         try? store.save()
         CaptureHaptics.selection()
-        guard specimen.hasConfirmedCaptureReceipt else { return }
-        let id = specimen.id
+        guard piece.hasConfirmedCaptureReceipt else { return }
+        let id = piece.id
         Task { @MainActor [weak self] in await self?.sync.enqueue(id) }
     }
 
@@ -535,7 +535,7 @@ final class ViewfinderModel {
     /// reachable from three places today and none of them is the capture path,
     /// so a capture taken from the shutter could never inherit a project.
     func placeFromCard() {
-        guard let id = cardSpecimen?.id else { return }
+        guard let id = cardPiece?.id else { return }
         analytics.event("capture.place_tapped", ["surface": "c3"])
         UserDefaults.standard.set("card", forKey: "capture.routingSource")
         coordinator.present(.assignVenue(id))
@@ -555,15 +555,15 @@ final class ViewfinderModel {
         // recorders on `AVAudioSession.sharedInstance()` — and whichever
         // `finish()` lands second deactivates the session under the other.
         guard micIsAvailable, !isRecordingCardNote, mode != .voice,
-              let specimen = cardSpecimen else { return }
+              let piece = cardPiece else { return }
         // FC-R11 (Ruling 4): a conversation note does not start until she taps.
         guard !FieldAffirmationPolicy.recordingIsBlocked(
-            noteSetting: specimen.noteSetting, affirmed: affirmed) else { return }
+            noteSetting: piece.noteSetting, affirmed: affirmed) else { return }
         do {
             // The recorder emits the ONE voice.start (it already carries
             // surface "c3"); this is what stops that row asserting "solo" over
             // a conversation note — FC-R11's only audit trail.
-            voice.setNoteSetting(specimen.noteSetting ?? .solo)
+            voice.setNoteSetting(piece.noteSetting ?? .solo)
             let stream = try voice.startLiveTranscription()
             isRecordingCardNote = true
             cardTranscript = ""
@@ -598,11 +598,11 @@ final class ViewfinderModel {
         // FC-R9: `finish()` tears the audio session down, so it is awaited even
         // when the card has already gone — resolving the subject BEFORE the
         // await is what keeps a released hold from leaving the mic live.
-        let subject = cardSpecimen
+        let subject = cardPiece
         Task { @MainActor [weak self] in
             guard let self else { return }
             let result = await self.voice.finish()
-            guard let specimen = subject else { return }
+            guard let piece = subject else { return }
             let transcript = result.transcript.isEmpty ? partial : result.transcript
             let hasAudio = result.audioFilename != nil || !result.audioSegments.isEmpty
             guard !transcript.isEmpty || hasAudio else {
@@ -613,15 +613,15 @@ final class ViewfinderModel {
             if transcript.isEmpty {
                 self.analytics.event("voice.empty_transcript", ["had_audio": "true"])
             }
-            specimen.voiceTranscript = transcript.isEmpty ? nil : transcript
-            specimen.voicePartialTranscript = partial.isEmpty ? nil : partial
-            specimen.voiceAudioFilename = result.audioFilename
-            specimen.voiceDurationSeconds = result.durationSeconds
-            specimen.voiceTranscriptSourceRaw = result.transcript.isEmpty
+            piece.voiceTranscript = transcript.isEmpty ? nil : transcript
+            piece.voicePartialTranscript = partial.isEmpty ? nil : partial
+            piece.voiceAudioFilename = result.audioFilename
+            piece.voiceDurationSeconds = result.durationSeconds
+            piece.voiceTranscriptSourceRaw = result.transcript.isEmpty
                 ? "device_partial" : "device"
-            specimen.voiceAudioSegmentsRaw = result.audioSegments.isEmpty
+            piece.voiceAudioSegmentsRaw = result.audioSegments.isEmpty
                 ? nil : result.audioSegments
-            specimen.touch()
+            piece.touch()
             try? self.store.save()
             // No voice.finish here: `SpeechVoiceNoteService.emitFinish` is the
             // one place it fires (Wave 1's P-1 ruling) and now carries the
@@ -680,8 +680,8 @@ final class ViewfinderModel {
         return draft
     }
 
-    private func currentSpecimen(id: UUID) -> Piece? {
-        CaptureOwnerProjectionPolicy.specimen(
+    private func currentPiece(id: UUID) -> Piece? {
+        CaptureOwnerProjectionPolicy.piece(
             id: id,
             store: store,
             runsRealServices: AppConfiguration.runsRealServices,
@@ -715,7 +715,7 @@ final class ViewfinderModel {
         do {
             if torchOn { camera.setTorch(.on) }
             let frame = try await camera.capture()
-            guard !Task.isCancelled, currentSpecimen(id: draft.id) != nil else { return }
+            guard !Task.isCancelled, currentPiece(id: draft.id) != nil else { return }
 
             let filename = "\(UUID().uuidString).heic"
             try? store.writeMedia(frame.data, filename: filename)
@@ -759,7 +759,7 @@ final class ViewfinderModel {
             let guess = await self.smartGuess.guess(image: image, ocr: [], codes: [])
             let recordable = guess.fieldsWorthRecording
             guard !recordable.isEmpty,
-                  let current = self.currentSpecimen(id: draftID),
+                  let current = self.currentPiece(id: draftID),
                   // She can route this record while the read is still running.
                   // Once it has left the device it must not be rewritten.
                   current.transferState.phase == .local else { return }

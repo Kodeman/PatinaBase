@@ -17,50 +17,50 @@ import Testing
 @testable import CaptureKit
 
 struct FieldWriteGateTests {
-    @Test func aSpecimenWithNoReceiptOffersNoCaptureID() {
-        let specimen = Piece()
-        #expect(FieldWriteGate.fieldCaptureID(for: specimen) == nil)
+    @Test func aPieceWithNoReceiptOffersNoCaptureID() {
+        let piece = Piece()
+        #expect(FieldWriteGate.fieldCaptureID(for: piece) == nil)
     }
 
-    @Test func aCommittedSpecimenWithARemoteIDOffersIt() {
+    @Test func aCommittedPieceWithARemoteIDOffersIt() {
         let id = UUID(uuidString: "c1111111-1111-4111-8111-111111111111")!
-        let specimen = Piece()
-        specimen.remoteId = id.uuidString
-        specimen.statusRaw = CaptureStatus.committed.rawValue
+        let piece = Piece()
+        piece.remoteId = id.uuidString
+        piece.statusRaw = CaptureStatus.committed.rawValue
 
-        #expect(FieldWriteGate.fieldCaptureID(for: specimen) == id)
+        #expect(FieldWriteGate.fieldCaptureID(for: piece) == id)
     }
 
     @Test func aRemoteIDWithoutACommittedStatusIsNotAReceipt() {
-        let specimen = Piece()
-        specimen.remoteId = "c1111111-1111-4111-8111-111111111111"
-        specimen.statusRaw = CaptureStatus.queued.rawValue
+        let piece = Piece()
+        piece.remoteId = "c1111111-1111-4111-8111-111111111111"
+        piece.statusRaw = CaptureStatus.queued.rawValue
 
-        #expect(FieldWriteGate.fieldCaptureID(for: specimen) == nil)
+        #expect(FieldWriteGate.fieldCaptureID(for: piece) == nil)
     }
 
     @Test func aNonUUIDRemoteIDIsRefusedRatherThanForcedThrough() {
-        let specimen = Piece()
-        specimen.remoteId = "not-a-uuid"
-        specimen.statusRaw = CaptureStatus.committed.rawValue
+        let piece = Piece()
+        piece.remoteId = "not-a-uuid"
+        piece.statusRaw = CaptureStatus.committed.rawValue
 
-        #expect(FieldWriteGate.fieldCaptureID(for: specimen) == nil)
+        #expect(FieldWriteGate.fieldCaptureID(for: piece) == nil)
     }
 
     @Test func whitespaceIsNotAReceipt() {
-        let specimen = Piece()
-        specimen.remoteId = "   "
-        specimen.statusRaw = CaptureStatus.committed.rawValue
+        let piece = Piece()
+        piece.remoteId = "   "
+        piece.statusRaw = CaptureStatus.committed.rawValue
 
-        #expect(FieldWriteGate.fieldCaptureID(for: specimen) == nil)
+        #expect(FieldWriteGate.fieldCaptureID(for: piece) == nil)
     }
 
     // MARK: - Ruling 1: which notes file themselves
 
     private func spoken(_ text: String?) -> Piece {
-        let specimen = Piece()
-        specimen.voiceTranscript = text
-        return specimen
+        let piece = Piece()
+        piece.voiceTranscript = text
+        return piece
     }
 
     @Test func aSpokenNoteInsideAPlacedVisitFilesItself() {
@@ -88,16 +88,16 @@ struct FieldWriteGateTests {
     }
 
     @Test func aLaneAlreadyRequestedIsNeverReRequested() {
-        let specimen = spoken("the scribe is short")
-        specimen.requestMarginNote(noteID: UUID())
+        let piece = spoken("the scribe is short")
+        piece.requestMarginNote(noteID: UUID())
         #expect(FieldWriteGate.shouldAutoFileMarginNote(
-            for: specimen, projectID: "p1", insideVisit: true) == false)
+            for: piece, projectID: "p1", insideVisit: true) == false)
     }
 
     // MARK: - The outcome → lane-state mapping the drain must not get wrong
 
     @Test func alreadyWrittenClosesTheLaneExactlyAsWrittenDoes() {
-        // `needsMarginNote` / `needsPunchTask` hold a committed specimen in the
+        // `needsMarginNote` / `needsPunchTask` hold a committed piece in the
         // outbox until its lane reads .written or .refused. Mapping
         // .alreadyWritten to anything else re-attempts, on every drain forever,
         // a row the server already has.

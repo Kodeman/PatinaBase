@@ -221,14 +221,14 @@ struct SyncStatusScreen: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if !rows.isEmpty {
                         sectionLabel("Captures")
-                        ForEach(rows, id: \.id) { specimen in
+                        ForEach(rows, id: \.id) { piece in
                             Button {
                                 analytics.event("sync.open_row", [
-                                    "status": specimen.transferState.phase.rawValue
+                                    "status": piece.transferState.phase.rawValue
                                 ])
-                                coordinator.navigate(to: .specimen(specimen.id))
+                                coordinator.navigate(to: .piece(piece.id))
                             } label: {
-                                row(specimen)
+                                row(piece)
                             }
                             .buttonStyle(.plain)
                             Rectangle().fill(CaptureColor.line).frame(height: 1)

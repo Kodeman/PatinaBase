@@ -4,7 +4,7 @@
 //  S2 · Create project inline. The empty-state path for a first capture on a new
 //  job — name it (and optionally seed a first room) without leaving capture, then
 //  drop straight back into S1 with the new project pre-selected. The CaptureSheet
-//  case carries no id, so the active routing specimen is recovered from the
+//  case carries no id, so the active routing piece is recovered from the
 //  shared @AppStorage handle that S1 writes.
 
 import Foundation
@@ -21,7 +21,7 @@ struct S2CreateProjectScreen: View {
     /// mode → the local-only path (unchanged harness behavior).
     let projectCreator: (any CaptureProjectCreating)?
 
-    @AppStorage("capture.routingSpecimenId") private var routingSpecimenId = ""
+    @AppStorage("capture.routingSpecimenId") private var routingPieceId = ""
     private let sessionContext = CaptureSessionContextStore.shared
 
     @State private var name = ""
@@ -167,8 +167,8 @@ struct S2CreateProjectScreen: View {
 
         guard owner == nil || session.ownerIdentity == owner else { return }
 
-        // Return to S1 for the specimen we came from (createProject carries no id).
-        if let id = UUID(uuidString: routingSpecimenId) {
+        // Return to S1 for the piece we came from (createProject carries no id).
+        if let id = UUID(uuidString: routingPieceId) {
             coordinator.present(.assignVenue(id))
         } else {
             coordinator.dismissSheet()

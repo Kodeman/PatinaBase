@@ -43,7 +43,7 @@ struct MediaRetentionPolicyTests {
 
 @MainActor
 struct CaptureStoreMediaRetentionSweepTests {
-    /// Writes a real (small) file for a fresh specimen's photo, stamps a
+    /// Writes a real (small) file for a fresh piece's photo, stamps a
     /// remote path so it counts as receipted, and pins its modification date
     /// so ordering is deterministic without writing anywhere near the real
     /// 512 MB soft cap.
@@ -53,7 +53,7 @@ struct CaptureStoreMediaRetentionSweepTests {
         bytes: Int,
         modifiedAt: Date
     ) throws -> URL {
-        let specimen = store.newDraft()
+        let piece = store.newDraft()
         let filename = "sweep-photo-\(UUID().uuidString).heic"
         try store.writeMedia(Data(repeating: 0xAB, count: bytes), filename: filename)
         let url = store.mediaURL(for: filename)
@@ -61,8 +61,8 @@ struct CaptureStoreMediaRetentionSweepTests {
             [.modificationDate: modifiedAt], ofItemAtPath: url.path)
         let photo = CapturePhoto(filename: filename)
         photo.remotePath = "remote/\(filename)"
-        photo.piece = specimen
-        specimen.photos.append(photo)
+        photo.piece = piece
+        piece.photos.append(photo)
         return url
     }
 
@@ -73,15 +73,15 @@ struct CaptureStoreMediaRetentionSweepTests {
         bytes: Int,
         modifiedAt: Date
     ) throws -> URL {
-        let specimen = store.newDraft()
+        let piece = store.newDraft()
         let filename = "sweep-unreceipted-\(UUID().uuidString).heic"
         try store.writeMedia(Data(repeating: 0xCD, count: bytes), filename: filename)
         let url = store.mediaURL(for: filename)
         try FileManager.default.setAttributes(
             [.modificationDate: modifiedAt], ofItemAtPath: url.path)
         let photo = CapturePhoto(filename: filename)
-        photo.piece = specimen
-        specimen.photos.append(photo)
+        photo.piece = piece
+        piece.photos.append(photo)
         return url
     }
 
@@ -143,7 +143,7 @@ struct CaptureStoreMediaRetentionSweepTests {
 
     @Test func sweepTreatsAReceiptedVoiceSegmentTheSameAsAReceiptedPhoto() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = store.newDraft()
+        let piece = store.newDraft()
         let uploadedName = "seg-uploaded-\(UUID().uuidString).m4a"
         let lostName = "seg-lost-\(UUID().uuidString).m4a"
         try store.writeMedia(Data(repeating: 0x01, count: 100), filename: uploadedName)
@@ -153,9 +153,9 @@ struct CaptureStoreMediaRetentionSweepTests {
         let old = Date().addingTimeInterval(-3600)
         try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: uploadedURL.path)
         try FileManager.default.setAttributes([.modificationDate: old], ofItemAtPath: lostURL.path)
-        specimen.voiceAudioSegmentsRaw = [uploadedName, lostName]
+        piece.voiceAudioSegmentsRaw = [uploadedName, lostName]
         // Only `uploadedName` carries a stamped remote path (Task 9's receipt).
-        specimen.voiceAudioRemotePathsRaw = ["some/folder/\(uploadedName)"]
+        piece.voiceAudioRemotePathsRaw = ["some/folder/\(uploadedName)"]
         defer {
             try? FileManager.default.removeItem(at: uploadedURL)
             try? FileManager.default.removeItem(at: lostURL)

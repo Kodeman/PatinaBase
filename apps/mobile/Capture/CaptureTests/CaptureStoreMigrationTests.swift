@@ -243,8 +243,8 @@ struct CaptureStoreMigrationTests {
 
         let migrated = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: url))
         let piece = try #require(try migrated.mainContext.fetch(FetchDescriptor<Piece>()).first)
-        let read = StoreFixtureProjection.specimen(piece)
-        let untouched = StoreFixtureProjection.specimen(Piece())
+        let read = StoreFixtureProjection.piece(piece)
+        let untouched = StoreFixtureProjection.piece(Piece())
         var differences: [String] = []
         for (attribute, value) in read.sorted(by: { $0.key < $1.key })
         where attribute != "photos" && attribute != "measurements" {
@@ -279,20 +279,20 @@ struct CaptureStoreMigrationTests {
         let fixture = try Self.openFixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let written = fixture.manifest.rows
-        let specimens = try fixture.store.context.fetch(FetchDescriptor<Piece>())
-        #expect(specimens.count == written["Specimen"]?.count)
+        let pieces = try fixture.store.context.fetch(FetchDescriptor<Piece>())
+        #expect(pieces.count == written["Specimen"]?.count)
 
         var referenced: Set<String> = []
-        for specimen in specimens {
-            for photo in specimen.photos {
-                #expect(photo.piece?.id == specimen.id)
+        for piece in pieces {
+            for photo in piece.photos {
+                #expect(photo.piece?.id == piece.id)
                 referenced.insert(photo.filename)
             }
-            for measurement in specimen.measurements {
-                #expect(measurement.piece?.id == specimen.id)
+            for measurement in piece.measurements {
+                #expect(measurement.piece?.id == piece.id)
             }
-            if let audio = specimen.voiceAudioFilename { referenced.insert(audio) }
-            referenced.formUnion(specimen.voiceAudioSegmentsRaw ?? [])
+            if let audio = piece.voiceAudioFilename { referenced.insert(audio) }
+            referenced.formUnion(piece.voiceAudioSegmentsRaw ?? [])
         }
         for record in fixture.store.siteRequestOutbox() {
             // Absolute paths under the seeding simulator's container, exactly as
@@ -300,8 +300,8 @@ struct CaptureStoreMigrationTests {
             referenced.insert(URL(fileURLWithPath: record.payloadPath).lastPathComponent)
             referenced.formUnion(record.mediaPaths.map { URL(fileURLWithPath: $0).lastPathComponent })
         }
-        #expect(specimens.flatMap(\.photos).count == written["CapturePhoto"]?.count)
-        #expect(specimens.flatMap(\.measurements).count == written["CaptureMeasurement"]?.count)
+        #expect(pieces.flatMap(\.photos).count == written["CapturePhoto"]?.count)
+        #expect(pieces.flatMap(\.measurements).count == written["CaptureMeasurement"]?.count)
 
         // Every media file the shipped build wrote is on disk, byte for byte,
         // and every one of them is named by a row that survived.
@@ -330,24 +330,24 @@ struct CaptureStoreMigrationTests {
         let fixture = try Self.openFixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let context = fixture.store.context
-        let specimens = try context.fetch(FetchDescriptor<Piece>())
+        let pieces = try context.fetch(FetchDescriptor<Piece>())
 
-        let ownedByA = specimens.filter {
+        let ownedByA = pieces.filter {
             Self.ownerA.matches(userID: $0.ownerUserID, workspaceID: $0.ownerWorkspaceID)
         }
-        let ownedByB = specimens.filter {
+        let ownedByB = pieces.filter {
             Self.ownerB.matches(userID: $0.ownerUserID, workspaceID: $0.ownerWorkspaceID)
         }
-        let unowned = specimens.filter { $0.ownerUserID == nil && $0.ownerWorkspaceID == nil }
+        let unowned = pieces.filter { $0.ownerUserID == nil && $0.ownerWorkspaceID == nil }
         #expect(!ownedByA.isEmpty && !ownedByB.isEmpty && !unowned.isEmpty)
-        #expect(ownedByA.count + ownedByB.count + unowned.count == specimens.count)
+        #expect(ownedByA.count + ownedByB.count + unowned.count == pieces.count)
         // A legacy unowned row stays quarantined: no owner's lookup claims it.
         for row in unowned {
-            #expect(fixture.store.specimen(id: row.id, owner: Self.ownerA) == nil)
+            #expect(fixture.store.piece(id: row.id, owner: Self.ownerA) == nil)
         }
 
         // The keys a replay dedupes on: one per row, never re-minted.
-        #expect(Set(specimens.map(\.clientToken)).count == specimens.count)
+        #expect(Set(pieces.map(\.clientToken)).count == pieces.count)
         let closes = try context.fetch(FetchDescriptor<FieldVisitCloseRecord>())
         #expect(Set(closes.map(\.timeEntryID)).count == closes.count)
         let deliveries = try context.fetch(FetchDescriptor<SiteRequestOutboxRecord>())
@@ -414,20 +414,20 @@ struct CaptureStoreMigrationTests {
         let context = fixture.store.context
         let writeStates: Set<String> = ["pending", "writing", "failed", "refused", "unwritable", "written"]
 
-        let specimens = try context.fetch(FetchDescriptor<Piece>())
-        #expect(Set(specimens.map(\.statusRaw))
+        let pieces = try context.fetch(FetchDescriptor<Piece>())
+        #expect(Set(pieces.map(\.statusRaw))
             == ["draft", "ready", "queued", "uploading", "failed", "committed"])
-        #expect(Set(specimens.map(\.lifecycleRaw))
+        #expect(Set(pieces.map(\.lifecycleRaw))
             .isSuperset(of: ["captured", "queued", "uploading", "awaitingConfirmation",
                              "failed", "rejected"]))
-        #expect(Set(specimens.compactMap(\.placementStateRaw))
+        #expect(Set(pieces.compactMap(\.placementStateRaw))
             == ["pending", "placing", "failed", "placed"])
-        #expect(specimens.contains { $0.placementReplayPending == true })
-        #expect(Set(specimens.compactMap(\.marginNoteStateRaw)) == writeStates)
-        #expect(Set(specimens.compactMap(\.punchTaskStateRaw)) == writeStates)
-        #expect(Set(specimens.compactMap(\.degradeNoteStateRaw)) == writeStates)
-        #expect(specimens.contains { !$0.photos.isEmpty && !$0.measurements.isEmpty })
-        #expect(specimens.contains { ($0.voiceAudioSegmentsRaw ?? []).count > 1 })
+        #expect(pieces.contains { $0.placementReplayPending == true })
+        #expect(Set(pieces.compactMap(\.marginNoteStateRaw)) == writeStates)
+        #expect(Set(pieces.compactMap(\.punchTaskStateRaw)) == writeStates)
+        #expect(Set(pieces.compactMap(\.degradeNoteStateRaw)) == writeStates)
+        #expect(pieces.contains { !$0.photos.isEmpty && !$0.measurements.isEmpty })
+        #expect(pieces.contains { ($0.voiceAudioSegmentsRaw ?? []).count > 1 })
 
         let scans = try context.fetch(FetchDescriptor<ScanUploadRecord>())
         #expect(Set(scans.map(\.statusRaw)) == ["queued", "uploading", "awaitingConfirmation",

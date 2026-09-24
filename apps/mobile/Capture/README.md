@@ -2,7 +2,7 @@
 
 **Patina Field** is a standalone iOS app. Today is home — the camera is one
 tap away, and it stays home inside a visit — turning a physical object in a
-showroom into a structured, located, synced **specimen**. Spec:
+showroom into a structured, located, synced **piece**. Spec:
 `docs/design/ios-Capture/patina-mobile-ux-flow.html`. Plan:
 `~/.claude/plans/review-the-design-document-greedy-engelbart.md`.
 

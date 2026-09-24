@@ -2,14 +2,14 @@
 //  CaptureKit
 //
 //  Enqueues a mid-scan context capture (detail photo or voice note) into the EXISTING
-//  offline-first outbox (Field Capture P1 · item 7). It produces a `Specimen` routed
+//  offline-first outbox (Field Capture P1 · item 7). It produces a `Piece` routed
 //  to the Capture Inbox, exactly like the core capture flow — set the media +
 //  provenance, mark `.ready`, save; `CaptureSyncService.drain()` then uploads it to
 //  `capture-media` + `commit_field_capture` → `field_captures`. This is a
 //  capture-SOURCE extension: no new sync plumbing, no migration, no change to the
 //  frozen `FieldCapturePayload` wire contract.
 //
-//  Lives in CaptureKit (operates only on CaptureKit types — CaptureStore / Specimen /
+//  Lives in CaptureKit (operates only on CaptureKit types — CaptureStore / Piece /
 //  VenueStamp / ContextCaptureProvenance) so the enqueue behavior is unit-testable
 //  with `CaptureStore.inMemory()`. The app target captures the media (AR frame / mic)
 //  and calls this; the media DATA source is the only device-only part.

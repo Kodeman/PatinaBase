@@ -128,15 +128,15 @@ struct VoiceModeTests {
         // Wave 2 held .voice off the selector so it would not ship a dead pill.
         // Wave 3 builds C6, so the pill earns its place.
         #expect(CameraMode.viewfinderSelectable == [.photo, .tag, .measure, .scan, .voice])
-        #expect(!SpecimenCapturePolicy.producesPhoto(.voice))
+        #expect(!PieceCapturePolicy.producesPhoto(.voice))
         for mode in CameraMode.allCases where mode != .voice {
-            #expect(SpecimenCapturePolicy.producesPhoto(mode))
+            #expect(PieceCapturePolicy.producesPhoto(mode))
         }
     }
 
     @MainActor
     @Test func aMediaLessVoiceNoteCommitsThroughTheExistingOutbox() throws {
-        // ContextCaptureService already proves a media-less specimen commits
+        // ContextCaptureService already proves a media-less piece commits
         // cleanly (ContextCaptureTests); C6 is that pattern at viewfinder scale.
         let store = try CaptureStore.inMemory()
         let owner = try #require(CaptureOwnerIdentity(userID: "u1", workspaceID: "w1"))

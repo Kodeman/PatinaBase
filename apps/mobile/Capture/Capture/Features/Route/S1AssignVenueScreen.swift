@@ -1,7 +1,7 @@
 //  S1AssignVenueScreen.swift
 //  Capture
 //
-//  S1 · Assign — with venue stamp. Tags the specimen to a project / room / shelf
+//  S1 · Assign — with venue stamp. Tags the piece to a project / room / shelf
 //  while the venue + timestamp ride along automatically (F-08/F-09). Last-used
 //  project & room are pre-filled for a fast showroom rhythm. S1 persists only
 //  assignment context; S3 owns the destination decision and route() commit.
@@ -15,7 +15,7 @@ import CaptureKitMocks
 #endif
 
 struct S1AssignVenueScreen: View {
-    let specimen: Piece?
+    let piece: Piece?
     let store: CaptureStore
     let location: any LocationService
     let session: any SessionProviding
@@ -25,14 +25,14 @@ struct S1AssignVenueScreen: View {
 
     var body: some View {
         Group {
-            if let specimen {
+            if let piece {
                 S1Content(
-                    specimen: specimen, store: store, location: location,
+                    piece: piece, store: store, location: location,
                     session: session, projectsService: projects,
                     coordinator: coordinator,
                     analytics: analytics)
             } else {
-                RouteMissingSpecimen()
+                RouteMissingPiece()
             }
         }
         .background(CaptureColor.paper3)
@@ -44,7 +44,7 @@ struct S1AssignVenueScreen: View {
 }
 
 private struct S1Content: View {
-    let specimen: Piece
+    let piece: Piece
     let store: CaptureStore
     let location: any LocationService
     let session: any SessionProviding
@@ -52,7 +52,7 @@ private struct S1Content: View {
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 
-    @AppStorage("capture.routingSpecimenId") private var routingSpecimenId = ""
+    @AppStorage("capture.routingSpecimenId") private var routingPieceId = ""
     // One-shot handle set by ViewfinderModel.placeFromCard() and consumed (then
     // cleared) in loadLocalContext() — the only signal that tells S1 it is
     // being presented from the C3 card rather than the deep-link harness, S2,
@@ -170,7 +170,7 @@ private struct S1Content: View {
                 }
                 if !projects.isEmpty { Divider() }
                 Button {
-                    routingSpecimenId = specimen.id.uuidString
+                    routingPieceId = piece.id.uuidString
                     coordinator.present(.createProject)
                 } label: {
                     Label("New project…", systemImage: "plus")
@@ -260,7 +260,7 @@ private struct S1Content: View {
     // MARK: Behaviour
 
     private func loadLocalContext() {
-        routingSpecimenId = specimen.id.uuidString
+        routingPieceId = piece.id.uuidString
         // Consume-and-clear: only placeFromCard() ever writes "card" here, so a
         // stale value could otherwise leak the Done primary into a later S1
         // presentation from the deep-link harness, S2, or the session tray.
@@ -295,20 +295,20 @@ private struct S1Content: View {
                 name: $0.name)
         }
 
-        let venue = specimen.venue
+        let venue = piece.venue
         let remembered = sessionContext.current(identity: identity).routing
         projectName = venue?.projectName ?? remembered.projectName ?? ""
         selectedProjectId = venue?.projectId ?? remembered.projectID ?? ""
         selectedProjectRoomId = venue?.projectRoomId
-            ?? specimen.placementRoomId
+            ?? piece.placementRoomId
             ?? remembered.projectRoomID
             ?? ""
         room = venue?.room ?? remembered.room ?? ""
         shelf = venue?.shelf ?? remembered.shelf ?? ""
         venueName = venue?.placemarkName ?? ""
-        if let slotID = specimen.placementSlotId {
+        if let slotID = piece.placementSlotId {
             placementChoice = .slot(slotID)
-        } else if specimen.placementProjectId != nil {
+        } else if piece.placementProjectId != nil {
             placementChoice = .createLine
         }
 
@@ -370,21 +370,21 @@ private struct S1Content: View {
             venueName = placemark
         }
         // Merge GPS facts onto the record now so they persist with the routing.
-        var venue = specimen.venue ?? stamp
+        var venue = piece.venue ?? stamp
         venue.latitude = venue.latitude ?? stamp.latitude
         venue.longitude = venue.longitude ?? stamp.longitude
         venue.accuracyMeters = venue.accuracyMeters ?? stamp.accuracyMeters
         if venue.placemarkName == nil { venue.placemarkName = stamp.placemarkName }
-        specimen.venue = venue
+        piece.venue = venue
     }
 
     private func advance() {
         persistRouting()
-        coordinator.present(.destination(specimen.id))
+        coordinator.present(.destination(piece.id))
     }
 
     private func persistRouting() {
-        var venue = specimen.venue ?? VenueStamp()
+        var venue = piece.venue ?? VenueStamp()
         let trimmedName = venueName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty { venue.placemarkName = trimmedName }
         venue.projectId = selectedProjectId.isEmpty ? nil : selectedProjectId
@@ -394,13 +394,13 @@ private struct S1Content: View {
             : selectedProjectRoomId
         venue.room = room.isEmpty ? nil : room
         venue.shelf = shelf.isEmpty ? nil : shelf
-        specimen.venue = venue
+        piece.venue = venue
         if !selectedProjectId.isEmpty {
             switch placementChoice {
             case .none:
-                specimen.clearProjectPlacement()
+                piece.clearProjectPlacement()
             case .createLine:
-                specimen.configureProjectPlacement(
+                piece.configureProjectPlacement(
                     projectID: selectedProjectId,
                     roomID: selectedProjectRoomId.isEmpty
                         ? nil
@@ -408,7 +408,7 @@ private struct S1Content: View {
                     slotID: nil,
                     category: placementCategory)
             case .slot(let slotID):
-                specimen.configureProjectPlacement(
+                piece.configureProjectPlacement(
                     projectID: selectedProjectId,
                     roomID: selectedProjectRoomId.isEmpty
                         ? nil
@@ -421,7 +421,7 @@ private struct S1Content: View {
                 "has_room": selectedProjectRoomId.isEmpty ? "false" : "true"
             ])
         }
-        specimen.touch()
+        piece.touch()
         try? store.save()
 
         let priorRouting = sessionContext.current(identity: identity).routing
@@ -445,7 +445,7 @@ private struct S1Content: View {
     }
 
     private var placementCategory: String? {
-        specimen.category == .unknown ? nil : specimen.category.rawValue
+        piece.category == .unknown ? nil : piece.category.rawValue
     }
 
     private var availableSlots: [FieldFFEItem] {
@@ -499,7 +499,7 @@ private enum PlacementChoice: Equatable {
 #Preview {
     let demo = RoutePreviewData.make()
     return S1AssignVenueScreen(
-        specimen: demo.specimen,
+        piece: demo.piece,
         store: demo.store,
         location: MockLocationService(),
         session: MockSessionProviding(),

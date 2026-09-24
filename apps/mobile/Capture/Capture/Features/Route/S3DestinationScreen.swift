@@ -18,7 +18,7 @@ import CaptureKitMocks
 #endif
 
 struct S3DestinationScreen: View {
-    let specimen: Piece?
+    let piece: Piece?
     let store: CaptureStore
     let sync: any CaptureSyncService
     let session: any SessionProviding
@@ -27,13 +27,13 @@ struct S3DestinationScreen: View {
 
     var body: some View {
         Group {
-            if let specimen {
+            if let piece {
                 S3Content(
-                    specimen: specimen, store: store, sync: sync,
+                    piece: piece, store: store, sync: sync,
                     session: session, coordinator: coordinator,
                     analytics: analytics)
             } else {
-                RouteMissingSpecimen()
+                RouteMissingPiece()
             }
         }
         .background(CaptureColor.paper3)
@@ -45,7 +45,7 @@ struct S3DestinationScreen: View {
 }
 
 private struct S3Content: View {
-    let specimen: Piece
+    let piece: Piece
     let store: CaptureStore
     let sync: any CaptureSyncService
     let session: any SessionProviding
@@ -57,26 +57,26 @@ private struct S3Content: View {
     @State private var routeError: String?
 
     private var recommended: CaptureDestination {
-        if specimen.destination == .library || specimen.destination == .inbox {
-            return specimen.destination
+        if piece.destination == .library || piece.destination == .inbox {
+            return piece.destination
         }
         return FieldDestinationPolicy.recommendation(
             for: sessionContext.visitState(
                 identity: CaptureSessionIdentity(userID: session.userID,
                                                  workspaceID: session.workspaceID)),
-            hasUnconfirmedGuess: specimen.hasUnconfirmedGuess)
+            hasUnconfirmedGuess: piece.hasUnconfirmedGuess)
     }
 
     /// Task 31 fix: this was hardcoded `"manual"`. The real basis is whichever
-    /// fact actually decided the project on `specimen.venue` — an accepted
+    /// fact actually decided the project on `piece.venue` — an accepted
     /// suggestion (the tray's `accept(_:projectID:)` writes `venue.projectId`
     /// from `suggestedProjectID` but never clears the suggestion fields), an
     /// open visit's own routing, or a genuinely manual pick — checked in that
     /// order and matching `ViewfinderModel:409`'s visit/manual shape otherwise.
     private var placementBasis: String {
-        if let suggestedProjectID = specimen.suggestedProjectID,
-           suggestedProjectID == specimen.venue?.projectId,
-           let basis = specimen.suggestionBasis {
+        if let suggestedProjectID = piece.suggestedProjectID,
+           suggestedProjectID == piece.venue?.projectId,
+           let basis = piece.suggestionBasis {
             return basis.rawValue
         }
         let identity = CaptureSessionIdentity(userID: session.userID,
@@ -166,39 +166,39 @@ private struct S3Content: View {
     private func choose(_ destination: CaptureDestination) {
         guard routing == nil else { return }
         routeError = nil
-        specimen.destination = destination
-        specimen.touch()
+        piece.destination = destination
+        piece.touch()
         try? store.save()
 
         routing = destination
         Task { @MainActor in
             do {
-                try await sync.route(specimen.id, to: destination)
+                try await sync.route(piece.id, to: destination)
                 remember(destination)
                 // The program's headline metric — S3 is the OTHER commit route
                 // (ViewfinderModel.saveFromCard() is the first): whether this
                 // capture actually landed on a project, via S1's persisted
-                // routing on `specimen.venue`, or is committing roving.
+                // routing on `piece.venue`, or is committing roving.
                 //
                 // Task 31 dedupe: when `saveFromCard()`'s pre-route emission
                 // already counted this capture and its `route` call then threw,
                 // it hands off here — `placementEventEmitted` is already true,
                 // so this success (the RETRY succeeding) must not count it again.
-                if specimen.placementEventEmitted != true {
-                    specimen.placementEventEmitted = true
-                    // FC-R21 / F-17: the predicate is `Specimen.isUnplaced`,
+                if piece.placementEventEmitted != true {
+                    piece.placementEventEmitted = true
+                    // FC-R21 / F-17: the predicate is `Piece.isUnplaced`,
                     // read from the shared factory. This route used to ask
                     // `venue.projectId != nil` instead, which called a Library
                     // capture with no project UNPLACED while its sibling
                     // emitter called the same capture placed.
                     analytics.emit(FieldVisitTelemetry.placement(
-                        specimen, basis: placementBasis, source: .capture))
+                        piece, basis: placementBasis, source: .capture))
                     try? store.save()
                 }
                 routing = nil
                 coordinator.present(destination == .library
-                                    ? .savedTerminal(specimen.id)
-                                    : .inboxTerminal(specimen.id))
+                                    ? .savedTerminal(piece.id)
+                                    : .inboxTerminal(piece.id))
             } catch {
                 routing = nil
                 routeError = "Couldn’t route it just now — it’s saved locally. Try again."
@@ -219,7 +219,7 @@ private struct S3Content: View {
 #Preview {
     let demo = RoutePreviewData.make()
     return S3DestinationScreen(
-        specimen: demo.specimen,
+        piece: demo.piece,
         store: demo.store,
         sync: InMemoryCaptureSyncService(),
         session: MockSessionProviding(),

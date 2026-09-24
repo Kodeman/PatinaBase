@@ -23,12 +23,12 @@ struct V1SessionTrayScreen: View {
     @State private var scope: FieldTrayScope = .unplacedOnly
     @State private var placedJustNow: Set<UUID> = []
     @State private var player = VoiceSegmentPlayer()
-    @State private var playingSpecimenID: UUID?
+    @State private var playingPieceID: UUID?
     private let sessionContext = CaptureSessionContextStore.shared
 
     private var groups: [(venue: String, items: [Piece])] {
-        let grouped = Dictionary(grouping: items) { specimen in
-            specimen.venue?.placemarkName ?? "This visit"
+        let grouped = Dictionary(grouping: items) { piece in
+            piece.venue?.placemarkName ?? "This visit"
         }
         return grouped
             .map { (venue: $0.key, items: ordered($0.value)) }
@@ -43,15 +43,15 @@ struct V1SessionTrayScreen: View {
     /// are answered, and `place(…)` leaves `suggested_*` standing, so a
     /// leftover question must not be allowed to reorder answered work. The
     /// unplaced section below carries its own FieldTraySuggestionOrder.
-    private func ordered(_ specimens: [Piece]) -> [Piece] {
-        specimens.sorted { $0.createdAt > $1.createdAt }
+    private func ordered(_ pieces: [Piece]) -> [Piece] {
+        pieces.sorted { $0.createdAt > $1.createdAt }
     }
 
     /// The unplaced tray leads with the strongest question — the confidence
     /// decides the sequence and is never shown (Task 27).
     private var unplacedGroups: [(venue: String, items: [Piece])] {
-        let grouped = Dictionary(grouping: unplaced) { specimen in
-            specimen.venue?.placemarkName ?? "This visit"
+        let grouped = Dictionary(grouping: unplaced) { piece in
+            piece.venue?.placemarkName ?? "This visit"
         }
         return grouped
             .map { (venue: $0.key, items: FieldTraySuggestionOrder.ordered($0.value)) }
@@ -134,11 +134,11 @@ struct V1SessionTrayScreen: View {
         }
     }
 
-    private func venueSection(_ venue: String, _ specimens: [Piece]) -> some View {
-        let doneCount = specimens.filter { $0.destination != .undecided }.count
+    private func venueSection(_ venue: String, _ pieces: [Piece]) -> some View {
+        let doneCount = pieces.filter { $0.destination != .undecided }.count
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(venue.uppercased()) · \(specimens.count) CAPTURES")
+                Text("\(venue.uppercased()) · \(pieces.count) CAPTURES")
                     .font(CaptureType.eyebrow)
                     .foregroundStyle(CaptureColor.inkSoft)
                 Spacer()
@@ -148,22 +148,22 @@ struct V1SessionTrayScreen: View {
             }
 
             VStack(spacing: 0) {
-                ForEach(specimens, id: \.id) { specimen in
-                    if specimen.id != specimens.first?.id {
+                ForEach(pieces, id: \.id) { piece in
+                    if piece.id != pieces.first?.id {
                         Divider().background(CaptureColor.line)
                     }
-                    row(specimen)
+                    row(piece)
                 }
             }
             .routeCard()
         }
     }
 
-    private func row(_ specimen: Piece) -> some View {
+    private func row(_ piece: Piece) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            rowBody(specimen)
-            placedSyncingLine(specimen)
-            suggestionRow(specimen)
+            rowBody(piece)
+            placedSyncingLine(piece)
+            suggestionRow(piece)
         }
     }
 
@@ -173,8 +173,8 @@ struct V1SessionTrayScreen: View {
     /// stuck — and clears itself the moment `reload()` finds the record
     /// complete (Task 27's placement call site is where it's raised).
     @ViewBuilder
-    private func placedSyncingLine(_ specimen: Piece) -> some View {
-        if placedJustNow.contains(specimen.id), specimen.transferState.phase != .complete {
+    private func placedSyncingLine(_ piece: Piece) -> some View {
+        if placedJustNow.contains(piece.id), piece.transferState.phase != .complete {
             Text("placed · syncing")
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.inkSoft)
@@ -185,12 +185,12 @@ struct V1SessionTrayScreen: View {
     /// The suggestion is ASKED, never asserted, and its basis is always in words.
     /// Only an unplaced capture is ever asked — a placed one has her answer.
     @ViewBuilder
-    private func suggestionRow(_ specimen: Piece) -> some View {
-        if specimen.isUnplaced,
-           let reason = specimen.suggestionReason,
-           let projectID = specimen.suggestedProjectID {
+    private func suggestionRow(_ piece: Piece) -> some View {
+        if piece.isUnplaced,
+           let reason = piece.suggestionReason,
+           let projectID = piece.suggestedProjectID {
             Button {
-                accept(specimen, projectID: projectID)
+                accept(piece, projectID: projectID)
             } label: {
                 Text("\(reason). Place it here?")
                     .font(CaptureType.footnote)
@@ -209,12 +209,12 @@ struct V1SessionTrayScreen: View {
     /// She answered the question, so the answer becomes the FACT.
     /// NEVER `route_field_capture`: that RPC hardcodes destination 'library'
     /// (00235:332) and would mint a product out of a damaged baseboard.
-    private func accept(_ specimen: Piece, projectID: String) {
-        specimen.place(projectID: projectID,
-                       projectRoomID: specimen.suggestedProjectRoomID,
+    private func accept(_ piece: Piece, projectID: String) {
+        piece.place(projectID: projectID,
+                       projectRoomID: piece.suggestedProjectRoomID,
                        room: nil)
         try? store.save()
-        if let basis = specimen.suggestionBasis {
+        if let basis = piece.suggestionBasis {
             analytics.emit(FieldVisitTelemetry.suggestionAccepted(basis: basis))
         }
         // FC-R21 part 2: filing from the tray is the flow the visit spine exists
@@ -225,28 +225,28 @@ struct V1SessionTrayScreen: View {
         // so the two are never confused. Emitted AFTER `place(…)`, because the
         // predicate is `isUnplaced` as it stands after the action.
         analytics.emit(FieldVisitTelemetry.placement(
-            specimen, basis: specimen.suggestionBasis?.rawValue ?? "manual",
+            piece, basis: piece.suggestionBasis?.rawValue ?? "manual",
             source: .tray))
-        placedJustNow.insert(specimen.id)
+        placedJustNow.insert(piece.id)
         reload()
         // §13.5: filing works offline. The local record is written now; the
         // EXISTING outbox carries the project to the server on the next drain.
         // No second queue — and for a capture that has not committed yet this
         // is the same outbox entry its first commit would use anyway.
-        Task { await sync.enqueue(specimen.id) }
+        Task { await sync.enqueue(piece.id) }
     }
 
-    private func rowBody(_ specimen: Piece) -> some View {
-        let playable = playableSegments(specimen)
+    private func rowBody(_ piece: Piece) -> some View {
+        let playable = playableSegments(piece)
         return HStack(spacing: 12) {
             Button {
-                coordinator.navigate(to: .specimen(specimen.id))
+                coordinator.navigate(to: .piece(piece.id))
             } label: {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(specimen.title ?? "Untitled capture")
+                    Text(piece.title ?? "Untitled capture")
                         .font(CaptureType.bodyEmph)
                         .foregroundStyle(CaptureColor.ink)
-                    Text("\(RouteFormat.time(specimen.createdAt)) · \(RouteFormat.descriptor(for: specimen).uppercased())")
+                    Text("\(RouteFormat.time(piece.createdAt)) · \(RouteFormat.descriptor(for: piece).uppercased())")
                         .font(CaptureType.monoSmall)
                         .foregroundStyle(CaptureColor.inkSoft)
                 }
@@ -257,7 +257,7 @@ struct V1SessionTrayScreen: View {
             .buttonStyle(.plain)
 
             if !playable.isEmpty {
-                playButton(specimen.id, playable)
+                playButton(piece.id, playable)
             }
 
             // The play control has to sit OUTSIDE a navigation button to receive
@@ -265,10 +265,10 @@ struct V1SessionTrayScreen: View {
             // the only thing on it that says "this row navigates", so the
             // trailing block gets its own button rather than going inert.
             Button {
-                coordinator.navigate(to: .specimen(specimen.id))
+                coordinator.navigate(to: .piece(piece.id))
             } label: {
                 HStack(spacing: 12) {
-                    RouteStatusChip(kind: RouteFormat.status(for: specimen))
+                    RouteStatusChip(kind: RouteFormat.status(for: piece))
                     Image(systemName: "chevron.right")
                         .font(CaptureType.footnote)
                         .foregroundStyle(CaptureColor.line2)
@@ -288,8 +288,8 @@ struct V1SessionTrayScreen: View {
     /// gated on the array alone offered Play and then played nothing, with no
     /// message. Playing the remote object instead is wave 4 (portal playback);
     /// until then the control is simply absent once the audio has left.
-    private func playableSegments(_ specimen: Piece) -> [URL] {
-        (specimen.voiceAudioSegmentsRaw ?? []).compactMap { name in
+    private func playableSegments(_ piece: Piece) -> [URL] {
+        (piece.voiceAudioSegmentsRaw ?? []).compactMap { name in
             let url = store.mediaURL(for: name)
             let values = try? url.resourceValues(
                 forKeys: [.isRegularFileKey, .fileSizeKey]
@@ -300,14 +300,14 @@ struct V1SessionTrayScreen: View {
         }
     }
 
-    private func playButton(_ specimenID: UUID, _ segments: [URL]) -> some View {
-        let playing = player.isPlaying && playingSpecimenID == specimenID
+    private func playButton(_ pieceID: UUID, _ segments: [URL]) -> some View {
+        let playing = player.isPlaying && playingPieceID == pieceID
         return Button {
             player.stop()
             if playing {
-                playingSpecimenID = nil
+                playingPieceID = nil
             } else {
-                playingSpecimenID = specimenID
+                playingPieceID = pieceID
                 player.play(segments)
             }
         } label: {

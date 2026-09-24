@@ -1,35 +1,35 @@
 //
-//  SpecimenCapturePolicy.swift
+//  PieceCapturePolicy.swift
 //  CaptureKit
 //
 //  Pure routing from the selected camera mode to its first relevant workflow.
 //
 
-public enum SpecimenCaptureNextStep: Equatable, Sendable {
+public enum PieceCaptureNextStep: Equatable, Sendable {
     case quickConfirm
     case tagOCR
     case codeScan
     case measure
 }
 
-public enum SpecimenCapturePolicy {
+public enum PieceCapturePolicy {
     public static func nextStep(
         for mode: CameraMode
-    ) -> SpecimenCaptureNextStep {
+    ) -> PieceCaptureNextStep {
         switch mode {
         case .photo: return .quickConfirm
         case .tag: return .tagOCR
         case .scan: return .codeScan
         case .measure: return .measure
         // Unreachable from the shutter: `.voice` is off `viewfinderSelectable`.
-        // Wave 3 guards captureSingle() with SpecimenCapturePolicy.producesPhoto(_:)
+        // Wave 3 guards captureSingle() with PieceCapturePolicy.producesPhoto(_:)
         // rather than changing this branch.
         case .voice: return .quickConfirm
         }
     }
 }
 
-public extension SpecimenCapturePolicy {
+public extension PieceCapturePolicy {
     /// VOICE (C6) is the one mode with no frame: it never reaches the C3 card
     /// and never opens an enrichment sheet.
     static func producesPhoto(_ mode: CameraMode) -> Bool { mode != .voice }

@@ -93,33 +93,33 @@ struct SuggestionEngineTests {
     @MainActor
     @Test func aSuggestionNeverBecomesTheFact() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = store.newDraft()
-        specimen.apply(CaptureSuggestion(projectID: "p1", projectRoomID: "sr1",
+        let piece = store.newDraft()
+        piece.apply(CaptureSuggestion(projectID: "p1", projectRoomID: "sr1",
                                          basis: .proximity, confidence: 0.72,
                                          reason: "You filed 9 captures to Maple St from right here"))
         try store.save()
 
-        #expect(specimen.suggestedProjectID == "p1")
-        #expect(specimen.suggestedProjectRoomID == "sr1")
-        #expect(specimen.suggestionBasis == .proximity)
-        #expect(specimen.suggestionConfidence == 0.72)
-        #expect(specimen.suggestionReason == "You filed 9 captures to Maple St from right here")
+        #expect(piece.suggestedProjectID == "p1")
+        #expect(piece.suggestedProjectRoomID == "sr1")
+        #expect(piece.suggestionBasis == .proximity)
+        #expect(piece.suggestionConfidence == 0.72)
+        #expect(piece.suggestionReason == "You filed 9 captures to Maple St from right here")
         // The fact is untouched, and the capture is still unplaced.
-        #expect(specimen.venue?.projectId == nil)
-        #expect(specimen.isUnplaced)
+        #expect(piece.venue?.projectId == nil)
+        #expect(piece.isUnplaced)
     }
 
     @MainActor
     @Test func applyingNilClearsTheSuggestionWithoutTouchingTheFact() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = store.newDraft()
-        specimen.venue = VenueStamp(projectId: "p1")
-        specimen.apply(CaptureSuggestion(projectID: "p2", projectRoomID: nil,
+        let piece = store.newDraft()
+        piece.venue = VenueStamp(projectId: "p1")
+        piece.apply(CaptureSuggestion(projectID: "p2", projectRoomID: nil,
                                          basis: .venue, confidence: 0.4, reason: "x"))
-        specimen.apply(nil)
-        #expect(specimen.suggestedProjectID == nil)
-        #expect(specimen.suggestionBasis == nil)
-        #expect(specimen.venue?.projectId == "p1")
+        piece.apply(nil)
+        #expect(piece.suggestedProjectID == nil)
+        #expect(piece.suggestionBasis == nil)
+        #expect(piece.venue?.projectId == "p1")
     }
 
     @MainActor
@@ -137,8 +137,8 @@ struct SuggestionEngineTests {
 
         let ordered = FieldTraySuggestionOrder.ordered([weak, none, strong])
         #expect(ordered.map(\.id) == [strong.id, weak.id, none.id])
-        for specimen in ordered {
-            #expect(!(specimen.suggestionReason ?? "").contains("0."))
+        for piece in ordered {
+            #expect(!(piece.suggestionReason ?? "").contains("0."))
         }
     }
 }

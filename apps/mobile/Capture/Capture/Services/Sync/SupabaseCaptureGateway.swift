@@ -66,7 +66,7 @@ struct SupabaseCaptureGateway: ProjectPlacementGateway {
         return try await client.rpc("route_field_capture", params: params).execute().value
     }
 
-    /// A response-loss-safe replay check. `captureId` is the specimen's stable
+    /// A response-loss-safe replay check. `captureId` is the piece's stable
     /// client token, written into `project_ffe_specs.routing_source` by the
     /// placement RPC.
     func existingPlacement(

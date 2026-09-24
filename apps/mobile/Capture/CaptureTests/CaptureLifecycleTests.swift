@@ -15,18 +15,18 @@ struct CaptureLifecycleTests {
         #expect(CaptureLifecycle.reduce(.viewfinder, .shutter) == .captured)
     }
 
-    @Test func capturedOpensToSpecimen() {
-        #expect(CaptureLifecycle.reduce(.captured, .openSpecimen) == .specimen)
+    @Test func capturedOpensToPiece() {
+        #expect(CaptureLifecycle.reduce(.captured, .openPiece) == .piece)
     }
 
-    @Test func enrichLoopsBackToSpecimen() {
-        let enriching = CaptureLifecycle.reduce(.specimen, .beginEnrich(.ocr))
+    @Test func enrichLoopsBackToPiece() {
+        let enriching = CaptureLifecycle.reduce(.piece, .beginEnrich(.ocr))
         #expect(enriching == .enriching)
-        #expect(CaptureLifecycle.reduce(enriching, .finishEnrich) == .specimen)
+        #expect(CaptureLifecycle.reduce(enriching, .finishEnrich) == .piece)
     }
 
     @Test func chooseLibraryRoutes() {
-        #expect(CaptureLifecycle.reduce(.specimen, .chooseDestination(.library)) == .routed)
+        #expect(CaptureLifecycle.reduce(.piece, .chooseDestination(.library)) == .routed)
     }
 
     @Test func offlineEnqueueQueues() {
@@ -58,7 +58,7 @@ struct CaptureLifecycleTests {
     }
 }
 
-struct SpecimenProvenanceTests {
+struct PieceProvenanceTests {
     @Test @MainActor func guessNeverOverwritesConfirmedValue() throws {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
@@ -97,16 +97,16 @@ struct SpecimenProvenanceTests {
             userID: " USER-A ",
             workspaceID: " WORKSPACE-A "
         ))
-        let specimen = store.newDraft(owner: owner)
-        specimen.status = .committed
-        specimen.remoteId = nil
+        let piece = store.newDraft(owner: owner)
+        piece.status = .committed
+        piece.remoteId = nil
         try store.save()
 
-        #expect(specimen.ownerUserID == "user-a")
-        #expect(specimen.ownerWorkspaceID == "workspace-a")
-        #expect(specimen.transferState.phase == .awaitingConfirmation)
-        #expect(specimen.transferState.receiptID == nil)
-        #expect(store.outbox(owner: owner).map(\.id) == [specimen.id])
+        #expect(piece.ownerUserID == "user-a")
+        #expect(piece.ownerWorkspaceID == "workspace-a")
+        #expect(piece.transferState.phase == .awaitingConfirmation)
+        #expect(piece.transferState.receiptID == nil)
+        #expect(store.outbox(owner: owner).map(\.id) == [piece.id])
     }
 
     @Test @MainActor
@@ -133,13 +133,13 @@ struct SpecimenProvenanceTests {
         legacy.status = .ready
         try store.save()
 
-        #expect(store.specimen(id: owned.id, owner: ownerA)?.id == owned.id)
-        #expect(store.specimen(id: otherWorkspace.id, owner: ownerA) == nil)
-        #expect(store.specimen(id: legacy.id, owner: ownerA) == nil)
+        #expect(store.piece(id: owned.id, owner: ownerA)?.id == owned.id)
+        #expect(store.piece(id: otherWorkspace.id, owner: ownerA) == nil)
+        #expect(store.piece(id: legacy.id, owner: ownerA) == nil)
         #expect(store.session(visitID: visit, owner: ownerA).map(\.id) == [owned.id])
         #expect(store.outbox(owner: ownerA).map(\.id) == [owned.id])
         #expect(
-            store.search(SpecimenQuery(), owner: ownerA).map(\.id)
+            store.search(PieceQuery(), owner: ownerA).map(\.id)
                 == [owned.id]
         )
     }
@@ -177,12 +177,12 @@ struct CaptureOwnerProjectionPolicyTests {
         }
 
         let store = try CaptureStore.inMemory()
-        let specimen = store.newDraft(owner: owner)
+        let piece = store.newDraft(owner: owner)
 
         #expect(owner.userID == "user-a")
         #expect(owner.workspaceID == "workspace-a")
-        #expect(specimen.ownerUserID == "user-a")
-        #expect(specimen.ownerWorkspaceID == "workspace-a")
+        #expect(piece.ownerUserID == "user-a")
+        #expect(piece.ownerWorkspaceID == "workspace-a")
     }
 
     @Test @MainActor func identifierResolutionNeverCrossesARealOwnerBoundary() throws {
@@ -191,26 +191,26 @@ struct CaptureOwnerProjectionPolicyTests {
             userID: "user-a", workspaceID: "workspace-a"))
         let ownerB = try #require(CaptureOwnerIdentity(
             userID: "user-b", workspaceID: "workspace-b"))
-        let specimenA = store.newDraft(owner: ownerA)
+        let pieceA = store.newDraft(owner: ownerA)
 
-        #expect(CaptureOwnerProjectionPolicy.specimen(
-            id: specimenA.id,
+        #expect(CaptureOwnerProjectionPolicy.piece(
+            id: pieceA.id,
             store: store,
             runsRealServices: true,
             userID: ownerB.userID,
             workspaceID: ownerB.workspaceID) == nil)
-        #expect(CaptureOwnerProjectionPolicy.specimen(
-            id: specimenA.id,
+        #expect(CaptureOwnerProjectionPolicy.piece(
+            id: pieceA.id,
             store: store,
             runsRealServices: true,
             userID: nil,
             workspaceID: nil) == nil)
-        #expect(CaptureOwnerProjectionPolicy.specimen(
-            id: specimenA.id,
+        #expect(CaptureOwnerProjectionPolicy.piece(
+            id: pieceA.id,
             store: store,
             runsRealServices: false,
             userID: nil,
-            workspaceID: nil)?.id == specimenA.id)
+            workspaceID: nil)?.id == pieceA.id)
     }
 
     @Test @MainActor func draftCreationFailsClosedInRealModeAndStaysGlobalInMocks() throws {
@@ -368,13 +368,13 @@ struct CaptureRouteSafetyPolicyTests {
     }
 
     @Test func keptCapturesStayLocalWithoutReenteringCull() {
-        let specimen = Piece()
-        #expect(CaptureRouteSafetyPolicy.canCull(specimen))
+        let piece = Piece()
+        #expect(CaptureRouteSafetyPolicy.canCull(piece))
 
-        specimen.lifecycleRaw = CaptureLifecycle.State.session.rawValue
+        piece.lifecycleRaw = CaptureLifecycle.State.session.rawValue
 
-        #expect(specimen.transferState.phase == .local)
-        #expect(!CaptureRouteSafetyPolicy.canCull(specimen))
+        #expect(piece.transferState.phase == .local)
+        #expect(!CaptureRouteSafetyPolicy.canCull(piece))
     }
 
     @Test func commitRequiresAnExplicitDestination() {
@@ -528,17 +528,17 @@ struct CaptureSessionContextPolicyTests {
 private actor RecordingRouteSyncService: CaptureSyncService {
     private var recordedRoutes: [(UUID, CaptureDestination)] = []
 
-    func enqueue(_ specimenID: UUID) async {}
+    func enqueue(_ pieceID: UUID) async {}
     func drain() async {}
-    func commit(_ specimenID: UUID) async throws -> CommitReceipt {
+    func commit(_ pieceID: UUID) async throws -> CommitReceipt {
         CommitReceipt(
             remoteId: "receipt",
             productId: nil,
             destination: .inbox,
             created: true)
     }
-    func route(_ specimenID: UUID, to destination: CaptureDestination) async throws {
-        recordedRoutes.append((specimenID, destination))
+    func route(_ pieceID: UUID, to destination: CaptureDestination) async throws {
+        recordedRoutes.append((pieceID, destination))
     }
     nonisolated var snapshots: AsyncStream<SyncSnapshot> {
         AsyncStream { continuation in continuation.finish() }
@@ -562,12 +562,12 @@ struct CaptureBulkRouteTests {
     }
 }
 
-struct ProgressiveSpecimenPolicyTests {
+struct ProgressivePiecePolicyTests {
     @Test func captureModeChoosesRelevantFirstEnrichment() {
-        #expect(SpecimenCapturePolicy.nextStep(for: .photo) == .quickConfirm)
-        #expect(SpecimenCapturePolicy.nextStep(for: .tag) == .tagOCR)
-        #expect(SpecimenCapturePolicy.nextStep(for: .scan) == .codeScan)
-        #expect(SpecimenCapturePolicy.nextStep(for: .measure) == .measure)
+        #expect(PieceCapturePolicy.nextStep(for: .photo) == .quickConfirm)
+        #expect(PieceCapturePolicy.nextStep(for: .tag) == .tagOCR)
+        #expect(PieceCapturePolicy.nextStep(for: .scan) == .codeScan)
+        #expect(PieceCapturePolicy.nextStep(for: .measure) == .measure)
     }
 }
 
@@ -898,14 +898,14 @@ struct DurableScanTransferTests {
 
     @Test @MainActor func missingCaptureMediaThrowsExplicitReviewError() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = store.newDraft()
+        let piece = store.newDraft()
         let token = UUID().uuidString
         let photoFilename = "missing-photo-\(token).heic"
         let voiceFilename = "missing-voice-\(token).m4a"
         let photo = CapturePhoto(filename: photoFilename)
-        photo.piece = specimen
-        specimen.photos.append(photo)
-        specimen.voiceAudioFilename = voiceFilename
+        photo.piece = piece
+        piece.photos.append(photo)
+        piece.voiceAudioFilename = voiceFilename
         defer {
             try? FileManager.default.removeItem(
                 at: store.mediaURL(for: photoFilename)
@@ -919,18 +919,18 @@ struct DurableScanTransferTests {
             photoFilename,
             voiceFilename
         ])) {
-            try store.validateRequiredMedia(for: specimen)
+            try store.validateRequiredMedia(for: piece)
         }
 
         try store.writeMedia(Data([0x01]), filename: photoFilename)
         try store.writeMedia(Data([0x02]), filename: voiceFilename)
-        try store.validateRequiredMedia(for: specimen)
+        try store.validateRequiredMedia(for: piece)
 
         try FileManager.default.removeItem(
             at: store.mediaURL(for: photoFilename)
         )
         photo.remotePath = "remote/\(photoFilename)"
-        try store.validateRequiredMedia(for: specimen)
+        try store.validateRequiredMedia(for: piece)
     }
 
     @MainActor
@@ -951,9 +951,9 @@ struct DurableScanTransferTests {
         notOurs.inherit(context)
         try store.save()
 
-        // What `inherit(_:)` actually writes (Specimen+Accessors.swift) — a
+        // What `inherit(_:)` actually writes (Piece+Accessors.swift) — a
         // no-op on any of these fields must redden this test, since they are
-        // the whole point of a specimen inheriting its visit.
+        // the whole point of a piece inheriting its visit.
         #expect(ours.visitKind == context.kind)
         #expect(ours.visitKit == context.kit)
         #expect(ours.visitLabel == context.label)

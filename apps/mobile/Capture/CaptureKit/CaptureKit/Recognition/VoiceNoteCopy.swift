@@ -2,7 +2,7 @@
 //  CaptureKit
 //
 //  The two rungs of §15.4's voice failure ladder that both surfaces must say
-//  identically — N4 (the specimen voice sheet) and F2 (the in-scan / non-Pro
+//  identically — N4 (the piece voice sheet) and F2 (the in-scan / non-Pro
 //  context capture). Held here, verbatim from the package, so the two cannot
 //  drift and so a copy change is one edit rather than a grep.
 //

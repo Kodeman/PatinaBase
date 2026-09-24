@@ -181,7 +181,7 @@ struct SmartGuessKeywordTests {
 
     @Test func anUnknownCategoryIsNeverWorthRecording() {
         let blank = SmartGuess(category: .unknown, categoryConfidence: 0, fields: [
-            FieldSuggestion(key: .category, value: SpecimenCategory.unknown.rawValue,
+            FieldSuggestion(key: .category, value: PieceCategory.unknown.rawValue,
                             confidence: 0)
         ])
         #expect(blank.fieldsWorthRecording.isEmpty)
@@ -189,7 +189,7 @@ struct SmartGuessKeywordTests {
 
     @Test func aRealReadIsWorthRecording() {
         let read = SmartGuess(category: .seating, categoryConfidence: 0.81, fields: [
-            FieldSuggestion(key: .category, value: SpecimenCategory.seating.rawValue,
+            FieldSuggestion(key: .category, value: PieceCategory.seating.rawValue,
                             confidence: 0.81),
             FieldSuggestion(key: .material, value: "Oak", confidence: 0.55),
             FieldSuggestion(key: .colorway, value: "Ecru", confidence: 0)
@@ -202,10 +202,10 @@ struct SmartGuessKeywordTests {
 struct UnconfirmedGuessTests {
 
     /// The viewfinder's recording step: filter the read, then hand what
-    /// survives to `Specimen.recordSmartGuess`, the shared source of truth
+    /// survives to `Piece.recordSmartGuess`, the shared source of truth
     /// `ViewfinderModel` (app-side, unreachable under C1) also calls.
-    @MainActor private func record(_ guess: SmartGuess, onto specimen: Piece) {
-        specimen.recordSmartGuess(guess.fieldsWorthRecording)
+    @MainActor private func record(_ guess: SmartGuess, onto piece: Piece) {
+        piece.recordSmartGuess(guess.fieldsWorthRecording)
     }
 
     @Test @MainActor func aCaptureWithNoGuessHasNothingToConfirm() throws {
@@ -222,7 +222,7 @@ struct UnconfirmedGuessTests {
         let store = try CaptureStore.inMemory()
 
         let unplaceable = SmartGuess(category: .unknown, categoryConfidence: 0, fields: [
-            FieldSuggestion(key: .category, value: SpecimenCategory.unknown.rawValue,
+            FieldSuggestion(key: .category, value: PieceCategory.unknown.rawValue,
                             confidence: 0)
         ])
         let baseboard = store.newDraft()
@@ -234,7 +234,7 @@ struct UnconfirmedGuessTests {
         // And the other direction: a label the table places does leave something
         // to confirm, so the drop above is the filter working, not a dead path.
         let placeable = SmartGuess(category: .seating, categoryConfidence: 0.81, fields: [
-            FieldSuggestion(key: .category, value: SpecimenCategory.seating.rawValue,
+            FieldSuggestion(key: .category, value: PieceCategory.seating.rawValue,
                             confidence: 0.81)
         ])
         let armchair = store.newDraft()
@@ -264,7 +264,7 @@ struct UnconfirmedGuessTests {
     }
 
     @Test @MainActor func recordSmartGuessLeavesAnAlreadySetFieldAndItsConfidenceUntouched() throws {
-        // Calls `Specimen.recordSmartGuess` directly (not through the `record`
+        // Calls `Piece.recordSmartGuess` directly (not through the `record`
         // wrapper above) to pin the extracted method's own guard: a field with
         // non-smartGuess provenance keeps both its value AND its prior
         // confidence — a refused write must not overwrite either.
@@ -285,7 +285,7 @@ struct UnconfirmedGuessTests {
     @Test @MainActor func aShakyGuessIsUnconfirmed() throws {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
-        s.setValue(SpecimenCategory.textile.rawValue, for: .category, source: .smartGuess)
+        s.setValue(PieceCategory.textile.rawValue, for: .category, source: .smartGuess)
         s.setConfidence(0.31, for: .category)
         #expect(s.hasUnconfirmedGuess)
     }
@@ -296,7 +296,7 @@ struct UnconfirmedGuessTests {
         // list and pre-selects in the confirm sheet; it never commits (FC-R12).
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
-        s.setValue(SpecimenCategory.seating.rawValue, for: .category, source: .smartGuess)
+        s.setValue(PieceCategory.seating.rawValue, for: .category, source: .smartGuess)
         s.setConfidence(0.92, for: .category)
         #expect(s.hasUnconfirmedGuess)
     }
@@ -329,7 +329,7 @@ struct GuessConfirmationTests {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
         let guesses = [
-            FieldSuggestion(key: .category, value: SpecimenCategory.seating.rawValue, confidence: 0.8),
+            FieldSuggestion(key: .category, value: PieceCategory.seating.rawValue, confidence: 0.8),
             FieldSuggestion(key: .material, value: "Oak", confidence: 0.6),
             FieldSuggestion(key: .colorway, value: "Bone", confidence: 0.5),
             FieldSuggestion(key: .title, value: "Lounge chair", confidence: 0.4)
@@ -407,14 +407,14 @@ struct GuessConfirmationTests {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
         s.recordSmartGuess([
-            FieldSuggestion(key: .category, value: SpecimenCategory.seating.rawValue, confidence: 0.8),
+            FieldSuggestion(key: .category, value: PieceCategory.seating.rawValue, confidence: 0.8),
             FieldSuggestion(key: .material, value: "Oak", confidence: 0.6)
         ])
         s.acceptReview([GuessReview(key: .category, value: "seating", proposed: "seating"),
                         GuessReview(key: .material, value: "Walnut", proposed: "Oak")],
                        by: "user-1", at: Self.confirmedAt)
 
-        let payload = FieldCapturePayload(specimen: s, device: .init())
+        let payload = FieldCapturePayload(piece: s, device: .init())
         let data = try JSONEncoder().encode(payload)
         #expect(try JSONDecoder().decode(FieldCapturePayload.self, from: data) == payload)
 
@@ -434,7 +434,7 @@ struct GuessConfirmationTests {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
         s.recordSmartGuess([FieldSuggestion(key: .material, value: "Oak", confidence: 0.6)])
-        let data = try JSONEncoder().encode(FieldCapturePayload(specimen: s, device: .init()))
+        let data = try JSONEncoder().encode(FieldCapturePayload(piece: s, device: .init()))
         let wire = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(wire["provenance"] as? [String: String] == ["material": "smartGuess"])
         #expect(wire["confirmations"] == nil)

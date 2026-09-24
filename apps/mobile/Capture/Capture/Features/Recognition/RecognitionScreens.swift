@@ -3,7 +3,7 @@
 //
 //  Team C registrar — Flow 3 "enrich in place" (N1–N5). Wires the five
 //  recognition sheets into the RouteRegistry, each binding the real recognition
-//  service (Vision / DataScanner / ARKit / Speech) and resolving the specimen
+//  service (Vision / DataScanner / ARKit / Speech) and resolving the piece
 //  UUID carried by the sheet case. The integration owner adds one line:
 //      RecognitionScreens.register(into: r, container: container, coordinator: coordinator)
 
@@ -18,7 +18,7 @@ enum RecognitionScreens {
         r.registerSheet(CaptureSheet.ocr(UUID()).registryKey) { sheet in
             guard case let .ocr(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(TagOCRSheet(
-                specimenID: id,
+                pieceID: id,
                 store: container.store,
                 session: container.session,
                 camera: container.camera,
@@ -32,7 +32,7 @@ enum RecognitionScreens {
         r.registerSheet(CaptureSheet.code(UUID()).registryKey) { sheet in
             guard case let .code(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(CodeScanSheet(
-                specimenID: id,
+                pieceID: id,
                 store: container.store,
                 session: container.session,
                 codeService: DataScannerCodeService(),
@@ -45,7 +45,7 @@ enum RecognitionScreens {
         r.registerSheet(CaptureSheet.measure(UUID()).registryKey) { sheet in
             guard case let .measure(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(MeasureSheet(
-                specimenID: id,
+                pieceID: id,
                 store: container.store,
                 session: container.session,
                 measureService: ARKitMeasureService(),
@@ -58,7 +58,7 @@ enum RecognitionScreens {
         r.registerSheet(CaptureSheet.voice(UUID()).registryKey) { sheet in
             guard case let .voice(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(VoiceNoteSheet(
-                specimenID: id,
+                pieceID: id,
                 store: container.store,
                 session: container.session,
                 voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
@@ -89,7 +89,7 @@ enum RecognitionScreens {
         r.registerSheet(CaptureSheet.smartGuessCard(UUID()).registryKey) { sheet in
             guard case let .smartGuessCard(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(SmartGuessSheet(
-                specimenID: id,
+                pieceID: id,
                 store: container.store,
                 session: container.session,
                 camera: container.camera,

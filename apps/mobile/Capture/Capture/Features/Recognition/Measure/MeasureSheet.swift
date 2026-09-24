@@ -11,7 +11,7 @@ import UIKit
 import CaptureKit
 
 struct MeasureSheet: View {
-    let specimenID: UUID
+    let pieceID: UUID
     let store: CaptureStore
     let session: any SessionProviding
     let measureService: any MeasureService
@@ -193,20 +193,20 @@ struct MeasureSheet: View {
     }
 
     private func commit() {
-        guard let specimen = currentSpecimen() else { return }
+        guard let piece = currentPiece() else { return }
         for axis in Self.axes {
             guard let mm = values[axis], mm > 0 else { continue }
             let source = sources[axis] ?? .manual
-            specimen.addMeasurement(axis: axis, millimeters: mm, source: source)
+            piece.addMeasurement(axis: axis, millimeters: mm, source: source)
         }
         try? store.save()
         analytics.event("N3.add-dimensions", ["count": String(values.count)])
-        coordinator?.present(.specimenSheet(specimenID))
+        coordinator?.present(.pieceSheet(pieceID))
     }
 
-    private func currentSpecimen() -> Piece? {
-        CaptureOwnerProjectionPolicy.specimen(
-            id: specimenID,
+    private func currentPiece() -> Piece? {
+        CaptureOwnerProjectionPolicy.piece(
+            id: pieceID,
             store: store,
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
@@ -220,9 +220,9 @@ import CaptureKitMocks
 #Preview("N3 · Measure") {
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
-    let specimen = store.newDraft()
+    let piece = store.newDraft()
     return MeasureSheet(
-        specimenID: specimen.id,
+        pieceID: piece.id,
         store: store,
         session: MockSessionProviding(),
         measureService: MockMeasureService(),

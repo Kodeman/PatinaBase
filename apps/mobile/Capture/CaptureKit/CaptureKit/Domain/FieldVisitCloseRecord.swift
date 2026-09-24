@@ -81,7 +81,7 @@ public extension FieldVisitCloseRecord {
     }
 
     /// The same ceiling the margin-note, punch-task and degrade lanes carry
-    /// (`FieldWriteGate.retryCeiling`, applied in Specimen+Accessors). A
+    /// (`FieldWriteGate.retryCeiling`, applied in Piece+Accessors). A
     /// classifier can only recognise the errors it was taught; a plain `.failed`
     /// — a 500, a token problem — otherwise retries hourly for the life of the
     /// install, which is the loop 653904911 added that ceiling to stop.
@@ -282,7 +282,7 @@ public enum VisitCloseOrchestrator {
             .compactMap { $0.visitLabel?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }
         let rooms = VisitReviewComposer.summarize(
-            rows: captures.map(VisitReviewRow.init(specimen:)),
+            rows: captures.map(VisitReviewRow.init(piece:)),
             startedAt: record.startedAt,
             now: record.endedAt).rooms
         let parts = [label, rooms.isEmpty ? nil : rooms.joined(separator: ", ")]

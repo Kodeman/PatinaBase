@@ -449,7 +449,7 @@ struct ProjectCacheTests {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let ancient = now.addingTimeInterval(-CaptureProjectCachePolicy.evictAfter - 1)
 
-        // R25's third referent. There is NO Specimen anywhere in this store, so
+        // R25's third referent. There is NO Piece anywhere in this store, so
         // this can only pass through the ScanUploadRecord lane — drop that lane
         // and the scan's project goes over the side while its upload is still
         // queued.

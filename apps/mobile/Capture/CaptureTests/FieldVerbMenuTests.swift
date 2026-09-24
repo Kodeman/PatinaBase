@@ -259,54 +259,54 @@ struct FieldVerbMenuTests {
         }
     }
 
-    // MARK: - Against a real Specimen
+    // MARK: - Against a real Piece
 
-    @Test func theFactsReadTheSpecimenTheCardIsShowing() {
-        let specimen = Piece()
-        #expect(FieldVerbFacts(specimen: specimen, partiesSettled: true).hasProject == false)
+    @Test func theFactsReadThePieceTheCardIsShowing() {
+        let piece = Piece()
+        #expect(FieldVerbFacts(piece: piece, partiesSettled: true).hasProject == false)
 
-        specimen.venue = VenueStamp(projectId: "proj-1")
-        #expect(FieldVerbFacts(specimen: specimen, partiesSettled: true).hasProject)
+        piece.venue = VenueStamp(projectId: "proj-1")
+        #expect(FieldVerbFacts(piece: piece, partiesSettled: true).hasProject)
 
-        specimen.requestPunchTask(taskID: UUID(), owner: "gc", partyID: "party-gc")
-        let facts = FieldVerbFacts(specimen: specimen, partiesSettled: true)
+        piece.requestPunchTask(taskID: UUID(), owner: "gc", partyID: "party-gc")
+        let facts = FieldVerbFacts(piece: piece, partiesSettled: true)
         #expect(facts.punchRequested)
         #expect(facts.punchState == .pending)
         #expect(facts.punchOwnerRaw == "gc")
         #expect(facts.punchPartyID == "party-gc")
 
-        specimen.requestMarginNote(noteID: UUID())
-        #expect(FieldVerbFacts(specimen: specimen, partiesSettled: true).noteRequested)
+        piece.requestMarginNote(noteID: UUID())
+        #expect(FieldVerbFacts(piece: piece, partiesSettled: true).noteRequested)
     }
 
     /// FC-R16: a spoken measurement never becomes a measured record. The verbs
     /// are the one place a dictated number reaches a business table, and the
     /// whole flow must leave the measurement list empty.
     @Test func noVerbEverInventsAMeasurement() {
-        let specimen = Piece()
-        specimen.venue = VenueStamp(projectId: "proj-1")
-        specimen.voiceTranscript = "The alcove reads 42.5 short."
+        let piece = Piece()
+        piece.venue = VenueStamp(projectId: "proj-1")
+        piece.voiceTranscript = "The alcove reads 42.5 short."
         var menu = FieldVerbMenu()
 
         for row: FieldVerbRow in [.note, .task, .punch] {
-            let facts = FieldVerbFacts(specimen: specimen, partiesSettled: true)
+            let facts = FieldVerbFacts(piece: piece, partiesSettled: true)
             if let action = menu.tap(row, facts: facts, parties: [gc]) {
-                apply(action, to: specimen)
+                apply(action, to: piece)
             }
-            if let confirmed = menu.confirmPunch() { apply(confirmed, to: specimen) }
+            if let confirmed = menu.confirmPunch() { apply(confirmed, to: piece) }
         }
 
-        #expect(specimen.measurements.isEmpty)
-        #expect(specimen.marginNoteId != nil)
-        #expect(specimen.punchTaskId != nil)
+        #expect(piece.measurements.isEmpty)
+        #expect(piece.marginNoteId != nil)
+        #expect(piece.punchTaskId != nil)
     }
 
-    private func apply(_ action: FieldVerbAction, to specimen: Piece) {
+    private func apply(_ action: FieldVerbAction, to piece: Piece) {
         switch action {
         case .note:
-            specimen.requestMarginNote(noteID: UUID())
+            piece.requestMarginNote(noteID: UUID())
         case .punchTask(let owner, let partyID, _):
-            specimen.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
+            piece.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
         }
     }
 }
@@ -318,46 +318,46 @@ struct FieldVerbMenuTests {
 /// ⚠ This pins the CaptureKit accessors the card READS, not the card. The
 /// overlay is app-target and unreachable from here (the wave's C1 finding), so
 /// what is falsified is "a verb lane disturbed the confirmed fields", which is
-/// a statement about `Specimen`. The rendering is compile-gated only.
+/// a statement about `Piece`. The rendering is compile-gated only.
 @MainActor
 struct CaptureCardConfirmUnchangedTests {
     private func confirmedCard() -> Piece {
-        let specimen = Piece()
-        specimen.venue = VenueStamp(projectId: "proj-1", projectName: "Maple St", room: "Living")
-        specimen.setValue("seating", for: .category, source: .smartGuess)
-        specimen.setValue("Oak / bouclé", for: .material, source: .manual)
-        return specimen
+        let piece = Piece()
+        piece.venue = VenueStamp(projectId: "proj-1", projectName: "Maple St", room: "Living")
+        piece.setValue("seating", for: .category, source: .smartGuess)
+        piece.setValue("Oak / bouclé", for: .material, source: .manual)
+        return piece
     }
 
     @Test func filingANoteLeavesTheConfirmedFieldsAndTheirProvenanceAlone() {
-        let specimen = confirmedCard()
-        specimen.requestMarginNote(noteID: UUID())
+        let piece = confirmedCard()
+        piece.requestMarginNote(noteID: UUID())
 
-        #expect(specimen.category == .seating)
-        #expect(specimen.materialNote == "Oak / bouclé")
-        #expect(specimen.provenance(for: .category) == .smartGuess)
-        #expect(specimen.provenance(for: .material) == .manual)
+        #expect(piece.category == .seating)
+        #expect(piece.materialNote == "Oak / bouclé")
+        #expect(piece.provenance(for: .category) == .smartGuess)
+        #expect(piece.provenance(for: .material) == .manual)
     }
 
     @Test func filingAPunchItemLeavesTheConfirmedFieldsAndTheirProvenanceAlone() {
-        let specimen = confirmedCard()
-        specimen.requestPunchTask(taskID: UUID(), owner: "gc", partyID: "party-gc")
+        let piece = confirmedCard()
+        piece.requestPunchTask(taskID: UUID(), owner: "gc", partyID: "party-gc")
 
-        #expect(specimen.category == .seating)
-        #expect(specimen.materialNote == "Oak / bouclé")
-        #expect(specimen.provenance(for: .category) == .smartGuess)
-        #expect(specimen.provenance(for: .material) == .manual)
+        #expect(piece.category == .seating)
+        #expect(piece.materialNote == "Oak / bouclé")
+        #expect(piece.provenance(for: .category) == .smartGuess)
+        #expect(piece.provenance(for: .material) == .manual)
     }
 
     @Test func thePlacementLineTheCardDrawsIsUnmovedByEitherVerb() {
-        let specimen = confirmedCard()
-        let before = FieldPlacementLine.text(for: specimen)
+        let piece = confirmedCard()
+        let before = FieldPlacementLine.text(for: piece)
         #expect(before == "Maple St · Living")
 
-        specimen.requestMarginNote(noteID: UUID())
-        specimen.requestPunchTask(taskID: UUID(), owner: "designer", partyID: nil)
+        piece.requestMarginNote(noteID: UUID())
+        piece.requestPunchTask(taskID: UUID(), owner: "designer", partyID: nil)
 
-        #expect(FieldPlacementLine.text(for: specimen) == before)
-        #expect(FieldPlacementLine.isUnplaced(specimen) == false)
+        #expect(FieldPlacementLine.text(for: piece) == before)
+        #expect(FieldPlacementLine.isUnplaced(piece) == false)
     }
 }

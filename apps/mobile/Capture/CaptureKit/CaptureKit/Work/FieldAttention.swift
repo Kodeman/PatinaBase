@@ -42,7 +42,7 @@ public enum FieldAttentionKind: String, Hashable, Sendable {
 }
 
 public enum FieldAttentionDestination: Hashable, Sendable {
-    case specimen(UUID)
+    case piece(UUID)
     case thread(String)
     case lead(String)
     case decision(String)
@@ -145,7 +145,7 @@ public enum FieldAttentionBuilder {
         for capture in captures {
             let id = "capture:\(capture.id.uuidString.lowercased())"
             let title = nonEmpty(capture.title) ?? "Untitled capture"
-            let specimenDestination = FieldAttentionDestination.specimen(capture.id)
+            let pieceDestination = FieldAttentionDestination.piece(capture.id)
             switch capture.transferPhase {
             case .retryableFailure:
                 groups.needs.append(Candidate(
@@ -180,7 +180,7 @@ public enum FieldAttentionBuilder {
                         item: FieldAttentionItem(
                             id: id, kind: .capture, title: title,
                             detail: detail,
-                            timestamp: capture.updatedAt, destination: specimenDestination
+                            timestamp: capture.updatedAt, destination: pieceDestination
                         )
                     ))
                     continue
@@ -208,7 +208,7 @@ public enum FieldAttentionBuilder {
     ) {
         let id = "capture:\(capture.id.uuidString.lowercased())"
         let title = nonEmpty(capture.title) ?? "Untitled capture"
-        let destination = FieldAttentionDestination.specimen(capture.id)
+        let destination = FieldAttentionDestination.piece(capture.id)
         switch capture.status {
         case .draft:
             groups.needs.append(Candidate(

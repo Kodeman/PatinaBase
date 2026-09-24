@@ -44,7 +44,7 @@ extension CaptureSchemaV2 {
         public var currencyCode: String?
         public var sourceURL: String?
         public var note: String?
-        public var categoryRaw: String = SpecimenCategory.unknown.rawValue
+        public var categoryRaw: String = PieceCategory.unknown.rawValue
 
         // Tag/array attributes (smart-guess + manual)
         public var materials: [String] = []
@@ -196,7 +196,7 @@ extension CaptureSchemaV2 {
             createdAt: Date = Date(),
             captureSessionID: UUID? = nil,
             owner: CaptureOwnerIdentity? = nil,
-            categoryRaw: String = SpecimenCategory.unknown.rawValue,
+            categoryRaw: String = PieceCategory.unknown.rawValue,
             destinationRaw: String = CaptureDestination.undecided.rawValue,
             statusRaw: String = CaptureStatus.draft.rawValue,
             lifecycleRaw: String = "captured"

@@ -2,7 +2,7 @@
 //  CaptureKitMocks
 //
 //  The Okonkwo residence, as the People room CRM fixture names it
-//  (`artifacts/people-room-crm-2026-09-11/specimens/people-room-390.html` §FIXTURE),
+//  (`artifacts/people-room-crm-2026-09-11/pieces/people-room-390.html` §FIXTURE),
 //  so PR1/PR2/PR3 render on the Simulator without network and the names on the
 //  screenshots are the names the panel argued over.
 //
@@ -29,7 +29,7 @@ public enum PeopleRoomFixtures {
     public static let personID = "F-11"
 
     /// The fixture's own today — the roster bands are reckoned against the week
-    /// containing it, so the Simulator shows the same bands the specimen does.
+    /// containing it, so the Simulator shows the same bands the piece does.
     public static let today = day("2026-10-20")
 
     private static let substantialCompletion = day("2027-08-13")

@@ -217,8 +217,8 @@ struct RootView: View {
         switch route {
         case .syncStatus:
             return "Sync status"
-        case .specimen:
-            return "Review this specimen"
+        case .piece:
+            return "Review this piece"
         case .session:
             return "Review this session"
         case .settings, .account:
@@ -596,10 +596,10 @@ enum FieldVisitEndCounts {
         }
         // Same split as `FieldTodayBandBuilder`: a "note" is a capture with a
         // transcript or audio and no photo; a "capture" is everything else.
-        let notes = visitCaptures.filter { specimen in
-            specimen.photos.isEmpty
-                && ((specimen.voiceTranscript?.isEmpty == false)
-                    || specimen.voiceAudioFilename?.isEmpty == false)
+        let notes = visitCaptures.filter { piece in
+            piece.photos.isEmpty
+                && ((piece.voiceTranscript?.isEmpty == false)
+                    || piece.voiceAudioFilename?.isEmpty == false)
         }.count
         return FieldVisitCounts(
             // Floored: a backwards clock is an `auto` close (CaptureVisitPolicy

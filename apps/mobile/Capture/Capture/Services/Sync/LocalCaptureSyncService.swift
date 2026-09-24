@@ -5,7 +5,7 @@
 //  touches the local outbox and never blocks on the network; `drain` walks the
 //  outbox oldest-first, and `commit` does the real work — uploads each artifact
 //  to the `capture-media` bucket (00234) then calls `commit_field_capture`
-//  (00235), idempotent on `Specimen.clientToken`. It streams `SyncSnapshot`s that
+//  (00235), idempotent on `Piece.clientToken`. It streams `SyncSnapshot`s that
 //  drive U1 and the offline-sync Live Activity.
 //
 //  Network I/O goes through the injected `SupabaseCaptureGateway`. A missing
@@ -17,7 +17,7 @@ import UIKit
 import CaptureKit
 
 enum LocalSyncError: LocalizedError {
-    case specimenNotFound(UUID)
+    case pieceNotFound(UUID)
     /// No signed-in session — the capture must stay queued, not fail.
     case notAuthenticated
     case remoteUnavailable
@@ -28,8 +28,8 @@ enum LocalSyncError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .specimenNotFound(let id):
-            return "Specimen \(id) not found in the local store."
+        case .pieceNotFound(let id):
+            return "Piece \(id) not found in the local store."
         case .notAuthenticated:
             return "Not signed in — captures stay queued until you connect."
         case .remoteUnavailable:
@@ -104,14 +104,14 @@ final class LocalCaptureSyncService: CaptureSyncService {
     var snapshots: AsyncStream<SyncSnapshot> { stream }
 
     // ── enqueue ──────────────────────────────────────────────────────────────
-    /// Persist the specimen in the local queue. Offline-safe: never reaches for
+    /// Persist the piece in the local queue. Offline-safe: never reaches for
     /// the network.
-    func enqueue(_ specimenID: UUID) async {
+    func enqueue(_ pieceID: UUID) async {
         let owner = activeOwner
-        guard let specimen = scopedSpecimen(id: specimenID, owner: owner) else {
+        guard let piece = scopedPiece(id: pieceID, owner: owner) else {
             return
         }
-        // A committed specimen is NOT demoted. Its receipt is durable and its
+        // A committed piece is NOT demoted. Its receipt is durable and its
         // local media has been swept, so a re-stamped `.queued` sends it back
         // through the upload leg against files that are gone and ends it
         // `.rejected` — a permanent failure badge on a capture the server
@@ -119,13 +119,13 @@ final class LocalCaptureSyncService: CaptureSyncService {
         // wave-4 write lane, and those keep their own state: the same fact
         // `isFieldWriteLaneOnly` makes the three transfer-phase branches honour.
         // Reachable from every field-write verb, each of which enqueues.
-        if !specimen.hasConfirmedCaptureReceipt {
-            specimen.applyTransferState(CaptureTransferState(
-                phase: .queued, retryCount: specimen.retryCount))
+        if !piece.hasConfirmedCaptureReceipt {
+            piece.applyTransferState(CaptureTransferState(
+                phase: .queued, retryCount: piece.retryCount))
         }
         try? store.save()
-        analytics?.event("sync.enqueue", ["id": specimenID.uuidString])
-        emitFromOutbox(lastTitle: specimen.title)
+        analytics?.event("sync.enqueue", ["id": pieceID.uuidString])
+        emitFromOutbox(lastTitle: piece.title)
 
         // Preserve CaptureSyncService's offline-safe/nonblocking enqueue contract:
         // authenticated real-mode captures schedule a serialized drain and return.
@@ -174,23 +174,23 @@ final class LocalCaptureSyncService: CaptureSyncService {
             }
 
             var remaining = items.count
-            for specimen in items {
+            for piece in items {
                 guard activeOwner == owner else { break }
-                attempted.insert(specimen.id)
-                beginAttempt(specimen)
+                attempted.insert(piece.id)
+                beginAttempt(piece)
                 emit(
                     queued: max(remaining - 1, 0),
                     uploading: 1,
-                    lastTitle: specimen.title
+                    lastTitle: piece.title
                 )
-                await runAttempt(specimen, owner: owner)
+                await runAttempt(piece, owner: owner)
 
                 remaining -= 1
                 if activeOwner == owner {
                     emit(
                         queued: remaining,
                         uploading: 0,
-                        lastTitle: specimen.title
+                        lastTitle: piece.title
                     )
                 }
             }
@@ -216,62 +216,62 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// retry paints `.uploading` and then `.retryableFailure` on a row the
     /// server accepted — a failure badge for something that did not fail.
     /// The lanes keep their own state, and that is where their errors show.
-    private func isFieldWriteLaneOnly(_ specimen: Piece) -> Bool {
-        specimen.hasConfirmedCaptureReceipt
-            && !specimen.needsProjectPlacement
-            && !specimen.placementNeedsReplay
-            && (specimen.needsMarginNote || specimen.needsPunchTask
-                || specimen.needsDegradeNote)
+    private func isFieldWriteLaneOnly(_ piece: Piece) -> Bool {
+        piece.hasConfirmedCaptureReceipt
+            && !piece.needsProjectPlacement
+            && !piece.placementNeedsReplay
+            && (piece.needsMarginNote || piece.needsPunchTask
+                || piece.needsDegradeNote)
     }
 
-    private func beginAttempt(_ specimen: Piece) {
-        if specimen.hasConfirmedCaptureReceipt
-            && specimen.needsProjectPlacement {
-            specimen.markProjectPlacementStarted()
-        } else if !isFieldWriteLaneOnly(specimen) {
-            specimen.applyTransferState(CaptureTransferState(
-                phase: .uploading, retryCount: specimen.retryCount))
+    private func beginAttempt(_ piece: Piece) {
+        if piece.hasConfirmedCaptureReceipt
+            && piece.needsProjectPlacement {
+            piece.markProjectPlacementStarted()
+        } else if !isFieldWriteLaneOnly(piece) {
+            piece.applyTransferState(CaptureTransferState(
+                phase: .uploading, retryCount: piece.retryCount))
         }
         try? store.save()
     }
 
     private func runAttempt(
-        _ specimen: Piece,
+        _ piece: Piece,
         owner: CaptureOwnerIdentity
     ) async {
         do {
-            _ = try await commit(specimen.id, owner: owner)
-            analytics?.event("sync.commit.ok", ["id": specimen.id.uuidString])
+            _ = try await commit(piece.id, owner: owner)
+            analytics?.event("sync.commit.ok", ["id": piece.id.uuidString])
         } catch let error as LocalSyncError where error.isDeferrable {
-            if specimen.hasConfirmedCaptureReceipt
-                && specimen.needsProjectPlacement {
-                specimen.markProjectPlacementPending()
-            } else if !isFieldWriteLaneOnly(specimen) {
-                specimen.applyTransferState(CaptureTransferState(
-                    phase: .queued, retryCount: specimen.retryCount))
+            if piece.hasConfirmedCaptureReceipt
+                && piece.needsProjectPlacement {
+                piece.markProjectPlacementPending()
+            } else if !isFieldWriteLaneOnly(piece) {
+                piece.applyTransferState(CaptureTransferState(
+                    phase: .queued, retryCount: piece.retryCount))
             }
             try? store.save()
-            analytics?.event("sync.commit.deferred", ["id": specimen.id.uuidString])
+            analytics?.event("sync.commit.deferred", ["id": piece.id.uuidString])
         } catch {
-            recordFailure(error, on: specimen)
-            analytics?.event("sync.commit.fail", ["id": specimen.id.uuidString])
+            recordFailure(error, on: piece)
+            analytics?.event("sync.commit.fail", ["id": piece.id.uuidString])
         }
     }
 
-    private func recordFailure(_ error: Error, on specimen: Piece) {
-        let placementRetry = specimen.hasConfirmedCaptureReceipt
-            && specimen.needsProjectPlacement
+    private func recordFailure(_ error: Error, on piece: Piece) {
+        let placementRetry = piece.hasConfirmedCaptureReceipt
+            && piece.needsProjectPlacement
         if placementRetry {
-            if specimen.placementState != .failed {
-                specimen.markProjectPlacementFailed(error.localizedDescription)
+            if piece.placementState != .failed {
+                piece.markProjectPlacementFailed(error.localizedDescription)
             }
-        } else if !isFieldWriteLaneOnly(specimen) {
+        } else if !isFieldWriteLaneOnly(piece) {
             let rejected = shouldReject(error)
-            specimen.applyTransferState(CaptureTransferState(
+            piece.applyTransferState(CaptureTransferState(
                 phase: rejected ? .rejected : .retryableFailure,
-                progress: specimen.uploadProgress,
+                progress: piece.uploadProgress,
                 errorMessage: error.localizedDescription,
-                retryCount: specimen.retryCount + (rejected ? 0 : 1)))
+                retryCount: piece.retryCount + (rejected ? 0 : 1)))
         }
         try? store.save()
     }
@@ -283,27 +283,27 @@ final class LocalCaptureSyncService: CaptureSyncService {
 
     // ── commit ───────────────────────────────────────────────────────────────
     /// Upload artifacts + land the record server-side. Idempotent on
-    /// `Specimen.clientToken`. No gateway leaves the item queued.
+    /// `Piece.clientToken`. No gateway leaves the item queued.
     @discardableResult
-    func commit(_ specimenID: UUID) async throws -> CommitReceipt {
+    func commit(_ pieceID: UUID) async throws -> CommitReceipt {
         guard let owner = activeOwner else {
             throw LocalSyncError.notAuthenticated
         }
-        return try await commit(specimenID, owner: owner)
+        return try await commit(pieceID, owner: owner)
     }
 
     @discardableResult
     private func commit(
-        _ specimenID: UUID,
+        _ pieceID: UUID,
         owner: CaptureOwnerIdentity
     ) async throws -> CommitReceipt {
         guard activeOwner == owner else {
             throw LocalSyncError.notAuthenticated
         }
-        guard let specimen = scopedSpecimen(id: specimenID, owner: owner) else {
-            throw LocalSyncError.specimenNotFound(specimenID)
+        guard let piece = scopedPiece(id: pieceID, owner: owner) else {
+            throw LocalSyncError.pieceNotFound(pieceID)
         }
-        guard CaptureRouteSafetyPolicy.canCommit(specimen.destination) else {
+        guard CaptureRouteSafetyPolicy.canCommit(piece.destination) else {
             throw LocalSyncError.destinationRequired
         }
         guard let remote else { throw LocalSyncError.remoteUnavailable }
@@ -312,11 +312,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
         }
 
         let receipt: CommitReceipt
-        if let confirmed = confirmedReceipt(for: specimen) {
+        if let confirmed = confirmedReceipt(for: piece) {
             receipt = confirmed
         } else {
             receipt = try await commitCapture(
-                specimen,
+                piece,
                 owner: owner,
                 remote: remote,
                 userID: uid
@@ -324,31 +324,31 @@ final class LocalCaptureSyncService: CaptureSyncService {
         }
         if let productID = receipt.productId {
             try await performProjectPlacementIfNeeded(
-                for: specimen,
+                for: piece,
                 productID: productID,
                 owner: owner)
         }
         // OUTSIDE the productId branch on purpose: a spoken note commits with no
         // Product at all, and that is precisely the capture the margin lane
         // exists for. The receipt above is the only thing either lane waits on.
-        await performFieldWritesIfNeeded(specimen, owner: owner)
+        await performFieldWritesIfNeeded(piece, owner: owner)
         return receipt
     }
 
     private func commitCapture(
-        _ specimen: Piece,
+        _ piece: Piece,
         owner: CaptureOwnerIdentity,
         remote: SupabaseCaptureGateway,
         userID: UUID
     ) async throws -> CommitReceipt {
         let voiceUpload = try await uploadMedia(
-            for: specimen,
+            for: piece,
             owner: owner,
             remote: remote,
             userID: userID
         )
         var payload = FieldCapturePayload(
-            specimen: specimen,
+            piece: piece,
             device: Self.deviceInfo()
         )
         if !voiceUpload.paths.isEmpty {
@@ -369,25 +369,25 @@ final class LocalCaptureSyncService: CaptureSyncService {
         }
 
         let routing = CaptureRoutingContext(
-            projectID: specimen.venue?.projectId.flatMap { UUID(uuidString: $0) },
-            projectRoomID: specimen.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
-            shelf: specimen.venue?.shelf,
+            projectID: piece.venue?.projectId.flatMap { UUID(uuidString: $0) },
+            projectRoomID: piece.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
+            shelf: piece.venue?.shelf,
             organizationID: UUID(uuidString: owner.workspaceID)
         )
         // FC-R6: the placement AS SENT, taken with the routing. She can re-place
         // during the awaits below, and the receipt must not be read as covering
         // a project it never carried.
-        let sentProjectID = specimen.venue?.projectId
-        let sentProjectRoomID = specimen.venue?.projectRoomId
+        let sentProjectID = piece.venue?.projectId
+        let sentProjectRoomID = piece.venue?.projectRoomId
         try requireActiveOwner(owner)
-        specimen.applyTransferState(CaptureTransferState(
+        piece.applyTransferState(CaptureTransferState(
             phase: .awaitingConfirmation,
             progress: 100,
-            retryCount: specimen.retryCount))
+            retryCount: piece.retryCount))
         try? store.save()
-        emitTransferState(lastTitle: specimen.title)
+        emitTransferState(lastTitle: piece.title)
         let destination: String
-        switch specimen.destination {
+        switch piece.destination {
         case .library:
             destination = "library"
         case .inbox:
@@ -396,15 +396,15 @@ final class LocalCaptureSyncService: CaptureSyncService {
             throw LocalSyncError.destinationRequired
         }
         let result = try await remote.commit(
-            clientCaptureID: specimen.clientToken,
+            clientCaptureID: piece.clientToken,
             destination: destination,
             payload: payload,
             routing: routing
         )
         try requireActiveOwner(owner)
-        let receipt = try applyCommitResult(result, to: specimen)
-        rememberFiling(specimen, owner: owner)
-        if specimen.reconcilePlacementReplay(sentProjectID: sentProjectID,
+        let receipt = try applyCommitResult(result, to: piece)
+        rememberFiling(piece, owner: owner)
+        if piece.reconcilePlacementReplay(sentProjectID: sentProjectID,
                                              sentProjectRoomID: sentProjectRoomID) {
             try? store.save()
         }
@@ -415,9 +415,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// physically is, so standing here again next visit can offer that project
     /// back. Only a FILED capture counts — `venue.projectId` is the fact she
     /// stated, never `suggested_*`, which nothing reads as truth.
-    private func rememberFiling(_ specimen: Piece, owner: CaptureOwnerIdentity) {
-        guard let projectID = specimen.venue?.projectId, !projectID.isEmpty else { return }
-        let coordinate = specimen.venue.flatMap { stamp -> CaptureCoordinate? in
+    private func rememberFiling(_ piece: Piece, owner: CaptureOwnerIdentity) {
+        guard let projectID = piece.venue?.projectId, !projectID.isEmpty else { return }
+        let coordinate = piece.venue.flatMap { stamp -> CaptureCoordinate? in
             guard let lat = stamp.latitude, let lng = stamp.longitude else { return nil }
             return CaptureCoordinate(latitude: lat, longitude: lng)
         }
@@ -427,36 +427,36 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// FC-R6: `canReuseConfirmedReceipt` is `hasConfirmedCaptureReceipt` MINUS a
     /// pending placement replay — a capture placed after it committed re-runs
     /// `commit_field_capture` so the server learns its project.
-    private func confirmedReceipt(for specimen: Piece) -> CommitReceipt? {
-        guard specimen.canReuseConfirmedReceipt,
-              let remoteID = specimen.remoteId,
-              let productID = specimen.committedProductId else { return nil }
+    private func confirmedReceipt(for piece: Piece) -> CommitReceipt? {
+        guard piece.canReuseConfirmedReceipt,
+              let remoteID = piece.remoteId,
+              let productID = piece.committedProductId else { return nil }
         return CommitReceipt(
             remoteId: remoteID,
             productId: productID,
-            destination: specimen.destination,
+            destination: piece.destination,
             created: false
         )
     }
 
     private func uploadMedia(
-        for specimen: Piece,
+        for piece: Piece,
         owner: CaptureOwnerIdentity,
         remote: SupabaseCaptureGateway,
         userID: UUID
     ) async throws -> (paths: [String], lost: Int) {
         // Photos only. Validating voice here would throw
         // CaptureMediaAvailabilityError, which shouldReject classifies as
-        // `.rejected`, and drainOwned excludes a rejected specimen from the
+        // `.rejected`, and drainOwned excludes a rejected piece from the
         // drain query — one lost segment would orphan the note from sync
         // forever. The per-segment drop below is what handles voice instead.
-        try store.validateRequiredPhotos(for: specimen)
+        try store.validateRequiredPhotos(for: piece)
 
         let folder = CaptureMediaPath.folder(
             userID: userID,
-            clientToken: specimen.clientToken
+            clientToken: piece.clientToken
         )
-        let photos = specimen.photos
+        let photos = piece.photos
             .filter {
                 ($0.remotePath?.trimmingCharacters(
                     in: .whitespacesAndNewlines
@@ -464,14 +464,14 @@ final class LocalCaptureSyncService: CaptureSyncService {
             }
             .sorted { $0.order < $1.order }
         let voiceFilenames: [String] = {
-            let raw = (specimen.voiceAudioSegmentsRaw?.isEmpty == false)
-                ? specimen.voiceAudioSegmentsRaw!
-                : [specimen.voiceAudioFilename].compactMap { $0 }
+            let raw = (piece.voiceAudioSegmentsRaw?.isEmpty == false)
+                ? piece.voiceAudioSegmentsRaw!
+                : [piece.voiceAudioFilename].compactMap { $0 }
             return raw
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
         }()
-        let stampedRemotePaths = stampedVoicePaths(for: specimen)
+        let stampedRemotePaths = stampedVoicePaths(for: piece)
         let total = photos.count + voiceFilenames.count
         var uploaded = 0
 
@@ -490,7 +490,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
             )
             photo.remotePath = path
             uploaded += 1
-            bumpProgress(specimen, uploaded: uploaded, total: total)
+            bumpProgress(piece, uploaded: uploaded, total: total)
         }
 
         var voicePaths: [String] = []
@@ -502,12 +502,12 @@ final class LocalCaptureSyncService: CaptureSyncService {
         for filename in voiceFilenames {
             var path = stampedRemotePaths[filename]
             if path == nil {
-                path = try await uploadVoiceSegment(filename, for: specimen,
+                path = try await uploadVoiceSegment(filename, for: piece,
                                                     owner: owner, remote: remote, folder: folder)
             }
             if let path { voicePaths.append(path) } else { lostSegments += 1 }
             uploaded += 1
-            bumpProgress(specimen, uploaded: uploaded, total: total)
+            bumpProgress(piece, uploaded: uploaded, total: total)
         }
         if lostSegments > 0 {
             analytics?.event("voice.audio_write_failed",
@@ -517,7 +517,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
         return (paths: voicePaths, lost: lostSegments)
     }
 
-    /// Filename → durable remote path for every segment this specimen has ALREADY
+    /// Filename → durable remote path for every segment this piece has ALREADY
     /// put on the server. The voice half of the `remotePath` exemption the photo
     /// filter in `uploadMedia` applies — with one difference: `audioSegments`
     /// must come back as the ordered list of objects the server holds, so an
@@ -525,9 +525,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// its stamp, in place. Without this a second commit re-read a local file
     /// the receipt deleter had already removed, counted the segment lost, and
     /// wrote `audioSegments = []` over audio sitting intact in Storage.
-    private func stampedVoicePaths(for specimen: Piece) -> [String: String] {
+    private func stampedVoicePaths(for piece: Piece) -> [String: String] {
         var byFilename: [String: String] = [:]
-        for raw in specimen.voiceAudioRemotePathsRaw ?? [] {
+        for raw in piece.voiceAudioRemotePathsRaw ?? [] {
             let path = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let name = path.split(separator: "/").last.map(String.init),
                   !name.isEmpty else { continue }
@@ -544,7 +544,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// or was lost across a reinstall.
     private func uploadVoiceSegment(
         _ filename: String,
-        for specimen: Piece,
+        for piece: Piece,
         owner: CaptureOwnerIdentity,
         remote: SupabaseCaptureGateway,
         folder: String
@@ -561,9 +561,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
         // from now on, exactly as it exempts an uploaded photo. Upload is
         // upsert-idempotent and a deferred commit re-runs the whole drain, so
         // the stamp must not double-append on replay.
-        if specimen.voiceAudioRemotePathsRaw?.contains(path) != true {
-            specimen.voiceAudioRemotePathsRaw =
-                (specimen.voiceAudioRemotePathsRaw ?? []) + [path]
+        if piece.voiceAudioRemotePathsRaw?.contains(path) != true {
+            piece.voiceAudioRemotePathsRaw =
+                (piece.voiceAudioRemotePathsRaw ?? []) + [path]
         }
         return path
     }
@@ -576,11 +576,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
 
     // ── route ────────────────────────────────────────────────────────────────
     /// Triage a synced/inbox capture to library vs inbox; updates local status.
-    /// A not-yet-committed specimen keeps only the local mutation (it carries its
+    /// A not-yet-committed piece keeps only the local mutation (it carries its
     /// `destination` into the eventual commit). An already-committed capture being
     /// promoted to the library mirrors server-side via `route_field_capture`.
     func route(
-        _ specimenID: UUID,
+        _ pieceID: UUID,
         to destination: CaptureDestination
     ) async throws {
         guard CaptureRouteSafetyPolicy.canCommit(destination) else {
@@ -589,20 +589,20 @@ final class LocalCaptureSyncService: CaptureSyncService {
         guard let owner = activeOwner else {
             throw LocalSyncError.notAuthenticated
         }
-        guard let specimen = scopedSpecimen(id: specimenID, owner: owner) else {
-            throw LocalSyncError.specimenNotFound(specimenID)
+        guard let piece = scopedPiece(id: pieceID, owner: owner) else {
+            throw LocalSyncError.pieceNotFound(pieceID)
         }
-        let previousDestination = specimen.destination
+        let previousDestination = piece.destination
 
-        guard let remoteId = specimen.remoteId,
+        guard let remoteId = piece.remoteId,
               let captureUUID = UUID(uuidString: remoteId),
-              specimen.status == .committed else {
-            specimen.destination = destination
-            specimen.touch()
+              piece.status == .committed else {
+            piece.destination = destination
+            piece.touch()
             try? store.save()
-            await enqueue(specimenID)
+            await enqueue(pieceID)
             analytics?.event("sync.route", [
-                "id": specimenID.uuidString,
+                "id": pieceID.uuidString,
                 "to": destination.rawValue,
                 "state": "queued"
             ])
@@ -615,9 +615,9 @@ final class LocalCaptureSyncService: CaptureSyncService {
                 throw LocalSyncError.notAuthenticated
             }
             let routing = CaptureRoutingContext(
-                projectID: specimen.venue?.projectId.flatMap { UUID(uuidString: $0) },
-                projectRoomID: specimen.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
-                shelf: specimen.venue?.shelf
+                projectID: piece.venue?.projectId.flatMap { UUID(uuidString: $0) },
+                projectRoomID: piece.venue?.projectRoomId.flatMap { UUID(uuidString: $0) },
+                shelf: piece.venue?.shelf
             )
             let result = try await remote.route(
                 captureID: captureUUID,
@@ -626,22 +626,22 @@ final class LocalCaptureSyncService: CaptureSyncService {
             guard activeOwner == owner else {
                 throw LocalSyncError.notAuthenticated
             }
-            let receipt = try applyCommitResult(result, to: specimen)
+            let receipt = try applyCommitResult(result, to: piece)
             if let productID = receipt.productId {
                 try await performProjectPlacementIfNeeded(
-                    for: specimen,
+                    for: piece,
                     productID: productID,
                     owner: owner
                 )
             }
-            await performFieldWritesIfNeeded(specimen, owner: owner)
+            await performFieldWritesIfNeeded(piece, owner: owner)
         } else if previousDestination != .inbox {
             throw LocalSyncError.remoteRejected(
                 "A confirmed library capture can’t be held for later from this device.")
         }
 
         analytics?.event("sync.route", [
-            "id": specimenID.uuidString,
+            "id": pieceID.uuidString,
             "to": destination.rawValue
         ])
         emitFromOutbox()
@@ -652,39 +652,39 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// updates the placement portion of the same persisted outbox record while
     /// leaving those durable capture fields untouched.
     private func performProjectPlacementIfNeeded(
-        for specimen: Piece,
+        for piece: Piece,
         productID: String,
         owner: CaptureOwnerIdentity
     ) async throws {
-        guard specimen.needsProjectPlacement else { return }
+        guard piece.needsProjectPlacement else { return }
         do {
             guard let remote else { throw LocalSyncError.remoteUnavailable }
             try requireActiveOwner(owner)
             let request = try placementRequest(
-                for: specimen,
+                for: piece,
                 productID: productID)
-            specimen.markProjectPlacementStarted()
+            piece.markProjectPlacementStarted()
             try? store.save()
-            emitTransferState(lastTitle: specimen.title)
+            emitTransferState(lastTitle: piece.title)
             let receipt = try await ProjectPlacementOrchestrator(
                 gateway: remote
             ).place(request)
             try requireActiveOwner(owner)
-            specimen.applyProjectPlacementReceipt(receipt)
+            piece.applyProjectPlacementReceipt(receipt)
             try? store.save()
             analytics?.event("spec_book.capture_placement.ok", [
                 "project_id": request.projectID.uuidString,
                 "placement": receipt.placement
             ])
         } catch let error as LocalSyncError where error.isDeferrable {
-            specimen.markProjectPlacementPending()
+            piece.markProjectPlacementPending()
             try? store.save()
             throw error
         } catch {
-            specimen.markProjectPlacementFailed(error.localizedDescription)
+            piece.markProjectPlacementFailed(error.localizedDescription)
             try? store.save()
             analytics?.event("spec_book.capture_placement.fail", [
-                "project_id": specimen.placementProjectId ?? "invalid"
+                "project_id": piece.placementProjectId ?? "invalid"
             ])
             throw error
         }
@@ -700,11 +700,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// capture's: the capture already landed, and reporting a refused task as a
     /// failed upload would be a lie about a row the server has.
     private func performFieldWritesIfNeeded(
-        _ specimen: Piece,
+        _ piece: Piece,
         owner: CaptureOwnerIdentity
     ) async {
         guard activeOwner == owner,
-              let captureID = FieldWriteGate.fieldCaptureID(for: specimen),
+              let captureID = FieldWriteGate.fieldCaptureID(for: piece),
               let writes = fieldWrites else { return }
 
         // Ruling 1 (2026-08-24) / spec §6 Flow 2 step 4: a note spoken inside a
@@ -714,32 +714,32 @@ final class LocalCaptureSyncService: CaptureSyncService {
         // .alreadyWritten — exactly as idempotent as the deliberate path.
         //
         // Wave 3 spells "in a visit" as `visitKind` (there is no `visitID` on
-        // Specimen; `captureSessionID` groups a session, and a fresh draft
+        // Piece; `captureSessionID` groups a session, and a fresh draft
         // carries one whether or not a visit was ever declared). `visitKind` is
         // what `FieldCapturePayload` itself gates the visit block on.
         if FieldWriteGate.shouldAutoFileMarginNote(
-            for: specimen,
-            projectID: specimen.venue?.projectId,
-            insideVisit: specimen.visitKind != nil) {
-            specimen.requestMarginNote(noteID: UUID())
+            for: piece,
+            projectID: piece.venue?.projectId,
+            insideVisit: piece.visitKind != nil) {
+            piece.requestMarginNote(noteID: UUID())
         }
 
         await writeMarginNoteIfNeeded(
-            specimen, owner: owner, captureID: captureID, writes: writes)
-        await writePunchTaskIfNeeded(specimen, owner: owner, captureID: captureID, writes: writes)
+            piece, owner: owner, captureID: captureID, writes: writes)
+        await writePunchTaskIfNeeded(piece, owner: owner, captureID: captureID, writes: writes)
         // FC-R8's degrade (ruling 3) is opened from inside the punch branch
         // above, which has already run past the note pass — and a degrade that
         // waits for the NEXT drain is a degrade that may never happen on a phone
         // about to go in a pocket. It has its own lane precisely so it does not
         // have to find the margin slot free.
         await writeDegradeNoteIfNeeded(
-            specimen, owner: owner, captureID: captureID, writes: writes)
+            piece, owner: owner, captureID: captureID, writes: writes)
 
         try? store.save()
     }
 
     private func writeMarginNoteIfNeeded(
-        _ specimen: Piece,
+        _ piece: Piece,
         owner: CaptureOwnerIdentity,
         captureID: UUID,
         writes: SupabaseFieldWriteGateway
@@ -747,32 +747,32 @@ final class LocalCaptureSyncService: CaptureSyncService {
         // Re-checked per lane, not once for all three: the lanes run in
         // sequence, so a switch during the note's await must not send the punch
         // item on the new account's JWT.
-        guard specimen.needsMarginNote,
+        guard piece.needsMarginNote,
               activeOwner == owner,
-              let noteID = specimen.marginNoteId.flatMap(UUID.init(uuidString:)),
-              let projectRaw = specimen.venue?.projectId,
+              let noteID = piece.marginNoteId.flatMap(UUID.init(uuidString:)),
+              let projectRaw = piece.venue?.projectId,
               let projectID = UUID(uuidString: projectRaw),
               let designerID = UUID(uuidString: owner.userID)
         else { return }
 
         // A lane opened on a capture whose words later resolve to nothing has no
         // row to write and no way to close itself: only markWritten/markRefused
-        // close a lane, so `outbox()` would hand this committed specimen back on
+        // close a lane, so `outbox()` would hand this committed piece back on
         // every drain, forever. Settle it instead of returning.
         guard let request = MarginNoteComposer.request(
             noteID: noteID,
             projectID: projectID,
             designerID: designerID,
             fieldCaptureID: captureID,
-            transcript: specimen.marginNoteBodyRaw
-                ?? specimen.voiceTranscript
-                ?? specimen.voicePartialTranscript)
+            transcript: piece.marginNoteBodyRaw
+                ?? piece.voiceTranscript
+                ?? piece.voicePartialTranscript)
         else {
-            specimen.settleMarginNoteWithNothingToWrite()
+            piece.settleMarginNoteWithNothingToWrite()
             return
         }
 
-        specimen.markMarginNoteStarted()
+        piece.markMarginNoteStarted()
         do {
             let outcome = try await MarginNoteOrchestrator(gateway: writes).write(request)
             // The same owner re-check `commit`, `route` and `drainOwned` make
@@ -781,21 +781,21 @@ final class LocalCaptureSyncService: CaptureSyncService {
             // terminal — so it defers instead, and the next drain under the
             // right account decides.
             guard activeOwner == owner else {
-                specimen.markMarginNotePending()
+                piece.markMarginNotePending()
                 return
             }
-            apply(outcome: outcome, toMarginNoteOn: specimen)
+            apply(outcome: outcome, toMarginNoteOn: piece)
         } catch {
             guard activeOwner == owner else {
-                specimen.markMarginNotePending()
+                piece.markMarginNotePending()
                 return
             }
             apply(outcome: FieldWriteClassifier.outcome(
                       code: SupabaseFieldWriteGateway.postgrestCode(from: error),
                       message: error.localizedDescription),
-                  toMarginNoteOn: specimen)
+                  toMarginNoteOn: piece)
         }
-        if specimen.marginNoteState == .written {
+        if piece.marginNoteState == .written {
             analytics?.event("field.margin_note.ok", ["capture_id": captureID.uuidString])
         }
     }
@@ -805,15 +805,15 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// designer_id, 00196:51-54); only the slot differs, so a capture that
     /// already auto-filed its transcript can still land this.
     private func writeDegradeNoteIfNeeded(
-        _ specimen: Piece,
+        _ piece: Piece,
         owner: CaptureOwnerIdentity,
         captureID: UUID,
         writes: SupabaseFieldWriteGateway
     ) async {
-        guard specimen.needsDegradeNote,
+        guard piece.needsDegradeNote,
               activeOwner == owner,
-              let noteID = specimen.degradeNoteId.flatMap(UUID.init(uuidString:)),
-              let projectRaw = specimen.venue?.projectId,
+              let noteID = piece.degradeNoteId.flatMap(UUID.init(uuidString:)),
+              let projectRaw = piece.venue?.projectId,
               let projectID = UUID(uuidString: projectRaw),
               let designerID = UUID(uuidString: owner.userID),
               let request = MarginNoteComposer.request(
@@ -821,65 +821,65 @@ final class LocalCaptureSyncService: CaptureSyncService {
                   projectID: projectID,
                   designerID: designerID,
                   fieldCaptureID: captureID,
-                  transcript: specimen.degradeNoteBodyRaw)
+                  transcript: piece.degradeNoteBodyRaw)
         else { return }
 
-        specimen.markDegradeNoteStarted()
+        piece.markDegradeNoteStarted()
         do {
             let outcome = try await MarginNoteOrchestrator(gateway: writes).write(request)
             guard activeOwner == owner else {
-                specimen.markDegradeNotePending()
+                piece.markDegradeNotePending()
                 return
             }
-            apply(outcome: outcome, toDegradeNoteOn: specimen)
+            apply(outcome: outcome, toDegradeNoteOn: piece)
         } catch {
             guard activeOwner == owner else {
-                specimen.markDegradeNotePending()
+                piece.markDegradeNotePending()
                 return
             }
             apply(outcome: FieldWriteClassifier.outcome(
                       code: SupabaseFieldWriteGateway.postgrestCode(from: error),
                       message: error.localizedDescription),
-                  toDegradeNoteOn: specimen)
+                  toDegradeNoteOn: piece)
         }
-        if specimen.degradeNoteState == .written {
+        if piece.degradeNoteState == .written {
             analytics?.event("field.degrade_note.ok", ["capture_id": captureID.uuidString])
         }
     }
 
     private func writePunchTaskIfNeeded(
-        _ specimen: Piece,
+        _ piece: Piece,
         owner: CaptureOwnerIdentity,
         captureID: UUID,
         writes: SupabaseFieldWriteGateway
     ) async {
-        guard specimen.needsPunchTask,
+        guard piece.needsPunchTask,
               activeOwner == owner,
-              let request = punchTaskRequest(for: specimen, owner: owner, captureID: captureID)
+              let request = punchTaskRequest(for: piece, owner: owner, captureID: captureID)
         else { return }
 
-        specimen.markPunchTaskStarted()
+        piece.markPunchTaskStarted()
         do {
             let outcome = try await PunchTaskOrchestrator(gateway: writes).write(request)
             guard activeOwner == owner else {
-                specimen.markPunchTaskPending()
+                piece.markPunchTaskPending()
                 return
             }
-            apply(outcome: outcome, toPunchTaskOn: specimen, request: request)
+            apply(outcome: outcome, toPunchTaskOn: piece, request: request)
         } catch {
             guard activeOwner == owner else {
-                specimen.markPunchTaskPending()
+                piece.markPunchTaskPending()
                 return
             }
             apply(outcome: FieldWriteClassifier.outcome(
                       code: SupabaseFieldWriteGateway.postgrestCode(from: error),
                       message: error.localizedDescription),
-                  toPunchTaskOn: specimen, request: request)
+                  toPunchTaskOn: piece, request: request)
         }
-        if specimen.punchTaskState == .written {
+        if piece.punchTaskState == .written {
             analytics?.event("field.punch_task.ok", [
                 "capture_id": captureID.uuidString,
-                "owner": specimen.punchTaskOwnerRaw ?? "designer"
+                "owner": piece.punchTaskOwnerRaw ?? "designer"
             ])
         }
     }
@@ -895,18 +895,18 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// one, writing it as her own task is the honest landing: an
     /// owner_party_id-less gc row reaches no trigger and no digest.
     private func punchTaskRequest(
-        for specimen: Piece,
+        for piece: Piece,
         owner: CaptureOwnerIdentity,
         captureID: UUID
     ) -> PunchTaskWriteRequest? {
-        guard let taskID = specimen.punchTaskId.flatMap(UUID.init(uuidString:)),
-              let projectRaw = specimen.venue?.projectId,
+        guard let taskID = piece.punchTaskId.flatMap(UUID.init(uuidString:)),
+              let projectRaw = piece.venue?.projectId,
               let projectID = UUID(uuidString: projectRaw),
               let designerID = UUID(uuidString: owner.userID) else { return nil }
 
-        let transcript = specimen.voiceTranscript ?? specimen.voicePartialTranscript
-        let room = specimen.venue?.room
-        if specimen.punchTaskOwnerRaw == "gc", let partyID = specimen.punchTaskPartyId {
+        let transcript = piece.voiceTranscript ?? piece.voicePartialTranscript
+        let room = piece.venue?.room
+        if piece.punchTaskOwnerRaw == "gc", let partyID = piece.punchTaskPartyId {
             return PunchTaskComposer.punch(
                 id: taskID, projectID: projectID, createdBy: designerID,
                 fieldCaptureID: captureID, transcript: transcript, roomName: room,
@@ -923,41 +923,41 @@ final class LocalCaptureSyncService: CaptureSyncService {
     /// unconditionally would be correct — but correct by accident. The day one
     /// of them RETURNS `.refused`, that shape marks a refusal as written and
     /// FC-R8's degrade never fires.
-    private func apply(outcome: FieldWriteOutcome, toMarginNoteOn specimen: Piece) {
+    private func apply(outcome: FieldWriteOutcome, toMarginNoteOn piece: Piece) {
         switch FieldWriteGate.laneState(for: outcome) {
-        case .written:    specimen.markMarginNoteWritten()
-        case .pending:    specimen.markMarginNotePending()
-        case .refused:    specimen.markMarginNoteRefused(outcome.message ?? "")
-        case .failed:     specimen.markMarginNoteFailed(outcome.message ?? "")
-        case .unwritable: specimen.markMarginNoteUnwritable(outcome.message ?? "")
+        case .written:    piece.markMarginNoteWritten()
+        case .pending:    piece.markMarginNotePending()
+        case .refused:    piece.markMarginNoteRefused(outcome.message ?? "")
+        case .failed:     piece.markMarginNoteFailed(outcome.message ?? "")
+        case .unwritable: piece.markMarginNoteUnwritable(outcome.message ?? "")
         case .writing:    break   // laneState never returns the in-flight state
         }
     }
 
-    private func apply(outcome: FieldWriteOutcome, toDegradeNoteOn specimen: Piece) {
+    private func apply(outcome: FieldWriteOutcome, toDegradeNoteOn piece: Piece) {
         switch FieldWriteGate.laneState(for: outcome) {
-        case .written:    specimen.markDegradeNoteWritten()
-        case .pending:    specimen.markDegradeNotePending()
-        case .refused:    specimen.markDegradeNoteRefused(outcome.message ?? "")
-        case .failed:     specimen.markDegradeNoteFailed(outcome.message ?? "")
-        case .unwritable: specimen.markDegradeNoteUnwritable(outcome.message ?? "")
+        case .written:    piece.markDegradeNoteWritten()
+        case .pending:    piece.markDegradeNotePending()
+        case .refused:    piece.markDegradeNoteRefused(outcome.message ?? "")
+        case .failed:     piece.markDegradeNoteFailed(outcome.message ?? "")
+        case .unwritable: piece.markDegradeNoteUnwritable(outcome.message ?? "")
         case .writing:    break
         }
     }
 
     private func apply(
         outcome: FieldWriteOutcome,
-        toPunchTaskOn specimen: Piece,
+        toPunchTaskOn piece: Piece,
         request: PunchTaskWriteRequest
     ) {
         switch FieldWriteGate.laneState(for: outcome) {
-        case .written:    specimen.markPunchTaskWritten()
-        case .pending:    specimen.markPunchTaskPending()
-        case .failed:     specimen.markPunchTaskFailed(outcome.message ?? "")
-        case .unwritable: specimen.markPunchTaskUnwritable(outcome.message ?? "")
+        case .written:    piece.markPunchTaskWritten()
+        case .pending:    piece.markPunchTaskPending()
+        case .failed:     piece.markPunchTaskFailed(outcome.message ?? "")
+        case .unwritable: piece.markPunchTaskUnwritable(outcome.message ?? "")
         case .writing:    break
         case .refused:
-            specimen.markPunchTaskRefused(outcome.message ?? "")
+            piece.markPunchTaskRefused(outcome.message ?? "")
             // FC-R8 / ruling 3: 42501 is terminal on this lane, and the degrade
             // has to be a WRITE, HERE. This drain is background and
             // per-owner-serialized; the card that reports the refusal may never
@@ -975,19 +975,19 @@ final class LocalCaptureSyncService: CaptureSyncService {
             // capture has usually already auto-opened the margin slot with its
             // transcript, and a single-slot lane silently drops the second note.
             let degrade = FieldWriteGate.degrade(request)
-            specimen.requestDegradeNote(noteID: degrade.noteID, body: degrade.body)
+            piece.requestDegradeNote(noteID: degrade.noteID, body: degrade.body)
         }
     }
 
     private func placementRequest(
-        for specimen: Piece,
+        for piece: Piece,
         productID: String
     ) throws -> ProjectPlacementRequest {
-        guard let projectRaw = specimen.placementProjectId,
+        guard let projectRaw = piece.placementProjectId,
               let projectID = UUID(uuidString: projectRaw),
               let productUUID = UUID(uuidString: productID),
-              let roomID = validOptionalUUID(specimen.placementRoomId),
-              let slotID = validOptionalUUID(specimen.placementSlotId) else {
+              let roomID = validOptionalUUID(piece.placementRoomId),
+              let slotID = validOptionalUUID(piece.placementSlotId) else {
             throw LocalSyncError.invalidPlacementTarget
         }
         return ProjectPlacementRequest(
@@ -995,11 +995,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
             productID: productUUID,
             roomID: roomID,
             slotID: slotID,
-            category: specimen.placementCategory,
+            category: piece.placementCategory,
             source: [
                 "client": "field-ios",
-                "captureId": specimen.clientToken.uuidString.lowercased(),
-                "fieldCaptureId": specimen.remoteId ?? ""
+                "captureId": piece.clientToken.uuidString.lowercased(),
+                "fieldCaptureId": piece.remoteId ?? ""
             ])
     }
 
@@ -1073,7 +1073,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
                 queued: items.count,
                 uploading: 0,
                 failed: 0,
-                lastSpecimenTitle: items.first?.title))
+                lastPieceTitle: items.first?.title))
         analytics?.event("sync.drain.start", ["count": "\(items.count)"])
     }
 
@@ -1120,13 +1120,13 @@ final class LocalCaptureSyncService: CaptureSyncService {
         return store.outbox(owner: owner)
     }
 
-    private func scopedSpecimen(
+    private func scopedPiece(
         id: UUID,
         owner: CaptureOwnerIdentity?
     ) -> Piece? {
-        guard remote != nil else { return store.specimen(id: id) }
+        guard remote != nil else { return store.piece(id: id) }
         guard let owner else { return nil }
-        return store.specimen(id: id, owner: owner)
+        return store.piece(id: id, owner: owner)
     }
 
     private func failedCount() -> Int {
@@ -1181,7 +1181,7 @@ final class LocalCaptureSyncService: CaptureSyncService {
             queued: queued,
             uploading: uploading,
             failed: failedN,
-            lastSpecimenTitle: lastTitle
+            lastPieceTitle: lastTitle
         ))
     }
 }

@@ -271,24 +271,24 @@ struct PunchTaskWriteTests {
     // MARK: - The lane
 
     @Test func aRefusedTaskClosesTheLaneSoItDegradesInsteadOfLooping() {
-        let specimen = Piece()
-        specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
-        #expect(specimen.needsPunchTask)
+        let piece = Piece()
+        piece.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
+        #expect(piece.needsPunchTask)
 
-        specimen.markPunchTaskRefused("new row violates row-level security policy")
-        #expect(specimen.punchTaskState == .refused)
-        #expect(specimen.needsPunchTask == false)
+        piece.markPunchTaskRefused("new row violates row-level security policy")
+        #expect(piece.punchTaskState == .refused)
+        #expect(piece.needsPunchTask == false)
     }
 
     @Test func requestingATaskRecordsTheCourtItWasAimedAt() {
-        let specimen = Piece()
-        specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
+        let piece = Piece()
+        piece.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
 
-        #expect(specimen.punchTaskId == taskID.uuidString)
-        #expect(specimen.punchTaskOwnerRaw == "gc")
-        #expect(specimen.punchTaskPartyId == "party-gc")
-        #expect(specimen.punchTaskState == .pending)
-        #expect(specimen.punchTaskRetryCount == 0)
+        #expect(piece.punchTaskId == taskID.uuidString)
+        #expect(piece.punchTaskOwnerRaw == "gc")
+        #expect(piece.punchTaskPartyId == "party-gc")
+        #expect(piece.punchTaskState == .pending)
+        #expect(piece.punchTaskRetryCount == 0)
     }
 
     @Test func reTappingAnOpenPunchLaneKeepsTheFirstId_soTheGCIsTextedOnce() {
@@ -297,18 +297,18 @@ struct PunchTaskWriteTests {
         // contractor. Lookup-before-write cannot save it — the gateway looks up
         // the NEW id, which has never been written. The margin lane has carried
         // this guard since it was written; this lane assigned unconditionally.
-        let specimen = Piece()
-        specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
-        specimen.requestPunchTask(taskID: UUID(), owner: "gc", partyID: "party-gc2")
+        let piece = Piece()
+        piece.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
+        piece.requestPunchTask(taskID: UUID(), owner: "gc", partyID: "party-gc2")
 
-        #expect(specimen.punchTaskId == taskID.uuidString)
-        #expect(specimen.punchTaskPartyId == "party-gc")
+        #expect(piece.punchTaskId == taskID.uuidString)
+        #expect(piece.punchTaskPartyId == "party-gc")
     }
 
     @Test func aWrittenPunchLaneReOpensForADeliberateSecondItem_andTheMenuSaysSo() {
-        let specimen = Piece()
-        specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
-        specimen.markPunchTaskWritten()
+        let piece = Piece()
+        piece.requestPunchTask(taskID: taskID, owner: "gc", partyID: "party-gc")
+        piece.markPunchTaskWritten()
 
         // The re-open is deliberate, and it is also invisible: nothing in the
         // verb menu acknowledged the first item, so a second filing read as the
@@ -317,12 +317,12 @@ struct PunchTaskWriteTests {
         #expect(PunchCourtCopy.punchFiledMenuRow == "Punch item filed — file another?")
 
         let second = UUID()
-        specimen.requestPunchTask(taskID: second, owner: "designer", partyID: nil)
+        piece.requestPunchTask(taskID: second, owner: "designer", partyID: nil)
 
-        #expect(specimen.punchTaskId == second.uuidString)
-        #expect(specimen.punchTaskOwnerRaw == "designer")
-        #expect(specimen.punchTaskState == .pending)
-        #expect(specimen.needsPunchTask)
+        #expect(piece.punchTaskId == second.uuidString)
+        #expect(piece.punchTaskOwnerRaw == "designer")
+        #expect(piece.punchTaskState == .pending)
+        #expect(piece.needsPunchTask)
     }
 
     @Test func aGCOwnedRowWithNoPartyCannotBePersisted() {
@@ -330,11 +330,11 @@ struct PunchTaskWriteTests {
         // owner_party_id reaches neither the trigger (00284:169) nor the daily
         // digest. PunchTaskComposer.punch already made it unrepresentable; the
         // lane accepted it and let it survive a relaunch.
-        let specimen = Piece()
-        specimen.requestPunchTask(taskID: taskID, owner: "gc", partyID: nil)
+        let piece = Piece()
+        piece.requestPunchTask(taskID: taskID, owner: "gc", partyID: nil)
 
-        #expect(specimen.punchTaskOwnerRaw == "designer")
-        #expect(specimen.punchTaskPartyId == nil)
+        #expect(piece.punchTaskOwnerRaw == "designer")
+        #expect(piece.punchTaskPartyId == nil)
 
         let blank = Piece()
         blank.requestPunchTask(taskID: taskID, owner: "gc", partyID: "   ")
@@ -344,26 +344,26 @@ struct PunchTaskWriteTests {
     }
 
     @Test func aPunchLaneThatSpendsItsRetriesClosesInsteadOfLoopingForever() {
-        let specimen = Piece()
-        specimen.requestPunchTask(taskID: taskID, owner: "designer", partyID: nil)
+        let piece = Piece()
+        piece.requestPunchTask(taskID: taskID, owner: "designer", partyID: nil)
         for attempt in 1...FieldWriteGate.retryCeiling {
-            specimen.markPunchTaskFailed("boom \(attempt)")
+            piece.markPunchTaskFailed("boom \(attempt)")
         }
 
-        #expect(specimen.punchTaskState == .unwritable)
-        #expect(specimen.needsPunchTask == false)
-        #expect(specimen.punchTaskLastError == "boom \(FieldWriteGate.retryCeiling)")
-        #expect(specimen.fieldWriteAttention?.lane == .punchTask)
+        #expect(piece.punchTaskState == .unwritable)
+        #expect(piece.needsPunchTask == false)
+        #expect(piece.punchTaskLastError == "boom \(FieldWriteGate.retryCeiling)")
+        #expect(piece.fieldWriteAttention?.lane == .punchTask)
     }
 
     @Test func markingAnUnopenedPunchLaneIsANoOp() {
-        let specimen = Piece()
-        specimen.markPunchTaskFailed("earlier")
-        specimen.markPunchTaskRefused("also earlier")
+        let piece = Piece()
+        piece.markPunchTaskFailed("earlier")
+        piece.markPunchTaskRefused("also earlier")
 
-        #expect(specimen.punchTaskState == nil)
-        #expect(specimen.punchTaskLastError == nil)
-        #expect(specimen.punchTaskRetryCount == nil)
+        #expect(piece.punchTaskState == nil)
+        #expect(piece.punchTaskLastError == nil)
+        #expect(piece.punchTaskRetryCount == nil)
     }
 }
 

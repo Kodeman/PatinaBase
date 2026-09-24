@@ -22,12 +22,12 @@ public enum CaptureMediaAvailabilityError: LocalizedError, Equatable {
     }
 }
 
-public struct SpecimenQuery: Sendable {
+public struct PieceQuery: Sendable {
     public var text: String?
-    public var category: SpecimenCategory?
+    public var category: PieceCategory?
     public var destination: CaptureDestination?
     public var venueRoom: String?
-    public init(text: String? = nil, category: SpecimenCategory? = nil,
+    public init(text: String? = nil, category: PieceCategory? = nil,
                 destination: CaptureDestination? = nil, venueRoom: String? = nil) {
         self.text = text; self.category = category
         self.destination = destination; self.venueRoom = venueRoom
@@ -509,26 +509,26 @@ public final class CaptureStore {
         return s
     }
 
-    public func delete(_ specimen: Piece) { context.delete(specimen) }
+    public func delete(_ piece: Piece) { context.delete(piece) }
 
     public func save() throws {
         if context.hasChanges { try context.save() }
     }
 
-    public func specimen(id: UUID) -> Piece? {
+    public func piece(id: UUID) -> Piece? {
         let descriptor = FetchDescriptor<Piece>(predicate: #Predicate { $0.id == id })
         return try? context.fetch(descriptor).first
     }
 
     /// Owner-scoped lookup for real upload and user-facing paths. Legacy rows
     /// (nil owner) and mismatches intentionally resolve as absent.
-    public func specimen(id: UUID, owner: CaptureOwnerIdentity) -> Piece? {
-        guard let specimen = specimen(id: id),
+    public func piece(id: UUID, owner: CaptureOwnerIdentity) -> Piece? {
+        guard let piece = piece(id: id),
               owner.matches(
-                userID: specimen.ownerUserID,
-                workspaceID: specimen.ownerWorkspaceID
+                userID: piece.ownerUserID,
+                workspaceID: piece.ownerWorkspaceID
               ) else { return nil }
-        return specimen
+        return piece
     }
 
     // ── Scan upload records (item 8 — durable resumable upload) ──
@@ -895,7 +895,7 @@ public final class CaptureStore {
             guard $0.statusRaw == committed else { return true }
             // FC-R6: placed AFTER it committed. `needsProjectPlacement` below is
             // the FF&E lane (`placementProjectId`/`placementState`), which
-            // `Specimen.place(…)` never writes — without this line a placed
+            // `Piece.place(…)` never writes — without this line a placed
             // committed row never re-enters the drain and the server keeps
             // project_id NULL forever, with nothing on screen to say so.
             if $0.placementNeedsReplay { return true }
@@ -921,7 +921,7 @@ public final class CaptureStore {
     }
 
     /// Library/dedupe search from the field (U2).
-    public func search(_ query: SpecimenQuery) -> [Piece] {
+    public func search(_ query: PieceQuery) -> [Piece] {
         var results = (try? context.fetch(FetchDescriptor<Piece>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
         if let text = query.text?.lowercased(), !text.isEmpty {
@@ -942,7 +942,7 @@ public final class CaptureStore {
 
     /// Owner-scoped search/list projection for authenticated app surfaces.
     public func search(
-        _ query: SpecimenQuery,
+        _ query: PieceQuery,
         owner: CaptureOwnerIdentity
     ) -> [Piece] {
         search(query).filter {
@@ -969,18 +969,18 @@ public final class CaptureStore {
 
     /// Required local media that cannot be read as non-empty regular files.
     /// Photos with a durable remote path no longer depend on their local copy.
-    public func missingRequiredMedia(for specimen: Piece) -> [String] {
-        missingRequiredPhotos(for: specimen) + missingVoiceSegments(for: specimen)
+    public func missingRequiredMedia(for piece: Piece) -> [String] {
+        missingRequiredPhotos(for: piece) + missingVoiceSegments(for: piece)
     }
 
     /// The photo half alone. A capture whose photo is gone is meaningless, so
     /// photos stay hard-required — but the voice half must NOT be, because
     /// CaptureMediaAvailabilityError is classified `.rejected` by the sync
-    /// service and `drainOwned` excludes a rejected specimen from the drain
+    /// service and `drainOwned` excludes a rejected piece from the drain
     /// query. Validating voice up front would orphan a whole note from the
     /// sync queue over one lost segment, with no operator present to retry it.
-    public func missingRequiredPhotos(for specimen: Piece) -> [String] {
-        let photos = specimen.photos.sorted { $0.order < $1.order }
+    public func missingRequiredPhotos(for piece: Piece) -> [String] {
+        let photos = piece.photos.sorted { $0.order < $1.order }
         return unreadable(photos.compactMap { photo -> String? in
             let remotePath = photo.remotePath?.trimmingCharacters(
                 in: .whitespacesAndNewlines
@@ -992,14 +992,14 @@ public final class CaptureStore {
     /// Voice segments that still depend on a local copy. Mirrors the photo rule:
     /// a segment carrying a durable remote path is exempt, exactly as an
     /// uploaded photo is. Reported, never used to gate an upload.
-    private func missingVoiceSegments(for specimen: Piece) -> [String] {
-        let uploaded = Set((specimen.voiceAudioRemotePathsRaw ?? [])
+    private func missingVoiceSegments(for piece: Piece) -> [String] {
+        let uploaded = Set((piece.voiceAudioRemotePathsRaw ?? [])
             .compactMap { $0.split(separator: "/").last.map(String.init) }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
         var seen = Set<String>()
         var names: [String] = []
-        let voiceNames = ([specimen.voiceAudioFilename]
-                          + (specimen.voiceAudioSegmentsRaw ?? []).map { Optional($0) })
+        let voiceNames = ([piece.voiceAudioFilename]
+                          + (piece.voiceAudioSegmentsRaw ?? []).map { Optional($0) })
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && !uploaded.contains($0) }
         for name in voiceNames where seen.insert(name).inserted {
@@ -1018,8 +1018,8 @@ public final class CaptureStore {
         }
     }
 
-    public func validateRequiredMedia(for specimen: Piece) throws {
-        let missing = missingRequiredMedia(for: specimen)
+    public func validateRequiredMedia(for piece: Piece) throws {
+        let missing = missingRequiredMedia(for: piece)
         guard missing.isEmpty else {
             throw CaptureMediaAvailabilityError.missingLocalMedia(missing)
         }
@@ -1027,8 +1027,8 @@ public final class CaptureStore {
 
     /// Photos only — what `uploadMedia` gates on, so a voice segment whose local
     /// file has gone missing reaches the per-segment DROP instead of throwing.
-    public func validateRequiredPhotos(for specimen: Piece) throws {
-        let missing = missingRequiredPhotos(for: specimen)
+    public func validateRequiredPhotos(for piece: Piece) throws {
+        let missing = missingRequiredPhotos(for: piece)
         guard missing.isEmpty else {
             throw CaptureMediaAvailabilityError.missingLocalMedia(missing)
         }
@@ -1044,7 +1044,7 @@ public final class CaptureStore {
     // ── Media retention sweep (FC-R19 / P-3) ──
 
     /// Runs the size-capped retention sweep: deletes oldest-first among media
-    /// files whose owning specimen already carries a durable remote path for
+    /// files whose owning piece already carries a durable remote path for
     /// that file, stopping the moment local usage is back at/under
     /// `MediaRetentionPolicy.softCapBytes`. A file with no stamped remote path
     /// is never touched, however large the overage — the stamp (a photo's
@@ -1079,25 +1079,25 @@ public final class CaptureStore {
         let modifiedAt: Date
     }
 
-    /// Every locally-persisted media file whose owning specimen has already
+    /// Every locally-persisted media file whose owning piece has already
     /// stamped a durable remote path for it: a photo's `remotePath`, or a
     /// voice filename that appears (by trailing path component) in
     /// `voiceAudioRemotePathsRaw`. These are the only files the sweep may
     /// ever delete.
     private func receiptedMediaFiles() -> [ReceiptedMediaFile] {
-        let specimens = (try? context.fetch(FetchDescriptor<Piece>())) ?? []
+        let pieces = (try? context.fetch(FetchDescriptor<Piece>())) ?? []
         var filenames = Set<String>()
-        for specimen in specimens {
-            for photo in specimen.photos {
+        for piece in pieces {
+            for photo in piece.photos {
                 let remotePath = photo.remotePath?.trimmingCharacters(
                     in: .whitespacesAndNewlines
                 ) ?? ""
                 if !remotePath.isEmpty { filenames.insert(photo.filename) }
             }
-            let uploadedBasenames = Set((specimen.voiceAudioRemotePathsRaw ?? [])
+            let uploadedBasenames = Set((piece.voiceAudioRemotePathsRaw ?? [])
                 .compactMap { $0.split(separator: "/").last.map(String.init) })
-            let voiceNames = ([specimen.voiceAudioFilename]
-                              + (specimen.voiceAudioSegmentsRaw ?? []).map { Optional($0) })
+            let voiceNames = ([piece.voiceAudioFilename]
+                              + (piece.voiceAudioSegmentsRaw ?? []).map { Optional($0) })
                 .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
             for name in voiceNames where uploadedBasenames.contains(name) {

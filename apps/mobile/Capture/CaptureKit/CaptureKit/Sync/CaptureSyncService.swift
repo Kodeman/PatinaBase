@@ -31,16 +31,16 @@ public struct SyncSnapshot: Sendable {
 
 public protocol CaptureSyncService: Sendable {
     /// Mark ready and persist to the outbox — offline-safe, never blocks on network.
-    func enqueue(_ specimenID: UUID) async
+    func enqueue(_ pieceID: UUID) async
     /// Back-online / manual retry: drain the outbox oldest-first.
     func drain() async
     /// Composition-root startup seam. Call after auth is ready; idempotency is
-    /// anchored by each specimen's stable client token.
+    /// anchored by each piece's stable client token.
     func reconcilePendingTransfers() async
     /// Upload artifacts + call commit_field_capture. Idempotent on clientToken.
-    func commit(_ specimenID: UUID) async throws -> CommitReceipt
+    func commit(_ pieceID: UUID) async throws -> CommitReceipt
     /// Triage: route a synced/inbox capture to library vs inbox.
-    func route(_ specimenID: UUID, to destination: CaptureDestination) async throws
+    func route(_ pieceID: UUID, to destination: CaptureDestination) async throws
     var snapshots: AsyncStream<SyncSnapshot> { get }
 }
 
@@ -72,9 +72,9 @@ public enum CaptureRouteSafetyPolicy {
 
     /// A kept item remains local until the designer explicitly routes it, but it
     /// should not reappear in the same visit's cull deck.
-    public static func canCull(_ specimen: Piece) -> Bool {
-        guard canCull(specimen.transferState) else { return false }
-        return CaptureLifecycle.State(rawValue: specimen.lifecycleRaw) != .session
+    public static func canCull(_ piece: Piece) -> Bool {
+        guard canCull(piece.transferState) else { return false }
+        return CaptureLifecycle.State(rawValue: piece.lifecycleRaw) != .session
     }
 
     /// Server commits require the explicit S3 destination choice. In particular,
@@ -112,11 +112,11 @@ public extension CaptureSyncService {
     /// Route a bounded set through the same per-record sync contract. Stops at
     /// the first error so the caller can keep unresolved records visible.
     func routeAll(
-        _ specimenIDs: [UUID],
+        _ pieceIDs: [UUID],
         to destination: CaptureDestination
     ) async throws {
-        for specimenID in specimenIDs {
-            try await route(specimenID, to: destination)
+        for pieceID in pieceIDs {
+            try await route(pieceID, to: destination)
         }
     }
 }

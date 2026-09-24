@@ -1,7 +1,7 @@
-//  V3SpecimenDetailScreen.swift
+//  V3PieceDetailScreen.swift
 //  Capture
 //
-//  V3 · Capture detail / edit. The full specimen record — all angles, every field
+//  V3 · Capture detail / edit. The full piece record — all angles, every field
 //  with its provenance badge (AR-measured, tag-read, smart-guess, voice), each
 //  editable. Editing a recognised/measured value re-badges it "edited" to preserve
 //  the audit trail. "Re-shoot" jumps back to the viewfinder; "Save changes"
@@ -11,17 +11,17 @@ import Foundation
 import SwiftUI
 import CaptureKit
 
-struct V3SpecimenDetailScreen: View {
-    let specimen: Piece?
+struct V3PieceDetailScreen: View {
+    let piece: Piece?
     let store: CaptureStore
     let coordinator: CaptureCoordinator
 
     var body: some View {
         Group {
-            if let specimen {
-                V3Content(specimen: specimen, store: store, coordinator: coordinator)
+            if let piece {
+                V3Content(piece: piece, store: store, coordinator: coordinator)
             } else {
-                RouteMissingSpecimen()
+                RouteMissingPiece()
             }
         }
         .navigationTitle("")
@@ -31,7 +31,7 @@ struct V3SpecimenDetailScreen: View {
 }
 
 private struct V3Content: View {
-    let specimen: Piece
+    let piece: Piece
     let store: CaptureStore
     let coordinator: CaptureCoordinator
 
@@ -44,17 +44,17 @@ private struct V3Content: View {
     @State private var note: String
     @State private var saved = false
 
-    init(specimen: Piece, store: CaptureStore, coordinator: CaptureCoordinator) {
-        self.specimen = specimen
+    init(piece: Piece, store: CaptureStore, coordinator: CaptureCoordinator) {
+        self.piece = piece
         self.store = store
         self.coordinator = coordinator
-        _title = State(initialValue: specimen.title ?? "")
-        _maker = State(initialValue: specimen.maker ?? "")
-        _sku = State(initialValue: specimen.sku ?? "")
-        _colorway = State(initialValue: specimen.colorway ?? "")
-        _material = State(initialValue: specimen.materialNote ?? "")
-        _priceText = State(initialValue: RouteFormat.editablePrice(specimen.priceTradeCents))
-        _note = State(initialValue: specimen.note ?? "")
+        _title = State(initialValue: piece.title ?? "")
+        _maker = State(initialValue: piece.maker ?? "")
+        _sku = State(initialValue: piece.sku ?? "")
+        _colorway = State(initialValue: piece.colorway ?? "")
+        _material = State(initialValue: piece.materialNote ?? "")
+        _priceText = State(initialValue: RouteFormat.editablePrice(piece.priceTradeCents))
+        _note = State(initialValue: piece.note ?? "")
     }
 
     var body: some View {
@@ -64,25 +64,25 @@ private struct V3Content: View {
                 angles
 
                 VStack(spacing: 0) {
-                    SpecimenFieldRow("Title", value: $title, source: specimen.provenance(for: .title))
-                    SpecimenFieldRow("Maker", value: $maker, source: specimen.provenance(for: .maker))
-                    SpecimenFieldRow("SKU", value: $sku, source: specimen.provenance(for: .sku))
-                    SpecimenFieldRow("Colorway", value: $colorway, source: specimen.provenance(for: .colorway),
-                                     confirmed: specimen.isConfirmed(.colorway))
-                    SpecimenFieldRow("Material", value: $material, source: specimen.provenance(for: .material),
-                                     confirmed: specimen.isConfirmed(.material))
-                    SpecimenFieldRow("Trade price", value: $priceText,
-                                     source: specimen.provenance(for: .price), placeholder: "$—")
-                    SpecimenFieldRow("Note", value: $note, source: specimen.provenance(for: .note))
+                    PieceFieldRow("Title", value: $title, source: piece.provenance(for: .title))
+                    PieceFieldRow("Maker", value: $maker, source: piece.provenance(for: .maker))
+                    PieceFieldRow("SKU", value: $sku, source: piece.provenance(for: .sku))
+                    PieceFieldRow("Colorway", value: $colorway, source: piece.provenance(for: .colorway),
+                                     confirmed: piece.isConfirmed(.colorway))
+                    PieceFieldRow("Material", value: $material, source: piece.provenance(for: .material),
+                                     confirmed: piece.isConfirmed(.material))
+                    PieceFieldRow("Trade price", value: $priceText,
+                                     source: piece.provenance(for: .price), placeholder: "$—")
+                    PieceFieldRow("Note", value: $note, source: piece.provenance(for: .note))
                 }
                 .routeCard()
 
-                if let dimensions = RouteFormat.dimensions(specimen.measurements) {
+                if let dimensions = RouteFormat.dimensions(piece.measurements) {
                     readRow("Dimensions", value: dimensions,
-                            source: RouteFormat.dimensionsSource(specimen.measurements))
+                            source: RouteFormat.dimensionsSource(piece.measurements))
                 }
 
-                if let transcript = specimen.voiceTranscript, !transcript.isEmpty {
+                if let transcript = piece.voiceTranscript, !transcript.isEmpty {
                     voiceRow(transcript)
                 }
 
@@ -97,10 +97,10 @@ private struct V3Content: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(specimen.title ?? "Untitled capture")
+            Text(piece.title ?? "Untitled capture")
                 .font(CaptureType.display)
                 .foregroundStyle(CaptureColor.ink)
-            if let placemark = specimen.venue?.placemarkName {
+            if let placemark = piece.venue?.placemarkName {
                 Text(placemark.uppercased())
                     .font(CaptureType.eyebrow)
                     .foregroundStyle(CaptureColor.inkSoft)
@@ -111,7 +111,7 @@ private struct V3Content: View {
     private var angles: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                let count = max(specimen.photos.count, 1)
+                let count = max(piece.photos.count, 1)
                 ForEach(Array(0..<count), id: \.self) { index in
                     RoundedRectangle(cornerRadius: 12)
                         .fill(CaptureColor.paper2)
@@ -189,7 +189,7 @@ private struct V3Content: View {
             Text("“\(transcript)”")
                 .font(CaptureType.body)
                 .foregroundStyle(CaptureColor.ink)
-            if let seconds = specimen.voiceDurationSeconds {
+            if let seconds = piece.voiceDurationSeconds {
                 Text(String(format: "0:%02d", Int(seconds)))
                     .font(CaptureType.monoSmall)
                     .foregroundStyle(CaptureColor.inkSoft)
@@ -215,13 +215,13 @@ private struct V3Content: View {
     // MARK: Editing
 
     private func save() {
-        commit(title, original: specimen.title, key: .title)
-        commit(maker, original: specimen.maker, key: .maker)
-        commit(sku, original: specimen.sku, key: .sku)
-        commit(colorway, original: specimen.colorway, key: .colorway)
-        commit(material, original: specimen.materialNote, key: .material)
+        commit(title, original: piece.title, key: .title)
+        commit(maker, original: piece.maker, key: .maker)
+        commit(sku, original: piece.sku, key: .sku)
+        commit(colorway, original: piece.colorway, key: .colorway)
+        commit(material, original: piece.materialNote, key: .material)
         commitPrice()
-        commit(note, original: specimen.note, key: .note)
+        commit(note, original: piece.note, key: .note)
         try? store.save()
         saved = true
         coordinator.goBack()
@@ -230,19 +230,19 @@ private struct V3Content: View {
     private func commit(_ newValue: String, original: String?, key: FieldKey) {
         let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed != (original ?? "") else { return }
-        specimen.setValue(trimmed.isEmpty ? nil : trimmed, for: key, source: newSource(for: key))
+        piece.setValue(trimmed.isEmpty ? nil : trimmed, for: key, source: newSource(for: key))
     }
 
     private func commitPrice() {
         let cents = RouteFormat.centsFromEditable(priceText)
-        guard cents != specimen.priceTradeCents else { return }
-        specimen.setValue(cents.map(String.init), for: .price, source: newSource(for: .price))
+        guard cents != piece.priceTradeCents else { return }
+        piece.setValue(cents.map(String.init), for: .price, source: newSource(for: .price))
     }
 
     /// A recognised/measured value the designer changed becomes `.edited`;
     /// a manually-typed or empty field stays `.manual`.
     private func newSource(for key: FieldKey) -> ProvenanceSource {
-        guard let existing = specimen.provenance(for: key) else { return .manual }
+        guard let existing = piece.provenance(for: key) else { return .manual }
         switch existing {
         case .manual, .imported, .edited: return .manual
         case .ocr, .code, .measure, .voice, .smartGuess: return .edited
@@ -254,7 +254,7 @@ private struct V3Content: View {
 #Preview {
     let demo = RoutePreviewData.make()
     return NavigationStack {
-        V3SpecimenDetailScreen(specimen: demo.specimen, store: demo.store, coordinator: CaptureCoordinator())
+        V3PieceDetailScreen(piece: demo.piece, store: demo.store, coordinator: CaptureCoordinator())
     }
 }
 #endif
