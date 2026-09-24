@@ -389,5 +389,15 @@ redefinition of any of these starts from 00666. Like 00661, 00666 must apply
 after 00660 on every database. 00666 replaces the public staging wrapper, so
 an 00660 applied after it would overwrite that wrapper, as it would 00661's.
 
+00667 `spec_book_snapshot_currency`, reserved 2026-09-24 by T6-01d (SQ-214),
+found in SQ-212. It draws above the head per discipline rule 2. At
+reservation, no file at or above 00667 existed on `main` (tip 00666), in
+`git log --all`, or in any sibling Sidequest worktree. It redefines
+`_spec_book_current_item_snapshots` from 00403's body, adding
+`pricing.currency` from `project_ffe_items.currency`, the key
+spec-book-render reads. Frozen snapshots are not rewritten. A later
+redefinition of that function starts from 00667. It must apply after 00661,
+which adds the column, and joins the ordered Strata push after 00666.
+
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.
