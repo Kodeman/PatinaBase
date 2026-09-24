@@ -24,13 +24,36 @@ test_() {
   echo "✔ tests"
 }
 
+# Pinned so `--strict` means the same thing on every machine and runner.
+# Bump this only alongside a deliberate `brew upgrade swiftlint` + a lint
+# fix-up pass for whatever the new version starts flagging.
+SWIFTLINT_VERSION="0.65.1"
+
 lint() {
-  if command -v swiftlint >/dev/null 2>&1; then
-    swiftlint lint --quiet --strict || { echo "✘ swiftlint"; exit 1; }
-    echo "✔ lint"
-  else
-    echo "… swiftlint not installed; skipping"
+  if ! command -v swiftlint >/dev/null 2>&1; then
+    echo "✘ swiftlint not installed"
+    echo "The Capture lint tier requires SwiftLint ${SWIFTLINT_VERSION}. Absent tooling"
+    echo "is a gate failure, not a skip — CI does not install swiftlint either"
+    echo "(.github/workflows/policy-quality.yml), so this is the only place that check"
+    echo "runs."
+    echo "Install it with: brew install swiftlint"
+    exit 1
   fi
+
+  local actual
+  actual="$(swiftlint version)"
+  if [ "$actual" != "$SWIFTLINT_VERSION" ]; then
+    echo "✘ swiftlint version mismatch"
+    echo "Expected SwiftLint ${SWIFTLINT_VERSION} (pinned in this script), found ${actual}."
+    echo "This gate runs with --strict, so a different SwiftLint version can flip this"
+    echo "tier red (or green) for a change that did not cause it."
+    echo "Install the pinned version with: brew install swiftlint@${SWIFTLINT_VERSION}"
+    echo "(or brew upgrade/downgrade swiftlint to ${SWIFTLINT_VERSION})"
+    exit 1
+  fi
+
+  swiftlint lint --quiet --strict || { echo "✘ swiftlint"; exit 1; }
+  echo "✔ lint"
 }
 
 # FC-R3: no user-facing surface may say "Parked in your inbox" (or any other
