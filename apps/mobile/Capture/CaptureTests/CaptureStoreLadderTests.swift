@@ -12,6 +12,7 @@
 //  `ModelConfiguration()` defaults `groupContainer: .automatic` and resolved
 //  right back into the App Group. Rung 3 then took the app in memory quietly.
 
+import CoreData
 import Foundation
 import SwiftData
 import Testing
@@ -65,14 +66,15 @@ struct CaptureStoreLadderTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("legacy.store")
 
+        // Bare, with no plan, on purpose: this is what a build before the plan
+        // existed wrote. The reopen below goes through the plan, as launch does.
         let older = Schema([Specimen.self, CapturePhoto.self,
                             CaptureMeasurement.self, CaptureProjectRef.self])
         let legacy = try ModelContainer(for: older, configurations: [ModelConfiguration(url: url)])
         legacy.mainContext.insert(Specimen())
         try legacy.mainContext.save()
 
-        let migrated = try ModelContainer(for: CaptureStore.schema,
-                                          configurations: [ModelConfiguration(url: url)])
+        let migrated = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: url))
         #expect(try migrated.mainContext.fetch(FetchDescriptor<Specimen>()).count == 1)
     }
 
@@ -93,14 +95,15 @@ struct CaptureStoreLadderTests {
         #expect(FileManager.default.fileExists(atPath: directory.path))
     }
 
-    // MARK: the reset-once path
+    // MARK: the reset-once path: moved into a dated recovery folder, never deleted
 
     @Test func resetsAnUnopenableStoreOnceAndComesBackEmpty() throws {
         let directory = Self.scratchDirectory()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("broken.store")
-        try Data("this is not a SQLite file".utf8).write(to: url)
+        let bytes = Data("this is not a SQLite file".utf8)
+        try bytes.write(to: url)
 
         let outcome = CaptureStore.openRung(ModelConfiguration(url: url), named: "test")
 
@@ -108,6 +111,60 @@ struct CaptureStoreLadderTests {
         #expect(outcome.failures.count == 1)          // the pre-reset failure only
         let container = try #require(outcome.container)
         #expect(try container.mainContext.fetch(FetchDescriptor<Specimen>()).isEmpty)
+        let folder = try #require(CaptureStore.preservedStores(beside: url).first)
+        #expect(try Data(contentsOf: folder.appendingPathComponent("broken.store")) == bytes)
+    }
+
+    /// The tester-data guarantee (SQ-197). A real store holding an unsynced
+    /// hour, made unopenable the way a schema this build does not know makes
+    /// it: its metadata says its Specimen table is one V1 has never declared.
+    /// The ladder moves it, whole, into a recovery folder, says so in the
+    /// report, and opens a fresh store on disk; the moved store still holds the
+    /// hour.
+    @Test func anUnopenableStoreHoldingUnsyncedWorkIsMovedAsideNotDeleted() throws {
+        let directory = Self.scratchDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("default.store")
+        let entryID = UUID()
+        do {
+            let writer = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: url))
+            writer.mainContext.insert(TimeEntryOutboxRecord(
+                entryID: entryID, projectID: UUID().uuidString,
+                ownerUserID: UUID().uuidString, startedAt: Date(), durationMinutes: 45,
+                activity: .travel, billable: true, notes: "not yet sent", rateRole: nil))
+            try writer.mainContext.save()
+        }
+        let written = try NSPersistentStoreCoordinator.metadataForPersistentStore(
+            type: .sqlite, at: url)
+        var hashes = try #require(written[NSStoreModelVersionHashesKey] as? [String: Any])
+        #expect(hashes["Specimen"] != nil)
+        hashes["Specimen"] = Data(repeating: 7, count: 32)
+        var unknown = written
+        unknown[NSStoreModelVersionHashesKey] = hashes
+        try NSPersistentStoreCoordinator.setMetadata(unknown, type: .sqlite, at: url)
+
+        let rung = CaptureStore.DiskRung(name: "test", persistence: .applicationSupport,
+                                         configuration: ModelConfiguration(url: url))
+        let store = CaptureStore.walk([rung]) { rung in
+            CaptureStore.openRung(rung.configuration, named: rung.name)
+        }
+
+        // Surfaced, and still persisting: not silently empty, not in memory.
+        #expect(store.openReport.didResetIncompatibleStore)
+        #expect(store.openReport.persistence == .applicationSupport)
+        #expect(store.openReport.preservedStores.count == 1)
+        let folder = try #require(store.openReport.preservedStores.first)
+        #expect(folder.deletingLastPathComponent() == CaptureStore.recoveryDirectory(beside: url))
+        #expect(store.timeEntryOutbox().isEmpty)
+
+        // Moved, not deleted: undo the tamper on the moved copy and the hour is there.
+        let moved = folder.appendingPathComponent("default.store")
+        try NSPersistentStoreCoordinator.setMetadata(written, type: .sqlite, at: moved)
+        let recovered = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: moved))
+        let hours = try recovered.mainContext.fetch(FetchDescriptor<TimeEntryOutboxRecord>())
+        #expect(hours.map(\.entryID) == [entryID])
+        #expect(hours.first?.stateRaw == "pending")
     }
 
     @Test func aFirstOpenNeverClaimsAReset() throws {
@@ -125,35 +182,47 @@ struct CaptureStoreLadderTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("x.store")
-        for path in [url.path, url.path + "-wal", url.path + "-shm"] {
-            FileManager.default.createFile(atPath: path, contents: Data("x".utf8))
+        let names = ["x.store", "x.store-wal", "x.store-shm"]
+        for name in names {
+            FileManager.default.createFile(atPath: directory.appendingPathComponent(name).path,
+                                           contents: Data(name.utf8))
         }
 
-        #expect(CaptureStore.setStoreFilesAside(at: url))
+        let folder = try #require(CaptureStore.setStoreFilesAside(at: url))
 
-        for path in [url.path, url.path + "-wal", url.path + "-shm"] {
-            #expect(FileManager.default.fileExists(atPath: path) == false)
-            #expect(FileManager.default.fileExists(atPath: path + ".bak"))
+        #expect(folder.deletingLastPathComponent() == CaptureStore.recoveryDirectory(beside: url))
+        for name in names {
+            #expect(FileManager.default.fileExists(
+                atPath: directory.appendingPathComponent(name).path) == false)
+            #expect(try Data(contentsOf: folder.appendingPathComponent(name)) == Data(name.utf8))
         }
     }
 
-    @Test func settingStoreFilesAsideReportsFalseWhenThereWasNothingToSetAside() {
+    @Test func settingStoreFilesAsideReportsNothingWhenThereWasNothingToSetAside() {
         let url = Self.scratchDirectory().appendingPathComponent("absent.store")
-        #expect(CaptureStore.setStoreFilesAside(at: url) == false)
+        #expect(CaptureStore.setStoreFilesAside(at: url) == nil)
+        #expect(FileManager.default.fileExists(
+            atPath: CaptureStore.recoveryDirectory(beside: url).path) == false)
     }
 
-    @Test func settingAsideOverwritesAnEarlierGenerationRatherThanFailing() throws {
+    @Test func aSecondSetAsideNeverOverwritesTheFirst() throws {
         let directory = Self.scratchDirectory()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("x.store")
-        FileManager.default.createFile(atPath: url.path + ".bak", contents: Data("older".utf8))
-        try Data("newer".utf8).write(to: url)
+        let sameSecond = Date(timeIntervalSince1970: 1_790_000_000)
 
-        #expect(CaptureStore.setStoreFilesAside(at: url))
+        try Data("first".utf8).write(to: url)
+        let first = try #require(CaptureStore.setStoreFilesAside(at: url, now: sameSecond))
+        try Data("second".utf8).write(to: url)
+        let second = try #require(CaptureStore.setStoreFilesAside(at: url, now: sameSecond))
 
-        #expect(try Data(contentsOf: URL(fileURLWithPath: url.path + ".bak"))
-            == Data("newer".utf8))
+        #expect(first.lastPathComponent == "20260921T141320Z")
+        #expect(second.lastPathComponent == "20260921T141320Z-2")
+        #expect(try Data(contentsOf: first.appendingPathComponent("x.store")) == Data("first".utf8))
+        #expect(try Data(contentsOf: second.appendingPathComponent("x.store"))
+            == Data("second".utf8))
+        #expect(CaptureStore.preservedStores(beside: url) == [first, second])
     }
 
     // MARK: a locked device is not an incompatible store
@@ -179,10 +248,14 @@ struct CaptureStoreLadderTests {
         #expect(outcome.didReset == false)
         #expect(outcome.deferredUntilUnlock)
         #expect(try Data(contentsOf: url) == bytes)          // untouched, byte for byte
-        #expect(FileManager.default.fileExists(atPath: url.path + ".bak") == false)
+        #expect(FileManager.default.fileExists(
+            atPath: CaptureStore.recoveryDirectory(beside: url).path) == false)
     }
 
-    @Test func aSetAsideStoreSurvivesTheResetAndGoesOnTheNextCleanOpen() throws {
+    /// The old reset deleted the set-aside store on the next clean open, which
+    /// is the very next launch. Nothing deletes it now, and every later launch
+    /// still reports it.
+    @Test func aSetAsideStoreSurvivesEveryLaterOpenAndIsStillReported() throws {
         let directory = Self.scratchDirectory()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -193,13 +266,17 @@ struct CaptureStoreLadderTests {
         let reset = CaptureStore.openRung(ModelConfiguration(url: url), named: "test")
         #expect(reset.didReset)
         #expect(reset.container != nil)
-        // Renamed, not deleted — the store is still recoverable from the container.
-        #expect(try Data(contentsOf: URL(fileURLWithPath: url.path + ".bak")) == bytes)
+        let folder = try #require(CaptureStore.preservedStores(beside: url).first)
 
-        let clean = CaptureStore.openRung(ModelConfiguration(url: url), named: "test")
-        #expect(clean.container != nil)
-        #expect(clean.didReset == false)
-        #expect(FileManager.default.fileExists(atPath: url.path + ".bak") == false)
+        let rung = CaptureStore.DiskRung(name: "test", persistence: .applicationSupport,
+                                         configuration: ModelConfiguration(url: url))
+        let later = CaptureStore.walk([rung]) { rung in
+            CaptureStore.openRung(rung.configuration, named: rung.name)
+        }
+        #expect(later.openReport.didResetIncompatibleStore == false)
+        #expect(later.openReport.failures.isEmpty)
+        #expect(later.openReport.preservedStores == [folder])
+        #expect(try Data(contentsOf: folder.appendingPathComponent("broken.store")) == bytes)
     }
 
     // MARK: every reset reaches the report, whichever rung answers

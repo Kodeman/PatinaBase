@@ -24,67 +24,69 @@
 import Foundation
 import SwiftData
 
-@Model
-public final class TimeEntryOutboxRecord {
-    /// Client-minted and never regenerated — it becomes
-    /// `project_time_entries.id`, and `log_time` is `ON CONFLICT (id) DO
-    /// NOTHING` (00608), so a replayed drain reads back the hour it already
-    /// wrote instead of logging her drive twice.
-    @Attribute(.unique) public var entryID: UUID = UUID()
-    public var projectID: String = ""
-    public var ownerUserID: String = ""
-    public var startedAt: Date = Date()
-    /// ALWAYS > 0, deliberately not Optional. See the header.
-    public var durationMinutes: Int = 1
-    /// A `project_time_entries.activity` value — 00616 admits design ·
-    /// sourcing · client · site_visit · admin · travel, and NULL for
-    /// "activity not set" (HT-24).
-    public var activityRaw: String?
-    /// HT-11: stated, never defaulted. `log_time` RAISES on a NULL billable, so
-    /// there is no such thing as a Field row that did not say.
-    public var billable: Bool = true
-    public var notes: String?
-    /// HT-41: the roster role the member picked when she holds more than one.
-    /// nil means "the server decides", which is every single-role member.
-    public var rateRoleRaw: String?
-    /// `project_time_entries.source`. 00595 bought 'field_manual' for exactly
-    /// this queue.
-    public var source: String = FieldTimeSource.fieldManual
-    public var createdAt: Date = Date()
-    public var stateRaw: String = FieldWriteState.pending.rawValue
-    public var lastError: String?
-    public var retryCount: Int = 0
-    public var nextAttemptAt: Date?
+extension CaptureSchemaV1 {
+    @Model
+    public final class TimeEntryOutboxRecord {
+        /// Client-minted and never regenerated — it becomes
+        /// `project_time_entries.id`, and `log_time` is `ON CONFLICT (id) DO
+        /// NOTHING` (00608), so a replayed drain reads back the hour it already
+        /// wrote instead of logging her drive twice.
+        @Attribute(.unique) public var entryID: UUID = UUID()
+        public var projectID: String = ""
+        public var ownerUserID: String = ""
+        public var startedAt: Date = Date()
+        /// ALWAYS > 0, deliberately not Optional. See the header.
+        public var durationMinutes: Int = 1
+        /// A `project_time_entries.activity` value — 00616 admits design ·
+        /// sourcing · client · site_visit · admin · travel, and NULL for
+        /// "activity not set" (HT-24).
+        public var activityRaw: String?
+        /// HT-11: stated, never defaulted. `log_time` RAISES on a NULL billable, so
+        /// there is no such thing as a Field row that did not say.
+        public var billable: Bool = true
+        public var notes: String?
+        /// HT-41: the roster role the member picked when she holds more than one.
+        /// nil means "the server decides", which is every single-role member.
+        public var rateRoleRaw: String?
+        /// `project_time_entries.source`. 00595 bought 'field_manual' for exactly
+        /// this queue.
+        public var source: String = FieldTimeSource.fieldManual
+        public var createdAt: Date = Date()
+        public var stateRaw: String = FieldWriteState.pending.rawValue
+        public var lastError: String?
+        public var retryCount: Int = 0
+        public var nextAttemptAt: Date?
 
-    public init(entryID: UUID, projectID: String, ownerUserID: String,
-                startedAt: Date, durationMinutes: Int,
-                activity: FieldTimeActivity?, billable: Bool,
-                notes: String?, rateRole: FieldRateRole?,
-                source: String = FieldTimeSource.fieldManual,
-                createdAt: Date = Date()) {
-        self.entryID = entryID
-        self.projectID = projectID
-        self.ownerUserID = ownerUserID
-        self.startedAt = startedAt
-        // A zero or a negative fails log_time's own guard on every attempt for
-        // good; the floor is the same one every other time surface applies.
-        self.durationMinutes = max(1, durationMinutes)
-        self.activityRaw = activity?.rawValue
-        self.billable = billable
-        self.notes = notes
-        self.rateRoleRaw = rateRole?.rawValue
-        self.source = source
-        self.createdAt = createdAt
-        self.stateRaw = FieldWriteState.pending.rawValue
-        self.retryCount = 0
-    }
+        public init(entryID: UUID, projectID: String, ownerUserID: String,
+                    startedAt: Date, durationMinutes: Int,
+                    activity: FieldTimeActivity?, billable: Bool,
+                    notes: String?, rateRole: FieldRateRole?,
+                    source: String = FieldTimeSource.fieldManual,
+                    createdAt: Date = Date()) {
+            self.entryID = entryID
+            self.projectID = projectID
+            self.ownerUserID = ownerUserID
+            self.startedAt = startedAt
+            // A zero or a negative fails log_time's own guard on every attempt for
+            // good; the floor is the same one every other time surface applies.
+            self.durationMinutes = max(1, durationMinutes)
+            self.activityRaw = activity?.rawValue
+            self.billable = billable
+            self.notes = notes
+            self.rateRoleRaw = rateRole?.rawValue
+            self.source = source
+            self.createdAt = createdAt
+            self.stateRaw = FieldWriteState.pending.rawValue
+            self.retryCount = 0
+        }
 
-    /// Byte-for-byte `FieldVisitCloseRecord.retryDelay(attempt:)`, which is
-    /// itself byte-for-byte `SiteRequestOutboxRecord`'s. Three queues, one
-    /// backoff — a fourth shape would be a fourth thing to reason about on a
-    /// road with no signal.
-    public static func retryDelay(attempt: Int) -> TimeInterval {
-        min(3_600, pow(2, Double(max(0, attempt - 1))) * 5)
+        /// Byte-for-byte `FieldVisitCloseRecord.retryDelay(attempt:)`, which is
+        /// itself byte-for-byte `SiteRequestOutboxRecord`'s. Three queues, one
+        /// backoff — a fourth shape would be a fourth thing to reason about on a
+        /// road with no signal.
+        public static func retryDelay(attempt: Int) -> TimeInterval {
+            min(3_600, pow(2, Double(max(0, attempt - 1))) * 5)
+        }
     }
 }
 

@@ -54,78 +54,80 @@ public enum SiteRequestOutboxTerminalReason: String, Codable, CaseIterable, Send
     }
 }
 
-@Model
-public final class SiteRequestOutboxRecord {
-    @Attribute(.unique) public var clientDeliveryID: UUID = UUID()
-    public var requestID: String = ""
-    public var itemID: String = ""
-    public var itemVersionID: String = ""
-    public var payloadPath: String = ""
-    public var mediaPaths: [String] = []
-    public var checksumSHA256: String = ""
-    public var stateRaw: String = SiteRequestOutboxState.queued.rawValue
-    public var retryCount: Int = 0
-    public var nextAttemptAt: Date?
-    public var lastError: String?
-    public var serverDeliverableID: String?
-    public var terminalReasonRaw: String?
-    public var createdAt: Date = Date()
-    public var updatedAt: Date = Date()
+extension CaptureSchemaV1 {
+    @Model
+    public final class SiteRequestOutboxRecord {
+        @Attribute(.unique) public var clientDeliveryID: UUID = UUID()
+        public var requestID: String = ""
+        public var itemID: String = ""
+        public var itemVersionID: String = ""
+        public var payloadPath: String = ""
+        public var mediaPaths: [String] = []
+        public var checksumSHA256: String = ""
+        public var stateRaw: String = SiteRequestOutboxState.queued.rawValue
+        public var retryCount: Int = 0
+        public var nextAttemptAt: Date?
+        public var lastError: String?
+        public var serverDeliverableID: String?
+        public var terminalReasonRaw: String?
+        public var createdAt: Date = Date()
+        public var updatedAt: Date = Date()
 
-    public var state: SiteRequestOutboxState {
-        get { SiteRequestOutboxState(rawValue: stateRaw) ?? .failed }
-        set { stateRaw = newValue.rawValue }
-    }
-
-    public var terminalReason: SiteRequestOutboxTerminalReason? {
-        terminalReasonRaw.flatMap(SiteRequestOutboxTerminalReason.init(rawValue:))
-    }
-
-    public init(clientDeliveryID: UUID = UUID(), requestID: String, itemID: String,
-                itemVersionID: String, payloadPath: String,
-                mediaPaths: [String] = [], checksumSHA256: String) {
-        self.clientDeliveryID = clientDeliveryID
-        self.requestID = requestID
-        self.itemID = itemID
-        self.itemVersionID = itemVersionID
-        self.payloadPath = payloadPath
-        self.mediaPaths = mediaPaths
-        self.checksumSHA256 = checksumSHA256
-        self.stateRaw = SiteRequestOutboxState.queued.rawValue
-        self.retryCount = 0
-        self.createdAt = Date()
-        self.updatedAt = Date()
-    }
-
-    public func transition(to next: SiteRequestOutboxState, error: String? = nil,
-                           serverDeliverableID: String? = nil,
-                           terminalReason: SiteRequestOutboxTerminalReason? = nil,
-                           now: Date = Date()) throws {
-        guard state.canTransition(to: next) else {
-            throw SiteRequestOutboxError.invalidTransition(from: state, to: next)
+        public var state: SiteRequestOutboxState {
+            get { SiteRequestOutboxState(rawValue: stateRaw) ?? .failed }
+            set { stateRaw = newValue.rawValue }
         }
-        if next == .delivered,
-           serverDeliverableID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
-            throw SiteRequestOutboxError.serverReceiptRequired
-        }
-        if next == .terminal, terminalReason == nil {
-            throw SiteRequestOutboxError.terminalReasonRequired
-        }
-        state = next
-        lastError = error
-        self.serverDeliverableID = serverDeliverableID ?? self.serverDeliverableID
-        terminalReasonRaw = terminalReason?.rawValue ?? terminalReasonRaw
-        updatedAt = now
-        if next == .failed {
-            retryCount += 1
-            nextAttemptAt = now.addingTimeInterval(Self.retryDelay(attempt: retryCount))
-        } else if next == .delivered || next == .queued || next == .terminal {
-            nextAttemptAt = nil
-        }
-    }
 
-    public static func retryDelay(attempt: Int) -> TimeInterval {
-        min(3_600, pow(2, Double(max(0, attempt - 1))) * 5)
+        public var terminalReason: SiteRequestOutboxTerminalReason? {
+            terminalReasonRaw.flatMap(SiteRequestOutboxTerminalReason.init(rawValue:))
+        }
+
+        public init(clientDeliveryID: UUID = UUID(), requestID: String, itemID: String,
+                    itemVersionID: String, payloadPath: String,
+                    mediaPaths: [String] = [], checksumSHA256: String) {
+            self.clientDeliveryID = clientDeliveryID
+            self.requestID = requestID
+            self.itemID = itemID
+            self.itemVersionID = itemVersionID
+            self.payloadPath = payloadPath
+            self.mediaPaths = mediaPaths
+            self.checksumSHA256 = checksumSHA256
+            self.stateRaw = SiteRequestOutboxState.queued.rawValue
+            self.retryCount = 0
+            self.createdAt = Date()
+            self.updatedAt = Date()
+        }
+
+        public func transition(to next: SiteRequestOutboxState, error: String? = nil,
+                               serverDeliverableID: String? = nil,
+                               terminalReason: SiteRequestOutboxTerminalReason? = nil,
+                               now: Date = Date()) throws {
+            guard state.canTransition(to: next) else {
+                throw SiteRequestOutboxError.invalidTransition(from: state, to: next)
+            }
+            if next == .delivered,
+               serverDeliverableID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+                throw SiteRequestOutboxError.serverReceiptRequired
+            }
+            if next == .terminal, terminalReason == nil {
+                throw SiteRequestOutboxError.terminalReasonRequired
+            }
+            state = next
+            lastError = error
+            self.serverDeliverableID = serverDeliverableID ?? self.serverDeliverableID
+            terminalReasonRaw = terminalReason?.rawValue ?? terminalReasonRaw
+            updatedAt = now
+            if next == .failed {
+                retryCount += 1
+                nextAttemptAt = now.addingTimeInterval(Self.retryDelay(attempt: retryCount))
+            } else if next == .delivered || next == .queued || next == .terminal {
+                nextAttemptAt = nil
+            }
+        }
+
+        public static func retryDelay(attempt: Int) -> TimeInterval {
+            min(3_600, pow(2, Double(max(0, attempt - 1))) * 5)
+        }
     }
 }
 
