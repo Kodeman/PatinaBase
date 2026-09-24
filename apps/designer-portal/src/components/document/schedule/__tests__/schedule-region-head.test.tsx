@@ -436,10 +436,19 @@ describe("ScheduleSpine quiet body (W4)", () => {
   });
 
   beforeEach(() => {
+    // The install fixture below reads 2026-09-15; pin the clock before that
+    // date so "Install 15 September" (not yet arrived) stays stable instead
+    // of flipping to "Installed 15 September" once the real date passes it.
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-09-01T00:00:00Z"));
     act(() => {
       __setDensityForTest(null);
     });
     phaseStateMock.mockReturnValue("active");
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it("prints head, count line, leader and the sr-only state line — and no phases", () => {
