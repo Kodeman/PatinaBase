@@ -139,9 +139,13 @@ ok "second run left both modified files untouched"
 # 6 — the hook is still wired into everything that runs xcodebuild. Read from
 # the working tree, like the script under test: this must hold for the edit you
 # are making, not for whatever HEAD happens to say.
-grep -qF 'bootstrap-worktree.sh' "$PATINA_DIR/scripts/ios-gate.sh" \
+# The exact invocation, not a bare filename: both consumers run it as
+# "$SCRIPT_DIR/bootstrap-worktree.sh", and a grep for the filename alone would
+# be satisfied by a comment that merely mentions the script.
+INVOCATION='"$SCRIPT_DIR/bootstrap-worktree.sh"'
+grep -qF "$INVOCATION" "$PATINA_DIR/scripts/ios-gate.sh" \
   || fail "ios-gate.sh no longer calls bootstrap-worktree.sh"
-grep -qF 'bootstrap-worktree.sh' "$PATINA_DIR/scripts/archive-testflight.sh" \
+grep -qF "$INVOCATION" "$PATINA_DIR/scripts/archive-testflight.sh" \
   || fail "archive-testflight.sh no longer calls bootstrap-worktree.sh"
 ok "ios-gate.sh and archive-testflight.sh both call the bootstrap"
 
