@@ -11,6 +11,7 @@ import {
   parseExtractSource,
   sha256Hex,
   validateExtraction,
+  validateExtractionV2,
 } from "./lib.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
@@ -25,6 +26,7 @@ Deno.serve(async (req) => {
   const caller = await admin.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
   if (caller.error || !caller.data.user) return json({ error: "unauthorized" }, 401);
   const payload = parseExtractRequest(await req.json().catch(() => null));
+  if (payload === "unsupported_schema_version") return json({ error: "unsupported_schema_version" }, 400);
   if (!payload) return json({ error: "invalid_body" }, 400);
   const staged = await admin.rpc("get_project_ffe_extract_upload", {
     p_project_id: payload.projectId,
@@ -34,10 +36,11 @@ Deno.serve(async (req) => {
   if (staged.error || !staged.data) return json({ error: "not_found" }, 404);
   const source = parseExtractSource(staged.data, payload, caller.data.user.id);
   if (!source) return json({ error: "invalid_source_manifest" }, 422);
+  if (source.sizeBytes > MAX_PDF_BYTES) return json({ error: "source_too_large" }, 413);
   const download = await admin.storage.from(source.bucket).download(source.path);
   if (download.error || !download.data) return json({ error: "source_unavailable" }, 422);
   const pdfBuffer = await download.data.arrayBuffer();
-  if (pdfBuffer.byteLength !== source.sizeBytes || pdfBuffer.byteLength > MAX_PDF_BYTES) return json({ error: "source_integrity_failed" }, 409);
+  if (pdfBuffer.byteLength !== source.sizeBytes) return json({ error: "source_integrity_failed" }, 409);
   const fileHash = await sha256Hex(pdfBuffer);
   if (source.checksumSha256 !== fileHash) return json({ error: "source_integrity_failed" }, 409);
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -48,8 +51,8 @@ Deno.serve(async (req) => {
     body: JSON.stringify({
       model: "claude-sonnet-5",
       max_tokens: 6000,
-      system: extractionPrompt(),
-      tools: [extractionTool()],
+      system: extractionPrompt(payload.schemaVersion),
+      tools: [extractionTool(payload.schemaVersion)],
       tool_choice: { type: "tool", name: EXTRACTION_TOOL_NAME, disable_parallel_tool_use: true },
       messages: [{ role: "user", content: [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: base64Chunks(new Uint8Array(pdfBuffer)) } }] }],
     }),
@@ -57,7 +60,9 @@ Deno.serve(async (req) => {
   if (!response.ok) return json({ error: "extraction_failed" }, 502);
   const model = await response.json() as { content?: Array<{ type?: string; name?: string; input?: unknown }> };
   const toolUse = model.content?.find((entry) => entry.type === "tool_use" && entry.name === EXTRACTION_TOOL_NAME);
-  const extraction = validateExtraction(toolUse?.input);
+  const extraction = payload.schemaVersion === 1
+    ? validateExtraction(toolUse?.input)
+    : validateExtractionV2(toolUse?.input, "pdf");
   if (!extraction) return json({ error: "invalid_extraction" }, 502);
   const committed = await admin.rpc(
     "stage_project_ffe_document_extraction",
@@ -66,5 +71,5 @@ Deno.serve(async (req) => {
   if (committed.error) return json({ error: "staging_failed" }, 500);
   const batch = parseExtractionBatchResult(committed.data, payload.assetId);
   if (!batch) return json({ error: "invalid_staging_result" }, 502);
-  return json(batch);
+  return json({ ...batch, schemaVersion: payload.schemaVersion });
 });
