@@ -52,24 +52,35 @@ struct RouteAnalyticsParityTests {
         #expect(rawValues.allSatisfy { !$0.isEmpty })
     }
 
-    // MARK: - Legacy dual-emit mapping (transition wave only)
+    // MARK: - One screen event per route, no flag
 
     @Test
-    func scanFlowLegacyNamesCoverThePreConsolidationFunnel() {
-        // Dual-emit (behind `ios_screen_name_v2`) must reproduce the old
-        // names so dashboards keep working during the migration wave.
-        #expect(AppRoute.scanFlow(reason: .fresh).legacyScreenName == "Walking")
-        #expect(AppRoute.scanFlow(reason: .rescan).legacyScreenName == "Re-scan Room")
-        #expect(AppRoute.scanFlow(reason: .fromConversation).legacyScreenName == "Style Discovery")
+    func trackScreenSendsOnlyTheNewName() throws {
+        // The `ios_screen_name_v2` dual-emit is gone: one `screen(` call,
+        // carrying `analyticsScreenName`, and no flag read beside it.
+        let source = try SourcePin.readCode("Patina/App/Coordinators/AppCoordinator.swift")
+        let start = try #require(source.range(of: "private func trackScreen(for route: AppRoute)"))
+        let end = try #require(source.range(of: "public func goBack()", range: start.upperBound..<source.endIndex))
+        let body = String(source[start.upperBound..<end.lowerBound])
+        #expect(body.components(separatedBy: "PostHogService.shared.screen(").count - 1 == 1)
+        #expect(body.contains("route.analyticsScreenName"))
+        #expect(!body.contains("isFeatureEnabled"))
     }
 
     @Test
-    func nonScanRoutesHaveNoLegacyName() {
-        // Only the scan flow consolidated; nothing else dual-emits.
-        #expect(AppRoute.heroFrame.legacyScreenName == nil)
-        #expect(AppRoute.profile.legacyScreenName == nil)
-        #expect(AppRoute.studio.legacyScreenName == nil)
-        #expect(AppRoute.notifications.legacyScreenName == nil)
+    func noSurfaceEvaluatesAFeatureFlag() throws {
+        // Standing rule: no feature flags. Nothing in the app, its widget or
+        // its tests may ask PostHog (or anything else) for a flag value.
+        var offenders: [String] = []
+        for root in ["Patina", "PatinaWidget", "PatinaWidgetShared", "PatinaTests", "PatinaUITests"] {
+            for path in SourcePin.swiftFiles(under: root) where !path.hasSuffix("RouteAnalyticsParityTests.swift") {
+                let code = SourcePin.code(try String(contentsOfFile: path, encoding: .utf8))
+                for api in ["isFeatureEnabled(", "getFeatureFlag", "reloadFeatureFlags"] where code.contains(api) {
+                    offenders.append("\((path as NSString).lastPathComponent): \(api)")
+                }
+            }
+        }
+        #expect(offenders.isEmpty, "flag evaluation found: \(offenders)")
     }
 
     // MARK: - A representative pin of stable screen names

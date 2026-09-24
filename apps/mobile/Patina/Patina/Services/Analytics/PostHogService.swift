@@ -159,30 +159,12 @@ public final class PostHogService {
         #endif
     }
 
-    // MARK: - Feature Flags
-
-    /// Check if a feature flag is enabled
-    /// - Parameter flag: Feature flag key
-    /// - Returns: Whether the flag is enabled
-    public func isFeatureEnabled(_ flag: String) -> Bool {
-        guard isEnabled else { return false }
-
-        return PostHogSDK.shared.isFeatureEnabled(flag)
-    }
+    // MARK: - Configuration
 
     /// Whether a PostHog client is configured at all. `false` means analytics
     /// is off (no API key, or the Debug kill switch) or `initialize()` never
     /// ran.
     public var isConfigured: Bool { isEnabled && isInitialized }
-
-    /// Get feature flag value
-    /// - Parameter flag: Feature flag key
-    /// - Returns: Flag value or nil
-    public func getFeatureFlagValue(_ flag: String) -> Any? {
-        guard isEnabled else { return nil }
-
-        return PostHogSDK.shared.getFeatureFlag(flag)
-    }
 
     // MARK: - User Properties
 

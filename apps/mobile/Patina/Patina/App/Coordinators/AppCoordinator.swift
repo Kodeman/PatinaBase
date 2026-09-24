@@ -587,26 +587,15 @@ public final class AppCoordinator: Coordinator {
         updateContext(for: route)
     }
 
-    /// Emit the PostHog screen-view event(s) for a route.
+    /// Emit the PostHog screen-view event for a route.
     ///
     /// PT-3-5: the canonical screen name for `.scanFlow` is the constant
     /// "Quiet Conversation" with `reason` as a property — this fixes the
     /// three-screen-name funnel corruption ("Walk" / "Walking" /
-    /// "Re-scan Room").
-    ///
-    /// Transition safety: while the `ios_screen_name_v2` flag is OFF we ALSO
-    /// emit the legacy per-reason screen name so existing funnel dashboards
-    /// keep receiving data until they've been rebuilt against the new name.
-    /// Once the flag is flipped ON for a project, only the new name is sent.
-    /// Remove this dual-emit a wave after dashboards are migrated.
+    /// "Re-scan Room"). Only that name is sent; the legacy per-reason names
+    /// are gone.
     private func trackScreen(for route: AppRoute) {
         PostHogService.shared.screen(route.analyticsScreenName, properties: screenProperties(for: route))
-
-        if case .scanFlow = route,
-           !PostHogService.shared.isFeatureEnabled("ios_screen_name_v2"),
-           let legacyName = route.legacyScreenName {
-            PostHogService.shared.screen(legacyName, properties: screenProperties(for: route))
-        }
     }
 
     public func goBack() {
