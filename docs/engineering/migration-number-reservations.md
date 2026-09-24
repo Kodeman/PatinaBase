@@ -369,5 +369,18 @@ redefines 00184's `receiving_inspection_side_effects()` so `delivered_date` is
 net-30 `due_date` then follows the phone's local day. Existing dates are not
 rewritten. A later redefinition of that trigger function starts from 00665.
 
+00666 `ffe_extract_money_review_fixes`, reserved 2026-09-24 by T6-01f (SQ-209),
+which closes SQ-208's review of 00661. It draws above the head per discipline
+rule 2, because the band has no spare. At reservation, no file at or above
+00666 existed on `main` (tip 00665), in `git log --all`, or in any sibling
+Sidequest worktree. It adds a USD trigger on `invoice_line_items` and
+redefines 00661's staging wrapper, commit wrapper, formula guard and decision
+validator. It also redefines two bodies that write catalog prices so they
+reset `currency` to USD: `_place_product_in_project_v2_00438_impl` (00435
+body) and `_apply_client_decision_authorized` (00464 body). A later
+redefinition of any of these starts from 00666. Like 00661, 00666 must apply
+after 00660 on every database. 00666 replaces the public staging wrapper, so
+an 00660 applied after it would overwrite that wrapper, as it would 00661's.
+
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.

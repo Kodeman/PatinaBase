@@ -178,7 +178,10 @@ function nullableText(value: unknown, maxLength: number): string | null | undefi
   if (value === null) return null;
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
-  if (trimmed.length > maxLength || /^[=+@]/.test(trimmed) || /^-[A-Za-z]/.test(trimmed) || /[\u0000-\u001f\u007f]/.test(trimmed)) return undefined;
+  // A minus before a digit is a formula (-2+3+cmd|x) unless the text is a plain number.
+  const formulaLike = /^[=+@]/.test(trimmed) || /^-[A-Za-z]/.test(trimmed) ||
+    (/^-[0-9]/.test(trimmed) && !/^-[0-9]+(\.[0-9]+)?$/.test(trimmed));
+  if (trimmed.length > maxLength || formulaLike || /[\u0000-\u001f\u007f]/.test(trimmed)) return undefined;
   return trimmed || null;
 }
 
