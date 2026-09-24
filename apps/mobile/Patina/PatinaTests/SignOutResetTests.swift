@@ -5,7 +5,7 @@
 //  C2-06 — sign-out left the previous account's screens on the navigation
 //  stack. `ContentView` switches the root on `phase`, so the `.main` branch is
 //  torn down while the coordinator survives; nothing on the sign-out path
-//  cleared `navigationPath`, `screenStack` or any of the four tab stacks, so
+//  cleared any of the four tab stacks, so
 //  signing back in restored the previous person's invoice under the new
 //  session's chrome.
 //
@@ -33,16 +33,13 @@ struct SignOutResetTests {
         var value: Int { lock.lock(); defer { lock.unlock() }; return count }
     }
 
-    private func coordinator(houseFirstRoot: Bool, endSession: Calls) -> AppCoordinator {
-        AppCoordinator(
-            houseFirstRoot: houseFirstRoot,
-            endSessionSideEffects: { endSession.record() }
-        )
+    private func coordinator(endSession: Calls) -> AppCoordinator {
+        AppCoordinator(endSessionSideEffects: { endSession.record() })
     }
 
     @Test("signing out empties every tab stack and returns to Today")
     func theHouseFirstRootIsResetOnSignOut() {
-        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        let coordinator = coordinator(endSession: Calls())
         coordinator.forcePhaseForTesting(.main)
 
         coordinator.openExternal(.invoiceDetail(invoiceId: "inv-1"))
@@ -58,26 +55,11 @@ struct SignOutResetTests {
         #expect(coordinator.currentScreen == .heroFrame)
     }
 
-    @Test("signing out empties the single stack on the flag-off root")
-    func theFlagOffRootIsResetOnSignOut() {
-        let coordinator = coordinator(houseFirstRoot: false, endSession: Calls())
-        coordinator.forcePhaseForTesting(.main)
-
-        coordinator.navigate(to: .invoiceDetail(invoiceId: "inv-1"))
-        coordinator.navigate(to: .proposalDetail(proposalId: "prop-1"))
-        #expect(coordinator.navigationPath.count == 2)
-
-        coordinator.forcePhaseForTesting(.auth)
-
-        #expect(coordinator.navigationPath.isEmpty)
-        #expect(coordinator.currentScreen == .heroFrame)
-    }
-
     /// A voluntary sign-out routes `.main → .launching` through
     /// `beginSplashTransition()`, so the reset cannot key on `.auth` alone.
     @Test("the splash-first sign-out resets too")
     func theSplashTransitionResetsAsWell() {
-        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        let coordinator = coordinator(endSession: Calls())
         coordinator.forcePhaseForTesting(.main)
         coordinator.openExternal(.proposalDetail(proposalId: "prop-1"))
 
@@ -93,7 +75,7 @@ struct SignOutResetTests {
     /// away the deep link the coordinator has just drained onto a stack.
     @Test("arriving at .main resets nothing")
     func arrivingAtMainIsNotASignOut() {
-        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        let coordinator = coordinator(endSession: Calls())
         coordinator.forcePhaseForTesting(.main)
         coordinator.openExternal(.invoiceDetail(invoiceId: "inv-1"))
         let depth = coordinator.tabs.stack(for: .projects).count
@@ -110,7 +92,7 @@ struct SignOutResetTests {
     @Test("the session-end hook fires once per ended session, and not on arrival")
     func theSessionEndHookFiresExactlyOnce() {
         let calls = Calls()
-        let coordinator = coordinator(houseFirstRoot: true, endSession: calls)
+        let coordinator = coordinator(endSession: calls)
 
         coordinator.forcePhaseForTesting(.main)
         #expect(calls.value == 0, "arriving is not ending")
@@ -130,7 +112,7 @@ struct SignOutResetTests {
         let suite = "patina.tests.signout.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         let queue = PendingLinkQueue(defaults: defaults)
-        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        let coordinator = coordinator(endSession: Calls())
         coordinator.attachDeepLinkClear { queue.clear() }
 
         coordinator.forcePhaseForTesting(.main)
@@ -157,7 +139,7 @@ struct SignOutResetTests {
     /// over a queue that no longer holds anything.
     @Test("the pending-link notice does not survive the session")
     func theNoticeIsClearedToo() {
-        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        let coordinator = coordinator(endSession: Calls())
         coordinator.forcePhaseForTesting(.main)
         coordinator.noteLinkHeld()
         #expect(coordinator.pendingLinkNotice != nil)
@@ -177,7 +159,7 @@ struct SignOutResetTests {
     /// close. It is stamped now, and the reset clears it.
     @Test("the return route is stamped with the account it was taken from")
     func theReturnRouteIsStamped() {
-        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        let coordinator = coordinator(endSession: Calls())
         coordinator.noteSignedInUserForTesting("a0000000-0000-0000-0000-000000000005")
         coordinator.forcePhaseForTesting(.main)
         coordinator.navigate(to: .invoiceDetail(invoiceId: "i1"))
@@ -193,7 +175,7 @@ struct SignOutResetTests {
     /// which is exactly "not the account that left".
     @Test("a different account does not inherit the return route")
     func aDifferentAccountDoesNotInheritIt() {
-        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        let coordinator = coordinator(endSession: Calls())
         coordinator.noteSignedInUserForTesting("a0000000-0000-0000-0000-000000000005")
         coordinator.forcePhaseForTesting(.main)
         coordinator.navigate(to: .invoiceDetail(invoiceId: "i1"))
@@ -209,7 +191,7 @@ struct SignOutResetTests {
     /// where the capture never fires and the reset still runs.
     @Test("a voluntary sign-out keeps no return route")
     func aVoluntarySignOutKeepsNothing() {
-        let coordinator = coordinator(houseFirstRoot: true, endSession: Calls())
+        let coordinator = coordinator(endSession: Calls())
         coordinator.noteSignedInUserForTesting("a0000000-0000-0000-0000-000000000005")
         coordinator.forcePhaseForTesting(.main)
         coordinator.navigate(to: .invoiceDetail(invoiceId: "i1"))

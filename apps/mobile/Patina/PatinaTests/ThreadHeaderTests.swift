@@ -257,7 +257,7 @@ struct ThreadHeaderTests {
         // The metric itself: the bar's tappable row plus the same 8 pt of air
         // every pinned money act reserves.
         #expect(
-            CompanionHearthMetrics.pinnedFooterClearance(houseFirst: true)
+            CompanionHearthMetrics.pinnedFooterClearance
                 == CompanionHearthMetrics.barRowHeight + 8
         )
         #expect(CompanionHearthMetrics.barRowHeight == 49)
@@ -265,20 +265,7 @@ struct ThreadHeaderTests {
         let code = SourceScan.code(
             in: try SourcePin.read("Patina/Features/Messaging/Views/ThreadDetailView.swift")
         )
-        #expect(code.contains("CompanionHearthMetrics.pinnedFooterClearance("))
-        #expect(code.contains("houseFirst: coordinator.isHouseFirstRoot"))
-        // Never a live flag read: the root is chosen once at launch, and a late
-        // PostHog payload must not move a screen under someone's thumb
-        // (`MoneyScreenMetrics`' own note).
-        #expect(!code.contains("FeatureFlags.shared.isOn(.houseFirst)"))
-    }
-
-    @Test("the clearance is the flag-off dock’s on the flag-off root")
-    func theFlagOffRootStillClearsItsDock() {
-        #expect(
-            CompanionHearthMetrics.pinnedFooterClearance(houseFirst: false)
-                == CompanionHearthMetrics.dockHeight + 8
-        )
+        #expect(code.contains("CompanionHearthMetrics.pinnedFooterClearance"))
     }
 
     // MARK: - The header and the chrome (round 2)

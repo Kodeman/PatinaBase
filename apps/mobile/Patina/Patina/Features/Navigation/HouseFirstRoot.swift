@@ -2,17 +2,11 @@
 //  HouseFirstRoot.swift
 //  Patina
 //
-//  The root the `house-first` flag chooses (B-1, R2). Four `NavigationStack`s
-//  under one bar, where the flag-off root has one stack under a floating orb.
+//  The app's root (B-1, R2): four `NavigationStack`s under one bar.
 //
-//  Two things this root deliberately does NOT do:
-//
-//   • It never applies `companionHearthReservation`. The 83 pt bar replaces the
-//     120 pt Hearth (B-2); reserving both would put 203 pt of dead space under
-//     every screen.
-//   • It does not re-read the flag. `ContentView` asks `AppCoordinator` once,
-//     and the coordinator resolved it in `init` — a payload landing late can
-//     never swap the root under a session that is already running.
+//  It never applies `companionHearthReservation`. The 83 pt bar replaces the
+//  120 pt Hearth (B-2); reserving both would put 203 pt of dead space under
+//  every screen.
 //
 //  Tabs mount lazily and then stay mounted, which is what `TabView` does: a tab
 //  you have never opened costs nothing on launch, and one you have opened keeps
@@ -38,14 +32,13 @@ public struct HouseFirstRoot: View {
     public init() {}
 
     /// The first-launch tour is hosted HERE, above the four stacks, and not
-    /// inside `DailyRoomView` as it is on the flag-off root.
+    /// inside `DailyRoomView`.
     ///
     /// `FirstLaunchTour` builds its model in `@State` and publishes it down its
     /// own subtree. B-8 points step 3 at the **Studio tab**, and the bar is a
     /// sibling of Today's stack — from inside `DailyRoomView` the popover could
     /// never reach it, which is the deviation `integration.md` §6a names. One
-    /// model per root: this one covers all four stacks *and* the bar;
-    /// `DailyRoomView` still owns the flag-off root's.
+    /// model for the root: it covers all four stacks *and* the bar.
     public var body: some View {
         // `W1-C-13`: the bar is a `safeAreaInset` INSIDE `rootContent`, so it
         // is inside the coordinate space every anchor measures itself in — and
@@ -183,12 +176,8 @@ public struct HouseFirstRoot: View {
 
 // MARK: - Navigation Destinations
 
-// A verbatim second copy of `ContentView`'s dispatcher. It is duplicated rather
-// than shared on purpose: W3's acceptance is that the flag-off root renders
-// byte-for-byte as W2 left it, which is easiest to prove when `ContentView`'s
-// existing branch is not edited at all. Both copies are exhaustive over
-// `AppRoute` with no `default:`, so a new route breaks compilation in both.
-// This copy dies with the flag-off root, one release from now.
+// Exhaustive over `AppRoute` with no `default:`, so a new route breaks
+// compilation here.
 extension HouseFirstRoot {
 
     @ViewBuilder
@@ -257,6 +246,10 @@ extension HouseFirstRoot {
             }
 
         case .roomEmergence(let roomId):
+            // U06/U07: `roomId` here is the LOCAL SwiftData `RoomModel.id` —
+            // NOT the remote id the `get_recommendations` RPC and the
+            // `saved_items.room_id` FK expect. RecommendationsView resolves it
+            // to `RoomModel.remoteId` itself before either is used.
             RecommendationsView(roomId: roomId.uuidString)
 
         case .table:

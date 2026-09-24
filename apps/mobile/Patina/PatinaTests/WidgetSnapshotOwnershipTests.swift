@@ -53,7 +53,6 @@ struct WidgetSnapshotOwnershipTests {
             appGroupIdentifier: "group.does.not.exist.\(UUID().uuidString)",
             fallbackDirectory: directory,
             reloadWidgets: { reloads.record($0) },
-            flagIsOn: { true },
             ownerId: { ownerId },
             clearOwner: {}
         )
@@ -186,7 +185,6 @@ struct WidgetSnapshotOwnershipTests {
             appGroupIdentifier: "group.does.not.exist.\(UUID().uuidString)",
             fallbackDirectory: directory,
             reloadWidgets: { reloads.record($0) },
-            flagIsOn: { true },
             ownerId: { Self.owner },
             clearOwner: { cleared.record("stamp") }
         )
@@ -238,7 +236,6 @@ struct WidgetSnapshotOwnershipTests {
             appGroupIdentifier: "group.does.not.exist.\(UUID().uuidString)",
             fallbackDirectory: directory,
             reloadWidgets: { reloads.record($0) },
-            flagIsOn: { true },
             ownerId: { nil },
             clearOwner: {},
             stampOwner: { stamped.record($0) }

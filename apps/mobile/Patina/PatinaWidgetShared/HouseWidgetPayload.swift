@@ -70,16 +70,6 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
     /// `house-record.json` and deliberately NOT it.
     static let fileName = "widget-snapshot.json"
 
-    /// `FeatureFlags.shared.isOn(.houseWidget)` when the app wrote the file.
-    ///
-    /// **D5 (2026-09-02): this no longer decides whether a placed widget
-    /// draws.** It used to, and `house-widget` is off for round one, so a
-    /// tester who added the widget read "Open Patina to see your house."
-    /// forever with two real rows in the file (GAP7B-02). The flag gates in-app
-    /// promotion; a widget somebody has already placed draws what the app gave
-    /// it. Still decoded, because W2 may gate promotion with it.
-    let flagOn: Bool
-
     /// The account the app built this payload for. Absent — or explicitly
     /// null, which is what sign-out writes — is the signed-out placeholder, and
     /// the only thing the widget refuses to draw (B-16). The extension cannot
@@ -103,11 +93,10 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
     let version: Int?
 
     private enum CodingKeys: String, CodingKey {
-        case flagOn, ownerId, refreshedAt, movedRows, houseLine, sinceDate, version
+        case ownerId, refreshedAt, movedRows, houseLine, sinceDate, version
     }
 
     init(
-        flagOn: Bool,
         refreshedAt: Date,
         movedRows: [HouseWidgetPayloadRow],
         houseLine: String? = nil,
@@ -115,7 +104,6 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
         ownerId: String? = nil,
         version: Int? = 1
     ) {
-        self.flagOn = flagOn
         self.refreshedAt = refreshedAt
         self.movedRows = movedRows
         self.houseLine = houseLine
@@ -126,7 +114,6 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        flagOn = try container.decodeIfPresent(Bool.self, forKey: .flagOn) ?? false
         ownerId = try container.decodeIfPresent(String.self, forKey: .ownerId)
         refreshedAt = try container.decode(Date.self, forKey: .refreshedAt)
         movedRows = try container.decodeIfPresent([HouseWidgetPayloadRow].self, forKey: .movedRows) ?? []
@@ -139,9 +126,6 @@ struct HouseWidgetPayload: Codable, Equatable, Sendable {
 
     /// The rows the widget draws. Capped here rather than at the view, so a
     /// longer file cannot widen the surface.
-    ///
-    /// D5: not gated on `flagOn`. A widget somebody placed draws what the app
-    /// gave it; the flag decides whether the app promotes the widget.
     var drawableRows: [HouseWidgetPayloadRow] {
         isPlaceholder ? [] : Array(movedRows.prefix(Self.maximumRows))
     }

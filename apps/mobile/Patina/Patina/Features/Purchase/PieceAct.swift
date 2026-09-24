@@ -2,14 +2,12 @@
 //  PieceAct.swift
 //  Patina
 //
-//  What the piece screen offers, resolved once from four inputs: the client's
-//  designer relationship, the `direct-orders` flag, the buyability gate, and
-//  the piece's price.
+//  What the piece screen offers, resolved once from three inputs: the client's
+//  designer relationship, the buyability gate, and the piece's price.
 //
 //  R3, stated here because this is the only place it can be enforced: a client
 //  with a LIVE designer relationship — an accepted lead or an active project —
-//  never sees Buy. Not as a secondary, not as a disclosure line, not behind a
-//  flag. "Ask <her first name> to source this" pre-empts it, on every piece,
+//  never sees Buy. Not as a secondary, not as a disclosure line. "Ask <her first name> to source this" pre-empts it, on every piece,
 //  room or no room, until the designer-side settle notice is proven on a
 //  device. `.roster` is deliberately NOT live: a client sitting on a designer's
 //  client list with no accepted lead and no active project may buy, and the
@@ -31,13 +29,13 @@ enum PieceAct: Equatable, Sendable {
     /// somebody it cannot name.
     case askDesigner(firstName: String?)
 
-    /// Path A. Behind `direct-orders`, and only when the gate passes.
+    /// Path A. Only when the gate passes.
     case buy(priceCents: Int)
 
     /// Path C. `reason` is the gate's plain sentence where the gate refused
     /// for a stated reason, and `nil` where the act is off for any other cause
-    /// — a feature flag is not a fact about the piece and the screen does not
-    /// invent one.
+    /// — an unresolved relationship is not a fact about the piece and the
+    /// screen does not invent one.
     case askAboutPiece(reason: String?)
 
     /// The primary control's label.
@@ -134,8 +132,6 @@ enum PieceActResolver {
     ///     C1 reads it and never writes it.
     ///   - designerName: the designer's display name where one has resolved —
     ///     `DesignerSeat.make(…)?.name`. Only the first word is used.
-    ///   - directOrdersEnabled: `FeatureFlags.shared.isOn(.directOrders)`,
-    ///     resolved once at launch and held for the session.
     ///   - relationshipIsResolved: whether the services the relationship is
     ///     derived from have actually answered. **An unanswered question must
     ///     never be answered with `.none`**: `.none` draws Buy, and a signed-in
@@ -148,11 +144,10 @@ enum PieceActResolver {
         product: Product,
         relationship: DesignerRelationship,
         designerName: String?,
-        directOrdersEnabled: Bool,
         relationshipIsResolved: Bool = true
     ) -> PieceAct {
-        // R3 first, and unconditionally. The flag and the gate are not
-        // consulted, so no future edit to either can reintroduce Buy here.
+        // R3 first, and unconditionally. The gate is not consulted, so no
+        // future edit to it can reintroduce Buy here.
         if relationship.isLive {
             return .askDesigner(firstName: firstName(of: designerName))
         }
@@ -162,10 +157,6 @@ enum PieceActResolver {
         // states no reason, because "still loading" is not a fact about the
         // piece.
         guard relationshipIsResolved else {
-            return .askAboutPiece(reason: nil)
-        }
-
-        guard directOrdersEnabled else {
             return .askAboutPiece(reason: nil)
         }
 

@@ -22,33 +22,6 @@ public final class AppCoordinator: Coordinator {
     /// directly from outside the recompute path.
     public private(set) var phase: AppPhase = .launching
 
-    /// Navigation path for stack-based navigation
-    public var navigationPath = NavigationPath() {
-        didSet {
-            // Pops can originate outside `goBack()` (interactive edge swipe,
-            // system back) by mutating the path through ContentView's
-            // binding. Trim the mirror stack and restore the previous
-            // screen so context-driven UI (companion nudges) can't outlive
-            // its screen (R11).
-            guard navigationPath.count < screenStack.count else { return }
-            screenStack.removeLast(screenStack.count - navigationPath.count)
-            let previous = screenStack.last ?? rootScreen
-            if currentScreen != previous {
-                currentScreen = previous
-                updateContext(for: previous)
-            }
-        }
-    }
-
-    /// Pushed-route history mirroring `navigationPath`. `NavigationPath` is
-    /// opaque, so this parallel stack is what lets a pop restore
-    /// `currentScreen` + companion context (R11).
-    private var screenStack: [AppRoute] = []
-
-    /// The route shown when `navigationPath` is empty — always `.heroFrame`
-    /// (the client home surface).
-    private var rootScreen: AppRoute = .heroFrame
-
     /// Whether the companion sheet is expanded
     public var isCompanionExpanded = false
 
@@ -157,16 +130,9 @@ public final class AppCoordinator: Coordinator {
     /// id has to be remembered while it is still there.
     private var lastKnownUserId: String?
 
-    // MARK: - The house-first root (B-1, R2)
+    // MARK: - The four-tab root (B-1, R2)
 
-    /// Whether this session runs the four-tab root. Read ONCE, here, from the
-    /// flag `PatinaApp.init()` resolved a moment earlier, and held for the
-    /// life of the coordinator — a PostHog payload arriving later cannot swap
-    /// the root under a session that is already running.
-    public let isHouseFirstRoot: Bool
-
-    /// The four stacks. Only the house-first root reads them; on the flag-off
-    /// root this stays empty and `navigationPath` is still the whole model.
+    /// The four stacks — the whole navigation model.
     public let tabs = TabNavigationModel()
 
     // MARK: - Dependencies
@@ -175,22 +141,16 @@ public final class AppCoordinator: Coordinator {
 
     // MARK: - Initialization
 
-    public convenience init() {
-        self.init(houseFirstRoot: FeatureFlags.shared.isOn(.houseFirst))
-    }
-
     /// - Parameter endSessionSideEffects: what a session ending does OUTSIDE
     ///   this coordinator's own state. Injected because the production value
     ///   rewrites the App Group container, and a unit tier that drove it would
     ///   destroy whatever walk state is on the same simulator — and couple two
     ///   suites through a file.
     init(
-        houseFirstRoot: Bool,
         endSessionSideEffects: @escaping @MainActor () -> Void = {
             RecordSnapshotStore.shared.clearForSignedOut()
         }
     ) {
-        self.isHouseFirstRoot = houseFirstRoot
         self.endSessionSideEffects = endSessionSideEffects
 
         // Phase is now derived from `AuthService.session`, onboarding
@@ -383,8 +343,7 @@ public final class AppCoordinator: Coordinator {
             pendingReturnOwner = nil
             if let owner, owner == AuthService.shared.currentUserId {
                 // A restore is an outside entry: the person did not walk here,
-                // so it lands on the route's own tab (no-op on the flag-off
-                // root).
+                // so it lands on the route's own tab.
                 openExternal(route)
             }
         }
@@ -402,9 +361,6 @@ public final class AppCoordinator: Coordinator {
     private let endSessionSideEffects: @MainActor () -> Void
 
     private func clearNavigationForEndedSession() {
-        screenStack = []
-        navigationPath = NavigationPath()
-        rootScreen = .heroFrame
         for tab in PatinaTab.allCases { tabs.popToRoot(tab) }
         tabs.selected = .today
         currentScreen = .heroFrame
@@ -537,41 +493,14 @@ public final class AppCoordinator: Coordinator {
         // flow; `reason` rides along as an event property — PT-3-5).
         trackScreen(for: route)
 
-        // House-first root: an in-app tap pushes onto the tab already on
-        // screen, so Back returns the person where they were and a room's own
-        // "browse pieces for this room" never strands the room behind a tab
-        // switch. Only `openExternal(_:)` — a link, a push, a restore — reads
-        // the route→tab table. A route that IS a tab's root still switches:
-        // the bar already carries that door, so a second copy is never pushed.
-        if isHouseFirstRoot {
-            tabs.push(route)
-            updateContext(for: route)
-            return
-        }
-
-        switch route {
-        case .heroFrame:
-            rootScreen = route
-            screenStack = []
-            navigationPath = NavigationPath()
-            updateContext(for: route)
-
-        case .yourSpaces, .roomProject, .roomSettings,
-             .crossRoom, .manualRoomEntry, .roomSavedItems,
-             .table, .scanFlow, .emergence, .roomEmergence, .pieceDetail,
-             .styleQuiz, .styleResult,
-             .arPlacement,
-             .profile, .studio, .notifications, .designerConsultation, .designRequests,
-             .projectList, .projectDetail,
-             .decisionList, .decisionDetail,
-             .threadList, .threadDetail,
-             .proposalList, .proposalDetail,
-             .invoiceList, .invoiceDetail,
-             .budget, .documentList,
-             .orderList, .orderDetail:
-            push(route)
-            updateContext(for: route)
-        }
+        // An in-app tap pushes onto the tab already on screen, so Back
+        // returns the person where they were and a room's own "browse pieces
+        // for this room" never strands the room behind a tab switch. Only
+        // `openExternal(_:)` — a link, a push, a restore — reads the
+        // route→tab table. A route that IS a tab's root still switches: the
+        // bar already carries that door, so a second copy is never pushed.
+        tabs.push(route)
+        updateContext(for: route)
     }
 
     /// The app entered from outside: a deep link, a universal link, an APNs
@@ -579,14 +508,8 @@ public final class AppCoordinator: Coordinator {
     ///
     /// This is the one entry that reads `RouteTabTable` — it lands on the
     /// route's OWN tab and pushes there, because the person did not come from
-    /// wherever the app happened to be sitting. On the flag-off root there is
-    /// one stack, so it is exactly `navigate(to:)`.
+    /// wherever the app happened to be sitting.
     public func openExternal(_ route: AppRoute) {
-        guard isHouseFirstRoot else {
-            navigate(to: route)
-            return
-        }
-
         // Same SP-07 guard as `navigate(to:)`: a link must not file a second
         // lead for a client who already has a live one.
         if case .designerConsultation = route {
@@ -612,17 +535,15 @@ public final class AppCoordinator: Coordinator {
     /// `currentScreen` follows through `syncCurrentScreen(to:)`, driven by the
     /// root's `onChange`, so tab taps and stack pops take one path.
     public func selectTab(_ tab: PatinaTab) {
-        guard isHouseFirstRoot else { return }
         tabs.select(tab)
     }
 
-    /// Re-derives `currentScreen` from whichever tab stack is on screen. This
-    /// is the multi-stack twin of the `navigationPath.didSet` trim: a pop
-    /// SwiftUI performs itself — an edge swipe, a system back button, a tab
-    /// switch — must restore the revealed screen's companion context, or a
-    /// nudge outlives the screen that earned it (R11).
+    /// Re-derives `currentScreen` from whichever tab stack is on screen: a
+    /// pop SwiftUI performs itself — an edge swipe, a system back button, a
+    /// tab switch — must restore the revealed screen's companion context, or
+    /// a nudge outlives the screen that earned it (R11).
     public func syncCurrentScreen(to route: AppRoute) {
-        guard isHouseFirstRoot, currentScreen != route else { return }
+        guard currentScreen != route else { return }
         currentScreen = route
         trackScreen(for: route)
         updateContext(for: route)
@@ -642,14 +563,6 @@ public final class AppCoordinator: Coordinator {
         }
     }
 
-    /// Append a pushed route to both the navigation path and its mirror
-    /// stack. Mirror first, so the `navigationPath.didSet` count comparison
-    /// doesn't misread a push as a pop.
-    private func push(_ route: AppRoute) {
-        screenStack.append(route)
-        navigationPath.append(route)
-    }
-
     /// PostHog screen-view properties for a route. For `.scanFlow` this
     /// attaches the entry `reason` so the single "Quiet Conversation"
     /// screen name can be segmented in dashboards (PT-3-5).
@@ -664,15 +577,12 @@ public final class AppCoordinator: Coordinator {
 
     /// Update `currentScreen` and companion context WITHOUT touching the
     /// navigation path. Use this from `.onAppear` when the view is already
-    /// the navigation root (so we don't dirty `navigationPath` and trigger
+    /// the navigation root (so we don't dirty the tab stack and trigger
     /// a re-render that corrupts SwiftUI's gesture recognizer tree under
     /// iOS 26's NavigationStack + ScrollView). Routes that imply a push
     /// must still go through `navigate(to:)`.
     public func setCurrentScreen(_ route: AppRoute) {
         currentScreen = route
-        // Keep the pop-restore fallback in sync with whichever home surface
-        // is actually showing — root views call this from `.onAppear`.
-        if navigationPath.isEmpty { rootScreen = route }
         trackScreen(for: route)
         updateContext(for: route)
     }
@@ -700,17 +610,9 @@ public final class AppCoordinator: Coordinator {
     }
 
     public func goBack() {
-        if isHouseFirstRoot {
-            // The root's `onChange` on `tabs.visibleRoute` restores
-            // `currentScreen` + companion context for the revealed screen.
-            tabs.pop()
-            return
-        }
-        if !navigationPath.isEmpty {
-            // `navigationPath.didSet` trims the mirror stack and restores
-            // `currentScreen` + companion context to the revealed screen.
-            navigationPath.removeLast()
-        }
+        // The root's `onChange` on `tabs.visibleRoute` restores
+        // `currentScreen` + companion context for the revealed screen.
+        tabs.pop()
     }
 
     // MARK: - Context Management
@@ -917,11 +819,8 @@ public final class AppCoordinator: Coordinator {
     public func resetToThreshold() {
         settings.hasSeenThreshold = false
         settings.hasCompletedOnboarding = false
-        navigationPath = NavigationPath()
-        if isHouseFirstRoot {
-            for tab in PatinaTab.allCases { tabs.popToRoot(tab) }
-            tabs.selected = .today
-        }
+        for tab in PatinaTab.allCases { tabs.popToRoot(tab) }
+        tabs.selected = .today
     }
 
     // MARK: - Companion

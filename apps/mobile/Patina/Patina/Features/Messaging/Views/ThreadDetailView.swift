@@ -83,14 +83,7 @@ struct ThreadDetailView: View { // swiftlint:disable:this type_body_length
                 // bar was drawn over it and won the hit test — a tap at the
                 // text field's own centre selected the Pieces tab. One owner,
                 // one seam: the metric the money screens already read.
-                //
-                // `coordinator.isHouseFirstRoot` rather than a live
-                // `FeatureFlags` read, per `MoneyScreenMetrics`' own note: the
-                // root is resolved once at launch and a late PostHog payload
-                // must not move a screen under someone's thumb.
-                .padding(.bottom, CompanionHearthMetrics.pinnedFooterClearance(
-                    houseFirst: coordinator.isHouseFirstRoot
-                ))
+                .padding(.bottom, CompanionHearthMetrics.pinnedFooterClearance)
         }
         .background(PatinaColors.Background.primary)
         .task {

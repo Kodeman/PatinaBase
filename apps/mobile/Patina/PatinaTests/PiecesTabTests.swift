@@ -80,22 +80,17 @@ struct PiecesTabTests {
         #expect(tabs.visibleRoute == RouteTabTable.rootRoute(for: .pieces))
     }
 
-    /// Both roots dispatch `.table` to `CollectionsView`, whose Boards /
+    /// The root dispatches `.table` to `CollectionsView`, whose Boards /
     /// All items tabs are untouched by this lane.
     @Test
     func savedIsStillTheBoardsAndAllItemsSurface() throws {
         #expect(CollectionsViewModel().tabs == ["Boards", "All pieces"])
 
-        for path in [
-            "Patina/Features/Navigation/HouseFirstRoot.swift",
-            "Patina/ContentView.swift"
-        ] {
-            let source = try SourcePin.read(path)
-            #expect(
-                source.contains("case .table:\n            CollectionsView()"),
-                "\(path) no longer dispatches .table to the canonical Saved surface"
-            )
-        }
+        let source = try SourcePin.read("Patina/Features/Navigation/HouseFirstRoot.swift")
+        #expect(
+            source.contains("case .table:\n            CollectionsView()"),
+            "HouseFirstRoot no longer dispatches .table to the canonical Saved surface"
+        )
     }
 
     // MARK: - The row draws only where M9 puts it

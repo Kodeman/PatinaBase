@@ -63,9 +63,8 @@ struct TopBandFoldTests {
         }
     }
 
-    @Test("the Hearth clearance stayed where it belongs")
+    @Test("the bar clearance stayed where it belongs")
     func theClearanceIsUntouched() {
-        #expect(MoneyScreenMetrics.bottomClearance(houseFirst: false)
-                >= CompanionHearthMetrics.reservedHeight)
+        #expect(MoneyScreenMetrics.bottomClearance == CompanionHearthMetrics.pinnedFooterClearance)
     }
 }

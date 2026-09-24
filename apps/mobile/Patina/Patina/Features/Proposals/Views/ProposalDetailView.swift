@@ -13,9 +13,6 @@ import SwiftUI
 
 struct ProposalDetailView: View {
     let proposalId: String
-    /// Read for the pinned-footer clearance only: the bar owns the bottom
-    /// edge on the house-first root, the Companion dock on the flag-off one.
-    @Environment(\.appCoordinator) private var coordinator
     /// `W2R2-n1`: the ceremony's covers honour it themselves. See below.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var viewModel = ProposalDetailViewModel()
@@ -34,7 +31,7 @@ struct ProposalDetailView: View {
                     loadingSkeleton
                 }
             }
-            .padding(.bottom, MoneyScreenMetrics.bottomClearance(houseFirst: coordinator.isHouseFirstRoot))
+            .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         }
         .background(PatinaColors.Background.primary)
         // U18: standard pushed-screen chrome — the header above carries

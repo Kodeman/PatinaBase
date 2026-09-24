@@ -4,8 +4,7 @@
 //
 //  `AppConfiguration.analyticsEnabled` existed with zero callers, so Debug
 //  builds reported into the PRODUCTION PostHog project — the same funnels the
-//  first tester round is meant to measure, and the same project whose flag
-//  payload `FeatureFlags` resolves from. This suite is the regression guard:
+//  first tester round is meant to measure. This suite is the regression guard:
 //  the switch is only real if flipping it stops a client being configured.
 //
 //  A Debug test run IS `analyticsEnabled == false`, so the assertion below is
@@ -31,7 +30,7 @@ struct AnalyticsKillSwitchTests {
     func initializeIsANoOpWhileDisabled() {
         PostHogService.shared.initialize()
         #expect(
-            PostHogService.shared.isFeatureFlagSourceLive == false,
+            PostHogService.shared.isConfigured == false,
             "PostHog was set up despite analyticsEnabled == false"
         )
     }

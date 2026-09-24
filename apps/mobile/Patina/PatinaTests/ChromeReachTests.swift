@@ -51,40 +51,6 @@ struct ChromeReachTests {
         #expect(source.components(separatedBy: "minHeight: 44").count - 1 >= 4)
     }
 
-    // MARK: - SP-19 · the Hearth
-
-    /// C8: "a reserved layout region, never a painted bar". The reservation
-    /// carried an opaque `PatinaColors.Background.primary` band with
-    /// `.ignoresSafeArea(edges: .bottom)`, which is what painted over
-    /// "Sign proposal" on a pushed screen (F49 / F137). More padding was never
-    /// the fix — ProposalDetailView already pads 140 and still collided.
-    @Test("the Hearth reserves space without painting a band")
-    func hearthReservationDrawsNothing() throws {
-        let source = try SourcePin.read("Patina/Design/Components/CompanionSafeArea.swift")
-        // Scope the pin to the reservation itself — the file's #Preview draws
-        // its own background legitimately. W5: the body moved into a
-        // `ViewModifier` (the height now reads `dynamicTypeSize`, which a plain
-        // `View` extension cannot hold), so the anchors follow it there. Same
-        // four facts, same region of code.
-        let start = try #require(source.range(of: "struct CompanionHearthReservation"))
-        let end = try #require(source.range(of: "extension View {"))
-        let reservation = String(source[start.lowerBound..<end.lowerBound])
-        #expect(!reservation.contains(".background"))
-        #expect(!reservation.contains("ignoresSafeArea"))
-        #expect(reservation.contains("Color.clear"))
-        #expect(reservation.contains("allowsHitTesting(false)"))
-    }
-
-    /// The reservation must keep its size: this is a paint change, not a
-    /// layout change, and every screen's clearance depends on the 120.
-    @Test("the reserved height is unchanged at 64 + 36 + 20")
-    func reservedHeightIsUnchanged() {
-        #expect(CompanionHearthMetrics.reservedHeight == 120)
-        #expect(CompanionHearthMetrics.collapsedDiameter == 64)
-        #expect(CompanionHearthMetrics.hintAllowance == 36)
-        #expect(CompanionHearthMetrics.verticalSpacing == 20)
-    }
-
     // MARK: - SP-19 · the unit control
 
     /// F40, narrowed: the conversion was never wrong. The control was — "ft"

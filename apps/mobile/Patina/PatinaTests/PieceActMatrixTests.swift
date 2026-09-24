@@ -9,10 +9,10 @@
 //  designer-side settle notice is proven on a device. No Buy button, no
 //  disclosure line, for those clients.
 //
-//  The pin is asserted over the WHOLE matrix — every flag state, every gate
-//  state — rather than on one happy case, because the failure mode this
-//  prevents is a future edit to the flag or the gate quietly reintroducing
-//  Buy for a client whose designer is on the job.
+//  The pin is asserted over the WHOLE matrix — every gate state — rather
+//  than on one happy case, because the failure mode this prevents is a future
+//  edit to the gate quietly reintroducing Buy for a client whose designer is
+//  on the job.
 //
 
 import Testing
@@ -46,21 +46,18 @@ struct PieceActMatrixTests {
 
     // MARK: - R3
 
-    @Test("a client with a live designer NEVER sees Buy — every flag, every gate")
+    @Test("a client with a live designer NEVER sees Buy — every gate")
     func liveRelationshipNeverProducesBuy() {
         for relationship in live {
             for piece in pieces {
-                for flag in [true, false] {
-                    let act = PieceActResolver.act(
-                        product: piece,
-                        relationship: relationship,
-                        designerName: "Leah Hartwell",
-                        directOrdersEnabled: flag
-                    )
-                    #expect(!act.isBuy)
-                    #expect(act == .askDesigner(firstName: "Leah"))
-                    #expect(!act.primaryLabel.lowercased().contains("buy"))
-                }
+                let act = PieceActResolver.act(
+                    product: piece,
+                    relationship: relationship,
+                    designerName: "Leah Hartwell"
+                )
+                #expect(!act.isBuy)
+                #expect(act == .askDesigner(firstName: "Leah"))
+                #expect(!act.primaryLabel.lowercased().contains("buy"))
             }
         }
     }
@@ -77,7 +74,6 @@ struct PieceActMatrixTests {
                 product: piece,
                 relationship: .none,
                 designerName: nil,
-                directOrdersEnabled: true,
                 relationshipIsResolved: false
             )
             #expect(!act.isBuy)
@@ -92,7 +88,6 @@ struct PieceActMatrixTests {
                 product: PurchaseFixture.piece(),
                 relationship: relationship,
                 designerName: "Leah Hartwell",
-                directOrdersEnabled: true,
                 relationshipIsResolved: false
             )
             #expect(act == .askDesigner(firstName: "Leah"))
@@ -150,16 +145,14 @@ struct PieceActMatrixTests {
         let named = PieceActResolver.act(
             product: PurchaseFixture.piece(),
             relationship: relationship,
-            designerName: "Leah Hartwell",
-            directOrdersEnabled: true
+            designerName: "Leah Hartwell"
         )
         #expect(named.primaryLabel == "Ask Leah to source this")
 
         let unnamed = PieceActResolver.act(
             product: PurchaseFixture.piece(),
             relationship: relationship,
-            designerName: nil,
-            directOrdersEnabled: true
+            designerName: nil
         )
         #expect(unnamed.primaryLabel == "Ask your designer to source this")
     }
@@ -172,8 +165,7 @@ struct PieceActMatrixTests {
             let act = PieceActResolver.act(
                 product: PurchaseFixture.piece(),
                 relationship: relationship,
-                designerName: nil,
-                directOrdersEnabled: true
+                designerName: nil
             )
             #expect(act == .buy(priceCents: 420_000))
             #expect(act.primaryLabel == "Buy — $4,200.00")
@@ -188,35 +180,19 @@ struct PieceActMatrixTests {
         let act = PieceActResolver.act(
             product: PurchaseFixture.piece(),
             relationship: roster,
-            designerName: "Leah Hartwell",
-            directOrdersEnabled: true
+            designerName: "Leah Hartwell"
         )
         #expect(act.isBuy)
     }
 
     // MARK: - Path C
 
-    @Test("the flag off is not a fact about the piece, so Path C states no reason")
-    func flagOffCarriesNoReason() {
-        for relationship in notLive {
-            let act = PieceActResolver.act(
-                product: PurchaseFixture.piece(),
-                relationship: relationship,
-                designerName: nil,
-                directOrdersEnabled: false
-            )
-            #expect(act == .askAboutPiece(reason: nil))
-            #expect(act.primaryLabel == "Ask about this piece")
-        }
-    }
-
     @Test("a failed gate falls to Path C carrying the gate’s own sentence")
     func gateFailureCarriesItsReason() {
         let act = PieceActResolver.act(
             product: PurchaseFixture.piece(dimensions: nil),
             relationship: .none,
-            designerName: nil,
-            directOrdersEnabled: true
+            designerName: nil
         )
         #expect(act == .askAboutPiece(reason: "We don’t have this piece’s size yet."))
         #expect(act.reason != nil)
@@ -227,8 +203,7 @@ struct PieceActMatrixTests {
         let act = PieceActResolver.act(
             product: PurchaseFixture.piece(priceCents: 0),
             relationship: .none,
-            designerName: nil,
-            directOrdersEnabled: true
+            designerName: nil
         )
         #expect(!act.isBuy)
         #expect(act.reason == "This piece doesn’t have a price yet.")

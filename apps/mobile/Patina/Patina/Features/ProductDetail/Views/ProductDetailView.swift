@@ -77,15 +77,14 @@ struct ProductDetailView: View {
         )
     }
 
-    /// The one act this piece offers, resolved from the relationship, the
-    /// flag and the gate. R3 lives inside `PieceActResolver`: a client with a
-    /// live designer gets Path B here whatever the flag and the gate say.
+    /// The one act this piece offers, resolved from the relationship and the
+    /// gate. R3 lives inside `PieceActResolver`: a client with a live designer
+    /// gets Path B here whatever the gate says.
     private func act(for product: Product) -> PieceAct {
         PieceActResolver.act(
             product: product,
             relationship: relationship,
             designerName: designerName,
-            directOrdersEnabled: FeatureFlags.shared.isOn(.directOrders),
             relationshipIsResolved: relationshipIsResolved
         )
     }
@@ -481,9 +480,7 @@ struct ProductDetailView: View {
                         soldByBlock(product)
 
                         Spacer()
-                            .frame(height: Self.actBarReservation(
-                                houseFirst: coordinator.isHouseFirstRoot
-                            ))
+                            .frame(height: Self.actBarReservation)
                     }
                     .padding(24)
                 }
@@ -543,27 +540,19 @@ struct ProductDetailView: View {
 
     // MARK: - The act
 
-    /// W2's clearance under the pinned act on a root with nothing else at that
-    /// edge: the home indicator's own room, and no more.
-    private static let pinnedActBottomInset: CGFloat = 36
-
     /// What the scroll column must leave under its last block so the screen's
     /// OWN pinned act bar does not sit on the sold-by paragraph.
     ///
     /// C9-04: this was the literal `120`, written across two lines so the
     /// keystone scan walked past it. It is not a Companion figure —
-    /// `companionBottomClearance()` answers 57 pt on the house-first root and
-    /// the bar is taller than that — it is the bar's own height: the 44 pt
-    /// capsule, its 16 pt top pad, and whatever clearance the bar's bottom edge
-    /// already takes. Derived from those three so a change to any of them moves
-    /// this too.
+    /// `companionBottomClearance()` answers 57 pt and the bar is taller than
+    /// that — it is the bar's own height: the 44 pt capsule, its 16 pt top
+    /// pad, and the clearance the bar's bottom edge already takes. Derived
+    /// from those three so a change to any of them moves this too.
     private static let actBarCapsuleHeight: CGFloat = 44
 
-    static func actBarReservation(houseFirst: Bool) -> CGFloat {
-        actBarCapsuleHeight + 16 + (houseFirst
-            ? MoneyScreenMetrics.bottomClearance(houseFirst: true)
-            : pinnedActBottomInset)
-    }
+    static let actBarReservation: CGFloat =
+        actBarCapsuleHeight + 16 + MoneyScreenMetrics.bottomClearance
 
     /// The width the Companion's minimal corner mark takes out of the bar's
     /// trailing edge: the 44 pt mark plus a hair of air. Its own trailing
@@ -640,18 +629,10 @@ struct ProductDetailView: View {
         .padding(.top, 16)
         // The act is pinned above the bottom safe area, and the root's
         // `safeAreaInset` does not reach a pushed destination — measured on
-        // `dr-w3-int`, this capsule sat at the identical y on both roots, which
-        // put its lower edge 13 pt under the house-first bar
-        // (`shots/w3-n1-13-piece-footer-under-bar-dark-xxl.png`). Where the bar
-        // draws, the capsule takes the same clearance the money screens take.
-        // On the flag-off root nothing is over this edge — `pieceDetail` is one
-        // of the routes where the Companion is already `.minimal`, a 44 pt mark
-        // in the corner, not a 140 pt dock — so W2's home-indicator breathing
-        // room is what this edge needs and the dock-sized figure would lift the
-        // act 112 pt off the bottom for nothing.
-        .padding(.bottom, coordinator.isHouseFirstRoot
-                 ? MoneyScreenMetrics.bottomClearance(houseFirst: true)
-                 : Self.pinnedActBottomInset)
+        // `dr-w3-int`, this capsule's lower edge sat 13 pt under the bar
+        // (`shots/w3-n1-13-piece-footer-under-bar-dark-xxl.png`). The capsule
+        // takes the same clearance the money screens take.
+        .padding(.bottom, MoneyScreenMetrics.bottomClearance)
         // PT-5-7: Liquid Glass action bar. `.glassEffect(.regular)` renders
         // the translucent, light-reactive material behind the bar (iOS 26+),
         // replacing the flat off-white + shadow. A hairline top divider keeps

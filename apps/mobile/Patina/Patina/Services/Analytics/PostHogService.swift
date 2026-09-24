@@ -170,37 +170,10 @@ public final class PostHogService {
         return PostHogSDK.shared.isFeatureEnabled(flag)
     }
 
-    /// Whether a flag read here can be trusted at all. `false` means
-    /// analytics is off (no API key) or PostHog was never set up, in which
-    /// case every key answers `false` and always will.
-    ///
-    /// posthog-ios persists its last flag payload
-    /// (`PostHogRemoteConfig.setCachedFeatureFlags` →
-    /// `storage.setDictionary(forKey: .enabledFeatureFlags)`) and reads it
-    /// back on the first access after `setup()`
-    /// (`getCachedFeatureFlags()`, `PostHogRemoteConfig.swift:568-573`), so
-    /// `isFeatureEnabled` answers from the previous session's payload
-    /// synchronously — no wait, no notification. That is what makes a
-    /// launch-time flag resolution possible at all; see `FeatureFlags`.
-    public var isFeatureFlagSourceLive: Bool { isEnabled && isInitialized }
-
-    /// The flag as PostHog can answer it *now*, or `nil` when PostHog has no
-    /// answer for this key at all — no cached payload yet, or the key is not in
-    /// the payload it has.
-    ///
-    /// `isFeatureEnabled` cannot express that: it maps an absent flag to
-    /// `false`, and `FeatureFlags` needs the difference — a `false` from
-    /// PostHog is the kill switch and beats the per-flag default, while silence
-    /// does not. `getFeatureFlagResult` is documented to return nil "if the
-    /// flag doesn't exist" (posthog-ios 3.48.0, PostHogSDK.swift:1453).
-    public func featureFlagAnswer(_ flag: String) -> Bool? {
-        guard isEnabled else { return nil }
-        guard let result = PostHogSDK.shared.getFeatureFlagResult(flag) else { return nil }
-        // A multivariate flag answers with a variant string; any variant means
-        // the flag is on, which is how `isFeatureEnabled` reads it too.
-        if result.variant != nil { return true }
-        return result.enabled
-    }
+    /// Whether a PostHog client is configured at all. `false` means analytics
+    /// is off (no API key, or the Debug kill switch) or `initialize()` never
+    /// ran.
+    public var isConfigured: Bool { isEnabled && isInitialized }
 
     /// Get feature flag value
     /// - Parameter flag: Feature flag key

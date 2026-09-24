@@ -119,16 +119,6 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// When the app last wrote this file. The widget says this when the
     /// snapshot is stale.
     let refreshedAt: Date
-    /// `house-widget`, as the app last resolved it.
-    ///
-    /// **D5 (2026-09-02) changed what this gates.** It used to decide whether a
-    /// placed widget drew anything at all, which meant a round-one tester —
-    /// `house-widget` off, and staying off — read "Open Patina to see your
-    /// house." forever with two real rows sitting in this file (GAP7B-02). It
-    /// is still written, because W2 may gate in-app *promotion* with it, and it
-    /// no longer reaches the render path.
-    let flagOn: Bool
-
     /// The account this payload was built for. nil is the signed-out
     /// placeholder, and the only payload the widget refuses to draw (B-16).
     let ownerId: String?
@@ -141,7 +131,7 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
     /// row whose id resolves to nothing sends every tap to Today with no
     /// explanation. A story has no destination in this app, so it has no place
     /// on a surface whose only affordance is a tap (GAP7B-05).
-    init(record: HouseRecord, houseLine: String?, refreshedAt: Date, flagOn: Bool, ownerId: String?) {
+    init(record: HouseRecord, houseLine: String?, refreshedAt: Date, ownerId: String?) {
         self.movedRows = record.moved.compactMap { row in
             // `R15`: the widget is untouched by "The Decision, Delivered".
             // `P-21`'s afterglow rows are the reader's OWN acts — "You
@@ -157,7 +147,6 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         self.houseLine = houseLine
         self.sinceDate = record.window.start
         self.refreshedAt = refreshedAt
-        self.flagOn = flagOn
         self.ownerId = ownerId
     }
 
@@ -166,14 +155,12 @@ struct WidgetSnapshot: Codable, Equatable, Sendable {
         houseLine: String?,
         sinceDate: Date?,
         refreshedAt: Date,
-        flagOn: Bool,
         ownerId: String?
     ) {
         self.movedRows = movedRows
         self.houseLine = houseLine
         self.sinceDate = sinceDate
         self.refreshedAt = refreshedAt
-        self.flagOn = flagOn
         self.ownerId = ownerId
     }
 }

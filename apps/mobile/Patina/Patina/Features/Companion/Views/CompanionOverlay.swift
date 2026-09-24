@@ -35,8 +35,6 @@ enum CompanionDisplayMode: Equatable {
 public struct CompanionOverlay: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Read here so `displayMode`'s yield and `companionHearthReservation`'s
-    /// height come from the same value (see `CompanionHearthReservation`).
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var viewModel = CompanionViewModel()
     @State private var state: CompanionState = .button
@@ -153,59 +151,13 @@ public struct CompanionOverlay: View {
 
         if state.isExpanded { return .expanded }
 
-        // B-2: on the house-first root the bar's trailing slot IS the collapsed
-        // Companion, so the floating dock retires entirely — mark, caption,
-        // nudge pill and all. Everything below this line describes where the
-        // dock rests over content, and there is no dock to rest.
+        // B-2: the bar's trailing slot IS the collapsed Companion, so the
+        // floating dock retires entirely — mark, caption, nudge pill and all.
         //
         // Placed AFTER the `.expanded` return on purpose: the panel is still
         // this view's, and returning `.hidden` before it resolves would strand
         // the Companion with a door that opens onto nothing.
-        if coordinator.isHouseFirstRoot, !state.isExpanded { return .hidden }
-
-        // Legacy journey mode remains source-compatible for context adapters
-        // outside the in-flow scan. If another flow publishes walk progress,
-        // it still maps to the canonical progress capsule.
-        if let progress = coordinator.companionContext.walkProgress {
-            let step = min(Int(progress * 4) + 1, 4)
-            let labels = ["Scanning room", "Capturing walls", "Finding details", "Almost done"]
-            let label = labels[min(step - 1, labels.count - 1)]
-            return .journeyMode(
-                progress: Double(progress),
-                step: step,
-                totalSteps: 4,
-                stepLabel: label
-            )
-        }
-
-        if case .pieceDetail = screen { return .minimal }
-        if case .arPlacement = screen { return .minimal }
-        // W4 walk 4, finding 1: at an accessibility text size the centred dock
-        // lands inside a card and takes its taps — the story card on Today,
-        // and every other card that grew with the type. The dock yields to its
-        // corner mark on every route that draws it. See
-        // `CompanionHearthMetrics.yieldsToAccessibilityText`.
-        //
-        // Ahead of the nudge check on purpose: the nudge pill is already
-        // suppressed at these sizes (`collapsedView`), so returning `.nudging`
-        // here would only draw the same dock under a different name.
-        if CompanionHearthMetrics.yieldsToAccessibilityText(dynamicTypeSize) { return .minimal }
-        // A screen with a pinned money act keeps the act; the dock yields to
-        // its corner mark. See `CompanionHearthMetrics.yieldsToPinnedFooter`.
-        if CompanionHearthMetrics.yieldsToPinnedFooter(
-            for: screen,
-            houseFirst: coordinator.isHouseFirstRoot
-        ) { return .minimal }
-        if case .styleResult = screen { return .resting }
-
-        if let nudge = CompanionActionProvider.nudge(
-            for: screen,
-            context: coordinator.companionContext
-        ) {
-            return .nudging(nudge)
-        }
-
-        return .resting
+        return .hidden
     }
 
     /// The coordinator's companion context, enriched with the promoted design
@@ -419,8 +371,8 @@ public struct CompanionOverlay: View {
 
     /// The Hearth's lift off the bottom safe area.
     ///
-    /// `CompanionOverlay` is mounted as a SIBLING of the four stacks on the
-    /// house-first root, not inside the bar's `safeAreaInset`, so it does not
+    /// `CompanionOverlay` is mounted as a SIBLING of the four stacks, not
+    /// inside the bar's `safeAreaInset`, so it does not
     /// inherit the bar's height — without this the expanded panel's bottom
     /// edge and its ✕ sit under the bar. `itemHeight` (49) rather than
     /// `barHeight` (83) because `safeAreaPadding` already adds the
@@ -429,7 +381,7 @@ public struct CompanionOverlay: View {
         let base: CGFloat = state.isExpanded ? 24 : 28
         // `PatinaTabBar` is generic over its trailing slot, so the static
         // needs a witness; any `Trailing` answers the same 49.
-        return coordinator.isHouseFirstRoot ? base + PatinaTabBar<EmptyView>.itemHeight : base
+        return base + PatinaTabBar<EmptyView>.itemHeight
     }
 
     public init() {}
@@ -506,7 +458,7 @@ public struct CompanionOverlay: View {
                 : .impact(weight: .light)
         }
         // B-2: the bar's trailing slot is the collapsed Companion's only
-        // control on the house-first root, and it can reach this view no other
+        // control, and it can reach this view no other
         // way — `expandToPanel()` is file-private. It writes
         // `coordinator.isCompanionExpanded`; this is what reads it.
         //

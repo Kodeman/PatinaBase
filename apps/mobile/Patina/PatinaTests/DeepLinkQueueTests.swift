@@ -51,7 +51,7 @@ struct DeepLinkQueueTests {
         #expect(handler.handle(link))
         #expect(handler.queuedURLs == [link])
 
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.main)
         handler.configure(coordinator: coordinator)
 
@@ -73,7 +73,7 @@ struct DeepLinkQueueTests {
     func everyNonMainPhaseQueues() throws {
         for phase in [AppPhase.launching, .auth, .onboarding] {
             let handler = DeepLinkHandler.makeForTests(queue: queue())
-            let coordinator = AppCoordinator(houseFirstRoot: true)
+            let coordinator = AppCoordinator()
             coordinator.forcePhaseForTesting(phase)
             handler.configure(coordinator: coordinator)
 
@@ -91,7 +91,7 @@ struct DeepLinkQueueTests {
     @Test("a link arriving at .main opens immediately and queues nothing")
     func theMainPhaseOpensRatherThanQueues() throws {
         let handler = DeepLinkHandler.makeForTests(queue: queue())
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.main)
         handler.configure(coordinator: coordinator)
 
@@ -108,7 +108,7 @@ struct DeepLinkQueueTests {
     @Test("a link tapped signed out opens the artifact once sign-in completes")
     func aSignedOutTapSurvivesSignIn() throws {
         let handler = DeepLinkHandler.makeForTests(queue: queue())
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.auth)
         handler.configure(coordinator: coordinator)
 
@@ -139,7 +139,7 @@ struct DeepLinkQueueTests {
     @Test("the queue holds more than one link and drains in arrival order")
     func theQueueIsAFifo() throws {
         let handler = DeepLinkHandler.makeForTests(queue: queue())
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.auth)
         handler.configure(coordinator: coordinator)
 
@@ -161,7 +161,7 @@ struct DeepLinkQueueTests {
     func theQueueIsBounded() throws {
         let store = queue()
         let handler = DeepLinkHandler.makeForTests(queue: store)
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.auth)
         handler.configure(coordinator: coordinator)
 
@@ -203,7 +203,7 @@ struct DeepLinkQueueTests {
     @Test("a queued link is acknowledged on the auth screen in one line")
     func aQueuedLinkIsAcknowledged() throws {
         let handler = DeepLinkHandler.makeForTests(queue: queue())
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.auth)
         handler.configure(coordinator: coordinator)
 
@@ -231,7 +231,7 @@ struct DeepLinkQueueTests {
         _ = handler.handle(try url(Self.proposal))
         #expect(handler.queuedURLs.count == 1)
 
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.auth)
         #expect(coordinator.pendingLinkNotice == nil)
 
@@ -247,7 +247,7 @@ struct DeepLinkQueueTests {
     @Test("configuring with nothing held says nothing")
     func configuringWithAnEmptyQueueSaysNothing() {
         let handler = DeepLinkHandler.makeForTests(queue: queue())
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.auth)
 
         handler.configure(coordinator: coordinator)
@@ -271,7 +271,7 @@ struct DeepLinkQueueTests {
     func authCallbacksBypassTheQueue() throws {
         for phase in [AppPhase.launching, .auth, .onboarding] {
             let handler = DeepLinkHandler.makeForTests(queue: queue())
-            let coordinator = AppCoordinator(houseFirstRoot: true)
+            let coordinator = AppCoordinator()
             coordinator.forcePhaseForTesting(phase)
             handler.configure(coordinator: coordinator)
 
@@ -285,7 +285,7 @@ struct DeepLinkQueueTests {
     @Test("a widget tap in a non-main phase is queued and replayed, not dropped")
     func theWidgetArmIsQueuedToo() throws {
         let handler = DeepLinkHandler.makeForTests(queue: queue())
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.launching)
         handler.configure(coordinator: coordinator)
 
@@ -303,7 +303,7 @@ struct DeepLinkQueueTests {
     @Test("an APNs route delivered before .main is held and replayed")
     func anApnsRouteIsHeldUntilMain() {
         let handler = DeepLinkHandler.makeForTests(queue: queue())
-        let coordinator = AppCoordinator(houseFirstRoot: true)
+        let coordinator = AppCoordinator()
         coordinator.forcePhaseForTesting(.auth)
         handler.configure(coordinator: coordinator)
 

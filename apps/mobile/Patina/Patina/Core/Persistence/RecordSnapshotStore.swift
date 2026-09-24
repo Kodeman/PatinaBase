@@ -51,10 +51,6 @@ final class RecordSnapshotStore: Sendable {
     /// Injected so a test can count reloads without a widget being installed.
     /// Production hands `WidgetCenter` the one kind X1's widget declares.
     private let reloadWidgets: @Sendable (String) -> Void
-    /// `house-widget`, read the way the widget reads it — from the App Group
-    /// mirror, not from `FeatureFlags` itself, which is `@MainActor` and holds
-    /// nothing on disk.
-    private let flagIsOn: @Sendable () -> Bool
     /// Who the payload is for (B-16), read the way the widget's own container
     /// is read — from the App Group stamp, which is `Sendable` and on disk,
     /// rather than from `AuthService`, which is `@MainActor` and would put an
@@ -87,14 +83,12 @@ final class RecordSnapshotStore: Sendable {
         reloadWidgets: @escaping @Sendable (String) -> Void = { kind in
             WidgetCenter.shared.reloadTimelines(ofKind: kind)
         },
-        flagIsOn: @escaping @Sendable () -> Bool = { FeatureFlagMirror.isOn(.houseWidget) },
         ownerId: @escaping @Sendable () -> String? = { RecordOwnerStamp.shared.ownerId },
         clearOwner: @escaping @Sendable () -> Void = { RecordOwnerStamp.shared.clear() },
         stampOwner: @escaping @Sendable (String) -> Void = { RecordOwnerStamp.shared.stamp($0) }
     ) {
         self.fileManager = fileManager
         self.reloadWidgets = reloadWidgets
-        self.flagIsOn = flagIsOn
         self.ownerId = ownerId
         self.clearOwner = clearOwner
         self.stampOwner = stampOwner
@@ -161,7 +155,6 @@ final class RecordSnapshotStore: Sendable {
                     record: record,
                     houseLine: line,
                     refreshedAt: now,
-                    flagOn: flagIsOn(),
                     // The named session wins over the stamp rather than being
                     // read back through it: the stamp is a `UserDefaults` round
                     // trip, and the payload must not depend on one having
@@ -207,7 +200,6 @@ final class RecordSnapshotStore: Sendable {
                     houseLine: nil,
                     sinceDate: nil,
                     refreshedAt: now,
-                    flagOn: flagIsOn(),
                     ownerId: nil
                 )
             )
@@ -233,7 +225,6 @@ final class RecordSnapshotStore: Sendable {
                     houseLine: line,
                     sinceDate: current.sinceDate,
                     refreshedAt: current.refreshedAt,
-                    flagOn: flagIsOn(),
                     ownerId: current.ownerId
                 )
             )

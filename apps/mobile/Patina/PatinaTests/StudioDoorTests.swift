@@ -23,9 +23,9 @@ struct StudioDoorTests {
     /// §6a's exit: one Studio door on this root, and B-8's step 3 points at it.
     ///
     /// The tour is hoisted into `HouseFirstRoot` so its model covers the bar as
-    /// well as the four stacks, the bar's `.studio` arm carries the anchor, and
-    /// the header's pill — B-1's fallback door for the root without a bar — is
-    /// gated off. The two mounts are mutually exclusive, which
+    /// well as the four stacks, and the bar carries the anchor. The header's
+    /// pill — B-1's fallback door for the root without a bar — went with that
+    /// root (D5), which
     /// `FirstLaunchTourTests.everyDefaultStepAnchorHasExactlyOneProductionMountPerRoot`
     /// pins from the other side.
     @Test
@@ -46,9 +46,9 @@ struct StudioDoorTests {
         #expect(SourceScan.code(in: root).contains("FirstLaunchTour("))
         #expect(SourceScan.code(in: root).contains("canAutoStart: coordinator.tabs.isShowingTodayRoot"))
 
-        // And the header's duplicate door is gated off wherever the bar draws.
-        #expect(SourceScan.code(in: header).contains("if showsStudioControl {"))
-        #expect(SourceScan.code(in: daily).contains("showsStudioControl: !coordinator.isHouseFirstRoot"))
+        // And the header's duplicate door is gone.
+        #expect(!SourceScan.code(in: header).contains(".firstLaunchTourAnchor(.profileMonogram)"))
+        #expect(!SourceScan.code(in: daily).contains("FirstLaunchTour("))
     }
 
     /// The walk's finding: on the flag-on root there was no way to Settings,

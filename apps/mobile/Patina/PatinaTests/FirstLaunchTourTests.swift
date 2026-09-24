@@ -695,16 +695,13 @@ struct FirstLaunchTourTests {
         // one step.
         //
         // So the pin is a map, not a count: every anchor names the file that is
-        // allowed to mount it, and nothing else in the app may. Step 3 has two
-        // entries because the app's Studio door is in two places — the bar on
-        // the house-first root, the header pill on the flag-off one — and the
-        // header gates its pill off wherever the bar draws
-        // (`DailyGreetingHeader.showsStudioControl`), so exactly one of the two
-        // is ever in the tree.
+        // allowed to mount it, and nothing else in the app may. Step 3 lives
+        // on the bar's tab item; the header pill that once carried it on the
+        // flag-off root went with that root (D5).
         let expected: [FirstLaunchTourAnchor: Set<String>] = [
             .homeGreeting: ["DailyGreetingHeader.swift"],
             .todayRecord: ["DailyRoomView.swift"],
-            .profileMonogram: ["PatinaTabBar.swift", "DailyGreetingHeader.swift"]
+            .profileMonogram: ["PatinaTabBar.swift"]
         ]
 
         for step in FirstLaunchTourModel.defaultSteps {
@@ -851,10 +848,8 @@ struct FirstLaunchTourTests {
     @Test
     func eachRootHostsExactlyOneTourModel() throws {
         // `FirstLaunchTour` publishes its model down its own subtree, so the
-        // host has to sit above every anchor the step list names. On the
-        // house-first root that means above the four stacks AND the bar
-        // (`HouseFirstRoot`); on the flag-off root Today's stack is the whole
-        // app, so `DailyRoomView` still hosts it there. Two hosts in one tree
+        // host has to sit above every anchor the step list names: above the
+        // four stacks AND the bar (`HouseFirstRoot`). Two hosts in one tree
         // would split the tour: Today's anchors would answer the inner model
         // and the bar's step 3 the outer one.
         let daily = SourceScan.code(in: try SourcePin.read("Patina/Features/Home/Views/DailyRoomView.swift"))
@@ -862,17 +857,12 @@ struct FirstLaunchTourTests {
             in: try SourcePin.read("Patina/Features/Navigation/HouseFirstRoot.swift")
         )
 
-        #expect(daily.contains("if coordinator.isHouseFirstRoot {"))
+        #expect(!daily.contains("FirstLaunchTour("))
         // `W1-C-13` gave the call a second argument — the bar's own height, so
         // step 2's card is never hung across it — so the call wraps.
         #expect(houseFirst.contains("FirstLaunchTour("))
         #expect(houseFirst.contains("canAutoStart: coordinator.tabs.isShowingTodayRoot"))
-        // The flag must not be read live in the view layer — `isHouseFirstRoot`
-        // is resolved once at launch by `AppCoordinator` and held.
-        #expect(!daily.contains("FeatureFlags.shared.isOn(.houseFirst)"))
-        #expect(!houseFirst.contains("FeatureFlags.shared.isOn(.houseFirst)"))
-
-        // Exactly two hosts in the whole app, one per root.
+        // Exactly one host in the whole app.
         var hosts: [String] = []
         for path in SourcePin.swiftFiles(under: "Patina")
             where !path.hasSuffix("FirstLaunchTour.swift") {
@@ -881,7 +871,7 @@ struct FirstLaunchTourTests {
                 hosts.append((path as NSString).lastPathComponent)
             }
         }
-        #expect(Set(hosts) == ["DailyRoomView.swift", "HouseFirstRoot.swift"], "found \(hosts)")
+        #expect(hosts == ["HouseFirstRoot.swift"], "found \(hosts)")
     }
 
     @Test
