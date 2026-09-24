@@ -8,7 +8,17 @@ SIM="${CAPTURE_SIM:-iPhone 17}"
 DEST="platform=iOS Simulator,name=${SIM}"
 CMD="${1:-all}"
 
-generate() { ruby scripts/generate_project.rb >/dev/null; }
+# Restore the gitignored Secrets.swift first. generate_project.rb globs *.swift
+# off disk, so in a fresh worktree or a CI checkout — where the gitignored file
+# was never checked out — it generates an app target missing the `Secrets` enum
+# that AppConfiguration.swift references, and the build fails for reasons that
+# have nothing to do with the change under test. Inside generate() so neither
+# build nor test can skip it. Never overwrites an existing file; see
+# scripts/bootstrap-worktree.sh.
+generate() {
+  scripts/bootstrap-worktree.sh
+  ruby scripts/generate_project.rb >/dev/null
+}
 
 build() {
   generate
