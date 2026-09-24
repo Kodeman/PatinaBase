@@ -51,8 +51,8 @@
 #     certificate; it does NOT create a certificate, Apple ID or API key.
 #     Without such a key, signing falls back to whatever Xcode and the keychain
 #     can already resolve.
-#   - Patina/App/Configuration/Secrets.swift (gitignored) — copy from
-#     Secrets.example.swift. Without it the build fails to compile.
+#   - Patina/App/Configuration/Secrets.swift (gitignored) holding the REAL anon
+#     key. scripts/bootstrap-worktree.sh makes one with an empty key; fill it in.
 #
 # Env vars (optional for export, REQUIRED for --upload):
 #   ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY_PATH
@@ -229,6 +229,10 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
+# Deliberately NOT bootstrapped: scripts/bootstrap-worktree.sh would happily
+# create this file with the template's EMPTY anon key, and an archive that
+# reaches TestFlight with no anon key is worse than one that never builds. A
+# shipping build gets the real key or it stops here.
 SECRETS_SWIFT="Patina/App/Configuration/Secrets.swift"
 if [[ ! -f "$SECRETS_SWIFT" ]]; then
   cat >&2 <<EOF
@@ -240,6 +244,26 @@ Then fill in supabaseAnonKey (and optionally postHogAPIKey).
 EOF
   exit 1
 fi
+
+# Existence is not enough. ios-gate.sh runs scripts/bootstrap-worktree.sh, which
+# creates this file from the template with an EMPTY anon key — so in a fresh
+# worktree where the gate ran first, the file exists and the check above passes.
+# An archive with no anon key reaches TestFlight and cannot authenticate.
+if ! grep -Eq 'supabaseAnonKey[[:space:]]*=[[:space:]]*"[^"]+"' "$SECRETS_SWIFT"; then
+  cat >&2 <<EOF
+archive-testflight.sh: $SECRETS_SWIFT has an empty supabaseAnonKey
+
+It was probably created by scripts/bootstrap-worktree.sh, which copies the
+template's empty key so dev builds compile. A shipping build needs the real
+key — fill in supabaseAnonKey and re-run.
+EOF
+  exit 1
+fi
+
+# Runs AFTER the guard above, so it can only ever restore the other gitignored
+# compile-time file, Patina/Generated/GitCommit.swift. Without it a fresh
+# checkout fails to compile — see scripts/bootstrap-worktree.sh.
+"$SCRIPT_DIR/bootstrap-worktree.sh"
 
 mkdir -p "$ARCHIVE_DIR" "$EXPORT_DIR"
 
