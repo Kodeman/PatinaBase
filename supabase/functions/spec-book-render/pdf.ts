@@ -19,6 +19,7 @@ import type {
   AudienceRenderModel,
 } from "./render-model.ts";
 import { renderMediaIdentity } from "./render-model.ts";
+import { DEFAULT_CURRENCY, formatMinorUnits } from "../_shared/currency-totals.ts";
 
 const h = React.createElement;
 const CONTENTS_ROWS_PER_PAGE = 34;
@@ -426,6 +427,13 @@ function pageFooter(
   );
 }
 
+/** A client price in its own currency. USD keeps the legacy format exactly. */
+export function clientPriceText(cents: number, currency: string): string {
+  return currency === DEFAULT_CURRENCY
+    ? `$${(cents / 100).toFixed(2)}`
+    : formatMinorUnits(cents, currency);
+}
+
 function itemPage(
   model: AudienceRenderModel,
   item: AudienceItem,
@@ -436,18 +444,20 @@ function itemPage(
   const firstImage = item.media
     .map((media) => imageData.get(renderMediaIdentity(media)))
     .find(Boolean);
+  // The client price prints in its own currency; `currency` is not a row.
+  const { currency = DEFAULT_CURRENCY, ...commercial } = item.commercial;
   const fields = [
     ...Object.entries(item.selection),
     ...Object.entries(item.vendor).map(([key, value]) =>
       [`Vendor ${key}`, value] as const
     ),
-    ...Object.entries(item.commercial).map(([key, value]) =>
+    ...Object.entries(commercial).map(([key, value]) =>
       [
         key === "clientPriceCents" && typeof value === "number"
           ? "Client price"
           : key,
         key === "clientPriceCents" && typeof value === "number"
-          ? `$${(value / 100).toFixed(2)}`
+          ? clientPriceText(value, String(currency))
           : value,
       ] as const
     ),

@@ -599,6 +599,12 @@ function buildSafeItem(
     ]);
     if (numberValue(clientPrice) !== null) {
       commercial.clientPriceCents = clientPrice;
+      // The price's own currency (project_ffe_items.currency). A snapshot
+      // without one reads as USD and the model stays exactly as before.
+      const currency = stringValue(pricing.currency)?.toUpperCase();
+      if (currency && /^[A-Z]{3}$/.test(currency)) {
+        commercial.currency = currency;
+      }
     }
   }
   if (audience === "internal") {

@@ -206,3 +206,48 @@ Deno.test("internal PDF contains frozen private and procurement commentary", asy
   assert(text.includes("PROCUREMENT-ONLY"));
   assert(text.includes("INTERNAL-CONTACT"));
 });
+
+// SQ-212: hashes taken from main @ d0254134a (pre-change) rendering the same
+// all-USD fixture. Spec Book renders are deterministic, so no bytes are masked.
+Deno.test("all-USD spec book PDFs are byte-for-byte the pre-SQ-212 output", async () => {
+  for (
+    const [audience, expected] of [
+      [
+        "client",
+        "df4c2aeff0d042b829a4152659f1465dcc061ab81f453e69d04ede12387961d5",
+      ],
+      [
+        "internal",
+        "6ae9bf36a80b9979d710d04af27dbb59538bcf646b9141f424bf7f2cd4d60288",
+      ],
+    ] as const
+  ) {
+    const model = await buildAudienceRenderModel(
+      frozenSnapshot(),
+      audience,
+      context,
+    );
+    assertEquals(await sha256Hex(await renderSpecBookPdf(model)), expected);
+  }
+});
+
+Deno.test("a frozen non-USD client price prints in its own currency", async () => {
+  const source = frozenSnapshot();
+  const snapshot = frozenSnapshot({
+    items: source.items.map((item) =>
+      item.pricing && typeof item.pricing === "object"
+        ? { ...item, pricing: { ...item.pricing, currency: "eur" } }
+        : item
+    ),
+  });
+  const model = await buildAudienceRenderModel(snapshot, "client", context);
+  const priced = model.items.find((item) =>
+    item.commercial.clientPriceCents === 12345
+  );
+  assertEquals(priced?.commercial.currency, "EUR");
+  const text = await extractedText(await renderSpecBookPdf(model));
+  assert(text.includes("€123.45"), text);
+  assertEquals(text.includes("$123.45"), false);
+  // The currency rides with the price; it is not printed as its own row.
+  assertEquals(text.includes("currency"), false);
+});
