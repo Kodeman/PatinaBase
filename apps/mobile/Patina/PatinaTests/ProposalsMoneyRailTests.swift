@@ -328,7 +328,7 @@ struct ProposalsMoneyRailTests {
         let proposal = try decode(RemoteProposal.self, """
         { "id": "p-3", "status": "sent", "title": "Aspen Loft",
           "total_amount": 10000000, "payment_terms": "net_30",
-          "valid_until": "2026-09-08", "project": { "id": "pr", "name": "Aspen Loft Refresh" },
+          "valid_until": "2999-09-08", "project": { "id": "pr", "name": "Aspen Loft Refresh" },
           "created_at": "2026-07-01T00:00:00Z" }
         """)
         let milestones = try decode([RemoteProposalMilestone].self, """
@@ -342,7 +342,10 @@ struct ProposalsMoneyRailTests {
         #expect(terms.deposit == "$25,000.00")
         #expect(terms.terms == "Net 30")
         // m-4: one expiry vocabulary. The sheet used to print "Expires Sep 8,
-        // 2026" over a detail reading "Expires Sep 8".
+        // 2026" over a detail reading "Expires Sep 8". `make` reads the wall
+        // clock (ProposalSignTerms.swift:55 calls `DateDisplay.expiry` without
+        // `now:`), so `valid_until` sits far enough out that it never passes;
+        // a 2026 fixture flipped this to "Expired Sep 8" once that day came.
         #expect(terms.expiry == "Expires Sep 8")
         #expect(terms.lines.map(\.label) == ["Project", "Total", "Deposit", "Terms", "Expiry"])
     }

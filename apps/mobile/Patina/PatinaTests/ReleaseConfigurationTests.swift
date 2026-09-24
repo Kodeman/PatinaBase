@@ -38,11 +38,51 @@ struct ReleaseConfigurationTests {
 
     // MARK: - A2-01 — the build number
 
-    /// ASC already holds build "2" (uploaded 2026-05-12), so 1 is below the
-    /// floor and the upload bounces before anyone sees it.
-    @Test("the resolved CFBundleVersion is 3")
-    func resolvedBuildNumberIsThree() {
-        #expect(appInfo["CFBundleVersion"] as? String == "3")
+    /// `CURRENT_PROJECT_VERSION` as `Config/Version.xcconfig` declares it,
+    /// parsed the way `scripts/archive-testflight.sh` reads it (last
+    /// uncommented assignment wins). Read from source so a bump never needs
+    /// this suite edited — the number is the xcconfig's, the wiring is ours.
+    private func xcconfigBuildNumber() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // PatinaTests
+            .deletingLastPathComponent() // apps/mobile/Patina
+            .appendingPathComponent("Config/Version.xcconfig")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let values = source.split(separator: "\n").compactMap { line -> String? in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("CURRENT_PROJECT_VERSION") else { return nil }
+            let parts = trimmed.split(separator: "=", maxSplits: 1)
+            guard parts.count == 2,
+                  parts[0].trimmingCharacters(in: .whitespaces) == "CURRENT_PROJECT_VERSION"
+            else { return nil }
+            return parts[1].trimmingCharacters(in: .whitespaces)
+        }
+        return try #require(values.last, "Config/Version.xcconfig sets no CURRENT_PROJECT_VERSION")
+    }
+
+    /// The xcconfig is the one source of the number only if nothing above it
+    /// wins: a target-level `CURRENT_PROJECT_VERSION` left in the pbxproj
+    /// silently outranks it. The as-built plist must carry exactly what the
+    /// xcconfig says.
+    @Test("the resolved CFBundleVersion is the one Config/Version.xcconfig declares")
+    func resolvedBuildNumberComesFromTheXcconfig() throws {
+        let declared = try xcconfigBuildNumber()
+        #expect(appInfo["CFBundleVersion"] as? String == declared)
+    }
+
+    /// ASC already holds build "2" (uploaded 2026-05-12), so anything at or
+    /// below it bounces before anyone sees it. The shape is the one
+    /// `archive-testflight.sh --build-number` accepts (`^[0-9]+(\.[0-9]+)*$`).
+    @Test("the resolved CFBundleVersion is numeric and above App Store Connect's floor")
+    func resolvedBuildNumberIsAboveTheFloor() throws {
+        let version = try #require(appInfo["CFBundleVersion"] as? String)
+        let components = version.split(separator: ".", omittingEmptySubsequences: false)
+        let isNumericShape = components.allSatisfy { part in
+            !part.isEmpty && part.allSatisfy { $0.isASCII && $0.isNumber }
+        }
+        #expect(isNumericShape, "CFBundleVersion '\(version)' is not the numeric shape archive-testflight.sh accepts")
+        let major = try #require(Int(components[0]))
+        #expect(major > 2, "CFBundleVersion '\(version)' is at or below build 2, which ASC already holds")
     }
 
     @Test("the resolved CFBundleShortVersionString is 1.0")
@@ -55,7 +95,8 @@ struct ReleaseConfigurationTests {
     @Test("the widget appex carries the same build number as the app")
     func widgetBuildNumberMatchesTheApp() throws {
         let widget = try widgetInfo()
-        #expect(widget["CFBundleVersion"] as? String == "3")
+        let declared = try xcconfigBuildNumber()
+        #expect(widget["CFBundleVersion"] as? String == declared)
         #expect(
             widget["CFBundleVersion"] as? String == appInfo["CFBundleVersion"] as? String,
             "app and appex build numbers diverged — ITMS-90473"
