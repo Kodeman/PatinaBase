@@ -2,7 +2,7 @@
 //  Capture
 //
 //  Team B registrar (Flow 2 · C1–C5). Wires the viewfinder home route and the
-//  full specimen sheet into RouteRegistry. The integration owner adds
+//  full piece sheet into RouteRegistry. The integration owner adds
 //  `CaptureCoreScreens.register(...)` to ScreenRegistry; registering `.viewfinder`
 //  makes the live viewfinder the app's home (replacing ViewfinderPlaceholder).
 //
@@ -20,21 +20,21 @@ enum CaptureCoreScreens {
             AnyView(ViewfinderScreen(container: container, coordinator: coordinator))
         }
 
-        r.registerSheet(CaptureSheet.specimenSheet(UUID()).registryKey) { sheet in
-            guard case let .specimenSheet(id) = sheet,
-                  let specimen = CaptureOwnerProjectionPolicy.specimen(
+        r.registerSheet(CaptureSheet.pieceSheet(UUID()).registryKey) { sheet in
+            guard case let .pieceSheet(id) = sheet,
+                  let piece = CaptureOwnerProjectionPolicy.piece(
                     id: id,
                     store: container.store,
                     runsRealServices: AppConfiguration.runsRealServices,
                     userID: container.session.userID,
                     workspaceID: container.session.workspaceID
                   ) else {
-                return AnyView(SpecimenMissingView())
+                return AnyView(PieceMissingView())
             }
-            return AnyView(SpecimenSheetScreen(
+            return AnyView(PieceSheetScreen(
                 store: container.store,
                 coordinator: coordinator,
-                specimen: specimen))
+                piece: piece))
         }
     }
 }

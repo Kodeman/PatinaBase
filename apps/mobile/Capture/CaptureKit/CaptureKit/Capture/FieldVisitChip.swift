@@ -64,31 +64,31 @@ public enum FieldVisitChipBuilder {
 /// The C3 / C5 placement line (spec §7.5). One line, always true.
 ///
 /// Wave 1 shipped this line pointed at S1; wave 3 repoints it at the door (V0)
-/// and keeps the copy honest. It reads `Specimen.isUnplaced` and never
+/// and keeps the copy honest. It reads `Piece.isUnplaced` and never
 /// re-derives placement — `status` and `remoteId` are a different axis, and the
 /// line clears on PLACEMENT, never on sync.
 public enum FieldPlacementLine {
     @MainActor
-    public static func text(for specimen: Piece) -> String {
+    public static func text(for piece: Piece) -> String {
         // Flow 2: the door keeps this promise for the capture in her hand — the
         // in-hand draft re-inherits the visit she starts there (ViewfinderModel),
         // so the words are honest. FC-R6 is untouched: an already-SAVED unplaced
         // capture still waits on Today until she files it from the tray.
-        guard !isUnplaced(specimen) else { return "Not placed — tap to place" }
-        let project = trimmed(specimen.venue?.projectName)
-        let room = trimmed(specimen.venue?.room)
+        guard !isUnplaced(piece) else { return "Not placed — tap to place" }
+        let project = trimmed(piece.venue?.projectName)
+        let room = trimmed(piece.venue?.room)
         // Spec Flow 6: an un-chipped market find filed to the Library shelf is
         // DONE. It is not adrift, so it is neither offered a placement nor given
         // a project it has not got — it is told where it actually landed.
         // Keyed on the project ID, the placement fact everywhere else, so a
         // chipped find whose NAME was never stamped keeps its room.
-        guard specimen.destinationRequiresProject
-                || trimmed(specimen.venue?.projectId) != nil else { return "Library" }
+        guard piece.destinationRequiresProject
+                || trimmed(piece.venue?.projectId) != nil else { return "Library" }
         return "\(project ?? "This project") · \(room ?? "Whole house")"
     }
 
     @MainActor
-    public static func isUnplaced(_ specimen: Piece) -> Bool { specimen.isUnplaced }
+    public static func isUnplaced(_ piece: Piece) -> Bool { piece.isUnplaced }
 
     private static func trimmed(_ value: String?) -> String? {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -99,7 +99,7 @@ public enum FieldPlacementLine {
 
 /// How the visit door keeps the C3 line's promise for the capture STILL IN HER
 /// HAND (spec Flow 2). "Tap to place" opens V0, and V0 commits a session
-/// context — it touches no `Specimen` — so without this the draft she left on
+/// context — it touches no `Piece` — so without this the draft she left on
 /// the card would still read "Not placed — tap to place" when she came back.
 ///
 /// FC-R6 is untouched: this is the UNSAVED draft only. An already-committed

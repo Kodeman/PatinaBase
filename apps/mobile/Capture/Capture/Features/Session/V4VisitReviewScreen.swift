@@ -7,7 +7,7 @@
 //  view does no arithmetic of its own.
 //
 //  ⚠ The groups are Captures · Notes · Unplaced. §7.9 also names Scans; a scan
-//  is not a Specimen and the device keeps no visit-keyed scan record, so
+//  is not a Piece and the device keeps no visit-keyed scan record, so
 //  counting them here would mean guessing.
 //
 //  This screen is now the ONLY caller of endVisit on the tray path, so the
@@ -32,11 +32,11 @@ struct V4VisitReviewScreen: View {
     /// Nil in mock mode, exactly as `AppContainer` holds it.
     let visitCloseDrainer: VisitCloseOutboxDrainer?
 
-    @State private var specimens: [Piece] = []
+    @State private var pieces: [Piece] = []
     /// Paired once per CHANGE, not per body pass. Read by four computed
     /// properties, each of which the body evaluates — re-pairing per read built
     /// a VisitReviewRow per capture roughly six times per pass.
-    @State private var paired: [(specimen: Piece, row: VisitReviewRow)] = []
+    @State private var paired: [(piece: Piece, row: VisitReviewRow)] = []
     /// The playable segments per capture, stat'ed once per change rather than on
     /// every body pass: `playableSegments` touches the filesystem per row.
     @State private var playable: [UUID: [URL]] = [:]
@@ -49,7 +49,7 @@ struct V4VisitReviewScreen: View {
     /// Snapshotted on appear: the offered minutes must not tick while she reads.
     @State private var closedAt = Date()
     @State private var player = VoiceSegmentPlayer()
-    @State private var playingSpecimenID: UUID?
+    @State private var playingPieceID: UUID?
     /// The standing close record's own state, or nil when there is none. The
     /// button reads THIS rather than a "she tapped" flag: a local insert is not
     /// a send, and saying "Logged." before the row exists is the §3.3 failure.
@@ -69,7 +69,7 @@ struct V4VisitReviewScreen: View {
         ZStack {
             CaptureColor.paper3.ignoresSafeArea()
             VStack(spacing: 0) {
-                if specimens.isEmpty {
+                if pieces.isEmpty {
                     emptyState
                 } else {
                     list
@@ -93,13 +93,13 @@ struct V4VisitReviewScreen: View {
 
     // MARK: - What the visit produced
 
-    private var captures: [Piece] { paired.filter(\.row.hasPhoto).map(\.specimen) }
+    private var captures: [Piece] { paired.filter(\.row.hasPhoto).map(\.piece) }
 
     private var notes: [Piece] {
-        paired.filter { !$0.row.hasPhoto && $0.row.hasTranscript }.map(\.specimen)
+        paired.filter { !$0.row.hasPhoto && $0.row.hasTranscript }.map(\.piece)
     }
 
-    private var unplaced: [Piece] { paired.filter { !$0.row.isPlaced }.map(\.specimen) }
+    private var unplaced: [Piece] { paired.filter { !$0.row.isPlaced }.map(\.piece) }
 
     private var summary: VisitReviewSummary {
         VisitReviewComposer.summarize(rows: paired.map(\.row),
@@ -127,11 +127,11 @@ struct V4VisitReviewScreen: View {
                     .font(CaptureType.eyebrow)
                     .foregroundStyle(CaptureColor.inkSoft)
                 VStack(spacing: 0) {
-                    ForEach(members, id: \.id) { specimen in
-                        if specimen.id != members.first?.id {
+                    ForEach(members, id: \.id) { piece in
+                        if piece.id != members.first?.id {
                             Divider().background(CaptureColor.line)
                         }
-                        row(specimen)
+                        row(piece)
                     }
                 }
                 .routeCard()
@@ -141,43 +141,43 @@ struct V4VisitReviewScreen: View {
 
     // MARK: - One capture
 
-    private func row(_ specimen: Piece) -> some View {
+    private func row(_ piece: Piece) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            rowBody(specimen)
-            rowActions(specimen)
+            rowBody(piece)
+            rowActions(piece)
         }
     }
 
-    private func rowBody(_ specimen: Piece) -> some View {
-        let playable = playable[specimen.id] ?? []
+    private func rowBody(_ piece: Piece) -> some View {
+        let playable = playable[piece.id] ?? []
         return HStack(spacing: 12) {
-            glyph(specimen)
+            glyph(piece)
             VStack(alignment: .leading, spacing: 3) {
-                Text(rowTitle(specimen))
+                Text(rowTitle(piece))
                     .font(CaptureType.bodyEmph)
                     .foregroundStyle(CaptureColor.ink)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                Text(specimen.venue?.room ?? "No room yet")
+                Text(piece.venue?.room ?? "No room yet")
                     .font(CaptureType.monoSmall)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if !playable.isEmpty {
-                playButton(specimen.id, playable)
+                playButton(piece.id, playable)
             }
-            RouteStatusChip(kind: RouteFormat.status(for: specimen))
+            RouteStatusChip(kind: RouteFormat.status(for: piece))
         }
         .padding(.vertical, 12)
     }
 
     /// The thumbnail when there is one, a mic when the capture is only words.
     @ViewBuilder
-    private func glyph(_ specimen: Piece) -> some View {
+    private func glyph(_ piece: Piece) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6).fill(CaptureColor.paper2)
             #if canImport(UIKit)
-            if let image = thumbnails[specimen.id] {
+            if let image = thumbnails[piece.id] {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -190,7 +190,7 @@ struct V4VisitReviewScreen: View {
             #endif
         }
         .frame(width: 40, height: 40)
-        .task(id: specimen.id) { await loadThumbnail(specimen) }
+        .task(id: piece.id) { await loadThumbnail(piece) }
     }
 
     private var micGlyph: some View {
@@ -202,37 +202,37 @@ struct V4VisitReviewScreen: View {
     /// Decoding a JPEG is not a view's work. Off the main actor, once per
     /// capture, cached for the life of the screen — the same image read that
     /// used to run inside `body`, and therefore on every pass.
-    private func loadThumbnail(_ specimen: Piece) async {
+    private func loadThumbnail(_ piece: Piece) async {
         #if canImport(UIKit)
-        guard thumbnails[specimen.id] == nil,
-              let photo = specimen.photos.first(where: { $0.isPrimary })
-                  ?? specimen.photos.first
+        guard thumbnails[piece.id] == nil,
+              let photo = piece.photos.first(where: { $0.isPrimary })
+                  ?? piece.photos.first
         else { return }
         let path = store.mediaURL(for: photo.thumbnailFilename ?? photo.filename).path
         let decoded = await Task.detached(priority: .utility) {
             UIImage(contentsOfFile: path)
         }.value
         guard !Task.isCancelled, let decoded else { return }
-        thumbnails[specimen.id] = decoded
+        thumbnails[piece.id] = decoded
         #endif
     }
 
-    private func rowTitle(_ specimen: Piece) -> String {
-        if let title = specimen.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+    private func rowTitle(_ piece: Piece) -> String {
+        if let title = piece.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !title.isEmpty {
             return title
         }
-        let words = (specimen.voiceTranscript ?? specimen.voicePartialTranscript ?? "")
+        let words = (piece.voiceTranscript ?? piece.voicePartialTranscript ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return words.isEmpty ? "Untitled capture" : words
     }
 
     /// Place and Change room are the same destination (S1) — what differs is
     /// only what she is being asked, so the label differs and nothing else.
-    private func rowActions(_ specimen: Piece) -> some View {
-        let placed = VisitReviewRow(specimen: specimen).isPlaced
+    private func rowActions(_ piece: Piece) -> some View {
+        let placed = VisitReviewRow(piece: piece).isPlaced
         return Button(placed ? "Change room" : "Place") {
-            coordinator.present(.assignVenue(specimen.id))
+            coordinator.present(.assignVenue(piece.id))
         }
         .font(CaptureType.footnote)
         .foregroundStyle(CaptureColor.verdigrisInk)
@@ -247,8 +247,8 @@ struct V4VisitReviewScreen: View {
     /// The segments whose bytes are still on THIS phone — once a capture is
     /// receipted the sync service deletes the local files and leaves the array
     /// standing, so a control gated on the array alone would play silence.
-    private func playableSegments(_ specimen: Piece) -> [URL] {
-        (specimen.voiceAudioSegmentsRaw ?? []).compactMap { name in
+    private func playableSegments(_ piece: Piece) -> [URL] {
+        (piece.voiceAudioSegmentsRaw ?? []).compactMap { name in
             let url = store.mediaURL(for: name)
             let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
             guard values?.isRegularFile == true, (values?.fileSize ?? 0) > 0 else { return nil }
@@ -256,14 +256,14 @@ struct V4VisitReviewScreen: View {
         }
     }
 
-    private func playButton(_ specimenID: UUID, _ segments: [URL]) -> some View {
-        let playing = player.isPlaying && playingSpecimenID == specimenID
+    private func playButton(_ pieceID: UUID, _ segments: [URL]) -> some View {
+        let playing = player.isPlaying && playingPieceID == pieceID
         return Button {
             player.stop()
             if playing {
-                playingSpecimenID = nil
+                playingPieceID = nil
             } else {
-                playingSpecimenID = specimenID
+                playingPieceID = pieceID
                 player.play(segments)
             }
         } label: {
@@ -488,21 +488,21 @@ struct V4VisitReviewScreen: View {
     private func refreshRows() {
         switch localListScope {
         case .globalFixtures:
-            specimens = store.session(visitID: visitID)
+            pieces = store.session(visitID: visitID)
         case .owner(let owner):
-            specimens = store.session(visitID: visitID, owner: owner)
+            pieces = store.session(visitID: visitID, owner: owner)
         case .unavailable:
-            specimens = []
+            pieces = []
         }
         // Paired so the screen's grouping uses the same judgement the mapper is
         // tested on, rather than a second opinion about what a note is.
-        paired = specimens
+        paired = pieces
             .sorted { $0.createdAt < $1.createdAt }
-            .map { ($0, VisitReviewRow(specimen: $0)) }
+            .map { ($0, VisitReviewRow(piece: $0)) }
         // `uniquingKeysWith`, not `uniqueKeysWithValues`: the latter TRAPS on a
         // duplicate id, and the fetch's uniqueness is not this view's to promise.
         playable = Dictionary(
-            specimens.map { ($0.id, playableSegments($0)) },
+            pieces.map { ($0.id, playableSegments($0)) },
             uniquingKeysWith: { first, _ in first })
     }
 

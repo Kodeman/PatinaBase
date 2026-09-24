@@ -30,7 +30,7 @@ public enum FieldWriteState: String, Codable, Sendable {
     case unwritable
 }
 
-/// Which post-commit lane a fact belongs to. Persisted on the specimen so a
+/// Which post-commit lane a fact belongs to. Persisted on the piece so a
 /// lane that closed without landing leaves something a reader can name.
 public enum FieldWriteLane: String, Codable, Sendable {
     case marginNote = "margin_note"
@@ -127,10 +127,10 @@ public extension FieldWriteOutcome {
 public enum FieldWriteGate {
     /// The server id both lanes hang off, or nil when it does not exist yet.
     /// `hasConfirmedCaptureReceipt` is the same predicate the placement lane
-    /// waits on (Specimen+Accessors.swift).
-    public static func fieldCaptureID(for specimen: Piece) -> UUID? {
-        guard specimen.hasConfirmedCaptureReceipt,
-              let raw = specimen.remoteId?
+    /// waits on (Piece+Accessors.swift).
+    public static func fieldCaptureID(for piece: Piece) -> UUID? {
+        guard piece.hasConfirmedCaptureReceipt,
+              let raw = piece.remoteId?
                   .trimmingCharacters(in: .whitespacesAndNewlines),
               !raw.isEmpty
         else { return nil }
@@ -144,20 +144,20 @@ public enum FieldWriteGate {
     ///   · the capture is on a project — FC-R6 keeps an unplaced note on Today
     ///   · there are words — a photo-only capture files nothing
     /// plus `insideVisit`, which the caller supplies because wave 3 spells a
-    /// visit on `Specimen` as `visitKind`/`captureSessionID` rather than a
+    /// visit on `Piece` as `visitKind`/`captureSessionID` rather than a
     /// single id, and this file must not pick one of those for the caller.
     public static func shouldAutoFileMarginNote(
-        for specimen: Piece,
+        for piece: Piece,
         projectID: String?,
         insideVisit: Bool
     ) -> Bool {
         guard insideVisit,
-              specimen.marginNoteId == nil,
-              specimen.marginNoteState == nil,
+              piece.marginNoteId == nil,
+              piece.marginNoteState == nil,
               (projectID?.isEmpty == false)
         else { return false }
 
-        let spoken = (specimen.voiceTranscript ?? specimen.voicePartialTranscript)?
+        let spoken = (piece.voiceTranscript ?? piece.voicePartialTranscript)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return spoken?.isEmpty == false
     }
@@ -165,7 +165,7 @@ public enum FieldWriteGate {
     /// The lane state an outcome lands on, as one rule both lanes read.
     ///
     /// `.alreadyWritten` MUST close the lane exactly as `.written` does.
-    /// `needsMarginNote` / `needsPunchTask` hold a committed specimen in the
+    /// `needsMarginNote` / `needsPunchTask` hold a committed piece in the
     /// outbox until its lane reads `.written` or `.refused`, so any other
     /// mapping re-attempts a row the server already has, on every drain,
     /// forever. `.deferred` reopens the lane with no retry penalty; `.refused`

@@ -2,7 +2,7 @@
 //  CaptureTransferState.swift
 //  CaptureKit
 //
-//  One honest transfer vocabulary shared by specimen sync and site-scan
+//  One honest transfer vocabulary shared by piece sync and site-scan
 //  recovery. A transfer is never complete without a server receipt.
 //
 

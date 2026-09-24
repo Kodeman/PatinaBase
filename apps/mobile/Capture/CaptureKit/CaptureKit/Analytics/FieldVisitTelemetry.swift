@@ -69,7 +69,7 @@ public enum FieldVisitTelemetry {
     }
 
     /// Same event as `suggestionAccepted(_:)`, from the basis alone — for a
-    /// caller (V1SessionTrayScreen) that has a `Specimen`, not a fresh
+    /// caller (V1SessionTrayScreen) that has a `Piece`, not a fresh
     /// `CaptureSuggestion`, and must not read `suggestionConfidence` just to
     /// build one: that number is CaptureKit-internal (Principle 4) and this
     /// signature is how a view-layer call site stays off that path entirely.
@@ -102,7 +102,7 @@ public enum FieldVisitTelemetry {
     }
 
     /// FC-R21 part 1: the ONE predicate. Which of the pair fires is
-    /// `Specimen.isUnplaced` AFTER the action, and no emitter may decide it for
+    /// `Piece.isUnplaced` AFTER the action, and no emitter may decide it for
     /// itself — `ViewfinderModel` read `isUnplaced` while `S3DestinationScreen`
     /// read `venue.projectId != nil`, so a Library capture with no project
     /// emitted opposite events depending on which route committed it and the
@@ -114,12 +114,12 @@ public enum FieldVisitTelemetry {
     /// `field_captures.project_room_id`, and a typed room name can exist with
     /// no id.
     @MainActor
-    public static func placement(_ specimen: Piece, basis: String,
+    public static func placement(_ piece: Piece, basis: String,
                                  source: PlacementSource) -> Event {
-        specimen.isUnplaced
+        piece.isUnplaced
             ? captureUnplaced(source: source)
             : capturePlaced(basis: basis,
-                            hasRoom: specimen.venue?.projectRoomId != nil,
+                            hasRoom: piece.venue?.projectRoomId != nil,
                             source: source)
     }
 }

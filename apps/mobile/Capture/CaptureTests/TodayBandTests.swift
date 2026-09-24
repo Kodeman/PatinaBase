@@ -120,7 +120,7 @@ struct TodayBandTests {
     // unplaced set INCLUDES `.committed` rows. A capture that has synced to the
     // server but has no project is still unplaced, and this band must still
     // count it. This is the rule the band exists to protect, so it is pinned
-    // here directly (not just at `Specimen.isUnplaced`, Task 7's level).
+    // here directly (not just at `Piece.isUnplaced`, Task 7's level).
     @Test func unplacedCountIncludesCommittedRowsThatHaveSyncedButNotBeenFiled() throws {
         let store = try CaptureStore.inMemory()
         let committed = store.newDraft()
@@ -490,15 +490,15 @@ struct TodayBandTests {
     @MainActor
     @Test func aCaptureFiledFromTheTrayIsPlacedFromTheTray() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = store.newDraft()
-        specimen.destination = .inbox
+        let piece = store.newDraft()
+        piece.destination = .inbox
         try store.save()
-        #expect(specimen.isUnplaced)
+        #expect(piece.isUnplaced)
 
-        specimen.place(projectID: "p1", projectRoomID: "pr1", room: nil)
+        piece.place(projectID: "p1", projectRoomID: "pr1", room: nil)
         try store.save()
 
-        let event = FieldVisitTelemetry.placement(specimen, basis: "suggested",
+        let event = FieldVisitTelemetry.placement(piece, basis: "suggested",
                                                   source: .tray)
         #expect(event.name == "capture.placed")
         #expect(event.properties["source"] == "tray")

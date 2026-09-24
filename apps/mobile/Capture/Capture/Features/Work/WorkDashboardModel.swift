@@ -237,7 +237,7 @@ final class WorkDashboardModel {
     }
 
     private func refreshLocalCaptures() {
-        captures = localCaptureSpecimens()
+        captures = localCapturePieces()
             .filter { $0.transferState.phase != .complete }
             .map {
             FieldCaptureActivity(
@@ -251,12 +251,12 @@ final class WorkDashboardModel {
         }
     }
 
-    private func localCaptureSpecimens() -> [Piece] {
+    private func localCapturePieces() -> [Piece] {
         switch localListScope {
         case .globalFixtures:
-            return store.search(SpecimenQuery())
+            return store.search(PieceQuery())
         case .owner(let owner):
-            return store.search(SpecimenQuery(), owner: owner)
+            return store.search(PieceQuery(), owner: owner)
         case .unavailable:
             return []
         }

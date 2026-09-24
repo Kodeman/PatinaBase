@@ -38,9 +38,9 @@ struct V2CullDeckScreen: View {
                 if current != nil {
                     // Up to three cards; deepest drawn first, top card drawn last.
                     let visible = Array(deck[index...].prefix(3))
-                    ForEach(visible.reversed(), id: \.id) { specimen in
-                        let depth = visible.firstIndex { $0.id == specimen.id } ?? 0
-                        cardView(specimen, depth: depth, isTop: depth == 0)
+                    ForEach(visible.reversed(), id: \.id) { piece in
+                        let depth = visible.firstIndex { $0.id == piece.id } ?? 0
+                        cardView(piece, depth: depth, isTop: depth == 0)
                     }
                 } else {
                     completionCard
@@ -83,21 +83,21 @@ struct V2CullDeckScreen: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func cardView(_ specimen: Piece, depth: Int, isTop: Bool) -> some View {
+    private func cardView(_ piece: Piece, depth: Int, isTop: Bool) -> some View {
         let translation = isTop ? drag : .zero
         let angle = isTop ? Double(drag.width / 18) : 0
         let scale = 1 - CGFloat(depth) * 0.04
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(specimen.title ?? "Untitled capture")
+                Text(piece.title ?? "Untitled capture")
                     .font(CaptureType.title2)
                     .foregroundStyle(CaptureColor.ink)
                 Spacer()
-                RouteStatusChip(kind: RouteFormat.status(for: specimen))
+                RouteStatusChip(kind: RouteFormat.status(for: piece))
             }
-            if let maker = specimen.maker {
-                Text("\(maker.uppercased()) · \(specimen.venue?.placemarkName?.uppercased() ?? RouteFormat.descriptor(for: specimen).uppercased())")
+            if let maker = piece.maker {
+                Text("\(maker.uppercased()) · \(piece.venue?.placemarkName?.uppercased() ?? RouteFormat.descriptor(for: piece).uppercased())")
                     .font(CaptureType.monoSmall)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
@@ -140,7 +140,7 @@ struct V2CullDeckScreen: View {
         .allowsHitTesting(isTop)
         .onTapGesture {
             coordinator.dismissSheet()
-            coordinator.navigate(to: .specimen(specimen.id))
+            coordinator.navigate(to: .piece(piece.id))
         }
         .gesture(dragGesture)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: index)
@@ -167,8 +167,8 @@ struct V2CullDeckScreen: View {
     }
 
     private func commit(_ action: CullAction) {
-        guard let specimen = current else { return }
-        guard CaptureRouteSafetyPolicy.canCull(specimen) else {
+        guard let piece = current else { return }
+        guard CaptureRouteSafetyPolicy.canCull(piece) else {
             reloadDeck()
             return
         }
@@ -182,8 +182,8 @@ struct V2CullDeckScreen: View {
         if action == .keep {
             // Keep means "retain in this visit", not "send to Library". The
             // explicit S3 destination choice remains outstanding.
-            specimen.lifecycleRaw = CaptureLifecycle.State.session.rawValue
-            specimen.touch()
+            piece.lifecycleRaw = CaptureLifecycle.State.session.rawValue
+            piece.touch()
             try? store.save()
         }
         // Cull: leave the deck only (Recently Deleted is a foundation seam gap —
@@ -248,10 +248,10 @@ struct V2CullDeckScreen: View {
     }
 
     private func keepAll() {
-        for specimen in deck
-        where CaptureRouteSafetyPolicy.canCull(specimen) {
-            specimen.lifecycleRaw = CaptureLifecycle.State.session.rawValue
-            specimen.touch()
+        for piece in deck
+        where CaptureRouteSafetyPolicy.canCull(piece) {
+            piece.lifecycleRaw = CaptureLifecycle.State.session.rawValue
+            piece.touch()
         }
         try? store.save()
         coordinator.dismissSheet()
@@ -262,12 +262,12 @@ struct V2CullDeckScreen: View {
             identity: CaptureSessionIdentity(
                 userID: session.userID,
                 workspaceID: session.workspaceID))
-        deck = sessionSpecimens(visitID: context.visitID)
+        deck = sessionPieces(visitID: context.visitID)
             .filter(CaptureRouteSafetyPolicy.canCull)
         index = 0
     }
 
-    private func sessionSpecimens(visitID: UUID) -> [Piece] {
+    private func sessionPieces(visitID: UUID) -> [Piece] {
         switch localListScope {
         case .globalFixtures:
             return store.session(visitID: visitID)

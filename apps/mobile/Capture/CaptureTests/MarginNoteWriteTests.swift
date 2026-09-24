@@ -154,43 +154,43 @@ struct MarginNoteWriteTests {
 
     // MARK: - The lane on the outbox record
 
-    @Test func aSpecimenWithNoNoteRequestNeedsNothing() {
-        let specimen = Piece()
-        #expect(specimen.needsMarginNote == false)
+    @Test func aPieceWithNoNoteRequestNeedsNothing() {
+        let piece = Piece()
+        #expect(piece.needsMarginNote == false)
     }
 
     @Test func markingAnUnopenedLaneIsANoOp_asOnThePlacementLane() {
         // markProjectPlacementFailed has always guarded on its id; these two
         // dropped it, so a failure could paint state onto a lane that was never
-        // requested and leave `…LastError` on a specimen with no note at all.
-        let specimen = Piece()
-        specimen.markMarginNoteFailed("earlier")
-        specimen.markMarginNoteRefused("also earlier")
+        // requested and leave `…LastError` on a piece with no note at all.
+        let piece = Piece()
+        piece.markMarginNoteFailed("earlier")
+        piece.markMarginNoteRefused("also earlier")
 
-        #expect(specimen.marginNoteState == nil)
-        #expect(specimen.marginNoteLastError == nil)
-        #expect(specimen.marginNoteRetryCount == nil)
-        #expect(specimen.fieldWriteAttention == nil)
+        #expect(piece.marginNoteState == nil)
+        #expect(piece.marginNoteLastError == nil)
+        #expect(piece.marginNoteRetryCount == nil)
+        #expect(piece.fieldWriteAttention == nil)
     }
 
     @Test func requestingANoteOpensTheLaneClean() {
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)
 
-        #expect(specimen.marginNoteId == noteID.uuidString)
-        #expect(specimen.marginNoteState == .pending)
-        #expect(specimen.marginNoteLastError == nil)
-        #expect(specimen.marginNoteRetryCount == 0)
-        #expect(specimen.needsMarginNote)
+        #expect(piece.marginNoteId == noteID.uuidString)
+        #expect(piece.marginNoteState == .pending)
+        #expect(piece.marginNoteLastError == nil)
+        #expect(piece.marginNoteRetryCount == 0)
+        #expect(piece.needsMarginNote)
     }
 
     @Test func aWrittenNoteClosesTheLane() {
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)
-        specimen.markMarginNoteWritten()
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)
+        piece.markMarginNoteWritten()
 
-        #expect(specimen.marginNoteState == .written)
-        #expect(specimen.needsMarginNote == false)
+        #expect(piece.marginNoteState == .written)
+        #expect(piece.needsMarginNote == false)
     }
 
     @Test func aRefusedNoteClosesTheLaneButLeavesTheLossOnRecord() {
@@ -198,50 +198,50 @@ struct MarginNoteWriteTests {
         // on the note's OWN designer_id — so it means this build wrote the wrong
         // designer_id. The lane closes, and the fact survives where a reader
         // can find it rather than only in a field nothing reads.
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)
-        specimen.markMarginNoteRefused("permission denied")
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)
+        piece.markMarginNoteRefused("permission denied")
 
-        #expect(specimen.marginNoteState == .refused)
-        #expect(specimen.marginNoteLastError == "permission denied")
-        #expect(specimen.needsMarginNote == false)
-        #expect(specimen.fieldWriteAttention?.lane == .marginNote)
-        #expect(specimen.fieldWriteAttention?.message == "permission denied")
+        #expect(piece.marginNoteState == .refused)
+        #expect(piece.marginNoteLastError == "permission denied")
+        #expect(piece.needsMarginNote == false)
+        #expect(piece.fieldWriteAttention?.lane == .marginNote)
+        #expect(piece.fieldWriteAttention?.message == "permission denied")
     }
 
     @Test func aFailedNoteStaysInTheLaneAndCountsTheAttempt() {
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)
-        specimen.markMarginNoteFailed("boom")
-        specimen.markMarginNoteFailed("boom again")
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)
+        piece.markMarginNoteFailed("boom")
+        piece.markMarginNoteFailed("boom again")
 
-        #expect(specimen.marginNoteState == .failed)
-        #expect(specimen.marginNoteRetryCount == 2)
-        #expect(specimen.needsMarginNote)
+        #expect(piece.marginNoteState == .failed)
+        #expect(piece.marginNoteRetryCount == 2)
+        #expect(piece.needsMarginNote)
     }
 
     @Test func aLaneThatSpendsItsRetriesClosesAndKeepsItsLastError() {
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)
         for attempt in 1...FieldWriteGate.retryCeiling {
-            specimen.markMarginNoteFailed("boom \(attempt)")
+            piece.markMarginNoteFailed("boom \(attempt)")
         }
 
-        #expect(specimen.marginNoteState == .unwritable)
-        #expect(specimen.marginNoteRetryCount == FieldWriteGate.retryCeiling)
-        #expect(specimen.marginNoteLastError == "boom \(FieldWriteGate.retryCeiling)")
-        #expect(specimen.needsMarginNote == false)
-        #expect(specimen.fieldWriteAttention?.lane == .marginNote)
+        #expect(piece.marginNoteState == .unwritable)
+        #expect(piece.marginNoteRetryCount == FieldWriteGate.retryCeiling)
+        #expect(piece.marginNoteLastError == "boom \(FieldWriteGate.retryCeiling)")
+        #expect(piece.needsMarginNote == false)
+        #expect(piece.fieldWriteAttention?.lane == .marginNote)
     }
 
     @Test func anUnsatisfiableErrorClosesTheLaneOnTheFirstAttempt() {
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)
-        specimen.markMarginNoteUnwritable("Could not find the column in the schema cache")
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)
+        piece.markMarginNoteUnwritable("Could not find the column in the schema cache")
 
-        #expect(specimen.marginNoteState == .unwritable)
-        #expect(specimen.needsMarginNote == false)
-        #expect(specimen.fieldWriteAttention?.lane == .marginNote)
+        #expect(piece.marginNoteState == .unwritable)
+        #expect(piece.needsMarginNote == false)
+        #expect(piece.fieldWriteAttention?.lane == .marginNote)
     }
 
     @Test func aLaneWithNothingLeftToSayCanStillClose() {
@@ -249,39 +249,39 @@ struct MarginNoteWriteTests {
         // empty. MarginNoteComposer.request returns nil, so there is no row to
         // write — and without a settle path `needsMarginNote` stays true and
         // CaptureStore.outbox() hands the committed row back on every drain.
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)
-        #expect(specimen.needsMarginNote)
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)
+        #expect(piece.needsMarginNote)
 
-        specimen.settleMarginNoteWithNothingToWrite()
+        piece.settleMarginNoteWithNothingToWrite()
 
-        #expect(specimen.needsMarginNote == false)
-        #expect(specimen.marginNoteState == .unwritable)
+        #expect(piece.needsMarginNote == false)
+        #expect(piece.marginNoteState == .unwritable)
         // Nothing failed, so nothing is owed to a reader.
-        #expect(specimen.fieldWriteAttention == nil)
+        #expect(piece.fieldWriteAttention == nil)
     }
 
     // MARK: - The automatic lane (ruling 1) and the degrade's body (ruling 3)
 
     @Test func requestingAnOpenLaneTwiceKeepsTheFirstId() {
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)
-        specimen.requestMarginNote(noteID: UUID())
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)
+        piece.requestMarginNote(noteID: UUID())
 
-        #expect(specimen.marginNoteId == noteID.uuidString)
+        #expect(piece.marginNoteId == noteID.uuidString)
     }
 
     @Test func aWrittenLaneIsFreeAgainForADeliberateSecondNote() {
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)
-        specimen.markMarginNoteWritten()
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)
+        piece.markMarginNoteWritten()
 
         let second = UUID()
-        specimen.requestMarginNote(noteID: second)
+        piece.requestMarginNote(noteID: second)
 
-        #expect(specimen.marginNoteId == second.uuidString)
-        #expect(specimen.marginNoteState == .pending)
-        #expect(specimen.needsMarginNote)
+        #expect(piece.marginNoteId == second.uuidString)
+        #expect(piece.marginNoteState == .pending)
+        #expect(piece.needsMarginNote)
     }
 
     @Test func theDegradeLandsWhileTheAutoFiledNoteIsStillInFlight() {
@@ -291,50 +291,50 @@ struct MarginNoteWriteTests {
         // degrade was a silent no-op. The punch lane is `.refused` by then, so
         // `needsPunchTask` is false and nothing ever retried: the co-member's
         // item vanished leaving only punchTaskLastError.
-        let specimen = Piece()
-        specimen.requestMarginNote(noteID: noteID)          // ruling 1, still pending
-        #expect(specimen.marginNoteState == .pending)
+        let piece = Piece()
+        piece.requestMarginNote(noteID: noteID)          // ruling 1, still pending
+        #expect(piece.marginNoteState == .pending)
 
         let refusedTaskID = UUID()
         let body = MarginNoteComposer.refusedTaskBody(title: "Scribe short", context: nil)
-        specimen.requestDegradeNote(noteID: refusedTaskID, body: body)
+        piece.requestDegradeNote(noteID: refusedTaskID, body: body)
 
         // The degrade is queued in its own slot, and the transcript note it
         // would have overwritten is untouched.
-        #expect(specimen.degradeNoteId == refusedTaskID.uuidString)
-        #expect(specimen.degradeNoteBodyRaw == body)
-        #expect(specimen.needsDegradeNote)
-        #expect(specimen.marginNoteId == noteID.uuidString)
-        #expect(specimen.needsMarginNote)
+        #expect(piece.degradeNoteId == refusedTaskID.uuidString)
+        #expect(piece.degradeNoteBodyRaw == body)
+        #expect(piece.needsDegradeNote)
+        #expect(piece.marginNoteId == noteID.uuidString)
+        #expect(piece.needsMarginNote)
     }
 
     @Test func theDegradeKeepsTheRefusedTasksIdSoAReplayWritesOnce() {
-        let specimen = Piece()
+        let piece = Piece()
         let refusedTaskID = UUID()
-        specimen.requestDegradeNote(noteID: refusedTaskID, body: "a")
-        specimen.requestDegradeNote(noteID: UUID(), body: "b")
+        piece.requestDegradeNote(noteID: refusedTaskID, body: "a")
+        piece.requestDegradeNote(noteID: UUID(), body: "b")
 
-        #expect(specimen.degradeNoteId == refusedTaskID.uuidString)
-        #expect(specimen.degradeNoteBodyRaw == "a")
+        #expect(piece.degradeNoteId == refusedTaskID.uuidString)
+        #expect(piece.degradeNoteBodyRaw == "a")
     }
 
     @Test func aWrittenDegradeClosesItsLane() {
-        let specimen = Piece()
-        specimen.requestDegradeNote(noteID: noteID, body: "a")
-        specimen.markDegradeNoteWritten()
+        let piece = Piece()
+        piece.requestDegradeNote(noteID: noteID, body: "a")
+        piece.markDegradeNoteWritten()
 
-        #expect(specimen.degradeNoteState == .written)
-        #expect(specimen.needsDegradeNote == false)
+        #expect(piece.degradeNoteState == .written)
+        #expect(piece.needsDegradeNote == false)
     }
 
     @Test func aRefusedDegradeIsTheEndOfTheRoadAndSaysSo() {
-        let specimen = Piece()
-        specimen.requestDegradeNote(noteID: noteID, body: "a")
-        specimen.markDegradeNoteRefused("permission denied")
+        let piece = Piece()
+        piece.requestDegradeNote(noteID: noteID, body: "a")
+        piece.markDegradeNoteRefused("permission denied")
 
-        #expect(specimen.needsDegradeNote == false)
-        #expect(specimen.fieldWriteAttention?.lane == .degradeNote)
-        #expect(specimen.fieldWriteAttention?.message == "permission denied")
+        #expect(piece.needsDegradeNote == false)
+        #expect(piece.fieldWriteAttention?.lane == .degradeNote)
+        #expect(piece.fieldWriteAttention?.message == "permission denied")
     }
 
     @Test func aDegradeBodyCarriesTheTaskThenTheContextThenTheReason() {
@@ -359,12 +359,12 @@ struct MarginNoteWriteTests {
     }
 
     @Test func aDegradeBodyIsPersistedOnTheLaneSoItSurvivesARelaunch() {
-        let specimen = Piece()
+        let piece = Piece()
         let body = MarginNoteComposer.refusedTaskBody(title: "Scribe short", context: nil)
-        specimen.requestDegradeNote(noteID: noteID, body: body)
+        piece.requestDegradeNote(noteID: noteID, body: body)
 
-        #expect(specimen.degradeNoteBodyRaw == body)
-        #expect(specimen.needsDegradeNote)
+        #expect(piece.degradeNoteBodyRaw == body)
+        #expect(piece.needsDegradeNote)
     }
 }
 

@@ -18,7 +18,7 @@ import SwiftUI
 import CaptureKit
 
 struct CaptureCardOverlay: View {
-    let specimen: Piece
+    let piece: Piece
     let saveTitle: String
     let onSave: () -> Void
     let onAddDetail: () -> Void
@@ -44,7 +44,7 @@ struct CaptureCardOverlay: View {
     /// Whether `verbParties` is the answer or merely the state before one.
     let verbPartiesSettled: Bool
     /// Held by ViewfinderScreen for `affirmed`'s reason: a fresh card is a
-    /// fresh confirm step, and this view's identity outlives the specimen's.
+    /// fresh confirm step, and this view's identity outlives the piece's.
     @Binding var verbMenu: FieldVerbMenu
     let onVerb: (FieldVerbAction) -> Void
 
@@ -88,12 +88,12 @@ struct CaptureCardOverlay: View {
 
             guessRow(label: "Category",
                      value: categoryLabel,
-                     source: specimen.provenance(for: .category),
-                     confirmed: specimen.isConfirmed(.category))
+                     source: piece.provenance(for: .category),
+                     confirmed: piece.isConfirmed(.category))
             guessRow(label: "Material",
-                     value: specimen.materialNote ?? "—",
-                     source: specimen.provenance(for: .material),
-                     confirmed: specimen.isConfirmed(.material))
+                     value: piece.materialNote ?? "—",
+                     source: piece.provenance(for: .material),
+                     confirmed: piece.isConfirmed(.material))
 
             Button(action: onPlacement) {
                 HStack(spacing: 8) {
@@ -199,7 +199,7 @@ struct CaptureCardOverlay: View {
     }
 
     private var verbFacts: FieldVerbFacts {
-        FieldVerbFacts(specimen: specimen, partiesSettled: verbPartiesSettled)
+        FieldVerbFacts(piece: piece, partiesSettled: verbPartiesSettled)
     }
 
     private var isBlocked: Bool {
@@ -228,6 +228,6 @@ struct CaptureCardOverlay: View {
     }
 
     private var categoryLabel: String {
-        specimen.category == .unknown ? "—" : specimen.category.rawValue.capitalized
+        piece.category == .unknown ? "—" : piece.category.rawValue.capitalized
     }
 }

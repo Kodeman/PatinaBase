@@ -11,7 +11,7 @@ import UIKit
 import CaptureKit
 
 struct TagOCRSheet: View {
-    let specimenID: UUID
+    let pieceID: UUID
     let store: CaptureStore
     let session: any SessionProviding
     let camera: any CameraService
@@ -87,9 +87,9 @@ struct TagOCRSheet: View {
                     .font(CaptureType.eyebrow).textCase(.uppercase)
                     .foregroundStyle(CaptureColor.inkSoft)
                 if isEditing {
-                    SpecimenFieldRow("Vendor", value: $maker, source: .ocr, placeholder: "Vendor")
-                    SpecimenFieldRow("SKU", value: $sku, source: .ocr, placeholder: "SKU")
-                    SpecimenFieldRow("Trade", value: $price, source: .ocr, placeholder: "$0")
+                    PieceFieldRow("Vendor", value: $maker, source: .ocr, placeholder: "Vendor")
+                    PieceFieldRow("SKU", value: $sku, source: .ocr, placeholder: "SKU")
+                    PieceFieldRow("Trade", value: $price, source: .ocr, placeholder: "$0")
                 } else {
                     RecognisedValueRow(label: "Vendor", value: maker, source: .ocr) { beginEdit() }
                     RecognisedValueRow(label: "SKU", value: sku, source: .ocr) { beginEdit() }
@@ -98,7 +98,7 @@ struct TagOCRSheet: View {
             }
             RecognitionActionBar(
                 secondaryTitle: isEditing ? "Done editing" : "Edit",
-                primaryTitle: "Add to specimen",
+                primaryTitle: "Add to piece",
                 onSecondary: { isEditing.toggle() },
                 onPrimary: { merge(defaultSource: .ocr) }
             )
@@ -145,13 +145,13 @@ struct TagOCRSheet: View {
                 Text("Type the tag")
                     .font(CaptureType.eyebrow).textCase(.uppercase)
                     .foregroundStyle(CaptureColor.inkSoft)
-                SpecimenFieldRow("Vendor", value: $maker, source: .manual, placeholder: "Vendor")
-                SpecimenFieldRow("SKU", value: $sku, source: .manual, placeholder: "SKU")
-                SpecimenFieldRow("Trade", value: $price, source: .manual, placeholder: "$0")
+                PieceFieldRow("Vendor", value: $maker, source: .manual, placeholder: "Vendor")
+                PieceFieldRow("SKU", value: $sku, source: .manual, placeholder: "SKU")
+                PieceFieldRow("Trade", value: $price, source: .manual, placeholder: "$0")
             }
             RecognitionActionBar(
                 secondaryTitle: "Cancel",
-                primaryTitle: "Add to specimen",
+                primaryTitle: "Add to piece",
                 onSecondary: { coordinator?.dismissSheet() },
                 onPrimary: { merge(defaultSource: .manual) }
             )
@@ -178,8 +178,8 @@ struct TagOCRSheet: View {
     private func read() {
         phase = .reading
         Task { @MainActor in
-            guard let specimen = currentSpecimen() else { phase = .fallback; return }
-            let image = await RecognitionImageLoader.captureImage(for: specimen, store: store, camera: camera)
+            guard let piece = currentPiece() else { phase = .fallback; return }
+            let image = await RecognitionImageLoader.captureImage(for: piece, store: store, camera: camera)
             crop = image
             let observations = (try? await ocr.recognizeText(in: image)) ?? []
             apply(observations)
@@ -203,30 +203,30 @@ struct TagOCRSheet: View {
     }
 
     private func merge(defaultSource: ProvenanceSource) {
-        guard let specimen = currentSpecimen() else { return }
+        guard let piece = currentPiece() else { return }
         // A corrected read records the read it replaced (`proposed`), in the
         // field's own stored form.
         if !maker.isEmpty {
-            specimen.setValue(maker, for: .maker, source: source(for: maker, original: makerOriginal, fallback: defaultSource),
+            piece.setValue(maker, for: .maker, source: source(for: maker, original: makerOriginal, fallback: defaultSource),
                               proposed: makerOriginal)
         }
         if !sku.isEmpty {
-            specimen.setValue(sku, for: .sku, source: source(for: sku, original: skuOriginal, fallback: defaultSource),
+            piece.setValue(sku, for: .sku, source: source(for: sku, original: skuOriginal, fallback: defaultSource),
                               proposed: skuOriginal)
         }
         if !price.isEmpty, let cents = Self.centsFromPrice(price) {
-            specimen.setValue(String(cents), for: .price, source: source(for: price, original: priceOriginal, fallback: defaultSource),
+            piece.setValue(String(cents), for: .price, source: source(for: price, original: priceOriginal, fallback: defaultSource),
                               proposed: Self.centsFromPrice(priceOriginal).map(String.init))
-            specimen.currencyCode = specimen.currencyCode ?? "USD"
+            piece.currencyCode = piece.currencyCode ?? "USD"
         }
         try? store.save()
         analytics.event("N1.merge", ["source": defaultSource.rawValue])
-        coordinator?.present(.specimenSheet(specimenID))
+        coordinator?.present(.pieceSheet(pieceID))
     }
 
-    private func currentSpecimen() -> Piece? {
-        CaptureOwnerProjectionPolicy.specimen(
-            id: specimenID,
+    private func currentPiece() -> Piece? {
+        CaptureOwnerProjectionPolicy.piece(
+            id: pieceID,
             store: store,
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
@@ -254,9 +254,9 @@ import CaptureKitMocks
 #Preview("N1 · Tag OCR") {
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
-    let specimen = store.newDraft()
+    let piece = store.newDraft()
     return TagOCRSheet(
-        specimenID: specimen.id,
+        pieceID: piece.id,
         store: store,
         session: MockSessionProviding(),
         camera: MockCameraService(),

@@ -234,7 +234,7 @@ fcr3_sweep() {
 # and a real violation this wave — a view building a whole `CaptureSuggestion`
 # just to read `.basis` — was caught by a hand-grep while that test sat green.
 # CaptureKit legitimately reads the field (`FieldTraySuggestionOrder.ordered`
-# orders the tray with it, the payload encoder ships it, the Specimen accessor
+# orders the tray with it, the payload encoder ships it, the Piece accessor
 # writes it); the APP TARGET, which is where views live, must not.
 principle4_sweep() {
   local out

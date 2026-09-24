@@ -83,7 +83,7 @@ struct PhotoImportSheet: View {
                              matching: .images, photoLibrary: .shared()) {
                     actionRow(icon: "photo.on.rectangle.angled",
                               title: "Import from Photos",
-                              subtitle: "Pull existing shots into a specimen",
+                              subtitle: "Pull existing shots into a piece",
                               tint: CaptureColor.verdigris,
                               busy: isImporting)
                 }
@@ -231,7 +231,7 @@ struct PhotoImportSheet: View {
             guard !Task.isCancelled, isCurrent(creationScope) else { return }
 
             analytics?.event("capture.photo_import", ["count": "\(order)"])
-            openSpecimen(draftID, scope: creationScope)
+            openPiece(draftID, scope: creationScope)
         }
     }
 
@@ -244,7 +244,7 @@ struct PhotoImportSheet: View {
         analytics?.event(
             "capture.manual_entry",
             ["from": context == .shareImport ? "share" : "denied"])
-        openSpecimen(draft.id, scope: creationScope)
+        openPiece(draft.id, scope: creationScope)
     }
 
     private func makeDraft(in scope: CaptureLocalListScope) -> Piece? {
@@ -278,14 +278,14 @@ struct PhotoImportSheet: View {
         openURL(url)
     }
 
-    /// Hand off to the C5 specimen sheet (Team B). Dismiss first so SwiftUI
+    /// Hand off to the C5 piece sheet (Team B). Dismiss first so SwiftUI
     /// cleanly swaps the single presented sheet.
-    private func openSpecimen(_ id: UUID, scope: CaptureLocalListScope) {
+    private func openPiece(_ id: UUID, scope: CaptureLocalListScope) {
         guard isCurrent(scope) else { return }
         coordinator.dismissSheet()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             guard isCurrent(scope) else { return }
-            coordinator.present(.specimenSheet(id))
+            coordinator.present(.pieceSheet(id))
         }
     }
 }

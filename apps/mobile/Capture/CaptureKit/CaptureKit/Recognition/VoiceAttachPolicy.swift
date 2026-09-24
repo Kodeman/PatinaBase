@@ -3,8 +3,8 @@
 //
 //  What a voice take may overwrite on a capture that already carries one.
 //
-//  The N4 sheet is keyed per specimen and re-openable on a capture whose audio
-//  has ALREADY synced: the objects are in Storage, the specimen's remote-path
+//  The N4 sheet is keyed per piece and re-openable on a capture whose audio
+//  has ALREADY synced: the objects are in Storage, the piece's remote-path
 //  stamps are set, and the local .m4a files have been deleted by the receipt.
 //  The only key by which the sync layer can still reach those stamps is the
 //  SEGMENT NAME LIST — stampedVoicePaths keys voiceAudioRemotePathsRaw by
@@ -26,7 +26,7 @@
 
 import Foundation
 
-/// The four voice fields an attach writes to a specimen, as one value.
+/// The four voice fields an attach writes to a piece, as one value.
 public struct VoiceAttachment: Sendable, Equatable {
     /// Segment 0, for every legacy reader.
     public var audioFilename: String?
@@ -55,15 +55,15 @@ public struct VoiceAttachment: Sendable, Equatable {
 }
 
 public enum VoiceAttachPolicy {
-    /// Merge the take that is being attached into what the specimen already
+    /// Merge the take that is being attached into what the piece already
     /// holds.
     ///
     /// - A take with at least one published segment REPLACES all four fields:
-    ///   it is a real recording and the specimen is now about that recording.
+    ///   it is a real recording and the piece is now about that recording.
     /// - A take with no segments — a typed note, a re-attach of an edit, or a
     ///   recording whose file never opened — preserves the existing audio
     ///   fields verbatim. It may still correct the transcript source: a take
-    ///   that produced WORDS was spoken, and a specimen that has never had any
+    ///   that produced WORDS was spoken, and a piece that has never had any
     ///   audio at all is plainly the designer's own typing.
     public static func merge(existing: VoiceAttachment,
                              new: VoiceNoteResult?) -> VoiceAttachment {

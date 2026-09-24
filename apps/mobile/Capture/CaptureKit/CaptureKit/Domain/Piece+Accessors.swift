@@ -1,4 +1,4 @@
-//  Specimen+Accessors.swift
+//  Piece+Accessors.swift
 //  CaptureKit
 //
 //  Typed accessors over the raw-string storage, and the SINGLE sanctioned
@@ -20,8 +20,8 @@ public struct GuessReview: Equatable, Sendable {
 }
 
 public extension Piece {
-    var category: SpecimenCategory {
-        get { SpecimenCategory(rawValue: categoryRaw) ?? .unknown }
+    var category: PieceCategory {
+        get { PieceCategory(rawValue: categoryRaw) ?? .unknown }
         set { categoryRaw = newValue.rawValue }
     }
     var destination: CaptureDestination {
@@ -481,7 +481,7 @@ public extension Piece {
 
     /// The lane was opened on a capture whose words later resolved to nothing —
     /// `MarginNoteComposer.request` returns nil and there is no row to write.
-    /// Without this the lane never closes and the committed specimen comes back
+    /// Without this the lane never closes and the committed piece comes back
     /// from `outbox()` on every drain, forever.
     func settleMarginNoteWithNothingToWrite() {
         guard marginNoteId != nil, marginNoteState != .written else { return }
@@ -868,8 +868,8 @@ public extension Piece {
 /// tray's ordinary newest-first order so the sequence is total and stable.
 public enum FieldTraySuggestionOrder {
     @MainActor
-    public static func ordered(_ specimens: [Piece]) -> [Piece] {
-        specimens.sorted { lhs, rhs in
+    public static func ordered(_ pieces: [Piece]) -> [Piece] {
+        pieces.sorted { lhs, rhs in
             let left = lhs.suggestionConfidence ?? -1
             let right = rhs.suggestionConfidence ?? -1
             if left != right { return left > right }

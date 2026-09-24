@@ -22,7 +22,7 @@ struct VisitReviewTests {
         offset: TimeInterval = 0
     ) -> VisitReviewRow {
         VisitReviewRow(
-            specimenID: UUID(uuidString: id)!,
+            pieceID: UUID(uuidString: id)!,
             hasPhoto: photo,
             hasTranscript: transcript,
             roomName: room,

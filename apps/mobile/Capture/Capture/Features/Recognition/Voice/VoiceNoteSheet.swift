@@ -4,9 +4,9 @@
 //  N4 · Voice note — live transcribe. Tap to start, tap to stop (matching
 //  every other long-form voice surface — §7.4), and the note transcribes on
 //  device in real time ("oak base, the warmer bouclé — rep is Dana"). "Attach
-//  note" saves transcript + audio to the specimen (source .voice); "Discard"
+//  note" saves transcript + audio to the piece (source .voice); "Discard"
 //  drops the take AND deletes its audio segments from the media directory —
-//  including any segments a PRIOR attach() already persisted to this specimen,
+//  including any segments a PRIOR attach() already persisted to this piece,
 //  since this sheet is re-openable on one that already carries audio (FC-R19).
 //  If the recogniser is unavailable (no mic permission, or the simulator), the
 //  sheet falls to a typed-note entry — the raw audio is always kept alongside
@@ -20,7 +20,7 @@ import UIKit
 import CaptureKit
 
 struct VoiceNoteSheet: View {
-    let specimenID: UUID
+    let pieceID: UUID
     let store: CaptureStore
     let session: any SessionProviding
     let voice: any VoiceNoteService
@@ -410,20 +410,20 @@ struct VoiceNoteSheet: View {
             }
             await MainActor.run {
                 // FC-R19: `abandoned` above is only THIS session's take. This
-                // sheet is re-openable on a specimen that already carries
+                // sheet is re-openable on a piece that already carries
                 // audio from an EARLIER attach() (see attach()'s comment
                 // below) — with the flag off it opens straight into the typed
                 // editor with no take in hand at all. Without this, discarding
                 // a re-opened note left that prior session's segments (and its
                 // voiceAudioFilename) on the phone forever: nothing else ever
                 // deletes them.
-                if let specimen = currentSpecimen() {
-                    for filename in (specimen.voiceAudioSegmentsRaw ?? [])
-                        + [specimen.voiceAudioFilename].compactMap({ $0 }) {
+                if let piece = currentPiece() {
+                    for filename in (piece.voiceAudioSegmentsRaw ?? [])
+                        + [piece.voiceAudioFilename].compactMap({ $0 }) {
                         try? FileManager.default.removeItem(at: store.mediaURL(for: filename))
                     }
-                    specimen.voiceAudioFilename = nil
-                    specimen.voiceAudioSegmentsRaw = nil
+                    piece.voiceAudioFilename = nil
+                    piece.voiceAudioSegmentsRaw = nil
                     try? store.save()
                 }
                 coordinator?.dismissSheet()
@@ -432,10 +432,10 @@ struct VoiceNoteSheet: View {
     }
 
     private func attach() {
-        guard let specimen = currentSpecimen() else { return }
+        guard let piece = currentPiece() else { return }
         let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        specimen.voiceTranscript = text
-        // This sheet is re-openable on a specimen that ALREADY carries audio —
+        piece.voiceTranscript = text
+        // This sheet is re-openable on a piece that ALREADY carries audio —
         // with the flag off it opens straight into the typed editor — and the
         // take in hand is then nil. Writing it through unconditionally, as this
         // did, nulled voiceAudioSegmentsRaw over a recording whose bytes are in
@@ -445,31 +445,31 @@ struct VoiceNoteSheet: View {
         // in CaptureKit, tested: replace only on a take that published a
         // segment; otherwise preserve every existing stamp and path.
         let merged = VoiceAttachPolicy.merge(
-            existing: VoiceAttachment(audioFilename: specimen.voiceAudioFilename,
-                                      audioSegments: specimen.voiceAudioSegmentsRaw,
-                                      transcriptSource: specimen.voiceTranscriptSourceRaw,
-                                      durationSeconds: specimen.voiceDurationSeconds),
+            existing: VoiceAttachment(audioFilename: piece.voiceAudioFilename,
+                                      audioSegments: piece.voiceAudioSegmentsRaw,
+                                      transcriptSource: piece.voiceTranscriptSourceRaw,
+                                      durationSeconds: piece.voiceDurationSeconds),
             new: result)
-        specimen.voiceAudioFilename = merged.audioFilename
-        specimen.voiceAudioSegmentsRaw = merged.audioSegments
-        specimen.voiceTranscriptSourceRaw = merged.transcriptSource
-        specimen.voiceDurationSeconds = merged.durationSeconds
+        piece.voiceAudioFilename = merged.audioFilename
+        piece.voiceAudioSegmentsRaw = merged.audioSegments
+        piece.voiceTranscriptSourceRaw = merged.transcriptSource
+        piece.voiceDurationSeconds = merged.durationSeconds
         // The honesty repair's own metric: a real recording committing with no
         // words. A take with an empty transcript is only a recording at all
         // when it published a segment — read the count rather than assume it.
         if let result, result.transcript.isEmpty, !result.audioSegments.isEmpty {
             analytics.event("voice.empty_transcript", ["had_audio": "true"])
         }
-        specimen.captureKindRaw = "note"
-        specimen.setValue(text, for: .note, source: .voice)
+        piece.captureKindRaw = "note"
+        piece.setValue(text, for: .note, source: .voice)
         try? store.save()
         analytics.event("N4.attach", ["chars": String(text.count)])
-        coordinator?.present(.specimenSheet(specimenID))
+        coordinator?.present(.pieceSheet(pieceID))
     }
 
-    private func currentSpecimen() -> Piece? {
-        CaptureOwnerProjectionPolicy.specimen(
-            id: specimenID,
+    private func currentPiece() -> Piece? {
+        CaptureOwnerProjectionPolicy.piece(
+            id: pieceID,
             store: store,
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
@@ -496,9 +496,9 @@ import CaptureKitMocks
 #Preview("N4 · Voice") {
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
-    let specimen = store.newDraft()
+    let piece = store.newDraft()
     return VoiceNoteSheet(
-        specimenID: specimen.id,
+        pieceID: piece.id,
         store: store,
         session: MockSessionProviding(),
         voice: MockVoiceNoteService(),

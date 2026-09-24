@@ -936,49 +936,49 @@ struct VisitContextTests {
                                       projectRoomID: "sr1", scanRoomID: "r1", room: "Living")
         let context = CaptureSessionContextPolicy.started(draft, identity: identity, now: now)
 
-        let specimen = store.newDraft(sessionID: context.visitID)
-        specimen.venue = context.routing.stamped(onto: specimen.venue ?? VenueStamp())
-        specimen.inherit(context)
+        let piece = store.newDraft(sessionID: context.visitID)
+        piece.venue = context.routing.stamped(onto: piece.venue ?? VenueStamp())
+        piece.inherit(context)
         try store.save()
 
-        #expect(specimen.captureSessionID == context.visitID)
-        #expect(specimen.venue?.projectId == "p1")
-        #expect(specimen.venue?.projectRoomId == "sr1")   // project_rooms lane only
-        #expect(specimen.venue?.room == "Living")
-        #expect(specimen.visitKind == .site)
-        #expect(specimen.visitKit == .walkThrough)
-        #expect(specimen.visitLabel == "Maple St")
-        #expect(specimen.visitStartedAt == now)
-        #expect(specimen.noteSetting == .conversation)
-        #expect(!specimen.isUnplaced)
+        #expect(piece.captureSessionID == context.visitID)
+        #expect(piece.venue?.projectId == "p1")
+        #expect(piece.venue?.projectRoomId == "sr1")   // project_rooms lane only
+        #expect(piece.venue?.room == "Living")
+        #expect(piece.visitKind == .site)
+        #expect(piece.visitKit == .walkThrough)
+        #expect(piece.visitLabel == "Maple St")
+        #expect(piece.visitStartedAt == now)
+        #expect(piece.noteSetting == .conversation)
+        #expect(!piece.isUnplaced)
     }
 
     @MainActor
     @Test func aCaptureWithNoVisitIsUnplacedAndCarriesNoVisitFacts() throws {
         let store = try CaptureStore.inMemory()
         let context = CaptureSessionContext(identity: identity, startedAt: now, lastActivityAt: now)
-        let specimen = store.newDraft(sessionID: context.visitID)
+        let piece = store.newDraft(sessionID: context.visitID)
         // Seeded, not fresh: a fresh draft is already nil on every visit field,
         // so asserting nil on one would pass with `inherit` as an empty body.
-        // Starting from a specimen that CARRIES a visit pins the clearing.
-        specimen.visitKind = .site
-        specimen.visitKit = .install
-        specimen.visitLabel = "Maple St"
-        specimen.visitStartedAt = now.addingTimeInterval(-3600)
-        specimen.visitEndedAt = now.addingTimeInterval(-600)
-        specimen.inherit(context)
+        // Starting from a piece that CARRIES a visit pins the clearing.
+        piece.visitKind = .site
+        piece.visitKit = .install
+        piece.visitLabel = "Maple St"
+        piece.visitStartedAt = now.addingTimeInterval(-3600)
+        piece.visitEndedAt = now.addingTimeInterval(-600)
+        piece.inherit(context)
         try store.save()
 
-        #expect(specimen.isUnplaced)
-        #expect(specimen.visitKind == nil)
-        #expect(specimen.visitKit == nil)
-        #expect(specimen.visitLabel == nil)
+        #expect(piece.isUnplaced)
+        #expect(piece.visitKind == nil)
+        #expect(piece.visitKit == nil)
+        #expect(piece.visitLabel == nil)
         // The kind-guard in `inherit`: a kindless context must not ship a start
         // time. A row with visit_started_at set and visit_kind NULL claims a
         // visit that never happened.
-        #expect(specimen.visitStartedAt == nil)
-        #expect(specimen.visitEndedAt == nil)
-        #expect(specimen.venue?.projectId == nil)
+        #expect(piece.visitStartedAt == nil)
+        #expect(piece.visitEndedAt == nil)
+        #expect(piece.venue?.projectId == nil)
     }
 
     // MARK: - F-15: a build-2 blob must still decode
@@ -1043,7 +1043,7 @@ struct VisitContextTests {
     // MARK: - F-17 / FC-R21: ONE placement predicate, whatever the route
 
     /// The case the two emitters used to split on. `ViewfinderModel` read
-    /// `specimen.isUnplaced`; `S3DestinationScreen` read `venue.projectId != nil`.
+    /// `piece.isUnplaced`; `S3DestinationScreen` read `venue.projectId != nil`.
     /// A LIBRARY capture with no project answers those two questions
     /// differently — it is not unplaced (Library owes no project) but its venue
     /// carries no project id — so the same capture emitted `capture.placed`
@@ -1099,13 +1099,13 @@ struct VisitContextTests {
     @MainActor
     @Test func aCommittedCaptureWithNoProjectIsStillUnplaced() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = store.newDraft()
-        specimen.status = .committed
-        specimen.remoteId = "fc_1"
+        let piece = store.newDraft()
+        piece.status = .committed
+        piece.remoteId = "fc_1"
         try store.save()
 
-        #expect(specimen.isUnplaced)
-        #expect(specimen.hasConfirmedCaptureReceipt)
+        #expect(piece.isUnplaced)
+        #expect(piece.hasConfirmedCaptureReceipt)
     }
 
     // MARK: - The launch table (task 16, spec §5.3 / FC-R1)

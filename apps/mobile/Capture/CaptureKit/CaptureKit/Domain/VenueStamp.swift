@@ -2,7 +2,7 @@
 //  CaptureKit
 //
 //  Where a capture was found (F-08/F-09). GPS is an immutable capture fact;
-//  the human label is editable (S1). Stored as one Codable value on Specimen.
+//  the human label is editable (S1). Stored as one Codable value on Piece.
 
 import Foundation
 

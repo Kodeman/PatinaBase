@@ -3,7 +3,7 @@
 //
 //  Shared building blocks for Team E's Route (S1–S5) and Session (V1–V3) screens:
 //  the paper/ink button kit, sheet header, field shells, status chips, and the
-//  small formatters that turn a Specimen into showroom-readable copy. Tokens only
+//  small formatters that turn a Piece into showroom-readable copy. Tokens only
 //  (CaptureColor / CaptureType) — no raw hex or system fonts.
 
 import Foundation
@@ -177,24 +177,24 @@ struct RouteStatusChip: View {
     }
 }
 
-// MARK: - Formatters / derivations over a Specimen
+// MARK: - Formatters / derivations over a Piece
 
 enum RouteFormat {
-    static func status(for specimen: Piece) -> RouteRowKind {
-        if specimen.hasUnconfirmedGuess { return .guess }
-        if specimen.destination == .inbox { return .inbox }
+    static func status(for piece: Piece) -> RouteRowKind {
+        if piece.hasUnconfirmedGuess { return .guess }
+        if piece.destination == .inbox { return .inbox }
         return .ready
     }
 
     /// A short "how it was read" descriptor for the session tray (e.g. "4 PHOTOS").
-    static func descriptor(for specimen: Piece) -> String {
-        if !specimen.measurements.isEmpty { return "measured" }
-        if !specimen.scannedCodes.isEmpty { return "scanned" }
-        if specimen.provenance(for: .maker) == .ocr || specimen.provenance(for: .sku) == .ocr {
+    static func descriptor(for piece: Piece) -> String {
+        if !piece.measurements.isEmpty { return "measured" }
+        if !piece.scannedCodes.isEmpty { return "scanned" }
+        if piece.provenance(for: .maker) == .ocr || piece.provenance(for: .sku) == .ocr {
             return "tag read"
         }
-        if specimen.voiceTranscript?.isEmpty == false { return "voice note" }
-        let count = specimen.photos.count
+        if piece.voiceTranscript?.isEmpty == false { return "voice note" }
+        let count = piece.photos.count
         if count == 0 { return "photo" }
         return count == 1 ? "1 photo" : "\(count) photos"
     }
@@ -249,9 +249,9 @@ enum RouteFormat {
     }
 }
 
-// MARK: - Not-found fallback (a routed/specimen id that no longer resolves)
+// MARK: - Not-found fallback (a routed/piece id that no longer resolves)
 
-struct RouteMissingSpecimen: View {
+struct RouteMissingPiece: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: "questionmark.square.dashed")
@@ -275,10 +275,10 @@ struct RouteMissingSpecimen: View {
 enum RoutePreviewData {
     struct Demo {
         let store: CaptureStore
-        let specimen: Piece
+        let piece: Piece
     }
 
-    /// A seeded in-memory store + a flagship specimen plus a couple of siblings so
+    /// A seeded in-memory store + a flagship piece plus a couple of siblings so
     /// the session tray / cull deck render with real content in previews.
     static func make() -> Demo {
         // swiftlint:disable:next force_try
@@ -324,7 +324,7 @@ enum RoutePreviewData {
         table.venue = venue
 
         try? store.save()
-        return Demo(store: store, specimen: chair)
+        return Demo(store: store, piece: chair)
     }
 }
 #endif

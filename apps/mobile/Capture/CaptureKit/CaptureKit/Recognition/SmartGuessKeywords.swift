@@ -1,7 +1,7 @@
 //  SmartGuessKeywords.swift
 //  CaptureKit
 //
-//  The Vision-label → SpecimenCategory mapping, lifted out of the app target so
+//  The Vision-label → PieceCategory mapping, lifted out of the app target so
 //  it runs under capture-gate.sh (CaptureTests links CaptureKit alone). The
 //  Vision request that produces the labels stays app-side and is owed a device
 //  pass; this table is pure and is the part that quietly rots.
@@ -10,7 +10,7 @@ import Foundation
 
 public enum SmartGuessKeywords {
 
-    public static let table: [(keyword: String, category: SpecimenCategory)] = [
+    public static let table: [(keyword: String, category: PieceCategory)] = [
         ("armchair", .seating), ("chair", .seating), ("sofa", .seating), ("couch", .seating),
         ("stool", .seating), ("bench", .seating), ("seat", .seating),
         ("table", .table), ("desk", .table), ("nightstand", .table),
@@ -63,7 +63,7 @@ public enum SmartGuessKeywords {
     /// the keyword's last token ("chairs", "benches"). "shelves" does not find
     /// "shelf" and "draperies" does not find "drapery" — no irregular plural
     /// matches, and none did under the old substring test either.
-    public static func category(forVisionLabel label: String) -> SpecimenCategory? {
+    public static func category(forVisionLabel label: String) -> PieceCategory? {
         let labelTokens = tokens(from: label)
         guard !labelTokens.isEmpty else { return nil }
         var best: Match?
@@ -86,14 +86,14 @@ public enum SmartGuessKeywords {
     private struct Match {
         let head: Int
         let length: Int
-        let category: SpecimenCategory
+        let category: PieceCategory
     }
 
     /// `table`, tokenized ONCE. `category(forVisionLabel:)` runs per Vision
     /// observation, and re-splitting every keyword on every call was 40-odd
     /// tokenizations per label for a table that never changes. Derived from
     /// `table` rather than written out again, so the two cannot drift.
-    private static let tokenizedTable: [(tokens: [String], category: SpecimenCategory)] =
+    private static let tokenizedTable: [(tokens: [String], category: PieceCategory)] =
         table.compactMap { entry in
             let keywordTokens = tokens(from: entry.keyword)
             return keywordTokens.isEmpty ? nil : (keywordTokens, entry.category)

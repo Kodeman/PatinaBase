@@ -248,7 +248,7 @@ struct ViewfinderShutter: View {
         }
         .contentShape(Circle())
         .accessibilityLabel("Shutter")
-        .accessibilityHint("Tap to capture, hold for a multi-shot specimen")
+        .accessibilityHint("Tap to capture, hold for a multi-shot piece")
     }
 }
 

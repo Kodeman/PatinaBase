@@ -23,9 +23,9 @@ public enum CaptureScreenID: String, CaseIterable, Sendable {
     // Flow 2 — core capture
     case c1Viewfinder         = "screen.C1.viewfinder"
     case c2Framing            = "screen.C2.framing"
-    case c3Specimen           = "screen.C3.specimen-forms"
+    case c3Piece              = "screen.C3.specimen-forms"   // raw value is a frozen screen id
     case c4MultiShot          = "screen.C4.multi-shot"
-    case c5SpecimenSheet      = "screen.C5.specimen-sheet"
+    case c5PieceSheet         = "screen.C5.specimen-sheet"   // raw value is a frozen screen id
     // Flow 3 — enrich in place
     case n1TagOCR             = "screen.N1.tag-ocr"
     case n2Scan               = "screen.N2.scan"

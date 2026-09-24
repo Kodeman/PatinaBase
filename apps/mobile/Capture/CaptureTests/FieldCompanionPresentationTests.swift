@@ -216,11 +216,11 @@ struct FieldCompanionPresentationTests {
 
         let full = CaptureSyncAttributes.ContentState(
             queued: 0, uploading: 0, failed: 0,
-            lastSpecimenTitle: "Brass sconce",
+            lastPieceTitle: "Brass sconce",
             visitLabel: "Maple St · Living",
             elapsedSeconds: 1_412,
             captureCount: 9)
-        #expect(full.lastSpecimenTitle == "Brass sconce")
+        #expect(full.lastPieceTitle == "Brass sconce")
         #expect(full.visitLabel == "Maple St · Living")
         #expect(full.elapsedSeconds == 1_412)
         #expect(full.captureCount == 9)
@@ -235,7 +235,7 @@ struct FieldCompanionPresentationTests {
             from: Data(inFlight.utf8))
         #expect(state.queued == 2)
         #expect(state.uploading == 1)
-        #expect(state.lastSpecimenTitle == "Oak bench")
+        #expect(state.lastPieceTitle == "Oak bench")
         #expect(state.visitLabel == nil)
         #expect(state.captureCount == nil)
     }

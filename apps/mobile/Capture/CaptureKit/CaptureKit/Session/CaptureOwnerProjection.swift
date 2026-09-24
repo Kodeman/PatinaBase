@@ -32,7 +32,7 @@ public enum CaptureOwnerProjectionPolicy {
     }
 
     @MainActor
-    public static func specimen(
+    public static func piece(
         id: UUID,
         store: CaptureStore,
         runsRealServices: Bool,
@@ -45,9 +45,9 @@ public enum CaptureOwnerProjectionPolicy {
             workspaceID: workspaceID
         ) {
         case .globalFixtures:
-            return store.specimen(id: id)
+            return store.piece(id: id)
         case .owner(let owner):
-            return store.specimen(id: id, owner: owner)
+            return store.piece(id: id, owner: owner)
         case .unavailable:
             return nil
         }

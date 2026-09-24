@@ -8,16 +8,16 @@
 import SwiftUI
 import CaptureKit
 
-// MARK: - Specimen image loading
+// MARK: - Piece image loading
 
 enum RecognitionImageLoader {
-    /// The still recognition works from: the specimen's primary photo if it has
+    /// The still recognition works from: the piece's primary photo if it has
     /// one, otherwise a fresh frame off the camera seam (mocked in CP0/previews).
     @MainActor
-    static func captureImage(for specimen: Piece,
+    static func captureImage(for piece: Piece,
                              store: CaptureStore,
                              camera: any CameraService) async -> CaptureImage {
-        if let photo = specimen.primaryPhoto {
+        if let photo = piece.primaryPhoto {
             let url = store.mediaURL(for: photo.filename)
             if let data = try? Data(contentsOf: url), !data.isEmpty {
                 return CaptureImage(data: data, width: photo.width, height: photo.height)

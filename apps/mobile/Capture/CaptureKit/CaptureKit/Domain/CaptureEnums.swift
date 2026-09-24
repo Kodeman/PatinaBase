@@ -11,7 +11,7 @@ import Foundation
 /// `voice`. `voice` was a RESERVED case through wave 2 — it exists so this
 /// frozen enum is edited exactly once — and wave 3 admitted it to
 /// `viewfinderSelectable` when C6 was built. What keeps a VOICE pill from
-/// being a shutter that takes a photo is `SpecimenCapturePolicy.producesPhoto(_:)`
+/// being a shutter that takes a photo is `PieceCapturePolicy.producesPhoto(_:)`
 /// guarding the capture paths, not the case's absence from that array.
 public enum CameraMode: String, Codable, CaseIterable, Sendable {
     case photo, tag, measure, scan, voice
@@ -29,13 +29,13 @@ public extension CameraMode {
     }
 }
 
-/// Coarse category for a specimen — seeds smart-guess (N5) and library filters.
-public enum SpecimenCategory: String, Codable, CaseIterable, Sendable {
+/// Coarse category for a piece — seeds smart-guess (N5) and library filters.
+public enum PieceCategory: String, Codable, CaseIterable, Sendable {
     case seating, table, lighting, storage, textile, rug, decor, hardware
     case material, paint, tile, wallcovering, plumbing, appliance, art, unknown
 }
 
-/// Editable fields on a specimen that carry per-field provenance.
+/// Editable fields on a piece that carry per-field provenance.
 public enum FieldKey: String, Codable, CaseIterable, Sendable {
     case title, maker, sku, colorway, material, price, sourceURL, category, note, dimensions
 }
@@ -60,7 +60,7 @@ public enum CaptureDestination: String, Codable, Sendable {
     case undecided, library, inbox
 }
 
-/// Lifecycle/sync status of a specimen record.
+/// Lifecycle/sync status of a piece record.
 public enum CaptureStatus: String, Codable, Sendable {
     case draft        // being built (C3/C5)
     case ready        // user committed; in the local outbox

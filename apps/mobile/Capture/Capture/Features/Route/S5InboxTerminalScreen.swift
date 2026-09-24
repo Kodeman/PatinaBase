@@ -2,7 +2,7 @@
 //  Capture
 //
 //  S5 · Sent to inbox. The terminal state for anything deferred. Confirms the
-//  specimen is safely held and previews what finishing it involves — a clean
+//  piece is safely held and previews what finishing it involves — a clean
 //  handoff from the field to triage (F-12). Offline this reads "queued — will
 //  sync" and routes via U1.
 
@@ -10,7 +10,7 @@ import SwiftUI
 import CaptureKit
 
 struct S5InboxTerminalScreen: View {
-    let specimen: Piece?
+    let piece: Piece?
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 
@@ -88,7 +88,7 @@ struct S5InboxTerminalScreen: View {
     }
 
     private var transfer: CaptureTransferState {
-        specimen?.transferState ?? .local
+        piece?.transferState ?? .local
     }
 
     private var isConfirmed: Bool {
@@ -105,10 +105,10 @@ struct S5InboxTerminalScreen: View {
     }
 
     private var leftToFinish: String {
-        guard let specimen else { return "Held safely — finish it tonight." }
-        let guessCount = FieldKey.allCases.filter { specimen.isUnconfirmedGuess($0) }.count
-        let priceUnverified = specimen.priceTradeCents == nil
-            || specimen.isUnconfirmedGuess(.price)
+        guard let piece else { return "Held safely — finish it tonight." }
+        let guessCount = FieldKey.allCases.filter { piece.isUnconfirmedGuess($0) }.count
+        let priceUnverified = piece.priceTradeCents == nil
+            || piece.isUnconfirmedGuess(.price)
 
         var parts: [String] = []
         if guessCount > 0 {
@@ -124,7 +124,7 @@ import CaptureKitMocks
 
 #Preview {
     let demo = RoutePreviewData.make()
-    return S5InboxTerminalScreen(specimen: demo.specimen, coordinator: CaptureCoordinator(),
+    return S5InboxTerminalScreen(piece: demo.piece, coordinator: CaptureCoordinator(),
                                  analytics: MockCaptureAnalytics())
 }
 #endif

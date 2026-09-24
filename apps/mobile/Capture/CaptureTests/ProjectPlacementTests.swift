@@ -70,37 +70,37 @@ struct ProjectPlacementTests {
     @Test @MainActor
     func placementFailurePreservesCaptureAndProductThenRetriesHonestly() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = store.newDraft()
+        let piece = store.newDraft()
         let captureID = UUID()
-        specimen.applyTransferState(CaptureTransferState(
+        piece.applyTransferState(CaptureTransferState(
             phase: .complete,
             progress: 100,
             receiptID: captureID.uuidString))
-        specimen.committedProductId = productID.uuidString
-        specimen.configureProjectPlacement(
+        piece.committedProductId = productID.uuidString
+        piece.configureProjectPlacement(
             projectID: projectID.uuidString,
             roomID: roomID.uuidString,
             slotID: nil,
             category: "seating")
-        specimen.markProjectPlacementFailed("Network unavailable")
+        piece.markProjectPlacementFailed("Network unavailable")
         try store.save()
 
-        #expect(specimen.status == .committed)
-        #expect(specimen.remoteId == captureID.uuidString)
-        #expect(specimen.committedProductId == productID.uuidString)
-        #expect(specimen.transferState.phase == .retryableFailure)
-        #expect(specimen.placementRetryCount == 1)
-        #expect(store.outbox().map(\.id) == [specimen.id])
+        #expect(piece.status == .committed)
+        #expect(piece.remoteId == captureID.uuidString)
+        #expect(piece.committedProductId == productID.uuidString)
+        #expect(piece.transferState.phase == .retryableFailure)
+        #expect(piece.placementRetryCount == 1)
+        #expect(store.outbox().map(\.id) == [piece.id])
 
-        specimen.markProjectPlacementStarted()
-        specimen.applyProjectPlacementReceipt(
+        piece.markProjectPlacementStarted()
+        piece.applyProjectPlacementReceipt(
             makeReceipt(ffeItemID: UUID(), placement: "created_line"))
         try store.save()
 
-        #expect(specimen.status == .committed)
-        #expect(specimen.remoteId == captureID.uuidString)
-        #expect(specimen.committedProductId == productID.uuidString)
-        #expect(specimen.transferState.phase == .complete)
+        #expect(piece.status == .committed)
+        #expect(piece.remoteId == captureID.uuidString)
+        #expect(piece.committedProductId == productID.uuidString)
+        #expect(piece.transferState.phase == .complete)
         #expect(store.outbox().isEmpty)
     }
 

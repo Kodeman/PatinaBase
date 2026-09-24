@@ -291,9 +291,9 @@ struct WorkDashboardScreen: View {
     private func openAttentionItem(_ item: FieldAttentionItem) {
         analytics.event("work.open_attention", ["kind": item.kind.rawValue])
         switch item.destination {
-        case .specimen(let id):
+        case .piece(let id):
             coordinator.switchRealm(.camera)
-            coordinator.navigate(to: .specimen(id))
+            coordinator.navigate(to: .piece(id))
         case .thread(let id):
             coordinator.navigate(to: .thread(id))
         case .lead(let id):

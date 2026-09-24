@@ -23,12 +23,12 @@ struct FieldCapturePayloadTests {
 
     // MARK: full mapping — every scalar/array/child lands under the contract key
 
-    @Test @MainActor func fullSpecimenMapsEveryKeyToTheRightPath() throws {
+    @Test @MainActor func fullPieceMapsEveryKeyToTheRightPath() throws {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
         s.title = "Lounge chair"
         s.note = "warmer bouclé"
-        s.categoryRaw = SpecimenCategory.seating.rawValue
+        s.categoryRaw = PieceCategory.seating.rawValue
         s.maker = "Holloway & Co."
         s.sku = "LQ-3S-OAK"
         s.priceTradeCents = 312_000
@@ -61,7 +61,7 @@ struct FieldCapturePayloadTests {
                              capturedAt: Date(timeIntervalSince1970: 1_700_000_000),
                              timezoneIdentifier: "America/New_York")
 
-        let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
+        let dict = try json(FieldCapturePayload(piece: s, device: Self.device))
 
         // top-level scalars
         #expect(dict["title"] as? String == "Lounge chair")
@@ -135,13 +135,13 @@ struct FieldCapturePayloadTests {
         #expect(device?["appVersion"] as? String == "0.1 (1)")
     }
 
-    // MARK: empty specimen — minimal payload (absent keys stay absent)
+    // MARK: empty piece — minimal payload (absent keys stay absent)
 
-    @Test @MainActor func emptySpecimenEmitsMinimalPayload() throws {
+    @Test @MainActor func emptyPieceEmitsMinimalPayload() throws {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft() // unknown category, no fields, no children
 
-        let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
+        let dict = try json(FieldCapturePayload(piece: s, device: Self.device))
 
         // Always present:
         #expect(dict["schemaVersion"] as? Int == FieldCapturePayload.currentSchemaVersion)
@@ -164,7 +164,7 @@ struct FieldCapturePayloadTests {
         s.provenanceRaw = ["maker": "ocr", "price": "manual", "category": "smartGuess"]
         s.guessConfidenceRaw = ["category": 0.72, "material": 0.6]
 
-        let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
+        let dict = try json(FieldCapturePayload(piece: s, device: Self.device))
 
         let prov = dict["provenance"] as? [String: Any]
         #expect(prov?["maker"] as? String == "ocr")
@@ -188,7 +188,7 @@ struct FieldCapturePayloadTests {
         // diagonal has no {width,height,depth} slot and is dropped:
         s.addMeasurement(axis: .diagonal, millimeters: 1660, source: .manual)
 
-        let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
+        let dict = try json(FieldCapturePayload(piece: s, device: Self.device))
         let m = try #require(dict["measurements"] as? [String: Any])
         #expect(m["width"] as? Double == 1420)
         #expect(m["height"] as? Double == 900)
@@ -212,7 +212,7 @@ struct FieldCapturePayloadTests {
         s.suggestionBasis = .proximity
         s.suggestionConfidence = 0.61
 
-        let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
+        let dict = try json(FieldCapturePayload(piece: s, device: Self.device))
         let visit = try #require(dict["visit"] as? [String: Any])
         #expect(visit["id"] as? String == "11111111-2222-4333-8444-555555555555")
         #expect(visit["kind"] as? String == "site")
@@ -246,7 +246,7 @@ struct FieldCapturePayloadTests {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
 
-        let dict = try json(FieldCapturePayload(specimen: s, device: Self.device))
+        let dict = try json(FieldCapturePayload(piece: s, device: Self.device))
         #expect(dict["visit"] == nil)
         #expect(dict["suggestion"] == nil)
     }

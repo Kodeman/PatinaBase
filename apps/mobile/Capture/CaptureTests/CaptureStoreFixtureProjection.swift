@@ -54,7 +54,7 @@ enum StoreFixtureProjection {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    static func specimen(_ row: Piece) -> Row {
+    static func piece(_ row: Piece) -> Row {
         [
             "id": value(row.id),
             "clientToken": value(row.clientToken),
@@ -279,7 +279,7 @@ enum StoreFixtureProjection {
             return Dictionary(uniqueKeysWithValues: rows.map { (key($0), project($0)) })
         }
         return [
-            "Specimen": try keyed(Piece.self, key: { $0.id.uuidString }, project: specimen),
+            "Specimen": try keyed(Piece.self, key: { $0.id.uuidString }, project: piece),
             "CapturePhoto": try keyed(CapturePhoto.self, key: { $0.id.uuidString }, project: photo),
             "CaptureMeasurement": try keyed(CaptureMeasurement.self,
                                             key: { $0.id.uuidString }, project: measurement),

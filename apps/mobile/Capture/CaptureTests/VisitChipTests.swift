@@ -226,14 +226,14 @@ struct VisitChipTests {
         let placed = store.newDraft()
         placed.venue = VenueStamp(projectId: "p1", projectName: "Maple St", room: "Living")
 
-        for specimen in [inbox, library, placed] {
-            #expect(!FieldPlacementLine.text(for: specimen).lowercased().contains("inbox"))
+        for piece in [inbox, library, placed] {
+            #expect(!FieldPlacementLine.text(for: piece).lowercased().contains("inbox"))
         }
     }
 
     // MARK: - The door keeps the line's promise (Flow 2)
 
-    /// V0 commits a session context and touches no `Specimen`, so without this
+    /// V0 commits a session context and touches no `Piece`, so without this
     /// the draft she left on the card would still read "Not placed — tap to
     /// place" after she picked Maple St at the door.
     @MainActor

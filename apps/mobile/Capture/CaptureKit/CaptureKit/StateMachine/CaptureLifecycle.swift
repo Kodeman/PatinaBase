@@ -2,7 +2,7 @@
 //  CaptureKit
 //
 //  The capture lifecycle as a pure state machine (spec §11). Whatever the entry
-//  or mode, a capture goes live → freezes to a specimen → loops while enriched →
+//  or mode, a capture goes live → freezes to a piece → loops while enriched →
 //  may rest in a session → gets routed → resolves to saved / inbox / queued.
 
 import Foundation
@@ -11,7 +11,8 @@ public enum CaptureLifecycle {
     public enum State: String, Codable, Sendable, CaseIterable {
         case viewfinder    // C1 live
         case captured      // C3 shutter fired, frame frozen
-        case specimen      // C5 card/sheet up
+        // Stored in `Piece.lifecycleRaw`, so the raw value keeps the old word.
+        case piece = "specimen" // C5 card/sheet up
         case enriching     // N1–N5 sub-action in flight
         case session       // V1 batch
         case routed        // S1 stamped + placed
@@ -29,7 +30,7 @@ public enum CaptureLifecycle {
     public enum Event: Sendable {
         case shutter
         case addShot
-        case openSpecimen
+        case openPiece
         case beginEnrich(EnrichKind)
         case finishEnrich
         case openSession
@@ -49,11 +50,11 @@ public enum CaptureLifecycle {
     public static func reduce(_ state: State, _ event: Event) -> State {
         switch (state, event) {
         case (.viewfinder, .shutter):                return .captured
-        case (.captured, .openSpecimen):             return .specimen
+        case (.captured, .openPiece):             return .piece
         case (.captured, .addShot):                  return .captured
-        case (.specimen, .addShot):                  return .specimen
+        case (.piece, .addShot):                  return .piece
         case (_, .beginEnrich):                      return .enriching
-        case (.enriching, .finishEnrich):            return .specimen
+        case (.enriching, .finishEnrich):            return .piece
         case (_, .openSession):                      return .session
         case (_, .assignVenue):                      return .routed
         case (_, .chooseDestination(.library)):      return .routed

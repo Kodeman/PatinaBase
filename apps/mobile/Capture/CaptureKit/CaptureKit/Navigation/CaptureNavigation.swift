@@ -19,7 +19,7 @@ public enum CapturePhase: Equatable, Sendable {
 public enum CaptureRoute: Hashable, Sendable {
     case viewfinder           // C1
     case session              // V1
-    case specimen(UUID)       // V3 detail
+    case piece(UUID)       // V3 detail
     case librarySearch        // U2
     case syncStatus           // U1
     case settings             // T1
@@ -55,7 +55,7 @@ public enum CaptureRoute: Hashable, Sendable {
 
 /// Sheets / overlays (presented over the viewfinder or a screen).
 public enum CaptureSheet: Hashable, Identifiable, Sendable {
-    case specimenSheet(UUID)  // C5
+    case pieceSheet(UUID)  // C5
     case smartGuessCard(UUID) // C3
     case ocr(UUID)            // N1
     case code(UUID)           // N2
@@ -84,7 +84,7 @@ public enum CaptureSheet: Hashable, Identifiable, Sendable {
 
     public var id: String {
         switch self {
-        case .specimenSheet(let u): return "specimen-\(u)"
+        case .pieceSheet(let u): return "piece-\(u)"
         case .smartGuessCard(let u): return "guess-\(u)"
         case .ocr(let u): return "ocr-\(u)"
         case .code(let u): return "code-\(u)"

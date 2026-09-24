@@ -38,34 +38,34 @@ struct VoiceAudioWireTests {
     }
 
     @Test func payloadCarriesEveryVoiceSegment() {
-        let specimen = Piece()
-        specimen.voiceTranscript = "the alcove is about forty-two and three quarters"
-        specimen.voiceAudioFilename = "voice-a-000.m4a"
-        specimen.voiceAudioSegmentsRaw = ["voice-a-000.m4a", "voice-a-001.m4a"]
-        specimen.voiceDurationSeconds = 91
-        let payload = FieldCapturePayload(specimen: specimen,
+        let piece = Piece()
+        piece.voiceTranscript = "the alcove is about forty-two and three quarters"
+        piece.voiceAudioFilename = "voice-a-000.m4a"
+        piece.voiceAudioSegmentsRaw = ["voice-a-000.m4a", "voice-a-001.m4a"]
+        piece.voiceDurationSeconds = 91
+        let payload = FieldCapturePayload(piece: piece,
                                           device: FieldCapturePayload.Device())
         #expect(payload.voice?.audioPath == "voice-a-000.m4a")
         #expect(payload.voice?.audioSegments == ["voice-a-000.m4a", "voice-a-001.m4a"])
     }
 
     @Test func payloadOmitsVoiceWhenNothingWasRecorded() {
-        let specimen = Piece()
-        let payload = FieldCapturePayload(specimen: specimen,
+        let piece = Piece()
+        let payload = FieldCapturePayload(piece: piece,
                                           device: FieldCapturePayload.Device())
         #expect(payload.voice == nil)
     }
 
     @Test func payloadCarriesTheCaptureKindTheServerChecks() {
-        let specimen = Piece()
-        specimen.captureKindRaw = "note"
-        let payload = FieldCapturePayload(specimen: specimen,
+        let piece = Piece()
+        piece.captureKindRaw = "note"
+        let payload = FieldCapturePayload(piece: piece,
                                           device: FieldCapturePayload.Device())
         #expect(payload.captureKind == "note")
     }
 
     @Test func payloadOmitsAnUnsetCaptureKindSoTheServerDefaultApplies() {
-        let payload = FieldCapturePayload(specimen: Piece(),
+        let payload = FieldCapturePayload(piece: Piece(),
                                           device: FieldCapturePayload.Device())
         #expect(payload.captureKind == nil)
     }
@@ -78,20 +78,20 @@ struct VoiceAudioWireTests {
 
     @Test @MainActor func missingRequiredMediaChecksEverySegmentInOrder() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = Piece()
-        specimen.voiceAudioFilename = "voice-a-000.m4a"
-        specimen.voiceAudioSegmentsRaw = ["voice-a-000.m4a", "voice-a-001.m4a"]
-        let missing = store.missingRequiredMedia(for: specimen)
+        let piece = Piece()
+        piece.voiceAudioFilename = "voice-a-000.m4a"
+        piece.voiceAudioSegmentsRaw = ["voice-a-000.m4a", "voice-a-001.m4a"]
+        let missing = store.missingRequiredMedia(for: piece)
         #expect(missing == ["voice-a-000.m4a", "voice-a-001.m4a"])
     }
 
     @Test @MainActor func anUploadedSegmentIsExemptedLikeAnUploadedPhoto() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = Piece()
-        specimen.voiceAudioFilename = "voice-a-000.m4a"
-        specimen.voiceAudioSegmentsRaw = ["voice-a-000.m4a", "voice-a-001.m4a"]
-        specimen.voiceAudioRemotePathsRaw = ["uid/tok/voice-a-000.m4a"]
-        let missing = store.missingRequiredMedia(for: specimen)
+        let piece = Piece()
+        piece.voiceAudioFilename = "voice-a-000.m4a"
+        piece.voiceAudioSegmentsRaw = ["voice-a-000.m4a", "voice-a-001.m4a"]
+        piece.voiceAudioRemotePathsRaw = ["uid/tok/voice-a-000.m4a"]
+        let missing = store.missingRequiredMedia(for: piece)
         #expect(missing == ["voice-a-001.m4a"])
     }
 }

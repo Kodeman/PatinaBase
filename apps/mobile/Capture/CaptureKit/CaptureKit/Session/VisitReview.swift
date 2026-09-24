@@ -5,7 +5,7 @@
 //  visit is derived here, from value types, so the screen holds no arithmetic.
 //
 //  ⚠ V4 groups Captures · Notes · Unplaced. §7.9 also names Scans; a scan is
-//  not a Specimen and the device keeps no visit-keyed scan record, so counting
+//  not a Piece and the device keeps no visit-keyed scan record, so counting
 //  them would mean guessing. Scans stay in the portal's Room files block and a
 //  room_scans.visit_id column is owed.
 //
@@ -17,7 +17,7 @@
 import Foundation
 
 public struct VisitReviewRow: Equatable, Sendable {
-    public let specimenID: UUID
+    public let pieceID: UUID
     public let hasPhoto: Bool
     public let hasTranscript: Bool
     public let roomName: String?
@@ -25,14 +25,14 @@ public struct VisitReviewRow: Equatable, Sendable {
     public let createdAt: Date
 
     public init(
-        specimenID: UUID,
+        pieceID: UUID,
         hasPhoto: Bool,
         hasTranscript: Bool,
         roomName: String?,
         isPlaced: Bool,
         createdAt: Date
     ) {
-        self.specimenID = specimenID
+        self.pieceID = pieceID
         self.hasPhoto = hasPhoto
         self.hasTranscript = hasTranscript
         self.roomName = roomName
@@ -197,17 +197,17 @@ public extension VisitReviewRow {
     /// terminal field_captures.status for it, because introducing one would
     /// silently revoke studio read (field_captures_org_inbox_select keys on
     /// status='inbox', 00233:175-186).
-    init(specimen: Piece) {
-        let words = (specimen.voiceTranscript ?? specimen.voicePartialTranscript ?? "")
+    init(piece: Piece) {
+        let words = (piece.voiceTranscript ?? piece.voicePartialTranscript ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(
-            specimenID: specimen.id,
-            hasPhoto: !specimen.photos.isEmpty,
+            pieceID: piece.id,
+            hasPhoto: !piece.photos.isEmpty,
             hasTranscript: !words.isEmpty,
-            roomName: specimen.venue?.room,
-            isPlaced: specimen.venue?.projectId?
+            roomName: piece.venue?.room,
+            isPlaced: piece.venue?.projectId?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty == false,
-            createdAt: specimen.createdAt)
+            createdAt: piece.createdAt)
     }
 }

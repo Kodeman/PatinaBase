@@ -1,8 +1,8 @@
-//  SpecimenSheetScreen.swift
+//  PieceSheetScreen.swift
 //  Capture
 //
-//  C5 — the full editable specimen record. A photo strip (primary marked, near-
-//  dup flagged) over every field rendered through the shared SpecimenFieldRow
+//  C5 — the full editable piece record. A photo strip (primary marked, near-
+//  dup flagged) over every field rendered through the shared PieceFieldRow
 //  with its ProvenanceBadge, so the designer can see and correct how each value
 //  was obtained. Edits flow through `setValue` (provenance → manual/edited, N5
 //  protected). Save commits & routes (S3); Re-shoot returns to the viewfinder.
@@ -14,10 +14,10 @@ import PatinaDesignKit
 import UIKit
 #endif
 
-struct SpecimenSheetScreen: View {
+struct PieceSheetScreen: View {
     let store: CaptureStore
     let coordinator: CaptureCoordinator
-    let specimen: Piece      // @Model — Observation tracks the fields read in body
+    let piece: Piece      // @Model — Observation tracks the fields read in body
 
     @Environment(\.dismiss) private var dismiss
     @State private var showMoreDetails = false
@@ -26,7 +26,7 @@ struct SpecimenSheetScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    SpecimenPhotoStrip(store: store, specimen: specimen)
+                    PiecePhotoStrip(store: store, piece: piece)
                     placement
                     fields
                     enrichmentActions
@@ -35,7 +35,7 @@ struct SpecimenSheetScreen: View {
                 .padding(20)
             }
             .background(CaptureColor.paper.ignoresSafeArea())
-            .navigationTitle("Specimen")
+            .navigationTitle("Piece")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -47,7 +47,7 @@ struct SpecimenSheetScreen: View {
         }
         .presentationDragIndicator(.visible)
         .onDisappear { try? store.save() }
-        .accessibilityIdentifier(CaptureScreenID.c5SpecimenSheet.rawValue)
+        .accessibilityIdentifier(CaptureScreenID.c5PieceSheet.rawValue)
     }
 
     // MARK: Placement
@@ -57,9 +57,9 @@ struct SpecimenSheetScreen: View {
     /// *Change* takes her to the same door the card does.
     private var placement: some View {
         HStack(spacing: 8) {
-            Text(FieldPlacementLine.text(for: specimen))
+            Text(FieldPlacementLine.text(for: piece))
                 .font(CaptureType.footnote)
-                .foregroundStyle(FieldPlacementLine.isUnplaced(specimen)
+                .foregroundStyle(FieldPlacementLine.isUnplaced(piece)
                                  ? CaptureColor.terracotta : CaptureColor.inkSoft)
             Spacer(minLength: 8)
             Button("Change") { coordinator.present(.visit) }
@@ -74,37 +74,37 @@ struct SpecimenSheetScreen: View {
 
     private var fields: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SpecimenFieldRow("Title", value: scalarBinding(.title) { specimen.title },
-                             source: specimen.provenance(for: .title),
+            PieceFieldRow("Title", value: scalarBinding(.title) { piece.title },
+                             source: piece.provenance(for: .title),
                              placeholder: "Name this piece")
-            SpecimenFieldRow("Maker", value: scalarBinding(.maker) { specimen.maker },
-                             source: specimen.provenance(for: .maker),
+            PieceFieldRow("Maker", value: scalarBinding(.maker) { piece.maker },
+                             source: piece.provenance(for: .maker),
                              placeholder: "Vendor / brand")
-            SpecimenFieldRow("Material", value: scalarBinding(.material) { specimen.materialNote },
-                             source: specimen.provenance(for: .material),
-                             confirmed: specimen.isConfirmed(.material))
+            PieceFieldRow("Material", value: scalarBinding(.material) { piece.materialNote },
+                             source: piece.provenance(for: .material),
+                             confirmed: piece.isConfirmed(.material))
 
             DisclosureGroup(isExpanded: $showMoreDetails) {
                 VStack(spacing: 0) {
-                    SpecimenFieldRow("SKU", value: scalarBinding(.sku) { specimen.sku },
-                                     source: specimen.provenance(for: .sku))
-                    SpecimenFieldRow("Colorway", value: scalarBinding(.colorway) { specimen.colorway },
-                                     source: specimen.provenance(for: .colorway),
-                                     confirmed: specimen.isConfirmed(.colorway))
-                    SpecimenFieldRow("Finish", value: finishBinding,
+                    PieceFieldRow("SKU", value: scalarBinding(.sku) { piece.sku },
+                                     source: piece.provenance(for: .sku))
+                    PieceFieldRow("Colorway", value: scalarBinding(.colorway) { piece.colorway },
+                                     source: piece.provenance(for: .colorway),
+                                     confirmed: piece.isConfirmed(.colorway))
+                    PieceFieldRow("Finish", value: finishBinding,
                                      source: .manual)
-                    SpecimenFieldRow("Trade price", value: priceBinding,
-                                     source: specimen.provenance(for: .price))
-                    SpecimenFieldRow("Dimensions", value: dimensionsBinding,
-                                     source: specimen.provenance(for: .dimensions),
+                    PieceFieldRow("Trade price", value: priceBinding,
+                                     source: piece.provenance(for: .price))
+                    PieceFieldRow("Dimensions", value: dimensionsBinding,
+                                     source: piece.provenance(for: .dimensions),
                                      placeholder: "Add in Measure")
-                    SpecimenFieldRow("Source", value: scalarBinding(.sourceURL) { specimen.sourceURL },
-                                     source: specimen.provenance(for: .sourceURL),
+                    PieceFieldRow("Source", value: scalarBinding(.sourceURL) { piece.sourceURL },
+                                     source: piece.provenance(for: .sourceURL),
                                      placeholder: "Website or showroom")
-                    SpecimenFieldRow("Notes", value: scalarBinding(.note) { specimen.note },
-                                     source: specimen.provenance(for: .note))
+                    PieceFieldRow("Notes", value: scalarBinding(.note) { piece.note },
+                                     source: piece.provenance(for: .note))
                     if hasVoiceNote {
-                        SpecimenFieldRow("Voice note", value: voiceBinding, source: .voice,
+                        PieceFieldRow("Voice note", value: voiceBinding, source: .voice,
                                          placeholder: "Transcript")
                     }
                 }
@@ -131,10 +131,10 @@ struct SpecimenSheetScreen: View {
                 .textCase(.uppercase)
                 .foregroundStyle(CaptureColor.inkSoft)
             HStack(spacing: 8) {
-                enrichmentButton("Tag", icon: "text.viewfinder", sheet: .ocr(specimen.id))
-                enrichmentButton("Code", icon: "barcode.viewfinder", sheet: .code(specimen.id))
-                enrichmentButton("Measure", icon: "ruler", sheet: .measure(specimen.id))
-                enrichmentButton("Voice", icon: "waveform", sheet: .voice(specimen.id))
+                enrichmentButton("Tag", icon: "text.viewfinder", sheet: .ocr(piece.id))
+                enrichmentButton("Code", icon: "barcode.viewfinder", sheet: .code(piece.id))
+                enrichmentButton("Measure", icon: "ruler", sheet: .measure(piece.id))
+                enrichmentButton("Voice", icon: "waveform", sheet: .voice(piece.id))
             }
         }
     }
@@ -174,10 +174,10 @@ struct SpecimenSheetScreen: View {
     }
 
     private func save() {
-        specimen.status = .ready
+        piece.status = .ready
         try? store.save()
         CaptureHaptics.success()
-        coordinator.present(.destination(specimen.id))      // S3 route & save
+        coordinator.present(.destination(piece.id))      // S3 route & save
     }
 
     private func reshoot() {
@@ -192,20 +192,20 @@ struct SpecimenSheetScreen: View {
             get: { get() ?? "" },
             set: { newValue in
                 let trimmed = newValue.isEmpty ? nil : newValue
-                specimen.setValue(trimmed, for: key, source: editSource(key))
+                piece.setValue(trimmed, for: key, source: editSource(key))
             }
         )
     }
 
     private var priceBinding: Binding<String> {
         Binding(
-            get: { specimen.priceTradeCents.map { String(format: "%.2f", Double($0) / 100) } ?? "" },
+            get: { piece.priceTradeCents.map { String(format: "%.2f", Double($0) / 100) } ?? "" },
             set: { newValue in
                 if newValue.isEmpty {
-                    specimen.setValue(nil, for: .price, source: editSource(.price))
+                    piece.setValue(nil, for: .price, source: editSource(.price))
                 } else if let dollars = Double(newValue.filter { $0.isNumber || $0 == "." }) {
                     let cents = Int((dollars * 100).rounded())
-                    specimen.setValue(String(cents), for: .price, source: editSource(.price))
+                    piece.setValue(String(cents), for: .price, source: editSource(.price))
                 }
             }
         )
@@ -213,49 +213,49 @@ struct SpecimenSheetScreen: View {
 
     private var finishBinding: Binding<String> {
         Binding(
-            get: { specimen.finish ?? "" },
+            get: { piece.finish ?? "" },
             set: {
-                specimen.finish = $0.isEmpty ? nil : $0
-                specimen.touch()
+                piece.finish = $0.isEmpty ? nil : $0
+                piece.touch()
             }
         )
     }
 
     // Display-only: measurements are authored in Measure (N3, Team C).
     private var dimensionsBinding: Binding<String> {
-        Binding(get: { Self.dimensionString(specimen.measurements) }, set: { _ in })
+        Binding(get: { Self.dimensionString(piece.measurements) }, set: { _ in })
     }
 
     private var voiceBinding: Binding<String> {
         Binding(
-            get: { specimen.voiceTranscript ?? specimen.voicePartialTranscript ?? "" },
+            get: { piece.voiceTranscript ?? piece.voicePartialTranscript ?? "" },
             set: { newValue in
-                specimen.voiceTranscript = newValue.isEmpty ? nil : newValue
-                specimen.touch()
+                piece.voiceTranscript = newValue.isEmpty ? nil : newValue
+                piece.touch()
             }
         )
     }
 
     private var hasVoiceNote: Bool {
-        specimen.voiceTranscript != nil || specimen.voicePartialTranscript != nil
+        piece.voiceTranscript != nil || piece.voicePartialTranscript != nil
     }
 
     private var detailSummary: String {
         var count = 0
-        if !(specimen.sku ?? "").isEmpty { count += 1 }
-        if !(specimen.colorway ?? "").isEmpty { count += 1 }
-        if !(specimen.finish ?? "").isEmpty { count += 1 }
-        if specimen.priceTradeCents != nil { count += 1 }
-        if !specimen.measurements.isEmpty { count += 1 }
-        if !(specimen.sourceURL ?? "").isEmpty { count += 1 }
-        if !(specimen.note ?? "").isEmpty { count += 1 }
+        if !(piece.sku ?? "").isEmpty { count += 1 }
+        if !(piece.colorway ?? "").isEmpty { count += 1 }
+        if !(piece.finish ?? "").isEmpty { count += 1 }
+        if piece.priceTradeCents != nil { count += 1 }
+        if !piece.measurements.isEmpty { count += 1 }
+        if !(piece.sourceURL ?? "").isEmpty { count += 1 }
+        if !(piece.note ?? "").isEmpty { count += 1 }
         return count == 0 ? "Optional" : "\(count) added"
     }
 
     /// A recognised/measured value the designer changes is "edited"; an empty or
     /// already-manual field stays "manual".
     private func editSource(_ key: FieldKey) -> ProvenanceSource {
-        switch specimen.provenance(for: key) {
+        switch piece.provenance(for: key) {
         case .none, .manual: return .manual
         default: return .edited
         }
@@ -273,11 +273,11 @@ struct SpecimenSheetScreen: View {
 
 // MARK: - Photo strip
 
-struct SpecimenPhotoStrip: View {
+struct PiecePhotoStrip: View {
     let store: CaptureStore
-    let specimen: Piece
+    let piece: Piece
 
-    private var photos: [CapturePhoto] { specimen.photos.sorted { $0.order < $1.order } }
+    private var photos: [CapturePhoto] { piece.photos.sorted { $0.order < $1.order } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -287,10 +287,10 @@ struct SpecimenPhotoStrip: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     if photos.isEmpty {
-                        SpecimenPhotoThumb(store: store, photo: nil)
+                        PiecePhotoThumb(store: store, photo: nil)
                     } else {
                         ForEach(photos, id: \.id) { photo in
-                            SpecimenPhotoThumb(store: store, photo: photo)
+                            PiecePhotoThumb(store: store, photo: photo)
                         }
                     }
                 }
@@ -299,7 +299,7 @@ struct SpecimenPhotoStrip: View {
     }
 }
 
-struct SpecimenPhotoThumb: View {
+struct PiecePhotoThumb: View {
     let store: CaptureStore
     let photo: CapturePhoto?
 
@@ -355,43 +355,43 @@ struct SpecimenPhotoThumb: View {
     }
 }
 
-// MARK: - Missing specimen fallback (registry resolves a bad/expired id)
+// MARK: - Missing piece fallback (registry resolves a bad/expired id)
 
-struct SpecimenMissingView: View {
+struct PieceMissingView: View {
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: "doc.questionmark")
                 .font(CaptureType.display)
                 .foregroundStyle(CaptureColor.inkSoft)
-            Text("That specimen is no longer here.")
+            Text("That piece is no longer here.")
                 .font(CaptureType.body)
                 .foregroundStyle(CaptureColor.ink)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(CaptureColor.paper.ignoresSafeArea())
-        .accessibilityIdentifier(CaptureScreenID.c5SpecimenSheet.rawValue)
+        .accessibilityIdentifier(CaptureScreenID.c5PieceSheet.rawValue)
     }
 }
 
-#Preview("Specimen sheet") {
+#Preview("Piece sheet") {
     let container = AppContainer()
     let store = container.store
-    let specimen = store.newDraft()
-    specimen.setValue("Lina Lounge Chair", for: .title, source: .manual)
-    specimen.setValue("Holloway & Co.", for: .maker, source: .ocr)
-    specimen.setValue("LQ-3S-OAK", for: .sku, source: .ocr)
-    specimen.setValue("Bone bouclé", for: .colorway, source: .smartGuess)
-    specimen.setValue("Oak / bouclé", for: .material, source: .smartGuess)
-    specimen.setValue("312000", for: .price, source: .ocr)        // cents → $3,120.00
-    specimen.category = .seating
-    specimen.voiceTranscript = "Oak base, the warmer bouclé, rep is Dana."
-    specimen.provenanceRaw[FieldKey.note.rawValue] = ProvenanceSource.voice.rawValue
-    specimen.addMeasurement(axis: .width, millimeters: 813, source: .arkit)
-    specimen.addMeasurement(axis: .depth, millimeters: 762, source: .arkit)
-    specimen.addMeasurement(axis: .height, millimeters: 864, source: .arkit)
+    let piece = store.newDraft()
+    piece.setValue("Lina Lounge Chair", for: .title, source: .manual)
+    piece.setValue("Holloway & Co.", for: .maker, source: .ocr)
+    piece.setValue("LQ-3S-OAK", for: .sku, source: .ocr)
+    piece.setValue("Bone bouclé", for: .colorway, source: .smartGuess)
+    piece.setValue("Oak / bouclé", for: .material, source: .smartGuess)
+    piece.setValue("312000", for: .price, source: .ocr)        // cents → $3,120.00
+    piece.category = .seating
+    piece.voiceTranscript = "Oak base, the warmer bouclé, rep is Dana."
+    piece.provenanceRaw[FieldKey.note.rawValue] = ProvenanceSource.voice.rawValue
+    piece.addMeasurement(axis: .width, millimeters: 813, source: .arkit)
+    piece.addMeasurement(axis: .depth, millimeters: 762, source: .arkit)
+    piece.addMeasurement(axis: .height, millimeters: 864, source: .arkit)
     let primary = CapturePhoto(filename: "p1.heic", isPrimary: true, order: 0)
-    primary.piece = specimen; specimen.photos.append(primary)
+    primary.piece = piece; piece.photos.append(primary)
     let side = CapturePhoto(filename: "p2.heic", order: 1)
-    side.piece = specimen; specimen.photos.append(side)
-    return SpecimenSheetScreen(store: store, coordinator: CaptureCoordinator(), specimen: specimen)
+    side.piece = piece; piece.photos.append(side)
+    return PieceSheetScreen(store: store, coordinator: CaptureCoordinator(), piece: piece)
 }

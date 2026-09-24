@@ -76,9 +76,9 @@ struct VoiceAttachPolicyTests {
         #expect(merged.transcriptSource == "device_partial")
     }
 
-    // MARK: - A specimen that never had audio
+    // MARK: - A piece that never had audio
 
-    @Test func aTypedNoteOnAFreshSpecimenIsTheDesignersOwn() {
+    @Test func aTypedNoteOnAFreshPieceIsTheDesignersOwn() {
         let merged = VoiceAttachPolicy.merge(existing: VoiceAttachment(), new: nil)
         #expect(merged.audioSegments == nil)
         #expect(merged.audioFilename == nil)
@@ -86,7 +86,7 @@ struct VoiceAttachPolicyTests {
         #expect(merged.durationSeconds == nil)
     }
 
-    @Test func wordsWithNoFileOnAFreshSpecimenAreStillSpoken() {
+    @Test func wordsWithNoFileOnAFreshPieceAreStillSpoken() {
         // Recognition ran, the AVAudioFile never opened: the transcript is
         // device-spoken even though nothing was written.
         let transcriptOnly = VoiceNoteResult(transcript: "oak base",

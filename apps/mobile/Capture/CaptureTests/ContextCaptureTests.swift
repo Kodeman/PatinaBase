@@ -57,42 +57,42 @@ struct ContextCaptureTests {
     // MARK: - Outbox enqueue (in-memory store)
 
     @MainActor
-    @Test func enqueuePhotoProducesInboxOutboxSpecimen() throws {
+    @Test func enqueuePhotoProducesInboxOutboxPiece() throws {
         let store = try CaptureStore.inMemory()
         let service = ContextCaptureService(store: store)
         let prov = ContextCaptureProvenance(scanSessionId: "scan-1", projectId: "proj-1",
                                             projectRoomId: "room-1",
                                             cameraPoseRowMajor: Array(repeating: 1.0, count: 16),
                                             capturedAt: "2026-07-17T00:00:00Z")
-        let specimen = service.enqueuePhoto(imageData: Data([0xFF, 0xD8, 0xFF]),
+        let piece = service.enqueuePhoto(imageData: Data([0xFF, 0xD8, 0xFF]),
                                             width: 100, height: 80, provenance: prov)
 
-        #expect(specimen.status == .ready)                 // in the outbox
-        #expect(specimen.destination == .inbox)            // Capture Inbox
-        #expect(specimen.photos.count == 1)
-        #expect(specimen.venue?.projectId == "proj-1")
-        #expect(specimen.venue?.projectRoomId == nil)      // rooms-id NOT in project_room_id (routing note)
-        #expect(specimen.provenanceRaw["siteScanContext.source"] == "site-scan-context")
-        #expect(specimen.provenanceRaw["siteScanContext.scanId"] == "scan-1")
-        #expect(specimen.provenanceRaw["siteScanContext.projectRoomId"] == "room-1")
-        #expect(store.outbox().contains { $0.id == specimen.id })
+        #expect(piece.status == .ready)                 // in the outbox
+        #expect(piece.destination == .inbox)            // Capture Inbox
+        #expect(piece.photos.count == 1)
+        #expect(piece.venue?.projectId == "proj-1")
+        #expect(piece.venue?.projectRoomId == nil)      // rooms-id NOT in project_room_id (routing note)
+        #expect(piece.provenanceRaw["siteScanContext.source"] == "site-scan-context")
+        #expect(piece.provenanceRaw["siteScanContext.scanId"] == "scan-1")
+        #expect(piece.provenanceRaw["siteScanContext.projectRoomId"] == "room-1")
+        #expect(store.outbox().contains { $0.id == piece.id })
     }
 
     @MainActor
-    @Test func enqueueVoiceProducesInboxOutboxSpecimen() throws {
+    @Test func enqueueVoiceProducesInboxOutboxPiece() throws {
         let store = try CaptureStore.inMemory()
         let service = ContextCaptureService(store: store)
         let prov = ContextCaptureProvenance(scanSessionId: "scan-1", projectId: "proj-1",
                                             projectRoomId: nil, cameraPoseRowMajor: nil,
                                             capturedAt: "2026-07-17T00:00:00Z")
-        let specimen = service.enqueueVoice(transcript: "north wall has a return",
+        let piece = service.enqueueVoice(transcript: "north wall has a return",
                                             audioFilename: "note.m4a", durationSeconds: 3.2,
                                             provenance: prov)
-        #expect(specimen.status == .ready)
-        #expect(specimen.destination == .inbox)
-        #expect(specimen.voiceTranscript == "north wall has a return")
-        #expect(specimen.voiceDurationSeconds == 3.2)
-        #expect(store.outbox().contains { $0.id == specimen.id })
+        #expect(piece.status == .ready)
+        #expect(piece.destination == .inbox)
+        #expect(piece.voiceTranscript == "north wall has a return")
+        #expect(piece.voiceDurationSeconds == 3.2)
+        #expect(store.outbox().contains { $0.id == piece.id })
     }
 
     @MainActor
@@ -111,15 +111,15 @@ struct ContextCaptureTests {
             capturedAt: "2026-07-17T00:00:00Z"
         )
 
-        let specimen = service.enqueueVoice(
+        let piece = service.enqueueVoice(
             transcript: "north wall",
             audioFilename: nil,
             durationSeconds: 0,
             provenance: provenance
         )
 
-        #expect(specimen.ownerUserID == owner.userID)
-        #expect(specimen.ownerWorkspaceID == owner.workspaceID)
-        #expect(store.outbox(owner: owner).map(\.id) == [specimen.id])
+        #expect(piece.ownerUserID == owner.userID)
+        #expect(piece.ownerWorkspaceID == owner.workspaceID)
+        #expect(store.outbox(owner: owner).map(\.id) == [piece.id])
     }
 }

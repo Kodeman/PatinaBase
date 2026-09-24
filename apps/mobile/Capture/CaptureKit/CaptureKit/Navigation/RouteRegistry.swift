@@ -41,7 +41,7 @@ public extension CaptureRoute {
         switch self {
         case .viewfinder: return "viewfinder"
         case .session: return "session"
-        case .specimen: return "specimen"
+        case .piece: return "piece"
         case .librarySearch: return "librarySearch"
         case .syncStatus: return "syncStatus"
         case .settings: return "settings"
@@ -69,7 +69,7 @@ public extension CaptureRoute {
 public extension CaptureSheet {
     var registryKey: String {
         switch self {
-        case .specimenSheet: return "specimenSheet"
+        case .pieceSheet: return "pieceSheet"
         case .smartGuessCard: return "smartGuessCard"
         case .ocr: return "ocr"
         case .code: return "code"

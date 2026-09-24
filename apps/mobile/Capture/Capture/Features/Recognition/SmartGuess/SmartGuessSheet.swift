@@ -13,7 +13,7 @@ import SwiftUI
 import CaptureKit
 
 struct SmartGuessSheet: View {
-    let specimenID: UUID
+    let pieceID: UUID
     let store: CaptureStore
     let session: any SessionProviding
     let camera: any CameraService
@@ -38,11 +38,11 @@ struct SmartGuessSheet: View {
     @State private var verbMenu = FieldVerbMenu()
 
     // Working values + the original guesses (to tell a correction from an accept).
-    @State private var categoryRaw = SpecimenCategory.unknown.rawValue
+    @State private var categoryRaw = PieceCategory.unknown.rawValue
     @State private var material = ""
     @State private var style = ""
     @State private var colour = ""
-    @State private var categoryOriginal = SpecimenCategory.unknown.rawValue
+    @State private var categoryOriginal = PieceCategory.unknown.rawValue
     @State private var materialOriginal = ""
     @State private var styleOriginal = ""
     @State private var colourOriginal = ""
@@ -86,10 +86,10 @@ struct SmartGuessSheet: View {
     // MARK: - The three verbs (FC-R7 · FC-R8 · ruling 1)
 
     private var verbFacts: FieldVerbFacts {
-        guard let specimen = currentSpecimen() else {
+        guard let piece = currentPiece() else {
             return FieldVerbFacts(hasProject: false)
         }
-        return FieldVerbFacts(specimen: specimen, partiesSettled: partiesSettled)
+        return FieldVerbFacts(piece: piece, partiesSettled: partiesSettled)
     }
 
     /// Survives for exactly two cases (ruling 1): a capture with no visit — the
@@ -97,21 +97,21 @@ struct SmartGuessSheet: View {
     /// Today (FC-R6). Inside a placed visit the menu's filed row replaces the
     /// verb, because the drain already did it.
     private func performVerb(_ action: FieldVerbAction) {
-        guard let specimen = currentSpecimen() else { return }
+        guard let piece = currentPiece() else { return }
         switch action {
         case .note:
-            specimen.requestMarginNote(noteID: UUID())
-            analytics.event("N5.make-note", ["id": specimen.id.uuidString])
+            piece.requestMarginNote(noteID: UUID())
+            analytics.event("N5.make-note", ["id": piece.id.uuidString])
         case .punchTask(let owner, let partyID, let intent):
-            specimen.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
+            piece.requestPunchTask(taskID: UUID(), owner: owner, partyID: partyID)
             analytics.event("N5.make-task", ["owner": owner, "verb": intent.rawValue])
         }
         try? store.save()
-        enqueue(specimen.id)
+        enqueue(piece.id)
     }
 
     private func loadParties() async {
-        guard let projectID = currentSpecimen()?.venue?.projectId,
+        guard let projectID = currentPiece()?.venue?.projectId,
               !projectID.isEmpty else { partiesSettled = true; return }
         parties = (try? await siteRequests.fieldParties(projectID: projectID)) ?? []
         partiesSettled = true
@@ -134,12 +134,12 @@ struct SmartGuessSheet: View {
                     confidenceTag("Category")
                 }
                 Menu {
-                    ForEach(SpecimenCategory.allCases, id: \.self) { c in
+                    ForEach(PieceCategory.allCases, id: \.self) { c in
                         Button(c.rawValue.capitalized) { categoryRaw = c.rawValue }
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Text(SpecimenCategory(rawValue: categoryRaw)?.rawValue.capitalized ?? "Unknown")
+                        Text(PieceCategory(rawValue: categoryRaw)?.rawValue.capitalized ?? "Unknown")
                             .font(CaptureType.bodyEmph)
                             .foregroundStyle(CaptureColor.verdigrisInk)
                         Image(systemName: "chevron.down")
@@ -197,20 +197,20 @@ struct SmartGuessSheet: View {
     // MARK: - Load + apply
 
     private func loadGuess() async {
-        guard !loaded, let sourceSpecimen = currentSpecimen() else { return }
+        guard !loaded, let sourcePiece = currentPiece() else { return }
         loaded = true
         analytics.screen("N5.smart-guess")
 
         let image = await RecognitionImageLoader.captureImage(
-            for: sourceSpecimen,
+            for: sourcePiece,
             store: store,
             camera: camera)
-        guard !Task.isCancelled, currentSpecimen() != nil else { return }
+        guard !Task.isCancelled, currentPiece() != nil else { return }
 
         let guess = await smartGuess.guess(image: image, ocr: [], codes: [])
-        guard !Task.isCancelled, let specimen = currentSpecimen() else { return }
+        guard !Task.isCancelled, let piece = currentPiece() else { return }
 
-        categoryRaw = guess.category == .unknown ? specimen.categoryRaw : guess.category.rawValue
+        categoryRaw = guess.category == .unknown ? piece.categoryRaw : guess.category.rawValue
         confidence["Category"] = guess.categoryConfidence
         for field in guess.fields {
             switch field.key {
@@ -219,51 +219,51 @@ struct SmartGuessSheet: View {
             default: break
             }
         }
-        if material.isEmpty { material = specimen.materialNote ?? "" }
-        if colour.isEmpty { colour = specimen.colorway ?? "" }
-        style = specimen.styleTags.first ?? ""
+        if material.isEmpty { material = piece.materialNote ?? "" }
+        if colour.isEmpty { colour = piece.colorway ?? "" }
+        style = piece.styleTags.first ?? ""
 
         categoryOriginal = categoryRaw
         materialOriginal = material
         styleOriginal = style
         colourOriginal = colour
 
-        applyAsGuess(specimen)
+        applyAsGuess(piece)
         try? store.save()
     }
 
-    private func applyAsGuess(_ specimen: Piece) {
+    private func applyAsGuess(_ piece: Piece) {
         // setValue refuses to overwrite what a tag, a scan, a measure or she
         // already set. Never pin a confidence to a value we didn't write.
-        if categoryRaw != SpecimenCategory.unknown.rawValue {
-            specimen.setValue(categoryRaw, for: .category, source: .smartGuess)
-            if specimen.provenance(for: .category) == .smartGuess {
-                specimen.setConfidence(confidence["Category"] ?? 0, for: .category)
+        if categoryRaw != PieceCategory.unknown.rawValue {
+            piece.setValue(categoryRaw, for: .category, source: .smartGuess)
+            if piece.provenance(for: .category) == .smartGuess {
+                piece.setConfidence(confidence["Category"] ?? 0, for: .category)
             }
         }
         if !material.isEmpty {
-            specimen.setValue(material, for: .material, source: .smartGuess)
-            if specimen.provenance(for: .material) == .smartGuess {
-                specimen.setConfidence(confidence["Material"] ?? 0, for: .material)
+            piece.setValue(material, for: .material, source: .smartGuess)
+            if piece.provenance(for: .material) == .smartGuess {
+                piece.setConfidence(confidence["Material"] ?? 0, for: .material)
             }
         }
         if !colour.isEmpty {
-            specimen.setValue(colour, for: .colorway, source: .smartGuess)
-            if specimen.provenance(for: .colorway) == .smartGuess {
-                specimen.setConfidence(confidence["Colour"] ?? 0, for: .colorway)
+            piece.setValue(colour, for: .colorway, source: .smartGuess)
+            if piece.provenance(for: .colorway) == .smartGuess {
+                piece.setConfidence(confidence["Colour"] ?? 0, for: .colorway)
             }
         }
-        if !style.isEmpty, !specimen.styleTags.contains(style) {
-            specimen.styleTags.append(style)
+        if !style.isEmpty, !piece.styleTags.contains(style) {
+            piece.styleTags.append(style)
         }
     }
 
     // MARK: - Accept (promote to confirmed)
 
     private func accept() {
-        guard let specimen = currentSpecimen() else { return }
+        guard let piece = currentPiece() else { return }
         var reviews: [GuessReview] = []
-        if categoryRaw != SpecimenCategory.unknown.rawValue {
+        if categoryRaw != PieceCategory.unknown.rawValue {
             reviews.append(GuessReview(key: .category, value: categoryRaw, proposed: categoryOriginal))
         }
         if !material.isEmpty {
@@ -272,24 +272,24 @@ struct SmartGuessSheet: View {
         if !colour.isEmpty {
             reviews.append(GuessReview(key: .colorway, value: colour, proposed: colourOriginal))
         }
-        specimen.acceptReview(reviews, by: session.userID)
+        piece.acceptReview(reviews, by: session.userID)
         // Style has no FieldKey — it lives in styleTags (no per-field provenance).
         if !style.isEmpty {
-            if let stale = styleOriginal.isEmpty ? nil : specimen.styleTags.firstIndex(of: styleOriginal) {
-                specimen.styleTags[stale] = style
-            } else if !specimen.styleTags.contains(style) {
-                specimen.styleTags.append(style)
+            if let stale = styleOriginal.isEmpty ? nil : piece.styleTags.firstIndex(of: styleOriginal) {
+                piece.styleTags[stale] = style
+            } else if !piece.styleTags.contains(style) {
+                piece.styleTags.append(style)
             }
         }
-        specimen.touch()
+        piece.touch()
         try? store.save()
         analytics.event("N5.accept", ["category": categoryRaw])
-        coordinator?.present(.specimenSheet(specimenID))
+        coordinator?.present(.pieceSheet(pieceID))
     }
 
-    private func currentSpecimen() -> Piece? {
-        CaptureOwnerProjectionPolicy.specimen(
-            id: specimenID,
+    private func currentPiece() -> Piece? {
+        CaptureOwnerProjectionPolicy.piece(
+            id: pieceID,
             store: store,
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
@@ -303,9 +303,9 @@ import CaptureKitMocks
 #Preview("N5 · Smart guess") {
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
-    let specimen = store.newDraft()
+    let piece = store.newDraft()
     return SmartGuessSheet(
-        specimenID: specimen.id,
+        pieceID: piece.id,
         store: store,
         session: MockSessionProviding(),
         camera: MockCameraService(),

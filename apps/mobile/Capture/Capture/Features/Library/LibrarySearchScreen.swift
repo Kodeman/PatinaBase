@@ -6,7 +6,7 @@
 //  isn't already captured before re-shooting it. Scope chips: All · This project
 //  · Saved here (this venue). A close match raises the "already in your library"
 //  dedupe warning. Tap a result → V3 detail.
-//  Source: container.store.search(SpecimenQuery(text:)); venue from location.
+//  Source: container.store.search(PieceQuery(text:)); venue from location.
 
 import SwiftUI
 import Foundation
@@ -164,12 +164,12 @@ struct LibrarySearchScreen: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(results, id: \.id) { specimen in
+                    ForEach(results, id: \.id) { piece in
                         Button {
                             analytics.event("library.open_result")
-                            coordinator.navigate(to: .specimen(specimen.id))
+                            coordinator.navigate(to: .piece(piece.id))
                         } label: {
-                            resultRow(specimen)
+                            resultRow(piece)
                         }
                         .buttonStyle(.plain)
                         Rectangle().fill(CaptureColor.line).frame(height: 1)
@@ -249,7 +249,7 @@ struct LibrarySearchScreen: View {
 
     private func runSearch() {
         let base = localSearch(
-            SpecimenQuery(text: queryText.isEmpty ? nil : queryText))
+            PieceQuery(text: queryText.isEmpty ? nil : queryText))
         switch scope {
         case .all:
             results = base
@@ -273,10 +273,10 @@ struct LibrarySearchScreen: View {
     /// venue so "This project" can scope honestly. (Seam gap — see manifest.)
     private func deriveActiveProject() {
         activeProjectName = venue?.projectName
-            ?? localSearch(SpecimenQuery()).compactMap { $0.venue?.projectName }.first
+            ?? localSearch(PieceQuery()).compactMap { $0.venue?.projectName }.first
     }
 
-    private func localSearch(_ query: SpecimenQuery) -> [Piece] {
+    private func localSearch(_ query: PieceQuery) -> [Piece] {
         switch localListScope {
         case .globalFixtures:
             return store.search(query)

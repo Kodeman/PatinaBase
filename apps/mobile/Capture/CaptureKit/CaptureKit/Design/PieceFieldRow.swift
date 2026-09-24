@@ -1,4 +1,4 @@
-//  SpecimenFieldRow.swift
+//  PieceFieldRow.swift
 //  CaptureKit
 //
 //  A single editable field with its provenance badge — the shared building block
@@ -6,7 +6,7 @@
 
 import SwiftUI
 
-public struct SpecimenFieldRow: View {
+public struct PieceFieldRow: View {
     private let label: String
     @Binding private var value: String
     private let source: ProvenanceSource?

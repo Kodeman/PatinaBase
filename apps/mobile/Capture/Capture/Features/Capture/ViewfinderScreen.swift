@@ -7,7 +7,7 @@
 //  selector, the shutter, and the session-tray handle. Low light (R1) surfaces a
 //  torch + hint + Night chip without ever blocking the shutter. The shutter tap
 //  freezes the frame into a C3 card; a hold rolls a C4 multi-shot into one
-//  specimen and opens the C5 sheet on release.
+//  piece and opens the C5 sheet on release.
 
 import SwiftUI
 import UIKit
@@ -22,7 +22,7 @@ struct ViewfinderScreen: View {
     /// fresh card is a fresh note, so it resets with the card.
     @State private var affirmed = false
     /// I-4's mount. Held here for `affirmed`'s reason: the overlay's view
-    /// identity outlives any one specimen, so a confirm step left open on one
+    /// identity outlives any one piece, so a confirm step left open on one
     /// card would greet the next one.
     @State private var verbMenu = FieldVerbMenu()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -81,20 +81,20 @@ struct ViewfinderScreen: View {
                 ViewfinderMultiShotOverlay(count: model.holdCount)
             }
 
-            if let specimen = model.cardSpecimen {
+            if let piece = model.cardPiece {
                 CaptureCardOverlay(
-                    specimen: specimen,
+                    piece: piece,
                     saveTitle: model.quickSaveTitle,
                     onSave: model.saveFromCard,
                     onAddDetail: model.addDetailFromCard,
                     onDismiss: model.dismissCard,
-                    placementLine: FieldPlacementLine.text(for: specimen),
-                    placementIsUnplaced: FieldPlacementLine.isUnplaced(specimen),
+                    placementLine: FieldPlacementLine.text(for: piece),
+                    placementIsUnplaced: FieldPlacementLine.isUnplaced(piece),
                     onPlacement: { coordinator.present(.visit) },
                     micIsAvailable: model.micIsAvailable,
                     isRecording: model.isRecordingCardNote,
                     transcript: model.cardTranscript,
-                    noteSetting: specimen.noteSetting,
+                    noteSetting: piece.noteSetting,
                     onMicPressChanged: { isDown in
                         isDown ? model.beginCardNote(affirmed: affirmed)
                                : model.endCardNote()
@@ -114,8 +114,8 @@ struct ViewfinderScreen: View {
         // surfaces): pin light so the dynamic tokens keep their designed
         // values instead of inverting under system dark mode.
         .environment(\.colorScheme, .light)
-        .animation(cardAnimation, value: model.cardSpecimen?.id)
-        .onChange(of: model.cardSpecimen?.id) { _, _ in
+        .animation(cardAnimation, value: model.cardPiece?.id)
+        .onChange(of: model.cardPiece?.id) { _, _ in
             affirmed = false
             verbMenu = FieldVerbMenu()
         }
@@ -152,7 +152,7 @@ struct ViewfinderScreen: View {
         // suspends the engine on backgrounding — but `stop()` (which is what
         // calls `endCardNote()`) is wired only to `.onDisappear`, which does not
         // fire. `finish()` never returned, so the transcript, the segments and
-        // the duration were never written to the Specimen, and on resume the
+        // the duration were never written to the Piece, and on resume the
         // card still read "Recording — release to keep it" over a dead mic:
         // her words gone AND the chrome overstating what was happening, the
         // exact thing `ViewfinderModel.endCardNote` exists to prevent.
