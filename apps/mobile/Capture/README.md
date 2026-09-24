@@ -113,18 +113,21 @@ Two scripts close the loop between code and a running app. Both regenerate the
 project first, so edits to any `.swift` file are picked up automatically.
 
 ```bash
+# Every simulator step takes this lane's OWN clone — never a device name,
+# which resolves to the same simulator in every concurrent lane:
+export CAPTURE_SIM_UDID="$(xcrun simctl clone <source-udid> field-<lane>)"
+
 # VERIFY — build + unit tests + lint (CI gate)
 scripts/capture-gate.sh            # or: build | test | lint
 
 # UI TESTS (XCUITest, app-hosted — NOT part of capture-gate.sh)
 xcodebuild test -project Capture.xcodeproj -scheme Capture \
-  -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -sdk iphonesimulator -destination "platform=iOS Simulator,id=$CAPTURE_SIM_UDID" \
   -only-testing:CaptureUITests CODE_SIGNING_ALLOWED=NO
 
 # RUN — generate → build → boot sim → install → launch
 scripts/capture-run.sh                    # real entry (viewfinder / onboarding)
 scripts/capture-run.sh C5.specimen-sheet  # jump straight to any built screen
-CAPTURE_SIM="iPhone 17 Pro" scripts/capture-run.sh N3.measure
 
 # SWEEP — screenshot every screen (pure simctl, no MCP) → .build/shots/
 scripts/capture-shots.sh                  # all 77 built screens

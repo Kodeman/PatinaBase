@@ -10,7 +10,9 @@
 #   scripts/capture-run.sh                       # open to the real entry (viewfinder/onboarding)
 #   scripts/capture-run.sh C5.specimen-sheet     # jump to a specific screen
 #   scripts/capture-run.sh T1.settings
-#   CAPTURE_SIM="iPhone 17 Pro" scripts/capture-run.sh N3.measure
+#
+# CAPTURE_SIM_UDID is required — this lane's OWN simulator clone, the same
+# variable capture-gate.sh reads. The script refuses to guess; see below.
 #
 # Screen suffixes are the tail of each CaptureScreenID, e.g.
 #   O1.welcome  C1.viewfinder  C5.specimen-sheet  N1.tag-ocr  S3.destination
@@ -18,43 +20,50 @@
 # (full list: CaptureKit/.../CaptureScreenID.swift)
 #
 # After this prints "running", drive the app from Claude Code with the
-# blitz-iphone MCP against udid "booted":
+# blitz-iphone MCP against this lane's udid ($CAPTURE_SIM_UDID) — not "booted",
+# which is whichever lane's simulator happens to be up:
 #   get_screenshot · describe_screen · scan_ui · device_action (tap/swipe/input-text)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SIM="${CAPTURE_SIM:-iPhone 17}"
 BUNDLE_ID="cloud.patina.field"
-DERIVED=".build/derived"          # under the gitignored .build/
 SCREEN="${1:-}"
+
+# The same per-worktree DerivedData capture-gate.sh builds into (see its
+# header). Absolute, so the path xcodebuild receives names this checkout.
+PROJECT_DIR="$PWD"                                   # apps/mobile/Capture
+DERIVED="$PROJECT_DIR/.build/DerivedData"
+
+# --- the simulator is explicit, or this refuses to guess ----------------------
+# This resolved ${CAPTURE_SIM:-iPhone 17} by NAME — the same device in every
+# concurrent Field lane, so two lanes installed over each other's app, and a
+# name the installed runtimes need not contain at all. Same contract as
+# capture-gate.sh sim_destination(). Checked BEFORE generate_project.rb, which
+# rm -rf's the TRACKED Capture.xcodeproj: a run that is going to refuse must
+# refuse before it has rewritten the working tree.
+# Pinned by scripts/capture-gate-guard.test.sh.
+if [[ -z "${CAPTURE_SIM_UDID:-}" ]]; then
+  printf '%s\n' \
+    "✘ CAPTURE_SIM_UDID is unset." \
+    "" \
+    "capture-run.sh needs an explicit simulator udid: this lane's OWN clone —" \
+    "never a shared device, never 'booted', never a device name. CAPTURE_SIM" \
+    "(a device NAME) is no longer read. Create the clone and export its udid:" \
+    "" \
+    "  xcrun simctl list devices                   # pick a source; note its udid" \
+    "  xcrun simctl shutdown <source-udid>         # clone refuses a booted source" \
+    '  export CAPTURE_SIM_UDID="$(xcrun simctl clone <source-udid> field-<lane>)"' >&2
+  exit 2
+fi
+DEVICE_ID="$CAPTURE_SIM_UDID"
 
 echo "→ regenerating project"
 ruby scripts/generate_project.rb >/dev/null
 
-echo "→ resolving simulator: $SIM (newest available iOS runtime)"
-DEVICE_ID=$(ruby -rjson -e '
-  sim = ARGV[0]
-  devices = JSON.parse(`xcrun simctl list devices available --json`)["devices"]
-  best = nil; best_ver = [-1, -1]
-  devices.each do |runtime, devs|
-    next unless runtime =~ /SimRuntime\.iOS-(\d+)-(\d+)/
-    ver = [$1.to_i, $2.to_i]
-    devs.each do |d|
-      next unless d["name"] == sim
-      if (ver <=> best_ver) >= 0
-        best = d["udid"]; best_ver = ver
-      end
-    end
-  end
-  abort "no available simulator named #{sim.inspect} — try `xcrun simctl list devices available`" unless best
-  print best
-' "$SIM")
-echo "  udid $DEVICE_ID"
-
 echo "→ building (Debug · iphonesimulator)"
 xcodebuild build -project Capture.xcodeproj -scheme Capture \
   -configuration Debug -sdk iphonesimulator \
-  -destination "id=$DEVICE_ID" \
+  -destination "platform=iOS Simulator,id=$DEVICE_ID" \
   -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
 
 APP="$DERIVED/Build/Products/Debug-iphonesimulator/Capture.app"
@@ -76,6 +85,6 @@ else
   xcrun simctl launch "$DEVICE_ID" "$BUNDLE_ID"
 fi
 
-echo "✔ running on \"$SIM\" ($DEVICE_ID) — bundle $BUNDLE_ID"
-echo "  drive from Claude Code via blitz-iphone (udid \"booted\"):"
+echo "✔ running on $DEVICE_ID — bundle $BUNDLE_ID"
+echo "  drive from Claude Code via blitz-iphone (udid \"$DEVICE_ID\"):"
 echo "    get_screenshot · describe_screen · scan_ui · device_action"
