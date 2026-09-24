@@ -14,5 +14,13 @@ DerivedData/
 *.xccheckout
 
 # Generated project is rebuilt by scripts/generate_project.rb; the implicit
-# workspace + SPM resolution (Package.resolved) are build artifacts, not source.
-Capture.xcodeproj/project.xcworkspace/
+# workspace is a build artifact. Its SwiftPM lockfile (Package.resolved) is NOT:
+# it is tracked so Field builds against one dependency graph on every machine,
+# and generate_project.rb carries it across the rebuild. Git cannot re-include a
+# file under an ignored directory, hence the ignore-contents/re-include chain.
+Capture.xcodeproj/project.xcworkspace/*
+!Capture.xcodeproj/project.xcworkspace/xcshareddata/
+Capture.xcodeproj/project.xcworkspace/xcshareddata/*
+!Capture.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+Capture.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!Capture.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved

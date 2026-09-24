@@ -28,6 +28,7 @@
 		0CC32009C961BE5BB60BED3B760942F8 /* LibrarySearchScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2B4CDA6B59D5B52836DE7EED4D6A89 /* LibrarySearchScreen.swift */; };
 		0E4F09CED8A285469665EFCC5322221F /* FieldVerbCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9B984E6435F8607CA4E1EBB6697CD18 /* FieldVerbCopyTests.swift */; };
 		0ED07D514F2E3429AE9C8EB314A74EF8 /* RoomPlanScanSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED588FB82FD8D5968E605EF6BF4BB8A /* RoomPlanScanSession.swift */; };
+		0F0230DB62C7F5EE9945BC97A8114325 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = A85AF8EE5FA7C0C9A00BD10F75E1AF46 /* Supabase */; };
 		0F312FA6CB2D171EC46E8C614C54BADB /* PatinaDesignKit in Embed Frameworks */ = {isa = PBXBuildFile; productRef = A9083BCB0566BE6DA2C4897758E0D564 /* PatinaDesignKit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		0FE89D5D4D89BEF00199FE220C3FE06A /* CaptureSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1416E5796B884CB6AC034E35BD1BB7C /* CaptureSyncService.swift */; };
 		0FF4C7252F0C9D094750683E1E9445AF /* FieldCapturePayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED33CD1D426A5A86D713E898FCF949AF /* FieldCapturePayload.swift */; };
@@ -166,7 +167,6 @@
 		6C2ECF1BD7F3B5619C4A8C831B489F92 /* FieldAttention.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C20D6A9019B519BAE1278803D894A4A /* FieldAttention.swift */; };
 		6C3D5ECDE3A52F348DC1AC4D7A84D1E4 /* MessagesServiceFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F91079555FAA73CB43EB375480BF4294 /* MessagesServiceFactory.swift */; };
 		6E077E93EDB973B58474795F77DDF8CA /* SupabaseSiteRequestService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1BDF4535D621124B374F52067D3CDB /* SupabaseSiteRequestService.swift */; };
-		6EA1980CBBA592B5160F312443DD56ED /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = F608D59CAF89D3C4FA5C38E338417F84 /* Supabase */; };
 		6FC30AF0BD177173D822EC9F4BC23608 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = A9083BCB0566BE6DA2C4897758E0D564 /* PatinaDesignKit */; };
 		70E3F3D43C9128D7CB7E7C405B2CF91A /* SiteScanEntryMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E12C25D2D4AF84C1B59BF7CE27BDD78 /* SiteScanEntryMode.swift */; };
 		71CE6CBAD77BE4F0A85F08CCC08EFD6F /* CaptureSyncAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B39EE7427890D99545D85C593EC0B9 /* CaptureSyncAttributes.swift */; };
@@ -786,7 +786,7 @@
 				605E8B6723B1ED045DD3652B083B6AE6 /* Foundation.framework in Frameworks */,
 				C38513D49831EDD9135A5241E2E459A6 /* CaptureKit.framework in Frameworks */,
 				C592AAC6AE75BE465557E19B31F82668 /* CaptureKitMocks.framework in Frameworks */,
-				6EA1980CBBA592B5160F312443DD56ED /* Supabase in Frameworks */,
+				0F0230DB62C7F5EE9945BC97A8114325 /* Supabase in Frameworks */,
 				0495533C02A54AF22583C972F5E94881 /* PostHog in Frameworks */,
 				6FC30AF0BD177173D822EC9F4BC23608 /* PatinaDesignKit in Frameworks */,
 			);
@@ -1303,7 +1303,7 @@
 			);
 			name = Capture;
 			packageProductDependencies = (
-				F608D59CAF89D3C4FA5C38E338417F84 /* Supabase */,
+				A85AF8EE5FA7C0C9A00BD10F75E1AF46 /* Supabase */,
 				CF607E7429F947D2D344338D48D34779 /* PostHog */,
 				A9083BCB0566BE6DA2C4897758E0D564 /* PatinaDesignKit */,
 			);
@@ -1368,7 +1368,7 @@
 			mainGroup = 2524AF07A4739DF8595D8EEB3F2532C0;
 			minimizedProjectReferenceProxies = 0;
 			packageReferences = (
-				34FD1F4E0E854B03F623AD9B7DC712BF /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				89F48D6A00CA610ACFA8565ECF6D4C7E /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				CBF3E2241469CD8472F9D026BF1542F8 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 				29B1FDA2B02B7B555D8BAAD4EAC43606 /* XCLocalSwiftPackageReference "PatinaDesignKit" */,
 			);
@@ -2329,12 +2329,12 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		34FD1F4E0E854B03F623AD9B7DC712BF /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+		89F48D6A00CA610ACFA8565ECF6D4C7E /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.40.0;
+				kind = exactVersion;
+				version = 2.55.2;
 			};
 		};
 		CBF3E2241469CD8472F9D026BF1542F8 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
@@ -2352,6 +2352,11 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = PatinaDesignKit;
 		};
+		A85AF8EE5FA7C0C9A00BD10F75E1AF46 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 89F48D6A00CA610ACFA8565ECF6D4C7E /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
 		A9083BCB0566BE6DA2C4897758E0D564 /* PatinaDesignKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PatinaDesignKit;
@@ -2360,11 +2365,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CBF3E2241469CD8472F9D026BF1542F8 /* XCRemoteSwiftPackageReference "posthog-ios" */;
 			productName = PostHog;
-		};
-		F608D59CAF89D3C4FA5C38E338417F84 /* Supabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 34FD1F4E0E854B03F623AD9B7DC712BF /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Supabase;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

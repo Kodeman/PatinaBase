@@ -906,8 +906,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.5.1;
+				kind = exactVersion;
+				version = 2.55.2;
 			};
 		};
 		CBC32DEA2F8687DE006575E7 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */ = {
