@@ -14,7 +14,7 @@ require 'xcodeproj'
 
 ROOT = File.expand_path('..', __dir__)
 PROJECT_PATH = File.join(ROOT, 'Capture.xcodeproj')
-DEPLOYMENT = '18.0'
+DEPLOYMENT = '26.0'
 
 # Remove any prior project so generation is deterministic.
 FileUtils.rm_rf(PROJECT_PATH)

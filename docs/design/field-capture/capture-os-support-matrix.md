@@ -14,7 +14,7 @@ device-run capture-rig integration test (OWED — see the item-3 device AC).
 
 | Axis | Requirement | Gate in code |
 |---|---|---|
-| Deployment floor | **iOS 18.0** | `IPHONEOS_DEPLOYMENT_TARGET` (Capture target, `generate_project.rb`) |
+| Deployment floor | **iOS 26.0** | `IPHONEOS_DEPLOYMENT_TARGET` (Capture target, `generate_project.rb`) |
 | Optimized target | iOS 26.5, LiDAR **Pro-line** iPhone (15 Pro / 17 Pro class) | — (device AC) |
 | Device posture | **LiDAR required to scan** (R2: non-Pro gets context capture, never a scan) | `RoomCaptureSession.isSupported` → `SupabaseSiteScanService.isSupported` |
 | Shared-session init | `RoomCaptureView(frame:arSession:)` — iOS 17+ | app-side; verified against Apple RoomPlan docs (2026-07): "RoomPlan preserves all of the AR session's settings" |
