@@ -229,7 +229,8 @@ public final class AppContainer {
     /// surface says so on every launch while it is there);
     /// `store.in_memory_fallback` fires when persistence was asked for and
     /// every on-disk rung refused, which costs the designer every capture made
-    /// in that run.
+    /// in that run. `store.carry_awaiting_restore` fires on every launch whose
+    /// V1→V2 restore failed, so its captures are still missing from the lists.
     private static func reportStoreOpen(_ report: CaptureStoreOpenReport,
                                         analytics: any CaptureAnalytics) {
         if report.didResetIncompatibleStore {
@@ -237,6 +238,11 @@ public final class AppContainer {
                 "persistence": report.persistence.rawValue,
                 "preserved_stores": String(report.preservedStores.count),
                 "failures": report.failures.joined(separator: " | ")
+            ])
+        }
+        if report.carryAwaitingRestore {
+            analytics.event("store.carry_awaiting_restore", [
+                "persistence": report.persistence.rawValue
             ])
         }
         guard report.losesWorkOnRelaunch else { return }

@@ -170,6 +170,43 @@ struct CaptureStoreLadderTests {
         #expect(hours.first?.stateRaw == "pending")
     }
 
+    /// SQ-210 F3. A carry the restore cannot read, a Row that no longer
+    /// decodes after an update, say, used to fail in silence: its pieces
+    /// stayed out of every list and the library read as empty. The report now
+    /// says so. The store still opens as itself, and the file stays for the
+    /// next open to retry.
+    @Test func aCarryThatCannotBeRestoredIsReportedAndKept() throws {
+        let directory = Self.scratchDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("default.store")
+        let entryID = UUID()
+        do {
+            let writer = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: url))
+            writer.mainContext.insert(TimeEntryOutboxRecord(
+                entryID: entryID, projectID: UUID().uuidString,
+                ownerUserID: UUID().uuidString, startedAt: Date(), durationMinutes: 45,
+                activity: .travel, billable: true, notes: "not yet sent", rateRole: nil))
+            try writer.mainContext.save()
+        }
+        let carry = PieceMigrationCarry.carryURL(beside: url)
+        let unreadable = Data(#"{"rows":[{"id":"not a row"}]}"#.utf8)
+        try unreadable.write(to: carry)
+
+        let rung = CaptureStore.DiskRung(name: "test", persistence: .applicationSupport,
+                                         configuration: ModelConfiguration(url: url))
+        let store = CaptureStore.walk([rung]) { rung in
+            CaptureStore.openRung(rung.configuration, named: rung.name)
+        }
+
+        #expect(store.openReport.carryAwaitingRestore)
+        #expect(store.openReport.didResetIncompatibleStore == false)
+        #expect(store.openReport.persistence == .applicationSupport)
+        #expect(store.openReport.preservedStores.isEmpty)
+        #expect(try Data(contentsOf: carry) == unreadable)
+        #expect(store.timeEntryOutbox().map(\.entryID) == [entryID])
+    }
+
     @Test func aFirstOpenNeverClaimsAReset() throws {
         let directory = Self.scratchDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -185,7 +222,10 @@ struct CaptureStoreLadderTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("x.store")
-        let names = ["x.store", "x.store-wal", "x.store-shm"]
+        // A V1→V2 carry still pending is part of the store (SQ-210 F4): left
+        // behind, its rows would be restored into the fresh store without
+        // their photos.
+        let names = ["x.store", "x.store-wal", "x.store-shm", "x.store-specimen-carry.json"]
         for name in names {
             FileManager.default.createFile(atPath: directory.appendingPathComponent(name).path,
                                            contents: Data(name.utf8))
@@ -198,6 +238,34 @@ struct CaptureStoreLadderTests {
             #expect(FileManager.default.fileExists(
                 atPath: directory.appendingPathComponent(name).path) == false)
             #expect(try Data(contentsOf: folder.appendingPathComponent(name)) == Data(name.utf8))
+        }
+    }
+
+    /// Whichever file refuses to move, whatever did move goes back, so the
+    /// store and its pending carry are never split between two folders.
+    @Test func aSetAsideThatCannotMoveEveryFilePutsTheWholeTrioBack() throws {
+        let names = ["x.store", "x.store-wal", "x.store-shm", "x.store-specimen-carry.json"]
+        for refusing in names {
+            let directory = Self.scratchDirectory()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let url = directory.appendingPathComponent("x.store")
+            for name in names {
+                FileManager.default.createFile(atPath: directory.appendingPathComponent(name).path,
+                                               contents: Data(name.utf8))
+            }
+            // An immutable file cannot be renamed, so its move throws.
+            let stuck = directory.appendingPathComponent(refusing).path
+            try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: stuck)
+            defer { try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: stuck) }
+
+            #expect(CaptureStore.setStoreFilesAside(at: url) == nil, "\(refusing) refused")
+
+            for name in names {
+                #expect(try Data(contentsOf: directory.appendingPathComponent(name)) == Data(name.utf8),
+                        "\(refusing) refused, and \(name) is not back beside the store")
+            }
+            #expect(CaptureStore.preservedStores(beside: url).isEmpty, "\(refusing) refused")
         }
     }
 

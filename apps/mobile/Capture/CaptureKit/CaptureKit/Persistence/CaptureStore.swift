@@ -65,17 +65,25 @@ public struct CaptureStoreOpenReport: Sendable {
     /// launch, not only the one that set it aside, because the app never
     /// deletes one: each holds whatever was unsynced when it was set aside.
     public let preservedStores: [URL]
+    /// Captures carried across the V1→V2 stage are still waiting to become
+    /// pieces, because this open could not restore them
+    /// (`PieceMigrationCarry.restorePending`). They are kept beside the store,
+    /// not deleted, and every open tries again; until one succeeds they are
+    /// missing from every list.
+    public let carryAwaitingRestore: Bool
 
     public init(persistence: CaptureStorePersistence,
                 didResetIncompatibleStore: Bool = false,
                 deferredUntilUnlock: Bool = false,
                 failures: [String] = [],
-                preservedStores: [URL] = []) {
+                preservedStores: [URL] = [],
+                carryAwaitingRestore: Bool = false) {
         self.persistence = persistence
         self.didResetIncompatibleStore = didResetIncompatibleStore
         self.deferredUntilUnlock = deferredUntilUnlock
         self.failures = failures
         self.preservedStores = preservedStores
+        self.carryAwaitingRestore = carryAwaitingRestore
     }
 
     /// True only when nothing written in this run survives relaunch.
@@ -124,6 +132,14 @@ public final class CaptureStore {
     /// V1 alone, which infers its way up to V1 as the V1-only plan did, and
     /// then crosses V1→V2 like any V1 store.
     public static func makeContainer(configuration: ModelConfiguration) throws -> ModelContainer {
+        try openContainer(configuration: configuration).container
+    }
+
+    /// `makeContainer(configuration:)`, plus whether carried rows are still
+    /// waiting because this open could not restore them, for the ladder to
+    /// report.
+    static func openContainer(configuration: ModelConfiguration) throws
+        -> (container: ModelContainer, carryAwaitingRestore: Bool) {
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema, migrationPlan: CaptureMigrationPlan.self,
@@ -134,8 +150,8 @@ public final class CaptureStore {
             container = try ModelContainer(for: schema, migrationPlan: CaptureMigrationPlan.self,
                                            configurations: [configuration])
         }
-        PieceMigrationCarry.restorePending(into: container, storeURL: configuration.url)
-        return container
+        let awaiting = PieceMigrationCarry.restorePending(into: container, storeURL: configuration.url)
+        return (container, awaiting)
     }
 
     /// The store on disk has V1's Specimen table and not V2's Piece table.
@@ -213,6 +229,7 @@ public final class CaptureStore {
         var failures = seedFailures
         var didReset = false
         var deferredUntilUnlock = false
+        var carryAwaitingRestore = false
         var answered: (container: ModelContainer, persistence: CaptureStorePersistence)?
 
         for rung in rungs {
@@ -220,6 +237,7 @@ public final class CaptureStore {
             failures += outcome.failures
             didReset = didReset || outcome.didReset
             deferredUntilUnlock = deferredUntilUnlock || outcome.deferredUntilUnlock
+            carryAwaitingRestore = carryAwaitingRestore || outcome.carryAwaitingRestore
             if let container = outcome.container {
                 answered = (container, rung.persistence)
                 break
@@ -241,7 +259,8 @@ public final class CaptureStore {
                     didResetIncompatibleStore: didReset,
                     deferredUntilUnlock: deferredUntilUnlock,
                     failures: failures,
-                    preservedStores: preserved))
+                    preservedStores: preserved,
+                    carryAwaitingRestore: carryAwaitingRestore))
         }
 
         // Last rung — memory. Loud by construction: the report says so, the
@@ -298,6 +317,7 @@ public final class CaptureStore {
         var failures: [String] = []
         var didReset = false
         var deferredUntilUnlock = false
+        var carryAwaitingRestore = false
     }
 
     /// Opens one on-disk rung, and on failure moves the store into a dated
@@ -324,7 +344,9 @@ public final class CaptureStore {
         createParentDirectory(of: config.url)
 
         do {
-            outcome.container = try makeContainer(configuration: config)
+            let opened = try openContainer(configuration: config)
+            outcome.container = opened.container
+            outcome.carryAwaitingRestore = opened.carryAwaitingRestore
             log.notice("Store opened on \(rung, privacy: .public) at \(config.url.path, privacy: .public)")
             return outcome
         } catch {
@@ -354,7 +376,9 @@ public final class CaptureStore {
             """)
 
         do {
-            outcome.container = try makeContainer(configuration: config)
+            let opened = try openContainer(configuration: config)
+            outcome.container = opened.container
+            outcome.carryAwaitingRestore = opened.carryAwaitingRestore
         } catch {
             outcome.failures.append("\(rung) after reset: \(error.localizedDescription)")
             log.error("""

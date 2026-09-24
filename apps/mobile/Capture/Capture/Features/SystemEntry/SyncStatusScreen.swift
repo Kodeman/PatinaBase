@@ -121,6 +121,16 @@ struct SyncStatusScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("u1.sync.preserved-store-notice")
             }
+            // Captures carried across the update that this open could not
+            // put back yet. They wait beside the store and every open tries
+            // again, but until then an empty list would read the same way.
+            if store.openReport.carryAwaitingRestore {
+                Text(Self.carryAwaitingRestoreNotice)
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.error)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("u1.sync.carry-awaiting-restore-notice")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -142,6 +152,14 @@ struct SyncStatusScreen: View {
         "Work saved on this iPhone before an update could not be opened, so it "
         + "is not listed here. It is kept on this iPhone, not deleted. Keep the "
         + "app installed and tell Patina, so it can be recovered."
+
+    /// Same promise as `preservedStoreNotice`: kept, not deleted, and the app
+    /// must stay installed, because deleting it deletes them too.
+    static let carryAwaitingRestoreNotice =
+        "Captures saved on this iPhone before an update have not been brought "
+        + "back yet, so they are not listed here. They are kept on this iPhone, "
+        + "not deleted, and the app tries again each time it opens. Keep the app "
+        + "installed and tell Patina, so they can be recovered."
 
     private var pendingCount: Int { rows.count + scanRows.count }
     private var hasRetryableTransfer: Bool {
