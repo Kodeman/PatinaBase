@@ -220,6 +220,36 @@ test("deployment planning fans shared packages into service workers and portals"
   assert.ok(plan.portals.includes("designer"));
 });
 
+test("iOS gate mapping fans PatinaDesignKit changes to both apps", async () => {
+  const patinaOnly = await classifyPaths(
+    ["apps/mobile/Patina/PatinaApp.swift"],
+    { root: repoRoot },
+  );
+  assert.equal(patinaOnly.iosPatina, true);
+  assert.equal(patinaOnly.iosCapture, false);
+
+  const captureOnly = await classifyPaths(
+    ["apps/mobile/Capture/CaptureApp.swift"],
+    { root: repoRoot },
+  );
+  assert.equal(captureOnly.iosPatina, false);
+  assert.equal(captureOnly.iosCapture, true);
+
+  const designKitOnly = await classifyPaths(
+    ["apps/mobile/PatinaDesignKit/Sources/Tokens.swift"],
+    { root: repoRoot },
+  );
+  assert.equal(designKitOnly.iosPatina, true);
+  assert.equal(designKitOnly.iosCapture, true);
+
+  const unrelated = await classifyPaths(
+    ["packages/types/src/index.ts"],
+    { root: repoRoot },
+  );
+  assert.equal(unrelated.iosPatina, false);
+  assert.equal(unrelated.iosCapture, false);
+});
+
 test("agent output denies blockers and attaches advisory context otherwise", () => {
   const denied = agentHookOutput("PreToolUse", [
     { id: "x", severity: "error", blocking: true, message: "blocked" },
