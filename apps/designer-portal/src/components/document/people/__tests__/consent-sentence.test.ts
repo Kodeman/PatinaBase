@@ -10,7 +10,7 @@
  * fallback and read as "Recorded consent".
  */
 
-import { consentSentence, consentSentenceForRecord } from '../consent-sentence';
+import { consentSentence, consentSentenceForRecord, viewerDay } from '../consent-sentence';
 
 const AT = '2026-09-08T14:00:00.000Z';
 
@@ -109,5 +109,37 @@ describe('consentSentence — the kickoff box has words of its own', () => {
     expect(
       consentSentence({ status: 'granted', source: 'kickoff_checkbox', consentedAt: null }),
     ).toBeNull();
+  });
+});
+
+describe('consentSentence — the day is the viewer’s own (D9)', () => {
+  // 19:00 PDT on 8 Sep 2026 is 02:00 UTC on 9 Sep. Slicing the instant printed
+  // "9 Sep"; the viewer in Los Angeles consented on the 8th.
+  const EVENING_LA = '2026-09-09T02:00:00+00:00';
+
+  it('resolves an instant to the calendar day of the zone it is read in', () => {
+    expect(viewerDay(EVENING_LA, 'America/Los_Angeles')).toBe('2026-09-08');
+    expect(viewerDay(EVENING_LA, 'UTC')).toBe('2026-09-09');
+    expect(viewerDay('2026-09-09', 'America/Los_Angeles')).toBe('2026-09-09');
+    expect(viewerDay('not a date')).toBeNull();
+  });
+
+  // The runner's own zone is the viewer's here, so the expected day is read off
+  // the same instant's local calendar: in any zone west of UTC it is the 8th,
+  // which the old UTC slice could never print.
+  const at = new Date(EVENING_LA);
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const localDay = `${at.getDate()} ${MONTHS[at.getMonth()]} ${at.getFullYear()}`;
+
+  it('prints the viewer’s local day of consented_at', () => {
+    expect(
+      consentSentence({ status: 'granted', source: 'written', consentedAt: EVENING_LA }),
+    ).toBe(`Written consent, ${localDay}.`);
+  });
+
+  it('prints the viewer’s local day of opt_out_at', () => {
+    expect(
+      consentSentence({ status: 'opted_out', optOutSource: 'inbound_sms', optOutAt: EVENING_LA }),
+    ).toBe(`Opted out by text, ${localDay}.`);
   });
 });

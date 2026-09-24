@@ -359,5 +359,15 @@ suggestion. A value in either column is now always one the designer supplied.
 The band has no spare left. A further T6 migration draws above the head per
 discipline rule 2 and is recorded here first.
 
+00665 `receiving_inspection_local_day`, reserved 2026-09-24 by T6-04 (SQ-193),
+ruling D9. It draws above the head per discipline rule 2, because T6-03 took
+only 00664. At reservation, no file at or above 00665 existed on `main` (tip
+00664), in `git log --all`, or in any sibling Sidequest worktree. It adds the
+nullable `receiving_inspections.inspected_local_date` column. It also
+redefines 00184's `receiving_inspection_side_effects()` so `delivered_date` is
+`COALESCE(po.delivered_date, inspected_local_date, inspected_at::date)`. The
+net-30 `due_date` then follows the phone's local day. Existing dates are not
+rewritten. A later redefinition of that trigger function starts from 00665.
+
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.
