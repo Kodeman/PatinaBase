@@ -18060,6 +18060,90 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.field_time_reports FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.field_time_reports TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.field_time_reports TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.field_time_report_decisions FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.field_time_report_decisions TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.field_time_report_decisions TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._apply_field_hours_effect(uuid, jsonb, text, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._apply_field_hours_effect(uuid, jsonb, text, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_field_effect(uuid, jsonb, text, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.field_time_report_decide(uuid, text, integer, uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.field_time_report_decide(uuid, text, integer, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.field_time_report_queue FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00653_field_time_reports.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.field_time_report_queue TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00654_client_letter_phone_status.sql
 DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.client_invitation_status(uuid) FROM PUBLIC, anon;
@@ -18081,6 +18165,108 @@ END $g$;
 -- 00654_client_letter_phone_status.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.client_link_refresh_target(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._stage_project_ffe_document_extraction_00661_impl(uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._derive_working_budget_draft_00661_impl(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._publish_budget_checkpoint_00661_impl(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.derive_working_budget_draft(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.derive_working_budget_draft(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.publish_budget_checkpoint(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_guard_usd_purchase_order_line() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_guard_usd_authorization_line() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_require_usd_budget_rollup(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_has_formula_like_text(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_extracted_commercial(jsonb, integer) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_import_commercial_decision(jsonb, integer) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stage_project_ffe_document_extraction(uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stage_project_ffe_document_extraction(uuid, uuid, uuid, text, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.commit_project_ffe_import(uuid, jsonb) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00661_ffe_extract_commercial_confirmation.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.commit_project_ffe_import(uuid, jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

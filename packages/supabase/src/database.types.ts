@@ -16186,6 +16186,7 @@ export type Database = {
         Row: {
           assignment_scope: string | null
           batch_id: string
+          commercial_decision: Json | null
           committed_ffe_item_id: string | null
           created_at: string
           duplicate_mode: string | null
@@ -16200,6 +16201,7 @@ export type Database = {
         Insert: {
           assignment_scope?: string | null
           batch_id: string
+          commercial_decision?: Json | null
           committed_ffe_item_id?: string | null
           created_at?: string
           duplicate_mode?: string | null
@@ -16214,6 +16216,7 @@ export type Database = {
         Update: {
           assignment_scope?: string | null
           batch_id?: string
+          commercial_decision?: Json | null
           committed_ffe_item_id?: string | null
           created_at?: string
           duplicate_mode?: string | null
@@ -16259,6 +16262,7 @@ export type Database = {
           budget_max_cents: number | null
           budget_min_cents: number | null
           created_at: string
+          currency: string
           custom_fields: Json
           design_disposition: string
           doc_code: string | null
@@ -16306,6 +16310,7 @@ export type Database = {
           budget_max_cents?: number | null
           budget_min_cents?: number | null
           created_at?: string
+          currency?: string
           custom_fields?: Json
           design_disposition?: string
           doc_code?: string | null
@@ -16353,6 +16358,7 @@ export type Database = {
           budget_max_cents?: number | null
           budget_min_cents?: number | null
           created_at?: string
+          currency?: string
           custom_fields?: Json
           design_disposition?: string
           doc_code?: string | null
@@ -32788,6 +32794,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _derive_working_budget_draft_00661_impl: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       _enqueue_decision_notification: {
         Args: {
           p_decision_id: string
@@ -32832,6 +32842,15 @@ export type Database = {
           p_scan_document_id?: string
           p_signed_name: string
         }
+        Returns: Json
+      }
+      _ffe_extracted_commercial: {
+        Args: { p_ordinal: number; p_row: Json }
+        Returns: Json
+      }
+      _ffe_has_formula_like_text: { Args: { p_value: Json }; Returns: boolean }
+      _ffe_import_commercial_decision: {
+        Args: { p_commercial: Json; p_ordinal: number }
         Returns: Json
       }
       _ffe_is_studio_actor: {
@@ -32886,6 +32905,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _ffe_require_usd_budget_rollup: {
+        Args: { p_project_id: string }
+        Returns: undefined
       }
       _ffe_strict_client_fields: { Args: { p_fields: Json }; Returns: Json }
       _finalize_spec_book_issue_00403: {
@@ -33283,6 +33306,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      _publish_budget_checkpoint_00661_impl: {
+        Args: { p_project_id: string; p_version_id: string }
+        Returns: Json
+      }
       _publish_project_review_00446_impl: {
         Args: { p_request: Json }
         Returns: Json
@@ -33650,6 +33677,16 @@ export type Database = {
           p_override_at: string
           p_studio: Json
           p_verified_at: string
+        }
+        Returns: Json
+      }
+      _stage_project_ffe_document_extraction_00661_impl: {
+        Args: {
+          p_actor_id: string
+          p_asset_id: string
+          p_file_hash: string
+          p_project_id: string
+          p_rows: Json
         }
         Returns: Json
       }

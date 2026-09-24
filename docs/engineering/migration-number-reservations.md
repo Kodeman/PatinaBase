@@ -332,8 +332,20 @@ from the upload rather than the `'pdf'` literal.
 00661 `ffe_extract_commercial_confirmation` — ruling D7's maker/SKU/price/
 currency, staged as unconfirmed envelopes that the existing `validation_errors`
 commit gate refuses until a per-row designer decision supplies the value.
-**Blocked** on where a confirmed non-USD currency persists — `project_ffe_items`
-has no currency column.
+Unblocked 2026-09-24 by ruling D7a: a confirmed currency persists in a new
+`project_ffe_items.currency` column (ISO-4217, `NOT NULL DEFAULT 'USD'`).
+**Written** by T6-01 (SQ-202). It renames the current
+`stage_project_ffe_document_extraction` to
+`_stage_project_ffe_document_extraction_00661_impl` and wraps it rather than
+copying its body, so it composes with 00660 in either authoring order: 00660
+must `CREATE OR REPLACE` the public name (applied first by number), never the
+`_00661_impl` name. It also keeps totals from adding across currencies: a
+non-USD selection is refused on a purchase-order link and on a furnishings
+authorization line (two triggers), and `derive_working_budget_draft` /
+`publish_budget_checkpoint` are renamed to `_…_00661_impl` and wrapped with a
+USD guard. A later migration changing either budget rollup edits the
+`_00661_impl` body; one that replaces the public name must keep the
+`_ffe_require_usd_budget_rollup` call.
 
 00662 `device_push_tokens_bundle` — the per-token bundle column `apns-send`
 needs to address Patina Field. 00663 holds its revert, written first: this
