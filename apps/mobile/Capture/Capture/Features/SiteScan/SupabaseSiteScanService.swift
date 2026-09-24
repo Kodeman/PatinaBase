@@ -100,6 +100,11 @@ final class SupabaseSiteScanService: SiteScanService {
         // A durable non-complete record owns its bundle bytes, including rejected
         // and receiptless legacy "complete" rows. Only unowned old directories
         // are eligible for best-effort orphan cleanup.
+        //
+        // A store set aside by the open ladder holds records this store cannot
+        // see, so every bundle it owns would look orphaned. No sweep while one
+        // is on the phone.
+        guard store.openReport.preservedStores.isEmpty else { return }
         let protectedBundlePaths = store.scanBundlePathsProtectedFromSweep()
         Task.detached { [protectedBundlePaths] in
             SiteScanBundleHome.sweepOrphans(

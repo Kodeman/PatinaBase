@@ -49,8 +49,9 @@ public enum CaptureStorePersistence: String, Sendable {
 /// the composition root can emit telemetry and the UI can tell the truth.
 public struct CaptureStoreOpenReport: Sendable {
     public let persistence: CaptureStorePersistence
-    /// An unreadable store was set aside (renamed to `.bak`) and recreated empty.
-    /// True if ANY rung did so, including one whose retry then failed.
+    /// THIS run moved an unreadable store into a dated recovery folder and
+    /// started a fresh one in its place. True if ANY rung did so, including one
+    /// whose retry then failed.
     public let didResetIncompatibleStore: Bool
     /// A store on disk could not be read because the device has not been
     /// unlocked since boot. Nothing was set aside; the next foreground launch
@@ -58,15 +59,22 @@ public struct CaptureStoreOpenReport: Sendable {
     public let deferredUntilUnlock: Bool
     /// One localized line per failed rung, in ladder order.
     public let failures: [String]
+    /// Every store ever set aside beside any rung's store and still on this
+    /// iPhone, oldest first: one dated recovery folder each. Listed on every
+    /// launch, not only the one that set it aside, because the app never
+    /// deletes one: each holds whatever was unsynced when it was set aside.
+    public let preservedStores: [URL]
 
     public init(persistence: CaptureStorePersistence,
                 didResetIncompatibleStore: Bool = false,
                 deferredUntilUnlock: Bool = false,
-                failures: [String] = []) {
+                failures: [String] = [],
+                preservedStores: [URL] = []) {
         self.persistence = persistence
         self.didResetIncompatibleStore = didResetIncompatibleStore
         self.deferredUntilUnlock = deferredUntilUnlock
         self.failures = failures
+        self.preservedStores = preservedStores
     }
 
     /// True only when nothing written in this run survives relaunch.
@@ -77,13 +85,9 @@ public struct CaptureStoreOpenReport: Sendable {
 public final class CaptureStore {
     public nonisolated(unsafe) static let appGroupID = "group.cloud.patina.field"
 
-    public static let schema = Schema([
-        Specimen.self, CapturePhoto.self, CaptureMeasurement.self, CaptureProjectRef.self,
-        ScanUploadRecord.self,  // item 8 — durable resumable upload state (additive)
-        SiteRequestOutboxRecord.self,
-        FieldVisitCloseRecord.self,  // wave 4 — the visit close's time entry (additive)
-        TimeEntryOutboxRecord.self   // W6 — an hour that is not a visit (additive)
-    ])
+    /// The newest version in `CaptureMigrationPlan` (CaptureSchema.swift).
+    /// Containers are built from the plan, never from this schema alone.
+    public static let schema = Schema(versionedSchema: CaptureSchemaV1.self)
 
     public let container: ModelContainer
     public var context: ModelContext { container.mainContext }
@@ -105,7 +109,14 @@ public final class CaptureStore {
         } else {
             config = ModelConfiguration(groupContainer: .identifier(appGroupID))
         }
-        return try ModelContainer(for: schema, configurations: [config])
+        return try makeContainer(configuration: config)
+    }
+
+    /// The one place a Field `ModelContainer` is built: from the migration
+    /// plan, so an installed store crosses a schema change through its stage.
+    public static func makeContainer(configuration: ModelConfiguration) throws -> ModelContainer {
+        try ModelContainer(for: schema, migrationPlan: CaptureMigrationPlan.self,
+                           configurations: [configuration])
     }
 
     public static func inMemory() throws -> CaptureStore {
@@ -173,6 +184,7 @@ public final class CaptureStore {
         var failures = seedFailures
         var didReset = false
         var deferredUntilUnlock = false
+        var answered: (container: ModelContainer, persistence: CaptureStorePersistence)?
 
         for rung in rungs {
             let outcome = open(rung)
@@ -180,14 +192,27 @@ public final class CaptureStore {
             didReset = didReset || outcome.didReset
             deferredUntilUnlock = deferredUntilUnlock || outcome.deferredUntilUnlock
             if let container = outcome.container {
-                return CaptureStore(
-                    container: container,
-                    openReport: CaptureStoreOpenReport(
-                        persistence: rung.persistence,
-                        didResetIncompatibleStore: didReset,
-                        deferredUntilUnlock: deferredUntilUnlock,
-                        failures: failures))
+                answered = (container, rung.persistence)
+                break
             }
+        }
+
+        // Every rung's recovery folder, whichever rung answered: a store set
+        // aside on rung 1 is still the designer's work when rung 2 answers.
+        // Two rungs in one directory share a recovery folder: list it once.
+        let preserved = rungs.flatMap { preservedStores(beside: $0.configuration.url) }
+            .reduce(into: [URL]()) { list, folder in
+                if !list.contains(folder) { list.append(folder) }
+            }
+        if let answered {
+            return CaptureStore(
+                container: answered.container,
+                openReport: CaptureStoreOpenReport(
+                    persistence: answered.persistence,
+                    didResetIncompatibleStore: didReset,
+                    deferredUntilUnlock: deferredUntilUnlock,
+                    failures: failures,
+                    preservedStores: preserved))
         }
 
         // Last rung — memory. Loud by construction: the report says so, the
@@ -202,7 +227,8 @@ public final class CaptureStore {
                                 persistence: .inMemoryFallback,
                                 didResetIncompatibleStore: didReset,
                                 deferredUntilUnlock: deferredUntilUnlock,
-                                failures: failures))
+                                failures: failures,
+                                preservedStores: preserved))
     }
 
     struct DiskRung {
@@ -245,19 +271,22 @@ public final class CaptureStore {
         var deferredUntilUnlock = false
     }
 
-    /// Opens one on-disk rung, and on failure sets the store aside and retries
-    /// exactly ONCE.
+    /// Opens one on-disk rung, and on failure moves the store into a dated
+    /// recovery folder and retries exactly ONCE on a fresh store.
     ///
     /// There is nothing to branch on: SwiftData collapses every load failure
     /// into the same opaque `SwiftDataError.loadIssueModelContainer` with an
     /// empty userInfo — the CoreData detail (`NSCocoaErrorDomain 134110
     /// "Cannot migrate store in-place: Validation error missing attribute
     /// values on mandatory destination attribute"`) reaches the log only,
-    /// never the thrown value. Field is not live (Kody ruling 2026-08-24), so
-    /// an unreadable store is reset rather than allowed to cost the designer
-    /// every future capture — but the reset renames rather than deletes, and
-    /// refuses to run at all while the device is locked, because a locked store
-    /// is indistinguishable here from an incompatible one and is perfectly good.
+    /// never the thrown value. So an unreadable store may hold unsynced work,
+    /// and nothing here ever deletes it: it is moved, whole, into its own dated
+    /// folder, which no later open or clean-up removes, and it is reported on
+    /// every launch (`CaptureStoreOpenReport.preservedStores`) so the sync
+    /// surface can say so. The fresh store is what keeps the designer's NEXT
+    /// capture on disk instead of in memory. Nothing runs while the device is
+    /// locked, because a locked store is indistinguishable here from an
+    /// incompatible one and is perfectly good.
     static func openRung(_ config: ModelConfiguration,
                          named rung: String,
                          isProtectedDataAvailable: @MainActor () -> Bool = { true })
@@ -266,11 +295,8 @@ public final class CaptureStore {
         createParentDirectory(of: config.url)
 
         do {
-            outcome.container = try ModelContainer(for: schema, configurations: [config])
+            outcome.container = try makeContainer(configuration: config)
             log.notice("Store opened on \(rung, privacy: .public) at \(config.url.path, privacy: .public)")
-            // A clean first-try open is the only proof that an earlier
-            // set-aside store is no longer worth keeping.
-            removeSetAsideStoreFiles(at: config.url)
             return outcome
         } catch {
             outcome.failures.append("\(rung): \(error.localizedDescription)")
@@ -290,12 +316,16 @@ public final class CaptureStore {
             return outcome
         }
 
-        guard setStoreFilesAside(at: config.url) else { return outcome }
+        guard let recovery = setStoreFilesAside(at: config.url) else { return outcome }
         outcome.didReset = true
-        log.notice("Set aside incompatible store at \(config.url.path, privacy: .public); retrying \(rung, privacy: .public)")
+        log.error("""
+            Moved unopenable store at \(config.url.path, privacy: .public) to \
+            \(recovery.path, privacy: .public), nothing deleted; retrying \(rung, privacy: .public) \
+            on a fresh store
+            """)
 
         do {
-            outcome.container = try ModelContainer(for: schema, configurations: [config])
+            outcome.container = try makeContainer(configuration: config)
         } catch {
             outcome.failures.append("\(rung) after reset: \(error.localizedDescription)")
             log.error("""
@@ -339,47 +369,89 @@ public final class CaptureStore {
         storeFileTrio(at: url).contains { FileManager.default.fileExists(atPath: $0.path) }
     }
 
-    /// The reset, which never deletes: the SQLite trio is renamed to
-    /// `<name>.bak`, one generation deep (a previous set is overwritten), so a
-    /// store set aside by mistake is still recoverable from the container.
-    /// Returns false when there was nothing to set aside, so a rung that failed
-    /// for some other reason never claims a reset.
-    @discardableResult
-    static func setStoreFilesAside(at url: URL) -> Bool {
-        let manager = FileManager.default
-        var movedAnything = false
-        for candidate in storeFileTrio(at: url)
-        where manager.fileExists(atPath: candidate.path) {
-            let backup = URL(fileURLWithPath: candidate.path + ".bak")
-            do {
-                if manager.fileExists(atPath: backup.path) {
-                    try manager.removeItem(at: backup)
-                }
-                try manager.moveItem(at: candidate, to: backup)
-                movedAnything = true
-            } catch {
-                log.error("""
-                    Could not set aside \(candidate.lastPathComponent, privacy: .public) \
-                    (\(error.localizedDescription, privacy: .public))
-                    """)
-            }
-        }
-        return movedAnything
+    /// Where set-aside stores live: a folder beside the store, holding one
+    /// dated folder per store set aside.
+    static func recoveryDirectory(beside url: URL) -> URL {
+        url.deletingLastPathComponent()
+            .appendingPathComponent("CaptureStoreRecovery", isDirectory: true)
     }
 
-    /// Drops a set-aside trio. Called only from a clean first-try open, which is
-    /// the one piece of evidence that the store it came from is not needed.
-    static func removeSetAsideStoreFiles(at url: URL) {
+    /// Every store set aside beside `url` and still on disk, oldest first: the
+    /// folder names are UTC timestamps.
+    static func preservedStores(beside url: URL) -> [URL] {
+        let directory = recoveryDirectory(beside: url)
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return names.filter { !$0.hasPrefix(".") }.sorted()
+            .map { directory.appendingPathComponent($0, isDirectory: true) }
+    }
+
+    /// The reset, which never deletes and never overwrites: the whole SQLite
+    /// trio moves, under its own names, into a new folder named for `now` (UTC)
+    /// inside `recoveryDirectory(beside:)`. A second failure gets a second
+    /// folder. Returns that folder, or nil when there was nothing to set aside
+    /// (so a rung that failed for some other reason never claims a reset) or
+    /// when a file refused to move. Then whatever did move is put back, so the
+    /// trio is never split between two places.
+    @discardableResult
+    static func setStoreFilesAside(at url: URL, now: Date = Date()) -> URL? {
         let manager = FileManager.default
-        for backup in storeFileTrio(at: url).map({ URL(fileURLWithPath: $0.path + ".bak") })
-        where manager.fileExists(atPath: backup.path) {
+        let present = storeFileTrio(at: url).filter { manager.fileExists(atPath: $0.path) }
+        guard !present.isEmpty else { return nil }
+
+        let folder: URL
+        do {
+            folder = try makeRecoveryFolder(beside: url, now: now)
+        } catch {
+            log.error("""
+                Could not make a recovery folder beside \(url.path, privacy: .public) \
+                (\(error.localizedDescription, privacy: .public)); store left in place
+                """)
+            return nil
+        }
+
+        var moved: [(from: URL, to: URL)] = []
+        for file in present {
+            let destination = folder.appendingPathComponent(file.lastPathComponent)
             do {
-                try manager.removeItem(at: backup)
+                try manager.moveItem(at: file, to: destination)
+                moved.append((file, destination))
             } catch {
                 log.error("""
-                    Could not delete \(backup.lastPathComponent, privacy: .public) \
-                    (\(error.localizedDescription, privacy: .public))
+                    Could not set aside \(file.lastPathComponent, privacy: .public) \
+                    (\(error.localizedDescription, privacy: .public)); putting the store back
                     """)
+                for move in moved.reversed() {
+                    try? manager.moveItem(at: move.to, to: move.from)
+                }
+                // Empty again unless a file would not go back; then it stays.
+                if (try? manager.contentsOfDirectory(atPath: folder.path))?.isEmpty == true {
+                    try? manager.removeItem(at: folder)
+                }
+                return nil
+            }
+        }
+        return folder
+    }
+
+    /// A new, empty folder for one set-aside store, named for `now` in UTC so
+    /// the names sort by age. A second store in the same second gets `-2`.
+    private static func makeRecoveryFolder(beside url: URL, now: Date) throws -> URL {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyyMMdd'T'HHmmss'Z'"
+        let stamp = formatter.string(from: now)
+        let directory = recoveryDirectory(beside: url)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var suffix = 1
+        while true {
+            let name = suffix == 1 ? stamp : "\(stamp)-\(suffix)"
+            let folder = directory.appendingPathComponent(name, isDirectory: true)
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+                return folder
+            } catch CocoaError.fileWriteFileExists {
+                suffix += 1
             }
         }
     }

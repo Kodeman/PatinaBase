@@ -224,8 +224,9 @@ public final class AppContainer {
     }
 
     /// Telemetry for the store-open ladder. `store.reset_incompatible` fires
-    /// when an unreadable store was set aside and recreated (Kody ruling
-    /// 2026-08-24: Field is not live, a fresh install may reset the store);
+    /// when an unreadable store was moved into a dated recovery folder and a
+    /// fresh one started (the moved store is kept, never deleted, and the sync
+    /// surface says so on every launch while it is there);
     /// `store.in_memory_fallback` fires when persistence was asked for and
     /// every on-disk rung refused, which costs the designer every capture made
     /// in that run.
@@ -234,6 +235,7 @@ public final class AppContainer {
         if report.didResetIncompatibleStore {
             analytics.event("store.reset_incompatible", [
                 "persistence": report.persistence.rawValue,
+                "preserved_stores": String(report.preservedStores.count),
                 "failures": report.failures.joined(separator: " | ")
             ])
         }

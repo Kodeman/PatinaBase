@@ -13,53 +13,55 @@
 import Foundation
 import SwiftData
 
-@Model
-public final class ScanUploadRecord {
+extension CaptureSchemaV1 {
+    @Model
+    public final class ScanUploadRecord {
 
-    /// Stable key = the bundle path RELATIVE to Application Support ("SiteScans/site-scan-…",
-    /// via `SiteScanBundleHome.relativeKey`). Container-independent so a resume re-resolves
-    /// the absolute URL under the CURRENT app container (C2); one record per scan.
-    @Attribute(.unique) public var bundlePath: String = ""
+        /// Stable key = the bundle path RELATIVE to Application Support ("SiteScans/site-scan-…",
+        /// via `SiteScanBundleHome.relativeKey`). Container-independent so a resume re-resolves
+        /// the absolute URL under the CURRENT app container (C2); one record per scan.
+        @Attribute(.unique) public var bundlePath: String = ""
 
-    public var scanID: String = ""
-    public var roomID: String = ""
-    /// Immutable creation-time owner stamp. Nil only for legacy/quarantined rows.
-    public private(set) var ownerUserID: String?
-    public private(set) var ownerWorkspaceID: String?
-    public var name: String = ""
-    public var projectID: String?
-    public var projectRoomID: String?
-    /// `room_scans.scan_schema_version` marker (3 = Field P1 instrument bundle).
-    public var scanSchemaVersion: Int = 3
-    /// Per-artifact upload progress (Codable value array attribute).
-    public var artifacts: [ScanArtifactUploadState] = []
-    /// CaptureTransferPhase raw value, with legacy `"pending"` accepted as queued.
-    public var statusRaw: String = CaptureTransferPhase.queued.rawValue
-    public var lastError: String?
-    public var retryCount: Int = 0
-    /// The server-confirmed scan id. Nil until confirmation succeeds.
-    public var receiptID: String?
-    public var createdAt: Date = Date()
-    public var updatedAt: Date = Date()
+        public var scanID: String = ""
+        public var roomID: String = ""
+        /// Immutable creation-time owner stamp. Nil only for legacy/quarantined rows.
+        public private(set) var ownerUserID: String?
+        public private(set) var ownerWorkspaceID: String?
+        public var name: String = ""
+        public var projectID: String?
+        public var projectRoomID: String?
+        /// `room_scans.scan_schema_version` marker (3 = Field P1 instrument bundle).
+        public var scanSchemaVersion: Int = 3
+        /// Per-artifact upload progress (Codable value array attribute).
+        public var artifacts: [ScanArtifactUploadState] = []
+        /// CaptureTransferPhase raw value, with legacy `"pending"` accepted as queued.
+        public var statusRaw: String = CaptureTransferPhase.queued.rawValue
+        public var lastError: String?
+        public var retryCount: Int = 0
+        /// The server-confirmed scan id. Nil until confirmation succeeds.
+        public var receiptID: String?
+        public var createdAt: Date = Date()
+        public var updatedAt: Date = Date()
 
-    public init(bundlePath: String, scanID: String, roomID: String, name: String,
-                projectID: String?, projectRoomID: String?, scanSchemaVersion: Int = 3,
-                artifacts: [ScanArtifactUploadState] = [],
-                owner: CaptureOwnerIdentity? = nil) {
-        self.bundlePath = bundlePath
-        self.scanID = scanID
-        self.roomID = roomID
-        self.ownerUserID = owner?.userID
-        self.ownerWorkspaceID = owner?.workspaceID
-        self.name = name
-        self.projectID = projectID
-        self.projectRoomID = projectRoomID
-        self.scanSchemaVersion = scanSchemaVersion
-        self.artifacts = artifacts
-        self.statusRaw = CaptureTransferPhase.queued.rawValue
-        self.retryCount = 0
-        self.createdAt = Date()
-        self.updatedAt = Date()
+        public init(bundlePath: String, scanID: String, roomID: String, name: String,
+                    projectID: String?, projectRoomID: String?, scanSchemaVersion: Int = 3,
+                    artifacts: [ScanArtifactUploadState] = [],
+                    owner: CaptureOwnerIdentity? = nil) {
+            self.bundlePath = bundlePath
+            self.scanID = scanID
+            self.roomID = roomID
+            self.ownerUserID = owner?.userID
+            self.ownerWorkspaceID = owner?.workspaceID
+            self.name = name
+            self.projectID = projectID
+            self.projectRoomID = projectRoomID
+            self.scanSchemaVersion = scanSchemaVersion
+            self.artifacts = artifacts
+            self.statusRaw = CaptureTransferPhase.queued.rawValue
+            self.retryCount = 0
+            self.createdAt = Date()
+            self.updatedAt = Date()
+        }
     }
 }
 

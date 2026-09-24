@@ -110,6 +110,17 @@ struct SyncStatusScreen: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("u1.sync.in-memory-warning")
             }
+            // A store this build could not open was moved aside, not deleted,
+            // and the queue above started fresh. Shown on every launch while
+            // it is on the phone, because an empty queue would otherwise read
+            // as "everything was sent".
+            if !store.openReport.preservedStores.isEmpty {
+                Text(Self.preservedStoreNotice)
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.error)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("u1.sync.preserved-store-notice")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -124,6 +135,13 @@ struct SyncStatusScreen: View {
         "Nothing you capture here is being saved on this iPhone. "
         + "Send what you have before you leave — anything still here is gone "
         + "once the app closes."
+
+    /// Deleting the app deletes the moved store with it, so this asks for the
+    /// one thing that keeps it recoverable.
+    static let preservedStoreNotice =
+        "Work saved on this iPhone before an update could not be opened, so it "
+        + "is not listed here. It is kept on this iPhone, not deleted. Keep the "
+        + "app installed and tell Patina, so it can be recovered."
 
     private var pendingCount: Int { rows.count + scanRows.count }
     private var hasRetryableTransfer: Bool {

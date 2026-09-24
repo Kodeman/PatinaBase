@@ -5,11 +5,12 @@
 //
 //  `Fixtures/Store-0.1-6` is a real SwiftData store, with its media directory,
 //  written by Patina Field 0.1 (6) (source b1447ba7d) through the app's own
-//  write paths — see that folder's README for exactly what it holds. If this
-//  build cannot open it, the ladder sets it aside and comes back empty
-//  (`CaptureStore.openRung` — "Set aside incompatible store at …; retrying"),
-//  and on a phone what it sets aside is unsynced captures, queued uploads and
-//  billable hours.
+//  write paths — see that folder's README for exactly what it holds. It is
+//  opened through `CaptureMigrationPlan`, as every container is: the store
+//  0.1 (6) wrote must be `CaptureSchemaV1` exactly. If this build cannot open
+//  it, the ladder moves it into a recovery folder and comes back empty
+//  (`CaptureStore.openRung` — "Moved unopenable store at …"), and on a phone
+//  what it moves aside is unsynced captures, queued uploads and billable hours.
 //
 //  Nothing else catches that. Every other test builds its store with the
 //  CURRENT types, so a schema change, or a rename that forgets the stored name,
@@ -56,7 +57,7 @@ struct CaptureStoreMigrationTests {
     /// Copies the fixture into a scratch directory — the bundle copy is never
     /// opened, so no run can migrate it in place — and opens the copy exactly
     /// as launch does: `CaptureStore.walk` over the Application Support rung
-    /// that `diskRungs` builds, through `openRung` and `CaptureStore.schema`.
+    /// that `diskRungs` builds, through `openRung` and `CaptureMigrationPlan`.
     /// Only the rung's URL moves, into the scratch directory.
     static func openFixture() throws -> OpenedFixture {
         let source = try fixtureSource()
@@ -104,12 +105,21 @@ struct CaptureStoreMigrationTests {
         #expect(report.persistence == .applicationSupport)
         #expect(report.deferredUntilUnlock == false)
         #expect(report.failures.isEmpty, "\(report.failures)")
-        // The reset path renames the SQLite trio to `.bak`; none may exist.
-        for file in CaptureStore.storeFileTrio(at: fixture.storeURL) {
-            #expect(!FileManager.default.fileExists(atPath: file.path + ".bak"),
-                    "\(file.lastPathComponent) was set aside")
-        }
+        // The reset path moves the SQLite trio into a recovery folder; none may exist.
+        #expect(report.preservedStores.isEmpty, "\(report.preservedStores)")
+        #expect(!FileManager.default.fileExists(
+            atPath: CaptureStore.recoveryDirectory(beside: fixture.storeURL).path))
         #expect(FileManager.default.fileExists(atPath: fixture.storeURL.path))
+    }
+
+    /// The container schema is the newest version the plan carries, so the
+    /// fixture above really was opened as V1.
+    @Test func theStoreSchemaIsTheNewestVersionInThePlan() throws {
+        let newest = try #require(CaptureMigrationPlan.schemas.last)
+        #expect(ObjectIdentifier(newest) == ObjectIdentifier(CaptureSchemaV1.self))
+        #expect(CaptureSchemaV1.versionIdentifier == Schema.Version(1, 0, 0))
+        #expect(Set(CaptureStore.schema.entities.map(\.name))
+            == Set(StoreFixtureProjection.entityNames))
     }
 
     // MARK: - Every row, every attribute
@@ -340,8 +350,7 @@ struct CaptureStoreMigrationTests {
         let url = directory.appendingPathComponent("hours.store")
         let owner = UUID()
 
-        let first = try ModelContainer(for: CaptureStore.schema,
-                                       configurations: [ModelConfiguration(url: url)])
+        let first = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: url))
         first.mainContext.insert(TimeEntryOutboxRecord(
             entryID: UUID(), projectID: UUID().uuidString,
             ownerUserID: owner.uuidString, startedAt: Date(), durationMinutes: 45,
