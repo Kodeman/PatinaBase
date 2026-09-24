@@ -177,7 +177,16 @@ tests.build_configurations.each do |c|
   c.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'cloud.patina.field.tests'
   c.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
 end
-add_sources(project, tests, 'CaptureTests', File.join(ROOT, 'CaptureTests'))
+tests_group = add_sources(project, tests, 'CaptureTests', File.join(ROOT, 'CaptureTests'))
+
+# Store fixtures CaptureStoreMigrationTests opens (Fixtures/Store-0.1-6: a
+# SwiftData store and its media, written by the shipped build). Bundled as ONE
+# folder reference so the tree arrives in the .xctest byte for byte. xcodeproj
+# types a reference by extension alone, which leaves a directory untyped, so
+# the type is set here.
+fixtures_ref = tests_group.new_file(File.join(ROOT, 'CaptureTests', 'Fixtures'))
+fixtures_ref.last_known_file_type = 'folder'
+tests.add_resources([fixtures_ref])
 
 # W5: UI tests (XCUITest, app-hosted). The logic bundle above cannot drive a
 # screen, so the one walk that proves PR1 opens and PR3 opens from it lives here.
