@@ -580,4 +580,28 @@ struct FieldCalendarDayTests {
         #expect(FieldPeopleDates.wireDay(day) == "2026-10-09")
         #expect(FieldPeopleDates.day(ofInstant: "2026-10-09", in: phone) == nil)
     }
+
+    /// D9 (00665): `SupabaseReceivingService.submitInspection` computes
+    /// `inspected_local_date` as `FieldPeopleDates.wireDay(FieldPeopleDates
+    /// .today(Date()))` — the phone's own calendar day at submission, not the
+    /// UTC day of the instant. A 7 pm inspection in Los Angeles must send
+    /// "2026-10-09", never the UTC day "2026-10-10" the naive `inspected_at`
+    /// string would lead with.
+    @Test
+    func anInspectionAt7pmLocalSendsTheLocalDay() throws {
+        var losAngeles = Calendar(identifier: .gregorian)
+        losAngeles.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let inspectedAt = try sevenPM(on: losAngeles)
+
+        let localDate = FieldPeopleDates.wireDay(FieldPeopleDates.today(inspectedAt, in: losAngeles))
+        #expect(localDate == "2026-10-09")
+
+        // The CHECK the row must satisfy on insert: the local day is within
+        // ±1 day of the UTC day of the same instant. 7 pm in LA is already
+        // the next day, 2026-10-10, in UTC.
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = try #require(TimeZone(identifier: "UTC"))
+        let utcDay = FieldPeopleDates.today(inspectedAt, in: utc)
+        #expect(FieldPeopleDates.wireDay(utcDay) == "2026-10-10")
+    }
 }
