@@ -24,7 +24,9 @@
 //  Running step 3 on every open is what makes the carry crash-safe. A launch
 //  killed between steps 2 and 3 leaves a V2 store without its pieces, and no
 //  stage will ever run on it again; the next open finishes from the file. Step 3
-//  is idempotent. The file is part of the store until it is gone:
+//  is idempotent, and once its save has landed the file is spent: the store's
+//  history holds that save, so a file that outlives it is removed, never
+//  applied again. The file is part of the store until it is gone:
 //  `CaptureStore.storeFileTrio` lists it, so a store the ladder sets aside takes
 //  its pending carry into the recovery folder with it.
 
@@ -143,36 +145,102 @@ struct PieceMigrationCarry: Codable {
 
     // MARK: - Step 1: the stage's willMigrate, on the V1 store
 
+    /// Throws only when the store cannot be read or the file cannot be
+    /// written (a full disk, say), never on a value. Any throw here fails the
+    /// open, and the ladder sets the whole V1 store aside.
     static func write(from context: ModelContext) throws {
         guard let storeURL = context.container.configurations.first?.url else {
             throw CarryError.noStoreURL
         }
         let specimens = try context.fetch(FetchDescriptor<CaptureSchemaV1.Specimen>())
         let carry = PieceMigrationCarry(rows: specimens.map(Row.init))
-        try JSONEncoder().encode(carry).write(to: carryURL(beside: storeURL), options: .atomic)
+        try encoder().encode(carry).write(to: carryURL(beside: storeURL), options: .atomic)
         log.notice("Carrying \(carry.rows.count) specimen row(s) across the V1→V2 stage")
+    }
+
+    /// JSON has no infinity or NaN, and a default JSONEncoder throws on
+    /// either. A V1 duration SQLite held as `inf` once failed the stage that
+    /// way and set the whole store aside (SQ-210 F2). Every Double in a Row,
+    /// and every Date, which encodes as one, is written as one of these
+    /// strings instead and read back as exactly that value. Nothing else a
+    /// Row holds can fail to encode.
+    private static let nonFinite = (positive: "+Infinity", negative: "-Infinity", nan: "NaN")
+
+    static func encoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(
+            positiveInfinity: nonFinite.positive, negativeInfinity: nonFinite.negative,
+            nan: nonFinite.nan)
+        return encoder
+    }
+
+    static func decoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+            positiveInfinity: nonFinite.positive, negativeInfinity: nonFinite.negative,
+            nan: nonFinite.nan)
+        return decoder
     }
 
     // MARK: - Step 3: after every open
 
     /// Finishes a carry the stage started, or does nothing when there is none.
-    /// A failure leaves the file where it is for the next open to retry; it
+    /// Returns true when carried rows are still waiting because restoring them
+    /// failed: the file stays for the next open to retry, and the ladder
+    /// reports it (`CaptureStoreOpenReport.carryAwaitingRestore`). A failure
     /// never fails the open, since the store itself is sound.
-    @MainActor
-    static func restorePending(into container: ModelContainer, storeURL: URL) {
+    ///
+    /// Once a restore has saved, its file is spent and never applies again,
+    /// even when it cannot be removed. Applied again later, it would bring
+    /// back a piece the designer had since deleted, without the photos its
+    /// delete cascaded away (SQ-210 F1). The store says whether that save
+    /// happened: `restore` saves as `restoreAuthor`, and SwiftData records
+    /// that author in the store's history in the same commit as the pieces.
+    /// `removeItem` deletes the file; a test passes one that throws.
+    @MainActor @discardableResult
+    static func restorePending(into container: ModelContainer, storeURL: URL,
+                               removeItem: (URL) throws -> Void = {
+                                   try FileManager.default.removeItem(at: $0)
+                               }) -> Bool {
         let url = carryURL(beside: storeURL)
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        let context = ModelContext(container)
         do {
-            let carry = try JSONDecoder().decode(Self.self, from: Data(contentsOf: url))
-            try restore(carry, into: ModelContext(container))
-            try FileManager.default.removeItem(at: url)
-            log.notice("Restored \(carry.rows.count) carried specimen row(s) as pieces")
+            if try restoreWasSaved(in: context) {
+                log.notice("Carried specimen rows were restored on an earlier open; removing their file")
+            } else {
+                let carry = try decoder().decode(Self.self, from: Data(contentsOf: url))
+                try restore(carry, into: context)
+                log.notice("Restored \(carry.rows.count) carried specimen row(s) as pieces")
+            }
         } catch {
             log.error("""
                 Carried specimen rows at \(url.path, privacy: .public) not restored yet \
                 (\(error.localizedDescription, privacy: .public)); kept for the next open
                 """)
+            return true
         }
+        do {
+            try removeItem(url)
+        } catch {
+            log.error("""
+                Carried specimen rows are restored, but their file at \(url.path, privacy: .public) \
+                could not be removed (\(error.localizedDescription, privacy: .public)); it will not \
+                be applied again, and a later open removes it
+                """)
+        }
+        return false
+    }
+
+    /// The author of the restore's save, which marks its file spent.
+    static let restoreAuthor = "PieceMigrationCarry.restore"
+
+    private static func restoreWasSaved(in context: ModelContext) throws -> Bool {
+        let author: String? = restoreAuthor
+        var descriptor = HistoryDescriptor<DefaultHistoryTransaction>(
+            predicate: #Predicate { $0.author == author })
+        descriptor.fetchLimit = 1
+        return try !context.fetchHistory(descriptor).isEmpty
     }
 
     static func restore(_ carry: PieceMigrationCarry, into context: ModelContext) throws {
@@ -190,6 +258,7 @@ struct PieceMigrationCarry: Codable {
             for id in row.photoIDs { photos[id]?.piece = piece }
             for id in row.measurementIDs { measurements[id]?.piece = piece }
         }
+        context.author = restoreAuthor
         try context.save()
     }
 }

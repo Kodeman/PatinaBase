@@ -106,6 +106,7 @@ struct CaptureStoreMigrationTests {
         #expect(report.persistence == .applicationSupport)
         #expect(report.deferredUntilUnlock == false)
         #expect(report.failures.isEmpty, "\(report.failures)")
+        #expect(report.carryAwaitingRestore == false)
         // The reset path moves the SQLite trio into a recovery folder; none may exist.
         #expect(report.preservedStores.isEmpty, "\(report.preservedStores)")
         #expect(!FileManager.default.fileExists(
@@ -173,7 +174,9 @@ struct CaptureStoreMigrationTests {
     /// The fixture leaves 26 of Specimen's attributes nil in every row, so it
     /// cannot see a V1→V2 carry that drops one of them. This V1 row sets every
     /// attribute to something other than its default, and each one must read
-    /// back from the Piece it became.
+    /// back from the Piece it became, compared with the Specimen itself — not
+    /// with the carry's Row, which a swapped assignment in `Row.init` would
+    /// leave agreeing with the Piece.
     @Test func aV1RowWithEveryAttributeSetBecomesAPieceIntact() throws {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("capture-store-v1-full-\(UUID().uuidString)", isDirectory: true)
@@ -184,7 +187,7 @@ struct CaptureStoreMigrationTests {
         let photoID = UUID()
         let measurementID = UUID()
 
-        let written: [String: Any]
+        let written: StoreFixtureProjection.Row
         do {
             let v1 = try ModelContainer(for: Schema(versionedSchema: CaptureSchemaV1.self),
                                         configurations: [ModelConfiguration(url: url)])
@@ -237,8 +240,7 @@ struct CaptureStoreMigrationTests {
             measurement.specimen = s
             s.updatedAt = at.addingTimeInterval(60)
             try v1.mainContext.save()
-            let row = try JSONEncoder().encode(PieceMigrationCarry.Row(s))
-            written = try #require(try JSONSerialization.jsonObject(with: row) as? [String: Any])
+            written = StoreFixtureProjection.specimen(s)
         }
 
         let migrated = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: url))
@@ -246,16 +248,13 @@ struct CaptureStoreMigrationTests {
         let read = StoreFixtureProjection.piece(piece)
         let untouched = StoreFixtureProjection.piece(Piece())
         var differences: [String] = []
-        for (attribute, value) in read.sorted(by: { $0.key < $1.key })
-        where attribute != "photos" && attribute != "measurements" {
-            guard let wrote = written[attribute] else {
-                differences.append("\(attribute): the carry has no such field")
-                continue
-            }
-            let wroteText = String(decoding: try JSONSerialization.data(
-                withJSONObject: wrote, options: [.fragmentsAllowed, .sortedKeys]), as: UTF8.self)
-            if !StoreFixtureProjection.sameValue(wroteText, value) {
-                differences.append("\(attribute): wrote \(wroteText), read \(value)")
+        for attribute in Set(written.keys).symmetricDifference(read.keys).sorted() {
+            differences.append("\(attribute): projected for only one of Specimen and Piece")
+        }
+        for (attribute, value) in read.sorted(by: { $0.key < $1.key }) {
+            guard let wrote = written[attribute] else { continue }
+            if !StoreFixtureProjection.sameValue(wrote, value) {
+                differences.append("\(attribute): wrote \(wrote), read \(value)")
             }
             if attribute != "id", attribute != "clientToken",
                StoreFixtureProjection.sameValue(value, untouched[attribute] ?? "") {
@@ -271,6 +270,161 @@ struct CaptureStoreMigrationTests {
         #expect(piece.measurements.map(\.id) == [measurementID])
         #expect(piece.measurements.first?.piece?.id == piece.id)
         #expect(!FileManager.default.fileExists(atPath: PieceMigrationCarry.carryURL(beside: url).path))
+    }
+
+    // MARK: - Numbers JSON has no spelling for
+
+    /// SQ-210 F2. JSON has no infinity or NaN, and the carry once threw on
+    /// one inside willMigrate. Both plan opens failed, the ladder set the
+    /// whole store aside, and the app opened empty, unsynced hours and all.
+    /// V1 rows holding them cross the stage like any other, with every number
+    /// exactly as the V1 store holds it, and nothing else in the store moves.
+    ///
+    /// Only the scalar Doubles can hold one on disk: SwiftData JSON-encodes a
+    /// `[String: Double]` attribute itself, with a `try!`, so a non-finite
+    /// `guessConfidenceRaw` value crashes the save that would have written
+    /// it. The carry's own encoding is checked for every number it holds,
+    /// NaN included, at the end.
+    @Test func nonFiniteNumbersCrossTheStageAndNothingIsSetAside() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("capture-store-v1-nonfinite-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("default.store")
+        let entryID = UUID()
+        do {
+            let v1 = try ModelContainer(for: Schema(versionedSchema: CaptureSchemaV1.self),
+                                        configurations: [ModelConfiguration(url: url)])
+            for value in [Double.infinity, -Double.infinity, Double.nan] {
+                let s = CaptureSchemaV1.Specimen()
+                s.voiceDurationSeconds = value
+                s.suggestionConfidence = value
+                v1.mainContext.insert(s)
+            }
+            v1.mainContext.insert(TimeEntryOutboxRecord(
+                entryID: entryID, projectID: UUID().uuidString,
+                ownerUserID: UUID().uuidString, startedAt: Date(), durationMinutes: 45,
+                activity: .travel, billable: true, notes: "not yet sent", rateRole: nil))
+            try v1.mainContext.save()
+        }
+        // What the V1 store holds, read back as the stage reads it: from disk,
+        // not from the objects that wrote it.
+        let held: [UUID: [Double?]]
+        do {
+            let v1 = try ModelContainer(for: Schema(versionedSchema: CaptureSchemaV1.self),
+                                        configurations: [ModelConfiguration(url: url)])
+            let specimens = try v1.mainContext.fetch(FetchDescriptor<CaptureSchemaV1.Specimen>())
+            held = Dictionary(uniqueKeysWithValues: specimens.map {
+                ($0.id, [$0.voiceDurationSeconds, $0.suggestionConfidence])
+            })
+        }
+        let heldValues = held.values.flatMap { $0 }.compactMap { $0 }
+        #expect(heldValues.contains(.infinity) && heldValues.contains(-.infinity),
+                "the V1 store kept no infinity: \(held)")
+
+        let rung = CaptureStore.DiskRung(name: "test", persistence: .applicationSupport,
+                                         configuration: ModelConfiguration(url: url))
+        let store = CaptureStore.walk([rung]) { rung in
+            CaptureStore.openRung(rung.configuration, named: rung.name)
+        }
+
+        #expect(store.openReport.didResetIncompatibleStore == false, "\(store.openReport.failures)")
+        #expect(store.openReport.preservedStores.isEmpty)
+        #expect(store.openReport.carryAwaitingRestore == false)
+        let pieces = try store.context.fetch(FetchDescriptor<Piece>())
+        #expect(Set(pieces.map(\.id)) == Set(held.keys))
+        for piece in pieces {
+            let read = [piece.voiceDurationSeconds, piece.suggestionConfidence]
+            let wrote = try #require(held[piece.id])
+            #expect(Self.same(wrote, read), "V1 held \(wrote), the piece reads \(read)")
+        }
+        #expect(store.timeEntryOutbox().map(\.entryID) == [entryID])
+        #expect(!FileManager.default.fileExists(atPath: PieceMigrationCarry.carryURL(beside: url).path))
+
+        // Every kind of number a Row carries — Double, Double in a dictionary
+        // and in the venue, and Date, which encodes as one — through the
+        // carry file's own encoding and back.
+        var row = PieceMigrationCarry.Row(CaptureSchemaV1.Specimen())
+        row.createdAt = Date(timeIntervalSinceReferenceDate: -.infinity)
+        row.voiceDurationSeconds = .nan
+        row.suggestionConfidence = -.infinity
+        row.guessConfidenceRaw = ["nan": .nan, "inf": .infinity, "-inf": -.infinity]
+        row.venue = VenueStamp(latitude: .nan, longitude: .infinity, accuracyMeters: -.infinity,
+                               capturedAt: Date(timeIntervalSinceReferenceDate: .infinity))
+        let numbers = { (row: PieceMigrationCarry.Row) -> [Double?] in
+            [row.createdAt.timeIntervalSinceReferenceDate, row.voiceDurationSeconds,
+             row.suggestionConfidence, row.guessConfidenceRaw["nan"], row.guessConfidenceRaw["inf"],
+             row.guessConfidenceRaw["-inf"], row.venue?.latitude, row.venue?.longitude,
+             row.venue?.accuracyMeters, row.venue?.capturedAt.timeIntervalSinceReferenceDate]
+        }
+        let data = try PieceMigrationCarry.encoder().encode(PieceMigrationCarry(rows: [row]))
+        let back = try #require(try PieceMigrationCarry.decoder()
+            .decode(PieceMigrationCarry.self, from: data).rows.first)
+        #expect(Self.same(numbers(back), numbers(row)), "wrote \(numbers(row)), read \(numbers(back))")
+    }
+
+    /// Equal numbers, NaN equal to NaN, and nil only to nil.
+    private static func same(_ lhs: [Double?], _ rhs: [Double?]) -> Bool {
+        lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { lhs, rhs in
+            lhs == rhs || (lhs?.isNaN == true && rhs?.isNaN == true)
+        }
+    }
+
+    // MARK: - A restore that saved is spent
+
+    /// SQ-210 F1. The restore saves its pieces, then deletes the carry file.
+    /// When that delete throws, which is not a crash, the session goes on with
+    /// the file still there. A piece the designer deletes afterwards must not
+    /// come back on the next launch, with its V1 values and none of the photos
+    /// its delete cascaded away. The piece she kept must come back exactly
+    /// once, still holding its photo.
+    @Test func aSavedRestoreNeverAppliesAgainWhenItsFileCouldNotBeRemoved() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("capture-store-v1-spent-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("default.store")
+        let carry = PieceMigrationCarry.carryURL(beside: url)
+        let kept = UUID()
+        let deleted = UUID()
+        do {
+            let v1 = try ModelContainer(for: Schema(versionedSchema: CaptureSchemaV1.self),
+                                        configurations: [ModelConfiguration(url: url)])
+            for (id, title) in [(kept, "kept"), (deleted, "deleted after restore")] {
+                let s = CaptureSchemaV1.Specimen(id: id)
+                s.title = title
+                v1.mainContext.insert(s)
+                let photo = CaptureSchemaV1.CapturePhoto(id: UUID(), filename: "\(title).heic",
+                                                         width: 4, height: 3, isPrimary: true, order: 0)
+                v1.mainContext.insert(photo)
+                photo.specimen = s
+            }
+            try v1.mainContext.save()
+        }
+        do {
+            // makeContainer's open without its restore, which runs next with a
+            // delete that throws.
+            let container = try ModelContainer(for: CaptureStore.schema,
+                                               migrationPlan: CaptureMigrationPlan.self,
+                                               configurations: [ModelConfiguration(url: url)])
+            let awaiting = PieceMigrationCarry.restorePending(
+                into: container, storeURL: url,
+                removeItem: { _ in throw CocoaError(.fileWriteNoPermission) })
+            #expect(awaiting == false, "the pieces were saved; only the file stayed")
+            #expect(FileManager.default.fileExists(atPath: carry.path))
+            let pieces = try container.mainContext.fetch(FetchDescriptor<Piece>())
+            #expect(Set(pieces.map(\.id)) == [kept, deleted])
+            let doomed = try #require(pieces.first { $0.id == deleted })
+            #expect(doomed.photos.count == 1)
+            container.mainContext.delete(doomed)
+            try container.mainContext.save()
+        }
+
+        let reopened = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: url))
+        let pieces = try reopened.mainContext.fetch(FetchDescriptor<Piece>())
+        #expect(pieces.map(\.id) == [kept], "the deleted piece came back, or the kept one doubled")
+        #expect(pieces.first?.photos.map(\.filename) == ["kept.heic"])
+        #expect(!FileManager.default.fileExists(atPath: carry.path))
     }
 
     // MARK: - Relationships and the media they name
@@ -486,5 +640,99 @@ struct CaptureStoreMigrationTests {
         let names = Set(CaptureStore.schema.entities.map(\.name))
         #expect(names.contains("FieldVisitCloseRecord"))
         #expect(names.contains("TimeEntryOutboxRecord"))
+    }
+}
+
+private extension StoreFixtureProjection {
+    /// A V1 Specimen under the same keys `piece(_:)` projects a Piece, read
+    /// straight from the Specimen's own properties, so the V1→V2 carry is
+    /// checked end to end and never against itself.
+    static func specimen(_ row: CaptureSchemaV1.Specimen) -> Row {
+        [
+            "id": value(row.id),
+            "clientToken": value(row.clientToken),
+            "createdAt": value(row.createdAt),
+            "updatedAt": value(row.updatedAt),
+            "ownerUserID": value(row.ownerUserID),
+            "ownerWorkspaceID": value(row.ownerWorkspaceID),
+            "title": value(row.title),
+            "maker": value(row.maker),
+            "sku": value(row.sku),
+            "colorway": value(row.colorway),
+            "materialNote": value(row.materialNote),
+            "finish": value(row.finish),
+            "priceTradeCents": value(row.priceTradeCents),
+            "priceRetailCents": value(row.priceRetailCents),
+            "currencyCode": value(row.currencyCode),
+            "sourceURL": value(row.sourceURL),
+            "note": value(row.note),
+            "categoryRaw": value(row.categoryRaw),
+            "materials": value(row.materials),
+            "colors": value(row.colors),
+            "styleTags": value(row.styleTags),
+            "photos": value(row.photos.map(\.id.uuidString).sorted()),
+            "measurements": value(row.measurements.map(\.id.uuidString).sorted()),
+            "voiceTranscript": value(row.voiceTranscript),
+            "voicePartialTranscript": value(row.voicePartialTranscript),
+            "voiceAudioFilename": value(row.voiceAudioFilename),
+            "voiceAudioSegmentsRaw": value(row.voiceAudioSegmentsRaw),
+            "voiceAudioRemotePathsRaw": value(row.voiceAudioRemotePathsRaw),
+            "voiceTranscriptSourceRaw": value(row.voiceTranscriptSourceRaw),
+            "captureKindRaw": value(row.captureKindRaw),
+            "voiceDurationSeconds": value(row.voiceDurationSeconds),
+            "scannedCodes": value(row.scannedCodes),
+            "catalogMatchRemoteId": value(row.catalogMatchRemoteId),
+            "provenanceRaw": value(row.provenanceRaw),
+            "guessConfidenceRaw": value(row.guessConfidenceRaw),
+            "venue": value(row.venue),
+            "captureSessionID": value(row.captureSessionID),
+            "destinationRaw": value(row.destinationRaw),
+            "statusRaw": value(row.statusRaw),
+            "lifecycleRaw": value(row.lifecycleRaw),
+            "remoteId": value(row.remoteId),
+            "committedProductId": value(row.committedProductId),
+            "lastSyncError": value(row.lastSyncError),
+            "retryCount": value(row.retryCount),
+            "uploadProgress": value(row.uploadProgress),
+            "placementProjectId": value(row.placementProjectId),
+            "placementRoomId": value(row.placementRoomId),
+            "placementSlotId": value(row.placementSlotId),
+            "placementCategory": value(row.placementCategory),
+            "placementStateRaw": value(row.placementStateRaw),
+            "placementFFEItemId": value(row.placementFFEItemId),
+            "placementSpecId": value(row.placementSpecId),
+            "placementLastError": value(row.placementLastError),
+            "placementRetryCount": value(row.placementRetryCount),
+            "marginNoteId": value(row.marginNoteId),
+            "marginNoteBodyRaw": value(row.marginNoteBodyRaw),
+            "marginNoteStateRaw": value(row.marginNoteStateRaw),
+            "marginNoteLastError": value(row.marginNoteLastError),
+            "marginNoteRetryCount": value(row.marginNoteRetryCount),
+            "punchTaskId": value(row.punchTaskId),
+            "punchTaskPartyId": value(row.punchTaskPartyId),
+            "punchTaskOwnerRaw": value(row.punchTaskOwnerRaw),
+            "punchTaskStateRaw": value(row.punchTaskStateRaw),
+            "punchTaskLastError": value(row.punchTaskLastError),
+            "punchTaskRetryCount": value(row.punchTaskRetryCount),
+            "degradeNoteId": value(row.degradeNoteId),
+            "degradeNoteBodyRaw": value(row.degradeNoteBodyRaw),
+            "degradeNoteStateRaw": value(row.degradeNoteStateRaw),
+            "degradeNoteLastError": value(row.degradeNoteLastError),
+            "degradeNoteRetryCount": value(row.degradeNoteRetryCount),
+            "fieldWriteAttentionRaw": value(row.fieldWriteAttentionRaw),
+            "visitKindRaw": value(row.visitKindRaw),
+            "visitKitRaw": value(row.visitKitRaw),
+            "visitLabel": value(row.visitLabel),
+            "visitStartedAt": value(row.visitStartedAt),
+            "visitEndedAt": value(row.visitEndedAt),
+            "noteSettingRaw": value(row.noteSettingRaw),
+            "suggestedProjectID": value(row.suggestedProjectID),
+            "suggestedProjectRoomID": value(row.suggestedProjectRoomID),
+            "suggestionBasisRaw": value(row.suggestionBasisRaw),
+            "suggestionConfidence": value(row.suggestionConfidence),
+            "suggestionReasonRaw": value(row.suggestionReasonRaw),
+            "placementReplayPending": value(row.placementReplayPending),
+            "placementEventEmitted": value(row.placementEventEmitted)
+        ]
     }
 }
