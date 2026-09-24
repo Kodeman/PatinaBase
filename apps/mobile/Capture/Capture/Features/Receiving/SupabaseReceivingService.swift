@@ -103,6 +103,14 @@ struct SupabaseReceivingService: ReceivingService {
 
         let trimmedNotes = submission.notes?.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // D9 (00665): the phone's own calendar day at submission, sent
+        // alongside the insert (not derived from the server-assigned
+        // `inspected_at` afterward) so the trigger's
+        // `receiving_inspections_local_date_near_inspected_at` CHECK — ±1 day
+        // of the UTC day of `inspected_at` — always passes: both values come
+        // from the same instant on this phone.
+        let inspectedLocalDate = FieldPeopleDates.wireDay(FieldPeopleDates.today(Date()))
+
         // ── Step 1: INSERT receiving_inspections (critical path) ──
         let inspectionRow: InspectionInsertResult = try await client
             .from("receiving_inspections")
@@ -112,7 +120,8 @@ struct SupabaseReceivingService: ReceivingService {
                     inspectedBy: userID,
                     outcome: submission.outcome.rawValue,
                     notes: (trimmedNotes?.isEmpty ?? true) ? nil : trimmedNotes,
-                    photoAssetIDs: submission.photoRefs
+                    photoAssetIDs: submission.photoRefs,
+                    inspectedLocalDate: inspectedLocalDate
                 ),
                 returning: .representation
             )
@@ -122,8 +131,7 @@ struct SupabaseReceivingService: ReceivingService {
             .value
 
         // ── Step 2: best-effort purchase_orders sync ──
-        await bestEffortSyncPurchaseOrder(poID: submission.poID, outcome: submission.outcome,
-                                          inspectedAt: inspectionRow.inspectedAt)
+        await bestEffortSyncPurchaseOrder(poID: submission.poID, outcome: submission.outcome)
 
         // ── Step 3: damage_claims (critical when outcome != clean) ──
         guard submission.outcome != .clean else { return }
@@ -150,8 +158,8 @@ struct SupabaseReceivingService: ReceivingService {
 
     // MARK: - Private
 
-    /// Best-effort delivered_date/status sync, mirroring the reference's
-    /// column names and "failure doesn't roll back the inspection" posture.
+    /// Best-effort status sync, mirroring the reference's column names and
+    /// "failure doesn't roll back the inspection" posture.
     ///
     /// This deliberately does NOT flip status unconditionally like the
     /// pre-00184 reference client does. Migration 00184's
@@ -162,24 +170,18 @@ struct SupabaseReceivingService: ReceivingService {
     /// (same transaction as Step 1's insert) by the time this executes, so
     /// this step is a defensive fallback, not the source of truth; it stays
     /// gated the same way the trigger is, so it can never re-introduce the
-    /// behaviour 00184 closed off. Both writes are expressed as single atomic
-    /// filtered UPDATEs (WHERE delivered_date IS NULL / WHERE status NOT IN
-    /// (…)) rather than a read-then-write, so there's no read/write race.
+    /// behaviour 00184 closed off. The write is expressed as a single atomic
+    /// filtered UPDATE (WHERE status NOT IN (…)) rather than a read-then-
+    /// write, so there's no read/write race.
     ///
-    /// `delivered_date` is a `date`; `inspected_at` is an instant. The day
-    /// written is this phone's calendar day at the inspection, never the
-    /// instant's leading UTC day (a 7 pm inspection in Los Angeles is the next
-    /// day in UTC).
-    private func bestEffortSyncPurchaseOrder(poID: String, outcome: FieldInspectionOutcome,
-                                             inspectedAt: String) async {
-        if let day = FieldPeopleDates.day(ofInstant: inspectedAt) {
-            try? await client.from("purchase_orders")
-                .update(["delivered_date": FieldPeopleDates.wireDay(day)])
-                .eq("id", value: poID)
-                .is("delivered_date", value: nil)
-                .execute()
-        }
-
+    /// D9 (00665) dropped the matching `delivered_date` best-effort write:
+    /// Step 1's insert now always sends `inspected_local_date`, so the
+    /// trigger's `COALESCE(v_po.delivered_date, NEW.inspected_local_date,
+    /// NEW.inspected_at::date)` always resolves to the phone's own local day
+    /// on first delivery — the exact value this fallback used to backfill.
+    /// The trigger now always wins with the correct value, so the client
+    /// duplicate has nothing left to correct.
+    private func bestEffortSyncPurchaseOrder(poID: String, outcome: FieldInspectionOutcome) async {
         guard outcome == .clean else { return }
         try? await client.from("purchase_orders")
             .update(["status": "delivered"])
@@ -247,6 +249,8 @@ private struct InspectionInsert: Encodable {
     let outcome: String
     let notes: String?
     let photoAssetIDs: [String]
+    /// D9 (00665): the inspecting phone's own calendar day, "yyyy-MM-dd".
+    let inspectedLocalDate: String
 
     enum CodingKeys: String, CodingKey {
         case purchaseOrderID = "purchase_order_id"
@@ -254,6 +258,7 @@ private struct InspectionInsert: Encodable {
         case outcome
         case notes
         case photoAssetIDs = "photo_asset_ids"
+        case inspectedLocalDate = "inspected_local_date"
     }
 }
 
