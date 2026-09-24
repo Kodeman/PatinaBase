@@ -10,15 +10,42 @@
 # Usage:
 #   scripts/capture-shots.sh                      # all 78 built screens
 #   scripts/capture-shots.sh C5 N1 S3             # only the given screens (prefix match)
-#   CAPTURE_SIM="iPhone 17 Pro" scripts/capture-shots.sh
+#
+# CAPTURE_SIM_UDID is required — this lane's OWN simulator clone, the same
+# variable capture-gate.sh reads. The script refuses to guess; see below.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SIM="${CAPTURE_SIM:-iPhone 17}"
 BUNDLE_ID="cloud.patina.field"
-DERIVED=".build/derived"
 OUT="${CAPTURE_SHOTS_DIR:-.build/shots}"
 SETTLE="${CAPTURE_SHOT_SETTLE:-1.4}"   # seconds to let a screen render before the shot
+
+# The same per-worktree DerivedData capture-gate.sh builds into (see its
+# header). Absolute, so the path xcodebuild receives names this checkout.
+PROJECT_DIR="$PWD"                                   # apps/mobile/Capture
+DERIVED="$PROJECT_DIR/.build/DerivedData"
+
+# --- the simulator is explicit, or this refuses to guess ----------------------
+# This resolved ${CAPTURE_SIM:-iPhone 17} by NAME — the same device in every
+# concurrent Field lane, so two sweeps installed over, and screenshotted, each
+# other's app. Same contract as capture-gate.sh sim_destination(). Checked
+# BEFORE generate_project.rb, which rm -rf's the TRACKED Capture.xcodeproj: a
+# sweep that is going to refuse must refuse before it has rewritten the tree.
+# Pinned by scripts/capture-gate-guard.test.sh.
+if [[ -z "${CAPTURE_SIM_UDID:-}" ]]; then
+  printf '%s\n' \
+    "✘ CAPTURE_SIM_UDID is unset." \
+    "" \
+    "capture-shots.sh needs an explicit simulator udid: this lane's OWN clone —" \
+    "never a shared device, never 'booted', never a device name. CAPTURE_SIM" \
+    "(a device NAME) is no longer read. Create the clone and export its udid:" \
+    "" \
+    "  xcrun simctl list devices                   # pick a source; note its udid" \
+    "  xcrun simctl shutdown <source-udid>         # clone refuses a booted source" \
+    '  export CAPTURE_SIM_UDID="$(xcrun simctl clone <source-udid> field-<lane>)"' >&2
+  exit 2
+fi
+DEVICE_ID="$CAPTURE_SIM_UDID"
 
 # The full screen matrix (suffix = tail of each CaptureScreenID).
 ALL_SCREENS=(
@@ -94,22 +121,10 @@ fi
 echo "→ regenerating project"
 ruby scripts/generate_project.rb >/dev/null
 
-DEVICE_ID=$(ruby -rjson -e '
-  sim = ARGV[0]
-  devices = JSON.parse(`xcrun simctl list devices available --json`)["devices"]
-  best = nil; best_ver = [-1, -1]
-  devices.each do |runtime, devs|
-    next unless runtime =~ /SimRuntime\.iOS-(\d+)-(\d+)/
-    ver = [$1.to_i, $2.to_i]
-    devs.each { |d| (best = d["udid"]; best_ver = ver) if d["name"] == sim && (ver <=> best_ver) >= 0 }
-  end
-  abort "no available simulator named #{sim.inspect}" unless best
-  print best
-' "$SIM")
-
 echo "→ building (Debug · iphonesimulator) — udid $DEVICE_ID"
 xcodebuild build -project Capture.xcodeproj -scheme Capture \
-  -configuration Debug -sdk iphonesimulator -destination "id=$DEVICE_ID" \
+  -configuration Debug -sdk iphonesimulator \
+  -destination "platform=iOS Simulator,id=$DEVICE_ID" \
   -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
 
 APP="$DERIVED/Build/Products/Debug-iphonesimulator/Capture.app"

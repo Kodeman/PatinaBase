@@ -56,8 +56,8 @@ sim_destination() {
     "" \
     'Retire it with the lane: xcrun simctl delete "$CAPTURE_SIM_UDID"' \
     "" \
-    "CAPTURE_SIM (a device NAME) is no longer read by this gate; capture-run.sh" \
-    "and capture-shots.sh still take it." >&2
+    "CAPTURE_SIM (a device NAME) is no longer read — not by this gate, and not" \
+    "by capture-run.sh or capture-shots.sh, which take CAPTURE_SIM_UDID too." >&2
   return 2
 }
 
