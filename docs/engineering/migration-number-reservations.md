@@ -328,6 +328,13 @@ Reserved 2026-09-23 by W0-16. Verified free at reservation time: `main` tip is
 `get_project_ffe_extract_upload`'s `content_type` filter (00437), adds `'photo'`
 to `project_ffe_import_batches.source_kind` (00434) and derives `source_kind`
 from the upload rather than the `'pdf'` literal.
+**Written** by T6-02 (SQ-204). It redefines the public
+`stage_project_ffe_document_extraction` from the 00437 body, which 00661 then
+renames to `_00661_impl`. It also redefines `_commit_project_ffe_import_00446_impl`
+from the 00439 body, so that a committed `photo` row is placed as
+`document-extraction` and not `spreadsheet-import`. A later redefinition of
+`get_project_ffe_extract_upload` or `_commit_project_ffe_import_00446_impl`
+starts from 00660.
 
 00661 `ffe_extract_commercial_confirmation` — ruling D7's maker/SKU/price/
 currency, staged as unconfirmed envelopes that the existing `validation_errors`

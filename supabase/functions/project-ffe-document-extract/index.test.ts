@@ -1,14 +1,26 @@
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   EXTRACTION_TOOL_NAME,
+  MAX_IMAGE_BYTES,
   MAX_PDF_BYTES,
   base64Chunks,
   extractionStageArgs,
   extractionPrompt,
   extractionTool,
+  maxSourceBytes,
   parseExtractRequest,
   parseExtractSource,
   parseExtractionBatchResult,
+  registerSourceDocument,
+  sha256Hex,
+  sniffSourceContentType,
+  sourceContentBlock,
+  sourceKindFor,
+  sourceRegistrationArgs,
+  SourceRegistrationError,
+  sourceRegistrationError,
+  type SourceRegistrationDependencies,
+  type SourceRequest,
   validateExtraction,
   validateExtractionV2,
 } from "./lib.ts";
@@ -208,4 +220,228 @@ Deno.test("PDF base64 encoding roundtrips across multiple bounded chunks", () =>
   for (let index = 0; index < bytes.length; index++) bytes[index] = index % 251;
   const decoded = Uint8Array.from(atob(base64Chunks(bytes)), (value) => value.charCodeAt(0));
   assertEquals(decoded, bytes);
+});
+
+// ── Image branch (Contract A §A.3) and source registration (Contract B) ─────
+
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+const WEBP = new TextEncoder().encode("RIFF$\u0000\u0000\u0000WEBPVP8 ");
+const PDF = new TextEncoder().encode("%PDF-1.7\n%âã\n1 0 obj\n");
+const bufferOf = (bytes: Uint8Array) => bytes.slice().buffer;
+const sourcePath = async (bytes: Uint8Array, ext: string) =>
+  `${projectId}/source-documents/${await sha256Hex(bufferOf(bytes))}.${ext}`;
+const sourceRequest = (path: string): SourceRequest => ({
+  source: { bucket: "project-ffe-working", path },
+  projectId,
+  schemaVersion: 2,
+});
+const photoRow = { ...v2Row, provenance: { page: 1, confidence: 0.8, sourceKind: "photo" } };
+
+// A fake storage object plus a registration RPC that behaves like 00455:
+// ON CONFLICT (bucket, path) DO NOTHING, returning the existing asset as reused.
+function fakeSource(bytes: Uint8Array | null, storedContentType: string) {
+  const calls: Array<ReturnType<typeof sourceRegistrationArgs>> = [];
+  const assets = new Map<string, string>();
+  const dependencies: SourceRegistrationDependencies = {
+    download: async () => bytes ? { bytes: bufferOf(bytes), storedContentType } : null,
+    register: async (args) => {
+      calls.push(args);
+      const reused = assets.has(args.p_path);
+      if (!reused) assets.set(args.p_path, `123e4567-e89b-42d3-a456-42661417${String(assets.size).padStart(4, "0")}`);
+      return {
+        failed: false,
+        data: {
+          sourceAssetId: assets.get(args.p_path), projectId: args.p_project_id, actorId: args.p_actor_id,
+          ffeItemId: null, bucket: args.p_bucket, path: args.p_path, checksumSha256: args.p_checksum_sha256,
+          sizeBytes: args.p_size_bytes, contentType: args.p_content_type, mediaKind: args.p_media_kind, reused,
+        },
+      };
+    },
+  };
+  return { calls, dependencies };
+}
+
+const refusal = async (promise: Promise<unknown>) => {
+  const error = await assertRejects(() => promise, SourceRegistrationError);
+  return [(error as SourceRegistrationError).code, (error as SourceRegistrationError).status];
+};
+
+Deno.test("a camera request names a content-addressed source path instead of an asset", async () => {
+  const path = await sourcePath(JPEG, "jpg");
+  assertEquals(
+    parseExtractRequest({ projectId, source: { bucket: "project-ffe-working", path }, schemaVersion: 2 }),
+    sourceRequest(path),
+  );
+  const source = { bucket: "project-ffe-working", path };
+  assertEquals(parseExtractRequest({ projectId, assetId, source }), null, "assetId and source are exclusive");
+  assertEquals(parseExtractRequest({ projectId }), null, "one of assetId or source is required");
+  assertEquals(parseExtractRequest({ projectId, source: { ...source, bucket: "project-review-media" } }), null);
+  assertEquals(parseExtractRequest({ projectId, source: { ...source, contentType: "image/jpeg" } }), null, "the client never names the type");
+  assertEquals(parseExtractRequest({ projectId, source: { ...source, path: 7 } }), null);
+  const otherProject = path.replace(projectId, assetId);
+  for (const bad of [
+    otherProject, `${projectId}/source-documents/../${path.split("/").pop()}`,
+    `${projectId}/documents/spec.pdf`, path.replace(/[0-9a-f]{64}/, "A".repeat(64)),
+    path.replace(".jpg", ".heic"), `${path}?x=1`, `https://evil.test/${path}`,
+  ]) {
+    assertEquals(parseExtractRequest({ projectId, source: { ...source, path: bad } }), "invalid_source_path", bad);
+  }
+});
+
+Deno.test("the sniff reads the four accepted types from their magic bytes only", () => {
+  assertEquals(sniffSourceContentType(bufferOf(PDF)), "application/pdf");
+  assertEquals(sniffSourceContentType(bufferOf(JPEG)), "image/jpeg");
+  assertEquals(sniffSourceContentType(bufferOf(PNG)), "image/png");
+  assertEquals(sniffSourceContentType(bufferOf(WEBP)), "image/webp");
+  assertEquals(sniffSourceContentType(bufferOf(new TextEncoder().encode("RIFF$\u0000\u0000\u0000WAVEfmt "))), null);
+  assertEquals(sniffSourceContentType(bufferOf(new TextEncoder().encode("GIF89a"))), null);
+  assertEquals(sniffSourceContentType(new ArrayBuffer(0)), null);
+});
+
+Deno.test("an image upload extracts: registered, sent as an image block, staged as photo rows", async () => {
+  const path = await sourcePath(JPEG, "jpg");
+  const { calls, dependencies } = fakeSource(JPEG, "image/jpeg");
+  const { registration, bytes } = await registerSourceDocument(sourceRequest(path), actorId, dependencies);
+  assertEquals(calls, [{
+    p_project_id: projectId, p_actor_id: actorId, p_bucket: "project-ffe-working", p_path: path,
+    p_checksum_sha256: await sha256Hex(bufferOf(JPEG)), p_size_bytes: JPEG.length,
+    p_content_type: "image/jpeg", p_media_kind: "source_document", p_ffe_item_id: null,
+  }]);
+  assertEquals(registration.mediaKind, "source_document");
+  assertEquals(registration.contentType, "image/jpeg");
+  assertEquals(registration.reused, false);
+  assertEquals(registration.sourceRegistrationVersion, 1);
+  // The manifest get_project_ffe_extract_upload returns for that asset (00660).
+  const manifest = parseExtractSource({
+    projectId, assetId: registration.assetId, actorId, bucket: "project-ffe-working", path,
+    checksumSha256: registration.checksumSha256, sizeBytes: registration.sizeBytes, contentType: "image/jpeg",
+  }, { projectId, assetId: registration.assetId }, actorId);
+  assertEquals(manifest?.contentType, "image/jpeg");
+  assertEquals(sourceKindFor(manifest!.contentType), "photo");
+  assertEquals(maxSourceBytes(manifest!.contentType), MAX_IMAGE_BYTES);
+  assertEquals(sourceContentBlock(manifest!.contentType, new Uint8Array(bytes)), {
+    type: "image",
+    source: { type: "base64", media_type: "image/jpeg", data: base64Chunks(JPEG) },
+  });
+  const extraction = validateExtractionV2({ rows: [photoRow] }, "photo");
+  assertEquals(extraction?.rows[0].provenance.sourceKind, "photo");
+  assertEquals(
+    extractionStageArgs({ projectId, assetId: registration.assetId }, actorId, registration.checksumSha256, extraction!.rows),
+    {
+      p_project_id: projectId, p_asset_id: registration.assetId, p_actor_id: actorId,
+      p_file_hash: registration.checksumSha256, p_rows: extraction!.rows,
+    },
+  );
+});
+
+Deno.test("a photograph has no pages: its rows are pinned to page 1", () => {
+  const page2 = { ...photoRow, pageNumber: 2, provenance: { ...photoRow.provenance, page: 2 } };
+  assertEquals(validateExtractionV2({ rows: [page2] }, "photo"), null);
+  assertEquals(validateExtraction({ rows: [{ ...row, pageNumber: 2, provenance: { page: 2, confidence: 0.8 } }] }, "photo"), null);
+  assertEquals(validateExtraction({ rows: [row] }, "photo")?.rows, [row]);
+  assertEquals(validateExtractionV2({ rows: [{ ...page2, provenance: { ...page2.provenance, sourceKind: "pdf" } }] }, "pdf")?.rows.length, 1);
+});
+
+Deno.test("a PDF uploaded as an image is refused by the sniff, before registration", async () => {
+  const path = await sourcePath(PDF, "jpg");
+  const renamed = fakeSource(PDF, "image/jpeg");
+  assertEquals(await refusal(registerSourceDocument(sourceRequest(path), actorId, renamed.dependencies)), ["unsupported_source_type", 415]);
+  assertEquals(renamed.calls.length, 0, "nothing is registered");
+  const relabelled = fakeSource(JPEG, "image/png");
+  assertEquals(
+    await refusal(registerSourceDocument(sourceRequest(await sourcePath(JPEG, "png")), actorId, relabelled.dependencies)),
+    ["unsupported_source_type", 415],
+    "sniffed bytes disagree with the stored metadata",
+  );
+  const unknown = fakeSource(new TextEncoder().encode("GIF89a...."), "image/gif");
+  assertEquals(
+    await refusal(registerSourceDocument(sourceRequest(await sourcePath(new TextEncoder().encode("GIF89a...."), "jpg")), actorId, unknown.dependencies)),
+    ["unsupported_source_type", 415],
+  );
+  // The same PDF bytes under their own type still register, as a document.
+  const honest = fakeSource(PDF, "application/pdf; charset=binary");
+  const { registration } = await registerSourceDocument(sourceRequest(await sourcePath(PDF, "pdf")), actorId, honest.dependencies);
+  assertEquals(registration.contentType, "application/pdf");
+  assertEquals(sourceKindFor(registration.contentType), "pdf");
+  assertEquals(sourceContentBlock(registration.contentType, PDF).type, "document");
+});
+
+Deno.test("registering the same upload twice is idempotent", async () => {
+  const path = await sourcePath(PNG, "png");
+  const { calls, dependencies } = fakeSource(PNG, "image/png");
+  const first = await registerSourceDocument(sourceRequest(path), actorId, dependencies);
+  const second = await registerSourceDocument(sourceRequest(path), actorId, dependencies);
+  assertEquals(first.registration.reused, false);
+  assertEquals(second.registration.reused, true);
+  assertEquals(second.registration.assetId, first.registration.assetId);
+  assertEquals(calls[1], calls[0], "the retry sends the identical registration");
+});
+
+Deno.test("the source path must be the content address of the bytes it holds", async () => {
+  const { calls, dependencies } = fakeSource(JPEG, "image/jpeg");
+  const wrongDigest = await sourcePath(PNG, "jpg");
+  assertEquals(await refusal(registerSourceDocument(sourceRequest(wrongDigest), actorId, dependencies)), ["invalid_source_path", 422]);
+  assertEquals(calls.length, 0);
+});
+
+Deno.test("registration refuses absent and oversize objects by the branch cap", async () => {
+  const absent = fakeSource(null, "");
+  assertEquals(await refusal(registerSourceDocument(sourceRequest(await sourcePath(JPEG, "jpg")), actorId, absent.dependencies)), ["source_unavailable", 404]);
+  const big = new Uint8Array(MAX_IMAGE_BYTES + 1);
+  big.set(JPEG);
+  const oversize = fakeSource(big, "image/jpeg");
+  assertEquals(await refusal(registerSourceDocument(sourceRequest(await sourcePath(big, "jpg")), actorId, oversize.dependencies)), ["source_too_large", 413]);
+  assertEquals(oversize.calls.length, 0);
+  const pdf = new Uint8Array(MAX_IMAGE_BYTES + 1);
+  pdf.set(PDF);
+  const { registration } = await registerSourceDocument(sourceRequest(await sourcePath(pdf, "pdf")), actorId, fakeSource(pdf, "application/pdf").dependencies);
+  assertEquals(registration.sizeBytes, MAX_IMAGE_BYTES + 1, "a PDF keeps its 25 MiB cap");
+  assertEquals(maxSourceBytes("application/pdf"), MAX_PDF_BYTES);
+});
+
+Deno.test("registration maps 00455's refusals to Contract B §B.8 codes", async () => {
+  const cases: Array<[string | undefined, string, number]> = [
+    ["42501", "source_not_authorized", 403],
+    ["23514", "invalid_source_path", 422],
+    ["22000", "source_registration_conflict", 409],
+    ["23000", "source_item_mismatch", 409],
+    ["XX000", "source_registration_failed", 500],
+    [undefined, "source_registration_failed", 500],
+  ];
+  for (const [sqlState, code, status] of cases) {
+    const error = sourceRegistrationError(sqlState);
+    assertEquals([error.code, error.status], [code, status], String(sqlState));
+    const refused: SourceRegistrationDependencies = {
+      download: async () => ({ bytes: bufferOf(JPEG), storedContentType: "image/jpeg" }),
+      register: async () => ({ data: null, sqlState, failed: true }),
+    };
+    assertEquals(await refusal(registerSourceDocument(sourceRequest(await sourcePath(JPEG, "jpg")), actorId, refused)), [code, status]);
+  }
+});
+
+Deno.test("a registration result that disagrees with what was sent is not authoritative", async () => {
+  const path = await sourcePath(JPEG, "jpg");
+  for (const patch of [{ mediaKind: "board_reference" }, { checksumSha256: "c".repeat(64) }, { contentType: "image/png" }, { reused: "no" }, { ffeItemId: assetId }]) {
+    const { dependencies } = fakeSource(JPEG, "image/jpeg");
+    const register = dependencies.register;
+    dependencies.register = async (args) => {
+      const result = await register(args);
+      return { ...result, data: { ...(result.data as Record<string, unknown>), ...patch } };
+    };
+    assertEquals(await refusal(registerSourceDocument(sourceRequest(path), actorId, dependencies)), ["invalid_source_registration", 502], JSON.stringify(patch));
+  }
+});
+
+Deno.test("the extract manifest accepts the four registered types and nothing else", () => {
+  const manifest = {
+    projectId, assetId, actorId, bucket: "project-ffe-working", path: `${projectId}/source-documents/${"a".repeat(64)}.webp`,
+    checksumSha256: "a".repeat(64), sizeBytes: 1024, contentType: "image/webp",
+  };
+  for (const contentType of ["application/pdf", "image/jpeg", "image/png", "image/webp"]) {
+    assertEquals(parseExtractSource({ ...manifest, contentType }, { projectId, assetId }, actorId)?.contentType, contentType);
+  }
+  for (const contentType of ["image/heic", "image/gif", "IMAGE/JPEG", null]) {
+    assertEquals(parseExtractSource({ ...manifest, contentType }, { projectId, assetId }, actorId), null, String(contentType));
+  }
 });
