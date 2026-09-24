@@ -1,5 +1,5 @@
 {
-  "originHash" : "a2b654e3a5c1478a21279416e6ac692a4b3083ccc8350fdd74d2faa20cb4d1e8",
+  "originHash" : "1b4a97f907623f92055fbc08cf09a2191cb901fce86fd2dc7bcbca0c57f9f097",
   "pins" : [
     {
       "identity" : "posthog-ios",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase/supabase-swift",
       "state" : {
-        "revision" : "27f31bfb7be836a33c89f6636ef69a2cfff9a3fd",
-        "version" : "2.51.0"
+        "revision" : "40344fb3a7007d772218c6ddf6bca9febd8cb226",
+        "version" : "2.55.2"
       }
     },
     {

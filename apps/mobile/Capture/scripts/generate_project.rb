@@ -16,8 +16,17 @@ ROOT = File.expand_path('..', __dir__)
 PROJECT_PATH = File.join(ROOT, 'Capture.xcodeproj')
 DEPLOYMENT = '26.0'
 
-# Remove any prior project so generation is deterministic.
+# Remove any prior project so generation is deterministic — except the tracked
+# SwiftPM lockfile, which is carried across the wipe. Deleting it made every
+# gate run re-resolve from scratch, so two machines could build Field against
+# different dependency graphs without git ever showing a difference.
+RESOLVED_PATH = File.join(PROJECT_PATH, 'project.xcworkspace', 'xcshareddata', 'swiftpm', 'Package.resolved')
+resolved = File.exist?(RESOLVED_PATH) ? File.binread(RESOLVED_PATH) : nil
 FileUtils.rm_rf(PROJECT_PATH)
+if resolved
+  FileUtils.mkdir_p(File.dirname(RESOLVED_PATH))
+  File.binwrite(RESOLVED_PATH, resolved)
+end
 project = Xcodeproj::Project.new(PROJECT_PATH, false, 77)
 
 def swift_files(dir)
@@ -216,10 +225,10 @@ end
 # CaptureKit / CaptureKitMocks / CaptureTests must NOT link these. supabase-swift
 # powers real auth/session/persistence (Phase 1a); posthog-ios is linked now and
 # consumed in Phase 1b (analytics).
-def link_remote_package(project, target, url:, minimum_version:, product:)
+def link_remote_package(project, target, url:, requirement:, product:)
   ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
   ref.repositoryURL = url
-  ref.requirement = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => minimum_version }
+  ref.requirement = requirement
   project.root_object.package_references << ref
 
   dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
@@ -233,12 +242,17 @@ def link_remote_package(project, target, url:, minimum_version:, product:)
   ref
 end
 
+# supabase-swift is pinned EXACTLY, to the same version as
+# Patina.xcodeproj's requirement: the two apps share one workspace
+# (Mobile.xcworkspace) and one Supabase backend. Change both together.
 link_remote_package(project, app,
                     url: 'https://github.com/supabase/supabase-swift',
-                    minimum_version: '2.40.0', product: 'Supabase')
+                    requirement: { 'kind' => 'exactVersion', 'version' => '2.55.2' },
+                    product: 'Supabase')
 link_remote_package(project, app,
                     url: 'https://github.com/PostHog/posthog-ios.git',
-                    minimum_version: '3.48.0', product: 'PostHog')
+                    requirement: { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => '3.48.0' },
+                    product: 'PostHog')
 
 # ── Local SPM packages ──────────────────────────────────────────────────────
 # PatinaDesignKit (R27 Wave 0): the shared design-system package at
