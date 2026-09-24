@@ -5,11 +5,9 @@
 //  access card opens from its head. Mock mode, so it runs on any Simulator with
 //  no network and the Okonkwo fixture behind it.
 //
-//  Run: xcodebuild test -project Capture.xcodeproj -scheme Capture \
-//       -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' \
-//       -only-testing:CaptureUITests CODE_SIGNING_ALLOWED=NO
+//  Run: CAPTURE_SIM_UDID=<this lane's clone> scripts/capture-gate.sh ui
 //  (`capture-gate.sh test` runs the CaptureKit logic bundle; a UI test needs an
-//  app host, so it lives in the app scheme.)
+//  app host, so it lives in the app scheme, which the `ui` tier runs.)
 
 import XCTest
 

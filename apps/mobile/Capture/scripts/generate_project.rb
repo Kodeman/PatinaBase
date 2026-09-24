@@ -191,7 +191,7 @@ tests.add_resources([fixtures_ref])
 # W5: UI tests (XCUITest, app-hosted). The logic bundle above cannot drive a
 # screen, so the one walk that proves PR1 opens and PR3 opens from it lives here.
 # `capture-gate.sh test` still runs the CaptureKit logic bundle; this target runs
-# through the Capture scheme.
+# through the Capture scheme (`capture-gate.sh ui`).
 ui_tests = project.new_target(:ui_test_bundle, 'CaptureUITests', :ios, DEPLOYMENT)
 ui_tests.build_configurations.each do |c|
   common!(c)
