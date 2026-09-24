@@ -422,9 +422,6 @@ public enum FieldConsentSentence {
         "other": "Opted out"
     ]
 
-    private static let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
     /// The sentence, or nil where the record cannot say one honestly.
     /// `status` is the word the card prints — `identity_consent_status()`'s,
     /// never re-derived here.
@@ -447,16 +444,12 @@ public enum FieldConsentSentence {
         return table[raw] ?? fallback
     }
 
-    /// "2026-10-10T15:00:00+00:00" → "10 Oct 2026". The leading date as
-    /// written, with no zone arithmetic anywhere near it.
-    static func shortDate(_ raw: String?) -> String? {
-        guard let raw, raw.count >= 10 else { return nil }
-        let head = raw.prefix(10).split(separator: "-")
-        guard head.count == 3,
-              head[0].count == 4, let year = Int(head[0]),
-              let month = Int(head[1]), (1...12).contains(month),
-              let day = Int(head[2]), (1...31).contains(day) else { return nil }
-        return "\(day) \(months[month - 1]) \(year)"
+    /// `consented_at` / `opt_out_at` are `timestamptz` — instants — so the
+    /// line prints the day that instant fell on where this phone is:
+    /// "2026-10-10T01:00:00+00:00" reads "9 Oct 2026" in Chicago.
+    static func shortDate(_ raw: String?, in calendar: Calendar = .current) -> String? {
+        guard let raw, let day = FieldPeopleDates.day(ofInstant: raw, in: calendar) else { return nil }
+        return FieldPeopleDates.shortDay(day)
     }
 }
 
@@ -511,6 +504,8 @@ public enum FieldPeopleDates {
 
     /// "2027-08-13" → that calendar day. Nil for anything else.
     public static func day(_ raw: String) -> Date? { wireDayFormatter.date(from: raw) }
+    /// A calendar day back onto the wire as a Postgres `date`, "2027-08-13".
+    public static func wireDay(_ day: Date) -> String { wireDayFormatter.string(from: day) }
     /// A calendar day as "13 Aug 2027".
     public static func shortDay(_ day: Date) -> String { shortDayFormatter.string(from: day) }
     /// A calendar day as "13 August 2027".
@@ -526,6 +521,23 @@ public enum FieldPeopleDates {
     public static func today(_ now: Date, in calendar: Calendar = .current) -> Date {
         let parts = calendar.dateComponents([.year, .month, .day], from: now)
         return dayCalendar.date(from: parts) ?? now
+    }
+
+    private static let instantFractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private static let instantPlain = ISO8601DateFormatter()
+
+    /// A `timestamptz` off the wire ("2026-10-10T01:00:00.123456+00:00") →
+    /// the day it fell on in `calendar`'s zone — the phone's by default — as a
+    /// calendar day. Its leading "yyyy-MM-dd" is the UTC day, never the
+    /// phone's. Nil for anything that is not an instant.
+    public static func day(ofInstant raw: String, in calendar: Calendar = .current) -> Date? {
+        guard let instant = instantFractional.date(from: raw) ?? instantPlain.date(from: raw)
+        else { return nil }
+        return today(instant, in: calendar)
     }
 
     /// The offline line: what a cached copy says about its own age. Ink, never

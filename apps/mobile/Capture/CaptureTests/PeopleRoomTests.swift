@@ -26,6 +26,18 @@ private func localDay(_ string: String) -> Date {
     return formatter.date(from: string) ?? .distantPast
 }
 
+/// A `timestamptz` exactly as PostgREST hands it over: UTC, microseconds,
+/// "+00:00" — "2026-10-10T02:00:00.000000+00:00".
+private func wireStamp(_ instant: Date) -> String {
+    ISO8601DateFormatter().string(from: instant)
+        .replacingOccurrences(of: "Z", with: ".000000+00:00")
+}
+
+/// 7 pm on 9 Oct 2026 on `phone`'s calendar — the next UTC day west of UTC.
+private func sevenPM(on phone: Calendar) throws -> Date {
+    try #require(phone.date(from: DateComponents(year: 2026, month: 10, day: 9, hour: 19)))
+}
+
 private func seat(
     _ id: String,
     stage: String? = "On the job",
@@ -287,17 +299,23 @@ private func consentRecord(source: String? = nil, consentedAt: String? = nil,
                                 projectName: projectName)
 }
 
+/// Noon on `string`'s day in the runner's own zone, as the wire stamps it, so
+/// the day the sentence prints is that day wherever the gate runs.
+private func noonStamp(_ string: String) -> String {
+    wireStamp(localDay(string).addingTimeInterval(12 * 3_600))
+}
+
 struct FieldConsentSentenceTests {
     @Test func aGrantReadsAsTheSourceTheDateAndTheJob() {
         #expect(FieldConsentSentence.compose(
             status: "granted",
             record: consentRecord(source: "written",
-                                  consentedAt: "2025-05-02T15:00:00+00:00",
+                                  consentedAt: noonStamp("2025-05-02"),
                                   projectName: "Lindqvist kitchen"))
             == "Written consent, 2 May 2025, on the Lindqvist kitchen.")
         #expect(FieldConsentSentence.compose(
             status: "granted",
-            record: consentRecord(source: "verbal", consentedAt: "2026-10-13",
+            record: consentRecord(source: "verbal", consentedAt: noonStamp("2026-10-13"),
                                   projectName: "Okonkwo residence"))
             == "Verbal consent, 13 Oct 2026, on the Okonkwo residence.")
     }
@@ -308,7 +326,7 @@ struct FieldConsentSentenceTests {
             record: consentRecord(source: "written",
                                   consentedAt: "2025-05-02T15:00:00+00:00",
                                   optOutSource: "inbound_sms",
-                                  optOutAt: "2025-12-03T09:00:00+00:00",
+                                  optOutAt: noonStamp("2025-12-03"),
                                   projectName: "Lindqvist kitchen"))
             == "Opted out by text, 3 Dec 2025, on the Lindqvist kitchen.")
     }
@@ -330,19 +348,29 @@ struct FieldConsentSentenceTests {
 
     @Test func anUnnamedSourceStillSaysTheFactItCanSay() {
         #expect(FieldConsentSentence.compose(
-            status: "granted", record: consentRecord(consentedAt: "2026-01-09"))
+            status: "granted", record: consentRecord(consentedAt: noonStamp("2026-01-09")))
             == "Recorded consent, 9 Jan 2026.")
         #expect(FieldConsentSentence.compose(
             status: "opted_out",
-            record: consentRecord(optOutAt: "2026-01-09", projectName: "  "))
+            record: consentRecord(optOutAt: noonStamp("2026-01-09"), projectName: "  "))
             == "Opted out, 9 Jan 2026.")
     }
 
-    /// The date is the one the studio wrote down, not the one the device's
-    /// zone would render: 01:00Z is the previous evening in Chicago.
-    @Test func theDateIsTheRecordsOwnAndNotTheDevicesZone() {
-        #expect(FieldConsentSentence.shortDate("2026-10-10T01:00:00+00:00")
-            == "10 Oct 2026")
+    /// consented_at / opt_out_at are instants: the line prints the day it was
+    /// where the phone is. The zone is pinned here, not taken from the runner.
+    /// In Los Angeles 7 pm is already the 10th in UTC — the day the wire
+    /// string leads with, and the day this line used to print.
+    @Test(arguments: ["America/Los_Angeles", "UTC", "Pacific/Auckland"])
+    func theDateIsTheDayItWasWhereThePhoneIs(zone: String) throws {
+        var phone = Calendar(identifier: .gregorian)
+        phone.timeZone = try #require(TimeZone(identifier: zone))
+        let wire = wireStamp(try sevenPM(on: phone))
+
+        #expect(FieldConsentSentence.shortDate(wire, in: phone) == "9 Oct 2026")
+        if zone == "America/Los_Angeles" { #expect(wire.hasPrefix("2026-10-10T02:00")) }
+    }
+
+    @Test func somethingThatIsNotAnInstantHasNoDate() {
         #expect(FieldConsentSentence.shortDate("not a date") == nil)
         #expect(FieldConsentSentence.shortDate(nil) == nil)
     }
@@ -537,5 +565,19 @@ struct FieldCalendarDayTests {
         #expect(FieldPeopleDates.today(noonThere, in: phone) == wire)
         let week = FieldRosterWeek.containing(noonThere, calendar: phone)
         #expect(week.start <= wire && wire < week.end)
+    }
+
+    /// Receiving's `delivered_date` write-back: a `date` taken from the
+    /// inspection instant is this phone's day at that instant, never the UTC
+    /// day the `inspected_at` string leads with.
+    @Test(arguments: ["America/Los_Angeles", "UTC", "Pacific/Auckland"])
+    func anInstantIsWrittenBackAsThePhonesOwnDay(zone: String) throws {
+        var phone = Calendar(identifier: .gregorian)
+        phone.timeZone = try #require(TimeZone(identifier: zone))
+        let inspectedAt = wireStamp(try sevenPM(on: phone))
+
+        let day = try #require(FieldPeopleDates.day(ofInstant: inspectedAt, in: phone))
+        #expect(FieldPeopleDates.wireDay(day) == "2026-10-09")
+        #expect(FieldPeopleDates.day(ofInstant: "2026-10-09", in: phone) == nil)
     }
 }
