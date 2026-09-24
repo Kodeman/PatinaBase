@@ -9,7 +9,7 @@ import SwiftUI
 import CaptureKit
 
 struct S4SavedTerminalScreen: View {
-    let specimen: Specimen?
+    let specimen: Piece?
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 

@@ -33,7 +33,7 @@ struct LibrarySearchScreen: View {
 
     @State private var queryText = ""
     @State private var scope: Scope = .all
-    @State private var results: [Specimen] = []
+    @State private var results: [Piece] = []
     @State private var venue: VenueStamp?
     @State private var activeProjectName: String?
     @FocusState private var searchFocused: Bool
@@ -125,7 +125,7 @@ struct LibrarySearchScreen: View {
 
     // MARK: dedupe banner
 
-    private func dedupeBanner(_ match: Specimen) -> some View {
+    private func dedupeBanner(_ match: Piece) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "diamond.fill")
                 .font(.caption2)
@@ -179,7 +179,7 @@ struct LibrarySearchScreen: View {
         }
     }
 
-    private func resultRow(_ s: Specimen) -> some View {
+    private func resultRow(_ s: Piece) -> some View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 8)
                 .fill(CaptureColor.paper2)
@@ -205,7 +205,7 @@ struct LibrarySearchScreen: View {
         .contentShape(Rectangle())
     }
 
-    private func subtitle(_ s: Specimen) -> String {
+    private func subtitle(_ s: Piece) -> String {
         let place = s.maker ?? s.venue?.placemarkName ?? s.venue?.projectName ?? "—"
         let tag: String
         switch s.destination {
@@ -216,7 +216,7 @@ struct LibrarySearchScreen: View {
         return "\(place) · \(tag)"
     }
 
-    @ViewBuilder private func destinationBadge(_ s: Specimen) -> some View {
+    @ViewBuilder private func destinationBadge(_ s: Piece) -> some View {
         let (text, color): (String, Color) = {
             switch s.destination {
             case .library: return ("library", CaptureColor.verdigris)
@@ -236,7 +236,7 @@ struct LibrarySearchScreen: View {
     // MARK: search + scope logic
 
     /// A library match whose title/maker contains the full query → dedupe warning.
-    private var duplicate: Specimen? {
+    private var duplicate: Piece? {
         let q = queryText.trimmingCharacters(in: .whitespaces)
         guard q.count >= 2 else { return nil }
         return results.first {
@@ -276,7 +276,7 @@ struct LibrarySearchScreen: View {
             ?? localSearch(SpecimenQuery()).compactMap { $0.venue?.projectName }.first
     }
 
-    private func localSearch(_ query: SpecimenQuery) -> [Specimen] {
+    private func localSearch(_ query: SpecimenQuery) -> [Piece] {
         switch localListScope {
         case .globalFixtures:
             return store.search(query)
@@ -309,7 +309,7 @@ import CaptureKitMocks
         s.status = status
         s.venue = venue
         let p = CapturePhoto(filename: "\(title).heic", width: 1170, height: 1560, isPrimary: true)
-        p.specimen = s
+        p.piece = s
         s.photos.append(p)
     }
     let hp = VenueStamp(projectName: "Walbridge Res.", placemarkName: "High Point · Showroom 214")

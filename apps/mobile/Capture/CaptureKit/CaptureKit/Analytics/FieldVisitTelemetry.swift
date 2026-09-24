@@ -114,7 +114,7 @@ public enum FieldVisitTelemetry {
     /// `field_captures.project_room_id`, and a typed room name can exist with
     /// no id.
     @MainActor
-    public static func placement(_ specimen: Specimen, basis: String,
+    public static func placement(_ specimen: Piece, basis: String,
                                  source: PlacementSource) -> Event {
         specimen.isUnplaced
             ? captureUnplaced(source: source)

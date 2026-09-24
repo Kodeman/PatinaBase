@@ -5,6 +5,7 @@
 //  Group container so the Share and Widget extensions read/write the same DB
 //  and the same on-disk media directory.
 
+import CoreData
 import Foundation
 import SwiftData
 import os
@@ -87,7 +88,7 @@ public final class CaptureStore {
 
     /// The newest version in `CaptureMigrationPlan` (CaptureSchema.swift).
     /// Containers are built from the plan, never from this schema alone.
-    public static let schema = Schema(versionedSchema: CaptureSchemaV1.self)
+    public static let schema = Schema(versionedSchema: CaptureSchemaV2.self)
 
     public let container: ModelContainer
     public var context: ModelContext { container.mainContext }
@@ -114,9 +115,37 @@ public final class CaptureStore {
 
     /// The one place a Field `ModelContainer` is built: from the migration
     /// plan, so an installed store crosses a schema change through its stage.
+    /// Then it finishes any V1→V2 carry still pending beside the store — the
+    /// stage's own open, or a later one after a launch that died mid-carry.
+    ///
+    /// A store written before the plan existed matches no version in it, and
+    /// SwiftData infers no migration into a custom stage, so that open fails.
+    /// When the store still holds V1's Specimen table, it is first opened as
+    /// V1 alone, which infers its way up to V1 as the V1-only plan did, and
+    /// then crosses V1→V2 like any V1 store.
     public static func makeContainer(configuration: ModelConfiguration) throws -> ModelContainer {
-        try ModelContainer(for: schema, migrationPlan: CaptureMigrationPlan.self,
-                           configurations: [configuration])
+        let container: ModelContainer
+        do {
+            container = try ModelContainer(for: schema, migrationPlan: CaptureMigrationPlan.self,
+                                           configurations: [configuration])
+        } catch where holdsSpecimenTable(configuration) {
+            _ = try ModelContainer(for: Schema(versionedSchema: CaptureSchemaV1.self),
+                                   configurations: [configuration])
+            container = try ModelContainer(for: schema, migrationPlan: CaptureMigrationPlan.self,
+                                           configurations: [configuration])
+        }
+        PieceMigrationCarry.restorePending(into: container, storeURL: configuration.url)
+        return container
+    }
+
+    /// The store on disk has V1's Specimen table and not V2's Piece table.
+    private static func holdsSpecimenTable(_ configuration: ModelConfiguration) -> Bool {
+        guard !configuration.isStoredInMemoryOnly,
+              let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(
+                type: .sqlite, at: configuration.url),
+              let hashes = metadata[NSStoreModelVersionHashesKey] as? [String: Any]
+        else { return false }
+        return hashes["Specimen"] != nil && hashes["Piece"] == nil
     }
 
     public static func inMemory() throws -> CaptureStore {
@@ -358,11 +387,14 @@ public final class CaptureStore {
 
     /// The SQLite trio for one store URL: the store, its write-ahead log, and
     /// its shared-memory file. A reset that took only the first would leave a
-    /// WAL that reattaches to the new store.
+    /// WAL that reattaches to the new store. Plus a V1→V2 carry still pending
+    /// beside it: until restored, those rows are part of this store, and left
+    /// behind they would be restored into the fresh one without their photos.
     static func storeFileTrio(at url: URL) -> [URL] {
         [url,
          URL(fileURLWithPath: url.path + "-wal"),
-         URL(fileURLWithPath: url.path + "-shm")]
+         URL(fileURLWithPath: url.path + "-shm"),
+         PieceMigrationCarry.carryURL(beside: url)]
     }
 
     static func storeFilesExist(at url: URL) -> Bool {
@@ -471,26 +503,26 @@ public final class CaptureStore {
     // ── CRUD / outbox ──
     @discardableResult
     public func newDraft(sessionID: UUID? = nil,
-                         owner: CaptureOwnerIdentity? = nil) -> Specimen {
-        let s = Specimen(captureSessionID: sessionID, owner: owner)
+                         owner: CaptureOwnerIdentity? = nil) -> Piece {
+        let s = Piece(captureSessionID: sessionID, owner: owner)
         context.insert(s)
         return s
     }
 
-    public func delete(_ specimen: Specimen) { context.delete(specimen) }
+    public func delete(_ specimen: Piece) { context.delete(specimen) }
 
     public func save() throws {
         if context.hasChanges { try context.save() }
     }
 
-    public func specimen(id: UUID) -> Specimen? {
-        let descriptor = FetchDescriptor<Specimen>(predicate: #Predicate { $0.id == id })
+    public func specimen(id: UUID) -> Piece? {
+        let descriptor = FetchDescriptor<Piece>(predicate: #Predicate { $0.id == id })
         return try? context.fetch(descriptor).first
     }
 
     /// Owner-scoped lookup for real upload and user-facing paths. Legacy rows
     /// (nil owner) and mismatches intentionally resolve as absent.
-    public func specimen(id: UUID, owner: CaptureOwnerIdentity) -> Specimen? {
+    public func specimen(id: UUID, owner: CaptureOwnerIdentity) -> Piece? {
         guard let specimen = specimen(id: id),
               owner.matches(
                 userID: specimen.ownerUserID,
@@ -790,16 +822,16 @@ public final class CaptureStore {
 
     /// A scoped visit returns all of its captures, including queued transfers.
     /// The nil legacy query remains drafts + ready for older callers.
-    public func session(visitID: UUID? = nil) -> [Specimen] {
+    public func session(visitID: UUID? = nil) -> [Piece] {
         if let visitID {
-            let descriptor = FetchDescriptor<Specimen>(
+            let descriptor = FetchDescriptor<Piece>(
                 sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
             let results = (try? context.fetch(descriptor)) ?? []
             return results.filter { $0.captureSessionID == visitID }
         }
         let draft = CaptureStatus.draft.rawValue
         let ready = CaptureStatus.ready.rawValue
-        let descriptor = FetchDescriptor<Specimen>(
+        let descriptor = FetchDescriptor<Piece>(
             predicate: #Predicate { $0.statusRaw == draft || $0.statusRaw == ready },
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
@@ -810,7 +842,7 @@ public final class CaptureStore {
     public func session(
         visitID: UUID? = nil,
         owner: CaptureOwnerIdentity
-    ) -> [Specimen] {
+    ) -> [Piece] {
         session(visitID: visitID).filter {
             owner.matches(
                 userID: $0.ownerUserID,
@@ -827,14 +859,14 @@ public final class CaptureStore {
     /// a disposal, so filtering it out would empty the tray on SYNC instead of on
     /// PLACEMENT — which is the opposite of what FC-R6 asks for. Placement is the
     /// only thing that removes a row from this list.
-    public func unfiled() -> [Specimen] {
-        let descriptor = FetchDescriptor<Specimen>(
+    public func unfiled() -> [Piece] {
+        let descriptor = FetchDescriptor<Piece>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
         let all = (try? context.fetch(descriptor)) ?? []
         return all.filter(\.isUnplaced)
     }
 
-    public func unfiled(owner: CaptureOwnerIdentity) -> [Specimen] {
+    public func unfiled(owner: CaptureOwnerIdentity) -> [Piece] {
         unfiled().filter {
             owner.matches(
                 userID: $0.ownerUserID,
@@ -844,13 +876,13 @@ public final class CaptureStore {
     }
 
     /// Everything awaiting/failing sync — drained oldest-first (R4/U1).
-    public func outbox() -> [Specimen] {
+    public func outbox() -> [Piece] {
         let ready = CaptureStatus.ready.rawValue
         let queued = CaptureStatus.queued.rawValue
         let uploading = CaptureStatus.uploading.rawValue
         let failed = CaptureStatus.failed.rawValue
         let committed = CaptureStatus.committed.rawValue
-        let descriptor = FetchDescriptor<Specimen>(
+        let descriptor = FetchDescriptor<Piece>(
             predicate: #Predicate {
                 $0.statusRaw == ready || $0.statusRaw == queued
                     || $0.statusRaw == uploading || $0.statusRaw == failed
@@ -879,7 +911,7 @@ public final class CaptureStore {
 
     /// Owner-scoped outbox for real sync. Unowned legacy rows are deliberately
     /// quarantined instead of being claimed by whoever signs in next.
-    public func outbox(owner: CaptureOwnerIdentity) -> [Specimen] {
+    public func outbox(owner: CaptureOwnerIdentity) -> [Piece] {
         outbox().filter {
             owner.matches(
                 userID: $0.ownerUserID,
@@ -889,8 +921,8 @@ public final class CaptureStore {
     }
 
     /// Library/dedupe search from the field (U2).
-    public func search(_ query: SpecimenQuery) -> [Specimen] {
-        var results = (try? context.fetch(FetchDescriptor<Specimen>(
+    public func search(_ query: SpecimenQuery) -> [Piece] {
+        var results = (try? context.fetch(FetchDescriptor<Piece>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
         if let text = query.text?.lowercased(), !text.isEmpty {
             results = results.filter {
@@ -912,7 +944,7 @@ public final class CaptureStore {
     public func search(
         _ query: SpecimenQuery,
         owner: CaptureOwnerIdentity
-    ) -> [Specimen] {
+    ) -> [Piece] {
         search(query).filter {
             owner.matches(
                 userID: $0.ownerUserID,
@@ -937,7 +969,7 @@ public final class CaptureStore {
 
     /// Required local media that cannot be read as non-empty regular files.
     /// Photos with a durable remote path no longer depend on their local copy.
-    public func missingRequiredMedia(for specimen: Specimen) -> [String] {
+    public func missingRequiredMedia(for specimen: Piece) -> [String] {
         missingRequiredPhotos(for: specimen) + missingVoiceSegments(for: specimen)
     }
 
@@ -947,7 +979,7 @@ public final class CaptureStore {
     /// service and `drainOwned` excludes a rejected specimen from the drain
     /// query. Validating voice up front would orphan a whole note from the
     /// sync queue over one lost segment, with no operator present to retry it.
-    public func missingRequiredPhotos(for specimen: Specimen) -> [String] {
+    public func missingRequiredPhotos(for specimen: Piece) -> [String] {
         let photos = specimen.photos.sorted { $0.order < $1.order }
         return unreadable(photos.compactMap { photo -> String? in
             let remotePath = photo.remotePath?.trimmingCharacters(
@@ -960,7 +992,7 @@ public final class CaptureStore {
     /// Voice segments that still depend on a local copy. Mirrors the photo rule:
     /// a segment carrying a durable remote path is exempt, exactly as an
     /// uploaded photo is. Reported, never used to gate an upload.
-    private func missingVoiceSegments(for specimen: Specimen) -> [String] {
+    private func missingVoiceSegments(for specimen: Piece) -> [String] {
         let uploaded = Set((specimen.voiceAudioRemotePathsRaw ?? [])
             .compactMap { $0.split(separator: "/").last.map(String.init) }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
@@ -986,7 +1018,7 @@ public final class CaptureStore {
         }
     }
 
-    public func validateRequiredMedia(for specimen: Specimen) throws {
+    public func validateRequiredMedia(for specimen: Piece) throws {
         let missing = missingRequiredMedia(for: specimen)
         guard missing.isEmpty else {
             throw CaptureMediaAvailabilityError.missingLocalMedia(missing)
@@ -995,7 +1027,7 @@ public final class CaptureStore {
 
     /// Photos only — what `uploadMedia` gates on, so a voice segment whose local
     /// file has gone missing reaches the per-segment DROP instead of throwing.
-    public func validateRequiredPhotos(for specimen: Specimen) throws {
+    public func validateRequiredPhotos(for specimen: Piece) throws {
         let missing = missingRequiredPhotos(for: specimen)
         guard missing.isEmpty else {
             throw CaptureMediaAvailabilityError.missingLocalMedia(missing)
@@ -1053,7 +1085,7 @@ public final class CaptureStore {
     /// `voiceAudioRemotePathsRaw`. These are the only files the sweep may
     /// ever delete.
     private func receiptedMediaFiles() -> [ReceiptedMediaFile] {
-        let specimens = (try? context.fetch(FetchDescriptor<Specimen>())) ?? []
+        let specimens = (try? context.fetch(FetchDescriptor<Piece>())) ?? []
         var filenames = Set<String>()
         for specimen in specimens {
             for photo in specimen.photos {

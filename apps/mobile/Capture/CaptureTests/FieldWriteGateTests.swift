@@ -18,13 +18,13 @@ import Testing
 
 struct FieldWriteGateTests {
     @Test func aSpecimenWithNoReceiptOffersNoCaptureID() {
-        let specimen = Specimen()
+        let specimen = Piece()
         #expect(FieldWriteGate.fieldCaptureID(for: specimen) == nil)
     }
 
     @Test func aCommittedSpecimenWithARemoteIDOffersIt() {
         let id = UUID(uuidString: "c1111111-1111-4111-8111-111111111111")!
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.remoteId = id.uuidString
         specimen.statusRaw = CaptureStatus.committed.rawValue
 
@@ -32,7 +32,7 @@ struct FieldWriteGateTests {
     }
 
     @Test func aRemoteIDWithoutACommittedStatusIsNotAReceipt() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.remoteId = "c1111111-1111-4111-8111-111111111111"
         specimen.statusRaw = CaptureStatus.queued.rawValue
 
@@ -40,7 +40,7 @@ struct FieldWriteGateTests {
     }
 
     @Test func aNonUUIDRemoteIDIsRefusedRatherThanForcedThrough() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.remoteId = "not-a-uuid"
         specimen.statusRaw = CaptureStatus.committed.rawValue
 
@@ -48,7 +48,7 @@ struct FieldWriteGateTests {
     }
 
     @Test func whitespaceIsNotAReceipt() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.remoteId = "   "
         specimen.statusRaw = CaptureStatus.committed.rawValue
 
@@ -57,8 +57,8 @@ struct FieldWriteGateTests {
 
     // MARK: - Ruling 1: which notes file themselves
 
-    private func spoken(_ text: String?) -> Specimen {
-        let specimen = Specimen()
+    private func spoken(_ text: String?) -> Piece {
+        let specimen = Piece()
         specimen.voiceTranscript = text
         return specimen
     }

@@ -32,14 +32,14 @@ public final class ContextCaptureService {
     @discardableResult
     public func enqueuePhoto(imageData: Data, width: Int, height: Int,
                              filenameExtension: String = "jpg",
-                             provenance: ContextCaptureProvenance) -> Specimen {
+                             provenance: ContextCaptureProvenance) -> Piece {
         let draft = store.newDraft(owner: owner)
         apply(provenance, to: draft)
         let filename = "\(UUID().uuidString.lowercased()).\(filenameExtension)"
         try? store.writeMedia(imageData, filename: filename)
         let photo = CapturePhoto(filename: filename, width: width, height: height,
                                  isPrimary: true, order: 0, captureModeRaw: CameraMode.photo.rawValue)
-        photo.specimen = draft
+        photo.piece = draft
         draft.photos.append(photo)
         finalize(draft)
         return draft
@@ -52,7 +52,7 @@ public final class ContextCaptureService {
                              audioSegments: [String] = [],
                              transcriptSource: String? = nil,
                              durationSeconds: Double,
-                             provenance: ContextCaptureProvenance) -> Specimen {
+                             provenance: ContextCaptureProvenance) -> Piece {
         let draft = store.newDraft(owner: owner)
         apply(provenance, to: draft)
         draft.voiceTranscript = transcript.isEmpty ? nil : transcript
@@ -65,7 +65,7 @@ public final class ContextCaptureService {
         return draft
     }
 
-    private func apply(_ provenance: ContextCaptureProvenance, to draft: Specimen) {
+    private func apply(_ provenance: ContextCaptureProvenance, to draft: Piece) {
         draft.provenanceRaw = provenance.provenanceEntries()
         // Route on project_id only (projects-compatible); the SiteScan rooms-id +
         // scan-id ride in provenance (see ContextCaptureProvenance routing note).
@@ -73,7 +73,7 @@ public final class ContextCaptureService {
         draft.destination = .inbox
     }
 
-    private func finalize(_ draft: Specimen) {
+    private func finalize(_ draft: Piece) {
         draft.status = .ready   // → store.outbox(), picked up by the next drain()
         try? store.save()
     }

@@ -6,7 +6,20 @@
 
 import Foundation
 
-public extension Specimen {
+/// One field N5 showed her: what the sheet proposed, and what she left in it.
+public struct GuessReview: Equatable, Sendable {
+    public let key: FieldKey
+    public let value: String
+    public let proposed: String
+
+    public init(key: FieldKey, value: String, proposed: String) {
+        self.key = key
+        self.value = value
+        self.proposed = proposed
+    }
+}
+
+public extension Piece {
     var category: SpecimenCategory {
         get { SpecimenCategory(rawValue: categoryRaw) ?? .unknown }
         set { categoryRaw = newValue.rawValue }
@@ -118,9 +131,36 @@ public extension Specimen {
         touch()
     }
 
-    /// Provenance of a field, if it has been set.
+    /// A field's ORIGIN — how its current value was obtained — if it has been
+    /// set. Confirming a value never changes it (`confirm(_:by:at:)`).
     func provenance(for key: FieldKey) -> ProvenanceSource? {
         provenanceRaw[key.rawValue].flatMap(ProvenanceSource.init(rawValue:))
+    }
+
+    /// Whether someone confirmed the field's current value. Its own fact: a
+    /// confirmed guess is still `.smartGuess`.
+    func isConfirmed(_ key: FieldKey) -> Bool {
+        confirmedAtRaw[key.rawValue] != nil
+    }
+
+    /// Who confirmed the field's current value, when a signed-in user did.
+    func confirmedBy(_ key: FieldKey) -> String? {
+        confirmedByRaw[key.rawValue]
+    }
+
+    func confirmedAt(_ key: FieldKey) -> Date? {
+        confirmedAtRaw[key.rawValue]
+    }
+
+    /// What the machine proposed before a human replaced it: present exactly
+    /// when the field's origin is `.edited`.
+    func proposedValue(for key: FieldKey) -> String? {
+        proposedValueRaw[key.rawValue]
+    }
+
+    /// A smart guess nobody has confirmed.
+    func isUnconfirmedGuess(_ key: FieldKey) -> Bool {
+        provenance(for: key) == .smartGuess && !isConfirmed(key)
     }
 
     var primaryPhoto: CapturePhoto? {
@@ -129,16 +169,63 @@ public extension Specimen {
 
     /// Has any field been set by a smart guess that the designer hasn't confirmed?
     var hasUnconfirmedGuess: Bool {
-        provenanceRaw.values.contains(ProvenanceSource.smartGuess.rawValue)
+        provenanceRaw.contains { key, origin in
+            origin == ProvenanceSource.smartGuess.rawValue && confirmedAtRaw[key] == nil
+        }
     }
 
-    /// THE mutation entry point: writes the field, records provenance, bumps updatedAt.
-    /// Guesses never overwrite a value a tag/scan/measure/human already set
-    /// (the spec's "guesses never overwrite" rule, N5).
-    func setValue(_ value: String?, for key: FieldKey, source: ProvenanceSource) {
-        if source == .smartGuess, let existing = provenance(for: key),
-           existing != .smartGuess {
-            return // don't clobber a confirmed/recognised value with a guess
+    /// The field's current value, as `setValue` writes it. Nil for
+    /// `.dimensions`, which lives in `measurements`.
+    func fieldValue(for key: FieldKey) -> String? {
+        switch key {
+        case .title:      return title
+        case .maker:      return maker
+        case .sku:        return sku
+        case .colorway:   return colorway
+        case .material:   return materialNote
+        case .price:      return priceTradeCents.map(String.init)
+        case .sourceURL:  return sourceURL
+        case .note:       return note
+        case .category:   return categoryRaw
+        case .dimensions: return nil
+        }
+    }
+
+    /// THE mutation entry point: writes the field, records its origin, bumps
+    /// updatedAt. A new value is an unconfirmed value.
+    ///
+    /// - A guess never overwrites a value a tag/scan/measure/human already set,
+    ///   nor a guess she confirmed (the spec's "guesses never overwrite" rule, N5).
+    /// - `.manual` and `.edited` both say "a human wrote this", and the origin
+    ///   recorded is the true one. `.manual` only when no machine had proposed a
+    ///   value for the field; `.edited` when she replaced one, keeping what the
+    ///   machine proposed: `proposed` when the caller holds a proposal the field
+    ///   never stored (N1's inline correction of a read; an empty read proposed
+    ///   nothing), otherwise the value she replaced. Editing an `.edited` field again keeps the first proposal.
+    ///   Writing back the machine's own value is not an edit and changes nothing.
+    func setValue(_ value: String?, for key: FieldKey, source: ProvenanceSource,
+                  proposed: String? = nil) {
+        let existing = provenance(for: key)
+        if source == .smartGuess, let existing, existing != .smartGuess || isConfirmed(key) {
+            return // don't clobber a recognised, typed or confirmed value with a guess
+        }
+        var origin = source
+        var proposal: String?
+        if source == .manual || source == .edited {
+            if source == .edited, let proposed, !proposed.isEmpty {
+                origin = .edited
+                proposal = proposed
+            } else if existing == .edited {
+                origin = .edited
+                proposal = proposedValueRaw[key.rawValue]
+            } else if let existing, existing != .manual {
+                let replaced = fieldValue(for: key)
+                guard replaced != value else { return }
+                origin = .edited
+                proposal = replaced
+            } else {
+                origin = .manual
+            }
         }
         switch key {
         case .title:     title = value
@@ -152,8 +239,36 @@ public extension Specimen {
         case .category:  if let v = value { categoryRaw = v }
         case .dimensions: break // dimensions live in `measurements`; use addMeasurement
         }
-        provenanceRaw[key.rawValue] = source.rawValue
+        provenanceRaw[key.rawValue] = origin.rawValue
+        proposedValueRaw[key.rawValue] = proposal
+        confirmedByRaw[key.rawValue] = nil
+        confirmedAtRaw[key.rawValue] = nil
         touch()
+    }
+
+    /// Records that `userID` confirmed the field's current value. The origin is
+    /// untouched: a guess she confirmed is still a guess, now a confirmed one.
+    func confirm(_ key: FieldKey, by userID: String?, at date: Date = Date()) {
+        confirmedAtRaw[key.rawValue] = date
+        confirmedByRaw[key.rawValue] = userID
+        touch()
+    }
+
+    /// N5's "Looks right". Every field the sheet showed her ends confirmed by
+    /// her. One she left as proposed keeps its origin, so an accepted guess
+    /// stays `.smartGuess`; one she corrected becomes `.edited` and keeps the
+    /// guess as its proposal.
+    func acceptReview(_ reviews: [GuessReview], by userID: String?, at date: Date = Date()) {
+        for review in reviews {
+            if review.value != review.proposed {
+                setValue(review.value, for: review.key, source: .edited, proposed: review.proposed)
+            } else if fieldValue(for: review.key) != review.value {
+                // The guess never landed (a tag, a scan or she had already set
+                // the field), so taking it now replaces that value: a human write.
+                setValue(review.value, for: review.key, source: .manual)
+            }
+            confirm(review.key, by: userID, at: date)
+        }
     }
 
     func setConfidence(_ confidence: Double, for key: FieldKey) {
@@ -176,7 +291,7 @@ public extension Specimen {
 
     func addMeasurement(axis: MeasurementAxis, millimeters: Double, source: MeasureSource) {
         let m = CaptureMeasurement(axisRaw: axis.rawValue, millimeters: millimeters, sourceRaw: source.rawValue)
-        m.specimen = self
+        m.piece = self
         measurements.append(m)
         provenanceRaw[FieldKey.dimensions.rawValue] =
             (source == .arkit ? ProvenanceSource.measure : ProvenanceSource.manual).rawValue
@@ -617,7 +732,7 @@ public extension Specimen {
 
 // MARK: - The visit (Field Companion wave 3)
 
-public extension Specimen {
+public extension Piece {
     var visitKind: FieldVisitKind? {
         get { visitKindRaw.flatMap(FieldVisitKind.init(rawValue:)) }
         set { visitKindRaw = newValue?.rawValue }
@@ -753,7 +868,7 @@ public extension Specimen {
 /// tray's ordinary newest-first order so the sequence is total and stable.
 public enum FieldTraySuggestionOrder {
     @MainActor
-    public static func ordered(_ specimens: [Specimen]) -> [Specimen] {
+    public static func ordered(_ specimens: [Piece]) -> [Piece] {
         specimens.sorted { lhs, rhs in
             let left = lhs.suggestionConfidence ?? -1
             let right = rhs.suggestionConfidence ?? -1

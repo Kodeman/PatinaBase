@@ -148,7 +148,7 @@ enum CaptureDeepLink {
         store: CaptureStore,
         session: any SessionProviding
     ) -> UUID? {
-        let specimen: Specimen?
+        let specimen: Piece?
         switch CaptureOwnerProjectionPolicy.resolve(
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
@@ -173,7 +173,7 @@ enum CaptureDeepLink {
         store: CaptureStore,
         session: any SessionProviding
     ) -> UUID {
-        let specimens: [Specimen]
+        let specimens: [Piece]
         switch CaptureOwnerProjectionPolicy.resolve(
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,

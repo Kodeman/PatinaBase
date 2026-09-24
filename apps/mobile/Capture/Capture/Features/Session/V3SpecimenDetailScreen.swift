@@ -12,7 +12,7 @@ import SwiftUI
 import CaptureKit
 
 struct V3SpecimenDetailScreen: View {
-    let specimen: Specimen?
+    let specimen: Piece?
     let store: CaptureStore
     let coordinator: CaptureCoordinator
 
@@ -31,7 +31,7 @@ struct V3SpecimenDetailScreen: View {
 }
 
 private struct V3Content: View {
-    let specimen: Specimen
+    let specimen: Piece
     let store: CaptureStore
     let coordinator: CaptureCoordinator
 
@@ -44,7 +44,7 @@ private struct V3Content: View {
     @State private var note: String
     @State private var saved = false
 
-    init(specimen: Specimen, store: CaptureStore, coordinator: CaptureCoordinator) {
+    init(specimen: Piece, store: CaptureStore, coordinator: CaptureCoordinator) {
         self.specimen = specimen
         self.store = store
         self.coordinator = coordinator
@@ -67,8 +67,10 @@ private struct V3Content: View {
                     SpecimenFieldRow("Title", value: $title, source: specimen.provenance(for: .title))
                     SpecimenFieldRow("Maker", value: $maker, source: specimen.provenance(for: .maker))
                     SpecimenFieldRow("SKU", value: $sku, source: specimen.provenance(for: .sku))
-                    SpecimenFieldRow("Colorway", value: $colorway, source: specimen.provenance(for: .colorway))
-                    SpecimenFieldRow("Material", value: $material, source: specimen.provenance(for: .material))
+                    SpecimenFieldRow("Colorway", value: $colorway, source: specimen.provenance(for: .colorway),
+                                     confirmed: specimen.isConfirmed(.colorway))
+                    SpecimenFieldRow("Material", value: $material, source: specimen.provenance(for: .material),
+                                     confirmed: specimen.isConfirmed(.material))
                     SpecimenFieldRow("Trade price", value: $priceText,
                                      source: specimen.provenance(for: .price), placeholder: "$—")
                     SpecimenFieldRow("Note", value: $note, source: specimen.provenance(for: .note))

@@ -10,7 +10,7 @@ import SwiftUI
 import CaptureKit
 
 struct S5InboxTerminalScreen: View {
-    let specimen: Specimen?
+    let specimen: Piece?
     let coordinator: CaptureCoordinator
     let analytics: any CaptureAnalytics
 
@@ -106,10 +106,9 @@ struct S5InboxTerminalScreen: View {
 
     private var leftToFinish: String {
         guard let specimen else { return "Held safely — finish it tonight." }
-        let guessCount = specimen.provenanceRaw.values
-            .filter { $0 == ProvenanceSource.smartGuess.rawValue }.count
+        let guessCount = FieldKey.allCases.filter { specimen.isUnconfirmedGuess($0) }.count
         let priceUnverified = specimen.priceTradeCents == nil
-            || specimen.provenance(for: .price) == .smartGuess
+            || specimen.isUnconfirmedGuess(.price)
 
         var parts: [String] = []
         if guessCount > 0 {

@@ -368,7 +368,7 @@ struct CaptureRouteSafetyPolicyTests {
     }
 
     @Test func keptCapturesStayLocalWithoutReenteringCull() {
-        let specimen = Specimen()
+        let specimen = Piece()
         #expect(CaptureRouteSafetyPolicy.canCull(specimen))
 
         specimen.lifecycleRaw = CaptureLifecycle.State.session.rawValue
@@ -903,7 +903,7 @@ struct DurableScanTransferTests {
         let photoFilename = "missing-photo-\(token).heic"
         let voiceFilename = "missing-voice-\(token).m4a"
         let photo = CapturePhoto(filename: photoFilename)
-        photo.specimen = specimen
+        photo.piece = specimen
         specimen.photos.append(photo)
         specimen.voiceAudioFilename = voiceFilename
         defer {

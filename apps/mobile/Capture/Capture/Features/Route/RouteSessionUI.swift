@@ -180,14 +180,14 @@ struct RouteStatusChip: View {
 // MARK: - Formatters / derivations over a Specimen
 
 enum RouteFormat {
-    static func status(for specimen: Specimen) -> RouteRowKind {
+    static func status(for specimen: Piece) -> RouteRowKind {
         if specimen.hasUnconfirmedGuess { return .guess }
         if specimen.destination == .inbox { return .inbox }
         return .ready
     }
 
     /// A short "how it was read" descriptor for the session tray (e.g. "4 PHOTOS").
-    static func descriptor(for specimen: Specimen) -> String {
+    static func descriptor(for specimen: Piece) -> String {
         if !specimen.measurements.isEmpty { return "measured" }
         if !specimen.scannedCodes.isEmpty { return "scanned" }
         if specimen.provenance(for: .maker) == .ocr || specimen.provenance(for: .sku) == .ocr {
@@ -275,7 +275,7 @@ struct RouteMissingSpecimen: View {
 enum RoutePreviewData {
     struct Demo {
         let store: CaptureStore
-        let specimen: Specimen
+        let specimen: Piece
     }
 
     /// A seeded in-memory store + a flagship specimen plus a couple of siblings so

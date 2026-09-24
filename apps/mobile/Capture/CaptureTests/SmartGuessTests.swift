@@ -1,7 +1,8 @@
 //  SmartGuessTests.swift
 //  CaptureTests
 //
-//  Two contracts the viewfinder's smart guess rests on, both moved into
+//  Three contracts the viewfinder's smart guess rests on (the third,
+//  confirmation, is at the bottom of the file), moved into
 //  CaptureKit so capture-gate.sh can see them (C1 — CaptureTests links
 //  CaptureKit alone, and HeuristicSmartGuessService is app-side):
 //
@@ -203,7 +204,7 @@ struct UnconfirmedGuessTests {
     /// The viewfinder's recording step: filter the read, then hand what
     /// survives to `Specimen.recordSmartGuess`, the shared source of truth
     /// `ViewfinderModel` (app-side, unreachable under C1) also calls.
-    @MainActor private func record(_ guess: SmartGuess, onto specimen: Specimen) {
+    @MainActor private func record(_ guess: SmartGuess, onto specimen: Piece) {
         specimen.recordSmartGuess(guess.fieldsWorthRecording)
     }
 
@@ -313,5 +314,130 @@ struct UnconfirmedGuessTests {
         s.setValue("Lostine armchair", for: .title, source: .manual)
         s.setConfidence(0.1, for: .title)
         #expect(s.hasUnconfirmedGuess == false)
+    }
+}
+
+/// 3. Origin and confirmation are two facts (P0-08). N5's "Looks right" used
+///    to rewrite every accepted guess to `.manual`, so a machine's value read
+///    as one she typed. Now the origin stays, the confirmation is recorded
+///    beside it, and a correction keeps the guess it replaced.
+struct GuessConfirmationTests {
+
+    static let confirmedAt = Date(timeIntervalSinceReferenceDate: 800_000_000)
+
+    @Test @MainActor func acceptingFourUnchangedGuessesKeepsEachAGuessAndConfirmsIt() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+        let guesses = [
+            FieldSuggestion(key: .category, value: SpecimenCategory.seating.rawValue, confidence: 0.8),
+            FieldSuggestion(key: .material, value: "Oak", confidence: 0.6),
+            FieldSuggestion(key: .colorway, value: "Bone", confidence: 0.5),
+            FieldSuggestion(key: .title, value: "Lounge chair", confidence: 0.4)
+        ]
+        s.recordSmartGuess(guesses)
+        #expect(s.hasUnconfirmedGuess)
+
+        s.acceptReview(guesses.map { GuessReview(key: $0.key, value: $0.value, proposed: $0.value) },
+                       by: "user-1", at: Self.confirmedAt)
+
+        for guess in guesses {
+            #expect(s.provenance(for: guess.key) == .smartGuess, "\(guess.key) lost its origin")
+            #expect(s.isConfirmed(guess.key))
+            #expect(s.confirmedBy(guess.key) == "user-1")
+            #expect(s.confirmedAt(guess.key) == Self.confirmedAt)
+            #expect(s.proposedValue(for: guess.key) == nil)
+            #expect(s.fieldValue(for: guess.key) == guess.value)
+        }
+        #expect(!s.provenanceRaw.values.contains(ProvenanceSource.manual.rawValue))
+        #expect(s.hasUnconfirmedGuess == false)
+        // A confirmed guess is hers: a later read may not overwrite it.
+        s.recordSmartGuess([FieldSuggestion(key: .material, value: "Ash", confidence: 0.9)])
+        #expect(s.materialNote == "Oak")
+        #expect(s.isConfirmed(.material))
+    }
+
+    @Test @MainActor func aCorrectedGuessRecordsHerValueAndTheGuessItReplaced() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+        s.recordSmartGuess([
+            FieldSuggestion(key: .material, value: "Oak", confidence: 0.6),
+            FieldSuggestion(key: .colorway, value: "Bone", confidence: 0.5)
+        ])
+
+        s.acceptReview([GuessReview(key: .material, value: "Walnut", proposed: "Oak"),
+                        GuessReview(key: .colorway, value: "Bone", proposed: "Bone")],
+                       by: "user-1", at: Self.confirmedAt)
+
+        #expect(s.materialNote == "Walnut")
+        #expect(s.provenance(for: .material) == .edited)
+        #expect(s.proposedValue(for: .material) == "Oak")
+        #expect(s.isConfirmed(.material))
+        #expect(s.provenance(for: .colorway) == .smartGuess)
+        #expect(s.proposedValue(for: .colorway) == nil)
+
+        // Editing it again keeps the machine's first proposal, and a new value
+        // is an unconfirmed one.
+        s.setValue("Black walnut", for: .material, source: .edited)
+        #expect(s.provenance(for: .material) == .edited)
+        #expect(s.proposedValue(for: .material) == "Oak")
+        #expect(s.isConfirmed(.material) == false)
+    }
+
+    @Test @MainActor func manualMeansTypedFromNothing() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+        s.setValue("Soane", for: .maker, source: .manual)
+        #expect(s.provenance(for: .maker) == .manual)
+        #expect(s.proposedValue(for: .maker) == nil)
+
+        // Typing over a read is an edit of the read, whatever the caller called it.
+        s.setValue("LQ-3S-OAK", for: .sku, source: .ocr)
+        s.setValue("LQ-3S-ASH", for: .sku, source: .manual)
+        #expect(s.provenance(for: .sku) == .edited)
+        #expect(s.proposedValue(for: .sku) == "LQ-3S-OAK")
+
+        // A tag read corrected before it was saved: the read never landed, and
+        // the correction still records it.
+        s.setValue("Holloway", for: .title, source: .edited, proposed: "Hol1oway")
+        #expect(s.provenance(for: .title) == .edited)
+        #expect(s.proposedValue(for: .title) == "Hol1oway")
+    }
+
+    @Test @MainActor func thePayloadCarriesOriginConfirmationAndProposalAndRoundTrips() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+        s.recordSmartGuess([
+            FieldSuggestion(key: .category, value: SpecimenCategory.seating.rawValue, confidence: 0.8),
+            FieldSuggestion(key: .material, value: "Oak", confidence: 0.6)
+        ])
+        s.acceptReview([GuessReview(key: .category, value: "seating", proposed: "seating"),
+                        GuessReview(key: .material, value: "Walnut", proposed: "Oak")],
+                       by: "user-1", at: Self.confirmedAt)
+
+        let payload = FieldCapturePayload(specimen: s, device: .init())
+        let data = try JSONEncoder().encode(payload)
+        #expect(try JSONDecoder().decode(FieldCapturePayload.self, from: data) == payload)
+
+        let wire = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let provenance = try #require(wire["provenance"] as? [String: String])
+        #expect(provenance == ["category": "smartGuess", "material": "edited"])
+        let confirmations = try #require(wire["confirmations"] as? [String: [String: String]])
+        let at = ISO8601DateFormatter().string(from: Self.confirmedAt)
+        #expect(confirmations == [
+            "category": ["confirmedBy": "user-1", "confirmedAt": at],
+            "material": ["confirmedBy": "user-1", "confirmedAt": at]
+        ])
+        #expect(wire["proposals"] as? [String: String] == ["material": "Oak"])
+    }
+
+    @Test @MainActor func aCaptureWithNothingConfirmedOmitsBothNewKeys() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+        s.recordSmartGuess([FieldSuggestion(key: .material, value: "Oak", confidence: 0.6)])
+        let data = try JSONEncoder().encode(FieldCapturePayload(specimen: s, device: .init()))
+        let wire = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(wire["provenance"] as? [String: String] == ["material": "smartGuess"])
+        #expect(wire["confirmations"] == nil)
+        #expect(wire["proposals"] == nil)
     }
 }

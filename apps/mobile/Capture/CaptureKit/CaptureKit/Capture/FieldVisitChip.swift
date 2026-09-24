@@ -69,7 +69,7 @@ public enum FieldVisitChipBuilder {
 /// line clears on PLACEMENT, never on sync.
 public enum FieldPlacementLine {
     @MainActor
-    public static func text(for specimen: Specimen) -> String {
+    public static func text(for specimen: Piece) -> String {
         // Flow 2: the door keeps this promise for the capture in her hand — the
         // in-hand draft re-inherits the visit she starts there (ViewfinderModel),
         // so the words are honest. FC-R6 is untouched: an already-SAVED unplaced
@@ -88,7 +88,7 @@ public enum FieldPlacementLine {
     }
 
     @MainActor
-    public static func isUnplaced(_ specimen: Specimen) -> Bool { specimen.isUnplaced }
+    public static func isUnplaced(_ specimen: Piece) -> Bool { specimen.isUnplaced }
 
     private static func trimmed(_ value: String?) -> String? {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -119,7 +119,7 @@ public enum FieldInHandPlacement {
     /// Returns whether the draft adopted the visit.
     @MainActor
     @discardableResult
-    public static func adopt(_ state: CaptureVisitState, into draft: Specimen) -> Bool {
+    public static func adopt(_ state: CaptureVisitState, into draft: Piece) -> Bool {
         // FC-R2: a kindless context is routing memory, not a visit — the same
         // guard the chip applies, so the chip and the card cannot disagree about
         // whether there is a visit to inherit.

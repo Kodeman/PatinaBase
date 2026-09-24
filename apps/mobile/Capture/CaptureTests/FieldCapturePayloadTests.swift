@@ -53,7 +53,7 @@ struct FieldCapturePayloadTests {
         let photo = CapturePhoto(filename: "shot.heic", width: 1170, height: 1560,
                                  isPrimary: true, order: 0)
         photo.remotePath = "uid/tok/shot.heic"
-        photo.specimen = s
+        photo.piece = s
         s.photos.append(photo)
 
         s.venue = VenueStamp(latitude: 35.97, longitude: -79.99, accuracyMeters: 8,

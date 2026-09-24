@@ -38,7 +38,7 @@ struct VoiceAudioWireTests {
     }
 
     @Test func payloadCarriesEveryVoiceSegment() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.voiceTranscript = "the alcove is about forty-two and three quarters"
         specimen.voiceAudioFilename = "voice-a-000.m4a"
         specimen.voiceAudioSegmentsRaw = ["voice-a-000.m4a", "voice-a-001.m4a"]
@@ -50,14 +50,14 @@ struct VoiceAudioWireTests {
     }
 
     @Test func payloadOmitsVoiceWhenNothingWasRecorded() {
-        let specimen = Specimen()
+        let specimen = Piece()
         let payload = FieldCapturePayload(specimen: specimen,
                                           device: FieldCapturePayload.Device())
         #expect(payload.voice == nil)
     }
 
     @Test func payloadCarriesTheCaptureKindTheServerChecks() {
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.captureKindRaw = "note"
         let payload = FieldCapturePayload(specimen: specimen,
                                           device: FieldCapturePayload.Device())
@@ -65,7 +65,7 @@ struct VoiceAudioWireTests {
     }
 
     @Test func payloadOmitsAnUnsetCaptureKindSoTheServerDefaultApplies() {
-        let payload = FieldCapturePayload(specimen: Specimen(),
+        let payload = FieldCapturePayload(specimen: Piece(),
                                           device: FieldCapturePayload.Device())
         #expect(payload.captureKind == nil)
     }
@@ -78,7 +78,7 @@ struct VoiceAudioWireTests {
 
     @Test @MainActor func missingRequiredMediaChecksEverySegmentInOrder() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.voiceAudioFilename = "voice-a-000.m4a"
         specimen.voiceAudioSegmentsRaw = ["voice-a-000.m4a", "voice-a-001.m4a"]
         let missing = store.missingRequiredMedia(for: specimen)
@@ -87,7 +87,7 @@ struct VoiceAudioWireTests {
 
     @Test @MainActor func anUploadedSegmentIsExemptedLikeAnUploadedPhoto() throws {
         let store = try CaptureStore.inMemory()
-        let specimen = Specimen()
+        let specimen = Piece()
         specimen.voiceAudioFilename = "voice-a-000.m4a"
         specimen.voiceAudioSegmentsRaw = ["voice-a-000.m4a", "voice-a-001.m4a"]
         specimen.voiceAudioRemotePathsRaw = ["uid/tok/voice-a-000.m4a"]

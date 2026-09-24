@@ -67,15 +67,18 @@ struct CaptureStoreLadderTests {
         let url = directory.appendingPathComponent("legacy.store")
 
         // Bare, with no plan, on purpose: this is what a build before the plan
-        // existed wrote. The reopen below goes through the plan, as launch does.
-        let older = Schema([Specimen.self, CapturePhoto.self,
-                            CaptureMeasurement.self, CaptureProjectRef.self])
+        // existed wrote, with that build's Specimen. The reopen below goes
+        // through the plan, as launch does, and the capture must come out the
+        // other side as a Piece.
+        let older = Schema([CaptureSchemaV1.Specimen.self, CaptureSchemaV1.CapturePhoto.self,
+                            CaptureSchemaV1.CaptureMeasurement.self, CaptureProjectRef.self])
         let legacy = try ModelContainer(for: older, configurations: [ModelConfiguration(url: url)])
-        legacy.mainContext.insert(Specimen())
+        let written = CaptureSchemaV1.Specimen()
+        legacy.mainContext.insert(written)
         try legacy.mainContext.save()
 
         let migrated = try CaptureStore.makeContainer(configuration: ModelConfiguration(url: url))
-        #expect(try migrated.mainContext.fetch(FetchDescriptor<Specimen>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<Piece>()).map(\.id) == [written.id])
     }
 
     // MARK: (b) a rung creates its own directory
@@ -110,14 +113,14 @@ struct CaptureStoreLadderTests {
         #expect(outcome.didReset)
         #expect(outcome.failures.count == 1)          // the pre-reset failure only
         let container = try #require(outcome.container)
-        #expect(try container.mainContext.fetch(FetchDescriptor<Specimen>()).isEmpty)
+        #expect(try container.mainContext.fetch(FetchDescriptor<Piece>()).isEmpty)
         let folder = try #require(CaptureStore.preservedStores(beside: url).first)
         #expect(try Data(contentsOf: folder.appendingPathComponent("broken.store")) == bytes)
     }
 
     /// The tester-data guarantee (SQ-197). A real store holding an unsynced
     /// hour, made unopenable the way a schema this build does not know makes
-    /// it: its metadata says its Specimen table is one V1 has never declared.
+    /// it: its metadata says its Piece table is one no version has declared.
     /// The ladder moves it, whole, into a recovery folder, says so in the
     /// report, and opens a fresh store on disk; the moved store still holds the
     /// hour.
@@ -138,8 +141,8 @@ struct CaptureStoreLadderTests {
         let written = try NSPersistentStoreCoordinator.metadataForPersistentStore(
             type: .sqlite, at: url)
         var hashes = try #require(written[NSStoreModelVersionHashesKey] as? [String: Any])
-        #expect(hashes["Specimen"] != nil)
-        hashes["Specimen"] = Data(repeating: 7, count: 32)
+        #expect(hashes["Piece"] != nil)
+        hashes["Piece"] = Data(repeating: 7, count: 32)
         var unknown = written
         unknown[NSStoreModelVersionHashesKey] = hashes
         try NSPersistentStoreCoordinator.setMetadata(unknown, type: .sqlite, at: url)

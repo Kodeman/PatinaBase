@@ -33,9 +33,16 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
     public var photos: [Photo]
     public var thumbnailUrl: String?
     public var venue: Venue?
-    /// FieldKey.rawValue -> ProvenanceSource.rawValue. Stored raw by 00235 and
-    /// copied onto the minted product's `capture_provenance`.
+    /// FieldKey.rawValue -> ProvenanceSource.rawValue: each field's ORIGIN. Stored
+    /// raw by 00235 and copied onto the minted product's `capture_provenance`.
     public var provenance: [String: String]?
+    /// FieldKey.rawValue -> who confirmed the field's value, and when. Its own
+    /// fact beside `provenance`: a confirmed guess is still "smartGuess" there.
+    /// No reader projects it yet; it rides `raw_payload` until T6 does.
+    public var confirmations: [String: Confirmation]?
+    /// FieldKey.rawValue -> the machine's proposal a human replaced, for each
+    /// "edited" field. Rides `raw_payload` like `confirmations`.
+    public var proposals: [String: String]?
     public var device: Device?
     /// 'note' | 'context' | nil. Read by the W1 migration into
     /// field_captures.capture_kind, which CHECKs ('specimen','note','context').
@@ -161,6 +168,13 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
         public var endedAt: String?
     }
 
+    public struct Confirmation: Codable, Equatable, Sendable {
+        /// The confirming user's id; nil when no one was signed in.
+        public var confirmedBy: String?
+        /// ISO8601 string.
+        public var confirmedAt: String
+    }
+
     /// The SUGGESTION is always distinct from the fact. `confidence` orders the
     /// tray and is NEVER RENDERED (Principle 4) — on the wire it is just a number.
     public struct Suggestion: Codable, Equatable, Sendable {
@@ -180,7 +194,7 @@ public extension FieldCapturePayload {
     /// argument, not a payload field. Photo `path` comes from each
     /// `CapturePhoto.remotePath` (set at upload); a not-yet-uploaded photo simply
     /// omits its path.
-    init(specimen s: Specimen, device: Device) {
+    init(specimen s: Piece, device: Device) {
         self.title = s.title?.nonEmpty
         self.notes = s.note?.nonEmpty
         // Emit the raw category unless it is the sentinel "unknown".
@@ -207,6 +221,13 @@ public extension FieldCapturePayload {
         self.thumbnailUrl = nil // private bucket (00234) → no public thumbnail yet
         self.venue = s.venue.map(Self.buildVenue)
         self.provenance = s.provenanceRaw.isEmpty ? nil : s.provenanceRaw
+        var confirmations: [String: Confirmation] = [:]
+        for (key, at) in s.confirmedAtRaw {
+            confirmations[key] = Confirmation(confirmedBy: s.confirmedByRaw[key],
+                                              confirmedAt: Self.venueDateFormatter.string(from: at))
+        }
+        self.confirmations = confirmations.isEmpty ? nil : confirmations
+        self.proposals = s.proposedValueRaw.isEmpty ? nil : s.proposedValueRaw
         self.device = device
         self.captureKind = s.captureKindRaw?.nonEmpty
         self.visit = Self.buildVisit(s)
@@ -233,7 +254,7 @@ public extension FieldCapturePayload {
         return Measurements(width: width, height: height, depth: depth, unit: "mm")
     }
 
-    private static func buildTag(_ s: Specimen) -> Tag? {
+    private static func buildTag(_ s: Piece) -> Tag? {
         let vendorName = s.maker?.nonEmpty
         let sku = s.sku?.nonEmpty
         let trade = s.priceTradeCents
@@ -243,7 +264,7 @@ public extension FieldCapturePayload {
                    priceTradeCents: trade, priceRetailCents: retail, vendorId: nil)
     }
 
-    private static func buildBarcode(_ s: Specimen) -> Barcode? {
+    private static func buildBarcode(_ s: Piece) -> Barcode? {
         // scannedCodes are "<kind>:<value>" tags (e.g. "gtin:00123", "url:https://…").
         // Treat only real barcode kinds (not url/text) as a barcode.
         var value: String?
@@ -264,7 +285,7 @@ public extension FieldCapturePayload {
         return Barcode(value: value, symbology: symbology, catalogMatchProductId: catalogId)
     }
 
-    private static func buildAttributes(_ s: Specimen) -> Attributes? {
+    private static func buildAttributes(_ s: Piece) -> Attributes? {
         let materials = s.materials.isEmpty ? nil : s.materials
         let colors = s.colors.isEmpty ? nil : s.colors
         let styleTags = s.styleTags.isEmpty ? nil : s.styleTags
@@ -274,7 +295,7 @@ public extension FieldCapturePayload {
                           styleTags: styleTags, materialTags: nil)
     }
 
-    private static func buildVoice(_ s: Specimen) -> Voice? {
+    private static func buildVoice(_ s: Piece) -> Voice? {
         let transcript = s.voiceTranscript?.nonEmpty
         let partial = s.voicePartialTranscript?.nonEmpty
         let audioPath = s.voiceAudioFilename?.nonEmpty
@@ -296,7 +317,7 @@ public extension FieldCapturePayload {
 
     /// FC-R2's null kind is expressed as an OMITTED envelope: a capture taken
     /// outside any visit carries no `visit.kind` to omit in the first place.
-    private static func buildVisit(_ s: Specimen) -> Visit? {
+    private static func buildVisit(_ s: Piece) -> Visit? {
         guard s.visitKindRaw?.nonEmpty != nil else { return nil }
         return Visit(id: s.captureSessionID?.uuidString,
                      kind: s.visitKindRaw?.nonEmpty,
@@ -306,7 +327,7 @@ public extension FieldCapturePayload {
                      endedAt: s.visitEndedAt.map(venueDateFormatter.string(from:)))
     }
 
-    private static func buildSuggestion(_ s: Specimen) -> Suggestion? {
+    private static func buildSuggestion(_ s: Piece) -> Suggestion? {
         let project = s.suggestedProjectID?.nonEmpty
         let room = s.suggestedProjectRoomID?.nonEmpty
         let basis = s.suggestionBasisRaw?.nonEmpty

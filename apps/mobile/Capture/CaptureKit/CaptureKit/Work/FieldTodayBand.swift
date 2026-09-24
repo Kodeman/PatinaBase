@@ -74,8 +74,8 @@ public enum FieldTodayBandBuilder {
     @MainActor
     // swiftlint:disable:next function_parameter_count
     public static func build(visitState: CaptureVisitState,
-                             visitCaptures: [Specimen],
-                             unplaced: [Specimen],
+                             visitCaptures: [Piece],
+                             unplaced: [Piece],
                              pendingScanUploads: Int,
                              queued: Int,
                              isOffline: Bool,

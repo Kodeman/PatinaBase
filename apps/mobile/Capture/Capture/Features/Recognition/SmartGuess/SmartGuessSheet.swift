@@ -3,9 +3,10 @@
 //
 //  N5 · Smart field guess. After capture an on-device vision model proposes
 //  category, material, style and colour. Every value is a labelled "guess" the
-//  designer confirms or corrects — never silently trusted. "Looks right" accepts
-//  the guesses as confirmed fields (source .manual; a corrected value becomes
-//  .edited); tapping a guess opens just that field; "Edit all" opens them all.
+//  designer confirms or corrects — never silently trusted. "Looks right" confirms
+//  every shown field (`Piece.acceptReview`): an unchanged guess keeps its
+//  .smartGuess origin, a corrected one becomes .edited and keeps the guess as
+//  its proposal; tapping a guess opens just that field; "Edit all" opens them all.
 //  Guesses never overwrite a value a tag/scan/measure/human already set.
 
 import SwiftUI
@@ -231,7 +232,7 @@ struct SmartGuessSheet: View {
         try? store.save()
     }
 
-    private func applyAsGuess(_ specimen: Specimen) {
+    private func applyAsGuess(_ specimen: Piece) {
         // setValue refuses to overwrite what a tag, a scan, a measure or she
         // already set. Never pin a confidence to a value we didn't write.
         if categoryRaw != SpecimenCategory.unknown.rawValue {
@@ -261,15 +262,17 @@ struct SmartGuessSheet: View {
 
     private func accept() {
         guard let specimen = currentSpecimen() else { return }
+        var reviews: [GuessReview] = []
         if categoryRaw != SpecimenCategory.unknown.rawValue {
-            specimen.setValue(categoryRaw, for: .category, source: promotedSource(categoryRaw, categoryOriginal))
+            reviews.append(GuessReview(key: .category, value: categoryRaw, proposed: categoryOriginal))
         }
         if !material.isEmpty {
-            specimen.setValue(material, for: .material, source: promotedSource(material, materialOriginal))
+            reviews.append(GuessReview(key: .material, value: material, proposed: materialOriginal))
         }
         if !colour.isEmpty {
-            specimen.setValue(colour, for: .colorway, source: promotedSource(colour, colourOriginal))
+            reviews.append(GuessReview(key: .colorway, value: colour, proposed: colourOriginal))
         }
+        specimen.acceptReview(reviews, by: session.userID)
         // Style has no FieldKey — it lives in styleTags (no per-field provenance).
         if !style.isEmpty {
             if let stale = styleOriginal.isEmpty ? nil : specimen.styleTags.firstIndex(of: styleOriginal) {
@@ -284,18 +287,13 @@ struct SmartGuessSheet: View {
         coordinator?.present(.specimenSheet(specimenID))
     }
 
-    private func currentSpecimen() -> Specimen? {
+    private func currentSpecimen() -> Piece? {
         CaptureOwnerProjectionPolicy.specimen(
             id: specimenID,
             store: store,
             runsRealServices: AppConfiguration.runsRealServices,
             userID: session.userID,
             workspaceID: session.workspaceID)
-    }
-
-    /// Accepted unchanged → .manual (designer-confirmed); corrected → .edited.
-    private func promotedSource(_ value: String, _ original: String) -> ProvenanceSource {
-        value == original ? .manual : .edited
     }
 }
 

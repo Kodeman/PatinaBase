@@ -277,7 +277,7 @@ public enum VisitCloseOrchestrator {
     /// Derived from the visit's own captures, which is where the label and the
     /// rooms actually live once the context has closed.
     public static func notes(for record: FieldVisitCloseRecord,
-                             captures: [Specimen]) -> String? {
+                             captures: [Piece]) -> String? {
         let label = captures
             .compactMap { $0.visitLabel?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first { !$0.isEmpty }

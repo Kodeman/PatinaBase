@@ -467,7 +467,7 @@ struct VoiceNoteSheet: View {
         coordinator?.present(.specimenSheet(specimenID))
     }
 
-    private func currentSpecimen() -> Specimen? {
+    private func currentSpecimen() -> Piece? {
         CaptureOwnerProjectionPolicy.specimen(
             id: specimenID,
             store: store,

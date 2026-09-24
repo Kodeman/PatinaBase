@@ -18,7 +18,7 @@ struct V2CullDeckScreen: View {
     let coordinator: CaptureCoordinator
     private let sessionContext = CaptureSessionContextStore.shared
 
-    @State private var deck: [Specimen] = []
+    @State private var deck: [Piece] = []
     @State private var index = 0
     @State private var drag: CGSize = .zero
     @State private var lastAction: CullAction = .keep
@@ -28,7 +28,7 @@ struct V2CullDeckScreen: View {
 
     private let threshold: CGFloat = 120
 
-    private var current: Specimen? { index < deck.count ? deck[index] : nil }
+    private var current: Piece? { index < deck.count ? deck[index] : nil }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -83,7 +83,7 @@ struct V2CullDeckScreen: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func cardView(_ specimen: Specimen, depth: Int, isTop: Bool) -> some View {
+    private func cardView(_ specimen: Piece, depth: Int, isTop: Bool) -> some View {
         let translation = isTop ? drag : .zero
         let angle = isTop ? Double(drag.width / 18) : 0
         let scale = 1 - CGFloat(depth) * 0.04
@@ -267,7 +267,7 @@ struct V2CullDeckScreen: View {
         index = 0
     }
 
-    private func sessionSpecimens(visitID: UUID) -> [Specimen] {
+    private func sessionSpecimens(visitID: UUID) -> [Piece] {
         switch localListScope {
         case .globalFixtures:
             return store.session(visitID: visitID)

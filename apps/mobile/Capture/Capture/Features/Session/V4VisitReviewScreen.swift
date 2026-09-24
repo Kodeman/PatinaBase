@@ -32,11 +32,11 @@ struct V4VisitReviewScreen: View {
     /// Nil in mock mode, exactly as `AppContainer` holds it.
     let visitCloseDrainer: VisitCloseOutboxDrainer?
 
-    @State private var specimens: [Specimen] = []
+    @State private var specimens: [Piece] = []
     /// Paired once per CHANGE, not per body pass. Read by four computed
     /// properties, each of which the body evaluates — re-pairing per read built
     /// a VisitReviewRow per capture roughly six times per pass.
-    @State private var paired: [(specimen: Specimen, row: VisitReviewRow)] = []
+    @State private var paired: [(specimen: Piece, row: VisitReviewRow)] = []
     /// The playable segments per capture, stat'ed once per change rather than on
     /// every body pass: `playableSegments` touches the filesystem per row.
     @State private var playable: [UUID: [URL]] = [:]
@@ -93,13 +93,13 @@ struct V4VisitReviewScreen: View {
 
     // MARK: - What the visit produced
 
-    private var captures: [Specimen] { paired.filter(\.row.hasPhoto).map(\.specimen) }
+    private var captures: [Piece] { paired.filter(\.row.hasPhoto).map(\.specimen) }
 
-    private var notes: [Specimen] {
+    private var notes: [Piece] {
         paired.filter { !$0.row.hasPhoto && $0.row.hasTranscript }.map(\.specimen)
     }
 
-    private var unplaced: [Specimen] { paired.filter { !$0.row.isPlaced }.map(\.specimen) }
+    private var unplaced: [Piece] { paired.filter { !$0.row.isPlaced }.map(\.specimen) }
 
     private var summary: VisitReviewSummary {
         VisitReviewComposer.summarize(rows: paired.map(\.row),
@@ -120,7 +120,7 @@ struct V4VisitReviewScreen: View {
     }
 
     @ViewBuilder
-    private func group(_ title: String, _ members: [Specimen]) -> some View {
+    private func group(_ title: String, _ members: [Piece]) -> some View {
         if !members.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 Text("\(title.uppercased()) · \(members.count)")
@@ -141,14 +141,14 @@ struct V4VisitReviewScreen: View {
 
     // MARK: - One capture
 
-    private func row(_ specimen: Specimen) -> some View {
+    private func row(_ specimen: Piece) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             rowBody(specimen)
             rowActions(specimen)
         }
     }
 
-    private func rowBody(_ specimen: Specimen) -> some View {
+    private func rowBody(_ specimen: Piece) -> some View {
         let playable = playable[specimen.id] ?? []
         return HStack(spacing: 12) {
             glyph(specimen)
@@ -173,7 +173,7 @@ struct V4VisitReviewScreen: View {
 
     /// The thumbnail when there is one, a mic when the capture is only words.
     @ViewBuilder
-    private func glyph(_ specimen: Specimen) -> some View {
+    private func glyph(_ specimen: Piece) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 6).fill(CaptureColor.paper2)
             #if canImport(UIKit)
@@ -202,7 +202,7 @@ struct V4VisitReviewScreen: View {
     /// Decoding a JPEG is not a view's work. Off the main actor, once per
     /// capture, cached for the life of the screen — the same image read that
     /// used to run inside `body`, and therefore on every pass.
-    private func loadThumbnail(_ specimen: Specimen) async {
+    private func loadThumbnail(_ specimen: Piece) async {
         #if canImport(UIKit)
         guard thumbnails[specimen.id] == nil,
               let photo = specimen.photos.first(where: { $0.isPrimary })
@@ -217,7 +217,7 @@ struct V4VisitReviewScreen: View {
         #endif
     }
 
-    private func rowTitle(_ specimen: Specimen) -> String {
+    private func rowTitle(_ specimen: Piece) -> String {
         if let title = specimen.title?.trimmingCharacters(in: .whitespacesAndNewlines),
            !title.isEmpty {
             return title
@@ -229,7 +229,7 @@ struct V4VisitReviewScreen: View {
 
     /// Place and Change room are the same destination (S1) — what differs is
     /// only what she is being asked, so the label differs and nothing else.
-    private func rowActions(_ specimen: Specimen) -> some View {
+    private func rowActions(_ specimen: Piece) -> some View {
         let placed = VisitReviewRow(specimen: specimen).isPlaced
         return Button(placed ? "Change room" : "Place") {
             coordinator.present(.assignVenue(specimen.id))
@@ -247,7 +247,7 @@ struct V4VisitReviewScreen: View {
     /// The segments whose bytes are still on THIS phone — once a capture is
     /// receipted the sync service deletes the local files and leaves the array
     /// standing, so a control gated on the array alone would play silence.
-    private func playableSegments(_ specimen: Specimen) -> [URL] {
+    private func playableSegments(_ specimen: Piece) -> [URL] {
         (specimen.voiceAudioSegmentsRaw ?? []).compactMap { name in
             let url = store.mediaURL(for: name)
             let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])

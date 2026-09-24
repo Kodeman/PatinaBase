@@ -22,7 +22,7 @@ enum RouteSessionScreens {
         let session = container.session
         let projects = container.projects
 
-        func currentSpecimen(_ id: UUID) -> Specimen? {
+        func currentSpecimen(_ id: UUID) -> Piece? {
             CaptureOwnerProjectionPolicy.specimen(
                 id: id,
                 store: store,

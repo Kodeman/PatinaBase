@@ -72,7 +72,7 @@ public enum CaptureRouteSafetyPolicy {
 
     /// A kept item remains local until the designer explicitly routes it, but it
     /// should not reappear in the same visit's cull deck.
-    public static func canCull(_ specimen: Specimen) -> Bool {
+    public static func canCull(_ specimen: Piece) -> Bool {
         guard canCull(specimen.transferState) else { return false }
         return CaptureLifecycle.State(rawValue: specimen.lifecycleRaw) != .session
     }

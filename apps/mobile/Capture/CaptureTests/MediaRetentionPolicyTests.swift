@@ -61,7 +61,7 @@ struct CaptureStoreMediaRetentionSweepTests {
             [.modificationDate: modifiedAt], ofItemAtPath: url.path)
         let photo = CapturePhoto(filename: filename)
         photo.remotePath = "remote/\(filename)"
-        photo.specimen = specimen
+        photo.piece = specimen
         specimen.photos.append(photo)
         return url
     }
@@ -80,7 +80,7 @@ struct CaptureStoreMediaRetentionSweepTests {
         try FileManager.default.setAttributes(
             [.modificationDate: modifiedAt], ofItemAtPath: url.path)
         let photo = CapturePhoto(filename: filename)
-        photo.specimen = specimen
+        photo.piece = specimen
         specimen.photos.append(photo)
         return url
     }

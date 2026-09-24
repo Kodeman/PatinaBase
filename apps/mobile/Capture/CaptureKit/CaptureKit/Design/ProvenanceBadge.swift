@@ -8,7 +8,13 @@ import SwiftUI
 
 public struct ProvenanceBadge: View {
     private let source: ProvenanceSource
-    public init(_ source: ProvenanceSource) { self.source = source }
+    /// A confirmed guess keeps its "guess" origin and loses the dash: the dash
+    /// marks a guess still waiting for her.
+    private let confirmed: Bool
+    public init(_ source: ProvenanceSource, confirmed: Bool = false) {
+        self.source = source
+        self.confirmed = confirmed
+    }
 
     public var body: some View {
         Text(label)
@@ -20,7 +26,8 @@ public struct ProvenanceBadge: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 3)
                     .stroke(CaptureColor.provenance(source).opacity(0.5),
-                            style: StrokeStyle(lineWidth: 1, dash: source == .smartGuess ? [3, 2] : []))
+                            style: StrokeStyle(lineWidth: 1,
+                                               dash: source == .smartGuess && !confirmed ? [3, 2] : []))
             )
             .accessibilityLabel("Source: \(label)")
     }

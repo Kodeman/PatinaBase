@@ -11,8 +11,8 @@
 
 import SwiftData
 
-/// The schema Patina Field 0.1 (6) shipped, and unchanged since: the store in
-/// `CaptureTests/Fixtures/Store-0.1-6` opens under it as-is.
+/// The schema Patina Field 0.1 (6) shipped: the store in
+/// `CaptureTests/Fixtures/Store-0.1-6` is V1, and opens through the V1→V2 stage.
 ///
 /// The model classes are declared INSIDE this enum (each in its own file, as
 /// `extension CaptureSchemaV1 { @Model public final class … }`), and the app
@@ -44,22 +44,55 @@ public enum CaptureSchemaV1: VersionedSchema {
     }
 }
 
+/// V2 (W1-02): the capture record is `Piece` (lexicon ruling D3a), and a
+/// field's origin and its confirmation are separate facts (`confirmedByRaw`,
+/// `confirmedAtRaw`, `proposedValueRaw`; inventory P0-08).
+///
+/// Only the three classes that changed are redeclared (Piece.swift). The other
+/// five are V1's classes, unchanged, so V1 and V2 share them.
+public enum CaptureSchemaV2: VersionedSchema {
+    public static var versionIdentifier: Schema.Version { Schema.Version(2, 0, 0) }
+
+    public static var models: [any PersistentModel.Type] {
+        [
+            Piece.self,
+            CapturePhoto.self,
+            CaptureMeasurement.self,
+            CaptureSchemaV1.CaptureProjectRef.self,
+            CaptureSchemaV1.ScanUploadRecord.self,
+            CaptureSchemaV1.SiteRequestOutboxRecord.self,
+            CaptureSchemaV1.FieldVisitCloseRecord.self,
+            CaptureSchemaV1.TimeEntryOutboxRecord.self
+        ]
+    }
+}
+
 /// Every version Field has shipped, oldest first, and the stages between them.
 /// A new version is appended here with its stage. Every `ModelContainer` Field
 /// opens is built from this plan (`CaptureStore.makeContainer(configuration:)`).
 public enum CaptureMigrationPlan: SchemaMigrationPlan {
     public static var schemas: [any VersionedSchema.Type] {
-        [CaptureSchemaV1.self]
+        [CaptureSchemaV1.self, CaptureSchemaV2.self]
     }
 
-    public static var stages: [MigrationStage] { [] }
+    /// V1→V2 is custom because SwiftData cannot rename an entity: a lightweight
+    /// stage would drop every Specimen row. willMigrate carries the rows out of
+    /// the V1 store; `CaptureStore.makeContainer` puts them back as pieces after
+    /// the open (PieceMigrationCarry.swift says why not in didMigrate).
+    public static var stages: [MigrationStage] {
+        [
+            .custom(fromVersion: CaptureSchemaV1.self, toVersion: CaptureSchemaV2.self,
+                    willMigrate: { context in try PieceMigrationCarry.write(from: context) },
+                    didMigrate: nil)
+        ]
+    }
 }
 
 // The live model types. Retarget these at the newest version's classes when
 // one is added.
-public typealias Specimen = CaptureSchemaV1.Specimen
-public typealias CapturePhoto = CaptureSchemaV1.CapturePhoto
-public typealias CaptureMeasurement = CaptureSchemaV1.CaptureMeasurement
+public typealias Piece = CaptureSchemaV2.Piece
+public typealias CapturePhoto = CaptureSchemaV2.CapturePhoto
+public typealias CaptureMeasurement = CaptureSchemaV2.CaptureMeasurement
 public typealias CaptureProjectRef = CaptureSchemaV1.CaptureProjectRef
 public typealias ScanUploadRecord = CaptureSchemaV1.ScanUploadRecord
 public typealias SiteRequestOutboxRecord = CaptureSchemaV1.SiteRequestOutboxRecord
