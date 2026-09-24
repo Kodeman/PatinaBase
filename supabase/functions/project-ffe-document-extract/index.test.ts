@@ -165,9 +165,13 @@ Deno.test("v2 validator enforces money shape, currency shape, pairing, and price
 });
 
 Deno.test("v2 validator applies the injection guard to maker and sku", () => {
-  for (const value of ["=HYPERLINK(\"x\")", "+SUM(A1)", "@SUM(A1)", "-cmd", "Vau\u0000ghan"]) {
+  for (const value of ["=HYPERLINK(\"x\")", "+SUM(A1)", "@SUM(A1)", "-cmd", "-2+3+cmd|x", " =cmd", "Vau\u0000ghan"]) {
     assertEquals(v2({ maker: reading(value) }), null, `maker ${value}`);
     assertEquals(v2({ sku: reading(value) }), null, `sku ${value}`);
+  }
+  assertEquals(validateExtraction({ rows: [{ ...row, name: "-2+3+cmd|x" }] }), null, "text fields share the guard");
+  for (const value of ["-12", "-12.50"]) {
+    assertEquals(v2({ sku: reading(value) })?.rows[0].sku?.value, value, `plain negative number ${value} is not a formula`);
   }
 });
 
