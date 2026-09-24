@@ -12,7 +12,11 @@
 --   1. adds a nullable `receiving_inspections.inspected_local_date`, the day
 --      on the inspecting phone's calendar, sent by the client;
 --   2. redefines the trigger function to prefer that day and fall back to the
---      UTC day for older clients that do not send it. `due_date` follows.
+--      UTC day for older clients that do not send it. `due_date` follows;
+--   3. bounds that client-sent day to within one day of the UTC day of
+--      `inspected_at` (CHECK receiving_inspections_local_date_near_inspected_at),
+--      because it drives the net-30 `due_date`. Every real zone (UTC-12 to
+--      UTC+14) lands inside that window.
 --
 -- Existing `delivered_date` / `due_date` values are NOT rewritten: they are
 -- money-adjacent history. Every existing inspection has a NULL local day, so
@@ -32,6 +36,16 @@ COMMENT ON COLUMN public.receiving_inspections.inspected_local_date IS
   'The inspection''s day on the inspecting phone''s own calendar (ruling D9). '
   'When present, the receiving trigger stamps purchase_orders.delivered_date '
   'from it; NULL (older clients) falls back to the UTC day of inspected_at.';
+
+ALTER TABLE public.receiving_inspections
+  DROP CONSTRAINT IF EXISTS receiving_inspections_local_date_near_inspected_at;
+ALTER TABLE public.receiving_inspections
+  ADD CONSTRAINT receiving_inspections_local_date_near_inspected_at
+  CHECK (
+    inspected_local_date IS NULL
+    OR inspected_local_date BETWEEN (inspected_at AT TIME ZONE 'UTC')::date - 1
+                                AND (inspected_at AT TIME ZONE 'UTC')::date + 1
+  );
 
 CREATE OR REPLACE FUNCTION public.receiving_inspection_side_effects()
 RETURNS TRIGGER

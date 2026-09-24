@@ -5,7 +5,9 @@
 #   1. SQL: supabase/tests/receiving/d9_delivery_day_test.sql. An inspection
 #           carrying the phone's local day stamps that day; a legacy one falls
 #           back to the UTC day; the net-30 due_date is delivered + 30; a later
-#           inspection does not move a delivery already stamped.
+#           inspection does not move a delivery already stamped; the local
+#           day must sit within ±1 day of the UTC day (+2/-2 are refused,
+#           Kiritimati's +1 is accepted).
 #           (procurement/state_chain_test.sql would cover 00184's other paths,
 #           but it stops at fixture time; see tests/KNOWN_FAILURES.md.)
 #   2. Report (read-only): existing inspections whose UTC day differs from the

@@ -7,6 +7,11 @@
 --   3. For both, the net-30 pending balance due_date = delivered_date + 30.
 --   4. A later inspection's local day does not move an already-stamped
 --      delivered_date or due_date.
+--   5. The local day is bounded to ±1 day of the UTC day of inspected_at:
+--      +2 and -2 raise check_violation on
+--      receiving_inspections_local_date_near_inspected_at, while +1 (08:00 in
+--      Pacific/Kiritimati, UTC+14) is accepted, stamps its local day, and puts
+--      the net-30 due date 30 days after it.
 --
 -- The session zone is pinned to UTC, which is Strata's, so the fallback is the
 -- UTC day it is in production. Runs as superuser in one transaction and rolls
@@ -67,6 +72,8 @@ BEGIN
     FROM purchase_orders WHERE id = 'd9000000-0000-4000-8000-0000000000a1';
   ASSERT v_delivered = DATE '2026-09-23',
     'FAIL 1: local-day inspection should stamp 2026-09-23, got ' || COALESCE(v_delivered::text, 'NULL');
+  ASSERT v_delivered = ('2026-09-23 19:00:00 America/Los_Angeles'::timestamptz AT TIME ZONE 'UTC')::date - 1,
+    'FAIL 1b: the Los Angeles local day should be the UTC day - 1, got ' || COALESCE(v_delivered::text, 'NULL');
   SELECT due_date INTO v_due
     FROM po_payments WHERE id = 'd9000000-0000-4000-8000-0000000000a2';
   ASSERT v_due = v_delivered + 30,
@@ -106,6 +113,64 @@ BEGIN
     'FAIL 4b: an existing due_date must not move, got ' || COALESCE(v_due::text, 'NULL');
 
   RAISE NOTICE 'D9 passed: a later inspection leaves the stamped delivery day alone.';
+END
+$$;
+
+-- 5a: a local day two days off the UTC day is refused, either way.
+DO $$
+DECLARE
+  v_offset     INT;
+  v_constraint TEXT;
+BEGIN
+  FOREACH v_offset IN ARRAY ARRAY[2, -2] LOOP
+    v_constraint := NULL;
+    BEGIN
+      INSERT INTO receiving_inspections (purchase_order_id, inspected_by, outcome, inspected_at, inspected_local_date)
+      VALUES ('d9000000-0000-4000-8000-0000000000b1', 'd9000000-0000-4000-8000-000000000001', 'clean',
+              '2026-09-25 12:00:00+00', DATE '2026-09-25' + v_offset);
+    EXCEPTION WHEN check_violation THEN
+      GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+    END;
+    ASSERT v_constraint = 'receiving_inspections_local_date_near_inspected_at',
+      'FAIL 5a: a local day ' || v_offset || ' days off the UTC day should raise check_violation on '
+      || 'receiving_inspections_local_date_near_inspected_at, got ' || COALESCE(v_constraint, 'no violation');
+  END LOOP;
+
+  RAISE NOTICE 'D9 passed: a local day two days off the UTC day is refused (+2 and -2).';
+END
+$$;
+
+-- 5b: Pacific/Kiritimati (UTC+14). 08:00 on 24 Sep there is 18:00 UTC on 23 Sep,
+-- so the local day is the UTC day + 1: accepted, stamped, due 30 days later.
+INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status)
+VALUES ('d9000000-0000-4000-8000-0000000000c1', 'd9000000-0000-4000-8000-000000000001', 'd9000000-0000-4000-8000-000000000002',
+        'd9000000-0000-4000-8000-000000000003', 'net_30', 100000, 'shipped');
+
+INSERT INTO po_payments (id, purchase_order_id, kind, amount_cents, state, paid_date)
+VALUES ('d9000000-0000-4000-8000-0000000000c2', 'd9000000-0000-4000-8000-0000000000c1', 'balance', 100000, 'pending', NULL);
+
+INSERT INTO receiving_inspections (purchase_order_id, inspected_by, outcome, inspected_at, inspected_local_date)
+VALUES ('d9000000-0000-4000-8000-0000000000c1', 'd9000000-0000-4000-8000-000000000001', 'clean',
+        '2026-09-24 08:00:00 Pacific/Kiritimati', '2026-09-24');
+
+DO $$
+DECLARE
+  v_delivered DATE;
+  v_due       DATE;
+BEGIN
+  ASSERT ('2026-09-24 08:00:00 Pacific/Kiritimati'::timestamptz AT TIME ZONE 'UTC')::date = DATE '2026-09-23',
+    'FIXTURE: 08:00 in Kiritimati should be the previous UTC day';
+
+  SELECT delivered_date INTO v_delivered
+    FROM purchase_orders WHERE id = 'd9000000-0000-4000-8000-0000000000c1';
+  ASSERT v_delivered = DATE '2026-09-24',
+    'FAIL 5b: the Kiritimati local day (UTC day + 1) should stamp 2026-09-24, got ' || COALESCE(v_delivered::text, 'NULL');
+  SELECT due_date INTO v_due
+    FROM po_payments WHERE id = 'd9000000-0000-4000-8000-0000000000c2';
+  ASSERT v_due = DATE '2026-10-24',
+    'FAIL 5c: the Kiritimati net-30 due_date should be 2026-10-24, got ' || COALESCE(v_due::text, 'NULL');
+
+  RAISE NOTICE 'D9 passed: a +1 local day (Kiritimati) is accepted, stamped, and due 30 days later.';
 END
 $$;
 
