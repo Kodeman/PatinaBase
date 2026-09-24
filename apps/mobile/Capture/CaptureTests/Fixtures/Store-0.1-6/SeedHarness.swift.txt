@@ -1,0 +1,605 @@
+//  SeedStoreFixture016.swift — TEMPORARY seed harness (SQ-195).
+//
+//  Runs inside Patina Field 0.1 (6), source b1447ba7d, and is never committed
+//  to that commit. It opens the store the way the app does at launch
+//  (`CaptureStore.resilient(persistent: true)`), fills it through the app's own
+//  CaptureKit write paths, and writes `fixture-manifest.json` beside it: every
+//  row as `StoreFixtureProjection` reads it, the SHA-256 of every media file,
+//  and what the shipped build's own outbox queries return.
+
+import AVFoundation
+import Foundation
+import ImageIO
+import SwiftData
+import Testing
+import UIKit
+import UniformTypeIdentifiers
+@testable import CaptureKit
+
+private struct FixtureProjects: ProjectsService {
+    let projects: [FieldProject]
+    let detail: FieldProjectDetail
+    func listProjects() async throws -> [FieldProject] { projects }
+    func projectDetail(id: String) async throws -> FieldProjectDetail { detail }
+}
+
+private struct SeedFailure: Error, CustomStringConvertible {
+    let description: String
+}
+
+@MainActor
+final class SeedStoreFixture016 {
+
+    // Two studios on one phone, plus the unowned legacy row a pre-Option-B
+    // build left behind. User ids are lower-case, as `CaptureOwnerIdentity`
+    // normalises them; the hours queues keep `UUID.uuidString`'s upper case,
+    // because that is what V4VisitReviewScreen and FieldLogTimeDraft write.
+    static let ownerA = CaptureOwnerIdentity(
+        userID: "0f6a8c52-3d1e-4b7a-9c20-5e8d1f4a7b36",
+        workspaceID: "a4c1e9d0-7b2f-4e6a-8d35-19f0c2b7e4d8")!
+    static let ownerB = CaptureOwnerIdentity(
+        userID: "7d2e4f61-0a9b-4c3d-8e5f-6a1b2c3d4e5f",
+        workspaceID: "c9e8d7f6-5a4b-4c3d-9e2f-1a0b9c8d7e6f")!
+    static let mapleStreet = "3b9f1c2e-6d4a-4f8b-9e1c-7a2d5b8e0f13"
+    static let highPoint = "5e2a7c9d-1b3f-4a6e-8d0c-2f4b6a8c0e15"
+    static let livingRoom = "8a1c3e5f-7b9d-4e2a-9c4e-6b8d0f2a4c17"
+
+    var labels: [String: String] = [:]
+
+    @Test func seedTheShippedBuildsStore() async throws {
+        let store = CaptureStore.resilient(persistent: true)
+        #expect(store.openReport.didResetIncompatibleStore == false)
+        #expect(store.openReport.persistence != .inMemoryFallback)
+        #expect(store.openReport.persistence != .inMemoryByDesign)
+        let before = try StoreFixtureProjection.snapshot(store.context)
+        let rowsBefore = before.values.reduce(0) { $0 + $1.count }
+        #expect(rowsBefore == 0, "the seed must start from an empty store")
+
+        try seedCaptures(store)
+        try seedContextCaptures(store)
+        await seedProjectCache(store)
+        try seedScanUploads(store)
+        try seedSiteRequests(store)
+        try seedVisitCloses(store)
+        try seedTimeEntries(store)
+        try store.save()
+
+        try writeManifest(store)
+    }
+
+    // MARK: - Media, as the device writes it
+
+    static func image(_ index: Int) -> UIImage {
+        let size = CGSize(width: 96, height: 128)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor(hue: CGFloat(index % 12) / 12, saturation: 0.45, brightness: 0.8, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 8 + (index * 7) % 56, y: 24, width: 28, height: 48))
+        }
+    }
+
+    static func heic(_ index: Int) throws -> Data {
+        let data = NSMutableData()
+        guard let cgImage = image(index).cgImage,
+              let destination = CGImageDestinationCreateWithData(
+                data, UTType.heic.identifier as CFString, 1, nil) else {
+            throw SeedFailure(description: "no HEIC destination")
+        }
+        CGImageDestinationAddImage(destination, cgImage,
+                                   [kCGImageDestinationLossyCompressionQuality: 0.6] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            throw SeedFailure(description: "HEIC encode failed")
+        }
+        return data as Data
+    }
+
+    /// A silent AAC segment, written where SpeechVoiceNoteService writes one:
+    /// straight into the media directory under VoiceRecordingPolicy's name.
+    static func writeSilentSegment(to url: URL, seconds: Double) throws {
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 16_000,
+            AVNumberOfChannelsKey: 1
+        ]
+        let file = try AVAudioFile(forWriting: url, settings: settings,
+                                   commonFormat: .pcmFormatFloat32, interleaved: false)
+        let frames = AVAudioFrameCount(seconds * 16_000)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                            frameCapacity: frames) else {
+            throw SeedFailure(description: "no PCM buffer")
+        }
+        buffer.frameLength = frames
+        try file.write(from: buffer)
+    }
+
+    // MARK: - Captures (Specimen + photos + measurements)
+
+    /// ViewfinderModel.makeDraft + captureFrame: the owner-projected draft, a
+    /// venue stamp, and one CapturePhoto per frame whose bytes went through
+    /// `store.writeMedia` under a `<UUID>.heic` name.
+    @discardableResult
+    func capture(_ store: CaptureStore, owner: CaptureOwnerIdentity?, title: String,
+                 photos: Int, category: SpecimenCategory = .seating,
+                 destination: CaptureDestination = .library,
+                 measurements: [(MeasurementAxis, Double, MeasureSource)] = []) throws -> Specimen {
+        let draft = try #require(CaptureOwnerProjectionPolicy.newDraft(
+            store: store, sessionID: UUID(),
+            runsRealServices: owner != nil,
+            userID: owner?.userID, workspaceID: owner?.workspaceID))
+        draft.venue = VenueStamp(projectId: Self.mapleStreet, projectName: "Maple St",
+                                 projectRoomId: Self.livingRoom, room: "Living",
+                                 shelf: "Seating · maybe", latitude: 35.9557, longitude: -80.0053,
+                                 accuracyMeters: 8, placemarkName: "High Point · Showroom 214",
+                                 timezoneIdentifier: "America/New_York")
+        draft.category = category
+        draft.destination = destination
+        draft.setValue(title, for: .title, source: .manual)
+        draft.setValue("Holloway & Co.", for: .maker, source: .ocr)
+        draft.setValue("LQ-3S-OAK", for: .sku, source: .ocr)
+        draft.setValue("312000", for: .price, source: .ocr)
+        draft.setConfidence(0.91, for: .sku)
+        draft.scannedCodes = ["012345678905"]
+        draft.materials = ["white oak", "linen"]
+        draft.colors = ["natural"]
+        for index in 0..<photos {
+            let filename = "\(UUID().uuidString).heic"
+            try store.writeMedia(try Self.heic(draft.photos.count + index * 3), filename: filename)
+            let photo = CapturePhoto(filename: filename, width: 96, height: 128,
+                                     isPrimary: index == 0, order: draft.photos.count,
+                                     captureModeRaw: index == 1 ? CameraMode.tag.rawValue
+                                                                : CameraMode.photo.rawValue)
+            photo.specimen = draft
+            draft.photos.append(photo)
+        }
+        for (axis, millimeters, source) in measurements {
+            draft.addMeasurement(axis: axis, millimeters: millimeters, source: source)
+        }
+        try store.save()
+        return draft
+    }
+
+    func label(_ specimen: Specimen, _ words: String) {
+        labels[specimen.id.uuidString] = words
+    }
+
+    /// The transfer transitions LocalCaptureSyncService makes, in its order.
+    static func enqueue(_ s: Specimen) {
+        s.status = .ready
+        s.applyTransferState(CaptureTransferState(phase: .queued, retryCount: s.retryCount))
+    }
+
+    static func upload(_ s: Specimen, progress: Int) {
+        s.applyTransferState(CaptureTransferState(phase: .uploading, progress: progress,
+                                                  retryCount: s.retryCount))
+    }
+
+    static func awaitConfirmation(_ s: Specimen) {
+        s.applyTransferState(CaptureTransferState(phase: .awaitingConfirmation, progress: 100,
+                                                  retryCount: s.retryCount))
+    }
+
+    static func commit(_ s: Specimen) {
+        enqueue(s)
+        upload(s, progress: 100)
+        awaitConfirmation(s)
+        s.applyTransferState(CaptureTransferState(
+            phase: .complete, progress: 100, retryCount: s.retryCount,
+            receiptID: UUID().uuidString.lowercased()))
+    }
+
+    func seedCaptures(_ store: CaptureStore) throws {
+        let owner = Self.ownerA
+        let chairMeasures: [(MeasurementAxis, Double, MeasureSource)] = [
+            (.width, 812, .arkit), (.depth, 870, .arkit), (.height, 760, .manual)
+        ]
+
+        let local = try capture(store, owner: owner, title: "Lounge chair, draft", photos: 2,
+                                measurements: chairMeasures)
+        label(local, "Specimen · local draft (status draft), never saved to the outbox")
+
+        let ready = try capture(store, owner: owner, title: "Side table", photos: 1,
+                                category: .table, measurements: [(.diagonal, 540, .arkit)])
+        ready.status = .ready
+        label(ready, "Specimen · ready (saved, not yet picked up by a drain)")
+
+        let queued = try capture(store, owner: owner, title: "Floor lamp", photos: 2,
+                                 category: .lighting, destination: .inbox)
+        Self.enqueue(queued)
+        label(queued, "Specimen · queued (offline, awaiting signal)")
+
+        let uploading = try capture(store, owner: owner, title: "Wool rug", photos: 1,
+                                    category: .rug, measurements: [(.width, 2440, .manual)])
+        Self.enqueue(uploading)
+        Self.upload(uploading, progress: 35)
+        label(uploading, "Specimen · uploading at 35%")
+
+        let awaiting = try capture(store, owner: owner, title: "Credenza", photos: 1,
+                                   category: .storage)
+        Self.enqueue(awaiting)
+        Self.upload(awaiting, progress: 100)
+        Self.awaitConfirmation(awaiting)
+        label(awaiting, "Specimen · uploading, lifecycle awaitingConfirmation (bytes up, no receipt)")
+
+        let retryable = try capture(store, owner: owner, title: "Pendant", photos: 1,
+                                    category: .lighting)
+        Self.enqueue(retryable)
+        Self.upload(retryable, progress: 60)
+        retryable.applyTransferState(CaptureTransferState(
+            phase: .retryableFailure, progress: 60,
+            errorMessage: "The Internet connection appears to be offline.",
+            retryCount: retryable.retryCount + 1))
+        label(retryable, "Specimen · failed, lifecycle failed (retryable, retryCount 1)")
+
+        let rejected = try capture(store, owner: owner, title: "Tile sample", photos: 1,
+                                   category: .tile)
+        Self.enqueue(rejected)
+        rejected.applyTransferState(CaptureTransferState(
+            phase: .rejected, progress: 0,
+            errorMessage: "A photo for this capture is missing from the phone.",
+            retryCount: rejected.retryCount))
+        label(rejected, "Specimen · failed, lifecycle rejected (needs review)")
+
+        try seedCommittedLanes(store, owner: owner)
+
+        let otherStudio = try capture(store, owner: Self.ownerB, title: "Other studio's stool",
+                                      photos: 1, measurements: [(.height, 650, .manual)])
+        Self.enqueue(otherStudio)
+        label(otherStudio, "Specimen · queued, owned by the second workspace (owner B)")
+
+        let legacy = try capture(store, owner: nil, title: "Unowned legacy capture", photos: 1)
+        legacy.status = .ready
+        label(legacy, "Specimen · ready with NO owner stamp (mock/legacy path; quarantined)")
+        try store.save()
+    }
+
+    /// Committed captures whose wave-4 write lanes keep them in `outbox()`:
+    /// every FieldWriteState on the margin, punch and degrade lanes, and every
+    /// ProjectPlacementState, spread over five rows, plus one fully settled row.
+    func seedCommittedLanes(_ store: CaptureStore, owner: CaptureOwnerIdentity) throws {
+        var rows: [Specimen] = []
+        for index in 0..<6 {
+            let row = try capture(store, owner: owner, title: "Committed capture \(index + 1)",
+                                  photos: 1, category: .decor,
+                                  measurements: [(.width, 300 + Double(index), .arkit)])
+            Self.commit(row)
+            row.configureProjectPlacement(projectID: Self.mapleStreet, roomID: Self.livingRoom,
+                                          slotID: UUID().uuidString.lowercased(), category: "decor")
+            row.requestMarginNote(noteID: UUID())
+            row.requestPunchTask(taskID: UUID(), owner: "designer", partyID: nil)
+            row.requestDegradeNote(noteID: UUID(), body: "Couldn't hand this to the GC — kept as a note.")
+            rows.append(row)
+        }
+        let placed = { (row: Specimen) in
+            row.markProjectPlacementStarted()
+            row.applyProjectPlacementReceipt(ProjectPlacementReceipt(
+                projectID: UUID(uuidString: Self.mapleStreet)!, ffeItemID: UUID(), specID: UUID(),
+                productID: UUID(), roomID: UUID(uuidString: Self.livingRoom), placement: "created"))
+        }
+
+        // 1 — every lane pending
+        label(rows[0], "Specimen · committed; placement pending, margin/punch/degrade pending")
+
+        // 2 — every lane in flight
+        rows[1].markProjectPlacementStarted()
+        rows[1].markMarginNoteStarted()
+        rows[1].markPunchTaskStarted()
+        rows[1].markDegradeNoteStarted()
+        label(rows[1], "Specimen · committed; placement placing, margin/punch/degrade writing")
+
+        // 3 — every lane failed once
+        rows[2].markProjectPlacementStarted()
+        rows[2].markProjectPlacementFailed("The request timed out.")
+        rows[2].markMarginNoteFailed("The request timed out.")
+        rows[2].markPunchTaskFailed("The request timed out.")
+        rows[2].markDegradeNoteFailed("The request timed out.")
+        label(rows[2], "Specimen · committed; placement failed, margin/punch/degrade failed (retry 1)")
+
+        // 4 — refused, and re-placed after committing (replay pending)
+        placed(rows[3])
+        rows[3].markMarginNoteRefused("new row violates row-level security policy")
+        rows[3].markPunchTaskRefused("new row violates row-level security policy")
+        rows[3].markDegradeNoteRefused("new row violates row-level security policy")
+        rows[3].place(projectID: Self.highPoint, projectRoomID: nil, room: "Showroom 214")
+        label(rows[3], "Specimen · committed; placed, margin/punch/degrade refused, placementReplayPending")
+
+        // 5 — unwritable: margin through the retry ceiling, the others first-attempt
+        placed(rows[4])
+        for _ in 0..<FieldWriteGate.retryCeiling {
+            rows[4].markMarginNoteFailed("Internal Server Error")
+        }
+        rows[4].markPunchTaskUnwritable("null value in column \"project_id\" violates not-null constraint")
+        rows[4].markDegradeNoteUnwritable("insert or update on table violates foreign key constraint")
+        label(rows[4], "Specimen · committed; placed, margin unwritable (retry ceiling), punch/degrade unwritable")
+
+        // 6 — fully settled; not in outbox()
+        placed(rows[5])
+        rows[5].markMarginNoteStarted(); rows[5].markMarginNoteWritten()
+        rows[5].markPunchTaskStarted(); rows[5].markPunchTaskWritten()
+        rows[5].markDegradeNoteStarted(); rows[5].markDegradeNoteWritten()
+        label(rows[5], "Specimen · committed and fully synced; placed, every lane written")
+        try store.save()
+    }
+
+    /// ContextCaptureService — the mid-scan detail photo and voice note paths.
+    func seedContextCaptures(_ store: CaptureStore) throws {
+        let service = ContextCaptureService(store: store, owner: Self.ownerA)
+        let provenance = ContextCaptureProvenance(
+            scanSessionId: UUID().uuidString.lowercased(), projectId: Self.mapleStreet,
+            projectRoomId: Self.livingRoom, cameraPoseRowMajor: nil,
+            capturedAt: ISO8601DateFormatter().string(from: Date()))
+        let jpeg = try #require(Self.image(40).jpegData(compressionQuality: 0.6))
+        let photo = service.enqueuePhoto(imageData: jpeg, width: 96, height: 128,
+                                         provenance: provenance)
+        label(photo, "Specimen · ready, context detail photo (ContextCaptureService, .jpg)")
+
+        let noteID = UUID()
+        let segments = (0..<2).map { VoiceRecordingPolicy.segmentFilename(noteID: noteID, index: $0) }
+        for name in segments {
+            try Self.writeSilentSegment(to: store.mediaURL(for: name), seconds: 0.5)
+        }
+        let voice = service.enqueueVoice(
+            transcript: "Check the skirting behind the radiator before we order.",
+            audioFilename: segments[0], audioSegments: segments,
+            transcriptSource: "on_device", durationSeconds: 1.0, provenance: provenance)
+        label(voice, "Specimen · ready, context voice note with two .m4a segments")
+    }
+
+    // MARK: - Project cache (CaptureProjectRef)
+
+    func seedProjectCache(_ store: CaptureStore) async {
+        let maple = FieldProject(id: Self.mapleStreet, name: "Maple St", status: "active")
+        let high = FieldProject(id: Self.highPoint, name: "High Point showroom", status: "active")
+        let detail = FieldProjectDetail(
+            project: maple,
+            specRooms: [FieldProjectRoom(id: Self.livingRoom, name: "Living"),
+                        FieldProjectRoom(id: UUID().uuidString.lowercased(), name: "Dining")],
+            rooms: [FieldProjectRoom(id: UUID().uuidString.lowercased(), name: "Living room")])
+        let cacheA = CaptureProjectCache(
+            store: store, projects: FixtureProjects(projects: [maple, high], detail: detail))
+        await cacheA.refreshList(owner: Self.ownerA)
+        await cacheA.refreshDetail(projectID: Self.mapleStreet, owner: Self.ownerA)
+        cacheA.recordFiling(projectID: Self.mapleStreet,
+                            at: CaptureCoordinate(latitude: 35.9557, longitude: -80.0053),
+                            owner: Self.ownerA)
+        cacheA.recordVisit(projectID: Self.mapleStreet, owner: Self.ownerA)
+
+        let cacheB = CaptureProjectCache(
+            store: store, projects: FixtureProjects(projects: [high], detail: detail))
+        await cacheB.refreshList(owner: Self.ownerB)
+
+        // S2CreateProjectScreen: a project made offline, no remote id yet.
+        let offline = CaptureProjectRef(remoteId: nil, name: "Garage studio", owner: Self.ownerA)
+        store.context.insert(offline)
+        try? store.save()
+
+        for ref in (try? store.context.fetch(FetchDescriptor<CaptureProjectRef>())) ?? [] {
+            let whose = ref.belongs(to: Self.ownerA) ? "owner A" : "owner B"
+            labels[ref.id.uuidString] = "CaptureProjectRef · \(ref.name), \(whose)"
+                + (ref.remoteId == nil ? ", created offline (no remote id)" : "")
+        }
+    }
+
+    // MARK: - Site-scan uploads (ScanUploadRecord)
+
+    static func artifacts(_ statuses: [ScanArtifactUploadState.Status]) -> [ScanArtifactUploadState] {
+        let kinds: [(String, String, String, String?)] = [
+            ("bundleManifest", "manifest.json", "application/json", "bundle_manifest_url"),
+            ("usdz", "room.usdz", "model/vnd.usdz+zip", "usdz_url"),
+            ("capturedRoomJson", "captured-room.json", "application/json", "captured_room_json_url"),
+            ("heroFrame", "hero.heic", "image/heic", nil),
+            ("coverageHeatmap", "coverage.png", "image/png", nil)
+        ]
+        return zip(kinds, statuses).map { kind, status in
+            let uploaded = status == .uploaded
+            return ScanArtifactUploadState(
+                kind: kind.0, relativePath: kind.1, mimeType: kind.2,
+                storagePath: uploaded ? "room-scans/\(ownerA.userID)/\(kind.1)" : nil,
+                remoteUrl: nil, sha256: uploaded ? String(repeating: "a", count: 64) : nil,
+                column: kind.3, status: status,
+                attempts: status == .failed ? 2 : (status == .pending ? 0 : 1),
+                lastError: status == .failed ? "The network connection was lost." : nil,
+                shadowUploaded: uploaded ? true : nil,
+                shadowSha256: uploaded ? String(repeating: "a", count: 64) : nil,
+                shadowMatched: uploaded ? true : nil)
+        }
+    }
+
+    func seedScanUploads(_ store: CaptureStore) throws {
+        let cases: [(String, [ScanArtifactUploadState.Status], CaptureTransferState)] = [
+            ("queued", [.pending, .pending, .pending, .pending, .pending],
+             CaptureTransferState(phase: .queued)),
+            ("uploading", [.uploaded, .uploading, .pending, .pending, .skipped],
+             CaptureTransferState(phase: .uploading, progress: 20)),
+            ("awaitingConfirmation", [.uploaded, .uploaded, .uploaded, .uploaded, .skipped],
+             CaptureTransferState(phase: .awaitingConfirmation, progress: 100)),
+            ("retryableFailure", [.uploaded, .failed, .pending, .pending, .pending],
+             CaptureTransferState(phase: .retryableFailure, progress: 20,
+                                  errorMessage: "The network connection was lost.", retryCount: 1)),
+            ("rejected", [.uploaded, .failed, .failed, .pending, .pending],
+             CaptureTransferState(phase: .rejected, progress: 20,
+                                  errorMessage: "This scan is missing its room model.")),
+            ("complete", [.uploaded, .uploaded, .uploaded, .uploaded, .uploaded],
+             CaptureTransferState(phase: .complete, progress: 100,
+                                  receiptID: UUID().uuidString.lowercased()))
+        ]
+        for (name, statuses, transfer) in cases {
+            let key = SiteScanBundleHome.relativeKey(
+                for: URL(fileURLWithPath: "/SiteScans/site-scan-\(UUID().uuidString.lowercased())"))
+            let record = try store.insertScanUploadRecord(ScanUploadRecord(
+                bundlePath: key, scanID: UUID().uuidString, roomID: Self.livingRoom,
+                name: "Living — \(name)", projectID: Self.mapleStreet,
+                projectRoomID: Self.livingRoom, owner: Self.ownerA))
+            store.updateScanUploadRecord(record, artifacts: Self.artifacts(statuses),
+                                         transfer: transfer)
+            labels[key] = "ScanUploadRecord · \(name)"
+        }
+    }
+
+    // MARK: - Site-request guest deliveries (SiteRequestOutboxRecord)
+
+    func seedSiteRequests(_ store: CaptureStore) throws {
+        let plan: [(String, [SiteRequestOutboxState], SiteRequestOutboxTerminalReason?)] = [
+            ("queued", [], nil),
+            ("uploading", [.uploading], nil),
+            ("awaitingReceipt", [.uploading, .awaitingReceipt], nil),
+            ("delivered", [.uploading, .awaitingReceipt, .delivered], nil),
+            ("failed", [.uploading, .failed], nil),
+            ("terminal", [.uploading, .terminal], .requestChanged)
+        ]
+        for (name, path, reason) in plan {
+            let deliveryID = UUID()
+            // SiteRequestScreens.captureProof + enqueue(submission:mediaPaths:)
+            let proof = try store.writeMedia(try Self.heic(50 + labels.count),
+                                             filename: "site-proof-\(UUID().uuidString).heic")
+            let submission = SiteDeliverySubmission(
+                requestID: UUID().uuidString.lowercased(), itemID: UUID().uuidString.lowercased(),
+                itemVersionID: UUID().uuidString.lowercased(), clientDeliveryID: deliveryID,
+                uploadIDs: [UUID().uuidString.lowercased()],
+                skippedShotLabels: name == "failed" ? ["Behind the door"] : [])
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let payload = try encoder.encode(submission)
+            let payloadURL = try store.writeMedia(
+                payload, filename: "site-delivery-\(deliveryID.uuidString).json")
+            let record = SiteRequestOutboxRecord(
+                clientDeliveryID: deliveryID, requestID: submission.requestID,
+                itemID: submission.itemID, itemVersionID: submission.itemVersionID,
+                payloadPath: payloadURL.path, mediaPaths: [proof.path],
+                checksumSHA256: SiteRequestChecksum.sha256(payload))
+            try store.enqueueSiteRequestDelivery(record)
+            for state in path {
+                try store.transitionSiteRequestDelivery(
+                    record, to: state,
+                    error: state == .failed ? "The request timed out." : nil,
+                    serverDeliverableID: state == .delivered ? UUID().uuidString.lowercased() : nil,
+                    terminalReason: state == .terminal ? reason : nil)
+            }
+            labels[deliveryID.uuidString] = "SiteRequestOutboxRecord · \(name)"
+        }
+    }
+
+    // MARK: - Hours (FieldVisitCloseRecord, TimeEntryOutboxRecord)
+
+    static let hoursOutcomes: [(String, [FieldWriteOutcome])] = [
+        ("pending", []),
+        ("writing", []),
+        ("failed", [.failed("Internal Server Error")]),
+        ("refused", [.refused("new row violates row-level security policy")]),
+        ("unwritable", [.unsatisfiable("insert or update violates foreign key constraint")]),
+        ("written", [.written]),
+        ("pending after deferral", [.deferred("You're offline.")]),
+        ("unwritable at retry ceiling", Array(repeating: .failed("Internal Server Error"),
+                                              count: FieldWriteGate.retryCeiling))
+    ]
+
+    func seedVisitCloses(_ store: CaptureStore) throws {
+        let ownerUserID = try #require(UUID(uuidString: Self.ownerA.userID))
+        for (index, entry) in Self.hoursOutcomes.enumerated() {
+            let visitID = UUID()
+            let end = Date().addingTimeInterval(-Double(index) * 3_600)
+            // V4VisitReviewScreen.logTheHours
+            let record = FieldVisitCloseRecord(
+                visitID: visitID, timeEntryID: UUID(), projectID: Self.mapleStreet,
+                ownerUserID: ownerUserID.uuidString, startedAt: end.addingTimeInterval(-95 * 60),
+                endedAt: end, durationMinutes: 95, billable: index % 3 != 2)
+            store.context.insert(record)
+            try store.save()
+            // VisitCloseOutboxDrainer.drain
+            if entry.0 == "writing" { record.state = .writing }
+            for outcome in entry.1 {
+                record.state = .writing
+                VisitCloseOrchestrator.apply(outcome, to: record, now: Date())
+            }
+            try store.save()
+            labels[visitID.uuidString] = "FieldVisitCloseRecord · \(entry.0)"
+                + (record.billable ? "" : " (not billable)")
+        }
+    }
+
+    func seedTimeEntries(_ store: CaptureStore) throws {
+        let ownerUserID = try #require(UUID(uuidString: Self.ownerA.userID))
+        let activities: [FieldTimeActivity] = [.travel, .siteVisit, .sourcing, .client, .design, .admin]
+        for (index, entry) in Self.hoursOutcomes.enumerated() {
+            // LogTimeSheet: the draft becomes the durable record.
+            let draft = FieldLogTimeDraft(
+                projectID: Self.mapleStreet, projectName: "Maple St",
+                startedAt: Date().addingTimeInterval(-Double(index + 1) * 7_200),
+                durationMinutes: 30 + 15 * index,
+                activity: activities[index % activities.count],
+                billable: index % 2 == 0,
+                notes: index == 0 ? "Maple St → High Point" : "",
+                rateRole: index == 1 ? .leadDesigner : nil)
+            let entryID = UUID()
+            let record = try #require(draft.record(entryID: entryID, ownerUserID: ownerUserID))
+            store.context.insert(record)
+            try store.save()
+            // TimeEntryOutboxDrainer.drain
+            if entry.0 == "writing" { record.state = .writing }
+            for outcome in entry.1 {
+                record.state = .writing
+                TimeEntryOutboxOrchestrator.apply(outcome, to: record, now: Date())
+            }
+            try store.save()
+            labels[entryID.uuidString] = "TimeEntryOutboxRecord · \(entry.0)"
+        }
+    }
+
+    // MARK: - Manifest
+
+    func writeManifest(_ store: CaptureStore) throws {
+        let storeURL = try #require(store.container.configurations.first?.url)
+        let mediaDirectory = store.mediaDirectory()
+        var media: [String: String] = [:]
+        for name in try FileManager.default.contentsOfDirectory(atPath: mediaDirectory.path) {
+            let data = try Data(contentsOf: mediaDirectory.appendingPathComponent(name))
+            #expect(!data.isEmpty, "media file \(name) is empty")
+            media[name] = StoreFixtureProjection.sha256(data)
+        }
+
+        let userInitiated = VisitCloseDrainTrigger.userInitiated
+        let queries: [String: [String]] = [
+            "outbox()": store.outbox().map(\.id.uuidString).sorted(),
+            "outbox(owner: A)": store.outbox(owner: Self.ownerA).map(\.id.uuidString).sorted(),
+            "outbox(owner: B)": store.outbox(owner: Self.ownerB).map(\.id.uuidString).sorted(),
+            "visitCloseOutbox(owner: A)":
+                store.visitCloseOutbox(owner: Self.ownerA).map(\.visitID.uuidString).sorted(),
+            "visitCloseDrainable(owner: A, userInitiated)":
+                VisitCloseOrchestrator.drainable(store.visitCloseOutbox(owner: Self.ownerA),
+                                                 at: Date(), trigger: userInitiated)
+                    .map(\.visitID.uuidString).sorted(),
+            "timeEntryOutbox(owner: A)":
+                store.timeEntryOutbox(owner: Self.ownerA).map(\.entryID.uuidString).sorted(),
+            "timeEntryDrainable(owner: A, userInitiated)":
+                TimeEntryOutboxOrchestrator.drainable(store.timeEntryOutbox(owner: Self.ownerA),
+                                                      at: Date(), trigger: userInitiated)
+                    .map(\.entryID.uuidString).sorted(),
+            "siteRequestOutbox()": store.siteRequestOutbox().map(\.clientDeliveryID.uuidString).sorted(),
+            "scanUploadRecords(owner: A)":
+                store.scanUploadRecords(owner: Self.ownerA).map(\.bundlePath).sorted(),
+            "scanUploadRecords(owner: A, includeComplete: true)":
+                store.scanUploadRecords(owner: Self.ownerA, includeComplete: true)
+                    .map(\.bundlePath).sorted(),
+            "scanBundlePathsProtectedFromSweep()": store.scanBundlePathsProtectedFromSweep().sorted()
+        ]
+
+        let manifest = StoreFixtureManifest(
+            sourceCommit: "b1447ba7da595c94e724611c28b4e8439267f0dc",
+            build: "Patina Field 0.1 (6)",
+            storeRung: store.openReport.persistence.rawValue,
+            storeFilename: storeURL.lastPathComponent,
+            seededStorePath: storeURL.path,
+            seededMediaPath: mediaDirectory.path,
+            rows: try StoreFixtureProjection.snapshot(store.context),
+            media: media,
+            labels: labels,
+            queries: queries)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let out = storeURL.deletingLastPathComponent().appendingPathComponent("fixture-manifest.json")
+        try encoder.encode(manifest).write(to: out, options: .atomic)
+        print("SQ195 store=\(storeURL.path) media=\(mediaDirectory.path) manifest=\(out.path)")
+    }
+}
