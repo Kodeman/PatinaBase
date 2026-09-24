@@ -326,8 +326,8 @@ public final class FirstLaunchTourModel {
             surfaceKey: SurfaceKeys.IOSApp.FirstLaunchTour.step3Profile,
             anchor: .profileMonogram,
             fallback: (
-                heading: "Your Studio",
-                body: "Your studio — projects, proposals, invoices and files"
+                heading: "Your Projects",
+                body: "Your projects — proposals, invoices and files"
             )
         ),
     ]

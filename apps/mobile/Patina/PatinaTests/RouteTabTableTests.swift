@@ -54,25 +54,25 @@ struct RouteTabTableTests {
         (.styleQuiz, .pieces),
         (.styleResult(result: style), .pieces),
 
-        (.studio, .studio),
-        (.profile, .studio),
-        (.notifications, .studio),
-        (.designerConsultation, .studio),
-        (.designRequests(focusLeadId: nil), .studio),
-        (.projectList, .studio),
-        (.projectDetail(projectId: "project-1"), .studio),
-        (.decisionList, .studio),
-        (.decisionDetail(decisionId: "decision-1"), .studio),
-        (.threadList, .studio),
-        (.threadDetail(threadId: "thread-1"), .studio),
-        (.proposalList, .studio),
-        (.proposalDetail(proposalId: "proposal-1"), .studio),
-        (.invoiceList, .studio),
-        (.invoiceDetail(invoiceId: "invoice-1"), .studio),
-        (.budget, .studio),
-        (.documentList, .studio),
-        (.orderList, .studio),
-        (.orderDetail(orderId: "fulfillment:order-1"), .studio)
+        (.studio, .projects),
+        (.profile, .projects),
+        (.notifications, .projects),
+        (.designerConsultation, .projects),
+        (.designRequests(focusLeadId: nil), .projects),
+        (.projectList, .projects),
+        (.projectDetail(projectId: "project-1"), .projects),
+        (.decisionList, .projects),
+        (.decisionDetail(decisionId: "decision-1"), .projects),
+        (.threadList, .projects),
+        (.threadDetail(threadId: "thread-1"), .projects),
+        (.proposalList, .projects),
+        (.proposalDetail(proposalId: "proposal-1"), .projects),
+        (.invoiceList, .projects),
+        (.invoiceDetail(invoiceId: "invoice-1"), .projects),
+        (.budget, .projects),
+        (.documentList, .projects),
+        (.orderList, .projects),
+        (.orderDetail(orderId: "fulfillment:order-1"), .projects)
     ]
 
     // MARK: - The table
@@ -101,7 +101,7 @@ struct RouteTabTableTests {
         let today = Self.expected.filter { $0.1 == .today }.count
         let spaces = Self.expected.filter { $0.1 == .spaces }.count
         let pieces = Self.expected.filter { $0.1 == .pieces }.count
-        let studio = Self.expected.filter { $0.1 == .studio }.count
+        let studio = Self.expected.filter { $0.1 == .projects }.count
         #expect(today == 1)
         #expect(spaces == 11)
         #expect(pieces == 6)
@@ -126,7 +126,7 @@ struct RouteTabTableTests {
         #expect(RouteTabTable.rootRoute(for: .today) == .heroFrame)
         #expect(RouteTabTable.rootRoute(for: .spaces) == .yourSpaces)
         #expect(RouteTabTable.rootRoute(for: .pieces) == .emergence(pieceId: nil))
-        #expect(RouteTabTable.rootRoute(for: .studio) == .studio)
+        #expect(RouteTabTable.rootRoute(for: .projects) == .studio)
     }
 
     @Test
@@ -158,7 +158,7 @@ struct RouteTabTableTests {
 
     @Test
     func theBarPrintsTheShortLabels() {
-        #expect(PatinaTab.allCases.map(\.title) == ["Today", "Spaces", "Pieces", "Studio"])
+        #expect(PatinaTab.allCases.map(\.title) == ["Today", "Spaces", "Pieces", "Projects"])
     }
 
     @Test
@@ -169,7 +169,7 @@ struct RouteTabTableTests {
         #expect(PatinaTab.today.canonicalName == "Today")
         #expect(PatinaTab.spaces.canonicalName == "Your Spaces")
         #expect(PatinaTab.pieces.canonicalName == "Browse pieces")
-        #expect(PatinaTab.studio.canonicalName == "Your Studio")
+        #expect(PatinaTab.projects.canonicalName == "Your Projects")
     }
 
     @Test
@@ -183,7 +183,7 @@ struct RouteTabTableTests {
 
     @Test
     func theBarIsFourTabsInOrder() {
-        #expect(PatinaTab.allCases == [.today, .spaces, .pieces, .studio])
+        #expect(PatinaTab.allCases == [.today, .spaces, .pieces, .projects])
     }
 
     // MARK: - Push notifications land on the right tab
@@ -191,14 +191,14 @@ struct RouteTabTableTests {
     @Test
     func everyPushEntityTypeLandsOnItsTab() {
         let cases: [(String, PatinaTab)] = [
-            ("project", .studio),
-            ("proposal", .studio),
-            ("decision", .studio),
-            ("invoice", .studio),
-            ("design_request", .studio),
-            ("lead", .studio),
-            ("thread", .studio),
-            ("message_thread", .studio),
+            ("project", .projects),
+            ("proposal", .projects),
+            ("decision", .projects),
+            ("invoice", .projects),
+            ("design_request", .projects),
+            ("lead", .projects),
+            ("thread", .projects),
+            ("message_thread", .projects),
             ("product", .pieces),
             ("piece", .pieces)
         ]
@@ -239,12 +239,12 @@ struct RouteTabTableTests {
         // set of paths the association carries.
         let cases: [(String, PatinaTab)] = [
             ("piece", .pieces),
-            ("invoices", .studio),
-            ("invoice", .studio),
-            ("proposals", .studio),
-            ("proposal", .studio),
-            ("decisions", .studio),
-            ("decision", .studio)
+            ("invoices", .projects),
+            ("invoice", .projects),
+            ("proposals", .projects),
+            ("proposal", .projects),
+            ("decisions", .projects),
+            ("decision", .projects)
         ]
         for (segment, tab) in cases {
             let url = try #require(URL(string: "https://\(host)/\(segment)/abc-123"))

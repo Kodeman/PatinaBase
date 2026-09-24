@@ -69,9 +69,9 @@ final class StudioHubViewModel {
     var loadMessage: String? {
         guard !failedSources.isEmpty else { return nil }
         if failedSources.count == Self.sourceCount {
-            return "We couldn’t gather your Studio. Check your connection and try again."
+            return "We couldn’t gather your projects. Check your connection and try again."
         }
-        return "Some Studio details couldn’t be refreshed. What loaded is still shown."
+        return "Some project details couldn’t be refreshed. What loaded is still shown."
     }
 
     /// L07-05: what the hub is showing is not what the studio holds.

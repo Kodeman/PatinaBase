@@ -166,7 +166,7 @@ struct ProfileView: View {
         // As the Studio tab's root there is no chevron and the destination's
         // canonical name is what the screen is called; the string is read from
         // `PatinaTab`, never re-typed (B-7 a).
-        .patinaScreen(title: isTabRoot ? PatinaTab.studio.canonicalName : nil)
+        .patinaScreen(title: isTabRoot ? PatinaTab.projects.canonicalName : nil)
         .onAppear {
             viewModel.loadData(context: modelContext)
         }

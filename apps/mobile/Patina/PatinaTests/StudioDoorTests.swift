@@ -37,7 +37,7 @@ struct StudioDoorTests {
 
         // The anchor is on the bar, on the `.studio` arm, with its raw value
         // untouched (it keys the Sanity document behind step 3).
-        #expect(SourceScan.code(in: bar).contains("if tab == .studio {"))
+        #expect(SourceScan.code(in: bar).contains("if tab == .projects {"))
         #expect(SourceScan.code(in: bar).contains("control.firstLaunchTourAnchor(.profileMonogram)"))
         #expect(FirstLaunchTourAnchor.profileMonogram.rawValue == "profile-monogram")
 
@@ -62,7 +62,7 @@ struct StudioDoorTests {
         let tabRoot = try SourcePin.read("Patina/Features/Navigation/TabRoot.swift")
         #expect(SourceScan.code(in: tabRoot).contains("struct StudioTabRoot"))
         #expect(SourceScan.code(in: tabRoot).contains("ProfileView()"))
-        #expect(SourceScan.code(in: tabRoot).contains(".tabRoot(.studio)"))
+        #expect(SourceScan.code(in: tabRoot).contains(".tabRoot(.projects)"))
 
         // …which carries the Settings row that presents the sheet…
         let profile = try SourcePin.read("Patina/Features/Profile/Views/ProfileView.swift")

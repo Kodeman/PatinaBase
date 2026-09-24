@@ -74,7 +74,7 @@ public struct RouteTabTable {
              // beside the money the order came out of.
              .orderList,
              .orderDetail:
-            return .studio
+            return .projects
         }
     }
 
@@ -91,7 +91,7 @@ public struct RouteTabTable {
         case .today: return .heroFrame
         case .spaces: return .yourSpaces
         case .pieces: return .emergence(pieceId: nil)
-        case .studio: return .studio
+        case .projects: return .studio
         }
     }
 

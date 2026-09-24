@@ -665,8 +665,8 @@ struct FirstLaunchTourTests {
         #expect(steps[0].fallback?.body == "This is Today — what moved in your house, and what is waiting on you.")
         #expect(steps[1].fallback?.heading == "What needs you")
         #expect(steps[1].fallback?.body == "Anything waiting on you lands here, dated. Tap a line to go straight to it.")
-        #expect(steps[2].fallback?.heading == "Your Studio")
-        #expect(steps[2].fallback?.body == "Your studio — projects, proposals, invoices and files")
+        #expect(steps[2].fallback?.heading == "Your Projects")
+        #expect(steps[2].fallback?.body == "Your projects — proposals, invoices and files")
     }
 
     @Test
@@ -976,7 +976,7 @@ struct FirstLaunchTourTests {
         // drifts from the build the day it lands.
         #expect(FirstLaunchTourModel.defaultSteps.count == 3)
         #expect(FirstLaunchTourModel.defaultSteps[0].fallback?.heading == "Welcome to Patina")
-        #expect(FirstLaunchTourModel.defaultSteps[2].fallback?.heading == "Your Studio")
+        #expect(FirstLaunchTourModel.defaultSteps[2].fallback?.heading == "Your Projects")
     }
 
     // MARK: - B-10 · step 1's cut-out

@@ -67,7 +67,7 @@ struct StudioHubView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            MonoLabel(text: "STUDIO", size: PatinaTypography.monoMedium)
+            MonoLabel(text: "PROJECTS", size: PatinaTypography.monoMedium)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -88,7 +88,7 @@ struct StudioHubView: View {
                     .font(PatinaTypography.bodySmallMedium)
                     .foregroundStyle(PatinaColors.Text.interactive)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("Studio summary: \(hint)")
+                    .accessibilityLabel("Projects summary: \(hint)")
             } else if viewModel.hasLoaded && viewModel.failedSources.isEmpty {
                 // R-01: `hasLoaded` alone is "a load finished", not "a load
                 // answered". A failed refresh leaves every hint nil, so the
@@ -109,7 +109,7 @@ struct StudioHubView: View {
         HStack(spacing: 12) {
             ProgressView()
                 .tint(PatinaColors.Text.interactive)
-            Text("Gathering your Studio…")
+            Text("Gathering your projects…")
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
         }
@@ -117,7 +117,7 @@ struct StudioHubView: View {
         .background(PatinaColors.Background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Gathering your Studio")
+        .accessibilityLabel("Gathering your projects")
     }
 
     private var errorState: some View {
@@ -127,7 +127,7 @@ struct StudioHubView: View {
                 .foregroundStyle(PatinaColors.Text.interactive)
                 .accessibilityHidden(true)
 
-            Text(viewModel.loadMessage ?? "We couldn’t gather your Studio.")
+            Text(viewModel.loadMessage ?? "We couldn’t gather your projects.")
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -150,7 +150,7 @@ struct StudioHubView: View {
 
     private var guestState: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Your Studio begins with a project.")
+            Text("Your projects will gather here.")
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.primary)
 
@@ -434,7 +434,7 @@ private extension StudioHubView {
     /// her arrival.
     var isOnStudio: Bool {
         guard coordinator.isHouseFirstRoot, isTabRoot else { return true }
-        return coordinator.tabs.selected == .studio
+        return coordinator.tabs.selected == .projects
     }
 
     /// Four states, not one per tab: switching between two tabs that are not

@@ -18,8 +18,8 @@ import SwiftUI
 /// than a number she can only feel.
 enum StudioControlLabel {
     /// The canonical surface name in full, for VoiceOver (C4 / B-7).
-    static let voiceOverName = "Your Studio"
-    static let title = "Studio"
+    static let voiceOverName = "Your Projects"
+    static let title = "Projects"
 }
 
 struct DailyGreetingHeader: View {
@@ -233,7 +233,7 @@ struct DailyGreetingHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(StudioControlLabel.voiceOverName)
-            .accessibilityHint("Opens your studio.")
+            .accessibilityHint("Opens your projects.")
             .accessibilityIdentifier("DailyRoomView.StudioButton")
         } else {
             control

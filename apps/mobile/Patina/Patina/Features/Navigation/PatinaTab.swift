@@ -17,7 +17,9 @@ public enum PatinaTab: String, CaseIterable, Hashable, Sendable, Identifiable {
     case today
     case spaces
     case pieces
-    case studio
+    /// D3: the homeowner's tab for her projects. "Studio" names the design
+    /// firm only, never her own hub.
+    case projects
 
     public var id: String { rawValue }
 
@@ -27,7 +29,7 @@ public enum PatinaTab: String, CaseIterable, Hashable, Sendable, Identifiable {
         case .today: return "Today"
         case .spaces: return "Spaces"
         case .pieces: return "Pieces"
-        case .studio: return "Studio"
+        case .projects: return "Projects"
         }
     }
 
@@ -39,7 +41,7 @@ public enum PatinaTab: String, CaseIterable, Hashable, Sendable, Identifiable {
         case .today: return "Today"
         case .spaces: return "Your Spaces"
         case .pieces: return "Browse pieces"
-        case .studio: return "Your Studio"
+        case .projects: return "Your Projects"
         }
     }
 
@@ -51,7 +53,7 @@ public enum PatinaTab: String, CaseIterable, Hashable, Sendable, Identifiable {
         case .today: return "sun.horizon"
         case .spaces: return "square.grid.2x2"
         case .pieces: return "sparkles"
-        case .studio: return "folder"
+        case .projects: return "folder"
         }
     }
 }

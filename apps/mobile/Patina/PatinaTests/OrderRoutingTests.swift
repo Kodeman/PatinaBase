@@ -87,8 +87,8 @@ struct OrderRoutingTests {
 
     @Test("both order routes belong to Studio, beside the money they came out of")
     func theOrderRoutesLiveInStudio() {
-        #expect(RouteTabTable.tab(for: .orderList) == .studio)
-        #expect(RouteTabTable.tab(for: .orderDetail(orderId: "fulfillment:o1")) == .studio)
+        #expect(RouteTabTable.tab(for: .orderList) == .projects)
+        #expect(RouteTabTable.tab(for: .orderDetail(orderId: "fulfillment:o1")) == .projects)
     }
 
     @Test("neither order route is a tab root — both are pushed")

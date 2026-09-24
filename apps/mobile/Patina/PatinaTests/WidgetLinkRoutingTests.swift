@@ -112,7 +112,7 @@ struct WidgetLinkRoutingTests {
     func todayLandsOnTheTodayTab() throws {
         let coordinator = AppCoordinator(houseFirstRoot: true)
         coordinator.openExternal(.invoiceDetail(invoiceId: "invoice-1"))
-        #expect(coordinator.tabs.selected == .studio)
+        #expect(coordinator.tabs.selected == .projects)
 
         coordinator.openExternal(try #require(route("patina://today")))
 
