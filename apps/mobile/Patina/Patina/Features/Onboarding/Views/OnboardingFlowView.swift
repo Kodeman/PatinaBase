@@ -4,11 +4,9 @@
 //
 //  3-screen onboarding flow: Philosophy → Promise → what happens next.
 //
-//  U33 — the third page tells the truth about the variant the user is in.
-//  Quiz-first (the shipped default) never asks for the camera during
-//  onboarding, so it must not close on a camera-permission promise; the
-//  camera page belongs to walk-first, which really does ask next.
-//  `OnboardingFlowHost` resolves the variant and threads it in.
+//  U33 — the third page tells the truth about what comes next. Onboarding
+//  never asks for the camera, so it closes on the style quiz, not on a
+//  camera-permission promise.
 //
 
 import SwiftUI
@@ -17,10 +15,6 @@ struct OnboardingFlowView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var currentPage = 0
-    /// PT-4-7 variant signal, resolved by `OnboardingFlowHost`. Only the third
-    /// page differs — walk-first heads into a camera ask, quiz-first into the
-    /// style quiz.
-    var isWalkFirst: Bool = false
     var onComplete: () -> Void
     /// A-05: Skip skips. It used to be byte-identical to `onComplete` — both
     /// landed in the same mandatory five-question quiz — while the visible
@@ -45,19 +39,11 @@ struct OnboardingFlowView: View {
                 ctaText: "Continue",
                 gradient: PatinaGradients.sageGradient
             ),
-            isWalkFirst ? Self.cameraPage : Self.quizPage
+            Self.quizPage
         ]
     }
 
-    /// Walk-first close — the very next screen is the camera primer.
-    private static let cameraPage = OnboardingPage(
-        title: "Choose how to add your room",
-        body: CameraTrustCopy.onboardingSummary,
-        ctaText: "See your choices",
-        gradient: PatinaGradients.linen
-    )
-
-    /// Quiz-first close — the very next screen is the style quiz. The camera
+    /// The close — the very next screen is the style quiz. The camera
     /// is named only as a later, opt-in step, which is what actually happens.
     private static let quizPage = OnboardingPage(
         title: "Find your style first",
@@ -242,8 +228,6 @@ struct OnboardingFlowView: View {
             roomIllustration
         } else if index == 1 {
             phoneIllustration
-        } else if isWalkFirst {
-            cameraIllustration
         } else {
             styleIllustration
         }
@@ -320,34 +304,6 @@ struct OnboardingFlowView: View {
             .clipShape(Capsule())
         }
     }
-
-    private var cameraIllustration: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(PatinaColors.clay.opacity(0.2))
-                    .frame(width: 80, height: 80)
-
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(PatinaColors.mocha.opacity(0.6))
-            }
-
-            HStack(spacing: 6) {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(PatinaColors.mocha)
-
-                Text("Saved on this iPhone first")
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.mocha)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-            .background(PatinaColors.offWhite)
-            .clipShape(Capsule())
-        }
-    }
 }
 
 // MARK: - Model
@@ -359,10 +315,6 @@ private struct OnboardingPage {
     let gradient: LinearGradient
 }
 
-#Preview("Quiz-first (default)") {
+#Preview {
     OnboardingFlowView(onComplete: {}, onSkip: {})
-}
-
-#Preview("Walk-first") {
-    OnboardingFlowView(isWalkFirst: true, onComplete: {}, onSkip: {})
 }

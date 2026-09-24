@@ -314,6 +314,23 @@ struct OnboardingResumptionTests {
         let recordSites = host.components(separatedBy: "OnboardingCompletion.shared.markCompleted").count - 1
         #expect(flagSites == recordSites, "\(flagSites) flag writes vs \(recordSites) account records")
     }
+
+    /// T4-01b: the walk-first experiment is gone. Onboarding is carousel →
+    /// quiz for everyone, and the funnel's `variant` is pinned to the value
+    /// the shipped path always sent.
+    @Test("onboarding is quiz-first for everyone, with no experiment branch")
+    @MainActor
+    func onboardingIsQuizFirstUnconditionally() throws {
+        let host = try SourcePin.readCode("Patina/Features/FirstLaunch/Views/OnboardingFlowHost.swift")
+        #expect(host.contains("@State private var step: Step = .carousel"))
+        #expect(host.contains("OnboardingFunnel.shared.beginOnboarding()"))
+        for gone in ["walkPermission", "CameraPermissionView", "isWalkFirst", "scanFlow", "PostHogService"] {
+            #expect(!host.contains(gone), "the onboarding host still carries \(gone)")
+        }
+        let view = try SourcePin.readCode("Patina/Features/Onboarding/Views/OnboardingFlowView.swift")
+        #expect(!view.contains("isWalkFirst"))
+        #expect(OnboardingFunnel.variant == "quiz_first")
+    }
 }
 
 private final class OnboardingReadCounter: @unchecked Sendable {

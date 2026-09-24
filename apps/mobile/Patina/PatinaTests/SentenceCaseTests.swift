@@ -70,12 +70,6 @@ struct SentenceCaseTests {
         #expect(!source.contains("\"Open Settings\""))
     }
 
-    @Test("the camera permission screen’s CTA is sentence case")
-    func cameraPermissionIsSentenceCase() throws {
-        let source = try SourcePin.read("Patina/Features/FirstLaunch/Views/CameraPermissionView.swift")
-        #expect(!source.contains("\"Open Settings\""))
-    }
-
     // MARK: - The scan pause menu and the room item menu (L1-B)
 
     @Test("the scan pause menu is sentence case")

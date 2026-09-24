@@ -30,7 +30,7 @@ public protocol Coordinator: AnyObject {
 /// itself (PT-3-5). The flow host (`QuietConversationFlowHost`) picks the
 /// LiDAR vs. manual-entry path on its own; `reason` is purely intent.
 public enum ScanReason: String, Hashable {
-    /// First scan of a brand-new room (Walk / Walk-First / "Scan a room").
+    /// First scan of a brand-new room (Walk / "Scan a room").
     case fresh
     /// Re-scanning a room the user already has.
     case rescan
@@ -208,29 +208,6 @@ public extension AppRoute {
             return "Your Studio"
         default:
             return displayName
-        }
-    }
-
-    /// The pre-consolidation PostHog screen name for this route, if it had a
-    /// distinct one. Used ONLY for the `ios_screen_name_v2` dual-emit
-    /// transition (PT-3-5) so legacy funnel dashboards keep receiving data
-    /// while they're rebuilt against the new constant name. Returns `nil`
-    /// for routes whose name didn't change.
-    ///
-    /// The three legacy names that previously corrupted the single scan
-    /// funnel were "Walk", "Walking", and "Re-scan Room"; "Style Discovery"
-    /// was the conversation-entry name. Keep this in sync with
-    /// `RouteAnalyticsParityTests`.
-    var legacyScreenName: String? {
-        switch self {
-        case .scanFlow(let reason):
-            switch reason {
-            case .fresh: return "Walking"
-            case .rescan: return "Re-scan Room"
-            case .fromConversation: return "Style Discovery"
-            }
-        default:
-            return nil
         }
     }
 }
