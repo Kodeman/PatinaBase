@@ -8,7 +8,11 @@
 #
 #   ruby scripts/generate_project.rb
 #
-$LOAD_PATH.unshift(*Dir[File.join(Dir.home, '.gem', 'ruby', '*', 'gems', '*', 'lib')])
+# Loads the exact gems in ../Gemfile.lock (xcodeproj decides every byte of the
+# pbxproj). A missing or mismatched gem fails here with Bundler::GemNotFound;
+# fix it with `bundle install` from apps/mobile/Capture.
+ENV['BUNDLE_GEMFILE'] = File.expand_path('../Gemfile', __dir__)
+require 'bundler/setup'
 require 'fileutils'
 require 'xcodeproj'
 

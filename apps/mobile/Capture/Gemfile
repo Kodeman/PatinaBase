@@ -1,0 +1,9 @@
+# frozen_string_literal: true
+
+# Toolchain for scripts/generate_project.rb, the sole author of
+# Capture.xcodeproj. xcodeproj is pinned exactly (and its dependencies through
+# Gemfile.lock) because a different gem version writes a different pbxproj.
+# 1.27.0 is the version that produced the committed project.
+source 'https://rubygems.org'
+
+gem 'xcodeproj', '1.27.0'
