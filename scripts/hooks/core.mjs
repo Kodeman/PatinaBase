@@ -362,12 +362,15 @@ export async function classifyPaths(
       item.startsWith("supabase/seed/") ||
       item.startsWith("supabase/tests/"),
   );
-  const iosPatina = paths.some((item) =>
-    item.startsWith("apps/mobile/Patina/"),
+  const iosShared = paths.some((item) =>
+    item.startsWith("apps/mobile/PatinaDesignKit/"),
   );
-  const iosCapture = paths.some((item) =>
-    item.startsWith("apps/mobile/Capture/"),
-  );
+  const iosPatina =
+    iosShared ||
+    paths.some((item) => item.startsWith("apps/mobile/Patina/"));
+  const iosCapture =
+    iosShared ||
+    paths.some((item) => item.startsWith("apps/mobile/Capture/"));
   const aesthete = paths.some((item) =>
     item.startsWith("services/aesthete-inference/"),
   );
