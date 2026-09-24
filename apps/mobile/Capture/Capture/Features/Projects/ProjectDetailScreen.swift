@@ -251,7 +251,7 @@ struct ProjectDetailScreen: View {
                 Text(milestone.label)
                     .font(CaptureType.body)
                     .foregroundStyle(CaptureColor.ink)
-                Text(milestone.dueDate.map { "Due \(ProjectsFormat.shortDate($0))" } ?? "No due date")
+                Text(milestone.dueDate.map { "Due \(FieldPeopleDates.mediumDay($0))" } ?? "No due date")
                     .font(CaptureType.footnote)
                     .foregroundStyle(CaptureColor.inkSoft)
             }

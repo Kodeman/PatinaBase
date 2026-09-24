@@ -15,15 +15,17 @@ import Foundation
 // MARK: - The week
 
 public enum FieldRosterWeek {
-    /// Monday-to-Sunday, in the caller's own calendar but with the week pinned
-    /// to Monday so "this week" means the same thing on every phone.
+    /// Monday-to-Sunday around the day `date` falls on in the caller's own
+    /// calendar, with the week pinned to Monday so "this week" means the same
+    /// thing on every phone. Seats' windows are calendar days, so the week is
+    /// reckoned in `FieldPeopleDates.dayCalendar`, the calendar they parse in.
     public static func containing(_ date: Date,
                                   calendar: Calendar = .current) -> DateInterval {
-        var cal = calendar
+        var cal = FieldPeopleDates.dayCalendar
         cal.firstWeekday = 2
-        if let week = cal.dateInterval(of: .weekOfYear, for: date) { return week }
-        let day = cal.startOfDay(for: date)
-        return DateInterval(start: day, duration: 7 * 24 * 60 * 60)
+        let today = FieldPeopleDates.today(date, in: calendar)
+        if let week = cal.dateInterval(of: .weekOfYear, for: today) { return week }
+        return DateInterval(start: today, duration: 7 * 24 * 60 * 60)
     }
 }
 
@@ -475,10 +477,56 @@ public enum FieldPeopleDates {
         return formatter
     }()
 
-    /// "16 Oct 2026"
+    /// "16 Oct 2026" — an instant, on this phone's calendar.
     public static func short(_ date: Date) -> String { shortFormatter.string(from: date) }
-    /// "13 August 2027"
+    /// "13 August 2027" — an instant, on this phone's calendar.
     public static func long(_ date: Date) -> String { longFormatter.string(from: date) }
+
+    // MARK: Calendar days (Postgres `date`)
+
+    /// A Postgres `date` is a day on the calendar, not an instant, so it has no
+    /// zone. Every date-only value is parsed AND printed in this one fixed
+    /// calendar — Gregorian, UTC — so "2027-08-13" reads 13 August on every
+    /// phone. Parsing it in one zone and printing it in the phone's is the
+    /// off-by-one every phone west of UTC used to show.
+    public static let dayCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "en_US_POSIX")
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
+
+    private static func dayFormatter(_ format: String) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = dayCalendar
+        formatter.locale = dayCalendar.locale
+        formatter.timeZone = dayCalendar.timeZone
+        formatter.dateFormat = format
+        return formatter
+    }
+
+    private static let wireDayFormatter = dayFormatter("yyyy-MM-dd")
+    private static let shortDayFormatter = dayFormatter("d MMM yyyy")
+    private static let longDayFormatter = dayFormatter("d MMMM yyyy")
+
+    /// "2027-08-13" → that calendar day. Nil for anything else.
+    public static func day(_ raw: String) -> Date? { wireDayFormatter.date(from: raw) }
+    /// A calendar day as "13 Aug 2027".
+    public static func shortDay(_ day: Date) -> String { shortDayFormatter.string(from: day) }
+    /// A calendar day as "13 August 2027".
+    public static func longDay(_ day: Date) -> String { longDayFormatter.string(from: day) }
+    /// A calendar day in the system's abbreviated style ("Aug 13, 2027").
+    public static func mediumDay(_ day: Date) -> String {
+        day.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted,
+                                       calendar: dayCalendar, timeZone: dayCalendar.timeZone))
+    }
+
+    /// The date on this phone's calendar at `now`, as a calendar day, so it
+    /// compares directly with the days above.
+    public static func today(_ now: Date, in calendar: Calendar = .current) -> Date {
+        let parts = calendar.dateComponents([.year, .month, .day], from: now)
+        return dayCalendar.date(from: parts) ?? now
+    }
 
     /// The offline line: what a cached copy says about its own age. Ink, never
     /// a spinner (ux-4-field-mobile §6).
@@ -531,7 +579,7 @@ public enum FieldLinkExpiry {
             return Window(endsAt: windowEnd.addingTimeInterval(oneDay),
                           lastDay: windowEnd,
                           isJobWindow: true,
-                          sentence: "Ends with the job, \(FieldPeopleDates.long(windowEnd)).")
+                          sentence: "Ends with the job, \(FieldPeopleDates.longDay(windowEnd)).")
         }
         let ends = now.addingTimeInterval(Double(fallbackDays) * oneDay)
         return Window(endsAt: ends,
