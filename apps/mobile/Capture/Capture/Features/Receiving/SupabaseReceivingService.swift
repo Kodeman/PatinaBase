@@ -165,14 +165,20 @@ struct SupabaseReceivingService: ReceivingService {
     /// behaviour 00184 closed off. Both writes are expressed as single atomic
     /// filtered UPDATEs (WHERE delivered_date IS NULL / WHERE status NOT IN
     /// (…)) rather than a read-then-write, so there's no read/write race.
+    ///
+    /// `delivered_date` is a `date`; `inspected_at` is an instant. The day
+    /// written is this phone's calendar day at the inspection, never the
+    /// instant's leading UTC day (a 7 pm inspection in Los Angeles is the next
+    /// day in UTC).
     private func bestEffortSyncPurchaseOrder(poID: String, outcome: FieldInspectionOutcome,
                                              inspectedAt: String) async {
-        let deliveredDate = String(inspectedAt.prefix(10))
-        try? await client.from("purchase_orders")
-            .update(["delivered_date": deliveredDate])
-            .eq("id", value: poID)
-            .is("delivered_date", value: nil)
-            .execute()
+        if let day = FieldPeopleDates.day(ofInstant: inspectedAt) {
+            try? await client.from("purchase_orders")
+                .update(["delivered_date": FieldPeopleDates.wireDay(day)])
+                .eq("id", value: poID)
+                .is("delivered_date", value: nil)
+                .execute()
+        }
 
         guard outcome == .clean else { return }
         try? await client.from("purchase_orders")
