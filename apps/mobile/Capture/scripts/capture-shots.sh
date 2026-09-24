@@ -8,7 +8,7 @@
 # (gitignored); override with CAPTURE_SHOTS_DIR.
 #
 # Usage:
-#   scripts/capture-shots.sh                      # all 72 built screens
+#   scripts/capture-shots.sh                      # all 78 built screens
 #   scripts/capture-shots.sh C5 N1 S3             # only the given screens (prefix match)
 #   CAPTURE_SIM="iPhone 17 Pro" scripts/capture-shots.sh
 set -euo pipefail
@@ -33,6 +33,7 @@ ALL_SCREENS=(
   W1.work
   H1.log-time
   P1.project-list P2.project-detail
+  PR1.roster PR2.person PR3.site-access
   L1.lead-list L2.lead-detail
   D1.decision-list D2.decision-detail
   M1.inbox M2.thread
@@ -46,14 +47,27 @@ ALL_SCREENS=(
   SR17.guest-queue SR18.guest-receipt SR19.guest-done SR20.guest-returned
 )
 
-# Not swept: V4.visit-review. Its CaptureScreenID case exists (the enum is a
-# frozen seam edited once, wave 2) but the screen behind it is wave 4. Sweeping
-# it would produce a PNG of C1 filed under another screen's name, which is worse
-# than a gap. V0.visit joined the sweep in wave 3 with the door itself; the
-# harness presents the `.visit` sheet for it. C6.voice joined in wave 3 too, but
-# it is neither a route nor a sheet — `CaptureDeepLink.drive` has nothing to
-# present for a camera MODE, so `ViewfinderScreen` reads the harness argument
-# itself and selects `.voice` after `model.start()`.
+# Screens whose CaptureScreenID case exists but that are deliberately NOT swept.
+# This array is the exclusion list itself, not prose about one: ALL_SCREENS is
+# the one file in the navigation lockstep the compiler does not cover, so
+# CaptureTests/ScreenInventoryParityTests.swift parses BOTH arrays out of this
+# file and asserts ALL_SCREENS ∪ EXCLUDED_SCREENS == CaptureScreenID.allCases.
+# A new enum case must therefore land in one array or the other.
+#
+# V4.visit-review — its case exists (the enum is a frozen seam edited once,
+# wave 2) but the screen behind it is wave 4. Sweeping it would produce a PNG of
+# C1 filed under another screen's name, which is worse than a gap.
+EXCLUDED_SCREENS=(
+  V4.visit-review
+)
+
+# V0.visit joined the sweep in wave 3 with the door itself; the harness presents
+# the `.visit` sheet for it. C6.voice joined in wave 3 too, but it is neither a
+# route nor a sheet — `CaptureDeepLink.drive` has nothing to present for a
+# camera MODE, so `ViewfinderScreen` reads the harness argument itself and
+# selects `.voice` after `model.start()`. PR1/PR2/PR3 joined in W5: all three
+# ride one `.people(screen:projectID:personID:)` route off the PeopleRoomFixtures
+# ids, which `CaptureDeepLink.routePeopleScreen` hands the coordinator.
 
 # Optional filter: keep screens whose suffix starts with any given prefix (e.g. "C5", "N").
 SCREENS=()
@@ -66,7 +80,16 @@ if [ "$#" -gt 0 ]; then
 else
   SCREENS=("${ALL_SCREENS[@]}")
 fi
-[ "${#SCREENS[@]}" -gt 0 ] || { echo "✘ no screens matched: $*"; exit 2; }
+if [ "${#SCREENS[@]}" -eq 0 ]; then
+  for s in "${EXCLUDED_SCREENS[@]}"; do
+    for want in "$@"; do
+      if [[ "$s" == "$want"* ]]; then
+        echo "✘ $s is deliberately not swept — see EXCLUDED_SCREENS above"; exit 2
+      fi
+    done
+  done
+  echo "✘ no screens matched: $*"; exit 2
+fi
 
 echo "→ regenerating project"
 ruby scripts/generate_project.rb >/dev/null
