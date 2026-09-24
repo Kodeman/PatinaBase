@@ -1,12 +1,65 @@
 #!/usr/bin/env bash
 # capture-gate.sh — build / test / lint gate for Patina Field Capture.
-# Usage: scripts/capture-gate.sh [build|test|lint|all]   (default: all)
+# Usage: scripts/capture-gate.sh [build|test|lint|fcr3|p4|all]   (default: all)
+#
+# The build/test/all tiers require CAPTURE_SIM_UDID — this lane's own simulator
+# clone. See sim_destination(); this gate does not guess.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SIM="${CAPTURE_SIM:-iPhone 17}"
-DEST="platform=iOS Simulator,name=${SIM}"
 CMD="${1:-all}"
+
+# --- per-worktree DerivedData: two concurrent Field lanes ---------------------
+# Sharing the default DerivedData means sharing its module cache and its lock.
+# `error: unable to attach DB … database is locked` is the documented symptom
+# (docs/design/ios-ux-review-2026-07/integration-log.md:22) and it fails the
+# lane that did nothing wrong. Same treatment as
+# apps/mobile/Patina/scripts/ios-gate.sh:44. `.build/` is gitignored, so this
+# never reaches the pbxproj commit generate() produces.
+PROJECT_DIR="$PWD"                                   # apps/mobile/Capture
+DERIVED="$PROJECT_DIR/.build/DerivedData"
+
+# --- the destination is explicit, or the gate refuses to guess ----------------
+# This was `platform=iOS Simulator,name=${CAPTURE_SIM:-iPhone 17}`. A name
+# resolves to the SAME device in every concurrent lane, so two lanes running
+# `test` install over each other and one lane's bundle can run against the
+# other's installed app. A name is also not guaranteed to resolve at all — the
+# installed device set need not contain "iPhone 17" — turning the gate red for
+# a reason that has nothing to do with the change under test.
+#
+# Same contract as ios-gate.sh sim_destination(): echo the destination and
+# RETURN a status, never `exit`. This only ever runs as `$(sim_destination)`,
+# where an `exit` kills the command substitution's subshell rather than the
+# gate. Every caller must test the status — see build().
+sim_destination() {
+  if [[ -n "${CAPTURE_SIM_UDID:-}" ]]; then
+    echo "platform=iOS Simulator,id=$CAPTURE_SIM_UDID"; return 0
+  fi
+  # printf rather than a heredoc: ios-gate.sh writes this refusal with plain
+  # redirected echoes, and a heredoc needs a writable temp file — which a
+  # sandboxed runner can refuse, swallowing the very message that explains the
+  # failure.
+  printf '%s\n' \
+    "✘ CAPTURE_SIM_UDID is unset." \
+    "" \
+    "The build/test/all tiers need an explicit simulator udid: this lane's OWN" \
+    "clone. Never a shared device, never 'booted', and never a device name —" \
+    "Field runs two concurrent lanes, and a name resolves to the same device in" \
+    "both, so one lane's test run installs over the other's." \
+    "" \
+    "Create this lane's clone and export its udid:" \
+    "" \
+    "  xcrun simctl list devices                   # pick a source; note its udid" \
+    "  xcrun simctl shutdown <source-udid>         # clone refuses a booted source" \
+    "                                              # (SimError 405)" \
+    '  export CAPTURE_SIM_UDID="$(xcrun simctl clone <source-udid> field-<lane>)"' \
+    "" \
+    'Retire it with the lane: xcrun simctl delete "$CAPTURE_SIM_UDID"' \
+    "" \
+    "CAPTURE_SIM (a device NAME) is no longer read by this gate; capture-run.sh" \
+    "and capture-shots.sh still take it." >&2
+  return 2
+}
 
 # Restore the gitignored Secrets.swift first. generate_project.rb globs *.swift
 # off disk, so in a fresh worktree or a CI checkout — where the gitignored file
@@ -21,16 +74,27 @@ generate() {
 }
 
 build() {
+  local dest
+  # Resolved BEFORE generate(). generate() rm -rf's the TRACKED Capture.xcodeproj
+  # and rebuilds it, so a gate that is going to refuse must refuse before it has
+  # rewritten the working tree. `|| return $?` is load-bearing: without it the
+  # failed assignment is swallowed and xcodebuild runs with -destination "".
+  dest="$(sim_destination)" || return $?
   generate
   xcodebuild build -project Capture.xcodeproj -scheme Capture \
-    -sdk iphonesimulator -destination "$DEST" CODE_SIGNING_ALLOWED=NO -quiet
+    -sdk iphonesimulator -destination "$dest" \
+    -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
   echo "✔ build"
 }
 
 test_() {
+  local dest
+  # Before generate(), and `|| return $?` tested — see build().
+  dest="$(sim_destination)" || return $?
   generate
   xcodebuild test -project Capture.xcodeproj -scheme CaptureKit \
-    -sdk iphonesimulator -destination "$DEST" CODE_SIGNING_ALLOWED=NO -quiet
+    -sdk iphonesimulator -destination "$dest" \
+    -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
   echo "✔ tests"
 }
 
