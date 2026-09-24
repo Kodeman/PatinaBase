@@ -350,7 +350,14 @@ USD guard. A later migration changing either budget rollup edits the
 00662 `device_push_tokens_bundle` — the per-token bundle column `apns-send`
 needs to address Patina Field. 00663 holds its revert, written first: this
 program ships no feature flags, so the revert migration is the only way back.
-00664 spare, per discipline rule 2.
+00664 `capture_enrichment_vendor_sku_suggestion_only`, reserved 2026-09-24 by
+T6-03 (SQ-203), ruling D7b. It takes the band's spare rather than extending the
+band to 00665. `record_capture_enrichment_result` (00515) stops writing
+`vendor_name` and `sku` into an empty `field_captures` column. Those two keys
+stay only in `capture_enrichment_runs.suggestions`, which is the unconfirmed
+suggestion. A value in either column is now always one the designer supplied.
+The band has no spare left. A further T6 migration draws above the head per
+discipline rule 2 and is recorded here first.
 
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.
