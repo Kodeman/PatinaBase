@@ -389,23 +389,24 @@ Carried from the red team and Astra's challenge, recorded so no one re-proposes 
 
 ---
 
-## 7. Open decisions — Kody's, and what each one blocks
+## 7. Decisions — RULED by Kody, 2026-09-23
 
-| | Decision | Blocks | Recommendation |
+All eight are closed. Where a ruling overrode the plan's recommendation it is marked, with the
+consequence the program now carries.
+
+| | Decision | Ruling | Consequence |
 |---|---|---|---|
-| **D1** | **The house census** — which phones Leah's crew and trades actually carry, with OS versions and Action Button presence. | Any floor change, the final device acceptance matrix, and every Apple-Intelligence item. Does **not** block ordinary implementation. | Keep Field at iOS 18 and Patina at iOS 26; use tested `@available` fallbacks rather than an exclusionary cut. Neither an iOS 26 nor an iOS 27 Field floor removes the need for a fallback. |
-| **D2** | **One real missed instruction** — Kody and Leah name an actual case, its recipient and its wording. | The notification producer and any real send. Registration, settings and routing can be built first. | One human-approved assigned-request notice, with no sensitive content on the lock screen. |
-| **D3** | **The lexicon** — `Piece` vs `CapturedPiece`, `Studio` reserved for the firm, `Projects` for the homeowner's tab. | W1, the whole freeze. Nothing Field-side proceeds without it. | Take Astra's recommendation as written; it is the one that keeps `Studio` meaning one thing. |
-| **D4** | **Offline visibility policy** for a shared direction. | **T4's cache schema itself**, not just final acceptance — it determines cache identity, retention, revocation and supersession. Corrected after challenge. | Visible last-fetched time, read-only access to the last authorized revision, purge on revocation or account change, and a mandatory online revision check before any consequential action. **No offline approvals** — not negotiable. |
-| **D5** | **Disposition of the three Patina rollout flags** — `house-first`, `direct-orders`, `house-widget`. | T4's flag-deletion item. | Keep the house-first root; enable the widget only after its acceptance gate; keep Save/Ask rather than silently enabling direct purchasing. Deleting a flag must not become tacit approval of a new commercial policy. **Corrected**: `FeatureFlags.swift:69–71` holds exactly three. I previously named a fourth, "onboarding walk" — that is `FirstLaunchTour`, a tour with pending state, not a flag. Field's `CaptureFeatureFlags` is a fail-closed **consent** seam and is explicitly *not* in scope. |
-| **D8** | **Take the full 1,856-occurrence `Specimen` rename, or only the 7 user-visible strings?** | W1's size, and therefore the whole schedule. | Take it — your instruction to make the big changes now, and a persisted-store rename only gets dearer. But both source analyses recommended against, and it is an `L` on pure critical path. This is the one place the plan overrules its own research, so it should be your call and not mine. |
-| **D6** | **Client voice** — narrow dictation into the existing composer, or a new Companion conversation. | Client voice UI and the permission copy. | Dictation only. Do not open a chatbot to justify an unused permission string. |
-| **D7** | **Pricing** — may the extractor read trade cost and price at all? | Any commercial-field ambition in Phase 2. | Genuinely open. Someone wrote that prohibition deliberately; it should be overturned explicitly or not at all. |
+| **D1** | Supported-device floors | **Raise Field to iOS 26.** *(overrode: keep 18 + fallbacks)* | Both apps align at 26. PatinaDesignKit's floor moves off 17.6 and a class of compatibility branches deletes — real simplification. **Cost: cuts uncounted crew and trades devices.** The census becomes a post-hoc check on a decision already made. `@available` is still needed for iOS 27 image prompting. |
+| **D2** | First notification | **A request assigned to you.** | Lock screen shows project + ask, never content. Producer is T6; the iOS half is unchanged. |
+| **D3** | Lexicon | **`Piece` / `CapturedPiece` split; `Studio` = the firm; `Projects` = homeowner tab.** | Unblocks W1. |
+| **D4** | Offline policy | **Read-only last authorized revision; visible last-fetched; purge on revocation; online check before any consequential action. No offline approvals.** | Fixes T4's cache identity, so the schema can be written. |
+| **D5** | The three Patina flags | **Enable all three** — house-first, house-widget, direct-orders. *(overrode: gate the widget, keep Save/Ask)* | `direct-orders` ships a purchasing path that has had no commercial review, against a catalogue with **1 visible product and 0 images**. `house-widget` ships without passing an acceptance gate first. Both need acceptance coverage added to T7's matrix; neither has a flag to fall back to. |
+| **D6** | Client voice | **A Companion conversation.** *(overrode: dictation only; both reviewers rejected this)* | **Scope expansion beyond phases 0–5.** A new conversational product surface in the client app. Scoped as its own wave item (W4b) with its own acceptance, so it cannot grow inside the cache work. |
+| **D7** | Extractor pricing | **Allow maker, SKU, price and currency, each with per-row confirmation.** *(overrode: keep the prohibition)* | The prompt's explicit refusal at `lib.ts:73` is deliberately reversed. `ExtractionRow`, its strict-key validator and the prompt all change. Phase 2 grows a **money-field gold set**, and per-row confirmation becomes load-bearing rather than a safety net — measured value accuracy for generated fields is 0.69–0.83. |
+| **D8** | Rename scope | **Take the full 1,856-occurrence rename now.** | W1 stands as one exclusive Field lane, `L`, on pure critical path. |
 
-Two more owed, unchanged from the deck: ask Leah what the studio would actually send to
-someone on a roof, and `git push` commit `ec3f2f65a`.
-
----
+**Toolchain gate: CLEARED 2026-09-23.** Xcode 27.0 (27A266a), iOS 27.0 SDK, Swift 6.4 verified
+installed. The CI runner image is still `macos-15` and remains a W0 item.
 
 ## 8. Five pre-existing defects worth tickets regardless of this program
 
