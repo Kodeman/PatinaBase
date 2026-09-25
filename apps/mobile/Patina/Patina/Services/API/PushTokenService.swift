@@ -177,11 +177,34 @@ final class PushTokenService {
 
     // MARK: - Token upload
 
-    private struct DevicePushTokenPayload: Encodable {
+    /// `internal` (not `private`) so `PushTokenServiceTests` can encode one
+    /// directly and assert `app` is present in the request body without a
+    /// network stub.
+    struct DevicePushTokenPayload: Encodable, Equatable {
         let user_id: String
         let token: String
         let platform: String
         let environment: String
+        /// NI-01 contract (`00668_device_push_tokens_app.sql`): which app the
+        /// token belongs to. Patina always sends its own value — Field is a
+        /// separate app with its own registration path. Dependency on NI-01
+        /// is contract-only: the column is absent from prod until 00668 is
+        /// on Strata, so this ticket must not ship in a distributed build
+        /// before that migration lands (W1A-12's archive note carries the
+        /// ordering).
+        let app: String
+    }
+
+    /// Pure builder so the shape of the upsert body is testable without a
+    /// live session or network call.
+    static func devicePushTokenPayload(userId: String, token: String, environment: String) -> DevicePushTokenPayload {
+        DevicePushTokenPayload(
+            user_id: userId,
+            token: token,
+            platform: "ios",
+            environment: environment,
+            app: "cloud.patina.app"
+        )
     }
 
     /// Hex-encode the APNs device token and upsert it into
@@ -201,10 +224,9 @@ final class PushTokenService {
             return
         }
 
-        let payload = DevicePushTokenPayload(
-            user_id: userId,
+        let payload = Self.devicePushTokenPayload(
+            userId: userId,
             token: hex,
-            platform: "ios",
             environment: Self.detectEnvironment()
         )
         do {
