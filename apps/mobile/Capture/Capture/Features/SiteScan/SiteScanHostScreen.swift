@@ -64,7 +64,8 @@ final class SiteScanHostModel {
     private let projectRoomID: String?
     private let voiceService: any VoiceNoteService
     private let analytics: any CaptureAnalytics
-    private let flags: CaptureFeatureFlags
+    /// The signed-in designer — distinct from `session`, the scan.
+    private let userSession: any SessionProviding
 
     @ObservationIgnored lazy var contextModel = SiteScanContextModel(
         store: store,
@@ -74,7 +75,7 @@ final class SiteScanHostModel {
         projectRoomID: projectRoomID,
         voice: voiceService,
         analytics: analytics,
-        flags: flags,
+        session: userSession,
         scanSessionIdProvider: { [weak self] in (self?.session as? ContextCapturing)?.scanSessionId },
         frameProvider: { [weak self] in (self?.session as? ContextCapturing)?.captureContextFrame() })
 
@@ -88,7 +89,7 @@ final class SiteScanHostModel {
         projectRoomID: String?,
         voice: any VoiceNoteService,
         analytics: any CaptureAnalytics,
-        flags: CaptureFeatureFlags
+        userSession: any SessionProviding
     ) {
         self.siteScan = siteScan
         self.name = name
@@ -99,7 +100,7 @@ final class SiteScanHostModel {
         self.projectRoomID = projectRoomID
         self.voiceService = voice
         self.analytics = analytics
-        self.flags = flags
+        self.userSession = userSession
     }
 
     func startScan() async {
@@ -221,7 +222,7 @@ struct SiteScanHostScreen: View {
                                           analytics: container.analytics,
                                           surface: "f2"),
             analytics: container.analytics,
-            flags: container.featureFlags))
+            userSession: container.session))
     }
 
     var body: some View {

@@ -92,17 +92,15 @@ public extension FieldNoteSetting {
     }
 }
 
-/// FC-R11's gate, in CaptureKit so the two surfaces this wave gates — the C3
-/// card and C6 — share one rule and one test. §15.2 item 2: she TAPS it. A
-/// recording that starts while the chip is untapped has not been affirmed,
-/// whatever it says.
+/// FC-R11's gate, in CaptureKit so every recording surface shares one rule and
+/// one test. §15.2 item 2: she TAPS it. A recording that starts while the chip
+/// is untapped has not been affirmed, whatever it says.
 ///
-/// COVERAGE IS C3 AND C6 ONLY. FC-R11 names two further recording surfaces —
-/// N4 (`VoiceNoteSheet`) and F2 (`SiteScanContextCapture`'s recorder) — and
-/// neither has a chip or calls this gate. Wave 3's plan scoped Ruling 4 to C3
-/// and C6, so that is a SCHEDULED GAP, not a rule this type enforces. Read
-/// `recordingIsBlocked` as "blocked on the surfaces that ask", never as
-/// "every conversation note is affirmed".
+/// COVERS ALL FOUR RECORDING SURFACES. C3 and C6 render the chip, so a tap
+/// there affirms. N4 (`VoiceNoteSheet`) and F2 (`SiteScanContextCapture`'s
+/// recorder) have no chip, so nothing on them can affirm: `recordingIsBlocked(on:)`
+/// treats their `affirmed` as false, and a conversation note does not start
+/// there at all. Solo notes are unaffected everywhere.
 public enum FieldAffirmationPolicy {
     public static func chipTitle(noteSetting: FieldNoteSetting?) -> String? {
         noteSetting?.affirmation
@@ -111,6 +109,14 @@ public enum FieldAffirmationPolicy {
     public static func recordingIsBlocked(noteSetting: FieldNoteSetting?,
                                           affirmed: Bool) -> Bool {
         noteSetting == .conversation && !affirmed
+    }
+
+    /// Only the surfaces that render the chip can be affirmed.
+    public static func recordingIsBlocked(on surface: FieldVoiceGesture.Surface,
+                                          noteSetting: FieldNoteSetting?,
+                                          affirmed: Bool) -> Bool {
+        let asks = surface == .quickConfirmCard || surface == .voiceMode
+        return recordingIsBlocked(noteSetting: noteSetting, affirmed: asks && affirmed)
     }
 }
 

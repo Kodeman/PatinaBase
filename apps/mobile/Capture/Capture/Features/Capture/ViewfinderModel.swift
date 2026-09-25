@@ -7,6 +7,7 @@
 //  The view stays declarative; this object owns the capture lifecycle.
 
 import SwiftUI
+import AVFoundation
 import CaptureKit
 
 @MainActor
@@ -25,7 +26,6 @@ final class ViewfinderModel {
     private let smartGuess: any SmartGuessService
     private let siteRequests: any SiteRequestService
     private let voice: any VoiceNoteService
-    private let featureFlags: CaptureFeatureFlags
     /// The learned filing places a suggestion is computed against, on device.
     private let projectCache: CaptureProjectCache
     private var visitID: UUID?
@@ -130,7 +130,6 @@ final class ViewfinderModel {
         self.companion = container.companion
         self.smartGuess = container.smartGuess
         self.siteRequests = container.siteRequests
-        self.featureFlags = container.featureFlags
         self.projectCache = container.projectCache
         self.voice = SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
                                             analytics: container.analytics,
@@ -547,7 +546,11 @@ final class ViewfinderModel {
     private(set) var cardTranscript = ""
     private var cardVoiceTask: Task<Void, Never>?
 
-    var micIsAvailable: Bool { featureFlags.isEnabled("field-companion-voice") && mode != .voice }
+    /// The microphone is the one permission a note needs (§15.4). The mic shows
+    /// unless she has said no; the site affirmation gates each take.
+    private(set) var micPermission = AVAudioApplication.shared.recordPermission
+
+    var micIsAvailable: Bool { micPermission != .denied && mode != .voice }
 
     func beginCardNote(affirmed: Bool) {
         // `mode != .voice`: C6 builds its OWN recorder as a child of this
@@ -559,6 +562,15 @@ final class ViewfinderModel {
         // FC-R11 (Ruling 4): a conversation note does not start until she taps.
         guard !FieldAffirmationPolicy.recordingIsBlocked(
             noteSetting: piece.noteSetting, affirmed: affirmed) else { return }
+        // The first hold asks. It records nothing; the hold after a yes does.
+        guard micPermission == .granted else {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                _ = await self.voice.requestAuthorization()
+                self.micPermission = AVAudioApplication.shared.recordPermission
+            }
+            return
+        }
         do {
             // The recorder emits the ONE voice.start (it already carries
             // surface "c3"); this is what stops that row asserting "solo" over

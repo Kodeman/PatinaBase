@@ -6,6 +6,7 @@
 //  and the mode selector. FC-R9: foreground only.
 
 import SwiftUI
+import AVFoundation
 import CaptureKit
 
 @MainActor
@@ -15,7 +16,6 @@ final class C6VoiceModel {
     private let sync: any CaptureSyncService
     private let analytics: any CaptureAnalytics
     private let voice: any VoiceNoteService
-    private let featureFlags: CaptureFeatureFlags
     private let owner: CaptureOwnerIdentity?
     private let session: any SessionProviding
     private let sessionContext: CaptureSessionContextStore
@@ -41,7 +41,6 @@ final class C6VoiceModel {
         voice = SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
                                        analytics: container.analytics,
                                        surface: "c6")
-        featureFlags = container.featureFlags
         owner = container.session.ownerIdentity
         session = container.session
         sessionContext = .shared
@@ -75,11 +74,12 @@ final class C6VoiceModel {
     /// pin is the type's, and CaptureTests holds it.
     private var take: FieldVoiceTake = .none
 
-    /// The recorder is gated on a flag that evaluates null on every device
-    /// build today, so this is the difference between a control that declines
-    /// and one that silently does nothing. C3 hides its mic and N4 falls to a
-    /// typed note; C6 IS the screen, so it says so.
-    var isAvailable: Bool { featureFlags.isEnabled("field-companion-voice") }
+    /// The microphone is the one permission a note needs (§15.4). Once she has
+    /// said no, this is the difference between a control that declines and one
+    /// that silently does nothing. C3 hides its mic and N4 falls to a typed
+    /// note; C6 IS the screen, so it says so.
+    private(set) var micPermission = AVAudioApplication.shared.recordPermission
+    var isAvailable: Bool { micPermission != .denied }
 
     var isRecording: Bool {
         switch state {
@@ -97,6 +97,11 @@ final class C6VoiceModel {
             await stop()
         } else if !FieldAffirmationPolicy.recordingIsBlocked(noteSetting: noteSetting,
                                                              affirmed: affirmed) {
+            // The first tap asks; a yes starts this take.
+            if micPermission == .undetermined {
+                _ = await voice.requestAuthorization()
+                micPermission = AVAudioApplication.shared.recordPermission
+            }
             start()
         }
     }
@@ -105,7 +110,7 @@ final class C6VoiceModel {
     /// already carries: a second `start()` would strand the first recorder's
     /// stream task and file handle with nothing left holding them.
     func start() {
-        guard isAvailable, !isRecording else { return }
+        guard micPermission == .granted, !isRecording else { return }
         started = Date()
         segmentCount = 0
         transcript = ""
