@@ -131,7 +131,7 @@ enum PurchaseComposition {
                     product: UITestDoubles.piece,
                     fitLine: nil,
                     handoff: PurchaseComposition.handoff(),
-                    terms: PurchaseComposition.terms,
+                    terms: UITestDoubles.terms,
                     onPlaced: { placed = $0 }
                 )
             }
