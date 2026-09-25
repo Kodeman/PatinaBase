@@ -48,8 +48,9 @@ final class ViewfinderModel {
     var isLowLight: Bool = false
     var torchOn: Bool = false
 
-    // ── Camera permission (device only; mirrored from AVFoundationCameraService) ──
-    private(set) var cameraAuthorization: CameraAuthorization = .notDetermined
+    // ── Camera permission — mirrored from the CameraService seam's own member,
+    // never a concrete-type cast, so a mock can drive the denied state too. ──
+    private(set) var cameraAuthorization: CameraAuthorizationState = .notDetermined
 
     // ── Venue (S1 stamp, auto) ──
     private var venueStamp: VenueStamp?
@@ -176,9 +177,7 @@ final class ViewfinderModel {
             camera.stop()
             return
         }
-        if let av = camera as? AVFoundationCameraService {
-            cameraAuthorization = av.authorization
-        }
+        cameraAuthorization = camera.authorizationState
         frameTask?.cancel()
         frameTask = Task { [weak self] in await self?.observeFrames() }
         await stampVenue()

@@ -13,9 +13,19 @@ import CaptureKit
 public final class MockCameraService: CameraService {
     public private(set) var currentMode: CameraMode = .photo
     public var isLowLight: Bool = false
+    /// Test seam for the denied → photo-import path (`ViewfinderScreen`'s
+    /// `liveFeed` switches on this, never a concrete-type cast). Defaults to
+    /// `.authorized` so every existing mock-mode screen — the E4 "Import from
+    /// Photos" button included — keeps working unchanged; a UI test overrides
+    /// it via `-CaptureCameraDenied`.
+    public var authorizationState: CameraAuthorizationState
     private let sampleHEIC: Data
 
-    public init(sampleHEIC: Data = Data()) { self.sampleHEIC = sampleHEIC }
+    public init(sampleHEIC: Data = Data(),
+                authorizationState: CameraAuthorizationState = .authorized) {
+        self.sampleHEIC = sampleHEIC
+        self.authorizationState = authorizationState
+    }
 
     public func configure(mode: CameraMode) async throws { currentMode = mode }
     public func start() async {}

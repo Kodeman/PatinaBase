@@ -88,6 +88,14 @@ public enum AppConfiguration {
         ProcessInfo.processInfo.arguments.contains("-CaptureUITest")
     }
 
+    /// W1A-02 test seam: mock-mode camera reports `.denied` instead of its
+    /// default `.authorized`, so a UI test can exercise the denied notice →
+    /// photo-import path the simulator otherwise never renders (the real
+    /// `AVFoundationCameraService` never runs there).
+    public static var cameraDenied: Bool {
+        ProcessInfo.processInfo.arguments.contains("-CaptureCameraDenied")
+    }
+
     /// Composition policy: whether the app wires REAL services (Supabase session,
     /// persistent store, local sync outbox) instead of mocks.
     ///

@@ -10,6 +10,14 @@ import CoreGraphics
 
 public enum TorchMode: Sendable { case off, on, auto }
 
+/// Camera permission, as every `CameraService` conformer reports it — a test
+/// seam, not a flag. Before this the viewfinder could only read denial by
+/// downcasting to the concrete `AVFoundationCameraService`, which a
+/// `MockCameraService` never satisfies, so the denied → import path had no
+/// way to be driven from a test. `.restricted` (parental controls/MDM) folds
+/// into `.denied` at the conformer — both mean "no live feed, offer Settings."
+public enum CameraAuthorizationState: Sendable { case notDetermined, authorized, denied }
+
 public struct CapturedFrame: Sendable {
     public let data: Data            // HEIC bytes
     public let width: Int
@@ -45,4 +53,6 @@ public protocol CameraService: AnyObject {
     var currentMode: CameraMode { get }
     var isLowLight: Bool { get }
     var frameState: AsyncStream<CameraFrameState> { get }
+    /// Test seam: the denied notice reads this, never a concrete-type cast.
+    var authorizationState: CameraAuthorizationState { get }
 }

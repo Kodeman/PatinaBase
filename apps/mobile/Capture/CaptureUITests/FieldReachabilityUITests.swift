@@ -60,12 +60,46 @@ final class FieldReachabilityUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Open Settings"].exists)
     }
 
+    // W1A-02: the denied notice renders only when `CameraService` itself
+    // reports `.denied` (a protocol member `MockCameraService` now carries,
+    // never a concrete-type cast to `AVFoundationCameraService` — the
+    // simulator's mock never satisfies that cast, so before this seam the
+    // denied → import path had no way to be driven by a test). This starts
+    // at that notice and follows E4's own door into R3, the denied-context
+    // import sheet — not E4's `.photoLibrary`, which claims the camera
+    // usually works.
+    func testCameraDeniedNoticeOpensR3PhotoImportFromTheViewfinder() {
+        let app = launch(cameraDenied: true)
+        openToday(app)
+        tap("field.realm.camera", in: app)
+        XCTAssertTrue(element("screen.C1.viewfinder", in: app).waitForExistence(timeout: 10),
+                      "the camera never came up")
+        XCTAssertTrue(app.staticTexts["Camera access is off for Patina Field"].waitForExistence(timeout: 10),
+                      "the denied notice never rendered for a denied MockCameraService")
+        let photos = app.buttons["Import from Photos"]
+        XCTAssertTrue(photos.waitForExistence(timeout: 10),
+                      "the viewfinder has no way into Photos while the camera is denied")
+        photos.tap()
+        XCTAssertTrue(element("screen.R3.denied", in: app).waitForExistence(timeout: 10),
+                      "R3 did not come up from the denied notice")
+        // R3's own face, not E4's: the camera is off here, so the sheet must
+        // say so and keep the Settings route.
+        XCTAssertTrue(app.staticTexts["Camera is off for Patina Field"].exists)
+        XCTAssertTrue(app.buttons["Open Settings"].exists,
+                      "the denied-context sheet dropped its route to Settings")
+        XCTAssertFalse(app.staticTexts["Add from Photos"].exists)
+    }
+
     // MARK: - Helpers
 
     /// No harness argument: the app opens wherever `FieldLaunchPolicy` sends it.
-    private func launch() -> XCUIApplication {
+    /// `cameraDenied` drives `MockCameraService.authorizationState` to
+    /// `.denied` via `-CaptureCameraDenied` (W1A-02's test seam); every other
+    /// test here leaves it at the mock's `.authorized` default.
+    private func launch(cameraDenied: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-CaptureUseMocks", "-CaptureUITest"]
+        if cameraDenied { app.launchArguments.append("-CaptureCameraDenied") }
         app.launch()
         return app
     }
