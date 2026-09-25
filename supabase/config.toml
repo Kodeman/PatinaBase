@@ -695,6 +695,12 @@ verify_jwt = true
 [functions.time-nudges]
 verify_jwt = true
 
+# CONTRACT-C NI-06: signs approval-edition attachments for the caller's JWT after
+# get_project_decision_edition answers ok; {"mode":"sweep"} is 00670's hourly pg_cron
+# job and is gated in code on the service-role principal.
+[functions.project-approval-attachments]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
