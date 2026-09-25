@@ -1,0 +1,1343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Return Teaching</title>
+<meta name="description" content="The return-teaching plan for the Document: research, three directions with mockups, the recommended staged build, and six rulings for Kody.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: light;
+  --font-display:'Playfair Display',Georgia,'Times New Roman',serif;
+  --font-body:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --font-meta:'DM Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+
+  --ground:#E8E3DB;
+  --paper:#FCFAF6;
+  --wash:#F4EFE7;
+  --ink:#2C2926;
+  --body:#4E4339;
+  --faint:#65594E;
+  --rule:rgba(44,41,38,.14);
+  --rule-strong:rgba(44,41,38,.32);
+  --accent:#7C5E30;
+  --accent-soft:#C4A57B;
+  --never:#9C5340;
+  --frame:#DAD4CA;
+  --bar-h:52px;
+  --gutter:clamp(16px,4vw,64px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --ground:#141210;
+    --paper:#1D1A17;
+    --wash:#25211D;
+    --ink:#EFE8DE;
+    --body:#D2C7B9;
+    --faint:#AA9D8E;
+    --rule:rgba(239,232,222,.13);
+    --rule-strong:rgba(239,232,222,.3);
+    --accent:#D6B587;
+    --accent-soft:#8C7351;
+    --never:#E3917B;
+    --frame:#2C2824;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --ground:#141210;
+  --paper:#1D1A17;
+  --wash:#25211D;
+  --ink:#EFE8DE;
+  --body:#D2C7B9;
+  --faint:#AA9D8E;
+  --rule:rgba(239,232,222,.13);
+  --rule-strong:rgba(239,232,222,.3);
+  --accent:#D6B587;
+  --accent-soft:#8C7351;
+  --never:#E3917B;
+  --frame:#2C2824;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--body);font-family:var(--font-body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+[hidden]{display:none!important}
+img,svg,iframe{max-width:100%}
+a{color:var(--accent);text-underline-offset:3px;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+code{font-family:var(--font-meta);font-size:.86em;color:var(--ink);overflow-wrap:anywhere}
+b,strong{color:var(--ink);font-weight:600}
+
+/* ---------- deck frame ---------- */
+.deck{position:relative}
+.slide{background:var(--paper)}
+.sheet{max-width:1240px;margin-inline:auto;display:grid;grid-template-columns:150px minmax(0,1fr);gap:clamp(20px,3vw,48px);padding-block:clamp(28px,4.5vh,56px) clamp(36px,6vh,72px);padding-inline:var(--gutter)}
+.margin{display:flex;flex-direction:column;gap:10px;padding-top:6px;border-right:1px solid var(--rule);padding-right:18px;font-family:var(--font-meta);font-size:.72rem;letter-spacing:.06em;color:var(--faint);text-transform:uppercase;line-height:1.5}
+.margin .no{font-size:1.9rem;letter-spacing:0;color:var(--accent);font-weight:400;line-height:1;font-variant-numeric:tabular-nums}
+.margin .sec{color:var(--ink)}
+.margin .src{text-transform:none;letter-spacing:.01em;overflow-wrap:anywhere}
+.main{min-width:0;overflow-wrap:break-word}
+
+/* ---------- type ---------- */
+.eyebrow,.label{font-family:var(--font-meta);font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:400}
+h1,h2,h3{font-family:var(--font-display);color:var(--ink);font-weight:500;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.6rem,6vw,4.6rem);line-height:1.04;letter-spacing:-.01em}
+h2{font-size:clamp(1.65rem,2.8vw,2.35rem);line-height:1.15;margin-bottom:.35em}
+h3{font-size:1.18rem;line-height:1.3}
+p{margin:0}
+.lede{font-size:clamp(1.05rem,1.35vw,1.2rem);max-width:62ch;color:var(--body)}
+.small{font-size:.875rem}
+.faint{color:var(--faint)}
+.italic{font-family:var(--font-display);font-style:italic}
+.stack{display:flex;flex-direction:column;gap:18px}
+.stack-sm{display:flex;flex-direction:column;gap:8px}
+.never{color:var(--never)}
+.accent{color:var(--accent)}
+
+/* ---------- title ---------- */
+.title-wrap{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:clamp(24px,5vw,72px);align-items:end}
+.title-wrap .thesis{font-family:var(--font-display);font-style:italic;font-size:clamp(1.25rem,2vw,1.6rem);line-height:1.35;color:var(--body);max-width:30ch;margin-top:22px}
+.meta-list{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 18px;font-size:.88rem;margin-top:30px;max-width:56ch}
+.meta-list dt{font-family:var(--font-meta);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding-top:2px}
+.meta-list dd{margin:0}
+
+/* the note specimen: the thing itself */
+.specimen{border-left:1px solid var(--accent-soft);padding:6px 0 6px 22px;max-width:36ch}
+.specimen .mn-label{font-family:var(--font-meta);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.specimen .mn-body{font-family:var(--font-display);font-style:italic;font-size:1.22rem;line-height:1.4;color:var(--body);margin-top:6px}
+.specimen .mn-act{display:inline-block;margin-top:10px;font-size:.9rem;color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.specimen .mn-cap{font-family:var(--font-meta);font-size:.68rem;color:var(--faint);margin-top:16px;letter-spacing:.02em}
+
+/* ---------- statement ---------- */
+.statement{font-family:var(--font-display);font-style:italic;font-weight:400;font-size:clamp(1.9rem,4.4vw,3.5rem);line-height:1.16;color:var(--ink);max-width:22ch;text-wrap:balance}
+.statement .accent{font-style:italic}
+
+/* ---------- common blocks ---------- */
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(20px,3vw,44px)}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(18px,2.4vw,32px)}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(16px,2vw,28px)}
+.ruled{list-style:none;margin:0;padding:0}
+.ruled>li{padding:12px 0;border-top:1px solid var(--rule)}
+.ruled>li:last-child{border-bottom:1px solid var(--rule)}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:6px 22px}
+.pair .who{font-family:var(--font-meta);font-size:.74rem;color:var(--faint);letter-spacing:.02em}
+.kv{display:flex;flex-direction:column;gap:4px}
+.kv .label{display:block}
+.panel{background:var(--wash);padding:18px 20px;border-radius:2px}
+.quote{font-family:var(--font-display);font-style:italic;font-size:clamp(1.2rem,2vw,1.55rem);line-height:1.4;color:var(--ink);max-width:48ch;border-left:1px solid var(--accent-soft);padding-left:22px}
+.chip{display:inline-block;font-family:var(--font-meta);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--rule-strong);border-radius:2px;color:var(--faint);white-space:nowrap}
+.chip.blocker{color:var(--never);border-color:var(--never)}
+.chip.rec{color:var(--accent);border-color:var(--accent)}
+.hr{height:1px;background:var(--rule);border:0;margin:6px 0}
+
+/* feature test */
+.test{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-top:1px solid var(--rule-strong)}
+.test>div{padding:16px 18px 6px 0}
+.test>div+div{padding-left:18px;border-left:1px solid var(--rule)}
+.test .answer{font-family:var(--font-display);font-size:1.15rem;color:var(--ink);margin:6px 0 8px;line-height:1.3}
+
+/* patterns */
+.patterns{counter-reset:p;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 clamp(24px,3vw,48px)}
+.patterns>li{list-style:none;display:grid;grid-template-columns:2.2rem minmax(0,1fr);gap:0 10px;padding:13px 0;border-top:1px solid var(--rule)}
+.patterns>li::before{counter-increment:p;content:counter(p,decimal-leading-zero);font-family:var(--font-meta);font-size:.78rem;color:var(--accent);padding-top:3px;grid-row:span 3}
+.patterns{padding:0;margin:0}
+.patterns h3{font-size:1.05rem}
+.patterns .proof{font-family:var(--font-meta);font-size:.74rem;color:var(--faint);margin-top:4px}
+
+/* anti-patterns */
+.anti>li{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:4px 24px}
+.anti .what{font-family:var(--font-display);font-size:1.08rem;color:var(--ink)}
+.refuse{display:flex;flex-wrap:wrap;gap:8px}
+.refuse span{font-family:var(--font-meta);font-size:.76rem;color:var(--never);border:1px solid var(--never);padding:3px 8px;border-radius:2px;text-decoration:line-through;text-decoration-thickness:1px}
+
+/* inventory */
+.feature-find{border-top:2px solid var(--accent);padding-top:16px}
+.feature-find .foot{font-family:var(--font-meta);font-size:.72rem;color:var(--faint);letter-spacing:.04em}
+.inv>li{display:grid;grid-template-columns:minmax(0,11rem) minmax(0,1fr);gap:4px 18px}
+.inv .name{color:var(--ink);font-weight:500}
+.missing>li{padding-left:18px;position:relative}
+.missing>li::before{content:"";position:absolute;left:0;top:1.28em;width:9px;border-top:1px solid var(--never)}
+
+/* lifecycle */
+.life{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:30px 0}
+.life>li{position:relative;padding:26px 16px 0 0}
+.life>li::before{content:"";position:absolute;left:0;right:0;top:7px;border-top:1px solid var(--rule-strong)}
+.life>li::after{content:"";position:absolute;left:0;top:3px;width:9px;height:9px;border-radius:50%;background:var(--paper);border:1px solid var(--accent)}
+.life .stage-name{font-family:var(--font-display);font-size:1.05rem;color:var(--ink);line-height:1.25}
+.life .when{font-family:var(--font-meta);font-size:.68rem;color:var(--faint);letter-spacing:.04em;margin:3px 0 8px;display:block}
+.life .t,.life .n{font-size:.84rem;line-height:1.45;display:block}
+.life .n{color:var(--never);margin-top:6px}
+.life .t::before{content:"Teach  ";font-family:var(--font-meta);font-size:.66rem;letter-spacing:.08em;color:var(--accent);text-transform:uppercase}
+.life .n::before{content:"Never  ";font-family:var(--font-meta);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase}
+
+/* tables that fold into cards */
+.tbl-wrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-size:.9rem}
+.tbl th,.tbl td{text-align:left;vertical-align:top;padding:11px 14px 11px 0;border-top:1px solid var(--rule)}
+.tbl thead th{font-family:var(--font-meta);font-weight:400;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);border-top:0;border-bottom:1px solid var(--rule-strong)}
+.tbl tbody th{font-weight:500;color:var(--ink);width:17%}
+.tbl td.rec-col{background:var(--wash);padding-left:12px}
+.tbl thead th.rec-col{background:var(--wash);padding-left:12px;color:var(--accent)}
+.yes{color:var(--accent);font-weight:500}
+.no{color:var(--never)}
+
+/* options */
+.opt-head{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:clamp(18px,3vw,44px);align-items:start}
+.opt-thesis{font-family:var(--font-display);font-size:clamp(1.08rem,1.5vw,1.28rem);line-height:1.45;color:var(--ink)}
+.mount{border-left:1px solid var(--rule-strong);padding-left:18px;font-size:.88rem}
+.moments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 clamp(18px,2.4vw,32px);margin:0}
+.moments>div{border-top:1px solid var(--rule);padding:10px 0 12px}
+.moments dt{font-family:var(--font-meta);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.moments dd{margin:4px 0 0;font-size:.875rem;line-height:1.45}
+
+/* mockup frames */
+.mocks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(16px,2vw,28px)}
+.mocks.one{grid-template-columns:minmax(0,1fr)}
+.mock{margin:0;min-width:0}
+.mock-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:0 0 8px}
+.mock-name{font-size:.84rem;color:var(--ink);min-width:0}
+.mock-name b{font-family:var(--font-meta);font-weight:400;color:var(--accent);margin-right:6px}
+.mock-ctl{display:flex;align-items:center;gap:4px;font-family:var(--font-meta);font-size:.72rem}
+.mock-ctl button{font:inherit;color:var(--faint);background:transparent;border:1px solid var(--rule-strong);padding:4px 9px;min-height:30px;cursor:pointer;border-radius:2px}
+.mock-ctl button[aria-pressed="true"]{color:var(--paper);background:var(--ink);border-color:var(--ink)}
+.mock-ctl a{margin-left:8px;padding:4px 0;white-space:nowrap}
+.stage{position:relative;width:100%;max-width:100%;aspect-ratio:16/10;overflow:hidden;background:var(--frame);border:1px solid var(--rule-strong)}
+.stage iframe{position:absolute;top:0;left:0;border:0;transform-origin:0 0;background:#FCFAF6;width:1280px;height:800px}
+.mock.is-phone .stage iframe{box-shadow:0 0 0 1px var(--rule-strong)}
+.mock-note{font-size:.8rem;color:var(--faint);margin-top:8px;line-height:1.45}
+
+/* diagram */
+.diagram{width:100%}
+.diagram svg{display:block;width:100%;height:auto}
+.diagram .tall{display:none;max-width:380px;margin-inline:auto}
+.d-box{fill:var(--paper);stroke:var(--rule-strong);stroke-width:1}
+.d-box.hot{stroke:var(--accent);stroke-width:1.5}
+.d-wash{fill:var(--wash);stroke:none}
+.d-lab{font-family:var(--font-meta);font-size:10px;letter-spacing:.08em;fill:var(--faint)}
+.d-title{font-family:var(--font-display);font-size:17px;fill:var(--ink)}
+.d-mono{font-family:var(--font-meta);font-size:10.5px;fill:var(--ink)}
+.d-txt{font-family:var(--font-body);font-size:11.5px;fill:var(--body)}
+.d-arrow{stroke:var(--accent);stroke-width:1.3;fill:none}
+.d-arrow.soft{stroke:var(--faint);stroke-dasharray:4 3}
+.d-head{fill:var(--accent)}
+.d-head.soft{fill:var(--faint)}
+.d-note{font-family:var(--font-meta);font-size:10px;fill:var(--accent)}
+.d-note.soft{fill:var(--faint)}
+
+/* rules / gates */
+.gates{counter-reset:g;list-style:none;margin:0;padding:0}
+.gates>li{display:grid;grid-template-columns:1.9rem minmax(0,1fr);gap:0 8px;padding:7px 0;border-top:1px solid var(--rule);font-size:.88rem;line-height:1.45}
+.gates>li::before{counter-increment:g;content:counter(g,decimal-leading-zero);font-family:var(--font-meta);font-size:.72rem;color:var(--accent);padding-top:2px}
+.guard{border-top:1px solid var(--rule-strong);padding-top:10px}
+.guard h3{font-size:1.02rem;margin-bottom:4px}
+.guard p{font-size:.86rem;line-height:1.45}
+
+/* measurement */
+.metric{border-top:1px solid var(--rule-strong);padding-top:12px}
+.metric .rule-line{font-family:var(--font-meta);font-size:.76rem;color:var(--accent);margin-top:6px}
+
+/* phasing */
+.lane{display:flex;width:100%;height:38px;border:1px solid var(--rule-strong)}
+.lane>div{display:flex;align-items:center;padding:0 10px;font-family:var(--font-meta);font-size:.74rem;color:var(--ink);border-right:1px solid var(--rule-strong);white-space:nowrap;overflow:hidden;min-width:0}
+.lane>div:last-child{border-right:0}
+.lane .p1{flex:8 1 0;background:var(--wash)}
+.lane .p2{flex:16 1 0;background:var(--wash)}
+.lane .p3{flex:6 1 0;background:repeating-linear-gradient(135deg,transparent 0 6px,var(--rule) 6px 7px);color:var(--faint)}
+.lane-scale{position:relative;height:1.3em;font-family:var(--font-meta);font-size:.68rem;color:var(--faint);margin-top:6px;font-variant-numeric:tabular-nums}
+.lane-scale span{position:absolute;top:0;transform:translateX(-50%)}
+.lane-scale span:first-child{transform:none}
+.lane-scale span:last-child{transform:translateX(-100%)}
+.lane-cap{font-family:var(--font-meta);font-size:.7rem;color:var(--faint);margin-top:2px}
+.phase h3{font-size:1.1rem}
+.phase .days{font-family:var(--font-meta);font-size:.78rem;color:var(--accent);margin:2px 0 8px;display:block}
+.phase ul{margin:0;padding-left:1.05em;font-size:.86rem;line-height:1.5}
+.phase ul li+li{margin-top:3px}
+.phase .rev{font-size:.82rem;margin-top:10px;border-top:1px solid var(--rule);padding-top:8px}
+.phase0{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 16px;align-items:baseline}
+
+/* review */
+.fix{list-style:none;margin:0;padding:0}
+.fix>li{display:grid;grid-template-columns:5.2rem minmax(0,1fr) minmax(0,1fr);gap:4px 22px;padding:10px 0;border-top:1px solid var(--rule);font-size:.86rem;line-height:1.45}
+.fix>li.head{font-family:var(--font-meta);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);border-top:0;padding-bottom:6px}
+.fix .id{font-family:var(--font-meta);font-size:.74rem;color:var(--ink)}
+.fix .id .chip{margin-top:4px}
+.fix .broke{color:var(--body)}
+.fix .changed{color:var(--ink)}
+.tally{display:flex;flex-wrap:wrap;gap:6px 22px;font-family:var(--font-meta);font-size:.78rem;color:var(--faint);font-variant-numeric:tabular-nums}
+.tally b{font-family:var(--font-display);font-size:1.5rem;font-weight:500;color:var(--ink);margin-right:6px}
+
+/* rulings */
+.rulings{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 clamp(22px,3vw,44px)}
+.rulings>li{border-top:1px solid var(--rule-strong);padding:12px 0 16px}
+.rulings .rid{font-family:var(--font-meta);font-size:.78rem;color:var(--accent);letter-spacing:.04em}
+.rulings h3{font-size:1.08rem;margin:2px 0 6px}
+.rulings .verb{font-size:.86rem;line-height:1.5}
+.rulings .opts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.rulings .opts span{font-family:var(--font-meta);font-size:.72rem;padding:3px 8px;border:1px solid var(--rule-strong);border-radius:2px;color:var(--body)}
+.rulings .opts span.pick{border-color:var(--accent);color:var(--accent)}
+.rulings .rec-line{font-size:.82rem;color:var(--faint);margin-top:8px}
+.rulings .rec-line b{font-family:var(--font-meta);font-weight:400;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-right:6px}
+.rulings>li.phase0-ask{grid-column:1/-1;background:var(--wash);border-top:2px solid var(--accent);padding:14px 18px 16px}
+
+/* next */
+.wave{list-style:none;margin:0;padding:0;counter-reset:w}
+.wave>li{display:grid;grid-template-columns:3.2rem minmax(0,9rem) minmax(0,1fr);gap:4px 16px;padding:10px 0;border-top:1px solid var(--rule);font-size:.9rem;align-items:baseline}
+.wave>li::before{counter-increment:w;content:"P1-" counter(w);font-family:var(--font-meta);font-size:.74rem;color:var(--accent)}
+.wave .area{font-family:var(--font-meta);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.wave>li.p0::before{content:"P0";color:var(--never)}
+
+/* ---------- control bar ---------- */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--paper);border-top:1px solid var(--rule-strong);padding-bottom:env(safe-area-inset-bottom,0px)}
+.bar-inner{height:var(--bar-h);display:flex;align-items:center;gap:10px;padding-inline:var(--gutter);max-width:1400px;margin-inline:auto}
+.progress{position:absolute;left:0;top:-1px;height:2px;background:var(--accent);width:0;transition:width .24s ease}
+.bar .deck-name{font-family:var(--font-meta);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.bar button{font-family:var(--font-meta);font-size:.8rem;color:var(--ink);background:transparent;border:1px solid var(--rule-strong);border-radius:2px;min-width:44px;height:36px;padding:0 10px;cursor:pointer}
+.bar button:hover{border-color:var(--ink)}
+.bar button:disabled{opacity:.35;cursor:default}
+.counter{font-family:var(--font-meta);font-size:.84rem;color:var(--ink);font-variant-numeric:tabular-nums;min-width:4.6rem;text-align:center;letter-spacing:.04em}
+
+.keys{position:fixed;inset:0;z-index:40;background:rgba(20,18,16,.42);display:grid;place-items:center;padding:16px}
+.keys-card{background:var(--paper);color:var(--body);width:min(420px,100%);padding:24px 26px;border:1px solid var(--rule-strong);box-shadow:0 18px 48px rgba(0,0,0,.25)}
+.keys-card h2{font-size:1.4rem}
+.keys-card dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 18px;margin:14px 0 20px;font-size:.9rem}
+.keys-card dt{font-family:var(--font-meta);font-size:.8rem;color:var(--ink)}
+.keys-card dd{margin:0}
+.keys-card kbd{font-family:var(--font-meta);font-size:.76rem;border:1px solid var(--rule-strong);border-bottom-width:2px;border-radius:3px;padding:1px 6px;background:var(--wash)}
+.keys-card button{font-family:var(--font-meta);font-size:.8rem;background:var(--ink);color:var(--paper);border:0;min-height:40px;padding:0 16px;cursor:pointer;border-radius:2px}
+
+/* ---------- horizontal presentation (wide screens) ---------- */
+@media (min-width:761px){
+  html,body{height:100%;overflow:hidden}
+  .deck{position:fixed;left:0;right:0;top:0;bottom:calc(var(--bar-h) + env(safe-area-inset-bottom,0px))}
+  .slide{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;visibility:hidden;opacity:0}
+  .slide.is-active{visibility:visible;opacity:1}
+  .slide.center .sheet{min-height:100%;align-content:center}
+}
+@media (min-width:761px) and (prefers-reduced-motion:no-preference){
+  .slide{transition:opacity .24s ease,visibility 0s linear .24s}
+  .slide.is-active{transition:opacity .24s ease,visibility 0s linear 0s}
+}
+
+/* ---------- narrowing ---------- */
+@media (max-width:1060px){
+  .moments{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .life{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .grid4{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:900px){
+  .sheet{grid-template-columns:minmax(0,1fr)}
+  .margin{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:4px 14px;border-right:0;border-bottom:1px solid var(--rule);padding:0 0 10px}
+  .margin .no{font-size:1.2rem}
+  .mocks{grid-template-columns:minmax(0,1fr)}
+  .title-wrap,.opt-head,.grid2{grid-template-columns:minmax(0,1fr)}
+  .grid3{grid-template-columns:minmax(0,1fr)}
+  .patterns{grid-template-columns:minmax(0,1fr)}
+  .test{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .test>div:nth-child(3){padding-left:0;border-left:0}
+  .rulings{grid-template-columns:minmax(0,1fr)}
+}
+/* ---------- stacked reading (phone) ---------- */
+@media (max-width:760px){
+  body{padding-bottom:calc(var(--bar-h) + env(safe-area-inset-bottom,0px))}
+  .slide{border-bottom:1px solid var(--rule-strong);scroll-margin-top:0}
+  .sheet{padding-block:28px 40px}
+  .bar .deck-name{display:none}
+  .bar-inner{justify-content:space-between}
+  .test{grid-template-columns:minmax(0,1fr)}
+  .test>div,.test>div+div{padding:14px 0 6px;border-left:0}
+  .test>div+div{border-top:1px solid var(--rule)}
+  .life{grid-template-columns:minmax(0,1fr);gap:0}
+  .life>li{padding:0 0 18px 26px}
+  .life>li::before{left:4px;right:auto;top:10px;bottom:0;border-top:0;border-left:1px solid var(--rule-strong)}
+  .life>li::after{top:4px}
+  .moments,.grid4{grid-template-columns:minmax(0,1fr)}
+  .anti>li,.inv>li,.pair{grid-template-columns:minmax(0,1fr)}
+  .fix>li{grid-template-columns:minmax(0,1fr)}
+  .fix>li.head{display:none}
+  .fix .broke::before{content:"Broke  ";font-family:var(--font-meta);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--never)}
+  .fix .changed::before{content:"Changed  ";font-family:var(--font-meta);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+  .wave>li{grid-template-columns:2.6rem minmax(0,1fr)}
+  .wave .area{grid-column:2}
+  .wave .what{grid-column:2}
+  .phase0{grid-template-columns:minmax(0,1fr)}
+  .diagram .wide{display:none}
+  .diagram .tall{display:block}
+  .lane>div{font-size:.66rem;padding:0 6px}
+  /* tables fold into labelled blocks */
+  table.tbl,.tbl tbody,.tbl tr,.tbl td,.tbl tbody th{display:block;width:auto}
+  .tbl thead{display:none}
+  .tbl tr{border-top:1px solid var(--rule-strong);padding:10px 0}
+  .tbl tbody th{border-top:0;padding:0 0 6px;font-family:var(--font-display);font-size:1.05rem}
+  .tbl td{border-top:0;padding:4px 0}
+  .tbl td.rec-col{padding:6px 10px}
+  .tbl td::before{content:attr(data-label);display:block;font-family:var(--font-meta);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+}
+@media (prefers-reduced-motion:reduce){
+  .progress{transition:none}
+}
+</style>
+</head>
+<body>
+
+<main class="deck" id="deck" aria-roledescription="slide deck">
+
+<!-- 1 · Title -->
+<section class="slide center" id="s1" data-title="Teach at the surface">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">For ruling</span><span class="src">US-12 · SQ-257 to SQ-266 · main 01958d27c</span></aside>
+    <div class="main">
+      <div class="title-wrap">
+        <div>
+          <p class="eyebrow">Return teaching · The Document · 25 Sep 2026</p>
+          <h1 style="margin-top:14px">Teach at the surface.</h1>
+          <p class="thesis">One sentence, set at the place that changed, once the work there is done. On most visits, nothing at all.</p>
+          <dl class="meta-list">
+            <dt>For</dt><dd>Kody, to rule. Not a pitch.</dd>
+            <dt>Working name</dt><dd>Teaching notes (<code>teachingNote</code> in code). The name the studio sees is ruling R-RT1.</dd>
+            <dt>Sources</dt><dd>Three research memos, UX options and architecture (revision 2), and the SQ-262 adversarial review.</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="specimen" aria-label="A sample note, as drawn in the mockups">
+            <div class="mn-label">Margin note · 11 Sep</div>
+            <p class="mn-body">Invoices now say what became of the email, delivered, opened or bounced, beside each one you send.</p>
+            <span class="mn-act">See the Sonnenberg invoice</span>
+            <p class="mn-cap">Sample 1, ux-options §D. A release note on the Desk. The label word waits on R-RT1.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 · The ask and the feature test -->
+<section class="slide" id="s2" data-title="The ask, and the feature test">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">The ask</span><span class="src">US-12 brief · vision-framing §1 · VISION.md</span></aside>
+    <div class="main stack">
+      <h2>The ask, and the feature test</h2>
+      <div class="stack-sm">
+        <p class="label">The ask, as briefed (US-12)</p>
+        <p class="quote">Design (not build) a system inside Patina that quietly teaches a returning designer one new feature or benefit, introduces new releases to designers seeing them for the first time, and manages that teaching across the whole lifecycle of a studio's engagement.</p>
+      </div>
+      <div class="test" role="list">
+        <div role="listitem"><p class="label">Surface</p><p class="answer">#1, The Document</p><p class="small">The Desk and the rooms of the Document. Never the client app, the marketplace or the client page, which is a letter from the studio. Patina Field is out of scope for this story.</p></div>
+        <div role="listitem"><p class="label">Studio moment</p><p class="answer">S2, the first hands</p><p class="small">The new hand has to get productive without taking the owner's hours. VISION §2: "the thing she cannot afford is a new system to learn."</p></div>
+        <div role="listitem"><p class="label">Stream</p><p class="answer">Mostly the floor</p><p class="small">A subscription is kept because the tool keeps being useful, and the second seat is where the floor grows. Never a marketplace sales channel.</p></div>
+        <div role="listitem"><p class="label">Promise</p><p class="answer">S4, you won't notice Patina</p><p class="small">A release introduction is never an upsell. No lock-in, no hidden fees.</p></div>
+      </div>
+      <p class="small faint">It passes the test on all four. The principle that makes it pass is on the next slide: teach only what shortens the task she is about to do, where she is about to do it, and never to bring her back.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · Tension and principle -->
+<section class="slide center" id="s3" data-title="The tension, and the principle">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Principle</span><span class="src">vision-framing §1 · VISION S4, §6</span></aside>
+    <div class="main stack" style="gap:28px">
+      <div class="grid2">
+        <div class="stack-sm"><p class="label">The tension</p><p>"Teach her something when she returns" is the textbook re-engagement loop, and S4 rules it out by name: never optimize the studio surface for engagement. A lesson placed on arrival competes with the task she came to do.</p></div>
+        <div class="stack-sm"><p class="label">The cost of silence</p><p>A studio that never learns the path from signed agreement to purchase order does the work twice by hand. She notices that.</p></div>
+      </div>
+      <p class="statement">Teach only what shortens the task she is about to do, where she is about to do it, <span class="accent">and never to bring her back.</span></p>
+      <p class="small faint" style="max-width:70ch">Every lesson names the task it shortens; if it can't, it isn't written. Lessons are judged by whether the task got shorter, never by visits, opens or click-through. The system has no scheduler of its own. A moment in her work is the only trigger.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · Research patterns -->
+<section class="slide" id="s4" data-title="What the research found">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Evidence</span><span class="src">research/external-patterns.md §1, §3 · 53 sources</span></aside>
+    <div class="main stack">
+      <h2>What the research found: eight patterns worth adopting</h2>
+      <ol class="patterns">
+        <li><h3>Pull over push</h3><p class="small">Help triggered by a signal that she would benefit at that moment beats launch tutorials and What's New modals.</p><p class="proof">Figma: a text tip only when you add a text box · NN/g</p></li>
+        <li><h3>Teach at the anchor, one thing at a time</h3><p class="small">One hint per interaction, near the interface it describes.</p><p class="proof">YouTube Android: one hint per gesture, where you reach it · NN/g</p></li>
+        <li><h3>Interrupt at coarse task boundaries</h3><p class="small">Interruptions between subtasks reduced annoyance and resumption lag; mid-subtask ones increased them.</p><p class="proof">Adamczyk &amp; Bailey 2004 · Iqbal &amp; Bailey 2005 (CHI)</p></li>
+        <li><h3>Retire a lesson once the behavior happens</h3><p class="small">"People who've already used a feature won't appreciate viewing a tip that describes it."</p><p class="proof">Apple TipKit: invalidate(reason:), MaxDisplayCount</p></li>
+        <li><h3>Set one cadence cap for the whole app</h3><p class="small">Several tips display "at a reasonable cadence, for example, once every 24 hours."</p><p class="proof">Apple HIG · Pendo, Appcues, Chameleon throttles</p></li>
+        <li><h3>Keep it short</h3><p class="small">One or two sentences. A feature that takes more than three actions is too much for a tip.</p><p class="proof">Apple HIG, Offering help</p></li>
+        <li><h3>A cumulative record, pulled</h3><p class="small">A plain "what's new" she can open when she wants it, cumulative across releases.</p><p class="proof">Apple iWork What's new · Slack monthly updates · Linear changelog</p></li>
+        <li><h3>The shorter way, shown after the long one</h3><p class="small">Teaching built into the tools: after she does it by hand, show the shortcut for next time without breaking flow.</p><p class="proof">Superhuman: Cmd+K shows "the shortcut for next time"</p></li>
+      </ol>
+      <p class="small faint">Vendor-published figures (Chameleon, Pendo, Userpilot) come from sellers of tours; the memo reads them as upper bounds, and this deck quotes none of them.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 · Anti-patterns -->
+<section class="slide" id="s5" data-title="What annoys professionals">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Evidence</span><span class="src">research/external-patterns.md §2 · vision-framing §5</span></aside>
+    <div class="main stack">
+      <h2>What annoys professionals, and what we will not do</h2>
+      <ul class="ruled anti">
+        <li><span class="what">Launch tours and What's New modals</span><span class="small">Skipped, and hard to recall when needed. Memory of an out-of-context hint fades in about 20 seconds (NN/g).</span></li>
+        <li><span class="what">Chains of coach marks</span><span class="small">"Think shot glass, not beer tankard." Frequent hint screens get dismissed faster.</span></li>
+        <li><span class="what">Overlays after sign-in or mid-task</span><span class="small">She arrives "with a next step in mind." Stacked popups multiply the cost.</span></li>
+        <li><span class="what">"New" badges and dots</span><span class="small">Red-dot blindness: if everything has a badge, none of them matter. Edge-of-screen marks also suffer change blindness.</span></li>
+        <li><span class="what">Anything that reads as marketing</span><span class="small">Banner blindness covers internal promotion too. Apple: a tip is never "promotional."</span></li>
+        <li><span class="what">Explaining the obvious; tours you can't bring back</span><span class="small">Skip what she already knows, and keep anything skipped easy to find.</span></li>
+      </ul>
+      <div class="stack-sm">
+        <p class="label">Refused in this design</p>
+        <div class="refuse" aria-label="Refused devices">
+          <span>modal</span><span>coach-mark tour</span><span>dot</span><span>count</span><span>badge</span><span>streak</span><span>progress bar</span><span>checklist</span><span>welcome back</span><span>did you know</span><span>"New" labels</span><span>upgrade to unlock</span><span>note on a client surface</span><span>unreviewed send</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 · Inventory -->
+<section class="slide" id="s6" data-title="What Patina already has">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Inventory</span><span class="src">research/patina-inventory.md · architecture F1, F2</span></aside>
+    <div class="main stack">
+      <h2>What Patina already has, and what is missing</h2>
+      <div class="feature-find grid2">
+        <div class="stack-sm">
+          <p class="label accent">The load-bearing finding</p>
+          <h3 style="font-size:1.45rem">MarginNote is already the primitive.</h3>
+          <p class="small"><code>components/document/margin-note.tsx</code> shows once per person, recedes on × or on a named act, persists across devices, re-arms on a new key (<code>key@2</code>), can be held (<code>suppressed</code>), and reports shown, dismissed and acted. Every option extends it. Nothing new is invented.</p>
+        </div>
+        <div class="specimen" style="align-self:center">
+          <p class="mn-body" style="margin-top:0">– A one-line note, in Playfair italic, beside the work.</p>
+          <p class="foot" style="margin-top:10px">Appears once · Recedes on use</p>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="stack-sm">
+          <p class="label">Also built</p>
+          <ul class="ruled inv small">
+            <li><span class="name"><code>profiles.help_state</code></span><span>Per-person UX state with a write-through adapter. Readable by co-members and clients (F1), and its writers clobber each other (F2, SQ-265). Teaching state goes elsewhere.</span></li>
+            <li><span class="name">Help system (Sanity <code>kv3qrinl</code>)</span><span>Surface keys, content types, and the help panel reached from ⌘K.</span></li>
+            <li><span class="name">FeatureAnnouncementCoachmark</span><span>One-shot per feature, in a popover. Retired into the in-place margin.</span></li>
+            <li><span class="name">Desk Walkthrough (R97)</span><span>A WelcomeModal and six coachmarks. Ruling R-RT2.</span></li>
+            <li><span class="name"><code>useFeatureFlag</code></span><span>PostHog, fails closed until resolved.</span></li>
+            <li><span class="name"><code>help.*</code> events</span><span>Dot-snake convention, e.g. <code>help.tour.started</code>.</span></li>
+            <li><span class="name">Tester Notes, the First Six Weeks drip</span><span>The flag-gated instrument pattern, and a live email drip that stays as it is.</span></li>
+          </ul>
+        </div>
+        <div class="stack-sm">
+          <p class="label never">Missing</p>
+          <ul class="ruled missing small">
+            <li>No release manifest: nothing lists what shipped, in order.</li>
+            <li>No release-aware gating, beyond one hard-coded Walkthrough ship date.</li>
+            <li>No return detection: no last-visit time is read anywhere.</li>
+            <li>No changelog, what-changed page or release email.</li>
+            <li><code>/version</code> is not wired to the live deploy path.</li>
+            <li>No per-person record that only the person can read.</li>
+          </ul>
+          <p class="small panel"><b>Name collision.</b> <code>use-margin-notes.ts</code> and the <code>margin_notes</code> table are the designer's own notes (R14). The teaching system is <code>teachingNote</code> internally and never touches them.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 · Lifecycle -->
+<section class="slide" id="s7" data-title="The lifecycle">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Lifecycle</span><span class="src">vision-framing §2 · ux-options §A, revision 2</span></aside>
+    <div class="main stack">
+      <h2>The lifecycle: what we teach, and what we never interrupt with</h2>
+      <ol class="life">
+        <li><span class="stage-name">First hour</span><span class="when">studio created · first sign-in</span><span class="t">The Document is the whole tool: one project, one client, one room, one piece. The existing first-touch note only.</span><span class="n">Releases, billing, hands, money.</span></li>
+        <li><span class="stage-name">First week</span><span class="when">account ≤ 7 days</span><span class="t">Library capture, previewing the client page, the proposal. No release notes: her cursor starts at account creation.</span><span class="n">Invoicing, Hours, seats. No faster ways yet; there is no habit to shorten.</span></li>
+        <li><span class="stage-name">First client page sent</span><span class="when">first client invite</span><span class="t">What her client sees: her letterhead, Patina only in the colophon.</span><span class="n">Marketplace, other features.</span></li>
+        <li><span class="stage-name">First agreement signed</span><span class="when">agreement reaches signed</span><span class="t">Signed pieces become purchase orders; deposits and draws.</span><span class="n">Pricing tiers, the Pledge.</span></li>
+        <li><span class="stage-name">First invoice</span><span class="when">first invoice drawn</span><span class="t">Delivery status and print, in place at the invoice, after it is sent.</span><span class="n">Hours, reporting.</span></li>
+        <li><span class="stage-name">First hands</span><span class="when">second member accepts</span><span class="t">Owner: roles, who sees money, Hours scopes. Hand: their own first-hour path, cut to their role.</span><span class="n">The hand is never taught owner-only work; the owner never sees the hand's notes.</span></li>
+        <li><span class="stage-name">Return after a gap</span><span class="when">7 · 30 · 90 days</span><span class="t">7: nothing new. 30 or more: one collapsed "Since you were last here" line, at most three releases.</span><span class="n">"Welcome back," counts of what she missed, a date.</span></li>
+        <li><span class="stage-name">A release shipped</span><span class="when">since her cursor · flag on</span><span class="t">A change to something she already uses first; a new capability second. One note.</span><span class="n">Anything her role or flags can't reach.</span></li>
+        <li><span class="stage-name">Untouched 60 days</span><span class="when">eligible, never used</span><span class="t">Only in place, and only when a live task shows the need.</span><span class="n">A generic "did you know" on arrival.</span></li>
+        <li><span class="stage-name">Dormant 90+ days</span><span class="when">no sign-in, no open job</span><span class="t">Nothing in the product. She isn't there. A 1:1 from Leah, if R-RT5 allows the list.</span><span class="n">A re-engagement drip, "we miss you."</span></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- 8 · Taxonomy -->
+<section class="slide" id="s8" data-title="Five kinds of lesson">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Taxonomy</span><span class="src">vision-framing §3 · architecture §1.1, §6</span></aside>
+    <div class="main stack">
+      <h2>Five kinds of lesson, and where each belongs</h2>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th scope="col">Kind</th><th scope="col">Return line (the Desk)</th><th scope="col">In place</th><th scope="col">Email</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">(a) A release</th><td data-label="Return line"><span class="yes">Yes, once.</span> A change to something she uses ranks first.</td><td data-label="In place">At the changed place, the first time she finishes work there.</td><td data-label="Email">Only if it changes money or what a client sees. None is built.</td></tr>
+            <tr><th scope="row">(b) A benefit never used</th><td data-label="Return line"><span class="no">No.</span> On arrival it reads as a nag.</td><td data-label="In place"><span class="yes">Yes</span>, only when a live task shows the need.</td><td data-label="Email"><span class="no">No.</span></td></tr>
+            <tr><th scope="row">(c) A faster way</th><td data-label="Return line">Only when its boundary happened on her last visit, on something she already uses.</td><td data-label="In place"><span class="yes">Its home.</span> After a named completion act. Slow-path counters wait for Phase 3.</td><td data-label="Email"><span class="no">No.</span></td></tr>
+            <tr><th scope="row">(d) Owner capability</th><td data-label="Return line"><span class="yes">Yes</span>, owner only, at the hands moment.</td><td data-label="In place">The members section, after her first invite is sent.</td><td data-label="Email">One reviewed owner letter, only if R-RT4 allows it.</td></tr>
+            <tr><th scope="row">(e) A client promise</th><td data-label="Return line"><span class="no">No.</span></td><td data-label="In place">The consequence sentence above the send act.</td><td data-label="Email">Framing favours reusable wording in a reviewed letter; nothing here builds it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small faint">Only (a), (d) and a task-tied (c) earn space on the return visit. Every note is one sentence of 24 words or fewer with one act. Agents draft into Sanity as drafts; Leah reviews and publishes, and publishing is approval.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 9 · Option 1 -->
+<section class="slide" id="s9" data-title="Option 1 · Margin only">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Option 1</span><span class="src">ux-options §A · mockups 01, 02</span></aside>
+    <div class="main stack">
+      <div class="opt-head">
+        <div class="stack-sm">
+          <p class="label">Option 1 · Stage 1 of the recommendation</p>
+          <h2>Margin only</h2>
+          <p class="opt-thesis">The Desk is the one place she arrives between tasks, so the Desk carries all the teaching: one italic line below the roster head, from a reviewed registry, and nothing anywhere else. A note that doesn't fit one sentence on the Desk never ships.</p>
+        </div>
+        <div class="mount stack-sm">
+          <p class="label">Mount</p>
+          <p><code>app/(document)/desk/page.tsx</code>, the Desk arbiter's single slot. It renders below the roster head and is never inserted above content after paint. If it can't resolve before the roster's first paint, it waits for the next visit.</p>
+          <p class="faint">Adds the registry, the person record, the arbiter, the caps and the label line. No new surfaces or routes.</p>
+        </div>
+      </div>
+      <dl class="moments">
+        <div><dt>1 · Ordinary return</dt><dd>At most one Desk note: a release she hasn't met, an owner note, or a faster way whose boundary happened last visit. Most visits show nothing.</dd></div>
+        <div><dt>2 · After a release</dt><dd>The release note takes the slot if its flag is on, her role reaches it, and its success signal hasn't fired since it shipped. A second release waits a visit.</dd></div>
+        <div><dt>3 · After 30+ days</dt><dd>The single most relevant note. Everything else lapses.</dd></div>
+        <div><dt>4 · First week</dt><dd>Silence, except the existing first-touch note. There are no releases to teach her yet.</dd></div>
+        <div><dt>5 · Owner adds a seat</dt><dd>One owner note on her next Desk after the invite is accepted. The hand gets the owner's handoff line, if she wrote one.</dd></div>
+        <div><dt>6 · Mid-task</dt><dd>Silence. The slot resolves only on Desk arrival, before the roster paints, with nothing open.</dd></div>
+      </dl>
+      <div class="mocks">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>01</b>Ordinary return, one note on the Desk</span><span class="mock-ctl" role="group" aria-label="Frame width for mockup 01"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button><a href="mockups/01-option1-desk-margin-note.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <div class="stage"><iframe src="mockups/01-option1-desk-margin-note.html" title="Mockup 01: a margin note on the Desk" loading="lazy"></iframe></div>
+        </figure>
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>02</b>Return after a release</span><span class="mock-ctl" role="group" aria-label="Frame width for mockup 02"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button><a href="mockups/02-option1-release-note.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <div class="stage"><iframe src="mockups/02-option1-release-note.html" title="Mockup 02: a release note as the visit's one note" loading="lazy"></iframe></div>
+        </figure>
+      </div>
+      <p class="mock-note">01 and 02 keep their revision-1 layout and captions: they draw the note above the roster head, where it now renders below it (finding 13), and 01 prints a display date the label no longer carries (finding 27). ux-options §D supersedes their captions.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 10 · Option 2 -->
+<section class="slide" id="s10" data-title="Option 2 · Margin plus What changed">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Option 2</span><span class="src">ux-options §A · mockups 03, 04</span></aside>
+    <div class="main stack">
+      <div class="opt-head">
+        <div class="stack-sm">
+          <p class="label">Option 2 · Stage 2 of the recommendation</p>
+          <h2>Margin plus What changed</h2>
+          <p class="opt-thesis">Option 1's note, plus a plain record she can pull. After 30 or more days away, the Desk's one note becomes a collapsed "Since you were last here" line, with no date and no count, disclosing at most three releases. Every note she dismisses stays readable on the page.</p>
+        </div>
+        <div class="mount stack-sm">
+          <p class="label">Mount</p>
+          <p><code>/help/changes</code> in the Help Center shell. A ⌘K row, "What changed", beside "The words". An entry in the help panel. The since-line's link is the one pointer to the page.</p>
+          <p class="faint">The page has no read state. Opening it marks nothing and moves no cursor. No dot, no count.</p>
+        </div>
+      </div>
+      <dl class="moments">
+        <div><dt>1 · Ordinary return</dt><dd>As Option 1.</dd></div>
+        <div><dt>2 · After a release</dt><dd>As Option 1, and the release is written up on What changed.</dd></div>
+        <div><dt>3 · After 30+ days</dt><dd>One collapsed line, at most three releases ranked against the jobs holding her pen (R-RT3). The rest is on the page.</dd></div>
+        <div><dt>4 · First week</dt><dd>As Option 1. The page is reachable but never pointed at.</dd></div>
+        <div><dt>5 · Owner adds a seat</dt><dd>As Option 1. The owner-only entry on the page is hidden from the hand.</dd></div>
+        <div><dt>6 · Mid-task</dt><dd>Silence.</dd></div>
+      </dl>
+      <div class="mocks">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>03</b>Since you were last here</span><span class="mock-ctl" role="group" aria-label="Frame width for mockup 03"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button><a href="mockups/03-option2-since-you-were-here.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <div class="stage"><iframe src="mockups/03-option2-since-you-were-here.html" title="Mockup 03: the collapsed since-you-were-last-here line" loading="lazy"></iframe></div>
+        </figure>
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>04</b>What changed, pulled from ⌘K</span><span class="mock-ctl" role="group" aria-label="Frame width for mockup 04"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button><a href="mockups/04-option2-changes-page.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <div class="stage"><iframe src="mockups/04-option2-changes-page.html" title="Mockup 04: the What changed page" loading="lazy"></iframe></div>
+        </figure>
+      </div>
+      <p class="mock-note">03 keeps its revision-1 layout, with the Desk note above the roster head; it now renders below it (finding 13).</p>
+    </div>
+  </div>
+</section>
+
+<!-- 11 · Option 3 -->
+<section class="slide" id="s11" data-title="Option 3 · Margin plus in place">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Option 3</span><span class="src">ux-options §A · architecture §2, §5 · mockups 05, 06</span></aside>
+    <div class="main stack">
+      <div class="opt-head">
+        <div class="stack-sm">
+          <p class="label">Option 3 · Stage 3 · <span class="chip rec">Recommended</span></p>
+          <h2>Margin plus in place</h2>
+          <p class="opt-thesis">Option 2, plus notes set in type at the place that changed, shown the first time she finishes a unit of work there. Once she sends an invoice, the note sits in the Accounts sheet's margin, beside the row she just made, with the sheet still open.</p>
+        </div>
+        <div class="mount stack-sm">
+          <p class="label">Mount</p>
+          <p>Region heads that already exist: the Accounts and Hours sheets, the Galley's studio strip, and the members section of the Account sheet. Each waits for a tagged completion act: invoice sent, time logged, part saved, invite sent, client page sent.</p>
+          <p class="faint">Never on mount. The sheet that hosts the note is its surface, so an open sheet doesn't block its own note; a dialog opened over it does.</p>
+        </div>
+      </div>
+      <dl class="moments">
+        <div><dt>1 · Ordinary return</dt><dd>As Option 2 on the Desk. A faster way with an in-place home waits at its own surface for its boundary.</dd></div>
+        <div><dt>2 · After a release</dt><dd>If the release has an in-place note on a surface she uses, the Desk defers; the note meets her there after her next completed act.</dd></div>
+        <div><dt>3 · After 30+ days</dt><dd>As Option 2. In-place notes still wait at their surfaces.</dd></div>
+        <div><dt>4 · First week</dt><dd>As Option 2. No faster ways, because there is no habit yet to shorten.</dd></div>
+        <div><dt>5 · Owner adds a seat</dt><dd>As Option 2, plus an owner note in the members section after her first invite is sent.</dd></div>
+        <div><dt>6 · Mid-task</dt><dd>Silence. A dialog over the sheet, a dirty editor or a focused composer holds the note.</dd></div>
+      </dl>
+      <div class="mocks">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>05</b>In place, after an invoice is sent</span><span class="mock-ctl" role="group" aria-label="Frame width for mockup 05"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button><a href="mockups/05-option3-in-place-note.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <div class="stage"><iframe src="mockups/05-option3-in-place-note.html" title="Mockup 05: an in-place note in the Accounts sheet after an invoice is sent" loading="lazy"></iframe></div>
+        </figure>
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>06</b>A faster way, in the Hours sheet</span><span class="mock-ctl" role="group" aria-label="Frame width for mockup 06"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button><a href="mockups/06-option3-faster-way.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <div class="stage"><iframe src="mockups/06-option3-faster-way.html" title="Mockup 06: a faster-way note after an hour is logged" loading="lazy"></iframe></div>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 · Trade-offs -->
+<section class="slide" id="s12" data-title="Trade-offs">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Trade-offs</span><span class="src">ux-options §B</span></aside>
+    <div class="main stack">
+      <h2>Trade-offs across the three</h2>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th scope="col"></th><th scope="col">Option 1 · Margin only</th><th scope="col">Option 2 · plus What changed</th><th scope="col" class="rec-col">Option 3 · plus in place</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Interruption cost</th><td data-label="Option 1">Low: one line, at the boundary.</td><td data-label="Option 2">Low: the since-line replaces the note.</td><td class="rec-col" data-label="Option 3">Lowest per note, each after work completes. Total held to one note per visit.</td></tr>
+            <tr><th scope="row">Teaching power</th><td data-label="Option 1">Weak. The Desk is far from the task, and an out-of-context hint fades in seconds.</td><td data-label="Option 2">Weak on arrival. The page adds depth for the few who pull.</td><td class="rec-col" data-label="Option 3"><span class="yes">Strong:</span> at the anchor, at the moment, once.</td></tr>
+            <tr><th scope="row">Build cost</th><td data-label="Option 1">Small. The primitive and flags exist.</td><td data-label="Option 2">Small, plus one route, one ⌘K row, one help-panel entry.</td><td class="rec-col" data-label="Option 3">Medium: anchor placement, tagged boundaries on five mutations, a hold registry (one hook, nine components).</td></tr>
+            <tr><th scope="row">Authoring cost</th><td data-label="Option 1">One sentence and one act per note.</td><td data-label="Option 2">Plus a prose entry per release.</td><td class="rec-col" data-label="Option 3">Plus an anchor and a named boundary per in-place note.</td></tr>
+            <tr><th scope="row">"Won't notice Patina"</th><td data-label="Option 1">Good.</td><td data-label="Option 2"><span class="yes">Best:</span> the record is pulled, never pushed.</td><td class="rec-col" data-label="Option 3">Good, if completion timing holds. Worst if it slips to mount.</td></tr>
+            <tr><th scope="row">Blindness risk</th><td data-label="Option 1"><span class="no">High:</span> same spot, same shape, every visit.</td><td data-label="Option 2">Same for the note; none for the page.</td><td class="rec-col" data-label="Option 3">Low. It varies by place and is tied to the act just done.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 · Recommendation -->
+<section class="slide" id="s13" data-title="Recommendation">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Recommendation</span><span class="src">ux-options §C · architecture §8</span></aside>
+    <div class="main stack">
+      <p class="label">Recommendation</p>
+      <p class="statement" style="max-width:26ch">Build Option 3, in the order 1 → 2 → 3, and ship each step on its own.</p>
+      <p class="lede">The job is to teach her the one thing that shortens the task she is about to do. Only an in-place note stands where that task happens. The Desk line alone teaches at the wrong distance, and its fixed position sets up the banner blindness the research warns about. Staging keeps each step small and reversible.</p>
+      <div class="grid3">
+        <div class="stack-sm guard"><p class="label accent">Graft from Option 1</p><p class="small">The Desk is the only place a note may appear on arrival. In-place notes never borrow its slot.</p></div>
+        <div class="stack-sm guard"><p class="label accent">Graft from Option 2</p><p class="small">The since-line is the only long-gap device. What changed never has read state.</p></div>
+        <div class="stack-sm guard"><p class="label never">Refused</p><p class="small">Any catch-up count. Any reminder that the page exists beyond the since-line's one link. Any in-place note fired on mount.</p></div>
+      </div>
+      <p class="small faint">No fourth option. Pull only (the page, nothing pushed) is the research's purest position, but nobody opens a changes page for a feature she doesn't know exists. Its discipline survives in Option 2.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 14 · Empty state -->
+<section class="slide" id="s14" data-title="Nothing to teach">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Empty state</span><span class="src">ux-options §A · architecture §2 · mockup 08</span></aside>
+    <div class="main stack">
+      <div class="grid2" style="align-items:end">
+        <div class="stack-sm">
+          <p class="label">Nothing to teach</p>
+          <p class="statement" style="font-size:clamp(1.7rem,3.4vw,2.7rem)">The surface disappears.</p>
+        </div>
+        <p>When nothing is eligible, the selector returns nothing and the slot renders nothing: no placeholder, no "you're all caught up", no space kept. The Desk looks exactly as it does today. The ⌘K row remains, as every row does. This is the state she will see on most visits.</p>
+      </div>
+      <div class="mocks one">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>08</b>Any visit with nothing eligible</span><span class="mock-ctl" role="group" aria-label="Frame width for mockup 08"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button><a href="mockups/08-empty-state.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <div class="stage"><iframe src="mockups/08-empty-state.html" title="Mockup 08: the Desk with nothing to teach" loading="lazy"></iframe></div>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 15 · How it works -->
+<section class="slide" id="s15" data-title="How it works">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">System</span><span class="src">architecture §1 to §7</span></aside>
+    <div class="main stack">
+      <h2>How it works</h2>
+      <p class="lede">One pipeline serves all three options. The selector is a pure function over cached state: it writes nothing. State is written only when a note is shown, closed, dismissed or acted on.</p>
+      <div class="diagram" role="img" aria-label="Pipeline: a Sanity lesson and the release manifest feed a pure selector, which reads the person's own seen-state and passes at most one note to the surfaces; the surfaces write outcomes back to seen-state and send personless events to measurement.">
+        <svg class="wide" viewBox="0 0 1120 420" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="d-head"/></marker>
+            <marker id="ahs" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="d-head soft"/></marker>
+          </defs>
+          <!-- top arc: selector passes one note to surfaces -->
+          <path class="d-arrow" d="M463 78 C 463 22, 851 22, 851 74" marker-end="url(#ah)"/>
+          <text class="d-note" x="657" y="30" text-anchor="middle">at most one note per visit</text>
+
+          <!-- nodes -->
+          <g>
+            <rect class="d-box" x="0" y="80" width="150" height="170" rx="2"/>
+            <text class="d-lab" x="12" y="102">1 · LESSON</text>
+            <text class="d-title" x="12" y="126">teachingNote</text>
+            <text class="d-mono" x="12" y="150">Sanity kv3qrinl</text>
+            <text class="d-txt" x="12" y="172">Agent drafts;</text>
+            <text class="d-txt" x="12" y="188">Leah publishes.</text>
+            <text class="d-txt" x="12" y="210">One sentence,</text>
+            <text class="d-txt" x="12" y="226">one act, one signal.</text>
+          </g>
+          <g>
+            <rect class="d-box" x="194" y="80" width="150" height="170" rx="2"/>
+            <text class="d-lab" x="206" y="102">2 · RELEASE</text>
+            <text class="d-title" x="206" y="126">Manifest</text>
+            <text class="d-mono" x="206" y="150">teaching-releases.ts</text>
+            <text class="d-txt" x="206" y="172">Append-only, ships</text>
+            <text class="d-txt" x="206" y="188">in the bundle.</text>
+            <text class="d-txt" x="206" y="210">Minor releases</text>
+            <text class="d-txt" x="206" y="226">never teach.</text>
+          </g>
+          <g>
+            <rect class="d-box hot" x="388" y="80" width="150" height="170" rx="2"/>
+            <text class="d-lab" x="400" y="102">3 · ELIGIBILITY</text>
+            <text class="d-title" x="400" y="126">Selector</text>
+            <text class="d-mono" x="400" y="150">selectTeachingNote()</text>
+            <text class="d-txt" x="400" y="172">Pure. Writes nothing.</text>
+            <text class="d-txt" x="400" y="188">Flags fail closed.</text>
+            <text class="d-txt" x="400" y="210">Caps, audience,</text>
+            <text class="d-txt" x="400" y="226">at rest, already_knew.</text>
+          </g>
+          <g>
+            <rect class="d-box" x="582" y="80" width="150" height="170" rx="2"/>
+            <text class="d-lab" x="594" y="102">4 · SEEN-STATE</text>
+            <text class="d-title" x="594" y="126">Her own row</text>
+            <text class="d-mono" x="594" y="150">teaching_note_state</text>
+            <text class="d-txt" x="594" y="172">Cursor, visit, caps,</text>
+            <text class="d-txt" x="594" y="188">outcomes.</text>
+            <text class="d-txt" x="594" y="210">RLS: own row only.</text>
+            <text class="d-txt" x="594" y="226">Not help_state.</text>
+          </g>
+          <g>
+            <rect class="d-box" x="776" y="80" width="150" height="170" rx="2"/>
+            <text class="d-lab" x="788" y="102">5 · SURFACES</text>
+            <text class="d-title" x="788" y="126">MarginNote</text>
+            <text class="d-mono" x="788" y="150">one primitive</text>
+            <text class="d-txt" x="788" y="172">Desk slot · in place</text>
+            <text class="d-txt" x="788" y="188">act slot · since-line</text>
+            <text class="d-txt" x="788" y="210">/help/changes,</text>
+            <text class="d-txt" x="788" y="226">pulled, uncapped.</text>
+          </g>
+          <g>
+            <rect class="d-box" x="970" y="80" width="150" height="170" rx="2"/>
+            <text class="d-lab" x="982" y="102">6 · MEASUREMENT</text>
+            <text class="d-title" x="982" y="126">Per note</text>
+            <text class="d-mono" x="982" y="150">help.teaching_note.*</text>
+            <text class="d-txt" x="982" y="172">No person identity.</text>
+            <text class="d-txt" x="982" y="188">Aggregates only.</text>
+            <text class="d-txt" x="982" y="210">Task shortened,</text>
+            <text class="d-txt" x="982" y="226">already_knew, harm.</text>
+          </g>
+
+          <!-- straight connectors -->
+          <line class="d-arrow" x1="151" y1="165" x2="191" y2="165" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="345" y1="165" x2="385" y2="165" marker-end="url(#ah)"/>
+          <line class="d-arrow soft" x1="581" y1="150" x2="541" y2="150" marker-end="url(#ahs)"/>
+          <text class="d-note soft" x="560" y="142" text-anchor="middle">reads</text>
+          <line class="d-arrow" x1="775" y1="185" x2="735" y2="185" marker-end="url(#ah)"/>
+          <text class="d-note" x="755" y="203" text-anchor="middle">writes</text>
+          <line class="d-arrow" x1="927" y1="165" x2="967" y2="165" marker-end="url(#ah)"/>
+          <text class="d-note" x="172" y="157" text-anchor="middle">copy</text>
+          <text class="d-note" x="366" y="157" text-anchor="middle">since</text>
+          <text class="d-note" x="948" y="157" text-anchor="middle">events</text>
+
+          <!-- inputs into the selector -->
+          <rect class="d-wash" x="283" y="300" width="360" height="104" rx="2"/>
+          <text class="d-lab" x="299" y="322">INPUTS TO THE SELECTOR</text>
+          <text class="d-txt" x="299" y="344">PostHog flags: teaching-notes + the note's own</text>
+          <text class="d-txt" x="299" y="362">teaching_signals(): role, used, success times</text>
+          <text class="d-txt" x="299" y="380">At rest, per surface · the hold registry</text>
+          <text class="d-txt" x="299" y="398">Tagged boundaries: invoice sent, time logged, …</text>
+          <line class="d-arrow" x1="463" y1="298" x2="463" y2="253" marker-end="url(#ah)"/>
+
+          <!-- surfaces written note -->
+          <text class="d-note" x="755" y="272" text-anchor="middle">on shown · closed ·</text>
+          <text class="d-note" x="755" y="286" text-anchor="middle">dismissed · acted</text>
+        </svg>
+
+        <svg class="tall" viewBox="0 0 360 1010" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <marker id="ah2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="d-head"/></marker>
+            <marker id="ahs2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="d-head soft"/></marker>
+          </defs>
+          <!-- node 1 -->
+          <rect class="d-box" x="4" y="4" width="250" height="118" rx="2"/>
+          <text class="d-lab" x="16" y="24">1 · LESSON</text>
+          <text class="d-title" x="16" y="48">teachingNote</text>
+          <text class="d-mono" x="16" y="70">Sanity kv3qrinl</text>
+          <text class="d-txt" x="16" y="90">Agent drafts; Leah publishes.</text>
+          <text class="d-txt" x="16" y="108">One sentence, one act, one signal.</text>
+          <line class="d-arrow" x1="129" y1="123" x2="129" y2="159" marker-end="url(#ah2)"/>
+          <text class="d-note" x="138" y="146">copy</text>
+          <!-- node 2 -->
+          <rect class="d-box" x="4" y="162" width="250" height="118" rx="2"/>
+          <text class="d-lab" x="16" y="182">2 · RELEASE</text>
+          <text class="d-title" x="16" y="206">Manifest</text>
+          <text class="d-mono" x="16" y="228">teaching-releases.ts</text>
+          <text class="d-txt" x="16" y="248">Append-only, ships in the bundle.</text>
+          <text class="d-txt" x="16" y="266">Minor releases never teach.</text>
+          <line class="d-arrow" x1="129" y1="281" x2="129" y2="317" marker-end="url(#ah2)"/>
+          <text class="d-note" x="138" y="304">since her cursor</text>
+          <!-- node 3 -->
+          <rect class="d-box hot" x="4" y="320" width="250" height="150" rx="2"/>
+          <text class="d-lab" x="16" y="340">3 · ELIGIBILITY</text>
+          <text class="d-title" x="16" y="364">Selector</text>
+          <text class="d-mono" x="16" y="386">selectTeachingNote()</text>
+          <text class="d-txt" x="16" y="406">Pure. Writes nothing.</text>
+          <text class="d-txt" x="16" y="424">Flags fail closed. Caps, audience,</text>
+          <text class="d-txt" x="16" y="442">at rest, already_knew.</text>
+          <text class="d-txt" x="16" y="460">Inputs: flags, signals, boundaries.</text>
+          <!-- reads: 4 -> 3 (upward) -->
+          <line class="d-arrow soft" x1="100" y1="508" x2="100" y2="473" marker-end="url(#ahs2)"/>
+          <text class="d-note soft" x="16" y="494">reads</text>
+          <!-- node 4 -->
+          <rect class="d-box" x="4" y="510" width="250" height="118" rx="2"/>
+          <text class="d-lab" x="16" y="530">4 · SEEN-STATE</text>
+          <text class="d-title" x="16" y="554">Her own row</text>
+          <text class="d-mono" x="16" y="576">teaching_note_state</text>
+          <text class="d-txt" x="16" y="596">Cursor, visit, caps, outcomes.</text>
+          <text class="d-txt" x="16" y="614">RLS: own row only. Not help_state.</text>
+          <!-- writes: 5 -> 4 (upward) -->
+          <line class="d-arrow" x1="129" y1="666" x2="129" y2="631" marker-end="url(#ah2)"/>
+          <text class="d-note" x="138" y="646">writes on shown,</text>
+          <text class="d-note" x="138" y="660">closed, dismissed, acted</text>
+          <!-- node 5 -->
+          <rect class="d-box" x="4" y="668" width="250" height="118" rx="2"/>
+          <text class="d-lab" x="16" y="688">5 · SURFACES</text>
+          <text class="d-title" x="16" y="712">MarginNote</text>
+          <text class="d-txt" x="16" y="734">Desk slot · in place · act slot</text>
+          <text class="d-txt" x="16" y="752">since-line</text>
+          <text class="d-txt" x="16" y="770">/help/changes, pulled, uncapped</text>
+          <!-- one note: 3 -> 5 arc on the right -->
+          <path class="d-arrow" d="M255 395 C 345 395, 345 727, 258 727" marker-end="url(#ah2)"/>
+          <text class="d-note" x="340" y="561" text-anchor="middle" transform="rotate(90 340 561)">one note per visit</text>
+          <line class="d-arrow" x1="129" y1="787" x2="129" y2="823" marker-end="url(#ah2)"/>
+          <text class="d-note" x="138" y="810">personless events</text>
+          <!-- node 6 -->
+          <rect class="d-box" x="4" y="826" width="250" height="118" rx="2"/>
+          <text class="d-lab" x="16" y="846">6 · MEASUREMENT</text>
+          <text class="d-title" x="16" y="870">Per note</text>
+          <text class="d-mono" x="16" y="892">help.teaching_note.*</text>
+          <text class="d-txt" x="16" y="912">No person identity. Aggregates only.</text>
+          <text class="d-txt" x="16" y="930">Task shortened, already_knew, harm.</text>
+        </svg>
+      </div>
+      <p class="small faint">Why a committed manifest: it ships inside the Worker it describes, so it can't announce code that isn't live, and it needs no deploy-time write. A cursor it doesn't recognise (a rollback, an old tab) resolves to the newest release and writes nothing.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 16 · Eligibility and guardrails -->
+<section class="slide" id="s16" data-title="Eligibility and guardrails">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Rules</span><span class="src">architecture §2 · ux-options definitions · mockups 07, 09</span></aside>
+    <div class="main stack">
+      <h2>Eligibility rules and guardrails</h2>
+      <div class="grid2">
+        <div class="stack-sm">
+          <p class="label">A note shows only if every gate passes, in this order</p>
+          <ol class="gates">
+            <li>The <code>teaching-notes</code> flag is on. Loading counts as off.</li>
+            <li>She hasn't quieted the notes, and no 30-day auto-quiet is running.</li>
+            <li>Her surface is at rest (below).</li>
+            <li>Nothing else unsolicited has shown this visit, and fewer than two in the last seven days.</li>
+            <li>Her role matches: owner (admins count), hand, or all. The note's own flag is on.</li>
+            <li>Not already dismissed, acted on, or retired after three unanswered visits.</li>
+            <li>A release she hasn't passed, and not a minor one.</li>
+            <li>Not <code>already_knew</code>: its success signal hasn't fired since the release shipped.</li>
+            <li>Every live name resolves (project, person, invoice). A note never prints a hole.</li>
+            <li>In place: its completion act fired on this surface. Never on mount.</li>
+          </ol>
+          <p class="small faint">Ties: a pinned project first, then never seen, oldest seen, priority. In place beats the Desk when both qualify.</p>
+        </div>
+        <div class="grid2" style="align-content:start;gap:18px">
+          <div class="guard"><h3>Never mid-task</h3><p>Mid-task is a dialog over the surface, an editor holding unsaved work, a focused composer, or a pending act. The sheet that hosts a note is its surface.</p></div>
+          <div class="guard"><h3>Dismiss is forever</h3><p>× or the act retires a note for good, per person, on every device. Three ignored in a row quiet the system for 30 days.</p></div>
+          <div class="guard"><h3>Owner and hands</h3><p>Seats, money and permissions go to the owner only. A hand is never taught what their role can't do, and neither sees the other's notes.</p></div>
+          <div class="guard"><h3>Caps</h3><p>One unsolicited note per visit, across every slot; two per rolling seven days. A visit is the first Desk load after 30 minutes away.</p></div>
+          <div class="guard" style="grid-column:1/-1"><h3>One exemption</h3><p>The consequence sentence above a send act, for workflow-changing releases only, sits outside the ceiling and shows once. The quiet switch silences it too.</p></div>
+        </div>
+      </div>
+      <div class="mocks">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>07</b>Owner, the visit after her first hire accepts</span><span class="mock-ctl" role="group" aria-label="Frame width for mockup 07"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button><a href="mockups/07-owner-second-seat.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <div class="stage"><iframe src="mockups/07-owner-second-seat.html" title="Mockup 07: an owner-only note after the second seat" loading="lazy"></iframe></div>
+        </figure>
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>09</b>Mid-task: a half-filled form, no note anywhere</span><span class="mock-ctl" role="group" aria-label="Frame width for mockup 09"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button><a href="mockups/09-mid-task-silence.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <div class="stage"><iframe src="mockups/09-mid-task-silence.html" title="Mockup 09: mid-task silence while a form is half filled" loading="lazy"></iframe></div>
+        </figure>
+      </div>
+      <p class="mock-note">07 keeps its revision-1 layout and caption: the Desk note above the roster head, and a display date in the label. Both are superseded (findings 13, 27).</p>
+    </div>
+  </div>
+</section>
+
+<!-- 17 · Measurement -->
+<section class="slide" id="s17" data-title="Measurement">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Measurement</span><span class="src">architecture §7 · VISION §6</span></aside>
+    <div class="main stack">
+      <h2>Measurement: notes, never people</h2>
+      <p class="lede">Every teaching event is captured without a person identity, so no event ties to anyone. Only per-note aggregates exist. A note's success event is the downstream task, never its own act.</p>
+      <div class="grid3">
+        <div class="metric stack-sm"><p class="label accent">We track · 1</p><h3>Task shortened</h3><p class="small">Share of people shown a note whose downstream task happens within 14 days, against the same task's rate among eligible people in the 14 days before. For example, an invoice sent whose delivery row she reads on a later visit.</p></div>
+        <div class="metric stack-sm"><p class="label accent">We track · 2</p><h3><code style="font-size:.9em">already_knew</code> rate</h3><p class="small">Notes whose task happened before they could show.</p><p class="rule-line">Above 50%: the note teaches the obvious. Cut it.</p></div>
+        <div class="metric stack-sm"><p class="label accent">We track · 3</p><h3>Harm</h3><p class="small">Dismissal rate and auto-quiet triggers, per note.</p><p class="rule-line">Dismissed by more than 40%: retired at review.</p></div>
+      </div>
+      <div class="stack-sm">
+        <p class="label never">We refuse to track</p>
+        <div class="refuse">
+          <span>time in app</span><span>time on a surface</span><span>sessions</span><span>DAU / WAU</span><span>return rate</span><span>streaks</span><span>open rate as a target</span><span>click-through as a target</span><span>what a hand read, shown to an owner</span><span>studio leaderboards</span><span>any count shown to her</span><span>dwell time</span>
+        </div>
+      </div>
+      <p class="small panel"><b>At today's scale this measures almost nothing.</b> About 24 prod profiles, and any cell under five people is suppressed. There is no holdout (decided). Phase 3's measurement work is deferred until there are enough studios to read.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 18 · Phasing -->
+<section class="slide" id="s18" data-title="Phasing and cost">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Phasing</span><span class="src">architecture §8 · ux-options §C · revision 2 figures</span></aside>
+    <div class="main stack">
+      <h2>Phasing and cost</h2>
+      <div>
+        <div class="lane" role="img" aria-label="Lane-days to scale: Phase 1, 8; Phase 2, 16; Phase 3, 6, deferred until scale. About 30 in all, about 24 before scale.">
+          <div class="p1">P1 · 8</div><div class="p2">P2 · 16</div><div class="p3">P3 · 6</div>
+        </div>
+        <div class="lane-scale" aria-hidden="true"><span style="left:0">0</span><span style="left:26.667%">8</span><span style="left:80%">24</span><span style="left:100%">30</span></div>
+        <p class="lane-cap">Lane-days, drawn to scale. About 24 before scale, about 30 in all. Phase 3 is hatched: deferred.</p>
+      </div>
+      <div class="grid3">
+        <div class="phase">
+          <h3>Phase 1 · Walking skeleton</h3><span class="days">~8 lane-days · Option 1</span>
+          <ul>
+            <li>One migration: <code>teaching_note_state</code>, own-row RLS, a patch function.</li>
+            <li>Sanity <code>teachingNote</code> and <code>teachingRelease</code>, with a publish guard.</li>
+            <li>The release manifest, its snapshot and test.</li>
+            <li>The pure selector and hook, release notes only.</li>
+            <li>The Desk arbiter over all five Desk lines, below the roster head.</li>
+            <li>MarginNote: label above, act slot, outcome reporting, personless capture.</li>
+          </ul>
+          <p class="rev"><b>Reversible:</b> the <code>teaching-notes</code> flag off (fails closed); unpublish a note instantly. The table is additive and no existing write path moves.</p>
+        </div>
+        <div class="phase">
+          <h3>Phase 2 · Full lifecycle</h3><span class="days">~16 lane-days · Options 2 and 3</span>
+          <ul>
+            <li><code>teaching_signals()</code> RPC.</li>
+            <li>At rest per surface; the hold registry (one hook, nine components).</li>
+            <li>Tagged boundaries on five mutations.</li>
+            <li>In place in Accounts, Hours, the Galley and the members section; the act slot.</li>
+            <li>Caps, visit, quiet switch, owner and hand audience.</li>
+            <li><code>/help/changes</code>, the ⌘K row, the help-panel entry, the since-line.</li>
+            <li>FeatureAnnouncementCoachmark retired into the margin.</li>
+          </ul>
+          <p class="rev"><b>Reversible:</b> the same flag, her own quiet switch, unpublish.</p>
+        </div>
+        <div class="phase">
+          <h3>Phase 3 · Measurement and slow paths</h3><span class="days">~6 lane-days · deferred until scale</span>
+          <ul>
+            <li>Personless events and per-note insights.</li>
+            <li>Slow-path counters and their first detectors.</li>
+            <li>The owner letter draft, only if R-RT4 allows it.</li>
+          </ul>
+          <p class="rev"><b>Reversible:</b> the page and events are removable; no data migration.</p>
+        </div>
+      </div>
+      <div class="panel phase0">
+        <span class="chip blocker">Phase 0 · SQ-265</span>
+        <p class="small">The <code>help_state</code> clobber: the web adapter, the iOS adapter and an e2e helper each write the whole blob, so a Walkthrough step erases margin-note dismissals today. Costed on SQ-265, not here. Teaching state no longer depends on it; tours and margin notes do. Ruling R-RT6.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 19 · Review -->
+<section class="slide" id="s19" data-title="What the review broke">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Review</span><span class="src">design/review.md (SQ-262) · revision 2 (SQ-266)</span></aside>
+    <div class="main stack">
+      <h2>What the review broke, and what changed</h2>
+      <div class="tally" aria-label="52 findings: 3 blockers, 21 majors, 23 minors, 5 nits">
+        <span><b>52</b>findings</span><span><b>3</b>blockers</span><span><b>21</b>majors</span><span><b>23</b>minors</span><span><b>5</b>nits</span>
+      </div>
+      <p class="small">Verdict: send back. All 52 are answered across the two revised documents, and the three blockers were accepted as written. A selection:</p>
+      <ul class="fix">
+        <li class="head"><span>Finding</span><span>What the reviewer broke</span><span>What changed</span></li>
+        <li><span class="id">1<br><span class="chip blocker">Blocker</span></span><span class="broke">"Has ever used the feature" marked notes as known, so release notes about features she uses, and every faster way, would never show. The selector also wrote state on every render.</span><span class="changed">A pure selector. <code>already_knew</code> only when the success signal fired after the release shipped.</span></li>
+        <li><span class="id">2<br><span class="chip blocker">Blocker</span></span><span class="broke">Phase 1 stored who read what, and when, in <code>help_state</code>, which co-members and clients can read.</span><span class="changed">An own-row <code>teaching_note_state</code> table. <code>help_state</code> untouched.</span></li>
+        <li><span class="id">3<br><span class="chip blocker">Blocker</span></span><span class="broke">In-place notes live inside sheets, and any open dialog blocked them: the recommended option could never render.</span><span class="changed">At rest per surface. The sheet that hosts the note is the surface.</span></li>
+        <li><span class="id">9, 10</span><span class="broke">The cursor jumped every designer past every release at launch, and an unknown cursor could replay them all.</span><span class="changed">The cursor starts at account creation. Unknown means newest, and nothing is written.</span></li>
+        <li><span class="id">11</span><span class="broke">A hand's first document fired a mutation on mount, so a note appeared in her first hour.</span><span class="changed">Only mutations tagged as completion acts count.</span></li>
+        <li><span class="id">13</span><span class="broke">The Desk note arrived late and pushed the roster under her pointer.</span><span class="changed">It renders below the roster head, resolved before first paint, or waits a visit.</span></li>
+        <li><span class="id">14, 15</span><span class="broke">Success was the note's own click, and staff could see a named hand's events.</span><span class="changed">Success is the downstream task. Events carry no person identity. Dwell dropped.</span></li>
+        <li><span class="id">17, 22, 24</span><span class="broke">A fifth ungoverned Desk line, no kill switch in Phase 1, and up to five notes in one visit.</span><span class="changed">One arbiter over all Desk lines, a flag from day one, one note per visit across all slots.</span></li>
+        <li><span class="id">21</span><span class="broke">The recommended option was neither costed nor phased.</span><span class="changed">Costed into the phases: ~8 / ~16 / ~6 lane-days, about 30 in all, against 21 to 23 before.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 20 · Rulings -->
+<section class="slide" id="s20" data-title="Rulings for Kody">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Rulings</span><span class="src">ux-options §Rulings for Kody (verbatim) · vision-framing §6</span></aside>
+    <div class="main stack">
+      <h2>Rulings for Kody</h2>
+      <ol class="rulings">
+        <li>
+          <span class="rid">R-RT1</span><h3>User-facing name</h3>
+          <p class="verb">Workshop Notes is the evidence-backed default: the designer's own notes are announced as "Margin note actions" (<code>margin-rail.tsx:748</code>), and Option 3 sets Patina's notes in the margin she writes in. The alternates are Margin Notes, or no visible name at all (the label carries only a release date), which serves "the studio won't notice Patina" best.</p>
+          <div class="opts"><span class="pick">Workshop Notes</span><span>Margin Notes</span><span>No visible name</span></div>
+          <p class="rec-line"><b>Team</b>Workshop Notes. Framing first favoured Margin Notes, before the collision with her own notes was found.</p>
+        </li>
+        <li>
+          <span class="rid">R-RT2</span><h3>The Desk Walkthrough</h3>
+          <p class="verb">Its WelcomeModal and six coachmarks contradict guardrail 2. Retire it, or keep it as the one sanctioned exception. Either way it joins the Desk arbiter, and teaching notes hold while it runs (the existing <code>suppressed</code> prop).</p>
+          <div class="opts"><span>Retire</span><span>Sanctioned exception</span></div>
+          <p class="rec-line"><b>Team</b>No recommendation recorded. The guardrail it breaks is the one against modals and tours.</p>
+        </li>
+        <li>
+          <span class="rid">R-RT3</span><h3>Since-line relevance input</h3>
+          <p class="verb">Rank the since-line's releases against the jobs holding her pen (<code>useReturnNote({ pinnedProjectIds })</code>, as mockup 03 draws), or show the line in the margin of the first document she opens.</p>
+          <div class="opts"><span class="pick">Jobs holding her pen</span><span>First document she opens</span></div>
+          <p class="rec-line"><b>Team</b>The mockup and the hook contract are drawn for the jobs holding her pen.</p>
+        </li>
+        <li>
+          <span class="rid">R-RT4</span><h3>Owner letter</h3>
+          <p class="verb">(framing ruling 2). Whether an owner (d) note may be followed by a letter, drafted by an agent into <code>awaiting_review</code> and sent only after Leah approves.</p>
+          <div class="opts"><span>No letter</span><span class="pick">Reviewed letter</span></div>
+          <p class="rec-line"><b>Team</b>Framing: a reviewed owner letter at most monthly, skipped in any month where nothing changes her work.</p>
+        </li>
+        <li>
+          <span class="rid">R-RT5</span><h3>Dormant studios</h3>
+          <p class="verb">(framing ruling 5). Whether Leah keeps a staff-run, studio-level list of studios dormant 90+ days. Nothing in the product detects dormancy, and nothing here builds it.</p>
+          <div class="opts"><span>Silence</span><span class="pick">Leah's 1:1 list</span></div>
+          <p class="rec-line"><b>Team</b>Framing: a Leah 1:1 list, never sent automatically.</p>
+        </li>
+        <li class="phase0-ask">
+          <span class="rid">R-RT6 · Phase 0, a separate go / no-go</span><h3>SQ-265</h3>
+          <p class="verb">Fix the <code>help_state</code> clobber (web adapter, iOS adapter, e2e helper) before Phase 1 or alongside it. Teaching state no longer depends on it; tours and margin notes do.</p>
+          <div class="opts"><span class="pick">Go, before or alongside Phase 1</span><span>No-go for now</span></div>
+          <p class="rec-line"><b>Team</b>Go. The defect erases margin-note dismissals today, with or without this plan.</p>
+        </li>
+      </ol>
+      <p class="small faint"><b>Decided from evidence, not asked:</b> admins count as owners (HT-10); there is no holdout at this scale; the Sanity draft-only token is an engineering choice made at build.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 21 · Next step -->
+<section class="slide" id="s21" data-title="If approved">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Next</span><span class="src">architecture §6, §8 · proposed tickets, not yet filed</span></aside>
+    <div class="main stack">
+      <h2>If approved: the first wave</h2>
+      <p class="lede">Phase 1 only, behind <code>teaching-notes</code>, teaching release notes on the Desk. Proposed tickets, one line each. Nothing is filed until the rulings land.</p>
+      <ol class="wave">
+        <li class="p0"><span class="area">Defect</span><span class="what">SQ-265: move every <code>help_state</code> writer to a patch, if R-RT6 is go.</span></li>
+        <li><span class="area">Migration</span><span class="what"><code>teaching_note_state</code>, own-row RLS for read and write, and the patch function.</span></li>
+        <li><span class="area">Sanity</span><span class="what"><code>teachingNote</code> and <code>teachingRelease</code> types, a draft-only publish guard, flag-or-release validation.</span></li>
+        <li><span class="area">Package</span><span class="what">The <code>TeachingNote</code> type and <code>createSupabaseTeachingNoteBackend</code>.</span></li>
+        <li><span class="area">Portal</span><span class="what"><code>teaching-releases.ts</code>, its snapshot, and the append-only and unknown-cursor test.</span></li>
+        <li><span class="area">Portal</span><span class="what">The pure <code>selectTeachingNote</code> and <code>useReturnNote</code>, with bindings, gated on the flag.</span></li>
+        <li><span class="area">Portal</span><span class="what">The Desk arbiter over all five Desk lines, below the roster head.</span></li>
+        <li><span class="area">Portal</span><span class="what">MarginNote: the label above, the act slot, outcome reporting, personless capture.</span></li>
+        <li><span class="area">Process</span><span class="what">One line in the deploy skill: publish a release's copy after the deploy verifies.</span></li>
+      </ol>
+      <p class="small faint">Then an independent review of the wave, the first release note drafted into Sanity for Leah, and Phase 2 once Phase 1 has run.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<nav class="bar" aria-label="Slide controls">
+  <div class="progress" id="progress"></div>
+  <div class="bar-inner">
+    <span class="deck-name">Return teaching · for ruling</span>
+    <button type="button" id="prev" aria-label="Previous slide">←</button>
+    <span class="counter" id="counter" aria-live="polite">01 / 21</span>
+    <button type="button" id="next" aria-label="Next slide">→</button>
+    <button type="button" id="help" aria-label="Keyboard keys" aria-haspopup="dialog" aria-controls="keys">?</button>
+  </div>
+</nav>
+
+<div class="keys" id="keys" role="dialog" aria-modal="true" aria-labelledby="keys-h" hidden>
+  <div class="keys-card">
+    <h2 id="keys-h">Keys</h2>
+    <dl>
+      <dt><kbd>→</kbd> <kbd>Space</kbd> <kbd>PgDn</kbd></dt><dd>Next slide</dd>
+      <dt><kbd>←</kbd> <kbd>⇧ Space</kbd> <kbd>PgUp</kbd></dt><dd>Previous slide</dd>
+      <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>First or last slide</dd>
+      <dt><kbd>?</kbd></dt><dd>Show or hide this list</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Close this list</dd>
+    </dl>
+    <p class="small faint" style="margin-bottom:16px">On a phone the slides stack; scroll to read, and the arrows jump a slide.</p>
+    <button type="button" id="keys-close">Close</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var n = slides.length;
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var prevBtn = document.getElementById('prev');
+  var nextBtn = document.getElementById('next');
+  var keys = document.getElementById('keys');
+  var helpBtn = document.getElementById('help');
+  var closeBtn = document.getElementById('keys-close');
+  var narrow = window.matchMedia('(max-width: 760px)');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var cur = 0;
+  var pad = function(x){ return (x < 10 ? '0' : '') + x; };
+
+  slides.forEach(function(s, i){
+    var no = s.querySelector('.margin .no');
+    if (no) no.textContent = pad(i + 1);
+    s.setAttribute('aria-roledescription', 'slide');
+    s.setAttribute('aria-label', (i + 1) + ' of ' + n + ': ' + (s.getAttribute('data-title') || ''));
+  });
+
+  function paint(){
+    counter.textContent = pad(cur + 1) + ' / ' + pad(n);
+    progress.style.width = ((cur + 1) / n * 100) + '%';
+    prevBtn.disabled = cur === 0;
+    nextBtn.disabled = cur === n - 1;
+  }
+
+  function go(i, fromScroll){
+    i = Math.max(0, Math.min(n - 1, i));
+    cur = i;
+    if (narrow.matches){
+      if (!fromScroll) slides[i].scrollIntoView({behavior: reduced.matches ? 'auto' : 'smooth', block: 'start'});
+    } else {
+      slides.forEach(function(s, k){
+        var on = k === i;
+        s.classList.toggle('is-active', on);
+        s.setAttribute('aria-hidden', on ? 'false' : 'true');
+      });
+      slides[i].scrollTop = 0;
+    }
+    try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+    paint();
+  }
+
+  function applyMode(){
+    if (narrow.matches){
+      slides.forEach(function(s){ s.classList.remove('is-active'); s.removeAttribute('aria-hidden'); });
+    }
+    go(cur, narrow.matches);
+    if (narrow.matches) slides[cur].scrollIntoView({block: 'start'});
+    document.querySelectorAll('.mock').forEach(fit);
+  }
+
+  /* stacked mode: follow the reader's scroll */
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      if (!narrow.matches) return;
+      entries.forEach(function(en){
+        if (en.isIntersecting){
+          var k = slides.indexOf(en.target);
+          if (k > -1 && k !== cur){ cur = k; paint(); try { history.replaceState(null, '', '#s' + (k + 1)); } catch (e) {} }
+        }
+      });
+    }, {rootMargin: '-45% 0px -50% 0px'});
+    slides.forEach(function(s){ io.observe(s); });
+  }
+
+  /* mockup frames: 1280 or 390 wide, scaled into a fixed 16:10 stage */
+  function fit(fig){
+    var stage = fig.querySelector('.stage');
+    var fr = stage && stage.querySelector('iframe');
+    if (!fr) return;
+    var W = stage.clientWidth, H = stage.clientHeight;
+    if (!W || !H) return;
+    var w = parseInt(fig.getAttribute('data-w'), 10) === 390 ? 390 : 1280;
+    var s = w === 1280 ? W / 1280 : Math.min(1, W / 390);
+    fr.style.width = w + 'px';
+    fr.style.height = (H / s) + 'px';
+    fr.style.transform = 'scale(' + s + ')';
+    fr.style.left = (w === 1280 ? 0 : (W - 390 * s) / 2) + 'px';
+    fig.classList.toggle('is-phone', w === 390);
+    fig.querySelectorAll('.mock-ctl button').forEach(function(b){
+      b.setAttribute('aria-pressed', parseInt(b.getAttribute('data-w'), 10) === w ? 'true' : 'false');
+    });
+  }
+  var figs = Array.prototype.slice.call(document.querySelectorAll('.mock'));
+  var ro = 'ResizeObserver' in window ? new ResizeObserver(function(list){
+    list.forEach(function(e){ fit(e.target.closest('.mock')); });
+  }) : null;
+  figs.forEach(function(fig){
+    if (narrow.matches) fig.setAttribute('data-w', '390');
+    fig.querySelectorAll('.mock-ctl button').forEach(function(b){
+      b.addEventListener('click', function(){ fig.setAttribute('data-w', b.getAttribute('data-w')); fit(fig); });
+    });
+    if (ro) ro.observe(fig.querySelector('.stage'));
+    fit(fig);
+  });
+  window.addEventListener('resize', function(){ figs.forEach(fit); });
+
+  /* key list */
+  var lastFocus = null;
+  function openKeys(){ lastFocus = document.activeElement; keys.hidden = false; closeBtn.focus(); }
+  function closeKeys(){ keys.hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+  helpBtn.addEventListener('click', function(){ keys.hidden ? openKeys() : closeKeys(); });
+  closeBtn.addEventListener('click', closeKeys);
+  keys.addEventListener('click', function(e){ if (e.target === keys) closeKeys(); });
+
+  prevBtn.addEventListener('click', function(){ go(cur - 1); });
+  nextBtn.addEventListener('click', function(){ go(cur + 1); });
+
+  document.addEventListener('keydown', function(e){
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === '?'){ e.preventDefault(); keys.hidden ? openKeys() : closeKeys(); return; }
+    if (!keys.hidden){
+      if (e.key === 'Escape'){ e.preventDefault(); closeKeys(); }
+      if (e.key === 'Tab'){ e.preventDefault(); closeBtn.focus(); }
+      return;
+    }
+    var tag = (e.target && e.target.tagName) || '';
+    var onControl = tag === 'BUTTON' || tag === 'A' || tag === 'INPUT';
+    if (e.key === 'ArrowRight'){ e.preventDefault(); go(cur + 1); }
+    else if (e.key === 'ArrowLeft'){ e.preventDefault(); go(cur - 1); }
+    else if (narrow.matches){ return; }
+    else if (e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey && !onControl)){ e.preventDefault(); go(cur + 1); }
+    else if (e.key === 'PageUp' || (e.key === ' ' && e.shiftKey && !onControl)){ e.preventDefault(); go(cur - 1); }
+    else if (e.key === 'Home'){ e.preventDefault(); go(0); }
+    else if (e.key === 'End'){ e.preventDefault(); go(n - 1); }
+  });
+
+  var m = /^#s(\d+)$/.exec(location.hash || '');
+  if (m) cur = Math.max(0, Math.min(n - 1, parseInt(m[1], 10) - 1));
+  if (narrow.addEventListener) narrow.addEventListener('change', applyMode);
+  else if (narrow.addListener) narrow.addListener(applyMode);
+  applyMode();
+})();
+</script>
+</body>
+</html>
