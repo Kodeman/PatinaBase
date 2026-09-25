@@ -18276,6 +18276,90 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00669_field_capture_confirmations_proposals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.field_captures_project_confirmations() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_project_approval_edition_object_immutable() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.project_approval_edition_objects FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.project_approval_edition_attachment_rows(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.project_approval_edition_manifest(uuid, boolean) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_decision_editions(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_decision_editions(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_project_decision_edition(uuid, integer, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_project_decision_edition(uuid, integer, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION app_private.record_project_approval_edition_object( uuid, uuid, text, bigint, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_project_approval_edition_object( uuid, uuid, text, bigint, text, text ) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_project_approval_edition_object( uuid, uuid, text, bigint, text, text ) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.project_approval_attachment_objects(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00670_shared_direction_editions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.project_approval_attachment_objects(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

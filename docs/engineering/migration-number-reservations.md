@@ -425,5 +425,22 @@ There is no backfill; existing rows project on their next re-commit. The
 revert is in the migration header. It joins the ordered Strata push after
 00668. Re-check the Strata head before pushing.
 
+00670 `shared_direction_editions`, reserved 2026-09-25 by NI-05 (SQ-219,
+story US-11, CONTRACT-C rev 4 §C.9). It draws above the head per discipline
+rule 2. At reservation, no file at or above 00670 existed on `main` (tip
+12f574fe9, head 00669), in `git log --all`, or in any sibling Sidequest
+worktree, and the local applied head was 00669. It adds only new objects: the
+typed edition RPCs `get_project_decision_editions(jsonb)` and
+`get_project_decision_edition(uuid, integer, text)` (authenticated), the
+private bucket `project-approval-editions` with no storage policy,
+`project_approval_edition_objects` (immutable, REVOKE ALL), the private
+recorder with its service-role `public` wrapper,
+`project_approval_attachment_objects(uuid)` (service role), and the hourly
+cron job `project-approval-editions-sweep-hourly`. It redefines nothing;
+`get_project_decision_review` is untouched. The revert is in the migration
+header. It ships in the same Strata push as the W1A-10 client and the NI-06
+`project-approval-attachments` edge function, after 00669. Re-check the Strata
+head before pushing.
+
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.
