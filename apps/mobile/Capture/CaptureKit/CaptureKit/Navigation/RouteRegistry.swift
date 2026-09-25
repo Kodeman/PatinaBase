@@ -81,6 +81,7 @@ public extension CaptureSheet {
         case .savedTerminal: return "savedTerminal"
         case .inboxTerminal: return "inboxTerminal"
         case .photoImport: return "photoImport"
+        case .photoLibrary: return "photoLibrary"
         case .cullDeck: return "cullDeck"
         case .visit: return "visit"
         case .logTime: return "logTime"

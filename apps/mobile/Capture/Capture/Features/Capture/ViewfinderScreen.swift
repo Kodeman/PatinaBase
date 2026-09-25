@@ -250,13 +250,31 @@ struct ViewfinderScreen: View {
                     onTorch: model.toggleTorch, onGrid: model.toggleGrid
                 )
                 Spacer()
-                ViewfinderSessionHandle(count: model.sessionCount, action: model.openSessionTray)
+                VStack(spacing: 14) {
+                    photoLibraryButton
+                    ViewfinderSessionHandle(count: model.sessionCount, action: model.openSessionTray)
+                }
             }
             ViewfinderShutter(
                 isHolding: model.isHolding, count: model.holdCount, capturing: model.capturing
             )
             .gesture(shutterPress)
         }
+    }
+
+    /// E4 — photo import's way in from the camera, whatever the camera's state.
+    /// Opens `.photoLibrary`, never R3's `.photoImport`: R3 says the camera is
+    /// off, and here it usually is not.
+    private var photoLibraryButton: some View {
+        Button { coordinator.present(.photoLibrary) } label: {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(CaptureType.body)
+                .foregroundStyle(CaptureColor.paper)
+                .frame(width: 44, height: 44)
+                .background(.black.opacity(0.38), in: Circle())
+        }
+        .accessibilityLabel("Import from Photos")
+        .accessibilityIdentifier("viewfinder.photoLibrary")
     }
 
     // MARK: Gestures

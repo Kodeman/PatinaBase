@@ -67,6 +67,9 @@ public enum CaptureSheet: Hashable, Identifiable, Sendable {
     case savedTerminal(UUID)  // S4
     case inboxTerminal(UUID)  // S5
     case photoImport          // R3/E3
+    /// E4 — the same import surface opened by choice from the viewfinder,
+    /// whatever the camera's state, so it says nothing about the camera.
+    case photoLibrary
     case cullDeck             // V2
 
     // ── Field Companion — the visit spine ──
@@ -96,6 +99,7 @@ public enum CaptureSheet: Hashable, Identifiable, Sendable {
         case .savedTerminal(let u): return "saved-\(u)"
         case .inboxTerminal(let u): return "inbox-\(u)"
         case .photoImport: return "photo-import"
+        case .photoLibrary: return "photo-library"
         case .cullDeck: return "cull-deck"
         case .visit: return "visit"
         case .logTime: return "log-time"

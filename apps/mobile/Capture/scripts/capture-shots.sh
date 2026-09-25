@@ -50,7 +50,7 @@ DEVICE_ID="$CAPTURE_SIM_UDID"
 # The full screen matrix (suffix = tail of each CaptureScreenID).
 ALL_SCREENS=(
   O1.welcome O2.connect O3.camera-priming O4.ready
-  E1.app-icon E2.system-entry E3.share-sheet
+  E1.app-icon E2.system-entry E3.share-sheet E4.photo-library
   C1.viewfinder C2.framing C3.specimen-forms C4.multi-shot C5.specimen-sheet C6.voice
   N1.tag-ocr N2.scan N3.measure N4.voice N5.smart-guess
   R1.low-light R2.ocr-fallback R3.denied R4.offline

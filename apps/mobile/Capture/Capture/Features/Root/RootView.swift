@@ -307,9 +307,33 @@ struct RootView: View {
             set: { coordinator.replacePath($0, for: realm) }
         )) {
             rootContent(for: realm)
+                .toolbar { accountEntry(for: realm) }
                 .navigationDestination(for: CaptureRoute.self) { route in
                     RouteRegistry.shared.view(for: route)
                 }
+        }
+    }
+
+    /// W1A-01 — the ordinary way into Account, and through it Settings and Q1.
+    /// Everything else that reached them was the `-CaptureScreen` / `field://screen`
+    /// harness, which `CaptureDeepLink.verificationHarnessAllowed` refuses in a
+    /// Release build on a device. Today's bar only: signed out, the realm roots
+    /// are onboarding, and a guest request is not her account.
+    @ToolbarContentBuilder
+    private func accountEntry(for realm: FieldRealm) -> some ToolbarContent {
+        if realm == .work,
+           coordinator.phase == .ready,
+           coordinator.guestAccessToken == nil {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    coordinator.navigate(to: .account)
+                } label: {
+                    Image(systemName: "person.crop.circle")
+                        .foregroundStyle(CaptureColor.verdigrisInk)
+                }
+                .accessibilityLabel("Account")
+                .accessibilityIdentifier("work.account")
+            }
         }
     }
 
