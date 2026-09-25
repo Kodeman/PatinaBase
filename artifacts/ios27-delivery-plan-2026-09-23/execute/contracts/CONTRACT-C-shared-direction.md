@@ -2,15 +2,17 @@
 W1A-09 / T4 (SQ-215, story US-11). The contract for the offline "shared direction" record,
 broader edition. Kody ruled Q1 → broader on 2026-09-24 (WAVE-NEXT-PLAN §10 "Rulings") and
 confirmed the attachment list A1–A3 on 2026-09-25.
-Revision 1 was written read-only against main 6bc6d093d. Revision 2 (this file) resolves the
-Astra review's ten findings (workflow task w40b8u077) and re-cites against main 3b1dc8b08.
-Document only: no app code, no migrations. NI-05 (00670), NI-06 (edge function) and W1A-10
-(PatinaSchemaV2) build from it. The disposition table is at the end.
+Revision 1 was written read-only against main 6bc6d093d. Revision 2 resolved the Astra
+review's ten findings (workflow task w40b8u077). Revision 3 (this file) resolves the round-2
+review: the two partials (#2, #8) and nine new findings (N1–N9) under rulings A–J; cited
+against main 73956fa33. Document only: no app code, no migrations. NI-05 (00670), NI-06
+(edge function) and W1A-10 (PatinaSchemaV2) build from it. The disposition tables are at the
+end.
 -->
 
 # CONTRACT C — the shared-direction record
 
-**Version** `sharedDirectionContract: 1` (wire tag `"shared_direction_v1"`) · **Revision 2**
+**Version** `sharedDirectionContract: 1` (wire tag `"shared_direction_v1"`) · **Revision 3**
 
 ## C.1 What already exists
 
@@ -82,6 +84,8 @@ Beside the record the device keeps two things that are **not** part of the serve
   `sizeBytes` and `contentType` are advisory and do not change the key.
 - `availability`: `complete | incomplete(missing: [attachmentId]) | none | noSpace`, the
   state of the **verified** local file set, tracked independently of the manifest.
+- `lastCommittedSeq`: the sequence number of the last authority answer committed for this
+  edition (§C.5.2). Process-local ordering state, never persisted or sent to the server.
 
 The mutable fields in `review` (`lifecycleStatus`, `outcome`, `disposition`, counts,
 `sentAt`, `respondedAt`, `updatedAt`) are cached as last served, display-only offline (§C.8).
@@ -125,29 +129,51 @@ co-member (C.1), the signer never signs a `project-documents` path. Instead:
   (`00433`, whose bucket has no storage policy), only `service_role` can read or write it. A
   SQL test asserts that no `storage.objects` policy references the bucket. The
   `project-documents` bucket and its policies are not touched.
-- **Content-addressed path:** `<decisionId>/<sha256>`. One object per attachment per
+- **Published path:** `<decisionId>/<attachmentId>/<sha256>`. One object per attachment per
   edition. The path is a pure function of frozen rows, so the manifest binds to the object
-  identity before the copy exists.
+  identity before the copy exists; `attachmentId` is in it because two distinct
+  `plan_issue_prints` rows may carry the same sha256 (`00429:170-190,237-250` constrains
+  print and sheet identity, not checksum uniqueness) and each needs its own recorded object.
+  Staging objects live under `<decisionId>/_staging/<attemptId>` and are never signed or
+  recorded.
 - **Table `public.project_approval_edition_objects`** (00670): `(decision_id, attachment_id)`
   PK, `bucket`, `object_path` (`UNIQUE`, `CHECK object_path = decision_id::text || '/' ||
-  sha256`), `sha256`, `size_bytes NOT NULL`, `content_type`, `verified_at`. Rows refuse
-  `UPDATE` and `DELETE` with the 00463 trigger pattern. `REVOKE ALL` from every role; the
-  only writer is `app_private.record_project_approval_edition_object(...)`, `SECURITY
-  DEFINER`, executable by `service_role` only, which refuses a row whose `sha256` does not
-  equal the frozen source checksum (`plan_issue_prints.sha256` or
-  `spec_book_artifacts.checksum_sha256`) for that `(decision_id, attachment_id)`.
-- **Materialization (NI-06).** For each attachment not yet recorded, the function: (1)
-  streams the source object from `project-documents` with service role and hashes it
-  incrementally (`@std/crypto` `digest` over the body stream, so memory stays bounded and
-  the whole-set edge limits that stopped verification in revision 1 do not apply per file);
-  (2) refuses on a mismatch with the frozen checksum (`409 media_integrity_failed`, nothing
-  recorded); (3) copies server-side to `project-approval-editions/<decisionId>/<sha256>`
-  with `upsert: false`; (4) streams the **destination** object back and hashes it, so the
-  bytes recorded are the bytes at the signed path, not the source at some earlier moment;
-  (5) records the row. An object that exists without a row is re-verified and recorded, never
-  overwritten. Materialization is idempotent and resumable: one request materializes as many
-  attachments as fit its time budget and answers `202 {status: "materializing", ready, total,
-  retryAfterSeconds}` until the set is complete. There is no delete path for edition copies.
+  attachment_id::text || '/' || sha256`), `sha256`, `size_bytes NOT NULL`, `content_type`,
+  `verified_at`. Rows refuse `UPDATE` and `DELETE` with the 00463 trigger pattern. `REVOKE
+  ALL` from every role. The writer is `app_private.record_project_approval_edition_object(
+  p_decision_id, p_attachment_id, p_sha256, p_size_bytes, p_content_type)`, `SECURITY
+  DEFINER`, which refuses a row whose `sha256` does not equal the frozen source checksum
+  (`plan_issue_prints.sha256` or `spec_book_artifacts.checksum_sha256`) for that
+  `(decision_id, attachment_id)` and is idempotent for an identical row.
+- **Reachable recorder (N1, ruling A).** `app_private` is not an exposed PostgREST schema
+  (`config.toml:13`) and `service_role` has no `USAGE` on it (`00565:140-141`), so an edge
+  function cannot reach the private recorder. 00670 therefore adds
+  `public.record_project_approval_edition_object(...)` with the same signature: `SECURITY
+  DEFINER`, `SET search_path = public, pg_temp`, body `SELECT
+  app_private.record_project_approval_edition_object(...)`; `REVOKE ALL ... FROM PUBLIC,
+  anon, authenticated, service_role` then `GRANT EXECUTE ... TO service_role`, the shape
+  `prepare_project_review_media_asset` uses (`00546:93-108,214-222`). **Test (NI-06):** a
+  Deno test calls the public wrapper through PostgREST (`supabase.rpc`) with the service key
+  against the local stack and reads the row back through
+  `project_approval_attachment_objects`; a SQL test proves `authenticated` is denied on it.
+- **Materialization (NI-06), staged (N4, ruling D).** The source can change between any two
+  reads of it, so nothing is hashed at the source and then copied. For each attachment not
+  yet recorded, one attempt with a fresh `attemptId` (UUIDv4): (1) copies the source object
+  server-side to `<decisionId>/_staging/<attemptId>`; (2) streams the **staging** object
+  and hashes it incrementally (`@std/crypto` `digest` over the body stream, memory bounded);
+  (3) on a mismatch with the frozen checksum, deletes the staging object and answers `409
+  media_integrity_failed`, nothing recorded; (4) on a match, publishes by server-side `move`
+  to the final path; (5) records the row through the public wrapper with the hash verified
+  at staging. Only bytes verified at staging ever reach a final path. If the final path is
+  already occupied, the function hashes that object first: a match is kept (the staging copy
+  is deleted) and recorded; a mismatch on an **unrecorded** path is replaced by the service
+  role (remove, then move). A **recorded** object is never replaced or removed; the row is
+  the proof it was verified. Every attempt deletes its own staging object on every exit, and
+  a request begins by sweeping `_staging/` objects older than one hour. Materialization is
+  idempotent and resumable: one request materializes as many attachments as fit its time
+  budget and answers `202 {status: "materializing", ready, total, retryAfterSeconds}` until
+  the set is complete (client side: §C.5.3). There is no delete path for **published**
+  copies.
 - **Signing reads only recorded rows.** `public.project_approval_attachment_objects(
   p_decision_id)` (service role only) returns the manifest joined to
   `project_approval_edition_objects`, with a `source` pointer only for rows not yet recorded.
@@ -169,7 +195,8 @@ per path. A verified, service-role-only copy makes the guarantee local to this c
    `status` → `503 edition_unavailable`, no URLs. A decoded envelope with `status ≠ ok` →
    `404 {error: <status>}`. `ok` continues.
 3. Resolves objects through `project_approval_attachment_objects`; materializes any missing
-   (§C.3.1); if still incomplete, `202 materializing`.
+   (§C.3.1); if still incomplete, `202 materializing` with no URLs. The client's
+   continuation is §C.5.3.
 4. Signs with `createSignedUrls(paths, 300)`. **Exact correspondence is required:**
    `data.length === paths.length`, and for every `i`: `data[i].path === paths[i]`,
    `data[i].error === null`, `data[i].signedUrl` is a non-empty string (storage-js returns
@@ -181,17 +208,22 @@ per path. A verified, service-role-only copy makes the guarantee local to this c
 A URL only has to be valid when its download starts; an expired URL means one more request,
 and every request re-checks authority. The function never downloads bytes on the sign path.
 
-**Timing (finding 8).** Threat model: an authenticated account that has obtained a decision
-UUID from elsewhere (a leaked link, a screenshot) and wants to confirm the decision exists.
-Random UUIDs cannot be enumerated (122 random bits), so the oracle is confirmation, not
-discovery. The guarantee is **structural parity, not constant time**: nonexistent,
-never-a-reader and wrong-proof requests all take the one negative path in §C.5 (one indexed
-lookup, one predicate evaluation, one proof comparison), and NI-06 answers every non-`ok`
-before touching storage, the object resolver or the signer. The residual difference (an
-index hit versus a miss) is well under network jitter and is accepted. Tests: the SQL test
-runs nonexistent-id and existing-denied-id 50× each with `clock_timestamp()` and asserts
-identical `not_found` bodies and a median ratio under 3; the Deno test asserts both return
-the same status and body and that the storage and signer mocks record zero calls for either.
+**Timing (finding 8, ruling J).** Threat model: an authenticated account that has obtained a
+decision UUID from elsewhere (a leaked link, a screenshot) and wants to confirm the decision
+exists. Decision ids are UUIDv4 (122 random bits) and are not enumerable, so the oracle is
+confirmation of an id the attacker already holds, which grants no access: every negative is
+the same `not_found` body with no URLs. **Residual leakage, stated and accepted:** the
+negative path is structurally shared but not constant time. `is_design_studio_comember`
+short-circuits a `NULL` owner and runs the membership join for a real one
+(`00399:1174-1191`), and an existing row requested in a batch has already had its project's
+reader gate evaluated in §C.5 step 1. Repeated measurement could in principle separate
+"exists, not yours" from "does not exist"; that separation is exactly the confirmation oracle
+above, and it is accepted rather than masked. The structural rule stands: NI-06 answers
+every non-`ok` before touching storage, the object resolver or the signer. Tests: the SQL
+test asserts identical `not_found` bodies for a nonexistent and an existing-denied id, and
+keeps a median-ratio-under-3 check over 50 runs each **as a regression guard only**; it does
+not prove indistinguishability and no claim rests on it. The Deno test asserts the same
+status and body for both and zero calls on the storage and signer mocks.
 
 ### C.3.3 Integrity, ceiling and admission (resolves finding 3)
 
@@ -211,22 +243,34 @@ the same status and body and that the storage and signer mocks record zero calls
   1. Before an edition's first byte, the store reserves `sum(sizeBytes)` from the NI-06
      response (always non-null there). Reservations are per edition; concurrent editions
      each hold their own, and reservations plus committed bytes never exceed the ceiling.
-  2. If it does not fit, the store evicts **whole eligible sets**, oldest `respondedAt`
-     (then oldest `servedAt`) first, until it fits.
-  3. **Eligibility:** an edition is protected from eviction only while `awaitsClient &&
-     viewerAnswers`. Observer rows (`viewerRole = 'studio'`) are always eligible, whatever
-     their state; so are responded, draft and unpublished editions.
-  4. If it still does not fit, the edition stays **record-only** with `availability =
-     noSpace` and nothing is downloaded or evicted. The screen says the document needs a
-     connection. `noSpace` editions are retried on the next refresh cycle.
+  2. If it does not fit, the store **plans before it deletes** (N6, ruling F): it orders
+     the eligible sets, oldest `respondedAt` (then oldest `servedAt`) first, and takes the
+     shortest prefix whose bytes cover the shortfall. If the sum of **all** eligible sets is
+     less than the shortfall there is no plan: nothing is evicted and step 4 applies. Only a
+     complete plan is executed (whole sets), inside the store actor, so no other admission
+     interleaves between planning and deletion.
+  3. **Eligibility (N7, ruling G):** the predicate `awaitsClient && viewerAnswers` is
+     authoritative. An edition is protected while it holds and eligible otherwise. Observer
+     rows (`viewerRole = 'studio'`) never satisfy `viewerAnswers`, so they are always
+     eligible; responded editions are eligible; a draft or unpublished edition is eligible
+     **only when it does not await this viewer**. A lead's incomplete draft has
+     `needsReviewConfirmation` true (`DecisionsAPIClient+ProjectApprovals.swift:249-251`),
+     so `awaitsClient` holds (`:278-280`) and it is protected.
+  4. Without a plan the edition stays **record-only** with `availability = noSpace` and
+     nothing is downloaded or evicted. The screen says the document needs a connection.
+     `noSpace` editions are retried on the next refresh cycle.
   5. On commit the reservation becomes committed bytes; on failure or cancellation the
      staging files are deleted and the reservation released. At launch, staging directories
      are cleared and reservations rebuilt from zero.
   Records are never evicted, only files.
-- **Test (W1A-10):** three awaiting, `viewerAnswers` editions of 200 MiB each: the first two
-  commit (400 MiB), the third is `noSpace`, no protected set is evicted, and the third
-  commits after one of the first two is responded and evicted. A second test proves an
-  awaiting observer row is evicted ahead of a responded answering row.
+- **Tests (W1A-10):** (a) three awaiting, `viewerAnswers` editions of 200 MiB each: the
+  first two commit (400 MiB), the third is `noSpace`, no protected set is evicted, and the
+  third commits after one of the first two is responded and evicted; (b) an awaiting
+  observer row is evicted ahead of a responded answering row; (c) **no plan:** 400 MiB
+  protected, 50 MiB eligible, 200 MiB incoming → `noSpace`, the 50 MiB set is still
+  `complete`, zero files deleted; (d) **draft awaiting confirmation:** a lead's incomplete
+  draft (`lifecycleStatus = draft`, `viewerAnswers`, `authorityRevision` non-null) is not
+  evicted while an older responded set is.
 
 **Not attached, and why.** Each is excluded because it is not frozen evidence of this
 edition: the room-by-room budget breakdown (live working budget); discussion and comments
@@ -270,7 +314,8 @@ stay untouched. 00670 adds two functions, `SECURITY DEFINER`, `STABLE`, granted 
 ```sql
 public.get_project_decision_editions(p_held jsonb) RETURNS jsonb
 -- p_held: [{"decisionId": uuid, "heldAuthorityRevision": int | null,
---           "heldArtifactChecksum": text | null}, …]   (1..200 items)
+--           "heldArtifactChecksum": text | null}, …]   (1..200 items; outside that
+--           range → SQL error, which the device classes indeterminate)
 
 public.get_project_decision_edition(
   p_decision_id uuid,
@@ -357,8 +402,16 @@ Apart from typed answers, the only purges are the two existing wipes,
 ### C.5.1 Refresh and recovery (resolves finding 4)
 
 On foreground or reconnection the device calls `list_my_project_decision_reviews` to
-discover new editions, then `get_project_decision_editions` once with every cached id and
-its held proof. No time-to-live purge applies.
+discover new editions, then `get_project_decision_editions` for every cached id with its
+held proof, **chunked (N5, ruling E):** cached ids are grouped by the record's `projectId`
+(`DecisionsAPIClient+ProjectApprovals.swift:118`), whole projects are packed into batches of
+at most 200 items (a project with more than 200 editions splits across batches and is
+projected once per batch), and an empty list makes no call. Chunks run sequentially; each
+chunk's answers commit through §C.5.2 as they arrive, so a failed chunk leaves the others'
+outcomes standing and is retried on the next refresh. No time-to-live purge applies.
+**Test (W1A-10):** 201 cached editions across two projects with a `revoked` answer in the
+last chunk: exactly two RPC calls, the revoked edition purged, every other record intact;
+an empty cache makes zero calls.
 
 Files are fetched on `ok` when `manifestKey` changed **or** `availability ≠ complete`
 (`incomplete`, `none`, `noSpace`), so a first download cut off by a timeout, or an evicted
@@ -369,24 +422,46 @@ incomplete; the replacement commits atomically or not at all.
 ### C.5.2 Generations and purge races (resolves finding 2)
 
 All cache commits (record write, file move into place, record or file delete) go through one
-serial store actor. The store holds `sessionGeneration` (bumped on every sign-in, sign-out,
-account switch and account deletion) and a per-edition `editionGeneration` (bumped on every
-purge and every record replacement).
+serial store actor. Two mechanisms order them and they answer different questions.
 
-- Every asynchronous task (RPC refresh, NI-06 request, download) captures
-  `(accountId, sessionGeneration, editionGeneration)` when it starts. At every commit the
-  store compares the captured triple with the current one and **drops the commit** if any
-  part differs. A stale result **neither writes nor deletes**: a late `revoked` from an
-  older generation does not purge the newer record, and a late download does not recreate
-  purged files.
-- A purge or wipe is the barrier: it bumps the generation(s), cancels outstanding tasks for
-  that edition (or account), and only then deletes. Because the actor is serial, a commit
-  either landed before the purge and is deleted by it, or arrives after and is dropped.
-- Staging files are per account and per task; a dropped task deletes only its own staging.
-- W1A-10 extends both wipes to bump `sessionGeneration`, cancel, then remove records and the
-  account's attachment directory, and adds the store's fields (`records`, `inFlight`,
-  `sessionGeneration`) to `SessionIsolationTests` (the pattern `DesignRequestStatusService`
-  pins at `:467-478` and the test names at `SessionIsolationTests.swift:191-201`).
+**Generations gate liveness.** The store holds `sessionGeneration` (bumped on every sign-in,
+sign-out, account switch and account deletion) and a per-edition `editionGeneration`, bumped
+**only on a purge** of that edition (so a re-cache after a purge starts a new one). An
+ordinary record replacement does **not** bump it; revision 2 did, and that let an older `ok`
+discard a newer `revoked` (round-2 finding N2). Every asynchronous task (RPC chunk, pre-act
+read, NI-06 request, continuation loop, download) captures `(accountId, sessionGeneration,
+editionGeneration)` when it starts; at every commit the store compares the captured triple
+with the current one and **drops the commit** if any part differs. A stale result neither
+writes nor deletes: a late download does not recreate purged files.
+
+**Sequence numbers order authority (ruling B).** Authority answers (`ok`, `revoked`,
+`not_found`, `unauthorized`, whether from a refresh chunk or the pre-act read in §C.8) are
+additionally ordered per edition:
+
+- **Single flight, coalesced.** At most one authority request covers edition E at a time. A
+  refresh requested while one is in flight sets a dirty flag, and exactly one follow-up
+  request runs when the in-flight one finishes or passes its deadline (the shape
+  `DesignRequestStatusService.swift:466-481` uses). A request past its deadline releases the
+  slot; its late answer is still ordered by its sequence, never by arrival.
+- **Sequence at start.** When a request starts it takes `seq = ++authoritySeq[E]` for each
+  edition it covers; a chunk takes one number per edition it contains.
+- **Commit rule.** An answer for E commits only if `seq > lastCommittedSeq[E]`, and then
+  sets `lastCommittedSeq[E] = seq`. An older `ok` can therefore never override a newer
+  `revoked`, whichever arrives first: if the newer `revoked` lands first it purges and the
+  old `ok` fails both the sequence and the generation check; if the older `ok` lands first
+  it commits its record without bumping the generation, and the newer `revoked` still
+  commits and purges. Both counters are per account and **process-local**: no request
+  survives a process, so both start at 0 on launch, and a purge resets `lastCommittedSeq[E]`.
+- Generations still gate everything: a sequence-valid answer from before a purge or a
+  session change is dropped.
+
+**Barrier.** A purge or wipe bumps the generation(s), cancels outstanding tasks for that
+edition (or account), and only then deletes. Because the actor is serial, a commit either
+landed before the purge and is deleted by it, or arrives after and is dropped. Staging files
+are per account and per task; a dropped task deletes only its own staging. W1A-10 extends
+both wipes to bump `sessionGeneration`, cancel, then remove records and the account's
+attachment directory, and adds the store's fields (`records`, `inFlight`, `authoritySeq`,
+`sessionGeneration`) to `SessionIsolationTests` (`SessionIsolationTests.swift:191-201`).
 
 **Deterministic tests (W1A-10)**, using a fake client whose responses are held until the test
 releases them:
@@ -398,6 +473,33 @@ releases them:
 3. **account deletion:** as 2, through the deletion wipe.
 4. **stale revoked:** refresh for E held at generation N; E is purged and re-cached at N+1;
    release the held `revoked` → the N+1 record and files are intact.
+5. **held old ok, new revoked (ruling B):** request 1 (seq 1) for E is held past its
+   deadline; request 2 (seq 2) answers `revoked` and E is purged; release request 1's `ok` →
+   E stays absent, no file and no record recreated. Variant: release the `ok` **before**
+   request 2 answers → the `ok` commits, then the `revoked` purges; E is absent either way.
+6. **coalescing:** three refresh requests for E while one is in flight → exactly two RPC
+   calls in total.
+
+### C.5.3 Materialization continuation (N8, ruling H)
+
+W1A-10 owns the client side of `202 materializing`. When an attachment request for edition E
+answers 202, the store runs one **generation-bound continuation loop** for E:
+
+- It waits `retryAfterSeconds` (clamped to 1…30 s; absent → 5 s) and asks NI-06 again. The
+  loop captures `(accountId, sessionGeneration, editionGeneration)` at start and stops
+  without effect if any part has moved (§C.5.2). It is cancelled outright when E is purged,
+  when the account is wiped, or when the screen that opened E is left; a loop started by a
+  background refresh is bound to no screen and stops only at the cap.
+- **Cap:** 6 requests per loop. At the cap E stays record-only with `availability`
+  unchanged (`none` or `incomplete`), nothing is purged, and §C.5.1 retries on the next
+  refresh or screen open. A 200 with URLs ends the loop and starts the download; a non-2xx
+  ends it per §C.5 (attachments unavailable, RPC refresh scheduled).
+- `ready/total` may drive a progress line and is never persisted.
+
+**Test (W1A-10):** under a test clock, a fake NI-06 answers 202 three times with
+`retryAfterSeconds = 1`, then 200 with URLs → files commit after exactly four requests; a second run answers 202 seven
+times → six requests, `availability = none`, nothing purged; a third run purges E after the
+first 202 → the loop stops, no further request.
 
 ## C.6 What is cached
 
@@ -412,11 +514,14 @@ read them; they carry no act controls and get no eviction protection (§C.3.3).
 Each cached edition stores `servedAt` (server time from its last `ok`). The device never
 computes age from its wall clock.
 
-- **Anchor.** Every decoded envelope received in the current process updates one anchor:
+- **Anchor, monotonic (N9, ruling I).** The process holds one anchor
   `(anchorServedAt, anchorInstant = ContinuousClock.now)` (the app already uses
   `ContinuousClock` for deadlines, e.g. `OrderHandoff.swift:217`). Estimated server now =
-  `anchorServedAt + (ContinuousClock.now − anchorInstant)`; age = that minus the edition's
-  `servedAt`, floored at zero.
+  `anchorServedAt + (ContinuousClock.now − anchorInstant)`. A decoded envelope **replaces
+  the anchor only when its `servedAt` is later than the current estimated server now**; a
+  delayed older envelope is ignored for anchoring (its edition answers still commit under
+  §C.5.2). The estimate never moves backward. Age = estimate minus the edition's `servedAt`,
+  floored at zero.
 - **No anchor yet** (cold launch before any server contact, or after any envelope fails to
   decode) → the label is the **absolute** `servedAt` rendered in the device's zone
   ("Updated 24 Sep, 3:12 PM"), never a relative one. `ContinuousClock` instants are not
@@ -428,7 +533,9 @@ The guarantee is: a relative label is server-anchored and monotonic-elapsed; an 
 label is a server timestamp. The revision-1 claim that "clock skew cannot flatter
 freshness" is withdrawn as stated; what holds is that a skewed device clock never enters the
 calculation. Screens drawing from a response received in the current foreground session show
-no label. The stamp is per edition.
+no label. The stamp is per edition. **Test (W1A-10):** an envelope served 12:05 for edition F
+arrives, then a delayed envelope served 12:00 for edition E: the anchor stays at 12:05, E's
+age reads five minutes, F's zero, and no label moves backward.
 
 ## C.8 "No offline approvals" at the API boundary
 
@@ -441,7 +548,8 @@ no label. The stamp is per edition.
   still `active` and the same `authorityRevision` and `artifactChecksum` the reader was shown.
   The write's CAS values (`authorityRevision`, `artifactHash`, `expectedUpdatedAt`) come from
   **that** read, never the cache. A non-`ok` answer refuses the act and is handled per §C.5;
-  an `indeterminate` answer refuses the act and purges nothing.
+  an `indeterminate` answer refuses the act and purges nothing. The read is an authority
+  answer and takes a sequence number like any other (§C.5.2).
 - **The server needs no change for this.** Confirm checks revision and hash; respond checks
   `updated_at` and `pending`.
 - **The offline UI.** Act controls are not drawn as queueable offline; tapping one gives the
@@ -449,26 +557,39 @@ no label. The stamp is per edition.
 
 ## C.9 Build split and sizing
 
-- **NI-05 (00670, L; was M).** `get_project_decision_editions` + wrapper (§C.5), the manifest
-  serializer, the plan-set assert, bucket `project-approval-editions` with no storage
-  policies, `project_approval_edition_objects` with immutability triggers,
-  `app_private.record_project_approval_edition_object` and
-  `public.project_approval_attachment_objects` (both service role only). SQL tests under
-  `supabase/tests/decisions/`: one per answer (including wrong proof and missing proof), the
-  plan-set checksum assert, the three C.4 authority cases, the query-cost test, the timing
-  parity test, the no-policy assert on the bucket, and the recorder's checksum refusal.
-- **NI-06 (`project-approval-attachments`, M; was S).** Sign path with exact-correspondence
-  validation, error classification, the materialization path with streaming verification of
-  source and destination, `202 materializing`. Deno tests: `ok`, each typed non-`ok`, RPC
-  error → 503, null and malformed envelope → 503, mixed-success signing → 503 with no URLs,
-  materialization mismatch → 409 with nothing recorded, resumable materialization, and the
-  timing-parity assertions. Deploy owed with 00670.
-- **W1A-10 (L).** The store actor with generations (§C.5.2), device identity and
-  `availability` (§C.2), admission control and eviction (§C.3.3), recovery refresh (§C.5.1),
-  the freshness anchor (§C.7), the RPC switch through the injected decisions client, both
-  wipes extended, and the tests named in §C.3.3, §C.5 and §C.5.2. No feature flag: a
-  pre-release build is not permission to destroy testers' cached data, so the migration stage
-  carries existing records forward and the purge rules above are the only deletions.
+- **NI-05 (00670, L).** `get_project_decision_editions` (1..200) + wrapper (§C.5), the
+  manifest serializer, the plan-set assert, bucket `project-approval-editions` with no
+  storage policies, `project_approval_edition_objects` with the three-segment path `CHECK`
+  and immutability triggers, `app_private.record_project_approval_edition_object` **and its
+  `public` service-role-only wrapper** (§C.3.1, N1), and
+  `public.project_approval_attachment_objects` (service role only). SQL tests under
+  `supabase/tests/decisions/`: one per answer (including wrong proof and missing proof), a
+  201-item batch → error, the plan-set checksum assert, the three C.4 authority cases, the
+  query-cost test, the timing regression guard (§C.3.2), the no-policy assert on the bucket,
+  the recorder's checksum refusal and idempotent re-record, two attachments sharing one
+  checksum recorded as two rows at two paths (N3), and `authenticated` denied on the public
+  wrapper.
+- **NI-06 (`project-approval-attachments`, M).** Sign path with exact-correspondence
+  validation, error classification, staged materialization (§C.3.1: copy to `_staging`,
+  verify there, `move` to the final path, replace an unrecorded mismatching final object and
+  never a recorded one, sweep stale staging), recording through the public wrapper, `202
+  materializing`. Deno tests: `ok`, each typed non-`ok`, RPC error → 503, null and malformed
+  envelope → 503, mixed-success signing → 503 with no URLs, staging mismatch → 409 with
+  nothing recorded and no final object, **poisoned destination** (N4: source mutated between
+  an earlier hash and copy leaves a wrong unrecorded object at the final path; source
+  restored; the retry publishes the verified bytes and records them; a recorded object in
+  the same position is left alone), same-checksum pair → two objects and two rows (N3),
+  resumable materialization, edge-to-PostgREST registration through the public wrapper (N1),
+  and the zero-storage-calls parity assertion. Deploy owed with 00670.
+- **W1A-10 (L).** The store actor with generations **and per-edition authority sequencing,
+  single-flight with coalescing** (§C.5.2, ruling B), device identity, `availability` and
+  `lastCommittedSeq` (§C.2), plan-then-evict admission and the authoritative eligibility
+  predicate (§C.3.3, N6/N7), chunked refresh by project (§C.5.1, N5), the 202 continuation
+  loop (§C.5.3, N8), the monotonic freshness anchor (§C.7, N9), the RPC switch through the
+  injected decisions client, both wipes extended, and the tests named in §C.3.3, §C.5,
+  §C.5.1, §C.5.2, §C.5.3 and §C.7. No feature flag: a pre-release build is not permission to
+  destroy testers' cached data, so the migration stage carries existing records forward
+  and the purge rules above are the only deletions.
 
 ---
 
@@ -498,3 +619,19 @@ Kody also accepted the two wording corrections: `unauthorized` means "no session
 | 8 | Equal statuses do not prove timing indistinguishability | §C.3.2 "Timing" threat model, structural parity; §C.5 one negative path; SQL and Deno parity tests |
 | 9 | Per-edition refresh serializes the whole project each time | §C.5 `get_project_decision_editions(p_held jsonb)` pinned, projection once per project, wrapper for single reads, query-cost test |
 | 10 | Server timestamp alone does not stop clock skew flattering age | §C.7 server anchor + `ContinuousClock` elapsed, absolute-time fallback, skew claim withdrawn |
+
+## Revision 3: round-2 review disposition
+
+| # | Finding (round 2) | Ruling | Resolved in |
+|---|---|---|---|
+| 2 (partial) | Record replacement bumped `editionGeneration`, so an older `ok` could discard a newer `revoked` | B | §C.5.2: generation bumps only on purge; per-edition `authoritySeq` / `lastCommittedSeq`, single flight with coalescing; tests 5–6 |
+| 8 (partial) | Negative path not timing-uniform (owner short-circuit, step-1 gate); median ratio proves nothing | J | §C.3.2 "Timing": residual leakage stated and accepted; UUIDv4 not enumerable; confirmation-only threat; no storage work on a negative; ratio kept as a regression guard only |
+| N1 | Private recorder unreachable through PostgREST | A | §C.3.1 "Reachable recorder": `public.record_project_approval_edition_object`, service_role only, per 00546; edge-to-PostgREST registration test |
+| N2 | Older `ok` invalidates a newer `revoked` | B | As #2 above |
+| N3 | Two attachments with equal bytes collide on `UNIQUE object_path` | C | §C.3.1 path `<decisionId>/<attachmentId>/<sha256>`, `CHECK` updated; same-checksum tests in NI-05 and NI-06 |
+| N4 | Source overwrite between hash and copy poisons the final path permanently | D | §C.3.1 staged materialization: verify at `_staging/<attemptId>`, then `move`; unrecorded mismatch replaceable, recorded never; poisoned-destination test |
+| N5 | Refresh impossible past 200 cached editions | E | §C.5.1 chunks of ≤ 200 grouped by `projectId`, empty list makes no call; 201-edition test with the revocation in the last chunk |
+| N6 | Eviction deletes before learning admission fails | F | §C.3.3 step 2 plans the shortest sufficient prefix first; no plan → nothing evicted, `noSpace`; test (c) |
+| N7 | Draft awaiting the viewer both protected and eligible | G | §C.3.3 step 3 predicate authoritative; drafts eligible only when not awaiting this viewer; test (d) |
+| N8 | No client continuation for `202 materializing` | H | §C.5.3 generation-bound loop: `retryAfterSeconds`, cancel on purge/navigation, cap 6 → record-only; multi-202 test |
+| N9 | Delayed envelope moves the freshness anchor backward | I | §C.7 anchor replaced only by a `servedAt` later than the current estimate; two-edition out-of-order test |
