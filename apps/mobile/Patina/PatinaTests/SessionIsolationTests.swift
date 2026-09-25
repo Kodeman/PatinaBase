@@ -212,6 +212,18 @@ struct SessionIsolationTests {
             (
                 "Patina/Services/Settings/SettingsService.swift",
                 ["notificationsEnabled", "hapticsEnabled", "isLoaded"]
+            ),
+            // W1A-10 · CONTRACT-C §C.5.2: the generation moves first, then
+            // everything in the air for the previous session is cancelled and
+            // forgotten. Its records are on disk under their account and are
+            // deleted by `wipe()`, which `LocalStoreReset` calls.
+            (
+                "Patina/Core/Persistence/SharedDirectionStore.swift",
+                [
+                    "sessionGeneration", "inFlight", "fileFetches", "reservations",
+                    "editionGeneration", "authoritySeq", "lastCommittedSeq",
+                    "shownProof", "shownFromCache"
+                ]
             )
         ]
     )
@@ -312,6 +324,13 @@ struct SessionIsolationTests {
         // which also fires `nil → A` at every cold launch and would wipe the
         // account's own portrait on launch.
         out["StyleProfileStore.swift"] = "on disk — cleared by LocalStoreReset.wipeUserScopedData"
+
+        // W1A-10. The offline shared direction: records and files on disk
+        // under their account, deleted by `LocalStoreReset.wipeUserScopedData`
+        // through `SharedDirectionStore.wipe()`. Its in-memory ordering state
+        // is reset by `AuthService.applySession` beside `SessionScope.reset()`
+        // (pinned in `theResetBodyNamesEveryField` and `SharedDirectionRaceTests`).
+        out["SharedDirectionStore.swift"] = "on disk, owner-keyed — LocalStoreReset’s boundary; reset on the AuthService seam"
 
         // The record of a store this launch had to start over. A device fact
         // about this process, not a cache of the account, and it is cleared

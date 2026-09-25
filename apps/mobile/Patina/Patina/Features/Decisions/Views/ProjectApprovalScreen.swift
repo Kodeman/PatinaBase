@@ -32,6 +32,8 @@ struct ProjectApprovalScreen: View {
                 discuss
             }
         }
+        // W1A-10 · §C.5.3: a 202 loop this screen started stops with it.
+        .onDisappear { viewModel.leaveApproval() }
     }
 
     /// "Approval" is the ask. A Stage-2 row is not a choice between named
@@ -45,6 +47,14 @@ struct ProjectApprovalScreen: View {
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("decisionDetail.approval.title")
+            // W1A-10 · §C.7: drawn only when the edition came from the offline
+            // cache — the last authorized revision, and how old it is.
+            if let freshness = viewModel.approvalFreshness {
+                Text(freshness)
+                    .font(PatinaTypography.caption)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .accessibilityIdentifier("decisionDetail.approval.freshness")
+            }
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)

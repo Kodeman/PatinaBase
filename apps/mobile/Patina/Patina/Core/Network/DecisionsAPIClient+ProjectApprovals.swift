@@ -374,24 +374,10 @@ public struct RemoteProjectApprovalReview: Codable, Sendable, Identifiable {
 
 extension DecisionsAPIClient {
 
-    /// This Stage-2 approval, or nil.
-    ///
-    /// Nil covers three things the RPC deliberately does not distinguish: no
-    /// such decision, a legacy (non-Stage-2) one, and one this caller is not
-    /// the frozen lead or a studio co-member for.
-    public func fetchProjectApprovalReview(
-        decisionId: String
-    ) async throws -> RemoteProjectApprovalReview? {
-        let data = try await callRPC(
-            "get_project_decision_review", body: ["p_decision_id": decisionId]
-        )
-        // The RPC returns `jsonb`, so an unauthorized or nonexistent id comes
-        // back as the four bytes `null` — not as an empty list.
-        let payload = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let payload, !payload.isEmpty, payload != "null" else { return nil }
-        return try JSONDecoder().decode(RemoteProjectApprovalReview.self, from: data)
-    }
+    // The single-approval read is `projectDecisionEdition` in
+    // `DecisionsAPIClient+SharedDirection.swift` (W1A-10): the typed edition
+    // answer that tells "no longer yours" from "never yours", which the
+    // `get_project_decision_review` NULL here could not.
 
     /// Every Stage-2 approval this caller can reach, across all her projects.
     ///

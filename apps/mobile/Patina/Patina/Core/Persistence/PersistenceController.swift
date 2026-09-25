@@ -43,7 +43,7 @@ public final class PersistenceController {
     // MARK: - Initialization
 
     private init() {
-        let schema = Schema(versionedSchema: PatinaSchemaV1.self)
+        let schema = Schema(versionedSchema: PatinaSchemaV2.self)
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
@@ -121,7 +121,7 @@ public final class PersistenceController {
     // MARK: - Preview Container
 
     public static var previewContainer: ModelContainer {
-        let schema = Schema(versionedSchema: PatinaSchemaV1.self)
+        let schema = Schema(versionedSchema: PatinaSchemaV2.self)
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: true

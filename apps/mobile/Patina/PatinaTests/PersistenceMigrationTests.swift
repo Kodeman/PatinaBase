@@ -61,10 +61,16 @@ struct PersistenceMigrationTests {
     /// `LocalStoreReset` names every model in the schema. A model in the
     /// container and not in the wipe is one account's row surviving into
     /// another account's session.
+    ///
+    /// W1A-10: the cached shared direction is deleted inside
+    /// `SharedDirectionStore.wipe()`, which `LocalStoreReset` calls first —
+    /// generations and cancellation have to precede its delete (§C.5.2).
     @Test
     func theWipeNamesEveryModelInTheSchema() throws {
         let source = try SourcePin.read("Patina/Core/Persistence/LocalStoreReset.swift")
-        for model in PatinaSchemaV1.models {
+            + SourcePin.read("Patina/Core/Persistence/SharedDirectionStore.swift")
+        #expect(source.contains("SharedDirectionStore.shared.wipe()"))
+        for model in PatinaSchemaV2.models {
             let name = String(describing: model)
             #expect(
                 source.contains("delete(model: \(name).self)"),
@@ -83,6 +89,59 @@ struct PersistenceMigrationTests {
         // Every stage must sit between two schemas the plan names, or the
         // plan cannot run it.
         #expect(PatinaMigrationPlan.stages.count == PatinaMigrationPlan.schemas.count - 1)
+    }
+
+    // MARK: - W1A-10: V2 adds the cached shared direction, lightweight
+
+    @Test
+    func v2IsTheLatestSchemaAndCarriesEveryV1Model() throws {
+        #expect(PatinaMigrationPlan.schemas.map { $0.versionIdentifier }
+            == [PatinaSchemaV1.versionIdentifier, PatinaSchemaV2.versionIdentifier])
+        #expect(PatinaMigrationPlan.stages.count == 1)
+        let v1 = Set(PatinaSchemaV1.models.map { String(describing: $0) })
+        let v2 = Set(PatinaSchemaV2.models.map { String(describing: $0) })
+        #expect(v2 == v1.union(["CachedDirectionEdition"]))
+        let source = try SourcePin.read("Patina/Core/Persistence/PersistenceController.swift")
+        #expect(source.contains("Schema(versionedSchema: PatinaSchemaV2.self)"))
+    }
+
+    /// A tester's store from the build before this one: written under V1,
+    /// opened under V2 through the plan. Its rows survive and the new table
+    /// is usable — no flag, no wipe.
+    @Test
+    func aV1StoreOpensUnderV2AndKeepsItsRows() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory
+            .appendingPathComponent("PersistenceMigrationTests-v1-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        let storeURL = dir.appendingPathComponent("v1.store")
+
+        do {
+            let v1 = Schema(versionedSchema: PatinaSchemaV1.self)
+            let container = try ModelContainer(
+                for: v1, configurations: [ModelConfiguration(schema: v1, url: storeURL)]
+            )
+            let context = ModelContext(container)
+            context.insert(BoardModel(name: "Living room"))
+            try context.save()
+        }
+
+        let v2 = Schema(versionedSchema: PatinaSchemaV2.self)
+        let container = try ModelContainer(
+            for: v2, migrationPlan: PatinaMigrationPlan.self,
+            configurations: [ModelConfiguration(schema: v2, url: storeURL)]
+        )
+        let context = ModelContext(container)
+        #expect(try context.fetch(FetchDescriptor<BoardModel>()).map(\.name) == ["Living room"])
+
+        context.insert(CachedDirectionEdition(
+            accountId: "a", decisionId: "d", projectId: "p", authorityRevision: 1,
+            artifactChecksum: "c", reviewJSON: Data("{}".utf8), attachmentsJSON: nil,
+            editionFiguresJSON: nil, servedAt: Date(), manifestKey: nil
+        ))
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<CachedDirectionEdition>()).count == 1)
     }
 
     @Test
@@ -123,7 +182,7 @@ struct PersistenceMigrationTests {
         #expect(fm.fileExists(atPath: archived.appendingPathComponent("corrupt.store-wal").path))
 
         // And the same URL now opens clean, which is what the app does next.
-        let schema = Schema(versionedSchema: PatinaSchemaV1.self)
+        let schema = Schema(versionedSchema: PatinaSchemaV2.self)
         let config = ModelConfiguration(schema: schema, url: storeURL)
         let container = try ModelContainer(
             for: schema, migrationPlan: PatinaMigrationPlan.self, configurations: [config]

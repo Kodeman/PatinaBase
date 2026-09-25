@@ -306,6 +306,13 @@ final class BadgeCountService {
         await task.value
     }
 
+    /// W1A-10 · CONTRACT-C §C.5.1: the list discovered; the typed edition
+    /// read refreshes the offline direction behind it.
+    private func adoptApprovals(_ approvals: [RemoteProjectApprovalReview]) {
+        projectApprovals = approvals
+        Task { await SharedDirectionStore.shared.refresh(discovered: approvals) }
+    }
+
     private func performRefresh(token: Int) async {
         guard AuthService.shared.isAuthenticated else {
             pendingDecisionCount = 0
@@ -345,7 +352,7 @@ final class BadgeCountService {
         // previous account's rows and there is nothing here to write them to.
         guard token == refreshToken else { return }
 
-        if let approvals { projectApprovals = approvals }
+        if let approvals { adoptApprovals(approvals) }
         let merged = Self.mergedDecisions(
             pending: decisions, approvals: approvals, previous: pendingDecisions,
             projects: fetchedProjects ?? projects

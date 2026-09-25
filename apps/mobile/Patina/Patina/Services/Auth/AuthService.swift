@@ -211,6 +211,9 @@ public final class AuthService {
         if accountChanged {
             settledUserId = incomingUserId
             SessionScope.reset()
+            // W1A-10: nothing in the air for the previous session may land
+            // (CONTRACT-C §C.5.2). The records stay on disk under their account.
+            SharedDirectionStore.shared.resetForSessionChange()
         }
         return accountChanged
     }

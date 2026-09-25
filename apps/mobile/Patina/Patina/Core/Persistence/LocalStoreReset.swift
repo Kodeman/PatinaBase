@@ -22,6 +22,12 @@ enum LocalStoreReset {
     /// identity), clear the in-memory room selection, and remove the on-disk
     /// scan bundles left by wiped `RoomScanPackage` rows.
     static func wipeUserScopedData() {
+        // W1A-10: the cached shared direction first. Its wipe moves the
+        // session generation and cancels its downloads before it deletes, so
+        // a download still in the air for this account cannot land after
+        // (CONTRACT-C §C.5.2). It deletes `CachedDirectionEdition` and the
+        // account's attachment files itself.
+        SharedDirectionStore.shared.wipe()
         let context = PersistenceController.shared.container.mainContext
         do {
             try context.delete(model: RoomModel.self)
