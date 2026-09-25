@@ -100,6 +100,25 @@ struct PushTokenServiceTests {
         #expect(PushTokenService.apsEnvironment(fromProvisioningProfileData: data) == nil)
     }
 
+    // MARK: - Upsert body carries `app` (W1A-13 / NI-01 contract)
+
+    /// `PushTokenService.devicePushTokenPayload` is exactly what
+    /// `uploadToken` sends as the `upsert` body — asserting on its JSON
+    /// encoding is asserting on the request body without a network stub.
+    @Test
+    func uploadPayloadCarriesThePatinaAppIdentifier() {
+        let payload = PushTokenService.devicePushTokenPayload(
+            userId: "11111111-1111-1111-1111-111111111111",
+            token: "0aff001bdeadbeef",
+            environment: "production"
+        )
+        #expect(payload.app == "cloud.patina.app")
+
+        let data = try! JSONEncoder().encode(payload)
+        let json = try! JSONSerialization.jsonObject(with: data) as! [String: String]
+        #expect(json["app"] == "cloud.patina.app")
+    }
+
     // MARK: - Token hex encoding
 
     @Test
