@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveModel } from "./model.ts";
 
 // CORS headers
 const corsHeaders = {
@@ -249,7 +250,7 @@ async function generateAIResponse(context: {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: resolveModel(Deno.env),
         max_tokens: 1024,
         system: systemPrompt,
         messages: [
