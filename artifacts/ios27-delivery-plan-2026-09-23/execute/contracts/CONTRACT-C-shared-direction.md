@@ -5,14 +5,16 @@ confirmed the attachment list A1–A3 on 2026-09-25.
 Revision 1 was written read-only against main 6bc6d093d. Revision 2 resolved the Astra
 review's ten findings (workflow task w40b8u077). Revision 3 (this file) resolves the round-2
 review: the two partials (#2, #8) and nine new findings (N1–N9) under rulings A–J; cited
-against main 73956fa33. Document only: no app code, no migrations. NI-05 (00670), NI-06
+against main 73956fa33. Revision 4 (orchestrator) replaces the revision-3 publish/repair
+design with per-attempt paths after the round-3 review and a narrow re-check (clean).
+Document only: no app code, no migrations. NI-05 (00670), NI-06
 (edge function) and W1A-10 (PatinaSchemaV2) build from it. The disposition tables are at the
 end.
 -->
 
 # CONTRACT C — the shared-direction record
 
-**Version** `sharedDirectionContract: 1` (wire tag `"shared_direction_v1"`) · **Revision 3**
+**Version** `sharedDirectionContract: 1` (wire tag `"shared_direction_v1"`) · **Revision 4**
 
 ## C.1 What already exists
 
@@ -129,22 +131,28 @@ co-member (C.1), the signer never signs a `project-documents` path. Instead:
   (`00433`, whose bucket has no storage policy), only `service_role` can read or write it. A
   SQL test asserts that no `storage.objects` policy references the bucket. The
   `project-documents` bucket and its policies are not touched.
-- **Published path:** `<decisionId>/<attachmentId>/<sha256>`. One object per attachment per
-  edition. The path is a pure function of frozen rows, so the manifest binds to the object
-  identity before the copy exists; `attachmentId` is in it because two distinct
+- **Published path:** `<decisionId>/<attachmentId>/<sha256>/<attemptId>` (revision 4). Each
+  attempt publishes to a path only it can own, so no attempt ever inspects, replaces or
+  removes an object another attempt published; the recorded row names which one is the
+  edition's. `attachmentId` is in it because two distinct
   `plan_issue_prints` rows may carry the same sha256 (`00429:170-190,237-250` constrains
   print and sheet identity, not checksum uniqueness) and each needs its own recorded object.
   Staging objects live under `<decisionId>/_staging/<attemptId>` and are never signed or
   recorded.
 - **Table `public.project_approval_edition_objects`** (00670): `(decision_id, attachment_id)`
-  PK, `bucket`, `object_path` (`UNIQUE`, `CHECK object_path = decision_id::text || '/' ||
-  attachment_id::text || '/' || sha256`), `sha256`, `size_bytes NOT NULL`, `content_type`,
+  PK, `bucket`, `object_path` (`UNIQUE`, `CHECK object_path ~ ('^' || decision_id::text ||
+  '/' || attachment_id::text || '/' || sha256 ||
+  '/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')`: exactly one UUIDv4
+  attempt segment; a SQL test rejects an empty, non-UUID and extra-segment suffix), `sha256`, `size_bytes NOT NULL`, `content_type`,
   `verified_at`. Rows refuse `UPDATE` and `DELETE` with the 00463 trigger pattern. `REVOKE
   ALL` from every role. The writer is `app_private.record_project_approval_edition_object(
-  p_decision_id, p_attachment_id, p_sha256, p_size_bytes, p_content_type)`, `SECURITY
+  p_decision_id, p_attachment_id, p_sha256, p_size_bytes, p_content_type, p_object_path)`, `SECURITY
   DEFINER`, which refuses a row whose `sha256` does not equal the frozen source checksum
   (`plan_issue_prints.sha256` or `spec_book_artifacts.checksum_sha256`) for that
-  `(decision_id, attachment_id)` and is idempotent for an identical row.
+  `(decision_id, attachment_id)`, refuses a `p_object_path` with no `storage.objects` row in
+  the bucket, and inserts `ON CONFLICT (decision_id, attachment_id) DO NOTHING`, returning
+  whether this call's path became the recorded one. (Its parameters gain `p_object_path`;
+  the public wrapper below matches.)
 - **Reachable recorder (N1, ruling A).** `app_private` is not an exposed PostgREST schema
   (`config.toml:13`) and `service_role` has no `USAGE` on it (`00565:140-141`), so an edge
   function cannot reach the private recorder. 00670 therefore adds
@@ -163,17 +171,27 @@ co-member (C.1), the signer never signs a `project-documents` path. Instead:
   and hashes it incrementally (`@std/crypto` `digest` over the body stream, memory bounded);
   (3) on a mismatch with the frozen checksum, deletes the staging object and answers `409
   media_integrity_failed`, nothing recorded; (4) on a match, publishes by server-side `move`
-  to the final path; (5) records the row through the public wrapper with the hash verified
-  at staging. Only bytes verified at staging ever reach a final path. If the final path is
-  already occupied, the function hashes that object first: a match is kept (the staging copy
-  is deleted) and recorded; a mismatch on an **unrecorded** path is replaced by the service
-  role (remove, then move). A **recorded** object is never replaced or removed; the row is
-  the proof it was verified. Every attempt deletes its own staging object on every exit, and
-  a request begins by sweeping `_staging/` objects older than one hour. Materialization is
+  to its own final path `<decisionId>/<attachmentId>/<sha256>/<attemptId>`; (5) records the
+  row through the public wrapper. Only bytes verified at staging ever reach a final path.
+  If (5) reports that another attempt's row won the `(decision_id, attachment_id)` key, the
+  attempt removes **its own** published object, which by construction no one else can
+  reference. There is no in-place repair and no shared destination, so concurrent attempts
+  need no lock (revision 4; replaces the revision-3 remove-then-move repair, whose
+  cross-worker race could delete a recorded object). A **recorded** object is never
+  replaced or removed. Every attempt deletes its own staging object on every exit. A request
+  begins by sweeping `_staging/` objects **and** unrecorded final objects older than 24 hours;
+  an attempt lives inside one edge-function invocation, whose wall-clock limit is minutes, so
+  no live attempt can own an object that old. **Tests (NI-06):** two concurrent attempts on
+  one attachment, with one suspended between `move` and record while the other records,
+  leave exactly one recorded object and no orphan once the loser resumes; an attempt that
+  fails between `move` and record leaves an unrecorded object the sweep removes, and a retry
+  records a fresh one. Materialization is
   idempotent and resumable: one request materializes as many attachments as fit its time
   budget and answers `202 {status: "materializing", ready, total, retryAfterSeconds}` until
-  the set is complete (client side: §C.5.3). There is no delete path for **published**
-  copies.
+  the set is complete (client side: §C.5.3). There is no delete path for **recorded**
+  copies. The 24-hour sweep also runs hourly from pg_cron through
+  `public.invoke_edge_function` (the function's service-role `sweep` mode; run history in
+  `job_runs`), so an orphan is removed even when no further request arrives.
 - **Signing reads only recorded rows.** `public.project_approval_attachment_objects(
   p_decision_id)` (service role only) returns the manifest joined to
   `project_approval_edition_objects`, with a `source` pointer only for rows not yet recorded.
@@ -522,8 +540,10 @@ computes age from its wall clock.
   delayed older envelope is ignored for anchoring (its edition answers still commit under
   §C.5.2). The estimate never moves backward. Age = estimate minus the edition's `servedAt`,
   floored at zero.
-- **No anchor yet** (cold launch before any server contact, or after any envelope fails to
-  decode) → the label is the **absolute** `servedAt` rendered in the device's zone
+- **Decode failure** never touches the anchor: an established anchor stays in force. (Revision
+  4: revision 3 wrongly listed decode failure as a reason to drop it.) **Test (W1A-10):** a
+  malformed envelope between two good ones leaves relative labels monotonic.
+- **No anchor yet** (cold launch, before any envelope in this process has decoded) → the label is the **absolute** `servedAt` rendered in the device's zone
   ("Updated 24 Sep, 3:12 PM"), never a relative one. `ContinuousClock` instants are not
   persisted; an anchor lives only in its process.
 - **Clock change** does not affect a relative label, because the label never reads the wall
@@ -559,7 +579,7 @@ age reads five minutes, F's zero, and no label moves backward.
 
 - **NI-05 (00670, L).** `get_project_decision_editions` (1..200) + wrapper (§C.5), the
   manifest serializer, the plan-set assert, bucket `project-approval-editions` with no
-  storage policies, `project_approval_edition_objects` with the three-segment path `CHECK`
+  storage policies, `project_approval_edition_objects` with the four-segment path `CHECK` (UUIDv4 attempt segment, §C.3.1), the hourly sweep cron job,
   and immutability triggers, `app_private.record_project_approval_edition_object` **and its
   `public` service-role-only wrapper** (§C.3.1, N1), and
   `public.project_approval_attachment_objects` (service role only). SQL tests under
@@ -571,14 +591,15 @@ age reads five minutes, F's zero, and no label moves backward.
   wrapper.
 - **NI-06 (`project-approval-attachments`, M).** Sign path with exact-correspondence
   validation, error classification, staged materialization (§C.3.1: copy to `_staging`,
-  verify there, `move` to the final path, replace an unrecorded mismatching final object and
-  never a recorded one, sweep stale staging), recording through the public wrapper, `202
+  verify there, `move` to the attempt's own final path, first-writer-wins recording, a losing
+  attempt removes only its own object, 24-hour sweep of staging and unrecorded finals), recording through the public wrapper, `202
   materializing`. Deno tests: `ok`, each typed non-`ok`, RPC error → 503, null and malformed
   envelope → 503, mixed-success signing → 503 with no URLs, staging mismatch → 409 with
-  nothing recorded and no final object, **poisoned destination** (N4: source mutated between
-  an earlier hash and copy leaves a wrong unrecorded object at the final path; source
-  restored; the retry publishes the verified bytes and records them; a recorded object in
-  the same position is left alone), same-checksum pair → two objects and two rows (N3),
+  nothing recorded and no final object, **source mutated mid-attempt** (N4: the staging hash
+  fails, nothing is published; the source is restored and the retry records verified bytes),
+  **two concurrent attempts** (one suspended between `move` and record: exactly one recorded
+  object, no orphan after the loser resumes), **interrupted attempt** (published but
+  unrecorded object removed by the sweep; the retry records a fresh one), same-checksum pair → two objects and two rows (N3),
   resumable materialization, edge-to-PostgREST registration through the public wrapper (N1),
   and the zero-storage-calls parity assertion. Deploy owed with 00670.
 - **W1A-10 (L).** The store actor with generations **and per-edition authority sequencing,
@@ -628,10 +649,18 @@ Kody also accepted the two wording corrections: `unauthorized` means "no session
 | 8 (partial) | Negative path not timing-uniform (owner short-circuit, step-1 gate); median ratio proves nothing | J | §C.3.2 "Timing": residual leakage stated and accepted; UUIDv4 not enumerable; confirmation-only threat; no storage work on a negative; ratio kept as a regression guard only |
 | N1 | Private recorder unreachable through PostgREST | A | §C.3.1 "Reachable recorder": `public.record_project_approval_edition_object`, service_role only, per 00546; edge-to-PostgREST registration test |
 | N2 | Older `ok` invalidates a newer `revoked` | B | As #2 above |
-| N3 | Two attachments with equal bytes collide on `UNIQUE object_path` | C | §C.3.1 path `<decisionId>/<attachmentId>/<sha256>`, `CHECK` updated; same-checksum tests in NI-05 and NI-06 |
-| N4 | Source overwrite between hash and copy poisons the final path permanently | D | §C.3.1 staged materialization: verify at `_staging/<attemptId>`, then `move`; unrecorded mismatch replaceable, recorded never; poisoned-destination test |
+| N3 (path superseded by revision 4) | Two attachments with equal bytes collide on `UNIQUE object_path` | C | §C.3.1 path `<decisionId>/<attachmentId>/<sha256>`, `CHECK` updated; same-checksum tests in NI-05 and NI-06 |
+| N4 (repair superseded by revision 4) | Source overwrite between hash and copy poisons the final path permanently | D | §C.3.1 staged materialization: verify at `_staging/<attemptId>`, then `move`; unrecorded mismatch replaceable, recorded never; poisoned-destination test |
 | N5 | Refresh impossible past 200 cached editions | E | §C.5.1 chunks of ≤ 200 grouped by `projectId`, empty list makes no call; 201-edition test with the revocation in the last chunk |
 | N6 | Eviction deletes before learning admission fails | F | §C.3.3 step 2 plans the shortest sufficient prefix first; no plan → nothing evicted, `noSpace`; test (c) |
 | N7 | Draft awaiting the viewer both protected and eligible | G | §C.3.3 step 3 predicate authoritative; drafts eligible only when not awaiting this viewer; test (d) |
 | N8 | No client continuation for `202 materializing` | H | §C.5.3 generation-bound loop: `retryAfterSeconds`, cancel on purge/navigation, cap 6 → record-only; multi-202 test |
 | N9 | Delayed envelope moves the freshness anchor backward | I | §C.7 anchor replaced only by a `servedAt` later than the current estimate; two-edition out-of-order test |
+
+### Revision 4 (orchestrator, after the round-3 review)
+
+| Round-3 finding | Resolution |
+|---|---|
+| Concurrent poisoned-path repair could delete a recorded object (medium) | §C.3.1: per-attempt final paths; recording is first-writer-wins; a losing attempt removes only its own object; no in-place repair; 24-hour sweep bounded by the edge wall-clock limit; two-worker suspended-attempt test. |
+| Decode failure could discard the anchor (low) | §C.7: decode failure leaves an established anchor unchanged; malformed-between-good test. |
+| Narrow re-check (clean; three low/medium notes) | §C.3.1: regex `CHECK` pins one UUIDv4 attempt segment; hourly pg_cron sweep; "no delete path for recorded copies"; header, §C.9 and the N3/N4 rows marked superseded. |
