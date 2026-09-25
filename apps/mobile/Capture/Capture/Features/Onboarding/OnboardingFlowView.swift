@@ -12,6 +12,7 @@
 //  Step indexing is 0-based throughout: 0 = O1, 1 = O2, 2 = O3, 3 = O4.
 
 import SwiftUI
+import UIKit
 import CaptureKit
 
 // MARK: - Flow
@@ -99,11 +100,32 @@ struct OnboardingFlowView: View {
         case 2:
             CameraPrimingScreen(analytics: analytics, onContinue: { advance(to: 3) })
         default:
-            ReadyScreen(analytics: analytics, onStart: onComplete)
+            ReadyScreen(
+                analytics: analytics,
+                hardwareEntry: OnboardingFlowView.hardwareEntry,
+                onStart: onComplete,
+                onSetHardwareEntry: OnboardingFlowView.openActionButtonSettings
+            )
         }
     }
 
     private func advance(to next: Int) { step = next }
+
+    /// This device's fastest capture entry, from `HardwareEntryPolicy`'s
+    /// machine-identifier allowlist — never a Pro/non-Pro predicate.
+    static var hardwareEntry: ReadyScreen.HardwareEntry {
+        HardwareEntryPolicy.hasActionButton() ? .actionButton : .controlCenter
+    }
+
+    /// No public API opens Settings scoped to the Action Button pane
+    /// specifically — iOS exposes no such deep link. This opens the app's
+    /// own Settings page, the real deep link this app already uses
+    /// elsewhere (`UIApplication.openSettingsURLString`), rather than
+    /// pretending to jump straight to Action Button.
+    static func openActionButtonSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
 }
 
 // MARK: - Stateful host (for `OnboardingScreens.flow`)
@@ -133,7 +155,11 @@ enum OnboardingScreens {
         case 0:  return AnyView(WelcomeScreen(analytics: analytics))
         case 1:  return AnyView(ConnectWorkspaceScreen(authorizer: StubWorkspaceAuthorizer(), analytics: analytics))
         case 2:  return AnyView(CameraPrimingScreen(analytics: analytics))
-        default: return AnyView(ReadyScreen(analytics: analytics))
+        default: return AnyView(ReadyScreen(
+            analytics: analytics,
+            hardwareEntry: OnboardingFlowView.hardwareEntry,
+            onSetHardwareEntry: OnboardingFlowView.openActionButtonSettings
+        ))
         }
     }
 
