@@ -12,6 +12,7 @@ import {
   type AttachmentsPort,
   handleDecisionRequest,
   hashStream,
+  isSweepCaller,
   MATERIALIZE_BUDGET_MS,
   parseRequest,
   type RecordArgs,
@@ -43,6 +44,7 @@ interface ManifestItem {
 interface Stored {
   bytes: Uint8Array<ArrayBuffer>;
   createdAtMs: number;
+  contentType?: string;
 }
 
 const envelope = (status: string, decisionId = DECISION) => ({
@@ -62,7 +64,7 @@ class World {
   now = T0;
   sources = new Map<string, Uint8Array<ArrayBuffer>>();
   objects = new Map<string, Stored>();
-  recorded = new Map<string, { path: string; sizeBytes: number }>();
+  recorded = new Map<string, { path: string; sizeBytes: number; contentType?: string }>();
   manifests = new Map<string, ManifestItem[]>();
   edition: RpcResult = envelope("ok");
   resolverFails = new Set<string>();
@@ -127,7 +129,11 @@ class World {
         this.now += this.copyAdvanceMs;
         const data = this.sources.get(source.path);
         if (!data) return Promise.resolve(false);
-        this.objects.set(stagingPath, { bytes: data.slice(), createdAtMs: this.now });
+        this.objects.set(stagingPath, {
+          bytes: data.slice(),
+          createdAtMs: this.now,
+          contentType: "application/pdf",
+        });
         return Promise.resolve(true);
       },
       openObject: (path) => {
@@ -142,7 +148,7 @@ class World {
               controller.close();
             },
           }),
-          contentType: "application/pdf",
+          contentType: object.contentType ?? null,
         });
       },
       move: (fromPath, toPath) => {
@@ -167,12 +173,24 @@ class World {
         if (!item || item.sha256 !== args.p_sha256) {
           return { data: null, error: { message: "checksum refused" } };
         }
-        if (!this.objects.has(args.p_object_path)) {
+        const stored = this.objects.get(args.p_object_path);
+        if (!stored) {
           return { data: null, error: { message: "no stored edition object" } };
+        }
+        // The stricter recorder: size and MIME must match the stored object's metadata.
+        if (
+          args.p_size_bytes !== stored.bytes.byteLength ||
+          args.p_content_type !== stored.contentType
+        ) {
+          return { data: null, error: { message: "object metadata refused" } };
         }
         const key = `${args.p_decision_id}/${args.p_attachment_id}`;
         if (!this.recorded.has(key)) {
-          this.recorded.set(key, { path: args.p_object_path, sizeBytes: args.p_size_bytes });
+          this.recorded.set(key, {
+            path: args.p_object_path,
+            sizeBytes: args.p_size_bytes,
+            contentType: args.p_content_type,
+          });
         }
         return { data: this.recorded.get(key)!.path === args.p_object_path, error: null };
       },
@@ -484,6 +502,51 @@ Deno.test("sweep mode: removes stale staging and stale unrecorded finals, never 
     world.recorded.get(`${DECISION}/${ATT_B}`)!.path,
     `${OTHER_DECISION}/${ATT_A}/${shaA}/00000000-0000-4000-8000-0000000000b1`,
   ].sort());
+});
+
+Deno.test("recorder metadata: the stored object's true size and MIME are recorded; a refusal is 503 and purges nothing", async () => {
+  const world = new World();
+  world.addSource(DECISION, ATT_A, "%PDF-sheet-a");
+  // The manifest's doc_type-derived type disagrees with the stored object's metadata.
+  world.manifests.get(DECISION)![0].contentType = "image/png";
+  assertEquals((await handleDecisionRequest(world.port(), DECISION)).status, 200);
+  const recorded = world.recorded.get(`${DECISION}/${ATT_A}`)!;
+  assertEquals(recorded.contentType, "application/pdf");
+  assertEquals(recorded.sizeBytes, bytes("%PDF-sheet-a").byteLength);
+
+  // A staged object with no usable MIME in storage falls back to the manifest type; a
+  // recorder refusal of it leaves the published object for the sweep and answers 503.
+  const refused = new World();
+  refused.addSource(DECISION, ATT_A, "%PDF-sheet-a");
+  const port = refused.port();
+  const copy = port.copyToStaging;
+  port.copyToStaging = async (source, stagingPath) => {
+    const ok = await copy(source, stagingPath);
+    refused.objects.get(stagingPath)!.contentType = undefined;
+    return ok;
+  };
+  assertEquals(await handleDecisionRequest(port, DECISION), {
+    status: 503,
+    body: { error: "media_unavailable" },
+  });
+  assertEquals(refused.recorded.size, 0);
+  assertEquals(refused.finals().length, 1);
+});
+
+Deno.test("sweep caller: a gateway-verified service_role JWT or a key match; never a user or anon token", () => {
+  const b64url = (value: unknown) =>
+    btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const jwt = (claims: Record<string, unknown>) =>
+    `${b64url({ alg: "HS256", typ: "JWT" })}.${b64url(claims)}.signature`;
+  const keys = { serviceRoleKey: "sb_secret_injected", secretKeys: '{"default":"sb_secret_other"}', projectRef: "bkvcixdmuyejfzcijpdg" };
+  // The Vault service_role_key that invoke_edge_function sends (local shape: no ref, demo iss).
+  assert(isSweepCaller(`Bearer ${jwt({ iss: "supabase-demo", role: "service_role", exp: 2098823596 })}`, keys));
+  assert(isSweepCaller("Bearer sb_secret_injected", keys));
+  assert(isSweepCaller("Bearer sb_secret_other", keys));
+  assert(!isSweepCaller(`Bearer ${jwt({ role: "authenticated", sub: DECISION })}`, keys));
+  assert(!isSweepCaller(`Bearer ${jwt({ iss: "supabase-demo", role: "anon" })}`, keys));
+  assert(!isSweepCaller("Bearer sb_secret_wrong", keys));
+  assert(!isSweepCaller(null, keys));
 });
 
 Deno.test("parseRequest and hashStream", async () => {

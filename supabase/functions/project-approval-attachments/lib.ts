@@ -5,6 +5,8 @@
 // service-role client for the resolver, recorder and project-approval-editions bucket).
 import { crypto } from "jsr:@std/crypto@1";
 import { encodeHex } from "jsr:@std/encoding@1/hex";
+import { bearerRole } from "../board-asset-cleanup/core.ts";
+import { isServiceRoleCaller } from "../client-invite/lib.ts";
 
 export const EDITIONS_BUCKET = "project-approval-editions";
 export const SIGNED_URL_TTL_SECONDS = 300;
@@ -100,6 +102,23 @@ export function parseRequest(body: unknown): ParsedRequest | null {
   const decisionId = record.decisionId;
   if (typeof decisionId !== "string" || !UUID_RE.test(decisionId)) return null;
   return { kind: "decision", decisionId: decisionId.toLowerCase() };
+}
+
+/**
+ * Who may run `{mode: "sweep"}`. The pg_cron job reaches this function through
+ * public.invoke_edge_function, whose Bearer is the Vault `service_role_key` app setting.
+ * It is admitted the way the other invoke_edge_function targets admit it
+ * (board-asset-cleanup, site-request-media-maintenance, apns-send): verify_jwt has
+ * verified the token at the gateway and its role claim is service_role. The key-format
+ * arms of isServiceRoleCaller (timing-safe equality with the injected keys) are also
+ * accepted. The bearer is never string-compared on its own.
+ */
+export function isSweepCaller(
+  authorization: string | null,
+  keys: { serviceRoleKey: string; secretKeys: string; projectRef: string | null },
+): boolean {
+  return bearerRole(authorization) === "service_role" ||
+    isServiceRoleCaller(authorization, keys.serviceRoleKey, keys.secretKeys, keys.projectRef);
 }
 
 export type EditionAnswer =
@@ -202,8 +221,9 @@ type AttemptOutcome = "recorded" | "lost" | "integrity" | "unavailable";
  * One staged attempt (§C.3.1): copy the source to <d>/_staging/<attempt>, hash the
  * staging object, publish by move to the attempt's own final path, record first-writer-
  * wins. A losing attempt removes only its own final object. A record call that errors
- * leaves the final object in place: whether it was recorded is unknown, and the sweep
- * removes it only once the resolver shows it unrecorded.
+ * or refuses leaves the final object in place and answers 503 (indeterminate, never a
+ * purge): whether it was recorded is unknown, and the sweep removes it only once the
+ * resolver shows it unrecorded.
  */
 export async function materializeEntry(
   port: AttachmentsPort,
@@ -227,7 +247,9 @@ export async function materializeEntry(
       return "unavailable";
     }
     if (hashed.sha256 !== entry.sha256) return "integrity";
-    const contentType = entry.contentType ?? opened.contentType;
+    // The recorder checks size and MIME against the stored object's metadata, so both
+    // come from the staged object itself: the streamed byte count and its served type.
+    const contentType = opened.contentType ?? entry.contentType;
     if (!contentType || !ALLOWED_CONTENT_TYPES.has(contentType)) return "unavailable";
     if (!await port.move(staging, published)) {
       // The final path is this attempt's alone, so removing it can touch nothing else.

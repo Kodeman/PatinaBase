@@ -15,13 +15,13 @@
 //       503 {error: "media_unavailable"}                    (any object missing or unsigned)
 //   POST {mode: "sweep"}  the hourly pg_cron job (00670 §7, invoke_edge_function):
 //     removes `_staging/` objects and unrecorded final objects older than 24 h. Only the
-//     platform service-role principal may run it (isServiceRoleCaller: never a bare
-//     string compare of the bearer). One job_runs row per sweep.
+//     platform service-role principal may run it (isSweepCaller: the gateway-verified
+//     role claim, as the other invoke_edge_function targets check it, or a timing-safe
+//     key match; never a bare string compare of the bearer). One job_runs row per sweep.
 //
 // Never returns a storage path; the sign path never downloads bytes.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { isServiceRoleCaller } from "../client-invite/lib.ts";
-import { handleDecisionRequest, parseRequest, sweepAll } from "./lib.ts";
+import { handleDecisionRequest, isSweepCaller, parseRequest, sweepAll } from "./lib.ts";
 import { buildPort } from "./port.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -97,12 +97,11 @@ Deno.serve(async (req) => {
 
   if (request.kind === "sweep") {
     if (
-      !isServiceRoleCaller(
-        authorization,
-        SUPABASE_SERVICE_ROLE_KEY,
-        SUPABASE_SECRET_KEYS,
-        PROJECT_REF,
-      )
+      !isSweepCaller(authorization, {
+        serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        secretKeys: SUPABASE_SECRET_KEYS,
+        projectRef: PROJECT_REF,
+      })
     ) {
       return json({ error: "forbidden" }, 403);
     }
