@@ -6,22 +6,174 @@
 
 export type ApnsEnvironment = "sandbox" | "production";
 
+/** Which app a push is for (00668). A token's app is its bundle id, stored in
+ *  `device_push_tokens.app`; the audience is the short name producers send. */
+export type PushAudience = "app" | "field";
+export type PushApp = "cloud.patina.app" | "cloud.patina.field";
+
+export const PUSH_APP: Record<PushAudience, PushApp> = {
+  app: "cloud.patina.app",
+  field: "cloud.patina.field",
+};
+
 export interface ApnsSendInput {
   user_id?: string;
   /** Explicit tokens override the user_id lookup. Strings are allowed; their
    *  environment is then resolved from device_push_tokens (I66: NEVER
-   *  inferred). */
-  tokens?: Array<string | { token: string; environment?: ApnsEnvironment }>;
+   *  inferred). `app` picks the token's topic; absent, it comes from the
+   *  token's row, then from the audience. */
+  tokens?: Array<
+    string | { token: string; environment?: ApnsEnvironment; app?: PushApp }
+  >;
   title: string;
   body: string;
   entity_type?: string;
   entity_id?: string;
   notification_log_id?: string;
+  /** Which app's tokens a user_id push reaches. Absent — every producer on
+   *  main today — it is derived from `entity_type` (`audienceFor`). */
+  audience?: PushAudience;
 }
 
 export interface ResolvedToken {
   token: string;
   environment: ApnsEnvironment;
+}
+
+/** A resolved token that also knows which app, so which topic, it is for. */
+export interface AddressedToken extends ResolvedToken {
+  app: PushApp;
+}
+
+/**
+ * The entity types producers send today. Every one of them is a Patina push:
+ * design_request (00330, 00331, 00334), decision/proposal/invoice
+ * (notify_client_attention, 00534 → 00572, and _shared/client-attention.ts),
+ * fulfillment_order (fulfillment-notify) and site_request
+ * (site-request-dispatch). A new entity type added here without an audience
+ * is a type error in ENTITY_AUDIENCE.
+ */
+export type KnownEntityType =
+  | "design_request"
+  | "decision"
+  | "proposal"
+  | "invoice"
+  | "fulfillment_order"
+  | "site_request";
+
+const ENTITY_AUDIENCE: Record<KnownEntityType, PushAudience> = {
+  design_request: "app",
+  decision: "app",
+  proposal: "app",
+  invoice: "app",
+  fulfillment_order: "app",
+  site_request: "app",
+};
+
+/**
+ * The audience of a push that did not name one. An unknown or missing entity
+ * type still goes to Patina, with a log line: rejecting or skipping it would
+ * silently drop a push from a producer this map has not caught up with.
+ */
+export function audienceFor(
+  entityType: string | null | undefined,
+): PushAudience {
+  if (
+    typeof entityType === "string" && Object.hasOwn(ENTITY_AUDIENCE, entityType)
+  ) {
+    return ENTITY_AUDIENCE[entityType as KnownEntityType];
+  }
+  console.warn("[apns-send] audience defaulted", {
+    entity_type: entityType ?? null,
+    audience: "app",
+  });
+  return "app";
+}
+
+/** The request's audience: the one it names, else derived from its entity.
+ *  A named audience that is not 'app' or 'field' is null (the caller 400s). */
+export function pushAudience(
+  input: Pick<ApnsSendInput, "audience" | "entity_type">,
+): PushAudience | null {
+  const named = (input as { audience?: unknown }).audience;
+  if (named === undefined || named === null) {
+    return audienceFor(input.entity_type);
+  }
+  return named === "app" || named === "field" ? named : null;
+}
+
+function isPushApp(value: unknown): value is PushApp {
+  return value === PUSH_APP.app || value === PUSH_APP.field;
+}
+
+/** A user's rows, kept to the audience's app: a Field push never reaches a
+ *  Patina token, and a Patina push never reaches a Field token. */
+export function tokensForAudience<T extends { app?: string | null }>(
+  rows: T[],
+  audience: PushAudience,
+): T[] {
+  return rows.filter((row) => row.app === PUSH_APP[audience]);
+}
+
+/**
+ * `resolveTokens`, plus each token's app. The app comes from the explicit
+ * entry, then the token's row, then the audience. An explicit app that is
+ * neither bundle id drops the token (returned in `unresolved`), because
+ * guessing a topic sends it where it cannot be delivered.
+ */
+export function addressTokens(
+  requested: NonNullable<ApnsSendInput["tokens"]>,
+  dbRows: Array<{ token: string; environment: string; app?: string | null }>,
+  audience: PushAudience,
+): { resolved: AddressedToken[]; unresolved: string[] } {
+  const { resolved, unresolved } = resolveTokens(requested, dbRows);
+  const rowApp = new Map<string, PushApp>();
+  for (const row of dbRows) {
+    if (isPushApp(row.app)) rowApp.set(row.token, row.app);
+  }
+  const explicitApp = new Map<string, unknown>();
+  for (const entry of requested) {
+    if (typeof entry !== "string" && entry.app !== undefined) {
+      explicitApp.set(entry.token, entry.app);
+    }
+  }
+  const addressed: AddressedToken[] = [];
+  for (const target of resolved) {
+    const app = explicitApp.has(target.token)
+      ? explicitApp.get(target.token)
+      : rowApp.get(target.token) ?? PUSH_APP[audience];
+    if (isPushApp(app)) {
+      addressed.push({ ...target, app });
+    } else {
+      unresolved.push(target.token);
+    }
+  }
+  return { resolved: addressed, unresolved };
+}
+
+/**
+ * The `apns-topic` for an app's tokens. Patina reads APNS_TOPIC_APP and falls
+ * back to APNS_TOPIC, the secret the deployed function already has. Field has
+ * no fallback: sending a Field token under Patina's topic cannot be delivered.
+ * Null means the app is not configured.
+ */
+export function apnsTopicFor(
+  app: PushApp,
+  env: (name: string) => string | undefined,
+): string | null {
+  const topic = app === PUSH_APP.field
+    ? env("APNS_TOPIC_FIELD")
+    : env("APNS_TOPIC_APP") || env("APNS_TOPIC");
+  return topic || null;
+}
+
+/** The springboard number is Patina's unread count, so only a Patina delivery
+ *  carries it. A Field token never receives Patina's badge. */
+export function badgeForApp(
+  app: PushApp,
+  badge: number | undefined,
+): number | undefined {
+  return app === PUSH_APP.app ? badge : undefined;
 }
 
 /**

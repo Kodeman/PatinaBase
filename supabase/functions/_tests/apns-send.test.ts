@@ -14,10 +14,14 @@ import {
   assertEquals,
 } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
+  addressTokens,
   apnsCategoryFor,
   apnsDeviceUrl,
   apnsHostFor,
   apnsThreadId,
+  apnsTopicFor,
+  audienceFor,
+  badgeForApp,
   badgeRowIsRead,
   bearerRole,
   buildApnsHeaders,
@@ -27,7 +31,9 @@ import {
   normalizePkcs8Pem,
   pickProjectThreadId,
   projectTableFor,
+  pushAudience,
   resolveTokens,
+  tokensForAudience,
 } from "../apns-send/core.ts";
 
 function fakeJwt(role: string): string {
@@ -565,4 +571,251 @@ Deno.test("only the three routed entities look for a project to ask in", () => {
   assertEquals(projectTableFor("invoice"), "invoices");
   assertEquals(projectTableFor("design_request"), null);
   assertEquals(projectTableFor(undefined), null);
+});
+
+// ── 00668. Each token is sent under its own app's topic ───────────────────
+// device_push_tokens.app is a bundle id, defaulting to cloud.patina.app, so
+// every row registered before 00668 is a Patina token. `audience` is optional:
+// no producer on main sends it, so it is derived from entity_type, and any
+// entity type the map does not know still reaches Patina, with a log line.
+
+/** Every console.warn made while `run` executes. */
+function warnings(run: () => void): unknown[][] {
+  const calls: unknown[][] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => {
+    calls.push(args);
+  };
+  try {
+    run();
+  } finally {
+    console.warn = original;
+  }
+  return calls;
+}
+
+/** A user with one Patina token (a pre-00668 row, given the default) and one
+ *  Field token. */
+const MIXED_ROWS = [
+  { token: "t-patina", environment: "sandbox", app: "cloud.patina.app" },
+  { token: "t-field", environment: "production", app: "cloud.patina.field" },
+];
+
+/** The envelope 00534's notify_client_attention (as 00572 redefines it)
+ *  hands apns-send: no audience, entity_type from p_entity_type. */
+const CLIENT_ATTENTION_PUSH = {
+  user_id: "00000000-0000-4000-8000-000000000001",
+  title: "Leah sent the kitchen plan set",
+  body: "Ready for your answer.",
+  entity_type: "decision",
+  entity_id: "11111111-2222-4333-8444-555555555555",
+  notification_log_id: "log-1",
+};
+
+Deno.test("00668: an existing client push still resolves to cloud.patina.app", () => {
+  // Strata today has only APNS_TOPIC. A row registered before 00668 carries
+  // the default app, and the producer names no audience.
+  const env = (name: string) =>
+    ({ APNS_TOPIC: "cloud.patina.app" } as Record<string, string>)[name];
+  const audience = pushAudience(CLIENT_ATTENTION_PUSH);
+  assertEquals(audience, "app");
+  const own = tokensForAudience(
+    [{ token: "t-old", environment: "sandbox", app: "cloud.patina.app" }],
+    audience!,
+  );
+  const { resolved, unresolved } = addressTokens(
+    own.map((r) => r.token),
+    own,
+    audience!,
+  );
+  assertEquals(unresolved, []);
+  assertEquals(resolved, [
+    { token: "t-old", environment: "sandbox", app: "cloud.patina.app" },
+  ]);
+  const topic = apnsTopicFor(resolved[0].app, env);
+  assertEquals(topic, "cloud.patina.app");
+  assertEquals(
+    buildApnsHeaders(CLIENT_ATTENTION_PUSH, topic!, "jwt")["apns-topic"],
+    "cloud.patina.app",
+  );
+  // Patina keeps its springboard number.
+  const aps = (buildApnsPayload(
+    CLIENT_ATTENTION_PUSH,
+    badgeForApp(resolved[0].app, 3),
+  ) as { aps: Record<string, unknown> }).aps;
+  assertEquals(aps.badge, 3);
+});
+
+Deno.test("00668: the topic is chosen per app; Field never borrows Patina's", () => {
+  const both = (name: string) =>
+    ({
+      APNS_TOPIC: "legacy.topic",
+      APNS_TOPIC_APP: "cloud.patina.app",
+      APNS_TOPIC_FIELD: "cloud.patina.field",
+    } as Record<string, string>)[name];
+  assertEquals(apnsTopicFor("cloud.patina.app", both), "cloud.patina.app");
+  assertEquals(apnsTopicFor("cloud.patina.field", both), "cloud.patina.field");
+
+  // Only the deployed secret: Patina falls back to it, Field is unconfigured.
+  const legacyOnly = (name: string) =>
+    ({ APNS_TOPIC: "cloud.patina.app" } as Record<string, string>)[name];
+  assertEquals(
+    apnsTopicFor("cloud.patina.app", legacyOnly),
+    "cloud.patina.app",
+  );
+  assertEquals(apnsTopicFor("cloud.patina.field", legacyOnly), null);
+
+  const none = (_name: string) => undefined;
+  assertEquals(apnsTopicFor("cloud.patina.app", none), null);
+  assertEquals(apnsTopicFor("cloud.patina.field", none), null);
+});
+
+Deno.test("00668: an explicit token's app comes from the entry, then its row, then the audience", () => {
+  const { resolved, unresolved } = addressTokens(
+    [
+      // explicit app beats the row
+      { token: "t-patina", app: "cloud.patina.field" },
+      // no explicit app: the row says Field
+      "t-field",
+      // unknown to the database: the audience decides
+      { token: "t-new", environment: "sandbox" },
+      // an app that is neither bundle id is dropped, never guessed
+      {
+        token: "t-typo",
+        environment: "sandbox",
+        app: "field" as unknown as "cloud.patina.field",
+      },
+    ],
+    MIXED_ROWS,
+    "app",
+  );
+  assertEquals(resolved, [
+    { token: "t-patina", environment: "sandbox", app: "cloud.patina.field" },
+    { token: "t-field", environment: "production", app: "cloud.patina.field" },
+    { token: "t-new", environment: "sandbox", app: "cloud.patina.app" },
+  ]);
+  assertEquals(unresolved, ["t-typo"]);
+
+  // The same unregistered token under a Field audience defaults to Field.
+  assertEquals(
+    addressTokens([{ token: "t-new", environment: "sandbox" }], [], "field")
+      .resolved,
+    [{ token: "t-new", environment: "sandbox", app: "cloud.patina.field" }],
+  );
+});
+
+Deno.test("00668: a client_attention push with no audience selects Patina tokens only", () => {
+  for (const entityType of ["decision", "proposal", "invoice"]) {
+    const input = { ...CLIENT_ATTENTION_PUSH, entity_type: entityType };
+    const logged = warnings(() => {
+      const audience = pushAudience(input);
+      assertEquals(audience, "app");
+      assertEquals(
+        tokensForAudience(MIXED_ROWS, audience!).map((r) => r.token),
+        ["t-patina"],
+      );
+    });
+    assertEquals(logged, [], `${entityType} is a known entity type`);
+  }
+});
+
+Deno.test("00668: every entity type a producer sends today derives Patina, silently", () => {
+  const logged = warnings(() => {
+    for (
+      const entityType of [
+        "design_request", // 00330, 00331, 00334
+        "decision",
+        "proposal",
+        "invoice", // notify_client_attention
+        "fulfillment_order", // fulfillment-notify
+        "site_request", // site-request-dispatch
+      ]
+    ) {
+      assertEquals(audienceFor(entityType), "app", entityType);
+    }
+  });
+  assertEquals(logged, []);
+});
+
+Deno.test("00668: an unknown entity_type with no audience still reaches Patina, and logs", () => {
+  const input = { ...CLIENT_ATTENTION_PUSH, entity_type: "not_a_known_entity" };
+  let selected: string[] = [];
+  const logged = warnings(() => {
+    const audience = pushAudience(input);
+    assertEquals(audience, "app");
+    selected = tokensForAudience(MIXED_ROWS, audience!).map((r) => r.token);
+  });
+  assertEquals(selected, ["t-patina"]);
+  assertEquals(logged.length, 1);
+  assertEquals(logged[0][0], "[apns-send] audience defaulted");
+  assertEquals(logged[0][1], {
+    entity_type: "not_a_known_entity",
+    audience: "app",
+  });
+
+  // No entity type at all: the same default, the same log.
+  const missing = warnings(() => {
+    assertEquals(pushAudience({}), "app");
+  });
+  assertEquals(missing.length, 1);
+  assertEquals(missing[0][1], { entity_type: null, audience: "app" });
+
+  // A prototype key is not a known entity type.
+  const inherited = warnings(() => {
+    assertEquals(audienceFor("constructor"), "app");
+  });
+  assertEquals(inherited.length, 1);
+});
+
+Deno.test("00668: audience 'field' selects Field tokens only and carries no badge", () => {
+  const input = { ...CLIENT_ATTENTION_PUSH, audience: "field" as const };
+  const audience = pushAudience(input);
+  assertEquals(audience, "field");
+  const own = tokensForAudience(MIXED_ROWS, audience!);
+  const { resolved } = addressTokens(own.map((r) => r.token), own, audience!);
+  assertEquals(resolved, [
+    { token: "t-field", environment: "production", app: "cloud.patina.field" },
+  ]);
+
+  const env = (name: string) =>
+    ({
+      APNS_TOPIC: "cloud.patina.app",
+      APNS_TOPIC_FIELD: "cloud.patina.field",
+    } as Record<string, string>)[name];
+  assertEquals(
+    buildApnsHeaders(input, apnsTopicFor(resolved[0].app, env)!, "jwt")[
+      "apns-topic"
+    ],
+    "cloud.patina.field",
+  );
+
+  // Patina's unread count is 3; the Field delivery must not paint it.
+  const aps = (buildApnsPayload(input, badgeForApp(resolved[0].app, 3)) as {
+    aps: Record<string, unknown>;
+  }).aps;
+  assert(!("badge" in aps), "a Field token never receives Patina's badge");
+  assertEquals(badgeForApp("cloud.patina.app", 3), 3);
+
+  // A named audience overrides what the entity type would derive.
+  assertEquals(
+    pushAudience({ entity_type: "decision", audience: "field" }),
+    "field",
+  );
+});
+
+Deno.test("00668: a named audience other than app or field is refused; a null one is derived", () => {
+  assertEquals(
+    pushAudience({
+      entity_type: "decision",
+      audience: "homeowner" as unknown as "app",
+    }),
+    null,
+  );
+  assertEquals(
+    pushAudience({
+      entity_type: "decision",
+      audience: null as unknown as "app",
+    }),
+    "app",
+  );
 });
