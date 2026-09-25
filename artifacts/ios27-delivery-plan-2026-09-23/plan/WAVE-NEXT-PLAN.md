@@ -935,6 +935,8 @@ Q4 plus a working `asc` or the `destination: upload` fallback.
 - **Q5 → fallback at deploy** (the recommended default under "file + dispatch").
 - **Q6 → not yet.** Tickets are filed and dispatched. Every deploy still waits for Kody's separate go.
 
+- **CONTRACT-C attachments → confirmed as listed (Kody, 2026-09-25).** A1 is the spec-book PDF, A2 the issued plan sheets (all or nothing, 200 MiB or less), and A3 the frozen budget totals, inline. Device ceiling 500 MiB. Kody also accepted the contract's two corrections (`revoked` is proven by possession; "never had authority" returns `not_found`). The signing edge function is filed as NI-06. An independent Astra review of CONTRACT-C gates W1A-10, NI-05 and NI-06.
+
 ## 11. Record of what the cross-review changed
 
 **Spine.** Fable's draft: its five-lane shape, W1A ids and "contract before schema" ordering
