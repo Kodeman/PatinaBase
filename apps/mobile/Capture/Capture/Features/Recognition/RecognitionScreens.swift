@@ -65,7 +65,6 @@ enum RecognitionScreens {
                                               analytics: container.analytics,
                                               surface: "n4"),
                 analytics: container.analytics,
-                flags: container.featureFlags,
                 coordinator: coordinator
             ))
         }

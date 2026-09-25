@@ -13,9 +13,6 @@ public protocol CaptureAnalytics: Sendable {
     /// Associate subsequent events with a stable user id + person properties
     /// (no-op by default).
     func identify(_ userID: String, properties: [String: String])
-    /// Remote feature flag. FAIL-CLOSED by default (see the extension) so a
-    /// seam that cannot reach PostHog never lights a gated surface.
-    func isFeatureEnabled(_ key: String) -> Bool
 }
 
 public extension CaptureAnalytics {
@@ -25,7 +22,4 @@ public extension CaptureAnalytics {
     func identify(_ userID: String) {}
     /// Additive (Phase 3): existing conformers (the mock) keep compiling.
     func identify(_ userID: String, properties: [String: String]) {}
-    /// Additive (Field Companion W1): existing conformers keep compiling, and
-    /// anything that cannot answer answers `false`.
-    func isFeatureEnabled(_ key: String) -> Bool { false }
 }

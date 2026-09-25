@@ -24,7 +24,7 @@ final class SiteScanContextModel {
     private let projectRoomID: String?
     private let voice: any VoiceNoteService
     private let analytics: any CaptureAnalytics
-    private let flags: CaptureFeatureFlags
+    private let session: any SessionProviding
 
     var toast: String?
     var isRecordingVoice = false
@@ -40,10 +40,13 @@ final class SiteScanContextModel {
     /// without this a second tap on Note during the prompt starts a second one.
     private var voiceAuthInFlight = false
 
-    /// Fail-closed (Field Companion W1): the voice-note affordance is absent
-    /// unless the seam answers `true`.
-    var voiceCaptureEnabled: Bool {
-        flags.isEnabled("field-companion-voice")
+    /// FC-R11: F2 has no affirmation chip, so a conversation note cannot be
+    /// affirmed here. Read at the tap, because the visit can change under the scan.
+    private var conversationNoteIsBlocked: Bool {
+        let visit = CaptureSessionContextStore.shared.visitState(identity: CaptureSessionIdentity(
+            userID: session.userID, workspaceID: session.workspaceID))
+        return FieldAffirmationPolicy.recordingIsBlocked(
+            on: .scanContext, noteSetting: FieldVoiceTake.noteSetting(for: visit), affirmed: false)
     }
 
     init(
@@ -54,7 +57,7 @@ final class SiteScanContextModel {
         projectRoomID: String?,
         voice: any VoiceNoteService,
         analytics: any CaptureAnalytics,
-        flags: CaptureFeatureFlags,
+        session: any SessionProviding,
         scanSessionIdProvider: @escaping () -> String?,
         frameProvider: @escaping () async -> ContextFrameSnapshot?
     ) {
@@ -65,7 +68,7 @@ final class SiteScanContextModel {
         self.projectRoomID = projectRoomID
         self.voice = voice
         self.analytics = analytics
-        self.flags = flags
+        self.session = session
         self.scanSessionIdProvider = scanSessionIdProvider
         self.frameProvider = frameProvider
     }
@@ -105,8 +108,12 @@ final class SiteScanContextModel {
     }
 
     func toggleVoice() {
-        guard voiceCaptureEnabled else { return }
-        if isRecordingVoice { stopVoice() } else { startVoice() }
+        if isRecordingVoice { stopVoice(); return }
+        guard !conversationNoteIsBlocked else {
+            toast = "Record conversation notes in Voice, where everyone can say yes."
+            return
+        }
+        startVoice()
     }
 
     private func startVoice() {
@@ -292,16 +299,14 @@ struct SiteScanContextControls: View {
             }
             HStack(spacing: 14) {
                 pill("camera.fill", "Photo") { Task { await model.capturePhoto() } }
-                if model.voiceCaptureEnabled {
-                    // F-11 / R262: these came from the same two literals
-                    // `FieldVoiceModeCopy.toggleGlyph`/`toggleLabel` hold and
-                    // `VoiceModeTests.theToggleLabelsMatchTheShippedScanContextControl`
-                    // claims to guard — but it was guarding the constants
-                    // against themselves while this control kept its own copy.
-                    pill(FieldVoiceModeCopy.toggleGlyph(isRecording: model.isRecordingVoice),
-                         FieldVoiceModeCopy.toggleLabel(isRecording: model.isRecordingVoice)) {
-                        model.toggleVoice()
-                    }
+                // F-11 / R262: these came from the same two literals
+                // `FieldVoiceModeCopy.toggleGlyph`/`toggleLabel` hold and
+                // `VoiceModeTests.theToggleLabelsMatchTheShippedScanContextControl`
+                // claims to guard — but it was guarding the constants
+                // against themselves while this control kept its own copy.
+                pill(FieldVoiceModeCopy.toggleGlyph(isRecording: model.isRecordingVoice),
+                     FieldVoiceModeCopy.toggleLabel(isRecording: model.isRecordingVoice)) {
+                    model.toggleVoice()
                 }
             }
         }
@@ -370,7 +375,7 @@ struct SiteScanContextScreen: View {
                                                   analytics: container.analytics,
                                                   surface: "f2"),
                     analytics: container.analytics,
-                    flags: container.featureFlags,
+                    session: container.session,
                     scanSessionIdProvider: { nil },      // no scan session on a non-Pro device
                     frameProvider: { [container] in
                         guard let frame = try? await container.camera.capture() else { return nil }

@@ -11,7 +11,7 @@
 //  mode calls each flow's own `<Flow>ServiceFactory.make(deps:)`, and every one
 //  of the eight now returns a real Supabase concrete. This file is owned by
 //  whichever wave is landing composition-root work; additive DI properties
-//  (wave 2's `smartGuess`/`featureFlags`, wave 3's `projectCache`) land with
+//  (wave 2's `smartGuess`, wave 3's `projectCache`) land with
 //  the wave that needs them, not on a fixed, closed list.
 //   • Real mode (physical device, or sim with -CaptureForceReal): Supabase
 //     session, persistent store (with graceful fallback), the local sync outbox
@@ -25,7 +25,6 @@ import SwiftData
 import UIKit
 import CaptureKit
 import CaptureKitMocks
-import PostHog
 import Supabase
 
 @Observable
@@ -42,9 +41,6 @@ public final class AppContainer {
     /// simply yields `.unknown` on an empty frame), so no surface anywhere gets
     /// a guess nothing computed.
     public let smartGuess: any SmartGuessService
-    /// Remote flags, fail-closed. `.allOff` in mock mode: the harness and the
-    /// previews must never light a gated surface.
-    public let featureFlags: CaptureFeatureFlags
     /// The offline project + room cache the door and the suggestion lane share.
     public let projectCache: CaptureProjectCache
     /// W5's People room seam, scoped to one project, and the on-disk cache that
@@ -153,7 +149,6 @@ public final class AppContainer {
             let analytics = PostHogCaptureAnalytics()
             self.analytics = analytics
             self.smartGuess = HeuristicSmartGuessService()
-            self.featureFlags = CaptureFeatureFlags(analytics: analytics)
 
             let session = SupabaseSessionService(client: client, analytics: analytics)
             self.session = session
@@ -195,7 +190,6 @@ public final class AppContainer {
             let analytics = MockCaptureAnalytics()
             self.analytics = analytics
             self.smartGuess = HeuristicSmartGuessService()
-            self.featureFlags = .allOff
             self.session = MockSessionProviding()
             self.authorizer = StubWorkspaceAuthorizer()
             self.sync = InMemoryCaptureSyncService()
@@ -296,7 +290,6 @@ public final class AppContainer {
             await session.waitForReady()
             if let uid = session.userID {
                 analytics.identify(uid, properties: ["role": "designer", "platform": "ios"])
-                PostHogSDK.shared.reloadFeatureFlags()
             }
         }
     }

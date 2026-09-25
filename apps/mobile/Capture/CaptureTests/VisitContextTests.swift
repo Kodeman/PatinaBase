@@ -1233,6 +1233,30 @@ struct VisitContextTests {
             noteSetting: nil, affirmed: false))
     }
 
+    @Test func n4AndF2HaveNoChipSoAConversationNoteNeverStartsThere() {
+        // W1A-05: with the remote flag gone, the gate is the only thing between
+        // a chipless surface and an unaffirmed conversation recording.
+        for surface in [FieldVoiceGesture.Surface.voiceSheet, .scanContext] {
+            #expect(FieldAffirmationPolicy.recordingIsBlocked(
+                on: surface, noteSetting: .conversation, affirmed: true))
+            #expect(FieldAffirmationPolicy.recordingIsBlocked(
+                on: surface, noteSetting: .conversation, affirmed: false))
+            #expect(!FieldAffirmationPolicy.recordingIsBlocked(
+                on: surface, noteSetting: .solo, affirmed: false))
+            #expect(!FieldAffirmationPolicy.recordingIsBlocked(
+                on: surface, noteSetting: nil, affirmed: false))
+        }
+        // C3 and C6 render the chip, so her tap still affirms there.
+        for surface in [FieldVoiceGesture.Surface.quickConfirmCard, .voiceMode] {
+            #expect(!FieldAffirmationPolicy.recordingIsBlocked(
+                on: surface, noteSetting: .conversation, affirmed: true))
+            #expect(FieldAffirmationPolicy.recordingIsBlocked(
+                on: surface, noteSetting: .conversation, affirmed: false))
+            #expect(!FieldAffirmationPolicy.recordingIsBlocked(
+                on: surface, noteSetting: .solo, affirmed: false))
+        }
+    }
+
     @MainActor
     @Test func theWalkThroughKitIsWhatMakesTheCardGated() throws {
         // The kit carries the default (FC-R11), so the C3 card inside a

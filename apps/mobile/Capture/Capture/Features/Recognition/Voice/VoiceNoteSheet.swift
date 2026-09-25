@@ -25,7 +25,6 @@ struct VoiceNoteSheet: View {
     let session: any SessionProviding
     let voice: any VoiceNoteService
     let analytics: any CaptureAnalytics
-    let flags: CaptureFeatureFlags
     let coordinator: CaptureCoordinator?
 
     @State private var authorized: Bool?
@@ -64,7 +63,10 @@ struct VoiceNoteSheet: View {
         }
         .task {
             analytics.screen("N4.voice")
-            guard flags.isEnabled("field-companion-voice") else {
+            // FC-R11: N4 has no affirmation chip, so a conversation note
+            // cannot be affirmed here and falls to the typed note.
+            guard !FieldAffirmationPolicy.recordingIsBlocked(
+                on: .voiceSheet, noteSetting: currentPiece()?.noteSetting, affirmed: false) else {
                 manualFallback = true
                 return
             }
@@ -412,8 +414,9 @@ struct VoiceNoteSheet: View {
                 // FC-R19: `abandoned` above is only THIS session's take. This
                 // sheet is re-openable on a piece that already carries
                 // audio from an EARLIER attach() (see attach()'s comment
-                // below) — with the flag off it opens straight into the typed
-                // editor with no take in hand at all. Without this, discarding
+                // below) — with the microphone denied, or in a conversation
+                // visit, it opens straight into the typed editor with no take
+                // in hand at all. Without this, discarding
                 // a re-opened note left that prior session's segments (and its
                 // voiceAudioFilename) on the phone forever: nothing else ever
                 // deletes them.
@@ -503,7 +506,6 @@ import CaptureKitMocks
         session: MockSessionProviding(),
         voice: MockVoiceNoteService(),
         analytics: MockCaptureAnalytics(),
-        flags: .allOff,
         coordinator: CaptureCoordinator()
     )
 }
