@@ -363,7 +363,7 @@ struct PieceMissingView: View {
             Image(systemName: "doc.questionmark")
                 .font(CaptureType.display)
                 .foregroundStyle(CaptureColor.inkSoft)
-            Text("That piece is no longer here.")
+            Text("This piece is no longer here.")
                 .font(CaptureType.body)
                 .foregroundStyle(CaptureColor.ink)
         }

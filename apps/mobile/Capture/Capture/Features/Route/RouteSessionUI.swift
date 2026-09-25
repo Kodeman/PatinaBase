@@ -257,7 +257,7 @@ struct RouteMissingPiece: View {
             Image(systemName: "questionmark.square.dashed")
                 .font(CaptureType.title)
                 .foregroundStyle(CaptureColor.inkSoft)
-            Text("This capture is no longer here")
+            Text("This piece is no longer here.")
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.ink)
             Text("It may have already been routed.")
