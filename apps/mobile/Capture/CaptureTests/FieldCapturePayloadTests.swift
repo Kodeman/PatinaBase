@@ -147,6 +147,10 @@ struct FieldCapturePayloadTests {
         #expect(dict["schemaVersion"] as? Int == FieldCapturePayload.currentSchemaVersion)
         #expect(dict["device"] is [String: Any])
         #expect((dict["photos"] as? [Any])?.isEmpty == true)
+        // confirmations/proposals are ALWAYS objects, `{}` when empty — never
+        // omitted, unlike every other optional envelope below (NI-02 contract).
+        #expect((dict["confirmations"] as? [String: Any])?.isEmpty == true)
+        #expect((dict["proposals"] as? [String: Any])?.isEmpty == true)
 
         // Absent when there is nothing to say:
         for key in ["title", "notes", "category", "subcategory", "measurements",
@@ -154,6 +158,81 @@ struct FieldCapturePayloadTests {
                     "venue", "provenance", "thumbnailUrl"] {
             #expect(dict[key] == nil, "expected \(key) to be absent in the minimal payload")
         }
+    }
+
+    // MARK: confirmations/proposals — NI-02 contract round-trip (W1A-08)
+
+    /// Objects, never omitted, and a decode round-trip preserves both — even
+    /// when empty. NI-02's trigger reads "key present and object" as the new
+    /// value and "key absent" as "this client doesn't speak it"; a V4 payload
+    /// must never fall into the second case.
+    @Test @MainActor func confirmationsAndProposalsRoundTripAsEmptyObjectsWhenEmpty() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+
+        let payload = FieldCapturePayload(piece: s, device: Self.device)
+        let dict = try json(payload)
+
+        let confirmations = try #require(dict["confirmations"] as? [String: Any])
+        #expect(confirmations.isEmpty)
+        let proposals = try #require(dict["proposals"] as? [String: Any])
+        #expect(proposals.isEmpty)
+
+        let data = try JSONEncoder().encode(payload)
+        let decoded = try JSONDecoder().decode(FieldCapturePayload.self, from: data)
+        #expect(decoded.confirmations == [:])
+        #expect(decoded.proposals == [:])
+        #expect(decoded == payload)
+    }
+
+    /// A confirmed field and an edited (proposal-carrying) field both encode
+    /// as objects keyed by `FieldKey.rawValue`, and decode back to the same
+    /// values.
+    @Test @MainActor func confirmationsAndProposalsRoundTripAsObjectsWhenPresent() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+        s.setValue("LQ-3S-OAK", for: .sku, source: .edited, proposed: "LQ-ORIG")
+        s.confirm(.maker, by: "user-1")
+
+        let payload = FieldCapturePayload(piece: s, device: Self.device)
+        let dict = try json(payload)
+
+        let confirmations = try #require(dict["confirmations"] as? [String: Any])
+        let maker = try #require(confirmations["maker"] as? [String: Any])
+        #expect(maker["confirmedBy"] as? String == "user-1")
+        #expect(maker["confirmedAt"] != nil)
+
+        let proposals = try #require(dict["proposals"] as? [String: Any])
+        #expect(proposals["sku"] as? String == "LQ-ORIG")
+
+        let data = try JSONEncoder().encode(payload)
+        let decoded = try JSONDecoder().decode(FieldCapturePayload.self, from: data)
+        #expect(decoded.confirmations?["maker"]?.confirmedBy == "user-1")
+        #expect(decoded.proposals?["sku"] == "LQ-ORIG")
+        #expect(decoded == payload)
+    }
+
+    /// The confirmed-to-unconfirmed recommit NI-02 tests server-side: a field
+    /// confirmed on one commit, then hand-edited (which clears its
+    /// confirmation, per `Piece.setValue`), must recommit `confirmations` back
+    /// down to `{}` for that key — not omit the key, and not keep the stale
+    /// confirmation.
+    @Test @MainActor func confirmedFieldRecommitsToEmptyObjectOnceUnconfirmed() throws {
+        let store = try CaptureStore.inMemory()
+        let s = store.newDraft()
+        s.confirm(.maker, by: "user-1")
+
+        let confirmedDict = try json(FieldCapturePayload(piece: s, device: Self.device))
+        let confirmedConfirmations = try #require(confirmedDict["confirmations"] as? [String: Any])
+        #expect(confirmedConfirmations["maker"] != nil)
+
+        // She edits the value by hand: `setValue` clears the confirmation.
+        s.setValue("Someone Else Co.", for: .maker, source: .edited, proposed: "Holloway & Co.")
+
+        let recommitDict = try json(FieldCapturePayload(piece: s, device: Self.device))
+        let recommitConfirmations = try #require(recommitDict["confirmations"] as? [String: Any])
+        #expect(recommitConfirmations.isEmpty,
+                "an unconfirmed field recommits to {} for that key, never omitted and never stale")
     }
 
     // MARK: provenance / guesses pass through unchanged
@@ -235,11 +314,12 @@ struct FieldCapturePayloadTests {
     }
 
     @Test func theSchemaVersionWasActuallyBumpedThisWave() {
-        // Wave 1 merged with FieldCapturePayload.currentSchemaVersion == 2; this
-        // wave set it to 3. The point is that the two numbers are DIFFERENT and
-        // that wave 3 moved it by exactly one.
-        let waveOneVersion = 2
-        #expect(FieldCapturePayload.currentSchemaVersion == waveOneVersion + 1)
+        // Wave 3 merged with FieldCapturePayload.currentSchemaVersion == 3;
+        // W1A-08 bumped it to 4 for the confirmations/proposals projection
+        // (00669). The point is that the two numbers are DIFFERENT and that
+        // this wave moved it by exactly one.
+        let previousWaveVersion = 3
+        #expect(FieldCapturePayload.currentSchemaVersion == previousWaveVersion + 1)
     }
 
     @Test @MainActor func aCaptureWithNoVisitOmitsTheVisitEnvelopeEntirely() throws {
