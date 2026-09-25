@@ -105,4 +105,59 @@ struct SmartGuessApplicationTests {
         #expect(results[.sku]?.outcome == .notApplied(persisted: "LQ-3S-OAK"))
         #expect(piece.provenance(for: .sku) == .ocr)
     }
+
+    // MARK: - The shutter's read (C3, W1A-07 F2)
+    //
+    // ViewfinderModel.applySmartGuess hands every Release capture's frame to
+    // `applyShutterRead`. It used to call `guess(image:ocr: [], codes: [])`.
+
+    @Test func theViewfinderShutterTakesThisRead() throws {
+        let source = SourcePin.code(try SourcePin.read("Capture/Features/Capture/ViewfinderModel.swift"))
+        #expect(source.contains(".applyShutterRead(image:"))
+        #expect(source.contains("scannedCodeTags: codeTags"))
+        #expect(!source.contains("ocr: [], codes: []"))
+    }
+
+    @Test @MainActor func theShutterReadRunsOCRAndTheDraftsScannedCodes() async throws {
+        let store = try CaptureStore.inMemory()
+        let draft = store.newDraft()
+        draft.scannedCodes = ["gtin:\(Self.gtin)"]
+        let guess = RecordingSmartGuessService(returning: Self.heuristic)
+
+        let results = await application(guess).applyShutterRead(
+            image: Self.frame, scannedCodeTags: draft.scannedCodes, to: { draft })
+
+        let ocr = await guess.receivedOCR
+        let codes = await guess.receivedCodes
+        #expect(ocr?.isEmpty == false)
+        #expect(codes?.isEmpty == false)
+        #expect(results?[.maker]?.isApplied == true)
+        #expect(results?[.sku]?.isApplied == true)
+        #expect(draft.maker == "Holloway & Co.")
+        #expect(draft.provenance(for: .maker) == .ocr)
+        #expect(draft.sku == Self.gtin)
+        #expect(draft.provenance(for: .sku) == .code)
+        #expect(draft.provenance(for: .material) == .smartGuess)
+    }
+
+    @Test @MainActor func theShutterReadLeavesAPieceThatHasLeftTheDevice() async throws {
+        let store = try CaptureStore.inMemory()
+        let piece = store.newDraft()
+        piece.scannedCodes = ["gtin:\(Self.gtin)"]
+        // She routed it while the read was running.
+        piece.status = .queued
+        #expect(piece.transferState.phase != .local)
+        let guess = RecordingSmartGuessService(returning: Self.heuristic)
+
+        let results = await application(guess).applyShutterRead(
+            image: Self.frame, scannedCodeTags: piece.scannedCodes, to: { piece })
+
+        #expect(results == nil)
+        #expect(piece.maker == nil)
+        #expect(piece.sku == nil)
+        #expect(piece.materialNote == nil)
+        for key in [FieldKey.maker, .sku, .material, .category] {
+            #expect(piece.provenance(for: key) == nil)
+        }
+    }
 }
