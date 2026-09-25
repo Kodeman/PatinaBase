@@ -50,6 +50,8 @@ struct SharedDirectionFilesTests {
         var responded = FakeEdition.responded()
         responded.sheetSizes = Self.twoHundred
         harness.client.editions[id(1)] = responded
+        // The noSpace set is retried on the next foreground's refresh (SQ-247 F9).
+        harness.store.enteredForeground()
         await harness.refreshAndSettle()
 
         #expect(availability(harness, 1) == SharedDirectionAvailability.none, "the responded set gave way")
@@ -220,6 +222,137 @@ struct SharedDirectionFilesTests {
         ]
         await discover(harness, [1])
         #expect(harness.waits == [.seconds(5), .seconds(30), .seconds(1)])
+    }
+
+    /// SQ-247 F11. The contract binds a loop to the screen that STARTED it.
+    @Test("a background 202 loop a screen then opens is not cancelled when the screen is left")
+    func backgroundLoopOutlivesTheScreen() async throws {
+        let harness = try DirectionHarness()
+        defer { harness.cleanUp() }
+        let edition = id(1)
+        harness.client.editions[edition] = FakeEdition(sheetSizes: [64])
+        harness.client.attachmentScript[edition] = [Self.materializing]
+        harness.holdWaits = true
+
+        await harness.store.refresh(discovered: [try #require(harness.discovered(edition))])
+        #expect(await eventually { harness.heldWaitCount == 1 })
+        let loop = try #require(harness.store.pendingFileFetch(edition))
+
+        _ = try await harness.store.readProjectApprovalReview(decisionId: edition)
+        harness.store.leaveEdition(edition)
+        #expect(harness.store.pendingFileFetch(edition) != nil, "leaving the screen did not cancel the loop")
+
+        harness.releaseWaits()
+        await loop.value
+        #expect(harness.client.attachmentCalls.count == 2)
+        #expect(availability(harness, 1) == .complete)
+    }
+
+    /// SQ-247 F12, §C.5.3: a non-2xx ends the loop per §C.5.
+    @Test("an NI-06 non-2xx marks the attachments unavailable, purges nothing and re-asks the RPC")
+    func signerRefusalRecordsUnavailability() async throws {
+        let harness = try DirectionHarness()
+        defer { harness.cleanUp() }
+        let edition = id(1)
+        harness.client.editions[edition] = FakeEdition(sheetSizes: [64, 64])
+        harness.client.attachmentScript[edition] = [(503, DirectionFixture.json(["error": "media_unavailable"]))]
+
+        await discover(harness, [1])
+
+        let record = try #require(harness.store.cachedEdition(decisionId: edition))
+        #expect(record.availability == .incomplete)
+        #expect(record.missingAttachmentIds == [0, 1].map { DirectionFixture.attachmentId(edition, $0) })
+        #expect(harness.client.downloadCalls.isEmpty)
+        #expect(await eventually { harness.client.batchCalls.count == 2 }, "the RPC is asked again")
+        #expect(harness.client.attachmentCalls.count == 1, "the re-check fetches nothing")
+        #expect(harness.store.cachedEdition(decisionId: edition) != nil)
+    }
+
+    // MARK: - SQ-247 F9 backoff
+
+    @Test("a failed set is retried at most once per foreground, then only after its backoff")
+    func aFailedSetBacksOff() async throws {
+        let harness = try DirectionHarness()
+        defer { harness.cleanUp() }
+        let edition = id(1)
+        harness.client.editions[edition] = FakeEdition(sheetSizes: [64])
+        harness.client.failDownloads = true
+
+        await discover(harness, [1])
+        #expect(availability(harness, 1) == .incomplete)
+        #expect(harness.client.downloadCalls.count == 1)
+
+        // The same foreground: every further refresh leaves it alone.
+        await harness.refreshAndSettle()
+        await harness.refreshAndSettle()
+        #expect(harness.client.attachmentCalls.count == 1)
+
+        // The next foreground: the first failure waits for nothing else.
+        harness.store.enteredForeground()
+        await harness.refreshAndSettle()
+        await harness.refreshAndSettle()
+        #expect(harness.client.attachmentCalls.count == 2)
+        #expect(harness.client.downloadCalls.count == 2)
+
+        // Two failures: a later foreground still waits out the backoff.
+        harness.store.enteredForeground()
+        await harness.refreshAndSettle()
+        #expect(harness.client.attachmentCalls.count == 2)
+        harness.clock.advance(SharedDirectionStore.retryBackoffBase)
+        harness.client.failDownloads = false
+        await harness.refreshAndSettle()
+        #expect(harness.client.attachmentCalls.count == 3)
+        #expect(availability(harness, 1) == .complete)
+    }
+
+    @Test("a screen opening a failed set fetches it, whatever the backoff")
+    func aScreenIgnoresTheBackoff() async throws {
+        let harness = try DirectionHarness()
+        defer { harness.cleanUp() }
+        let edition = id(1)
+        harness.client.editions[edition] = FakeEdition(sheetSizes: [64])
+        harness.client.failDownloads = true
+        await discover(harness, [1])
+        #expect(availability(harness, 1) == .incomplete)
+
+        harness.client.failDownloads = false
+        _ = try await harness.store.readProjectApprovalReview(decisionId: edition)
+        await harness.settle()
+        #expect(harness.client.attachmentCalls.count == 2)
+        #expect(availability(harness, 1) == .complete)
+    }
+
+    // MARK: - SQ-247 F10 manifest checks
+
+    @Test("a manifest that names one attachmentId twice is refused at admission")
+    func aDuplicateAttachmentIdIsRefused() {
+        let entry = SharedDirectionManifestEntry(
+            attachmentId: "f0000000-0000-4000-8000-000000000001", kind: "plan_sheet", position: 1,
+            sha256: String(repeating: "b", count: 64), sizeBytes: 10, contentType: "application/pdf"
+        )
+        let signed = SharedDirectionSignedFile(
+            attachmentId: entry.attachmentId, url: URL(string: "https://files.test/x")!, sizeBytes: 10
+        )
+        #expect(SharedDirectionAdmission.admissibleBytes(
+            manifest: [entry], signed: [signed], limits: .contract
+        ) == 10)
+        #expect(SharedDirectionAdmission.admissibleBytes(
+            manifest: [entry, entry], signed: [signed], limits: .contract
+        ) == nil)
+    }
+
+    @Test("a file whose bytes are not its manifest contentType fails the set; an absent one is not checked")
+    func theContentTypeIsChecked() async throws {
+        let harness = try DirectionHarness()
+        defer { harness.cleanUp() }
+        harness.client.editions[id(1)] = FakeEdition(sheetSizes: [64], contentType: "image/png")
+        harness.client.editions[id(2)] = FakeEdition(sheetSizes: [64], contentType: NSNull())
+
+        await discover(harness, [1, 2])
+
+        #expect(availability(harness, 1) == .incomplete)
+        #expect(harness.filesOnDisk(id(1)).isEmpty)
+        #expect(availability(harness, 2) == .complete)
     }
 
     // MARK: - §C.7 freshness

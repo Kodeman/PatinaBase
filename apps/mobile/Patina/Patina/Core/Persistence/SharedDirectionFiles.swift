@@ -69,6 +69,20 @@ nonisolated enum SharedDirectionFiles {
         return (hex, bytes)
     }
 
+    /// What the file's first bytes say it is — PDF, PNG or JPEG — or nil.
+    /// A manifest `contentType` is checked against the bytes themselves,
+    /// not against a header the storage echoes back (SQ-247 F10).
+    static func sniffedContentType(of url: URL) throws -> String? {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let head = try handle.read(upToCount: 1024) ?? Data()
+        if head.starts(with: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) { return "image/png" }
+        if head.starts(with: [0xFF, 0xD8, 0xFF]) { return "image/jpeg" }
+        // A PDF reader accepts the header anywhere in the first kilobyte.
+        if head.range(of: Data("%PDF-".utf8)) != nil { return "application/pdf" }
+        return nil
+    }
+
     /// At launch every staging directory is cleared: no fetch survives a
     /// process, so whatever is there is a dead task's (§C.3.3 step 5).
     static func clearStaging(root: URL) {

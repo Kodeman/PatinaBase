@@ -13,14 +13,16 @@ import SwiftData
 extension SharedDirectionStore {
 
     static let continuationCap = 6
+    /// The wait after the second failure in a row; each further failure
+    /// doubles it, up to `retryBackoffCap` (SQ-247 F9).
+    static let retryBackoffBase: Duration = .seconds(60)
+    static let retryBackoffCap: Duration = .seconds(3600)
 
-    /// One fetch per edition at a time. A screen opening an edition whose
-    /// background fetch is already running binds it to the screen.
+    /// One fetch per edition at a time. A fetch keeps the binding of the
+    /// origin that started it: a background loop that a screen then opens
+    /// stays unbound, so it stops only at the cap (§C.5.3, SQ-247 F11).
     func startFileFetch(_ decisionId: String, origin: Origin) {
-        if fileFetches[decisionId] != nil {
-            if origin == .screen { fileFetches[decisionId]?.screenBound = true }
-            return
-        }
+        guard fileFetches[decisionId] == nil else { return }
         sweepAfterLaunch()
         let token = UUID()
         let ticket = ticket(decisionId)
@@ -60,6 +62,7 @@ extension SharedDirectionStore {
                 let (status, body) = try await env.client.projectApprovalAttachments(decisionId: decisionId)
                 answer = SharedDirectionWire.attachmentAnswer(status: status, body: body)
             } catch {
+                fileFetchFailed(decisionId, ticket: ticket)
                 return
             }
             guard isCurrent(ticket, decisionId), !Task.isCancelled else { return }
@@ -69,14 +72,21 @@ extension SharedDirectionStore {
                 await download(decisionId, files, token: token, ticket: ticket)
                 return
             case .unavailable:
-                // NI-06 never purges. The RPC is asked again, and that answer
-                // fetches nothing, so the two cannot chase each other.
+                // §C.5: the attachments are unavailable. A verified set
+                // already on disk is still served. NI-06 never purges; the
+                // RPC is asked again, and that answer fetches nothing, so the
+                // two cannot chase each other (SQ-247 F12).
+                markFailed(decisionId, missing: row(decisionId)?.manifest?.map(\.attachmentId) ?? [])
+                fileFetchFailed(decisionId, ticket: ticket)
                 Task { await self.refresh(decisionIds: [decisionId], origin: .recheck) }
                 return
             case .materializing(let retryAfter):
                 // At the cap the record stays as it is; §C.5.1 retries on the
                 // next refresh or screen open.
-                guard requests < Self.continuationCap else { return }
+                guard requests < Self.continuationCap else {
+                    fileFetchFailed(decisionId, ticket: ticket)
+                    return
+                }
                 let seconds = min(30, max(1, retryAfter ?? 5))
                 do { try await env.retryWait(.seconds(seconds)) } catch { return }
             }
@@ -95,6 +105,7 @@ extension SharedDirectionStore {
             manifest: manifest, signed: files, limits: env.limits
         ) else {
             markFailed(decisionId, missing: ids)
+            fileFetchFailed(decisionId, ticket: ticket)
             return
         }
         guard admit(decisionId, needed: needed, token: token) else {
@@ -102,6 +113,7 @@ extension SharedDirectionStore {
                 record.availability = .noSpace
                 save()
             }
+            fileFetchFailed(decisionId, ticket: ticket)
             return
         }
         let staging = SharedDirectionFiles.stagingDirectory(root: env.root, account: account, task: token)
@@ -115,8 +127,10 @@ extension SharedDirectionStore {
               fileFetches[decisionId]?.token == token else { return }
         guard verified.count == ids.count, move(staging, into: account, decisionId) else {
             markFailed(decisionId, missing: ids.filter { !verified.contains($0) })
+            fileFetchFailed(decisionId, ticket: ticket)
             return
         }
+        fileRetries[decisionId] = nil
         guard let current = row(decisionId) else { return }
         current.filesManifestKey = SharedDirectionWire.manifestKey(manifest)
         current.availability = .complete
@@ -126,8 +140,10 @@ extension SharedDirectionStore {
     }
 
     /// Downloads the set into staging, hashing each file against its manifest
-    /// `sha256` and signed size. Stops at the first failure, or as soon as the
-    /// ticket has moved; returns the ids that verified.
+    /// `sha256` and signed size, and checking what its bytes are against the
+    /// manifest `contentType` when there is one (SQ-247 F10). Stops at the
+    /// first failure, or as soon as the ticket has moved; returns the ids
+    /// that verified.
     private func verifiedFiles(
         _ manifest: [SharedDirectionManifestEntry], _ files: [SharedDirectionSignedFile],
         into staging: URL, _ decisionId: String, ticket: Ticket
@@ -142,11 +158,13 @@ extension SharedDirectionStore {
                 let destination = staging.appendingPathComponent(entry.attachmentId)
                 try await env.client.downloadAttachment(from: file.url, to: destination)
                 guard isCurrent(ticket, decisionId), !Task.isCancelled else { break }
-                let digest = try await Task.detached(priority: .utility) {
-                    try SharedDirectionFiles.digest(of: destination)
+                let (digest, contentType) = try await Task.detached(priority: .utility) {
+                    (try SharedDirectionFiles.digest(of: destination),
+                     try SharedDirectionFiles.sniffedContentType(of: destination))
                 }.value
                 // A mismatch discards the file and fails the set.
-                guard digest.sha256 == entry.sha256, digest.bytes == file.sizeBytes else { break }
+                guard digest.sha256 == entry.sha256, digest.bytes == file.sizeBytes,
+                      entry.contentType.map({ $0 == contentType }) ?? true else { break }
                 verified.insert(entry.attachmentId)
             }
         } catch {
@@ -177,6 +195,13 @@ extension SharedDirectionStore {
 
     /// Plan, then evict, then reserve — all in this one turn, so no other
     /// admission interleaves between the plan and the deletion.
+    ///
+    /// The eviction happens before the download, so a download that then
+    /// fails has given up those sets for nothing (SQ-247 F8). Downloading
+    /// into staging first is not possible here: staging bytes are reserved
+    /// bytes, and §C.3.3 holds committed plus reserved bytes under the
+    /// ceiling from the first byte on. Evicting after the download would
+    /// break that ceiling for as long as the download ran.
     private func admit(_ decisionId: String, needed: Int, token: UUID) -> Bool {
         let records = rows()
         let committed = records.reduce(0) { $0 + $1.committedBytes }
@@ -278,5 +303,34 @@ extension SharedDirectionStore {
         record.availability = .incomplete
         record.missingAttachmentIds = missing
         save()
+    }
+
+    // MARK: - Backing off a set that failed (SQ-247 F9)
+
+    /// A background refresh may fetch the set again only in a later
+    /// foreground than its last failure, and only once its backoff has
+    /// passed. A new manifest is a new set and starts clean.
+    func mayRetryFiles(_ decisionId: String, manifestKey: String?) -> Bool {
+        guard let retry = fileRetries[decisionId], retry.manifestKey == manifestKey else { return true }
+        return foreground > retry.foreground && env.now() >= retry.notBefore
+    }
+
+    /// A fetch ended without a verified set: an unreachable signer, a
+    /// refusal, the 202 cap, no space, or a download that did not verify.
+    /// The first failure waits only for the next foreground; each one after
+    /// it also waits `retryBackoffBase`, doubled per failure, up to the cap.
+    /// A fetch whose ticket moved records nothing.
+    private func fileFetchFailed(_ decisionId: String, ticket: Ticket) {
+        guard isCurrent(ticket, decisionId), !Task.isCancelled else { return }
+        let key = row(decisionId)?.manifestKey
+        let previous = fileRetries[decisionId].flatMap { $0.manifestKey == key ? $0.failures : nil } ?? 0
+        let failures = previous + 1
+        let backoff: Duration = failures < 2
+            ? .zero
+            : min(Self.retryBackoffBase * (1 << min(failures - 2, 16)), Self.retryBackoffCap)
+        fileRetries[decisionId] = FileRetry(
+            manifestKey: key, failures: failures, foreground: foreground,
+            notBefore: env.now().advanced(by: backoff)
+        )
     }
 }

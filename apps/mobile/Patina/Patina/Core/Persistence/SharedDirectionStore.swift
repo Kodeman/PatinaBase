@@ -27,6 +27,7 @@
 
 import Foundation
 import SwiftData
+import UIKit
 
 /// Why an act was refused before anything was sent (§C.8).
 enum SharedDirectionActRefusal: Error, Equatable {
@@ -41,7 +42,15 @@ enum SharedDirectionActRefusal: Error, Equatable {
 @MainActor
 final class SharedDirectionStore {
 
-    static let shared = SharedDirectionStore(environment: .live)
+    static let shared: SharedDirectionStore = {
+        let store = SharedDirectionStore(environment: .live)
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+        ) { [weak store] _ in
+            MainActor.assumeIsolated { store?.enteredForeground() }
+        }
+        return store
+    }()
 
     /// Everything the store reaches outside itself, so a test can hold each
     /// answer, own the clock and point the files at a temporary root.
@@ -99,9 +108,20 @@ final class SharedDirectionStore {
         let token: UUID
         var task: Task<Void, Never>?
         /// Started by a screen that opened the edition; cancelled when the
-        /// screen is left while the 202 loop is still waiting (§C.5.3).
-        var screenBound: Bool
+        /// screen is left while the 202 loop is still waiting (§C.5.3). A
+        /// loop a background refresh started stays unbound (SQ-247 F11).
+        let screenBound: Bool
         var looping = true
+    }
+
+    /// An edition's file fetches that ended without a verified set, for the
+    /// manifest they were for (SQ-247 F9).
+    struct FileRetry {
+        let manifestKey: String?
+        let failures: Int
+        /// The foreground the last failure happened in.
+        let foreground: Int
+        let notBefore: ContinuousClock.Instant
     }
 
     /// Who asked. A screen's fetch is bound to it; a re-check after NI-06
@@ -120,6 +140,9 @@ final class SharedDirectionStore {
     /// Bytes held for an edition's download, by the fetch that holds them.
     var reservations: [String: (token: UUID, bytes: Int)] = [:]
     var fileFetches: [String: FileFetch] = [:]
+    var fileRetries: [String: FileRetry] = [:]
+    /// Moves each time the app returns to the foreground.
+    private(set) var foreground = 0
     /// What each screen was last shown: the proof the pre-act check compares.
     var shownProof: [String: SharedDirectionHeldProof] = [:]
     /// The editions a screen was last handed FROM THE CACHE, and their stamp.
@@ -136,6 +159,12 @@ final class SharedDirectionStore {
         self.env = environment
     }
 
+    /// The app came back to the foreground, so a failed file set may be
+    /// tried once more (SQ-247 F9).
+    func enteredForeground() {
+        foreground += 1
+    }
+
     // MARK: - The two account wipes
 
     /// A session change: sign-in, sign-out, account switch. The account's
@@ -147,6 +176,7 @@ final class SharedDirectionStore {
         inFlight = [:]
         for fetch in fileFetches.values { fetch.task?.cancel() }
         fileFetches = [:]
+        fileRetries = [:]
         reservations = [:]
         editionGeneration = [:]
         authoritySeq = [:]

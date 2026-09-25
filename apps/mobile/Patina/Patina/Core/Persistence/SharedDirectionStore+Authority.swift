@@ -210,7 +210,9 @@ extension SharedDirectionStore {
     }
 
     /// `ok` + `active`: replace the record and stamp its `servedAt`; fetch the
-    /// files when the verified set is not this manifest's (§C.5.1).
+    /// files when the verified set is not this manifest's (§C.5.1). A set
+    /// that failed is tried again at most once per foreground, after its
+    /// backoff; a screen opening the edition always tries (SQ-247 F9).
     private func write(_ answer: SharedDirectionAnswer, servedAt: Date, account: String?, origin: Origin) {
         guard let account, let review = answer.review, let reviewJSON = answer.reviewJSON,
               SharedDirectionFiles.isSafeComponent(account),
@@ -240,7 +242,8 @@ extension SharedDirectionStore {
         // A set deleted from disk under a complete record is fetched again.
         demoteIfFilesMissing(record)
         guard origin != .recheck, let manifest = answer.manifest, !manifest.isEmpty,
-              record.filesManifestKey != key || record.availability != .complete else { return }
+              record.filesManifestKey != key || record.availability != .complete,
+              origin == .screen || mayRetryFiles(answer.decisionId, manifestKey: key) else { return }
         startFileFetch(answer.decisionId, origin: origin)
     }
 
@@ -251,6 +254,7 @@ extension SharedDirectionStore {
         editionGeneration[decisionId, default: 0] += 1
         lastCommittedSeq[decisionId] = nil
         if let fetch = fileFetches.removeValue(forKey: decisionId) { fetch.task?.cancel() }
+        fileRetries[decisionId] = nil
         reservations[decisionId] = nil
         shownFromCache[decisionId] = nil
         guard let account = env.account(), SharedDirectionFiles.isSafeComponent(decisionId) else { return }

@@ -85,17 +85,20 @@ enum SharedDirectionAdmission {
     }
 
     /// The bytes a signed set needs, or nil when the set may not be committed
-    /// at all (§C.3.3 "all or nothing"): a URL for every manifest entry and
-    /// nothing else, a known content type, one spec book or 1…60 sheets, no
-    /// file past 50 MiB and no sheet set past 200 MiB.
+    /// at all (§C.3.3 "all or nothing"): no attachmentId twice in the
+    /// manifest (SQ-247 F10), a URL for every manifest entry and nothing
+    /// else, a known content type, one spec book or 1…60 sheets, no file
+    /// past 50 MiB and no sheet set past 200 MiB.
     static func admissibleBytes(
         manifest: [SharedDirectionManifestEntry],
         signed: [SharedDirectionSignedFile],
         limits: SharedDirectionLimits
     ) -> Int? {
         let signedIds = signed.map(\.attachmentId)
-        guard !manifest.isEmpty, Set(signedIds).count == signedIds.count,
-              Set(signedIds) == Set(manifest.map(\.attachmentId)) else { return nil }
+        let manifestIds = manifest.map(\.attachmentId)
+        guard !manifest.isEmpty, Set(manifestIds).count == manifestIds.count,
+              Set(signedIds).count == signedIds.count,
+              Set(signedIds) == Set(manifestIds) else { return nil }
         for entry in manifest {
             if let type = entry.contentType,
                !SharedDirectionManifestEntry.contentTypes.contains(type) { return nil }

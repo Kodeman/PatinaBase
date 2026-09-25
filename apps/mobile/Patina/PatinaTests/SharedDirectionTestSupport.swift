@@ -33,6 +33,8 @@ struct FakeEdition {
     var successorDecisionId: Any = NSNull()
     /// One plan sheet per entry, of that many bytes. Empty: no attachments.
     var sheetSizes: [Int] = []
+    /// Every sheet's manifest `contentType`. The bytes are always a PDF's.
+    var contentType: Any = "application/pdf"
 
     static func responded(at respondedAt: String = "2026-09-05T09:00:00+00:00") -> FakeEdition {
         FakeEdition(lifecycleStatus: "responded", outcome: "approved", respondedAt: respondedAt)
@@ -57,9 +59,13 @@ enum DirectionFixture {
         "\(decisionId)-s\(sheet)"
     }
 
+    /// A PDF's header, then filler distinct per sheet: the store checks the
+    /// bytes against the manifest `contentType`.
     static func bytes(_ decisionId: String, _ sheet: Int, size: Int) -> Data {
         let seed = decisionId.utf8.reduce(sheet) { $0 &+ Int($1) }
-        return Data(repeating: UInt8(seed & 0x7f), count: size)
+        let header = Data("%PDF-".utf8)
+        let filler = Data(repeating: UInt8(seed & 0x7f), count: max(0, size - header.count))
+        return (header + filler).prefix(size)
     }
 
     static func sha256(_ data: Data) -> String {
@@ -93,7 +99,7 @@ enum DirectionFixture {
                 "attachmentId": attachmentId(decisionId, index), "kind": "plan_sheet",
                 "position": index + 1, "label": "A-10\(index)",
                 "sha256": sha256(bytes(decisionId, index, size: size)),
-                "sizeBytes": size, "contentType": "application/pdf"
+                "sizeBytes": size, "contentType": edition.contentType
             ]
         }
     }
@@ -149,6 +155,8 @@ final class FakeDirectionClient: SharedDirectionClient {
 
     var holdNextBatches = 0
     var holdDownloads = false
+    /// While true, every download answers a 500.
+    var failDownloads = false
     private var heldBatches: [CheckedContinuation<Data, Error>] = []
     private var heldDownloads: [CheckedContinuation<Void, Error>] = []
 
@@ -243,6 +251,7 @@ final class FakeDirectionClient: SharedDirectionClient {
         if holdDownloads {
             try await withCheckedThrowingContinuation { heldDownloads.append($0) }
         }
+        if failDownloads { throw SharedDirectionDownloadError(status: 500) }
         let parts = url.pathComponents.suffix(3)
         guard parts.count == 3, let sheet = Int(parts[parts.startIndex + 1]),
               let size = Int(parts[parts.startIndex + 2]) else {
