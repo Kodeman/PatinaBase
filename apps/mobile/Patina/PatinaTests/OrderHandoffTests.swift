@@ -135,6 +135,100 @@ struct OrderHandoffTests {
         #expect(events.properties(of: "order_failed")?["reason"] == "poll_timeout")
     }
 
+    // MARK: - Unconfirmed (W1A-11 F1)
+
+    @Test("an unconfirmed order refuses a second begin — the reader may already have paid")
+    func beginIsRefusedWhileUnconfirmed() async throws {
+        let created = Counter()
+        let machine = handoff(
+            create: { _, _ in
+                created.bump()
+                return PurchaseFixture.order()
+            },
+            poll: { _ in PurchaseFixture.order(status: "pending_payment") }
+        )
+        await machine.begin(productId: PurchaseFixture.productId)
+        machine.checkoutDismissed()
+        try await waitFor { machine.isUnconfirmed }
+
+        await machine.begin(productId: PurchaseFixture.productId)
+
+        #expect(created.value == 1)
+        #expect(machine.phase == .unconfirmed(PurchaseFixture.order()))
+        #expect(machine.checkoutURL == nil)
+    }
+
+    @Test("check again polls the same order under a fresh deadline, and never creates")
+    func checkAgainRepollsTheSameOrder() async throws {
+        let created = Counter()
+        let checkouts = Counter()
+        let polls = PollLog()
+        let machine = handoff(
+            create: { _, _ in
+                created.bump()
+                return PurchaseFixture.order()
+            },
+            checkout: { _ in
+                checkouts.bump()
+                return URL(string: "https://checkout.stripe.com/c/pay/cs_test_123")!
+            },
+            poll: { id in
+                PurchaseFixture.order(id: id, status: polls.record(id) ? "paid" : "pending_payment")
+            }
+        )
+        await machine.begin(productId: PurchaseFixture.productId)
+        machine.checkoutDismissed()
+        try await waitFor { machine.isUnconfirmed }
+        let pollsBeforeRecheck = polls.ids.count
+
+        polls.settle()
+        machine.checkAgain()
+        #expect(machine.phase == .confirming(PurchaseFixture.order()))
+
+        try await waitFor { if case .placed = machine.phase { return true } else { return false } }
+        #expect(created.value == 1)
+        #expect(checkouts.value == 1)
+        #expect(polls.ids.count > pollsBeforeRecheck)
+        #expect(Set(polls.ids) == [PurchaseFixture.order().id])
+    }
+
+    @Test("check again that still hears nothing ends unconfirmed again, never a new order")
+    func checkAgainIsBounded() async throws {
+        let created = Counter()
+        let machine = handoff(
+            create: { _, _ in
+                created.bump()
+                return PurchaseFixture.order()
+            },
+            poll: { _ in nil }
+        )
+        await machine.begin(productId: PurchaseFixture.productId)
+        machine.checkoutDismissed()
+        try await waitFor { machine.isUnconfirmed }
+
+        machine.checkAgain()
+        #expect(machine.isWorking)
+        try await waitFor { machine.isUnconfirmed }
+
+        #expect(machine.phase == .unconfirmed(PurchaseFixture.order()))
+        #expect(created.value == 1)
+    }
+
+    /// The ids the poll was asked about, and whether it answers settled yet.
+    final class PollLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var asked: [String] = []
+        private var settles = false
+        /// Records the id; returns whether the row should answer paid.
+        func record(_ id: String) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            asked.append(id)
+            return settles
+        }
+        func settle() { lock.lock(); settles = true; lock.unlock() }
+        var ids: [String] { lock.lock(); defer { lock.unlock() }; return asked }
+    }
+
     // MARK: - Failure
 
     @Test("a create refusal becomes a Patina sentence, and reports a code")

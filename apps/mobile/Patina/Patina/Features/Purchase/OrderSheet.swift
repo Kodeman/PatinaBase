@@ -312,7 +312,14 @@ struct OrderSheet: View {
             }
             .accessibilityIdentifier("OrderSheet.Primary")
 
-            if let reason = content.disabledReason {
+            if handoff.isUnconfirmed {
+                // The way out. A new order starts from the piece, in a new
+                // sheet, never from this one.
+                Button("Close") { dismiss() }
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.interactive)
+                    .accessibilityIdentifier("OrderSheet.Close")
+            } else if let reason = content.disabledReason {
                 Text(reason)
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
@@ -331,16 +338,23 @@ struct OrderSheet: View {
     }
 
     /// The second tap exists only where the server named a designer, so the
-    /// disclosure is read before money moves.
+    /// disclosure is read before money moves. Once the poll has run out the
+    /// act asks after the same order again — the reader may already have paid,
+    /// so it must never be a second payment.
     private var primaryLabel: String {
-        if case .disclosing = handoff.phase { return "Continue to payment" }
-        return content.primaryLabel
+        switch handoff.phase {
+        case .disclosing: return "Continue to payment"
+        case .unconfirmed: return "Check again"
+        default: return content.primaryLabel
+        }
     }
 
     private func primaryTapped() async {
         switch handoff.phase {
         case .disclosing:
             await handoff.confirmDisclosure()
+        case .unconfirmed:
+            handoff.checkAgain()
         default:
             PostHogService.shared.capture("order_created_tapped", properties: [
                 "product_id": product.id

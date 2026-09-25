@@ -78,6 +78,11 @@ final class OrderHandoff {
         }
     }
 
+    var isUnconfirmed: Bool {
+        if case .unconfirmed = phase { return true }
+        return false
+    }
+
     // MARK: - Seams
 
     /// The two network calls and the poll, injected so the machine can be
@@ -131,8 +136,13 @@ final class OrderHandoff {
     /// guest meets the auth wall over the piece and **nothing is written**
     /// (`create_direct_order` would refuse anyway, EXECUTE being revoked from
     /// `anon`, but the app must not make the call to find that out).
+    ///
+    /// Refused while this handoff's order is unconfirmed: the reader may have
+    /// paid and the webhook may simply be late, and the server mints a fresh
+    /// row and a fresh Checkout session for every create. A new order starts
+    /// only from a new sheet.
     func begin(productId: String, quantity: Int = 1) async {
-        guard !isWorking else { return }
+        guard !isWorking, !isUnconfirmed else { return }
         phase = .creating
         do {
             let order = try await dependencies.create(productId, quantity)
@@ -180,6 +190,15 @@ final class OrderHandoff {
     func checkoutDismissed() {
         guard case .awaitingPayment(let order, _) = phase else { return }
         pendingReturn = order
+        phase = .confirming(order)
+        startPolling(order)
+    }
+
+    /// The unconfirmed state's act: read the same row again, under a fresh
+    /// deadline. It never creates — the order that may have been paid is the
+    /// only one this sheet will ask about.
+    func checkAgain() {
+        guard case .unconfirmed(let order) = phase else { return }
         phase = .confirming(order)
         startPolling(order)
     }
