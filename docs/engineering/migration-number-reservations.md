@@ -442,5 +442,18 @@ header. It ships in the same Strata push as the W1A-10 client and the NI-06
 `project-approval-attachments` edge function, after 00669. Re-check the Strata
 head before pushing.
 
+00671 `create_direct_order_open_order_reuse`, reserved 2026-09-25 by W1A-11 F1
+(SQ-241, story US-11). It draws above the head per discipline rule 2. At
+reservation, no file at or above 00671 existed on `main` (tip 3838010ef, head
+00670), in `git log --all`, or in any sibling Sidequest worktree, and the local
+applied head was 00670. It redefines `create_direct_order(uuid, integer)` from
+00540 (lineage 00276 → 00540 → 00671). While the caller holds a
+`pending_payment` order for the same product and clamped quantity, the function
+returns that order and inserts nothing. An advisory lock on buyer and product
+serializes racing calls. Grants are restated unchanged. It adds no table,
+column or index and does not clean up duplicate rows. The revert is in the
+migration header. It joins the ordered Strata push after 00670 and needs no
+edge-function or app deploy. Re-check the Strata head before pushing.
+
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.
