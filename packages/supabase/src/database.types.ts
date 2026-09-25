@@ -5999,6 +5999,7 @@ export type Database = {
       }
       device_push_tokens: {
         Row: {
+          app: string
           created_at: string
           environment: string
           id: string
@@ -6008,6 +6009,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          app?: string
           created_at?: string
           environment: string
           id?: string
@@ -6017,6 +6019,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          app?: string
           created_at?: string
           environment?: string
           id?: string

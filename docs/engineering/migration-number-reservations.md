@@ -354,9 +354,11 @@ USD guard. A later migration changing either budget rollup edits the
 `_00661_impl` body; one that replaces the public name must keep the
 `_ffe_require_usd_budget_rollup` call.
 
-00662 `device_push_tokens_bundle` — the per-token bundle column `apns-send`
-needs to address Patina Field. 00663 holds its revert, written first: this
-program ships no feature flags, so the revert migration is the only way back.
+00662 and 00663 were reserved for `device_push_tokens_bundle` and its revert,
+and were never written. The column landed as 00668 (below), and its revert is
+a rollback file outside `migrations/`. Both numbers stay unused: they sit below
+the applied head, so a file at either number would sort before migrations
+Strata has already applied.
 00664 `capture_enrichment_vendor_sku_suggestion_only`, reserved 2026-09-24 by
 T6-03 (SQ-203), ruling D7b. It takes the band's spare rather than extending the
 band to 00665. `record_capture_enrichment_result` (00515) stops writing
@@ -398,6 +400,18 @@ reservation, no file at or above 00667 existed on `main` (tip 00666), in
 spec-book-render reads. Frozen snapshots are not rewritten. A later
 redefinition of that function starts from 00667. It must apply after 00661,
 which adds the column, and joins the ordered Strata push after 00666.
+
+00668 `device_push_tokens_app`, reserved 2026-09-25 by NI-01 (SQ-216). It
+takes the per-token app column that 00662/00663 had held. It draws above the
+head per discipline rule 2. At reservation, no file at or above 00668 existed
+on `main` (tip 00667), in `git log --all`, or in any sibling Sidequest
+worktree, and the local applied head was 00667. It adds
+`device_push_tokens.app` (`NOT NULL DEFAULT 'cloud.patina.app'`, CHECK
+`cloud.patina.app` | `cloud.patina.field`). The default is the backfill, so no
+`UPDATE` runs. Its revert is `supabase/rollback/00668_device_push_tokens_app.sql`,
+kept outside `migrations/` because a reset or `db push` would apply it. Apply
+00668 before deploying the `apns-send` that selects `app`. It joins the
+ordered Strata push after 00667. Re-check the Strata head before pushing.
 
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.

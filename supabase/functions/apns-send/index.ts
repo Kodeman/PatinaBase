@@ -7,9 +7,12 @@
 // no CORS (no browser ever calls this).
 //
 // Input:  { user_id?, tokens?, title, body, entity_type?, entity_id?,
-//           notification_log_id? }
-// Reads device_push_tokens for user_id unless explicit tokens are passed, and
-// — when a user_id is given — counts that user's unopened in_app
+//           notification_log_id?, audience? }
+// Reads device_push_tokens for user_id unless explicit tokens are passed,
+// keeping only the audience's app (00668): `audience` when the caller names
+// it, else derived from entity_type (core.ts `audienceFor`, default 'app').
+// Each token is sent under its own app's topic. When a user_id is given and a
+// Patina token is among the targets, it counts that user's unopened in_app
 // notification_log rows, collapsed on the entity key the bell collapses on and
 // under the bell's own read rule (one read row reads its whole entity), so
 // the springboard number moves while the app is backgrounded (R5, ruled at the
@@ -22,7 +25,8 @@
 // Failure posture:
 //  - Missing APNS_* secrets → log + 200 {skipped:'apns_not_configured'}. This
 //    path fires from live RPCs BEFORE Kody provisions the key — it must never
-//    error the caller.
+//    error the caller. The same skip answers when the only targets belong to
+//    an app with no topic configured.
 //  - 410/BadDeviceToken/Unregistered → delete the dead token row.
 //  - notification_log_id given → update that row's status ('delivered' on ≥1
 //    success, else 'failed') + provider_id (apns-id header), mirroring
@@ -31,14 +35,18 @@
 // Secrets (names only): APNS_AUTH_KEY (.p8 contents — full PEM or a bare
 // base64 body; normalizePkcs8Pem in core.ts handles either shape, since
 // jose's importPKCS8 hard-requires BEGIN/END PRIVATE KEY framing), APNS_KEY_ID,
-// APNS_TEAM_ID, APNS_TOPIC.
+// APNS_TEAM_ID, APNS_TOPIC_APP (falls back to APNS_TOPIC), APNS_TOPIC_FIELD.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { importPKCS8, SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
 import {
+  type AddressedToken,
+  addressTokens,
   apnsDeviceUrl,
   type ApnsSendInput,
+  apnsTopicFor,
+  badgeForApp,
   type BadgeRow,
   bearerRole,
   buildApnsHeaders,
@@ -48,8 +56,10 @@ import {
   normalizePkcs8Pem,
   pickProjectThreadId,
   projectTableFor,
-  type ResolvedToken,
-  resolveTokens,
+  PUSH_APP,
+  type PushApp,
+  pushAudience,
+  tokensForAudience,
 } from "./core.ts";
 
 /** The bell's own page size (`NotificationsAPIClient.list(limit: 50)`). */
@@ -221,13 +231,24 @@ Deno.serve(async (req) => {
   if (!input.user_id && !input.tokens?.length) {
     return json({ error: "Provide user_id or tokens" }, 400);
   }
+  const audience = pushAudience(input);
+  if (!audience) {
+    return json({ error: "audience must be 'app' or 'field'" }, 400);
+  }
 
   // ── Not configured yet → skip cleanly (never error the SQL caller) ────────
   const authKey = Deno.env.get("APNS_AUTH_KEY");
   const keyId = Deno.env.get("APNS_KEY_ID");
   const teamId = Deno.env.get("APNS_TEAM_ID");
-  const topic = Deno.env.get("APNS_TOPIC");
-  if (!authKey || !keyId || !teamId || !topic) {
+  const env = (name: string) => Deno.env.get(name);
+  const topics: Record<PushApp, string | null> = {
+    "cloud.patina.app": apnsTopicFor("cloud.patina.app", env),
+    "cloud.patina.field": apnsTopicFor("cloud.patina.field", env),
+  };
+  if (
+    !authKey || !keyId || !teamId ||
+    (!topics[PUSH_APP.app] && !topics[PUSH_APP.field])
+  ) {
     console.log(
       "[apns-send] APNS_* secrets not configured; skipping push",
       {
@@ -239,8 +260,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // ── Resolve target tokens (+ their per-token environments) ──────────────
-    let targets: ResolvedToken[] = [];
+    // ── Resolve target tokens (+ their per-token environment and app) ───────
+    let addressed: AddressedToken[] = [];
     let unresolved: string[] = [];
 
     if (input.tokens?.length) {
@@ -249,40 +270,57 @@ Deno.serve(async (req) => {
       ) => (typeof t === "string" ? t : t.token));
       const { data: rows } = await supabase
         .from("device_push_tokens")
-        .select("token, environment")
+        .select("token, environment, app")
         .in("token", plain);
-      ({ resolved: targets, unresolved } = resolveTokens(
+      ({ resolved: addressed, unresolved } = addressTokens(
         input.tokens,
         rows ?? [],
+        audience,
       ));
     } else {
       const { data: rows, error } = await supabase
         .from("device_push_tokens")
-        .select("token, environment")
+        .select("token, environment, app")
         .eq("user_id", input.user_id!);
       if (error) throw error;
-      ({ resolved: targets, unresolved } = resolveTokens(
-        (rows ?? []).map((r) => r.token),
-        rows ?? [],
+      const own = tokensForAudience(rows ?? [], audience);
+      ({ resolved: addressed, unresolved } = addressTokens(
+        own.map((r) => r.token),
+        own,
+        audience,
       ));
     }
 
     if (unresolved.length) {
       console.warn(
-        "[apns-send] dropping tokens with unknown environment",
+        "[apns-send] dropping tokens with unknown environment or app",
         unresolved,
       );
     }
+    const targets = addressed.filter((t) => topics[t.app]);
+    if (targets.length < addressed.length) {
+      console.warn("[apns-send] dropping tokens whose app has no topic", {
+        apps: [
+          ...new Set(addressed.filter((t) => !topics[t.app]).map((t) => t.app)),
+        ],
+        log_id: input.notification_log_id ?? null,
+      });
+    }
     if (!targets.length) {
-      return json({ sent: 0, skipped: "no_tokens" });
+      return addressed.length
+        ? json({ sent: 0, skipped: "apns_not_configured" })
+        : json({ sent: 0, skipped: "no_tokens" });
     }
 
     const jwt = await providerJwt(authKey, keyId, teamId);
-    const badge = await unreadInAppBadge(supabase, input.user_id);
+    const badge = targets.some((t) => t.app === PUSH_APP.app)
+      ? await unreadInAppBadge(supabase, input.user_id)
+      : undefined;
     const conversationThreadId = await resolveProjectThreadId(supabase, input);
-    const payload = JSON.stringify(
-      buildApnsPayload(input, badge, conversationThreadId),
-    );
+    const payloadFor = (app: PushApp): string =>
+      JSON.stringify(
+        buildApnsPayload(input, badgeForApp(app, badge), conversationThreadId),
+      );
 
     let successes = 0;
     let providerId: string | undefined;
@@ -293,8 +331,8 @@ Deno.serve(async (req) => {
       try {
         const res = await fetch(apnsDeviceUrl(target), {
           method: "POST",
-          headers: buildApnsHeaders(input, topic, jwt),
-          body: payload,
+          headers: buildApnsHeaders(input, topics[target.app]!, jwt),
+          body: payloadFor(target.app),
         });
 
         if (res.ok) {
