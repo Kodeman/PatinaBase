@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # capture-gate.sh — build / test / lint gate for Patina Field Capture.
-# Usage: scripts/capture-gate.sh [build|test|ui|lint|fcr3|p4|all]   (default: all)
+# Usage: scripts/capture-gate.sh [build|test|ui|release|release-ui|lint|fcr3|p4|all]   (default: all)
 #
 # The build/test/ui/all tiers require CAPTURE_SIM_UDID — this lane's own simulator
 # clone. See sim_destination(); this gate does not guess.
@@ -111,6 +111,41 @@ ui() {
     -sdk iphonesimulator -destination "$dest" \
     -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
   echo "✔ ui tests"
+}
+
+release() {
+  local dest
+  # Before generate(), and `|| return $?` tested — see build().
+  dest="$(sim_destination)" || return $?
+  generate
+  xcodebuild build -project Capture.xcodeproj -scheme Capture \
+    -sdk iphonesimulator -destination "$dest" -configuration Release \
+    -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO -quiet
+  echo "✔ release build"
+}
+
+# CaptureUITests under a Release-configured build. Proves the ordinary-tap
+# edges into a Release binary; it cannot observe verificationHarnessAllowed
+# refused, since a UI test sets isUITest and runsRealServices stays false in
+# both Debug and Release — see WAVE-NEXT-PLAN.md W1A-00. That physical-device
+# observation is W1A-07's.
+#
+# ENABLE_TESTABILITY=YES is required here: the Capture scheme's Test action
+# still builds the whole test plan (CaptureTests included) even when
+# -only-testing narrows what RUNS, and Release turns testability off by
+# default, so CaptureTests' `@testable import CaptureKit` fails to resolve
+# ("module built without '-enable-testing'"). This override only affects this
+# xcodebuild invocation, not the committed Release scheme.
+release_ui() {
+  local dest
+  # Before generate(), and `|| return $?` tested — see build().
+  dest="$(sim_destination)" || return $?
+  generate
+  xcodebuild test -project Capture.xcodeproj -scheme Capture \
+    -only-testing:CaptureUITests \
+    -sdk iphonesimulator -destination "$dest" -configuration Release \
+    -derivedDataPath "$DERIVED" CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES -quiet
+  echo "✔ release ui tests"
 }
 
 # Pinned so `--strict` means the same thing on every machine and runner.
@@ -260,12 +295,14 @@ EOF
 }
 
 case "$CMD" in
-  build) build ;;
-  test)  test_ ;;
-  ui)    ui ;;
-  lint)  lint ;;
-  fcr3)  fcr3_sweep ;;
-  p4)    principle4_sweep ;;
-  all)   build; test_; ui; lint; fcr3_sweep; principle4_sweep ;;
-  *) echo "usage: $0 [build|test|ui|lint|fcr3|p4|all]"; exit 2 ;;
+  build)      build ;;
+  test)       test_ ;;
+  ui)         ui ;;
+  release)    release ;;
+  release-ui) release_ui ;;
+  lint)       lint ;;
+  fcr3)       fcr3_sweep ;;
+  p4)         principle4_sweep ;;
+  all)        build; test_; ui; lint; fcr3_sweep; principle4_sweep ;;
+  *) echo "usage: $0 [build|test|ui|release|release-ui|lint|fcr3|p4|all]"; exit 2 ;;
 esac
