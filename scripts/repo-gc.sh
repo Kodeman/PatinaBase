@@ -42,6 +42,9 @@
 #   Candidates: apps/*/.next, apps/*/.open-next, apps/mobile/Patina/build,
 #   apps/mobile/Capture/.build, <root>/.build, packages/*/storybook-static,
 #   and any .turbo directory outside node_modules/ and registered worktrees.
+#   Also the keyed iOS DerivedData dirs under $PATINA_DERIVED_ROOT (default
+#   ~/Library/Caches/patina-derived) whose CHECKOUT file names a path that
+#   no longer exists.
 #   Skipped automatically (with a printed reason) if a matching dev/build
 #   process is running:
 #     - `next dev`/`next-server` running  -> .next/.open-next left alone
@@ -368,6 +371,24 @@ if [[ "$skip_xcode" -eq 0 ]]; then
   add_candidates apps/mobile/Patina/build apps/mobile/Capture/.build .build
 fi
 
+# The iOS scripts build into $PATINA_DERIVED_ROOT/<app>-<hash>/, outside every
+# checkout, and write <that dir>/CHECKOUT naming the app dir. A keyed dir whose
+# CHECKOUT path no longer exists belongs to a retired worktree. These live
+# outside the repo, so they are added to FINAL_TARGETS after the repo-root
+# filter below rather than to CANDIDATES.
+DERIVED_ORPHANS=()
+if [[ "$skip_xcode" -eq 0 ]]; then
+  derived_root="${PATINA_DERIVED_ROOT:-$HOME/Library/Caches/patina-derived}"
+  for d in "$derived_root"/patina-* "$derived_root"/capture-*; do
+    if [[ -d "$d" && -f "$d/CHECKOUT" ]]; then
+      checkout="$(head -n 1 "$d/CHECKOUT")"
+      if [[ -n "$checkout" && ! -e "$checkout" ]]; then
+        DERIVED_ORPHANS+=("$d")
+      fi
+    fi
+  done
+fi
+
 add_candidates packages/*/storybook-static
 
 # .turbo dirs anywhere in the tree, excluding node_modules/ and worktrees —
@@ -436,6 +457,12 @@ for t in "${CANDIDATES[@]+"${CANDIDATES[@]}"}"; do
     continue
   fi
   FINAL_TARGETS+=("$real")
+done
+
+for t in "${DERIVED_ORPHANS[@]+"${DERIVED_ORPHANS[@]}"}"; do
+  if is_new_target "$t"; then
+    FINAL_TARGETS+=("$t")
+  fi
 done
 
 TOTAL_KB=0

@@ -58,6 +58,9 @@ cp "$REAL_PBXPROJ" "$FIX/Capture.xcodeproj/project.pbxproj" || exit 1
 
 export CAPTURE_GUARD_LOGS="$LOGS"
 export CAPTURE_GUARD_FIXTURE="$FIX"
+# The scripts' out-of-tree DerivedData root, kept inside the fixture.
+export PATINA_DERIVED_ROOT="$WORK/derived"
+KEYED="$PATINA_DERIVED_ROOT/capture-$(printf %s "$FIX" | shasum -a 256 | cut -c1-12)"
 
 # ---- stubs ---------------------------------------------------------------------
 # One tab-separated argv line per invocation, one log per tool.
@@ -113,7 +116,7 @@ STATUS=0
 run() {
   local script="$1"; shift
   rm -f "$LOGS"/*.log
-  rm -rf "$FIX/Capture.xcodeproj" "$FIX/.build"
+  rm -rf "$FIX/Capture.xcodeproj" "$FIX/.build" "$PATINA_DERIVED_ROOT"
   mkdir -p "$FIX/Capture.xcodeproj"
   cp "$REAL_PBXPROJ" "$FIX/Capture.xcodeproj/project.pbxproj"
   bash "$FIX/scripts/$script" "$@" > "$OUT" 2>&1
@@ -129,6 +132,9 @@ invoked()  { [[ -s "$LOGS/$1.log" ]]; }
 failed()         { [[ $STATUS -ne 0 ]]; }
 succeeded()      { [[ $STATUS -eq 0 ]]; }
 pbxproj_intact() { [[ "$(hash_of "$FIX/Capture.xcodeproj/project.pbxproj")" == "$PBX_HASH" ]]; }
+derived_root_absent() { [[ ! -e "$PATINA_DERIVED_ROOT" ]]; }
+in_tree_derived_absent() { [[ ! -e "$FIX/.build/DerivedData" ]]; }
+checkout_marker_ok() { [[ "$(cat "$KEYED/CHECKOUT" 2>/dev/null)" == "$FIX" ]]; }
 
 # ---- 1. every simulator-taking entry point refuses when the udid is unset ------
 # CAPTURE_SIM is set on purpose: the old NAME variable must no longer satisfy it.
@@ -147,17 +153,18 @@ for entry in "capture-gate.sh build" "capture-gate.sh test" "capture-gate.sh ui"
   ! invoked ruby; check $? "never ran generate_project.rb"
   ! invoked bootstrap-worktree.sh; check $? "never ran bootstrap-worktree.sh"
   ! invoked xcrun; check $? "never touched a simulator (xcrun)"
+  derived_root_absent; check $? "never created \$PATINA_DERIVED_ROOT"
   grep -q 'CAPTURE_SIM_UDID is unset' "$OUT"; check $? "printed the guard's error message"
 done
 unset CAPTURE_SIM
 
-# ---- 2. with the udid set, it is the destination and DerivedData is local ------
+# ---- 2. with the udid set, it is the destination and DerivedData is keyed ------
 # Also proves the harness can see a violation: here generate DOES run, and the
 # stub DOES rewrite the fixture pbxproj — so the hash check above is not vacuous.
 export CAPTURE_SIM_UDID="$FAKE_UDID"
 export CAPTURE_SHOTS_DIR="$WORK/shots" CAPTURE_SHOT_SETTLE=0
 DEST="$(printf -- '-destination\tplatform=iOS Simulator,id=%s\t' "$FAKE_UDID")"
-DERIVED="$(printf -- '-derivedDataPath\t%s/.build/DerivedData\t' "$FIX")"
+DERIVED="$(printf -- '-derivedDataPath\t%s/DerivedData\t' "$KEYED")"
 for entry in "capture-gate.sh build" "capture-gate.sh test" "capture-gate.sh ui" \
              "capture-run.sh C5.specimen-sheet" "capture-shots.sh C5"; do
   printf '  %-34s (CAPTURE_SIM_UDID set)\n' "$entry"
@@ -167,7 +174,9 @@ for entry in "capture-gate.sh build" "capture-gate.sh test" "capture-gate.sh ui"
   succeeded; check $? "exits zero (got $STATUS)"
   ! pbxproj_intact; check $? "generate ran (the stub rewrote the fixture pbxproj)"
   log_has xcodebuild "$DEST"; check $? "destination is platform=iOS Simulator,id=\$CAPTURE_SIM_UDID"
-  log_has xcodebuild "$DERIVED"; check $? "-derivedDataPath is this checkout's .build/DerivedData"
+  log_has xcodebuild "$DERIVED"; check $? "-derivedDataPath is \$PATINA_DERIVED_ROOT/capture-<key>/DerivedData"
+  in_tree_derived_absent; check $? "nothing built into the checkout's .build/DerivedData"
+  checkout_marker_ok; check $? "CHECKOUT names this checkout"
   case "$entry" in
     "capture-gate.sh ui")
       log_has xcodebuild "$(printf -- '-scheme\tCapture\t-only-testing:CaptureUITests\t')"

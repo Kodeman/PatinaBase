@@ -71,6 +71,15 @@ xcodebuild test  -project Capture.xcodeproj -scheme CaptureKit \
   CODE_SIGNING_ALLOWED=NO
 ```
 
+The scripts below (`capture-gate.sh`, `capture-run.sh`, `capture-shots.sh`,
+`archive-testflight.sh`) pin `-derivedDataPath` to this checkout's own
+directory OUTSIDE the worktree:
+`$PATINA_DERIVED_ROOT/capture-<first 12 hex of sha256(abs path of apps/mobile/Capture)>/`
+(default root `~/Library/Caches/patina-derived`), holding `DerivedData/`,
+`archives/`, `export/` and a `CHECKOUT` file naming the checkout. Concurrent
+worktrees never share a DerivedData lock, and `scripts/repo-gc.sh` sweeps the
+dirs of worktrees that are gone.
+
 Run on mocks (Simulator-safe): launch with `-CaptureUseMocks`.
 Real backend calls need `Secrets.swift` (copy from `Secrets.example.swift`).
 
@@ -197,7 +206,8 @@ export FIELD_DEVICE_UDID='<physical-device-UDID>'
 test -n "$FIELD_DEVICE_UDID"
 
 # One-time prerequisite: set the Capture target's signing team in Xcode.
-export FIELD_RASTER_DERIVED="$PWD/.build/raster-fixture-$FIELD_DEVICE_UDID"
+KEY="capture-$(printf %s "$PWD" | shasum -a 256 | cut -c1-12)"
+export FIELD_RASTER_DERIVED="${PATINA_DERIVED_ROOT:-$HOME/Library/Caches/patina-derived}/$KEY/raster-fixture-$FIELD_DEVICE_UDID"
 xcodebuild build -project Capture.xcodeproj -scheme Capture \
   -configuration Debug \
   -destination "platform=iOS,id=$FIELD_DEVICE_UDID" \
@@ -252,8 +262,11 @@ Verify with `codesign -dvv Payload/Capture.app` on the exported `.ipa` —
 
 Export options: `scripts/ExportOptions.plist` (`method: app-store-connect`,
 `teamID: VP22LXHT7L`, automatic signing). DerivedData and archive/export
-output live under this checkout's own `.build/` (gitignored, per-worktree —
-two worktrees archiving concurrently never collide).
+output live under this checkout's own keyed directory outside the worktree,
+`$PATINA_DERIVED_ROOT/capture-<hash>/` (default root
+`~/Library/Caches/patina-derived`; see "Build" above), shared with
+`capture-gate.sh` — two worktrees archiving concurrently never collide. The
+script prints the archive and export paths.
 
 An App Store Connect **Admin**-role API key lets `-allowProvisioningUpdates`
 register the `cloud.patina.field` App ID and a distribution provisioning

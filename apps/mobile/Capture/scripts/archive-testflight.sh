@@ -39,8 +39,9 @@
 # Env vars (all optional, only used for -allowProvisioningUpdates / upload):
 #   ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY_PATH
 #
-# Output: an .xcarchive under DerivedData and, unless --skip-export, an
-# exported .ipa under the export directory. Both paths are printed at the end
+# Output: an .xcarchive under $PATINA_DERIVED_ROOT/capture-<key>/archives
+# (default root ~/Library/Caches/patina-derived) and, unless --skip-export, an
+# exported .ipa under .../export. Both paths are printed at the end
 # along with their sizes.
 
 set -euo pipefail
@@ -97,13 +98,18 @@ if [[ "$SKIP_REGEN" -eq 0 ]]; then
   ruby scripts/generate_project.rb
 fi
 
-# Per-worktree DerivedData: keyed off this checkout's own absolute path so
-# two worktrees archiving concurrently never collide or share stale state.
-WORKTREE_HASH="$(echo -n "$CAPTURE_DIR" | shasum -a 256 | cut -c1-12)"
-DERIVED_DATA="$CAPTURE_DIR/.build/archive-derived-data-$WORKTREE_HASH"
-ARCHIVE_DIR="$CAPTURE_DIR/.build/archives"
-EXPORT_DIR="$CAPTURE_DIR/.build/export"
+# Per-checkout DerivedData, archives and export, outside the worktree and shared
+# with capture-gate.sh. The key hashes this checkout's own absolute path so two
+# worktrees archiving concurrently never collide or share stale state.
+PATINA_DERIVED_ROOT="${PATINA_DERIVED_ROOT:-$HOME/Library/Caches/patina-derived}"
+KEY="capture-$(printf %s "$CAPTURE_DIR" | shasum -a 256 | cut -c1-12)"
+DERIVED_DATA="$PATINA_DERIVED_ROOT/$KEY/DerivedData"
+ARCHIVE_DIR="$PATINA_DERIVED_ROOT/$KEY/archives"
+EXPORT_DIR="$PATINA_DERIVED_ROOT/$KEY/export"
 mkdir -p "$ARCHIVE_DIR" "$EXPORT_DIR"
+# CHECKOUT maps the hashed dir back to its checkout, so scripts/repo-gc.sh can
+# sweep the dirs of worktrees that no longer exist.
+printf '%s\n' "$CAPTURE_DIR" > "$PATINA_DERIVED_ROOT/$KEY/CHECKOUT"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 ARCHIVE_PATH="$ARCHIVE_DIR/PatinaField-$TIMESTAMP.xcarchive"

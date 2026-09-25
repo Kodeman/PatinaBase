@@ -20,10 +20,12 @@ BUNDLE_ID="cloud.patina.field"
 OUT="${CAPTURE_SHOTS_DIR:-.build/shots}"
 SETTLE="${CAPTURE_SHOT_SETTLE:-1.4}"   # seconds to let a screen render before the shot
 
-# The same per-worktree DerivedData capture-gate.sh builds into (see its
-# header). Absolute, so the path xcodebuild receives names this checkout.
+# The same per-checkout DerivedData capture-gate.sh builds into, outside the
+# worktree (see its header). The key hashes this checkout's absolute path.
 PROJECT_DIR="$PWD"                                   # apps/mobile/Capture
-DERIVED="$PROJECT_DIR/.build/DerivedData"
+PATINA_DERIVED_ROOT="${PATINA_DERIVED_ROOT:-$HOME/Library/Caches/patina-derived}"
+KEY="capture-$(printf %s "$PROJECT_DIR" | shasum -a 256 | cut -c1-12)"
+DERIVED="$PATINA_DERIVED_ROOT/$KEY/DerivedData"
 
 # --- the simulator is explicit, or this refuses to guess ----------------------
 # This resolved ${CAPTURE_SIM:-iPhone 17} by NAME — the same device in every
@@ -122,6 +124,10 @@ echo "→ regenerating project"
 ruby scripts/generate_project.rb >/dev/null
 
 echo "→ building (Debug · iphonesimulator) — udid $DEVICE_ID"
+# CHECKOUT maps the hashed dir back to its checkout, so scripts/repo-gc.sh can
+# sweep the dirs of worktrees that no longer exist.
+mkdir -p "$PATINA_DERIVED_ROOT/$KEY"
+printf '%s\n' "$PROJECT_DIR" > "$PATINA_DERIVED_ROOT/$KEY/CHECKOUT"
 xcodebuild build -project Capture.xcodeproj -scheme Capture \
   -configuration Debug -sdk iphonesimulator \
   -destination "platform=iOS Simulator,id=$DEVICE_ID" \

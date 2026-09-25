@@ -36,6 +36,9 @@ trap 'rm -rf "$STUB_DIR"' EXIT
 LOG="$STUB_DIR/xcodebuild-argv.log"
 OUT="$STUB_DIR/gate-output.txt"
 export IOS_GATE_TEST_LOG="$LOG"
+# The gate writes a CHECKOUT marker under its DerivedData root before every
+# xcodebuild; keep that inside this temp dir, not the real cache.
+export PATINA_DERIVED_ROOT="$STUB_DIR/derived"
 
 # ---- stubs ---------------------------------------------------------------------
 # One tab-separated line per invocation. An EMPTY argument shows up as two adjacent

@@ -9,15 +9,20 @@ cd "$(dirname "$0")/.."
 
 CMD="${1:-all}"
 
-# --- per-worktree DerivedData: two concurrent Field lanes ---------------------
+# --- per-checkout DerivedData: two concurrent Field lanes ---------------------
 # Sharing the default DerivedData means sharing its module cache and its lock.
 # `error: unable to attach DB … database is locked` is the documented symptom
 # (docs/design/ios-ux-review-2026-07/integration-log.md:22) and it fails the
 # lane that did nothing wrong. Same treatment as
-# apps/mobile/Patina/scripts/ios-gate.sh:44. `.build/` is gitignored, so this
-# never reaches the pbxproj commit generate() produces.
+# apps/mobile/Patina/scripts/ios-gate.sh. The dir lives under
+# PATINA_DERIVED_ROOT, outside the worktree (an in-tree .build/ per worktree
+# filled the disk); the key hashes this checkout's absolute path, so two
+# worktrees never share one. capture-run.sh, capture-shots.sh and
+# archive-testflight.sh derive the same dir.
 PROJECT_DIR="$PWD"                                   # apps/mobile/Capture
-DERIVED="$PROJECT_DIR/.build/DerivedData"
+PATINA_DERIVED_ROOT="${PATINA_DERIVED_ROOT:-$HOME/Library/Caches/patina-derived}"
+KEY="capture-$(printf %s "$PROJECT_DIR" | shasum -a 256 | cut -c1-12)"
+DERIVED="$PATINA_DERIVED_ROOT/$KEY/DerivedData"
 
 # --- the destination is explicit, or the gate refuses to guess ----------------
 # This was `platform=iOS Simulator,name=${CAPTURE_SIM:-iPhone 17}`. A name
@@ -71,6 +76,11 @@ sim_destination() {
 generate() {
   scripts/bootstrap-worktree.sh
   ruby scripts/generate_project.rb >/dev/null
+  # Every xcodebuild tier runs this first. CHECKOUT maps the hashed dir back to
+  # its checkout, so scripts/repo-gc.sh can sweep the dirs of worktrees that no
+  # longer exist.
+  mkdir -p "$PATINA_DERIVED_ROOT/$KEY"
+  printf '%s\n' "$PROJECT_DIR" > "$PATINA_DERIVED_ROOT/$KEY/CHECKOUT"
 }
 
 build() {
