@@ -86,15 +86,6 @@ enum PurchaseComposition {
             )
         }
 
-        private actor PollCount {
-            private var calls = 0
-
-            func next() -> Int {
-                calls += 1
-                return calls
-            }
-        }
-
         static let piece = Product(
             id: "a0000000-0000-0000-0000-0000000000e1",
             name: "Heirloom Oak Dining Table",
@@ -136,5 +127,15 @@ enum PurchaseComposition {
                 )
             }
         }
+    }
+}
+
+/// How many times the scripted order poll has been asked.
+private actor PollCount {
+    private var calls = 0
+
+    func next() -> Int {
+        calls += 1
+        return calls
     }
 }
