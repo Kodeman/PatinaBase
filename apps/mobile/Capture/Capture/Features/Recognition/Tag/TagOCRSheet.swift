@@ -98,7 +98,7 @@ struct TagOCRSheet: View {
             }
             RecognitionActionBar(
                 secondaryTitle: isEditing ? "Done editing" : "Edit",
-                primaryTitle: "Add to piece",
+                primaryTitle: "Add to this piece",
                 onSecondary: { isEditing.toggle() },
                 onPrimary: { merge(defaultSource: .ocr) }
             )
@@ -151,7 +151,7 @@ struct TagOCRSheet: View {
             }
             RecognitionActionBar(
                 secondaryTitle: "Cancel",
-                primaryTitle: "Add to piece",
+                primaryTitle: "Add to this piece",
                 onSecondary: { coordinator?.dismissSheet() },
                 onPrimary: { merge(defaultSource: .manual) }
             )

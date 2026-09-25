@@ -28,8 +28,8 @@ enum LocalSyncError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .pieceNotFound(let id):
-            return "Piece \(id) not found in the local store."
+        case .pieceNotFound:
+            return "This piece could not be found on this iPhone."
         case .notAuthenticated:
             return "Not signed in — captures stay queued until you connect."
         case .remoteUnavailable:
