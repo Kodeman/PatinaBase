@@ -3,9 +3,10 @@
 //
 //  Team D — Flow 4 (resilience & edges). The R3 `.photoImport` degraded-mode
 //  sheet ("Camera is off for Patina Field") + the ResilienceScreens registrar. This
-//  sheet doubles as the E3 share-import finisher: same surface, reflected id.
+//  sheet doubles as the E3 share-import finisher and the E4 import the viewfinder
+//  opens by choice: same surface, reflected id.
 //
-//  Registers ONLY `.photoImport`. OfflineQueueBanner is a composable overlay the
+//  Registers ONLY `.photoImport` and `.photoLibrary`. OfflineQueueBanner is a composable overlay the
 //  C1 viewfinder renders, not a registered screen; `.ocr` (R2) and `.syncStatus`
 //  (U1) belong to Teams C/F.
 
@@ -18,19 +19,53 @@ import CaptureKit
 import CaptureKitMocks
 #endif
 
-/// Why the degraded-mode sheet is up: a denied camera permission (R3) or a
-/// share-sheet hand-off that needs finishing (E3). Drives copy + the reflected
-/// accessibility id so XCUITest/MobAI can tell the two entries apart.
+/// Why the import sheet is up: a denied camera permission (R3), a share-sheet
+/// hand-off that needs finishing (E3), or a choice made from the viewfinder
+/// (E4). Drives copy + the reflected accessibility id so XCUITest/MobAI can
+/// tell the entries apart.
 enum PhotoImportContext {
     case denied        // R3 — camera off for Patina Field
     case shareImport   // E3 — "Save to Patina Field" share extension hand-off
+    case library       // E4 — opened by choice; the camera may be working fine
 
-    var screenID: CaptureScreenID { self == .shareImport ? .e3ShareSheet : .r3Denied }
-    var title: String { self == .shareImport ? "Saved to Patina Field" : "Camera is off for Patina Field" }
+    var screenID: CaptureScreenID {
+        switch self {
+        case .denied: .r3Denied
+        case .shareImport: .e3ShareSheet
+        case .library: .e4PhotoLibrary
+        }
+    }
+    var title: String {
+        switch self {
+        case .denied: "Camera is off for Patina Field"
+        case .shareImport: "Saved to Patina Field"
+        case .library: "Add from Photos"
+        }
+    }
     var blurb: String {
-        self == .shareImport
-            ? "These shots are in. Finish the record now, or pick more from Photos and add them by hand."
-            : "You can still import from Photos and finish records by hand — or turn the camera on to capture live."
+        switch self {
+        case .denied:
+            "You can still import from Photos and finish records by hand — or turn the camera on to capture live."
+        case .shareImport:
+            "These shots are in. Finish the record now, or pick more from Photos and add them by hand."
+        case .library:
+            "Bring in shots you already have, or start a record by hand."
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .denied: "camera.fill"
+        case .shareImport: "square.and.arrow.down.fill"
+        case .library: "photo.on.rectangle.angled"
+        }
+    }
+    /// The `from` value on `capture.manual_entry`.
+    var source: String {
+        switch self {
+        case .denied: "denied"
+        case .shareImport: "share"
+        case .library: "library"
+        }
     }
 }
 
@@ -60,9 +95,9 @@ struct PhotoImportSheet: View {
                     Circle()
                         .fill(CaptureColor.paper2)
                         .frame(width: 72, height: 72)
-                    Image(systemName: context == .shareImport ? "square.and.arrow.down.fill" : "camera.fill")
+                    Image(systemName: context.symbol)
                         .font(CaptureType.title)
-                        .foregroundStyle(context == .shareImport ? CaptureColor.verdigris : CaptureColor.error)
+                        .foregroundStyle(context == .denied ? CaptureColor.error : CaptureColor.verdigris)
                 }
                 .accessibilityHidden(true)
                 Text(context.title)
@@ -122,7 +157,7 @@ struct PhotoImportSheet: View {
                     .accessibilityIdentifier("photoImport.openSettings")
                 }
                 Button { coordinator.dismissSheet() } label: {
-                    Text(context == .shareImport ? "Not now" : "Keep using import")
+                    Text(context == .denied ? "Keep using import" : "Not now")
                         .font(CaptureType.callout)
                         .foregroundStyle(CaptureColor.inkSoft)
                         .frame(maxWidth: .infinity, minHeight: 40)
@@ -241,9 +276,7 @@ struct PhotoImportSheet: View {
               isCurrent(creationScope) else { return }
         try? store.save()
         guard isCurrent(creationScope) else { return }
-        analytics?.event(
-            "capture.manual_entry",
-            ["from": context == .shareImport ? "share" : "denied"])
+        analytics?.event("capture.manual_entry", ["from": context.source])
         openPiece(draft.id, scope: creationScope)
     }
 
@@ -290,19 +323,22 @@ struct PhotoImportSheet: View {
     }
 }
 
-/// Team D registrar — registers ONLY the R3/E3 `.photoImport` sheet.
+/// Team D registrar — registers the R3/E3 `.photoImport` sheet and its E4
+/// `.photoLibrary` face (the viewfinder's own way in).
 enum ResilienceScreens {
     @MainActor
     static func register(into r: RouteRegistry, container: AppContainer, coordinator: CaptureCoordinator) {
-        r.registerSheet(CaptureSheet.photoImport.registryKey) { _ in
+        func sheet(_ context: PhotoImportContext) -> AnyView {
             AnyView(
                 PhotoImportSheet(store: container.store,
                                  session: container.session,
                                  coordinator: coordinator,
                                  analytics: container.analytics,
-                                 context: .denied)
+                                 context: context)
             )
         }
+        r.registerSheet(CaptureSheet.photoImport.registryKey) { _ in sheet(.denied) }
+        r.registerSheet(CaptureSheet.photoLibrary.registryKey) { _ in sheet(.library) }
     }
 }
 
@@ -313,6 +349,10 @@ enum ResilienceScreens {
 
 #Preview("E3 · share import") {
     photoImportPreview(.shareImport)
+}
+
+#Preview("E4 · photo library") {
+    photoImportPreview(.library)
 }
 
 @MainActor

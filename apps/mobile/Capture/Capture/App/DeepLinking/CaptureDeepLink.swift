@@ -76,8 +76,7 @@ enum CaptureDeepLink {
         coordinator.switchRealm(realm(for: id), reset: true)
 
         func withSample(_ action: (UUID) -> Void) {
-            guard let sampleID = samplePieceID(store: store, session: session) else { return }
-            action(sampleID)
+            if let sampleID = samplePieceID(store: store, session: session) { action(sampleID) }
         }
 
         switch id {
@@ -105,6 +104,7 @@ enum CaptureDeepLink {
         case .n5SmartGuess:     withSample { coordinator.present(.smartGuessCard($0)) }
         case .r2OCRFallback:    withSample { coordinator.present(.ocr($0)) }
         case .r3Denied, .e3ShareSheet: coordinator.present(.photoImport)
+        case .e4PhotoLibrary:   coordinator.present(.photoLibrary)
         case .r4Offline:        coordinator.navigate(to: .syncStatus)
         case .s1Assign:         withSample { coordinator.present(.assignVenue($0)) }
         case .s2CreateProject:  coordinator.present(.createProject)

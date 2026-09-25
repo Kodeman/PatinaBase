@@ -31,7 +31,7 @@ struct AccountScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 identityCard
-                workRow
+                linkRows
                 workspaceSection
                 deviceSection
                 actions
@@ -105,27 +105,55 @@ struct AccountScreen: View {
         return email
     }
 
-    // MARK: work (W1 — designer/pro dashboard)
+    // MARK: work (W1 — designer/pro dashboard), settings, Q1
 
-    private var workRow: some View {
-        Button {
-            analytics.event("work.open", ["from": "account"])
-            coordinator.navigate(to: .work)
-        } label: {
+    private var linkRows: some View {
+        VStack(spacing: 12) {
+            // Account is pushed on Work's stack now (RootView's Today bar), so
+            // `navigate(to: .work)` — a realm switch — would land nowhere. The
+            // reset takes her back to Today.
+            linkRow(symbol: "briefcase.fill",
+                    title: "Work",
+                    subtitle: "Projects, leads, decisions, messages",
+                    identifier: "account.work") {
+                analytics.event("work.open", ["from": "account"])
+                coordinator.switchRealm(.work, reset: true)
+            }
+            linkRow(symbol: "gearshape.fill",
+                    title: "Settings",
+                    subtitle: "Capture defaults, feel and sync",
+                    identifier: "account.settings") {
+                coordinator.navigate(to: .settings)
+            }
+            linkRow(symbol: "qrcode.viewfinder",
+                    title: "Scan to sign in",
+                    subtitle: "Sign in to the web app with this phone",
+                    identifier: "account.qrScan") {
+                coordinator.navigate(to: .qrScan)
+            }
+        }
+    }
+
+    private func linkRow(symbol: String,
+                         title: String,
+                         subtitle: String,
+                         identifier: String,
+                         action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(CaptureColor.verdigrisInk.opacity(0.12))
                         .frame(width: 44, height: 44)
-                    Image(systemName: "briefcase.fill")
+                    Image(systemName: symbol)
                         .font(CaptureType.title2)
                         .foregroundStyle(CaptureColor.verdigrisInk)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Work")
+                    Text(title)
                         .font(CaptureType.bodyEmph)
                         .foregroundStyle(CaptureColor.ink)
-                    Text("Projects, leads, decisions, messages")
+                    Text(subtitle)
                         .font(CaptureType.footnote)
                         .foregroundStyle(CaptureColor.inkSoft)
                 }
@@ -139,7 +167,7 @@ struct AccountScreen: View {
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(CaptureColor.line, lineWidth: 1))
             .contentShape(Rectangle())
         }
-        .accessibilityIdentifier("account.work")
+        .accessibilityIdentifier(identifier)
     }
 
     // MARK: workspace + plan
