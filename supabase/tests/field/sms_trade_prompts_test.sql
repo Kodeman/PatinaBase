@@ -83,6 +83,7 @@ CREATE FUNCTION pg_temp.claim(day date, class text DEFAULT 'event',
 LANGUAGE sql AS $$
   SELECT public.sms_claim_party_budget(conv,'64500000-0000-4000-8000-000000000020',party,day,class);
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.claim(date, text, uuid, uuid) TO PUBLIC;
 
 DO $a2$
 DECLARE r jsonb; d date := '2026-11-01';
@@ -159,6 +160,7 @@ BEGIN
   SELECT * INTO p FROM public.sms_prompts WHERE id=i;
   RETURN p;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.prompt(text, integer, uuid, timestamptz) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.message(body text) RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE i uuid:=gen_random_uuid(); BEGIN
@@ -166,12 +168,14 @@ DECLARE i uuid:=gen_random_uuid(); BEGIN
   VALUES(i,'64500000-0000-4000-8000-000000000050','inbound',body,'SM'||replace(i::text,'-',''));
   RETURN i;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.message(text) TO PUBLIC;
 
 /** Close every open prompt on the pair: the codeless door needs one question. */
 CREATE FUNCTION pg_temp.close_open() RETURNS void LANGUAGE sql AS $$
   UPDATE public.sms_prompts SET answered_at=clock_timestamp()
   WHERE recipient_phone='+15555120000' AND answered_at IS NULL;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.close_open() TO PUBLIC;
 
 DO $a4$
 DECLARE p public.sms_prompts; again public.sms_prompts; k text;
@@ -194,12 +198,14 @@ CREATE FUNCTION pg_temp.apply(p public.sms_prompts,m uuid,e jsonb) RETURNS jsonb
 LANGUAGE sql AS $$
   SELECT public.sms_apply_prompt(p.id,'+15555129999','+15555120000',m,e);
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.apply(public.sms_prompts, uuid, jsonb) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.effect(kind text, extra jsonb DEFAULT '{}'::jsonb) RETURNS jsonb
 LANGUAGE sql AS $$
   SELECT jsonb_build_object('type',kind,'note','from the fixture',
     'target',jsonb_build_object('kind','task','id','64500000-0000-4000-8000-000000000040')) || extra;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.effect(text, jsonb) TO PUBLIC;
 
 DO $a5_reading$
 DECLARE trade public.sms_prompts; daily public.sms_prompts; wrong text;
@@ -329,15 +335,18 @@ RETURNS public.sms_prompts LANGUAGE sql AS $$
     code,clock_timestamp()+interval '1 day',clock_timestamp()-age)
   RETURNING *;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.ask(text, text, integer, interval) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.gate() RETURNS jsonb LANGUAGE sql AS $$
   SELECT public.sms_party_prompt_gate('64500000-0000-4000-8000-000000000051','64500000-0000-4000-8000-000000000020','64500000-0000-4000-8000-000000000031');
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.gate() TO PUBLIC;
 
 CREATE FUNCTION pg_temp.unpause() RETURNS void LANGUAGE sql AS $$
   UPDATE public.sms_conversation_context SET paused_until=NULL
    WHERE conversation_id='64500000-0000-4000-8000-000000000051' AND project_id='64500000-0000-4000-8000-000000000020';
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.unpause() TO PUBLIC;
 
 DO $a6$
 DECLARE r jsonb; first_ask public.sms_prompts; second_ask public.sms_prompts;

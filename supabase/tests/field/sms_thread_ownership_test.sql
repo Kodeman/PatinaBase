@@ -1,6 +1,7 @@
 -- Synthetic SQL regression; the caller owns the transaction and rolls it back.
 -- Two studio-A members plus studio B's designer exercise takeover without
 -- accidentally granting either studio-A member access to studio B.
+BEGIN;
 SET LOCAL statement_timeout = '30s';
 SET LOCAL plpgsql.check_asserts = on;
 
@@ -174,3 +175,4 @@ BEGIN
   RAISE NOTICE 'PASS sms_thread_ownership: ownership, additive pause, tenant isolation, input validation and ACL assertions';
 END;
 $$;
+ROLLBACK;

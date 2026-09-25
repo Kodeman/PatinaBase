@@ -92,6 +92,7 @@ BEGIN
     json_build_object('sub',p_user_id::text,'role','authenticated')::text,true);
   EXECUTE 'SET LOCAL ROLE authenticated';
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user_role(UUID) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.reset_role() RETURNS VOID
 LANGUAGE plpgsql AS $$
@@ -99,6 +100,7 @@ BEGIN
   EXECUTE 'RESET ROLE';
   PERFORM set_config('request.jwt.claims',NULL,true);
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 -- A challenge is an sms_prompts row kind='optin' (00639). Inserted directly so
 -- its created_at can be BACKDATED — the 24h floor's clock is that column, and
@@ -130,12 +132,14 @@ BEGIN
     CASE WHEN p_resent IS NOT NULL THEN v_evidence END);
   RETURN v_id;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.challenge(uuid, text, interval, text, boolean, interval) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.evidence(p_source text DEFAULT 'verbal') RETURNS jsonb
 LANGUAGE sql AS $$
   SELECT jsonb_build_object('source',p_source,'disclosure_version','field-sms-v1',
                             'note','They said yes on the phone');
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.evidence(text) TO PUBLIC;
 
 -- Every refusal is asserted the same way: the named token, AND that the rail
 -- is exactly as it was — no resend stamp, no consent stamp moved, no seat row
@@ -166,6 +170,7 @@ BEGIN
   ASSERT (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY t.id),'[]')=v_parties FROM public.project_parties t),
     p_token||': no seat row touched';
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.refuses(uuid, uuid, jsonb, text) TO PUBLIC;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- A · Double call → ONE resend. The claim is the challenge row.

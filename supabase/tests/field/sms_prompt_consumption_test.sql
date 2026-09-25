@@ -37,6 +37,7 @@ BEGIN
  CASE WHEN kind='optin' THEN NULL ELSE target END, (SELECT COALESCE(max(version),0)+1 FROM sms_prompts),expiry,'+15555109999','+15555100000',CASE WHEN stored AND kind<>'optin' THEN e ELSE NULL END);
  SELECT * INTO p FROM public.sms_prompts WHERE id=i; RETURN p;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.proposal(text, uuid, timestamptz, boolean) TO PUBLIC;
 CREATE FUNCTION pg_temp.message(p public.sms_prompts,verb text DEFAULT 'YES') RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE i uuid:=gen_random_uuid();
 BEGIN
@@ -44,12 +45,15 @@ BEGIN
  VALUES(i,'51000000-0000-4000-8000-000000000050','inbound',verb||' '||p.short_code,'SM'||replace(i::text,'-',''));
  RETURN i;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.message(public.sms_prompts, text) TO PUBLIC;
 CREATE FUNCTION pg_temp.apply(p public.sms_prompts,m uuid,e jsonb DEFAULT NULL) RETURNS jsonb LANGUAGE sql AS $$
  SELECT public.sms_apply_prompt(p.id,'+15555109999','+15555100000',m,e);
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.apply(public.sms_prompts, uuid, jsonb) TO PUBLIC;
 CREATE FUNCTION pg_temp.grant_optin(p public.sms_prompts,m uuid) RETURNS jsonb LANGUAGE sql AS $$
  SELECT public.sms_grant_optin_prompt(p.id,'+15555109999','+15555100000',m);
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.grant_optin(public.sms_prompts, uuid) TO PUBLIC;
 CREATE FUNCTION pg_temp.must_fail(q text, label text, expected text DEFAULT '23514') RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  BEGIN EXECUTE q; EXCEPTION WHEN OTHERS THEN
@@ -57,6 +61,7 @@ BEGIN
  END;
  RAISE EXCEPTION 'ASSERT expected refusal: %',label;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.must_fail(text, text, text) TO PUBLIC;
 
 -- SQ-66: service-parsed command availability, not proposal affirmation.
 SAVEPOINT availability_compatibility;
@@ -67,6 +72,7 @@ INSERT INTO project_party_authority(engagement_id,scope,effective_from)
 CREATE FUNCTION pg_temp.availability_payload() RETURNS jsonb LANGUAGE sql AS $$
  SELECT '{"type":"confirm_availability","target":{"kind":"task","id":"51000000-0000-4000-8000-000000000040"},"note":"available","availability":{"date":"2026-11-03","window":"09:00-11:00"}}'::jsonb;
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.availability_payload() TO PUBLIC;
 CREATE FUNCTION pg_temp.raw_message(body text) RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE i uuid:=gen_random_uuid();
 BEGIN
@@ -74,6 +80,7 @@ BEGIN
  VALUES(i,'51000000-0000-4000-8000-000000000050','inbound',body,'SM'||replace(i::text,'-',''));
  RETURN i;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.raw_message(text) TO PUBLIC;
 CREATE FUNCTION pg_temp.availability_state() RETURNS jsonb LANGUAGE sql AS $$
  SELECT jsonb_build_array(
   (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM project_tasks t),
@@ -83,6 +90,7 @@ CREATE FUNCTION pg_temp.availability_state() RETURNS jsonb LANGUAGE sql AS $$
   (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM sms_prompts t),
   (SELECT jsonb_agg(to_jsonb(t) ORDER BY organization_id,channel_value) FROM studio_channel_consent t));
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.availability_state() TO PUBLIC;
 CREATE FUNCTION pg_temp.availability_refuses(p public.sms_prompts,m uuid,e jsonb,label text,expected text DEFAULT '23514')
 RETURNS void LANGUAGE plpgsql AS $$
 DECLARE before_state jsonb:=pg_temp.availability_state();
@@ -94,6 +102,7 @@ BEGIN
  END IF;
  ASSERT pg_temp.availability_state()=before_state,label||' zero business/message/prompt/consent mutation';
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.availability_refuses(public.sms_prompts, uuid, jsonb, text, text) TO PUBLIC;
 DO $$ DECLARE p public.sms_prompts; other public.sms_prompts; m uuid; r jsonb; again jsonb; reply_body text; failure text;
  e jsonb:=pg_temp.availability_payload(); before_tasks jsonb; before_report jsonb;
 BEGIN
@@ -201,6 +210,7 @@ END $$;
 CREATE FUNCTION pg_temp.sq66_fail_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
  RAISE EXCEPTION 'synthetic availability write failure' USING ERRCODE='P0001';
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.sq66_fail_write() TO PUBLIC;
 CREATE TRIGGER sq66_fail_receipt BEFORE UPDATE ON sms_prompts FOR EACH ROW
  WHEN (NEW.consumed_sid IS NOT NULL) EXECUTE FUNCTION pg_temp.sq66_fail_write();
 DO $$ DECLARE p public.sms_prompts; m uuid;
@@ -315,6 +325,7 @@ CREATE FUNCTION pg_temp.legacy_payload(kind text, target_kind text DEFAULT 'task
    CASE WHEN target_kind='task' THEN '51000000-0000-4000-8000-000000000040' ELSE '51000000-0000-4000-8000-000000000061' END),
    'note','original proposal','media','["synthetic/photo.jpg"]'::jsonb);
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.legacy_payload(text, text) TO PUBLIC;
 CREATE FUNCTION pg_temp.legacy_prompt(e jsonb, stored boolean DEFAULT true) RETURNS public.sms_prompts LANGUAGE plpgsql AS $$
 DECLARE i uuid; p public.sms_prompts; failure text;
 BEGIN
@@ -331,6 +342,7 @@ BEGIN
  ASSERT failure IS NULL, 'legacy '||(e->>'type')||' proposal creation supported: '||COALESCE(failure,'');
  SELECT * INTO STRICT p FROM sms_prompts WHERE id=i; RETURN p;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.legacy_prompt(jsonb, boolean) TO PUBLIC;
 
 DO $$ DECLARE k text; target_kind text; stored boolean; e jsonb; p public.sms_prompts; m uuid; r jsonb; again jsonb; n integer; failure text;
 BEGIN
@@ -386,6 +398,7 @@ CREATE FUNCTION pg_temp.fail_legacy_stamp() RETURNS trigger LANGUAGE plpgsql AS 
  END IF;
  RETURN NEW;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.fail_legacy_stamp() TO PUBLIC;
 CREATE TRIGGER sq57_fail_stamp BEFORE UPDATE ON sms_messages FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_legacy_stamp();
 DO $$ DECLARE k text; p public.sms_prompts; m uuid; n integer;
 BEGIN
@@ -406,6 +419,7 @@ CREATE FUNCTION pg_temp.fail_receipt() RETURNS trigger LANGUAGE plpgsql AS $$ BE
  IF NEW.consumed_sid IS NOT NULL THEN RAISE EXCEPTION 'injected receipt failure' USING ERRCODE='P0001'; END IF;
  RETURN NEW;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.fail_receipt() TO PUBLIC;
 CREATE TRIGGER sq51_fail_receipt BEFORE UPDATE ON sms_prompts FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_receipt();
 DO $$ DECLARE k text; target_kind text; stored boolean; e jsonb; p public.sms_prompts; m uuid; n integer; before_message jsonb;
 BEGIN

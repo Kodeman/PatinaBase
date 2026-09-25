@@ -206,7 +206,7 @@ BEGIN
 
   SELECT pg_get_functiondef('public.fc_dispatch_task_assignment()'::regprocedure)
     INTO v_fn_src;
-  ASSERT v_fn_src LIKE '%sms_consent_status%' AND v_fn_src LIKE '%granted%',
+  ASSERT v_fn_src LIKE '%channel_consent_status%' AND v_fn_src LIKE '%granted%',
     'FAIL 4b: the dispatch trigger lost its consent gate — the device would be causing an unconsented send';
   ASSERT v_fn_src LIKE '%sms_court_assignment%',
     'FAIL 4c: the dispatch trigger no longer sends sms_court_assignment';

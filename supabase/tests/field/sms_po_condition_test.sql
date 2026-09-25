@@ -39,20 +39,24 @@ CREATE FUNCTION pg_temp.po_effect(kind text, target uuid DEFAULT '77000000-0000-
  SELECT jsonb_build_object('type',kind,'target',jsonb_build_object('kind','purchase_order','id',target),
  'condition',jsonb_build_object('ok',false,'note','dented corner'),'note','dented corner');
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.po_effect(text, uuid) TO PUBLIC;
 CREATE FUNCTION pg_temp.po_prompt(kind text DEFAULT 'confirm_delivery',subject uuid DEFAULT '77000000-0000-4000-8000-000000000002', stored jsonb DEFAULT NULL) RETURNS sms_prompts LANGUAGE plpgsql AS $$
 DECLARE i uuid;p sms_prompts;
 BEGIN
  SELECT id INTO i FROM sms_create_prompt('51000000-0000-4000-8000-000000000030','51000000-0000-4000-8000-000000000020',kind,subject,1,clock_timestamp()+interval '1 day','+15555109999','+15555100000',stored);
  SELECT * INTO p FROM sms_prompts WHERE id=i; RETURN p;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.po_prompt(text, uuid, jsonb) TO PUBLIC;
 CREATE FUNCTION pg_temp.po_message(body text) RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE i uuid:=gen_random_uuid(); BEGIN
  INSERT INTO sms_messages(id,conversation_id,direction,body,twilio_sid) VALUES(i,'51000000-0000-4000-8000-000000000050','inbound',body,'SM'||replace(i::text,'-',''));
  RETURN i;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.po_message(text) TO PUBLIC;
 CREATE FUNCTION pg_temp.po_apply(p sms_prompts,m uuid,e jsonb) RETURNS jsonb LANGUAGE sql AS $$
  SELECT sms_apply_prompt(p.id,'+15555109999','+15555100000',m,e);
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.po_apply(sms_prompts, uuid, jsonb) TO PUBLIC;
 CREATE FUNCTION pg_temp.po_refuses(p sms_prompts,m uuid,e jsonb,label text,expected text DEFAULT '23514') RETURNS void LANGUAGE plpgsql AS $$
 DECLARE before_p jsonb;before_m jsonb;before_r jsonb;failed boolean:=false;
 BEGIN
@@ -67,6 +71,7 @@ BEGIN
  ASSERT (SELECT to_jsonb(t)=before_m FROM sms_messages t WHERE id=m),label||' inbound unchanged';
  ASSERT (SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]')=before_r FROM field_delivery_reports t),label||' reports unchanged';
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.po_refuses(sms_prompts, uuid, jsonb, text, text) TO PUBLIC;
 DO $$ DECLARE p sms_prompts;m uuid;r jsonb;receipt jsonb;body text;kind text;before_po jsonb;before_receiving jsonb;
 BEGIN
  SELECT jsonb_agg(to_jsonb(t) ORDER BY id) INTO before_po FROM purchase_orders t;

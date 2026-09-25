@@ -148,6 +148,7 @@ BEGIN
     json_build_object('sub',p_user_id::text,'role','authenticated')::text,true);
   EXECUTE 'SET LOCAL ROLE authenticated';
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume_user_role(UUID) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.reset_role() RETURNS VOID
 LANGUAGE plpgsql AS $$
@@ -155,6 +156,7 @@ BEGIN
   EXECUTE 'RESET ROLE';
   PERFORM set_config('request.jwt.claims',NULL,true);
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.reset_role() TO PUBLIC;
 
 -- THE ONE SHAPE OF A REFUSAL. Not an error with a readable DETAIL, not a row
 -- of NULLs that confirms a seat exists — nothing at all, identically, for every

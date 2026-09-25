@@ -61,12 +61,14 @@ BEGIN
     json_build_object('sub',p_user_id::text,'role','authenticated')::text,true);
   EXECUTE 'SET LOCAL ROLE authenticated';
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.assume(uuid) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.unassume() RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   EXECUTE 'RESET ROLE';
   PERFORM set_config('request.jwt.claims',NULL,true);
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.unassume() TO PUBLIC;
 
 -- One visit task per ask, so every prompt has its own immutable subject and the
 -- one-open-prompt rules are never accidentally ambiguous.
@@ -78,6 +80,7 @@ BEGIN
          '20000000-0000-4000-8000-000000000030','todo',CURRENT_DATE);
   RETURN i;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.visit(text) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.ask(p_task uuid, p_version integer DEFAULT 1,
   p_party uuid DEFAULT '20000000-0000-4000-8000-000000000030') RETURNS sms_prompts
@@ -89,6 +92,7 @@ BEGIN
     '+15555209999','+15555200000',NULL);
   SELECT * INTO p FROM sms_prompts WHERE id=i; RETURN p;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.ask(uuid, integer, uuid) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.msg(p_body text) RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE i uuid := gen_random_uuid();
@@ -97,6 +101,7 @@ BEGIN
   VALUES(i,'20000000-0000-4000-8000-000000000050','inbound',p_body,'SM'||replace(i::text,'-',''));
   RETURN i;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.msg(text) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.effect(p_task uuid, p_hours text, p_note text DEFAULT NULL,
   p_kind text DEFAULT 'task') RETURNS jsonb LANGUAGE sql AS $$
@@ -106,6 +111,7 @@ CREATE FUNCTION pg_temp.effect(p_task uuid, p_hours text, p_note text DEFAULT NU
     'hours',p_hours::numeric,
     'note',p_note));
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.effect(uuid, text, text, text) TO PUBLIC;
 
 -- The service path, with the prompt named the way sms_apply_prompt names it.
 CREATE FUNCTION pg_temp.propose(p_prompt sms_prompts, p_task uuid, p_hours text,
@@ -121,6 +127,7 @@ BEGIN
   END IF;
   RETURN (r->>'report_id')::uuid;
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.propose(sms_prompts, uuid, text, text, boolean) TO PUBLIC;
 
 -- Refusal harness: the statement must raise, with this SQLSTATE, this stable
 -- DETAIL token when one is expected, and this message when one is named. The
@@ -149,12 +156,14 @@ BEGIN
   END;
   ASSERT v_failed, p_label||' must be refused';
 END $$;
+GRANT EXECUTE ON FUNCTION pg_temp.refuses(text, text, text, text, text) TO PUBLIC;
 
 CREATE FUNCTION pg_temp.decide_sql(p_report uuid, p_decision text, p_version integer,
   p_user uuid DEFAULT NULL) RETURNS text LANGUAGE sql AS $$
   SELECT format('SELECT public.field_time_report_decide(%L,%L,%s,%s)',
     p_report, p_decision, p_version, COALESCE(quote_literal(p_user)||'::uuid','NULL'));
 $$;
+GRANT EXECUTE ON FUNCTION pg_temp.decide_sql(uuid, text, integer, uuid) TO PUBLIC;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 1. S1 — the kind, its subject, and the issuance rule
