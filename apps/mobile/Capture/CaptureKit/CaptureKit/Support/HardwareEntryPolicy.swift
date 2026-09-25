@@ -32,7 +32,7 @@ public enum HardwareEntryPolicy {
         "iPhone16,1", "iPhone16,2",                                    // 15 Pro, 15 Pro Max
         "iPhone17,1", "iPhone17,2", "iPhone17,3", "iPhone17,4", "iPhone17,5",
         // 16 Pro, 16 Pro Max, 16, 16 Plus, 16e
-        "iPhone18,1", "iPhone18,2", "iPhone18,3", "iPhone18,4", "iPhone18,5",
+        "iPhone18,1", "iPhone18,2", "iPhone18,3", "iPhone18,4", "iPhone18,5"
         // 17 Pro, 17 Pro Max, 17, Air, 17e
     ]
 
