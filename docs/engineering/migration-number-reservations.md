@@ -413,5 +413,17 @@ kept outside `migrations/` because a reset or `db push` would apply it. Apply
 00668 before deploying the `apns-send` that selects `app`. It joins the
 ordered Strata push after 00667. Re-check the Strata head before pushing.
 
+00669 `field_capture_confirmations_proposals`, reserved 2026-09-25 by NI-02
+(SQ-217). It draws above the head per discipline rule 2. At reservation, no
+file at or above 00669 existed on `main` (tip 00668), in `git log --all`, or
+in any sibling Sidequest worktree, and the local applied head was 00668. It
+adds `field_captures.confirmations` and `field_captures.proposals` (both
+`jsonb NOT NULL DEFAULT '{}'`) and a `BEFORE INSERT OR UPDATE` trigger that
+projects them from `raw_payload`. Unlike 00532's visit trigger, a changed
+payload that carries a key as an object replaces the column, `{}` included.
+There is no backfill; existing rows project on their next re-commit. The
+revert is in the migration header. It joins the ordered Strata push after
+00668. Re-check the Strata head before pushing.
+
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.
