@@ -926,6 +926,15 @@ Q4 plus a working `asc` or the `destination: upload` fallback.
 
 ---
 
+### Rulings (Kody, 2026-09-24)
+
+- **Q1 → broader record.** The cached direction is the approval edition *plus* what attaches to it. W1A-09 now proposes the attachment set (which artifacts, their checksums, size bounds, how each is revoked) with a recommendation. Kody confirms the attachment list when the contract lands. W1A-10 and NI-05 start only after that confirmation, and NI-05 is sized M.
+- **Q2 → available to all.** W1A-05 deletes `field-companion-voice`. Voice is gated only by microphone/speech permission and the site affirmation.
+- **Q3 → Fable picks.** NI-04 is an XS ticket: the packet's recommendations apply. Kody reads the three meaning-bearing strings at review.
+- **Q4 → Kody checks ASC.** The true high-water mark is above 6, and Kody will supply the number. Encryption stays `false` (not ruled otherwise). W1A-12 waits on the number.
+- **Q5 → fallback at deploy** (the recommended default under "file + dispatch").
+- **Q6 → not yet.** Tickets are filed and dispatched. Every deploy still waits for Kody's separate go.
+
 ## 11. Record of what the cross-review changed
 
 **Spine.** Fable's draft: its five-lane shape, W1A ids and "contract before schema" ordering
