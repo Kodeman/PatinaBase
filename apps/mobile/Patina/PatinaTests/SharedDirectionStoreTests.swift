@@ -130,6 +130,152 @@ struct SharedDirectionStoreTests {
         }
     }
 
+    // MARK: - SQ-247 F5: each edition in a batch stands alone
+
+    /// An `ok` whose review does not decode as its edition.
+    private func undecodable(_ decisionId: String) -> [String: Any] {
+        var item = DirectionFixture.item(decisionId, FakeEdition())
+        item["review"] = ["decisionId": decisionId]
+        return item
+    }
+
+    @Test("one undecodable ok item beside a revoked one: the revoked edition purges, the other is kept")
+    func anUndecodableItemIsIndeterminateForItsEditionOnly() async throws {
+        let harness = try DirectionHarness()
+        defer { harness.cleanUp() }
+        let kept = DirectionFixture.decisionId(1)
+        let revoked = DirectionFixture.decisionId(2)
+        for id in [kept, revoked] { harness.client.editions[id] = FakeEdition(sheetSizes: [64]) }
+        await harness.refreshAndSettle([kept, revoked].compactMap(harness.discovered))
+        #expect(harness.store.rows().count == 2)
+
+        let reply = DirectionFixture.envelope(servedAt: DirectionFixture.noon, items: [
+            undecodable(kept), DirectionFixture.item(revoked, FakeEdition(status: "revoked"))
+        ])
+        harness.client.batchOverride = { reply }
+        await harness.refreshAndSettle()
+
+        #expect(harness.store.cachedEdition(decisionId: kept)?.availability == .complete)
+        #expect(harness.filesOnDisk(kept).count == 1)
+        #expect(harness.store.cachedEdition(decisionId: revoked) == nil)
+        #expect(harness.filesOnDisk(revoked).isEmpty)
+        #expect(harness.telemetry == ["shared_direction_revoked"])
+    }
+
+    @Test("the envelope stays strict; inside it an undecodable item drops only its own edition")
+    func theEnvelopeIsStrictAndItsItemsAreNot() throws {
+        let one = DirectionFixture.decisionId(1)
+        let two = DirectionFixture.decisionId(2)
+        let revokedTwo = DirectionFixture.item(two, FakeEdition(status: "revoked"))
+
+        let mixed = try #require(SharedDirectionWire.envelope(from: DirectionFixture.envelope(
+            servedAt: DirectionFixture.noon, items: [undecodable(one), revokedTwo]
+        )))
+        #expect(mixed.answers.map(\.decisionId) == [two])
+
+        // A decodable answer for an edition that also came back undecodable
+        // is not trusted either: the edition gets no answer at all.
+        let doubled = try #require(SharedDirectionWire.envelope(from: DirectionFixture.envelope(
+            servedAt: DirectionFixture.noon,
+            items: [DirectionFixture.item(one, FakeEdition(status: "revoked")), undecodable(one), revokedTwo]
+        )))
+        #expect(doubled.answers.map(\.decisionId) == [two])
+
+        for broken: [String: Any] in [
+            ["servedAt": DirectionFixture.noon, "editions": [revokedTwo]],
+            ["contract": "shared_direction_v1", "editions": [revokedTwo]],
+            ["contract": "shared_direction_v1", "servedAt": DirectionFixture.noon, "editions": revokedTwo],
+            ["contract": "shared_direction_v1", "servedAt": DirectionFixture.noon]
+        ] {
+            #expect(SharedDirectionWire.envelope(from: DirectionFixture.json(broken)) == nil)
+        }
+    }
+
+    // MARK: - SQ-247 F4: the record agrees with the files on disk
+
+    @Test("a complete edition whose directory was deleted is fetched again on the next refresh")
+    func deletedFilesAreFetchedAgain() async throws {
+        let harness = try await cachedWithFiles()
+        defer { harness.cleanUp() }
+        let fetches = harness.client.attachmentCalls.count
+        try FileManager.default.removeItem(at: harness.editionDirectory(edition))
+
+        await harness.refreshAndSettle()
+
+        #expect(harness.client.attachmentCalls.count == fetches + 1)
+        #expect(harness.store.cachedEdition(decisionId: edition)?.availability == .complete)
+        #expect(harness.filesOnDisk(edition).count == 1)
+    }
+
+    @Test("a truncated file reads as .none, and the next refresh fetches the set again")
+    func aTruncatedFileIsDemotedOnRead() async throws {
+        let harness = try await cachedWithFiles()
+        defer { harness.cleanUp() }
+        let fetches = harness.client.attachmentCalls.count
+        let file = try #require(harness.filesOnDisk(edition).first)
+        try Data(count: 10).write(to: harness.editionDirectory(edition).appendingPathComponent(file))
+
+        #expect(harness.store.cachedEdition(decisionId: edition)?.availability == SharedDirectionAvailability.none)
+        await harness.refreshAndSettle()
+
+        #expect(harness.client.attachmentCalls.count == fetches + 1)
+        #expect(harness.store.cachedEdition(decisionId: edition)?.availability == .complete)
+        let size = try FileManager.default.attributesOfItem(
+            atPath: harness.editionDirectory(edition).appendingPathComponent(file).path
+        )[.size] as? Int
+        #expect(size == 64)
+    }
+
+    // MARK: - SQ-247 F6: the launch sweep
+
+    @Test("at launch, edition directories no record names are removed; every account's held ones stay")
+    func theLaunchSweepRemovesOrphans() async throws {
+        let harness = try DirectionHarness(onDisk: true)
+        defer { harness.cleanUp() }
+        let other = DirectionFixture.decisionId(2)
+        harness.client.editions[edition] = FakeEdition(sheetSizes: [64])
+        harness.client.editions[other] = FakeEdition(sheetSizes: [64])
+        await harness.refreshAndSettle([try #require(harness.discovered(edition))])
+        harness.account = DirectionFixture.accountB
+        harness.store.resetForSessionChange()
+        await harness.refreshAndSettle([try #require(harness.discovered(other))])
+        harness.account = DirectionFixture.accountA
+        harness.store.resetForSessionChange()
+
+        // A purge that crashed between its record and its files, under each
+        // account, and a dead fetch's staging.
+        let orphans = [
+            harness.editionDirectory(DirectionFixture.decisionId(3)),
+            harness.editionDirectory(DirectionFixture.decisionId(4), account: DirectionFixture.accountB),
+            SharedDirectionFiles.stagingDirectory(root: harness.root, account: DirectionFixture.accountA, task: UUID())
+        ]
+        for orphan in orphans {
+            try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
+            try Data("left".utf8).write(to: orphan.appendingPathComponent("sheet"))
+        }
+
+        harness.relaunch()
+        await harness.refreshAndSettle()
+
+        for orphan in orphans { #expect(!FileManager.default.fileExists(atPath: orphan.path)) }
+        #expect(harness.filesOnDisk(edition).count == 1)
+        #expect(harness.filesOnDisk(other, account: DirectionFixture.accountB).count == 1)
+    }
+
+    @Test("a launch whose store runs in memory sweeps no edition directory")
+    func noSweepWithoutTheRecords() async throws {
+        let harness = try DirectionHarness()
+        defer { harness.cleanUp() }
+        let orphan = harness.editionDirectory(DirectionFixture.decisionId(3))
+        try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
+        try Data("held by a record on disk".utf8).write(to: orphan.appendingPathComponent("sheet"))
+
+        harness.client.editions[edition] = FakeEdition(sheetSizes: [64])
+        await harness.refreshAndSettle([try #require(harness.discovered(edition))])
+
+        #expect(FileManager.default.fileExists(atPath: orphan.appendingPathComponent("sheet").path))
+    }
+
     // MARK: - §C.5.1: chunked by project, no call for an empty cache
 
     @Test("201 cached editions across two projects: two calls, the revocation in the last one lands")

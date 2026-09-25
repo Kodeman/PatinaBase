@@ -26,6 +26,7 @@ extension SharedDirectionStore {
     /// the list discovered that is not cached yet. No time-to-live applies.
     func refresh(discovered: [RemoteProjectApprovalReview]) async {
         guard env.account() != nil else { return }
+        sweepAfterLaunch()
         var items: [String: RefreshItem] = [:]
         for record in rows() {
             items[record.decisionId] = RefreshItem(proof: Self.proof(record), projectId: record.projectId)
@@ -236,6 +237,8 @@ extension SharedDirectionStore {
             env.context().insert(record)
         }
         save()
+        // A set deleted from disk under a complete record is fetched again.
+        demoteIfFilesMissing(record)
         guard origin != .recheck, let manifest = answer.manifest, !manifest.isEmpty,
               record.filesManifestKey != key || record.availability != .complete else { return }
         startFileFetch(answer.decisionId, origin: origin)

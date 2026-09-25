@@ -29,7 +29,7 @@ import SwiftData
 struct GuestRoomListScopeTests {
 
     private func makeContext() throws -> ModelContext {
-        let schema = Schema(versionedSchema: PatinaSchemaV1.self)
+        let schema = PatinaSchemaCurrent.schema
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return ModelContext(try ModelContainer(for: schema, configurations: [config]))
     }

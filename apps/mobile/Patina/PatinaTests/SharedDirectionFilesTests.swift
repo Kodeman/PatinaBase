@@ -122,6 +122,33 @@ struct SharedDirectionFilesTests {
         #expect(availability(harness, 3) == .complete)
     }
 
+    /// SQ-247 F7. A record whose review no longer decodes cannot show it is
+    /// the responded one that may give way, so it is held as protected.
+    @Test("(e) a set whose review does not decode is protected: nothing is evicted, the incoming set is noSpace")
+    func anUndecodableReviewIsProtected() async throws {
+        let harness = try DirectionHarness(limits: Self.scaled)
+        defer { harness.cleanUp() }
+        var responded = FakeEdition.responded()
+        responded.sheetSizes = Self.twoHundred
+        harness.client.editions[id(1)] = responded
+        harness.client.editions[id(2)] = FakeEdition(sheetSizes: Self.twoHundred)
+        harness.client.editions[id(3)] = FakeEdition(sheetSizes: Self.twoHundred)
+        await discover(harness, [1, 2])
+        #expect(availability(harness, 1) == .complete)
+
+        let record = try #require(harness.store.cachedEdition(decisionId: id(1)))
+        record.reviewJSON = Data("{}".utf8)
+        try harness.context.save()
+        #expect(record.review == nil)
+
+        await harness.store.refresh(decisionIds: [id(3)])
+        await harness.settle()
+
+        #expect(availability(harness, 1) == .complete, "the undecodable set is kept")
+        #expect(harness.filesOnDisk(id(1)).count == 4)
+        #expect(availability(harness, 3) == .noSpace)
+    }
+
     // MARK: - §C.5.3 the continuation loop
 
     private static let materializing = (

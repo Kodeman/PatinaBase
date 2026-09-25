@@ -5,10 +5,13 @@
 //  W1A-10 · CONTRACT-C §C.5 and §C.3.2. What the typed edition RPCs (NI-05)
 //  and the attachment signer (NI-06) answer, read under one rule: only a
 //  DECODED `shared_direction_v1` envelope may drive a purge. A transport
-//  failure, a non-2xx, a null body, malformed JSON, an unknown contract tag, an
-//  unknown status or an item that does not decode all come out of here as
-//  `nil` — `indeterminate` — and an indeterminate answer never deletes
-//  anything.
+//  failure, a non-2xx, a null body, malformed JSON, an unknown contract tag or
+//  a missing `servedAt` or `editions` array all come out of here as `nil` —
+//  `indeterminate` — and an indeterminate answer never deletes anything.
+//  Inside a decoded envelope each edition stands alone: one with an unknown
+//  status or an item that does not decode is left out, so it is indeterminate
+//  for that edition only and never purges, while its neighbours' answers
+//  still land (SQ-247 F5).
 //
 //  Built against the contract's wire shapes; NI-05 and NI-06 ship with this
 //  build (00670 deploys only in the same distribution).
@@ -81,17 +84,28 @@ enum SharedDirectionWire {
 
     static let contract = "shared_direction_v1"
 
-    /// `get_project_decision_editions`' batch envelope, or nil.
+    /// `get_project_decision_editions`' batch envelope, or nil when the
+    /// envelope itself is not the contract's. An item that does not decode is
+    /// left out, and so is every other answer naming the same edition: the
+    /// edition gets no answer — indeterminate — and cannot be purged by it.
     static func envelope(from data: Data) -> SharedDirectionEnvelope? {
         guard let root = object(data), root["contract"] as? String == contract,
               let servedAt = date(root["servedAt"]),
-              let items = root["editions"] as? [[String: Any]] else { return nil }
+              let items = root["editions"] as? [Any] else { return nil }
         var answers: [SharedDirectionAnswer] = []
+        var undecodable: Set<String> = []
         for item in items {
-            guard let answer = answer(from: item) else { return nil }
-            answers.append(answer)
+            let object = item as? [String: Any]
+            if let object, let answer = answer(from: object) {
+                answers.append(answer)
+            } else if let decisionId = object?["decisionId"] as? String {
+                undecodable.insert(decisionId)
+            }
         }
-        return SharedDirectionEnvelope(servedAt: servedAt, answers: answers)
+        return SharedDirectionEnvelope(
+            servedAt: servedAt,
+            answers: answers.filter { !undecodable.contains($0.decisionId) }
+        )
     }
 
     /// `get_project_decision_edition`'s single envelope — one edition object
@@ -132,6 +146,13 @@ enum SharedDirectionWire {
         manifest.map { "\($0.attachmentId):\($0.sha256)" }.joined(separator: "|")
     }
 
+    /// The attachment ids a `manifestKey` names, in order.
+    static func attachmentIds(inManifestKey key: String) -> [String] {
+        key.split(separator: "|").compactMap { entry in
+            entry.split(separator: ":", maxSplits: 1).first.map(String.init)
+        }
+    }
+
     /// NI-06's answer (§C.3.2). Anything that is not an exact 200 or 202 shape
     /// is `unavailable`.
     static func attachmentAnswer(status: Int, body: Data) -> SharedDirectionAttachmentAnswer {
@@ -170,8 +191,9 @@ enum SharedDirectionWire {
         value.count == 64 && value.allSatisfy(\.isHexDigit)
     }
 
-    /// One edition object. An unknown `status`, or an `ok` whose review does
-    /// not decode as this edition, makes the whole envelope undecodable.
+    /// One edition object, or nil for an unknown `status` or an `ok` whose
+    /// review or manifest does not decode as this edition. The batch envelope
+    /// leaves a nil out; the single envelope is nil with it.
     private static func answer(from item: [String: Any]) -> SharedDirectionAnswer? {
         guard let decisionId = item["decisionId"] as? String, !decisionId.isEmpty,
               let raw = item["status"] as? String,

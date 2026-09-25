@@ -277,6 +277,8 @@ final class DirectionHarness {
     let clock = ManualClock()
     let context: ModelContext
     let root: URL
+    /// Where an `onDisk` harness keeps its records.
+    private let storeURL: URL
     var account: String? = DirectionFixture.accountA
     private(set) var telemetry: [String] = []
     private(set) var waits: [Duration] = []
@@ -288,15 +290,21 @@ final class DirectionHarness {
 
     var heldWaitCount: Int { heldWaits.count }
 
-    /// `limits` defaults to the contract's own.
-    init(limits: SharedDirectionLimits? = nil) throws {
-        let schema = Schema(versionedSchema: PatinaSchemaV2.self)
-        let container = try ModelContainer(
-            for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
-        )
+    /// `limits` defaults to the contract's own. `onDisk` puts the records in
+    /// a store file beside the root, as the app's are: the launch sweep does
+    /// nothing over a store that runs in memory.
+    init(limits: SharedDirectionLimits? = nil, onDisk: Bool = false) throws {
+        let name = "SharedDirectionTests-\(UUID().uuidString)"
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(name, isDirectory: true)
+        self.root = root
+        let storeURL = FileManager.default.temporaryDirectory.appendingPathComponent(name + ".store")
+        self.storeURL = storeURL
+        let schema = PatinaSchemaCurrent.schema
+        let configuration = onDisk
+            ? ModelConfiguration(schema: schema, url: storeURL)
+            : ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
         context = ModelContext(container)
-        root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SharedDirectionTests-\(UUID().uuidString)", isDirectory: true)
         // Weak throughout: a task the store started (a deadline, a follow-up)
         // can still run after the test that owned this harness has returned.
         let clock = self.clock
@@ -323,6 +331,15 @@ final class DirectionHarness {
 
     func cleanUp() {
         try? FileManager.default.removeItem(at: root)
+        for file in LocalStoreRecovery.storeFiles(for: storeURL) {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    /// A new process over the same records and files: every piece of
+    /// process-local state starts again.
+    func relaunch() {
+        store = SharedDirectionStore(environment: store.env)
     }
 
     func releaseWaits() {

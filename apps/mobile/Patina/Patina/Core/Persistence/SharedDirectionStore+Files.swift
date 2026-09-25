@@ -21,12 +21,7 @@ extension SharedDirectionStore {
             if origin == .screen { fileFetches[decisionId]?.screenBound = true }
             return
         }
-        if !stagingCleared {
-            // No fetch survives a process: whatever is in staging now is a
-            // dead task's (§C.3.3 step 5).
-            SharedDirectionFiles.clearStaging(root: env.root)
-            stagingCleared = true
-        }
+        sweepAfterLaunch()
         let token = UUID()
         let ticket = ticket(decisionId)
         fileFetches[decisionId] = FileFetch(token: token, screenBound: origin == .screen)
@@ -191,7 +186,9 @@ extension SharedDirectionStore {
             return SharedDirectionAdmission.Holding(
                 decisionId: record.decisionId,
                 bytes: record.committedBytes,
-                isProtected: review.map(SharedDirectionAdmission.isProtected) ?? false,
+                // A review that no longer decodes cannot show it was never
+                // responded to, so its files are held as if it were (SQ-247 F7).
+                isProtected: review.map(SharedDirectionAdmission.isProtected) ?? true,
                 respondedAt: review?.respondedAt.flatMap(ISO8601DateParsing.date(from:)),
                 servedAt: record.servedAt
             )
@@ -211,6 +208,55 @@ extension SharedDirectionStore {
         }
         reservations[decisionId] = (token, needed)
         return true
+    }
+
+    // MARK: - The files on disk agree with the record (SQ-247 F4, F6)
+
+    /// A record that says its set is on disk, whose files are not — deleted,
+    /// or not the size that verified — goes back to `.none`, so the next
+    /// refresh fetches the set again. Size only: re-hashing every file on
+    /// every read would cost more than a truncation it has not already caught.
+    func demoteIfFilesMissing(_ record: CachedDirectionEdition) {
+        guard let key = record.filesManifestKey else { return }
+        let edition = SharedDirectionFiles.editionDirectory(
+            root: env.root, account: record.accountId, decisionId: record.decisionId
+        )
+        var bytes = 0
+        for attachmentId in SharedDirectionWire.attachmentIds(inManifestKey: key) {
+            let path = edition.appendingPathComponent(attachmentId).path
+            guard let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int else {
+                evictFiles(record)
+                return
+            }
+            bytes += size
+        }
+        if bytes != record.committedBytes { evictFiles(record) }
+    }
+
+    /// Once per process, before its first fetch or refresh: staging is
+    /// cleared — no fetch survives a process, so whatever is there is a dead
+    /// task's (§C.3.3 step 5) — and so is every edition directory no record
+    /// names. A purge deletes the record before the files, so a crash between
+    /// the two leaves only files, and this is where they go.
+    ///
+    /// Skipped while the store runs in memory: the records are then on disk,
+    /// out of reach, and every directory would look orphaned (SQ-247 F3).
+    func sweepAfterLaunch() {
+        guard !launchSwept else { return }
+        launchSwept = true
+        SharedDirectionFiles.clearStaging(root: env.root)
+        let context = env.context()
+        guard !context.container.configurations.contains(where: \.isStoredInMemoryOnly),
+              let records = try? context.fetch(FetchDescriptor<CachedDirectionEdition>()) else { return }
+        let held = Set(records.map { "\($0.accountId)/\($0.decisionId)" })
+        let fm = FileManager.default
+        for account in (try? fm.contentsOfDirectory(atPath: env.root.path)) ?? [] {
+            let accountDirectory = SharedDirectionFiles.accountDirectory(root: env.root, account: account)
+            for decisionId in (try? fm.contentsOfDirectory(atPath: accountDirectory.path)) ?? []
+            where decisionId != SharedDirectionFiles.stagingName && !held.contains("\(account)/\(decisionId)") {
+                SharedDirectionFiles.remove(accountDirectory.appendingPathComponent(decisionId, isDirectory: true))
+            }
+        }
     }
 
     /// Records are never evicted, only files.

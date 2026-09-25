@@ -43,7 +43,7 @@ public final class PersistenceController {
     // MARK: - Initialization
 
     private init() {
-        let schema = Schema(versionedSchema: PatinaSchemaV2.self)
+        let schema = PatinaSchemaCurrent.schema
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,
@@ -59,15 +59,20 @@ public final class PersistenceController {
         }
     }
 
-    /// Open the store, and if it will not open, start over rather than trap.
+    /// Open the store, and if it will not open, let the file say what that
+    /// means rather than trap.
     ///
-    /// Three attempts, in the only order that keeps a launch survivable:
-    /// the store as it stands; a fresh store with the unreadable one moved
-    /// aside; and — if even that fails, which means the disk itself is the
-    /// problem — memory, so the app opens and can say what happened. There is
-    /// no `fatalError` on this path: a shipping build must not answer a
-    /// corrupt file with a crash loop the person cannot escape (C7-01).
-    private static func open(
+    /// A file that is not a database, or whose schema no stage of this build
+    /// reaches, will never open as it stands: it is moved aside, a fresh store
+    /// opens, and the one-time notice says so. Anything else — a full disk, a
+    /// file-protection or permission refusal, an IO error, a store a newer
+    /// build wrote — may leave the store intact, so it stays exactly where it
+    /// is: this launch runs in memory and says nothing untrue, and the next
+    /// launch tries the same file again (SQ-247 F3). A store that cannot be
+    /// moved aside is left in place the same way. There is no `fatalError` on
+    /// this path: a shipping build must not answer a bad file with a crash
+    /// loop the person cannot escape (C7-01).
+    static func open(
         schema: Schema,
         configuration: ModelConfiguration
     ) -> (container: ModelContainer, recovery: LocalStoreRecoveryRecord?) {
@@ -84,44 +89,48 @@ public final class PersistenceController {
             )
         }
 
-        let archived = LocalStoreRecovery.archiveStore(at: configuration.url)
-        if archived != nil {
-            do {
-                let container = try ModelContainer(
-                    for: schema,
-                    migrationPlan: PatinaMigrationPlan.self,
-                    configurations: [configuration]
-                )
-                return (
-                    container,
-                    LocalStoreRecoveryRecord(archivedAt: archived!, occurredAt: Date())
-                )
-            } catch {
-                PatinaLog.sync.error(
-                    "[Persistence] fresh store would not open: \(error.localizedDescription)"
-                )
-            }
+        guard LocalStoreRecovery.classify(storeAt: configuration.url) == .setAside else {
+            PatinaLog.sync.error(
+                "[Persistence] store left in place; this launch runs in memory and the next retries"
+            )
+            return (memoryContainer(schema), nil)
+        }
+        guard let archived = LocalStoreRecovery.archiveStore(at: configuration.url) else {
+            PatinaLog.sync.error(
+                "[Persistence] store could not be set aside; left in place, this launch runs in memory"
+            )
+            return (memoryContainer(schema), nil)
         }
 
-        let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        // The in-memory container is the last rung and it takes no plan: there
-        // is no prior store to migrate. If it throws, `try!` is honest — the
-        // process has no store of any kind and nothing below this can run.
-        // swiftlint:disable:next force_try
-        let container = try! ModelContainer(for: schema, configurations: [memory])
-        return (
-            container,
-            LocalStoreRecoveryRecord(
-                archivedAt: archived ?? configuration.url,
-                occurredAt: Date()
+        let recovery = LocalStoreRecoveryRecord(archivedAt: archived, occurredAt: Date())
+        do {
+            let container = try ModelContainer(
+                for: schema,
+                migrationPlan: PatinaMigrationPlan.self,
+                configurations: [configuration]
             )
-        )
+            return (container, recovery)
+        } catch {
+            PatinaLog.sync.error(
+                "[Persistence] fresh store would not open: \(error.localizedDescription)"
+            )
+        }
+        return (memoryContainer(schema), recovery)
+    }
+
+    /// The last rung, and it takes no plan: there is no prior store to
+    /// migrate. If it throws, `try!` is honest — the process has no store of
+    /// any kind and nothing below this can run.
+    private static func memoryContainer(_ schema: Schema) -> ModelContainer {
+        let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        // swiftlint:disable:next force_try
+        return try! ModelContainer(for: schema, configurations: [memory])
     }
 
     // MARK: - Preview Container
 
     public static var previewContainer: ModelContainer {
-        let schema = Schema(versionedSchema: PatinaSchemaV2.self)
+        let schema = PatinaSchemaCurrent.schema
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: true

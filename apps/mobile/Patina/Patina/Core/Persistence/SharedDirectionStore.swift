@@ -129,7 +129,8 @@ final class SharedDirectionStore {
     /// The monotonic freshness anchor (§C.7). Server time, not account data,
     /// so a session change leaves it where it is.
     private(set) var anchor = SharedDirectionAnchor()
-    var stagingCleared = false
+    /// `sweepAfterLaunch` has run in this process.
+    var launchSwept = false
 
     init(environment: Environment) {
         self.env = environment
@@ -209,9 +210,12 @@ final class SharedDirectionStore {
         return SharedDirectionFreshness.label(servedAt: servedAt, anchor: anchor, now: env.now())
     }
 
-    /// The bound account's cached edition, or nil.
+    /// The bound account's cached edition, or nil. One whose files have gone
+    /// from disk is read as `.none`, never as a complete set (SQ-247 F4).
     func cachedEdition(decisionId: String) -> CachedDirectionEdition? {
-        row(decisionId)
+        guard let record = row(decisionId) else { return nil }
+        demoteIfFilesMissing(record)
+        return record
     }
 
     // MARK: - Acts (§C.8): an online check before every one, no deferral
