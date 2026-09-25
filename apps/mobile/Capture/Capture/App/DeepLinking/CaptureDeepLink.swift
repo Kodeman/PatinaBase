@@ -101,7 +101,6 @@ enum CaptureDeepLink {
         case .n2Scan:           withSample { coordinator.present(.code($0)) }
         case .n3Measure:        withSample { coordinator.present(.measure($0)) }
         case .n4Voice:          withSample { coordinator.present(.voice($0)) }
-        case .n5SmartGuess:     withSample { coordinator.present(.smartGuessCard($0)) }
         case .r2OCRFallback:    withSample { coordinator.present(.ocr($0)) }
         case .r3Denied, .e3ShareSheet: coordinator.present(.photoImport)
         case .e4PhotoLibrary:   coordinator.present(.photoLibrary)

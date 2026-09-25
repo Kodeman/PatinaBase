@@ -3,9 +3,10 @@
 //
 //  The three field verbs — a note in the Document · a task · a punch item — as
 //  a state machine the view renders rather than owns. Extracted from
-//  SmartGuessSheet (N5) so the C3 quick-confirm card can mount the SAME menu:
-//  I-4's gap was that N5 has no production presenter, and Kody ruled the verbs
-//  onto the card every capture already shows after the shutter.
+//  the N5 sheet so the C3 quick-confirm card could mount the SAME menu: I-4's
+//  gap was that N5 had no production presenter, and Kody ruled the verbs onto
+//  the card every capture already shows after the shutter. N5 is retired
+//  (W1A-07 F1); the card is the menu's only host.
 //
 //  Nothing here writes. A tap returns the ACTION its host performs against
 //  Piece's own request lanes (`requestMarginNote` / `requestPunchTask`), so

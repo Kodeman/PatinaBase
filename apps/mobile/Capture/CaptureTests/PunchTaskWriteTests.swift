@@ -312,8 +312,8 @@ struct PunchTaskWriteTests {
 
         // The re-open is deliberate, and it is also invisible: nothing in the
         // verb menu acknowledged the first item, so a second filing read as the
-        // tap doing nothing. `.written` is exactly the state SmartGuessSheet
-        // shows this row on.
+        // tap doing nothing. `.written` is exactly the state the C3 card's
+        // verb menu (`FieldVerbMenu`) shows this row on.
         #expect(PunchCourtCopy.punchFiledMenuRow == "Punch item filed — file another?")
 
         let second = UUID()

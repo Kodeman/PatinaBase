@@ -1,15 +1,16 @@
 //  SmartGuessApplication.swift
 //  CaptureKit
 //
-//  N5's orchestration, lifted out of SmartGuessSheet so CaptureTests (which
-//  links CaptureKit and the mocks, never the app) can reach it.
+//  The smart-guess read's orchestration, lifted out of the retired N5 sheet so
+//  CaptureTests (which links CaptureKit and the mocks, never the app) can reach
+//  it. The C3 card's post-shutter read (`ViewfinderModel`) is its caller.
 //
-//  1. `observe` reads the frame the sheet loaded: OCR runs on that frame, the
+//  1. `observe` reads the captured frame: OCR runs on that frame, the
 //     codes already scanned onto the piece are parsed, and both reach
-//     `SmartGuessService.guess(image:ocr:codes:)`. The sheet used to pass
+//     `SmartGuessService.guess(image:ocr:codes:)`. N5 used to pass
 //     empty arrays, so the guess never saw the tag or the barcode.
 //  2. `apply` writes each suggestion through `Piece.setValue` and reports what
-//     the PIECE holds afterwards, so the sheet shows what persisted rather
+//     the PIECE holds afterwards, so the surface shows what persisted rather
 //     than what it proposed. A refused suggestion comes back `notApplied`
 //     with the persisted value beside it.
 //

@@ -21,7 +21,7 @@ harness, one set of dev-loop scripts drives all 74 built screens.
 | 0 | First run & permissions | O1 welcome · O2 connect · O3 camera-priming · O4 ready |
 | 1 | Entry points | E1 app-icon · E2 system-entry · E3 share-sheet |
 | 2 | Core capture | C1 viewfinder · C2 framing · C3 specimen-forms · C4 multi-shot · C5 specimen-sheet |
-| 3 | Enrich in place | N1 tag-ocr · N2 scan · N3 measure · N4 voice · N5 smart-guess |
+| 3 | Enrich in place | N1 tag-ocr · N2 scan · N3 measure · N4 voice |
 | 4 | Resilience & edges | R1 low-light · R2 ocr-fallback · R3 denied · R4 offline |
 | 5 | Route & save | S1 assign · S2 create-project · S3 destination · S4 saved · S5 inbox |
 | 6 | Session & review | V1 session-tray · V2 cull · V3 detail |

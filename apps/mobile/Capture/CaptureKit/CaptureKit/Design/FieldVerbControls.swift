@@ -2,9 +2,9 @@
 //  CaptureKit
 //
 //  The rendering half of `FieldVerbMenu`: an overflow control and the notice
-//  beneath it. Both surfaces that carry the three verbs — the C3 quick-confirm
-//  card (`CaptureCardOverlay`) and N5 (`SmartGuessSheet`) — build them from
-//  here, so the menu cannot say one thing on one screen and another elsewhere.
+//  beneath it. The surface that carries the three verbs — the C3 quick-confirm
+//  card (`CaptureCardOverlay`) — builds them from here, so a future second
+//  host cannot make the menu say one thing on one screen and another elsewhere.
 //
 //  The views hold no state of their own. `FieldVerbMenu` is the state and its
 //  owner keeps it, because the confirm step must survive a body pass and must
@@ -21,9 +21,8 @@ public struct FieldVerbOverflowMenu: View {
     private let idPrefix: String
     private let onAction: (FieldVerbAction) -> Void
 
-    /// `idPrefix` names the SURFACE ("card." / "n5."). Both mount the same
-    /// controls, so a hardcoded id would have the device-pass script addressing
-    /// N5's menu by the card's name.
+    /// `idPrefix` names the SURFACE (today only "card."), so a second host
+    /// never has the device-pass script addressing its menu by the card's name.
     public init(
         menu: Binding<FieldVerbMenu>,
         facts: FieldVerbFacts,
@@ -81,9 +80,8 @@ public struct FieldVerbNotice: View {
     private let idPrefix: String
     private let onAction: (FieldVerbAction) -> Void
 
-    /// `idPrefix` names the SURFACE ("card." / "n5."). Both mount the same
-    /// controls, so a hardcoded id would have the device-pass script addressing
-    /// N5's menu by the card's name.
+    /// `idPrefix` names the SURFACE (today only "card."), so a second host
+    /// never has the device-pass script addressing its menu by the card's name.
     public init(
         menu: Binding<FieldVerbMenu>,
         facts: FieldVerbFacts,

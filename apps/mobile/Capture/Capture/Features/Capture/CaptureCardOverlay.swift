@@ -7,12 +7,13 @@
 //  filled shows "—" with no badge at all. Save commits & routes (S3);
 //  Add detail opens the full sheet (C5);
 //  swipe down keeps shooting. This is a transient overlay INSIDE the viewfinder,
-//  not a registered sheet (Team C owns CaptureSheet.smartGuessCard).
+//  not a registered sheet.
 //
 //  Wave 4 / I-4: the three field verbs mount HERE, on the overflow beside Save
 //  — the C3 card §7.5 draws is this file, and it is the card every capture
-//  shows after the shutter. They shipped on N5 (SmartGuessSheet), which no
-//  release build can open.
+//  shows after the shutter. They first shipped on N5, a harness-only sheet no
+//  release build could open; W1A-07 F1 retired N5, so this card is the only
+//  surface for the smart-guess read.
 
 import SwiftUI
 import CaptureKit
