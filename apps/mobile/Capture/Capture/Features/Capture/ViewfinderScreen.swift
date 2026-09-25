@@ -177,24 +177,28 @@ struct ViewfinderScreen: View {
 
     // MARK: Live feed
 
-    /// The real device camera downcasts to `AVFoundationCameraService` (the lawful
-    /// in-repo pattern, cf. `session as? RoomPlanScanSession`): show its preview
-    /// when authorized, a Settings prompt when denied. Mock/sim keeps the exact
+    /// Denied/not-determined branch on `model.cameraAuthorization` — the
+    /// `CameraService` protocol member, never a concrete-type cast, so a
+    /// `MockCameraService` can drive the denied notice too. Only the
+    /// authorized preview itself downcasts to `AVFoundationCameraService`
+    /// (the lawful in-repo pattern, cf. `session as? RoomPlanScanSession`):
+    /// it alone needs the concrete `previewSession`. Mock/sim with no
+    /// authorization override reports `.authorized` and keeps the exact
     /// gradient it always drew.
     @ViewBuilder private var liveFeed: some View {
-        if let camera = model.camera as? AVFoundationCameraService {
-            switch model.cameraAuthorization {
-            case .authorized:
+        switch model.cameraAuthorization {
+        case .authorized:
+            if let camera = model.camera as? AVFoundationCameraService {
                 CameraPreviewView(session: camera.previewSession)
-            case .denied:
-                ZStack {
-                    ViewfinderSceneBackdrop(luma: model.luma)
-                    CameraAccessDeniedNotice()
-                }
-            case .notDetermined:
+            } else {
                 ViewfinderSceneBackdrop(luma: model.luma)
             }
-        } else {
+        case .denied:
+            ZStack {
+                ViewfinderSceneBackdrop(luma: model.luma)
+                CameraAccessDeniedNotice()
+            }
+        case .notDetermined:
             ViewfinderSceneBackdrop(luma: model.luma)
         }
     }
@@ -262,11 +266,16 @@ struct ViewfinderScreen: View {
         }
     }
 
-    /// E4 — photo import's way in from the camera, whatever the camera's state.
-    /// Opens `.photoLibrary`, never R3's `.photoImport`: R3 says the camera is
-    /// off, and here it usually is not.
+    /// E4 — photo import's way in from the camera, whatever the camera's
+    /// state. Opens `.photoLibrary` when the camera is working; when it is
+    /// actually `.denied` this is the same door the denied notice's own
+    /// entry is, so it opens R3's `.photoImport` (denied context) instead —
+    /// never a face that claims the camera "usually" works when the model
+    /// just said it does not.
     private var photoLibraryButton: some View {
-        Button { coordinator.present(.photoLibrary) } label: {
+        Button {
+            coordinator.present(model.cameraAuthorization == .denied ? .photoImport : .photoLibrary)
+        } label: {
             Image(systemName: "photo.on.rectangle.angled")
                 .font(CaptureType.body)
                 .foregroundStyle(CaptureColor.paper)

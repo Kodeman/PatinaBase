@@ -176,7 +176,7 @@ public final class AppContainer {
             self.projectCreator = SupabaseProjectCreator(client: client, session: session)
 
             #if targetEnvironment(simulator)
-            self.camera = MockCameraService()
+            self.camera = MockCameraService(authorizationState: AppConfiguration.cameraDenied ? .denied : .authorized)
             self.location = MockLocationService()
             #else
             self.camera = AVFoundationCameraService()
@@ -196,7 +196,7 @@ public final class AppContainer {
             self.projectCreator = nil
             self.visitCloseOutboxDrainer = nil; self.timeEntryOutboxDrainer = nil
             self.hours = MockFieldHoursService()
-            self.camera = MockCameraService()
+            self.camera = MockCameraService(authorizationState: AppConfiguration.cameraDenied ? .denied : .authorized)
             self.location = MockLocationService()
 
             // Phase 2 seams — mock conformers (also the harness/preview default).

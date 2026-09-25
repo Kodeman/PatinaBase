@@ -23,10 +23,6 @@ enum AVFoundationCameraError: Error, Sendable {
     case encodingFailed     // photo produced no file data
 }
 
-/// Camera permission as the viewfinder branches on it. `.restricted` (parental
-/// controls / MDM) folds into `.denied` — both mean "no live feed, offer Settings."
-enum CameraAuthorization: Sendable { case notDetermined, authorized, denied }
-
 /// Real camera. `@MainActor` to satisfy the `CameraService` seam; all hardware
 /// work is delegated to `CaptureCameraEngine` on its own serial queue.
 @MainActor
@@ -34,9 +30,10 @@ public final class AVFoundationCameraService: NSObject, CameraService {
     public private(set) var currentMode: CameraMode = .photo
     public private(set) var isLowLight: Bool = false
 
-    /// Camera permission, resolved in `start()`. The viewfinder mirrors this to
-    /// switch between the live preview, the gradient, and the "off" notice.
-    private(set) var authorization: CameraAuthorization = .notDetermined
+    /// Camera permission, resolved in `start()`. `CameraService`'s protocol
+    /// member — the viewfinder reads it to switch between the live preview,
+    /// the gradient, and the "off" notice, with no concrete-type cast.
+    public private(set) var authorizationState: CameraAuthorizationState = .notDetermined
 
     /// Bumped by every `stop()`. `start()` snapshots it before awaiting the
     /// permission dialog and bails if it changed — otherwise a stop() landing
@@ -79,7 +76,7 @@ public final class AVFoundationCameraService: NSObject, CameraService {
     public func start() async {
         let epoch = startEpoch
         await ensureAuthorized()
-        guard authorization == .authorized, epoch == startEpoch else { return }
+        guard authorizationState == .authorized, epoch == startEpoch else { return }
         // Attach the input now that we hold permission, then run. Both hop
         // through the engine's serial queue, so the input is in place before the
         // session starts.
@@ -98,13 +95,13 @@ public final class AVFoundationCameraService: NSObject, CameraService {
     private func ensureAuthorized() async {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            authorization = .authorized
+            authorizationState = .authorized
         case .notDetermined:
-            authorization = await AVCaptureDevice.requestAccess(for: .video) ? .authorized : .denied
+            authorizationState = await AVCaptureDevice.requestAccess(for: .video) ? .authorized : .denied
         case .denied, .restricted:
-            authorization = .denied
+            authorizationState = .denied
         @unknown default:
-            authorization = .denied
+            authorizationState = .denied
         }
     }
 
