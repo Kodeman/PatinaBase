@@ -1,10 +1,12 @@
 //  RecognitionScreens.swift
 //  Capture
 //
-//  Team C registrar — Flow 3 "enrich in place" (N1–N5). Wires the five
+//  Team C registrar — Flow 3 "enrich in place" (N1–N4). Wires the four
 //  recognition sheets into the RouteRegistry, each binding the real recognition
 //  service (Vision / DataScanner / ARKit / Speech) and resolving the piece
-//  UUID carried by the sheet case. The integration owner adds one line:
+//  UUID carried by the sheet case. The smart field guess has no sheet: it runs
+//  on the C3 card after the shutter (`ViewfinderModel` → `SmartGuessApplication`).
+//  The integration owner adds one line:
 //      RecognitionScreens.register(into: r, container: container, coordinator: coordinator)
 
 import SwiftUI
@@ -65,37 +67,6 @@ enum RecognitionScreens {
                                               analytics: container.analytics,
                                               surface: "n4"),
                 analytics: container.analytics,
-                coordinator: coordinator
-            ))
-        }
-
-        registerSmartGuess(into: r, container: container, coordinator: coordinator)
-    }
-
-    /// N5 · .smartGuessCard — smart field guess (Vision classify + heuristics).
-    /// Lifted out of `register` so that function stays under swiftlint's
-    /// 60-line body limit, which `--strict` promotes to an error.
-    ///
-    /// ⚠ The route case is `smartGuessCard` but the screen this builds is
-    /// `SmartGuessSheet`, whose accessibility id is `n5SmartGuess`. The route
-    /// name and the screen id disagree; left as found.
-    @MainActor
-    private static func registerSmartGuess(
-        into r: RouteRegistry,
-        container: AppContainer,
-        coordinator: CaptureCoordinator
-    ) {
-        r.registerSheet(CaptureSheet.smartGuessCard(UUID()).registryKey) { sheet in
-            guard case let .smartGuessCard(id) = sheet else { return AnyView(EmptyView()) }
-            return AnyView(SmartGuessSheet(
-                pieceID: id,
-                store: container.store,
-                session: container.session,
-                camera: container.camera,
-                smartGuess: container.smartGuess,
-                analytics: container.analytics,
-                sync: container.sync,
-                siteRequests: container.siteRequests,
                 coordinator: coordinator
             ))
         }

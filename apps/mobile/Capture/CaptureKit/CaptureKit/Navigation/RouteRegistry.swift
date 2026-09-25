@@ -70,7 +70,6 @@ public extension CaptureSheet {
     var registryKey: String {
         switch self {
         case .pieceSheet: return "pieceSheet"
-        case .smartGuessCard: return "smartGuessCard"
         case .ocr: return "ocr"
         case .code: return "code"
         case .measure: return "measure"

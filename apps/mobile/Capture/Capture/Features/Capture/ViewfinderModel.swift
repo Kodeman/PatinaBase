@@ -129,7 +129,7 @@ final class ViewfinderModel {
         self.sync = container.sync
         self.session = container.session
         self.companion = container.companion
-        // The same readers N1/N2/N5 construct (RecognitionScreens, SmartGuessSheet).
+        // The same readers N1/N2 construct (RecognitionScreens).
         self.smartGuess = SmartGuessApplication(ocr: VisionTagOCRService(),
                                                 codes: DataScannerCodeService(),
                                                 smartGuess: container.smartGuess)

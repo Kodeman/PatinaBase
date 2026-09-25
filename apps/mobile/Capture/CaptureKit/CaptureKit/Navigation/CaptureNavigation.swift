@@ -56,7 +56,6 @@ public enum CaptureRoute: Hashable, Sendable {
 /// Sheets / overlays (presented over the viewfinder or a screen).
 public enum CaptureSheet: Hashable, Identifiable, Sendable {
     case pieceSheet(UUID)  // C5
-    case smartGuessCard(UUID) // C3
     case ocr(UUID)            // N1
     case code(UUID)           // N2
     case measure(UUID)        // N3
@@ -88,7 +87,6 @@ public enum CaptureSheet: Hashable, Identifiable, Sendable {
     public var id: String {
         switch self {
         case .pieceSheet(let u): return "piece-\(u)"
-        case .smartGuessCard(let u): return "guess-\(u)"
         case .ocr(let u): return "ocr-\(u)"
         case .code(let u): return "code-\(u)"
         case .measure(let u): return "measure-\(u)"

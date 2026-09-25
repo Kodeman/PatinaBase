@@ -1,9 +1,10 @@
 //  CaptureScreenID.swift
 //  CaptureKit
 //
-//  Frozen per-screen accessibility identifiers (80 entries) — the deterministic
+//  Frozen per-screen accessibility identifiers (79 entries) — the deterministic
 //  handles XCUITest, capture-shots.sh and MobAI use to drive and assert every
-//  screen. 79 of them reach a built screen today; wave 3 built v0Visit and
+//  screen. 78 of them reach a built screen today (N5, the harness-only smart
+//  guess sheet, was retired in W1A-07 F1: the guess runs on the C3 card); wave 3 built v0Visit and
 //  c6Voice, and W5 built the three PR screens (the People room, scoped to one
 //  job). v4VisitReview is the one remaining reserved id, held out of the
 //  sweep until the screen behind it exists (wave 4).
@@ -34,7 +35,6 @@ public enum CaptureScreenID: String, CaseIterable, Sendable {
     case n2Scan               = "screen.N2.scan"
     case n3Measure            = "screen.N3.measure"
     case n4Voice              = "screen.N4.voice"
-    case n5SmartGuess         = "screen.N5.smart-guess"
     // Flow 4 — resilience & edges
     case r1LowLight           = "screen.R1.low-light"
     case r2OCRFallback        = "screen.R2.ocr-fallback"

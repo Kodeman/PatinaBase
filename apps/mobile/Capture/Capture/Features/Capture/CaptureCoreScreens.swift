@@ -7,8 +7,7 @@
 //  makes the live viewfinder the app's home (replacing ViewfinderPlaceholder).
 //
 //  C3 (the smart-guess card) and C4 (multi-shot) are in-viewfinder states, not
-//  registered surfaces — C3 renders as a transient overlay inside ViewfinderScreen
-//  (CaptureSheet.smartGuessCard belongs to Team C).
+//  registered surfaces — C3 renders as a transient overlay inside ViewfinderScreen.
 
 import SwiftUI
 import CaptureKit
