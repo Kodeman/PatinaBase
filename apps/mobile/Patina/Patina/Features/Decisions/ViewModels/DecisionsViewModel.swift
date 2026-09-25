@@ -421,7 +421,7 @@ final class DecisionDetailViewModel {
     /// Argument: the decision id.
     @ObservationIgnored
     var fetchApprovalReview: (String) async throws -> RemoteProjectApprovalReview? = { decisionId in
-        try await DecisionsAPIClient.shared.fetchProjectApprovalReview(decisionId: decisionId)
+        try await SharedDirectionStore.shared.readProjectApprovalReview(decisionId: decisionId)
     }
 
     /// `confirm_project_decision_review`, behind a seam.
@@ -429,7 +429,7 @@ final class DecisionDetailViewModel {
     /// idempotency key.
     @ObservationIgnored
     var confirmApprovalReview: (String, Int, String, String) async throws -> Void = { decisionId, revision, checksum, key in
-        try await DecisionsAPIClient.shared.confirmProjectApprovalReview(
+        try await SharedDirectionStore.shared.confirmProjectApprovalReview(
             decisionId: decisionId,
             authorityRevision: revision,
             artifactChecksum: checksum,
@@ -438,12 +438,12 @@ final class DecisionDetailViewModel {
     }
 
     /// `respond_project_approval`, behind a seam. Arguments: decision id,
-    /// outcome, the typed legal name (`P-18`), expected `updatedAt`, key.
+    /// outcome, the typed legal name (`P-18`), the shown `updatedAt`, key.
     @ObservationIgnored
-    var respondToApproval: (String, ProjectApprovalOutcome, String, String, String) async throws -> Void = { decisionId, outcome, signature, expectedUpdatedAt, key in
-        try await DecisionsAPIClient.shared.respondToProjectApproval(
-            decisionId: decisionId, outcome: outcome, clientSignature: signature,
-            expectedUpdatedAt: expectedUpdatedAt, idempotencyKey: key
+    var respondToApproval: (String, ProjectApprovalOutcome, String, String, String) async throws -> Void = { decisionId, outcome, signature, _, key in
+        // The CAS value is the pre-act read's, never the cache's (§C.8).
+        try await SharedDirectionStore.shared.respondToProjectApproval(
+            decisionId: decisionId, outcome: outcome, clientSignature: signature, idempotencyKey: key
         )
     }
 

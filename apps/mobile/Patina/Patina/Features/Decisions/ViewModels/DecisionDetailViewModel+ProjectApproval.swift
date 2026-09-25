@@ -31,6 +31,19 @@ extension DecisionDetailViewModel {
         }
     }
 
+    /// W1A-10 · CONTRACT-C §C.7. "Updated 5 min ago" beside an edition the
+    /// offline cache served — the last authorized revision, read-only — and
+    /// nil while the screen draws a live answer.
+    var approvalFreshness: String? {
+        SharedDirectionStore.shared.freshnessLabel(forDecision: approvalReview?.decisionId)
+    }
+
+    /// The screen was left: a 202 continuation it started stops (§C.5.3).
+    func leaveApproval() {
+        guard let decisionId = approvalDecisionId else { return }
+        SharedDirectionStore.shared.leaveEdition(decisionId)
+    }
+
     /// `P-18` / `R1`: the name on the rule is long enough to be one. Two
     /// characters is the server's own floor
     /// (`_respond_project_approval_checked`, 00464:557-561), so the act is

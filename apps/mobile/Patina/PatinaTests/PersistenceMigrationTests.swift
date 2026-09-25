@@ -23,7 +23,7 @@ struct PersistenceMigrationTests {
 
     @Test
     func versionedSchemaCarriesBoardModel() {
-        let names = PatinaSchemaV1.models.map { String(describing: $0) }
+        let names = PatinaSchemaCurrent.models.map { String(describing: $0) }
         #expect(names.contains("BoardModel"))
     }
 
@@ -31,7 +31,7 @@ struct PersistenceMigrationTests {
     /// from this list is a fetch that throws at runtime on a screen.
     @Test
     func versionedSchemaCarriesEveryPersistedModel() {
-        let names = Set(PatinaSchemaV1.models.map { String(describing: $0) })
+        let names = Set(PatinaSchemaCurrent.models.map { String(describing: $0) })
         let required: Set<String> = [
             "TableItemModel", "RoomModel", "SavedItem", "StylePreferenceModel",
             "SyncQueueItem", "RoomScanPackage", "DesignRequestDraft",
@@ -45,7 +45,7 @@ struct PersistenceMigrationTests {
     /// made against a container that had never heard of the type.
     @Test
     func boardsRoundTripThroughTheShippedSchema() throws {
-        let schema = Schema(versionedSchema: PatinaSchemaV1.self)
+        let schema = PatinaSchemaCurrent.schema
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])
         let context = ModelContext(container)
@@ -61,10 +61,16 @@ struct PersistenceMigrationTests {
     /// `LocalStoreReset` names every model in the schema. A model in the
     /// container and not in the wipe is one account's row surviving into
     /// another account's session.
+    ///
+    /// W1A-10: the cached shared direction is deleted inside
+    /// `SharedDirectionStore.wipe()`, which `LocalStoreReset` calls first —
+    /// generations and cancellation have to precede its delete (§C.5.2).
     @Test
     func theWipeNamesEveryModelInTheSchema() throws {
         let source = try SourcePin.read("Patina/Core/Persistence/LocalStoreReset.swift")
-        for model in PatinaSchemaV1.models {
+            + SourcePin.read("Patina/Core/Persistence/SharedDirectionStore.swift")
+        #expect(source.contains("SharedDirectionStore.shared.wipe()"))
+        for model in PatinaSchemaCurrent.models {
             let name = String(describing: model)
             #expect(
                 source.contains("delete(model: \(name).self)"),
@@ -85,6 +91,61 @@ struct PersistenceMigrationTests {
         #expect(PatinaMigrationPlan.stages.count == PatinaMigrationPlan.schemas.count - 1)
     }
 
+    // MARK: - W1A-10: V2 adds the cached shared direction, lightweight
+
+    @Test
+    func v2IsTheLatestSchemaAndCarriesEveryV1Model() throws {
+        #expect(PatinaMigrationPlan.schemas.map { $0.versionIdentifier }
+            == [PatinaSchemaV1.versionIdentifier, PatinaSchemaV2.versionIdentifier])
+        #expect(PatinaMigrationPlan.stages.count == 1)
+        let v1 = Set(PatinaSchemaV1.models.map { String(describing: $0) })
+        let v2 = Set(PatinaSchemaV2.models.map { String(describing: $0) })
+        #expect(v2 == v1.union(["CachedDirectionEdition"]))
+        let source = try SourcePin.read("Patina/Core/Persistence/PersistenceController.swift")
+        #expect(source.contains("PatinaSchemaCurrent.schema"))
+    }
+
+    /// A tester's store from the build before this one: written under the
+    /// frozen V1, opened by the app's own open path over the live classes.
+    /// Its rows survive, nothing is set aside, and the new table is usable —
+    /// no flag, no wipe.
+    @Test
+    func aV1StoreOpensUnderV2AndKeepsItsRows() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory
+            .appendingPathComponent("PersistenceMigrationTests-v1-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        let storeURL = dir.appendingPathComponent("v1.store")
+
+        do {
+            let v1 = Schema(versionedSchema: PatinaSchemaV1.self)
+            let container = try ModelContainer(
+                for: v1, configurations: [ModelConfiguration(schema: v1, url: storeURL)]
+            )
+            let context = ModelContext(container)
+            context.insert(PatinaSchemaV1.BoardModel(name: "Living room"))
+            try context.save()
+        }
+
+        let schema = PatinaSchemaCurrent.schema
+        let opened = PersistenceController.open(
+            schema: schema, configuration: ModelConfiguration(schema: schema, url: storeURL)
+        )
+        #expect(opened.recovery == nil)
+        #expect(try fm.contentsOfDirectory(atPath: dir.path).contains { $0.hasPrefix("RecoveredStore-") } == false)
+        let context = ModelContext(opened.container)
+        #expect(try context.fetch(FetchDescriptor<BoardModel>()).map(\.name) == ["Living room"])
+
+        context.insert(CachedDirectionEdition(
+            accountId: "a", decisionId: "d", projectId: "p", authorityRevision: 1,
+            artifactChecksum: "c", reviewJSON: Data("{}".utf8), attachmentsJSON: nil,
+            editionFiguresJSON: nil, servedAt: Date(), manifestKey: nil
+        ))
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<CachedDirectionEdition>()).count == 1)
+    }
+
     @Test
     func theContainerIsBuiltWithThePlanAndNeverTraps() throws {
         let source = try SourcePin.read("Patina/Core/Persistence/PersistenceController.swift")
@@ -93,7 +154,7 @@ struct PersistenceMigrationTests {
         #expect(source.contains("fatalError(\"Failed to create ModelContainer") == false)
         // `previewContainer` is DEBUG-only scaffolding and keeps its trap; the
         // shipping path is the one under test, and it is the `open` function.
-        let openBody = source.components(separatedBy: "private static func open(").last ?? ""
+        let openBody = source.components(separatedBy: "static func open(").last ?? ""
         let shippingPath = openBody.components(separatedBy: "// MARK: - Preview Container").first ?? ""
         #expect(shippingPath.contains("fatalError") == false)
     }
@@ -123,7 +184,7 @@ struct PersistenceMigrationTests {
         #expect(fm.fileExists(atPath: archived.appendingPathComponent("corrupt.store-wal").path))
 
         // And the same URL now opens clean, which is what the app does next.
-        let schema = Schema(versionedSchema: PatinaSchemaV1.self)
+        let schema = PatinaSchemaCurrent.schema
         let config = ModelConfiguration(schema: schema, url: storeURL)
         let container = try ModelContainer(
             for: schema, migrationPlan: PatinaMigrationPlan.self, configurations: [config]
@@ -182,7 +243,7 @@ struct PersistenceMigrationTests {
     @Test
     func anUnregisteredContextIsNotTheSharedStore() throws {
         let container = try ModelContainer(
-            for: Schema(versionedSchema: PatinaSchemaV1.self),
+            for: PatinaSchemaCurrent.schema,
             configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
         )
         #expect(PersistenceController.isSharedContext(ModelContext(container)) == false)

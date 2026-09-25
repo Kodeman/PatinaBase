@@ -146,16 +146,17 @@ struct ProjectApprovalActTests {
     /// `iosb-B1`. The projection is the homeowner's ONLY door: 00467:18-38
     /// excludes `project_artifact_v1` from every raw `client_decisions` SELECT
     /// policy she can reach, so a PostgREST read of the row returns nothing to
-    /// the person being asked.
+    /// the person being asked. W1A-10 (§C.5): the typed edition wrapper reads
+    /// the same projection under the same gate.
     @Test("the client reads the sanitized single-row RPC, not the row and not the studio one")
     func theClientReadsTheSanitizedProjection() throws {
         let source = try SourcePin.read(
-            "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
+            "Patina/Core/Network/DecisionsAPIClient+SharedDirection.swift"
         )
-        let start = try #require(source.range(of: "public func fetchProjectApprovalReview("))
-        let body = String(source[start.lowerBound...].prefix(900))
-        #expect(body.contains("callRPC("))
-        #expect(body.contains("\"get_project_decision_review\", body: [\"p_decision_id\": decisionId]"))
+        let start = try #require(source.range(of: "func projectDecisionEdition(_ held: SharedDirectionHeldProof) async throws -> Data {"))
+        let body = String(source[start.lowerBound...].prefix(500))
+        #expect(body.contains("callRPC(\"get_project_decision_edition\""))
+        #expect(body.contains("\"p_decision_id\": held.decisionId"))
         // `get_project_decision_reviews` is studio-scoped and answers a
         // homeowner with `insufficient_privilege`; `client_decisions` is the
         // raw table she cannot see a Stage-2 row in at all.
@@ -163,15 +164,12 @@ struct ProjectApprovalActTests {
         #expect(!body.contains("client_decisions"))
     }
 
-    /// The RPC returns `jsonb`, and NULL for a nonexistent, legacy or
-    /// unauthorized id. Four bytes of `null` are not a decoding failure.
-    @Test("an unauthorized or unknown id decodes as no approval, not as an error")
-    func aNullProjectionIsNotAnError() throws {
-        let source = try SourcePin.readCode(
-            "Patina/Core/Network/DecisionsAPIClient+ProjectApprovals.swift"
-        )
-        #expect(source.contains("payload != \"null\""))
-        #expect(source.contains("-> RemoteProjectApprovalReview?"))
+    /// W1A-10 (§C.5): every unknown id now gets a typed answer, so four bytes
+    /// of `null` are indeterminate, which never purges, not "no approval".
+    @Test("a null body is indeterminate, not an empty answer")
+    func aNullProjectionIsNotAnError() {
+        #expect(SharedDirectionWire.singleEdition(from: Data("null".utf8)) == nil)
+        #expect(SharedDirectionWire.envelope(from: Data("null".utf8)) == nil)
     }
 
     /// The parameters `use-project-approvals.ts` sends, argument for argument.

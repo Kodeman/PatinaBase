@@ -16,13 +16,13 @@ import SwiftData
 struct AccountIsolationTests {
 
     /// The app's own schema, so `delete(model:)` finds every type the wipe
-    /// names. Read from `PatinaSchemaV1` rather than re-listed: a hand-copied
-    /// list went stale the moment `BoardModel` joined the container (C7-02),
-    /// and `wipeGuestWork` then threw `NSFetchRequest could not locate an
-    /// NSEntityDescription for entity name 'BoardModel'` — in a test, where
-    /// the app would have thrown it on a real store.
+    /// names. Read from `PatinaSchemaCurrent` rather than re-listed: a
+    /// hand-copied list went stale the moment `BoardModel` joined the
+    /// container (C7-02), and `wipeGuestWork` then threw `NSFetchRequest could
+    /// not locate an NSEntityDescription for entity name 'BoardModel'` — in a
+    /// test, where the app would have thrown it on a real store.
     private func makeContext() throws -> ModelContext {
-        let schema = Schema(versionedSchema: PatinaSchemaV1.self)
+        let schema = PatinaSchemaCurrent.schema
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return ModelContext(try ModelContainer(for: schema, configurations: [config]))
     }
