@@ -52,13 +52,22 @@ enum PurchaseComposition {
             }
         }
 
+        /// How many orders the scripted `create` has minted. The host prints it
+        /// so a UI test can see that nothing after the first tap made another.
+        fileprivate static let creates = CreateCount()
+
+        fileprivate static func recordCreate() {
+            creates.value += 1
+        }
+
         /// `create` succeeds, `checkout` returns a URL that resolves nowhere,
         /// `poll` answers settled on call `settlesAfter` and not before.
         static func dependencies(settlesAfter: Int) -> OrderHandoff.Dependencies {
             let calls = PollCount()
             return OrderHandoff.Dependencies(
                 create: { _, quantity in
-                    await order(quantity: quantity, status: "pending_payment")
+                    await recordCreate()
+                    return await order(quantity: quantity, status: "pending_payment")
                 },
                 checkout: { _ in
                     URL(string: "https://checkout.patina.invalid/uitest")!
@@ -109,25 +118,39 @@ enum PurchaseComposition {
     }
 
     /// The root under `--uitesting --uitest-order-sheet`: the sheet over the
-    /// scripted piece, then a marker once the handoff reports it placed.
+    /// scripted piece, then a marker once the handoff reports it placed. The
+    /// scripted create count stays on screen throughout.
     struct UITestOrderHost: View {
         @State private var placed: DirectOrder?
 
         var body: some View {
-            if let placed {
-                Text("Placed \(placed.id)")
-                    .accessibilityIdentifier("OrderSheetUITest.Placed")
-            } else {
-                OrderSheet(
-                    product: UITestDoubles.piece,
-                    fitLine: nil,
-                    handoff: PurchaseComposition.handoff(),
-                    terms: UITestDoubles.terms,
-                    onPlaced: { placed = $0 }
-                )
+            Group {
+                if let placed {
+                    Text("Placed \(placed.id)")
+                        .accessibilityIdentifier("OrderSheetUITest.Placed")
+                } else {
+                    OrderSheet(
+                        product: UITestDoubles.piece,
+                        fitLine: nil,
+                        handoff: PurchaseComposition.handoff(),
+                        terms: UITestDoubles.terms,
+                        onPlaced: { placed = $0 }
+                    )
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                Text("\(UITestDoubles.creates.value)")
+                    .font(PatinaTypography.caption)
+                    .accessibilityIdentifier("OrderSheetUITest.CreateCount")
             }
         }
     }
+}
+
+/// How many times the scripted order create has been called.
+@Observable
+private final class CreateCount {
+    var value = 0
 }
 
 /// How many times the scripted order poll has been asked.

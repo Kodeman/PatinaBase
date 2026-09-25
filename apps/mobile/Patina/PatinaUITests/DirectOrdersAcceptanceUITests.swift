@@ -90,4 +90,37 @@ final class DirectOrdersAcceptanceUITests: XCTestCase {
         XCTAssertFalse(confirming.exists, "Still confirming after the deadline")
         XCTAssertFalse(placed.exists, "A poll that never settled placed the order")
     }
+
+    /// W1A-11 F1. A reader whose webhook is late may already have paid, so the
+    /// unconfirmed sheet must not offer a second payment. Its act re-polls the
+    /// same order: the scripted poll settles on call 24, which the first 60 s
+    /// cycle (at most 21 polls at 3 s) cannot reach, so only "Check again" can
+    /// place it — and the scripted create is still called exactly once.
+    @MainActor
+    func testUnconfirmedOffersCheckAgainAndNeverASecondOrder() throws {
+        let app = returnFromCheckout(pollSettlesAfter: 24)
+        let unconfirmed = app.staticTexts["OrderSheet.Unconfirmed"]
+        let placed = app.staticTexts["OrderSheetUITest.Placed"]
+        let creates = app.staticTexts["OrderSheetUITest.CreateCount"]
+        let primary = app.buttons["OrderSheet.Primary"]
+
+        XCTAssertTrue(unconfirmed.waitForExistence(timeout: 80), "The 60 s poll deadline should end unconfirmed")
+        XCTAssertEqual(creates.label, "1", "One tap, one scripted create")
+
+        XCTAssertEqual(primary.label, "Check again")
+        XCTAssertFalse(
+            app.buttons.matching(NSPredicate(format: "label == %@", "Continue to payment")).firstMatch.exists,
+            "An unconfirmed payment offered a second checkout"
+        )
+        XCTAssertTrue(app.buttons["OrderSheet.Close"].exists, "The unconfirmed sheet needs a way to leave")
+
+        primary.tap()
+        XCTAssertTrue(confirming(in: app).waitForExistence(timeout: 5), "Check again re-polls, it does not create")
+        XCTAssertFalse(unconfirmed.exists)
+        XCTAssertFalse(app.buttons["Done"].exists, "Check again opened Checkout")
+
+        XCTAssertTrue(placed.waitForExistence(timeout: 60), "The re-poll should reach the settled row")
+        XCTAssertEqual(placed.label, "Placed d0000000-0000-0000-0000-0000000000e1")
+        XCTAssertEqual(creates.label, "1", "Check again made a second order")
+    }
 }
