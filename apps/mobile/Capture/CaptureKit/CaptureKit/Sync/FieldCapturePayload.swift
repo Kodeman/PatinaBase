@@ -38,10 +38,14 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
     public var provenance: [String: String]?
     /// FieldKey.rawValue -> who confirmed the field's value, and when. Its own
     /// fact beside `provenance`: a confirmed guess is still "smartGuess" there.
-    /// No reader projects it yet; it rides `raw_payload` until T6 does.
+    /// Projected out of `raw_payload` by 00669 (V4+): ALWAYS an object on the
+    /// wire, `{}` when there are no confirmations — never omitted, since an
+    /// omitted key means "this client doesn't speak it" (a V3 payload), not
+    /// "nothing is confirmed".
     public var confirmations: [String: Confirmation]?
     /// FieldKey.rawValue -> the machine's proposal a human replaced, for each
-    /// "edited" field. Rides `raw_payload` like `confirmations`.
+    /// "edited" field. Projected out of `raw_payload` by 00669, same
+    /// always-an-object rule as `confirmations`.
     public var proposals: [String: String]?
     public var device: Device?
     /// 'note' | 'context' | nil. Read by the W1 migration into
@@ -56,8 +60,12 @@ public struct FieldCapturePayload: Codable, Equatable, Sendable {
 
     /// Bumped alongside a 00235-side (or successor) reader change. Wave 3 bumped
     /// this from 2 to 3 to add the `visit`/`suggestion` envelopes and
-    /// `voice.noteSetting`; Task 9's migration reads both.
-    public static let currentSchemaVersion = 3
+    /// `voice.noteSetting`; Task 9's migration reads both. W1A-08 bumped this
+    /// from 3 to 4: `confirmations`/`proposals` are now ALWAYS encoded as JSON
+    /// objects (`{}` when empty, never omitted), against 00669's
+    /// replace-on-changed-payload projection, which treats "key present and
+    /// empty" as clear and "key absent" as "this client does not speak the key".
+    public static let currentSchemaVersion = 4
 
     // ── Nested envelopes (each key path is read individually by 00235) ────────
 
@@ -226,8 +234,11 @@ public extension FieldCapturePayload {
             confirmations[key] = Confirmation(confirmedBy: s.confirmedByRaw[key],
                                               confirmedAt: Self.venueDateFormatter.string(from: at))
         }
-        self.confirmations = confirmations.isEmpty ? nil : confirmations
-        self.proposals = s.proposedValueRaw.isEmpty ? nil : s.proposedValueRaw
+        // ALWAYS an object, even when empty ({} clears the projection per
+        // 00669; omitting the key would instead mean "this client doesn't
+        // speak it", which a V4 client never means).
+        self.confirmations = confirmations
+        self.proposals = s.proposedValueRaw
         self.device = device
         self.captureKind = s.captureKindRaw?.nonEmpty
         self.visit = Self.buildVisit(s)

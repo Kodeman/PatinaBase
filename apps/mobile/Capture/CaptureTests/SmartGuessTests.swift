@@ -430,14 +430,18 @@ struct GuessConfirmationTests {
         #expect(wire["proposals"] as? [String: String] == ["material": "Oak"])
     }
 
-    @Test @MainActor func aCaptureWithNothingConfirmedOmitsBothNewKeys() throws {
+    // W1A-08 (schemaVersion 4): confirmations/proposals are now ALWAYS objects,
+    // `{}` when empty — never omitted. An omitted key means "this client
+    // doesn't speak it" (a V3 payload), which a V4 client never means; 00669's
+    // trigger reads "present and empty" as the clear.
+    @Test @MainActor func aCaptureWithNothingConfirmedEncodesBothNewKeysAsEmptyObjects() throws {
         let store = try CaptureStore.inMemory()
         let s = store.newDraft()
         s.recordSmartGuess([FieldSuggestion(key: .material, value: "Oak", confidence: 0.6)])
         let data = try JSONEncoder().encode(FieldCapturePayload(piece: s, device: .init()))
         let wire = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(wire["provenance"] as? [String: String] == ["material": "smartGuess"])
-        #expect(wire["confirmations"] == nil)
-        #expect(wire["proposals"] == nil)
+        #expect((wire["confirmations"] as? [String: Any])?.isEmpty == true)
+        #expect((wire["proposals"] as? [String: Any])?.isEmpty == true)
     }
 }
