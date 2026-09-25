@@ -8,6 +8,11 @@
 //  .smartGuess origin, a corrected one becomes .edited and keeps the guess as
 //  its proposal; tapping a guess opens just that field; "Edit all" opens them all.
 //  Guesses never overwrite a value a tag/scan/measure/human already set.
+//
+//  The frame's OCR and the piece's scanned codes feed the guess, and every
+//  row shows what the piece holds after the write, never the sheet's own guess
+//  (`SmartGuessApplication`, CaptureKit). A refused guess is marked
+//  "not applied" beside the value that stayed.
 
 import SwiftUI
 import CaptureKit
@@ -18,6 +23,9 @@ struct SmartGuessSheet: View {
     let session: any SessionProviding
     let camera: any CameraService
     let smartGuess: any SmartGuessService
+    /// N1's reader and N2's parser, the same ones those sheets are built with.
+    var ocr: any TagOCRService = VisionTagOCRService()
+    var codeService: any CodeScanService = DataScannerCodeService()
     let analytics: any CaptureAnalytics
     let sync: any CaptureSyncService
     let siteRequests: any SiteRequestService
@@ -37,16 +45,23 @@ struct SmartGuessSheet: View {
     /// deep link — and renders the shared component.
     @State private var verbMenu = FieldVerbMenu()
 
-    // Working values + the original guesses (to tell a correction from an accept).
-    @State private var categoryRaw = PieceCategory.unknown.rawValue
-    @State private var material = ""
+    // Working values + what the piece held when shown (to tell a correction
+    // from an accept). Both start from the piece, read back after the write.
+    @State private var values: [FieldKey: String] = [:]
+    @State private var originals: [FieldKey: String] = [:]
+    @State private var origins: [FieldKey: ProvenanceSource] = [:]
+    @State private var confirmedKeys: Set<FieldKey> = []
+    @State private var results: [FieldKey: SmartGuessFieldResult] = [:]
     @State private var style = ""
-    @State private var colour = ""
-    @State private var categoryOriginal = PieceCategory.unknown.rawValue
-    @State private var materialOriginal = ""
     @State private var styleOriginal = ""
-    @State private var colourOriginal = ""
-    @State private var confidence: [String: Double] = [:]
+
+    /// Category, material and colour always show; a maker or SKU only when
+    /// this pass read one off the tag or the code.
+    private var shownKeys: [FieldKey] { Self.shownKeys(results) }
+
+    private static func shownKeys(_ results: [FieldKey: SmartGuessFieldResult]) -> [FieldKey] {
+        [.category, .material, .colorway] + [FieldKey.maker, .sku].filter { results[$0] != nil }
+    }
 
     var body: some View {
         RecognitionSheetLayout {
@@ -55,9 +70,18 @@ struct SmartGuessSheet: View {
 
             RecognitionCard {
                 categoryRow
-                textGuessRow(label: "Material", value: $material, key: "Material")
-                textGuessRow(label: "Style", value: $style, key: "Style")
-                textGuessRow(label: "Colour", value: $colour, key: "Colour")
+                textGuessRow(label: "Material", value: binding(.material), id: FieldKey.material.rawValue,
+                             field: .material)
+                textGuessRow(label: "Style", value: $style, id: "style", field: nil)
+                textGuessRow(label: "Colour", value: binding(.colorway), id: FieldKey.colorway.rawValue,
+                             field: .colorway)
+                if results[.maker] != nil {
+                    textGuessRow(label: "Maker", value: binding(.maker), id: FieldKey.maker.rawValue,
+                                 field: .maker)
+                }
+                if results[.sku] != nil {
+                    textGuessRow(label: "SKU", value: binding(.sku), id: FieldKey.sku.rawValue, field: .sku)
+                }
             }
 
             HStack(spacing: 12) {
@@ -126,20 +150,14 @@ struct SmartGuessSheet: View {
     private var categoryRow: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text("Category")
-                        .font(CaptureType.eyebrow).textCase(.uppercase)
-                        .foregroundStyle(CaptureColor.inkSoft)
-                    ProvenanceBadge(.smartGuess)
-                    confidenceTag("Category")
-                }
+                rowHeader("Category", field: .category)
                 Menu {
                     ForEach(PieceCategory.allCases, id: \.self) { c in
-                        Button(c.rawValue.capitalized) { categoryRaw = c.rawValue }
+                        Button(c.rawValue.capitalized) { values[.category] = c.rawValue }
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Text(PieceCategory(rawValue: categoryRaw)?.rawValue.capitalized ?? "Unknown")
+                        Text(PieceCategory(rawValue: values[.category] ?? "")?.rawValue.capitalized ?? "Unknown")
                             .font(CaptureType.bodyEmph)
                             .foregroundStyle(CaptureColor.verdigrisInk)
                         Image(systemName: "chevron.down")
@@ -155,23 +173,16 @@ struct SmartGuessSheet: View {
     }
 
     @ViewBuilder
-    private func textGuessRow(label: String, value: Binding<String>, key: String) -> some View {
-        let isEditing = editAll || editing.contains(key)
+    private func textGuessRow(label: String, value: Binding<String>, id: String, field: FieldKey?) -> some View {
+        let isEditing = editAll || editing.contains(id)
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(label)
-                    .font(CaptureType.eyebrow).textCase(.uppercase)
-                    .foregroundStyle(CaptureColor.inkSoft)
-                ProvenanceBadge(.smartGuess)
-                confidenceTag(key)
-                Spacer()
-            }
+            rowHeader(label, field: field)
             if isEditing {
                 TextField("—", text: value)
                     .font(CaptureType.body)
                     .foregroundStyle(CaptureColor.ink)
             } else {
-                Button { editing.insert(key) } label: {
+                Button { editing.insert(id) } label: {
                     Text(value.wrappedValue.isEmpty ? "Tap to add" : value.wrappedValue)
                         .font(CaptureType.bodyEmph)
                         .foregroundStyle(value.wrappedValue.isEmpty ? CaptureColor.inkSoft : CaptureColor.verdigrisInk)
@@ -185,13 +196,37 @@ struct SmartGuessSheet: View {
         .overlay(alignment: .bottom) { Rectangle().fill(CaptureColor.line).frame(height: 1) }
     }
 
-    @ViewBuilder
-    private func confidenceTag(_ key: String) -> some View {
-        if let c = confidence[key], c > 0, c < 0.55 {
-            Text("low")
+    /// The label, the persisted field's own origin, and what became of this
+    /// pass's guess for it. Style has no FieldKey, so no origin of its own.
+    private func rowHeader(_ label: String, field: FieldKey?) -> some View {
+        HStack {
+            Text(label)
                 .font(CaptureType.eyebrow).textCase(.uppercase)
-                .foregroundStyle(CaptureColor.terracotta)
+                .foregroundStyle(CaptureColor.inkSoft)
+            ProvenanceBadge(field.flatMap { origins[$0] } ?? .smartGuess,
+                            confirmed: field.map { confirmedKeys.contains($0) } ?? false)
+            if let field { guessTag(field) }
+            Spacer()
         }
+    }
+
+    @ViewBuilder
+    private func guessTag(_ key: FieldKey) -> some View {
+        if let result = results[key] {
+            if !result.isApplied {
+                Text("not applied")
+                    .font(CaptureType.eyebrow).textCase(.uppercase)
+                    .foregroundStyle(CaptureColor.inkSoft)
+            } else if result.confidence > 0, result.confidence < 0.55 {
+                Text("low")
+                    .font(CaptureType.eyebrow).textCase(.uppercase)
+                    .foregroundStyle(CaptureColor.terracotta)
+            }
+        }
+    }
+
+    private func binding(_ key: FieldKey) -> Binding<String> {
+        Binding(get: { values[key] ?? "" }, set: { values[key] = $0 })
     }
 
     // MARK: - Load + apply
@@ -200,6 +235,7 @@ struct SmartGuessSheet: View {
         guard !loaded, let sourcePiece = currentPiece() else { return }
         loaded = true
         analytics.screen("N5.smart-guess")
+        let codeTags = sourcePiece.scannedCodes
 
         let image = await RecognitionImageLoader.captureImage(
             for: sourcePiece,
@@ -207,70 +243,38 @@ struct SmartGuessSheet: View {
             camera: camera)
         guard !Task.isCancelled, currentPiece() != nil else { return }
 
-        let guess = await smartGuess.guess(image: image, ocr: [], codes: [])
+        let observed = await SmartGuessApplication(ocr: ocr, codes: codeService, smartGuess: smartGuess)
+            .observe(image: image, scannedCodeTags: codeTags)
         guard !Task.isCancelled, let piece = currentPiece() else { return }
 
-        categoryRaw = guess.category == .unknown ? piece.categoryRaw : guess.category.rawValue
-        confidence["Category"] = guess.categoryConfidence
-        for field in guess.fields {
-            switch field.key {
-            case .material: material = field.value; confidence["Material"] = field.confidence
-            case .colorway: colour = field.value; confidence["Colour"] = field.confidence
-            default: break
-            }
-        }
-        if material.isEmpty { material = piece.materialNote ?? "" }
-        if colour.isEmpty { colour = piece.colorway ?? "" }
-        style = piece.styleTags.first ?? ""
-
-        categoryOriginal = categoryRaw
-        materialOriginal = material
-        styleOriginal = style
-        colourOriginal = colour
-
-        applyAsGuess(piece)
+        let applied = SmartGuessApplication.apply(observed.suggestions, to: piece)
         try? store.save()
+        showPersisted(piece, keys: Self.shownKeys(applied))
+        results = applied
     }
 
-    private func applyAsGuess(_ piece: Piece) {
-        // setValue refuses to overwrite what a tag, a scan, a measure or she
-        // already set. Never pin a confidence to a value we didn't write.
-        if categoryRaw != PieceCategory.unknown.rawValue {
-            piece.setValue(categoryRaw, for: .category, source: .smartGuess)
-            if piece.provenance(for: .category) == .smartGuess {
-                piece.setConfidence(confidence["Category"] ?? 0, for: .category)
-            }
+    /// Every row starts from what the piece holds now, applied or refused.
+    private func showPersisted(_ piece: Piece, keys: [FieldKey]) {
+        var persisted: [FieldKey: String] = [:]
+        for key in keys {
+            persisted[key] = piece.fieldValue(for: key) ?? ""
+            origins[key] = piece.provenance(for: key)
+            if piece.isConfirmed(key) { confirmedKeys.insert(key) }
         }
-        if !material.isEmpty {
-            piece.setValue(material, for: .material, source: .smartGuess)
-            if piece.provenance(for: .material) == .smartGuess {
-                piece.setConfidence(confidence["Material"] ?? 0, for: .material)
-            }
-        }
-        if !colour.isEmpty {
-            piece.setValue(colour, for: .colorway, source: .smartGuess)
-            if piece.provenance(for: .colorway) == .smartGuess {
-                piece.setConfidence(confidence["Colour"] ?? 0, for: .colorway)
-            }
-        }
-        if !style.isEmpty, !piece.styleTags.contains(style) {
-            piece.styleTags.append(style)
-        }
+        values = persisted
+        originals = persisted
+        style = piece.styleTags.first ?? ""
+        styleOriginal = style
     }
 
     // MARK: - Accept (promote to confirmed)
 
     private func accept() {
         guard let piece = currentPiece() else { return }
-        var reviews: [GuessReview] = []
-        if categoryRaw != PieceCategory.unknown.rawValue {
-            reviews.append(GuessReview(key: .category, value: categoryRaw, proposed: categoryOriginal))
-        }
-        if !material.isEmpty {
-            reviews.append(GuessReview(key: .material, value: material, proposed: materialOriginal))
-        }
-        if !colour.isEmpty {
-            reviews.append(GuessReview(key: .colorway, value: colour, proposed: colourOriginal))
+        let reviews: [GuessReview] = shownKeys.compactMap { key in
+            guard let value = values[key], !value.isEmpty,
+                  value != PieceCategory.unknown.rawValue || key != .category else { return nil }
+            return GuessReview(key: key, value: value, proposed: originals[key] ?? "")
         }
         piece.acceptReview(reviews, by: session.userID)
         // Style has no FieldKey — it lives in styleTags (no per-field provenance).
@@ -283,7 +287,7 @@ struct SmartGuessSheet: View {
         }
         piece.touch()
         try? store.save()
-        analytics.event("N5.accept", ["category": categoryRaw])
+        analytics.event("N5.accept", ["category": values[.category] ?? PieceCategory.unknown.rawValue])
         coordinator?.present(.pieceSheet(pieceID))
     }
 
@@ -310,6 +314,8 @@ import CaptureKitMocks
         session: MockSessionProviding(),
         camera: MockCameraService(),
         smartGuess: StubSmartGuessService(),
+        ocr: MockTagOCRService(),
+        codeService: MockCodeScanService(),
         analytics: MockCaptureAnalytics(),
         sync: InMemoryCaptureSyncService(),
         siteRequests: MockSiteRequestService(),

@@ -33,16 +33,20 @@ public final class MockCameraService: CameraService {
 }
 
 public struct MockTagOCRService: TagOCRService {
-    public init() {}
+    public static let tagRead: [OCRObservation] = [
+        OCRObservation(text: "Holloway & Co.", confidence: 0.94,
+                       boundingBox: .init(x: 0.1, y: 0.2, width: 0.5, height: 0.06), suggestedField: .maker),
+        OCRObservation(text: "LQ-3S-OAK", confidence: 0.91,
+                       boundingBox: .init(x: 0.1, y: 0.3, width: 0.4, height: 0.06), suggestedField: .sku),
+        OCRObservation(text: "$3,120", confidence: 0.88,
+                       boundingBox: .init(x: 0.1, y: 0.4, width: 0.3, height: 0.06), suggestedField: .price)
+    ]
+    private let observations: [OCRObservation]
+    public init(observations: [OCRObservation] = MockTagOCRService.tagRead) {
+        self.observations = observations
+    }
     public func recognizeText(in image: CaptureImage) async throws -> [OCRObservation] {
-        [
-            OCRObservation(text: "Holloway & Co.", confidence: 0.94,
-                           boundingBox: .init(x: 0.1, y: 0.2, width: 0.5, height: 0.06), suggestedField: .maker),
-            OCRObservation(text: "LQ-3S-OAK", confidence: 0.91,
-                           boundingBox: .init(x: 0.1, y: 0.3, width: 0.4, height: 0.06), suggestedField: .sku),
-            OCRObservation(text: "$3,120", confidence: 0.88,
-                           boundingBox: .init(x: 0.1, y: 0.4, width: 0.3, height: 0.06), suggestedField: .price)
-        ]
+        observations
     }
 }
 
@@ -91,6 +95,20 @@ public struct StubSmartGuessService: SmartGuessService {
             FieldSuggestion(key: .category, value: PieceCategory.seating.rawValue, confidence: 0.72),
             FieldSuggestion(key: .material, value: "Oak / bouclé", confidence: 0.6)
         ])
+    }
+}
+
+/// Returns a fixed guess and keeps what it was handed, so a test can prove the
+/// OCR and the scanned codes reached `guess(image:ocr:codes:)`.
+public actor RecordingSmartGuessService: SmartGuessService {
+    public private(set) var receivedOCR: [OCRObservation]?
+    public private(set) var receivedCodes: [ScannedCode]?
+    private let result: SmartGuess
+    public init(returning result: SmartGuess) { self.result = result }
+    public func guess(image: CaptureImage, ocr: [OCRObservation], codes: [ScannedCode]) async -> SmartGuess {
+        receivedOCR = ocr
+        receivedCodes = codes
+        return result
     }
 }
 
