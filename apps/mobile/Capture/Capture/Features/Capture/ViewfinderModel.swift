@@ -23,7 +23,7 @@ final class ViewfinderModel {
     private let session: any SessionProviding
     private let companion: FieldCompanionController
     private let sessionContext: CaptureSessionContextStore
-    private let smartGuess: any SmartGuessService
+    private let smartGuess: SmartGuessApplication
     private let siteRequests: any SiteRequestService
     private let voice: any VoiceNoteService
     /// The learned filing places a suggestion is computed against, on device.
@@ -129,7 +129,10 @@ final class ViewfinderModel {
         self.sync = container.sync
         self.session = container.session
         self.companion = container.companion
-        self.smartGuess = container.smartGuess
+        // The same readers N1/N2/N5 construct (RecognitionScreens, SmartGuessSheet).
+        self.smartGuess = SmartGuessApplication(ocr: VisionTagOCRService(),
+                                                codes: DataScannerCodeService(),
+                                                smartGuess: container.smartGuess)
         self.siteRequests = container.siteRequests
         self.projectCache = container.projectCache
         self.voice = SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory(),
@@ -752,29 +755,27 @@ final class ViewfinderModel {
         try? store.save()
     }
 
-    /// Read the frame we just took and record what it says — the real reader,
-    /// not a placeholder. The read is deferred off the synchronous shutter call
-    /// so the shutter does not block on it, and the fields land when it
-    /// completes; `setValue` still refuses to let a guess clobber anything a tag,
-    /// a scan, a measure or the designer set.
+    /// Read the frame we just took and record what it says — OCR on the frame,
+    /// the codes already scanned onto the draft, then the guess, applied with
+    /// `SmartGuessApplication`'s precedence (code, OCR, guess), which never
+    /// overwrites a confirmed field or another origin. The read is deferred off
+    /// the synchronous shutter call so the shutter does not block on it; C3
+    /// shows what the piece holds when it lands.
     private func applySmartGuess(to draft: Piece) {
         guard let photo = draft.primaryPhoto else { return }
         let mediaURL = store.mediaURL(for: photo.filename)
         let width = photo.width
         let height = photo.height
         let draftID = draft.id
+        let codeTags = draft.scannedCodes
+        let reader = smartGuess
         Task { [weak self] in
             guard let self else { return }
             guard let data = try? Data(contentsOf: mediaURL), !data.isEmpty else { return }
             let image = CaptureImage(data: data, width: width, height: height)
-            let guess = await self.smartGuess.guess(image: image, ocr: [], codes: [])
-            let recordable = guess.fieldsWorthRecording
-            guard !recordable.isEmpty,
-                  let current = self.currentPiece(id: draftID),
-                  // She can route this record while the read is still running.
-                  // Once it has left the device it must not be rewritten.
-                  current.transferState.phase == .local else { return }
-            current.recordSmartGuess(recordable)
+            let applied = await reader.applyShutterRead(image: image, scannedCodeTags: codeTags,
+                                                        to: { self.currentPiece(id: draftID) })
+            guard applied != nil else { return }
             try? self.store.save()
         }
     }

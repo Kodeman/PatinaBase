@@ -26,8 +26,8 @@ struct CaptureCardOverlay: View {
     let placementLine: String
     let placementIsUnplaced: Bool
     let onPlacement: () -> Void
-    /// The mic is not rendered at all when the flag is off (FC-R11's off-switch):
-    /// a control that cannot record must not be offered.
+    /// The mic is not rendered at all when microphone permission is denied (or
+    /// in VOICE mode): a control that cannot record must not be offered.
     let micIsAvailable: Bool
     let isRecording: Bool
     let transcript: String
@@ -94,6 +94,18 @@ struct CaptureCardOverlay: View {
                      value: piece.materialNote ?? "—",
                      source: piece.provenance(for: .material),
                      confirmed: piece.isConfirmed(.material))
+            // The shutter's read also takes maker and SKU off the tag and the
+            // scanned code. Shown once the piece holds one, badged by origin.
+            if let maker = piece.maker, !maker.isEmpty {
+                guessRow(label: "Maker", value: maker,
+                         source: piece.provenance(for: .maker),
+                         confirmed: piece.isConfirmed(.maker))
+            }
+            if let sku = piece.sku, !sku.isEmpty {
+                guessRow(label: "SKU", value: sku,
+                         source: piece.provenance(for: .sku),
+                         confirmed: piece.isConfirmed(.sku))
+            }
 
             Button(action: onPlacement) {
                 HStack(spacing: 8) {

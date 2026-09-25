@@ -133,6 +133,21 @@ public struct SmartGuessApplication: Sendable {
         return results
     }
 
+    /// The shutter's read: C3 is the surface every Release capture shows, so
+    /// this is `observe` then `apply` for the frame just taken. `piece` is
+    /// resolved AFTER the read — she can route the capture while it runs, and
+    /// once it has left the device (`transferState.phase` is no longer
+    /// `.local`) it is not rewritten. Nil when nothing was written.
+    @MainActor
+    public func applyShutterRead(image: CaptureImage, scannedCodeTags: [String],
+                                 to piece: () -> Piece?) async -> [FieldKey: SmartGuessFieldResult]? {
+        let observed = await observe(image: image, scannedCodeTags: scannedCodeTags)
+        guard !observed.suggestions.isEmpty,
+              let current = piece(),
+              current.transferState.phase == .local else { return nil }
+        return Self.apply(observed.suggestions, to: current)
+    }
+
     private func parse(_ tag: String) -> ScannedCode? {
         guard let sep = tag.firstIndex(of: ":") else { return nil }
         let value = String(tag[tag.index(after: sep)...])
