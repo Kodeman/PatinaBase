@@ -39,9 +39,15 @@ SCHEME="Patina"
 CONFIG="$PROJECT_DIR/.swiftlint.yml"
 PROJECT_DIR_REL="${PROJECT_DIR#"$REPO_ROOT"/}"       # apps/mobile/Patina
 
-# --- per-worktree DerivedData: six lanes compiling into one shared tree -------
-# produces transient failures the Daily Return already paid for.
-DERIVED="$PROJECT_DIR/.build/DerivedData"
+# --- per-checkout DerivedData: six lanes compiling into one shared tree -------
+# produces transient failures the Daily Return already paid for. Each checkout
+# builds into its own dir under PATINA_DERIVED_ROOT, outside the worktree (an
+# in-tree .build/ per worktree filled the disk). The key hashes this app dir's
+# absolute path, so two worktrees never share a DerivedData lock.
+PATINA_DERIVED_ROOT="${PATINA_DERIVED_ROOT:-$HOME/Library/Caches/patina-derived}"
+KEY="patina-$(printf %s "$PROJECT_DIR" | shasum -a 256 | cut -c1-12)"
+DERIVED="$PATINA_DERIVED_ROOT/$KEY/DerivedData"
+ARCHIVE_DIR="$PATINA_DERIVED_ROOT/$KEY/archives"
 
 # ---- every xcodebuild in this file goes through here --------------------------
 # The bootstrap call lives INSIDE the funnel, not in main(), so no tier can be
@@ -51,6 +57,10 @@ DERIVED="$PROJECT_DIR/.build/DerivedData"
 # scripts/bootstrap-worktree.sh for why the "Stamp Git SHA" phase cannot do it.
 run_xcb() {
   "$SCRIPT_DIR/bootstrap-worktree.sh"
+  # CHECKOUT maps the hashed dir back to its checkout, so scripts/repo-gc.sh can
+  # sweep the dirs of worktrees that no longer exist.
+  mkdir -p "$PATINA_DERIVED_ROOT/$KEY"
+  printf '%s\n' "$PROJECT_DIR" > "$PATINA_DERIVED_ROOT/$KEY/CHECKOUT"
   if command -v xcbeautify >/dev/null 2>&1; then
     set -o pipefail; "$@" | xcbeautify
   else
@@ -117,7 +127,7 @@ cmd_archive() {
   run_xcb xcodebuild archive \
     -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
     -destination 'generic/platform=iOS' \
-    -archivePath "$PROJECT_DIR/.build/archives/Patina.xcarchive" \
+    -archivePath "$ARCHIVE_DIR/Patina.xcarchive" \
     -derivedDataPath "$DERIVED" \
     -allowProvisioningUpdates
 }

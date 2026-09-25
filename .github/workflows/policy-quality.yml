@@ -99,6 +99,8 @@ jobs:
     needs: plan
     if: needs.plan.outputs.ios_patina == 'true'
     runs-on: xcode-27
+    env:
+      PATINA_DERIVED_ROOT: ${{ github.workspace }}/.derived
     steps:
       - uses: actions/checkout@v4
         with:
@@ -130,7 +132,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            apps/mobile/Patina/.build/DerivedData/SourcePackages
+            .derived/*/DerivedData/SourcePackages
             ~/Library/Caches/org.swift.swiftpm
           key: ${{ runner.os }}-${{ runner.arch }}-xcode27-patina-spm-${{ hashFiles('apps/mobile/Patina/Patina.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
 
@@ -157,6 +159,8 @@ jobs:
     needs: plan
     if: needs.plan.outputs.ios_capture == 'true'
     runs-on: xcode-27
+    env:
+      PATINA_DERIVED_ROOT: ${{ github.workspace }}/.derived
     steps:
       - uses: actions/checkout@v4
         with:
@@ -226,7 +230,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            apps/mobile/Capture/.build/DerivedData/SourcePackages
+            .derived/*/DerivedData/SourcePackages
             ~/Library/Caches/org.swift.swiftpm
           key: ${{ runner.os }}-${{ runner.arch }}-xcode27-capture-spm-${{ hashFiles('apps/mobile/Capture/Capture.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
 

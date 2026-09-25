@@ -57,8 +57,9 @@
 # Env vars (optional for export, REQUIRED for --upload):
 #   ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY_PATH
 #
-# Output: an .xcarchive under .build/archives and, unless --skip-export, either
-# an exported .ipa under .build/export (default) or a build handed to App Store
+# Output: an .xcarchive under $PATINA_DERIVED_ROOT/patina-<key>/archives (default
+# root ~/Library/Caches/patina-derived) and, unless --skip-export, either an
+# exported .ipa under .../export (default) or a build handed to App Store
 # Connect (--upload). Paths and sizes are printed at the end.
 
 set -euo pipefail
@@ -147,11 +148,14 @@ EOF
   fi
 fi
 
-# Reuse ios-gate.sh's DerivedData so archives share its warm SPM checkouts.
-# It is already per-worktree: .build/ lives inside this checkout.
-DERIVED_DATA="$PROJECT_DIR/.build/DerivedData"
-ARCHIVE_DIR="$PROJECT_DIR/.build/archives"
-EXPORT_DIR="$PROJECT_DIR/.build/export"
+# Reuse ios-gate.sh's DerivedData so archives share its warm SPM checkouts:
+# the same per-checkout dir under PATINA_DERIVED_ROOT, outside the worktree.
+# The key hashes this app dir's absolute path, so two worktrees never share it.
+PATINA_DERIVED_ROOT="${PATINA_DERIVED_ROOT:-$HOME/Library/Caches/patina-derived}"
+KEY="patina-$(printf %s "$PROJECT_DIR" | shasum -a 256 | cut -c1-12)"
+DERIVED_DATA="$PATINA_DERIVED_ROOT/$KEY/DerivedData"
+ARCHIVE_DIR="$PATINA_DERIVED_ROOT/$KEY/archives"
+EXPORT_DIR="$PATINA_DERIVED_ROOT/$KEY/export"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 ARCHIVE_PATH="$ARCHIVE_DIR/Patina-$TIMESTAMP.xcarchive"
@@ -266,6 +270,9 @@ fi
 "$SCRIPT_DIR/bootstrap-worktree.sh"
 
 mkdir -p "$ARCHIVE_DIR" "$EXPORT_DIR"
+# CHECKOUT maps the hashed dir back to its checkout, so scripts/repo-gc.sh can
+# sweep the dirs of worktrees that no longer exist.
+printf '%s\n' "$PROJECT_DIR" > "$PATINA_DERIVED_ROOT/$KEY/CHECKOUT"
 
 echo "==> Archiving ($CONFIGURATION, build $BUILD_NUMBER) -> $ARCHIVE_PATH"
 xcodebuild "${XCODEBUILD_ARGS[@]}"

@@ -55,6 +55,14 @@ apps/mobile/Patina/scripts/ios-gate.sh all           # build + unit + lint-delta
 apps/mobile/Capture/scripts/capture-gate.sh all      # build + test + lint
 apps/mobile/Capture/scripts/capture-gate.sh build
 
+# Both gates, the run/shots scripts and archive-testflight.sh build OUTSIDE the
+# checkout: DerivedData, archives and export go to
+# $PATINA_DERIVED_ROOT/<patina|capture>-<sha256(app dir)[:12]>/ (default root
+# ~/Library/Caches/patina-derived), with a CHECKOUT file naming the app dir.
+# Nothing lands in the app's .build/ except capture-shots.sh's screenshots.
+# A sandboxed shell that cannot write there: export PATINA_DERIVED_ROOT to a
+# writable dir. scripts/repo-gc.sh sweeps keyed dirs whose checkout is gone.
+
 # Regenerate Capture's project after adding/removing/renaming a .swift file
 ruby apps/mobile/Capture/scripts/generate_project.rb
 
