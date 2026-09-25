@@ -8,6 +8,7 @@
 
 import SwiftUI
 import CaptureKit
+import PatinaDesignKit
 
 struct FieldAffirmationChip: View {
     let noteSetting: FieldNoteSetting?
@@ -18,7 +19,11 @@ struct FieldAffirmationChip: View {
             Button { affirmed = true } label: {
                 Label(title, systemImage: affirmed ? "checkmark.circle.fill" : "circle")
                     .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.ink)
+                    // `CaptureColor.goldenHour` is a fixed fill (not
+                    // dynamic); dynamic `Text.primary` ink on it measured
+                    // ~1.6:1 in dark mode (SQ-225). Fixed charcoal ink on a
+                    // fixed fill holds in both appearances.
+                    .foregroundStyle(PatinaColors.charcoal)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(CaptureColor.goldenHour, in: Capsule())
             }

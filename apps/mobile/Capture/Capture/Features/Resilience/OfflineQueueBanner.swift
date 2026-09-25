@@ -9,6 +9,7 @@
 
 import SwiftUI
 import CaptureKit
+import PatinaDesignKit
 
 struct OfflineQueueBanner: View {
     let queuedCount: Int
@@ -46,7 +47,11 @@ struct OfflineQueueBanner: View {
                         .font(CaptureType.monoBody)
                         .monospacedDigit()
                 }
-                .foregroundStyle(CaptureColor.ink)
+                // `CaptureColor.warning` is a fixed fill (not dynamic);
+                // dynamic `Text.primary` ink on it measured ~2.1:1 in dark
+                // mode (SQ-225). Fixed charcoal ink on a fixed fill holds in
+                // both appearances.
+                .foregroundStyle(PatinaColors.charcoal)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(Capsule().fill(CaptureColor.warning))
