@@ -1,11 +1,17 @@
 //  ReadyScreen.swift
 //  Capture
 //
-//  O4 · Ready — Action Button (screen.O4.ready). Confirms setup and teaches the
-//  fastest entry — the Action Button — while being explicit that the remaining
-//  permissions (Mic/Photos/Location) are deferred until their feature is used.
-//  Non-Pro devices skip the Action Button tip and surface the Control Center
-//  control instead.
+//  O4 · Ready — (screen.O4.ready). Confirms setup and teaches the fastest
+//  entry this device actually has, while being explicit that the remaining
+//  permissions (Mic/Photos/Location) are deferred until their feature is
+//  used.
+//
+//  `hardwareEntry` is derived by the caller from `HardwareEntryPolicy` (a
+//  machine-identifier allowlist — Pro vs. non-Pro is NOT the test; the
+//  14 Pro has no Action Button) and passed in. There is no Control Center
+//  control yet — no `ControlWidget`/`AppIntent` exists anywhere under
+//  `apps/mobile/Capture` (that's W3b) — so the non-Action-Button branch
+//  says only what is true today: open Patina Field from the Home Screen.
 
 import SwiftUI
 import CaptureKit
@@ -14,12 +20,15 @@ struct ReadyScreen: View {
     enum HardwareEntry { case actionButton, controlCenter }
 
     let analytics: any CaptureAnalytics
-    /// Pro devices teach the Action Button; others fall back to Control Center.
-    var hardwareEntry: HardwareEntry = .actionButton
+    /// Which fast entry this device supports, per `HardwareEntryPolicy`.
+    let hardwareEntry: HardwareEntry
     /// "Start capturing" → opens the live viewfinder (C1). This is the flow's
     /// completion handoff.
     var onStart: () -> Void = {}
-    /// Deep-links to Settings › Action Button (deferred; integrator-wired).
+    /// Action Button branch only: opens the real Action Button settings
+    /// pane if a deep link exists, otherwise explains where to go. Never
+    /// invoked on the Control Center branch — there is nothing to set up
+    /// yet.
     var onSetHardwareEntry: () -> Void = {}
 
     var body: some View {
@@ -71,35 +80,38 @@ struct ReadyScreen: View {
     private var subtitle: String {
         switch hardwareEntry {
         case .actionButton:
-            return "Map the Action Button to Patina Field, and capture without even unlocking to the app."
+            return "Assign the Action Button to Patina Field — it opens straight to the viewfinder."
         case .controlCenter:
-            return "Add the Capture control to Control Center and shoot in a single tap."
+            return "Open Patina Field from the Home Screen whenever you're ready to capture."
         }
     }
 
+    @ViewBuilder
     private var hardwareCard: some View {
         HStack(spacing: 14) {
-            Image(systemName: hardwareEntry == .actionButton ? "smallcircle.filled.circle" : "switch.2")
+            Image(systemName: hardwareEntry == .actionButton ? "smallcircle.filled.circle" : "square.grid.2x2")
                 .font(CaptureType.title)
                 .foregroundStyle(CaptureColor.verdigrisInk)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(hardwareEntry == .actionButton ? "Action Button → Capture" : "Control Center → Capture")
+                Text(hardwareEntry == .actionButton ? "Action Button → Capture" : "Open from the Home Screen")
                     .font(CaptureType.bodyEmph)
                     .foregroundStyle(CaptureColor.ink)
                 Text(hardwareEntry == .actionButton
-                     ? "Capture without even unlocking to the app."
-                     : "One tap from anywhere in iOS.")
+                     ? "Opens the viewfinder — you'll still unlock to see it."
+                     : "Tap the Patina Field icon to start capturing.")
                     .font(CaptureType.footnote)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
 
             Spacer(minLength: 8)
 
-            Button(action: onSetHardwareEntry) {
-                Text("Set up")
-                    .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.verdigris)
+            if hardwareEntry == .actionButton {
+                Button(action: onSetHardwareEntry) {
+                    Text("Set up")
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.verdigris)
+                }
             }
         }
         .padding(16)
@@ -112,7 +124,7 @@ struct ReadyScreen: View {
 import CaptureKitMocks
 
 #Preview("Action Button") {
-    ReadyScreen(analytics: MockCaptureAnalytics())
+    ReadyScreen(analytics: MockCaptureAnalytics(), hardwareEntry: .actionButton)
 }
 
 #Preview("Control Center") {
