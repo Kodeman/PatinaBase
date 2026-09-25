@@ -55,6 +55,20 @@ struct PatinaApp: App {
         return (value?.isEmpty == false) ? value : nil
     }
 
+    /// `--uitest-order-sheet` (with `--uitesting`) opens the order sheet over
+    /// `PurchaseComposition`'s scripted piece and doubles instead of the app.
+    static var opensOrderSheetForUITest: Bool {
+        isUITesting && ProcessInfo.processInfo.arguments.contains("--uitest-order-sheet")
+    }
+
+    /// Which call of the scripted order poll answers settled. Set
+    /// `UITEST_ORDER_POLL_SETTLES_AFTER` on the launch environment; defaults
+    /// to 2 so the sheet is always seen confirming before it is placed.
+    static var uitestingOrderPollSettlesAfter: Int {
+        let raw = ProcessInfo.processInfo.environment["UITEST_ORDER_POLL_SETTLES_AFTER"]
+        return raw.flatMap(Int.init).map { max(1, $0) } ?? 2
+    }
+
     init() {
         // B.3 (Wave 3): register PatinaDesignKit's vendored faces
         // (PlayfairDisplay / Inter / DMMono) process-wide via CTFontManager —
@@ -92,9 +106,18 @@ struct PatinaApp: App {
         RoomScanSyncService.shared.configure(modelContext: modelContext)
     }
 
+    @ViewBuilder
+    private var root: some View {
+        if Self.opensOrderSheetForUITest {
+            PurchaseComposition.UITestOrderHost()
+        } else {
+            ContentView()
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            root
                 .preferredColorScheme((AppearanceSetting(rawValue: appearanceRaw) ?? .system).colorScheme)
                 .appCoordinator(coordinator)
                 .environment(\.scanEventChannel, scanEvents)

@@ -214,6 +214,8 @@ struct ProductDetailView: View {
                     OrderSheet(
                         product: product,
                         fitLine: fitLine?.text,
+                        handoff: PurchaseComposition.handoff(),
+                        terms: PurchaseComposition.terms,
                         onPlaced: { order in presented = .orderPlaced(order) }
                     )
                 }

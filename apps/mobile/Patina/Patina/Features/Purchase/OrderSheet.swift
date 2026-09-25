@@ -24,11 +24,29 @@ struct OrderSheet: View {
     /// swap the sheet for `OrderPlacedView`.
     let onPlaced: (DirectOrder) -> Void
 
+    /// Where the terms come from. `PurchaseComposition` picks the live read or,
+    /// under `--uitesting`, the scripted double.
+    private let fetchTerms: PurchaseComposition.TermsProvider
+
     @Environment(\.dismiss) private var dismiss
-    @State private var handoff = OrderHandoff()
+    @State private var handoff: OrderHandoff
     @State private var terms: DirectOrderTerms = .unknown
     @State private var hasLoadedTerms = false
     @State private var designerFirstName: String?
+
+    init(
+        product: Product,
+        fitLine: String?,
+        handoff: OrderHandoff,
+        terms: @escaping PurchaseComposition.TermsProvider,
+        onPlaced: @escaping (DirectOrder) -> Void
+    ) {
+        self.product = product
+        self.fitLine = fitLine
+        self.onPlaced = onPlaced
+        self.fetchTerms = terms
+        _handoff = State(initialValue: handoff)
+    }
 
     private var content: OrderSheetContent {
         OrderSheetContent.make(
@@ -53,7 +71,7 @@ struct OrderSheet: View {
         .task {
             guard !hasLoadedTerms else { return }
             hasLoadedTerms = true
-            terms = (try? await DirectOrdersAPIClient.shared.fetchTerms()) ?? .unknown
+            terms = (try? await fetchTerms()) ?? .unknown
             PostHogService.shared.capture("order_sheet_shown", properties: [
                 "product_id": product.id,
                 "tax_shipping_enabled": terms.taxShippingEnabled
