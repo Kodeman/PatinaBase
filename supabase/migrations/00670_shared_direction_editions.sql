@@ -25,8 +25,9 @@
 --      per kept project, under the same per-decision reader predicate
 --      `list_my_project_decision_reviews` uses (00467). The reader rule is not restated
 --      anywhere else (§C.4).
---   5. `app_private.record_project_approval_edition_object(...)` (the writer: frozen
---      checksum match, storage object must exist, INSERT ... ON CONFLICT DO NOTHING,
+--   5. `app_private.record_project_approval_edition_object(...)` (the writer: the
+--      attachment must be in the served manifest, frozen checksum match, storage object
+--      must exist with matching size and mimetype, INSERT ... ON CONFLICT DO NOTHING,
 --      returns whether this call's path is the recorded one) and its reachable
 --      `public` wrapper, service_role only (§C.3.1 N1, the 00546 grant shape).
 --   6. `public.project_approval_attachment_objects(p_decision_id)`, service_role only:
@@ -330,6 +331,10 @@ DECLARE
   v_project_id uuid;
   v_items jsonb := '{}'::jsonb;
   v_editions jsonb;
+  -- Checked before any cast: one malformed item answers not_found on its own and
+  -- never fails the batch.
+  v_uuid_pattern constant text :=
+    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 BEGIN
   IF p_held IS NULL OR jsonb_typeof(p_held) <> 'array' THEN
     RAISE EXCEPTION 'p_held must be a JSON array of 1 to 200 held editions'
@@ -350,58 +355,61 @@ BEGIN
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
-  -- No authenticated subject: every item is `unauthorized`, nothing is looked up.
-  IF v_actor IS NULL THEN
-    SELECT jsonb_agg(jsonb_build_object(
-      'decisionId', (held.value->>'decisionId')::uuid,
-      'status', 'unauthorized',
-      'review', NULL,
-      'attachments', NULL,
-      'editionFigures', NULL
-    ) ORDER BY held.ordinality)
-    INTO v_editions
-    FROM jsonb_array_elements(p_held) WITH ORDINALITY AS held(value, ordinality);
-
-    RETURN jsonb_build_object(
-      'contract', 'shared_direction_v1',
-      'servedAt', now(),
-      'editions', v_editions
-    );
-  END IF;
-
   -- Step 1. Projection once per project: the distinct projects of the requested
   -- Stage-2 decisions the caller reads under the 00467 predicate
-  -- (list_my_project_decision_reviews), each serialized exactly once.
-  FOR v_project_id IN
-    SELECT DISTINCT decision.project_id
-    FROM jsonb_array_elements(p_held) AS held(value)
-    JOIN public.client_decisions AS decision
-      ON decision.id = (held.value->>'decisionId')::uuid
-    LEFT JOIN public.project_decision_authority_snapshots AS snapshot
-      ON snapshot.decision_id = decision.id
-     AND snapshot.project_id = decision.project_id
-    WHERE decision.approval_contract = 'project_artifact_v1'
-      AND decision.project_id IS NOT NULL
-      AND (
-        snapshot.decision_lead_id = v_actor
-        OR public.is_design_studio_comember(decision.designer_id)
+  -- (list_my_project_decision_reviews), each serialized exactly once. With no
+  -- authenticated subject nothing is projected.
+  IF v_actor IS NOT NULL THEN
+    FOR v_project_id IN
+      SELECT DISTINCT decision.project_id
+      FROM jsonb_array_elements(p_held) AS held(value)
+      JOIN public.client_decisions AS decision
+        ON decision.id = CASE
+             WHEN held.value->>'decisionId' ~* v_uuid_pattern
+             THEN (held.value->>'decisionId')::uuid
+           END
+      LEFT JOIN public.project_decision_authority_snapshots AS snapshot
+        ON snapshot.decision_id = decision.id
+       AND snapshot.project_id = decision.project_id
+      WHERE decision.approval_contract = 'project_artifact_v1'
+        AND decision.project_id IS NOT NULL
+        AND (
+          snapshot.decision_lead_id = v_actor
+          OR public.is_design_studio_comember(decision.designer_id)
+        )
+    LOOP
+      SELECT v_items || COALESCE(
+        jsonb_object_agg(item.value->>'decisionId', item.value),
+        '{}'::jsonb
       )
-  LOOP
-    SELECT v_items || COALESCE(
-      jsonb_object_agg(item.value->>'decisionId', item.value),
-      '{}'::jsonb
-    )
-    INTO v_items
-    FROM jsonb_array_elements(
-      public.get_project_decision_reviews(v_project_id)
-    ) AS item(value);
-  END LOOP;
+      INTO v_items
+      FROM jsonb_array_elements(
+        public.get_project_decision_reviews(v_project_id)
+      ) AS item(value);
+    END LOOP;
+  END IF;
 
-  -- Step 2. Present in the projection → ok. Every other id takes the one negative
-  -- path, identical whether or not the row exists: one LEFT JOIN lookup, the reader
-  -- predicate on the (possibly NULL) designer, then the possession proof.
+  -- Step 2. A malformed item (decisionId not a UUID, heldAuthorityRevision present but
+  -- not an integer) → not_found, echoing the decisionId as sent. No subject →
+  -- unauthorized. Present in the projection → ok. Every other id takes the one
+  -- negative path, identical whether or not the row exists: one LEFT JOIN lookup, the
+  -- reader predicate on the (possibly NULL) designer, then the possession proof.
   SELECT jsonb_agg(
     CASE
+      WHEN held.decision_id IS NULL THEN jsonb_build_object(
+        'decisionId', held.held_decision_id,
+        'status', 'not_found',
+        'review', NULL,
+        'attachments', NULL,
+        'editionFigures', NULL
+      )
+      WHEN v_actor IS NULL THEN jsonb_build_object(
+        'decisionId', held.decision_id,
+        'status', 'unauthorized',
+        'review', NULL,
+        'attachments', NULL,
+        'editionFigures', NULL
+      )
       WHEN v_items ? held.decision_id::text THEN jsonb_build_object(
         'decisionId', held.decision_id,
         'status', 'ok',
@@ -446,10 +454,26 @@ BEGIN
   FROM (
     SELECT
       element.ordinality,
-      (element.value->>'decisionId')::uuid AS decision_id,
-      (element.value->>'heldAuthorityRevision')::integer AS held_authority_revision,
+      element.value->'decisionId' AS held_decision_id,
+      CASE
+        WHEN element.value->>'decisionId' ~* v_uuid_pattern
+         AND (element.value->>'heldAuthorityRevision' IS NULL
+              OR revision.value IS NOT NULL)
+        THEN (element.value->>'decisionId')::uuid
+      END AS decision_id,
+      revision.value AS held_authority_revision,
       element.value->>'heldArtifactChecksum' AS held_artifact_checksum
     FROM jsonb_array_elements(p_held) WITH ORDINALITY AS element(value, ordinality)
+    CROSS JOIN LATERAL (
+      SELECT CASE
+        WHEN element.value->>'heldAuthorityRevision' ~ '^-?[0-9]{1,10}$'
+        THEN CASE
+          WHEN (element.value->>'heldAuthorityRevision')::bigint
+               BETWEEN -2147483648 AND 2147483647
+          THEN (element.value->>'heldAuthorityRevision')::integer
+        END
+      END AS value
+    ) AS revision
   ) AS held
   LEFT JOIN public.client_decisions AS decision
     ON decision.id = held.decision_id
@@ -481,8 +505,10 @@ COMMENT ON FUNCTION public.get_project_decision_editions(jsonb) IS
   'attachments, editionFigures}]} in request order. review is the '
   'get_project_decision_reviews item as served; it and attachments/editionFigures '
   'are non-null only on ok. revoked = the row exists, the caller is no longer a '
-  'reader, and the held (authorityRevision, artifactChecksum) pair matches. The '
-  'projection runs once per project. get_project_decision_review is unchanged.';
+  'reader, and the held (authorityRevision, artifactChecksum) pair matches. An item '
+  'whose decisionId is not a UUID or whose heldAuthorityRevision is not an integer '
+  'answers not_found on its own. The projection runs once per project. '
+  'get_project_decision_review is unchanged.';
 
 CREATE OR REPLACE FUNCTION public.get_project_decision_edition(
   p_decision_id uuid,
@@ -529,6 +555,11 @@ COMMENT ON FUNCTION public.get_project_decision_edition(uuid, integer, text) IS
   'pre-act check (§C.8).';
 
 -- ── 5. The recorder and its reachable wrapper (§C.3.1, N1) ─────────────────────────
+-- Recorded rows are immutable, so everything a row asserts is checked before the
+-- insert: the attachment is in the edition's served manifest (a set that fails the
+-- plan-set assert has none, so nothing unservable is recorded), the checksum is the
+-- frozen one, and size and content type are the stored object's own metadata. A spec
+-- book is recorded only as application/pdf.
 CREATE OR REPLACE FUNCTION app_private.record_project_approval_edition_object(
   p_decision_id uuid,
   p_attachment_id uuid,
@@ -543,7 +574,9 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_expected text;
+  v_manifest jsonb;
+  v_entry jsonb;
+  v_metadata jsonb;
   v_recorded text;
 BEGIN
   IF p_decision_id IS NULL OR p_attachment_id IS NULL OR p_object_path IS NULL THEN
@@ -551,26 +584,49 @@ BEGIN
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
-  SELECT entry.sha256 INTO v_expected
-  FROM app_private.project_approval_edition_attachment_rows(p_decision_id) AS entry
-  WHERE entry.attachment_id = p_attachment_id;
-  IF v_expected IS NULL THEN
+  v_manifest := app_private.project_approval_edition_manifest(p_decision_id, false);
+  IF v_manifest IS NULL THEN
+    RAISE EXCEPTION 'edition % has no servable attachment set', p_decision_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT entry.value INTO v_entry
+  FROM jsonb_array_elements(v_manifest) AS entry(value)
+  WHERE entry.value->>'attachmentId' = p_attachment_id::text;
+  IF v_entry IS NULL THEN
     RAISE EXCEPTION 'attachment % is not part of edition %', p_attachment_id, p_decision_id
       USING ERRCODE = 'check_violation';
   END IF;
 
-  IF p_sha256 IS DISTINCT FROM v_expected THEN
+  IF p_sha256 IS DISTINCT FROM v_entry->>'sha256' THEN
     RAISE EXCEPTION 'edition object checksum does not match the frozen source checksum'
       USING ERRCODE = 'check_violation';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM storage.objects AS object
-    WHERE object.bucket_id = 'project-approval-editions'
-      AND object.name = p_object_path
-  ) THEN
+  IF v_entry->>'kind' = 'spec_book_pdf'
+     AND p_content_type IS DISTINCT FROM 'application/pdf'
+  THEN
+    RAISE EXCEPTION 'a spec book edition object must be application/pdf'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT object.metadata INTO v_metadata
+  FROM storage.objects AS object
+  WHERE object.bucket_id = 'project-approval-editions'
+    AND object.name = p_object_path;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'no stored edition object at %', p_object_path
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_size_bytes IS DISTINCT FROM (
+       CASE WHEN v_metadata->>'size' ~ '^[0-9]{1,18}$'
+            THEN (v_metadata->>'size')::bigint
+       END)
+     OR p_content_type IS DISTINCT FROM v_metadata->>'mimetype'
+  THEN
+    RAISE EXCEPTION 'edition object size or content type does not match the stored object at %',
+      p_object_path
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -598,11 +654,13 @@ REVOKE ALL ON FUNCTION app_private.record_project_approval_edition_object(
 COMMENT ON FUNCTION app_private.record_project_approval_edition_object(
   uuid, uuid, text, bigint, text, text
 ) IS
-  'CONTRACT-C §C.3.1 writer. Refuses a sha256 other than the frozen source checksum '
-  '(plan_issue_prints.sha256, or the spec-book artifact_hash) and a path with no '
-  'storage.objects row in project-approval-editions; inserts ON CONFLICT '
-  '(decision_id, attachment_id) DO NOTHING and returns whether p_object_path is the '
-  'recorded one.';
+  'CONTRACT-C §C.3.1 writer. Refuses an edition whose manifest is NULL (the plan-set '
+  'assert failed), an attachment outside that manifest, a sha256 other than the frozen '
+  'source checksum (plan_issue_prints.sha256, or the spec-book artifact_hash), a spec '
+  'book that is not application/pdf, a path with no storage.objects row in '
+  'project-approval-editions, and a size or content type other than that object''s '
+  'metadata size and mimetype; inserts ON CONFLICT (decision_id, attachment_id) DO '
+  'NOTHING and returns whether p_object_path is the recorded one.';
 
 CREATE OR REPLACE FUNCTION public.record_project_approval_edition_object(
   p_decision_id uuid,

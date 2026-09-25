@@ -10,9 +10,16 @@
 --   · the plan-set assert (fixture checksum reproduces; a mismatched set → null)
 --   · the timing regression guard (median ratio < 3 over 50 runs; a guard, not proof)
 --   · bucket: private, and no storage.objects policy references it
---   · recorder: checksum refusal, missing-object refusal, idempotent re-record
+--   · a malformed item (non-UUID decisionId, non-integer heldAuthorityRevision) answers
+--     not_found for that item only; the rest of the batch is answered
+--   · spec-book edition: one spec_book_pdf entry whose sha256 is the frozen checksum;
+--     budget edition: attachments [] and editionFigures from the frozen snapshot
+--   · recorder: checksum refusal, missing-object refusal, size and content-type
+--     refusals against the stored object's metadata, refusal for a set whose manifest
+--     is NULL, spec book only as application/pdf, idempotent re-record
 --     (ON CONFLICT DO NOTHING, first writer wins), two attachments sharing one
---     checksum recorded as two rows at two paths (N3), authenticated denied
+--     checksum recorded as two rows at two paths (N3), a spec-book copy recorded,
+--     authenticated denied
 --   · path CHECK: empty, non-UUID and extra-segment suffixes rejected; rows immutable
 --
 -- Run (local stack, after 00670):
@@ -277,8 +284,79 @@ JOIN public.plan_prints AS plan_print ON plan_print.id = sheet.current_print_id
 WHERE sheet.project_id = 'c6703000-0000-4000-8000-000000000001'
   AND sheet.sheet_number = 'A-101';
 
+-- An issued client spec-book PDF (checksum 5…5, 4096 bytes) and a published budget
+-- checkpoint (B-001) in project A, the sources of the S1 and G1 editions.
+INSERT INTO public.spec_book_templates (
+  id, template_key, version, studio_id, name, page_grammar,
+  audience_profiles, required_field_rules, visibility_rules, created_by
+) VALUES (
+  'c6705000-0000-4000-8000-000000000001', 'nf.edition', 1,
+  'c6701000-0000-4000-8000-000000000001', 'Edition spec template',
+  '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
+  'c6700000-0000-4000-8000-000000000001'
+);
+INSERT INTO public.spec_books (
+  id, project_id, title, template_id, default_audiences, created_by
+) VALUES (
+  'c6705100-0000-4000-8000-000000000001', 'c6703000-0000-4000-8000-000000000001',
+  'Edition specification book', 'c6705000-0000-4000-8000-000000000001',
+  ARRAY['client']::text[], 'c6700000-0000-4000-8000-000000000001'
+);
+INSERT INTO public.project_documents (
+  id, project_id, title, doc_type, storage_path, status, uploaded_by,
+  section_key, client_visible, size_bytes
+) VALUES (
+  'c6705200-0000-4000-8000-000000000001', 'c6703000-0000-4000-8000-000000000001',
+  'Edition spec PDF', 'pdf', 'c6703000-0000-4000-8000-000000000001/specs/nf-spec.pdf',
+  'ready', 'c6700000-0000-4000-8000-000000000001', 'spec-book', true, 4096
+);
+INSERT INTO public.spec_book_revisions (
+  id, spec_book_id, revision_number, idempotency_key, issue_type, status,
+  requested_audiences, template_snapshot, render_snapshot,
+  snapshot_checksum, created_by, issued_at
+) VALUES (
+  'c6705300-0000-4000-8000-000000000001', 'c6705100-0000-4000-8000-000000000001', 1,
+  'nf-spec-issued', 'full', 'issued', ARRAY['client']::text[], '{}'::jsonb,
+  '{"clientSafe":true}'::jsonb, repeat('4', 64),
+  'c6700000-0000-4000-8000-000000000001', now()
+);
+INSERT INTO public.spec_book_artifacts (
+  id, revision_id, audience, status, project_document_id, storage_path,
+  checksum_sha256, size_bytes, rendered_at
+) VALUES (
+  'c6705400-0000-4000-8000-000000000001', 'c6705300-0000-4000-8000-000000000001',
+  'client', 'ready', 'c6705200-0000-4000-8000-000000000001',
+  'c6703000-0000-4000-8000-000000000001/specs/nf-spec.pdf', repeat('5', 64), 4096, now()
+);
+
+INSERT INTO public.project_budget_versions (id, project_id, version, status, note, created_by)
+VALUES ('c6705500-0000-4000-8000-000000000001', 'c6703000-0000-4000-8000-000000000001',
+        1, 'draft', 'Edition budget', 'c6700000-0000-4000-8000-000000000001');
+INSERT INTO public.project_budget_lines (
+  id, budget_version_id, room_name, category, low_cents, target_cents,
+  high_cents, scheduled_cents, authorized_cents, sort_order
+) VALUES (
+  'c6705600-0000-4000-8000-000000000001', 'c6705500-0000-4000-8000-000000000001',
+  'Living Room', 'Upholstery', 900000, 1000000, 1200000, 0, 0, 0
+);
+SELECT set_config('app.budget_publish_id', 'c6705500-0000-4000-8000-000000000001', true);
+UPDATE public.project_budget_versions
+SET status = 'published', low_total_cents = 900000, target_total_cents = 1000000,
+    high_total_cents = 1200000, published_at = now()
+WHERE id = 'c6705500-0000-4000-8000-000000000001';
+SELECT set_config('app.budget_publish_id', '', true);
+INSERT INTO public.project_budget_checkpoints (
+  id, project_id, budget_version_id, checkpoint_code, snapshot_fingerprint, published_by
+) VALUES (
+  'c6705700-0000-4000-8000-000000000001', 'c6703000-0000-4000-8000-000000000001',
+  'c6705500-0000-4000-8000-000000000001', 'B-001',
+  public._budget_version_fingerprint('c6705500-0000-4000-8000-000000000001'),
+  'c6700000-0000-4000-8000-000000000001'
+);
+
 CREATE OR REPLACE FUNCTION pg_temp.nf_create(
-  p_label text, p_project uuid, p_phase uuid, p_issue uuid
+  p_label text, p_project uuid, p_phase uuid, p_issue uuid,
+  p_kind text DEFAULT 'plan_issue'
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -295,7 +373,7 @@ BEGIN
       'dueAt', (now() + interval '5 days')::text,
       'phaseId', p_phase,
       'sectionKey', 'project',
-      'artifactKind', 'plan_issue',
+      'artifactKind', p_kind,
       'artifactId', p_issue,
       'costCentsDelta', 0,
       'scheduleDaysDelta', 0,
@@ -307,7 +385,7 @@ BEGIN
   INSERT INTO nf_ids (label, id) VALUES (p_label, (v_result->>'decisionId')::uuid);
 END;
 $$;
-GRANT EXECUTE ON FUNCTION pg_temp.nf_create(text, uuid, uuid, uuid) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_temp.nf_create(text, uuid, uuid, uuid, text) TO PUBLIC;
 
 SELECT pg_temp.nf_assume('c6700000-0000-4000-8000-000000000001');
 SET LOCAL ROLE authenticated;
@@ -319,7 +397,20 @@ SELECT pg_temp.nf_create('A6', 'c6703000-0000-4000-8000-000000000001',
 SELECT pg_temp.nf_create('B' || n, 'c6703000-0000-4000-8000-000000000002',
   'c6703100-0000-4000-8000-000000000002', 'c6704000-0000-4000-8000-000000000002')
 FROM generate_series(1, 2) AS n;
+SELECT pg_temp.nf_create('S1', 'c6703000-0000-4000-8000-000000000001',
+  'c6703100-0000-4000-8000-000000000001', 'c6705400-0000-4000-8000-000000000001',
+  'spec_book_artifact');
+SELECT pg_temp.nf_create('G1', 'c6703000-0000-4000-8000-000000000001',
+  'c6703100-0000-4000-8000-000000000001', 'c6705500-0000-4000-8000-000000000001',
+  'budget_version');
 RESET ROLE;
+
+-- The frozen artifact rows of S1 and G1, as the assertions below expect them served.
+CREATE TEMP TABLE nf_frozen ON COMMIT DROP AS
+SELECT decision_id, source_kind, artifact_title, artifact_hash, source_snapshot
+FROM public.project_approval_artifacts
+WHERE decision_id IN (pg_temp.nf('S1'), pg_temp.nf('G1'));
+GRANT SELECT ON nf_frozen TO authenticated, service_role;
 
 -- Frozen proof for A1: what a device that read it holds.
 CREATE TEMP TABLE nf_proof ON COMMIT DROP AS
@@ -479,6 +570,62 @@ BEGIN
     'wrapper is not the batch item plus contract and servedAt';
 END;
 $$;
+
+-- ── Spec-book and budget editions (§C.3 A1, A3) ───────────────────────────────────
+DO $$
+DECLARE
+  v_spec uuid := pg_temp.nf('S1');
+  v_budget uuid := pg_temp.nf('G1');
+  v_spec_frozen nf_frozen%ROWTYPE;
+  v_budget_frozen nf_frozen%ROWTYPE;
+  v_envelope jsonb;
+  v_item jsonb;
+BEGIN
+  SELECT * INTO v_spec_frozen FROM nf_frozen WHERE decision_id = v_spec;
+  SELECT * INTO v_budget_frozen FROM nf_frozen WHERE decision_id = v_budget;
+  ASSERT v_spec_frozen.source_kind = 'spec_book_artifact'
+     AND v_spec_frozen.artifact_hash = repeat('5', 64)
+     AND v_budget_frozen.source_kind = 'budget_version',
+    'fixture: S1/G1 artifacts are not the spec book and the budget';
+
+  v_envelope := public.get_project_decision_editions(jsonb_build_array(
+    jsonb_build_object('decisionId', v_spec),
+    jsonb_build_object('decisionId', v_budget)));
+
+  v_item := v_envelope->'editions'->0;
+  ASSERT v_item->>'status' = 'ok'
+     AND v_item->'review' = public.get_project_decision_review(v_spec)
+     AND v_item->'editionFigures' = 'null'::jsonb,
+    format('spec-book edition is not ok with null editionFigures: %s', v_item);
+  ASSERT v_item->'attachments' = jsonb_build_array(jsonb_build_object(
+      'attachmentId', 'c6705400-0000-4000-8000-000000000001',
+      'kind', 'spec_book_pdf',
+      'position', 1,
+      'label', v_spec_frozen.artifact_title,
+      'sha256', v_spec_frozen.artifact_hash,
+      'sizeBytes', 4096,
+      'contentType', 'application/pdf')),
+    format('spec-book manifest wrong: %s', v_item->'attachments');
+  ASSERT v_spec_frozen.artifact_title = 'Edition specification book',
+    format('spec-book label is not the book title: %s', v_spec_frozen.artifact_title);
+
+  v_item := v_envelope->'editions'->1;
+  ASSERT v_item->>'status' = 'ok'
+     AND v_item->'review' = public.get_project_decision_review(v_budget)
+     AND v_item->'attachments' = '[]'::jsonb,
+    format('budget edition is not ok with an empty manifest: %s', v_item);
+  ASSERT v_item->'editionFigures' = jsonb_build_object(
+      'checkpointCode', 'B-001',
+      'publishedAt', v_budget_frozen.source_snapshot->'publishedAt',
+      'lowTotalCents', 900000,
+      'targetTotalCents', 1000000,
+      'highTotalCents', 1200000)
+     AND jsonb_typeof(v_item->'editionFigures'->'publishedAt') = 'string',
+    format('budget editionFigures wrong: %s', v_item->'editionFigures');
+
+  ASSERT v_envelope::text NOT LIKE '%specs/nf-spec%', 'spec-book storage path reached the client';
+END;
+$$;
 RESET ROLE;
 
 -- ── unauthorized, bad batches ─────────────────────────────────────────────────────
@@ -501,6 +648,14 @@ BEGIN
     'a caller with no subject must get unauthorized for every item';
   ASSERT public.get_project_decision_edition(pg_temp.nf('A1'))->>'status' = 'unauthorized',
     'wrapper without a subject is not unauthorized';
+
+  -- A malformed item does not fail the batch without a subject either.
+  v_envelope := public.get_project_decision_editions(jsonb_build_array(
+    jsonb_build_object('decisionId', 'not-a-uuid'),
+    jsonb_build_object('decisionId', pg_temp.nf('A1'))));
+  ASSERT v_envelope->'editions'->0->>'status' = 'not_found'
+     AND v_envelope->'editions'->1->>'status' = 'unauthorized',
+    format('malformed item without a subject answered wrong: %s', v_envelope);
 END;
 $$;
 RESET ROLE;
@@ -511,6 +666,7 @@ DO $$
 DECLARE
   v_bad jsonb;
   v_raised boolean;
+  v_envelope jsonb;
 BEGIN
   FOREACH v_bad IN ARRAY ARRAY[
     '[]'::jsonb,
@@ -534,6 +690,31 @@ BEGIN
     (SELECT jsonb_agg(jsonb_build_object('decisionId', gen_random_uuid()))
      FROM generate_series(1, 200)))->'editions') = 200,
     '200 held items must be answered';
+
+  -- One malformed item among valid ones answers not_found for itself only: a
+  -- non-UUID decisionId, and a readable decision held with a revision that is a
+  -- fraction, a word, or out of integer range. Uppercase UUIDs still parse.
+  v_envelope := public.get_project_decision_editions(jsonb_build_array(
+    jsonb_build_object('decisionId', pg_temp.nf('A1')),
+    jsonb_build_object('decisionId', 'not-a-uuid'),
+    jsonb_build_object('decisionId', pg_temp.nf('A2'), 'heldAuthorityRevision', 1.5),
+    jsonb_build_object('decisionId', pg_temp.nf('A3'), 'heldAuthorityRevision', 'two'),
+    jsonb_build_object('decisionId', pg_temp.nf('A4'), 'heldAuthorityRevision', 99999999999),
+    jsonb_build_object('decisionId', upper(pg_temp.nf('A5')::text),
+      'heldAuthorityRevision', 1)));
+  ASSERT (SELECT array_agg(e.item->>'status' ORDER BY e.ordinality)
+          FROM jsonb_array_elements(v_envelope->'editions') WITH ORDINALITY AS e(item, ordinality))
+       = ARRAY['ok', 'not_found', 'not_found', 'not_found', 'not_found', 'ok'],
+    format('malformed items were not answered per item: %s', v_envelope);
+  ASSERT v_envelope->'editions'->1 = jsonb_build_object(
+      'decisionId', 'not-a-uuid', 'status', 'not_found',
+      'review', NULL, 'attachments', NULL, 'editionFigures', NULL),
+    format('malformed decisionId is not a bare not_found echoing it: %s',
+      v_envelope->'editions'->1);
+  ASSERT v_envelope->'editions'->2->>'decisionId' = pg_temp.nf('A2')::text
+     AND v_envelope->'editions'->2->'review' = 'null'::jsonb
+     AND v_envelope->'editions'->5->>'decisionId' = pg_temp.nf('A5')::text,
+    format('per-item answers echo the wrong decisionId: %s', v_envelope);
 END;
 $$;
 RESET ROLE;
@@ -720,25 +901,44 @@ INSERT INTO nf_ids (label, id)
 SELECT 'att' || (e.item->>'position'), (e.item->>'attachmentId')::uuid
 FROM jsonb_array_elements(
   app_private.project_approval_edition_manifest(pg_temp.nf('A1'), true)) AS e(item);
+INSERT INTO nf_ids (label, id)
+SELECT 'a6att', entry.attachment_id
+FROM app_private.project_approval_edition_attachment_rows(pg_temp.nf('A6')) AS entry;
 INSERT INTO nf_ids (label, id) VALUES
   ('try1', gen_random_uuid()), ('try2', gen_random_uuid()),
-  ('try3', gen_random_uuid()), ('try4', gen_random_uuid());
+  ('try3', gen_random_uuid()), ('try4', gen_random_uuid()),
+  ('try5', gen_random_uuid()), ('try6', gen_random_uuid()),
+  ('try7', gen_random_uuid()),
+  ('specatt', 'c6705400-0000-4000-8000-000000000001');
 
-CREATE OR REPLACE FUNCTION pg_temp.nf_path(p_att text, p_sha text, p_try text)
+CREATE OR REPLACE FUNCTION pg_temp.nf_path(
+  p_att text, p_sha text, p_try text, p_edition text DEFAULT 'A1'
+)
 RETURNS text
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT pg_temp.nf('A1') || '/' || pg_temp.nf(p_att) || '/' || p_sha || '/' || pg_temp.nf(p_try)
+  SELECT pg_temp.nf(p_edition) || '/' || pg_temp.nf(p_att) || '/' || p_sha || '/' || pg_temp.nf(p_try)
 $$;
-GRANT EXECUTE ON FUNCTION pg_temp.nf_path(text, text, text) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_temp.nf_path(text, text, text, text) TO PUBLIC;
 
-INSERT INTO storage.objects (bucket_id, name)
+-- Each stored copy carries the metadata the Storage API writes: its size and mimetype.
+INSERT INTO storage.objects (bucket_id, name, metadata)
 VALUES
-  ('project-approval-editions', pg_temp.nf_path('att1', repeat('a', 64), 'try1')),
-  ('project-approval-editions', pg_temp.nf_path('att1', repeat('a', 64), 'try2')),
-  ('project-approval-editions', pg_temp.nf_path('att2', repeat('a', 64), 'try3')),
-  ('project-approval-editions', pg_temp.nf_path('att1', repeat('b', 64), 'try4'));
+  ('project-approval-editions', pg_temp.nf_path('att1', repeat('a', 64), 'try1'),
+   '{"size": 1000, "mimetype": "application/pdf"}'),
+  ('project-approval-editions', pg_temp.nf_path('att1', repeat('a', 64), 'try2'),
+   '{"size": 1000, "mimetype": "application/pdf"}'),
+  ('project-approval-editions', pg_temp.nf_path('att2', repeat('a', 64), 'try3'),
+   '{"size": 2000, "mimetype": "application/pdf"}'),
+  ('project-approval-editions', pg_temp.nf_path('att1', repeat('b', 64), 'try4'),
+   '{"size": 1000, "mimetype": "application/pdf"}'),
+  ('project-approval-editions', pg_temp.nf_path('a6att', repeat('a', 64), 'try5', 'A6'),
+   '{"size": 1000, "mimetype": "application/pdf"}'),
+  ('project-approval-editions', pg_temp.nf_path('specatt', repeat('5', 64), 'try6', 'S1'),
+   '{"size": 4096, "mimetype": "application/pdf"}'),
+  ('project-approval-editions', pg_temp.nf_path('specatt', repeat('5', 64), 'try7', 'S1'),
+   '{"size": 4096, "mimetype": "image/png"}');
 
 -- authenticated is denied on the public recorder and the resolver.
 SELECT pg_temp.nf_assume('c6700000-0000-4000-8000-000000000003');
@@ -816,32 +1016,97 @@ BEGIN
   END;
   ASSERT v_raised, 'recorder accepted a foreign attachment';
 
+  -- Size and content type must be the stored object's metadata (1000, application/pdf).
+  v_raised := false;
+  BEGIN
+    PERFORM public.record_project_approval_edition_object(
+      v_a1, pg_temp.nf('att1'), repeat('a', 64), 999, 'application/pdf',
+      pg_temp.nf_path('att1', repeat('a', 64), 'try1'));
+  EXCEPTION WHEN check_violation THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'recorder accepted a size other than the stored object''s';
+  v_raised := false;
+  BEGIN
+    PERFORM public.record_project_approval_edition_object(
+      v_a1, pg_temp.nf('att1'), repeat('a', 64), 1000, 'image/png',
+      pg_temp.nf_path('att1', repeat('a', 64), 'try1'));
+  EXCEPTION WHEN check_violation THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'recorder accepted a content type other than the stored object''s';
+
+  -- A6's set fails the plan-set assert (manifest NULL): nothing is recorded for it,
+  -- although checksum, object and metadata all match.
+  ASSERT public.project_approval_attachment_objects(pg_temp.nf('A6')) IS NULL,
+    'fixture: A6 manifest is not NULL';
+  v_raised := false;
+  BEGIN
+    PERFORM public.record_project_approval_edition_object(
+      pg_temp.nf('A6'), pg_temp.nf('a6att'), repeat('a', 64), 1000, 'application/pdf',
+      pg_temp.nf_path('a6att', repeat('a', 64), 'try5', 'A6'));
+  EXCEPTION WHEN check_violation THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'recorder accepted an attachment of an unservable set';
+
   -- First writer wins; re-recording the same path is idempotent; a second attempt's
   -- path is not recorded and the first row is untouched.
   ASSERT public.record_project_approval_edition_object(
-      v_a1, pg_temp.nf('att1'), repeat('a', 64), 1111, 'application/pdf',
+      v_a1, pg_temp.nf('att1'), repeat('a', 64), 1000, 'application/pdf',
       pg_temp.nf_path('att1', repeat('a', 64), 'try1')) = true,
     'first attempt was not recorded';
   ASSERT public.record_project_approval_edition_object(
-      v_a1, pg_temp.nf('att1'), repeat('a', 64), 1111, 'application/pdf',
+      v_a1, pg_temp.nf('att1'), repeat('a', 64), 1000, 'application/pdf',
       pg_temp.nf_path('att1', repeat('a', 64), 'try1')) = true,
     'idempotent re-record of the recorded path did not report true';
   ASSERT public.record_project_approval_edition_object(
-      v_a1, pg_temp.nf('att1'), repeat('a', 64), 1111, 'application/pdf',
+      v_a1, pg_temp.nf('att1'), repeat('a', 64), 1000, 'application/pdf',
       pg_temp.nf_path('att1', repeat('a', 64), 'try2')) = false,
     'a losing attempt was reported as recorded';
 
   -- N3: A-102 shares A-101's checksum and gets its own row at its own path.
   ASSERT public.record_project_approval_edition_object(
-      v_a1, pg_temp.nf('att2'), repeat('a', 64), 2222, 'application/pdf',
+      v_a1, pg_temp.nf('att2'), repeat('a', 64), 2000, 'application/pdf',
       pg_temp.nf_path('att2', repeat('a', 64), 'try3')) = true,
     'same-checksum second attachment was not recorded';
+
+  -- Spec book: the frozen artifact_hash is the checksum, and only a PDF is recorded.
+  v_raised := false;
+  BEGIN
+    PERFORM public.record_project_approval_edition_object(
+      pg_temp.nf('S1'), pg_temp.nf('specatt'), repeat('6', 64), 4096, 'application/pdf',
+      pg_temp.nf_path('specatt', repeat('5', 64), 'try6', 'S1'));
+  EXCEPTION WHEN check_violation THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'recorder accepted a spec book checksum other than artifact_hash';
+  v_raised := false;
+  BEGIN
+    PERFORM public.record_project_approval_edition_object(
+      pg_temp.nf('S1'), pg_temp.nf('specatt'), repeat('5', 64), 4096, 'image/png',
+      pg_temp.nf_path('specatt', repeat('5', 64), 'try7', 'S1'));
+  EXCEPTION WHEN check_violation THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'recorder accepted a spec book that is not application/pdf';
+  ASSERT public.record_project_approval_edition_object(
+      pg_temp.nf('S1'), pg_temp.nf('specatt'), repeat('5', 64), 4096, 'application/pdf',
+      pg_temp.nf_path('specatt', repeat('5', 64), 'try6', 'S1')) = true,
+    'spec-book copy was not recorded';
+  v_objects := public.project_approval_attachment_objects(pg_temp.nf('S1'));
+  ASSERT jsonb_array_length(v_objects) = 1
+     AND (v_objects->0->>'recorded')::boolean
+     AND v_objects->0->>'objectPath' = pg_temp.nf_path('specatt', repeat('5', 64), 'try6', 'S1')
+     AND v_objects->0->>'kind' = 'spec_book_pdf'
+     AND (v_objects->0->>'sizeBytes')::bigint = 4096,
+    format('spec-book resolver after recording is wrong: %s', v_objects);
 
   v_objects := public.project_approval_attachment_objects(v_a1);
   ASSERT (v_objects->0->>'recorded')::boolean
      AND v_objects->0->>'objectPath' = pg_temp.nf_path('att1', repeat('a', 64), 'try1')
      AND v_objects->0->'source' = 'null'::jsonb
-     AND (v_objects->0->>'sizeBytes')::bigint = 1111
+     AND (v_objects->0->>'sizeBytes')::bigint = 1000
      AND (v_objects->1->>'recorded')::boolean
      AND v_objects->1->>'objectPath' = pg_temp.nf_path('att2', repeat('a', 64), 'try3')
      AND NOT (v_objects->2->>'recorded')::boolean
@@ -864,6 +1129,13 @@ BEGIN
           WHERE decision_id = v_a1 AND attachment_id = pg_temp.nf('att1'))
          = pg_temp.nf_path('att1', repeat('a', 64), 'try1'),
     'recorded rows are not exactly the two first-writer rows';
+  ASSERT (SELECT array_agg(size_bytes::text || ' ' || content_type ORDER BY size_bytes)
+          FROM public.project_approval_edition_objects WHERE decision_id = v_a1)
+       = ARRAY['1000 application/pdf', '2000 application/pdf'],
+    'recorded rows do not carry the stored objects'' size and type';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.project_approval_edition_objects
+                     WHERE decision_id = pg_temp.nf('A6')),
+    'a row was recorded for the unservable A6 set';
 
   -- Path CHECK: exactly one UUIDv4 attempt segment.
   FOREACH v_bad IN ARRAY ARRAY[
@@ -911,8 +1183,8 @@ DECLARE
   v_item jsonb := public.get_project_decision_edition(pg_temp.nf('A1'));
 BEGIN
   ASSERT v_item->>'status' = 'ok'
-     AND (v_item->'attachments'->0->>'sizeBytes')::bigint = 1111
-     AND (v_item->'attachments'->1->>'sizeBytes')::bigint = 2222
+     AND (v_item->'attachments'->0->>'sizeBytes')::bigint = 1000
+     AND (v_item->'attachments'->1->>'sizeBytes')::bigint = 2000
      AND (v_item->'attachments'->2->>'sizeBytes')::bigint = 3000
      AND v_item::text NOT LIKE '%' || pg_temp.nf('try1') || '%',
     format('client manifest after recording is wrong: %s', v_item);
