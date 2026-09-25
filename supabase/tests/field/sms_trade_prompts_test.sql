@@ -251,7 +251,15 @@ END $a5_reading$;
 
 DO $a5_matrix$
 DECLARE p public.sms_prompts; m uuid; r jsonb; before_reports jsonb; v integer := 20261110;
+  before_inspections integer; before_pos integer;
 BEGIN
+  -- Baseline counts, not zero: dev-seed data (procurement_receiving_dev.sql)
+  -- already carries receiving_inspections/purchase_orders rows unrelated to
+  -- this fixture, so "none written" below is asserted as no *change* against
+  -- this snapshot rather than an absolute zero.
+  SELECT count(*) INTO before_inspections FROM public.receiving_inspections;
+  SELECT count(*) INTO before_pos FROM public.purchase_orders;
+
   -- ARRIVAL, DELAY, PROBLEM, DEPARTURE — each through the real door, each
   -- against the visit's own task.
   PERFORM pg_temp.close_open();
@@ -286,8 +294,8 @@ BEGIN
       AND arrived_at IS NOT NULL AND left_at IS NOT NULL AND condition_ok IS FALSE
     FROM public.field_delivery_reports),
     'presence and condition, against the visit''s own task';
-  ASSERT (SELECT count(*)=0 FROM public.receiving_inspections), 'no receiving inspection';
-  ASSERT (SELECT count(*)=0 FROM public.purchase_orders), 'and no purchase order was even involved';
+  ASSERT (SELECT count(*)=before_inspections FROM public.receiving_inspections), 'no receiving inspection';
+  ASSERT (SELECT count(*)=before_pos FROM public.purchase_orders), 'and no purchase order was even involved';
 
   -- The refusals. Each one raises 23514 and writes nothing.
   SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]') INTO before_reports FROM public.field_delivery_reports t;
