@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { FolderPlus, Keyboard, LifeBuoy, Type } from 'lucide-react';
+import { FolderPlus, History, Keyboard, LifeBuoy, Type } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import {
   usePeopleDirectory,
@@ -50,6 +50,7 @@ import { openHelp } from '@/lib/help-system/open-help';
 import { openLogTime } from './log-time-sheet';
 import { openKeys } from './overlays/keys-sheet';
 import { THE_WORDS_HREF } from '@/lib/help-system/keys-reference';
+import { CHANGES_HREF } from '@/lib/teaching/constants';
 import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
 import { fillStateForDesk, type FillState } from '@/lib/document/fill-state';
@@ -578,6 +579,16 @@ export function CommandBar() {
         sub: 'guides · every surface',
         run: () => router.push('/help'),
         match: 'browse help center guides support articles every surface',
+      },
+      {
+        // Return teaching: the pull door to What changed. No dot, no count.
+        kind: 'help',
+        key: 'what-changed',
+        icon: History,
+        label: 'What changed',
+        sub: 'changes to the Document, newest first',
+        run: () => router.push(CHANGES_HREF),
+        match: 'what changed changes release notes updates recent the document',
       },
       {
         // L5 — "The keys": the reference opens as an overlay over whatever is

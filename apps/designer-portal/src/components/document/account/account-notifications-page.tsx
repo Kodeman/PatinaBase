@@ -8,7 +8,63 @@
  * separate (that's ⌘K → Interruptions).
  */
 
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { useFeatureFlags } from '@/hooks/use-feature-flags';
+import { TEACHING_SYSTEM_FLAG } from '@/lib/teaching/constants';
+
+/**
+ * "Quiet the notes" (ux-options §E): silences every teaching slot through
+ * `quiet.off`. Loaded only when the teaching flag is on, so the teaching data
+ * layer (and @patina/help-system's barrel) stays out of the Account sheet
+ * otherwise.
+ */
+const QuietTheNotesRow = lazy(() =>
+  import('@/hooks/use-teaching-data').then(({ useTeachingNoteState }) => ({
+    default: function QuietTheNotesRow() {
+      const { state, patch, isLoading } = useTeachingNoteState();
+      const quiet = state?.quiet?.off === true;
+      return (
+        <div className="mt-6 flex items-center gap-3 border-y border-[var(--color-pearl)] py-3">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-medium text-[var(--color-charcoal)]">
+              Quiet the notes
+            </span>
+            <span className="block text-[11px] text-[var(--color-aged-oak)]">
+              Turns off Patina&rsquo;s notes in the margin. ⌘K and What changed stay.
+            </span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={quiet}
+            aria-label="Quiet the notes"
+            disabled={isLoading}
+            onClick={() => {
+              // A failed teaching write stays silent (the hook surfaces it inline).
+              patch(['quiet', 'off'], !quiet).catch(() => {});
+            }}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] disabled:opacity-50"
+          >
+            <span
+              className={`relative h-[20px] w-[36px] rounded-full border transition-colors ${
+                quiet
+                  ? 'border-[var(--color-clay)] bg-[var(--color-clay)]'
+                  : 'border-[var(--color-aged-oak)] bg-transparent'
+              }`}
+            >
+              <span
+                className={`absolute top-[2px] h-[14px] w-[14px] rounded-full transition-all ${
+                  quiet ? 'bg-white' : 'bg-[var(--color-aged-oak)]'
+                }`}
+                style={{ left: quiet ? 18 : 2 }}
+              />
+            </span>
+          </button>
+        </div>
+      );
+    },
+  })),
+);
 
 type Prefs = Record<string, boolean>;
 
@@ -37,6 +93,8 @@ const PREFERENCES: { key: string; label: string; blurb: string }[] = [
 
 export function AccountNotificationsPage() {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
+  const teachingFlag = useFeatureFlags([TEACHING_SYSTEM_FLAG])[TEACHING_SYSTEM_FLAG];
+  const teachingOn = teachingFlag?.value === true && !teachingFlag.isLoading;
 
   useEffect(() => {
     let active = true;
@@ -133,6 +191,11 @@ export function AccountNotificationsPage() {
           );
         })}
       </ul>
+      {teachingOn && (
+        <Suspense fallback={null}>
+          <QuietTheNotesRow />
+        </Suspense>
+      )}
     </div>
   );
 }

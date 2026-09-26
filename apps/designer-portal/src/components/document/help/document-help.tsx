@@ -33,6 +33,7 @@ import {
   useSetSurfaceKey,
 } from '@patina/help-system';
 import { documentPathnameToSurfaceKey } from '@/lib/help-system/document-pathname-to-surface-key';
+import { CHANGES_HREF } from '@/lib/teaching/constants';
 import {
   DOCUMENT_HELP_EVENT,
   type HelpOpenSource,
@@ -171,13 +172,16 @@ function SurfaceIntro({ blurb }: { blurb: string }) {
  *  for everything else. Rendered by the shared panel's `footer` slot, below
  *  the article list, so it survives regardless of what the panel shows. */
 function BrowseAllHelpLink() {
+  const linkClass =
+    'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]';
   return (
-    <div className="border-t border-[var(--doc-ink-border)] px-4 py-3">
-      <Link
-        href="/help"
-        className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
-      >
+    <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-[var(--doc-ink-border)] px-4 py-3">
+      <Link href="/help" className={linkClass}>
         Browse all help →
+      </Link>
+      {/* Return teaching: the help panel's door to What changed. No dot, no count. */}
+      <Link href={CHANGES_HREF} className={linkClass}>
+        What changed
       </Link>
     </div>
   );
