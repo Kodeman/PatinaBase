@@ -18402,6 +18402,18 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00673_teaching_signals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.teaching_signals() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00673_teaching_signals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.teaching_signals() TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00674_help_state_merge.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.help_state_merge(jsonb) FROM PUBLIC, anon;
