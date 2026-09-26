@@ -54,6 +54,14 @@ export type {
   WelcomeModalContent,
   VideoContent,
   ContentTypeMap,
+  TeachingNote,
+  TeachingRelease,
+  TeachingKind,
+  TeachingAudience,
+  TeachingTrigger,
+  TeachingFeatureKey,
+  TeachingBoundaryKey,
+  TeachingSizeClass,
 } from './contentTypes';
 
 // ─── Sanity client (exported so portals can swap it out in A6) ────────────────
@@ -135,8 +143,14 @@ export {
   createSupabaseFirstAuthoredBackend,
   createSupabaseHelpStateBackends,
   migrateLocalToSupabase,
+  createSupabaseTeachingNoteBackend,
+  EMPTY_TEACHING_NOTE_STATE,
 } from './persistence';
 export type {
+  TeachingNoteBackend,
+  TeachingNoteOutcome,
+  TeachingNoteSeen,
+  TeachingNoteState,
   CreateSupabaseBackendsResult,
   CreateSupabaseMarginNoteBackendResult,
   CreateSupabaseFirstAuthoredBackendResult,

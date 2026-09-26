@@ -140,3 +140,88 @@ export type ContentTypeMap = {
   welcomeModal: WelcomeModalContent
   video: VideoContent
 }
+
+// ─── Return teaching (Workshop Notes) ─────────────────────────────────────────
+// A `teachingNote` is its own Sanity document type beside `helpContent`, not a
+// `contentType` value, so it is deliberately absent from `HelpContent` and
+// `ContentTypeMap`. Fields per return-teaching system-architecture §1.1/§1.2.
+
+export type TeachingKind =
+  | 'release'
+  | 'unused_benefit'
+  | 'faster_way'
+  | 'owner_capability'
+  | 'client_promise'
+
+export type TeachingAudience = 'owner' | 'hand' | 'all'
+
+export type TeachingTrigger = 'return' | 'anchor' | 'act' | 'pull_only'
+
+export type TeachingFeatureKey =
+  | 'galley'
+  | 'ledger'
+  | 'hours'
+  | 'people'
+  | 'field_capture'
+  | 'client_page'
+  | 'purchase_orders'
+  | 'seats'
+
+export type TeachingBoundaryKey =
+  | 'invoice_sent'
+  | 'time_logged'
+  | 'part_saved'
+  | 'invite_sent'
+  | 'client_page_sent'
+
+export type TeachingSizeClass = 'minor' | 'useful' | 'workflow_changing'
+
+export interface TeachingNote {
+  /** Versioned key, e.g. `galley-po@1`. */
+  noteKey: string
+  kind: TeachingKind
+  audience: TeachingAudience
+  trigger: TeachingTrigger
+  /** Slash form, e.g. `designer-portal/document/accounts`. */
+  surfaceKey: string
+  /** A `DocumentActionGroup` `regionKey` inside the surface. */
+  anchor?: string
+  /** Required when kind = `release`; matches a manifest entry. */
+  releaseId?: string
+  /** PostHog flag; loading or off makes the note ineligible. */
+  flag?: string
+  featureKey?: TeachingFeatureKey
+  /** Required for `anchor` and `faster_way` notes. */
+  boundary?: TeachingBoundaryKey
+  /** One sentence, ≤140 chars; may carry `{binding}` tokens. */
+  body: string
+  act?: { label: string; hrefTemplate: string }
+  bindings?: Record<string, 'projectName' | 'personName' | 'invoiceNumber' | 'invoiceId'>
+  /** Signal key in `teaching_signals()` that decides `already_knew`. */
+  successSignal?: string
+  /** PostHog event for the downstream outcome. Measurement only. */
+  successEvent?: string
+  /** 1–5, tie-break only. */
+  priority: number
+  publishedAt?: string
+  expiresAt?: string
+  /** Window CustomEvent names passed to `MarginNote.actionEvents`. */
+  recedeOn: string[]
+  maxDisplays: number
+  /** noteKey of the note that must be met first. */
+  prerequisite?: string
+  /** noteKey of the note this one supersedes. */
+  supersedes?: string
+  learnMore?: { slug?: string; _ref?: string }
+  provenance: 'agent' | 'leah'
+}
+
+export interface TeachingRelease {
+  /** Manifest id, e.g. `2026-09-25-galley-po`. */
+  id: string
+  headline: string
+  prose?: string
+  sizeClass: TeachingSizeClass
+  shippedOn: string
+  featureKeys: TeachingFeatureKey[]
+}

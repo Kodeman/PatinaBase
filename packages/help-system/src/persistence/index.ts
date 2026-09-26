@@ -29,3 +29,13 @@ export type {
   FirstAuthoredStateBackend,
   HelpStateSupabaseClient,
 } from './types'
+export {
+  createSupabaseTeachingNoteBackend,
+  EMPTY_TEACHING_NOTE_STATE,
+} from './teachingNoteBackend'
+export type {
+  TeachingNoteBackend,
+  TeachingNoteOutcome,
+  TeachingNoteSeen,
+  TeachingNoteState,
+} from './teachingNoteBackend'
