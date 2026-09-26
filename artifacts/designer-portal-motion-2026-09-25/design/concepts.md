@@ -237,6 +237,8 @@ Each file opens from disk and carries "Fixture · Middle West Studio · not a cl
 
 Key: R 160ms E · X 120ms Q · P 270ms O · D 200ms Q · S 240ms E · B 180ms Q. Detail wells reserve at least 144px desktop, 192px phone, or their content height if taller; margin wells are content-sized, with no minimum.
 
+**Full-page mockups.** `fullpage/index.html` (the Desk) and `fullpage/document.html` (the held Ainsworth Document): Plain Lines at full length, one linked flow; `?controls=1` adds review controls, `?rm=1` forces reduced motion; checked by `verify/fullpage-oracle.mjs`.
+
 **Prototype limitations.** Verification is source-only: `verify/oracle.mjs` and in-memory runs of the shared script, with no browser, phone or screen-reader walk, so rendered layout, focus order and announcements are unverified. Navigation is partial: Library and the other fixture doorways are not in this mockup; the finish record, the held document, Accounts and the note sheet are the only destinations built. 08 carries one margin note and no drawer, and the Desk pick-up lands on a short held brief; neither is evidence about a full margin or a full-record task. The .32 ink veil is a fixture value derived from the palette, not a live token. Reading Line pages add a 50vh run-out below the last section so it can reach the reading line: real reading length, not free polish. Native find reaches closed detail only where the browser supports `hidden="until-found"`; elsewhere print is the static path.
 
 ---
