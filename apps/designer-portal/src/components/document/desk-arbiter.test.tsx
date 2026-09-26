@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { TeachingNote, TeachingNoteState } from '@/lib/teaching/types';
+import { resetTeachingNoteSession } from '@/hooks/use-teaching-note';
+import {
+  StudioSetupWhisper,
+  useStudioSetupWhisperEligible,
+} from '@/components/document/account/studio-setup-whisper';
 import {
   pickDeskLine,
   resetDeskVisit,
@@ -13,11 +20,69 @@ let mockSuppress = false;
 const mockSeen = new Set<string>();
 let mockTeaching: { body: string } | null = null;
 let mockSinceLine: { items: { id: string; headline: string }[]; changesHref: string } | null = null;
-/** Teaching's reads have arrived (else it is undecided). */
+/** Teaching's reads had arrived at first paint (else it yields the load). */
 let mockReadsIn = true;
 /** The stored visit's unsolicited line, already shown. */
 let mockUnsolicitedShown: string | null = null;
 const mockReturnNote = jest.fn();
+/** Run the real `useReturnNote` over the mocked data hooks below. */
+let mockRealTeaching = false;
+
+// The real hook's data: teaching reads, flags, at rest, and the whisper's studio.
+let mockNotes: TeachingNote[] | undefined;
+let mockReleases: unknown[] | undefined;
+let mockState: TeachingNoteState | undefined;
+let mockSignals: unknown;
+let mockRole = 'owner';
+let client: QueryClient;
+const STATE_KEY = ['teaching-note-state'];
+
+function setIn(target: unknown, path: string[], value: unknown): unknown {
+  const [head, ...rest] = path;
+  const base = (target && typeof target === 'object' ? target : {}) as Record<string, unknown>;
+  return { ...base, [head]: rest.length ? setIn(base[head], rest, value) : value };
+}
+
+const mockPatch = jest.fn(async (path: string[], value: unknown) => {
+  const next = setIn(client.getQueryData(STATE_KEY), path, value);
+  client.setQueryData(STATE_KEY, next);
+  return next;
+});
+
+jest.mock('@/hooks/use-teaching-data', () => ({
+  TEACHING_NOTE_STATE_KEY: ['teaching-note-state'],
+  useTeachingNotes: () => ({ data: mockNotes }),
+  useTeachingReleases: () => ({ data: mockReleases }),
+  useTeachingNoteState: () => ({ state: mockState, patch: mockPatch, isLoading: !mockState }),
+  useTeachingSignals: () => ({ data: mockSignals }),
+}));
+jest.mock('@/hooks/use-feature-flags', () => ({
+  useFeatureFlags: () => ({ 'teaching-notes': { value: true, isLoading: false } }),
+}));
+jest.mock('@/hooks/use-teaching-at-rest', () => ({ useTeachingAtRest: () => true }));
+jest.mock('@/lib/analytics/teaching-events', () => ({ captureTeachingEvent: jest.fn() }));
+// studio-workspaces: the whisper's flag, on.
+jest.mock('@/hooks/use-feature-flag', () => ({ useFeatureFlag: () => ({ value: true, isLoading: false }) }));
+jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'me' } }) }));
+jest.mock('@/components/document/account/account-sheet', () => ({ openAccountPage: jest.fn() }));
+// A studio with four open setup steps (no crew, contacts or projects yet).
+jest.mock('@patina/supabase', () => ({
+  useProjects: () => ({ data: [], isLoading: false }),
+  useOrganizations: () => ({
+    data: [
+      {
+        id: 'org-1',
+        type: 'design_studio',
+        created_at: '2026-01-01T00:00:00Z',
+        rolodex_seed_skipped_at: null,
+        membership: { role: mockRole },
+      },
+    ],
+    isLoading: false,
+  }),
+  useOrganizationMembers: () => ({ data: [{ user_id: 'me', job_title: 'Principal', status: 'active' }], isLoading: false }),
+  useStudioContacts: () => ({ data: [], isLoading: false }),
+}));
 
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
   useSuppressDeskFirstTouch: () => mockSuppress,
@@ -31,29 +96,37 @@ jest.mock('@/components/document/margin-note', () => ({
     </aside>
   ),
 }));
-jest.mock('@/hooks/use-teaching-note', () => ({
-  useReturnNote: (opts: { ready: boolean; taken: boolean }) => {
-    mockReturnNote(opts);
-    const decided = opts.ready && mockReadsIn;
-    // As the hook does: a since-line means no teaching note is chosen.
-    const note = decided && !opts.taken && !mockSinceLine ? mockTeaching : null;
-    return {
-      note: note && { noteKey: 'galley-parts@1', body: note.body },
-      bind: note && {
-        noteKey: 'galley-parts@1',
-        seen: false,
-        actionEvents: [],
-        label: 'WORKSHOP NOTE · 10 SEP',
-        placement: 'default',
-        captureEvents: false,
-        onSeen: () => {},
-      },
-      sinceLine: decided ? mockSinceLine : null,
-      decided,
-      unsolicitedShown: decided ? mockUnsolicitedShown : null,
-    };
-  },
-}));
+jest.mock('@/hooks/use-teaching-note', () => {
+  const actual = jest.requireActual('@/hooks/use-teaching-note');
+  return {
+    ...actual,
+    useReturnNote: (opts: { pinnedProjectIds: string[]; ready: boolean; taken: boolean }) => {
+      mockReturnNote(opts);
+      if (mockRealTeaching) return actual.useReturnNote(opts);
+      // As the hook does: decided at first paint, where a read still pending
+      // yields the load (R-RT7); a since-line means no teaching note is chosen.
+      const decided = opts.ready;
+      const live = decided && mockReadsIn;
+      const note = live && !opts.taken && !mockSinceLine ? mockTeaching : null;
+      return {
+        note: note && { noteKey: 'galley-parts@1', body: note.body },
+        bind: note && {
+          noteKey: 'galley-parts@1',
+          seen: false,
+          actionEvents: [],
+          label: 'WORKSHOP NOTE · 10 SEP',
+          placement: 'default',
+          captureEvents: false,
+          onSeen: () => {},
+        },
+        sinceLine: live ? mockSinceLine : null,
+        decided,
+        yielded: decided && !mockReadsIn,
+        unsolicitedShown: live ? mockUnsolicitedShown : null,
+      };
+    },
+  };
+});
 
 type Legacy = Exclude<DeskLineKey, 'teaching-note'>;
 
@@ -85,6 +158,7 @@ beforeEach(() => {
   mockReadsIn = true;
   mockUnsolicitedShown = null;
   mockReturnNote.mockClear();
+  mockRealTeaching = false;
 });
 
 const lastOnScreen = () => mockReturnNote.mock.calls.at(-1)?.[0].onScreen;
@@ -282,18 +356,19 @@ describe('useDeskLine', () => {
       changesHref: '/help/changes',
     };
 
-    it('tells teaching which line is on screen: the since-line and the whisper, never a line ahead', () => {
+    it('tells teaching when its own slot is on screen: never the whisper, never a line ahead', () => {
       mockSinceLine = SINCE;
       const since = render(<Desk lines={candidates({ 'setup-whisper': true })} />);
       expect(screen.getByRole('button', { name: 'Since you were last here' })).toBeInTheDocument();
       expect(lastOnScreen()).toBe('teaching-note');
       since.unmount();
 
+      // The whisper is a Desk line, not teaching: it takes no teaching slot.
       resetDeskVisit();
       mockSinceLine = null;
       const whisper = render(<Desk lines={candidates({ 'setup-whisper': true })} />);
       expect(screen.getByTestId('line-setup-whisper')).toBeInTheDocument();
-      expect(lastOnScreen()).toBe('setup-whisper');
+      expect(lastOnScreen()).toBeNull();
       whisper.unmount();
 
       resetDeskVisit();
@@ -316,23 +391,169 @@ describe('useDeskLine', () => {
       expect(lastOnScreen()).toBeNull();
     });
 
-    it('a reload after the whisper: its own claim keeps it, alone', () => {
-      mockUnsolicitedShown = 'setup-whisper';
+    it('a reload after the whisper: it held no slot, so the order decides again and a teaching note beats it', () => {
+      const first = render(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(screen.getByTestId('line-setup-whisper')).toBeInTheDocument();
+      first.unmount();
+
+      // A reload drops the module memory; the stored visit holds no line.
+      resetDeskVisit();
+      mockTeaching = { body: 'A signed part now draws its PO.' };
       render(<Desk lines={candidates({ 'setup-whisper': true })} />);
       expect(shown()).toHaveLength(1);
-      expect(screen.getByTestId('line-setup-whisper')).toBeInTheDocument();
+      expect(screen.getByTestId('note-galley-parts@1')).toBeInTheDocument();
     });
 
-    it('undecided teaching holds the whisper; once its reads arrive the since-line takes the slot on the same load', () => {
+    it('R-RT7: teaching still pending at first paint yields — the whisper is not held, and the next Desk load picks again', () => {
       mockReadsIn = false;
       mockSinceLine = SINCE;
-      const { rerender } = render(<Desk lines={candidates({ 'setup-whisper': true })} />);
-      expect(screen.getByTestId('slot')).toBeEmptyDOMElement();
+      const first = render(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(screen.getByTestId('line-setup-whisper')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Since you were last here' })).not.toBeInTheDocument();
+      first.unmount();
 
+      // Same visit, warm cache: the yielded load's pick was not the visit's line.
       mockReadsIn = true;
-      rerender(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      render(<Desk lines={candidates({ 'setup-whisper': true })} />);
       expect(screen.getByRole('button', { name: 'Since you were last here' })).toBeInTheDocument();
       expect(shown()).toHaveLength(0);
     });
+
+    it('R-RT7: a line ahead of teaching, picked while teaching yielded, is still the visit’s line', () => {
+      mockReadsIn = false;
+      const first = render(<Desk lines={candidates({ 'desk-walkthrough-offer': true })} />);
+      expect(screen.getByTestId('line-desk-walkthrough-offer')).toBeInTheDocument();
+      first.unmount();
+
+      mockReadsIn = true;
+      mockTeaching = { body: 'A signed part now draws its PO.' };
+      mockSeen.add('desk-walkthrough-offer');
+      render(<Desk lines={candidates({ 'desk-walkthrough-offer': true })} />);
+      expect(screen.getByTestId('slot')).toBeEmptyDOMElement();
+    });
+  });
+});
+
+describe('useDeskLine with the real useReturnNote and the real whisper predicate (R3 N1)', () => {
+  const NOW = Date.parse('2026-09-25T15:00:00Z');
+  const MIN = 60 * 1000;
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const WHISPER = 'The studio isn’t fully set up.';
+  const RELEASE_NOTE: TeachingNote = {
+    noteKey: 'galley-parts@1',
+    kind: 'release',
+    audience: 'all',
+    trigger: 'return',
+    surfaceKey: 'designer-portal/document/desk',
+    releaseId: '2026-09-10-galley-parts',
+    body: 'A signed part now draws its PO.',
+    priority: 5,
+    recedeOn: [],
+    maxDisplays: 3,
+    provenance: 'agent',
+  };
+  const RELEASES = [
+    {
+      id: '2026-09-10-galley-parts',
+      shippedOn: '2026-09-10',
+      sizeClass: 'workflow_changing',
+      featureKeys: ['galley'],
+      headline: 'Parts draw POs',
+    },
+  ];
+  const SIGNALS = { role: 'owner', used: {}, lastAt: {}, createdAt: '2026-08-01T00:00:00Z' };
+
+  const patched = (path: string[]) => mockPatch.mock.calls.filter(([p]) => p.join('.') === path.join('.'));
+
+  function RealDesk() {
+    const whisper = useStudioSetupWhisperEligible();
+    const lines = candidates({});
+    lines['setup-whisper'] = { when: whisper, node: <StudioSetupWhisper /> };
+    return <div data-testid="slot">{useDeskLine({ ready: true, pinnedProjectIds: [], lines })}</div>;
+  }
+  const renderReal = () =>
+    render(<RealDesk />, {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+
+  beforeEach(() => {
+    jest.spyOn(Date, 'now').mockReturnValue(NOW);
+    resetTeachingNoteSession();
+    mockRealTeaching = true;
+    mockPatch.mockClear();
+    mockRole = 'owner';
+    mockNotes = [RELEASE_NOTE];
+    mockReleases = RELEASES;
+    mockSignals = SIGNALS;
+    // A returning designer, two hours away: a new visit, synced just now.
+    mockState = {
+      v: 1,
+      cursor: { lastSeenReleaseId: null },
+      visit: { startedAt: iso(NOW - 3 * 60 * MIN), lastActiveAt: iso(NOW - 2 * 60 * MIN) },
+    };
+    client = new QueryClient();
+    client.setQueryData(STATE_KEY, mockState);
+  });
+
+  afterEach(async () => {
+    // Unmount now and let each mount's close land inside its own test.
+    cleanup();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+  });
+
+  it('whisper predicate false (a member): the whisper is not eligible and claims nothing; the teaching note renders', async () => {
+    mockRole = 'member';
+    renderReal();
+    expect(screen.getByTestId('note-galley-parts@1')).toHaveTextContent('A signed part now draws its PO.');
+    expect(screen.queryByText(WHISPER)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(patched(['visit', 'unsolicitedShown'])).toEqual([[['visit', 'unsolicitedShown'], 'galley-parts@1']])
+    );
+  });
+
+  it('whisper predicate false and nothing to teach: nothing renders and the visit stays unclaimed for an anchor note', async () => {
+    mockRole = 'member';
+    mockNotes = [];
+    renderReal();
+    expect(screen.getByTestId('slot')).toBeEmptyDOMElement();
+    await waitFor(() => expect(patched(['visit', 'startedAt'])).toHaveLength(1));
+    await act(async () => {});
+    expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(0);
+    expect(client.getQueryData<TeachingNoteState>(STATE_KEY)?.visit?.unsolicitedShown).toBeUndefined();
+  });
+
+  it('whisper predicate true, nothing to teach: the whisper renders and claims nothing; teaching records only the Desk load', async () => {
+    mockNotes = [];
+    renderReal();
+    expect(screen.getByText(WHISPER)).toBeInTheDocument();
+    await waitFor(() => expect(patched(['visit', 'startedAt'])).toHaveLength(1));
+    await act(async () => {});
+    expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(0);
+    expect(patched(['recentUnsolicited'])).toHaveLength(0);
+  });
+
+  it('whisper predicate true, a teaching read pending at first paint: the whisper renders, teaching yields, nothing is written', async () => {
+    mockSignals = undefined;
+    const first = renderReal();
+    expect(screen.getByText(WHISPER)).toBeInTheDocument();
+    expect(screen.queryByTestId('note-galley-parts@1')).not.toBeInTheDocument();
+
+    // The read arrives after first paint: this load does not re-decide.
+    mockSignals = SIGNALS;
+    first.rerender(<RealDesk />);
+    expect(screen.getByText(WHISPER)).toBeInTheDocument();
+    expect(screen.queryByTestId('note-galley-parts@1')).not.toBeInTheDocument();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    expect(mockPatch).not.toHaveBeenCalled();
+    first.unmount();
+
+    // The next Desk mount, warm cache, same visit: the order decides again.
+    renderReal();
+    expect(screen.getByTestId('note-galley-parts@1')).toBeInTheDocument();
+    expect(screen.queryByText(WHISPER)).not.toBeInTheDocument();
   });
 });

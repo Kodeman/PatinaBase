@@ -6,6 +6,10 @@
  * headlines, with no count and no dates, and the one link to What changed.
  * Set type, not a widget: the disclosure is a plain `<button aria-expanded
  * aria-controls>` and nothing takes focus on arrival.
+ *
+ * `ph-no-capture`: the primary PostHog instance's autocapture skips the
+ * disclosure and the link, as it does a teaching margin note; teaching reports
+ * only through its own taxonomy events.
  */
 
 import { useId, useState } from 'react';
@@ -28,7 +32,7 @@ export function SinceLine({ items, changesHref }: SinceLineProps) {
   const listId = useId();
 
   return (
-    <aside role="note" className="max-w-[34ch]">
+    <aside role="note" className="ph-no-capture max-w-[34ch]">
       <button
         type="button"
         aria-expanded={open}

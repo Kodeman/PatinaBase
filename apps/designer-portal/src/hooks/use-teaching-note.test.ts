@@ -112,7 +112,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return createElement(QueryClientProvider, { client }, children);
 }
 
-type DeskProps = { ready?: boolean; taken?: boolean; onScreen?: 'teaching-note' | 'setup-whisper' | null };
+type DeskProps = { ready?: boolean; taken?: boolean; onScreen?: 'teaching-note' | null };
 const renderDesk = (initial: DeskProps = {}) =>
   renderHook((props: DeskProps) => useReturnNote({ pinnedProjectIds: [], ...props }), {
     wrapper,
@@ -185,43 +185,73 @@ describe('useReturnNote', () => {
     expect(mockCapture).not.toHaveBeenCalled();
   });
 
-  it('a read still loading at first paint: undecided and nothing written, then it decides when the read arrives', async () => {
+  it('R-RT7: a read still pending at first paint yields the load — nothing rendered or written, decided at once, and no re-decision when it arrives', async () => {
     prime(undefined);
     const { result, rerender } = renderDesk();
-    expect(result.current.decided).toBe(false);
+    // Decided at first paint, so the arbiter holds no line back for teaching.
+    expect(result.current.decided).toBe(true);
+    expect(result.current.yielded).toBe(true);
     expect(result.current.note).toBeNull();
+    expect(result.current.bind).toBeNull();
+    expect(result.current.sinceLine).toBeNull();
     await act(async () => {});
     expect(mockPatch).not.toHaveBeenCalled();
 
-    // The state arrives after first paint: the same Desk load decides now.
+    // The state arrives after first paint: this Desk load stays out.
     prime(state({ visit: { startedAt: iso(NOW - 3 * 60 * MIN), lastActiveAt: iso(NOW - 2 * 60 * MIN) } }));
     rerender({});
-    expect(result.current.decided).toBe(true);
-    expect(result.current.note?.noteKey).toBe('galley-parts@1');
-    await waitFor(() => expect(patched(['visit', 'startedAt'])).toEqual([[['visit', 'startedAt'], iso(NOW)]]));
+    expect(result.current.note).toBeNull();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    expect(mockPatch).not.toHaveBeenCalled();
+    expect(captured('help.teaching_note.shown')).toHaveLength(0);
   });
 
-  it('a cold cache on a return after 30 days: the since-line still renders once the reads arrive', async () => {
+  it('R-RT7: the next Desk mount, warm cache, decides normally — the since-line renders and claims the visit', async () => {
+    mockSignals = undefined;
+    prime(AWAY());
+    const first = renderDesk({ onScreen: 'teaching-note' });
+    expect(first.result.current.yielded).toBe(true);
+    expect(first.result.current.sinceLine).toBeNull();
+    mockSignals = SIGNALS;
+    first.rerender({ onScreen: 'teaching-note' });
+    first.unmount();
+    await act(async () => {});
+    expect(mockPatch).not.toHaveBeenCalled();
+
+    const second = renderDesk({ onScreen: 'teaching-note' });
+    expect(second.result.current.yielded).toBe(false);
+    expect(second.result.current.sinceLine).toEqual({
+      items: [{ id: '2026-09-10-galley-parts', headline: 'Parts draw POs' }],
+      changesHref: '/help/changes',
+    });
+    await waitFor(() => expect(patched(['visit', 'unsolicitedShown'])).toEqual([[['visit', 'unsolicitedShown'], 'since-line']]));
+    expect(patched(['recentUnsolicited'])).toEqual([[['recentUnsolicited'], [iso(NOW)]]]);
+  });
+
+  it('R-RT7: a cold cache on a return after 30 days writes nothing on the pending mount, so the since-line is not lost', async () => {
     mockNotes = undefined;
     mockReleases = undefined;
     mockSignals = undefined;
     prime(undefined);
-    const { result, rerender } = renderDesk();
-    expect(result.current.decided).toBe(false);
-    expect(result.current.sinceLine).toBeNull();
-    await act(async () => {});
-    // Nothing written while loading, so prevStartedAt has not rolled forward.
-    expect(mockPatch).not.toHaveBeenCalled();
+    const first = renderDesk({ onScreen: 'teaching-note' });
+    expect(first.result.current.sinceLine).toBeNull();
 
+    // The reads arrive after first paint; this load stays out and writes
+    // nothing, so prevStartedAt has not rolled forward.
     mockNotes = [RELEASE_NOTE];
     mockReleases = RELEASES;
     mockSignals = SIGNALS;
     prime(AWAY());
-    rerender({});
-    expect(result.current.sinceLine).toEqual({
-      items: [{ id: '2026-09-10-galley-parts', headline: 'Parts draw POs' }],
-      changesHref: '/help/changes',
-    });
+    first.rerender({ onScreen: 'teaching-note' });
+    expect(first.result.current.sinceLine).toBeNull();
+    first.unmount();
+    await act(async () => {});
+    expect(mockPatch).not.toHaveBeenCalled();
+
+    const second = renderDesk({ onScreen: 'teaching-note' });
+    expect(second.result.current.sinceLine).not.toBeNull();
     await waitFor(() =>
       expect(patched(['visit', 'prevStartedAt'])).toEqual([[['visit', 'prevStartedAt'], iso(NOW - 40 * DAY)]])
     );
@@ -309,6 +339,83 @@ describe('useReturnNote', () => {
       [['visit', 'lastActiveAt'], iso(NOW)],
     ]);
     expect(client.getQueryData<TeachingNoteState>(STATE_KEY)?.visit?.unsolicitedShown).toBe('other@1');
+  });
+
+  it('a tab idle for hours decides from the stored row: it shows no second line and claims nothing another tab claimed', async () => {
+    // Tab A last synced two hours ago; its cache says a 40-day return starts now.
+    mockState = AWAY();
+    client.setQueryData(STATE_KEY, mockState, { updatedAt: NOW - 2 * 60 * MIN });
+    // Meanwhile tab B started this visit and showed its since-line.
+    const stored = state({
+      visit: {
+        startedAt: iso(NOW - 20 * MIN),
+        prevStartedAt: iso(NOW - 40 * DAY),
+        lastActiveAt: iso(NOW - 5 * MIN),
+        unsolicitedShown: 'since-line',
+      },
+      recentUnsolicited: [iso(NOW - 20 * MIN)],
+    });
+    mockPatch.mockImplementationOnce(async (path: string[], value: unknown) => {
+      const next = setIn(stored, path, value);
+      client.setQueryData(STATE_KEY, next);
+      return next;
+    });
+    const tabA = renderDesk({ onScreen: 'teaching-note' });
+    // The stored row is not in at first paint: tab A yields this load.
+    expect(tabA.result.current.yielded).toBe(true);
+    expect(tabA.result.current.sinceLine).toBeNull();
+    expect(tabA.result.current.note).toBeNull();
+    await waitFor(() => expect(client.getQueryData<TeachingNoteState>(STATE_KEY)?.visit?.startedAt).toBe(iso(NOW - 20 * MIN)));
+    await act(async () => {});
+    // Only the no-op read of the stored row: no visit, claim or count written.
+    expect(mockPatch.mock.calls).toEqual([[['v'], 1]]);
+    tabA.unmount();
+
+    // Its next Desk mount decides from the stored row: the visit is tab B's,
+    // so it shows that visit's own since-line, as a reload does, and claims
+    // nothing again.
+    prime(client.getQueryData<TeachingNoteState>(STATE_KEY));
+    mockPatch.mockClear();
+    const next = renderDesk({ onScreen: 'teaching-note' });
+    expect(next.result.current.yielded).toBe(false);
+    expect(next.result.current.note).toBeNull();
+    expect(next.result.current.sinceLine).not.toBeNull();
+    expect(next.result.current.unsolicitedShown).toBe('since-line');
+    await waitFor(() => expect(patched(['visit', 'lastActiveAt'])).toEqual([[['visit', 'lastActiveAt'], iso(NOW)]]));
+    expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(0);
+    expect(patched(['recentUnsolicited'])).toHaveLength(0);
+    expect(patched(['visit', 'startedAt'])).toHaveLength(0);
+  });
+
+  it('a stale cache whose stored row arrives before first paint decides from it on the same load', async () => {
+    mockNotes = [];
+    mockState = AWAY();
+    client.setQueryData(STATE_KEY, mockState, { updatedAt: NOW - 2 * 60 * MIN });
+    const stored = state({
+      visit: {
+        startedAt: iso(NOW - 20 * MIN),
+        prevStartedAt: iso(NOW - 40 * DAY),
+        lastActiveAt: iso(NOW - 5 * MIN),
+        unsolicitedShown: 'other@1',
+      },
+    });
+    mockPatch.mockImplementationOnce(async (path: string[], value: unknown) => {
+      const next = setIn(stored, path, value);
+      client.setQueryData(STATE_KEY, next);
+      return next;
+    });
+    const { result, rerender } = renderDesk({ ready: false, onScreen: 'teaching-note' });
+    await waitFor(() => expect(client.getQueryData<TeachingNoteState>(STATE_KEY)?.visit?.unsolicitedShown).toBe('other@1'));
+    // The query hands the Desk the stored row, then the roster paints.
+    mockState = client.getQueryData<TeachingNoteState>(STATE_KEY);
+    rerender({ ready: true, onScreen: 'teaching-note' });
+    expect(result.current.yielded).toBe(false);
+    // Tab A's cache alone would have shown a since-line: the stored visit has shown its note.
+    expect(result.current.sinceLine).toBeNull();
+    expect(result.current.unsolicitedShown).toBe('other@1');
+    await waitFor(() => expect(patched(['visit', 'lastActiveAt'])).toEqual([[['visit', 'lastActiveAt'], iso(NOW)]]));
+    expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(0);
+    expect(patched(['recentUnsolicited'])).toHaveLength(0);
   });
 
   it('a new visit clears the last visit’s note, so the Desk may teach again', () => {
@@ -583,24 +690,30 @@ describe('one unsolicited line per visit, in the stored visit', () => {
     expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(0);
   });
 
-  it('the whisper on screen claims the visit (not the 7-day cap); after a reload the Desk offers no teaching note', async () => {
+  it('the whisper on screen writes nothing; after a reload the arbiter’s order decides again', async () => {
+    // Nothing to teach: the arbiter falls to the whisper, and teaching's slot
+    // is taken with nothing of its own on screen.
     mockNotes = [];
-    renderDesk({ onScreen: 'setup-whisper' });
-    await waitFor(() => expect(patched(['visit', 'unsolicitedShown'])).toEqual([[['visit', 'unsolicitedShown'], 'setup-whisper']]));
+    const { rerender } = renderDesk();
+    rerender({ taken: true, onScreen: null });
+    await waitFor(() => expect(patched(['visit', 'startedAt'])).toHaveLength(1));
+    await act(async () => {});
+    expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(0);
     expect(patched(['recentUnsolicited'])).toHaveLength(0);
 
-    // A note is ready by the reload, but the visit's line has shown.
+    // A note is ready by the reload: the whisper held no slot, so it shows.
     reload();
     mockNotes = [RELEASE_NOTE];
     const { result } = renderDesk();
-    expect(result.current.decided).toBe(true);
-    expect(result.current.note).toBeNull();
-    expect(result.current.unsolicitedShown).toBe('setup-whisper');
+    expect(result.current.unsolicitedShown).toBeNull();
+    expect(result.current.note?.noteKey).toBe('galley-parts@1');
+    await waitFor(() => expect(patched(['visit', 'unsolicitedShown'])).toEqual([[['visit', 'unsolicitedShown'], 'galley-parts@1']]));
   });
 
-  it('teaching off: the arbiter’s since-line or whisper on screen writes nothing', async () => {
+  it('teaching off: the arbiter’s since-line on screen writes nothing', async () => {
     mockFlags = { 'teaching-notes': { value: false, isLoading: false } };
-    renderDesk({ onScreen: 'setup-whisper' });
+    prime(AWAY());
+    renderDesk({ onScreen: 'teaching-note' });
     await act(async () => {});
     expect(mockPatch).not.toHaveBeenCalled();
   });

@@ -12,14 +12,17 @@
  * unsolicited note, so it and a teaching note never both render.
  *
  * The line is decided once, at the first ready render where every line ahead
- * of the winner has resolved. Teaching is undecided until its reads arrive,
- * which holds the whisper; it then decides on the same Desk load. Later Desk
- * loads in the same visit (no VISIT_GAP_MS away) keep the visit's line. The
- * teaching note, the since-line and the whisper are the visit's one
- * unsolicited line in the stored visit too (`useReturnNote` records the one on
- * screen), so after a reload the whisper yields to a line already shown.
- * Nothing renders while the walkthrough is on screen (R-RT2), and nothing at
- * all when no line is eligible: no placeholder, no space kept.
+ * of the winner has resolved. Teaching settles at that first paint (R-RT7): a
+ * teaching read still pending then yields the load, so it holds no line back,
+ * and that pick is not carried: the next Desk load picks again. Otherwise
+ * later Desk loads in the same visit (no VISIT_GAP_MS away) keep the visit's
+ * line. The teaching note and the since-line are the visit's one unsolicited
+ * line in the stored visit too (`useReturnNote` records the one on screen),
+ * so after a reload the whisper yields to a line already shown. The whisper
+ * is a Desk line, not teaching: it records nothing, and after a reload the
+ * order decides again. Nothing renders while the walkthrough is on screen
+ * (R-RT2), and nothing at all when no line is eligible: no placeholder, no
+ * space kept.
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
@@ -116,14 +119,10 @@ export function useDeskLine({
     pinnedProjectIds,
     ready,
     taken: line !== undefined ? line !== 'teaching-note' : aheadOfTeaching || walkthroughOnScreen,
-    onScreen:
-      walkthroughOnScreen || !(line === 'teaching-note' || (line === 'setup-whisper' && whisperWhen === true))
-        ? null
-        : line,
+    onScreen: !walkthroughOnScreen && line === 'teaching-note' ? line : null,
   });
-  // The stored visit already showed another unsolicited line: the whisper yields.
-  const whisper =
-    teaching.unsolicitedShown && teaching.unsolicitedShown !== 'setup-whisper' ? false : whisperWhen;
+  // The stored visit already showed a teaching line: the whisper yields.
+  const whisper = teaching.unsolicitedShown ? false : whisperWhen;
 
   const states: Record<DeskLineKey, DeskLineState> = {
     'hire-handoff': handoff,
@@ -138,9 +137,12 @@ export function useDeskLine({
     if (pick !== undefined) setLine(pick);
   }
 
+  // A pick at or behind teaching's place, made while teaching sat the load
+  // out, is not the visit's line: the next Desk load picks again.
+  const carried = teaching.yielded && (line === null || line === 'setup-whisper') ? undefined : line;
   useEffect(() => {
-    if (line !== undefined && visit) visit.line = line;
-  }, [line]);
+    if (carried !== undefined && visit) visit.line = carried;
+  }, [carried]);
 
   if (walkthroughOnScreen || line == null) return null;
   if (line === 'teaching-note') {

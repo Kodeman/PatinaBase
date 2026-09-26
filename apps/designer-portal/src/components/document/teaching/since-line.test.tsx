@@ -43,6 +43,17 @@ describe('SinceLine', () => {
     expect(region).not.toBeVisible();
   });
 
+  it('keeps autocapture off its button and link: ph-no-capture on the root', () => {
+    render(<SinceLine items={items} changesHref="/help/changes" />);
+    const note = screen.getByRole('note');
+    expect(note).toHaveClass('ph-no-capture');
+    const toggle = screen.getByRole('button', { name: 'Since you were last here' });
+    fireEvent.click(toggle);
+    const link = screen.getByRole('link', { name: 'What changed' });
+    expect(toggle.closest('.ph-no-capture')).toBe(note);
+    expect(link.closest('.ph-no-capture')).toBe(note);
+  });
+
   it('is set type, not a widget: a note, never a dialog', () => {
     render(<SinceLine items={items.slice(0, 1)} changesHref="/help/changes" />);
     expect(screen.getByRole('note')).toBeInTheDocument();

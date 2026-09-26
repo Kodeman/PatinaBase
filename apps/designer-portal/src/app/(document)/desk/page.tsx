@@ -12,8 +12,6 @@ import {
   useProfile,
   useOrganizations,
   useOrganizationMembers,
-  useProjects,
-  useStudioContacts,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useAuth } from '@/hooks/use-auth';
@@ -36,8 +34,10 @@ import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reaction-rollup';
 import { MarginNote } from '@/components/document/margin-note';
-import { StudioSetupWhisper } from '@/components/document/account/studio-setup-whisper';
-import { deriveSetupSteps } from '@/lib/document/studio-setup';
+import {
+  StudioSetupWhisper,
+  useStudioSetupWhisperEligible,
+} from '@/components/document/account/studio-setup-whisper';
 import { firstNameOf } from '@/lib/document/account-identity';
 import {
   START_DESK_WALKTHROUGH_EVENT,
@@ -79,11 +79,8 @@ export default function DeskPage() {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [openProjectOpen, setOpenProjectOpen] = useState(false);
 
-  // U7 — the setup whisper's inputs. Same design_studio-preferred resolution
-  // as account-studio-page.tsx, kept minimal here since this page only needs
-  // the owner check + open-step count, not the full studio row.
-  const { value: studioWorkspacesEnabled, isLoading: studioWorkspacesLoading } =
-    useFeatureFlag('studio-workspaces');
+  // U7 — the setup whisper's render predicate, over the reads it renders from.
+  const setupWhisperEligible = useStudioSetupWhisperEligible();
   // L8 — the owner's handoff-note margin note, behind the teammate-persona
   // flag (W2). Flag off (or loading) never renders it.
   const { value: teammatePersonaEnabled, isLoading: teammatePersonaLoading } =
@@ -92,15 +89,6 @@ export default function DeskPage() {
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
   const { data: studioMembers, isLoading: studioMembersLoading } =
     useOrganizationMembers(studio?.id ?? '');
-  const { data: studioProjects } = useProjects();
-  const { data: studioContacts } = useStudioContacts(studio?.id ?? null);
-  // activeMemberCountBeyondSelf / hiresWithFirstDocument (L3, 00559): same
-  // active-only / first-document-opened derivation as account-studio-page.tsx,
-  // so this whisper's openCount never runs ahead or behind the checklist it
-  // sends you to.
-  const otherActiveStudioMembers = (studioMembers ?? []).filter(
-    (m) => m.user_id !== user?.id && m.status === 'active',
-  );
 
   // L8 — the hire-handoff margin note. Reads the signed-in member's OWN
   // organization_members row for a note the owner wrote on the invite; the
@@ -113,17 +101,6 @@ export default function DeskPage() {
   const handoffOwnerFirstName = firstNameOf(
     handoffOwner?.profiles.full_name || handoffOwner?.profiles.display_name,
   );
-  const { openCount: studioSetupOpenCount } = deriveSetupSteps({
-    orgCreatedAt: studio?.created_at ?? null,
-    myJobTitle: studioMembers?.find((m) => m.user_id === user?.id)?.job_title ?? null,
-    activeMemberCountBeyondSelf: otherActiveStudioMembers.length,
-    projectsCount: studioProjects?.length ?? 0,
-    contactsCount: studioContacts?.length ?? 0,
-    seedSkipped: !!studio?.rolodex_seed_skipped_at,
-    hiresWithFirstDocument: otherActiveStudioMembers.filter(
-      (m) => m.first_document_opened_at != null,
-    ).length,
-  });
 
   // A9: no mobile primary action is registered here — the header's
   // "Capture a lead" (below) is the one on-screen CTA at every viewport, and
@@ -317,16 +294,10 @@ export default function DeskPage() {
       // en-dash lead) with a live derivation for visibility instead of
       // MarginNote's once-only localStorage contract, so it rides the same
       // `studio-workspaces` flag the Account sheet's Studio page already
-      // gates behind.
+      // gates behind. `when` is its real render predicate (R3 N1).
       'setup-whisper': {
-        when: studioWorkspacesLoading ? 'pending' : studioWorkspacesEnabled,
-        node: (
-          <StudioSetupWhisper
-            isOwner={studio?.membership.role === 'owner'}
-            openCount={studioSetupOpenCount}
-            className="mb-10"
-          />
-        ),
+        when: setupWhisperEligible,
+        node: <StudioSetupWhisper className="mb-10" />,
       },
     },
   });
