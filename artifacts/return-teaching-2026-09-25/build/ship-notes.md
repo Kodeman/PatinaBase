@@ -172,6 +172,33 @@ log has the fix-wave rulings).
   live to a change made elsewhere in the same session.
 - **After a Desk tour reset, teaching still fails closed** (no note or
   since-line) until the next full Desk load resolves fresh state.
+- **R-RT8 (assumed 2026-09-26, R4).** A tagged boundary keeps a Desk visit
+  alive only when the cached teaching state says the visit is current. During
+  a new-visit gap (no decided Desk load yet this visit) a boundary does not
+  bump `visit.lastActiveAt`, so the next Desk mount starts the new visit.
+  Reason: under R-RT7 a cold Desk load yields; without R-RT8 an action on
+  that load extended yesterday's visit and suppressed the since-line and
+  every note until a 30-minute idle. Implemented by SQ-315.
+
+## R4 residuals accepted at single-studio flag-on
+
+- **Two-tab display residual.** A second tab whose cache was synced within
+  the last 30 minutes decides without re-reading the row and can show one
+  extra line in the same visit (a repeat since-line, or a note that spends
+  one of the two-per-seven-days slots); no writes are clobbered and no
+  since-line is lost. Cheapest narrowing if it ever matters:
+  `refetchOnWindowFocus: 'always'` on the teaching state query.
+- **Cold first load never teaches.** On a full page load the teaching reads
+  are almost always pending at first paint, so the first Desk load of a page
+  session yields by design (R-RT7); the second load decides.
+- **Setup-whisper open-step count can be off by one** at the pick when the
+  auth user is still undefined (pre-existing; the user is not part of the
+  whisper's loading state).
+- **The whisper predicate and component each run the studio-setup queries**
+  (deduped by React Query; no extra network).
+- **Test gaps.** Real hydration timing, an un-mocked 'pending' whisper, the
+  stale-tab path through the arbiter, and StrictMode are not covered by unit
+  tests.
 
 ## Known gaps (recorded, not fixed)
 
