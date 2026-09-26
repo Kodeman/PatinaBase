@@ -66,7 +66,9 @@
  *   Return teaching (Margin Notes) · PERSONLESS: captured by the portal with
  *   `$process_person_profile: false` under an anonymous distinct_id, never the
  *   identified one. Every event takes `TeachingEventProps`, and none carries
- *   body text, a project or client id, or dwell.
+ *   body text, a project or client id, or dwell. The portal's teaching
+ *   instance also strips the SDK's URL, path, referrer, session and device
+ *   properties (apps/designer-portal/src/lib/analytics/teaching-events.ts).
  *     teaching_note.shown          TeachingEventProps
  *     teaching_note.dismissed      TeachingEventProps
  *     teaching_note.acted          TeachingEventProps

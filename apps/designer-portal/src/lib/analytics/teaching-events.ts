@@ -14,6 +14,9 @@
  *   · 'memory' persistence plus a bootstrap distinct_id gives it no shared
  *     identity. The id is `teaching-anon-<uuid>`, kept for the browser session.
  *   · Every automatic feature is off, and it never fetches flags.
+ *   · The SDK's own location, referrer, session and device properties are
+ *     denylisted, and `sanitizeTeachingProperties` drops anything else that
+ *     could carry a route: a `/doc/<projectId>` URL maps to its designer.
  * Never call `identify` or `register` on it.
  *
  * Event names and property keys are the help-system taxonomy of record
@@ -57,6 +60,44 @@ const ALLOWED_KEYS: ReadonlyArray<keyof TeachingEventProps> = [
   'reason',
 ];
 
+/** posthog-js default properties that locate the designer: never sent. */
+export const TEACHING_PROPERTY_DENYLIST = [
+  '$current_url',
+  '$pathname',
+  '$referrer',
+  '$referring_domain',
+  '$host',
+  '$initial_referrer',
+  '$initial_referring_domain',
+  '$initial_current_url',
+  '$initial_pathname',
+  '$initial_host',
+  '$session_id',
+  '$window_id',
+  '$device_id',
+];
+
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+function carriesRoute(value: string): boolean {
+  return value.includes('/doc/') || value.includes('/projects/') || value.includes('?') || UUID_PATTERN.test(value);
+}
+
+/**
+ * The second net behind the denylist: drops any `$initial_*` key and any
+ * string value holding a route, a query string or a UUID. `distinct_id` is the
+ * anonymous `teaching-anon-<uuid>` and must reach the wire, so it is kept.
+ */
+export function sanitizeTeachingProperties<T extends Record<string, unknown>>(properties: T): T {
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (key.startsWith('$initial_')) continue;
+    if (key !== 'distinct_id' && typeof value === 'string' && carriesRoute(value)) continue;
+    kept[key] = value;
+  }
+  return kept as T;
+}
+
 const INSTANCE_NAME = 'teaching';
 const ANON_ID_KEY = 'patina:teaching-anon-id';
 const ANON_ID_PREFIX = 'teaching-anon-';
@@ -64,7 +105,10 @@ const ANON_ID_PREFIX = 'teaching-anon-';
 let memoryAnonId: string | null = null;
 let teachingClient: PostHog | null = null;
 
-/** One anonymous id per browser session: sessionStorage, else this page's memory. */
+/**
+ * One anonymous id per browser session: sessionStorage, else this page's memory.
+ * Per tab session, not per event as §7 reads (accepted deviation): already_knew dedupe needs an id stable within the session.
+ */
 export function getTeachingAnonId(): string {
   try {
     const stored = window.sessionStorage.getItem(ANON_ID_KEY);
@@ -118,6 +162,8 @@ function getTeachingClient(): PostHog | null {
       save_campaign_params: false,
       respect_dnt: true,
       ip: false,
+      property_denylist: [...TEACHING_PROPERTY_DENYLIST],
+      sanitize_properties: sanitizeTeachingProperties,
       before_send: sanitizePostHogEvent,
     },
     INSTANCE_NAME

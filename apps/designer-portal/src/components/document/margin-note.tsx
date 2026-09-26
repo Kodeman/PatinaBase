@@ -141,7 +141,9 @@ export interface MarginNoteProps {
   /** 'anchor' sets the note in a sheet's margin column. */
   placement?: 'default' | 'anchor';
   /** When false, the primitive's own `document_margin_note` capture is off:
-   *  teaching notes report through their personless events instead. */
+   *  teaching notes report through their personless events instead. The root
+   *  also takes `ph-no-capture`, so the identified instance's autocapture
+   *  cannot record the act link or the × either. */
   captureEvents?: boolean;
   /** Window CustomEvent names whose firing counts as the note's named action —
    *  the first one recedes the note as 'acted'. */
@@ -264,7 +266,7 @@ export function MarginNote({
       role="note"
       className={`flex max-w-[34ch] items-start gap-2 ${
         placement === 'anchor' ? `${ANCHOR_PLACEMENT} ` : ''
-      }${className ?? ''}`}
+      }${captureEvents ? '' : 'ph-no-capture '}${className ?? ''}`}
     >
       <p className="min-w-0 flex-1">
         {label !== undefined && (

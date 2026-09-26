@@ -350,6 +350,26 @@ describe('MarginNote — return-teaching additions (§5 changes 1–5)', () => {
     expect(marginNoteEvent).not.toHaveBeenCalled();
   });
 
+  it('(e) captureEvents={false} marks the note ph-no-capture so autocapture skips the act link and ×', () => {
+    const { unmount } = render(
+      <MarginNote noteKey="t-private" seen={false} captureEvents={false} act={{ label: 'Go', href: '/go' }}>
+        body
+      </MarginNote>,
+    );
+    const note = screen.getByRole('note');
+    expect(note).toHaveClass('ph-no-capture');
+    expect(screen.getByRole('link', { name: 'Go' }).closest('.ph-no-capture')).toBe(note);
+    expect(screen.getByRole('button', { name: 'Dismiss note' }).closest('.ph-no-capture')).toBe(note);
+    unmount();
+
+    render(
+      <MarginNote noteKey="t-public" seen={false}>
+        body
+      </MarginNote>,
+    );
+    expect(screen.getByRole('note')).not.toHaveClass('ph-no-capture');
+  });
+
   it('(e) captures shown, acted and dismissed by default', () => {
     const { unmount } = render(
       <MarginNote noteKey="t-loud" seen={false} act={{ label: 'Go', href: '/go' }}>
