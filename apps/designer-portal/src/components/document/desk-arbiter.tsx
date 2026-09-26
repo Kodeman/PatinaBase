@@ -7,7 +7,9 @@
  * Priority (UX shared addition 3): a person's words (`hire-handoff`), then
  * `desk-first-touch` (first hour only), the walkthrough offer, the teaching
  * note (owner capability > release > faster way, ordered inside
- * `useReturnNote`), and last the setup whisper.
+ * `useReturnNote`), and last the setup whisper. After 30 days away the
+ * since-line takes the teaching slot instead: it is the visit's one
+ * unsolicited note, so it and a teaching note never both render.
  *
  * The line is decided once, at the Desk's first ready render, when every line
  * ahead of the winner has resolved. The teaching note may take the slot only
@@ -20,6 +22,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useSuppressDeskFirstTouch } from '@/components/document/help/desk-walkthrough';
 import { MarginNote, hasMarginNoteBeenSeen } from '@/components/document/margin-note';
+import { SinceLine } from '@/components/document/teaching/since-line';
 import { useReturnNote } from '@/hooks/use-teaching-note';
 import { VISIT_GAP_MS } from '@/lib/teaching/constants';
 
@@ -116,7 +119,7 @@ export function useDeskLine({
     'hire-handoff': handoff,
     'desk-first-touch': firstTouch,
     'desk-walkthrough-offer': offer,
-    'teaching-note': teaching.decided ? teaching.note !== null : 'pending',
+    'teaching-note': teaching.decided ? teaching.sinceLine !== null || teaching.note !== null : 'pending',
     'setup-whisper': whisper,
   };
 
@@ -131,6 +134,13 @@ export function useDeskLine({
 
   if (walkthroughOnScreen || line == null) return null;
   if (line === 'teaching-note') {
+    if (teaching.sinceLine) {
+      return (
+        <div className="mb-10">
+          <SinceLine items={teaching.sinceLine.items} changesHref={teaching.sinceLine.changesHref} />
+        </div>
+      );
+    }
     return teaching.note && teaching.bind ? (
       <MarginNote {...teaching.bind} className="mb-10">
         {teaching.note.body}

@@ -21,16 +21,19 @@
  * this visit. The Desk writes nothing before that moment, so its own writes
  * never hold the Desk off at-rest rule 1.
  *
- * `boundaries` defaults to a log where nothing ever fired; W3 passes the real
- * tagged-boundary log.
+ * `boundaries` defaults to the page session's tagged-boundary log
+ * (`lib/teaching/boundaries.ts`); tests pass their own.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import type { TeachingRelease as TeachingReleaseDoc } from '@patina/help-system';
 import { useProjects } from '@patina/supabase';
+import type { SinceLineItem } from '@/components/document/teaching/since-line';
 import { TEACHING_RELEASES, initialCursorFor, sizeOf } from '@/content/teaching-releases';
 import { captureTeachingEvent, type TeachingEventName } from '@/lib/analytics/teaching-events';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { boundaryLog, setCurrentTeachingSurface } from '@/lib/teaching/boundaries';
 import {
   DEFAULT_MAX_DISPLAYS,
   TEACHING_SYSTEM_FLAG,
@@ -54,7 +57,6 @@ import type {
   TeachingNoteBinding,
   TeachingNoteState,
   TeachingNoteView,
-  TeachingRelease,
   TeachingSlot,
 } from '@/lib/teaching/types';
 import { useFeatureFlags } from './use-feature-flags';
@@ -79,13 +81,15 @@ export interface TeachingNoteResult {
   bind: TeachingMarginNoteBind | null;
 }
 
-export type SinceLine = ReturnType<typeof sinceLineFor>;
+/** The Desk's since-line (§5): releases only, at most three, with their published headlines. */
+export type SinceLine = { items: SinceLineItem[]; changesHref: string } | null;
 
 type Outcome = 'dismissed' | 'acted' | 'closed';
 type Leaf = [path: string[], value: unknown];
 type Job = (state: TeachingNoteState) => Leaf[];
 type Write = (job: Job) => void;
 
+/** `already_knew` never depends on a boundary. */
 const NEVER_FIRED: BoundaryLog = { firedOn: () => false };
 const DESK = DOCUMENT_SURFACE_KEYS.desk;
 /** The Desk arbiter's teaching order (§2): an owner capability, then a release, then a faster way. */
@@ -215,7 +219,7 @@ function useTeachingReads() {
   const { state, patch } = useTeachingNoteState();
   const signalsQuery = useTeachingSignals();
   const notes = notesQuery.data as readonly TeachingNote[] | undefined;
-  const releases = releasesQuery.data as readonly TeachingRelease[] | undefined;
+  const releases = releasesQuery.data as readonly TeachingReleaseDoc[] | undefined;
   const signals = signalsQuery.data as SelectInputs['signals'] | null | undefined;
 
   const flagNames = useMemo(() => {
@@ -283,6 +287,22 @@ function inputsFor(
     pinnedProjectIds: extra.pinnedProjectIds,
     bindings: extra.bindings,
     surfaceMountedAt: extra.surfaceMountedAt,
+  };
+}
+
+/** `sinceLineFor` ranks the published releases; their headlines come from the same docs. */
+function sinceLineOf(
+  state: TeachingNoteState,
+  releases: readonly TeachingReleaseDoc[],
+  pinnedProjectIds: string[],
+  now: number
+): SinceLine {
+  const line = sinceLineFor(state, releases, pinnedProjectIds, now);
+  if (!line) return null;
+  const headlines = new Map(releases.map((release) => [release.id, release.headline]));
+  return {
+    items: line.items.map((release) => ({ id: release.id, headline: headlines.get(release.id) ?? '' })),
+    changesHref: line.changesHref,
   };
 }
 
@@ -447,8 +467,9 @@ function decideDesk(
         },
       }
     : r.state;
-  const sinceLine = sinceLineFor(state, r.releases ?? [], o.pinnedProjectIds, at);
-  if (o.taken || !r.signals) return { ...none, sinceLine, newVisit };
+  const sinceLine = sinceLineOf(state, r.releases ?? [], o.pinnedProjectIds, at);
+  // The since-line is the visit's one unsolicited note: with it, no teaching note.
+  if (o.taken || !r.signals || sinceLine) return { ...none, sinceLine, newVisit };
 
   const x = inputsFor(r, 'desk', { ...o, state, signals: r.signals, now: at });
   let note: TeachingNote | null = null;
@@ -476,8 +497,10 @@ export function useReturnNote(opts: {
   taken?: boolean;
   boundaries?: BoundaryLog;
 }): TeachingNoteResult & { sinceLine: SinceLine; decided: boolean } {
-  const { pinnedProjectIds, ready = true, taken = false, boundaries = NEVER_FIRED } = opts;
+  const { pinnedProjectIds, ready = true, taken = false, boundaries = boundaryLog } = opts;
   const r = useTeachingReads();
+  // A tagged boundary that fires while the Desk is up is the Desk's.
+  useEffect(() => setCurrentTeachingSurface(DESK), []);
   const atRest = useTeachingAtRest({ surfaceKey: DESK, host: null, slot: 'desk' });
   const [surfaceMountedAt] = useState(() => Date.now());
 
@@ -546,7 +569,7 @@ export function useTeachingNoteFor(
     boundaries?: BoundaryLog;
   }
 ): TeachingNoteResult {
-  const { slot, host, anchor, bindings = NO_BINDINGS, boundaries = NEVER_FIRED } = opts;
+  const { slot, host, anchor, bindings = NO_BINDINGS, boundaries = boundaryLog } = opts;
   const r = useTeachingReads();
   const atRest = useTeachingAtRest({ surfaceKey, host, slot });
   const [surfaceMountedAt] = useState(() => Date.now());

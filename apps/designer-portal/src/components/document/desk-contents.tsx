@@ -390,13 +390,9 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
                 <ContentsRow
                   key={verb.key}
                   icon={verb.icon}
-                  // F08 — the Desk's own invoice door names its scope
-                  // (unscoped here: it opens the composer fresh).
-                  label={
-                    verb.key === 'draw-invoice'
-                      ? 'Draw an invoice · new'
-                      : verb.label
-                  }
+                  // The Desk's invoice door is unscoped: it opens the composer
+                  // fresh. Its release note, not the label, tells her it is new.
+                  label={verb.label}
                   subLabel={verb.key === 'draw-invoice' ? undefined : verb.subLabel}
                   variant="verb"
                   prominent={prominent}

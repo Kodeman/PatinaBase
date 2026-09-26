@@ -1,6 +1,7 @@
 import { createElement, type ReactNode } from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { getCurrentTeachingSurface, record, resetTeachingBoundaries } from '@/lib/teaching/boundaries';
 import type { TeachingNote, TeachingNoteState } from '@/lib/teaching/types';
 import { resetTeachingNoteSession, useReturnNote, useTeachingNoteFor } from './use-teaching-note';
 
@@ -123,6 +124,7 @@ const captured = (name: string) => mockCapture.mock.calls.filter(([n]) => n === 
 beforeEach(() => {
   jest.spyOn(Date, 'now').mockReturnValue(NOW);
   resetTeachingNoteSession();
+  resetTeachingBoundaries();
   mockPatch.mockClear();
   mockCapture.mockClear();
   client = new QueryClient();
@@ -338,9 +340,26 @@ describe('useReturnNote', () => {
     prime(state({ visit: { startedAt: iso(NOW - 40 * 24 * 60 * MIN), lastActiveAt: iso(NOW - 39 * 24 * 60 * MIN) } }));
     const { result } = renderDesk();
     expect(result.current.sinceLine).toEqual({
-      items: [expect.objectContaining({ id: '2026-09-10-galley-parts' })],
+      items: [{ id: '2026-09-10-galley-parts', headline: 'Parts draw POs' }],
       changesHref: '/help/changes',
     });
+  });
+
+  it('the since-line is the visit’s one unsolicited note: no teaching note is chosen beside it', async () => {
+    prime(state({ visit: { startedAt: iso(NOW - 40 * 24 * 60 * MIN), lastActiveAt: iso(NOW - 39 * 24 * 60 * MIN) } }));
+    const { result } = renderDesk();
+    expect(result.current.sinceLine).not.toBeNull();
+    expect(result.current.note).toBeNull();
+    expect(result.current.bind).toBeNull();
+    await act(async () => {});
+    expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(0);
+    expect(captured('help.teaching_note.shown')).toHaveLength(0);
+  });
+
+  it('declares the Desk as the current teaching surface on mount', () => {
+    expect(getCurrentTeachingSurface()).toBe('unknown');
+    renderDesk();
+    expect(getCurrentTeachingSurface()).toBe(DESK);
   });
 });
 
@@ -386,5 +405,27 @@ describe('useTeachingNoteFor', () => {
     rerender();
     expect(result.current.note?.noteKey).toBe('ledger-delivery@1');
     await waitFor(() => expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(1));
+  });
+
+  it('by default reads the real tagged-boundary log: only a firing on this surface counts', () => {
+    const { result, rerender } = renderHook(
+      () =>
+        useTeachingNoteFor(ACCOUNTS, {
+          slot: 'anchor',
+          host: null,
+          anchor: 'invoice-sent',
+          bindings: { invoiceNumber: 'INV-0002' },
+        }),
+      { wrapper }
+    );
+    expect(result.current.note).toBeNull();
+
+    record({ boundaryKey: 'invoice_sent', at: NOW, surfaceKey: 'designer-portal/document/hours' });
+    rerender();
+    expect(result.current.note).toBeNull();
+
+    record({ boundaryKey: 'invoice_sent', at: NOW, surfaceKey: ACCOUNTS });
+    rerender();
+    expect(result.current.note?.body).toBe('The delivery row shows when INV-0002 was read.');
   });
 });

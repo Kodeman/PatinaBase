@@ -12,6 +12,7 @@ import {
 let mockSuppress = false;
 const mockSeen = new Set<string>();
 let mockTeaching: { body: string } | null = null;
+let mockSinceLine: { items: { id: string; headline: string }[]; changesHref: string } | null = null;
 const mockReturnNote = jest.fn();
 
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
@@ -29,7 +30,8 @@ jest.mock('@/components/document/margin-note', () => ({
 jest.mock('@/hooks/use-teaching-note', () => ({
   useReturnNote: (opts: { ready: boolean; taken: boolean }) => {
     mockReturnNote(opts);
-    const note = opts.ready && !opts.taken ? mockTeaching : null;
+    // As the hook does: a since-line means no teaching note is chosen.
+    const note = opts.ready && !opts.taken && !mockSinceLine ? mockTeaching : null;
     return {
       note: note && { noteKey: 'galley-parts@1', body: note.body },
       bind: note && {
@@ -41,7 +43,7 @@ jest.mock('@/hooks/use-teaching-note', () => ({
         captureEvents: false,
         onSeen: () => {},
       },
-      sinceLine: null,
+      sinceLine: opts.ready ? mockSinceLine : null,
       decided: opts.ready,
     };
   },
@@ -73,6 +75,7 @@ beforeEach(() => {
   mockSuppress = false;
   mockSeen.clear();
   mockTeaching = null;
+  mockSinceLine = null;
   mockReturnNote.mockClear();
 });
 
@@ -197,6 +200,44 @@ describe('useDeskLine', () => {
     mockSuppress = false;
     rerender(<Desk lines={candidates({ 'desk-first-touch': true, 'setup-whisper': true })} />);
     expect(screen.getByTestId('line-desk-first-touch')).toBeInTheDocument();
+  });
+
+  describe('the since-line', () => {
+    const SINCE = {
+      items: [{ id: '2026-09-10-galley-parts', headline: 'Parts draw POs' }],
+      changesHref: '/help/changes',
+    };
+
+    it('takes the teaching slot, alone: no teaching note and no whisper beside it', () => {
+      mockSinceLine = SINCE;
+      mockTeaching = { body: 'A signed part now draws its PO.' };
+      render(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(screen.getByRole('button', { name: 'Since you were last here' })).toBeInTheDocument();
+      expect(screen.getByText('Parts draw POs')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'What changed', hidden: true })).toHaveAttribute(
+        'href',
+        '/help/changes'
+      );
+      expect(shown()).toHaveLength(0);
+    });
+
+    it('yields to a line ahead of teaching', () => {
+      mockSinceLine = SINCE;
+      render(<Desk lines={candidates({ 'desk-walkthrough-offer': true })} />);
+      expect(screen.getByTestId('line-desk-walkthrough-offer')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Since you were last here' })).not.toBeInTheDocument();
+    });
+
+    it('holds while the walkthrough is on screen (R-RT2)', () => {
+      mockSuppress = true;
+      mockSinceLine = SINCE;
+      const { rerender } = render(<Desk lines={candidates({})} />);
+      expect(screen.getByTestId('slot')).toBeEmptyDOMElement();
+
+      mockSuppress = false;
+      rerender(<Desk lines={candidates({})} />);
+      expect(screen.getByRole('button', { name: 'Since you were last here' })).toBeInTheDocument();
+    });
   });
 
   it('one line per visit: a later Desk load in the visit keeps the visit’s line', () => {
