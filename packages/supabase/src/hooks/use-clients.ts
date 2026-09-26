@@ -578,6 +578,8 @@ export function useAddClient() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // Return teaching: static tag, so it also fires on add-without-invite.
+    meta: { teachingBoundary: true, boundaryKey: 'client_page_sent' },
     mutationFn: async ({
       clientEmail,
       clientPhone,
