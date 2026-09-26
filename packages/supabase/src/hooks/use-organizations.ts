@@ -331,6 +331,7 @@ export function useInviteMember() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: { teachingBoundary: true, boundaryKey: 'invite_sent' },
     mutationFn: async (input: InviteMemberInput): Promise<InviteMemberResult> => {
       const supabase = getSupabase();
       const { data, error } = await supabase.functions.invoke('workspace-member-invite', {

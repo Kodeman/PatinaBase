@@ -1114,7 +1114,12 @@ export function useRecordPayment(options?: { errorSurface?: 'inline' }) {
 export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    // Return teaching: a completed send is a tagged boundary.
+    meta: {
+      ...(options?.errorSurface ? { errorSurface: options.errorSurface } : {}),
+      teachingBoundary: true,
+      boundaryKey: 'invoice_sent',
+    },
     mutationFn: async ({
       invoiceId,
       message,

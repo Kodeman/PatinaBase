@@ -536,7 +536,12 @@ export function useCreateTimeEntry(options?: { errorSurface?: 'inline' }) {
 
   return useMutation({
     // R83 — document surfaces render failures inline; no global toast.
-    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    // Return teaching: a logged hour is a tagged boundary.
+    meta: {
+      ...(options?.errorSurface ? { errorSurface: options.errorSurface } : {}),
+      teachingBoundary: true,
+      boundaryKey: 'time_logged',
+    },
     mutationFn: async (input: CreateTimeEntryInput) => {
       const supabase = getSupabase();
       // 00608 — `log_time`, not a bare insert. The id is minted here so a

@@ -728,7 +728,7 @@ export function useInviteAndLinkClient() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    meta: { errorSurface: 'inline' },
+    meta: { errorSurface: 'inline', teachingBoundary: true, boundaryKey: 'client_page_sent' },
     mutationFn: async ({
       designerClientId,
       clientEmail,

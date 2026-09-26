@@ -15,7 +15,35 @@ jest.mock('../error-handler', () => ({
   toLiveSessionError: jest.requireActual('../error-handler').toLiveSessionError,
 }));
 
+// Return teaching follow-ups, loaded lazily by the boundary subscriber.
+const mockInvalidateTeachingSignals = jest.fn();
+const mockTeachingPatch = jest.fn();
+const mockBrowserClient = { tag: 'browser-client' };
+const mockCreateTeachingBackend = jest.fn();
+
+jest.mock('../../hooks/use-teaching-data', () => ({
+  TEACHING_NOTE_STATE_KEY: ['teaching-note-state'],
+  invalidateTeachingSignals: (...args: unknown[]) => mockInvalidateTeachingSignals(...args),
+}));
+
+// SWC rewrites `@patina/help-system` to the package's src barrel (patina-testing
+// Trap 1), so mock the resolved path, not the specifier.
+jest.mock('../../../../../packages/help-system/src/index.ts', () => ({
+  createSupabaseTeachingNoteBackend: (client: unknown) => {
+    mockCreateTeachingBackend(client);
+    return { patch: (...args: unknown[]) => mockTeachingPatch(...args) };
+  },
+}));
+
+jest.mock('@patina/supabase', () => ({ createBrowserClient: () => mockBrowserClient }));
+
+import { waitFor } from '@testing-library/react';
 import { queryClient } from '../react-query';
+import {
+  firedOn,
+  resetTeachingBoundaries,
+  setCurrentTeachingSurface,
+} from '../teaching/boundaries';
 
 /** The copy that must never survive an alive/inconclusive verdict. */
 const EXPIRED_COPY = /session has expired/i;
@@ -276,5 +304,54 @@ describe('React Query error surfaces', () => {
 
       expect(mockShowErrorToast).toHaveBeenCalledWith(failure);
     });
+  });
+});
+
+describe('Return teaching tagged boundaries', () => {
+  const SURFACE = 'designer-portal/document/accounts';
+
+  beforeEach(() => {
+    queryClient.clear();
+    resetTeachingBoundaries();
+    setCurrentTeachingSurface(SURFACE);
+    mockInvalidateTeachingSignals.mockReset();
+    mockCreateTeachingBackend.mockReset();
+    mockTeachingPatch.mockReset().mockResolvedValue({ v: 1, visit: { lastActiveAt: 'patched' } });
+  });
+
+  const succeed = (meta?: Record<string, unknown>) =>
+    queryClient
+      .getMutationCache()
+      .build(queryClient, { mutationFn: async () => 'ok', meta })
+      .execute(undefined);
+
+  it('does nothing for an untagged mutation success', async () => {
+    await succeed({ errorSurface: 'inline', boundaryKey: 'invoice_sent' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(firedOn(SURFACE, 'invoice_sent')).toBe(false);
+    expect(mockInvalidateTeachingSignals).not.toHaveBeenCalled();
+    expect(mockTeachingPatch).not.toHaveBeenCalled();
+  });
+
+  it('records a tagged success on the current surface, refreshes signals and patches lastActiveAt', async () => {
+    const before = Date.now();
+    await succeed({ errorSurface: 'inline', teachingBoundary: true, boundaryKey: 'invoice_sent' });
+
+    expect(firedOn(SURFACE, 'invoice_sent', before)).toBe(true);
+    expect(firedOn('designer-portal/document/hours', 'invoice_sent')).toBe(false);
+
+    await waitFor(() =>
+      expect(queryClient.getQueryData(['teaching-note-state'])).toEqual({
+        v: 1,
+        visit: { lastActiveAt: 'patched' },
+      }),
+    );
+    expect(mockInvalidateTeachingSignals).toHaveBeenCalledWith(queryClient);
+    expect(mockCreateTeachingBackend).toHaveBeenCalledWith(mockBrowserClient);
+    expect(mockTeachingPatch).toHaveBeenCalledTimes(1);
+    const [path, value] = mockTeachingPatch.mock.calls[0];
+    expect(path).toEqual(['visit', 'lastActiveAt']);
+    expect(Date.parse(value as string)).toBeGreaterThanOrEqual(before);
   });
 });

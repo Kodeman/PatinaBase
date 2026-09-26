@@ -231,6 +231,7 @@ export function useSaveAgreementPart() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: ['save-agreement-part'],
+    meta: { teachingBoundary: true, boundaryKey: 'part_saved' },
     mutationFn: async (input: SaveAgreementPartInput): Promise<StudioAgreementPart> => {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase.rpc('save_agreement_part', {

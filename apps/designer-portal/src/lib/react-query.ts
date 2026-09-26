@@ -8,6 +8,8 @@ import {
   handleAuthExpiry,
   toLiveSessionError,
 } from './error-handler';
+import { getCurrentTeachingSurface, record as recordTeachingBoundary } from './teaching/boundaries';
+import type { TeachingBoundaryKey } from './teaching/types';
 
 /**
  * R83 — the error grammar. Mutations on (document) surfaces render failures as
@@ -29,6 +31,9 @@ declare module '@tanstack/react-query' {
       /** 'inline' = the caller renders the failure inline (R83); no global toast. */
       errorSurface?: 'inline';
       successMessage?: string;
+      /** Return teaching: a named completion act (see `onTeachingBoundary`). */
+      teachingBoundary?: true;
+      boundaryKey?: TeachingBoundaryKey;
       [key: string]: unknown;
     };
   }
@@ -166,8 +171,39 @@ const mutationCache = new MutationCache({
     if (mutation.meta?.successMessage) {
       // showSuccessToast(mutation.meta.successMessage as string);
     }
+    // Return teaching counts only tagged completion acts; autosaves and
+    // untagged mutations do nothing here.
+    if (mutation.meta?.teachingBoundary === true && mutation.meta.boundaryKey) {
+      onTeachingBoundary(mutation.meta.boundaryKey);
+    }
   },
 });
+
+/**
+ * Records the boundary in memory (anchors read it), then refreshes
+ * `teaching_signals()` and patches `visit.lastActiveAt`. The teaching data
+ * layer is imported lazily so the many modules that import `queryKeys` from
+ * this file do not pull Sanity and the teaching backend into their graph.
+ * Teaching is background context: a failure here is logged, never surfaced.
+ */
+function onTeachingBoundary(boundaryKey: TeachingBoundaryKey): void {
+  const at = Date.now();
+  recordTeachingBoundary({ boundaryKey, at, surfaceKey: getCurrentTeachingSurface() });
+  void Promise.all([
+    import('@/hooks/use-teaching-data'),
+    import('@patina/help-system'),
+    import('@patina/supabase'),
+  ])
+    .then(async ([teaching, helpSystem, supabase]) => {
+      void teaching.invalidateTeachingSignals(queryClient);
+      const backend = helpSystem.createSupabaseTeachingNoteBackend(supabase.createBrowserClient());
+      const state = await backend.patch(['visit', 'lastActiveAt'], new Date(at).toISOString());
+      queryClient.setQueryData(teaching.TEACHING_NOTE_STATE_KEY, state);
+    })
+    .catch((error: unknown) => {
+      console.warn('[teaching] boundary follow-up failed', error);
+    });
+}
 
 export const queryClient = new QueryClient({
   queryCache,
