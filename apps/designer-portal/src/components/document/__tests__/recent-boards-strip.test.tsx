@@ -57,7 +57,14 @@ jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { deskRendered: jest.fn(), actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 jest.mock('@/components/document/desk-contents', () => ({ DeskContents: () => null }));
-jest.mock('@/components/document/margin-note', () => ({ MarginNote: () => null }));
+jest.mock('@/components/document/margin-note', () => ({
+  MarginNote: () => null,
+  hasMarginNoteBeenSeen: () => false,
+}));
+// The Desk arbiter's teaching slot (return teaching): nothing to teach here.
+jest.mock('@/hooks/use-teaching-note', () => ({
+  useReturnNote: () => ({ note: null, bind: null, sinceLine: null, decided: true }),
+}));
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
   START_DESK_WALKTHROUGH_EVENT: 'document:start-desk-walkthrough',
   clearDeskWalkthroughLater: jest.fn(),
@@ -93,8 +100,11 @@ function board(over: Record<string, unknown> = {}) {
 
 import { RecentBoardsStrip } from '../recent-boards-strip';
 import DeskPage from '../../../app/(document)/desk/page';
+import { resetDeskVisit } from '@/components/document/desk-arbiter';
 
 beforeEach(() => {
+  // Each test is a fresh Desk visit for the arbiter.
+  resetDeskVisit();
   mockRecentBoards.mockReturnValue({ data: [], isLoading: false, isError: false });
 });
 

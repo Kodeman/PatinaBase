@@ -73,6 +73,11 @@ export const DOCUMENT_SURFACE_KEYS = {
   // /doc/[id]/plans — the Plan Room (the current set, the light table, the
   // drawing log, the issue ceremony).
   plans:           'designer-portal/document/plans',
+  // W2-d (return-teaching, hold registry) — the Galley fold (distinct from
+  // `drafting`) and the Account page's members section (distinct from the
+  // Document's client-facing `people`), mirroring the canonical additions.
+  draftingGalley:  'designer-portal/document/drafting/galley',
+  accountMembers:  'designer-portal/document/account/members',
 } as const;
 
 export type DocumentSurfaceKey =
