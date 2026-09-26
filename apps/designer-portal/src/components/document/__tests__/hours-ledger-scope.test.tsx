@@ -85,6 +85,12 @@ let onStamp: (() => void) | null = null;
 const mockScopeViewedCalls: Array<Record<string, unknown>> = [];
 const mockRateUnresolvedCalls: Array<Record<string, unknown>> = [];
 
+// Return teaching's in-place and act notes: jest cannot load @patina/help-system
+// behind the real hook, and nothing here is taught.
+jest.mock('@/hooks/use-teaching-note', () => ({
+  useTeachingNoteFor: () => ({ note: null, bind: null }),
+}));
+
 // Only the two instruments under test are replaced; everything else on the
 // module (DocumentAction's own `actionShown`, for one) stays real.
 jest.mock('@/lib/analytics/document-events', () => {

@@ -16,6 +16,12 @@ const mockMaterialize = jest.fn();
 const mockDiscard = jest.fn();
 const mockAttachClient = jest.fn();
 
+// Return teaching's in-place and act notes: jest cannot load @patina/help-system
+// behind the real hook, and nothing here is taught.
+jest.mock('@/hooks/use-teaching-note', () => ({
+  useTeachingNoteFor: () => ({ note: null, bind: null }),
+}));
+
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));

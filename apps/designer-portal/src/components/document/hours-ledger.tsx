@@ -63,6 +63,10 @@ import { hoursUtilization } from "@/lib/document/ledger-summary";
 import { openInvoiceComposer } from "./accounts/invoice-overlays";
 import type { OpenLedgerContext } from "./command-bar";
 import { DocSheetHead } from "./overlays/doc-sheet";
+import {
+  TEACHING_MARGIN_COLUMN,
+  TeachingAnchorNote,
+} from "./teaching/teaching-anchor-note";
 import { STUDIO_LEDGERS } from "@/lib/document/registry";
 import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
 import { DocumentAction, DocumentActionGroup } from "./document-action";
@@ -193,6 +197,7 @@ export function HoursLedger({
 }) {
   const updateEntry = useUpdateTimeEntry({ errorSurface: "inline" });
   const createEntry = useCreateTimeEntry({ errorSurface: "inline" });
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   // ── The lens + the page ───────────────────────────────────────────────────
   const [lensProjectId, setLensProjectId] = useState<string | null>(
@@ -834,12 +839,15 @@ export function HoursLedger({
   }, [scope, groupBy]);
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div ref={sheetRef} className="mx-auto max-w-3xl">
       <DocSheetHead
         icon={HOURS_ICON}
         title="Hours"
         helpKey={DOCUMENT_SURFACE_KEYS.hours}
       />
+      {/* Return teaching: the ledger, then the margin an in-place note sits in. */}
+      <div className={TEACHING_MARGIN_COLUMN}>
+      <div className="min-w-0">
       <div className="mb-4 flex items-baseline justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
@@ -1483,6 +1491,9 @@ export function HoursLedger({
           </div>
         </div>
       )}
+      </div>
+      <TeachingAnchorNote surfaceKey={DOCUMENT_SURFACE_KEYS.hours} hostRef={sheetRef} />
+      </div>
     </div>
   );
 }

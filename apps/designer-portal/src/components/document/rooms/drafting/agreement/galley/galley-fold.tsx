@@ -14,7 +14,13 @@ import type { AgreementPart } from "@patina/types";
 import { PartEditor } from "../part-editor";
 import { PartHistoryStrip } from "../part-history-strip";
 import type { TurnkeyContext } from "../turnkey";
+import { useRef } from "react";
 import { useTeachingHold } from "@/lib/teaching/hold-registry";
+import { DOCUMENT_SURFACE_KEYS } from "@/lib/help-system/document-surface-keys";
+import {
+  TEACHING_MARGIN_COLUMN,
+  TeachingAnchorNote,
+} from "@/components/document/teaching/teaching-anchor-note";
 
 export function GalleyFold({
   part,
@@ -50,8 +56,11 @@ export function GalleyFold({
   kept: boolean;
 }) {
   useTeachingHold(`galley-fold:${part.partKey}`, dirty);
+  const foldRef = useRef<HTMLDivElement>(null);
   return (
-    <>
+    // Return teaching: the fold, then the margin an in-place note sits in.
+    <div ref={foldRef} className={TEACHING_MARGIN_COLUMN}>
+    <div className="min-w-0">
       {!readOnly && (
         <div className="field">
           <label className="label" htmlFor={`rename-${part.partKey}`}>
@@ -110,6 +119,11 @@ export function GalleyFold({
       {libraryOn && (
         <PartHistoryStrip proposalId={proposalId} partKey={part.partKey} />
       )}
-    </>
+    </div>
+    <TeachingAnchorNote
+      surfaceKey={DOCUMENT_SURFACE_KEYS.draftingGalley}
+      hostRef={foldRef}
+    />
+    </div>
   );
 }

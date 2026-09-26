@@ -14,7 +14,7 @@
  * ONLY — this book never reaches the client mirror.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   useArAging,
@@ -36,6 +36,7 @@ import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountsQueryFailure } from './accounts-query-failure';
 import { SectionLoadingLine } from '../section-loading-line';
+import { TEACHING_MARGIN_COLUMN, TeachingAnchorNote } from '../teaching/teaching-anchor-note';
 
 // R96 — the registry is the single source of the surface icon (no drift).
 const ACCOUNTS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'accounts')!.icon;
@@ -56,6 +57,7 @@ export function AccountsBook({
   initialContext?: OpenLedgerContext | null;
 }) {
   const router = useRouter();
+  const sheetRef = useRef<HTMLDivElement>(null);
   const { data: invoices, isLoading, isError, refetch } = useInvoices();
   const { aging } = useArAging();
   const { data: earnings } = useEarningsStats();
@@ -94,7 +96,7 @@ export function AccountsBook({
     : [];
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div ref={sheetRef} className="mx-auto max-w-3xl">
       <DocSheetHead
         icon={ACCOUNTS_ICON}
         title="Accounts"
@@ -102,6 +104,9 @@ export function AccountsBook({
         onClose={onClose}
         helpKey={DOCUMENT_SURFACE_KEYS.accounts}
       />
+      {/* Return teaching: the book, then the margin an in-place note sits in. */}
+      <div className={TEACHING_MARGIN_COLUMN}>
+      <div className="min-w-0">
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <div>
           <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
@@ -179,6 +184,9 @@ export function AccountsBook({
           )}
         </>
       )}
+      </div>
+      <TeachingAnchorNote surfaceKey={DOCUMENT_SURFACE_KEYS.accounts} hostRef={sheetRef} />
+      </div>
     </div>
   );
 }

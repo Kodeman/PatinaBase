@@ -15,7 +15,7 @@
  * doesn't either.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useOrganizations,
   useOrganizationMembers,
@@ -45,6 +45,11 @@ import { ROSTER_RATE_ROLES } from '../rooms/drafting/agreement/part-kinds';
 import { monogramOf } from '@/lib/document/account-identity';
 import { clampInvitableRole, friendlyInviteError, isInviteExpired } from '@/lib/document/invite-status';
 import { StudioInviteModal } from './studio-invite-modal';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import {
+  TEACHING_MARGIN_COLUMN,
+  TeachingAnchorNote,
+} from '../teaching/teaching-anchor-note';
 import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { StudioSetupChecklist } from './studio-setup-checklist';
 import { MemberTitleLine } from './member-title-line';
@@ -247,6 +252,7 @@ export function AccountStudioPage() {
   const updateBilling = useUpdateStudioBillingSettings();
   const updateAgreementDefaults = useUpdateStudioAgreementDefaults();
   const resendInvite = useInviteMember();
+  const membersRef = useRef<HTMLDivElement>(null);
 
   const [newStudioName, setNewStudioName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
@@ -1565,7 +1571,9 @@ export function AccountStudioPage() {
         <LicensingAttestationCard studioId={studio.id} canManage={canManage} />
       )}
 
-      {/* Members */}
+      {/* Members — the roster, then the margin an in-place note sits in. */}
+      <div ref={membersRef} className={TEACHING_MARGIN_COLUMN}>
+      <div className="min-w-0">
       <div className="mb-2 flex items-center justify-between">
         <h3 className={LABEL}>Members</h3>
         {canManage && (
@@ -1740,6 +1748,12 @@ export function AccountStudioPage() {
           })}
         </ul>
       )}
+      </div>
+      <TeachingAnchorNote
+        surfaceKey={DOCUMENT_SURFACE_KEYS.accountMembers}
+        hostRef={membersRef}
+      />
+      </div>
 
       {/* Studio rates (HT-3) — tier 2 of the one rate chain, owner/admin only.
           A signed agreement rate still wins; this is what prices an hour where

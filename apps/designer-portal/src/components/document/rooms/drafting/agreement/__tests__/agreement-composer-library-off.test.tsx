@@ -34,6 +34,12 @@ import type { AgreementPart } from "@patina/types";
 import { AgreementComposer } from "../agreement-composer";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 
+// Return teaching's in-place and act notes: jest cannot load @patina/help-system
+// behind the real hook, and nothing here is taught.
+jest.mock('@/hooks/use-teaching-note', () => ({
+  useTeachingNoteFor: () => ({ note: null, bind: null }),
+}));
+
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn() }),
 }));

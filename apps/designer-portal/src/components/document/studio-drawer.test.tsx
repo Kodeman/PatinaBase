@@ -17,6 +17,12 @@ let mockInHandToday = 0;
 // any more, so the hook is what these three cases drive.
 let mockPresenceOthers: string[] = [];
 
+// Return teaching's in-place and act notes: jest cannot load @patina/help-system
+// behind the real hook, and nothing here is taught.
+jest.mock('@/hooks/use-teaching-note', () => ({
+  useTeachingNoteFor: () => ({ note: null, bind: null }),
+}));
+
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
   useRouter: () => ({ push: mockPush }),

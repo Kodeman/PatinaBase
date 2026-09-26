@@ -48,6 +48,8 @@ import { useDraftingState } from '@/hooks/use-drafting-state';
 import { assessProposalSendReadiness } from '@/lib/document/proposal-send-validation';
 import { useProposalAutosaveBarrier } from '@/hooks/use-proposal-autosave-barrier';
 import { useTeachingHold } from '@/lib/teaching/hold-registry';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { TeachingActNote } from '../teaching/teaching-act-note';
 import {
   flushProposalAutosaves,
   getProposalAutosaveSnapshot,
@@ -195,6 +197,7 @@ export function SendSheet({
   const [acknowledgedIncomplete, setAcknowledgedIncomplete] = useState(false);
   const [isPreparingSend, setIsPreparingSend] = useState(false);
   const sendAttemptInFlight = useRef(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const [refreshedGaps, setRefreshedGaps] = useState<string[] | null>(null);
   const [refreshedClientData, setRefreshedClientData] = useState<
     NonNullable<typeof clientPayload.data> | null
@@ -650,7 +653,7 @@ export function SendSheet({
 
   return (
     <DocSheet open={open} onClose={onClose} title="Send proposal">
-      <div className="mx-auto max-w-xl">
+      <div ref={sheetRef} className="mx-auto max-w-xl">
         <p className={labelCls}>
           {proposal?.title ?? 'Proposal'} &middot; v{proposal?.version || 1}.0
           &middot; ${total}
@@ -1004,6 +1007,14 @@ export function SendSheet({
               >
                 {sendError}
               </div>
+            )}
+
+            {/* Return teaching: one sentence above the send act. */}
+            {proposal.status === 'draft' && !deliveryRecovery && (
+              <TeachingActNote
+                surfaceKey={DOCUMENT_SURFACE_KEYS.drafting}
+                hostRef={sheetRef}
+              />
             )}
 
             {/* Actions */}

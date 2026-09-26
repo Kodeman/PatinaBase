@@ -9,6 +9,13 @@ import { render, screen } from '@testing-library/react';
 
 const mockRecentBoards = jest.fn();
 
+// Return teaching (the Desk slot, in-place and act notes): jest cannot load
+// @patina/help-system behind the real hooks, and nothing here is taught.
+jest.mock('@/hooks/use-teaching-note', () => ({
+  useReturnNote: () => ({ note: null, bind: null, sinceLine: null, decided: true }),
+  useTeachingNoteFor: () => ({ note: null, bind: null }),
+}));
+
 jest.mock('@patina/supabase', () => ({
   useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
   // The remaining exports are only exercised by the DeskPage-level describe
