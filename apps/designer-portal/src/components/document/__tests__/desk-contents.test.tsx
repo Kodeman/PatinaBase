@@ -7,7 +7,8 @@
  * F38 — every row now carries a static sub-label; F17 — `The Rooms` reads
  * `The Scans` here too; F51 — `Open the Drafting Room` joins Begin and calls
  * the shared opener, not a doorway string (C-AF-01); F08 — the Desk's own
- * invoice door names its scope (`Draw an invoice · new`).
+ * invoice door names its scope (`Draw an invoice`; SQ-292 retired the
+ * hand-written `· new` marker — the release note carries newness now).
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { DeskContents } from '../desk-contents';
@@ -158,10 +159,10 @@ describe('DeskContents — Begin column', () => {
     renderContents();
 
     expect(
-      screen.getByRole('button', { name: /Draw an invoice · new/ }),
+      screen.getByRole('button', { name: /^Draw an invoice$/ }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /^Draw an invoice$/ }),
+      screen.queryByRole('button', { name: /Draw an invoice · new/ }),
     ).not.toBeInTheDocument();
   });
 
