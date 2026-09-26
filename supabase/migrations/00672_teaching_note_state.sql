@@ -9,10 +9,12 @@
 --
 -- What this adds, all new objects; nothing installed is redefined:
 --   1. `public.teaching_note_state` (user_id PK → auth.users ON DELETE CASCADE,
---      state jsonb, updated_at). RLS on; authenticated holds SELECT and DELETE on its
---      own row only. There is no INSERT or UPDATE grant and no INSERT or UPDATE
---      policy: every write is enforced through the RPC below, which runs as its
---      owner. No other leg, no view, and no grant to anon, agent_reader or agent_writer.
+--      state jsonb, updated_at). RLS on; authenticated holds SELECT on its own row
+--      only. There is no INSERT, UPDATE or DELETE grant and no policy for any of
+--      them: every write is enforced through the RPC below, which runs as its owner.
+--      DELETE is withheld because dismiss = forever (§2): a client that could delete
+--      its own row could wipe every sticky `seen.<key>.out` (R2 finding 14). No other
+--      leg, no view, and no grant to anon, agent_reader or agent_writer.
 --   2. `public.teaching_note_state_patch(p_path text[], p_value jsonb) RETURNS jsonb`,
 --      SECURITY DEFINER, pinned to auth.uid(). It sets one leaf under a whitelisted
 --      path (a plain 1-based, one-dimensional array of non-empty, non-NULL segments,
@@ -39,10 +41,10 @@ CREATE TABLE IF NOT EXISTS public.teaching_note_state (
 
 ALTER TABLE public.teaching_note_state ENABLE ROW LEVEL SECURITY;
 
--- Own row only, for SELECT and DELETE. There is no INSERT or UPDATE policy: the
--- table grant below withholds both, so teaching_note_state_patch is the only writer.
--- The DROPs of the insert/update policies remove them where an earlier body of this
--- file created them.
+-- Own row only, for SELECT. There is no INSERT, UPDATE or DELETE policy: the table
+-- grant below withholds all three, so teaching_note_state_patch is the only writer.
+-- The DROPs of the insert/update/delete policies remove them where an earlier body
+-- of this file created them.
 DROP POLICY IF EXISTS teaching_note_state_select_own ON public.teaching_note_state;
 CREATE POLICY teaching_note_state_select_own ON public.teaching_note_state
   FOR SELECT TO authenticated
@@ -50,26 +52,22 @@ CREATE POLICY teaching_note_state_select_own ON public.teaching_note_state
 
 DROP POLICY IF EXISTS teaching_note_state_insert_own ON public.teaching_note_state;
 DROP POLICY IF EXISTS teaching_note_state_update_own ON public.teaching_note_state;
-
 DROP POLICY IF EXISTS teaching_note_state_delete_own ON public.teaching_note_state;
-CREATE POLICY teaching_note_state_delete_own ON public.teaching_note_state
-  FOR DELETE TO authenticated
-  USING (user_id = (SELECT auth.uid()));
 
--- Post-flip, the policies above only bite with a matching table grant. authenticated
--- gets SELECT and DELETE only; INSERT and UPDATE are withheld so the whitelist, the
+-- Post-flip, the policy above only bites with a matching table grant. authenticated
+-- gets SELECT only; INSERT, UPDATE and DELETE are withheld so the whitelist, the
 -- value cap and the sticky `out` in teaching_note_state_patch cannot be bypassed by
--- writing the row directly. anon and the agent roles get nothing.
+-- writing or deleting the row directly. anon and the agent roles get nothing.
 REVOKE ALL ON public.teaching_note_state FROM PUBLIC, anon, authenticated;
-REVOKE INSERT, UPDATE ON public.teaching_note_state FROM authenticated;
-GRANT SELECT, DELETE ON public.teaching_note_state TO authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.teaching_note_state FROM authenticated;
+GRANT SELECT ON public.teaching_note_state TO authenticated;
 GRANT ALL ON public.teaching_note_state TO service_role;
 
 COMMENT ON TABLE public.teaching_note_state IS
   'A designer''s return-teaching state (Margin Notes, 00672): release cursor, visit, '
   'unsolicited cap, quiet switch and per-note seen outcomes. Own row only; never '
   'stored in profiles.help_state, which counterparties can read. Writes are enforced '
-  'through teaching_note_state_patch: authenticated holds SELECT and DELETE only.';
+  'through teaching_note_state_patch: authenticated holds SELECT only.';
 
 -- ── 2. The writer ───────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.teaching_note_state_patch(p_path text[], p_value jsonb)

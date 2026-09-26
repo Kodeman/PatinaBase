@@ -4,7 +4,11 @@
 -- flag false and every lastAt null, with exactly the TeachingSignals keys; (3) after
 -- one sent invoice for user A, used.ledger is true and lastAt.invoice_sent is its
 -- sent_at; (4) user B sees false/null for A's rows; (5) an active 'member'
--- membership makes the caller a 'hand', while A (owner of that studio) stays 'owner'.
+-- membership makes the caller a 'hand', while A (owner of that studio) stays 'owner';
+-- (6) role counts only ACTIVE memberships (R2 finding 15): a solo designer D whose only
+-- rows are 'removed' and 'invited' gets the function's default for "no active
+-- membership", which is 'owner'; (7) documented multi-studio limitation: A, owner of
+-- studio 1 and an active 'member' (hand) of studio 2, is 'owner'.
 --
 -- Run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/teaching_signals.sql
 -- Everything runs inside one transaction and is rolled back.
@@ -165,6 +169,62 @@ BEGIN
   ASSERT s->'lastAt'->>'invite_sent' IS NOT NULL, 'lastAt.invite_sent must be set after A invited H';
   ASSERT s->'lastAt'->'invite_with_handoff_note' = 'null'::jsonb,
     'invite_with_handoff_note must stay null for an invite with no handoff note';
+END $$;
+
+RESET ROLE;
+SELECT set_config('request.jwt.claims', NULL, true);
+
+-- ─── fixture: solo designer D with only removed/invited rows; a second studio ──
+-- D was removed from studio 1 and has a pending invite to studio 2; D holds no
+-- active membership anywhere. A joins studio 2 as an active 'member'.
+
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, instance_id, aud, role)
+VALUES
+  ('e9673000-0000-4000-8000-00000000000d', '00673-signals-d@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.organizations (id, type, name, slug)
+VALUES ('e9673000-0000-4000-8000-0000000000d2', 'design_studio', '00673 Studio Two', 'studio-00673-signals-two');
+
+INSERT INTO public.organization_members (organization_id, user_id, role, status)
+VALUES
+  ('e9673000-0000-4000-8000-0000000000d1', 'e9673000-0000-4000-8000-00000000000d', 'member', 'removed'),
+  ('e9673000-0000-4000-8000-0000000000d2', 'e9673000-0000-4000-8000-00000000000d', 'member', 'invited'),
+  ('e9673000-0000-4000-8000-0000000000d2', 'e9673000-0000-4000-8000-00000000000a', 'member', 'active');
+
+-- (6) D: only removed/invited rows → no active membership → the default, 'owner'
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', 'e9673000-0000-4000-8000-00000000000d', 'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+
+DO $$
+DECLARE
+  s jsonb := public.teaching_signals();
+BEGIN
+  -- Fixture sanity: D can read both of its own non-active rows, so the old
+  -- any-row predicate would have made D a 'hand'.
+  ASSERT (SELECT count(*) FROM public.organization_members
+          WHERE user_id = 'e9673000-0000-4000-8000-00000000000d'
+            AND status IN ('removed', 'invited')) = 2,
+    'fixture: D must see its own removed and invited rows';
+  ASSERT s->>'role' = 'owner',
+    format('a designer with only removed/invited rows has no active membership and must be owner (the default), got %s', s->>'role');
+END $$;
+
+RESET ROLE;
+
+-- (7) A: active owner of studio 1 and active member (hand) of studio 2 → 'owner'
+-- (accepted: teaching_signals() takes no studio context).
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', 'e9673000-0000-4000-8000-00000000000a', 'role', 'authenticated')::text, true);
+SET LOCAL ROLE authenticated;
+
+DO $$
+DECLARE
+  s jsonb := public.teaching_signals();
+BEGIN
+  ASSERT s->>'role' = 'owner',
+    format('an owner of one studio who is a hand in another must be owner (documented), got %s', s->>'role');
 END $$;
 
 RESET ROLE;

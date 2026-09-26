@@ -12,8 +12,14 @@
 --   RLS applies, and every sub-query filters on the caller. It persists nothing.
 --
 -- Readings the queries rest on:
---   role .......... 'owner' when the caller holds an active owner/admin membership or
---                   has no organization_members row at all; otherwise 'hand'.
+--   role .......... only ACTIVE memberships count (om.status = 'active', the predicate
+--                   00584's studio co-member legs use; 'invited' and 'removed' rows are
+--                   ignored). 'owner' when the caller holds an active owner/admin
+--                   membership, or has no active membership at all (the default: a solo
+--                   designer whose only rows are invited/removed is an owner, R2 finding
+--                   15); otherwise 'hand'. ACCEPTED LIMITATION: the function takes no
+--                   studio context, so an owner/admin of studio A who is a hand in
+--                   studio B is 'owner' everywhere.
 --   galley ........ agreement kinds are design_services and service_addendum (00412)
 --                   plus design_build (00578). Not legacy, furnishings_authorization
 --                   (00412) or trade_scope (00423).
@@ -46,6 +52,8 @@ SET search_path = public, pg_temp
 AS $$
   SELECT jsonb_build_object(
     'role',
+      -- Active memberships only. Multi-studio: an active owner/admin anywhere wins
+      -- (no studio context in the signature; accepted, see the header).
       CASE
         WHEN EXISTS (
                SELECT 1 FROM public.organization_members om
@@ -54,7 +62,7 @@ AS $$
                LIMIT 1)
           OR NOT EXISTS (
                SELECT 1 FROM public.organization_members om
-               WHERE om.user_id = me.uid
+               WHERE om.user_id = me.uid AND om.status = 'active'
                LIMIT 1)
         THEN 'owner'
         ELSE 'hand'

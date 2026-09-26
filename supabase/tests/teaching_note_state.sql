@@ -4,7 +4,7 @@
 -- returns the state; (3) missing parents are created (seen.<key>.n on an empty state);
 -- (4) a set seen.<key>.out is sticky; (5) refused paths, non-1-based or NULL-bearing
 -- path arrays, a NULL value and an oversize value raise 22023; (5b) the owner cannot
--- INSERT or UPDATE the table directly (42501) and the RPC still writes; (6) another
+-- INSERT, UPDATE or DELETE the table directly (42501) and the RPC still writes; (6) another
 -- user cannot SELECT or write the row.
 --
 -- Run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/teaching_note_state.sql
@@ -27,18 +27,17 @@ BEGIN
   ASSERT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.teaching_note_state'::regclass),
     'teaching_note_state must have RLS enabled';
   ASSERT (SELECT count(*) FROM pg_policies
-          WHERE schemaname = 'public' AND tablename = 'teaching_note_state') = 2,
-    'teaching_note_state must carry exactly two policies (SELECT, DELETE)';
-  ASSERT NOT EXISTS (SELECT 1 FROM pg_policies
-                     WHERE schemaname = 'public' AND tablename = 'teaching_note_state'
-                       AND cmd IN ('INSERT', 'UPDATE', 'ALL')),
-    'teaching_note_state must carry no INSERT or UPDATE policy';
-  ASSERT has_table_privilege('authenticated', 'public.teaching_note_state', 'SELECT')
-     AND has_table_privilege('authenticated', 'public.teaching_note_state', 'DELETE'),
-    'authenticated must hold SELECT and DELETE';
+          WHERE schemaname = 'public' AND tablename = 'teaching_note_state') = 1,
+    'teaching_note_state must carry exactly one policy (SELECT)';
+  ASSERT (SELECT cmd FROM pg_policies
+          WHERE schemaname = 'public' AND tablename = 'teaching_note_state') = 'SELECT',
+    'the one policy on teaching_note_state must be the SELECT policy';
+  ASSERT has_table_privilege('authenticated', 'public.teaching_note_state', 'SELECT'),
+    'authenticated must hold SELECT';
   ASSERT NOT has_table_privilege('authenticated', 'public.teaching_note_state', 'INSERT')
-     AND NOT has_table_privilege('authenticated', 'public.teaching_note_state', 'UPDATE'),
-    'authenticated must not hold INSERT or UPDATE: the RPC is the only writer';
+     AND NOT has_table_privilege('authenticated', 'public.teaching_note_state', 'UPDATE')
+     AND NOT has_table_privilege('authenticated', 'public.teaching_note_state', 'DELETE'),
+    'authenticated must not hold INSERT, UPDATE or DELETE: the RPC is the only writer';
   ASSERT NOT has_table_privilege('anon', 'public.teaching_note_state', 'SELECT'),
     'anon must not SELECT teaching_note_state';
   ASSERT NOT EXISTS (
@@ -240,8 +239,18 @@ BEGIN
     NULL;
   END;
 
+  -- R2 finding 14: dismiss = forever, so the owner cannot DELETE its own row either
+  -- (a delete would wipe every sticky out). 42501 = insufficient_privilege.
+  BEGIN
+    DELETE FROM public.teaching_note_state
+     WHERE user_id = 'e9672000-0000-4000-8000-00000000000a';
+    RAISE EXCEPTION 'the owner''s direct DELETE must be refused';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
   ASSERT (SELECT state #>> '{seen,k@1,out}' FROM public.teaching_note_state) = 'dismissed',
-    'the refused direct writes must leave the row unchanged';
+    'the refused direct writes and delete must leave the row unchanged';
 
   v_state := public.teaching_note_state_patch(ARRAY['seen', 'k@1', 'n'], '3'::jsonb);
   ASSERT v_state #>> '{seen,k@1,n}' = '3', format('n must still set via the RPC, got %s', v_state);

@@ -18380,13 +18380,13 @@ END $g$;
 
 -- 00672_teaching_note_state.sql
 DO $g$ BEGIN
-  REVOKE INSERT, UPDATE ON public.teaching_note_state FROM authenticated;
+  REVOKE INSERT, UPDATE, DELETE ON public.teaching_note_state FROM authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00672_teaching_note_state.sql
 DO $g$ BEGIN
-  GRANT SELECT, DELETE ON public.teaching_note_state TO authenticated;
+  GRANT SELECT ON public.teaching_note_state TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
