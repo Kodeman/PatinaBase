@@ -19,8 +19,11 @@
  *        round-trip).
  *
  *     2. Writes update the cache synchronously and schedule an async
- *        Supabase patch via `saveHelpState(...)`. Patches are serialized
- *        through a per-user promise chain so a rapid sequence of
+ *        Supabase patch via `saveHelpState(...)`, which sends ONLY the
+ *        top-level keys the writing cache owns through the
+ *        `help_state_merge` RPC (a server-side shallow merge), so one cache
+ *        never erases a sibling cache's keys (SQ-265). Patches are serialized
+ *        through a per-cache promise chain so a rapid sequence of
  *        `setTourState(...)` calls during a tour skip + dismiss + complete
  *        never races into a stale-blob overwrite.
  *
@@ -53,6 +56,14 @@ import { _clearAllFeatureAnnouncementState } from '../proactive/FeatureAnnouncem
 
 const PROFILES_TABLE = 'profiles'
 const HELP_STATE_COLUMN = 'help_state'
+const HELP_STATE_MERGE_RPC = 'help_state_merge'
+
+/** Top-level `help_state` keys a write may carry — the owning cache's only. */
+type HelpStateKeys = ReadonlyArray<keyof HelpStateBlob>
+
+const TOUR_CACHE_KEYS: HelpStateKeys = ['tours', 'featureAnnouncements']
+const MARGIN_NOTE_KEYS: HelpStateKeys = ['marginNotes']
+const FIRST_AUTHORED_KEYS: HelpStateKeys = ['firstAuthoredAt']
 
 /**
  * Load the entire `profiles.help_state` blob for `userId`. Returns `{}` when
@@ -94,26 +105,35 @@ export async function loadHelpState(
 }
 
 /**
- * Persist the full `profiles.help_state` blob for `userId`. Caller is
- * responsible for merging in-memory updates before calling — this writer
- * always overwrites the whole column. Failures are logged but never thrown.
+ * Merge the `keys` sub-keys of `blob` into the signed-in caller's
+ * `profiles.help_state` via the `help_state_merge` RPC (top-level shallow
+ * merge; every other key stays as the server has it). The RPC acts on the
+ * caller's own row, so `userId` must be the signed-in user. Resolves with the
+ * resulting full column, or `null` when the write failed — failures are
+ * logged but never thrown.
  */
 export async function saveHelpState(
   client: HelpStateSupabaseClient,
   userId: string,
   blob: HelpStateBlob,
-): Promise<void> {
+  keys: HelpStateKeys,
+): Promise<HelpStateBlob | null> {
+  const p_patch: Record<string, unknown> = {}
+  for (const key of keys) {
+    if (blob[key] !== undefined) p_patch[key] = blob[key]
+  }
   try {
-    const { error } = await client
-      .from(PROFILES_TABLE)
-      .update({ [HELP_STATE_COLUMN]: blob })
-      .eq('id', userId)
-    if (error && typeof console !== 'undefined') {
-      console.warn(
-        `[help-system] saveHelpState: Supabase update failed — write dropped.`,
-        error.message,
-      )
+    const { data, error } = await client.rpc(HELP_STATE_MERGE_RPC, { p_patch })
+    if (error) {
+      if (typeof console !== 'undefined') {
+        console.warn(
+          `[help-system] saveHelpState: help_state_merge failed — write dropped.`,
+          error.message,
+        )
+      }
+      return null
     }
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : null
   } catch (err) {
     if (typeof console !== 'undefined') {
       console.warn(
@@ -121,6 +141,7 @@ export async function saveHelpState(
         err,
       )
     }
+    return null
   }
 }
 
@@ -144,19 +165,31 @@ function createCache(): BackendCache {
 }
 
 /**
- * Schedule an async write to Supabase, serialized behind any previous in-flight
- * write so we never race writes from quick-succession user actions. The cache's
- * `blob` is read at the moment the chained promise actually runs, so the most
- * recent in-memory mutation wins.
+ * Schedule an async write of the cache's owned `keys` to Supabase, serialized
+ * behind any previous in-flight write so we never race writes from
+ * quick-succession user actions. The cache's `blob` is read at the moment the
+ * chained promise actually runs, so the most recent in-memory mutation wins.
+ * On success the cache adopts the returned column, keeping its own keys'
+ * in-memory values (they may carry a mutation made while the write was in
+ * flight).
  */
 function scheduleWrite(
   cache: BackendCache,
   client: HelpStateSupabaseClient,
   userId: string,
+  keys: HelpStateKeys,
 ): void {
   cache.pendingWrite = cache.pendingWrite
     .catch(() => undefined)
-    .then(() => saveHelpState(client, userId, cache.blob))
+    .then(async () => {
+      const merged = await saveHelpState(client, userId, cache.blob, keys)
+      if (!merged) return
+      const next: Record<string, unknown> = { ...merged }
+      for (const key of keys) {
+        if (cache.blob[key] !== undefined) next[key] = cache.blob[key]
+      }
+      cache.blob = next as HelpStateBlob
+    })
 }
 
 /**
@@ -181,7 +214,7 @@ export function createSupabaseTourStateBackend(
         ...cache.blob,
         tours: { ...prevTours, [tourId]: next },
       }
-      scheduleWrite(cache, client, userId)
+      scheduleWrite(cache, client, userId, TOUR_CACHE_KEYS)
     },
     clearTourState(tourId: string): void {
       const prevTours = cache.blob.tours
@@ -193,7 +226,7 @@ export function createSupabaseTourStateBackend(
         ...cache.blob,
         tours: nextTours,
       }
-      scheduleWrite(cache, client, userId)
+      scheduleWrite(cache, client, userId, TOUR_CACHE_KEYS)
     },
   }
 }
@@ -226,7 +259,7 @@ export function createSupabaseFeatureAnnouncementBackend(
           [featureKey]: { dismissedAt: state.dismissedAt },
         },
       }
-      scheduleWrite(cache, client, userId)
+      scheduleWrite(cache, client, userId, TOUR_CACHE_KEYS)
     },
   }
 }
@@ -248,13 +281,9 @@ export interface CreateSupabaseMarginNoteBackendResult extends MarginNoteStateBa
 /**
  * Build a standalone margin-note backend for `userId`. Unlike the tour /
  * feature-announcement pair above, this does not share a cache with
- * `createSupabaseHelpStateBackends` — it keeps its own cache of the FULL
- * `help_state` blob (hydrated once) so its write-through never clobbers
- * sibling sub-keys it never touches, at the cost of not seeing a concurrent
- * write to `tours`/`featureAnnouncements` made through the other cache after
- * this one hydrated. Acceptable for margin notes: they are dismissed by user
- * action, rarely in the same instant as a tour transition, and the adapter's
- * whole design already accepts eventual consistency over strict locking.
+ * `createSupabaseHelpStateBackends` — it keeps its own cache, and its
+ * write-through sends only `marginNotes` (see `saveHelpState`), so it never
+ * clobbers sibling sub-keys it never touches.
  */
 export function createSupabaseMarginNoteBackend(
   client: HelpStateSupabaseClient,
@@ -272,7 +301,7 @@ export function createSupabaseMarginNoteBackend(
         ...cache.blob,
         marginNotes: { ...prev, [noteKey]: new Date().toISOString() },
       }
-      scheduleWrite(cache, client, userId)
+      scheduleWrite(cache, client, userId, MARGIN_NOTE_KEYS)
     },
     async hydrate(): Promise<Record<string, string>> {
       const blob = await loadHelpState(client, userId)
@@ -304,8 +333,8 @@ export interface CreateSupabaseFirstAuthoredBackendResult extends FirstAuthoredS
 /**
  * Build a standalone first-authored backend for `userId` (onboarding Wave 1,
  * L6). Same independent-cache design as `createSupabaseMarginNoteBackend` —
- * it keeps its own cache of the full `help_state` blob (hydrated once) so
- * its write-through never clobbers sibling sub-keys it never touches.
+ * its write-through sends only `firstAuthoredAt`, so it never clobbers
+ * sibling sub-keys it never touches.
  */
 export function createSupabaseFirstAuthoredBackend(
   client: HelpStateSupabaseClient,
@@ -322,7 +351,7 @@ export function createSupabaseFirstAuthoredBackend(
         ...cache.blob,
         firstAuthoredAt: new Date().toISOString(),
       }
-      scheduleWrite(cache, client, userId)
+      scheduleWrite(cache, client, userId, FIRST_AUTHORED_KEYS)
     },
     async hydrate(): Promise<boolean> {
       const blob = await loadHelpState(client, userId)

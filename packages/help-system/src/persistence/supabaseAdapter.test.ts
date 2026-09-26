@@ -25,39 +25,43 @@ import type { HelpStateSupabaseClient, HelpStateBlob } from './types'
 import { TOUR_STATE_STORAGE_PREFIX } from '../proactive/TourController/tourState'
 
 /**
- * Tiny in-memory Supabase stub. Captures last write so assertions can inspect
- * the JSONB payload sent across the wire.
+ * Tiny in-memory Supabase stub. `help_state_merge` is modelled as the W1-c RPC
+ * (top-level shallow merge into the stored column, returning the result).
+ * `lastWrite` is the column after the last successful merge; `rpcCalls`
+ * captures each RPC payload sent across the wire.
  */
 function makeStubClient(initial: HelpStateBlob | null = {}): {
   client: HelpStateSupabaseClient
   lastWrite: { current: HelpStateBlob | null }
+  rpcCalls: { fn: string; args: { p_patch: HelpStateBlob } }[]
   selectError: { current: { message: string } | null }
-  updateError: { current: { message: string } | null }
+  rpcError: { current: { message: string } | null }
 } {
+  let stored: HelpStateBlob | null = initial
   const lastWrite: { current: HelpStateBlob | null } = { current: null }
+  const rpcCalls: { fn: string; args: { p_patch: HelpStateBlob } }[] = []
   const selectError: { current: { message: string } | null } = { current: null }
-  const updateError: { current: { message: string } | null } = { current: null }
+  const rpcError: { current: { message: string } | null } = { current: null }
   const client: HelpStateSupabaseClient = {
     from: (_table: string) => ({
       select: (_columns: string) => ({
         eq: (_column: string, _value: string) => ({
           single: async () => ({
-            data: selectError.current ? null : { help_state: initial },
+            data: selectError.current ? null : { help_state: stored },
             error: selectError.current,
           }),
         }),
       }),
-      update: (values: Record<string, unknown>) => ({
-        eq: async (_column: string, _value: string) => {
-          if (!updateError.current) {
-            lastWrite.current = (values.help_state as HelpStateBlob | null) ?? null
-          }
-          return { error: updateError.current }
-        },
-      }),
     }),
+    rpc: async (fn: string, args: { p_patch: HelpStateBlob }) => {
+      rpcCalls.push({ fn, args: JSON.parse(JSON.stringify(args)) })
+      if (rpcError.current) return { data: null, error: rpcError.current }
+      stored = { ...(stored ?? {}), ...JSON.parse(JSON.stringify(args.p_patch)) }
+      lastWrite.current = stored
+      return { data: stored, error: null }
+    },
   }
-  return { client, lastWrite, selectError, updateError }
+  return { client, lastWrite, rpcCalls, selectError, rpcError }
 }
 
 describe('loadHelpState', () => {
@@ -86,21 +90,33 @@ describe('loadHelpState', () => {
 })
 
 describe('saveHelpState', () => {
-  it('writes the blob through to the table', async () => {
-    const { client, lastWrite } = makeStubClient({})
-    await saveHelpState(client, 'user-1', {
-      tours: { tour: { abandoned: true } },
+  it('merges only the named keys through help_state_merge and returns the column', async () => {
+    const { client, rpcCalls } = makeStubClient({
+      marginNotes: { 'doc-first-touch': '2026-01-01T00:00:00Z' },
     })
-    expect(lastWrite.current).toEqual({
+    const merged = await saveHelpState(
+      client,
+      'user-1',
+      {
+        tours: { tour: { abandoned: true } },
+        marginNotes: { stale: '2020-01-01T00:00:00Z' },
+      },
+      ['tours'],
+    )
+    expect(rpcCalls).toEqual([
+      { fn: 'help_state_merge', args: { p_patch: { tours: { tour: { abandoned: true } } } } },
+    ])
+    expect(merged).toEqual({
       tours: { tour: { abandoned: true } },
+      marginNotes: { 'doc-first-touch': '2026-01-01T00:00:00Z' },
     })
   })
 
-  it('does not throw when the Supabase update fails', async () => {
-    const { client, updateError } = makeStubClient({})
-    updateError.current = { message: 'permission denied' }
+  it('does not throw when the RPC fails', async () => {
+    const { client, rpcError } = makeStubClient({})
+    rpcError.current = { message: 'permission denied' }
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    await expect(saveHelpState(client, 'user-1', { tours: {} })).resolves.toBeUndefined()
+    await expect(saveHelpState(client, 'user-1', { tours: {} }, ['tours'])).resolves.toBeNull()
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })
@@ -396,6 +412,29 @@ describe('createSupabaseMarginNoteBackend', () => {
     await backend.hydrate()
     expect(backend.hasSeen('desk-first-touch')).toBe(true)
     expect(backend.hasSeen('doc-first-touch')).toBe(true)
+  })
+
+  it('a tour write after a margin-note write leaves marginNotes intact (SQ-265)', async () => {
+    const { client, lastWrite, rpcCalls } = makeStubClient({})
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    const marginNoteBackend = createSupabaseMarginNoteBackend(client, 'user-1')
+    await backends.hydrate()
+    await marginNoteBackend.hydrate()
+
+    marginNoteBackend.markSeen('doc-first-touch')
+    await marginNoteBackend.flush()
+    backends.tourBackend.setTourState('desk-walkthrough', { completed: true })
+    await backends.flush()
+
+    expect(rpcCalls.map((c) => Object.keys(c.args.p_patch).sort())).toEqual([
+      ['marginNotes'],
+      ['featureAnnouncements', 'tours'],
+    ])
+    expect(rpcCalls[1]!.args.p_patch).not.toHaveProperty('marginNotes')
+    expect(lastWrite.current?.marginNotes?.['doc-first-touch']).toEqual(expect.any(String))
+    expect(lastWrite.current?.tours?.['desk-walkthrough']).toEqual({ completed: true })
+    // The tour cache adopted the returned column, so it now sees the note too.
+    expect(backends.getBlob().marginNotes?.['doc-first-touch']).toEqual(expect.any(String))
   })
 })
 

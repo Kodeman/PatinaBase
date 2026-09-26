@@ -12,6 +12,7 @@
  * a fresh, loud stop rather than a silent write against Strata prod (whose
  * ref is bkvcixdmuyejfzcijpdg.supabase.co).
  */
+import { psqlAsUser } from './psql';
 import { adminDb, getUserIdByEmail } from './supabase-admin';
 
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
@@ -58,13 +59,15 @@ export async function clearHelpState(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Persist a completed desk-walkthrough record (suppresses modal + offer). */
+/**
+ * Persist a completed desk-walkthrough record (suppresses modal + offer).
+ * Merges `tours` through `help_state_merge` so sibling keys (marginNotes,
+ * firstAuthoredAt, …) survive. The RPC merges into the CALLER's row, so it
+ * runs impersonating `id` via psql — `adminDb.rpc` would carry no auth.uid().
+ */
 export async function setTourCompleted(id: string): Promise<void> {
-  const { error } = await adminDb
-    .from('profiles')
-    .update({ help_state: { tours: { [DESK_WALKTHROUGH_TOUR_ID]: { completed: true } } } })
-    .eq('id', id);
-  if (error) throw error;
+  const patch = JSON.stringify({ tours: { [DESK_WALKTHROUGH_TOUR_ID]: { completed: true } } });
+  psqlAsUser(id, `SELECT public.help_state_merge('${patch.replace(/'/g, "''")}'::jsonb);`);
 }
 
 /** The persisted tours['desk-walkthrough'] record, or null when absent. */
