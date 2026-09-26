@@ -239,6 +239,8 @@ Key: R 160ms E · X 120ms Q · P 270ms O · D 200ms Q · S 240ms E · B 180ms Q.
 
 **Full-page mockups.** `fullpage/index.html` (the Desk) and `fullpage/document.html` (the held Ainsworth Document): Plain Lines at full length, one linked flow; `?controls=1` adds review controls, `?rm=1` forces reduced motion; checked by `verify/fullpage-oracle.mjs`.
 
+**Cinematic arrival.** `cinematic/index.html` and `cinematic/document.html`: §8 over the full-page pair; `?arrive=0`, `?scale=0`, Replay arrival; checked by `verify/cinematic-oracle.mjs`.
+
 **Prototype limitations.** Verification is source-only: `verify/oracle.mjs` and in-memory runs of the shared script, with no browser, phone or screen-reader walk, so rendered layout, focus order and announcements are unverified. Navigation is partial: Library and the other fixture doorways are not in this mockup; the finish record, the held document, Accounts and the note sheet are the only destinations built. 08 carries one margin note and no drawer, and the Desk pick-up lands on a short held brief; neither is evidence about a full margin or a full-record task. The .32 ink veil is a fixture value derived from the palette, not a live token. Reading Line pages add a 50vh run-out below the last section so it can reach the reading line: real reading length, not free polish. Native find reaches closed detail only where the browser supports `hidden="until-found"`; elsewhere print is the static path.
 
 ---
@@ -290,3 +292,18 @@ Recommend A. The studio's first hand should inherit its working language, not be
 - R150 keeps region heads silent; large section truths need named amendments.
 - The live Desk stagger is not replayed (§1); live ⌘K is instant, so a reveal there would be regression. Prototype v4's height transitions are no mandate to animate layout under text.
 - A hover can be accidental. Labeled seams, dwell, holds and explicit alternatives constrain that.
+
+## §8 Cinematic arrival (proposal)
+
+The owed sentence opens centred with its real act and settles as the page prints around it; input ends it at rest. Score (ms): 0–560 still; 560 facts print, carriers fly 640 Q; 760–1000 tiers 240 E; 1200 land; 1440 rest.
+
+- R-DM8 performed open: A daily, B news-only.
+- R-DM9 staging until 560: A=B.
+- R-DM10 52→34 scale: A built; B `?scale=0`.
+- R-DM11 replaces pick-up: A=B.
+- R-DM12 reading position: A.
+- R-DM13 work before stage: A=B.
+- R-DM14 focus: A keyboard-only, B doorway verbs; both built.
+- R-DM15 cadence: A daily, B owed item.
+- R-DM16 reduced motion: B line in place, built; A instant.
+- R-DM17 every hand alike: A=B.
