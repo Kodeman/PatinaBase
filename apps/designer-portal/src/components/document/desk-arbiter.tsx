@@ -11,12 +11,15 @@
  * since-line takes the teaching slot instead: it is the visit's one
  * unsolicited note, so it and a teaching note never both render.
  *
- * The line is decided once, at the Desk's first ready render, when every line
- * ahead of the winner has resolved. The teaching note may take the slot only
- * at that first render, from cache (finding 13). Later Desk loads in the same
- * visit (no VISIT_GAP_MS away) keep the visit's line. Nothing renders while
- * the walkthrough is on screen (R-RT2), and nothing at all when no line is
- * eligible: no placeholder, no space kept.
+ * The line is decided once, at the first ready render where every line ahead
+ * of the winner has resolved. Teaching is undecided until its reads arrive,
+ * which holds the whisper; it then decides on the same Desk load. Later Desk
+ * loads in the same visit (no VISIT_GAP_MS away) keep the visit's line. The
+ * teaching note, the since-line and the whisper are the visit's one
+ * unsolicited line in the stored visit too (`useReturnNote` records the one on
+ * screen), so after a reload the whisper yields to a line already shown.
+ * Nothing renders while the walkthrough is on screen (R-RT2), and nothing at
+ * all when no line is eligible: no placeholder, no space kept.
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
@@ -106,14 +109,21 @@ export function useDeskLine({
   const handoff = stateOf('hire-handoff');
   const firstTouch = stateOf('desk-first-touch');
   const offer = stateOf('desk-walkthrough-offer');
-  const whisper = stateOf('setup-whisper');
+  const whisperWhen = stateOf('setup-whisper');
 
   const aheadOfTeaching = handoff !== false || firstTouch !== false || offer !== false;
   const teaching = useReturnNote({
     pinnedProjectIds,
     ready,
     taken: line !== undefined ? line !== 'teaching-note' : aheadOfTeaching || walkthroughOnScreen,
+    onScreen:
+      walkthroughOnScreen || !(line === 'teaching-note' || (line === 'setup-whisper' && whisperWhen === true))
+        ? null
+        : line,
   });
+  // The stored visit already showed another unsolicited line: the whisper yields.
+  const whisper =
+    teaching.unsolicitedShown && teaching.unsolicitedShown !== 'setup-whisper' ? false : whisperWhen;
 
   const states: Record<DeskLineKey, DeskLineState> = {
     'hire-handoff': handoff,

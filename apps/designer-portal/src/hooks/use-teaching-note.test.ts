@@ -112,11 +112,20 @@ function wrapper({ children }: { children: ReactNode }) {
   return createElement(QueryClientProvider, { client }, children);
 }
 
-const renderDesk = (initial: { ready?: boolean; taken?: boolean } = {}) =>
-  renderHook((props: { ready?: boolean; taken?: boolean }) => useReturnNote({ pinnedProjectIds: [], ...props }), {
+type DeskProps = { ready?: boolean; taken?: boolean; onScreen?: 'teaching-note' | 'setup-whisper' | null };
+const renderDesk = (initial: DeskProps = {}) =>
+  renderHook((props: DeskProps) => useReturnNote({ pinnedProjectIds: [], ...props }), {
     wrapper,
     initialProps: initial,
   });
+
+const DAY = 24 * 60 * MIN;
+const RELEASES = [
+  { id: '2026-09-10-galley-parts', shippedOn: '2026-09-10', sizeClass: 'workflow_changing', featureKeys: ['galley'], headline: 'Parts draw POs' },
+];
+const SIGNALS = { role: 'owner', used: {}, lastAt: {}, createdAt: '2026-08-01T00:00:00Z' };
+/** Back after 40 days: the since-line's return. */
+const AWAY = () => state({ visit: { startedAt: iso(NOW - 40 * DAY), lastActiveAt: iso(NOW - 39 * DAY) } });
 
 const patched = (path: string[]) => mockPatch.mock.calls.filter(([p]) => p.join('.') === path.join('.'));
 const captured = (name: string) => mockCapture.mock.calls.filter(([n]) => n === name);
@@ -129,10 +138,8 @@ beforeEach(() => {
   mockCapture.mockClear();
   client = new QueryClient();
   mockNotes = [RELEASE_NOTE];
-  mockReleases = [
-    { id: '2026-09-10-galley-parts', shippedOn: '2026-09-10', sizeClass: 'workflow_changing', featureKeys: ['galley'], headline: 'Parts draw POs' },
-  ];
-  mockSignals = { role: 'owner', used: {}, lastAt: {}, createdAt: '2026-08-01T00:00:00Z' };
+  mockReleases = RELEASES;
+  mockSignals = SIGNALS;
   mockFlags = { 'teaching-notes': { value: true, isLoading: false } };
   mockAtRest = true;
   prime(state({ visit: { startedAt: iso(NOW - 3 * 60 * MIN), lastActiveAt: iso(NOW - 2 * 60 * MIN) } }));
@@ -178,28 +185,63 @@ describe('useReturnNote', () => {
     expect(mockCapture).not.toHaveBeenCalled();
   });
 
-  it('loading at first paint: no note, and no retry this visit', async () => {
+  it('a read still loading at first paint: undecided and nothing written, then it decides when the read arrives', async () => {
     prime(undefined);
-    const { result, rerender, unmount } = renderDesk();
+    const { result, rerender } = renderDesk();
+    expect(result.current.decided).toBe(false);
     expect(result.current.note).toBeNull();
+    await act(async () => {});
+    expect(mockPatch).not.toHaveBeenCalled();
 
-    // The state arrives after first paint: still nothing for this mount…
+    // The state arrives after first paint: the same Desk load decides now.
     prime(state({ visit: { startedAt: iso(NOW - 3 * 60 * MIN), lastActiveAt: iso(NOW - 2 * 60 * MIN) } }));
     rerender({});
-    expect(result.current.note).toBeNull();
-    await waitFor(() => expect(patched(['visit'])).toHaveLength(1));
-    unmount();
-
-    // …nor for the next Desk load in the same visit.
-    prime(client.getQueryData<TeachingNoteState>(STATE_KEY));
-    const again = renderDesk();
-    expect(again.result.current.note).toBeNull();
+    expect(result.current.decided).toBe(true);
+    expect(result.current.note?.noteKey).toBe('galley-parts@1');
+    await waitFor(() => expect(patched(['visit', 'startedAt'])).toEqual([[['visit', 'startedAt'], iso(NOW)]]));
   });
 
-  it('a flag still loading at first paint counts as loading', () => {
+  it('a cold cache on a return after 30 days: the since-line still renders once the reads arrive', async () => {
+    mockNotes = undefined;
+    mockReleases = undefined;
+    mockSignals = undefined;
+    prime(undefined);
+    const { result, rerender } = renderDesk();
+    expect(result.current.decided).toBe(false);
+    expect(result.current.sinceLine).toBeNull();
+    await act(async () => {});
+    // Nothing written while loading, so prevStartedAt has not rolled forward.
+    expect(mockPatch).not.toHaveBeenCalled();
+
+    mockNotes = [RELEASE_NOTE];
+    mockReleases = RELEASES;
+    mockSignals = SIGNALS;
+    prime(AWAY());
+    rerender({});
+    expect(result.current.sinceLine).toEqual({
+      items: [{ id: '2026-09-10-galley-parts', headline: 'Parts draw POs' }],
+      changesHref: '/help/changes',
+    });
+    await waitFor(() =>
+      expect(patched(['visit', 'prevStartedAt'])).toEqual([[['visit', 'prevStartedAt'], iso(NOW - 40 * DAY)]])
+    );
+  });
+
+  it('a flag still loading counts as off: no note and nothing written, even once it resolves', async () => {
     mockFlags = { 'teaching-notes': { value: false, isLoading: true } };
-    const { result } = renderDesk();
+    const { result, rerender } = renderDesk();
     expect(result.current.note).toBeNull();
+    await act(async () => {});
+    expect(mockPatch).not.toHaveBeenCalled();
+    expect(mockCapture).not.toHaveBeenCalled();
+
+    // This Desk load was decided without teaching: it stays unrecorded, so the
+    // visit (and a since-line it might start) waits for the next load.
+    mockFlags = { 'teaching-notes': { value: true, isLoading: false } };
+    rerender({});
+    await act(async () => {});
+    expect(result.current.note).toBeNull();
+    expect(mockPatch).not.toHaveBeenCalled();
   });
 
   it('waits for `ready`, then decides once', () => {
@@ -221,24 +263,52 @@ describe('useReturnNote', () => {
     expect(patched(['cursor'])).toHaveLength(1);
   });
 
-  it('marks a new visit after 30 minutes away, and only touches lastActiveAt inside a visit', async () => {
+  it('writes a new visit leaf by leaf, never a whole visit, and only lastActiveAt inside a visit', async () => {
+    mockNotes = [];
     const started = iso(NOW - 3 * 60 * MIN);
+    prime(state({ visit: { startedAt: started, lastActiveAt: iso(NOW - 2 * 60 * MIN), unsolicitedShown: 'old@1' } }));
     renderDesk();
-    await waitFor(() =>
-      expect(patched(['visit'])).toEqual([
-        [
-          ['visit'],
-          { startedAt: iso(NOW), prevStartedAt: started, lastActiveAt: iso(NOW), unsolicitedShown: null },
-        ],
-      ])
-    );
+    await waitFor(() => expect(patched(['visit', 'startedAt'])).toHaveLength(1));
+    expect(mockPatch.mock.calls).toEqual([
+      [['v'], 1],
+      [['visit', 'prevStartedAt'], started],
+      [['visit', 'unsolicitedShown'], ''],
+      [['visit', 'lastActiveAt'], iso(NOW)],
+      [['visit', 'startedAt'], iso(NOW)],
+    ]);
 
     mockPatch.mockClear();
     resetTeachingNoteSession();
     prime(state({ visit: { startedAt: iso(NOW - 20 * MIN), lastActiveAt: iso(NOW - 10 * MIN), unsolicitedShown: 'x@1' } }));
     renderDesk();
     await waitFor(() => expect(patched(['visit', 'lastActiveAt'])).toEqual([[['visit', 'lastActiveAt'], iso(NOW)]]));
-    expect(patched(['visit'])).toHaveLength(0);
+    expect(mockPatch.mock.calls).toEqual([[['visit', 'lastActiveAt'], iso(NOW)]]);
+  });
+
+  it('a stale tab confirms a new visit against the stored row: it never restarts, or clears, a visit another tab is in', async () => {
+    mockNotes = [];
+    // Its cache last saw a Desk load two hours ago; since then another tab
+    // has been in a visit and showed that visit's note.
+    const stored = state({
+      visit: {
+        startedAt: iso(NOW - 20 * MIN),
+        prevStartedAt: iso(NOW - 3 * 60 * MIN),
+        lastActiveAt: iso(NOW - 5 * MIN),
+        unsolicitedShown: 'other@1',
+      },
+    });
+    mockPatch.mockImplementationOnce(async (path: string[], value: unknown) => {
+      const next = setIn(stored, path, value);
+      client.setQueryData(STATE_KEY, next);
+      return next;
+    });
+    renderDesk();
+    await waitFor(() => expect(patched(['visit', 'lastActiveAt'])).toEqual([[['visit', 'lastActiveAt'], iso(NOW)]]));
+    expect(mockPatch.mock.calls).toEqual([
+      [['v'], 1],
+      [['visit', 'lastActiveAt'], iso(NOW)],
+    ]);
+    expect(client.getQueryData<TeachingNoteState>(STATE_KEY)?.visit?.unsolicitedShown).toBe('other@1');
   });
 
   it('a new visit clears the last visit’s note, so the Desk may teach again', () => {
@@ -273,7 +343,7 @@ describe('useReturnNote', () => {
   it('taken: selects nothing but still records the Desk load', async () => {
     const { result } = renderDesk({ taken: true });
     expect(result.current.note).toBeNull();
-    await waitFor(() => expect(patched(['visit'])).toHaveLength(1));
+    await waitFor(() => expect(patched(['visit', 'startedAt'])).toHaveLength(1));
     expect(captured('help.teaching_note.shown')).toHaveLength(0);
   });
 
@@ -319,21 +389,38 @@ describe('useReturnNote', () => {
     expect(captured('help.teaching_note.receded')[0][1]).toMatchObject({ reason: 'retired_max' });
   });
 
-  it('reports already_knew once per note per session', async () => {
-    mockSignals = {
-      role: 'owner',
-      used: {},
-      lastAt: { po_drawn: '2026-09-20T00:00:00Z' },
-      createdAt: '2026-08-01T00:00:00Z',
-    };
+  it('already_knew is stored once as seen.<key>.out with its one event; a later session reads it and reports nothing', async () => {
+    mockSignals = { ...SIGNALS, lastAt: { po_drawn: '2026-09-20T00:00:00Z' } };
     mockNotes = [{ ...RELEASE_NOTE, successSignal: 'po_drawn' }];
     const { result, unmount } = renderDesk();
     expect(result.current.note).toBeNull();
-    await waitFor(() => expect(captured('help.teaching_note.already_knew')).toHaveLength(1));
-    unmount();
-    renderDesk();
-    await act(async () => {});
+    await waitFor(() =>
+      expect(patched(['seen', 'galley-parts@1', 'out'])).toEqual([[['seen', 'galley-parts@1', 'out'], 'already_knew']])
+    );
     expect(captured('help.teaching_note.already_knew')).toHaveLength(1);
+    unmount();
+
+    // A reload: the session memory is gone, the stored out is not.
+    resetTeachingNoteSession();
+    prime(client.getQueryData<TeachingNoteState>(STATE_KEY));
+    const again = renderDesk();
+    await act(async () => {});
+    expect(again.result.current.note).toBeNull();
+    expect(patched(['seen', 'galley-parts@1', 'out'])).toHaveLength(1);
+    expect(captured('help.teaching_note.already_knew')).toHaveLength(1);
+  });
+
+  it('a success signal after the note was shown is not already_knew', async () => {
+    mockSignals = { ...SIGNALS, lastAt: { po_drawn: '2026-09-20T00:00:00Z' } };
+    mockNotes = [{ ...RELEASE_NOTE, successSignal: 'po_drawn' }];
+    prime(state({ seen: { 'galley-parts@1': { n: 1, first: '2026-09-15T00:00:00Z' } } }));
+    renderDesk();
+    await waitFor(() => expect(patched(['visit', 'lastActiveAt'])).toHaveLength(1));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    expect(patched(['seen', 'galley-parts@1', 'out'])).toHaveLength(0);
+    expect(captured('help.teaching_note.already_knew')).toHaveLength(0);
   });
 
   it('returns the since-line after 30 days away', () => {
@@ -427,5 +514,94 @@ describe('useTeachingNoteFor', () => {
     record({ boundaryKey: 'invoice_sent', at: NOW, surfaceKey: ACCOUNTS });
     rerender();
     expect(result.current.note?.body).toBe('The delivery row shows when INV-0002 was read.');
+  });
+});
+
+describe('one unsolicited line per visit, in the stored visit', () => {
+  const reload = () => {
+    cleanup();
+    resetTeachingNoteSession();
+    prime(client.getQueryData<TeachingNoteState>(STATE_KEY));
+  };
+
+  it('the since-line on screen claims the visit and the 7-day cap, so an anchor note in the same visit stays away', async () => {
+    mockNotes = [RELEASE_NOTE, ANCHOR_NOTE];
+    mockSignals = { ...SIGNALS, used: { ledger: true } };
+    prime(AWAY());
+    const { result } = renderDesk({ onScreen: 'teaching-note' });
+    expect(result.current.sinceLine).not.toBeNull();
+    await waitFor(() => expect(patched(['visit', 'unsolicitedShown'])).toEqual([[['visit', 'unsolicitedShown'], 'since-line']]));
+    expect(patched(['recentUnsolicited'])).toEqual([[['recentUnsolicited'], [iso(NOW)]]]);
+
+    prime(client.getQueryData<TeachingNoteState>(STATE_KEY));
+    const anchor = renderHook(
+      () =>
+        useTeachingNoteFor('designer-portal/document/accounts', {
+          slot: 'anchor',
+          host: null,
+          anchor: 'invoice-sent',
+          bindings: { invoiceNumber: 'INV-0002' },
+          boundaries: { firedOn: () => true },
+        }),
+      { wrapper }
+    );
+    expect(anchor.result.current.note).toBeNull();
+  });
+
+  it('a reload after the since-line shows the same line, and claims nothing twice', async () => {
+    prime(AWAY());
+    renderDesk({ onScreen: 'teaching-note' });
+    await waitFor(() => expect(patched(['recentUnsolicited'])).toHaveLength(1));
+
+    reload();
+    const { result } = renderDesk({ onScreen: 'teaching-note' });
+    expect(result.current.sinceLine).not.toBeNull();
+    expect(result.current.note).toBeNull();
+    await waitFor(() => expect(patched(['visit', 'lastActiveAt'])).toHaveLength(2));
+    expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(1);
+    expect(patched(['recentUnsolicited'])).toHaveLength(1);
+  });
+
+  it('a reload mid-visit after a teaching note: no since-line and no second note', async () => {
+    // A 40-day return whose visit already showed its note, ten minutes ago.
+    prime(
+      state({
+        visit: {
+          startedAt: iso(NOW - 10 * MIN),
+          prevStartedAt: iso(NOW - 40 * DAY),
+          lastActiveAt: iso(NOW - 5 * MIN),
+          unsolicitedShown: 'galley-parts@1',
+        },
+      })
+    );
+    const { result } = renderDesk({ onScreen: 'teaching-note' });
+    expect(result.current.decided).toBe(true);
+    expect(result.current.sinceLine).toBeNull();
+    expect(result.current.note).toBeNull();
+    expect(result.current.unsolicitedShown).toBe('galley-parts@1');
+    await act(async () => {});
+    expect(patched(['visit', 'unsolicitedShown'])).toHaveLength(0);
+  });
+
+  it('the whisper on screen claims the visit (not the 7-day cap); after a reload the Desk offers no teaching note', async () => {
+    mockNotes = [];
+    renderDesk({ onScreen: 'setup-whisper' });
+    await waitFor(() => expect(patched(['visit', 'unsolicitedShown'])).toEqual([[['visit', 'unsolicitedShown'], 'setup-whisper']]));
+    expect(patched(['recentUnsolicited'])).toHaveLength(0);
+
+    // A note is ready by the reload, but the visit's line has shown.
+    reload();
+    mockNotes = [RELEASE_NOTE];
+    const { result } = renderDesk();
+    expect(result.current.decided).toBe(true);
+    expect(result.current.note).toBeNull();
+    expect(result.current.unsolicitedShown).toBe('setup-whisper');
+  });
+
+  it('teaching off: the arbiter’s since-line or whisper on screen writes nothing', async () => {
+    mockFlags = { 'teaching-notes': { value: false, isLoading: false } };
+    renderDesk({ onScreen: 'setup-whisper' });
+    await act(async () => {});
+    expect(mockPatch).not.toHaveBeenCalled();
   });
 });

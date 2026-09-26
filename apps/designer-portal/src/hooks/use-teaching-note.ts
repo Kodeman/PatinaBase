@@ -5,21 +5,26 @@
  *
  * They hand the cached teaching reads, the flags and at-rest to the pure
  * `selectTeachingNote`, which decides everything about eligibility. The hooks
- * only write, and only when a note is displayed or ends:
+ * write only while the `teaching-notes` flag has resolved on (loading counts
+ * as off), and only these leaves:
+ *  - a Desk load: the `visit` leaves (a new visit, or `lastActiveAt`);
  *  - displayed: `visit.unsolicitedShown` + `recentUnsolicited` (not the act
- *    slot, which is exempt), and `seen.<key>.first` (once) / `.last`;
+ *    slot, which is exempt), and `seen.<key>.first` (once) / `.last`. The
+ *    Desk's since-line and setup whisper, once on screen, claim
+ *    `visit.unsolicitedShown` the same way (the since-line also counts in
+ *    `recentUnsolicited`);
  *  - × → `seen.<key>.out = dismissed`; the act → `acted`; both reset
- *    `ignoredStreak`;
+ *    `ignoredStreak`; a success signal before any display → `already_knew`;
  *  - any other end (unmount, or `onSeen('closed')`) is a close, written as
  *    the leaves `nextStateAfterClose` changes.
  * Writes are serialised, and each is computed at its turn from the state the
  * previous patch returned (R1: the RPC SETS counters, it never increments).
  * A failed teaching write never interrupts the studio.
  *
- * The Desk note resolves once, at the Desk's first ready render, from what is
- * already cached. If a teaching read is still loading then, there is no note
- * this visit. The Desk writes nothing before that moment, so its own writes
- * never hold the Desk off at-rest rule 1.
+ * The Desk note resolves once per Desk load, at the first ready render where
+ * every teaching read has arrived. Until then it is undecided and writes
+ * nothing. Its writes follow the decision, so they never hold the Desk off
+ * at-rest rule 1.
  *
  * `boundaries` defaults to the page session's tagged-boundary log
  * (`lib/teaching/boundaries.ts`); tests pass their own.
@@ -95,6 +100,9 @@ const DESK = DOCUMENT_SURFACE_KEYS.desk;
 /** The Desk arbiter's teaching order (§2): an owner capability, then a release, then a faster way. */
 const DESK_KIND_ORDER: readonly TeachingKind[] = ['owner_capability', 'release', 'faster_way'];
 const NO_BINDINGS: TeachingBindingsData = {};
+/** The Desk lines besides a note that take the visit's one unsolicited slot (`visit.unsolicitedShown`). */
+const SINCE_LINE = 'since-line';
+const WHISPER = 'setup-whisper';
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
@@ -102,15 +110,13 @@ const iso = (ms: number): string => new Date(ms).toISOString();
 
 let writes: Promise<void> = Promise.resolve();
 let cursorWritten = false;
-/** The Desk visit's reads were still loading at first paint: no retry this visit. */
-let deskDeferred = false;
+/** Notes whose `already_knew` write is queued this session. */
 const alreadyKnewReported = new Set<string>();
 
 /** Tests (and a sign-out) start a fresh session. */
 export function resetTeachingNoteSession(): void {
   writes = Promise.resolve();
   cursorWritten = false;
-  deskDeferred = false;
   alreadyKnewReported.clear();
 }
 
@@ -137,36 +143,65 @@ const cursorJob =
       ? [[['cursor'], { lastSeenReleaseId: initialCursorFor(createdAt, TEACHING_RELEASES) }]]
       : [];
 
-/** Every Desk load: a new visit starts after VISIT_GAP_MS away, else the visit stays active. */
+/**
+ * A Desk load whose cached state says a new visit starts may be a stale tab's.
+ * A no-op write (`v`) returns the stored row first, so `visitJob` decides from
+ * it and a stale tab never restarts, and clears, a visit another tab is in.
+ */
+const confirmVisitJob =
+  (at: number): Job =>
+  (s) =>
+    isNewVisit(s, at) ? [[['v'], 1]] : [];
+
+/**
+ * Every Desk load, leaf by leaf: a new visit starts after VISIT_GAP_MS away,
+ * else the visit stays active. The RPC refuses a JSON null (it arrives as SQL
+ * NULL), so the last visit's note is cleared with ''. `startedAt` goes last:
+ * a retry after a partial write then never rolls `prevStartedAt` onto it.
+ */
 const visitJob =
   (at: number): Job =>
   (s) =>
     isNewVisit(s, at)
       ? [
-          [
-            ['visit'],
-            {
-              startedAt: iso(at),
-              prevStartedAt: s.visit?.startedAt,
-              lastActiveAt: iso(at),
-              unsolicitedShown: null,
-            },
-          ],
+          ...(s.visit?.startedAt ? ([[['visit', 'prevStartedAt'], s.visit.startedAt]] as Leaf[]) : []),
+          ...(s.visit?.unsolicitedShown ? ([[['visit', 'unsolicitedShown'], '']] as Leaf[]) : []),
+          [['visit', 'lastActiveAt'], iso(at)],
+          [['visit', 'startedAt'], iso(at)],
         ]
       : [[['visit', 'lastActiveAt'], iso(at)]];
+
+/** The visit's one unsolicited slot, and (unless the whisper) a place in the 7-day cap. */
+const claimLeaves = (s: TeachingNoteState, key: string, at: number, counted: boolean): Leaf[] => [
+  [['visit', 'unsolicitedShown'], key],
+  ...(counted
+    ? ([[['recentUnsolicited'], [...(s.recentUnsolicited ?? []), iso(at)].slice(-UNSOLICITED_PER_7D)]] as Leaf[])
+    : []),
+];
 
 const displayJob =
   (noteKey: string, exempt: boolean, at: number): Job =>
   (s) => [
-    ...(exempt
-      ? []
-      : ([
-          [['visit', 'unsolicitedShown'], noteKey],
-          [['recentUnsolicited'], [...(s.recentUnsolicited ?? []), iso(at)].slice(-UNSOLICITED_PER_7D)],
-        ] as Leaf[])),
+    ...(exempt ? [] : claimLeaves(s, noteKey, at, true)),
     ...(s.seen?.[noteKey]?.first ? [] : ([[['seen', noteKey, 'first'], iso(at)]] as Leaf[])),
     [['seen', noteKey, 'last'], iso(at)],
   ];
+
+/** The since-line or the whisper on screen: it claims the visit's slot unless a line already has. */
+const unsolicitedJob =
+  (key: string, at: number): Job =>
+  (s) =>
+    s.visit?.unsolicitedShown ? [] : claimLeaves(s, key, at, key === SINCE_LINE);
+
+/** `already_knew`, stored once; the event goes with the write, so a later session reports nothing. */
+const alreadyKnewJob =
+  (note: TeachingNote): Job =>
+  (s) => {
+    const seen = s.seen?.[note.noteKey];
+    if (seen?.out || seen?.first) return [];
+    capture('help.teaching_note.already_knew', note, note.surfaceKey);
+    return [[['seen', note.noteKey, 'out'], 'already_knew']];
+  };
 
 const outcomeJob =
   (noteKey: string, out: 'dismissed' | 'acted'): Job =>
@@ -247,8 +282,8 @@ function useTeachingReads() {
     state: state as TeachingNoteState | undefined,
     signals,
     flags,
-    /** The system gate resolved off: teaching does not exist here, and nothing is written. */
-    off: !system.isLoading && !system.value,
+    /** The system gate is not on yet (off, or still loading): nothing shows and nothing is written. */
+    off: system.isLoading || system.value !== true,
     loading:
       notes === undefined ||
       releases === undefined ||
@@ -320,11 +355,12 @@ function viewOf(note: TeachingNote, bindings: TeachingBindingsData): TeachingNot
 }
 
 /**
- * `already_knew` is reported by the hook, not the selector (§7): once per note
- * per session, for a live note that could reach her (her audience, its flag on).
+ * `already_knew` is recorded by the hook, not the selector (§7), for a live
+ * note that could reach her (her audience, its flag on) whose success signal
+ * came before any display: `seen.<key>.out`, written once with its event.
  */
 function useAlreadyKnew(r: Reads): void {
-  const { notes, releases, state, signals, flags, loading, off } = r;
+  const { notes, releases, state, signals, flags, loading, off, write } = r;
   useEffect(() => {
     if (loading || off || !notes || !releases || !state || !signals) return;
     const x: SelectInputs = {
@@ -341,14 +377,15 @@ function useAlreadyKnew(r: Reads): void {
       surfaceMountedAt: 0,
     };
     for (const note of notes) {
-      if (alreadyKnewReported.has(note.noteKey) || state.seen?.[note.noteKey]?.out) continue;
+      const seen = state.seen?.[note.noteKey];
+      if (alreadyKnewReported.has(note.noteKey) || seen?.out || seen?.first) continue;
       if (note.audience !== 'all' && note.audience !== signals.role) continue;
       if (note.flag && !flags[note.flag]?.value) continue;
       if (!alreadyKnew(note, x)) continue;
       alreadyKnewReported.add(note.noteKey);
-      capture('help.teaching_note.already_knew', note, note.surfaceKey);
+      write(alreadyKnewJob(note));
     }
-  }, [notes, releases, state, signals, flags, loading, off]);
+  }, [notes, releases, state, signals, flags, loading, off, write]);
 }
 
 /** Writes the first-load cursor (§1.3) once, from the value the selector already assumes. */
@@ -429,13 +466,16 @@ function useNoteLifecycle(
 
 interface DeskDecision {
   at: number;
+  /** Teaching was on and every read had arrived: this Desk load is recorded. */
+  live: boolean;
   note: TeachingNote | null;
   view: TeachingNoteView | null;
   sinceLine: SinceLine;
-  deferred: boolean;
-  newVisit: boolean;
+  /** The stored visit's unsolicited line, already shown (none in a new visit). */
+  unsolicitedShown: string | null;
 }
 
+/** The Desk load's decision, or null while a teaching read is still loading: undecided, nothing written. */
 function decideDesk(
   r: Reads,
   o: {
@@ -447,16 +487,14 @@ function decideDesk(
     bindings: TeachingBindingsData;
     surfaceMountedAt: number;
   }
-): DeskDecision {
+): DeskDecision | null {
   const at = Date.now();
-  const none = { at, note: null, view: null, sinceLine: null, deferred: false, newVisit: false };
+  const none = { at, live: false, note: null, view: null, sinceLine: null, unsolicitedShown: null };
   if (r.off) return none;
-  if (r.loading || o.bindingsLoading || !r.state) return { ...none, deferred: !o.taken };
+  if (r.loading || o.bindingsLoading || !r.state) return null;
 
-  const newVisit = isNewVisit(r.state, at);
-  if (deskDeferred && !newVisit) return none;
   // Selection sees the visit this load starts; the write follows after paint.
-  const state: TeachingNoteState = newVisit
+  const state: TeachingNoteState = isNewVisit(r.state, at)
     ? {
         ...r.state,
         visit: {
@@ -467,9 +505,16 @@ function decideDesk(
         },
       }
     : r.state;
-  const sinceLine = sinceLineOf(state, r.releases ?? [], o.pinnedProjectIds, at);
+  // One unsolicited line per visit, from the stored visit (a reload included):
+  // once another line has shown, no since-line.
+  const unsolicitedShown = state.visit?.unsolicitedShown || null;
+  const sinceLine =
+    unsolicitedShown && unsolicitedShown !== SINCE_LINE
+      ? null
+      : sinceLineOf(state, r.releases ?? [], o.pinnedProjectIds, at);
+  const decided: DeskDecision = { ...none, live: true, sinceLine, unsolicitedShown };
   // The since-line is the visit's one unsolicited note: with it, no teaching note.
-  if (o.taken || !r.signals || sinceLine) return { ...none, sinceLine, newVisit };
+  if (o.taken || !r.signals || sinceLine) return decided;
 
   const x = inputsFor(r, 'desk', { ...o, state, signals: r.signals, now: at });
   let note: TeachingNote | null = null;
@@ -479,25 +524,30 @@ function decideDesk(
   }
   note ??= selectTeachingNote('desk', DESK, x);
   const view = note ? viewOf(note, o.bindings) : null;
-  return { at, note: view ? note : null, view, sinceLine, deferred: false, newVisit };
+  return { ...decided, note: view ? note : null, view };
 }
 
 /**
  * The Desk's teaching note (§5), for the Desk arbiter's single slot.
  *
  * Beyond §5's `pinnedProjectIds`, the arbiter passes `ready` (the Desk's first
- * paint has come: decide now) and `taken` (a line ahead of teaching holds the
- * slot: select nothing, but still record the Desk load). Both default so a
- * lone caller decides at its first render. `decided` is true from the render
- * after the decision, so the arbiter never ranks a note not yet chosen.
+ * paint has come: decide now), `taken` (a line ahead of teaching holds the
+ * slot: select nothing, but still record the Desk load) and `onScreen` (its
+ * line now showing, when that is teaching's slot or the whisper: the
+ * since-line or the whisper is recorded as the visit's one unsolicited line).
+ * They default so a lone caller decides at its first render. `decided` is
+ * true from the render after the decision, so the arbiter never ranks a note
+ * not yet chosen; `unsolicitedShown` is the stored visit's line, already
+ * shown, so the arbiter holds back the whisper after another line.
  */
 export function useReturnNote(opts: {
   pinnedProjectIds: string[];
   ready?: boolean;
   taken?: boolean;
+  onScreen?: 'teaching-note' | 'setup-whisper' | null;
   boundaries?: BoundaryLog;
-}): TeachingNoteResult & { sinceLine: SinceLine; decided: boolean } {
-  const { pinnedProjectIds, ready = true, taken = false, boundaries = boundaryLog } = opts;
+}): TeachingNoteResult & { sinceLine: SinceLine; decided: boolean; unsolicitedShown: string | null } {
+  const { pinnedProjectIds, ready = true, taken = false, onScreen = null, boundaries = boundaryLog } = opts;
   const r = useTeachingReads();
   // A tagged boundary that fires while the Desk is up is the Desk's.
   useEffect(() => setCurrentTeachingSurface(DESK), []);
@@ -514,41 +564,52 @@ export function useReturnNote(opts: {
 
   const [decision, setDecision] = useState<DeskDecision | null>(null);
   if (ready && decision === null) {
-    setDecision(
-      decideDesk(r, {
-        taken,
-        bindingsLoading: !!pinned && projectsLoading,
-        atRest,
-        boundaries,
-        pinnedProjectIds,
-        bindings: projectName ? { projectName } : NO_BINDINGS,
-        surfaceMountedAt,
-      })
-    );
+    const decided = decideDesk(r, {
+      taken,
+      bindingsLoading: !!pinned && projectsLoading,
+      atRest,
+      boundaries,
+      pinnedProjectIds,
+      bindings: projectName ? { projectName } : NO_BINDINGS,
+      surfaceMountedAt,
+    });
+    if (decided) setDecision(decided);
   }
 
-  useEffect(() => {
-    if (!decision) return;
-    if (decision.deferred) deskDeferred = true;
-    else if (decision.newVisit) deskDeferred = false;
-  }, [decision]);
-
-  // Every Desk load is recorded once, after the decision, so the write never
-  // holds off the at-rest check the decision itself made.
+  // A live Desk load is recorded once, after the decision, so the write never
+  // holds off the at-rest check the decision itself made. A decision made
+  // while teaching was off writes nothing, even once the flag turns on.
   const recorded = useRef(false);
-  const { off, state, write } = r;
+  const { off, write } = r;
+  const live = !!decision?.live && !off;
   useEffect(() => {
-    if (!decision || recorded.current || off || !state) return;
+    if (!live || !decision || recorded.current) return;
     recorded.current = true;
+    write(confirmVisitJob(decision.at));
     write(visitJob(decision.at));
-  }, [decision, off, state, write]);
-  useCursorOnce(r, decision !== null);
+  }, [live, decision, write]);
+  useCursorOnce(r, live);
   useAlreadyKnew(r);
 
   const note = decision?.note ?? null;
   const view = decision?.view ?? null;
   const bind = useNoteLifecycle(note, view, 'desk', DESK, write);
-  return { note: view, bind, sinceLine: decision?.sinceLine ?? null, decided: decision !== null };
+
+  // The arbiter's since-line or whisper, once on screen, is the visit's one
+  // unsolicited line; a note records itself when displayed.
+  const sinceLine = decision?.sinceLine ?? null;
+  const unsolicited = onScreen === 'setup-whisper' ? WHISPER : onScreen === 'teaching-note' && sinceLine ? SINCE_LINE : null;
+  useEffect(() => {
+    if (live && unsolicited) write(unsolicitedJob(unsolicited, Date.now()));
+  }, [live, unsolicited, write]);
+
+  return {
+    note: view,
+    bind,
+    sinceLine,
+    decided: decision !== null,
+    unsolicitedShown: decision?.unsolicitedShown ?? null,
+  };
 }
 
 // ─── In place and at the act ──────────────────────────────────────────────────

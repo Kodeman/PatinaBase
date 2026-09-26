@@ -13,6 +13,10 @@ let mockSuppress = false;
 const mockSeen = new Set<string>();
 let mockTeaching: { body: string } | null = null;
 let mockSinceLine: { items: { id: string; headline: string }[]; changesHref: string } | null = null;
+/** Teaching's reads have arrived (else it is undecided). */
+let mockReadsIn = true;
+/** The stored visit's unsolicited line, already shown. */
+let mockUnsolicitedShown: string | null = null;
 const mockReturnNote = jest.fn();
 
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
@@ -30,8 +34,9 @@ jest.mock('@/components/document/margin-note', () => ({
 jest.mock('@/hooks/use-teaching-note', () => ({
   useReturnNote: (opts: { ready: boolean; taken: boolean }) => {
     mockReturnNote(opts);
+    const decided = opts.ready && mockReadsIn;
     // As the hook does: a since-line means no teaching note is chosen.
-    const note = opts.ready && !opts.taken && !mockSinceLine ? mockTeaching : null;
+    const note = decided && !opts.taken && !mockSinceLine ? mockTeaching : null;
     return {
       note: note && { noteKey: 'galley-parts@1', body: note.body },
       bind: note && {
@@ -43,8 +48,9 @@ jest.mock('@/hooks/use-teaching-note', () => ({
         captureEvents: false,
         onSeen: () => {},
       },
-      sinceLine: opts.ready ? mockSinceLine : null,
-      decided: opts.ready,
+      sinceLine: decided ? mockSinceLine : null,
+      decided,
+      unsolicitedShown: decided ? mockUnsolicitedShown : null,
     };
   },
 }));
@@ -76,8 +82,12 @@ beforeEach(() => {
   mockSeen.clear();
   mockTeaching = null;
   mockSinceLine = null;
+  mockReadsIn = true;
+  mockUnsolicitedShown = null;
   mockReturnNote.mockClear();
 });
+
+const lastOnScreen = () => mockReturnNote.mock.calls.at(-1)?.[0].onScreen;
 
 afterEach(() => {
   jest.restoreAllMocks();
@@ -158,7 +168,12 @@ describe('useDeskLine', () => {
     expect(screen.getByTestId('note-galley-parts@1')).toHaveTextContent(
       'WORKSHOP NOTE · 10 SEPA signed part now draws its PO.'
     );
-    expect(mockReturnNote).toHaveBeenCalledWith({ pinnedProjectIds: ['p1'], ready: true, taken: false });
+    expect(mockReturnNote).toHaveBeenCalledWith({
+      pinnedProjectIds: ['p1'],
+      ready: true,
+      taken: false,
+      onScreen: 'teaching-note',
+    });
   });
 
   it('falls to the whisper when there is nothing to teach', () => {
@@ -259,5 +274,65 @@ describe('useDeskLine', () => {
     now.mockReturnValue(1_000_000 + 50 * 60 * 1000);
     render(<Desk lines={candidates({ 'desk-walkthrough-offer': true, 'setup-whisper': true })} />);
     expect(screen.getByTestId('note-galley-parts@1')).toBeInTheDocument();
+  });
+
+  describe('the visit’s one unsolicited line, in the stored visit', () => {
+    const SINCE = {
+      items: [{ id: '2026-09-10-galley-parts', headline: 'Parts draw POs' }],
+      changesHref: '/help/changes',
+    };
+
+    it('tells teaching which line is on screen: the since-line and the whisper, never a line ahead', () => {
+      mockSinceLine = SINCE;
+      const since = render(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(screen.getByRole('button', { name: 'Since you were last here' })).toBeInTheDocument();
+      expect(lastOnScreen()).toBe('teaching-note');
+      since.unmount();
+
+      resetDeskVisit();
+      mockSinceLine = null;
+      const whisper = render(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(screen.getByTestId('line-setup-whisper')).toBeInTheDocument();
+      expect(lastOnScreen()).toBe('setup-whisper');
+      whisper.unmount();
+
+      resetDeskVisit();
+      render(<Desk lines={candidates({ 'hire-handoff': true, 'setup-whisper': true })} />);
+      expect(screen.getByTestId('line-hire-handoff')).toBeInTheDocument();
+      expect(lastOnScreen()).toBeNull();
+    });
+
+    it('nothing is on screen while the walkthrough is', () => {
+      mockSuppress = true;
+      render(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(lastOnScreen()).toBeNull();
+    });
+
+    it('a reload mid-visit after a teaching note: the whisper yields, no second line', () => {
+      // A reload drops the module memory; the stored visit says a note showed.
+      mockUnsolicitedShown = 'galley-parts@1';
+      render(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(screen.getByTestId('slot')).toBeEmptyDOMElement();
+      expect(lastOnScreen()).toBeNull();
+    });
+
+    it('a reload after the whisper: its own claim keeps it, alone', () => {
+      mockUnsolicitedShown = 'setup-whisper';
+      render(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(shown()).toHaveLength(1);
+      expect(screen.getByTestId('line-setup-whisper')).toBeInTheDocument();
+    });
+
+    it('undecided teaching holds the whisper; once its reads arrive the since-line takes the slot on the same load', () => {
+      mockReadsIn = false;
+      mockSinceLine = SINCE;
+      const { rerender } = render(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(screen.getByTestId('slot')).toBeEmptyDOMElement();
+
+      mockReadsIn = true;
+      rerender(<Desk lines={candidates({ 'setup-whisper': true })} />);
+      expect(screen.getByRole('button', { name: 'Since you were last here' })).toBeInTheDocument();
+      expect(shown()).toHaveLength(0);
+    });
   });
 });
