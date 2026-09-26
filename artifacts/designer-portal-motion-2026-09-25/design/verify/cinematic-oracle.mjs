@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 const DESIGN = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (...p) => fs.readFileSync(path.join(DESIGN, ...p), 'utf8');
@@ -77,6 +78,7 @@ class El {
   focus() { focusTo(this); }
   blur() { if (W.doc.activeElement === this) { W.doc.activeElement = W.doc.body; fire(this, 'focusout', { relatedTarget: null }); } }
   click() { return fire(this, 'click', { detail: 0 }); }
+  dispatchEvent(ev) { W.dispatched.push(ev); return !fire(this, ev.type, { ...ev, synthetic: true }).defaultPrevented; }
   scrollIntoView() { W.scrolled.push(this); }
   fixed() { return !!this.closest('.arr-card,.arr-skip,.mc,.spine,.rail'); }
   box(r) { const dy = this.fixed() ? 0 : W.ctx.scrollY; return { left: r.left, right: r.right, top: r.top - dy, bottom: r.bottom - dy, width: r.right - r.left, height: r.bottom - r.top }; }
@@ -256,7 +258,7 @@ const LAYOUT = {
 
 function boot(file, { search = '', hash = '', osRM = false, session = {}, vp = [1440, 900], nav = 'navigate', fonts = true, gaps = [], base = false, visibility = 'visible' } = {}) {
   const doc = parseHTML((base ? BASE : SRC)[file]);
-  W = { doc, clock: 1000, tid: 0, timeouts: [], running: [], log: [], navs: [], defaultNav: [], scrolled: [], scrolls: [], intervals: 0, rafs: 0, rafq: [], nextFrame: 1016, gaps: gaps.slice(),
+  W = { doc, clock: 1000, tid: 0, timeouts: [], running: [], log: [], navs: [], defaultNav: [], dispatched: [], scrolled: [], scrolls: [], intervals: 0, rafs: 0, rafq: [], nextFrame: 1016, gaps: gaps.slice(),
     kbd: false, session: new Map(Object.entries(session)), win: { L: {}, C: {} }, fontsOK: fonts, fontWait: [], vp, def: R(0, 100, 100, 130), sel: true };
   doc.activeElement = doc.body; doc.visibilityState = visibility;
   const key = file + '@' + vp.join('x');
@@ -273,6 +275,7 @@ function boot(file, { search = '', hash = '', osRM = false, session = {}, vp = [
     getSelection: () => ({ isCollapsed: W.sel, anchorNode: null }),
     getComputedStyle: (el) => ({ transform: el.style.transform || 'none', opacity: el.style.opacity === undefined || el.style.opacity === '' ? '1' : el.style.opacity, backgroundColor: 'rgb(139, 115, 85)', ...el.cs }),
     DOMMatrixReadOnly: Matrix,
+    MouseEvent: class { constructor(type, init = {}) { Object.assign(this, init); this.type = type; } },
     setTimeout(fn, d) { const id = ++W.tid; W.timeouts.push({ fn, at: W.clock + (d || 0), id }); return id; },
     clearTimeout(id) { W.timeouts = W.timeouts.filter((t) => t.id !== id); },
     setInterval() { W.intervals++; return 0; }, clearInterval() {},
@@ -378,7 +381,9 @@ for (const f of [DESK, DOC]) {
   check(f + ' arrival overflow never scrolls sideways; print drops the card and Skip', /html\.arr-on\{overflow-x:hidden\}/.test(p.arrCss) && /@media print\{\.arr-card,\.arr-skip\{display:none!important\}\}/.test(p.arrCss));
   check(f + ' Skip arrival: real button, DM Mono 11/16.5, 44px target, 16px safe inset, hint', /<button type="button" class="arr-skip" data-arr aria-describedby="arr-hint" hidden>Skip arrival<\/button>/.test(s) && /<span id="arr-hint" data-arr hidden>Escape or any key skips\.<\/span>/.test(s) && /\.arr-skip\{[^}]*right:calc\(16px \+ env\(safe-area-inset-right\)\);bottom:calc\(16px \+ env\(safe-area-inset-bottom\)\)[^}]*min-width:44px;min-height:44px[^}]*font-size:11px;line-height:16\.5px/.test(p.arrCss));
   check(f + ' the opening card is aria-hidden and starts hidden', /<div class="arr-card" data-arr aria-hidden="true" hidden>/.test(s));
-  check(f + ' Replay arrival: a real scored button in the fixture footer line', /<p class="fixture-foot">[^\n]*<span data-arr> · <button type="button" class="act" data-press data-arr-replay><span class="w">Replay arrival<\/span><span class="rule" aria-hidden="true"><\/span><\/button><\/span><\/p>/.test(s));
+  const RB = (v, w) => '<button type="button" class="act" data-press data-arr-replay' + v + '><span class="w">' + w + '</span><span class="rule" aria-hidden="true"></span></button>';
+  check(f + ' Replay arrival, Replay reduced, Replay without scale: real scored buttons in the fixture footer line (F8)', /<p class="fixture-foot">[^\n]*<\/p>/.test(s) && s.includes('<span data-arr> · ' + RB('', 'Replay arrival') + ' · ' + RB('="rm"', 'Replay reduced') + ' · ' + RB('="translate"', 'Replay without scale') + '</span></p>'));
+  check(f + ' F1: during the arrival staged layers take no pointer hits; Skip and the review strip stay live', p.arrCss.includes('html.arr-on body{pointer-events:none}') && p.arrCss.includes('html.arr-on .arr-skip,html.arr-on .mc{pointer-events:auto}'));
   const strip = [...s.slice(s.indexOf('<aside class="mc"'), s.indexOf('</aside>', s.indexOf('<aside class="mc"'))).matchAll(/id="(mc-replay|mc-rm|mc-tr|mc-slow)"/g)].map((m) => m[1]).join(',');
   check(f + ' ?controls=1 strip: Replay · Reduced motion · Translate only · Slow ×4', strip === 'mc-replay,mc-rm,mc-tr,mc-slow' && s.includes('<aside class="mc" aria-label="Review controls" hidden>'), strip);
   for (const [i, src] of [...s.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).entries()) attempt(f + ' inline script ' + i + ' parses', () => { new vm.Script(src); return true; });
@@ -549,17 +554,65 @@ attempt('a blank press finishes and cannot click through onto what it revealed',
   fire($('#n-ains a'), 'click');
   return W.defaultNav.join() === 'document.html' ? true : 'the next ordinary click was lost: ' + W.defaultNav;
 });
-attempt('a press on the visible Review finish acts on it exactly once (Desk: to #rec; Document: opens the record)', () => {
-  const d = skipAt(DESK, 700, ({ $ }) => fire($(actSel[DESK]), 'pointerdown'));
-  fire(d.$(actSel[DESK]), 'click');
-  if (W.defaultNav.join() !== 'document.html#rec' || W.session.get('pl-carry') !== '1') return 'Desk act: ' + W.defaultNav;
-  let opened = 0;
-  const r = boot(DOC, { session: { 'pl-arrive': 'ptr' } });
-  const was = r.K.openRecord; r.K.openRecord = (...a) => { opened++; return was(...a); };
-  until(200); fire(r.$(actSel[DOC]), 'pointerdown');
-  const rest = atRest(r.K, r.doc, r.$); if (rest !== true) return rest;
-  fire(r.$(actSel[DOC]), 'click');
-  return opened === 1 && !r.$('#rec').hidden && W.doc.activeElement === r.$('#rec-note') ? true : 'record opened ' + opened + 'x';
+/* a press on the act at its visible (staged) box, released at pointer `up` with init `upInit`; the native click follows on the root */
+function pressAct(file, t, up, upInit = {}, opts = {}) {
+  const r = boot(file, opts); until(t);
+  const act = r.$(actSel[file]), b = act.getBoundingClientRect(), cx = (b.left + b.right) / 2, cy = (b.top + b.bottom) / 2;
+  let opened = 0; const was = r.K.openRecord; r.K.openRecord = (...a) => { opened++; return was(...a); };
+  fire(act.querySelector('.w'), 'pointerdown', { pointerId: 7, clientX: cx, clientY: cy });
+  const rest = atRest(r.K, r.doc, r.$); if (rest !== true) throw new Error('press did not rest at once: ' + rest);
+  const early = W.defaultNav.length + opened + W.dispatched.length;
+  if (up) up(r, { cx, cy, b }, upInit);
+  fire(r.doc.documentElement, 'click', { detail: 1 }); // the browser's own click lands where the page now is
+  return { ...r, early, opened: () => opened };
+}
+attempt('F2: a press on the visible Review finish ends the arrival at once and acts only on release, exactly once (Desk: to #rec; Document: opens the record)', () => {
+  const release = ({ $, doc }, { cx, cy }, init) => fire(doc.documentElement, 'pointerup', { pointerId: 7, clientX: cx, clientY: cy, ...init });
+  const d = pressAct(DESK, 700, release);
+  if (d.early) return 'Desk: acted on the down press';
+  if (W.defaultNav.join() !== 'document.html#rec' || W.session.get('pl-carry') !== '1' || W.dispatched.length !== 1) return 'Desk act: ' + W.defaultNav + ' x' + W.dispatched.length;
+  const r = pressAct(DOC, 200, release, {}, { session: { 'pl-arrive': 'ptr' } });
+  if (r.early) return 'Document: acted on the down press';
+  return r.opened() === 1 && !r.$('#rec').hidden && W.doc.activeElement === r.$('#rec-note') ? true : 'record opened ' + r.opened() + 'x';
+});
+attempt('F2: a cancelled press, a scroll or wheel during the press, or a release off the act never activates; the next ordinary click still works', () => {
+  const cases = {
+    pointercancel: ({ doc }) => fire(doc.documentElement, 'pointercancel', { pointerId: 7 }),
+    scroll: ({ doc, ctx }, { cx, cy }) => { ctx.scrollY += 60; fireWin('scroll'); fire(doc.documentElement, 'pointerup', { pointerId: 7, clientX: cx, clientY: cy }); },
+    wheel: ({ doc }, { cx, cy }) => { fire(doc.documentElement, 'wheel'); fire(doc.documentElement, 'pointerup', { pointerId: 7, clientX: cx, clientY: cy }); },
+    'release off the act': ({ doc }, { b }) => fire(doc.documentElement, 'pointerup', { pointerId: 7, clientX: b.right + 40, clientY: b.bottom + 40 }),
+    'another pointer': ({ doc }, { cx, cy }) => fire(doc.documentElement, 'pointerup', { pointerId: 8, clientX: cx, clientY: cy }),
+  };
+  for (const [name, up] of Object.entries(cases)) {
+    const r = pressAct(DESK, 500, up);
+    if (W.defaultNav.length || W.dispatched.length || W.session.has('pl-carry')) return name + ' activated: ' + W.defaultNav;
+    advance(1); fire(r.$(actSel[DESK]), 'click', { detail: 1 });
+    if (W.defaultNav.join() !== 'document.html#rec') return name + ': the next ordinary click was lost';
+  }
+  const o = pressAct(DOC, 300, cases.pointercancel, {}, { session: { 'pl-arrive': 'ptr' } });
+  return o.opened() === 0 && o.$('#rec').hidden ? true : 'Document record opened on a cancelled press';
+});
+attempt('F2: modifier keys on the release pass through to the act; a secondary button never activates', () => {
+  let seen = null;
+  const r = pressAct(DESK, 400, ({ $, doc }, { cx, cy }) => {
+    $(actSel[DESK]).addEventListener('click', (e) => { seen = e; });
+    fire(doc.documentElement, 'pointerup', { pointerId: 7, clientX: cx, clientY: cy, metaKey: true, shiftKey: true });
+  });
+  if (!seen || !seen.metaKey || !seen.shiftKey || seen.ctrlKey || seen.detail !== 1 || W.dispatched.length !== 1) return 'modifiers lost: ' + JSON.stringify(seen && { m: seen.metaKey, s: seen.shiftKey, d: seen.detail });
+  const s = boot(DESK); until(400);
+  const act = s.$(actSel[DESK]), b = act.getBoundingClientRect();
+  fire(act, 'pointerdown', { pointerId: 3, button: 2, clientX: b.left + 1, clientY: b.top + 1 });
+  fire(s.doc.documentElement, 'pointerup', { pointerId: 3, button: 2, clientX: b.left + 1, clientY: b.top + 1 });
+  return r && !W.defaultNav.length && !W.dispatched.length ? true : 'secondary button activated';
+});
+attempt('F1: the real act is the one live target during the arrival (inline pointer-events:auto), cleared on the resting frame', () => {
+  for (const [f, o] of [[DESK, {}], [DOC, { session: { 'pl-arrive': 'ptr' } }], [DESK, { search: '?rm=1' }]]) {
+    const r = boot(f, o); until(100);
+    if (!r.K.arrival.running() || r.$(actSel[f]).style.pointerEvents !== 'auto' || !/arr-on/.test(r.doc.documentElement.attrs.class)) return f + ' act not live ' + o.search;
+    until(1500);
+    if (r.$(actSel[f]).style.pointerEvents) return f + ' pointer-events residue';
+  }
+  return true;
 });
 attempt('wheel and touch finish without blocking her scroll; Skip finishes', () => {
   for (const t of ['wheel', 'touchstart']) { const { out } = skipAt(DESK, 500, ({ $ }) => fire($('.ledger-h'), t)); if (out.defaultPrevented) return t + ' prevented'; }
@@ -652,16 +705,44 @@ attempt('?arrive=0 disables the arrival: the resting page from frame 0', () => {
   const want = ser(doc); boot(DESK, { base: true });
   return want === ser(W.doc) ? true : 'differs from fullpage';
 });
-attempt('fonts not ready: at most 150ms on covered paper, then the ordinary page (and the Document pick-up as today)', () => {
+attempt('F3: fonts not ready: covered paper never outlasts the first frame; then the ordinary page (and the Document pick-up as today)', () => {
   const { K, doc, $ } = boot(DOC, { fonts: false, session: { 'pl-arrive': 'ptr', 'pl-carry': '1' } });
   if (K.arrival.running() || !/arr-pre/.test(doc.documentElement.attrs.class)) return 'did not wait covered';
-  advance(149); if (!/arr-pre/.test(doc.documentElement.attrs.class)) return 'uncovered early';
-  advance(1);
-  if (/arr-/.test(doc.documentElement.attrs.class) || K.arrival.running() || !$('.arr-card').hidden) return 'not the ordinary page at 150ms';
+  advance(15); if (!/arr-pre/.test(doc.documentElement.attrs.class)) return 'uncovered before the first frame';
+  advance(1); // the first frame (t0 + 16)
+  if (/arr-/.test(doc.documentElement.attrs.class) || K.arrival.running() || !$('.arr-card').hidden) return 'blank paper past the first frame';
   const p = animOf($('#paper'))[0];
   if (!p || p.duration !== 270) return 'no pick-up fallback';
-  const r = boot(DESK, { fonts: false }); advance(100); W.fontsOK = true; W.fontWait.forEach((f) => f());
-  return r.K.arrival.running() ? true : 'fonts ready inside 150ms did not play';
+  if (pendingTimers().filter((t) => !t.a).length || W.rafq.length) return 'the wait left a timer or frame pending';
+  const r = boot(DESK, { fonts: false }); advance(5); W.fontsOK = true; W.fontWait.forEach((f) => f());
+  if (!r.K.arrival.running()) return 'fonts ready before the first frame did not play';
+  const late = boot(DESK, { fonts: false }); advance(100); W.fontsOK = true; W.fontWait.forEach((f) => f());
+  return !late.K.arrival.running() && !/arr-/.test(late.doc.documentElement.attrs.class) ? true : 'fonts after the first frame started the cinema late';
+});
+attempt('F3: a key, press, wheel or touch during the font wait ends it for good: the resting page at once, no later start', () => {
+  const inputs = {
+    key: ({ doc }) => fire(doc.body, 'keydown', { key: 'a' }),
+    Escape: ({ doc }) => fire(doc.body, 'keydown', { key: 'Escape' }),
+    press: ({ $ }) => fire($('#n-ains a'), 'pointerdown'),
+    wheel: ({ $ }) => fire($('.ledger-h'), 'wheel'),
+    touch: ({ $ }) => fire($('.ledger-h'), 'touchstart'),
+  };
+  for (const [name, input] of Object.entries(inputs)) {
+    for (const when of ['fonts ready', 'first frame', '150ms']) {
+      const r = boot(DESK, { fonts: false }); advance(4);
+      const ev = input(r);
+      if (/arr-/.test(r.doc.documentElement.attrs.class) || r.K.arrival.running()) return name + ': still covered after the input';
+      if (name === 'Escape' && !ev.defaultPrevented) return 'Escape during the wait was not spent as the skip';
+      if (when === 'fonts ready') { W.fontsOK = true; W.fontWait.forEach((f) => f()); advance(200); }
+      else if (when === 'first frame') { W.fontsOK = true; advance(16); } else advance(200);
+      if (r.K.arrival.running() || W.log.some((a) => !a.el.classList.contains('rule'))) return name + ' then ' + when + ': the cinema started after the input';
+      const rest = atRest(r.K, r.doc, r.$); if (rest !== true) return name + ' then ' + when + ': ' + rest;
+      if (name === 'press') { fire(r.$('#n-ains a'), 'click'); if (W.defaultNav.length) return 'a press on blank paper clicked through'; }
+    }
+  }
+  const d = boot(DOC, { fonts: false, session: { 'pl-arrive': 'ptr', 'pl-carry': '1' } }); advance(4);
+  fire(d.doc.body, 'keydown', { key: 'Escape' }); advance(200);
+  return !animOf(d.$('#paper')).length && !W.navs.length ? true : 'Document: the skip during the wait put the paper down or played the pick-up';
 });
 attempt('a background tab or no fit (390x480 collision) gets the instant page, never a squeezed ceremony', () => {
   const h = boot(DESK, { visibility: 'hidden' });
@@ -687,7 +768,7 @@ attempt('reduced motion (?rm=1 and OS): line first in place; the rest fades 120-
     if (!$('.arr-card').hidden || !$('.arr-skip').hidden) return 'centred card under RM';
     if (arrAnims().some((a) => a.kf.some((k) => 'transform' in k)) || $(hero[DESK]).style.transform) return 'transform under RM';
     const words = visibleWords(doc).sort().join('|');
-    if (words !== ['Finish approval needed.', 'One reply is past due: the Delgado delivery window needed an answer by Sep 23.', 'Review finish'].sort().join('|')) return 'RM frame 0: ' + words;
+    if (words !== ['Ainsworth', 'Procurement · Leah · due today', 'Finish approval needed.', 'One reply is past due: the Delgado delivery window needed an answer by Sep 23.', 'Review finish'].sort().join('|')) return 'RM frame 0: ' + words;
     if (!arrAnims().every((a) => a.delay === 120 && a.duration === 200 && a.easing === Q)) return 'RM timings ' + [...new Set(arrAnims().map((a) => a.delay + '/' + a.duration))];
     until(319); if (!K.arrival.running()) return 'ended early';
     until(321);
@@ -697,6 +778,21 @@ attempt('reduced motion (?rm=1 and OS): line first in place; the rest fades 120-
   if (W.scrolls.join() !== '1160') return 'RM initial position ' + W.scrolls;
   until(330);
   return W.doc.activeElement === d.$(actSel[DOC]) ? true : 'RM keyboard focus';
+});
+attempt('F5: reduced motion shows the whole hero block at full ink at t0 (Desk: name, owner and stage, sentence, act, warning; Document: heading, context line, sentence, act, Detail)', () => {
+  const blocks = {
+    [DESK]: ['#n-ains', '#claims .pl-id .ctx', hero[DESK], actSel[DESK], '.overdue'],
+    [DOC]: ['#h-direction', '#s-direction [data-seam="w-direction"] > .ctx', hero[DOC], actSel[DOC], '[data-detail="w-direction"]'],
+  };
+  for (const [f, o] of [[DESK, { search: '?rm=1' }], [DOC, { search: '?rm=1', session: { 'pl-arrive': 'ptr' } }], [DOC, { osRM: true, session: { 'pl-arrive': 'ptr' } }]]) {
+    const { K, $ } = boot(f, o);
+    if (!K.arrival.running()) return f + ': the RM arrival did not run';
+    for (const s of blocks[f]) if (opacity($(s)) !== 1 || animOf($(s)).some((a) => 'opacity' in a.kf[0])) return f + ' t0: ' + s + ' at ' + opacity($(s));
+    const covered = f === DESK ? ['.mnote', '#ledger'] : ['#s-procurement', '#w-direction', '.spine-name'];
+    for (const s of covered) if (opacity($(s)) !== 0) return f + ' t0: ' + s + ' not covered';
+    until(320); for (const s of covered) if (opacity($(s)) !== 1) return f + ' 320: ' + s + ' not in';
+  }
+  return true;
 });
 attempt('?scale=0 (R-DM10 B): translate only, 34px throughout, same centre', () => {
   const { $ } = boot(DESK, { search: '?scale=0' });
@@ -744,13 +840,24 @@ attempt('Document carriers: 52/34 sentence to Direction, act 12px under the cont
   if (a.s !== 1 || !near(a.x, 720 - 384) || !near(a.y, hBot + 8 + 18 + 12 - 310)) return 'act ' + $(actSel[DOC]).style.transform;
   return $('.arr-below').style.top === String(Math.round((hBot + 8) * 100) / 100) + 'px' ? true : 'context line ' + $('.arr-below').style.top;
 });
-attempt('Document tiers: Direction head and context, later stages at 560; detail 760; spine 840; settled and rail 920; above and below untouched', () => {
+attempt('F4: the job name and the current stage (Procurement) print at the 560 handoff and stay readable while the intro context dissolves', () => {
+  const { $ } = boot(DOC, { session: { 'pl-arrive': 'ptr' } });
+  const name = $('.spine-name'), cur = $('.spine [aria-current]');
+  until(559); if (opacity(name) !== 0 || opacity(cur) !== 0 || opacity($('.arr-above')) !== 1) return 'frame 559';
+  for (const t of [560, 620, 680, 760, 839]) {
+    until(t);
+    if (opacity(name) !== 1 || opacity(cur) !== 1) return 'frame ' + t + ': name ' + opacity(name) + ' stage ' + opacity(cur);
+  }
+  return opacity($('.arr-above')) === 0 && opacity($('.spine .leave')) === 0 ? true : 'frame 839: intro context or optional navigation';
+});
+attempt('Document tiers: Direction head and context, later stages, job name and current stage at 560; detail 760; rest of the spine 840; settled and rail 920; above and below untouched', () => {
   const { $ } = boot(DOC, { session: { 'pl-arrive': 'ptr' } });
   const T = (el) => animOf(el).map(tierOf).join(' / ');
   const exp = [
     [$('#h-direction'), '560 0 linear - 0>1'], [$('#s-direction .ctx'), '560 0 linear - 0>1'], [$('#s-procurement'), '560 0 linear - 0>1'], [$('#s-schedule'), '560 0 linear - 0>1'],
     [$('[data-detail="w-direction"]'), '760 240 ' + E + ' translate(0px,6px) scale(1) 0>1'], [$('#w-direction'), '760 240 ' + E + ' translate(0px,6px) scale(1) 0>1'],
-    [$('.spine'), '840 240 ' + E + ' - 0>1'],
+    [$('.spine-name'), '560 0 linear - 0>1'], [$('.spine [aria-current]').parentNode, '560 0 linear - 0>1'],
+    [$('.spine .leave'), '840 240 ' + E + ' - 0>1'], [$('.jumps > li'), '840 240 ' + E + ' - 0>1'], [$('.spine [href="#s-schedule"]').parentNode, '840 240 ' + E + ' - 0>1'],
     [$('#s-discovery'), '920 240 ' + E + ' translate(0px,4px) scale(1) 0>1'], [$('#s-agreement'), '920 240 ' + E + ' translate(0px,4px) scale(1) 0>1'], [$('.rail'), '920 240 ' + E + ' translate(0px,4px) scale(1) 0>1'],
   ];
   for (const [el, want] of exp) if (T(el) !== want) return (el.id || el.attrs.class) + ': ' + T(el);
@@ -772,8 +879,18 @@ attempt('Document 390: hero top 160px, scale 1, sticky spine clear; same score',
 });
 
 /* ---------------- 8. slow devices and replay ---------------- */
+attempt('F6: the first frame interval runs from t0: a stalled first frame (over 50ms) cuts to rest; a 40ms one does not', () => {
+  for (const [f, o] of [[DESK, {}], [DOC, { session: { 'pl-arrive': 'ptr' } }]]) {
+    const r = boot(f, o); W.nextFrame = W.clock + 200; advance(200);
+    const rest = atRest(r.K, r.doc, r.$); if (rest !== true) return f + ' 200ms first frame: ' + rest;
+  }
+  const s = boot(DESK); W.nextFrame = W.clock + 51; advance(51);
+  if (s.K.arrival.running()) return '51ms first frame';
+  const ok = boot(DESK); W.nextFrame = W.clock + 40; advance(60);
+  return ok.K.arrival.running() ? true : 'a 40ms first frame cut the arrival';
+});
 attempt('frame-drop guard: a first-three interval over 50ms, one over 100ms, or two over 34ms in a row cut to rest', () => {
-  for (const gaps of [[60], [16, 55],[16, 16, 16, 16, 120], [16, 16, 16, 16, 40, 40]]) {
+  for (const gaps of [[60], [55], [16, 16, 16, 16, 120], [16, 16, 16, 16, 40, 40]]) {
     const r = boot(DESK, { gaps: [16, ...gaps] });
     advance(16 + 16 + gaps.reduce((a, b) => a + b, 0) + 1); // first frame at +16, the leading 16, then the gaps
     const rest = atRest(r.K, r.doc, r.$); if (rest !== true) return JSON.stringify(gaps) + ': ' + rest;
@@ -812,8 +929,44 @@ attempt('pressing Replay mid-arrival restarts cleanly (its press is not spent as
   return h.length === 1 && h[0].start === W.clock ? true : 'restart';
 });
 
+attempt('F8: footer Replay reduced replays once under reduced motion; Replay without scale once translate-only; nothing is kept for the next Replay', () => {
+  for (const [f, o] of [[DESK, {}], [DOC, { session: { 'pl-arrive': 'ptr' } }]]) {
+    const r = boot(f, o); until(1500);
+    const btn = (v) => r.$('[data-arr-replay="' + v + '"]');
+    fire(btn('rm').querySelector('.w'), 'click', { detail: 1 });
+    if (!r.K.arrival.running() || !r.$('.arr-card').hidden || r.$(hero[f]).style.transform || arrAnims().filter((a) => a.start === W.clock).some((a) => a.delay !== 120 || a.duration !== 200 || a.kf.some((k) => 'transform' in k))) return f + ': Replay reduced did not replay line-first';
+    if (opacity(r.$(actSel[f])) !== 1) return f + ': Replay reduced hid the act';
+    advance(330);
+    let rest = atRest(r.K, r.doc, r.$); if (rest !== true) return f + ' reduced: ' + rest;
+    fire(btn('translate'), 'click', { detail: 1 });
+    const t = parseTf(r.$(hero[f]).style.transform);
+    if (!r.K.arrival.running() || r.$('.arr-card').hidden || !t.ok || t.s !== 1 || r.K.arrScale0) return f + ': Replay without scale ' + r.$(hero[f]).style.transform;
+    advance(1500);
+    rest = atRest(r.K, r.doc, r.$); if (rest !== true) return f + ' without scale: ' + rest;
+    fire(r.$('[data-arr-replay=""]'), 'click', { detail: 1 });
+    if (!r.K.arrival.running() || r.$('.arr-card').hidden || !near(parseTf(r.$(hero[f]).style.transform).s, 52 / 34, 1e-9) || r.K.rm()) return f + ': a mode persisted into the plain Replay';
+  }
+  const q = boot(DESK, { search: '?rm=1&scale=0' });
+  return q.K.rm() && q.K.arrScale0 && q.K.arrival.running() && q.$('.arr-card').hidden ? true : 'query toggles no longer work';
+});
+attempt('F8: any hash still declines the arrival (the artifact host passes only a bare #anchor)', () => {
+  for (const hash of ['#rec', '#controls', '#s-direction', '#x.y_z~-1']) {
+    const d = boot(DESK, { hash });
+    if (d.K.arrival.running() || W.log.some((a) => !a.el.classList.contains('rule'))) return 'Desk played under ' + hash;
+    const o = boot(DOC, { hash, session: { 'pl-arrive': 'ptr' } });
+    if (o.K.arrival.running()) return 'Document played under ' + hash;
+  }
+  return true;
+});
+if (process.env.CINE_ORACLE_FORCE_FAIL) check('forced failing assertion (F7 self-test)', false);
+else {
+  const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], { env: { ...process.env, CINE_ORACLE_FORCE_FAIL: '1' }, encoding: 'utf8' });
+  check('F7: a failed assertion exits non-zero (forced-failure child run)', child.status === 1 && /FAILED/.test(child.stdout), 'exit ' + child.status);
+}
+
 /* ---------------- report ---------------- */
 const total = pass + fails.length;
 for (const x of fails) console.log('FAIL ' + x);
 console.log(`${fails.length ? 'FAILED' : 'PASS'} ${pass}/${total} checks · cinematic/index.html + cinematic/document.html`);
+if (fails.length) process.exitCode = 1;
 console.log('Not run: rendered browser at 1440/1280/390, real font metrics and safe areas, screen reader, device frame timing (source and in-memory runs only).');

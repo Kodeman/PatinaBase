@@ -184,6 +184,8 @@ body{background:var(--doc-paper)}
 /* arrival:start (cinematic prototype, SQ-321: proposed rulings R-DM8..R-DM17, not doctrine; all of it leaves with the finish) */
 html.arr-pre body{opacity:0}
 html.arr-on{overflow-x:hidden}
+html.arr-on body{pointer-events:none} /* staged, faded layers take no hits: a press lands on the root and only skips; the real act is re-enabled inline */
+html.arr-on .arr-skip,html.arr-on .mc{pointer-events:auto}
 .arr-card{position:fixed;inset:0;z-index:40;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 .arr-card>*{position:absolute;left:16px;right:16px;max-width:640px;margin:0 auto;text-align:center}
 .arr-card p{margin-left:auto;margin-right:auto}
@@ -319,7 +321,7 @@ html.arr-on{overflow-x:hidden}
     </div>
   </div>
 </div>
-<p class="fixture-foot">Fixture · Middle West Studio · not a client record · The finish record and the note are the working doorways here.<span data-arr> · <button type="button" class="act" data-press data-arr-replay><span class="w">Replay arrival</span><span class="rule" aria-hidden="true"></span></button></span></p>
+<p class="fixture-foot">Fixture · Middle West Studio · not a client record · The finish record and the note are the working doorways here.<span data-arr> · <button type="button" class="act" data-press data-arr-replay><span class="w">Replay arrival</span><span class="rule" aria-hidden="true"></span></button> · <button type="button" class="act" data-press data-arr-replay="rm"><span class="w">Replay reduced</span><span class="rule" aria-hidden="true"></span></button> · <button type="button" class="act" data-press data-arr-replay="translate"><span class="w">Replay without scale</span><span class="rule" aria-hidden="true"></span></button></span></p>
 <aside class="mc" aria-label="Review controls" hidden>
   <button type="button" class="mc-toggle" aria-expanded="false" aria-controls="mc-body">Controls</button>
   <div class="mc-body" id="mc-body">
@@ -689,7 +691,7 @@ var osRM=window.matchMedia('(prefers-reduced-motion: reduce)');
 var DOORWAY=/^(review|open|read|see|plan|draft)\b/i; /* a terminal verb (approve, send, sign, pay, book) never takes landing focus */
 var TIER={560:[0,'linear',0],760:[240,E,6],840:[240,E,0],920:[240,E,4],1000:[240,E,0]}; /* start: duration, curve, rise px */
 var GONE=[{opacity:1,visibility:'visible'},{opacity:0,visibility:'hidden'}];
-var st=null,swallow=false,quiet=false,wired=false;
+var st=null,swallow=false,quiet=false,wired=false,wait=null,press=null,own=false;
 K.arrScale0=/[?&]scale=0(&|$)/.test(location.search);
 function ms(n){return n*K.slow;}
 function num(v){v=parseFloat(v);return isNaN(v)?0:v;}
@@ -722,7 +724,7 @@ function busy(){
   return !!(a&&a!==document.body&&!(a.closest&&a.closest('.mc,[data-arr-replay]')));
 }
 /* The initial reading position, chosen before frame 0, and the opening composition. Anything that does not fit: no arrival. */
-function plan(cfg,rm){
+function plan(cfg,rm,flat){
   var v=view(),hero=$(cfg.hero),act=$(cfg.act),top=$(cfg.top);
   if(!hero||!act||!top)return null;
   var y0=window.scrollY||0,max=Math.max(0,(root.scrollHeight||0)-window.innerHeight),bar=0,y;
@@ -739,7 +741,7 @@ function plan(cfg,rm){
   if(cfg.warn){var o=rect($(cfg.warn),dy);if(o.top<v.top||o.bottom>v.bottom)return null;} /* the warning hands off only to a visible home */
   if(rm)return {y:y};
   var F=rect(hero,dy),G=ink(hero,dy),B=rect(act,dy);if(!G)return null;
-  var s=K.arrScale0?1:(v.vw>=1024?52/34:(v.vw>=761?42/34:1));
+  var s=K.arrScale0||flat?1:(v.vw>=1024?52/34:(v.vw>=761?42/34:1));
   if(G.w*s>Math.min(640,v.vw-32))return null;
   var cx=v.vw/2,cy=v.top+.46*v.H,hTop=cy-G.h*s/2,hBot=cy+G.h*s/2;
   var aTop=hTop-cfg.gap-rect($('.arr-above')).height;
@@ -808,17 +810,19 @@ function stage(p,hero,act,card,skip){
 }
 function start(o){
   finish();
+  o=o||{};
   var cfg=K.page.arrive,card=$('.arr-card'),skip=$('.arr-skip');
   if(!cfg||!card||!skip||busy())return false;
-  var rm=K.rm();
+  var rm=!!o.rm||K.rm();
   card.hidden=rm;skip.hidden=rm;
-  var p=plan(cfg,rm);
+  var p=plan(cfg,rm,o.flat);
   if(!p){card.hidden=true;skip.hidden=true;return false;}
   if(Math.abs((window.scrollY||0)-p.y)>.5)window.scrollTo(0,p.y); /* one pre-paint position; zero scroll writes after t0 */
   current();
-  st={o:o||{},cfg:cfg,rm:rm,anims:[],styled:[],carry:[],t0:performance.now(),y:window.scrollY||0,last:0,gaps:[],landed:rm,raf:0,watch:0};
+  st={o:o,cfg:cfg,rm:rm,anims:[],styled:[],carry:[],t0:performance.now(),y:window.scrollY||0,last:0,gaps:[],landed:rm,raf:0,watch:0};
   root.classList.add('arr-on');root.classList.remove('arr-pre');
   var hero=$(cfg.hero),act=$(cfg.act),keep=[hero,act];
+  act.style.pointerEvents='auto';st.styled.push({el:act,props:['pointerEvents']}); /* the one live target while the rest takes no hits */
   if(rm)(cfg.keep||[]).forEach(function(s){var el=$(s);if(el)keep.push(el);});
   cover(keep,cfg,rm,window.innerHeight);
   if(!rm)stage(p,hero,act,card,skip);
@@ -830,10 +834,8 @@ function start(o){
 function tick(now){
   if(!st)return;
   st.raf=0;
-  if(st.last){
-    var g=now-st.last,n=st.gaps.push(g);
-    if((n<=3&&g>50)||g>100||(n>1&&g>34&&st.gaps[n-2]>34)){finish(true);return;}
-  }
+  var g=now-(st.last||st.t0),n=st.gaps.push(g); /* the first interval runs from t0, so a stalled first frame is measured too */
+  if((n<=3&&g>50)||g>100||(n>1&&g>34&&st.gaps[n-2]>34)){finish(true);return;}
   st.last=now;
   var t=(performance.now()-st.t0)/K.slow;
   if(!st.landed&&t>=1200)land();
@@ -861,8 +863,10 @@ function finish(normal){
     quiet=true;try{to.focus({preventScroll:true});}finally{quiet=false;} /* landing focus is not an address: no detail opens */
   }
 }
-function cut(){finish();}
+function halt(){if(wait)wait(false,true);} /* input during the font wait ends it for good: the resting page, no later start */
+function cut(){halt();finish();}
 function onKey(e){
+  if(wait){halt();if(e.key==='Escape'){e.preventDefault();e.stopPropagation();}return;}
   if(!st)return;
   var a=document.activeElement,free=!a||a===document.body||a===$('.arr-skip'),act=$(st.cfg.act);
   finish();
@@ -871,16 +875,29 @@ function onKey(e){
   if(e.key==='Tab'){act.focus({preventScroll:true});if(!e.shiftKey)e.preventDefault();return;}
   if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();} /* nothing chosen yet: skip only */
 }
-/* A press on the real act she can see acts on it exactly once; any other press only finishes and cannot click through. */
+/* A press on the real act she can see ends the arrival at once and acts on it exactly once, on release over the act she
+   pressed; a cancel, a scroll or a release elsewhere does not act. Any other press only finishes and cannot click through. */
 function onDown(e){
+  if(wait){halt();swallow=true;return;}
   if(!st)return;
   var t=e.target,act=$(st.cfg.act),ours=t.closest&&t.closest('.mc,[data-arr-replay]');
+  press=!ours&&act.contains(t)&&!(e.button>0)?{id:e.pointerId,r:act.getBoundingClientRect(),act:act,y:window.scrollY||0}:null;
   finish();
   if(ours)return;
-  if(act.contains(t)&&!(e.button>0))act.click();
   swallow=true;
 }
+function onUp(e){
+  var p=press;press=null;
+  if(swallow)setTimeout(function(){swallow=false;},0);
+  if(!p||e.pointerId!==p.id)return;
+  var r=p.r,x=e.clientX,y=e.clientY;
+  if(!(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom))return;
+  own=true; /* the press's own completed activation, carrying her modifier keys */
+  try{p.act.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window,detail:1,button:0,clientX:x,clientY:y,ctrlKey:e.ctrlKey,metaKey:e.metaKey,shiftKey:e.shiftKey,altKey:e.altKey}));}
+  finally{own=false;}
+}
 function onClick(e){
+  if(own)return;
   if(swallow){swallow=false;e.preventDefault();e.stopPropagation();return;}
   if(st)finish(); /* assistive activation without a press is honoured */
 }
@@ -890,14 +907,14 @@ function wire(){
   root.addEventListener('keydown',onKey,true);
   root.addEventListener('pointerdown',onDown,true);
   root.addEventListener('click',onClick,true);
-  root.addEventListener('pointerup',function(){if(swallow)setTimeout(function(){swallow=false;},0);},true);
-  root.addEventListener('pointercancel',function(){swallow=false;},true);
+  root.addEventListener('pointerup',onUp,true);
+  root.addEventListener('pointercancel',function(){press=null;swallow=false;},true);
   root.addEventListener('pointermove',function(e){if(st)e.stopPropagation();},true); /* assembly under a still pointer never addresses a line */
   root.addEventListener('focusin',function(e){if(quiet){e.stopPropagation();return;}if(st)finish();},true);
-  root.addEventListener('wheel',cut,{capture:true,passive:true});
+  root.addEventListener('wheel',function(){press=null;cut();},{capture:true,passive:true});
   root.addEventListener('touchstart',cut,{capture:true,passive:true});
   document.addEventListener('selectionchange',function(){var s=st&&getSelection();if(s&&!s.isCollapsed)finish();});
-  window.addEventListener('scroll',function(){if(st&&Math.abs((window.scrollY||0)-st.y)>.5)finish();},{passive:true});
+  window.addEventListener('scroll',function(){if(press&&Math.abs((window.scrollY||0)-press.y)>.5)press=null;if(st&&Math.abs((window.scrollY||0)-st.y)>.5)finish();},{passive:true});
   window.addEventListener('resize',cut);
   if(window.visualViewport)window.visualViewport.addEventListener('resize',cut);
   window.addEventListener('blur',cut);window.addEventListener('pagehide',cut);window.addEventListener('beforeprint',cut);
@@ -911,24 +928,29 @@ function wire(){
 }
 function fonts(){try{return document.fonts.check('500 34px "Playfair Display"')&&document.fonts.check('400 12px "DM Mono"');}catch(e){return false;}}
 K.arrival={
-  /* Page load: plays only if the gate allowed it and the page is ready now (fonts within 150ms at most, on covered paper). */
+  /* Page load: plays only if the gate allowed it and the page is ready by the first frame; covered paper is never painted.
+     Any input while the fonts are awaited ends the wait for good on the resting page. */
   boot:function(decline){
     wire();clearTimeout(A.safety);
-    function no(){$('.arr-card').hidden=true;$('.arr-skip').hidden=true;root.classList.remove('arr-pre');if(decline)decline();}
+    function no(skip){$('.arr-card').hidden=true;$('.arr-skip').hidden=true;root.classList.remove('arr-pre');if(decline&&!skip)decline();}
     function go(){var ok=false;try{ok=start({kbd:A.kbd});}catch(err){finish();}if(!ok)no();}
     if(!A.play||(document.visibilityState&&document.visibilityState!=='visible'))return no();
     var f=document.fonts;
     if(!f||!f.check)return no();
     if(fonts())return go();
-    var waited=false,to=setTimeout(function(){if(!waited){waited=true;no();}},150);
-    f.ready.then(function(){if(waited)return;waited=true;clearTimeout(to);if(fonts())go();else no();});
+    var fr=0,to=0;
+    wait=function(ok,skip){wait=null;clearTimeout(to);cancelAnimationFrame(fr);if(ok&&fonts())go();else no(skip);};
+    fr=requestAnimationFrame(function(){if(wait)wait(true);}); /* the first frame decides: fonts usable now, or the ordinary page */
+    to=setTimeout(function(){if(wait)wait(false);},150);
+    f.ready.then(function(){if(wait)wait(true);});
   },
-  /* Review only: from the resting start position, as if she had just arrived. Keyboard activation earns the landing focus. */
+  /* Review only: from the resting start position, as if she had just arrived. Keyboard activation earns the landing focus.
+     The footer's Replay reduced and Replay without scale are one-shot: that replay only, nothing kept. */
   replay:function(e){
-    var kbd=!!(e&&e.detail===0),a;
+    var kbd=!!(e&&e.detail===0),b=e&&e.target&&e.target.closest?e.target.closest('[data-arr-replay]'):null,m=b?b.getAttribute('data-arr-replay'):'',a;
     finish();
     a=document.activeElement;if(a&&a.closest&&a.closest('[data-arr-replay]')&&a.blur)a.blur();
-    return start({kbd:kbd,replay:true});
+    return start({kbd:kbd,replay:true,rm:m==='rm',flat:m==='translate'});
   },
   finish:function(){finish();},
   running:function(){return !!st;}
@@ -982,8 +1004,9 @@ K.page.onClick=function(e){
 };
 K.page.trigger1=function(){K.address(K.wells['w-direction']);};
 /* Arrival: where the project is (Procurement), then the finish Leah can review, landing in Direction without changing the stage. */
-K.page.arrive={page:'doc',hero:'#s-direction [data-seam="w-direction"] > .t-d1',act:'#s-direction [data-primary]',top:'#h-direction',head:'#h-direction',gap:24,split:['.sh'],
-  tiers:[[560,'#doc-title,.sh-house,.sh-vitals,.sh-acts,#h-direction,#s-direction .ctx,.tsec:not(.settled-sec)'],[760,'#s-direction [data-detail],#w-direction'],[840,'.spine,.mi'],[920,'.settled-sec,.rail']]};
+K.page.arrive={page:'doc',hero:'#s-direction [data-seam="w-direction"] > .t-d1',act:'#s-direction [data-primary]',top:'#h-direction',head:'#h-direction',gap:24,split:['.sh','.spine','.jumps'],
+  keep:['#h-direction','#s-direction [data-seam="w-direction"] > .ctx','#s-direction [data-detail="w-direction"]'],
+  tiers:[[560,'#doc-title,.sh-house,.sh-vitals,.sh-acts,#h-direction,#s-direction .ctx,.tsec:not(.settled-sec),.spine-name,.spine [aria-current]'],[760,'#s-direction [data-detail],#w-direction'],[840,'.spine .leave,.jumps > li,.mi'],[920,'.settled-sec,.rail']]};
 K.init();
 </script>
 </body>
