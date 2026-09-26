@@ -18372,6 +18372,48 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00672_teaching_note_state.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.teaching_note_state FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00672_teaching_note_state.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.teaching_note_state TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00672_teaching_note_state.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.teaching_note_state TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00672_teaching_note_state.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.teaching_note_state_patch(text[], jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00672_teaching_note_state.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.teaching_note_state_patch(text[], jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00674_help_state_merge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.help_state_merge(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00674_help_state_merge.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.help_state_merge(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
