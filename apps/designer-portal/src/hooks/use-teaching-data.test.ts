@@ -25,16 +25,14 @@ jest.mock('../../../../packages/help-system/src/index.ts', () => ({
   },
 }));
 
-jest.mock(
-  '../content/teaching-releases',
-  () => ({
-    TEACHING_RELEASES: [
-      { id: '2026-09-25-galley-po', shippedOn: '2026-09-25', sizeClass: 'workflow_changing', featureKeys: ['galley'] },
-      { id: '2026-10-02-hours', shippedOn: '2026-10-02', sizeClass: 'useful', featureKeys: ['hours'] },
-    ],
-  }),
-  { virtual: true },
-);
+// Not `virtual`: a virtual mock registers under the extensionless path, which
+// misses whenever this worker already resolved the hook's import to the real .ts.
+jest.mock('../content/teaching-releases', () => ({
+  TEACHING_RELEASES: [
+    { id: '2026-09-25-galley-po', shippedOn: '2026-09-25', sizeClass: 'workflow_changing', featureKeys: ['galley'] },
+    { id: '2026-10-02-hours', shippedOn: '2026-10-02', sizeClass: 'useful', featureKeys: ['hours'] },
+  ],
+}));
 
 let mockTeachingFlag = { value: true, isLoading: false };
 jest.mock('./use-feature-flags', () => ({
