@@ -17,6 +17,15 @@ describe('HELP_EVENTS', () => {
     expect(HELP_EVENTS.SHORTCUTS_OPENED).toBe('help.shortcuts.opened')
   })
 
+  it('names the six personless return-teaching events under the help.* namespace', () => {
+    expect(HELP_EVENTS.TEACHING_NOTE_SHOWN).toBe('help.teaching_note.shown')
+    expect(HELP_EVENTS.TEACHING_NOTE_DISMISSED).toBe('help.teaching_note.dismissed')
+    expect(HELP_EVENTS.TEACHING_NOTE_ACTED).toBe('help.teaching_note.acted')
+    expect(HELP_EVENTS.TEACHING_NOTE_RECEDED).toBe('help.teaching_note.receded')
+    expect(HELP_EVENTS.TEACHING_NOTE_ALREADY_KNEW).toBe('help.teaching_note.already_knew')
+    expect(HELP_EVENTS.TEACHING_CHANGES_OPENED).toBe('help.teaching_changes.opened')
+  })
+
   it('keeps every event name dot-namespaced and lowercase', () => {
     for (const name of Object.values(HELP_EVENTS)) {
       expect(name).toMatch(/^help\.[a-z0-9_.]+$/)

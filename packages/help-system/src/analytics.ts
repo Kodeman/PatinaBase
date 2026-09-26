@@ -62,6 +62,17 @@
  *     help_center.viewed           { source }                                    ← /help shell (portal-fired)
  *     shortcuts.opened             { source: 'key'|'palette'|'help_center' } ← "The keys" (sheet or page)
  *     glossary.opened              { source: 'palette' | 'panel' }                ← "The words" (Ideas & vocabulary shelf)
+ *
+ *   Return teaching (Margin Notes) · PERSONLESS: captured by the portal with
+ *   `$process_person_profile: false` under an anonymous distinct_id, never the
+ *   identified one. Every event takes `TeachingEventProps`, and none carries
+ *   body text, a project or client id, or dwell.
+ *     teaching_note.shown          TeachingEventProps
+ *     teaching_note.dismissed      TeachingEventProps
+ *     teaching_note.acted          TeachingEventProps
+ *     teaching_note.receded        TeachingEventProps & { reason }
+ *     teaching_note.already_knew   TeachingEventProps   ← hook-emitted, first exclusion only
+ *     teaching_changes.opened      TeachingEventProps
  */
 
 /**
@@ -118,10 +129,46 @@ export const HELP_EVENTS = {
   SHORTCUTS_OPENED: 'help.shortcuts.opened',
   /** New (onboarding Wave 1) — "The words" opened: the Ideas & vocabulary shelf. */
   GLOSSARY_OPENED: 'help.glossary.opened',
+
+  // ─── Return teaching · personless (system-architecture §7) ──────────────
+  TEACHING_NOTE_SHOWN: 'help.teaching_note.shown',
+  TEACHING_NOTE_DISMISSED: 'help.teaching_note.dismissed',
+  TEACHING_NOTE_ACTED: 'help.teaching_note.acted',
+  TEACHING_NOTE_RECEDED: 'help.teaching_note.receded',
+  TEACHING_NOTE_ALREADY_KNEW: 'help.teaching_note.already_knew',
+  TEACHING_CHANGES_OPENED: 'help.teaching_changes.opened',
 } as const
 
 /** A union of every event name in the taxonomy. */
 export type HelpEventName = (typeof HELP_EVENTS)[keyof typeof HELP_EVENTS]
+
+/** The six return-teaching event names, each captured personless. */
+export type TeachingEventName =
+  | typeof HELP_EVENTS.TEACHING_NOTE_SHOWN
+  | typeof HELP_EVENTS.TEACHING_NOTE_DISMISSED
+  | typeof HELP_EVENTS.TEACHING_NOTE_ACTED
+  | typeof HELP_EVENTS.TEACHING_NOTE_RECEDED
+  | typeof HELP_EVENTS.TEACHING_NOTE_ALREADY_KNEW
+  | typeof HELP_EVENTS.TEACHING_CHANGES_OPENED
+
+/**
+ * The only properties a teaching event may carry: per-note aggregate keys.
+ * It never carries body text, a project or client id, or dwell (§7, findings 14 and 15).
+ */
+export type TeachingEventProps = {
+  note_key?: string
+  kind?: string
+  trigger?: string
+  surface_key?: string
+  release_id?: string
+  size_class?: string
+  audience?: string
+  /** Why a note receded. Set only on `help.teaching_note.receded`. */
+  reason?: 'closed' | 'retired_max' | 'superseded' | 'expired'
+}
+
+/** Event name → property type for the teaching events. */
+export type TeachingEventMap = Record<TeachingEventName, TeachingEventProps>
 
 // ─── PostHog capture — the single guarded entry point ─────────────────────────
 
