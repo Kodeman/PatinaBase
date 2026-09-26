@@ -165,7 +165,7 @@
     "surfaceKey": "designer-portal/document/hours",
     "flag": "onboarding-teammate-persona",
     "featureKey": "hours",
-    "body": "A teammate's hours now land on your Hours ledger; she sees only her own, and billing stays with you.",
+    "body": "A teammate's hours now land on your Hours ledger; they see only their own, and billing stays with you.",
     "act": { "label": "Open Hours", "hrefTemplate": "?sheet=hours" },
     "bindings": [],
     "successSignal": "invoice_line_from_member_time",
