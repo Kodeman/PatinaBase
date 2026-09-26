@@ -56,7 +56,24 @@ function makeStubClient(initial: HelpStateBlob | null = {}): {
     rpc: async (fn: string, args: { p_patch: HelpStateBlob }) => {
       rpcCalls.push({ fn, args: JSON.parse(JSON.stringify(args)) })
       if (rpcError.current) return { data: null, error: rpcError.current }
-      stored = { ...(stored ?? {}), ...JSON.parse(JSON.stringify(args.p_patch)) }
+      // Two-level merge, as 00674: an object patch value merges one level down
+      // onto the stored value (or onto {} when that is not an object) and a
+      // second-level null deletes that entry; anything else replaces the key.
+      const isObj = (v: unknown): v is Record<string, unknown> =>
+        typeof v === 'object' && v !== null && !Array.isArray(v)
+      const base: Record<string, unknown> = isObj(stored) ? { ...stored } : {}
+      const patch = JSON.parse(JSON.stringify(args.p_patch)) as Record<string, unknown>
+      for (const [key, value] of Object.entries(patch)) {
+        const prev = base[key]
+        if (!isObj(value)) {
+          base[key] = value
+          continue
+        }
+        const level: Record<string, unknown> = { ...(isObj(prev) ? prev : {}), ...value }
+        for (const k of Object.keys(level)) if (level[k] === null) delete level[k]
+        base[key] = level
+      }
+      stored = base as HelpStateBlob
       lastWrite.current = stored
       return { data: stored, error: null }
     },
@@ -178,20 +195,26 @@ describe('createSupabaseHelpStateBackends', () => {
   })
 
   it('hydrate does not clobber in-memory writes that happened during the round-trip', async () => {
-    const { client } = makeStubClient({
+    const { client, lastWrite, rpcCalls } = makeStubClient({
       tours: { x: { completed: true } },
     })
     const backends = createSupabaseHelpStateBackends(client, 'user-1')
     // Simulate a user action firing before the hydrate completes.
     backends.tourBackend.setTourState('y', { abandoned: true })
     await backends.hydrate()
+    await backends.flush()
     // Both keys survive.
     expect(backends.tourBackend.getTourState('x').completed).toBe(true)
     expect(backends.tourBackend.getTourState('y').abandoned).toBe(true)
+    // The pre-hydrate write carried only its own tour (SQ-294 R1 finding 9) ...
+    expect(rpcCalls[0]!.args.p_patch.tours).toEqual({ y: { abandoned: true } })
+    // ... and the server's two-level merge kept the stored sibling.
+    expect(lastWrite.current?.tours?.x).toEqual({ completed: true })
+    expect(lastWrite.current?.tours?.y).toEqual({ abandoned: true })
   })
 
   it('clearTourState drops the record + writes the cleared blob through, leaving siblings', async () => {
-    const { client, lastWrite } = makeStubClient({
+    const { client, lastWrite, rpcCalls } = makeStubClient({
       tours: { walk: { completed: true }, keep: { abandoned: true } },
     })
     const backends = createSupabaseHelpStateBackends(client, 'user-1')
@@ -204,6 +227,8 @@ describe('createSupabaseHelpStateBackends', () => {
     await backends.flush()
 
     expect(backends.tourBackend.getTourState('walk')).toEqual({})
+    // The server merges `tours` one level down, so the clear is an explicit null.
+    expect(rpcCalls.at(-1)!.args.p_patch).toEqual({ tours: { walk: null } })
     expect(lastWrite.current?.tours?.walk).toBeUndefined()
     // Sibling tour is untouched.
     expect(lastWrite.current?.tours?.keep).toEqual({ abandoned: true })
@@ -404,14 +429,20 @@ describe('createSupabaseMarginNoteBackend', () => {
   })
 
   it('hydrate merges server state without clobbering an in-flight local write', async () => {
-    const { client } = makeStubClient({
+    const { client, lastWrite, rpcCalls } = makeStubClient({
       marginNotes: { 'desk-first-touch': '2026-01-01T00:00:00Z' },
     })
     const backend = createSupabaseMarginNoteBackend(client, 'user-1')
     backend.markSeen('doc-first-touch')
     await backend.hydrate()
+    await backend.flush()
     expect(backend.hasSeen('desk-first-touch')).toBe(true)
     expect(backend.hasSeen('doc-first-touch')).toBe(true)
+    // The pre-hydrate write carried only its own note (SQ-294 R1 finding 9) ...
+    expect(Object.keys(rpcCalls[0]!.args.p_patch.marginNotes ?? {})).toEqual(['doc-first-touch'])
+    // ... and the server's two-level merge kept the stored sibling.
+    expect(lastWrite.current?.marginNotes?.['desk-first-touch']).toBe('2026-01-01T00:00:00Z')
+    expect(lastWrite.current?.marginNotes?.['doc-first-touch']).toEqual(expect.any(String))
   })
 
   it('a tour write after a margin-note write leaves marginNotes intact (SQ-265)', async () => {
@@ -435,6 +466,22 @@ describe('createSupabaseMarginNoteBackend', () => {
     expect(lastWrite.current?.tours?.['desk-walkthrough']).toEqual({ completed: true })
     // The tour cache adopted the returned column, so it now sees the note too.
     expect(backends.getBlob().marginNotes?.['doc-first-touch']).toEqual(expect.any(String))
+
+    // Concurrent: both caches write before either flushes. Each payload names only
+    // its own keys, and the last stored column keeps every key from both caches.
+    marginNoteBackend.markSeen('desk-first-touch')
+    backends.tourBackend.setTourState('doc-walkthrough', { abandoned: true })
+    await Promise.all([marginNoteBackend.flush(), backends.flush()])
+    const last2 = rpcCalls.slice(-2).map((c) => Object.keys(c.args.p_patch).sort())
+    expect(last2).toEqual([['marginNotes'], ['featureAnnouncements', 'tours']])
+    expect(lastWrite.current?.marginNotes).toEqual({
+      'doc-first-touch': expect.any(String),
+      'desk-first-touch': expect.any(String),
+    })
+    expect(lastWrite.current?.tours).toEqual({
+      'desk-walkthrough': { completed: true },
+      'doc-walkthrough': { abandoned: true },
+    })
   })
 })
 

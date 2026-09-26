@@ -21,7 +21,7 @@
  *     2. Writes update the cache synchronously and schedule an async
  *        Supabase patch via `saveHelpState(...)`, which sends ONLY the
  *        top-level keys the writing cache owns through the
- *        `help_state_merge` RPC (a server-side shallow merge), so one cache
+ *        `help_state_merge` RPC (a server-side two-level merge), so one cache
  *        never erases a sibling cache's keys (SQ-265). Patches are serialized
  *        through a per-cache promise chain so a rapid sequence of
  *        `setTourState(...)` calls during a tour skip + dismiss + complete
@@ -106,8 +106,9 @@ export async function loadHelpState(
 
 /**
  * Merge the `keys` sub-keys of `blob` into the signed-in caller's
- * `profiles.help_state` via the `help_state_merge` RPC (top-level shallow
- * merge; every other key stays as the server has it). The RPC acts on the
+ * `profiles.help_state` via the `help_state_merge` RPC (a two-level merge:
+ * object keys merge one level down, a second-level null deletes that entry,
+ * and every other key stays as the server has it). The RPC acts on the
  * caller's own row, so `userId` must be the signed-in user. Resolves with the
  * resulting full column, or `null` when the write failed — failures are
  * logged but never thrown.
@@ -171,18 +172,20 @@ function createCache(): BackendCache {
  * chained promise actually runs, so the most recent in-memory mutation wins.
  * On success the cache adopts the returned column, keeping its own keys'
  * in-memory values (they may carry a mutation made while the write was in
- * flight).
+ * flight). `patch`, when given, is sent instead of the cache's keys: the
+ * server merges one level down, so removing an entry takes an explicit null.
  */
 function scheduleWrite(
   cache: BackendCache,
   client: HelpStateSupabaseClient,
   userId: string,
   keys: HelpStateKeys,
+  patch?: HelpStateBlob,
 ): void {
   cache.pendingWrite = cache.pendingWrite
     .catch(() => undefined)
     .then(async () => {
-      const merged = await saveHelpState(client, userId, cache.blob, keys)
+      const merged = await saveHelpState(client, userId, patch ?? cache.blob, keys)
       if (!merged) return
       const next: Record<string, unknown> = { ...merged }
       for (const key of keys) {
@@ -226,7 +229,10 @@ export function createSupabaseTourStateBackend(
         ...cache.blob,
         tours: nextTours,
       }
-      scheduleWrite(cache, client, userId, TOUR_CACHE_KEYS)
+      // help_state_merge merges `tours` one level down, so omitting the entry
+      // would keep it server-side; a JSON null deletes it (00674).
+      const clearPatch = { tours: { [tourId]: null } } as unknown as HelpStateBlob
+      scheduleWrite(cache, client, userId, TOUR_CACHE_KEYS, clearPatch)
     },
   }
 }

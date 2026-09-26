@@ -9,11 +9,14 @@
 --
 -- What this adds, all new objects; nothing installed is redefined:
 --   1. `public.teaching_note_state` (user_id PK → auth.users ON DELETE CASCADE,
---      state jsonb, updated_at). RLS on, four own-row policies to authenticated.
---      No other leg, no view, and no grant to anon, agent_reader or agent_writer.
+--      state jsonb, updated_at). RLS on; authenticated holds SELECT and DELETE on its
+--      own row only. There is no INSERT or UPDATE grant and no INSERT or UPDATE
+--      policy: every write is enforced through the RPC below, which runs as its
+--      owner. No other leg, no view, and no grant to anon, agent_reader or agent_writer.
 --   2. `public.teaching_note_state_patch(p_path text[], p_value jsonb) RETURNS jsonb`,
 --      SECURITY DEFINER, pinned to auth.uid(). It sets one leaf under a whitelisted
---      path (depth 1–3; `seen` paths are exactly seen.<key>.<n|first|last|out>),
+--      path (a plain 1-based, one-dimensional array of non-empty, non-NULL segments,
+--      depth 1–3; `seen` paths are exactly seen.<key>.<n|first|last|out>),
 --      refuses a value over 1024 bytes, creates missing parents instead of
 --      no-opping, keeps a set `seen.<key>.out` terminal, and returns the resulting
 --      state so the caller adopts it.
@@ -36,39 +39,37 @@ CREATE TABLE IF NOT EXISTS public.teaching_note_state (
 
 ALTER TABLE public.teaching_note_state ENABLE ROW LEVEL SECURITY;
 
--- Own row only, for SELECT and every write.
+-- Own row only, for SELECT and DELETE. There is no INSERT or UPDATE policy: the
+-- table grant below withholds both, so teaching_note_state_patch is the only writer.
+-- The DROPs of the insert/update policies remove them where an earlier body of this
+-- file created them.
 DROP POLICY IF EXISTS teaching_note_state_select_own ON public.teaching_note_state;
 CREATE POLICY teaching_note_state_select_own ON public.teaching_note_state
   FOR SELECT TO authenticated
   USING (user_id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS teaching_note_state_insert_own ON public.teaching_note_state;
-CREATE POLICY teaching_note_state_insert_own ON public.teaching_note_state
-  FOR INSERT TO authenticated
-  WITH CHECK (user_id = (SELECT auth.uid()));
-
 DROP POLICY IF EXISTS teaching_note_state_update_own ON public.teaching_note_state;
-CREATE POLICY teaching_note_state_update_own ON public.teaching_note_state
-  FOR UPDATE TO authenticated
-  USING (user_id = (SELECT auth.uid()))
-  WITH CHECK (user_id = (SELECT auth.uid()));
 
 DROP POLICY IF EXISTS teaching_note_state_delete_own ON public.teaching_note_state;
 CREATE POLICY teaching_note_state_delete_own ON public.teaching_note_state
   FOR DELETE TO authenticated
   USING (user_id = (SELECT auth.uid()));
 
--- Post-flip, the policies above only bite with a matching table grant. anon and
--- the agent roles get nothing.
+-- Post-flip, the policies above only bite with a matching table grant. authenticated
+-- gets SELECT and DELETE only; INSERT and UPDATE are withheld so the whitelist, the
+-- value cap and the sticky `out` in teaching_note_state_patch cannot be bypassed by
+-- writing the row directly. anon and the agent roles get nothing.
 REVOKE ALL ON public.teaching_note_state FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.teaching_note_state TO authenticated;
+REVOKE INSERT, UPDATE ON public.teaching_note_state FROM authenticated;
+GRANT SELECT, DELETE ON public.teaching_note_state TO authenticated;
 GRANT ALL ON public.teaching_note_state TO service_role;
 
 COMMENT ON TABLE public.teaching_note_state IS
   'A designer''s return-teaching state (Margin Notes, 00672): release cursor, visit, '
   'unsolicited cap, quiet switch and per-note seen outcomes. Own row only; never '
-  'stored in profiles.help_state, which counterparties can read. Writes go through '
-  'teaching_note_state_patch.';
+  'stored in profiles.help_state, which counterparties can read. Writes are enforced '
+  'through teaching_note_state_patch: authenticated holds SELECT and DELETE only.';
 
 -- ── 2. The writer ───────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.teaching_note_state_patch(p_path text[], p_value jsonb)
@@ -86,10 +87,27 @@ BEGIN
     RAISE EXCEPTION 'not authenticated' USING ERRCODE = '42501';
   END IF;
 
-  IF p_path IS NULL OR cardinality(p_path) NOT BETWEEN 1 AND 3
-     OR p_path[1] NOT IN ('v', 'cursor', 'visit', 'recentUnsolicited', 'ignoredStreak', 'quiet', 'seen')
-     OR (p_path[1] = 'seen' AND (cardinality(p_path) <> 3 OR p_path[3] NOT IN ('n', 'first', 'last', 'out')))
-     OR pg_column_size(p_value) > 1024
+  -- Shape first: p_path[1]/p_path[3] below only mean "first"/"third" on a plain
+  -- 1-based, one-dimensional array. On '[0:0]={x}' or '[2:4]={a,b,c}' they are NULL,
+  -- which would make the whitelist NULL while jsonb_set still walks the real
+  -- elements. unnest (not array_position) so a multi-dimensional array is refused
+  -- here with 22023 rather than raising 0A000.
+  IF p_path IS NULL
+     OR p_value IS NULL
+     OR array_ndims(p_path) IS DISTINCT FROM 1
+     OR array_lower(p_path, 1) IS DISTINCT FROM 1
+     OR EXISTS (SELECT 1 FROM unnest(p_path) AS s(seg) WHERE s.seg IS NULL OR s.seg = '')
+  THEN
+    RAISE EXCEPTION 'teaching_note_state_patch: path or value refused' USING ERRCODE = '22023';
+  END IF;
+
+  -- The whitelist as an allow predicate: anything not provably true refuses.
+  IF NOT COALESCE(
+       cardinality(p_path) BETWEEN 1 AND 3
+       AND p_path[1] IN ('v', 'cursor', 'visit', 'recentUnsolicited', 'ignoredStreak', 'quiet', 'seen')
+       AND (p_path[1] <> 'seen' OR (cardinality(p_path) = 3 AND p_path[3] IN ('n', 'first', 'last', 'out')))
+       AND pg_column_size(p_value) <= 1024,
+       false)
   THEN
     RAISE EXCEPTION 'teaching_note_state_patch: path or value refused' USING ERRCODE = '22023';
   END IF;
@@ -118,8 +136,9 @@ COMMENT ON FUNCTION public.teaching_note_state_patch(text[], jsonb) IS
   'Sets one leaf of the caller''s own teaching_note_state (00672) and returns the '
   'resulting state. Path depth 1-3, first segment in v | cursor | visit | '
   'recentUnsolicited | ignoredStreak | quiet | seen; a seen path is exactly '
-  'seen.<key>.<n|first|last|out>. A value over 1024 bytes or any other path raises '
-  '22023. Missing parents are created. A set seen.<key>.out is terminal: a later '
+  'seen.<key>.<n|first|last|out>. The path must be a 1-based one-dimensional array '
+  'of non-empty, non-NULL segments. A NULL value, a value over 1024 bytes or any '
+  'other path raises 22023. Missing parents are created. A set seen.<key>.out is terminal: a later '
   'write to it returns the current state unchanged.';
 
 REVOKE ALL ON FUNCTION public.teaching_note_state_patch(text[], jsonb) FROM PUBLIC, anon;

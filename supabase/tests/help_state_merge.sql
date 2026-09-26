@@ -3,7 +3,11 @@
 --
 -- Covers: (1) {marginNotes:{x:1}} after {tours:{t:1}} keeps both keys; (2) an unknown
 -- top-level key raises 22023; (3) a non-object patch raises 22023; (4) the result
--- equals the stored column. Also: anon cannot execute; an oversize patch raises 22023.
+-- equals the stored column; (5) a stored non-object help_state ([], "str", JSON null)
+-- is replaced by the patch, never concatenated into an array; (6) object over object
+-- merges one level down (stored tours.x / marginNotes.desk-first-touch survive a
+-- sibling patch), scalar over object and object over scalar replace. Also: anon cannot
+-- execute; an oversize patch raises 22023.
 --
 -- Run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/help_state_merge.sql
 -- Everything runs inside one transaction and is rolled back.
@@ -53,13 +57,13 @@ BEGIN
           WHERE id = 'e9674000-0000-4000-8000-00000000000a') = v_result,
     'the returned value must equal the stored help_state';
 
-  -- A key present in the patch replaces that key whole.
-  v_result := public.help_state_merge('{"tours": {"u": 2}}'::jsonb);
-  ASSERT v_result = '{"tours": {"u": 2}, "marginNotes": {"x": 1}}'::jsonb,
-    format('a patched key must replace the stored key whole, got %s', v_result);
+  -- Object over object merges one level down; a second-level entry is replaced whole.
+  v_result := public.help_state_merge('{"tours": {"u": 2, "t": 3}}'::jsonb);
+  ASSERT v_result = '{"tours": {"t": 3, "u": 2}, "marginNotes": {"x": 1}}'::jsonb,
+    format('an object patch must merge into the stored object key, got %s', v_result);
   ASSERT (SELECT help_state FROM public.profiles
           WHERE id = 'e9674000-0000-4000-8000-00000000000a') = v_result,
-    'the returned value must equal the stored help_state after a replace';
+    'the returned value must equal the stored help_state after a merge';
 END $$;
 
 -- (2) an unknown top-level key, (3) a non-object patch, and an oversize patch raise 22023
@@ -93,8 +97,107 @@ BEGIN
 
   ASSERT (SELECT help_state FROM public.profiles
           WHERE id = 'e9674000-0000-4000-8000-00000000000a')
-         = '{"tours": {"u": 2}, "marginNotes": {"x": 1}}'::jsonb,
+         = '{"tours": {"t": 3, "u": 2}, "marginNotes": {"x": 1}}'::jsonb,
     'a refused patch must write nothing';
+END $$;
+
+-- (6) two-level merge (SQ-294 R1 finding 9): a cache that writes before it has
+-- hydrated sends only its own entry, and the stored siblings must survive.
+RESET ROLE;
+UPDATE public.profiles
+   SET help_state = '{"tours": {"x": {"completed": true}}, "marginNotes": {"desk-first-touch": {"at": "2026-01-01T00:00:00Z"}}}'::jsonb
+ WHERE id = 'e9674000-0000-4000-8000-00000000000a';
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_result jsonb;
+BEGIN
+  v_result := public.help_state_merge('{"tours": {"y": {"abandoned": true}}}'::jsonb);
+  ASSERT v_result -> 'tours' = '{"x": {"completed": true}, "y": {"abandoned": true}}'::jsonb,
+    format('a tours patch must keep the stored tours.x, got %s', v_result);
+
+  v_result := public.help_state_merge('{"marginNotes": {"doc-first-touch": {"at": "2026-09-25T00:00:00Z"}}}'::jsonb);
+  ASSERT v_result -> 'marginNotes' ? 'desk-first-touch' AND v_result -> 'marginNotes' ? 'doc-first-touch',
+    format('a marginNotes patch must keep the stored desk-first-touch, got %s', v_result);
+  ASSERT v_result -> 'tours' ? 'x' AND v_result -> 'tours' ? 'y', 'tours untouched by a marginNotes patch';
+  ASSERT (SELECT help_state FROM public.profiles
+          WHERE id = 'e9674000-0000-4000-8000-00000000000a') = v_result,
+    'the returned value must equal the stored help_state';
+
+  -- A second-level JSON null deletes that entry and keeps its siblings.
+  v_result := public.help_state_merge('{"tours": {"walk": {"completed": true}}}'::jsonb);
+  ASSERT v_result -> 'tours' ? 'walk', 'fixture: tours.walk set';
+  v_result := public.help_state_merge('{"tours": {"walk": null}}'::jsonb);
+  ASSERT v_result -> 'tours' = '{"x": {"completed": true}, "y": {"abandoned": true}}'::jsonb,
+    format('{"tours":{"walk":null}} must remove walk and keep x, y, got %s', v_result);
+
+  -- A null deeper inside an entry is preserved.
+  v_result := public.help_state_merge('{"tours": {"walk": {"completedAt": null}}}'::jsonb);
+  ASSERT v_result #> '{tours,walk}' = '{"completedAt": null}'::jsonb,
+    format('a nested null must be kept, got %s', v_result);
+
+  -- Deleting an entry that does not exist is a no-op.
+  v_result := public.help_state_merge('{"tours": {"nope": null}}'::jsonb);
+  ASSERT v_result -> 'tours'
+         = '{"x": {"completed": true}, "y": {"abandoned": true}, "walk": {"completedAt": null}}'::jsonb,
+    format('deleting an absent entry must change nothing, got %s', v_result);
+  ASSERT (SELECT help_state FROM public.profiles
+          WHERE id = 'e9674000-0000-4000-8000-00000000000a') = v_result,
+    'the returned value must equal the stored help_state after the deletes';
+
+  -- Scalar over object replaces; object over scalar replaces (no merge).
+  v_result := public.help_state_merge('{"tours": "reset"}'::jsonb);
+  ASSERT v_result -> 'tours' = '"reset"'::jsonb,
+    format('a scalar patch must replace a stored object, got %s', v_result);
+  v_result := public.help_state_merge('{"tours": {"z": 1}}'::jsonb);
+  ASSERT v_result -> 'tours' = '{"z": 1}'::jsonb,
+    format('an object patch over a stored scalar must replace it, got %s', v_result);
+  ASSERT v_result -> 'marginNotes' ? 'desk-first-touch', 'other keys survive the replaces';
+END $$;
+
+-- (5) a stored non-object help_state is replaced, not concatenated (R1 finding 6:
+-- `[] || {...}` stored [{...}] and grew by one element per write). The fixture
+-- value is written as the table owner; the merge runs as the user.
+RESET ROLE;
+UPDATE public.profiles SET help_state = '[]'::jsonb WHERE id = 'e9674000-0000-4000-8000-00000000000a';
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_result jsonb;
+BEGIN
+  v_result := public.help_state_merge('{"tours": {"t": 1}}'::jsonb);
+  ASSERT v_result = '{"tours": {"t": 1}}'::jsonb,
+    format('a stored [] must yield only the patch keys, got %s', v_result);
+  ASSERT (SELECT help_state FROM public.profiles
+          WHERE id = 'e9674000-0000-4000-8000-00000000000a') = v_result,
+    'the stored help_state must be the object, not an array';
+END $$;
+
+RESET ROLE;
+UPDATE public.profiles SET help_state = '"str"'::jsonb WHERE id = 'e9674000-0000-4000-8000-00000000000a';
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_result jsonb;
+BEGIN
+  v_result := public.help_state_merge('{"marginNotes": {"x": 1}}'::jsonb);
+  ASSERT v_result = '{"marginNotes": {"x": 1}}'::jsonb,
+    format('a stored "str" must yield only the patch keys, got %s', v_result);
+  ASSERT jsonb_typeof((SELECT help_state FROM public.profiles
+                       WHERE id = 'e9674000-0000-4000-8000-00000000000a')) = 'object',
+    'the stored help_state must be an object';
+END $$;
+
+RESET ROLE;
+UPDATE public.profiles SET help_state = 'null'::jsonb WHERE id = 'e9674000-0000-4000-8000-00000000000a';
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_result jsonb;
+BEGIN
+  v_result := public.help_state_merge('{"firstAuthoredAt": "2026-09-25T00:00:00Z"}'::jsonb);
+  ASSERT v_result = '{"firstAuthoredAt": "2026-09-25T00:00:00Z"}'::jsonb,
+    format('a stored JSON null must yield only the patch keys, got %s', v_result);
 END $$;
 
 RESET ROLE;

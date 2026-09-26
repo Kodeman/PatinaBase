@@ -2,8 +2,10 @@
 --
 -- Covers: (1) anon cannot execute the writer; (2) a first patch creates the row and
 -- returns the state; (3) missing parents are created (seen.<key>.n on an empty state);
--- (4) a set seen.<key>.out is sticky; (5) refused paths and an oversize value raise
--- 22023; (6) another user cannot SELECT the row.
+-- (4) a set seen.<key>.out is sticky; (5) refused paths, non-1-based or NULL-bearing
+-- path arrays, a NULL value and an oversize value raise 22023; (5b) the owner cannot
+-- INSERT or UPDATE the table directly (42501) and the RPC still writes; (6) another
+-- user cannot SELECT or write the row.
 --
 -- Run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/teaching_note_state.sql
 -- Everything runs inside one transaction and is rolled back.
@@ -25,8 +27,18 @@ BEGIN
   ASSERT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.teaching_note_state'::regclass),
     'teaching_note_state must have RLS enabled';
   ASSERT (SELECT count(*) FROM pg_policies
-          WHERE schemaname = 'public' AND tablename = 'teaching_note_state') = 4,
-    'teaching_note_state must carry exactly four policies';
+          WHERE schemaname = 'public' AND tablename = 'teaching_note_state') = 2,
+    'teaching_note_state must carry exactly two policies (SELECT, DELETE)';
+  ASSERT NOT EXISTS (SELECT 1 FROM pg_policies
+                     WHERE schemaname = 'public' AND tablename = 'teaching_note_state'
+                       AND cmd IN ('INSERT', 'UPDATE', 'ALL')),
+    'teaching_note_state must carry no INSERT or UPDATE policy';
+  ASSERT has_table_privilege('authenticated', 'public.teaching_note_state', 'SELECT')
+     AND has_table_privilege('authenticated', 'public.teaching_note_state', 'DELETE'),
+    'authenticated must hold SELECT and DELETE';
+  ASSERT NOT has_table_privilege('authenticated', 'public.teaching_note_state', 'INSERT')
+     AND NOT has_table_privilege('authenticated', 'public.teaching_note_state', 'UPDATE'),
+    'authenticated must not hold INSERT or UPDATE: the RPC is the only writer';
   ASSERT NOT has_table_privilege('anon', 'public.teaching_note_state', 'SELECT'),
     'anon must not SELECT teaching_note_state';
   ASSERT NOT EXISTS (
@@ -149,6 +161,94 @@ BEGIN
     'a refused patch must write nothing';
 END $$;
 
+-- (5a) path arrays that are not plain 1-based and NULL-free, and a NULL value,
+-- raise 22023 (R1 finding 1: on '[0:0]={bogus}' p_path[1] is NULL, so the old
+-- whitelist went NULL and jsonb_set wrote top-level "bogus"; on '[2:4]={seen,k@1,out}'
+-- p_path[3] is NULL, so the sticky-out check was skipped and out was overwritten).
+DO $$
+DECLARE
+  v_before jsonb := (SELECT state FROM public.teaching_note_state);
+BEGIN
+  BEGIN
+    PERFORM public.teaching_note_state_patch('[0:0]={bogus}'::text[], '"x"'::jsonb);
+    RAISE EXCEPTION 'a [0:0] path must be refused';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+
+  BEGIN
+    PERFORM public.teaching_note_state_patch('[2:4]={seen,k@1,out}'::text[], '"acted"'::jsonb);
+    RAISE EXCEPTION 'a [2:4] path must be refused';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+
+  BEGIN
+    PERFORM public.teaching_note_state_patch('{{v}}'::text[], '1'::jsonb);
+    RAISE EXCEPTION 'a two-dimensional path must be refused';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+
+  BEGIN
+    PERFORM public.teaching_note_state_patch(ARRAY['seen', NULL, 'n'], '1'::jsonb);
+    RAISE EXCEPTION 'a NULL path segment must be refused';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+
+  BEGIN
+    PERFORM public.teaching_note_state_patch(ARRAY['seen', '', 'n'], '1'::jsonb);
+    RAISE EXCEPTION 'an empty path segment must be refused';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+
+  BEGIN
+    PERFORM public.teaching_note_state_patch(ARRAY['v'], NULL);
+    RAISE EXCEPTION 'a NULL value must be refused';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+
+  ASSERT (SELECT state FROM public.teaching_note_state) = v_before,
+    format('refused path arrays must write nothing, got %s', (SELECT state FROM public.teaching_note_state));
+  ASSERT v_before #>> '{seen,k@1,out}' = 'dismissed' AND NOT v_before ? 'bogus',
+    'out stays dismissed and no top-level bogus key exists';
+END $$;
+
+-- (5b) the owner cannot write the table directly; the RPC is the only writer
+-- (R1 finding 2: a direct UPDATE bypassed the whitelist, the cap and sticky out).
+DO $$
+DECLARE
+  v_state jsonb;
+BEGIN
+  BEGIN
+    UPDATE public.teaching_note_state SET state = '{}'::jsonb
+     WHERE user_id = 'e9672000-0000-4000-8000-00000000000a';
+    RAISE EXCEPTION 'the owner''s direct UPDATE must be refused';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.teaching_note_state (user_id, state)
+    VALUES ('e9672000-0000-4000-8000-00000000000a', '{}'::jsonb)
+    ON CONFLICT (user_id) DO NOTHING;
+    RAISE EXCEPTION 'the owner''s direct INSERT must be refused';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  ASSERT (SELECT state #>> '{seen,k@1,out}' FROM public.teaching_note_state) = 'dismissed',
+    'the refused direct writes must leave the row unchanged';
+
+  v_state := public.teaching_note_state_patch(ARRAY['seen', 'k@1', 'n'], '3'::jsonb);
+  ASSERT v_state #>> '{seen,k@1,n}' = '3', format('n must still set via the RPC, got %s', v_state);
+  ASSERT (SELECT state #>> '{seen,k@1,n}' FROM public.teaching_note_state) = '3',
+    'the RPC write must be stored';
+END $$;
+
 RESET ROLE;
 
 -- ─── (6) user B cannot SELECT A's row ──────────────────────────────────────
@@ -174,9 +274,14 @@ BEGIN
   ASSERT v_state = '{"ignoredStreak": 0}'::jsonb, format('B starts from an empty state, got %s', v_state);
   ASSERT (SELECT count(*) FROM public.teaching_note_state) = 1, 'B sees exactly one row, its own';
 
-  -- B cannot overwrite A's row directly either.
-  UPDATE public.teaching_note_state SET state = '{}'::jsonb
-   WHERE user_id = 'e9672000-0000-4000-8000-00000000000a';
+  -- B cannot overwrite A's row directly either: no UPDATE grant at all.
+  BEGIN
+    UPDATE public.teaching_note_state SET state = '{}'::jsonb
+     WHERE user_id = 'e9672000-0000-4000-8000-00000000000a';
+    RAISE EXCEPTION 'B''s direct UPDATE must be refused';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
 END $$;
 
 RESET ROLE;
