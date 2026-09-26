@@ -1,0 +1,1531 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The paper answers a hand</title>
+<meta name="description" content="Motion concepts for The Document: the grammar, three directions with live mockups, trade-offs, the review, and seven rulings for the team.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: light;
+  --font-display:'Playfair Display',Georgia,'Times New Roman',serif;
+  --font-body:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --font-meta:'DM Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+
+  --ground:#E8E3DB;
+  --paper:#FCFAF6;
+  --wash:#F4EFE7;
+  --ink:#2C2926;
+  --body:#4E4339;
+  --faint:#65594E;
+  --rule:rgba(44,41,38,.14);
+  --rule-strong:rgba(44,41,38,.32);
+  --accent:#7C5E30;
+  --accent-soft:#C4A57B;
+  --never:#9C5340;
+  --frame:#DAD4CA;
+  --bar-h:52px;
+  --gutter:clamp(16px,4vw,64px);
+
+  /* the concept's own curves (concepts.md §1) */
+  --ease-e:cubic-bezier(.22,1,.36,1);
+  --ease-q:cubic-bezier(.42,0,.58,1);
+  --ease-o:cubic-bezier(0,0,.58,1);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --ground:#141210;
+    --paper:#1D1A17;
+    --wash:#25211D;
+    --ink:#EFE8DE;
+    --body:#D2C7B9;
+    --faint:#AA9D8E;
+    --rule:rgba(239,232,222,.13);
+    --rule-strong:rgba(239,232,222,.3);
+    --accent:#D6B587;
+    --accent-soft:#8C7351;
+    --never:#E3917B;
+    --frame:#2C2824;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --ground:#141210;
+  --paper:#1D1A17;
+  --wash:#25211D;
+  --ink:#EFE8DE;
+  --body:#D2C7B9;
+  --faint:#AA9D8E;
+  --rule:rgba(239,232,222,.13);
+  --rule-strong:rgba(239,232,222,.3);
+  --accent:#D6B587;
+  --accent-soft:#8C7351;
+  --never:#E3917B;
+  --frame:#2C2824;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--body);font-family:var(--font-body);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+[hidden]{display:none!important}
+img,svg,iframe{max-width:100%}
+a{color:var(--accent);text-underline-offset:3px;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+code{font-family:var(--font-meta);font-size:.86em;color:var(--ink);overflow-wrap:anywhere}
+b,strong{color:var(--ink);font-weight:600}
+
+/* ---------- deck frame ---------- */
+.deck{position:relative}
+.slide{background:var(--paper)}
+.sheet{max-width:1240px;margin-inline:auto;display:grid;grid-template-columns:150px minmax(0,1fr);gap:clamp(20px,3vw,48px);padding-block:clamp(28px,4.5vh,56px) clamp(24px,4vh,48px);padding-inline:var(--gutter)}
+.margin{display:flex;flex-direction:column;gap:10px;padding-top:6px;border-right:1px solid var(--rule);padding-right:18px;font-family:var(--font-meta);font-size:.72rem;letter-spacing:.06em;color:var(--faint);text-transform:uppercase;line-height:1.5}
+.margin .no{font-size:1.9rem;letter-spacing:0;color:var(--accent);font-weight:400;line-height:1;font-variant-numeric:tabular-nums}
+.margin .sec{color:var(--ink)}
+.margin .src{text-transform:none;letter-spacing:.01em;overflow-wrap:anywhere}
+.main{min-width:0;overflow-wrap:break-word}
+.fixture{grid-column:1/-1;font-family:var(--font-meta);font-size:.68rem;letter-spacing:.03em;color:var(--faint);border-top:1px solid var(--rule);padding-top:10px;margin:0}
+
+/* ---------- type ---------- */
+.eyebrow,.label{font-family:var(--font-meta);font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:400}
+h1,h2,h3{font-family:var(--font-display);color:var(--ink);font-weight:500;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.5rem,5.4vw,4.3rem);line-height:1.04;letter-spacing:-.01em}
+h2{font-size:clamp(1.65rem,2.8vw,2.35rem);line-height:1.15;margin-bottom:.35em}
+h3{font-size:1.14rem;line-height:1.3}
+p{margin:0}
+.lede{font-size:clamp(1.05rem,1.35vw,1.2rem);max-width:62ch;color:var(--body)}
+.small{font-size:.875rem}
+.faint{color:var(--faint)}
+.stack{display:flex;flex-direction:column;gap:18px}
+.stack-sm{display:flex;flex-direction:column;gap:8px}
+.never{color:var(--never)}
+.accent{color:var(--accent)}
+
+/* ---------- title ---------- */
+.cover{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:clamp(24px,4vw,56px);align-items:center}
+.cover .thesis{font-family:var(--font-display);font-style:italic;font-size:clamp(1.15rem,1.8vw,1.45rem);line-height:1.4;color:var(--body);max-width:30ch;margin-top:20px}
+.meta-list{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 18px;font-size:.88rem;margin:26px 0 0;max-width:56ch}
+.meta-list dt{font-family:var(--font-meta);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding-top:2px}
+.meta-list dd{margin:0}
+
+/* ---------- statement ---------- */
+.statement{font-family:var(--font-display);font-weight:400;font-size:clamp(2rem,4.6vw,3.7rem);line-height:1.12;color:var(--ink);max-width:20ch;text-wrap:balance}
+.resolve{font-family:var(--font-display);font-style:italic;font-size:clamp(1.3rem,2.3vw,1.9rem);line-height:1.3;color:var(--accent);max-width:34ch;text-wrap:balance}
+.quote{font-family:var(--font-display);font-style:italic;font-size:clamp(1.15rem,1.9vw,1.5rem);line-height:1.42;color:var(--ink);max-width:52ch;border-left:1px solid var(--accent-soft);padding-left:22px}
+.quote cite{display:block;font-family:var(--font-meta);font-style:normal;font-size:.72rem;letter-spacing:.04em;color:var(--faint);margin-top:10px}
+.pull{font-family:var(--font-display);font-style:italic;font-size:1.05rem;line-height:1.45;color:var(--ink);border-left:1px solid var(--accent-soft);padding-left:16px}
+
+/* ---------- common blocks ---------- */
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(20px,3vw,44px)}
+.grid2.lean{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(18px,2.4vw,32px)}
+.ruled{list-style:none;margin:0;padding:0}
+.ruled>li{padding:10px 0;border-top:1px solid var(--rule)}
+.ruled>li:last-child{border-bottom:1px solid var(--rule)}
+.ruled.tight>li{padding:7px 0;font-size:.9rem;line-height:1.45}
+.panel{background:var(--wash);padding:16px 18px;border-radius:2px}
+.chip{display:inline-block;font-family:var(--font-meta);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--rule-strong);border-radius:2px;color:var(--faint);white-space:nowrap}
+.chip.rec{color:var(--accent);border-color:var(--accent)}
+.chip.major{color:var(--never);border-color:var(--never)}
+.refuse{display:flex;flex-wrap:wrap;gap:8px}
+.refuse span{font-family:var(--font-meta);font-size:.76rem;color:var(--never);border:1px solid var(--never);padding:3px 8px;border-radius:2px;text-decoration:line-through;text-decoration-thickness:1px}
+
+/* feature test */
+.test{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--rule-strong)}
+.test>div{padding:14px 18px 6px 0}
+.test>div+div{padding-left:18px;border-left:1px solid var(--rule)}
+.test .answer{font-family:var(--font-display);font-size:1.12rem;color:var(--ink);margin:6px 0 8px;line-height:1.3}
+.test p.small{line-height:1.5}
+
+/* two definitions */
+.defs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 clamp(24px,4vw,56px);border-top:1px solid var(--rule-strong)}
+.defs>div{padding-top:14px}
+.defs .term{font-family:var(--font-meta);font-size:.8rem;letter-spacing:.1em;text-transform:uppercase}
+.defs .term.banned{color:var(--never)}
+.defs .term.kept{color:var(--accent)}
+.defs p{margin-top:6px;font-size:.95rem;max-width:46ch}
+
+/* numbered principle lists (these are the memo's own numbers) */
+.borrow{list-style:none;margin:0;padding:0;counter-reset:b}
+.borrow>li{display:grid;grid-template-columns:2rem minmax(0,1fr);gap:0 8px;padding:8px 0;border-top:1px solid var(--rule);font-size:.9rem;line-height:1.45}
+.borrow>li::before{counter-increment:b;content:counter(b);font-family:var(--font-meta);font-size:.76rem;color:var(--accent);padding-top:2px}
+.borrow.no>li::before{color:var(--never)}
+
+/* tables that fold into labelled blocks */
+.tbl-wrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-size:.86rem;line-height:1.45}
+.tbl th,.tbl td{text-align:left;vertical-align:top;padding:9px 14px 9px 0;border-top:1px solid var(--rule)}
+.tbl thead th{font-family:var(--font-meta);font-weight:400;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);border-top:0;border-bottom:1px solid var(--rule-strong)}
+.tbl tbody th{font-weight:500;color:var(--ink)}
+.tbl .mono{font-family:var(--font-meta);font-size:.78rem;color:var(--ink);white-space:nowrap}
+.tbl tr.dropped td,.tbl tr.dropped th{background:var(--wash)}
+.tbl tr.dropped th{padding-left:8px}
+.tbl td.rec-col{background:var(--wash);padding-left:12px}
+.tbl thead th.rec-col{background:var(--wash);padding-left:12px;color:var(--accent)}
+.tbl.compact{font-size:.82rem}
+.tbl.compact th,.tbl.compact td{padding-block:7px}
+
+/* large type specimen: at rest vs addressed */
+.states{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 clamp(24px,4vw,56px)}
+.states .name{font-family:var(--font-display);font-size:clamp(2.2rem,4.8vw,3.6rem);line-height:1;color:var(--ink);letter-spacing:.01em}
+.states .def{font-size:1rem;line-height:1.55;max-width:44ch;margin-top:14px}
+.states .def b{font-weight:500}
+.specimen{margin-top:22px;border-top:1px solid var(--rule-strong);padding-top:16px}
+
+/* storyboard minis: drawn from the concepts.md ASCII storyboards */
+.boards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.mini{margin:0;min-width:0}
+.mini figcaption{font-family:var(--font-meta);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.mini figcaption b{color:var(--accent);font-weight:400}
+.mini .pg{position:relative;background:var(--paper);border:1px solid var(--rule-strong);padding:12px 12px 14px;display:flex;flex-direction:column;gap:5px;min-height:100%}
+.m-head{font-family:var(--font-meta);font-size:.64rem;color:var(--faint);letter-spacing:.02em;border-bottom:1px solid var(--rule);padding-bottom:6px;margin-bottom:2px}
+.m-id{font-family:var(--font-meta);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:4px}
+.m-big{font-family:var(--font-display);font-size:1.22rem;line-height:1.15;color:var(--ink)}
+.m-name{font-family:var(--font-display);font-size:1.22rem;line-height:1.15;color:var(--ink)}
+.m-fact{font-size:.8rem;color:var(--ink)}
+.m-sm{font-size:.74rem;color:var(--faint)}
+.m-act{font-family:var(--font-meta);font-size:.68rem;color:var(--accent)}
+.m-text{height:26px;background:repeating-linear-gradient(180deg,var(--rule) 0 1px,transparent 1px 8px);opacity:.9}
+.m-well{min-height:48px;border:1px dashed var(--rule-strong);padding:5px 7px;display:flex;flex-direction:column;gap:2px;justify-content:center}
+.m-well.empty::after{content:"reserved paper";font-family:var(--font-meta);font-size:.6rem;color:var(--faint);letter-spacing:.04em}
+.m-well.risen{border-style:solid;border-color:transparent;border-left:1px solid var(--accent);background:var(--wash)}
+.m-well.risen span{font-size:.74rem;line-height:1.35;color:var(--ink)}
+.m-well.risen .m-act{font-size:.66rem}
+.m-line{position:relative;border-top:1px dashed var(--accent);margin:4px -12px 0;height:0}
+.m-line::after{content:"reading line";position:absolute;right:8px;top:-15px;font-family:var(--font-meta);font-size:.58rem;color:var(--accent);background:var(--paper);padding:0 4px}
+
+/* six moments, one row */
+.six{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0 14px;margin:0}
+.six>div{border-top:1px solid var(--rule-strong);padding:9px 0 4px}
+.six dt{font-family:var(--font-meta);font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.six dd{margin:4px 0 0;font-size:.82rem;line-height:1.42}
+
+/* direction head */
+.dir-head{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:clamp(18px,3vw,44px);align-items:start}
+.thesis-line{font-family:var(--font-display);font-size:clamp(1.08rem,1.5vw,1.28rem);line-height:1.45;color:var(--ink)}
+.moves-mini{font-family:var(--font-meta);font-size:.76rem;list-style:none;margin:0;padding:0}
+.moves-mini li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:6px 0;border-top:1px solid var(--rule);color:var(--ink)}
+.moves-mini li span+span{color:var(--accent);white-space:nowrap}
+
+/* kill risk + doctrine */
+.kill{border-top:2px solid var(--never);padding-top:10px}
+.kill .label{color:var(--never)}
+.kill p.q{font-family:var(--font-display);font-style:italic;font-size:1.1rem;line-height:1.4;color:var(--ink);margin-top:6px}
+.doc-row{display:grid;grid-template-columns:6.5rem minmax(0,1fr);gap:4px 14px;padding:8px 0;border-top:1px solid var(--rule);font-size:.86rem;line-height:1.45}
+.doc-row .k{font-family:var(--font-meta);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding-top:2px}
+.doc-row .k.amend{color:var(--never)}
+
+/* ---------- mockup stages ---------- */
+.mocks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(16px,2vw,28px)}
+.mocks.one{grid-template-columns:minmax(0,1fr)}
+.mock{margin:0;min-width:0}
+.mock-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:0 0 6px}
+.mock-name{font-size:.84rem;color:var(--ink);min-width:0}
+.mock-name b{font-family:var(--font-meta);font-weight:400;color:var(--accent);margin-right:6px}
+.mock-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-family:var(--font-meta);font-size:.72rem}
+.mock-ctl .grp{display:inline-flex;gap:0}
+.mock-ctl .grp+.grp{margin-left:6px}
+.mock-ctl button{font:inherit;color:var(--faint);background:transparent;border:1px solid var(--rule-strong);padding:4px 9px;min-height:30px;cursor:pointer;border-radius:0}
+.mock-ctl .grp button+button{border-left:0}
+.mock-ctl button[aria-pressed="true"]{color:var(--paper);background:var(--ink);border-color:var(--ink)}
+.mock-ctl a{margin-left:8px;padding:4px 0;white-space:nowrap}
+.hint{font-size:.8rem;color:var(--body);margin:0 0 8px;line-height:1.45}
+.hint .label{font-size:.66rem;color:var(--accent);margin-right:6px}
+.stage{position:relative;width:100%;max-width:100%;aspect-ratio:16/10;overflow:hidden;background:var(--frame);border:1px solid var(--rule-strong)}
+.stage iframe{position:absolute;top:0;left:0;border:0;transform-origin:0 0;background:#FCFAF6;width:1280px;height:800px}
+.mock.is-phone .stage iframe{box-shadow:0 0 0 1px var(--rule-strong)}
+.phone-link{display:none}
+.mock-note{font-size:.8rem;color:var(--faint);margin-top:8px;line-height:1.45}
+
+/* grammar: easing curves drawn to scale */
+.curves{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.curve{margin:0;border-top:1px solid var(--rule-strong);padding-top:8px}
+.curve svg{display:block;width:100%;max-width:150px;height:auto}
+.curve .ax{stroke:var(--rule-strong);stroke-width:1;fill:none}
+.curve .lin{stroke:var(--rule);stroke-width:1;stroke-dasharray:3 3;fill:none}
+.curve .c{stroke:var(--accent);stroke-width:2;fill:none}
+.curve figcaption{font-family:var(--font-meta);font-size:.7rem;color:var(--ink);margin-top:6px;line-height:1.45}
+.curve figcaption span{display:block;color:var(--faint)}
+.bands{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;font-size:.84rem;margin:0}
+.bands dt{font-family:var(--font-meta);font-size:.76rem;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bands dd{margin:0}
+
+/* laws */
+.laws{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 clamp(22px,3vw,44px)}
+.laws>li{border-top:1px solid var(--rule-strong);padding:10px 0 12px}
+.laws h3{font-size:1.04rem;margin-bottom:4px}
+.laws p{font-size:.86rem;line-height:1.5}
+
+/* two positions */
+.positions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-top:2px solid var(--ink)}
+.positions>div{padding:16px 22px 8px 0}
+.positions>div+div{padding-left:22px;padding-right:0;border-left:1px solid var(--rule-strong)}
+.positions .who{font-family:var(--font-meta);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.positions h3{font-size:1.5rem;margin:4px 0 10px}
+.positions p{font-size:.9rem;line-height:1.5}
+.positions p+p{margin-top:8px}
+.ask-line{background:var(--wash);border-left:2px solid var(--accent);padding:14px 18px;font-size:.98rem;color:var(--ink)}
+
+/* review */
+.tally{display:flex;flex-wrap:wrap;gap:6px 26px;font-family:var(--font-meta);font-size:.78rem;color:var(--faint);font-variant-numeric:tabular-nums;align-items:baseline}
+.tally b{font-family:var(--font-display);font-size:1.6rem;font-weight:500;color:var(--ink);margin-right:6px}
+.three{list-style:none;margin:0;padding:0;counter-reset:t}
+.three>li{display:grid;grid-template-columns:1.6rem minmax(0,1fr);gap:0 8px;padding:10px 0;border-top:1px solid var(--rule);font-size:.88rem;line-height:1.5}
+.three>li::before{counter-increment:t;content:counter(t);font-family:var(--font-display);font-size:1.2rem;color:var(--accent);line-height:1.2}
+
+/* rulings */
+.rulings{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 clamp(22px,3vw,44px)}
+.rulings>li{border-top:1px solid var(--rule-strong);padding:12px 0 14px}
+.rulings>li.first{grid-column:1/-1;background:var(--wash);border-top:2px solid var(--accent);padding:14px 18px 16px}
+.rulings .rid{font-family:var(--font-meta);font-size:.78rem;color:var(--accent);letter-spacing:.04em}
+.rulings h3{font-size:1.06rem;margin:2px 0 8px}
+.rulings .opts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.rulings .opts li{font-size:.84rem;line-height:1.45;padding-left:1.7rem;position:relative}
+.rulings .opts li::before{content:attr(data-o);position:absolute;left:0;top:1px;font-family:var(--font-meta);font-size:.7rem;width:1.2rem;text-align:center;border:1px solid var(--rule-strong);border-radius:2px;color:var(--faint);line-height:1.35}
+.rulings .opts li.pick::before{border-color:var(--accent);background:var(--accent);color:var(--paper)}
+.rulings .opts li.pick{color:var(--ink)}
+.rulings .rec-line{font-size:.84rem;color:var(--body);margin-top:10px;line-height:1.5}
+.rulings .rec-line b{font-family:var(--font-meta);font-weight:400;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-right:6px}
+
+/* next steps (a real sequence) */
+.steps{list-style:none;margin:0;padding:0;counter-reset:s}
+.steps>li{display:grid;grid-template-columns:2.2rem minmax(0,1fr);gap:4px 12px;padding:11px 0;border-top:1px solid var(--rule);font-size:.9rem;line-height:1.5}
+.steps>li::before{counter-increment:s;content:counter(s);font-family:var(--font-display);font-size:1.3rem;color:var(--accent);line-height:1.1}
+.steps h3{font-size:1.04rem;margin-bottom:3px}
+.no-code{border:1px solid var(--never);color:var(--never);padding:12px 16px;font-family:var(--font-meta);font-size:.8rem;letter-spacing:.02em;line-height:1.5}
+
+/* ---------- control bar ---------- */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--paper);border-top:1px solid var(--rule-strong);padding-bottom:env(safe-area-inset-bottom,0px)}
+.bar-inner{height:var(--bar-h);display:flex;align-items:center;gap:10px;padding-inline:var(--gutter);max-width:1400px;margin-inline:auto}
+.progress{position:absolute;left:0;top:-1px;height:2px;background:var(--accent);width:0}
+html.ready .progress{transition:width 240ms var(--ease-e)}
+.bar .deck-name{font-family:var(--font-meta);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.bar button{font-family:var(--font-meta);font-size:.8rem;color:var(--ink);background:transparent;border:1px solid var(--rule-strong);border-radius:2px;min-width:44px;height:36px;padding:0 10px;cursor:pointer}
+.bar button:hover{border-color:var(--ink)}
+.bar button:disabled{opacity:.35;cursor:default}
+.counter{font-family:var(--font-meta);font-size:.84rem;color:var(--ink);font-variant-numeric:tabular-nums;min-width:4.6rem;text-align:center;letter-spacing:.04em}
+
+.keys{position:fixed;inset:0;z-index:40;background:rgba(20,18,16,.42);display:grid;place-items:center;padding:16px}
+.keys-card{background:var(--paper);color:var(--body);width:min(440px,100%);padding:24px 26px;border:1px solid var(--rule-strong)}
+.keys-card h2{font-size:1.4rem}
+.keys-card dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 18px;margin:14px 0 16px;font-size:.9rem}
+.keys-card dt{font-family:var(--font-meta);font-size:.8rem;color:var(--ink)}
+.keys-card dd{margin:0}
+.keys-card kbd{font-family:var(--font-meta);font-size:.76rem;border:1px solid var(--rule-strong);border-bottom-width:2px;border-radius:3px;padding:1px 6px;background:var(--wash)}
+.keys-card button{font-family:var(--font-meta);font-size:.8rem;background:var(--ink);color:var(--paper);border:0;min-height:40px;padding:0 16px;cursor:pointer;border-radius:2px}
+
+/* ---------- horizontal presentation (wide screens) ---------- */
+@media (min-width:761px){
+  html,body{height:100%;overflow:hidden}
+  .deck{position:fixed;left:0;right:0;top:0;bottom:calc(var(--bar-h) + env(safe-area-inset-bottom,0px))}
+  .slide{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;visibility:hidden;opacity:0}
+  .slide.is-active{visibility:visible;opacity:1}
+  .slide.center .sheet{min-height:100%;align-content:center}
+  /* Performed: a slide changes only on her key or click. Nothing runs on load (html.ready arrives after first paint). */
+  html.ready .slide{transition:opacity 240ms var(--ease-q),transform 240ms var(--ease-q),visibility 0s linear 240ms}
+  html.ready .slide.is-active{transition:opacity 280ms var(--ease-e),transform 280ms var(--ease-e),visibility 0s linear 0s}
+}
+@media (min-width:761px) and (prefers-reduced-motion:no-preference){
+  .slide{transform:translateX(8px)}
+  .slide.past{transform:translateX(-8px)}
+  .slide.is-active{transform:none}
+}
+
+/* ---------- narrowing ---------- */
+@media (max-width:1100px){
+  .boards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .six{grid-template-columns:repeat(3,minmax(0,1fr));gap:0 14px}
+}
+@media (max-width:900px){
+  .sheet{grid-template-columns:minmax(0,1fr)}
+  .margin{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:4px 14px;border-right:0;border-bottom:1px solid var(--rule);padding:0 0 10px}
+  .margin .no{font-size:1.2rem}
+  .mocks,.cover,.dir-head,.grid2,.grid2.lean,.grid3,.laws,.rulings,.states,.defs{grid-template-columns:minmax(0,1fr)}
+  .defs>div+div,.states>div+div{margin-top:18px}
+  .test{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .test>div:nth-child(3){padding-left:0;border-left:0}
+  .positions{grid-template-columns:minmax(0,1fr)}
+  .positions>div,.positions>div+div{padding:14px 0 8px;border-left:0}
+  .positions>div+div{border-top:1px solid var(--rule-strong)}
+}
+/* ---------- stacked reading (phone) ---------- */
+@media (max-width:760px){
+  body{padding-bottom:calc(var(--bar-h) + env(safe-area-inset-bottom,0px))}
+  .slide{border-bottom:1px solid var(--rule-strong)}
+  .sheet{padding-block:28px 32px}
+  .bar .deck-name{display:none}
+  .bar-inner{justify-content:space-between}
+  .test{grid-template-columns:minmax(0,1fr)}
+  .test>div,.test>div+div{padding:12px 0 6px;border-left:0}
+  .test>div+div{border-top:1px solid var(--rule)}
+  .six{grid-template-columns:minmax(0,1fr)}
+  .curves{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .doc-row{grid-template-columns:minmax(0,1fr)}
+  /* on a phone, a stage becomes a link to the mockup (synthesis part 1) */
+  .stage,.mock-ctl .grp{display:none}
+  .phone-link{display:block;border:1px solid var(--rule-strong);background:var(--wash);padding:14px 16px;font-size:.9rem;color:var(--ink);text-decoration:none}
+  .phone-link span{display:block;font-family:var(--font-meta);font-size:.7rem;color:var(--accent);margin-top:4px}
+  /* tables fold into labelled blocks */
+  table.tbl,.tbl tbody,.tbl tr,.tbl td,.tbl tbody th{display:block;width:auto}
+  .tbl thead{display:none}
+  .tbl tr{border-top:1px solid var(--rule-strong);padding:10px 0}
+  .tbl tbody th{border-top:0;padding:0 0 6px;font-family:var(--font-display);font-size:1.05rem}
+  .tbl tr.dropped th{padding-left:0}
+  .tbl td{border-top:0;padding:4px 0}
+  .tbl td.rec-col{padding:6px 10px}
+  .tbl .mono{white-space:normal}
+  .tbl td::before{content:attr(data-label);display:block;font-family:var(--font-meta);font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+}
+@media (max-width:520px){
+  .boards{grid-template-columns:minmax(0,1fr)}
+  .curves{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){
+  html.ready .progress{transition:none}
+}
+</style>
+</head>
+<body>
+
+<main class="deck" id="deck" aria-roledescription="slide deck">
+
+<!-- 1 · Title -->
+<section class="slide center" id="s1" data-title="The paper answers a hand">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">For review</span><span class="src">US-14 · concepts.md · mockup 04</span></aside>
+    <div class="main">
+      <div class="cover">
+        <div>
+          <p class="eyebrow">Motion concepts for The Document · 26 Sep 2026</p>
+          <h1 style="margin-top:14px">The paper answers a hand</h1>
+          <p class="thesis">The Document stays still until she addresses it. Then the paper answers with what she asked for, and goes still again.</p>
+          <dl class="meta-list">
+            <dt>Concept</dt><dd>Astra (GPT-6)</dd>
+            <dt>Review</dt><dd>Astra's adversarial review; synthesis by Fable</dd>
+            <dt>Build</dt><dd>Opus</dd>
+            <dt>For</dt><dd>Kody and Leah, and whoever they invite. Seven rulings at the end. Design only.</dd>
+          </dl>
+        </div>
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>04</b>Plain Lines · the Desk at rest</span><span class="mock-ctl" role="group" aria-label="Mockup 04 frame"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/04-direction2-desk.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Rest the pointer on Ainsworth, then Delgado, or press Tab. Controls shows the mockup's own Replay.</p>
+          <div class="stage"><iframe src="mockups/04-direction2-desk.html?frame=product" data-bare="mockups/04-direction2-desk.html" title="Mockup 04: Plain Lines, the Desk" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/04-direction2-desk.html" target="_blank" rel="noopener">Open mockup 04, Plain Lines · the Desk<span>Rest on Ainsworth, then Delgado</span></a>
+        </figure>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record. Every studio, job and date in this deck is fictional.</p>
+  </div>
+</section>
+
+<!-- 2 · The ask and the feature test -->
+<section class="slide" id="s2" data-title="The ask, and the feature test">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">The ask</span><span class="src">US-14 story · doctrine-constraints §1 · VISION.md:21, 29–31, 42, 50</span></aside>
+    <div class="main stack">
+      <h2>The ask, in Kody's words</h2>
+      <blockquote class="quote" style="margin:0">Have Fable work with Astra to create a new UX concept for the designer portal where there is more motion and revealing of text on the page. At rest the page should be peaceful, large informational text that then animates and reveals the details as the designer interacts with the page. (Think the movie HER interface). Do not implement any code and have them build out some concepts for our team to review. Present these in an HTML presentation.<cite>Kody · 25 Sep 2026 · US-14</cite></blockquote>
+      <div>
+        <p class="label" style="margin-bottom:8px">The feature test, answered</p>
+        <div class="test">
+          <div><p class="label">Surface</p><p class="answer">The Document</p><p class="small">The Desk, the held document, Sheets and ⌘K. "Patina for the next twelve months." Not the iOS app, not the marketplace.</p></div>
+          <div><p class="label">Studio moment</p><p class="answer">Her first hand, workload doubling</p><p class="small">Leah's studio first. The owner is delegating for the first time and cannot afford a new system to learn.</p></div>
+          <div><p class="label">Stream</p><p class="answer">The floor</p><p class="small">The studio subscription. A clearer working surface protects renewal. Nothing here touches the margin stream.</p></div>
+          <div><p class="label">Promise</p><p class="answer">"You won't notice Patina."</p><p class="small">Success is less finding and re-finding. Never more time on screen, never engagement.</p></div>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 3 · The tension -->
+<section class="slide center" id="s3" data-title="The tension">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">The tension</span><span class="src">DECISIONS.md:390–393 (R15) · :6603 (I107) · :221–222 (D12)</span></aside>
+    <div class="main stack" style="gap:28px">
+      <p class="statement">A surface that promises not to be noticed, asked to move more.</p>
+      <p class="resolve">Ambient motion stays banned. Performed motion is the grammar.</p>
+      <div class="defs">
+        <div><p class="term banned">Ambient</p><p>Moves without her addressing the thing: a loop, a timer, a greeting on arrival. R15: "nothing on the Desk ever moves." Its one exception, the breath on the active spine marker, stays exactly as it is.</p></div>
+        <div><p class="term kept">Performed</p><p>The direct, finite consequence of her act, and reversible. The log already obeys this without naming it. I107: "All motion is interaction-triggered, R15 intact." D12: "raise-to-fill scale (~270ms; reduced-motion: crossfade)."</p></div>
+      </div>
+      <div>
+        <p class="label" style="margin-bottom:8px">Not proposed, in any direction</p>
+        <div class="refuse"><span>loops</span><span>greetings</span><span>personas</span><span>autoplay</span><span>badges</span><span>dots</span><span>counts</span><span>pulses</span></div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 4 · Her -->
+<section class="slide" id="s4" data-title="What Her actually does">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Research</span><span class="src">external-patterns §1, §7 · Fast Company, Deadline, Gizmodo, Rhizome</span></aside>
+    <div class="main stack">
+      <h2>What Her actually does</h2>
+      <p class="lede">Installing OS1, "the screen goes blank, then comes back and looks exactly the same as it did before, except now her voice comes out." The screen can be nearly empty because voice carries the work. A text tool can borrow the intent. It cannot borrow the vanishing.</p>
+      <div class="grid2">
+        <div>
+          <p class="label" style="margin-bottom:6px">Eight we borrow</p>
+          <ol class="borrow">
+            <li>A near-empty resting screen is a resolved choice about attention, not an absence of one.</li>
+            <li>Warm, restrained color can do the job chrome usually does, giving the eye one focus.</li>
+            <li>One typeface, used large, reads as considered rather than sparse.</li>
+            <li>Cutting a whole color family (Her removed blue) signals "not tech-coded" better than adding warmth.</li>
+            <li>Confirmation appears after an action, not before, so her own work stays the center.</li>
+            <li>Hand-evident graphics read as authored rather than generated.</li>
+            <li>Warmth by default is an antidote to machine-coded visual clichés.</li>
+            <li>Uncluttering comes from color restraint, not from hiding real structure.</li>
+          </ol>
+        </div>
+        <div>
+          <p class="label" style="margin-bottom:6px">Five we refuse</p>
+          <ol class="borrow no">
+            <li>No persona. A professional portal never implies it is someone.</li>
+            <li>No "the system speaks first." It inverts the promise not to court her attention.</li>
+            <li>No voice-first architecture. Voice is why Her's screens can vanish.</li>
+            <li>No narrative prop-dressing. The cigarette-case device was storytelling.</li>
+            <li>No "blank screen means nothing changed." She needs to know a save or send landed.</li>
+          </ol>
+          <p class="pull" style="margin-top:16px">Borrow the physics, not the personality: the Dynamic Island's interruptible mechanism, without its living-organism character.</p>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 5 · Precedents -->
+<section class="slide" id="s5" data-title="What the research found elsewhere">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Research</span><span class="src">external-patterns §3, §6, §7 · sources cited in the memo</span></aside>
+    <div class="main stack">
+      <h2>What the research found elsewhere</h2>
+      <div class="tbl-wrap">
+        <table class="tbl compact">
+          <thead><tr><th scope="col">Tool</th><th scope="col">Rests</th><th scope="col">Reveals</th><th scope="col">Trigger</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">iA Writer, Focus Mode</th><td data-label="Rests">The full document, evenly weighted</td><td data-label="Reveals">The active sentence; the rest dims</td><td data-label="Trigger">Cursor placement · performed</td></tr>
+            <tr><th scope="row">Notion</th><td data-label="Rests">Plain text blocks</td><td data-label="Reveals">Drag handle and +; a page preview on link hover</td><td data-label="Trigger">Hover, instant · performed, but users called the preview "disorienting"</td></tr>
+            <tr><th scope="row">Arc, Little Arc</th><td data-label="Rests">No tab strip or URL bar</td><td data-label="Reveals">URL bar; window controls</td><td data-label="Trigger">Click or ⌘L; hover after about 100ms, then a 150ms fade · performed</td></tr>
+            <tr><th scope="row">Linear</th><td data-label="Rests">Minimal chrome, keyboard first</td><td data-label="Reveals">Command palette; panes on selection</td><td data-label="Trigger">Shortcut or selection · performed</td></tr>
+            <tr><th scope="row">Dynamic Island</th><td data-label="Rests">A small black pill</td><td data-label="Reveals">An expanded live activity</td><td data-label="Trigger">Tap is performed; system events are ambient</td></tr>
+            <tr><th scope="row">Stage Manager</th><td data-label="Rests">One window; the rest as thumbnails</td><td data-label="Reveals">A prior window returns</td><td data-label="Trigger">Click, about a quarter of a second · return performed, recede ambient</td></tr>
+            <tr><th scope="row">Stripe, Vercel</th><td data-label="Rests">KPI cards; near-monochrome, color only for status</td><td data-label="Reveals">Detail on click-through</td><td data-label="Trigger">Click · still at rest, performed on drill-down</td></tr>
+            <tr><th scope="row">Things 3</th><td data-label="Rests">A plain task row</td><td data-label="Reveals">Notes, date, tags, deadline</td><td data-label="Trigger">Tap · performed</td></tr>
+            <tr><th scope="row">Kinopio</th><td data-label="Rests">Controls in view</td><td data-label="Reveals">Nothing hidden behind hover</td><td data-label="Trigger">The counter-case: "Screw minimal. I want to do real work wherever I want."</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <p class="label" style="margin-bottom:8px">What annoys professionals, and what we will not do</p>
+        <div class="refuse"><span>splash on a timer</span><span>staggered lists read daily</span><span>hover-only essential controls</span><span>a reduce-motion toggle that does nothing</span><span>glitches on frequent navigation</span><span>motion on high-frequency controls or focus rings</span></div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 6 · What the Document already does -->
+<section class="slide" id="s6" data-title="What the Document already does">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Today</span><span class="src">portal-inventory §3 · doctrine-constraints §2</span></aside>
+    <div class="main stack">
+      <h2>What the Document already does</h2>
+      <p class="lede">Every Document motion today is plain CSS. framer-motion is installed with no call sites on this surface. ⌘K and margin notes do not animate at all.</p>
+      <div class="grid2 lean">
+        <div class="tbl-wrap">
+          <table class="tbl compact">
+            <thead><tr><th scope="col">Surface</th><th scope="col">Moves</th><th scope="col">Time</th><th scope="col">Reduced motion</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Held document</th><td data-label="Moves">Pick-up: opacity, scale .986→1</td><td data-label="Time" class="mono">270ms</td><td data-label="Reduced motion">200ms crossfade</td></tr>
+              <tr><th scope="row">Room</th><td data-label="Moves">Enter; leave with a veil</td><td data-label="Time" class="mono">300ms · 380+200ms</td><td data-label="Reduced motion">Crossfade; leave at once</td></tr>
+              <tr><th scope="row">Sheet</th><td data-label="Moves">Rises 14px with opacity</td><td data-label="Time" class="mono">240–300ms</td><td data-label="Reduced motion">None</td></tr>
+              <tr><th scope="row">⌘K · margin note</th><td data-label="Moves">Nothing</td><td data-label="Time" class="mono">0ms</td><td data-label="Reduced motion">Already still</td></tr>
+              <tr class="dropped"><th scope="row">Desk roster</th><td data-label="Moves">Cards rise 14px, staggered on first paint. All three directions drop it.</td><td data-label="Time" class="mono">320ms +60ms/card</td><td data-label="Reduced motion">None</td></tr>
+              <tr><th scope="row">Fold seam</th><td data-label="Moves">Fade and drop</td><td data-label="Time" class="mono">300ms</td><td data-label="Reduced motion">No fallback at all</td></tr>
+              <tr><th scope="row">Spine marker</th><td data-label="Moves">The breath, 1↔.62 opacity. The one ambient motion.</td><td data-label="Time" class="mono">3s loop</td><td data-label="Reduced motion">Still</td></tr>
+              <tr><th scope="row">Strata fill · sweep</th><td data-label="Moves">Fill on stage change; sweep while loading</td><td data-label="Time" class="mono">600ms · 2.2s</td><td data-label="Reduced motion">Static fill</td></tr>
+              <tr><th scope="row">Wash · Scored Ink</th><td data-label="Moves">Hover sweep (focus fills at once); ink press</td><td data-label="Time" class="mono">200–260 · 150–260ms</td><td data-label="Reduced motion">Flat, instant</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <p class="label" style="margin-bottom:6px">Standing rulings the concepts touch</p>
+          <ul class="ruled tight">
+            <li><b>R15</b> Nothing on the Desk ever moves; the breath is the one exception.</li>
+            <li><b>D12</b> The paper is the screen; pick-up is the one whole-surface transform.</li>
+            <li><b>D14</b> Sheets: pull, glance, put back. The document stays mounted.</li>
+            <li><b>R35</b> Progress is the fill; any wait is the sweep, never a spinner.</li>
+            <li><b>R150</b> Name at 34px, standing fact at 16px, region heads silent.</li>
+            <li><b>R22 · D8</b> A folder claims an available act. No badges or pulsing counts.</li>
+            <li><b>D4</b> No shadows; depth is value contrast.</li>
+            <li><b>Truth-framing</b> Motion reveals a fact that occurred, never a guess.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 7 · The grammar -->
+<section class="slide" id="s7" data-title="The grammar: at rest and addressed">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Grammar</span><span class="src">concepts.md §1 Two states · Large type and density</span></aside>
+    <div class="main stack">
+      <div class="states">
+        <div>
+          <p class="name">At rest</p>
+          <p class="def"><b>Large:</b> identity, or the fact explaining why this needs a hand. <b>Small:</b> ownership, date, vitals, section names, action words. <b>Absent:</b> secondary explanation behind visible doorways. <b>Never absent:</b> an owed act, error, permission explanation, field label, decision-critical amount or confirmation.</p>
+        </div>
+        <div>
+          <p class="name">Addressed</p>
+          <p class="def">The large line stays put. A bounded block (fact, act, doorway) arrives as one unit from the nearest seam: reading order, not delayed beats. Then everything stays still.</p>
+        </div>
+      </div>
+      <div class="specimen grid2">
+        <p class="small">Large means 34px Playfair Display, "not a slogan at 70px." It names the work or a sourced standing fact, never a greeting. One address adds one reason (up to two lines), two fact rows and one doorway. Wrap, never truncate.</p>
+        <p class="small">Mandatory floor in every direction: the Desk's needs and day's line (R143), the editable household and vitals line, the Room head action, field labels and complete ⌘K rows stand at rest.</p>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 8 · The vocabulary -->
+<section class="slide" id="s8" data-title="The vocabulary: nine moves">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Grammar</span><span class="src">concepts.md §1 Nine moves · Bands and easing</span></aside>
+    <div class="main stack">
+      <h2>Nine moves, and nothing else</h2>
+      <div class="tbl-wrap">
+        <table class="tbl compact">
+          <thead><tr><th scope="col">Move</th><th scope="col">Trigger · what moves · axis</th><th scope="col">Duration · ease</th><th scope="col">Reduced motion</th><th scope="col">Meaning</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Ink answers</th><td data-label="Trigger · what moves">Address labeled seam · existing score/tint · no displacement</td><td data-label="Duration · ease" class="mono">100ms E</td><td data-label="Reduced motion">Instant tint</td><td data-label="Meaning">This word is usable</td></tr>
+            <tr><th scope="row">Detail rises</th><td data-label="Trigger · what moves">Address truth line · complete secondary block in reserved well · y:+4→0px</td><td data-label="Duration · ease" class="mono">160ms E</td><td data-label="Reduced motion">Instant final position</td><td data-label="Meaning">What that line rests on</td></tr>
+            <tr><th scope="row">Margin opens</th><td data-label="Trigger · what moves">Address existing margin item · explanation within rail allocation · x:+4→0px</td><td data-label="Duration · ease" class="mono">180ms E</td><td data-label="Reduced motion">Instant explanation</td><td data-label="Meaning">This belongs here</td></tr>
+            <tr><th scope="row">Paper is taken</th><td data-label="Trigger · what moves">Activate Pick up · full-bleed paper · scale .986→1 plus opacity</td><td data-label="Duration · ease" class="mono">270ms O, existing D12</td><td data-label="Reduced motion">Existing 200ms opacity-only</td><td data-label="Meaning">Work now in hand</td></tr>
+            <tr><th scope="row">Sheet is drawn</th><td data-label="Trigger · what moves">Activate ledger/form doorway · laid sheet · y:+14→0px, paper opacity .6→1</td><td data-label="Duration · ease" class="mono">240ms E, live DocSheet</td><td data-label="Reduced motion">Instant sheet</td><td data-label="Meaning">Glance without leaving</td></tr>
+            <tr><th scope="row">Sheet is returned</th><td data-label="Trigger · what moves">Put back/Esc/permitted backdrop · same sheet · y:0→+14px, veil fades</td><td data-label="Duration · ease" class="mono">180ms Q, proposed inverse</td><td data-label="Reduced motion">Instant, restore focus</td><td data-label="Meaning">Work underneath was kept</td></tr>
+            <tr><th scope="row">Ink lands</th><td data-label="Trigger · what moves">Action press · existing Scored Ink, then confirmed state in reserved status line</td><td data-label="Duration · ease" class="mono">Existing 150–260ms, linear/E</td><td data-label="Reduced motion">Instant press/result</td><td data-label="Meaning">The act landed</td></tr>
+            <tr><th scope="row">Detail recedes</th><td data-label="Trigger · what moves">Address another region or close · optional block · y:0→+4px, margin x:0→+4</td><td data-label="Duration · ease" class="mono">120ms Q</td><td data-label="Reduced motion">Instant hide</td><td data-label="Meaning">Finished looking, nothing discarded</td></tr>
+            <tr><th scope="row">Paper is put down</th><td data-label="Trigger · what moves">Explicit Put down/unconsumed Esc · held paper · scale 1→.986, opacity out</td><td data-label="Duration · ease" class="mono">200ms Q, proposed D12 inverse</td><td data-label="Reduced motion">Instant Desk return</td><td data-label="Meaning">Leave, keep its place</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid2 lean">
+        <div class="curves" aria-label="The three easing curves, plotted to scale">
+          <figure class="curve">
+            <svg viewBox="0 0 110 110" role="img" aria-label="E, cubic-bezier .22, 1, .36, 1"><path class="ax" d="M5 5V105H105"/><path class="lin" d="M5 105L105 5"/><path class="c" d="M5 105C27 5 41 5 105 5"/></svg>
+            <figcaption>E · editorial<span>.22, 1, .36, 1 · reveals, Sheet drawn</span></figcaption>
+          </figure>
+          <figure class="curve">
+            <svg viewBox="0 0 110 110" role="img" aria-label="Q, cubic-bezier .42, 0, .58, 1"><path class="ax" d="M5 5V105H105"/><path class="lin" d="M5 105L105 5"/><path class="c" d="M5 105C47 105 63 5 105 5"/></svg>
+            <figcaption>Q · ease-in-out<span>.42, 0, .58, 1 · recedes, returns</span></figcaption>
+          </figure>
+          <figure class="curve">
+            <svg viewBox="0 0 110 110" role="img" aria-label="O, cubic-bezier 0, 0, .58, 1"><path class="ax" d="M5 5V105H105"/><path class="lin" d="M5 105L105 5"/><path class="c" d="M5 105C5 105 63 5 105 5"/></svg>
+            <figcaption>O · ease-out<span>0, 0, .58, 1 · pick-up only</span></figcaption>
+          </figure>
+        </div>
+        <div class="stack-sm">
+          <dl class="bands">
+            <dt>120–180ms</dt><dd>Reveal</dd>
+            <dt>100–150ms</dt><dd>Recede</dd>
+            <dt>200–300ms</dt><dd>Structural</dd>
+            <dt>0ms</dt><dd>Focus ring, ⌘K</dd>
+          </dl>
+          <p class="small faint">No scale, blur, letter-building or masks on text: "glyph resizing costs too much under a reading eye." No spring, bounce or overshoot.</p>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 9 · The rules -->
+<section class="slide" id="s9" data-title="The rules">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Grammar</span><span class="src">concepts.md §1 Laws (restored in SQ-301)</span></aside>
+    <div class="main stack">
+      <h2>The rules every direction keeps</h2>
+      <ul class="laws">
+        <li><h3>Never before her act</h3><p>Mount, incoming updates and passive intersection cannot invent intent. Pointer address is a 100ms cancellable dwell in a labeled seam; focus, click, tap, Enter and Space are immediate.</p></li>
+        <li><h3>Never mid-task</h3><p>Focus inside, text selection, dirty input, validation, a pending action or an open Sheet holds the region. Scrolling or hovering elsewhere cannot collapse it. Animation never saves, sends or discards.</p></li>
+        <li><h3>No lure</h3><p>No new badge, dot, count or pulse; no count-up, list stagger, entry ceremony, auto-scroll or snapping.</p></li>
+        <li><h3>Type never reflows under a reading eye</h3><p>Wells reserve content-sized space before interaction and never shrink. A full-section opening lays out once, anchored to its heading.</p></li>
+        <li><h3>Interruptible</h3><p>Reverse from the current frame, with no flourish queue, finish-before-close or input lock. Semantic state follows the act, not the animation's end.</p></li>
+        <li><h3>Reads frozen</h3><p>A frozen frame never falsely implies that a save succeeded, a record vanished or a different engagement became active. Find, print and plain reading expose the complete text.</p></li>
+        <li><h3>Keyboard parity</h3><p>Pointer and keyboard reveal identical facts and acts. Touch uses the same visible Detail control, never a long-press. Targets at least 44px.</p></li>
+        <li><h3>Motion off keeps everything</h3><p>Reduced motion preserves every fact, act and hold. No transform, parallax or smooth scroll. The OS preference and the mockup toggle both count.</p></li>
+      </ul>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 10 · Direction 1: Open Edges -->
+<section class="slide" id="s10" data-title="Direction 1 · Open Edges">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Direction 1</span><span class="src">concepts.md §2.1, §3</span></aside>
+    <div class="main stack">
+      <div class="dir-head">
+        <div class="stack-sm">
+          <p class="label">Direction 1 of 3</p>
+          <h2>Open Edges</h2>
+          <p class="thesis-line">Today's Document, with its seams made useful. A need, fold or margin item answers where it already stands. Nothing clears for an entrance; there is no new reading mode.</p>
+        </div>
+        <ul class="moves-mini" aria-label="Open Edges timing">
+          <li><span>Explanation y +4→0</span><span>160ms E</span></li>
+          <li><span>Margin x +4→0, inside the rail</span><span>180ms E</span></li>
+          <li><span>Sheet drawn · returned</span><span>240ms E · 180ms Q</span></li>
+        </ul>
+      </div>
+      <div class="boards">
+        <figure class="mini"><figcaption><b>Desk</b> at rest</figcaption><div class="pg">
+          <p class="m-head">Middle West · Find anything</p>
+          <p class="m-big">Finish approval today.</p>
+          <p class="m-fact">Ainsworth · Finish needed</p>
+          <p class="m-act">Review finish · Detail</p>
+          <div class="m-well empty"></div>
+          <p class="m-fact">Delgado · Review delivery</p>
+        </div></figure>
+        <figure class="mini"><figcaption><b>Desk</b> addressed</figcaption><div class="pg">
+          <p class="m-head">Middle West · Find anything</p>
+          <p class="m-big">Finish approval today.</p>
+          <p class="m-fact">Ainsworth · Finish needed</p>
+          <p class="m-act">Review finish · Close detail</p>
+          <div class="m-well risen"><span>Sample recorded Sep 24.</span><span>Workshop awaits finish choice.</span></div>
+          <p class="m-fact">Delgado · Review delivery</p>
+        </div></figure>
+        <figure class="mini"><figcaption><b>Document</b> at rest</figcaption><div class="pg">
+          <p class="m-name">Ainsworth Residence</p>
+          <p class="m-sm">Household · vitals · Edit</p>
+          <p class="m-fact">Finish needed · Review</p>
+          <div class="m-text" aria-hidden="true"></div>
+          <p class="m-act">Detail</p>
+          <div class="m-well empty"></div>
+        </div></figure>
+        <figure class="mini"><figcaption><b>Document</b> addressed</figcaption><div class="pg">
+          <p class="m-name">Ainsworth Residence</p>
+          <p class="m-sm">Household · vitals · Edit</p>
+          <p class="m-fact">Finish needed · Review</p>
+          <div class="m-text" aria-hidden="true"></div>
+          <p class="m-act">Close detail</p>
+          <div class="m-well risen"><span>White oak, clear oil.</span><span>Spring Green workshop.</span></div>
+        </div></figure>
+      </div>
+      <dl class="six">
+        <div><dt>Arrive at Desk</dt><dd>Current readable needs; no roster stagger</dd></div>
+        <div><dt>Pick up</dt><dd>Existing 270ms raise, no extra head entrance</dd></div>
+        <div><dt>Read then act</dt><dd>Optional Detail; explicit full Unfold</dd></div>
+        <div><dt>Sheet</dt><dd>240ms draw / 180ms return; state retained</dd></div>
+        <div><dt>⌘K</dt><dd>Instant and complete</dd></div>
+        <div><dt>First hand</dt><dd>Same controls as Leah; eligible static note only</dd></div>
+      </dl>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record. Storyboards redrawn from concepts.md; dashed boxes are reserved paper.</p>
+  </div>
+</section>
+
+<!-- 11 · Direction 1 mockups -->
+<section class="slide" id="s11" data-title="Open Edges · Desk and document">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Direction 1</span><span class="src">mockups 01, 02 · concepts.md §5</span></aside>
+    <div class="main stack">
+      <h2>Open Edges, on the Desk and in the document</h2>
+      <div class="mocks">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>01</b>The need reads before the hand moves</span><span class="mock-ctl" role="group" aria-label="Mockup 01 frame"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/01-direction1-desk.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Rest the pointer on the Ainsworth need, or Tab to its Detail. Review finish picks up the paper.</p>
+          <div class="stage"><iframe src="mockups/01-direction1-desk.html?frame=product" data-bare="mockups/01-direction1-desk.html" title="Mockup 01: Open Edges, the Desk" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/01-direction1-desk.html" target="_blank" rel="noopener">Open mockup 01, Open Edges · the Desk<span>Tap Detail beside Ainsworth</span></a>
+        </figure>
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>02</b>The margin opens without moving the work</span><span class="mock-ctl" role="group" aria-label="Mockup 02 frame"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/02-direction1-document.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Hover or Tab to Detail beside Workshop note in the margin. Unfold opens Procurement.</p>
+          <div class="stage"><iframe src="mockups/02-direction1-document.html?frame=product" data-bare="mockups/02-direction1-document.html" title="Mockup 02: Open Edges, the held document" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/02-direction1-document.html" target="_blank" rel="noopener">Open mockup 02, Open Edges · the held document<span>Detail draws the note as an anchored Sheet</span></a>
+        </figure>
+      </div>
+      <p class="mock-note">Paper shows the product alone. Controls loads the same file with its caption and review strip: Replay, Reduced motion, Pause and Slow ×4. Slow ×4 is a review aid, not product timing.</p>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 12 · Direction 1 Sheet, doctrine, kill risk -->
+<section class="slide" id="s12" data-title="Open Edges · Sheet, rulings, risk">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Direction 1</span><span class="src">mockup 03 · concepts.md §2.1 · SQ-277 VERDICT</span></aside>
+    <div class="main stack">
+      <div class="grid2 lean">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>03</b>A glance, then the same place</span><span class="mock-ctl" role="group" aria-label="Mockup 03 frame"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/03-direction1-sheet.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Select a word in the draft, then Accounts. Esc puts the Sheet back; the selection is still there.</p>
+          <div class="stage"><iframe src="mockups/03-direction1-sheet.html?frame=product" data-bare="mockups/03-direction1-sheet.html" title="Mockup 03: Open Edges, the Accounts sheet" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/03-direction1-sheet.html" target="_blank" rel="noopener">Open mockup 03, Open Edges · Accounts sheet<span>Accounts, then Put back</span></a>
+        </figure>
+        <div class="stack">
+          <div>
+            <div class="doc-row"><span class="k">Complies</span><span>D1–D11 (D4's named exceptions only), D12/D14, R21/R22/R35/R95/R143, all R150 type and leader rules, I107 and truth-framing.</span></div>
+            <div class="doc-row"><span class="k amend">Amends</span><span>R15, for performed seams. Names the finite inverse put-down and the Sheet exit. No R150 amendment.</span></div>
+            <div class="doc-row"><span class="k">Motion off</span><span>Explanations and Sheets are instant; pick-up is the 200ms opacity-only fade. The same explicit unfolding and the same facts.</span></div>
+            <div class="doc-row"><span class="k">Rulings</span><span>R-DM1 B · R-DM2 A · R-DM3 A · R-DM4 A</span></div>
+          </div>
+          <div class="kill">
+            <p class="label">Kill risk</p>
+            <p class="q">"A seam merely wiggles information already visible. Delete the reveal instead of decorating it."</p>
+          </div>
+          <p class="small faint">Review, before fixes: yes, as the intended conservative comparison, not as a complete answer to the Her ask. Astra's own doubt: it "may be too slight."</p>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 13 · Direction 2: Plain Lines -->
+<section class="slide" id="s13" data-title="Direction 2 · Plain Lines">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Direction 2</span><span class="src">concepts.md §2.2, §3</span></aside>
+    <div class="main stack">
+      <div class="dir-head">
+        <div class="stack-sm">
+          <p class="label">Direction 2 of 3</p>
+          <h2>Plain Lines</h2>
+          <p class="thesis-line">The screen-only Her direction: a few large, complete work sentences with enough small print to act honestly. The work speaks, never Patina. Detail rises under the line she addresses; the line neither shrinks nor moves.</p>
+        </div>
+        <ul class="moves-mini" aria-label="Plain Lines timing">
+          <li><span>Supporting block y +4→0</span><span>160ms E</span></li>
+          <li><span>Next line: old recedes, new rises, together</span><span>120ms Q · 160ms E</span></li>
+          <li><span>Show all detail, a latch</span><span>0ms</span></li>
+        </ul>
+      </div>
+      <div class="boards">
+        <figure class="mini"><figcaption><b>Desk</b> at rest</figcaption><div class="pg">
+          <p class="m-head">Middle West · Show all detail</p>
+          <p class="m-id">Ainsworth</p>
+          <p class="m-big">Finish needed.</p>
+          <p class="m-act">Review finish · Detail</p>
+          <div class="m-well empty"></div>
+          <p class="m-id">Delgado</p>
+          <p class="m-big">Delivery needed.</p>
+        </div></figure>
+        <figure class="mini"><figcaption><b>Desk</b> addressed</figcaption><div class="pg">
+          <p class="m-head">Middle West · Show all detail</p>
+          <p class="m-id">Ainsworth</p>
+          <p class="m-big">Finish needed.</p>
+          <p class="m-act">Review finish · Close detail</p>
+          <div class="m-well risen"><span>White oak sample recorded.</span><span>Workshop awaits clear oil.</span><span class="m-act">Open record</span></div>
+          <p class="m-id">Delgado</p>
+          <p class="m-big">Delivery needed.</p>
+        </div></figure>
+        <figure class="mini"><figcaption><b>Document</b> at rest</figcaption><div class="pg">
+          <p class="m-sm">Ainsworth · household / vitals</p>
+          <p class="m-id">Direction</p>
+          <p class="m-big">Finish needed.</p>
+          <p class="m-act">Review finish · Detail</p>
+          <div class="m-well empty"></div>
+          <p class="m-id">Procurement</p>
+          <p class="m-big">Delivery not booked.</p>
+        </div></figure>
+        <figure class="mini"><figcaption><b>Document</b> addressed</figcaption><div class="pg">
+          <p class="m-sm">Ainsworth · household / vitals</p>
+          <p class="m-id">Direction</p>
+          <p class="m-big">Finish needed.</p>
+          <p class="m-act">Review finish · Close detail</p>
+          <div class="m-well risen"><span>Sample recorded Sep 24.</span><span>Spring Green workshop.</span><span class="m-act">Open the finish record</span></div>
+          <p class="m-id">Procurement</p>
+          <p class="m-big">Delivery not booked.</p>
+        </div></figure>
+      </div>
+      <dl class="six">
+        <div><dt>Arrive at Desk</dt><dd>Large named needs; never blankness</dd></div>
+        <div><dt>Pick up</dt><dd>Same 270ms raise; required facts already there</dd></div>
+        <div><dt>Read then act</dt><dd>Address raises detail; Enter/tap pins; explicit act opens full work</dd></div>
+        <div><dt>Sheet</dt><dd>Same; rows and labels never sparse</dd></div>
+        <div><dt>⌘K</dt><dd>Dense instant counterweight</dd></div>
+        <div><dt>First hand</dt><dd>Visible Detail and Show all; no hover discovery required</dd></div>
+      </dl>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record. Storyboards redrawn from concepts.md; dashed boxes are reserved paper.</p>
+  </div>
+</section>
+
+<!-- 14 · Direction 2 mockups -->
+<section class="slide" id="s14" data-title="Plain Lines · Desk and document">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Direction 2</span><span class="src">mockups 04, 05 · concepts.md §5</span></aside>
+    <div class="main stack">
+      <h2>Plain Lines, on the Desk and in the document</h2>
+      <div class="mocks">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>04</b>The work in a few lines; the rest when asked</span><span class="mock-ctl" role="group" aria-label="Mockup 04 frame, direction slide"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/04-direction2-desk.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Rest on Ainsworth, then Delgado: one recedes as the other rises. Try Show all detail.</p>
+          <div class="stage"><iframe src="mockups/04-direction2-desk.html?frame=product" data-bare="mockups/04-direction2-desk.html" title="Mockup 04: Plain Lines, the Desk" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/04-direction2-desk.html" target="_blank" rel="noopener">Open mockup 04, Plain Lines · the Desk<span>Tap Detail, then Show all detail</span></a>
+        </figure>
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>05</b>The sentence stays; its evidence comes forward</span><span class="mock-ctl" role="group" aria-label="Mockup 05 frame"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/05-direction2-document.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Rest on or Tab to the Direction sentence. Detail pins it; Review finish opens the record.</p>
+          <div class="stage"><iframe src="mockups/05-direction2-document.html?frame=product" data-bare="mockups/05-direction2-document.html" title="Mockup 05: Plain Lines, the held document" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/05-direction2-document.html" target="_blank" rel="noopener">Open mockup 05, Plain Lines · the held document<span>Tap Detail under Direction</span></a>
+        </figure>
+      </div>
+      <p class="mock-note">Built at full strength (34px needs, sparse rest, a working Show all), not as a straw man.</p>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 15 · Direction 2 command, doctrine, kill risk -->
+<section class="slide" id="s15" data-title="Plain Lines · ⌘K, rulings, risk">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Direction 2</span><span class="src">mockup 06 · concepts.md §2.2 · SQ-277 VERDICT</span></aside>
+    <div class="main stack">
+      <div class="grid2 lean">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>06</b>When the question is exact, the answer is immediate</span><span class="mock-ctl" role="group" aria-label="Mockup 06 frame"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/06-direction2-command.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Click into the frame, press ⌘K or Ctrl-K, arrow to Accounts and press Enter. Or Esc.</p>
+          <div class="stage"><iframe src="mockups/06-direction2-command.html?frame=product" data-bare="mockups/06-direction2-command.html" title="Mockup 06: Plain Lines, Find anything" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/06-direction2-command.html" target="_blank" rel="noopener">Open mockup 06, Plain Lines · Find anything<span>Tap Find anything, then Accounts</span></a>
+        </figure>
+        <div class="stack">
+          <div>
+            <div class="doc-row"><span class="k">Complies</span><span>D1–D11, full-bleed D12, D14, R21/R22/R35/R95, R143 visible needs and day's line, I107, truth-framing and the mandatory floor.</span></div>
+            <div class="doc-row"><span class="k amend">Amends</span><span>R15, plus R150 R3/R6 and band-only leader allocation for large section facts without duplication. Needs approval for less secondary roster density than R143 treats today.</span></div>
+            <div class="doc-row"><span class="k">Motion off</span><span>The same sparse/dense choice, with detail instant and no type travel.</span></div>
+            <div class="doc-row"><span class="k">Rulings</span><span>R-DM1 B · R-DM2 B · R-DM3 B · R-DM5 B then C</span></div>
+          </div>
+          <div class="kill">
+            <p class="label">Kill risk</p>
+            <p class="q">Comparing work now means opening several lines. "Permanent use of Show all means the sparse resting premise failed, not that users need training."</p>
+          </div>
+          <p class="small faint">Review, before fixes: yes, as the strongest expression of the ask; its sparse resting hierarchy is honestly built.</p>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 16 · Direction 3: Reading Line -->
+<section class="slide" id="s16" data-title="Direction 3 · Reading Line">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Direction 3</span><span class="src">concepts.md §2.3, §3</span></aside>
+    <div class="main stack">
+      <div class="dir-head">
+        <div class="stack-sm">
+          <p class="label">Direction 3 of 3</p>
+          <h2>Reading Line</h2>
+          <p class="thesis-line">One paper column, addressed by scrolling. A large fact begins each section; bounded detail resolves at the reading line, then stays still. "It should feel like following a page with a finger, not operating a slideshow."</p>
+        </div>
+        <ul class="moves-mini" aria-label="Reading Line timing">
+          <li><span>Scroll-address y +4→0, once per crossing</span><span>160ms E</span></li>
+          <li><span>Hold by focus, tap or act</span><span>0ms</span></li>
+          <li><span>Offscreen, unheld recede</span><span>120ms Q</span></li>
+          <li><span>Reading line at clamp(112px, 28vh, 200px)</span><span>24px hysteresis</span></li>
+        </ul>
+      </div>
+      <div class="boards">
+        <figure class="mini"><figcaption><b>Desk</b> at rest</figcaption><div class="pg">
+          <p class="m-head">Middle West</p>
+          <p class="m-id">Ainsworth</p>
+          <p class="m-big">Finish needed.</p>
+          <p class="m-act">Review finish · Detail</p>
+          <div class="m-well empty"></div>
+          <p class="m-id">Delgado</p>
+          <p class="m-big">Delivery needed.</p>
+        </div></figure>
+        <figure class="mini"><figcaption><b>Desk</b> at the reading line</figcaption><div class="pg">
+          <p class="m-head">Middle West</p>
+          <p class="m-id">Ainsworth</p>
+          <p class="m-big">Finish needed.</p>
+          <div class="m-line" aria-hidden="true"></div>
+          <p class="m-act">Review finish · Detail</p>
+          <div class="m-well risen"><span>Sample recorded Sep 24.</span><span>Workshop awaits clear oil.</span><span class="m-act">Open record</span></div>
+          <p class="m-id">Delgado</p>
+          <p class="m-big">Delivery needed.</p>
+        </div></figure>
+        <figure class="mini"><figcaption><b>Document</b> at rest</figcaption><div class="pg">
+          <p class="m-sm">Ainsworth · household / vitals</p>
+          <p class="m-id">Direction</p>
+          <p class="m-big">Finish needed.</p>
+          <p class="m-act">Review finish · Detail</p>
+          <div class="m-well empty"></div>
+          <p class="m-id">Procurement</p>
+        </div></figure>
+        <figure class="mini"><figcaption><b>Document</b> addressed by scroll</figcaption><div class="pg">
+          <p class="m-id">Direction</p>
+          <p class="m-big">Finish needed.</p>
+          <div class="m-line" aria-hidden="true"></div>
+          <p class="m-act">Review finish · Detail</p>
+          <div class="m-well risen"><span>Sample recorded Sep 24.</span><span>Spring Green workshop.</span><span class="m-act">Open the finish record</span></div>
+          <p class="m-id">Procurement</p>
+        </div></figure>
+      </div>
+      <dl class="six">
+        <div><dt>Arrive at Desk</dt><dd>Single-column needs, all visible</dd></div>
+        <div><dt>Pick up</dt><dd>Same 270ms raise, into one reading column</dd></div>
+        <div><dt>Read then act</dt><dd>Scroll or Detail addresses; entering work pins it against later scroll</dd></div>
+        <div><dt>Sheet</dt><dd>Same; reading-line updates suspended beneath, anchor restored</dd></div>
+        <div><dt>⌘K</dt><dd>Instant jumps; with put-down, the only designed cuts between reading contexts</dd></div>
+        <div><dt>First hand</dt><dd>Read naturally or tap Detail; no threshold knowledge required</dd></div>
+      </dl>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record. Storyboards redrawn from concepts.md; dashed boxes are reserved paper.</p>
+  </div>
+</section>
+
+<!-- 17 · Direction 3 mockups -->
+<section class="slide" id="s17" data-title="Reading Line · Desk and document">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Direction 3</span><span class="src">mockups 07, 08 · concepts.md §5</span></aside>
+    <div class="main stack">
+      <h2>Reading Line, on the Desk and in the document</h2>
+      <div class="mocks">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>07</b>Scroll finds the next piece of work, without pulling the page</span><span class="mock-ctl" role="group" aria-label="Mockup 07 frame"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/07-direction3-desk.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Scroll slowly inside the frame, past Ainsworth and Delgado, then back up.</p>
+          <div class="stage"><iframe src="mockups/07-direction3-desk.html?frame=product" data-bare="mockups/07-direction3-desk.html" title="Mockup 07: Reading Line, the Desk" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/07-direction3-desk.html" target="_blank" rel="noopener">Open mockup 07, Reading Line · the Desk<span>Scroll slowly</span></a>
+        </figure>
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>08</b>Where she stops is where the paper stays open</span><span class="mock-ctl" role="group" aria-label="Mockup 08 frame"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/08-direction3-document.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Scroll slowly inside the frame. Review finish pins the section; ⌘K jumps between sections.</p>
+          <div class="stage"><iframe src="mockups/08-direction3-document.html?frame=product" data-bare="mockups/08-direction3-document.html" title="Mockup 08: Reading Line, the held document" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/08-direction3-document.html" target="_blank" rel="noopener">Open mockup 08, Reading Line · the held document<span>Scroll, then Review finish</span></a>
+        </figure>
+      </div>
+      <p class="mock-note">Each Reading Line page carries a 50vh run-out below its last section so that section can reach the reading line. It is real reading length, not free polish.</p>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 18 · Direction 3 Sheet, doctrine, kill risk -->
+<section class="slide" id="s18" data-title="Reading Line · Sheet, rulings, risk">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Direction 3</span><span class="src">mockup 09 · concepts.md §2.3 · SQ-277 VERDICT</span></aside>
+    <div class="main stack">
+      <div class="grid2 lean">
+        <figure class="mock" data-w="1280">
+          <figcaption class="mock-bar"><span class="mock-name"><b>09</b>Put it back and carry on, not start again</span><span class="mock-ctl" role="group" aria-label="Mockup 09 frame"><span class="grp"><button type="button" data-w="1280" aria-pressed="true">1280</button><button type="button" data-w="390" aria-pressed="false">390</button></span><span class="grp"><button type="button" data-frame="product" aria-pressed="true">Paper</button><button type="button" data-frame="controls" aria-pressed="false">Controls</button></span><a href="mockups/09-direction3-sheet.html" target="_blank" rel="noopener">Open full size</a></span></figcaption>
+          <p class="hint"><span class="label">To address it</span>Accounts, then Esc, then scroll: addressing resumes where she left off.</p>
+          <div class="stage"><iframe src="mockups/09-direction3-sheet.html?frame=product" data-bare="mockups/09-direction3-sheet.html" title="Mockup 09: Reading Line, the Sheet return" loading="lazy"></iframe></div>
+          <a class="phone-link" href="mockups/09-direction3-sheet.html" target="_blank" rel="noopener">Open mockup 09, Reading Line · Sheet return<span>Accounts, Put back, then scroll</span></a>
+        </figure>
+        <div class="stack">
+          <div>
+            <div class="doc-row"><span class="k">Complies</span><span>D1/D2/D4/D6–D11, the D12 full-bleed principle, D14, R21/R22/R35/R95/R143, I107 and truth-framing. D5 margin ownership stays; this is not a feed.</span></div>
+            <div class="doc-row"><span class="k amend">Amends</span><span>R15; R150 band-only and silent-head allocation; D12 desktop rails and the D3 collapse boundary, for single-column anchored margin access at every width.</span></div>
+            <div class="doc-row"><span class="k">Motion off</span><span>All optional summaries stand visible and there is no automatic scroll reveal. Full-section acts and holds remain.</span></div>
+            <div class="doc-row"><span class="k">Rulings</span><span>R-DM1 B · R-DM2 C · R-DM3 B · R-DM4 B · R-DM6 B</span></div>
+          </div>
+          <div class="kill">
+            <p class="label">Kill risk</p>
+            <p class="q">Blank wells lengthen the work, and scroll is an imperfect proxy for reading. "Losing her place or scrolling twice for one fact kills the direction."</p>
+          </div>
+          <p class="small faint">Review, before fixes: partly. Reverse scrolling failed its own kill test, so the scroll demonstration was rejected until repaired. SQ-301 repaired it; nobody has walked it yet.</p>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 19 · Trade-offs -->
+<section class="slide" id="s19" data-title="Trade-offs">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Compare</span><span class="src">concepts.md §4</span></aside>
+    <div class="main stack">
+      <div class="stack-sm">
+        <h2>Trade-offs across the three</h2>
+        <p class="small faint">"These are design judgments to test, not measured productivity claims."</p>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl compact">
+          <thead><tr><th scope="col">Test</th><th scope="col">Open Edges</th><th scope="col">Plain Lines</th><th scope="col">Reading Line</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Quiet at rest</th><td data-label="Open Edges">Familiar working density, fully still</td><td data-label="Plain Lines">Fewest visible secondary facts; broad paper between lines</td><td data-label="Reading Line">Still single column; more blank paper outside the reading place</td></tr>
+            <tr><th scope="row">Time-to-detail</th><td data-label="Open Edges">Essential work 0ms; optional block 160ms after focus/tap, 260ms from pointer entry including dwell</td><td data-label="Plain Lines">Same preview timing; more facts require that step; Show all 0ms</td><td data-label="Reading Line">Scroll travel is variable, then 160ms; tap/focus alternative 160ms</td></tr>
+            <tr><th scope="row">Scannability</th><td data-label="Open Edges">Closest to today; little lost</td><td data-label="Plain Lines">Needs remain scannable, cross-job context suffers; keyboard sweep/Show all recover it</td><td data-label="Reading Line">Sequential reading strong, nonadjacent comparison weak; ⌘K jumps rather than compares</td></tr>
+            <tr><th scope="row">First-week hand</th><td data-label="Open Edges">Existing words and seams; least new learning</td><td data-label="Plain Lines">Detail is visible, but the difference between preview and held work must be learned</td><td data-label="Reading Line">Natural scrolling helps; automatic disappearance is harder to predict</td></tr>
+            <tr><th scope="row">Phone</th><td data-label="Open Edges">Existing layout, visible tap targets; no hover dependency</td><td data-label="Plain Lines">Large truths wrap, reducing jobs visible at once; show-all can be long</td><td data-label="Reading Line">Native strength, but reserved wells increase thumb travel; never scroll-lock</td></tr>
+            <tr><th scope="row">Reduced-motion parity</th><td data-label="Open Edges">Same layout and states, small reveals instant</td><td data-label="Plain Lines">Same sparse/dense choice, instant transitions</td><td data-label="Reading Line">All summaries visible, same facts/acts; visual sparsity is intentionally not identical</td></tr>
+            <tr><th scope="row">Doctrine amendments</th><td data-label="Open Edges">R15 performed exception; inverse exits named</td><td data-label="Plain Lines">R15 plus R150 fact/type/leader allocation and secondary roster-density ruling</td><td data-label="Reading Line">R15/R150 plus D12 rail layout and D3 all-width collapse</td></tr>
+            <tr><th scope="row">Build cost</th><td data-label="Open Edges"><b>S</b> · existing seams/overlays, optional wells</td><td data-label="Plain Lines"><b>M</b> · consistent disclosure/hold state and density fallback</td><td data-label="Reading Line"><b>L</b> · reading-position ownership, offscreen recede, geometry, selection and responsive interaction</td></tr>
+            <tr><th scope="row">"You won't notice Patina"</th><td data-label="Open Edges">The answer appears where her hand already is</td><td data-label="Plain Lines">The tool withdraws, but may make her ask too often</td><td data-label="Reading Line">The reading place becomes the address, but may make her manage that address</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 20 · Recommendation -->
+<section class="slide" id="s20" data-title="Recommendation: two positions">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Recommend</span><span class="src">concepts.md §4 · §7 · SQ-280 synthesis part 1</span></aside>
+    <div class="main stack">
+      <h2>Two honest positions</h2>
+      <p class="ask-line">R-DM1 is common ground: all three directions need performed motion allowed and ambient motion still banned. The decision this deck asks for is <b>R-DM2</b>, how much may disappear at rest.</p>
+      <div class="positions">
+        <div>
+          <p class="who">Astra, as the designer</p>
+          <h3>Open Edges as the default</h3>
+          <p>"Take Open Edges forward as the default candidate. It improves a real studio moment without asking Leah to exchange her working map for our visual idea. Its restraint must not become timidity."</p>
+          <p>Astra's own doubt: "Open Edges may be too slight to satisfy the desired change in feeling. The correct response is to compare the working mockups, not add idle motion."</p>
+        </div>
+        <div>
+          <p class="who">Kody's ask, as the brief</p>
+          <h3>Plain Lines is what the brief describes</h3>
+          <p>"Peaceful, large informational text that animates and reveals the details… think Her" describes Plain Lines: large text as the resting state, detail as the performed answer.</p>
+          <p>Its cost is real and named: cross-job context suffers, and a permanent Show all means the premise failed. The walk tests that cost; it does not disqualify the direction in advance.</p>
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <p class="label" style="margin-bottom:6px">Graft from the runners-up</p>
+          <ul class="ruled tight">
+            <li>From Plain Lines, its truthful hierarchy, and a trial of its large Desk needs, "but do not silently apply its R150 amendment to Open Edges."</li>
+            <li>From Reading Line, its guarantee that stopping, selecting or entering work holds the place. Never its automatic scroll-disclosure.</li>
+          </ul>
+        </div>
+        <div>
+          <p class="label" style="margin-bottom:6px">What would change it</p>
+          <p class="small">"Plain Lines wins only if the reduced surface makes those tasks clearer without extra hunting." The tasks are the walk on slide 24.</p>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 21 · Reduced motion and the phone -->
+<section class="slide" id="s21" data-title="Reduced motion and the phone">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Access</span><span class="src">concepts.md §1 Laws, §2, §4, §5 · R-DM6</span></aside>
+    <div class="main stack">
+      <div class="stack-sm">
+        <h2>With motion off, and at 390</h2>
+        <p class="lede">Motion off must be a first-class working surface. Every fact, act and hold survives; only travel goes. The OS preference and the mockup toggle both count, and the toggle can add reduction but never override the OS.</p>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl compact">
+          <thead><tr><th scope="col">Direction</th><th scope="col">Motion off</th><th scope="col">At 390</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Open Edges</th><td data-label="Motion off">Explanations and Sheets are instant; pick-up is the 200ms opacity-only fade. Same unfolding, same facts. R-DM6 A.</td><td data-label="At 390">Existing layout, visible tap targets, no hover dependency. Below 1024px the margin note previews in place and Detail draws it as an anchored Sheet (mockup 02).</td></tr>
+            <tr><th scope="row">Plain Lines</th><td data-label="Motion off">The same sparse/dense choice; detail switches at 0ms with no type travel. Show all still latches. R-DM6 A.</td><td data-label="At 390">Large truths wrap, so fewer jobs show at once. Show all can run long.</td></tr>
+            <tr><th scope="row">Reading Line</th><td data-label="Motion off">Every optional summary stands printed in the same column; no automatic scroll reveal, and Close cannot hide them. Full-section acts and holds remain. R-DM6 B.</td><td data-label="At 390">The same column: no snapping, sticky headline or viewport-height scenes. Reserved wells add thumb travel. Never scroll-lock.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid3">
+        <p class="small"><b>Wells</b> reserve at least 144px on desktop and 192px on a phone, or their content height if taller, so nothing below them moves.</p>
+        <p class="small"><b>Touch</b> uses the same visible Detail control as the keyboard, never a long-press. Targets are at least 44px.</p>
+        <p class="small"><b>In the mockups</b> at 760px and below, the review strip folds to one Controls button and the caption to its first line.</p>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 22 · What the review broke -->
+<section class="slide" id="s22" data-title="What the review broke and what changed">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Review</span><span class="src">SQ-277 FINDINGS 1–4, VERDICT · SQ-301 closure · oracle.mjs</span></aside>
+    <div class="main stack">
+      <div class="stack-sm">
+        <h2>What the review broke, and what changed</h2>
+        <p class="tally"><span><b>15</b>findings</span><span><b>11</b>major</span><span><b>4</b>minor</span><span><b>15</b>fixed in SQ-301, source-verified</span></p>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl compact">
+          <thead><tr><th scope="col">Group</th><th scope="col">What broke</th><th scope="col">Severity</th><th scope="col">What changed</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Modal keyboard</th><td data-label="What broke">F1 the Sheet's Tab trap threw an error; F2 ⌘K let Tab escape, ignored Esc from inside, and stacked over a Sheet</td><td data-label="Severity">2 major</td><td data-label="What changed">Tab wraps and pulls focus back in; Esc closes ⌘K from anywhere inside; ⌘K is refused while a Sheet is open</td></tr>
+            <tr><th scope="row">Reading line: reverse and keys</th><td data-label="What broke">F3 scrolling back up never reopened a section; F11 keys did not count as scroll intent</td><td data-label="Severity">1 major · 1 minor</td><td data-label="What changed">An upward crossing reopens with the 24px hysteresis; PageDown, arrows and the like count, typing in fields does not</td></tr>
+            <tr><th scope="row">Holds and doorways</th><td data-label="What broke">F5 a focused link or button did not hold; F9 finish-record doorways led nowhere; F15 Fold was under 44px</td><td data-label="Severity">2 major · 1 minor</td><td data-label="What changed">Any focused descendant holds; every finish-record doorway opens the record; stubs say "not in this mockup"; Fold is 44px</td></tr>
+            <tr><th scope="row">Reduced motion and static access</th><td data-label="What broke">F6 Reading Line with motion off was not fully printed; F4 find and print could not reach closed text; F14 closed wells stayed in the accessibility tree</td><td data-label="Severity">2 major · 1 minor</td><td data-label="What changed">Motion off opens everything and Close cannot hide it; print styles and hidden="until-found"; closed wells are aria-hidden or inert</td></tr>
+            <tr><th scope="row">Harness truth and phone</th><td data-label="What broke">F8 Pause, Replay and Slow ×4 misreported; F7 the review strip covered the phone; F10 the phone margin note had the wrong semantics</td><td data-label="Severity">2 major · 1 minor</td><td data-label="What changed">Replay cancels the previous one; Pause holds timers; the strip folds to one Controls button; ?frame=product; a real Sheet opener</td></tr>
+            <tr><th scope="row">Doctrine and compilation</th><td data-label="What broke">F12 ⌘K carried an unauthorised depth token and shadow; F13 concepts.md had dropped the laws</td><td data-label="Severity">2 major</td><td data-label="What changed">Selection is a clay left rule, no depth; the laws restored in Astra's wording, with a Prototype limitations section</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid2">
+        <div class="stack-sm">
+          <p class="label">What the mockups cannot say</p>
+          <ol class="three">
+            <li>R-DM2 is unresolved. This is a density decision, not blanket approval for more motion, and no mockup ratifies production doctrine.</li>
+            <li>Quiet has a cost. Plain Lines hides simultaneous context; Reading Line buys its sparse frame with blank length and a fallible intent model. Show all left on, repeated reveals or a lost place are failures, not engagement.</li>
+            <li>These are fictional, bounded prototypes with partial navigation. Library and other doorways are not built; review chrome is not product design.</li>
+          </ol>
+        </div>
+        <div class="stack-sm">
+          <p class="label">How far the checking goes</p>
+          <p class="small">A node oracle runs each mockup's real script against a fake DOM. It passes 349 of 349 checks, on the design files and on these deck copies; the same oracle failed 216 checks on the build before the fixes.</p>
+          <p class="small"><b>Nobody has rendered these in a browser, on a phone, or with a screen reader.</b> Nobody has walked them with Leah or a first-week hand.</p>
+          <p class="small faint">Three small deviations the fixer declared: Space on a focused control does not count as scroll intent; 09's caption omits the "Replay jumps" line, which would be false there; the Fold control is 44px wide, slightly wider than its word.</p>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 23 · Rulings -->
+<section class="slide" id="s23" data-title="Rulings for the team">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Rulings</span><span class="src">concepts.md §6, verbatim</span></aside>
+    <div class="main stack">
+      <div class="stack-sm">
+        <h2>Rulings for the team</h2>
+        <p class="small faint">These are proposed rulings, not decisions already taken. The mockups compare consequences; they do not amend production doctrine. The filled letter is the recommendation.</p>
+      </div>
+      <ol class="rulings">
+        <li class="first">
+          <p class="rid">R-DM1 · the R15 amendment</p>
+          <h3>May R15 explicitly allow performed motion while ambient motion remains banned?</h3>
+          <ul class="opts">
+            <li data-o="A">Keep its literal "nothing on the Desk ever moves";</li>
+            <li data-o="B" class="pick">Allow finite, reversible motion caused by her act, retain only the existing active-spine breath as an ambient exception;</li>
+            <li data-o="C">Consider another ambient exception in a separate program.</li>
+          </ul>
+          <p class="rec-line"><b>Recommend B</b>Generalize the I107/D12 test. No concept here depends on C. R35's actual pending-operation sweep remains operation feedback, not permission for a resting loop.</p>
+        </li>
+        <li>
+          <p class="rid">R-DM2</p>
+          <h3>How much secondary information may disappear at rest?</h3>
+          <ul class="opts">
+            <li data-o="A" class="pick">Existing readable Document plus optional seam explanations (Open Edges);</li>
+            <li data-o="B">Truth-line-first with visible Detail controls and a Show all hold (Plain Lines);</li>
+            <li data-o="C">Reading-place-first with bounded scroll reveals (Reading Line).</li>
+          </ul>
+          <p class="rec-line"><b>Recommend A</b>for the default candidate; compare B and C in the nine mockups before choosing any broader removal. In every option, Desk needs/day line, errors, labels, primary acts, household/vitals, decision-critical amounts and command sub-labels remain visible. They are not bargaining chips for quiet.</p>
+        </li>
+        <li>
+          <p class="rid">R-DM3</p>
+          <h3>May section standing facts join document identity at 34px, amending R150's silent heads and band-only leader allocation?</h3>
+          <ul class="opts">
+            <li data-o="A" class="pick">Keep document name 34 / standing fact 16 / silent region head;</li>
+            <li data-o="B">Permit one 34px section fact at its own place, removing any duplicate standing fact;</li>
+            <li data-o="C">Make each section name large regardless of its information.</li>
+          </ul>
+          <p class="rec-line"><b>Recommend A</b>for Open Edges; authorize B only as the explicit Plain Lines/Reading Line concept amendment. Decline C. A heading earns scale by stating work, not by naming navigation. The household/editable vitals remain controls, not expendable small print.</p>
+        </li>
+        <li>
+          <p class="rid">R-DM4</p>
+          <h3>Does deliberate scrolling count as addressing a section?</h3>
+          <ul class="opts">
+            <li data-o="A">No, detail requires labeled focus/tap/click;</li>
+            <li data-o="B" class="pick">Yes for optional explanation, with stable geometry, an equal explicit control and task holds;</li>
+            <li data-o="C">Let scroll automatically open and close working sections.</li>
+          </ul>
+          <p class="rec-line"><b>Recommend B</b>for the Reading Line experiment only, A for the default's working content; decline C. Reading Line also needs the named D12/D3 layout amendment for all-width single-column margin access. No scroll-triggered loss of draft, selection or place is acceptable.</p>
+        </li>
+        <li>
+          <p class="rid">R-DM5</p>
+          <h3>When should a revealed explanation recede?</h3>
+          <ul class="opts">
+            <li data-o="A">As soon as pointer leaves;</li>
+            <li data-o="B" class="pick">On the next unheld address or explicit close, with blank paper and reading pauses doing nothing;</li>
+            <li data-o="C" class="pick">Only on explicit close for every preview.</li>
+          </ul>
+          <p class="rec-line"><b>Recommend B</b>plus C once she pins or enters work. Show all is a persistent click/Space toggle within the current surface, never a physical long press. No idle countdown. If B proves unpredictable in a walk, use C before adding more choreography.</p>
+        </li>
+        <li>
+          <p class="rid">R-DM6</p>
+          <h3>What should reduced motion preserve when the concept depends on scroll-disclosure?</h3>
+          <ul class="opts">
+            <li data-o="A">Same hidden summaries but no travel;</li>
+            <li data-o="B" class="pick">Fully printed summaries in the same column, with all full-section acts intact;</li>
+            <li data-o="C">Remove those summaries.</li>
+          </ul>
+          <p class="rec-line"><b>Recommend B</b>for Reading Line; A for the explicit-control Open Edges/Plain Lines variants. Decline C. Information and task parity matter more than matching the sparse screenshot. Motion off must be a first-class working surface.</p>
+        </li>
+        <li>
+          <p class="rid">R-DM7</p>
+          <h3>Should a first hand receive a different visual arrival?</h3>
+          <ul class="opts">
+            <li data-o="A" class="pick">Same still Desk, with only an already-eligible once/in-place teaching note;</li>
+            <li data-o="B">A special animated welcome or tour;</li>
+            <li data-o="C">No teaching note even when the existing program calls for one.</li>
+          </ul>
+          <p class="rec-line"><b>Recommend A</b>The studio's first hand should inherit its working language, not be greeted by a second interface. This motion program must neither expand nor silently disable the existing teaching program.</p>
+        </li>
+      </ol>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 24 · If approved -->
+<section class="slide" id="s24" data-title="If approved, what happens next">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Next</span><span class="src">concepts.md §4 What would change the recommendation · §5 Prototype limitations</span></aside>
+    <div class="main stack">
+      <h2>If a direction is picked, what happens next</h2>
+      <p class="no-code">No code is authorised by this deck. Every step below is design work. A build is a separate request, after the rulings and the walk.</p>
+      <ol class="steps">
+        <li><div><h3>Rule R-DM1 and R-DM2</h3><p>The R15 amendment first, since every direction depends on it; then how much may disappear at rest. R-DM3 to R-DM7 follow from the direction.</p></div></li>
+        <li><div><h3>Walk the picked mockups with Leah and a first-week hand</h3><p>Find the finish-approval job, compare it with the delivery job, reach the record, enter a draft, pull Accounts and return. By keyboard, at phone width and with reduced motion. Watch for wrong choices, repeated reveals, lost place and requests to show everything. Never measure dwell or delight.</p></div></li>
+        <li><div><h3>Render them properly for the first time</h3><p>A real browser, a real phone and a screen reader. None of that has happened yet; layout, focus order and announcements are unverified.</p></div></li>
+        <li><div><h3>Write the rulings into DECISIONS.md</h3><p>Including the R15 amendment and any R150, D12 or D3 amendment the chosen direction names, so doctrine changes by ruling, never by a mockup.</p></div></li>
+      </ol>
+      <p class="quote" style="font-size:clamp(1.1rem,1.7vw,1.35rem)">No direction earns production approval from a beautiful replay alone.<cite>Astra · concepts.md §4</cite></p>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+<!-- 25 · Appendix -->
+<section class="slide" id="s25" data-title="Appendix: mockup index">
+  <div class="sheet">
+    <aside class="margin"><span class="no"></span><span class="sec">Appendix</span><span class="src">concepts.md §5 · US-14 tickets</span></aside>
+    <div class="main stack">
+      <h2>Mockup index</h2>
+      <p class="small faint">Each link opens the mockup with its caption and review controls. Key: R 160ms E · X 120ms Q · P 270ms O · D 200ms Q · S 240ms E · B 180ms Q.</p>
+      <div class="tbl-wrap">
+        <table class="tbl compact">
+          <thead><tr><th scope="col">File</th><th scope="col">Direction</th><th scope="col">Surface</th><th scope="col">Trigger 1</th><th scope="col">Caption</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><a href="mockups/01-direction1-desk.html" target="_blank" rel="noopener">01-direction1-desk</a></th><td data-label="Direction">Open Edges</td><td data-label="Surface">Desk</td><td data-label="Trigger 1">Address Ainsworth: R/F; Review finish: P</td><td data-label="Caption">"The need reads before the hand moves."</td></tr>
+            <tr><th scope="row"><a href="mockups/02-direction1-document.html" target="_blank" rel="noopener">02-direction1-document</a></th><td data-label="Direction">Open Edges</td><td data-label="Surface">Held document</td><td data-label="Trigger 1">Margin Detail, x+4→0 180ms E (phone: anchored Sheet)</td><td data-label="Caption">"The margin opens without moving the work."</td></tr>
+            <tr><th scope="row"><a href="mockups/03-direction1-sheet.html" target="_blank" rel="noopener">03-direction1-sheet</a></th><td data-label="Direction">Open Edges</td><td data-label="Surface">Accounts sheet</td><td data-label="Trigger 1">Accounts: S/I; Put back/Esc: B</td><td data-label="Caption">"A glance, then the same place."</td></tr>
+            <tr><th scope="row"><a href="mockups/04-direction2-desk.html" target="_blank" rel="noopener">04-direction2-desk</a></th><td data-label="Direction">Plain Lines</td><td data-label="Surface">Desk</td><td data-label="Trigger 1">Ainsworth R/F, then Delgado concurrent X/R/G; Show all 0ms</td><td data-label="Caption">"The work in a few lines; the rest when asked."</td></tr>
+            <tr><th scope="row"><a href="mockups/05-direction2-document.html" target="_blank" rel="noopener">05-direction2-document</a></th><td data-label="Direction">Plain Lines</td><td data-label="Surface">Held document</td><td data-label="Trigger 1">Direction address R/F; Enter/tap pins; Save note</td><td data-label="Caption">"The sentence stays; its evidence comes forward."</td></tr>
+            <tr><th scope="row"><a href="mockups/06-direction2-command.html" target="_blank" rel="noopener">06-direction2-command</a></th><td data-label="Direction">Plain Lines</td><td data-label="Surface">⌘K</td><td data-label="Trigger 1">Command at 0ms; Accounts starts S/I</td><td data-label="Caption">"When the question is exact, the answer is immediate."</td></tr>
+            <tr><th scope="row"><a href="mockups/07-direction3-desk.html" target="_blank" rel="noopener">07-direction3-desk</a></th><td data-label="Direction">Reading Line</td><td data-label="Surface">Desk</td><td data-label="Trigger 1">Scroll crossing Ainsworth at L: R/F</td><td data-label="Caption">"Scroll finds the next piece of work, without pulling the page."</td></tr>
+            <tr><th scope="row"><a href="mockups/08-direction3-document.html" target="_blank" rel="noopener">08-direction3-document</a></th><td data-label="Direction">Reading Line</td><td data-label="Surface">Held document</td><td data-label="Trigger 1">Scroll or Detail: R/F; Review finish pins</td><td data-label="Caption">"Where she stops is where the paper stays open."</td></tr>
+            <tr><th scope="row"><a href="mockups/09-direction3-sheet.html" target="_blank" rel="noopener">09-direction3-sheet</a></th><td data-label="Direction">Reading Line</td><td data-label="Surface">Sheet return</td><td data-label="Trigger 1">Accounts S/I with reading line suspended; B restores</td><td data-label="Caption">"Put it back and carry on, not start again."</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid2">
+        <div>
+          <p class="label" style="margin-bottom:6px">Where the files live</p>
+          <ul class="ruled tight">
+            <li><code>artifacts/designer-portal-motion-2026-09-25/research/</code> three recon memos</li>
+            <li><code>design/concepts.md</code> the compiled concept, canonical text</li>
+            <li><code>design/mockups/</code> the nine mockups; <code>deck/mockups/</code> byte-identical copies</li>
+            <li><code>design/verify/oracle.mjs</code> the node oracle</li>
+          </ul>
+        </div>
+        <div>
+          <p class="label" style="margin-bottom:6px">Sidequest tickets, story US-14</p>
+          <ul class="ruled tight">
+            <li><b>SQ-272 · SQ-273 · SQ-274</b> recon: portal inventory, doctrine, external patterns</li>
+            <li><b>SQ-275</b> concept, Astra · <b>SQ-276</b> build, Opus</li>
+            <li><b>SQ-277</b> adversarial review, Astra · <b>SQ-301</b> fixes, Opus</li>
+            <li><b>SQ-280</b> this deck</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <p class="fixture">Fixture · Middle West Studio · not a client record.</p>
+  </div>
+</section>
+
+</main>
+
+<nav class="bar" aria-label="Deck controls">
+  <div class="progress" id="progress"></div>
+  <div class="bar-inner">
+    <span class="deck-name">The paper answers a hand · for review</span>
+    <button type="button" id="prev" aria-label="Previous slide">←</button>
+    <span class="counter" id="counter" aria-live="polite">01 / 25</span>
+    <button type="button" id="next" aria-label="Next slide">→</button>
+    <button type="button" id="help" aria-label="Keyboard keys" aria-haspopup="dialog" aria-controls="keys">?</button>
+  </div>
+</nav>
+
+<div class="keys" id="keys" role="dialog" aria-modal="true" aria-labelledby="keys-h" hidden>
+  <div class="keys-card">
+    <h2 id="keys-h">Keys</h2>
+    <dl>
+      <dt><kbd>→</kbd> <kbd>Space</kbd> <kbd>PgDn</kbd></dt><dd>Next slide</dd>
+      <dt><kbd>←</kbd> <kbd>⇧ Space</kbd> <kbd>PgUp</kbd></dt><dd>Previous slide</dd>
+      <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>First or last slide</dd>
+      <dt><kbd>?</kbd></dt><dd>Show or hide this list</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Close this list</dd>
+    </dl>
+    <p class="small faint" style="margin-bottom:10px">While a mockup has focus, keys go to the mockup. Click the slide's margin to hand them back to the deck.</p>
+    <p class="small faint" style="margin-bottom:16px">On a phone the slides stack; scroll to read, and the arrows jump a slide.</p>
+    <button type="button" id="keys-close">Close</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var root = document.documentElement;
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var n = slides.length;
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var prevBtn = document.getElementById('prev');
+  var nextBtn = document.getElementById('next');
+  var keys = document.getElementById('keys');
+  var helpBtn = document.getElementById('help');
+  var closeBtn = document.getElementById('keys-close');
+  var narrow = window.matchMedia('(max-width: 760px)');
+  var cur = 0;
+  var pad = function(x){ return (x < 10 ? '0' : '') + x; };
+
+  slides.forEach(function(s, i){
+    var no = s.querySelector('.margin .no');
+    if (no) no.textContent = pad(i + 1);
+    s.setAttribute('aria-roledescription', 'slide');
+    s.setAttribute('aria-label', (i + 1) + ' of ' + n + ': ' + (s.getAttribute('data-title') || ''));
+  });
+
+  function paint(){
+    counter.textContent = pad(cur + 1) + ' / ' + pad(n);
+    progress.style.width = ((cur + 1) / n * 100) + '%';
+    prevBtn.disabled = cur === 0;
+    nextBtn.disabled = cur === n - 1;
+  }
+
+  /* A slide changes only on her key or click. CSS carries the move (280ms in, 240ms out,
+     8px of travel, opacity only under reduced motion) and reverses from the current frame. */
+  function go(i, fromScroll){
+    i = Math.max(0, Math.min(n - 1, i));
+    cur = i;
+    if (narrow.matches){
+      if (!fromScroll) slides[i].scrollIntoView({block: 'start'});
+    } else {
+      slides.forEach(function(s, k){
+        var on = k === i;
+        s.classList.toggle('is-active', on);
+        s.classList.toggle('past', k < i);
+        s.setAttribute('aria-hidden', on ? 'false' : 'true');
+        if ('inert' in s) s.inert = !on;
+      });
+      slides[i].scrollTop = 0;
+      slides[i].querySelectorAll('.mock').forEach(fit);
+    }
+    try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+    paint();
+  }
+
+  function applyMode(){
+    if (narrow.matches){
+      slides.forEach(function(s){
+        s.classList.remove('is-active', 'past');
+        s.removeAttribute('aria-hidden');
+        if ('inert' in s) s.inert = false;
+      });
+    }
+    go(cur, narrow.matches);
+    if (narrow.matches) slides[cur].scrollIntoView({block: 'start'});
+    figs.forEach(fit);
+  }
+
+  /* stacked mode: follow the reader's scroll */
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      if (!narrow.matches) return;
+      entries.forEach(function(en){
+        if (en.isIntersecting){
+          var k = slides.indexOf(en.target);
+          if (k > -1 && k !== cur){ cur = k; paint(); try { history.replaceState(null, '', '#s' + (k + 1)); } catch (e) {} }
+        }
+      });
+    }, {rootMargin: '-45% 0px -50% 0px'});
+    slides.forEach(function(s){ io.observe(s); });
+  }
+
+  /* mockup stages: 1280 or 390 wide, scaled into a fixed 16:10 stage; Paper or Controls */
+  function fit(fig){
+    var stage = fig.querySelector('.stage');
+    var fr = stage && stage.querySelector('iframe');
+    if (!fr) return;
+    var W = stage.clientWidth, H = stage.clientHeight;
+    if (!W || !H) return;
+    var w = parseInt(fig.getAttribute('data-w'), 10) === 390 ? 390 : 1280;
+    var s = w === 1280 ? W / 1280 : Math.min(1, W / 390);
+    fr.style.width = w + 'px';
+    fr.style.height = (H / s) + 'px';
+    fr.style.transform = 'scale(' + s + ')';
+    fr.style.left = (w === 1280 ? 0 : (W - 390 * s) / 2) + 'px';
+    fig.classList.toggle('is-phone', w === 390);
+    fig.querySelectorAll('button[data-w]').forEach(function(b){
+      b.setAttribute('aria-pressed', parseInt(b.getAttribute('data-w'), 10) === w ? 'true' : 'false');
+    });
+  }
+  function setFrame(fig, mode){
+    var fr = fig.querySelector('iframe');
+    if (!fr) return;
+    var bare = fr.getAttribute('data-bare');
+    var want = mode === 'controls' ? bare : bare + '?frame=product';
+    if (fr.getAttribute('src') !== want) fr.setAttribute('src', want);
+    fig.querySelectorAll('button[data-frame]').forEach(function(b){
+      b.setAttribute('aria-pressed', b.getAttribute('data-frame') === mode ? 'true' : 'false');
+    });
+  }
+  var figs = Array.prototype.slice.call(document.querySelectorAll('.mock'));
+  var ro = 'ResizeObserver' in window ? new ResizeObserver(function(list){
+    list.forEach(function(e){ fit(e.target.closest('.mock')); });
+  }) : null;
+  figs.forEach(function(fig){
+    fig.querySelectorAll('button[data-w]').forEach(function(b){
+      b.addEventListener('click', function(){ fig.setAttribute('data-w', b.getAttribute('data-w')); fit(fig); });
+    });
+    fig.querySelectorAll('button[data-frame]').forEach(function(b){
+      b.addEventListener('click', function(){ setFrame(fig, b.getAttribute('data-frame')); });
+    });
+    if (ro) ro.observe(fig.querySelector('.stage'));
+  });
+  window.addEventListener('resize', function(){ figs.forEach(fit); });
+
+  /* key list */
+  var lastFocus = null;
+  function openKeys(){ lastFocus = document.activeElement; keys.hidden = false; closeBtn.focus(); }
+  function closeKeys(){ keys.hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+  helpBtn.addEventListener('click', function(){ keys.hidden ? openKeys() : closeKeys(); });
+  closeBtn.addEventListener('click', closeKeys);
+  keys.addEventListener('click', function(e){ if (e.target === keys) closeKeys(); });
+
+  prevBtn.addEventListener('click', function(){ go(cur - 1); });
+  nextBtn.addEventListener('click', function(){ go(cur + 1); });
+
+  document.addEventListener('keydown', function(e){
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === '?'){ e.preventDefault(); keys.hidden ? openKeys() : closeKeys(); return; }
+    if (!keys.hidden){
+      if (e.key === 'Escape'){ e.preventDefault(); closeKeys(); }
+      if (e.key === 'Tab'){ e.preventDefault(); closeBtn.focus(); }
+      return;
+    }
+    var tag = (e.target && e.target.tagName) || '';
+    var onControl = tag === 'BUTTON' || tag === 'A' || tag === 'INPUT';
+    if (e.key === 'ArrowRight'){ e.preventDefault(); go(cur + 1); }
+    else if (e.key === 'ArrowLeft'){ e.preventDefault(); go(cur - 1); }
+    else if (narrow.matches){ return; }
+    else if (e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey && !onControl)){ e.preventDefault(); go(cur + 1); }
+    else if (e.key === 'PageUp' || (e.key === ' ' && e.shiftKey && !onControl)){ e.preventDefault(); go(cur - 1); }
+    else if (e.key === 'Home'){ e.preventDefault(); go(0); }
+    else if (e.key === 'End'){ e.preventDefault(); go(n - 1); }
+  });
+
+  var m = /^#s(\d+)$/.exec(location.hash || '');
+  if (m) cur = Math.max(0, Math.min(n - 1, parseInt(m[1], 10) - 1));
+  if (narrow.addEventListener) narrow.addEventListener('change', applyMode);
+  else if (narrow.addListener) narrow.addListener(applyMode);
+  applyMode();
+  /* nothing moves on load: transitions switch on only after the first frame has painted */
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ root.classList.add('ready'); }); });
+})();
+</script>
+</body>
+</html>
