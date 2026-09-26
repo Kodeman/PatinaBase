@@ -93,7 +93,8 @@ A release note shows only when its `teachingRelease` is published too.
 1. **Migrations:** `supabase migration list` shows 00672, 00673 and 00674 on
    the remote. Read-only SQL on Strata:
    - `select to_regclass('public.teaching_note_state');` is not null.
-   - `select has_table_privilege('authenticated', 'public.teaching_note_state', 'INSERT'), has_table_privilege('authenticated', 'public.teaching_note_state', 'UPDATE');` returns `false, false`.
+   - `select has_table_privilege('authenticated', 'public.teaching_note_state', 'INSERT'), has_table_privilege('authenticated', 'public.teaching_note_state', 'UPDATE'), has_table_privilege('authenticated', 'public.teaching_note_state', 'DELETE');` returns `false, false, false`.
+   - As an authenticated (non-service-role) session, `delete from public.teaching_note_state where note_key = '__probe__';` is refused with `42501 insufficient_privilege`, confirming the revoke holds for DELETE and not just INSERT/UPDATE.
    - `select has_function_privilege('authenticated', 'public.teaching_note_state_patch(text[], jsonb)', 'EXECUTE'), has_function_privilege('authenticated', 'public.teaching_signals()', 'EXECUTE'), has_function_privilege('authenticated', 'public.help_state_merge(jsonb)', 'EXECUTE');` returns all `true`.
 2. **Sanity:** the hosted Studio lists Teaching note and Teaching release. A
    non-publisher sees no Publish button on either. A published-perspective
@@ -109,14 +110,68 @@ A release note shows only when its `teachingRelease` is published too.
 
 ## Rollback
 
-1. Turn the `teaching-notes` flag off. Teaching disappears everywhere at once,
-   and nothing more is written.
+1. Turn the `teaching-notes` flag off. This is not instant: PostHog's
+   persisted flags lag one page load, so a browser that already has the flag
+   evaluated true keeps it until its next load, and a teaching note already
+   held for its exit animation (`margin-note.tsx`'s hold/anchor mount) stays
+   on screen for that mount rather than disappearing mid-render. No new
+   teaching state is written once the flag reads false.
 2. Unpublish any note or release in the Studio. The portal stops showing it
    on its next Sanity read (the portal caches teaching reads for up to 30
    minutes per session).
 3. The migrations are additive: they add a table and three functions and move
    no existing write path. Leave them in place. Do not drop `help_state_merge`
    (00674): the web help-state adapter now calls it.
+
+## Rulings assumed in the build
+
+One line each, so Kody can overrule any of them from one place
+(`artifacts/return-teaching-2026-09-25/design/ux-options.md` and
+`system-architecture.md` have the full framing for R-RT1–R-RT6; US-13 story
+log has the fix-wave rulings).
+
+- **R-RT1 User-facing name.** "Workshop Notes" / label word `WORKSHOP NOTE`
+  (`lib/teaching/constants.ts`), not "Margin Notes" or an unnamed label.
+- **R-RT2 The Desk Walkthrough.** Kept as the one sanctioned modal exception;
+  teaching notes hold (render nothing, write nothing) while it is on screen.
+- **R-RT3 Since-line relevance.** Not implemented: releases are not ranked
+  against the designer's pinned projects (no release↔project link exists).
+- **R-RT4 Owner letter.** Not built this story. No automated send exists for
+  any teaching content.
+- **R-RT5 Dormant studios.** Not built. No in-product dormancy signal exists
+  or is planned here.
+- **R-RT6 SQ-265 (`help_state` clobber).** Fixed in scope via the 00674
+  two-level merge; the iOS adapter still writes whole blobs (separate owed
+  follow-up).
+- **R-RT7 First-paint settle (SQ-310/SQ-311).** If any teaching read is still
+  pending when the Desk roster first paints, teaching yields for that page
+  load — nothing rendered, nothing written — and the next Desk load decides
+  fresh. No late insertion once the roster has painted.
+- **Setup whisper is a Desk line, not a teaching note.** It never claims
+  `visit.unsolicitedShown`; its Desk eligibility is the component's own render
+  predicate (owner and two or more open steps), not the `teaching-notes` flag
+  alone.
+- **Personless analytics: one anon id per tab session, not per event.**
+  Accepted documented deviation from §7 (already_knew dedupe needs a stable
+  id within the session).
+- **Multi-studio owner role resolution.** Accepted: role is derived from the
+  designer's active memberships; a multi-studio owner is not specially cased.
+- **Act slot and anchor placements stay contentless.** Accounts, Hours, the
+  Galley and the members section ship with no authored in-place note until
+  Leah writes one in Sanity; accepted for a flag-off ship.
+- **Sanity publishing stays manual.** No Scheduled Publishing or Content
+  Releases integration; Leah publishes by hand, and the write token used for
+  seeding stays with Kody.
+- **Unreachable-release notes read as `already_knew`.** A release note whose
+  release the designer cannot see is treated the same as one already acted on.
+- **`$feature_flag_called` telemetry is unaddressed** for the teaching flag
+  check (accepted; not a personless-analytics leak).
+- **A direct URL to `/help/changes` with nothing to show renders empty**, not
+  a redirect or an explicit empty state.
+- **The quiet switch in the Account sheet renders once** rather than reacting
+  live to a change made elsewhere in the same session.
+- **After a Desk tour reset, teaching still fails closed** (no note or
+  since-line) until the next full Desk load resolves fresh state.
 
 ## Known gaps (recorded, not fixed)
 
@@ -125,9 +180,15 @@ A release note shows only when its `teachingRelease` is published too.
   can miss that visit.
 - **`desk-first-touch`** shows only within one hour of account creation.
 - **Since-line.** It shows after 30 days away and takes the teaching slot for
-  that visit, so no teaching note shows beside it. It writes no teaching state
-  (no `unsolicitedShown`, no weekly count). Ranking against pinned projects
-  (R-RT3) is not implemented: no release is linked to a project.
+  that visit, so no teaching note shows beside it. Unlike the setup whisper
+  (which never claims), the since-line does write teaching state: it claims
+  `visit.unsolicitedShown` and counts against `recentUnsolicited`, the same as
+  an in-place teaching note would (SQ-311). The Desk teaching line settles at
+  first paint per ruling R-RT7 — if a teaching read is still pending when the
+  roster first paints, teaching yields for that page load and nothing is
+  rendered or written; the next Desk load decides fresh, with no late
+  insertion. Ranking against pinned projects (R-RT3) is not implemented: no
+  release is linked to a project.
 - **Client page send.** `useAddClient` is tagged `client_page_sent`, by ruling
   (SQ-287).
 - **"Draw an invoice · new"** is retired from the Desk contents

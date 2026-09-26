@@ -25,18 +25,18 @@
  * project or client ids, and dwell cannot ride along.
  */
 
-import posthog, { type PostHog } from 'posthog-js';
+import posthog, { type PostHog } from "posthog-js";
 
-import { createBrowserUuid } from '../browser-uuid';
-import { isAnalyticsPossible, sanitizePostHogEvent } from './posthog';
+import { createBrowserUuid } from "../browser-uuid";
+import { isAnalyticsPossible, sanitizePostHogEvent } from "./posthog";
 
 export type TeachingEventName =
-  | 'help.teaching_note.shown'
-  | 'help.teaching_note.dismissed'
-  | 'help.teaching_note.acted'
-  | 'help.teaching_note.receded'
-  | 'help.teaching_note.already_knew'
-  | 'help.teaching_changes.opened';
+  | "help.teaching_note.shown"
+  | "help.teaching_note.dismissed"
+  | "help.teaching_note.acted"
+  | "help.teaching_note.receded"
+  | "help.teaching_note.already_knew"
+  | "help.teaching_changes.opened";
 
 export type TeachingEventProps = {
   note_key?: string;
@@ -46,41 +46,63 @@ export type TeachingEventProps = {
   release_id?: string;
   size_class?: string;
   audience?: string;
-  reason?: 'closed' | 'retired_max' | 'superseded' | 'expired';
+  reason?: "closed" | "retired_max" | "superseded" | "expired";
 };
 
 const ALLOWED_KEYS: ReadonlyArray<keyof TeachingEventProps> = [
-  'note_key',
-  'kind',
-  'trigger',
-  'surface_key',
-  'release_id',
-  'size_class',
-  'audience',
-  'reason',
+  "note_key",
+  "kind",
+  "trigger",
+  "surface_key",
+  "release_id",
+  "size_class",
+  "audience",
+  "reason",
 ];
 
 /** posthog-js default properties that locate the designer: never sent. */
 export const TEACHING_PROPERTY_DENYLIST = [
-  '$current_url',
-  '$pathname',
-  '$referrer',
-  '$referring_domain',
-  '$host',
-  '$initial_referrer',
-  '$initial_referring_domain',
-  '$initial_current_url',
-  '$initial_pathname',
-  '$initial_host',
-  '$session_id',
-  '$window_id',
-  '$device_id',
+  "$current_url",
+  "$pathname",
+  "$referrer",
+  "$referring_domain",
+  "$host",
+  "$initial_referrer",
+  "$initial_referring_domain",
+  "$initial_current_url",
+  "$initial_pathname",
+  "$initial_host",
+  "$session_id",
+  "$window_id",
+  "$device_id",
+  "$browser",
+  "$browser_version",
+  "$browser_language",
+  "$os",
+  "$os_version",
+  "$device_type",
+  "$screen_height",
+  "$screen_width",
+  "$viewport_height",
+  "$viewport_width",
+  "$timezone",
+  "$raw_user_agent",
+  "$lib",
+  "$lib_version",
+  "$insert_id",
+  "$time",
 ];
 
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const UUID_PATTERN =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 function carriesRoute(value: string): boolean {
-  return value.includes('/doc/') || value.includes('/projects/') || value.includes('?') || UUID_PATTERN.test(value);
+  return (
+    value.includes("/doc/") ||
+    value.includes("/projects/") ||
+    value.includes("?") ||
+    UUID_PATTERN.test(value)
+  );
 }
 
 /**
@@ -88,19 +110,26 @@ function carriesRoute(value: string): boolean {
  * string value holding a route, a query string or a UUID. `distinct_id` is the
  * anonymous `teaching-anon-<uuid>` and must reach the wire, so it is kept.
  */
-export function sanitizeTeachingProperties<T extends Record<string, unknown>>(properties: T): T {
+export function sanitizeTeachingProperties<T extends Record<string, unknown>>(
+  properties: T,
+): T {
   const kept: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(properties)) {
-    if (key.startsWith('$initial_')) continue;
-    if (key !== 'distinct_id' && typeof value === 'string' && carriesRoute(value)) continue;
+    if (key.startsWith("$initial_")) continue;
+    if (
+      key !== "distinct_id" &&
+      typeof value === "string" &&
+      carriesRoute(value)
+    )
+      continue;
     kept[key] = value;
   }
   return kept as T;
 }
 
-const INSTANCE_NAME = 'teaching';
-const ANON_ID_KEY = 'patina:teaching-anon-id';
-const ANON_ID_PREFIX = 'teaching-anon-';
+const INSTANCE_NAME = "teaching";
+const ANON_ID_KEY = "patina:teaching-anon-id";
+const ANON_ID_PREFIX = "teaching-anon-";
 
 let memoryAnonId: string | null = null;
 let teachingClient: PostHog | null = null;
@@ -137,8 +166,8 @@ function getTeachingClient(): PostHog | null {
     key,
     {
       ...(host && { api_host: host }),
-      person_profiles: 'never',
-      persistence: 'memory',
+      person_profiles: "never",
+      persistence: "memory",
       // posthog-js keys its module-level memory store by persistence name,
       // which is `ph_<token>_posthog` by default. Without a name of its own,
       // this instance would share the primary's store, and with it `$user_id`.
@@ -166,7 +195,7 @@ function getTeachingClient(): PostHog | null {
       sanitize_properties: sanitizeTeachingProperties,
       before_send: sanitizePostHogEvent,
     },
-    INSTANCE_NAME
+    INSTANCE_NAME,
   );
   return teachingClient;
 }
@@ -176,7 +205,7 @@ function pickAllowed(props: TeachingEventProps): TeachingEventProps {
   const picked: Record<string, string> = {};
   for (const key of ALLOWED_KEYS) {
     const value = source[key];
-    if (typeof value === 'string') picked[key] = value;
+    if (typeof value === "string") picked[key] = value;
   }
   return picked as TeachingEventProps;
 }
@@ -185,11 +214,17 @@ function pickAllowed(props: TeachingEventProps): TeachingEventProps {
  * Capture a teaching event personless. It is a no-op when analytics is not
  * possible here, and it never throws.
  */
-export function captureTeachingEvent(name: TeachingEventName, props: TeachingEventProps = {}): void {
+export function captureTeachingEvent(
+  name: TeachingEventName,
+  props: TeachingEventProps = {},
+): void {
   try {
     const client = getTeachingClient();
     if (!client) return;
-    client.capture(name, { ...pickAllowed(props), $process_person_profile: false });
+    client.capture(name, {
+      ...pickAllowed(props),
+      $process_person_profile: false,
+    });
   } catch {
     // analytics must never crash the UI
   }
