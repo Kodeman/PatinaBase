@@ -24,7 +24,7 @@ jest.mock('@/lib/analytics/posthog', () => ({
   },
 }));
 
-import { useFeatureFlags } from './use-feature-flags';
+import { isTeachingNotesEnabled, useFeatureFlags } from './use-feature-flags';
 
 const ENV_KEY = 'NEXT_PUBLIC_FLAG_OVERRIDES';
 const originalOverrides = process.env[ENV_KEY];
@@ -105,5 +105,37 @@ describe('useFeatureFlags', () => {
     rerender({ names: ['teaching-notes', 'agreement-parts'] });
     expect(result.current).not.toBe(first);
     expect(result.current['agreement-parts']).toEqual({ value: false, isLoading: false });
+  });
+});
+
+describe('isTeachingNotesEnabled', () => {
+  it('is false while PostHog has not loaded flags', () => {
+    expect(isTeachingNotesEnabled()).toBe(false);
+    mockIsAnalyticsEnabled.mockReturnValue(true);
+    mockIsFeatureEnabled.mockReturnValue(undefined);
+    expect(isTeachingNotesEnabled()).toBe(false);
+  });
+
+  it('is true only when PostHog is up and teaching-notes is on', () => {
+    mockIsAnalyticsEnabled.mockReturnValue(true);
+    mockIsFeatureEnabled.mockImplementation((name: string) => name === 'teaching-notes');
+    expect(isTeachingNotesEnabled()).toBe(true);
+    expect(mockIsFeatureEnabled).toHaveBeenCalledWith('teaching-notes');
+  });
+
+  it('is false when teaching-notes is off', () => {
+    mockIsAnalyticsEnabled.mockReturnValue(true);
+    mockIsFeatureEnabled.mockReturnValue(false);
+    expect(isTeachingNotesEnabled()).toBe(false);
+  });
+
+  it('respects an env override either way without consulting PostHog', () => {
+    process.env[ENV_KEY] = 'teaching-notes:true';
+    expect(isTeachingNotesEnabled()).toBe(true);
+    process.env[ENV_KEY] = 'teaching-notes:false';
+    mockIsAnalyticsEnabled.mockReturnValue(true);
+    mockIsFeatureEnabled.mockReturnValue(true);
+    expect(isTeachingNotesEnabled()).toBe(false);
+    expect(mockIsFeatureEnabled).not.toHaveBeenCalled();
   });
 });

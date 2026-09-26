@@ -36,6 +36,11 @@ jest.mock(
   { virtual: true },
 );
 
+let mockTeachingFlag = { value: true, isLoading: false };
+jest.mock('./use-feature-flags', () => ({
+  useFeatureFlags: () => ({ 'teaching-notes': mockTeachingFlag }),
+}));
+
 import {
   invalidateTeachingSignals,
   useTeachingNotes,
@@ -54,6 +59,29 @@ function setup() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockSession = { user: { id: 'user-1' } };
+  mockTeachingFlag = { value: true, isLoading: false };
+});
+
+describe('teaching-notes flag gate', () => {
+  it.each([
+    ['off', { value: false, isLoading: false }],
+    ['loading', { value: false, isLoading: true }],
+  ])('with the flag %s, no teaching query fetches and no RPC runs', (_label, flag) => {
+    mockTeachingFlag = flag;
+    const { wrapper } = setup();
+    const notes = renderHook(() => useTeachingNotes(), { wrapper });
+    const releases = renderHook(() => useTeachingReleases(), { wrapper });
+    const state = renderHook(() => useTeachingNoteState(), { wrapper });
+    const signals = renderHook(() => useTeachingSignals(), { wrapper });
+
+    expect(notes.result.current.fetchStatus).toBe('idle');
+    expect(releases.result.current.fetchStatus).toBe('idle');
+    expect(signals.result.current.fetchStatus).toBe('idle');
+    expect(state.result.current.state).toBeUndefined();
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockLoad).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
 });
 
 describe('useTeachingNotes', () => {

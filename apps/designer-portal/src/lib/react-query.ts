@@ -180,21 +180,24 @@ const mutationCache = new MutationCache({
 });
 
 /**
- * Records the boundary in memory (anchors read it), then refreshes
- * `teaching_signals()` and patches `visit.lastActiveAt`. The teaching data
- * layer is imported lazily so the many modules that import `queryKeys` from
- * this file do not pull Sanity and the teaching backend into their graph.
+ * Records the boundary in memory (anchors read it), then, only while the
+ * `teaching-notes` flag is on, refreshes `teaching_signals()` and patches
+ * `visit.lastActiveAt`. The flag accessor and teaching data layer are imported
+ * lazily so the many modules that import `queryKeys` from this file do not
+ * pull PostHog, Sanity and the teaching backend into their graph.
  * Teaching is background context: a failure here is logged, never surfaced.
  */
 function onTeachingBoundary(boundaryKey: TeachingBoundaryKey): void {
   const at = Date.now();
   recordTeachingBoundary({ boundaryKey, at, surfaceKey: getCurrentTeachingSurface() });
-  void Promise.all([
-    import('@/hooks/use-teaching-data'),
-    import('@patina/help-system'),
-    import('@patina/supabase'),
-  ])
-    .then(async ([teaching, helpSystem, supabase]) => {
+  void import('@/hooks/use-feature-flags')
+    .then(async (flags) => {
+      if (!flags.isTeachingNotesEnabled()) return;
+      const [teaching, helpSystem, supabase] = await Promise.all([
+        import('@/hooks/use-teaching-data'),
+        import('@patina/help-system'),
+        import('@patina/supabase'),
+      ]);
       void teaching.invalidateTeachingSignals(queryClient);
       const backend = helpSystem.createSupabaseTeachingNoteBackend(supabase.createBrowserClient());
       const state = await backend.patch(['visit', 'lastActiveAt'], new Date(at).toISOString());

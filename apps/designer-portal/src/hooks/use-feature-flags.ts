@@ -114,3 +114,19 @@ export function useFeatureFlags(names: readonly string[]): FeatureFlagStates {
 
   return resolved.key === namesKey ? resolved.states : initial;
 }
+
+const TEACHING_NOTES_FLAG = 'teaching-notes';
+
+/**
+ * Synchronous, fail-closed read of the `teaching-notes` flag for code outside
+ * React (the MutationCache boundary subscriber). True only when a
+ * `NEXT_PUBLIC_FLAG_OVERRIDES` entry turns it on, or PostHog is up and has
+ * loaded flags with `teaching-notes` on. Loading, unreachable or unset → false.
+ */
+export function isTeachingNotesEnabled(): boolean {
+  const override = parseFlagOverride(TEACHING_NOTES_FLAG);
+  if (override !== undefined) return override;
+  if (!isAnalyticsEnabled()) return false;
+  // `isFeatureEnabled` answers undefined until flags have loaded.
+  return posthog.isFeatureEnabled(TEACHING_NOTES_FLAG) === true;
+}

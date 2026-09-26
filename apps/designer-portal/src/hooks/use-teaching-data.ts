@@ -2,7 +2,8 @@
 
 /**
  * Return teaching data layer (system-architecture §2 Inputs). Four React Query
- * reads the selector consumes, each disabled until a user is signed in:
+ * reads the selector consumes, each disabled until a user is signed in and the
+ * `teaching-notes` flag has resolved on (fail-closed while it loads):
  *   · notes    — Sanity `teachingNote` (published perspective, CDN)
  *   · releases — the committed manifest ∩ published Sanity `teachingRelease`
  *   · state    — own `teaching_note_state` row, patched via the teaching backend
@@ -21,6 +22,7 @@ import {
   type TeachingRelease,
 } from '@patina/help-system';
 import { TEACHING_RELEASES } from '@/content/teaching-releases';
+import { useFeatureFlags } from './use-feature-flags';
 
 export const TEACHING_NOTES_KEY = ['teaching-notes'] as const;
 export const TEACHING_RELEASES_KEY = ['teaching-releases'] as const;
@@ -70,15 +72,24 @@ function useSignedInUserId(): string | null {
   return session?.user?.id ?? null;
 }
 
+const TEACHING_FLAGS = ['teaching-notes'] as const;
+
+/** False while the flag loads, when it is off, and when PostHog is unreachable. */
+function useTeachingFlagOn(): boolean {
+  const flag = useFeatureFlags(TEACHING_FLAGS)['teaching-notes'];
+  return flag.value && !flag.isLoading;
+}
+
 export function useTeachingNotes() {
   const userId = useSignedInUserId();
+  const flagOn = useTeachingFlagOn();
   return useQuery({
     queryKey: TEACHING_NOTES_KEY,
     queryFn: async (): Promise<TeachingNoteDoc[]> => {
       const docs = await getSanityClient().fetch<TeachingNoteDoc[] | null>(TEACHING_NOTES_QUERY);
       return (docs ?? []).map((doc) => ({ ...doc, bindings: toBindingMap(doc.bindings) }));
     },
-    enabled: !!userId,
+    enabled: !!userId && flagOn,
     staleTime: THIRTY_MINUTES,
     meta: SILENT,
   });
@@ -87,6 +98,7 @@ export function useTeachingNotes() {
 /** Published releases that this bundle ships, in manifest (release) order. */
 export function useTeachingReleases() {
   const userId = useSignedInUserId();
+  const flagOn = useTeachingFlagOn();
   return useQuery({
     queryKey: TEACHING_RELEASES_KEY,
     queryFn: async (): Promise<TeachingRelease[]> => {
@@ -97,7 +109,7 @@ export function useTeachingReleases() {
         return doc ? [doc] : [];
       });
     },
-    enabled: !!userId,
+    enabled: !!userId && flagOn,
     staleTime: THIRTY_MINUTES,
     meta: SILENT,
   });
@@ -109,11 +121,12 @@ function teachingBackend() {
 
 export function useTeachingNoteState() {
   const userId = useSignedInUserId();
+  const flagOn = useTeachingFlagOn();
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: TEACHING_NOTE_STATE_KEY,
     queryFn: () => teachingBackend().load(),
-    enabled: !!userId,
+    enabled: !!userId && flagOn,
     meta: SILENT,
   });
   const mutation = useMutation({
@@ -138,6 +151,7 @@ let signalsErrorLogged = false;
 
 export function useTeachingSignals() {
   const userId = useSignedInUserId();
+  const flagOn = useTeachingFlagOn();
   return useQuery({
     queryKey: TEACHING_SIGNALS_KEY,
     queryFn: async (): Promise<TeachingSignals | null> => {
@@ -153,7 +167,7 @@ export function useTeachingSignals() {
       }
       return (data ?? null) as TeachingSignals | null;
     },
-    enabled: !!userId,
+    enabled: !!userId && flagOn,
     staleTime: FIVE_MINUTES,
   });
 }

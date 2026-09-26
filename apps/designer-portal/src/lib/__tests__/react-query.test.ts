@@ -37,6 +37,11 @@ jest.mock('../../../../../packages/help-system/src/index.ts', () => ({
 
 jest.mock('@patina/supabase', () => ({ createBrowserClient: () => mockBrowserClient }));
 
+const mockIsTeachingNotesEnabled = jest.fn();
+jest.mock('../../hooks/use-feature-flags', () => ({
+  isTeachingNotesEnabled: () => mockIsTeachingNotesEnabled(),
+}));
+
 import { waitFor } from '@testing-library/react';
 import { queryClient } from '../react-query';
 import {
@@ -317,6 +322,7 @@ describe('Return teaching tagged boundaries', () => {
     mockInvalidateTeachingSignals.mockReset();
     mockCreateTeachingBackend.mockReset();
     mockTeachingPatch.mockReset().mockResolvedValue({ v: 1, visit: { lastActiveAt: 'patched' } });
+    mockIsTeachingNotesEnabled.mockReset().mockReturnValue(true);
   });
 
   const succeed = (meta?: Record<string, unknown>) =>
@@ -353,5 +359,20 @@ describe('Return teaching tagged boundaries', () => {
     const [path, value] = mockTeachingPatch.mock.calls[0];
     expect(path).toEqual(['visit', 'lastActiveAt']);
     expect(Date.parse(value as string)).toBeGreaterThanOrEqual(before);
+  });
+
+  it('with teaching-notes off, still records the boundary but never patches or refreshes', async () => {
+    mockIsTeachingNotesEnabled.mockReturnValue(false);
+    const before = Date.now();
+    await succeed({ errorSurface: 'inline', teachingBoundary: true, boundaryKey: 'invoice_sent' });
+
+    expect(firedOn(SURFACE, 'invoice_sent', before)).toBe(true);
+    await waitFor(() => expect(mockIsTeachingNotesEnabled).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockCreateTeachingBackend).not.toHaveBeenCalled();
+    expect(mockTeachingPatch).not.toHaveBeenCalled();
+    expect(mockInvalidateTeachingSignals).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(['teaching-note-state'])).toBeUndefined();
   });
 });
