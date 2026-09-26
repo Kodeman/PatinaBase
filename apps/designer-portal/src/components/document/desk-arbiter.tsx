@@ -2,7 +2,7 @@
 
 /**
  * The Desk arbiter (system-architecture §2, finding 17): every Desk line goes
- * through one slot, and at most one line renders per visit.
+ * through one slot, and at most one line renders per Desk load.
  *
  * Priority (UX shared addition 3): a person's words (`hire-handoff`), then
  * `desk-first-touch` (first hour only), the walkthrough offer, the teaching
@@ -17,12 +17,14 @@
  * and that pick is not carried: the next Desk load picks again. Otherwise
  * later Desk loads in the same visit (no VISIT_GAP_MS away) keep the visit's
  * line. The teaching note and the since-line are the visit's one unsolicited
- * line in the stored visit too (`useReturnNote` records the one on screen),
- * so after a reload the whisper yields to a line already shown. The whisper
- * is a Desk line, not teaching: it records nothing, and after a reload the
- * order decides again. Nothing renders while the walkthrough is on screen
- * (R-RT2), and nothing at all when no line is eligible: no placeholder, no
- * space kept.
+ * line in the stored visit too (`useReturnNote` records the one on screen).
+ * The setup whisper is a Desk line, never a teaching claim: it records
+ * nothing, and a load that decides from the stored visit holds it back after
+ * a teaching line. A full reload is usually cold, so teaching yields there
+ * and the whisper may show; the whisper and a teaching line can each appear
+ * on different loads of the same visit, in either order. Nothing renders
+ * while the walkthrough is on screen (R-RT2), and nothing at all when no line
+ * is eligible: no placeholder, no space kept.
  */
 
 import { useEffect, useState, type ReactNode } from 'react';

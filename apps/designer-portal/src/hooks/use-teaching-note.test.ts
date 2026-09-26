@@ -31,6 +31,9 @@ const mockPatch = jest.fn(async (path: string[], value: unknown) => {
   return next;
 });
 
+/** The state query's read of the stored row; by default the row is what the cache holds. */
+const mockLoad = jest.fn(async () => client.getQueryData(STATE_KEY));
+
 jest.mock('./use-teaching-data', () => ({
   TEACHING_NOTE_STATE_KEY: ['teaching-note-state'],
   useTeachingNotes: () => ({ data: mockNotes }),
@@ -136,7 +139,10 @@ beforeEach(() => {
   resetTeachingBoundaries();
   mockPatch.mockClear();
   mockCapture.mockClear();
+  mockLoad.mockClear();
   client = new QueryClient();
+  // The real state query's queryFn, so a refetch of it reads the stored row.
+  client.setQueryDefaults(STATE_KEY, { queryFn: () => mockLoad() });
   mockNotes = [RELEASE_NOTE];
   mockReleases = RELEASES;
   mockSignals = SIGNALS;
@@ -355,11 +361,7 @@ describe('useReturnNote', () => {
       },
       recentUnsolicited: [iso(NOW - 20 * MIN)],
     });
-    mockPatch.mockImplementationOnce(async (path: string[], value: unknown) => {
-      const next = setIn(stored, path, value);
-      client.setQueryData(STATE_KEY, next);
-      return next;
-    });
+    mockLoad.mockImplementationOnce(async () => stored);
     const tabA = renderDesk({ onScreen: 'teaching-note' });
     // The stored row is not in at first paint: tab A yields this load.
     expect(tabA.result.current.yielded).toBe(true);
@@ -367,8 +369,9 @@ describe('useReturnNote', () => {
     expect(tabA.result.current.note).toBeNull();
     await waitFor(() => expect(client.getQueryData<TeachingNoteState>(STATE_KEY)?.visit?.startedAt).toBe(iso(NOW - 20 * MIN)));
     await act(async () => {});
-    // Only the no-op read of the stored row: no visit, claim or count written.
-    expect(mockPatch.mock.calls).toEqual([[['v'], 1]]);
+    // One read-only refetch of the stored row: nothing at all written.
+    expect(mockLoad).toHaveBeenCalledTimes(1);
+    expect(mockPatch).not.toHaveBeenCalled();
     tabA.unmount();
 
     // Its next Desk mount decides from the stored row: the visit is tab B's,
@@ -399,11 +402,7 @@ describe('useReturnNote', () => {
         unsolicitedShown: 'other@1',
       },
     });
-    mockPatch.mockImplementationOnce(async (path: string[], value: unknown) => {
-      const next = setIn(stored, path, value);
-      client.setQueryData(STATE_KEY, next);
-      return next;
-    });
+    mockLoad.mockImplementationOnce(async () => stored);
     const { result, rerender } = renderDesk({ ready: false, onScreen: 'teaching-note' });
     await waitFor(() => expect(client.getQueryData<TeachingNoteState>(STATE_KEY)?.visit?.unsolicitedShown).toBe('other@1'));
     // The query hands the Desk the stored row, then the roster paints.

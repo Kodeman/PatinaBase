@@ -340,7 +340,20 @@ describe('Return teaching tagged boundaries', () => {
     expect(mockTeachingPatch).not.toHaveBeenCalled();
   });
 
+  const MIN = 60 * 1000;
+  /** A cached state row whose visit was last active `agoMs` before now. */
+  const cacheVisit = (agoMs: number) =>
+    queryClient.setQueryData(['teaching-note-state'], {
+      v: 1,
+      visit: {
+        startedAt: new Date(Date.now() - agoMs - 10 * MIN).toISOString(),
+        lastActiveAt: new Date(Date.now() - agoMs).toISOString(),
+        unsolicitedShown: 'yesterday@1',
+      },
+    });
+
   it('records a tagged success on the current surface, refreshes signals and patches lastActiveAt', async () => {
+    cacheVisit(5 * MIN);
     const before = Date.now();
     await succeed({ errorSurface: 'inline', teachingBoundary: true, boundaryKey: 'invoice_sent' });
 
@@ -359,6 +372,33 @@ describe('Return teaching tagged boundaries', () => {
     const [path, value] = mockTeachingPatch.mock.calls[0];
     expect(path).toEqual(['visit', 'lastActiveAt']);
     expect(Date.parse(value as string)).toBeGreaterThanOrEqual(before);
+  });
+
+  it('R-RT8: when the cached row says a new visit starts, records the boundary but never patches lastActiveAt', async () => {
+    // Yesterday's visit, still in cache on a Desk load that yielded.
+    cacheVisit(20 * 60 * MIN);
+    const cachedBefore = queryClient.getQueryData(['teaching-note-state']);
+    const before = Date.now();
+    await succeed({ errorSurface: 'inline', teachingBoundary: true, boundaryKey: 'invoice_sent' });
+
+    expect(firedOn(SURFACE, 'invoice_sent', before)).toBe(true);
+    await waitFor(() => expect(mockInvalidateTeachingSignals).toHaveBeenCalledWith(queryClient));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockTeachingPatch).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(['teaching-note-state'])).toBe(cachedBefore);
+  });
+
+  it('R-RT8: with no cached state row, records the boundary but never patches lastActiveAt', async () => {
+    const before = Date.now();
+    await succeed({ errorSurface: 'inline', teachingBoundary: true, boundaryKey: 'invoice_sent' });
+
+    expect(firedOn(SURFACE, 'invoice_sent', before)).toBe(true);
+    await waitFor(() => expect(mockInvalidateTeachingSignals).toHaveBeenCalledWith(queryClient));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockTeachingPatch).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(['teaching-note-state'])).toBeUndefined();
   });
 
   it('with teaching-notes off, still records the boundary but never patches or refreshes', async () => {

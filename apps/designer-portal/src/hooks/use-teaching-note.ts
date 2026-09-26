@@ -479,7 +479,7 @@ interface DeskDecision {
 /**
  * The cache says a new visit starts, but this page has not synced the row
  * within VISIT_GAP_MS: another tab may be in the visit. The Desk decides from
- * the stored row (`confirmVisitJob`), never from the stale cache (R3 #14).
+ * the stored row (a read-only refetch), never from the stale cache (R3 #14).
  */
 const unconfirmedVisit = (state: TeachingNoteState | undefined, syncedAt: number, now: number): boolean =>
   !!state && isNewVisit(state, now) && !(now - syncedAt < VISIT_GAP_MS);
@@ -580,8 +580,9 @@ export function useReturnNote(opts: {
         ?.name ?? undefined
     : undefined;
 
-  // A stale cache asks for the stored row at once, so it may arrive before
+  // A stale cache refetches the stored row at once, so it may arrive before
   // first paint; if not, this load yields and the next mount has the row.
+  // A read, never a write: a load that may yield writes nothing.
   const queryClient = useQueryClient();
   const syncedAt = queryClient.getQueryState(TEACHING_NOTE_STATE_KEY)?.dataUpdatedAt ?? 0;
   const unconfirmed = !off && unconfirmedVisit(r.state, syncedAt, Date.now());
@@ -589,8 +590,8 @@ export function useReturnNote(opts: {
   useEffect(() => {
     if (!unconfirmed || confirming.current) return;
     confirming.current = true;
-    write(confirmVisitJob(Date.now()));
-  }, [unconfirmed, write]);
+    void queryClient.refetchQueries({ queryKey: TEACHING_NOTE_STATE_KEY, exact: true });
+  }, [unconfirmed, queryClient]);
 
   const [decision, setDecision] = useState<DeskDecision | null>(null);
   if (ready && decision === null) {

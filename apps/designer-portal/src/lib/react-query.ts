@@ -9,7 +9,7 @@ import {
   toLiveSessionError,
 } from './error-handler';
 import { getCurrentTeachingSurface, record as recordTeachingBoundary } from './teaching/boundaries';
-import type { TeachingBoundaryKey } from './teaching/types';
+import type { TeachingBoundaryKey, TeachingNoteState } from './teaching/types';
 
 /**
  * R83 — the error grammar. Mutations on (document) surfaces render failures as
@@ -182,9 +182,12 @@ const mutationCache = new MutationCache({
 /**
  * Records the boundary in memory (anchors read it), then, only while the
  * `teaching-notes` flag is on, refreshes `teaching_signals()` and patches
- * `visit.lastActiveAt`. The flag accessor and teaching data layer are imported
- * lazily so the many modules that import `queryKeys` from this file do not
- * pull PostHog, Sanity and the teaching backend into their graph.
+ * `visit.lastActiveAt` when the cached state row says the visit is current
+ * (R-RT8). With no cached row, or one that says a new visit starts, nothing is
+ * written, so a boundary on a yielded Desk load cannot keep yesterday's visit
+ * alive. The flag accessor and teaching data layer are imported lazily so the
+ * many modules that import `queryKeys` from this file do not pull PostHog,
+ * Sanity and the teaching backend into their graph.
  * Teaching is background context: a failure here is logged, never surfaced.
  */
 function onTeachingBoundary(boundaryKey: TeachingBoundaryKey): void {
@@ -193,12 +196,15 @@ function onTeachingBoundary(boundaryKey: TeachingBoundaryKey): void {
   void import('@/hooks/use-feature-flags')
     .then(async (flags) => {
       if (!flags.isTeachingNotesEnabled()) return;
-      const [teaching, helpSystem, supabase] = await Promise.all([
+      const [teaching, helpSystem, supabase, select] = await Promise.all([
         import('@/hooks/use-teaching-data'),
         import('@patina/help-system'),
         import('@patina/supabase'),
+        import('./teaching/select'),
       ]);
       void teaching.invalidateTeachingSignals(queryClient);
+      const cached = queryClient.getQueryData<TeachingNoteState>(teaching.TEACHING_NOTE_STATE_KEY);
+      if (!cached || select.isNewVisit(cached, at)) return;
       const backend = helpSystem.createSupabaseTeachingNoteBackend(supabase.createBrowserClient());
       const state = await backend.patch(['visit', 'lastActiveAt'], new Date(at).toISOString());
       queryClient.setQueryData(teaching.TEACHING_NOTE_STATE_KEY, state);
