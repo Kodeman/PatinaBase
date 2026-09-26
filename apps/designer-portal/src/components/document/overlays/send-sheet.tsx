@@ -47,6 +47,7 @@ import { useProposalMirrorData } from '../drafting/proposal-mirror';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { assessProposalSendReadiness } from '@/lib/document/proposal-send-validation';
 import { useProposalAutosaveBarrier } from '@/hooks/use-proposal-autosave-barrier';
+import { useTeachingHold } from '@/lib/teaching/hold-registry';
 import {
   flushProposalAutosaves,
   getProposalAutosaveSnapshot,
@@ -207,6 +208,12 @@ export function SendSheet({
   const clientCopyReviewAttempt = useRef(0);
   const [deliveryRecovery, setDeliveryRecovery] =
     useState<DeliveryRecovery | null>(null);
+  // Return-teaching §2 (finding 12) — composing a cc or a personal note is
+  // unsaved sheet state; no teaching note may render while either is typed.
+  useTeachingHold(
+    'send-sheet',
+    personalMessage.trim() !== '' || ccEmail.trim() !== '',
+  );
   const committedDispatchId =
     typeof proposal?.proposal_send_dispatch_id === 'string'
       ? proposal.proposal_send_dispatch_id

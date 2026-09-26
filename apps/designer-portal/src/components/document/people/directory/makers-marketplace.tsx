@@ -21,6 +21,7 @@ import {
 } from '@patina/supabase';
 import { Avatar } from '../person-bits';
 import { DocumentAction } from '../../document-action';
+import { useTeachingHold } from '@/lib/teaching/hold-registry';
 
 // The vendors hook predates generated types for this table (see use-vendors.ts).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,6 +68,9 @@ export function MakersMarketplace({
   const [rowError, setRowError] = useState<{ id: string; text: string } | null>(
     null,
   );
+  // Return-teaching §2 (finding 12) — an admission write in flight is an
+  // unsaved row; no teaching note may render while it is on the wire.
+  useTeachingHold('makers-marketplace', savingId !== null);
 
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string | null>(null);

@@ -35,6 +35,7 @@ import { rippleSentence } from '@/lib/document/schedule-ripple-derivation';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import { useRippleSession } from './schedule-ripple-context';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { useTeachingHold } from '@/lib/teaching/hold-registry';
 
 export interface ScheduleConfirmStripProps {
   projectId: string;
@@ -60,6 +61,11 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
   // an ended session (commit success or Esc·Revert) resets it to "following."
   const [reason, setReason] = useState('');
   const [reasonDirty, setReasonDirty] = useState(false);
+
+  // Return-teaching §2 (finding 12) — a ripple session in flight is a pending
+  // confirm; called unconditionally, ahead of the `session == null` early
+  // return below, since a hook cannot be called conditionally.
+  useTeachingHold('schedule-confirm-strip', session != null && diff != null);
 
   useEffect(() => {
     if (!reasonDirty && sentence != null) setReason(sentence.plain);

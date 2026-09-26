@@ -55,6 +55,7 @@ import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import { partDrawsNothing } from "../../../commercial/agreement-parts-body";
 import { ServiceAgreementSendSheet } from "../../../commercial/service-agreement-send-sheet";
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
+import { useTeachingHold } from "@/lib/teaching/hold-registry";
 import {
   createBlankPart,
   duplicateMoneyVariants,
@@ -290,6 +291,9 @@ export function AgreementComposer({
    */
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  // Return-teaching §2 (finding 12) — the composer holds unsaved composition
+  // state; no teaching note may render while it does.
+  useTeachingHold("agreement-composer", dirty);
   const [savedAt, setSavedAt] = useState<string | null>(() =>
     newestUpdate(bundle.parts),
   );
@@ -1093,6 +1097,7 @@ export function AgreementComposer({
             ? `${savedLine(savedAt)} · ${part.title} not yet saved`
             : savedLine(savedAt)
       }
+      dirty={dirty}
       readOnly={readOnly}
       libraryOn={libraryOn}
       blockers={partBlockers}

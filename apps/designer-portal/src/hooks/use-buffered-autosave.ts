@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BoardOwnerRef } from '@patina/types';
 import { registerBoardOwnerAutosave } from '@/lib/proposal-autosave-registry';
+import { useTeachingHold } from '@/lib/teaching/hold-registry';
 
 export type BufferedAutosaveState =
   | 'idle'
@@ -258,6 +259,15 @@ export function useBufferedAutosave<Key extends string, Patch extends object>({
     }
   }, [generation]);
   generation.flushAll = flushAll;
+
+  // Return-teaching §2 (finding 12) — a designer mid-edit here is not at rest.
+  // `pending`/`inFlight` are this generation's queued and in-flight save maps;
+  // either non-empty means unsaved or unsettled work, so no teaching note may
+  // render while this instance holds it.
+  useTeachingHold(
+    `buffered-autosave:${resolvedGenerationKey}`,
+    generation.pending.size > 0 || generation.inFlight.size > 0,
+  );
 
   useEffect(() => {
     let detached = false;

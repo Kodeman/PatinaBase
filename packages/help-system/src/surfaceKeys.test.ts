@@ -240,6 +240,19 @@ describe('SurfaceKeys — spot-check constant values', () => {
     )
   })
 
+  // ── W2-d (return-teaching, hold registry) ─────────────────────────────────
+  it('DesignerPortal.Document.DraftingGalley is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Document.DraftingGalley).toBe(
+      'designer-portal/document/drafting/galley',
+    )
+  })
+
+  it('DesignerPortal.Document.AccountMembers is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Document.AccountMembers).toBe(
+      'designer-portal/document/account/members',
+    )
+  })
+
   // ── The Desk Walkthrough tour (R97) ───────────────────────────────────────
   it('DesignerPortal.Tours.DeskWalkthrough.Root is the correct literal', () => {
     expect(SurfaceKeys.DesignerPortal.Tours.DeskWalkthrough.Root).toBe(

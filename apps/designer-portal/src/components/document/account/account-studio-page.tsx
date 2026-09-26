@@ -54,6 +54,7 @@ import { LicensingAttestationCard } from './licensing-attestation-card';
 import { studioEvents } from '@/lib/analytics/studio-events';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { RolodexSeedSheet } from '../people/directory/rolodex-seed-sheet';
+import { useTeachingHold } from '@/lib/teaching/hold-registry';
 
 /** Map studio DB error codes to friendly copy (see 00319 guard + RPCs). */
 function friendlyStudioError(err: unknown, fallback: string): string {
@@ -339,6 +340,33 @@ export function AccountStudioPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agreementDefaults?.studioId]);
+
+  // Return-teaching §2 (finding 12) — an unsaved form on this page holds
+  // teaching. Called here, ahead of the "no studio"/"loading" early returns
+  // below, since a hook cannot be called conditionally; mirrors the
+  // branding/billing/agreement-defaults dirty checks derived again (for
+  // display) further down.
+  const holdAddress = (studio?.address ?? {}) as Record<string, unknown>;
+  const holdAsStr = (v: unknown) => (typeof v === 'string' ? v : '');
+  const holdBillingBps = percentInputToBps(billing.cardFeePercent);
+  useTeachingHold(
+    'account-studio-page',
+    !!studio &&
+      (branding.website !== (studio.website ?? '') ||
+        branding.email !== (studio.email ?? '') ||
+        branding.phone !== (studio.phone ?? '') ||
+        branding.line1 !== holdAsStr(holdAddress.line1) ||
+        branding.line2 !== holdAsStr(holdAddress.line2) ||
+        branding.city !== holdAsStr(holdAddress.city) ||
+        branding.state !== holdAsStr(holdAddress.state) ||
+        branding.zip !== holdAsStr(holdAddress.zip) ||
+        (!!billingSettings &&
+          (holdBillingBps !== billingSettings.card_surcharge_bps ||
+            billing.checkRemitTo !== (billingSettings.check_remit_to ?? ''))) ||
+        (!!agreementDefaults &&
+          JSON.stringify(rateCardForSave(agreementForm.rateCard)) !==
+            JSON.stringify(agreementDefaults.rateCard))),
+  );
 
   const myRole = studio?.membership.role ?? null;
   const canManage = myRole === 'owner' || myRole === 'admin';

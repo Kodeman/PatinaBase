@@ -673,6 +673,13 @@ export const SurfaceKeys = {
       // own room, and the help copy there is about sets and revisions, not
       // about the document the band sits on.
       Plans:           'designer-portal/document/plans',
+      // W2-d (return-teaching, hold registry) — the Galley fold, its own key
+      // distinct from Drafting: a designer editing a part's clause is a
+      // different help moment than the room around it.
+      DraftingGalley:  'designer-portal/document/drafting/galley',
+      // W2-d — the Account page's roster/members section, its own key
+      // distinct from People (which is the Document's client-facing roster).
+      AccountMembers:  'designer-portal/document/account/members',
     },
   },
   /**

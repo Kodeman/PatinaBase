@@ -14,11 +14,13 @@ import type { AgreementPart } from "@patina/types";
 import { PartEditor } from "../part-editor";
 import { PartHistoryStrip } from "../part-history-strip";
 import type { TurnkeyContext } from "../turnkey";
+import { useTeachingHold } from "@/lib/teaching/hold-registry";
 
 export function GalleyFold({
   part,
   proposalId,
   record,
+  dirty,
   readOnly,
   libraryOn,
   blockers,
@@ -33,6 +35,9 @@ export function GalleyFold({
   proposalId: string;
   /** The dated record, with this part's own unsaved clause when it has one. */
   record: string;
+  /** The composer's dirty flag — this part's own unsaved clause (return-teaching
+   *  §2, finding 12): while true, nothing here is at rest. */
+  dirty: boolean;
   readOnly: boolean;
   libraryOn: boolean;
   blockers: string[];
@@ -44,6 +49,7 @@ export function GalleyFold({
   onKeepInLibrary?: () => void;
   kept: boolean;
 }) {
+  useTeachingHold(`galley-fold:${part.partKey}`, dirty);
   return (
     <>
       {!readOnly && (

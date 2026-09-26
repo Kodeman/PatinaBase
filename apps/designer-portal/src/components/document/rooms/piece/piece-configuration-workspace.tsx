@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Input, Select, Textarea } from "@/components/ui/controls";
 import { StrataSweep } from "@/components/ui/strata-sweep";
 import { libraryConfigurationEvents } from "@/lib/analytics/library-configuration-events";
+import { useTeachingHold } from "@/lib/teaching/hold-registry";
 import { PieceConfigurationEditor } from "./piece-configuration-editor";
 import {
   COM_LEAD_TIME_WARNING,
@@ -257,6 +258,11 @@ export function PieceConfigurationWorkspace({
   useEffect(() => {
     onResolutionChange?.(effectiveResolution, authoritativeSnapshot);
   }, [authoritativeSnapshot, effectiveResolution, onResolutionChange]);
+
+  // Return-teaching §2 (finding 12) — called here, ahead of the
+  // `definitionLoading` early return below, since a hook cannot be called
+  // conditionally.
+  useTeachingHold("piece-configuration-workspace", configurationDirty);
 
   const changeSelection = (next: PieceConfigurationSelectionView) => {
     setSelection(next);

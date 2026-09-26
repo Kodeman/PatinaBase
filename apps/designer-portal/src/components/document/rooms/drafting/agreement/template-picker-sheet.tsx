@@ -20,6 +20,7 @@ import { useAgreementTemplates } from "@patina/supabase";
 import { DESIGN_BUILD_COPY, type AgreementTemplate } from "@patina/types";
 import { Button } from "@/components/ui/controls";
 import { DocSheet } from "../../../overlays/doc-sheet";
+import { useTeachingHold } from "@/lib/teaching/hold-registry";
 
 const LABEL =
   "font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ink-subtle)]";
@@ -116,6 +117,9 @@ export function TemplatePickerSheet({
   const templates = useAgreementTemplates(studioId);
   const [chosen, setChosen] = useState<AgreementTemplate | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Return-teaching §2 (finding 12) — a template picked but not yet confirmed
+  // is a pending pick; no teaching note may render until it resolves.
+  useTeachingHold("template-picker-sheet", chosen !== null);
 
   const shelf = useMemo(() => {
     return ((templates.data ?? []) as AgreementTemplate[])
