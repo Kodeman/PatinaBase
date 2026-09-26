@@ -66,10 +66,12 @@ jest.mock('@/hooks/use-auth', () => ({
 
 let mockCallSheetFlag = false;
 let mockTesterNotesFlag = false;
+let mockTeachingNotesFlag = false;
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (name: string) => {
     if (name === 'call-sheet') return { value: mockCallSheetFlag };
     if (name === 'tester-notes') return { value: mockTesterNotesFlag };
+    if (name === 'teaching-notes') return { value: mockTeachingNotesFlag };
     return { value: false };
   },
 }));
@@ -119,6 +121,7 @@ function deskRow(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   mockCallSheetFlag = false;
   mockTesterNotesFlag = false;
+  mockTeachingNotesFlag = false;
   mockPathname.mockReturnValue('/desk');
   mockDeskData.mockReturnValue({ folders: [], chips: [] });
   mockPush.mockClear();
@@ -810,6 +813,36 @@ describe('the "Leave a note" doorway follows the tester-notes flag', () => {
 
     expect(screen.getByText('Leave a note')).toBeInTheDocument();
     expect(screen.getByText('feedback on this screen')).toBeInTheDocument();
+  });
+});
+
+describe('R2-F2 — the "What changed" row follows the teaching-notes flag', () => {
+  function typeForTheChangesRow() {
+    render(
+      <>
+        <FindAnythingButton />
+        <CommandBar />
+      </>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /find anything/i }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find anything' }), {
+      target: { value: 'what changed' },
+    });
+  }
+
+  it('offers no What changed row with the flag off', () => {
+    mockTeachingNotesFlag = false;
+    typeForTheChangesRow();
+
+    expect(screen.queryByText('What changed')).not.toBeInTheDocument();
+  });
+
+  it('offers the What changed row with the flag on', () => {
+    mockTeachingNotesFlag = true;
+    typeForTheChangesRow();
+
+    expect(screen.getByText('What changed')).toBeInTheDocument();
+    expect(screen.getByText('changes to the Document, newest first')).toBeInTheDocument();
   });
 });
 

@@ -58,6 +58,14 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/desk',
 }));
 
+let mockTeachingNotesFlag = false;
+jest.mock('@/hooks/use-feature-flag', () => ({
+  useFeatureFlag: (name: string) => {
+    if (name === 'teaching-notes') return { value: mockTeachingNotesFlag };
+    return { value: false };
+  },
+}));
+
 jest.mock('next/link', () => ({
   __esModule: true,
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -230,5 +238,29 @@ describe('DocumentHelpPanel (host surfaces answer, and the KEYS block)', () => {
     expect(keys).toHaveTextContent('Orders');
     expect(keys).toHaveTextContent('G');
     expect(keys).toHaveTextContent('O');
+  });
+});
+
+describe('R2-F2 — the "What changed" doorway follows the teaching-notes flag', () => {
+  beforeEach(() => {
+    mockSurfaceKey = DOCUMENT_SURFACE_KEYS.desk;
+  });
+
+  it('prints no What changed link with the flag off', () => {
+    mockTeachingNotesFlag = false;
+    renderPanel();
+    act(() => {
+      openHelp();
+    });
+    expect(screen.queryByRole('link', { name: /What changed/ })).not.toBeInTheDocument();
+  });
+
+  it('prints the What changed link with the flag on', () => {
+    mockTeachingNotesFlag = true;
+    renderPanel();
+    act(() => {
+      openHelp();
+    });
+    expect(screen.getByRole('link', { name: /What changed/ })).toBeInTheDocument();
   });
 });

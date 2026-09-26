@@ -33,7 +33,8 @@ import {
   useSetSurfaceKey,
 } from '@patina/help-system';
 import { documentPathnameToSurfaceKey } from '@/lib/help-system/document-pathname-to-surface-key';
-import { CHANGES_HREF } from '@/lib/teaching/constants';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { CHANGES_HREF, TEACHING_SYSTEM_FLAG } from '@/lib/teaching/constants';
 import {
   DOCUMENT_HELP_EVENT,
   type HelpOpenSource,
@@ -174,15 +175,19 @@ function SurfaceIntro({ blurb }: { blurb: string }) {
 function BrowseAllHelpLink() {
   const linkClass =
     'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]';
+  // Return teaching: the What changed doorway is gated on the teaching system
+  // flag, fail-closed — hidden while the flag loads and while it's off.
+  const { value: teachingNotesOn } = useFeatureFlag(TEACHING_SYSTEM_FLAG);
   return (
     <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-[var(--doc-ink-border)] px-4 py-3">
       <Link href="/help" className={linkClass}>
         Browse all help →
       </Link>
-      {/* Return teaching: the help panel's door to What changed. No dot, no count. */}
-      <Link href={CHANGES_HREF} className={linkClass}>
-        What changed
-      </Link>
+      {teachingNotesOn && (
+        <Link href={CHANGES_HREF} className={linkClass}>
+          What changed
+        </Link>
+      )}
     </div>
   );
 }

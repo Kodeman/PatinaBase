@@ -50,7 +50,7 @@ import { openHelp } from '@/lib/help-system/open-help';
 import { openLogTime } from './log-time-sheet';
 import { openKeys } from './overlays/keys-sheet';
 import { THE_WORDS_HREF } from '@/lib/help-system/keys-reference';
-import { CHANGES_HREF } from '@/lib/teaching/constants';
+import { CHANGES_HREF, TEACHING_SYSTEM_FLAG } from '@/lib/teaching/constants';
 import { HELP_EVENTS, safeCapture } from '@/lib/help-system/help-events';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
 import { fillStateForDesk, type FillState } from '@/lib/document/fill-state';
@@ -275,6 +275,9 @@ export function CommandBar() {
   // "Leave a note" is the Tester Notes doorway; without the flag the widget is
   // not mounted and the row would dispatch its open event into nothing.
   const { value: testerNotesOn } = useFeatureFlag('tester-notes');
+  // Return teaching: "What changed" is gated on the teaching system flag,
+  // fail-closed — hidden while the flag loads and while it's off.
+  const { value: teachingNotesOn } = useFeatureFlag(TEACHING_SYSTEM_FLAG);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -677,7 +680,9 @@ export function CommandBar() {
       },
     ];
     const utilityRows: PaletteRow[] = allUtilityRows.filter(
-      (row) => row.key !== 'leave-note' || testerNotesOn,
+      (row) =>
+        (row.key !== 'leave-note' || testerNotesOn) &&
+        (row.key !== 'what-changed' || teachingNotesOn),
     );
 
     const addToProjectRow: PaletteRow | null = inHandRow?.project_id && inHandRow.active_section === 'project'
@@ -995,6 +1000,7 @@ export function CommandBar() {
     user?.email,
     signOut,
     testerNotesOn,
+    teachingNotesOn,
   ]);
 
   // F1 — queried (debounced ~300ms, not per-keystroke) + zeroResult.

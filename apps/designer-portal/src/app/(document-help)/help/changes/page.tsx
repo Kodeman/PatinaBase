@@ -14,7 +14,9 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useChangesList } from '@/hooks/use-changes-list';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { captureTeachingEvent } from '@/lib/analytics/teaching-events';
+import { TEACHING_SYSTEM_FLAG } from '@/lib/teaching/constants';
 import type { TeachingNoteView } from '@/lib/teaching/types';
 
 const DATE_WORD = new Intl.DateTimeFormat('en-GB', {
@@ -53,7 +55,29 @@ function NoteSentences({ notes }: { notes: TeachingNoteView[] }) {
   );
 }
 
-export default function WhatChangedPage() {
+function ChangesHeader() {
+  return (
+    <header>
+      <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
+        The Help Center
+      </p>
+      <h1 className="mt-1 font-heading text-[24px] font-medium text-[var(--color-charcoal)]">
+        What changed
+      </h1>
+    </header>
+  );
+}
+
+function EmptyChangesBody() {
+  return (
+    <p className="font-heading text-[15px] italic leading-relaxed text-[var(--text-muted)]">
+      Nothing has changed in the Document yet.
+    </p>
+  );
+}
+
+/** Flag on: the real releases list, wired to `useChangesList`. */
+function ChangesListBody() {
   const { releases, also, isLoading } = useChangesList();
 
   useEffect(() => {
@@ -63,21 +87,8 @@ export default function WhatChangedPage() {
   const empty = !isLoading && releases.length === 0 && also.length === 0;
 
   return (
-    <article className="space-y-7">
-      <header>
-        <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--text-muted)]">
-          The Help Center
-        </p>
-        <h1 className="mt-1 font-heading text-[24px] font-medium text-[var(--color-charcoal)]">
-          What changed
-        </h1>
-      </header>
-
-      {empty && (
-        <p className="font-heading text-[15px] italic leading-relaxed text-[var(--text-muted)]">
-          Nothing has changed in the Document yet.
-        </p>
-      )}
+    <>
+      {empty && <EmptyChangesBody />}
 
       {releases.map((release) => (
         <section
@@ -114,6 +125,23 @@ export default function WhatChangedPage() {
           <NoteSentences notes={also} />
         </section>
       )}
+    </>
+  );
+}
+
+/**
+ * Fail-closed on the teaching system flag: while it's loading or off, this
+ * renders the same quiet empty state the page shows when there are no
+ * releases (no 404, no redirect) and never mounts `ChangesListBody`, so
+ * `useChangesList` is not called.
+ */
+export default function WhatChangedPage() {
+  const { value: teachingNotesOn, isLoading: flagLoading } = useFeatureFlag(TEACHING_SYSTEM_FLAG);
+
+  return (
+    <article className="space-y-7">
+      <ChangesHeader />
+      {flagLoading || !teachingNotesOn ? <EmptyChangesBody /> : <ChangesListBody />}
     </article>
   );
 }
