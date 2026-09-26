@@ -120,8 +120,6 @@ export {
   TOUR_STATE_STORAGE_PREFIX,
 } from './proactive/TourController';
 export type { TourState, TourStateBackend } from './proactive/TourController';
-export { FeatureAnnouncementCoachmark } from './proactive/FeatureAnnouncementCoachmark';
-export type { FeatureAnnouncementCoachmarkProps } from './proactive/FeatureAnnouncementCoachmark';
 export {
   getFeatureAnnouncementState,
   setFeatureAnnouncementState,

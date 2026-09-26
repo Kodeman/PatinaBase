@@ -1,5 +1,3 @@
-export { FeatureAnnouncementCoachmark } from './FeatureAnnouncementCoachmark'
-export type { FeatureAnnouncementCoachmarkProps } from './FeatureAnnouncementCoachmark'
 export {
   getFeatureAnnouncementState,
   setFeatureAnnouncementState,

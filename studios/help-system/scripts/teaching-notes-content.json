@@ -195,7 +195,7 @@
     "kind": "owner_capability",
     "audience": "owner",
     "trigger": "anchor",
-    "surfaceKey": "designer-portal/account/members",
+    "surfaceKey": "designer-portal/document/account/members",
     "flag": "onboarding-teammate-persona",
     "featureKey": "seats",
     "boundary": "invite_sent",
