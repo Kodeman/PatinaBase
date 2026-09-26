@@ -56,7 +56,9 @@ Deploys the studio to `https://kv3qrinl.sanity.studio`. Requires Sanity credenti
 
 `teachingNote` and `teachingRelease` hold return-teaching copy (design: `artifacts/return-teaching-2026-09-25/design/system-architecture.md` §1.1, §1.2, §6). Agents write drafts; the portal reads only published documents, so publishing is the approval.
 
-Publish on these two types is limited to the Sanity user ids in `SANITY_STUDIO_PUBLISHER_IDS` (comma-separated, read at studio build). Empty or unset means no guard, and the studio logs a console warning. The guard hides the Studio button only; it does not stop an API token from publishing.
+Publish on these two types is limited to the Sanity user ids in `SANITY_STUDIO_PUBLISHER_IDS` (comma-separated, read at studio build). Empty or unset fails closed: the Publish action is removed for both types (nobody can publish), and the studio logs a console warning naming the variable. The guard hides the Studio button only; it does not stop an API token from publishing. The Publish action also stamps `publishedAt` (ISO now) on the draft when it has none, before the publish transaction commits.
+
+The teaching-notes content seed (`scripts/run-teaching-notes-seed.mjs`) writes drafts with `createIfNotExists`, so a re-run never overwrites a doc Leah has already edited or approved; it reports "exists, skipped" per doc that already exists.
 
 ```bash
 # From this directory
