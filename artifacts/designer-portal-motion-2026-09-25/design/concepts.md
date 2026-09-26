@@ -12,7 +12,7 @@ Kody asked for "peaceful, large informational text that animates and reveals the
 
 ### Two states
 
-**AT REST.** Large: identity, or the fact explaining why this needs a hand. Small: ownership, date, vitals, section names, action words. Absent: secondary explanation behind visible doorways. Never absent: an owed act, error, field label, decision-critical amount or confirmation.
+**AT REST.** Large: identity, or the fact explaining why this needs a hand. Small: ownership, date, vitals, section names, action words. Absent: secondary explanation behind visible doorways. Never absent: an owed act, error, permission explanation, field label, decision-critical amount or confirmation.
 
 **ADDRESSED.** The large line stays put. A bounded block (fact, act, doorway) arrives as one unit from the nearest seam: reading order, not delayed beats. Then everything stays still.
 
@@ -42,11 +42,12 @@ Reveal 120–180ms; recede 100–150ms; hover 80–120ms; structural 200–300ms
 
 - **Never before her act; never mid-task.** Mount, incoming updates and passive intersection cannot invent intent. Pointer address = 100ms cancellable dwell in a labeled seam; focus, click, tap, Enter and Space are immediate. Scroll-caused pointer crossings are ignored.
 - **Parity.** Pointer and keyboard reveal identical facts and acts. Focus outline 0ms. Touch uses the same visible Detail control, never a long-press. Targets at least 44px.
-- **Hover is optional.** It reveals explanation, never essential controls. Blank paper does not snatch a reveal away; another address, Close detail or put-down ends it. No timeout.
-- **Holds.** Focus inside, selection, a dirty input, a pending action or an open Sheet holds the region. Animation never saves, sends or discards.
+- **Never absent at rest.** An owed act, error, permission explanation, field label, decision-critical amount or confirmation is never hidden to make the page quiet.
+- **Hover is optional.** Hover reveals optional explanation, not essential controls. Keep hit targets fixed. Trigger OR body hover/focus sustains the reveal. Moving into blank paper does not snatch it away; addressing another region, Close detail or put-down ends it. No timeout-dismiss.
+- **Holds.** Focus inside, text selection, dirty input, validation, pending action or an open Sheet holds the region. Scrolling/hovering elsewhere cannot collapse it. Explicit safe completion/departure releases the hold. Animation never saves, sends or discards.
 - **No lure.** No new badge, dot, count or pulse; no count-up, list stagger, entry ceremony, auto-scroll or snapping.
 - **Type never reflows under a reading eye.** Wells reserve content-sized space before interaction and never shrink. A full-section opening lays out once, anchored to its heading.
-- **Reverse from the current frame**: no flourish queue, no input lock. Semantic state follows the act, not `animationend`.
+- **Reverse from the current frame**, with no flourish queue, finish-before-close or input lock. Semantic state follows the act, not `animationend`. Closed details leave tab order/accessibility tree; expanded state and landmarks agree. Find-in-page, print and plain reading expose the complete text without motion.
 - **RM preserves every fact, act and hold.** No transform, parallax or smooth scroll. The OS preference and the mockup toggle both count.
 
 No new ambient motion: the spine breath is not expanded, and R35's sweep stays operation feedback.
@@ -220,7 +221,7 @@ Acts use existing Scored Ink and factual confirmation, never celebration.
 
 ## §5 Mockup index
 
-Each file opens from disk and carries "Fixture · Middle West Studio · not a client record". **(synthesis)** A DM Mono "mockup controls" strip holds Replay (AT REST, then trigger 1, then hold), Reduced motion (adds to the OS setting, never overrides it), Pause/Resume and Slow ×4 ("review aid, not a product setting"). Nothing animates on load.
+Each file opens from disk and carries "Fixture · Middle West Studio · not a client record". **(synthesis)** A DM Mono "mockup controls" strip holds Replay (AT REST, then trigger 1, then hold), Reduced motion (adds to the OS setting, never overrides it), Pause/Resume and Slow ×4 ("review aid, not a product setting"). Nothing animates on load. Pause freezes running animations and holds a pending Replay or dwell until Resume; it cannot freeze her own scrolling. A new Replay cancels any pending one. Slow ×4 multiplies every move, the 100ms dwell and the 360ms Replay hold, but does not stretch a move already in flight. Reading Line Replay jumps to the reading line, then runs the 160ms reveal; in the product she scrolls. At 760px and below the strip folds to one Controls button and the caption to its first line. `?frame=product` hides caption and strip, leaving the paper and one fixture line at its foot.
 
 | File | Direction | Surface | Trigger 1 | Caption |
 |---|---|---|---|---|
@@ -234,7 +235,9 @@ Each file opens from disk and carries "Fixture · Middle West Studio · not a cl
 | `08-direction3-document.html` | Reading Line | Held document | Scroll or Detail: R/F; Review finish pins | "Where she stops is where the paper stays open." |
 | `09-direction3-sheet.html` | Reading Line | Sheet return | Accounts S/I with reading line suspended; B restores | "Put it back and carry on, not start again." |
 
-Key: R 160ms E · X 120ms Q · P 270ms O · D 200ms Q · S 240ms E · B 180ms Q. Wells reserve 144px desktop, 192px phone.
+Key: R 160ms E · X 120ms Q · P 270ms O · D 200ms Q · S 240ms E · B 180ms Q. Detail wells reserve at least 144px desktop, 192px phone, or their content height if taller; margin wells are content-sized, with no minimum.
+
+**Prototype limitations.** Verification is source-only: `verify/oracle.mjs` and in-memory runs of the shared script, with no browser, phone or screen-reader walk, so rendered layout, focus order and announcements are unverified. Navigation is partial: Library and the other fixture doorways are not in this mockup; the finish record, the held document, Accounts and the note sheet are the only destinations built. 08 carries one margin note and no drawer, and the Desk pick-up lands on a short held brief; neither is evidence about a full margin or a full-record task. The .32 ink veil is a fixture value derived from the palette, not a live token. Reading Line pages add a 50vh run-out below the last section so it can reach the reading line: real reading length, not free polish. Native find reaches closed detail only where the browser supports `hidden="until-found"`; elsewhere print is the static path.
 
 ---
 
