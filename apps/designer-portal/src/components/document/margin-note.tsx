@@ -33,6 +33,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { X } from 'lucide-react';
 import { documentEvents } from '@/lib/analytics/document-events';
 import type { MarginNoteStateBackend } from '@patina/help-system';
@@ -129,8 +130,19 @@ export interface MarginNoteProps {
   noteKey: string;
   /** The note body, without a leading dash (the primitive supplies the lead). */
   children: React.ReactNode;
-  /** The DM-mono footnote; defaults to the R94 idiom. */
+  /** The DM-mono footnote; defaults to the R94 idiom on a note without a
+   *  `label`. A labelled note prints a footnote only when one is passed. */
   caption?: string;
+  /** A DM-mono label line printed ABOVE the sentence (return teaching). */
+  label?: string;
+  /** One act under the sentence, a link at 44px. Following it recedes the
+   *  note as 'acted'. */
+  act?: { label: string; href: string };
+  /** 'anchor' sets the note in a sheet's margin column. */
+  placement?: 'default' | 'anchor';
+  /** When false, the primitive's own `document_margin_note` capture is off:
+   *  teaching notes report through their personless events instead. */
+  captureEvents?: boolean;
   /** Window CustomEvent names whose firing counts as the note's named action —
    *  the first one recedes the note as 'acted'. */
   actionEvents?: string[];
@@ -148,14 +160,28 @@ export interface MarginNoteProps {
    *  of this primitive's call sites put a <button> inside the body. */
   clamp?: boolean;
   seen?: boolean;
-  onSeen?: () => void;
+  /** Called when the note recedes: 'dismissed' for the ×, 'acted' for a named
+   *  action or the `act`. The primitive never sends 'closed'; that is a
+   *  caller's word for a show that ended with neither. */
+  onSeen?: (how: 'dismissed' | 'acted' | 'closed') => void;
   className?: string;
 }
+
+const DEFAULT_CAPTION = 'Appears once · Recedes on use';
+
+/** A sheet margin column's rule: beside the rows from 860px, above them on a
+ *  narrower sheet. */
+const ANCHOR_PLACEMENT =
+  'mt-2 border-t border-[var(--border-subtle)] pt-4 min-[860px]:mt-0 min-[860px]:border-l min-[860px]:border-t-0 min-[860px]:pl-6 min-[860px]:pt-1';
 
 export function MarginNote({
   noteKey,
   children,
-  caption = 'Appears once · Recedes on use',
+  caption,
+  label,
+  act,
+  placement = 'default',
+  captureEvents = true,
   actionEvents,
   commandBar = false,
   suppressed = false,
@@ -164,6 +190,7 @@ export function MarginNote({
   onSeen,
   className,
 }: MarginNoteProps) {
+  const footnote = caption ?? (label === undefined ? DEFAULT_CAPTION : undefined);
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
   // 'shown' fires at most once per mount even as `suppressed` toggles.
@@ -181,9 +208,9 @@ export function MarginNote({
     setVisible(true);
     if (!shownRef.current) {
       shownRef.current = true;
-      documentEvents.wayfinding.marginNote({ key: noteKey, action: 'shown' });
+      if (captureEvents) documentEvents.wayfinding.marginNote({ key: noteKey, action: 'shown' });
     }
-  }, [noteKey, suppressed, seen]);
+  }, [noteKey, suppressed, seen, captureEvents]);
 
   // Once shown, the first named action recedes the note forever. Listeners are
   // only bound while the note is on screen (and not suppressed), so a note that
@@ -192,9 +219,9 @@ export function MarginNote({
     if (!visible || suppressed) return;
     const recede = () => {
       if (seen === undefined) markMarginNoteSeen(noteKey);
-      onSeen?.();
+      onSeen?.('acted');
       setVisible(false);
-      documentEvents.wayfinding.marginNote({ key: noteKey, action: 'acted' });
+      if (captureEvents) documentEvents.wayfinding.marginNote({ key: noteKey, action: 'acted' });
     };
     const cleanups: Array<() => void> = [];
     for (const name of actionEvents ?? []) {
@@ -215,15 +242,15 @@ export function MarginNote({
       });
     }
     return () => cleanups.forEach((fn) => fn());
-  }, [visible, suppressed, noteKey, commandBar, actionEvents, seen, onSeen]);
+  }, [visible, suppressed, noteKey, commandBar, actionEvents, seen, onSeen, captureEvents]);
 
   if (suppressed || !visible) return null;
 
-  const dismiss = () => {
+  const recedeAs = (how: 'dismissed' | 'acted') => {
     if (seen === undefined) markMarginNoteSeen(noteKey);
-    onSeen?.();
+    onSeen?.(how);
     setVisible(false);
-    documentEvents.wayfinding.marginNote({ key: noteKey, action: 'dismissed' });
+    if (captureEvents) documentEvents.wayfinding.marginNote({ key: noteKey, action: how });
   };
 
   // RF-03's cap, when the caller asks for it: two lines, with a focusable
@@ -233,8 +260,18 @@ export function MarginNote({
   const clamped = clamp && !expanded;
 
   return (
-    <aside role="note" className={`flex max-w-[34ch] items-start gap-2 ${className ?? ''}`}>
+    <aside
+      role="note"
+      className={`flex max-w-[34ch] items-start gap-2 ${
+        placement === 'anchor' ? `${ANCHOR_PLACEMENT} ` : ''
+      }${className ?? ''}`}
+    >
       <p className="min-w-0 flex-1">
+        {label !== undefined && (
+          <span className="mb-1 block font-mono text-[11px] uppercase tracking-[0.11em] text-[var(--text-faint)]">
+            {label}
+          </span>
+        )}
         <span
           id={clamp ? `margin-note-body-${noteKey}` : undefined}
           className={`font-heading text-[15px] italic leading-[1.55] text-[var(--text-body)] ${
@@ -259,13 +296,24 @@ export function MarginNote({
             </span>
           </button>
         )}
-        <span className="mt-2 block font-mono text-[11px] uppercase tracking-[0.11em] text-[var(--text-faint)]">
-          {caption}
-        </span>
+        {act && (
+          <Link
+            href={act.href}
+            onClick={() => recedeAs('acted')}
+            className="da-score-hover mt-1 flex min-h-11 w-fit items-center font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay-ink)]"
+          >
+            {act.label}
+          </Link>
+        )}
+        {footnote !== undefined && (
+          <span className="mt-2 block font-mono text-[11px] uppercase tracking-[0.11em] text-[var(--text-faint)]">
+            {footnote}
+          </span>
+        )}
       </p>
       <button
         type="button"
-        onClick={dismiss}
+        onClick={() => recedeAs('dismissed')}
         aria-label="Dismiss note"
         className="mt-[2px] shrink-0 rounded-[3px] p-0.5 text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
       >

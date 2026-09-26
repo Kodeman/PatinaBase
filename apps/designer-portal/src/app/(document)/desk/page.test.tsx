@@ -79,7 +79,14 @@ jest.mock('@/lib/analytics/document-events', () => ({
   },
 }));
 jest.mock('@/components/document/desk-contents', () => ({ DeskContents: () => null }));
-jest.mock('@/components/document/margin-note', () => ({ MarginNote: () => null }));
+jest.mock('@/components/document/margin-note', () => ({
+  MarginNote: () => null,
+  hasMarginNoteBeenSeen: () => false,
+}));
+// The Desk arbiter's teaching slot (return teaching): nothing to teach here.
+jest.mock('@/hooks/use-teaching-note', () => ({
+  useReturnNote: () => ({ note: null, bind: null, sinceLine: null, decided: true }),
+}));
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
   START_DESK_WALKTHROUGH_EVENT: 'document:start-desk-walkthrough',
   clearDeskWalkthroughLater: jest.fn(),
@@ -106,6 +113,7 @@ jest.mock('@/components/document/mobile/mobile-shell', () => ({
 }));
 
 import DeskPage from './page';
+import { resetDeskVisit } from '@/components/document/desk-arbiter';
 import { useMobilePrimaryAction } from '@/components/document/mobile/mobile-shell';
 
 const WHISPER = 'The studio isn’t fully set up.';
@@ -123,6 +131,8 @@ function studio(over: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  // Each test is a fresh Desk visit for the arbiter.
+  resetDeskVisit();
   mockOrgs.mockReturnValue([studio()]);
   // Own title set; nobody else on the crew (one open step).
   mockMembers.mockReturnValue([{ user_id: 'me', job_title: 'Principal' }]);

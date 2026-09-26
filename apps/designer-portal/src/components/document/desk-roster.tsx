@@ -14,7 +14,7 @@
  * refuses.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   CLAIMS_ANCHOR_ID,
   deriveDeskClaims,
@@ -202,9 +202,12 @@ function LedgerHalf({
 export function DeskRoster({
   roster,
   studioMembers,
+  belowHead,
 }: {
   roster: DeskRosterModel;
   studioMembers?: readonly RosterMember[];
+  /** The Desk arbiter's one line (§2): set below the head, never above content after paint. */
+  belowHead?: ReactNode;
 }) {
   const settle = useSettleOnce();
   const [needsMe, setNeedsMe] = useState(false);
@@ -290,6 +293,7 @@ export function DeskRoster({
       <p className="doc-type-body mb-8 text-[var(--text-body)]">
         {roster.overdueLine}
       </p>
+      {belowHead}
 
       {/* The day's line: it quotes the grid below it (D7), each line an act
           into a card already on the page, and NOTHING at all when nothing

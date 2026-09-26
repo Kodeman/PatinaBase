@@ -26,7 +26,11 @@ import {
 } from '@/components/document/command-bar';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DeskRoster } from '@/components/document/desk-roster';
-import { deriveDeskRoster } from '@/lib/document/desk-roster-derivation';
+import {
+  deriveDeskRoster,
+  pinnedProjectIdsFromRoster,
+} from '@/lib/document/desk-roster-derivation';
+import { useDeskLine } from '@/components/document/desk-arbiter';
 import { WEEKDAY_FORMAT, dayMonth } from '@/lib/document/dates';
 import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
@@ -61,11 +65,14 @@ const OPEN_PROJECT_SUBLABEL = STUDIO_VERBS.find(
   (verb) => verb.key === 'open-project',
 )?.subLabel;
 
+/** `desk-first-touch` is a first-hour line (return-teaching §2). */
+const FIRST_HOUR_MS = 60 * 60 * 1000;
+
 export default function DeskPage() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.desk); // R89 — scope help to the Desk
   const { data, isLoading, isError, refetch } = useDeskEngagements();
   const { user } = useAuth();
-  const { data: profile } = useProfile();
+  const { data: profile, isLoading: profileLoading } = useProfile();
   const hydrated = useHydrated();
   const suppressFirstTouch = useSuppressDeskFirstTouch(); // R97 — hold the note during modal/tour
   const showWalkthroughOffer = useDeskWalkthroughOffer(); // R97 — existing-designer tour offer
@@ -75,15 +82,16 @@ export default function DeskPage() {
   // U7 — the setup whisper's inputs. Same design_studio-preferred resolution
   // as account-studio-page.tsx, kept minimal here since this page only needs
   // the owner check + open-step count, not the full studio row.
-  const { value: studioWorkspacesEnabled } = useFeatureFlag('studio-workspaces');
+  const { value: studioWorkspacesEnabled, isLoading: studioWorkspacesLoading } =
+    useFeatureFlag('studio-workspaces');
   // L8 — the owner's handoff-note margin note, behind the teammate-persona
   // flag (W2). Flag off (or loading) never renders it.
-  const { value: teammatePersonaEnabled } = useFeatureFlag(
-    'onboarding-teammate-persona',
-  );
-  const { data: orgs } = useOrganizations();
+  const { value: teammatePersonaEnabled, isLoading: teammatePersonaLoading } =
+    useFeatureFlag('onboarding-teammate-persona');
+  const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
-  const { data: studioMembers } = useOrganizationMembers(studio?.id ?? '');
+  const { data: studioMembers, isLoading: studioMembersLoading } =
+    useOrganizationMembers(studio?.id ?? '');
   const { data: studioProjects } = useProjects();
   const { data: studioContacts } = useStudioContacts(studio?.id ?? null);
   // activeMemberCountBeyondSelf / hiresWithFirstDocument (L3, 00559): same
@@ -219,6 +227,110 @@ export default function DeskPage() {
   // bottom front matter. Only known once the read resolves.
   const deskEmpty = !!data && roster.liveCount === 0;
 
+  // The Desk arbiter (return-teaching §2): these four lines keep their own
+  // conditions, and at most one of them, or the teaching note, renders per
+  // visit, below the roster head. `pending` holds the pick until a line's
+  // inputs resolve.
+  const pinnedProjectIds = useMemo(
+    () => pinnedProjectIdsFromRoster(roster.groups.flatMap((group) => group.lines)),
+    [roster],
+  );
+  const accountAgeMs = profile?.created_at
+    ? now.getTime() - Date.parse(profile.created_at)
+    : Number.NaN;
+  const deskLine = useDeskLine({
+    ready: hydrated && !!data && !isError,
+    pinnedProjectIds,
+    lines: {
+      // L8 — the owner's handoff note, once, on the new hire's first Desk.
+      // Behind `onboarding-teammate-persona`; renders only for a member
+      // whose own membership row carries a written note.
+      'hire-handoff': {
+        when:
+          teammatePersonaLoading ||
+          (teammatePersonaEnabled && (orgsLoading || studioMembersLoading))
+            ? 'pending'
+            : !!(teammatePersonaEnabled && myMembership?.handoff_note),
+        node: (
+          <MarginNote noteKey="hire-handoff" className="mb-10">
+            From {handoffOwnerFirstName}: {myMembership?.handoff_note}
+          </MarginNote>
+        ),
+      },
+      // R94 — the one first-touch note: what the Desk is, and the ⌘K move.
+      // Recedes forever on the first ⌘K open or the × (never a tour). R97 —
+      // held while the walkthrough modal/tour is on screen, and retired on
+      // tour completion (the tour teaches ⌘K itself). First hour only (§2).
+      'desk-first-touch': {
+        when: profileLoading ? 'pending' : accountAgeMs < FIRST_HOUR_MS,
+        node: (
+          <MarginNote
+            noteKey="desk-first-touch"
+            commandBar
+            suppressed={suppressFirstTouch}
+            className="mb-10"
+          >
+            This is your Desk. Folders that need you gather here; the rest stays
+            quiet.{' '}
+            <span className="font-mono text-[12px] not-italic tracking-[0.02em] text-[var(--text-muted)]">
+              ⌘K
+            </span>{' '}
+            finds anything by name — try “invoice”.
+          </MarginNote>
+        ),
+      },
+      // R97 — existing designers (created before the ship date) get a quiet
+      // one-time offer instead of the auto-modal. The inline link starts the
+      // walkthrough; the note recedes on that same event (actionEvents) or
+      // the ×. The Desk Walkthrough gates eligibility; the primitive gates
+      // once-only.
+      'desk-walkthrough-offer': {
+        when: showWalkthroughOffer,
+        node: (
+          <MarginNote
+            noteKey="desk-walkthrough-offer"
+            actionEvents={[START_DESK_WALKTHROUGH_EVENT]}
+            // A deferred ("Show me later") record only earns one re-offer
+            // (decisions #2) — clear it as soon as this note is seen,
+            // whether dismissed (×) or acted on (the tour starting).
+            onSeen={clearDeskWalkthroughLater}
+            className="mb-10"
+          >
+            New desk, same studio — your projects are all here as documents
+            now.{' '}
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent(START_DESK_WALKTHROUGH_EVENT),
+                )
+              }
+              className="inline-flex min-h-11 items-center font-heading text-[15px] italic text-[var(--color-aged-oak)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-2 transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
+            >
+              The walkthrough is six quick stops
+            </button>{' '}
+            if you&apos;d like the lay of it.
+          </MarginNote>
+        ),
+      },
+      // U7 — the setup whisper, MarginNote's visual idiom (Playfair italic,
+      // en-dash lead) with a live derivation for visibility instead of
+      // MarginNote's once-only localStorage contract, so it rides the same
+      // `studio-workspaces` flag the Account sheet's Studio page already
+      // gates behind.
+      'setup-whisper': {
+        when: studioWorkspacesLoading ? 'pending' : studioWorkspacesEnabled,
+        node: (
+          <StudioSetupWhisper
+            isOwner={studio?.membership.role === 'owner'}
+            openCount={studioSetupOpenCount}
+            className="mb-10"
+          />
+        ),
+      },
+    },
+  });
+
   const rosterBlock =
     isLoading && !data ? (
       <div
@@ -234,7 +346,11 @@ export default function DeskPage() {
         ))}
       </div>
     ) : (
-      <DeskRoster roster={roster} studioMembers={studioMembers} />
+      <DeskRoster
+        roster={roster}
+        studioMembers={studioMembers}
+        belowHead={deskLine}
+      />
     );
 
   return (
@@ -356,77 +472,6 @@ export default function DeskPage() {
         </div>
       ) : (
         <>
-          {/* R94 — the one first-touch note: what the Desk is, and the ⌘K move.
-              Recedes forever on the first ⌘K open or the × (never a tour). R97 —
-              held while the walkthrough modal/tour is on screen, and retired on tour
-              completion (the tour teaches ⌘K itself). */}
-          <MarginNote
-            noteKey="desk-first-touch"
-            commandBar
-            suppressed={suppressFirstTouch}
-            className="mb-10"
-          >
-            This is your Desk. Folders that need you gather here; the rest stays
-            quiet.{' '}
-            <span className="font-mono text-[12px] not-italic tracking-[0.02em] text-[var(--text-muted)]">
-              ⌘K
-            </span>{' '}
-            finds anything by name — try “invoice”.
-          </MarginNote>
-
-          {/* R97 — existing designers (created before the ship date) get a quiet
-              one-time offer instead of the auto-modal. The inline link starts the
-              walkthrough; the note recedes on that same event (actionEvents) or the
-              ×. The Desk Walkthrough gates eligibility; the primitive gates once-only. */}
-          {showWalkthroughOffer && (
-            <MarginNote
-              noteKey="desk-walkthrough-offer"
-              actionEvents={[START_DESK_WALKTHROUGH_EVENT]}
-              // A deferred ("Show me later") record only earns one re-offer
-              // (decisions #2) — clear it as soon as this note is seen,
-              // whether dismissed (×) or acted on (the tour starting).
-              onSeen={clearDeskWalkthroughLater}
-              className="mb-10"
-            >
-              New desk, same studio — your projects are all here as documents
-              now.{' '}
-              <button
-                type="button"
-                onClick={() =>
-                  window.dispatchEvent(
-                    new CustomEvent(START_DESK_WALKTHROUGH_EVENT),
-                  )
-                }
-                className="inline-flex min-h-11 items-center font-heading text-[15px] italic text-[var(--color-aged-oak)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-2 transition-colors hover:text-[var(--color-clay-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] motion-reduce:transition-none"
-              >
-                The walkthrough is six quick stops
-              </button>{' '}
-              if you&apos;d like the lay of it.
-            </MarginNote>
-          )}
-
-          {/* L8 — the owner's handoff note, once, on the new hire's first
-              Desk. Behind `onboarding-teammate-persona`; renders only for a
-              member whose own membership row carries a written note. */}
-          {teammatePersonaEnabled && myMembership?.handoff_note && (
-            <MarginNote noteKey="hire-handoff" className="mb-10">
-              From {handoffOwnerFirstName}: {myMembership.handoff_note}
-            </MarginNote>
-          )}
-
-          {/* U7 — the setup whisper, MarginNote's visual idiom (Playfair
-              italic, en-dash lead) with a live derivation for visibility
-              instead of MarginNote's once-only localStorage contract, so it
-              rides the same `studio-workspaces` flag the Account sheet's
-              Studio page already gates behind. */}
-          {studioWorkspacesEnabled && (
-            <StudioSetupWhisper
-              isOwner={studio?.membership.role === 'owner'}
-              openCount={studioSetupOpenCount}
-              className="mb-10"
-            />
-          )}
-
           {/* The roster takes the full width of the desk at every viewport.
               IA-17's ≥1280px boards rail took a 260px column out of it, which
               left the ledger row narrower than its own fixed tracks — the

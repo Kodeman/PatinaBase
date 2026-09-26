@@ -86,6 +86,11 @@ jest.mock('@/components/document/margin-note', () => ({
     noteKey: string;
     children: React.ReactNode;
   }) => <div data-testid={`margin-note-${noteKey}`}>{children}</div>,
+  hasMarginNoteBeenSeen: () => false,
+}));
+// The Desk arbiter's teaching slot (return teaching): nothing to teach here.
+jest.mock('@/hooks/use-teaching-note', () => ({
+  useReturnNote: () => ({ note: null, bind: null, sinceLine: null, decided: true }),
 }));
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
   START_DESK_WALKTHROUGH_EVENT: 'document:start-desk-walkthrough',
@@ -110,6 +115,7 @@ jest.mock('@/components/document/mobile/mobile-shell', () => ({
 }));
 
 import DeskPage from './page';
+import { resetDeskVisit } from '@/components/document/desk-arbiter';
 
 function studio(over: Record<string, unknown> = {}) {
   return {
@@ -146,6 +152,8 @@ const HIRE_NO_NOTE = {
 };
 
 beforeEach(() => {
+  // Each test is a fresh Desk visit for the arbiter.
+  resetDeskVisit();
   mockTeammatePersonaFlag = { value: true, isLoading: false };
   mockOrgs.mockReturnValue([studio()]);
   mockMembers.mockReturnValue([OWNER, HIRE_WITH_NOTE]);

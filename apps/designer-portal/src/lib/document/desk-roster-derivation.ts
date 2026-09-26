@@ -227,6 +227,21 @@ export function custodyWord(
 }
 
 /**
+ * The jobs holding her pen, as project ids: the teaching note's ranking input
+ * (return-teaching §2, finding 19). Roster order, each id once; a line with no
+ * project (a lead) has nothing to pin.
+ */
+export function pinnedProjectIdsFromRoster(lines: readonly RosterLine[]): string[] {
+  const ids: string[] = [];
+  for (const line of lines) {
+    if (line.custody === CUSTODY_YOUR_PEN && line.projectId && !ids.includes(line.projectId)) {
+      ids.push(line.projectId);
+    }
+  }
+  return ids;
+}
+
+/**
  * D8 — the date an in-motion state is anchored to, for the ledger's value
  * column.
  *
