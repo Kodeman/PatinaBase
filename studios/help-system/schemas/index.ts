@@ -4,6 +4,8 @@ import emptyStateContent from './emptyStateContent'
 import helpArticleContent from './helpArticleContent'
 import coachmarkContent from './coachmarkContent'
 import videoContent from './videoContent'
+import teachingNote from './teachingNote'
+import teachingRelease from './teachingRelease'
 
 export const schemaTypes = [
   helpContent,
@@ -12,4 +14,6 @@ export const schemaTypes = [
   helpArticleContent,
   coachmarkContent,
   videoContent,
+  teachingNote,
+  teachingRelease,
 ]

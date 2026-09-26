@@ -49,6 +49,20 @@ Deploys the studio to `https://kv3qrinl.sanity.studio`. Requires Sanity credenti
 | `emptyStateContent` | Standalone empty-state documents. | `heading` required max 50, `description` required max 300. |
 | `helpArticleContent` | Long-form articles rendered in the Contextual Help Panel. | `title` + `oneSentenceAnswer` + `body` required. `wordCount`, `readingTimeMinutes`, `lastUpdated` are read-only (auto-set). |
 | `coachmarkContent` | Standalone coachmark documents (Sprint 4 S4-4). | `heading` required max 60, `body` required max 120, `ctaLabel` optional max 20. |
+| `teachingNote` | One Workshop Note (return teaching). | `noteKey` required, versioned (`galley-po@1`). `body` required max 140. Release notes need `releaseId`; other notes need `flag` or `releaseId`; anchor and faster-way notes need `boundary`. |
+| `teachingRelease` | Changes-page copy for one release in `apps/designer-portal/src/content/teaching-releases.ts`. | `id` required, `YYYY-MM-DD-slug`. `headline` max 90. |
+
+## Teaching notes
+
+`teachingNote` and `teachingRelease` hold return-teaching copy (design: `artifacts/return-teaching-2026-09-25/design/system-architecture.md` §1.1, §1.2, §6). Agents write drafts; the portal reads only published documents, so publishing is the approval.
+
+Publish on these two types is limited to the Sanity user ids in `SANITY_STUDIO_PUBLISHER_IDS` (comma-separated, read at studio build). Empty or unset means no guard, and the studio logs a console warning. The guard hides the Studio button only; it does not stop an API token from publishing.
+
+```bash
+# From this directory
+npx sanity@latest schema deploy                                        # push the schema
+SANITY_STUDIO_PUBLISHER_IDS=<id>[,<id>] pnpm --filter @patina/help-system-studio run deploy   # hosted studio at https://patina-help.sanity.studio
+```
 
 ### `helpContent` inline design
 
