@@ -341,7 +341,10 @@ async function b11(file, vp) {
       const inView = (e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; };
       const s = document.querySelector('.arr-skip');
       const lines = ['name', 'stage', 'job', 'headline', 'f1', 'f2', 'f3', 'act', 'act2'].map((n) => [n, part(n)]).filter((x) => x[1]);
-      const hidden = lines.filter(([, e]) => { const r = e.getBoundingClientRect(); return !(shown(e) && opacity(e) > 0.99 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth); }).map(([n]) => n);
+      const vis = (e) => { const r = e.getBoundingClientRect(); return shown(e) && opacity(e) > 0.99 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth; };
+      // Reduced motion presents the card layer (SQ-338 F4); a line counts when it is visible in place or on that layer.
+      const layer = [...document.querySelectorAll('[data-arr] *')].filter((e) => !e.children.length && e.textContent.trim() && vis(e)).map((e) => e.textContent.replace(/\s+/g, ' ').trim());
+      const hidden = lines.filter(([, e]) => { const c = e.cloneNode(true); c.querySelectorAll('.vh').forEach((v) => v.remove()); const t = c.textContent.replace(/\s+/g, ' ').trim(); return !(vis(e) || (t && layer.some((l) => l.includes(t)))); }).map(([n]) => n);
       return { rm: window.K.arrival.schedule().rm, skip: !!s && shown(s) && inView(s), n: lines.length, hidden };
     });
     return [r.rm && r.skip && r.hidden.length === 0, `rm=${r.rm} skip in view=${r.skip} lines=${r.n} not visible=[${r.hidden.join(',')}]`];
