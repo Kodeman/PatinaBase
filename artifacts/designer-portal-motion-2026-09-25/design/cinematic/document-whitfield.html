@@ -185,7 +185,7 @@ body{background:var(--doc-paper)}
 </style>
 <script>(function(s,c){if(/[?&]controls=1(&|$)/.test(s))c.add('controls');if(/[?&]rm=1(&|$)/.test(s))c.add('rm');})(location.search,document.documentElement.classList);</script>
 <link rel="stylesheet" href="arrival.css">
-<script src="arrival.js"></script>
+<script src="arrival.js" defer></script>
 </head>
 <body>
 <div id="paper" class="paper on-paper" data-under>
@@ -265,7 +265,7 @@ body{background:var(--doc-paper)}
       </section>
       <section class="tsec" id="s-care" data-region aria-labelledby="h-care">
         <h2 class="t-head sec-head" id="h-care" tabindex="-1"><span>Care</span><span class="state">Ahead</span></h2>
-        <div data-seam="w-care"><p class="t-d1">Care note not drafted.</p><p class="t-meta ctx">Household copy, printed</p><div class="acts"><a href="#" class="act" data-press data-primary data-fixture><span class="w">Draft care note</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-care" aria-expanded="false" aria-controls="w-care"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
+        <div data-seam="w-care"><p class="t-d1">Care note not drafted.</p><p class="t-meta ctx">Household copy, printed · Tomás</p><div class="acts"><a href="#" class="act" data-press data-primary data-fixture><span class="w">Draft care note</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-care" aria-expanded="false" aria-controls="w-care"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="well" id="w-care" role="region" aria-label="Care detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">The care guide goes out when the punch list closes.</p><p class="fact">Walnut: oil twice a year</p><p class="fact">Printed copy for the household</p><a href="#" class="act" data-press data-fixture><span class="w">Open care record</span><span class="rule" aria-hidden="true"></span></a></div></div>
       </section>
     </div>
@@ -313,10 +313,10 @@ body{background:var(--doc-paper)}
   "milestone": {"label": "Install", "date": "2026-10-06", "fidelity": "exact"},
   "rest": "punch list opens at install",
   "since": {
-    "anchor": "2026-09-18",
+    "anchor": "2026-09-18T09:00",
     "anchorNote": "fixture: Leah last opened this Document on Friday Sep 18",
     "changes": [
-      {"at": "2026-09-18", "by": "Tomás", "kind": "decision", "text": "final delivery signed"},
+      {"at": "2026-09-18T15:00", "by": "Tomás", "kind": "decision", "text": "final delivery signed"},
       {"at": "2026-09-22", "by": "Tomás", "kind": "hours", "text": "Three hours logged"}
     ]
   }
@@ -676,7 +676,7 @@ K.page.putDown=function(){
   }
   var p=K.$('#paper');
   p.style.transformOrigin='50% '+(window.scrollY+window.innerHeight/2)+'px';
-  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc','1');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing */
+  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc',(location.pathname||'').split('/').pop()||'document.html');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing and shows this job */
 };
 /* Paper is taken: 270ms O (reduced motion: 200ms opacity only), played only when she picked it up on the Desk. */
 K.page.pickUp=function(){
@@ -690,8 +690,12 @@ K.page.pickUp=function(){
 K.page.setup=function(){
   var carried=false;
   try{carried=sessionStorage.getItem('pl-carry')==='1';sessionStorage.removeItem('pl-carry');}catch(err){}
-  if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp(); /* one entry move only: the arrival, when it plays, replaces the pick-up */
-  if(location.hash==='#rec')K.openRecord('rec',K.$('#doc-title'));
+  /* arrival.js is deferred: it has run by DOMContentLoaded. One entry move only: the arrival, when it plays, replaces the pick-up. */
+  function go(){if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+  /* #rec opens the record, on load and whenever the hash names it later */
+  function rec(){if(location.hash!=='#rec')return;if(K.arrival)K.arrival.finish();K.openRecord('rec',K.$('#doc-title'));}
+  rec();window.addEventListener('hashchange',rec);
   /* Back from the Desk through the page cache: the paper is whole again, with no move. */
   window.addEventListener('pageshow',function(e){if(e.persisted){var p=K.$('#paper');p.getAnimations().forEach(function(a){a.cancel();});p.style.transform='';p.style.opacity='';}});
 };

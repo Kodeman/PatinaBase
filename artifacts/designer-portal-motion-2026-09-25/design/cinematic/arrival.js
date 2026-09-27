@@ -1,6 +1,7 @@
 /* arrival v3 (SQ-333): "the sentence finds its place", one engine for the Desk and every Document.
    A review prototype of proposed rulings R-DM18..R-DM36 (contract: SQ-333 "ARRIVAL v3 MERGED CONTRACT"), not doctrine.
-   Load it in <head>, after arrival.css and before the page body: the gate below runs before the first paint.
+   Load it in <head> with defer, after arrival.css: the gate below runs once the page is parsed, and the page boots it at
+   DOMContentLoaded. A slow or hung file never blanks the page; the O2 budget is counted from navigation start.
    A page declares only its Briefing inputs (<script type="application/json" id="briefing">) and data-part marks:
      headline · act · act2 · f1 f2 f3 (canonical facts) · job (Desk name) · warn (Desk past-due line) · name · stage ·
      settle (the state word) · head (focus for a terminal verb) · crown (the current Strata Mark) · place
@@ -12,23 +13,45 @@ var DAY=864e5,VISIT=30*60e3,FONT_WAIT=1500;
 var WD=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 var MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-/* ---------- 0. the gate: decided before the first paint; the tokens are spent here, once ---------- */
-var A=w.ARR={play:false,kbd:false,why:'',at:0};
+/* ---------- 0. the gate: decided once, when the parsed page runs this deferred file; the tokens are spent here ---------- */
+var A=w.ARR={play:false,kbd:false,why:''};
+/* the tab's own marks: sessionStorage; where that is refused, a line kept on window.name (it outlives same-tab navigation) */
+var MARK='\u2063pl:';
+var store=(function(){
+  try{var ss=w.sessionStorage;ss.setItem('pl-probe','1');ss.removeItem('pl-probe');
+    return {get:function(k){try{return ss.getItem(k);}catch(e){return null;}},set:function(k,v){try{ss.setItem(k,String(v));}catch(e){}},del:function(k){try{ss.removeItem(k);}catch(e){}}};}catch(e){}
+  var o={};
+  try{var n=String(w.name||''),i=n.indexOf(MARK);if(i>=0)o=JSON.parse(n.slice(i+MARK.length))||{};}catch(e){o={};}
+  function save(){try{var n=String(w.name||''),i=n.indexOf(MARK);w.name=(i<0?n:n.slice(0,i))+MARK+JSON.stringify(o);}catch(e){}}
+  return {get:function(k){return Object.prototype.hasOwnProperty.call(o,k)?String(o[k]):null;},set:function(k,v){o[k]=String(v);save();},del:function(k){delete o[k];save();}};
+})();
+/* a deep link she chose names a record or a section on this page; any other hash (a host's own) is not hers */
+function target(h){
+  var el=null;
+  try{el=h&&h.length>1?d.getElementById(decodeURIComponent(h.slice(1))):null;}catch(e){}
+  return !!el&&el.matches('[data-record],section');
+}
 (function(){
-  var page=root.getAttribute('data-arrival'),s=w.location.search,nav='',now=Date.now(),last=null,tok=null;
-  try{A.at=w.performance.now();}catch(e){}
-  try{var ss=w.sessionStorage;last=ss.getItem('pl-visit');tok=ss.getItem('pl-arrive');ss.removeItem('pl-arrive');ss.setItem('pl-visit',String(now));}catch(e){}
+  var page=root.getAttribute('data-arrival'),s=w.location.search,nav='',now=Date.now(),t=0;
+  var last=+store.get('pl-visit')||0,tok=store.get('pl-arrive');
+  store.del('pl-arrive');
+  if(!last||now-last>=VISIT)store.del('pl-desk'); /* 30 minutes without her hand: a new visit */
+  store.set('pl-visit',now);
+  try{t=w.performance.now();}catch(e){}
   try{nav=w.performance.getEntriesByType('navigation')[0].type;}catch(e){}
   if(!page)A.why='no page';
   else if(/[?&]arrive=0(&|$)/.test(s))A.why='arrive=0';
-  else if(w.location.hash)A.why='hash';                      /* she chose the spot: #rec and every deep link */
+  else if(target(w.location.hash))A.why='hash';             /* she chose the spot: #rec or a section */
   else if(nav==='back_forward')A.why='history';              /* Back and Forward restore; they never perform */
-  else if(page==='desk'&&last&&now-(+last)<VISIT)A.why='same visit'; /* the put-down, and any Desk within 30 minutes */
-  else{A.play=true;A.kbd=tok==='kbd';root.classList.add('arr-pre');A.safety=w.setTimeout(function(){root.classList.remove('arr-pre');},FONT_WAIT+200);}
+  else if(t>=FONT_WAIT)A.why='late';                         /* the O2 budget is spent: the ordinary page */
+  else if(page==='desk'&&store.get('pl-desk'))A.why='same visit'; /* the Desk briefs once a visit: the put-down and later loads never replay */
+  else{A.play=true;A.kbd=tok==='kbd';root.classList.add('arr-pre');A.safety=w.setTimeout(function(){root.classList.remove('arr-pre');},FONT_WAIT+200-t);}
 })();
 
 /* ---------- 1. selection: SQ-330 §2 rules R1-R8, the Desk rule and the §4 since forms, as a pure function ---------- */
-function day(s){var p=String(s).split('-');return Date.UTC(+p[0],+p[1]-1,+p[2]);}
+function day(s){var p=String(s).slice(0,10).split('-');return Date.UTC(+p[0],+p[1]-1,+p[2]);}
+/* a moment: a date, or a date and a UTC time ("2026-09-24T16:00"); changes and anchors compare strictly */
+function ts(s){if(typeof s==='number')return s;var m=/T(\d\d):(\d\d)/.exec(String(s));return day(s)+(m?m[1]*36e5+m[2]*6e4:0);}
 function fmt(t){var x=new Date(t);return MO[x.getUTCMonth()]+' '+x.getUTCDate();}
 function weekday(t){return WD[new Date(t).getUTCDay()];}
 function lc(s){return s.charAt(0).toLowerCase()+s.slice(1);}
@@ -36,15 +59,14 @@ function stop(s){return s.replace(/[.;,:]+$/,'');}
 function plural(n){return n+(n===1?' day':' days');}
 function words(s){return String(s||'').split(/\s+/).filter(function(x){return /[\w\d]/.test(x);}).length;}
 /* R2's second key: the need's rank within a custody band (after R143's band order) */
-var NEED_RANK=['overdue_decision','finish_approval','client_approval','essentials','proposal_draft','order_send','delivery_window','sample','install_date','care_note'];
+var NEED_RANK=['overdue_decision','finish_approval','client_approval','essentials','proposal_draft','order_send','booking','delivery_window','sample','install_date','care_note'];
 var KIND_ORDER=['decision','message','invoice','sms','pulse'];
 var EXCLUDED=['hours','workshop_note'];
 function overdue(n,today){return n.dueOn&&day(n.dueOn)<today?Math.round((today-day(n.dueOn))/DAY):0;}
 function band(n,today,viewer){
   if(n.owner==='client')return 2;
   if(n.owner==='maker')return 3;
-  if(n.who&&n.who!==viewer)return 4;          /* a teammate's pen is named, never "Your pen" (R-DM20 A) */
-  return overdue(n,today)?0:1;
+  return overdue(n,today)?0:1;                /* a teammate's pen is the studio's pen (R143 D3); only F3 names them */
 }
 function rank(k){var i=NEED_RANK.indexOf(k);return i<0?99:i;}
 function oldest(n){return n.dueOn?day(n.dueOn):n.since?day(n.since):Infinity;}
@@ -65,7 +87,7 @@ function due(n,today){
 function custody(n,today,viewer,odInF3){
   var od=overdue(n,today),tail=odInF3&&od?', overdue '+plural(od):'',x;
   if(n.owner==='client')x='Waiting on '+n.who+(n.ask?' to '+n.ask:'')+tail;
-  else if(n.owner==='maker')x='With the maker; promised by '+(n.dueOn?(day(n.dueOn)===today?'today':fmt(day(n.dueOn))):'no date')+tail;
+  else if(n.owner==='maker')x=n.custody?n.custody+'; '+(due(n,today)||'no date'):'With the maker; promised by '+(n.dueOn?(day(n.dueOn)===today?'today':fmt(day(n.dueOn))):'no date')+tail;
   else{
     var dd=due(n,today);
     x=(n.who&&n.who!==viewer?'With '+n.who:'Your pen')+(dd?', '+dd:'')+(n.ball?'; '+n.ball:'');
@@ -76,12 +98,17 @@ function anchorWord(a,today){
   var n=Math.round((today-day(a))/DAY);
   return n<=0?'earlier today':n===1?'yesterday':n<7?weekday(day(a)):fmt(day(a));
 }
-/* F2 (§4): the newest change since her last open that bears on the headline need, else the newest by kind order */
-function sinceLine(since,today,viewer,head){
+/* F2 (§4): the newest change strictly after her last open that bears on the headline need, else the newest by kind order.
+   A due date that passed after her last open is a change too: the need fell overdue while she was away. */
+function sinceLine(since,today,viewer,head,needs){
   since=since||{};
-  if(!since.anchor)return 'New to you: '+stop(since.first||'opened by the studio')+'.';
-  var a=day(since.anchor),cs=(since.changes||[]).filter(function(c){return day(c.at)>=a&&c.by!==viewer&&EXCLUDED.indexOf(c.kind)<0;});
-  function newer(x,y){return day(y.at)-day(x.at)||(x.text<y.text?-1:x.text>y.text?1:0);}
+  if(!since.anchor)return 'First visit: '+stop(since.first||'opened by the studio')+'.';
+  var a=ts(since.anchor),cs=(since.changes||[]).filter(function(c){return ts(c.at)>a&&c.by!==viewer&&EXCLUDED.indexOf(c.kind)<0;});
+  (needs||[]).forEach(function(n){
+    var fell=n.dueOn?day(n.dueOn)+DAY:0,k=Math.round((today-day(n.dueOn||0))/DAY);
+    if(overdue(n,today)&&fell>a)cs.push({at:fell,kind:'pulse',need:n.kind,text:(n.brief||lc(stop(n.line)))+' fell overdue '+(k===1?'yesterday':k<7?weekday(day(n.dueOn)):fmt(day(n.dueOn)))});
+  });
+  function newer(x,y){return ts(y.at)-ts(x.at)||(x.text<y.text?-1:x.text>y.text?1:0);}
   var on=head?cs.filter(function(c){return c.need===head.kind;}).sort(newer):[];
   var pick=on[0]||cs.slice().sort(function(x,y){var k=KIND_ORDER.indexOf(x.kind)-KIND_ORDER.indexOf(y.kind);return k||newer(x,y);})[0];
   var w0=anchorWord(since.anchor,today);
@@ -105,7 +132,7 @@ function select(inputs,today,viewer){
   var pos=inputs.position,f1=pos&&pos.text&&pos.fidelity!=='band'?pos.text:'No dates fixed yet.';
   if(job.paused){
     card.rule='R1';card.headline='Paused since '+fmt(day(job.paused))+'.';
-    card.facts=['Stopped in '+job.stage+'.',sinceLine(inputs.since,today,viewer,null),'At rest.'];
+    card.facts=['Stopped in '+job.stage+'.',sinceLine(inputs.since,today,viewer,null,needs),'At rest.'];
     return card;
   }
   var h=needs[0];
@@ -113,7 +140,7 @@ function select(inputs,today,viewer){
     var hl=headlineOf(h,today);
     card.rule=overdue(h,today)?'R5':'R2';card.need=h;card.headline=hl.text;
     var f3=h.namesCustody?(needs[1]?needs[1].line:'Nothing else is yours.'):custody(h,today,viewer,hl.odInF3);
-    card.facts=[f1,sinceLine(inputs.since,today,viewer,h),f3];
+    card.facts=[f1,sinceLine(inputs.since,today,viewer,h,needs),f3];
     card.act=h.act||null;
     var two=needs.filter(function(n){return n!==h&&band(n,today,viewer)<=1&&n.act;})[0];
     card.act2=two?two.act:null;
@@ -165,7 +192,7 @@ function message(card){
   s.push(card.act?'Tab to '+card.act+', or press any key to open the page.':'Press any key to open the page.');
   return s.join(' ');
 }
-var Arrival=w.Arrival={select:select,message:message,words:words,DOORWAY:DOORWAY,day:day,A:A};
+var Arrival=w.Arrival={select:select,message:message,words:words,DOORWAY:DOORWAY,day:day,A:A,store:store};
 
 /* ---------- 2. the score (ms at Slow 1; SQ-331 §2-§11) ---------- */
 var C={X:[.16,1,.3,1],O:[0,0,.58,1],Q:[.42,0,.58,1],EXIT:[.4,0,1,1],IO:[.65,0,.35,1],YL:[.45,0,.25,1],DRAW:[.55,0,.1,1]};
@@ -184,7 +211,7 @@ function curve(c,x){
   for(var i=0;i<40;i++){t=(lo+hi)/2;if(b(c[0],c[2],t)<x)lo=t;else hi=t;}
   return b(c[1],c[3],t);
 }
-var K=null,st=null,wired=false,wait=null,press=null,own=false,swallow=false,quiet=false,status=null;
+var K=null,st=null,wired=false,wait=null,press=null,own=false,swallow=false,quiet=false,status=null,inputAt=-1e9,dbl=null,wrote=0;
 var BOX=null; /* the Briefing inputs and the card chosen from them, read once at boot */
 function $(s,c){return (c||d).querySelector(s);}
 function $$(s,c){return [].slice.call((c||d).querySelectorAll(s));}
@@ -289,7 +316,7 @@ function plan(card,v,H,A,A2,L,skip,flat){
   var tops=Object.keys(m).map(function(k){return m[k].top;}).concat([hTop]),top=Math.min.apply(null,tops),bot=m.line.top+1;
   var lift=Math.max(0,bot-limit);lift=Math.min(lift,Math.max(0,top-(v.top+16)));
   Object.keys(m).forEach(function(k){m[k].top-=lift;});hTop-=lift;hBot-=lift;aTop-=lift;a2Top-=lift;
-  Object.keys(m).forEach(function(k){m[k].left=v.phone?gx:(k==='line'?cx-60:cx-m[k].w/2);});
+  Object.keys(m).forEach(function(k){m[k].left=v.phone?gx:(k==='line'?cx-80:cx-m[k].w/2);});
   var dot=/\.$/.test((H.textContent||'').trim())&&!v.phone?.064*fs*s:0;
   var Lc=v.phone?gx:cx-G.w*s/2-dot;
   /* H: ink left on its first baseline is the origin, so the first letter travels a clean path */
@@ -303,7 +330,7 @@ function plan(card,v,H,A,A2,L,skip,flat){
   p.carriers.push({r0:{left:Lc,top:hTop,right:Lc+G.w*s,bottom:hBot},r1:G,t:S.hand,d:p.d});
   if(p.act)p.carriers.push({r0:p.act.r0,r1:B,t:S.hand+S.lag,d:p.d});
   if(p.act2)p.carriers.push({r0:p.act2.r0,r1:B2,t:S.hand+2*S.lag,d:p.d});
-  /* the doubles that ride home with the sentence: F1 (Document), the job name and the past-due line (Desk) */
+  /* the doubles that ride home with the sentence: F1 (Document) and the past-due line (Desk) */
   p.rides=[];
   function ride(k,canon,warn){
     var c=canon&&ink(canon);if(!c||!m[k])return;
@@ -311,7 +338,7 @@ function plan(card,v,H,A,A2,L,skip,flat){
     var q={k:k,canon:canon,dx:c.left-r0.left,dy:c.top-r0.top,d:warn?S.warnD:p.d,warn:!!warn};
     p.rides.push(q);p.carriers.push({r0:r0,r1:{left:c.left,top:c.top,right:c.left+(r0.right-r0.left),bottom:c.top+(r0.bottom-r0.top)},t:S.hand,d:q.d});
   }
-  if(card.kind==='desk'){ride('job',part('job'));if(card.warn>=0)ride('f'+(card.warn+1),part('warn'),true);}
+  if(card.kind==='desk'){if(card.warn>=0)ride('f'+(card.warn+1),part('warn'),true);}
   else ride('f1',part('f1'));
   return p;
 }
@@ -449,33 +476,27 @@ function start(o){
   if(Math.abs((w.scrollY||0)-y)>.5)w.scrollTo(0,y); /* one pre-paint position; zero scroll writes after t0 */
   current();
   var s=st={o:o,rm:rm,card:card,H:H,A:A1,A2:A2,v:v,y:w.scrollY||0,phase:'compose',anims:[],saved:[],nodes:[],timers:[],comp:[],carry:[],ua:[],cc:[],
-    kbd:!!o.kbd,raf:0,g0:0,last:0,gaps:[],thin:false,actAt:Infinity,left:0,at:0,pz:{focus:false,hidden:false},paused:false,holdT:0,cue:[],adv:0,
+    kbd:!!o.kbd,raf:0,g0:0,last:0,gaps:[],thin:false,actAt:Infinity,left:0,at:0,pz:{focus:false,hidden:false},paused:false,holdT:0,cue:[],adv:0,attrs:[],
     faint:cssVar('--text-faint')};
   status.textContent='';
   var skip=mk('button','arr-skip','Skip arrival'),hint=mk('p','arr-vh','Skip goes straight to the page; any key opens it.');
   skip.type='button';skip.setAttribute('data-arr','');skip.setAttribute('aria-describedby','arr-hint');hint.id='arr-hint';hint.setAttribute('data-arr','');
+  hint.setAttribute('aria-hidden','true'); /* read as Skip's description only, never as a stray line */
   skip.addEventListener('click',function(){finish(true);});
   d.body.appendChild(hint);d.body.appendChild(skip);s.nodes.push(hint,skip);s.skip=skip;
   var b=build(card),L=s.L=b.L,layer=s.layer=b.layer;d.body.appendChild(layer);s.nodes.push(layer);
   var keep=[H,A1,A2],canon=[];
-  ['name','stage','job','warn','f1'].concat(rm?['f2','f3']:[]).forEach(function(n){parts(n).forEach(function(el){if(keep.indexOf(el)<0){keep.push(el);canon.push(el);}});});
+  ['name','stage','job','warn','f1'].forEach(function(n){parts(n).forEach(function(el){if(keep.indexOf(el)<0){keep.push(el);canon.push(el);}});});
   keep=keep.filter(Boolean);
-  var p=s.p=null,G;
-  if(rm){
-    Object.keys(L).forEach(function(k){if(k!=='cue')L[k].hidden=true;});
-    var an=box(A1||H);
-    L.cue.style.left=px(an.left);L.cue.style.top=px(an.bottom+24+s.y);L.cue.style.opacity="0";
-    G=ink(H)||box(H);
-  }else{
-    var flat=!!o.flat||K.arrScale0,warnEl=card.warn>=0?L['f'+(card.warn+1)]:null;
-    p=s.p=plan(card,v,H,A1,A2,L,skip,flat);G=p.G;
-    Object.keys(p.m).forEach(function(k){var m=p.m[k];L[k].style.left=px(m.left);L[k].style.top=px(m.top+s.y);if(L[k]!==warnEl)L[k].style.opacity='0';});
-    s.lineCol=getComputedStyle(L.line).backgroundColor;
-  }
+  /* reduced motion places the same card, unscaled; it composes and hands off by opacity alone */
+  var flat=rm||!!o.flat||K.arrScale0,warnEl=card.warn>=0?L['f'+(card.warn+1)]:null;
+  var p=s.p=plan(card,v,H,A1,A2,L,skip,flat),G=p.G;
+  Object.keys(p.m).forEach(function(k){var m=p.m[k];L[k].style.left=px(m.left);L[k].style.top=px(m.top+s.y);if(L[k]!==warnEl)L[k].style.opacity='0';});
+  s.lineCol=getComputedStyle(L.line).backgroundColor;
   /* the page's parts in the first view: covered now, assembled in Act 3 */
   var c=collect(keep,v),units=c.units.map(function(el){return unit(el,G,v,rm);});
   c.through.forEach(function(el){var u=unit(el,G,v,rm);if(u.rules.length){u.kind='rules';u.kids=[];u.off=0;u.dur=rm?S.rmPart:S.stem;units.push(u);}});
-  s.units=field(units,p?p.carriers:[],v,rm);
+  s.units=field(units,p.carriers,v,rm);
   var rl=mk('div','arr-rules'),rf=mk('div','arr-rules-fix');rl.setAttribute('data-arr','');rf.setAttribute('data-arr','');
   s.units.forEach(function(u){
     u.rules.forEach(function(o){put(u.el,o.prop,'transparent');if(rm){o.el.style.transform='none';o.el.style.opacity='0';}(o.fix?rf:rl).appendChild(o.el);});
@@ -485,12 +506,17 @@ function start(o){
   d.body.appendChild(rl);d.body.appendChild(rf);s.nodes.push(rl,rf);
   s.settle=parts('settle').map(function(el){return {el:el,col:getComputedStyle(el).color};});
   s.canon=canon;
-  if(!rm)canon.forEach(function(el){put(el,'opacity','0');});
-  s.sched={page:root.getAttribute('data-arrival'),rm:rm,phone:v.phone,cap:v.phone?S.pCap:S.cap,d:p?p.d:0,s:p?p.s:1,
-    carriers:p?p.carriers:[],units:s.units.map(function(u){return {t:u.t,base:u.base,d:u.d,dur:u.dur,kind:u.kind,r:u.r,kids:u.kids.map(function(k){return k.t;}),el:u.el};})};
+  canon.forEach(function(el){put(el,'opacity','0');});
+  s.sched={page:root.getAttribute('data-arrival'),rm:rm,phone:v.phone,cap:v.phone?S.pCap:S.cap,d:rm?0:p.d,s:p.s,
+    carriers:rm?[]:p.carriers,units:s.units.map(function(u){return {t:u.t,base:u.base,d:u.d,dur:u.dur,kind:u.kind,r:u.r,kids:u.kids.map(function(k){return k.t;}),el:u.el};})};
   root.classList.add('arr-on');root.classList.remove('arr-pre');
-  [A1,A2].forEach(function(a){if(a)put(a,'pointerEvents','auto');}); /* the one live target while the rest takes no hits */
-  if(!rm)stage(s,p,H,A1,A2);
+  [A1,A2].forEach(function(a){
+    if(!a)return;
+    put(a,'pointerEvents','auto'); /* the one live target while the rest takes no hits */
+    put(a,'position','relative');put(a,'zIndex','39'); /* in flight it stays on top: a hit at its visual position is the act */
+    if(a.tagName==='A'){s.attrs.push([a,a.getAttribute('draggable')]);a.setAttribute('draggable','false');} /* a press never becomes a link drag */
+  });
+  stage(s,p,H,A1,A2);
   s.t0=performance.now();
   compose(s);
   guard();
@@ -509,8 +535,8 @@ function draw(el,t,dur){return run(el,[{transform:'scaleX(0)',transformOrigin:'0
 function compose(s){
   var L=s.L,p=s.p,ph=s.v.phone,c=s.comp,end;
   if(s.rm){
-    var seq=['name','stage','job','headline','f1','f2','f3','act','act2'].map(function(n){return n==='headline'?s.H:n==='act'?s.A:n==='act2'?s.A2:part(n);})
-      .filter(function(el,i,a){return el&&a.indexOf(el)===i;});
+    var seq=['crown','place','slug','day','job'].map(function(k){return L[k];}).concat([s.H],['f1','f2','f3'].map(function(k,i){return i===s.card.warn?null:L[k];}),[s.A,s.A2])
+      .filter(Boolean);
     seq.forEach(function(el,i){if(el===s.A)s.actAt=s.t0+ms(i*S.rmStag);c.push(run(el,[{opacity:0},{opacity:1}],i*S.rmStag,S.rmLine,cb(C.Q)));});
     end=(seq.length-1)*S.rmStag+S.rmLine;
   }else{
@@ -610,7 +636,18 @@ function assemble(src){
     if(s.line){var ct=s.line.currentTime||0;pr=Math.max(0,Math.min(1,(ct-ms(S.cue))/ms(S.hold-S.cue)));s.line.cancel();}
     run(L.line,[{transform:'scaleX('+r2(pr)+')',opacity:1},{transform:'scaleX(1)',opacity:1}],0,S.lineDone,cb(C.Q));
     run(L.line,[{opacity:1},{opacity:0}],S.lineDone,S.lineFade,cb(C.Q));
-    s.canon.forEach(function(el){if(el.matches('[data-part~="name"],[data-part~="stage"]'))run(el,[{opacity:0},{opacity:1}],0,1,'linear');});
+    s.canon.forEach(function(el){
+      if(el.matches('[data-part~="name"],[data-part~="stage"]'))run(el,[{opacity:0},{opacity:1}],0,1,'linear');
+      else if(el.matches('[data-part~="job"]'))run(el,[{opacity:0},{opacity:1}],S.hand+p.d-S.lead,S.dissolve,cb(C.Q)); /* the Desk's name label prints as the sentence lands */
+    });
+  }else{
+    /* reduced motion: the same card hands off by opacity alone; the carriers fade out on the card, go home unseen and
+       fade in there; the past-due line swaps in one frame, never faded */
+    var OUT=[{opacity:1},{opacity:0}],IN=[{opacity:0},{opacity:1}],Qe=cb(C.Q),wk=s.card.warn>=0?'f'+(s.card.warn+1):'';
+    ['crown','place','slug','day','job','f1','f2','f3'].forEach(function(k){if(L[k])run(L[k],OUT,k===wk?S.rmLine:0,k===wk?1:S.rmLine,k===wk?'linear':Qe);});
+    [s.H,s.A,s.A2].forEach(function(el){if(el)run(el,OUT,0,S.rmLine,Qe);});
+    s.canon.forEach(function(el){var x=el.matches('[data-part~="warn"]');run(el,IN,S.rmLine,x?1:S.rmLine,x?'linear':Qe);});
+    later(land,S.rmLine);end=2*S.rmLine;
   }
   run(L.cue,[{opacity:1},{opacity:0}],0,S.cueOut,cb(C.Q));
   /* the page assembles from its own parts: nearest the landed sentence first, each growing from the back */
@@ -649,7 +686,7 @@ function assemble(src){
 function land(){
   var s=st;if(!s)return;
   s.landed=true;
-  [s.H,s.A,s.A2].forEach(function(el){if(el){el.style.transform='';el.style.translate='';el.style.transformOrigin='';el.style.willChange='';}});
+  [s.H,s.A,s.A2].forEach(function(el){if(el){el.style.transform='';el.style.translate='';el.style.transformOrigin='';el.style.willChange='';if(s.rm)run(el,[{opacity:0},{opacity:1}],0,S.rmLine,cb(C.Q));}});
   s.carry.forEach(function(a){a.cancel();});
 }
 /* ---------- 7. the frame watch and the guard ladder (R-DM26 A): Act 1 trips to the hold; the first Act 3 trip thins the
@@ -687,6 +724,8 @@ function finish(normal){
   var held=d.activeElement===s.skip;
   s.anims.forEach(function(a){a.cancel();});
   for(var i=s.saved.length-1;i>=0;i--)s.saved[i][0].style[s.saved[i][1]]=s.saved[i][2];
+  s.attrs.forEach(function(x){if(x[1]===null)x[0].removeAttribute('draggable');else x[0].setAttribute('draggable',x[1]);});
+  if(status)status.textContent=''; /* the hold's message is not true at rest */
   [s.H,s.A,s.A2].forEach(function(el){if(el){el.style.translate='';}});
   s.units.forEach(function(u){u.kids.forEach(function(k){k.el.style.transformOrigin='';});});
   s.nodes.forEach(function(n){if(n.parentNode)n.parentNode.removeChild(n);});
@@ -728,6 +767,10 @@ function onKey(e){
     if(e.key==='Escape')e.stopPropagation(); /* never also the put-down */
     s.kbd=true;advance('key');return;
   }
+  if(e.key==='Tab'){ /* Act 3: Tab rests at once, focus on the act (or the landing), never on the first control */
+    e.preventDefault();e.stopPropagation();
+    var to=s.A||landing(s);s.kbd=false;finish(true);if(to)calm(to);return;
+  }
   if(e.key==='Escape'){e.preventDefault();e.stopPropagation();} /* Act 3: Escape is swallowed; other keys act natively */
 }
 function control(t){return t&&t.closest&&t.closest(CTRL);}
@@ -736,11 +779,14 @@ function onDown(e){
   if(!st)return;
   var s=st,t=e.target,ours=t.closest&&t.closest('.mc,[data-arr-replay],.arr-skip');
   if(ours)return;
-  var act=[s.A,s.A2].filter(function(x){return x&&x.contains(t);})[0];
-  if(act&&!(e.button>0)&&performance.now()>=s.actAt){ /* a press on the real act: it acts on release over it */
+  var x=e.clientX,y=e.clientY,now=performance.now();
+  if(!early()&&dbl&&now-dbl.t<500&&Math.abs(x-dbl.x)<=8&&Math.abs(y-dbl.y)<=8){swallow=true;return;} /* the second click of a double: nothing extra */
+  var act=[s.A,s.A2].filter(function(a){return a&&a.contains(t);})[0];
+  if(!act&&!early())act=[s.A,s.A2].filter(function(a){if(!a)return false;var r=a.getBoundingClientRect();return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;})[0]; /* in flight: where she sees it */
+  if(act&&!(e.button>0)&&(!early()||now>=s.actAt)){ /* a press on the real act: it acts on release over it */
     press={id:e.pointerId,r:act.getBoundingClientRect(),act:act,y:w.scrollY||0};swallow=true;return;
   }
-  if(early()){s.kbd=false;swallow=true;advance('pointer');return;}
+  if(early()){s.kbd=false;swallow=true;dbl={t:now,x:x,y:y};advance('pointer');return;}
   if(control(t)&&!(s.layer&&s.layer.contains(t)))finish(); /* Act 3: a control snaps to rest, then acts natively, once */
 }
 function onUp(e){
@@ -763,11 +809,16 @@ function onClick(e){
   if(early()&&(t===st.A||t===st.A2||(st.A&&st.A.contains(t)))){finish();return;} /* assistive activation without a press is honoured */
   if(!early()&&control(t))finish();
 }
-function onTouch(){if(wait)return cut();if(early()){st.kbd=false;advance('touch');}} /* a swipe advances; its scroll never finishes */
+function onTouch(){if(wait)return cut();if(press)return;if(early()){st.kbd=false;advance('touch');}} /* a swipe advances (a tap on the act is a press); its scroll never finishes */
 function onWheel(){press=null;if(wait)return cut();if(early()){st.kbd=false;advance('wheel');}}
+/* her hand: a scroll counts only when a wheel, touch, key or press came first; the visit is still hers (throttled) */
+var GESTURE=800;
+function mark(){inputAt=performance.now();var t=Date.now();if(t-wrote>1e4){wrote=t;store.set('pl-visit',t);}}
 function onScroll(){
-  if(press&&Math.abs((w.scrollY||0)-press.y)>.5)press=null;
-  if(!st||Math.abs((w.scrollY||0)-st.y)<=.5)return;
+  var y=w.scrollY||0;
+  if(performance.now()-inputAt>GESTURE){if(press)press.y=y;if(st)st.y=y;return;} /* layout moved the page, not her: a new baseline */
+  if(press&&Math.abs(y-press.y)>.5)press=null;
+  if(!st||Math.abs(y-st.y)<=.5)return;
   if(early())advance('scroll'); /* Act 3 scrolls natively while the parts keep assembling */
 }
 function onFocus(e){
@@ -783,17 +834,18 @@ function onResize(){if(st&&Math.abs((root.clientWidth||w.innerWidth)-st.v.vw)>1)
 function wire(){
   if(wired)return;
   wired=true;
+  ['keydown','pointerdown','wheel','touchstart','touchmove'].forEach(function(t){root.addEventListener(t,mark,{capture:true,passive:true});});
   root.addEventListener('keydown',onKey,true);
   root.addEventListener('pointerdown',onDown,true);
   root.addEventListener('click',onClick,true);
   root.addEventListener('pointerup',onUp,true);
-  root.addEventListener('pointercancel',function(){press=null;swallow=false;},true);
+  root.addEventListener('pointercancel',function(){var p=press;press=null;swallow=false;if(p&&early()){st.kbd=false;advance('pointer');}},true); /* a press the browser took over opens the page */
   root.addEventListener('pointermove',function(e){if(st)e.stopPropagation();},true); /* assembly under a still pointer never addresses a line */
   root.addEventListener('focusin',onFocus,true);
   root.addEventListener('focusout',onBlurIn,true);
   root.addEventListener('wheel',onWheel,{capture:true,passive:true});
   root.addEventListener('touchstart',onTouch,{capture:true,passive:true});
-  d.addEventListener('selectionchange',function(){var s=st&&w.getSelection();if(s&&!s.isCollapsed)finish();});
+  d.addEventListener('selectionchange',function(){var s=early()&&w.getSelection();if(s&&!s.isCollapsed)finish();}); /* Act 3 is never cancelled by a selection */
   w.addEventListener('scroll',onScroll,{passive:true});
   w.addEventListener('resize',onResize);
   if(w.visualViewport)w.visualViewport.addEventListener('resize',onResize);
@@ -814,7 +866,12 @@ function wire(){
 }
 /* ---------- 9. boot (O2): bare paper for at most 1,500ms while the card's faces load; input cancels to the resting page ---------- */
 var FACES=['500 34px "Playfair Display"','500 20px "Playfair Display"','400 16px Inter','400 14px Inter','400 11px "DM Mono"','500 11px "DM Mono"'];
-function faces(){return Promise.all(FACES.map(function(f){return d.fonts.load(f);}));}
+/* every face loaded, or the ordinary page: a blocked or failed face never plays the card in a fallback */
+function faces(){
+  return Promise.all(FACES.map(function(f){return d.fonts.load(f);})).then(function(r){
+    if(!r.every(function(x){return x&&x.length;})||!FACES.every(function(f){return d.fonts.check(f);}))throw new Error('faces');
+  });
+}
 function pre(budget,sim,go,no){
   var to=0,done=false;
   root.classList.add('arr-pre');
@@ -830,11 +887,11 @@ function boot(k,decline){
   K.arrScale0=/[?&]scale=0(&|$)/.test(w.location.search);
   wire();clearTimeout(A.safety);
   function no(skip){root.classList.remove("arr-pre");if(decline&&!skip)decline();} /* a declined arrival lets the page make its own entry move */
-  function go(){var ok=false;try{ok=start({kbd:A.kbd});}catch(err){try{finish();}catch(e){}}if(!ok)no();}
+  function go(){var ok=false;try{ok=start({kbd:A.kbd});}catch(err){try{finish();}catch(e){}}if(ok&&root.getAttribute('data-arrival')==='desk')store.set('pl-desk',Date.now());if(!ok)no();}
+  if(A.why==='late')return no(true); /* the page has shown for the whole budget: no entry move now */
   if(!BOX||!A.play||(d.visibilityState&&d.visibilityState!=='visible'))return no();
-  if(!d.fonts||!d.fonts.load)return no();
-  var spent=0;try{spent=w.performance.now()-A.at;}catch(e){}
-  pre(FONT_WAIT-spent,0,go,no);
+  if(cssVar('--arr-ok')!=='1'||!d.fonts||!d.fonts.load)return no(); /* arrival.css missing: the ordinary page */
+  pre(FONT_WAIT-performance.now(),0,go,no); /* the budget runs from navigation start */
 }
 /* Review only: from the resting start, as if she had just arrived. Keyboard activation earns the landing focus.
    Replay reduced, without scale and cold are one-shot: that replay only, nothing kept. Cold replays the O2 wait. */

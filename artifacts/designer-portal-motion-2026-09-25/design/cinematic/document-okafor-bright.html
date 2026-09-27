@@ -185,7 +185,7 @@ body{background:var(--doc-paper)}
 </style>
 <script>(function(s,c){if(/[?&]controls=1(&|$)/.test(s))c.add('controls');if(/[?&]rm=1(&|$)/.test(s))c.add('rm');})(location.search,document.documentElement.classList);</script>
 <link rel="stylesheet" href="arrival.css">
-<script src="arrival.js"></script>
+<script src="arrival.js" defer></script>
 </head>
 <body>
 <div id="paper" class="paper on-paper" data-under>
@@ -195,7 +195,7 @@ body{background:var(--doc-paper)}
     <p class="t-head spine-name" data-part="name">Okafor-Bright</p>
     <ol class="jumps">
       <li><a href="#s-brief" class="jump" data-jump><svg class="sm settled" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Brief</span><span class="vh">, settled</span></a></li>
-      <li><a href="#s-discovery" class="jump" data-jump aria-current="step" data-part="stage"><svg class="sm active" data-part="crown" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Discovery</span><span class="vh">, the stage now, essentials needed</span></a></li>
+      <li><a href="#s-discovery" class="jump" data-jump aria-current="step" data-part="stage"><svg class="sm active" data-part="crown" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Discovery</span><span class="vh">, the stage now, essentials with Tomás</span></a></li>
       <li><a href="#s-direction" class="jump" data-jump><svg class="sm" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Direction</span><span class="vh">, ahead</span></a></li>
       <li><a href="#s-agreement" class="jump" data-jump><svg class="sm" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Agreement</span><span class="vh">, ahead</span></a></li>
       <li><a href="#s-procurement" class="jump" data-jump><svg class="sm" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Procurement</span><span class="vh">, ahead</span></a></li>
@@ -219,20 +219,20 @@ body{background:var(--doc-paper)}
       <section class="mi margin-inline" data-region aria-labelledby="h-margin">
         <h2 class="t-head sec-head" id="h-margin">Margin</h2>
         <div data-seam="w-margin"><div class="acts"><p class="t-body">Four notes sit beside this job.</p><button type="button" class="act seam" data-detail="w-margin" aria-expanded="false" aria-controls="w-margin"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
-        <div class="well well-margin" id="w-margin" role="region" aria-label="Margin detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><div class="note-row"><p class="t-head faint">New to you</p><p class="t-body-sm">Brief opened Sep 20.</p></div><div class="note-row"><p class="t-head faint">Brief</p><p class="t-body-sm">Tomás: Ada would rather talk budget with you.</p></div><div class="note-row"><p class="t-head faint">Household</p><p class="t-body-sm">Kwame works nights; call Ada after 10 am.</p></div><div class="note-row"><p class="t-head faint">Discovery</p><p class="t-body-sm">Tomás walks the house Sep 29 at 9 am.</p></div></div></div>
+        <div class="well well-margin" id="w-margin" role="region" aria-label="Margin detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><div class="note-row"><p class="t-head faint">First visit</p><p class="t-body-sm">Brief open since Sep 20.</p></div><div class="note-row"><p class="t-head faint">Brief</p><p class="t-body-sm">Tomás: Ada will cover budget at the walkthrough.</p></div><div class="note-row"><p class="t-head faint">Household</p><p class="t-body-sm">Kwame works nights; call Ada after 10 am.</p></div><div class="note-row"><p class="t-head faint">Discovery</p><p class="t-body-sm">Tomás walks the house Sep 29 at 9 am.</p></div></div></div>
       </section>
       <section class="tsec settled-sec" id="s-brief" data-region aria-labelledby="h-brief">
         <h2 class="t-head sec-head" id="h-brief" tabindex="-1"><span>Brief</span><span class="state">Settled</span></h2>
         <div data-seam="w-brief"><p class="t-d1">Brief opened Sep 20.</p><p class="t-meta ctx">Ada Okafor-Bright's first call · Tomás</p><div class="acts"><a href="#" class="act" data-press data-primary data-fixture><span class="w">Read the call notes</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-brief" aria-expanded="false" aria-controls="w-brief"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="well" id="w-brief" role="region" aria-label="Brief detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Ada called after seeing the Hale kitchen; the back of the house has to work for four.</p><p class="fact">Referred by the Hales</p><p class="fact">First call: 25 minutes, Sep 20</p><a href="#" class="act" data-press data-fixture><span class="w">Open the call notes</span><span class="rule" aria-hidden="true"></span></a></div></div>
       </section>
-      <section class="tsec needs" id="s-discovery" data-region aria-labelledby="h-discovery">
-        <h2 class="t-head sec-head" id="h-discovery" tabindex="-1" data-part="head"><span>Discovery</span><span class="state" data-part="settle">Needs you</span></h2>
-        <div data-seam="w-discovery"><p class="t-d1" data-part="headline">Yours to add: budget, how they live.</p><p class="t-meta ctx" data-part="f1">Two of five essentials on record.</p><p class="t-body-sm muted ball" data-part="f3">No proposal drafted yet.</p><div class="acts"><button type="button" class="act act-primary" data-press data-primary data-open-record="rec" data-part="act"><span class="w">Continue the brief</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act seam" data-detail="w-discovery" aria-expanded="false" aria-controls="w-discovery"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
-        <div class="well" id="w-discovery" role="region" aria-label="Discovery detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Tomás took the first call and left budget and how they live to you.</p><p class="fact">Walkthrough Sep 29; Tomás measures</p><p class="fact">Rooms: kitchen, family room, porch</p><button type="button" class="act" data-press data-open-record="rec"><span class="w">Open the essentials</span><span class="rule" aria-hidden="true"></span></button></div></div>
+      <section class="tsec now" id="s-discovery" data-region aria-labelledby="h-discovery">
+        <h2 class="t-head sec-head" id="h-discovery" tabindex="-1" data-part="head"><span>Discovery</span><span class="state" data-part="settle">Now</span></h2>
+        <div data-seam="w-discovery"><p class="t-d1" data-part="headline">Still to add: budget, how they live.</p><p class="t-meta ctx" data-part="f1">Two of five essentials on record.</p><p class="t-body-sm muted ball" data-part="f3">With Tomás; walkthrough Sep 29.</p><div class="acts"><button type="button" class="act act-primary" data-press data-primary data-open-record="rec" data-part="act"><span class="w">Continue the brief</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act seam" data-detail="w-discovery" aria-expanded="false" aria-controls="w-discovery"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
+        <div class="well" id="w-discovery" role="region" aria-label="Discovery detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Tomás gathers budget and how they live at the walkthrough.</p><p class="fact">Walkthrough Sep 29; Tomás measures</p><p class="fact">Rooms: kitchen, family room, porch</p><button type="button" class="act" data-press data-open-record="rec"><span class="w">Open the essentials</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="record" id="rec" data-record hidden>
           <p class="t-head sec-head">The five essentials</p>
-          <dl><dt>Who lives there</dt><dd>Ada and Kwame, two children, an old dog</dd><dt>Rooms</dt><dd>Kitchen, family room, back porch</dd><dt>How they live</dt><dd>Yours to add</dd><dt>Budget</dt><dd>Yours to add</dd><dt>Measurements</dt><dd>At the walkthrough, Sep 29 · Tomás</dd></dl>
+          <dl><dt>Who lives there</dt><dd>Ada and Kwame, two children, an old dog</dd><dt>Rooms</dt><dd>Kitchen, family room, back porch</dd><dt>How they live</dt><dd>At the walkthrough, Sep 29 · Tomás</dd><dt>Budget</dt><dd>At the walkthrough, Sep 29 · Tomás</dd><dt>Measurements</dt><dd>At the walkthrough, Sep 29 · Tomás</dd></dl>
           <div class="field"><label class="t-head" for="rec-note">How they live</label><textarea id="rec-note" rows="3"></textarea></div>
           <p class="t-meta status" role="status" aria-live="polite"></p>
           <div class="acts"><button type="button" class="act act-primary" data-press data-save="How they live saved to the brief."><span class="w">Save to brief</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act" data-press data-close-record><span class="w">Close record</span><span class="rule" aria-hidden="true"></span></button></div>
@@ -272,8 +272,8 @@ body{background:var(--doc-paper)}
   </main>
   <aside class="rail" aria-label="Margin">
     <p class="t-head faint">Margin</p>
-    <div class="note-row" data-part="f2"><p class="t-head faint">New to you</p><p class="t-body-sm">Brief opened Sep 20.</p></div>
-    <div class="note-row"><p class="t-head faint">Brief</p><p class="t-body-sm">Tomás: Ada would rather talk budget with you.</p></div>
+    <div class="note-row" data-part="f2"><p class="t-head faint">First visit</p><p class="t-body-sm">Brief open since Sep 20.</p></div>
+    <div class="note-row"><p class="t-head faint">Brief</p><p class="t-body-sm">Tomás: Ada will cover budget at the walkthrough.</p></div>
     <div class="note-row"><p class="t-head faint">Household</p><p class="t-body-sm">Kwame works nights; call Ada after 10 am.</p></div>
     <div class="note-row"><p class="t-head faint">Discovery</p><p class="t-body-sm">Tomás walks the house Sep 29 at 9 am.</p></div>
   </aside>
@@ -310,14 +310,14 @@ body{background:var(--doc-paper)}
   "sections": ["brief", "discovery", "direction", "agreement", "procurement", "schedule", "install", "care"],
   "position": {"text": "Two of five essentials on record.", "fidelity": "exact"},
   "needs": [
-    {"kind": "essentials", "owner": "studio", "who": "Leah", "since": "2026-09-20", "urgent": false, "namesCustody": true, "line": "Yours to add: budget, how they live.", "act": "Continue the brief", "section": "discovery"},
-    {"kind": "proposal_draft", "owner": "studio", "who": "Leah", "since": "2026-09-20", "urgent": false, "line": "No proposal drafted yet.", "act": null, "section": "direction"}
+    {"kind": "essentials", "owner": "studio", "who": "Tomás", "since": "2026-09-20", "urgent": false, "ball": "walkthrough Sep 29", "line": "Still to add: budget, how they live.", "act": "Continue the brief", "section": "discovery"},
+    {"kind": "proposal_draft", "owner": "studio", "who": "Leah", "since": "2026-09-20", "urgent": false, "line": "Proposal not started.", "act": null, "section": "direction"}
   ],
   "milestone": null,
   "since": {
     "anchor": null,
     "anchorNote": "fixture: Leah has never opened this Document; Tomás opened the brief Sep 20 after Ada's first call",
-    "first": "brief opened Sep 20",
+    "first": "brief open since Sep 20",
     "changes": [
       {"at": "2026-09-20", "by": "Tomás", "kind": "message", "need": "essentials", "text": "brief opened"},
       {"at": "2026-09-22", "by": "Tomás", "kind": "message", "text": "walkthrough booked for Sep 29"}
@@ -679,7 +679,7 @@ K.page.putDown=function(){
   }
   var p=K.$('#paper');
   p.style.transformOrigin='50% '+(window.scrollY+window.innerHeight/2)+'px';
-  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc','1');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing */
+  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc',(location.pathname||'').split('/').pop()||'document.html');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing and shows this job */
 };
 /* Paper is taken: 270ms O (reduced motion: 200ms opacity only), played only when she picked it up on the Desk. */
 K.page.pickUp=function(){
@@ -693,8 +693,12 @@ K.page.pickUp=function(){
 K.page.setup=function(){
   var carried=false;
   try{carried=sessionStorage.getItem('pl-carry')==='1';sessionStorage.removeItem('pl-carry');}catch(err){}
-  if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp(); /* one entry move only: the arrival, when it plays, replaces the pick-up */
-  if(location.hash==='#rec')K.openRecord('rec',K.$('#doc-title'));
+  /* arrival.js is deferred: it has run by DOMContentLoaded. One entry move only: the arrival, when it plays, replaces the pick-up. */
+  function go(){if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+  /* #rec opens the record, on load and whenever the hash names it later */
+  function rec(){if(location.hash!=='#rec')return;if(K.arrival)K.arrival.finish();K.openRecord('rec',K.$('#doc-title'));}
+  rec();window.addEventListener('hashchange',rec);
   /* Back from the Desk through the page cache: the paper is whole again, with no move. */
   window.addEventListener('pageshow',function(e){if(e.persisted){var p=K.$('#paper');p.getAnimations().forEach(function(a){a.cancel();});p.style.transform='';p.style.opacity='';}});
 };

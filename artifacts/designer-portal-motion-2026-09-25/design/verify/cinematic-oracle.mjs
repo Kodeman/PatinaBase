@@ -21,13 +21,13 @@ const FULL = { 'index.html': read('fullpage', 'index.html'), 'document.html': re
 const EXPECT = {
   desk: { place: 'Middle West Studio · Friday, Sep 25', headline: 'Ainsworth: finish approval needed.', facts: ['Delgado: delivery reply overdue 2 days.', 'Reyes: fabric sample due from the mill.', "Since yesterday: Hale's final order confirmed."], act: 'Review finish' },
   Ainsworth: { place: 'Ainsworth · Procurement', headline: 'Finish approval needed.', facts: ['Install targeted for Oct 16.', 'Since Wednesday: white oak sample recorded.', 'Your pen, due today; the workshop waits.'], act: 'Review finish' },
-  Delgado: { place: 'Delgado · Schedule', headline: 'Overdue 2 days: delivery window needed.', facts: ['Delivery offered Oct 12–16.', 'Nothing new since Monday.', 'Waiting on the Delgados to confirm access.'], act: 'Review delivery' },
-  Reyes: { place: 'Reyes · Install', headline: 'Waiting for the fabric sample.', facts: ['Install booked Oct 21.', 'Since Tuesday: sample marked in transit.', 'With the maker; promised by today.'], act: 'Follow up on sample' },
+  Delgado: { place: 'Delgado · Schedule', headline: "Overdue 2 days: the Delgados' reply.", facts: ['Delivery offered Oct 12–16.', 'Since Monday: delivery reply fell overdue Wednesday.', 'Waiting on the Delgados to confirm access.'], act: 'Review delivery' },
+  Reyes: { place: 'Reyes · Install', headline: 'Waiting for the fabric sample.', facts: ['Install booked Oct 21.', 'Since Tuesday: sample marked in transit.', 'In transit from the mill; due today.'], act: 'Follow up on sample' },
   Whitfield: { place: 'Whitfield · Install', headline: 'Install starts Oct 6; nothing needs you.', facts: ['All 14 lines delivered.', 'Since Sep 18: final delivery signed.', 'At rest; punch list opens at install.'], act: null },
-  'Okafor-Bright': { place: 'Okafor-Bright · Discovery', headline: 'Yours to add: budget, how they live.', facts: ['Two of five essentials on record.', 'New to you: brief opened Sep 20.', 'No proposal drafted yet.'], act: 'Continue the brief' },
+  'Okafor-Bright': { place: 'Okafor-Bright · Discovery', headline: 'Still to add: budget, how they live.', facts: ['Two of five essentials on record.', 'First visit: brief open since Sep 20.', 'With Tomás; walkthrough Sep 29.'], act: 'Continue the brief' },
 };
-// A doorway verb may be phrasal ("Follow up on sample"): its particle counts with the verb, not as a word.
-const verbAct = (act) => act.replace(/^([A-Z][a-z]+) (up|out|in|on|back|over)\b/, '$1');
+// A phrasal verb from the explicit list ("Follow up on sample") counts as one word; nothing else is folded.
+const verbAct = (act) => act.replace(/^(Follow up|Sign off|Check in|Call back)\b/i, (m) => m.split(' ')[0]);
 const HINT = 'Skip goes straight to the page; any key opens it.';
 const CE = 1800, HOLD = 10000;
 
@@ -146,7 +146,7 @@ function parseHTML(html) {
     if (tag === 'script' || tag === 'style') {
       const end = html.indexOf('</' + tag + '>', TOK.lastIndex);
       const raw = html.slice(TOK.lastIndex, end);
-      if (tag === 'script') doc.scripts.push({ raw, src: attrs.src, type: attrs.type });
+      if (tag === 'script') doc.scripts.push({ raw, src: attrs.src, type: attrs.type, defer: 'defer' in attrs });
       el.childNodes.push(new Text(raw, el)); TOK.lastIndex = end + tag.length + 3; continue;
     }
     if (!VOID.has(tag) && !m[4]) stack.push(el);
@@ -229,7 +229,7 @@ function focusTo(el) {
 /* ---------------- a generic flow layout: page coordinates, from the markup alone ---------------- */
 // type metrics [font-size, line-height, char width]; a leaf takes the nearest class it or an ancestor carries
 const TYPE = { 't-d1': [34, 39.1, 16], 't-d2': [28, 34, 13], 't-d3': [20, 27, 9.5], 't-head': [11, 16.5, 8], 't-meta': [12, 18, 8], 't-body': [16, 24.8, 7.6], 't-body-sm': [14, 21, 6.7],
-  'arr-place': [20, 26, 9.5], 'arr-slug': [11, 16.5, 8], 'arr-day': [14, 21, 6.7], 'arr-job': [11, 16.5, 8], 'arr-f1': [12, 18, 8], 'arr-f': [16, 24.8, 7.6], 'arr-cue': [11, 16.5, 8], 'act': [12, 44, 8], 'arr-skip': [11, 44, 8] };
+  'arr-place': [20, 26, 9.5], 'arr-slug': [11, 16.5, 8], 'arr-day': [14, 21, 6.7], 'arr-job': [20, 26, 9.5], 'arr-f1': [12, 18, 8], 'arr-f': [16, 24.8, 7.6], 'arr-cue': [11, 16.5, 8], 'act': [12, 44, 8], 'arr-skip': [11, 44, 8] };
 const PHONE_TYPE = { 'arr-f': [14, 21, 6.7] };
 const INLINE = new Set(['SPAN', 'EM', 'KBD', 'I', 'SMALL', 'STRONG', 'B', 'SVG', 'RECT', 'INPUT', 'LABEL']);
 const ROWS = '.acts,.pl-id,.desk-head,.roster-head,.sh-vitals,.lrow,.strip,.contents,.mnote,.sec-head,.fill,.fixture-foot,.leave';
@@ -328,7 +328,7 @@ function rect(e) {
     const fix = e.parentNode.matches('.arr-rules-fix'), l = pxv(e.style.left), t = pxv(e.style.top);
     let w, h;
     if (e.style.width) { w = pxv(e.style.width); h = pxv(e.style.height); }
-    else if (e.matches('.arr-line')) { w = 120; h = 1; }
+    else if (e.matches('.arr-line')) { w = 160; h = 1; }
     else if (e.matches('.arr-crown')) { w = h = phone() ? 14 : 16; }
     else { const n = natural(e); w = Math.min(n.w, phone() ? vw - 32 : 640); h = n.h * Math.ceil(n.w / w); }
     return out(R(l, l + w, t, t + h), fix ? 0 : sy);
@@ -349,7 +349,7 @@ function computed(e) {
   const [fs] = e.nodeType === 1 ? metric(e) : [16];
   const cs = { fontSize: fs + 'px', display: 'block', position: 'static', overflowX: 'visible', overflowY: 'visible', color: 'rgb(44, 41, 38)', backgroundColor: 'rgb(139, 115, 85)',
     paddingTop: '0px', paddingRight: '0px', paddingBottom: '0px', paddingLeft: '0px', opacity: e.style && e.style.opacity !== undefined && e.style.opacity !== '' ? e.style.opacity : '1', transform: (e.style && e.style.transform) || 'none',
-    getPropertyValue: (n) => (n === '--text-faint' ? '#9A8F84' : '') };
+    getPropertyValue: (n) => (n === '--text-faint' ? '#9A8F84' : n === '--arr-ok' && W.css ? ' 1' : '') };
   for (const s of ['Top', 'Right', 'Bottom', 'Left']) { cs['border' + s + 'Width'] = '0px'; cs['border' + s + 'Style'] = 'none'; cs['border' + s + 'Color'] = 'rgba(44, 41, 38, 0.1)'; }
   if (e.nodeType !== 1 || e.tagName === 'HTML') return cs;
   if (INLINE.has(e.tagName) || isInline(e)) cs.display = 'inline';
@@ -376,9 +376,12 @@ class SP {
   static resolve(v) { return v instanceof SP ? v : new SP((r) => r(v)); }
 }
 const EPOCH = Date.UTC(2026, 8, 25, 14, 0, 0);
-function boot(file, { search = '', hash = '', osRM = false, coarse = false, session = {}, vp = [1440, 900], nav = 'navigate', fontAt = 0, gaps = [], visibility = 'visible', src = null, epoch = EPOCH, sel = true } = {}) {
+// t0: ms since navigation start when the deferred engine runs (performance.now; the O2 budget counts from 0).
+// css: arrival.css loaded (its sentinel). fontFail: 'empty' (the font CSS blocked: load resolves []) or 'error' (a face failed).
+// noStorage: sessionStorage throws; name: window.name carried from the previous page in this tab.
+function boot(file, { search = '', hash = '', osRM = false, coarse = false, session = {}, vp = [1440, 900], nav = 'navigate', fontAt = 0, gaps = [], visibility = 'visible', src = null, epoch = EPOCH, sel = true, t0 = 0, css = true, fontFail = null, noStorage = false, name = '' } = {}) {
   const doc = parseHTML(src || SRC[file]);
-  W = { doc, clock: 1000, tid: 0, timeouts: [], running: [], log: [], navs: [], defaultNav: [], dispatched: [], scrolled: [], scrolls: [], rafq: [], nextFrame: 1016, gaps: gaps.slice(),
+  W = { doc, clock: 1000, p0: 1000 - t0, css, tid: 0, timeouts: [], running: [], log: [], navs: [], defaultNav: [], dispatched: [], scrolled: [], scrolls: [], rafq: [], nextFrame: 1016, gaps: gaps.slice(),
     kbd: false, session: new Map(Object.entries(session)), win: { L: {}, C: {} }, vp, sel, reads: 0, dirty: true, epoch, fontAt: 1000 + fontAt, clicks: [] };
   doc.activeElement = doc.body; doc.visibilityState = visibility;
   const html = doc.documentElement; html.cw = vp[0]; html.scrollHeight = 4000;
@@ -387,7 +390,7 @@ function boot(file, { search = '', hash = '', osRM = false, coarse = false, sess
     Date: class extends Date { static now() { return W.epoch + W.clock; } },
     scrollTo(x, y) { ctx.scrollY = typeof x === 'object' ? x.top : y; W.scrolls.push({ y: ctx.scrollY, at: W.clock }); },
     matchMedia: (q) => ({ matches: (osRM && /reduce/.test(q)) || (coarse && /coarse/.test(q)), addEventListener() {} }),
-    performance: { now: () => W.clock, getEntriesByType: () => [{ type: nav }] },
+    performance: { now: () => W.clock - W.p0, getEntriesByType: () => [{ type: nav }] }, name,
     getSelection: () => ({ isCollapsed: W.sel, anchorNode: null }),
     getComputedStyle: (el) => computed(el),
     DOMMatrixReadOnly: class { constructor(s) { this.m41 = 0; this.m42 = 0; this.a = 1; const m = s && /translate\(([-\d.e]+)px,\s*([-\d.e]+)px\)\s*scale\(([-\d.e]+)\)/.exec(s); if (m) { this.m41 = +m[1]; this.m42 = +m[2]; this.a = +m[3]; } } },
@@ -400,14 +403,18 @@ function boot(file, { search = '', hash = '', osRM = false, coarse = false, sess
     sessionStorage: { getItem: (k) => (W.session.has(k) ? W.session.get(k) : null), setItem: (k, v) => W.session.set(k, String(v)), removeItem: (k) => W.session.delete(k) },
     addEventListener(t, f, o) { const m = o === true || (o && o.capture) ? W.win.C : W.win.L; (m[t] = m[t] || []).push(f); },
   };
-  ctx.location = { search, hash, h: file, get href() { return this.h; }, set href(v) { W.navs.push(String(v)); this.h = String(v); } };
-  doc.fonts = { check: () => W.clock >= W.fontAt, ready: { then() {} }, load: () => new SP((res) => { if (W.clock >= W.fontAt) res(); else ctx.setTimeout(res, W.fontAt - W.clock); }) };
+  if (noStorage) Object.defineProperty(ctx, 'sessionStorage', { get() { throw new Error('SecurityError: storage is disabled'); } });
+  ctx.location = { search, hash, pathname: '/design/cinematic/' + file, h: file, get href() { return this.h; }, set href(v) { W.navs.push(String(v)); this.h = String(v); } };
+  const faces = () => (fontFail === 'empty' ? [] : [{ status: 'loaded' }]);
+  doc.fonts = { check: () => fontFail !== 'error' && W.clock >= W.fontAt, ready: { then() {} }, load: () => new SP((res) => { if (W.clock >= W.fontAt) res(faces()); else ctx.setTimeout(() => res(faces()), W.fontAt - W.clock); }) };
   ctx.window = ctx; W.ctx = ctx;
   vm.createContext(ctx);
-  for (const s of doc.scripts) {
-    if (s.type === 'application/json') continue;
-    vm.runInContext(s.src ? read('cinematic', s.src) : s.raw, ctx, { filename: s.src || file });
-  }
+  // parse order: classic scripts while loading, then the deferred ones, then DOMContentLoaded
+  const run = (s) => vm.runInContext(s.src ? read('cinematic', s.src) : s.raw, ctx, { filename: s.src || file });
+  doc.readyState = 'loading';
+  for (const s of doc.scripts) if (s.type !== 'application/json' && !s.defer) run(s);
+  for (const s of doc.scripts) if (s.type !== 'application/json' && s.defer) run(s);
+  doc.readyState = 'interactive'; fire(doc, 'DOMContentLoaded');
   const $ = (s) => doc.querySelector(s), $$ = (s) => doc.querySelectorAll(s);
   const K = ctx.K, A = K && K.arrival;
   const o = { K, A, doc, $, $$, ctx, file, card: A && A.card(), inputs: JSON.parse($('#briefing').textContent) };
@@ -421,7 +428,7 @@ function tick(ms) {
   for (;;) {
     const due = W.timeouts.filter((t) => t.at <= end).sort((a, b) => a.at - b.at)[0];
     const fAt = W.rafq.length ? W.nextFrame : Infinity;
-    if (fAt <= end && (!due || fAt < due.at)) { W.clock = fAt; const q = W.rafq; W.rafq = []; W.nextFrame = W.clock + nextGap(); q.forEach((x) => x.fn(W.clock)); continue; }
+    if (fAt <= end && (!due || fAt < due.at)) { W.clock = fAt; const q = W.rafq; W.rafq = []; W.nextFrame = W.clock + nextGap(); q.forEach((x) => x.fn(W.clock - W.p0)); continue; }
     if (!due) break;
     W.clock = due.at; W.timeouts = W.timeouts.filter((t) => t !== due); due.fn();
   }
@@ -517,9 +524,13 @@ attempt('T6: the since forms (SQ-330 §4)', () => {
   const f2 = (inp) => sel(inp, inp.today, inp.viewer).facts[1];
   const c = (at, by, kind, text, need) => ({ at, by, kind, text, need });
   const cases = [
-    [base(undefined), 'New to you: brief opened Sep 20.'],
-    [base('2026-09-24', [c('2026-09-24', 'Tomás', 'message', 'sample recorded')]), 'Since yesterday: sample recorded.'],
-    [base('2026-09-25', [c('2026-09-25', 'Tomás', 'message', 'sample recorded')]), 'Since earlier today: sample recorded.'],
+    [base(undefined), 'First visit: brief opened Sep 20.'],
+    [base('2026-09-24T09:00', [c('2026-09-24T16:00', 'Tomás', 'message', 'sample recorded')]), 'Since yesterday: sample recorded.'],
+    [base('2026-09-25T08:00', [c('2026-09-25T10:30', 'Tomás', 'message', 'sample recorded')]), 'Since earlier today: sample recorded.'],
+    [base('2026-09-24T16:00', [c('2026-09-24T16:00', 'Tomás', 'message', 'sample recorded')]), 'Nothing new since yesterday.'],
+    [base('2026-09-24', [c('2026-09-24', 'Tomás', 'message', 'sample recorded')]), 'Nothing new since yesterday.'],
+    [base('2026-09-21', [], { needs: [{ kind: 'delivery_window', owner: 'client', who: 'the Delgados', dueOn: '2026-09-23', line: 'The Delgados\' reply.', brief: 'delivery reply', act: 'Review delivery' }] }), 'Since Monday: delivery reply fell overdue Wednesday.'],
+    [base('2026-09-24', [], { needs: [{ kind: 'delivery_window', owner: 'client', who: 'the Delgados', dueOn: '2026-09-23', line: 'The Delgados\' reply.', act: 'Review delivery' }] }), 'Nothing new since yesterday.'],
     [base('2026-09-22', [c('2026-09-23', 'Tomás', 'message', 'sample recorded')]), 'Since Tuesday: sample recorded.'],
     [base('2026-09-18', [c('2026-09-20', 'Tomás', 'message', 'sample recorded')]), 'Since Sep 18: sample recorded.'],
     [base('2026-09-21', []), 'Nothing new since Monday.'],
@@ -538,7 +549,7 @@ for (const file of PAGES) {
   const head = src.slice(0, src.indexOf('</head>'));
   attempt(P('S1 loads the shared engine in <head>; declares only a Briefing and data-part marks'), () => {
     if (!/<html lang="en" data-arrival="(desk|doc)">/.test(src)) return 'no data-arrival on <html>';
-    if (!head.includes('<link rel="stylesheet" href="arrival.css">') || !head.includes('<script src="arrival.js"></script>')) return 'arrival.css/js not loaded relatively in <head>';
+    if (!head.includes('<link rel="stylesheet" href="arrival.css">') || !head.includes('<script src="arrival.js" defer></script>')) return 'arrival.css/js (deferred) not loaded relatively in <head>';
     if (!/rel="preconnect" href="https:\/\/fonts\.googleapis\.com"/.test(head) || !/rel="preconnect" href="https:\/\/fonts\.gstatic\.com"/.test(head)) return 'no preconnect to both font hosts (O2)';
     if (/arrival:start|arrival:gate|K\.page\.arrive\s*=/.test(src)) return 'an inline arrival engine, gate or cfg remains';
     if (!/<script type="application\/json" id="briefing">/.test(src)) return 'no Briefing JSON';
@@ -564,7 +575,7 @@ for (const file of PAGES) {
     const hw = words(card.headline); if (hw < 3 || hw > 8 || !/\.$/.test(card.headline)) return 'headline ' + hw + ' words';
     for (const f of card.facts) if (words(f) > 7) return 'fact "' + f + '" ' + words(f);
     if (card.act && (words(verbAct(card.act)) < 1 || words(verbAct(card.act)) > 3)) return 'act ' + words(verbAct(card.act));
-    if (words(card.place) + words(card.headline) > 12) return 'core ' + (words(card.place) + words(card.headline));
+    const core = words(card.place) + words(card.headline) + (card.act ? words(verbAct(card.act)) : 0); if (core > 12) return 'core ' + core;
     const all = cardLines(card).reduce((n, s) => n + words(s), 0); if (all > 36) return 'card ' + all;
     const m = o.ctx.Arrival.message(card); return words(m) <= 45 || 'message ' + words(m);
   });
@@ -633,10 +644,10 @@ for (const file of PAGES) {
     const desk = o.inputs.kind === 'desk', now = EPOCH + 1000;
     const plays = (opt) => { const q = boot(file, opt); return q.A.phase() !== null; };
     if (!plays({})) return 'fresh entry did not play';
-    if (desk && plays({ session: { 'pl-visit': String(now - 10 * 60e3) } })) return 'Desk played within the visit';
-    if (desk && !plays({ session: { 'pl-visit': String(now - 31 * 60e3) } })) return 'Desk did not play after 30 minutes';
+    if (desk && plays({ session: { 'pl-visit': String(now - 10 * 60e3), 'pl-desk': String(now - 12 * 60e3) } })) return 'Desk played within the visit';
+    if (desk && !plays({ session: { 'pl-visit': String(now - 31 * 60e3), 'pl-desk': String(now - 40 * 60e3) } })) return 'Desk did not play after 30 minutes';
     if (!desk && !plays({ session: { 'pl-visit': String(now - 60e3) } })) return 'Document did not play mid-visit';
-    for (const opt of [{ hash: '#rec' }, { nav: 'back_forward' }, { search: '?arrive=0' }]) if (plays(opt)) return 'played under ' + JSON.stringify(opt);
+    for (const opt of [...(desk ? [] : [{ hash: '#rec' }]), { nav: 'back_forward' }, { search: '?arrive=0' }]) if (plays(opt)) return 'played under ' + JSON.stringify(opt);
     const q = boot(file, { session: { 'pl-arrive': 'kbd' } }); if (W.session.has('pl-arrive') || !q.ctx.ARR.kbd) return 'token not spent into keyboard modality';
     return true;
   });
@@ -704,7 +715,7 @@ for (const file of PAGES) for (const [vn, vo] of Object.entries(VPS)) {
     toRest(o, 60000); return true;
   });
   attempt(P('O1(c) pointer, touch swipe, wheel and scroll each advance; the press is swallowed; the swipe\'s scroll never finishes Act 3'), () => {
-    const cases = [['pointer', (o) => press(o, blank(o))], ['wheel', (o) => fire(blank(o), 'wheel', { deltaY: 40 })], ['touch', (o) => { fire(blank(o), 'touchstart', {}); scrollBy(o, 180); }], ['scroll', (o) => scrollBy(o, 120)]];
+    const cases = [['pointer', (o) => press(o, blank(o))], ['wheel', (o) => fire(blank(o), 'wheel', { deltaY: 40 })], ['touch', (o) => { fire(blank(o), 'touchstart', {}); scrollBy(o, 180); }], ['scroll', (o) => { key(o, 'Shift'); scrollBy(o, 120); }], ['touch scroll', (o) => { fire(blank(o), 'touchmove', {}); scrollBy(o, 120); }]];
     for (const [n, f] of cases) for (const early of [false, true]) {
       const o = boot(file, vo); if (early) tick(300); else toHold(o);
       f(o);
@@ -835,12 +846,14 @@ for (const file of PAGES) {
     tick(720); if (o.A.phase() !== 'compose') return 'Replay cold did not play after its wait: ' + o.A.phase();
     toRest(o, 60000); return atRest(o);
   });
-  attempt(P('T11 reduced motion: no card lines, opacity-only, onsets within 400ms, Skip stays'), () => {
+  attempt(P('T11 reduced motion: the same card, every line shown, opacity-only, onsets within 400ms, Skip stays visible'), () => {
     const o = boot(file, { osRM: true }), n0 = W.log.length;
-    const shown = o.doc.querySelector('.arr-card').children.filter((c) => !c.hidden && !c.matches('.arr-cue'));
-    if (shown.length) return 'card lines shown: ' + shown.map((c) => c.className);
-    if (!skipEl(o)) return 'no Skip';
-    toHold(o); if (!skipEl(o)) return 'Skip gone in the hold';
+    const lines = o.doc.querySelector('.arr-card').children.filter((c) => !c.matches('.arr-cue,.arr-line'));
+    if (lines.length < o.card.facts.length + 1 || lines.some((c) => c.hidden)) return 'card lines shown ' + lines.filter((c) => !c.hidden).length + ' of ' + lines.length;
+    if (!skipEl(o) || skipEl(o).hidden) return 'no visible Skip';
+    toHold(o); if (!skipEl(o) || skipEl(o).hidden) return 'Skip gone in the hold';
+    const dim = [...lines, o.part('headline'), actEl(o)].filter((c) => c && opacity(c) < 1); if (dim.length) return 'not composed: ' + dim.map((c) => c.className);
+    if (o.doc.querySelector('.arr-line') && W.log.some((a) => a.el.matches('.arr-line'))) return 'the hairline ran';
     key(o, 'a'); toRest(o);
     // motion is a keyframed geometry that changes, or any transform other than none (a static "none" pins the part in place)
     const moved = W.log.slice(n0).filter((a) => Object.keys(a.kf[0]).some((p) => !/^(opacity|visibility|offset|easing|color|backgroundColor|border\w*Color)$/.test(p) && (a.kf.some((k) => k[p] !== a.kf[0][p]) || (/transform|translate|scale/.test(p) && a.kf[0][p] !== 'none'))));
@@ -970,6 +983,162 @@ for (const file of PAGES) {
     return (!o.A.running() && atRest(o) === true) || 'still ' + o.A.phase();
   });
 }
+
+
+/* ---------------- 5. SQ-342: the review fixes (input model, failure means the ordinary page, visit tracking, honesty) ---------------- */
+const secOf = (el) => el && el.closest('section[id]');
+for (const file of PAGES) {
+  const P = (n) => file + ': ' + n;
+  attempt(P('stage = landing: the eyebrow names the section the headline lands in, and the need is filed there'), () => {
+    const o = boot(file, { search: '?arrive=0' }), c = o.card;
+    if (o.inputs.kind === 'desk') {
+      for (const j of o.inputs.jobs) for (const n of j.needs || []) if (n.section !== j.stage.toLowerCase()) return j.name + ': need filed under ' + n.section + ', stage ' + j.stage;
+      return true;
+    }
+    const stage = c.place.split(' · ')[1], sec = secOf(o.part('headline'));
+    if (!sec) return 'the headline is not in a section';
+    const label = sec.querySelector('h2 span'); if (!label || label.textContent !== stage) return 'lands under ' + (label && label.textContent) + ', eyebrow says ' + stage;
+    if (c.need && 's-' + c.need.section !== sec.id) return 'need filed under ' + c.need.section + ', lands in ' + sec.id;
+    return true;
+  });
+  for (const [vn, vo] of Object.entries(VPS)) {
+    const Q = (n) => file + ' @' + vn + ': ' + n;
+    attempt(Q('a layout shift is never input: a scroll with no hand before it re-baselines; after a hand it advances'), () => {
+      for (const early of [true, false]) {
+        const o = boot(file, vo); if (early) tick(300); else toHold(o);
+        scrollBy(o, 21); tick(900); if (o.A.phase() !== (early ? 'compose' : 'hold')) return (early ? 'compose' : 'hold') + ': a bare scroll advanced';
+        if (early) toHold(o);
+        fire(blank(o), 'touchmove', {}); scrollBy(o, 1); if (o.A.phase() !== 'assemble') return 'a scroll after her hand did not advance: ' + o.A.phase();
+        toRest(o); if (o.A.advances() !== 1) return 'advances ' + o.A.advances();
+      }
+      return true;
+    });
+    attempt(Q('Tab in Act 3 rests at once, focus on the act (or the landing)'), () => {
+      const o = boot(file, vo); toHold(o); press(o, blank(o)); tick(100);
+      const ev = key(o, 'Tab'); if (!ev.defaultPrevented) return 'Tab not taken';
+      if (o.A.running()) return 'still ' + o.A.phase();
+      const want = actEl(o) || o.part('head'); if (o.doc.activeElement !== want) return 'focus on ' + o.doc.activeElement.tagName + '.' + o.doc.activeElement.className;
+      return o.A.schedule().finished === 'rest' || 'finished ' + o.A.schedule().finished;
+    });
+    attempt(Q('at rest the status is empty; the hint is read only as Skip\'s description'), () => {
+      const o = boot(file, vo); if (o.doc.getElementById('arr-hint').getAttribute('aria-hidden') !== 'true') return 'hint exposed';
+      toHold(o); key(o, 'a'); toRest(o);
+      const st = o.doc.querySelector('[role="status"][data-arr]'); return !st.textContent || 'status still says "' + st.textContent + '"';
+    });
+    attempt(Q('a double click in the hold advances once; a selection never cuts Act 3; the second click never acts'), () => {
+      for (const when of ['hold', 'compose']) {
+        const o = boot(file, vo); if (when === 'hold') toHold(o); else tick(300);
+        const c = pageCtrl(o), n = clicks(c), r = rect(c), x = (r.left + r.right) / 2, y = (r.top + r.bottom) / 2;
+        press(o, blank(o), { x, y }); if (o.A.phase() !== 'assemble') return when + ': ' + o.A.phase();
+        press(o, c, { x: x + 3, y }); fire(c, 'dblclick', {}); W.sel = false; fire(o.doc, 'selectionchange'); W.sel = true;
+        if (o.A.phase() !== 'assemble') return when + ': the double click cut Act 3: ' + o.A.phase();
+        if (n.c) return when + ': the second click acted';
+        toRest(o); if (o.A.schedule().finished !== 'rest' || o.A.advances() !== 1) return when + ': ' + o.A.schedule().finished + ' / ' + o.A.advances();
+      }
+      return true;
+    });
+    attempt(Q('Act 3: a press at the act where it flies is the act, never the part beneath it'), () => {
+      const o = boot(file, vo), a = actEl(o); if (!a) return true;
+      const n = clicks(a); toHold(o); key(o, 'a'); tick(250);
+      const r = a.getBoundingClientRect(), x = (r.left + r.right) / 2, y = (r.top + r.bottom) / 2, under = o.doc.body;
+      fire(under, 'pointerdown', { pointerId: 5, clientX: x, clientY: y }); fire(under, 'pointerup', { pointerId: 5, clientX: x, clientY: y }); fire(under, 'click', { detail: 1, clientX: x, clientY: y }); tick(1);
+      if (o.A.running()) return 'still ' + o.A.phase();
+      return n.c === 1 || 'the act received ' + n.c;
+    });
+  }
+  attempt(P('a touch tap on the act in the hold acts directly, with no advance'), () => {
+    const o = boot(file, VPS.phone), a = actEl(o); if (!a) return true;
+    const n = clicks(a); toHold(o); const r = rect(a), x = (r.left + r.right) / 2, y = (r.top + r.bottom) / 2;
+    fire(a, 'pointerdown', { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y }); fire(a, 'touchstart', {});
+    fire(a, 'pointerup', { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y }); fire(a, 'click', { detail: 1, clientX: x, clientY: y }); tick(1);
+    if (o.A.advances()) return 'advanced first'; if (o.A.running()) return 'still ' + o.A.phase();
+    return n.c === 1 || 'the act received ' + n.c;
+  });
+  attempt(P('a press the browser cancels opens the page; the act links never drag'), () => {
+    const o = boot(file), a = actEl(o); if (!a) return true;
+    if (a.tagName === 'A' && a.getAttribute('draggable') !== 'false') return 'act link draggable during the arrival';
+    const n = clicks(a); toHold(o); const r = rect(a);
+    fire(a, 'pointerdown', { pointerId: 8, clientX: r.left + 2, clientY: r.top + 2 }); fire(a, 'pointercancel', { pointerId: 8 });
+    if (o.A.phase() !== 'assemble' || n.c) return 'cancel: ' + o.A.phase() + ' / clicks ' + n.c;
+    toRest(o); return a.getAttribute('draggable') === null || 'draggable left as ' + a.getAttribute('draggable');
+  });
+  attempt(P('a completed press with no native click still acts once (the dispatched click is her own)'), () => {
+    const o = boot(file), a = actEl(o); if (!a) return true;
+    const n = clicks(a); toHold(o); const r = rect(a), x = (r.left + r.right) / 2, y = (r.top + r.bottom) / 2;
+    fire(a, 'pointerdown', { pointerId: 9, clientX: x, clientY: y }); fire(a, 'pointerup', { pointerId: 9, clientX: x, clientY: y }); tick(1);
+    return n.c === 1 || 'the act received ' + n.c;
+  });
+  attempt(P('a swallowed press ends with its release: the next click on the page is never eaten'), () => {
+    const o = boot(file); toHold(o);
+    fire(blank(o), 'pointerdown', { pointerId: 11, clientX: 5, clientY: 5 }); fire(blank(o), 'pointerup', { pointerId: 11, clientX: 5, clientY: 5 }); tick(1);
+    toRest(o); const c = pageCtrl(o), n = clicks(c); fire(c, 'click', { detail: 1 });
+    return n.c === 1 || 'the click after rest was swallowed';
+  });
+  attempt(P('the hold is still: only the cue and the hairline move'), () => {
+    const o = boot(file); tick(CE - 20); const n0 = W.log.length; tick(3040);
+    if (o.A.phase() !== 'hold') return 'phase ' + o.A.phase();
+    const moved = W.log.slice(n0).filter((a) => !a.el.matches('.arr-line,.arr-cue'));
+    if (moved.length) return 'moved in the hold: ' + moved.map((a) => a.el.className).join(',');
+    const line = W.log.slice(n0).find((a) => a.el.matches('.arr-line')); if (!line || line.duration !== HOLD - 1500) return 'no single slow crawl';
+    toRest(o, 60000); return true;
+  });
+  attempt(P('a spurious resume never re-arms the hold: focus still pauses it past the first deadline'), () => {
+    const o = boot(file); toHold(o); tick(2000);
+    fire(o.doc, 'visibilitychange'); key(o, 'Tab'); tick(HOLD);
+    if (o.A.phase() !== 'hold') return 'the hold ran on under focus: ' + o.A.phase();
+    toRest(o, 60000); return true;
+  });
+  attempt(P('failure means the ordinary page: no arrival.css, failed or blocked faces, a late script'), () => {
+    for (const [n, opt] of [['no css', { css: false }], ['faces blocked', { fontFail: 'empty' }], ['a face failed', { fontFail: 'error' }], ['late', { t0: 1600 }], ['budget spent', { t0: 1000, fontAt: 600 }]]) {
+      const o = boot(file, opt); tick(700);
+      if (o.A.phase() !== null || /arr-/.test(o.doc.documentElement.attrs.class || '')) return n + ': ' + o.A.phase() + ' / ' + o.doc.documentElement.attrs.class;
+      const r = atRest(o); if (r !== true) return n + ': ' + r;
+    }
+    const q = boot(file, { t0: 1000, fontAt: 400 }); tick(410); if (q.A.phase() !== 'compose') return 'fonts inside the budget from navigation start did not play: ' + q.A.phase();
+    toRest(q, 60000); return true;
+  });
+  attempt(P('a hash plays unless it names this page\'s record or a section; #rec opens the record, on load and on hashchange'), () => {
+    const d = boot(file, { search: '?arrive=0' }).doc, known = [d.querySelector('[data-record][id]'), d.querySelector('section[id]')].filter(Boolean);
+    if (boot(file, { hash: '#s-unknown' }).A.phase() === null) return 'an unknown hash suppressed it';
+    for (const e of known) if (boot(file, { hash: '#' + e.id }).A.phase() !== null) return '#' + e.id + ' played';
+    if (!d.querySelector('#rec')) return true;
+    const o = boot(file, { hash: '#rec' }); if (o.$('#rec').hidden) return 'loaded with #rec, the record stayed shut';
+    const q = boot(file); tick(400); q.ctx.location.hash = '#rec'; fireWin('hashchange');
+    if (q.A.running()) return 'hashchange left the arrival running';
+    return !q.$('#rec').hidden || 'hashchange to #rec did not open the record';
+  });
+}
+attempt('document.html: Shift+Tab steps back through act, second act and Skip', () => {
+  const src = SRC['document.html'].replace('<a href="#" class="act act-primary" data-press data-primary data-fixture><span class="w">Book delivery</span>', '<a href="#" class="act act-primary" data-press data-primary data-fixture data-part="act2"><span class="w">Book delivery</span>');
+  if (src === SRC['document.html']) return 'no Book delivery link';
+  const o = boot('document.html', { src }); if (o.card.act2 !== 'Book delivery') return 'act2 ' + o.card.act2;
+  toHold(o); const a = actEl(o), a2 = o.part('act2'), sk = skipEl(o);
+  key(o, 'Tab'); if (o.doc.activeElement !== a) return 'Tab 1';
+  key(o, 'Tab', { shiftKey: true }); if (o.doc.activeElement !== sk) return 'Shift+Tab from the act went to ' + o.doc.activeElement.className;
+  key(o, 'Tab', { shiftKey: true }); if (o.doc.activeElement !== a2) return 'Shift+Tab from Skip went to ' + o.doc.activeElement.className;
+  toRest(o, 60000); return true;
+});
+attempt('visit tracking: the Desk briefs once a visit, apart from last activity; a pasted Document never suppresses it; no storage carries on window.name', () => {
+  const now = EPOCH + 1000;
+  if (boot('index.html', { session: { 'pl-visit': String(now - 10 * 60e3) } }).A.phase() === null) return 'a visit that began on a Document suppressed the Desk briefing';
+  const o = boot('index.html'); if (!W.session.has('pl-desk')) return 'the briefing was not recorded';
+  const carry = Object.fromEntries(W.session);
+  if (boot('index.html', { session: carry }).A.phase() !== null) return 'the Desk replayed in the same visit';
+  if (boot('index.html', { session: { ...carry, 'pl-visit': String(now - 31 * 60e3) } }).A.phase() === null) return 'the Desk did not brief a new visit';
+  const a = boot('index.html', { noStorage: true }); if (a.A.phase() === null) return 'no storage: the first Desk did not play';
+  const name = a.ctx.name; if (!/pl-desk/.test(name)) return 'no storage: nothing carried on window.name';
+  if (boot('index.html', { noStorage: true, name }).A.phase() !== null) return 'no storage: the Desk replayed';
+  if (boot('document-delgado.html', { noStorage: true, name }).A.phase() === null) return 'no storage: a Document did not play';
+  return true;
+});
+attempt('the put-down names its job; the Desk shows that job\'s line before the first paint', () => {
+  const d = boot('document-delgado.html', { search: '?arrive=0' }); d.K.page.putDown(); tick(1000);
+  if (W.session.get('pl-from-doc') !== 'document-delgado.html') return 'pl-from-doc ' + W.session.get('pl-from-doc');
+  const o = boot('index.html', { session: { 'pl-from-doc': 'document-delgado.html' }, search: '?arrive=0' });
+  if (W.session.has('pl-from-doc')) return 'not consumed';
+  const want = o.doc.querySelector('#claims .pl-id a[href="document-delgado.html"]').closest('.pl');
+  return (W.scrolled.length === 1 && W.scrolled[0] === want) || 'scrolled ' + W.scrolled.map((e) => e.className);
+});
 
 /* ---------------- F7: the oracle fails loudly ---------------- */
 if (process.env.CINE_ORACLE_FORCE_FAIL) check('forced failing assertion (F7 self-test)', false);

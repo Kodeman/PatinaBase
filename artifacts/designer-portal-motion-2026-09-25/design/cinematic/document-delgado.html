@@ -185,7 +185,7 @@ body{background:var(--doc-paper)}
 </style>
 <script>(function(s,c){if(/[?&]controls=1(&|$)/.test(s))c.add('controls');if(/[?&]rm=1(&|$)/.test(s))c.add('rm');})(location.search,document.documentElement.classList);</script>
 <link rel="stylesheet" href="arrival.css">
-<script src="arrival.js"></script>
+<script src="arrival.js" defer></script>
 </head>
 <body>
 <div id="paper" class="paper on-paper" data-under>
@@ -219,7 +219,7 @@ body{background:var(--doc-paper)}
       <section class="mi margin-inline" data-region aria-labelledby="h-margin">
         <h2 class="t-head sec-head" id="h-margin">Margin</h2>
         <div data-seam="w-margin"><div class="acts"><p class="t-body">Four notes sit beside this job.</p><button type="button" class="act seam" data-detail="w-margin" aria-expanded="false" aria-controls="w-margin"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
-        <div class="well well-margin" id="w-margin" role="region" aria-label="Margin detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><div class="note-row"><p class="t-head faint">Last opened Monday</p><p class="t-body-sm">Nothing new since Monday.</p></div><div class="note-row"><p class="t-head faint">Schedule</p><p class="t-body-sm">Tomás offered the Delgados Oct 12–16 on Sep 18.</p></div><div class="note-row"><p class="t-head faint">Household</p><p class="t-body-sm">Andrés works from home on weekdays; the side gate stays locked.</p></div><div class="note-row"><p class="t-head faint">Install</p><p class="t-body-sm">Morgan Lee is also on the Ainsworth install, Oct 16.</p></div></div></div>
+        <div class="well well-margin" id="w-margin" role="region" aria-label="Margin detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><div class="note-row"><p class="t-head faint">Since Monday</p><p class="t-body-sm">Delivery reply fell overdue Wednesday.</p></div><div class="note-row"><p class="t-head faint">Schedule</p><p class="t-body-sm">Tomás offered the Delgados Oct 12–16 on Sep 18.</p></div><div class="note-row"><p class="t-head faint">Household</p><p class="t-body-sm">Andrés works from home on weekdays; the side gate stays locked.</p></div><div class="note-row"><p class="t-head faint">Install</p><p class="t-body-sm">Morgan Lee is also on the Ainsworth install, Oct 16.</p></div></div></div>
       </section>
       <section class="tsec settled-sec" id="s-brief" data-region aria-labelledby="h-brief">
         <h2 class="t-head sec-head" id="h-brief" tabindex="-1"><span>Brief</span><span class="state">Settled</span></h2>
@@ -248,7 +248,7 @@ body{background:var(--doc-paper)}
       </section>
       <section class="tsec needs" id="s-schedule" data-region aria-labelledby="h-schedule">
         <h2 class="t-head sec-head" id="h-schedule" tabindex="-1" data-part="head"><span>Schedule</span><span class="state" data-part="settle">Reply overdue</span></h2>
-        <div data-seam="w-schedule"><p class="t-d1" data-part="headline">Overdue 2 days: delivery window needed.</p><p class="t-meta ctx" data-part="f1">Delivery offered Oct 12–16.</p><p class="t-body-sm muted ball" data-part="f3">Waiting on the Delgados to confirm access.</p><div class="acts"><button type="button" class="act act-primary" data-press data-primary data-open-record="rec" data-part="act"><span class="w">Review delivery</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act seam" data-detail="w-schedule" aria-expanded="false" aria-controls="w-schedule"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
+        <div data-seam="w-schedule"><p class="t-d1" data-part="headline">Overdue 2 days: the Delgados' reply.</p><p class="t-meta ctx" data-part="f1">Delivery offered Oct 12–16.</p><p class="t-body-sm muted ball" data-part="f3">Waiting on the Delgados to confirm access.</p><div class="acts"><button type="button" class="act act-primary" data-press data-primary data-open-record="rec" data-part="act"><span class="w">Review delivery</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act seam" data-detail="w-schedule" aria-expanded="false" aria-controls="w-schedule"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="well" id="w-schedule" role="region" aria-label="Schedule detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Tomás offered Oct 12–16 on Sep 18; the answer was due Sep 23.</p><p class="fact">Installer: Morgan Lee</p><p class="fact">The banquette needs the side gate, 36 in clear</p><button type="button" class="act" data-press data-open-record="rec"><span class="w">Open delivery record</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="record" id="rec" data-record hidden>
           <p class="t-head sec-head">Delivery record</p>
@@ -272,7 +272,7 @@ body{background:var(--doc-paper)}
   </main>
   <aside class="rail" aria-label="Margin">
     <p class="t-head faint">Margin</p>
-    <div class="note-row" data-part="f2"><p class="t-head faint">Last opened Monday</p><p class="t-body-sm">Nothing new since Monday.</p></div>
+    <div class="note-row" data-part="f2"><p class="t-head faint">Since Monday</p><p class="t-body-sm">Delivery reply fell overdue Wednesday.</p></div>
     <div class="note-row"><p class="t-head faint">Schedule</p><p class="t-body-sm">Tomás offered the Delgados Oct 12–16 on Sep 18.</p></div>
     <div class="note-row"><p class="t-head faint">Household</p><p class="t-body-sm">Andrés works from home on weekdays; the side gate stays locked.</p></div>
     <div class="note-row"><p class="t-head faint">Install</p><p class="t-body-sm">Morgan Lee is also on the Ainsworth install, Oct 16.</p></div>
@@ -310,8 +310,7 @@ body{background:var(--doc-paper)}
   "sections": ["brief", "discovery", "direction", "agreement", "procurement", "schedule", "install", "care"],
   "position": {"text": "Delivery offered Oct 12–16.", "fidelity": "exact"},
   "needs": [
-    {"kind": "delivery_window", "owner": "client", "who": "the Delgados", "ask": "confirm access", "dueOn": "2026-09-23", "urgent": true, "line": "Delivery window needed.", "act": "Review delivery", "section": "schedule"},
-    {"kind": "install_date", "owner": "studio", "who": "Tomás", "line": "Install date not set.", "act": "Set install date", "section": "install"}
+    {"kind": "delivery_window", "owner": "client", "who": "the Delgados", "ask": "confirm access", "dueOn": "2026-09-23", "urgent": true, "line": "The Delgados' reply.", "brief": "delivery reply", "act": "Review delivery", "section": "schedule"}
   ],
   "milestone": {"label": "Delivery", "date": "2026-10-12", "fidelity": "band"},
   "since": {
@@ -679,7 +678,7 @@ K.page.putDown=function(){
   }
   var p=K.$('#paper');
   p.style.transformOrigin='50% '+(window.scrollY+window.innerHeight/2)+'px';
-  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc','1');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing */
+  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc',(location.pathname||'').split('/').pop()||'document.html');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing and shows this job */
 };
 /* Paper is taken: 270ms O (reduced motion: 200ms opacity only), played only when she picked it up on the Desk. */
 K.page.pickUp=function(){
@@ -693,8 +692,12 @@ K.page.pickUp=function(){
 K.page.setup=function(){
   var carried=false;
   try{carried=sessionStorage.getItem('pl-carry')==='1';sessionStorage.removeItem('pl-carry');}catch(err){}
-  if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp(); /* one entry move only: the arrival, when it plays, replaces the pick-up */
-  if(location.hash==='#rec')K.openRecord('rec',K.$('#doc-title'));
+  /* arrival.js is deferred: it has run by DOMContentLoaded. One entry move only: the arrival, when it plays, replaces the pick-up. */
+  function go(){if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+  /* #rec opens the record, on load and whenever the hash names it later */
+  function rec(){if(location.hash!=='#rec')return;if(K.arrival)K.arrival.finish();K.openRecord('rec',K.$('#doc-title'));}
+  rec();window.addEventListener('hashchange',rec);
   /* Back from the Desk through the page cache: the paper is whole again, with no move. */
   window.addEventListener('pageshow',function(e){if(e.persisted){var p=K.$('#paper');p.getAnimations().forEach(function(a){a.cancel();});p.style.transform='';p.style.opacity='';}});
 };

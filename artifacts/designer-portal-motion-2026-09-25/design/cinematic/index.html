@@ -137,8 +137,10 @@ html.rm .seam,html.rm .seam .rule{transition:none}
 .mnote p{flex:1 1 280px;padding:8px 0}
 .roster{margin-top:48px}
 .roster-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:0 24px;padding-bottom:4px;border-bottom:var(--rule-mid)}
-.overdue{margin-top:16px;max-width:760px}
+.overdue{margin:4px 0 8px;max-width:760px}
 .dayline{margin:4px 0 8px;max-width:760px}
+.day-first{margin-top:16px}
+.since-line{margin:16px 0 8px;max-width:760px;color:var(--text-faint)}
 .lines{max-width:760px}
 .lines .pl:first-child{border-top:0}
 .pl-id{display:flex;flex-wrap:wrap;align-items:center;gap:0 12px}
@@ -165,7 +167,7 @@ html.rm .seam,html.rm .seam .rule{transition:none}
 </style>
 <script>(function(s,c){if(/[?&]controls=1(&|$)/.test(s))c.add('controls');if(/[?&]rm=1(&|$)/.test(s))c.add('rm');})(location.search,document.documentElement.classList);</script>
 <link rel="stylesheet" href="arrival.css">
-<script src="arrival.js"></script>
+<script src="arrival.js" defer></script>
 </head>
 <body>
 <main id="desk" class="ground" data-under aria-labelledby="greet">
@@ -193,9 +195,10 @@ html.rm .seam,html.rm .seam .rule{transition:none}
         <button type="button" class="act" data-press data-show-all="#claims" aria-pressed="false"><span class="w">Show all detail</span><span class="rule" aria-hidden="true"></span></button>
       </div>
     </div>
+    <p class="t-body dayline day-first">Ainsworth: finish approval needed.</p>
     <p class="t-body overdue" data-part="warn">Delgado: delivery reply overdue 2 days.</p>
     <p class="t-body dayline muted">Reyes: fabric sample due from the mill.</p>
-    <p class="t-body dayline muted">Since yesterday: Hale's final order confirmed.</p>
+    <p class="t-body-sm since-line">Since yesterday: Hale's final order confirmed.</p>
     <div class="lines" id="claims" data-group>
       <article class="pl" data-region aria-labelledby="n-ains">
         <div class="pl-id"><h3 class="t-head" id="n-ains"><a href="document.html" data-carry data-arrive data-part="job">Ainsworth</a></h3><p class="t-meta ctx">Procurement · Leah · due today</p></div>
@@ -204,7 +207,7 @@ html.rm .seam,html.rm .seam .rule{transition:none}
       </article>
       <article class="pl" data-region aria-labelledby="n-delg">
         <div class="pl-id"><h3 class="t-head" id="n-delg"><a href="document-delgado.html" data-arrive>Delgado</a></h3><p class="t-meta ctx">Schedule · Tomás · answer was due Sep 23</p></div>
-        <div data-seam="w-delg"><p class="t-d1">Delivery window needed.</p><div class="acts"><a href="document-delgado.html#rec" class="act act-primary" data-press data-primary><span class="w">Review delivery</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-delg" aria-expanded="false" aria-controls="w-delg"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
+        <div data-seam="w-delg"><p class="t-d1">Overdue 2 days: the Delgados' reply.</p><div class="acts"><a href="document-delgado.html#rec" class="act act-primary" data-press data-primary><span class="w">Review delivery</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-delg" aria-expanded="false" aria-controls="w-delg"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="well" id="w-delg" role="region" aria-label="Delgado detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Delivery offered Oct 12–16.</p><p class="fact">Installer: Morgan Lee</p><p class="fact">Confirm access with household</p><a href="#" class="act" data-press data-fixture><span class="w">Open delivery record</span><span class="rule" aria-hidden="true"></span></a></div></div>
       </article>
       <article class="pl" data-region aria-labelledby="n-reyes">
@@ -266,12 +269,12 @@ html.rm .seam,html.rm .seam .rule{transition:none}
   "studio": "Middle West Studio",
   "sections": ["brief", "discovery", "direction", "agreement", "procurement", "schedule", "install", "care"],
   "since": {
-    "anchor": "2026-09-24",
-    "anchorNote": "fixture: Leah last opened the Desk on Thursday Sep 24",
+    "anchor": "2026-09-24T09:00",
+    "anchorNote": "fixture: Leah last opened the Desk on Thursday Sep 24, 9 am",
     "changes": [
-      {"at": "2026-09-24", "by": "Tomás", "kind": "message", "text": "Hale's final order confirmed"},
-      {"at": "2026-09-24", "by": "Leah", "kind": "decision", "text": "Lindqvist directions sent"},
-      {"at": "2026-09-24", "by": "Tomás", "kind": "hours", "text": "Four hours logged on Moreau"}
+      {"at": "2026-09-24T16:00", "by": "Tomás", "kind": "message", "text": "Hale's final order confirmed"},
+      {"at": "2026-09-24T11:00", "by": "Leah", "kind": "decision", "text": "Lindqvist directions sent"},
+      {"at": "2026-09-24T17:00", "by": "Tomás", "kind": "hours", "text": "Four hours logged on Moreau"}
     ]
   },
   "jobs": [
@@ -279,10 +282,10 @@ html.rm .seam,html.rm .seam .rule{transition:none}
       {"kind": "finish_approval", "owner": "studio", "who": "Leah", "dueOn": "2026-09-25", "urgent": true, "line": "Finish approval needed.", "brief": "finish approval needed", "act": "Review finish", "section": "procurement"}
     ]},
     {"name": "Delgado", "stage": "Schedule", "needs": [
-      {"kind": "delivery_window", "owner": "client", "who": "the Delgados", "ask": "confirm access", "dueOn": "2026-09-23", "urgent": true, "line": "Delivery window needed.", "brief": "delivery reply", "act": "Review delivery", "section": "schedule"}
+      {"kind": "delivery_window", "owner": "client", "who": "the Delgados", "ask": "confirm access", "dueOn": "2026-09-23", "urgent": true, "line": "The Delgados' reply.", "brief": "delivery reply", "act": "Review delivery", "section": "schedule"}
     ]},
     {"name": "Reyes", "stage": "Install", "needs": [
-      {"kind": "sample", "owner": "maker", "dueOn": "2026-09-25", "line": "Waiting for the fabric sample.", "brief": "fabric sample due from the mill", "act": "Follow up on sample", "section": "procurement"}
+      {"kind": "sample", "owner": "maker", "dueOn": "2026-09-25", "line": "Waiting for the fabric sample.", "brief": "fabric sample due from the mill", "act": "Follow up on sample", "section": "install"}
     ]},
     {"name": "Whitaker", "stage": "Brief", "needs": []},
     {"name": "Okafor-Bright", "stage": "Discovery", "needs": []},
@@ -653,7 +656,15 @@ K.page.onClick=function(e){
 };
 K.page.trigger1=function(){K.address(K.wells['w-ains']);};
 /* Arrival v3: the engine (arrival.js) reads the Briefing below and the data-part marks; nothing else is declared here. */
-K.page.setup=function(){if(window.Arrival)Arrival.boot(K);};
+K.page.setup=function(){
+  /* back from a Document: that job's line is in view before the first paint */
+  var from='';try{from=sessionStorage.getItem('pl-from-doc')||'';sessionStorage.removeItem('pl-from-doc');}catch(err){}
+  var a=from?K.$$('a[data-arrive]').filter(function(x){return x.getAttribute('href')===from&&!x.closest('[hidden]');})[0]:null,row=a&&a.closest('.pl,.lrow');
+  if(row)row.scrollIntoView({block:'center'});
+  /* arrival.js is deferred: it has run by DOMContentLoaded */
+  function go(){if(window.Arrival)Arrival.boot(K);}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+};
 K.init();
 </script>
 </body>

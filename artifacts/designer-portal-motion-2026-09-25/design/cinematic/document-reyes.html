@@ -185,7 +185,7 @@ body{background:var(--doc-paper)}
 </style>
 <script>(function(s,c){if(/[?&]controls=1(&|$)/.test(s))c.add('controls');if(/[?&]rm=1(&|$)/.test(s))c.add('rm');})(location.search,document.documentElement.classList);</script>
 <link rel="stylesheet" href="arrival.css">
-<script src="arrival.js"></script>
+<script src="arrival.js" defer></script>
 </head>
 <body>
 <div id="paper" class="paper on-paper" data-under>
@@ -253,7 +253,7 @@ body{background:var(--doc-paper)}
       </section>
       <section class="tsec now" id="s-install" data-region aria-labelledby="h-install">
         <h2 class="t-head sec-head" id="h-install" tabindex="-1" data-part="head"><span>Install</span><span class="state" data-part="settle">Now</span></h2>
-        <div data-seam="w-install"><p class="t-d1" data-part="headline">Waiting for the fabric sample.</p><p class="t-meta ctx" data-part="f1">Install booked Oct 21.</p><p class="t-body-sm muted ball" data-part="f3">With the maker; promised by today.</p><div class="acts"><button type="button" class="act act-primary" data-press data-primary data-open-record="rec" data-part="act"><span class="w">Follow up on sample</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act seam" data-detail="w-install" aria-expanded="false" aria-controls="w-install"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
+        <div data-seam="w-install"><p class="t-d1" data-part="headline">Waiting for the fabric sample.</p><p class="t-meta ctx" data-part="f1">Install booked Oct 21.</p><p class="t-body-sm muted ball" data-part="f3">In transit from the mill; due today.</p><div class="acts"><button type="button" class="act act-primary" data-press data-primary data-open-record="rec" data-part="act"><span class="w">Follow up on sample</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act seam" data-detail="w-install" aria-expanded="false" aria-controls="w-install"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="well" id="w-install" role="region" aria-label="Install detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Calder Mill promised the sample within five working days of Sep 18.</p><p class="fact">Two reading chairs to cover, in oat bouclé</p><p class="fact">Carmen approves the dye lot before the mill cuts</p><button type="button" class="act" data-press data-open-record="rec"><span class="w">Open sample request</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="record" id="rec" data-record hidden>
           <p class="t-head sec-head">Sample follow-up</p>
@@ -311,8 +311,7 @@ body{background:var(--doc-paper)}
   "sections": ["brief", "discovery", "direction", "agreement", "procurement", "schedule", "install", "care"],
   "position": {"text": "Install booked Oct 21.", "fidelity": "exact"},
   "needs": [
-    {"kind": "sample", "owner": "maker", "who": "Calder Mill", "dueOn": "2026-09-25", "since": "2026-09-18", "line": "Waiting for the fabric sample.", "brief": "fabric sample due from the mill", "act": "Follow up on sample", "section": "install"},
-    {"kind": "care_note", "owner": "studio", "who": "Tomás", "line": "Care note not drafted.", "act": "Draft care note", "section": "care"}
+    {"kind": "sample", "owner": "maker", "who": "Calder Mill", "dueOn": "2026-09-25", "since": "2026-09-18", "custody": "In transit from the mill", "line": "Waiting for the fabric sample.", "brief": "fabric sample due from the mill", "act": "Follow up on sample", "section": "install"}
   ],
   "milestone": {"label": "Install", "date": "2026-10-21", "fidelity": "exact"},
   "since": {
@@ -681,7 +680,7 @@ K.page.putDown=function(){
   }
   var p=K.$('#paper');
   p.style.transformOrigin='50% '+(window.scrollY+window.innerHeight/2)+'px';
-  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc','1');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing */
+  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc',(location.pathname||'').split('/').pop()||'document.html');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing and shows this job */
 };
 /* Paper is taken: 270ms O (reduced motion: 200ms opacity only), played only when she picked it up on the Desk. */
 K.page.pickUp=function(){
@@ -695,8 +694,12 @@ K.page.pickUp=function(){
 K.page.setup=function(){
   var carried=false;
   try{carried=sessionStorage.getItem('pl-carry')==='1';sessionStorage.removeItem('pl-carry');}catch(err){}
-  if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp(); /* one entry move only: the arrival, when it plays, replaces the pick-up */
-  if(location.hash==='#rec')K.openRecord('rec',K.$('#doc-title'));
+  /* arrival.js is deferred: it has run by DOMContentLoaded. One entry move only: the arrival, when it plays, replaces the pick-up. */
+  function go(){if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+  /* #rec opens the record, on load and whenever the hash names it later */
+  function rec(){if(location.hash!=='#rec')return;if(K.arrival)K.arrival.finish();K.openRecord('rec',K.$('#doc-title'));}
+  rec();window.addEventListener('hashchange',rec);
   /* Back from the Desk through the page cache: the paper is whole again, with no move. */
   window.addEventListener('pageshow',function(e){if(e.persisted){var p=K.$('#paper');p.getAnimations().forEach(function(a){a.cancel();});p.style.transform='';p.style.opacity='';}});
 };

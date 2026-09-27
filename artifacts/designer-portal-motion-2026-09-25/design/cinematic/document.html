@@ -185,7 +185,7 @@ body{background:var(--doc-paper)}
 </style>
 <script>(function(s,c){if(/[?&]controls=1(&|$)/.test(s))c.add('controls');if(/[?&]rm=1(&|$)/.test(s))c.add('rm');})(location.search,document.documentElement.classList);</script>
 <link rel="stylesheet" href="arrival.css">
-<script src="arrival.js"></script>
+<script src="arrival.js" defer></script>
 </head>
 <body>
 <div id="paper" class="paper on-paper" data-under>
@@ -196,9 +196,9 @@ body{background:var(--doc-paper)}
     <ol class="jumps">
       <li><a href="#s-brief" class="jump" data-jump><svg class="sm settled" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Brief</span><span class="vh">, settled</span></a></li>
       <li><a href="#s-discovery" class="jump" data-jump><svg class="sm settled" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Discovery</span><span class="vh">, settled</span></a></li>
-      <li><a href="#s-direction" class="jump" data-jump><svg class="sm settled" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Direction</span><span class="vh">, settled, finish approval needed</span></a></li>
+      <li><a href="#s-direction" class="jump" data-jump><svg class="sm settled" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Direction</span><span class="vh">, settled</span></a></li>
       <li><a href="#s-agreement" class="jump" data-jump><svg class="sm settled" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Agreement</span><span class="vh">, settled</span></a></li>
-      <li><a href="#s-procurement" class="jump" data-jump aria-current="step" data-part="stage"><svg class="sm active" data-part="crown" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Procurement</span><span class="vh">, the stage now</span></a></li>
+      <li><a href="#s-procurement" class="jump" data-jump aria-current="step" data-part="stage"><svg class="sm active" data-part="crown" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Procurement</span><span class="vh">, the stage now, finish approval needed</span></a></li>
       <li><a href="#s-schedule" class="jump" data-jump><svg class="sm" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Schedule</span><span class="vh">, ahead</span></a></li>
       <li><a href="#s-install" class="jump" data-jump><svg class="sm" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Install</span><span class="vh">, ahead</span></a></li>
       <li><a href="#s-care" class="jump" data-jump><svg class="sm" viewBox="0 0 14 14" aria-hidden="true" focusable="false"><rect x=".5" y=".5" width="13" height="3"/><rect x=".5" y="5.5" width="13" height="3"/><rect x=".5" y="10.5" width="13" height="3"/></svg><span>Care</span><span class="vh">, ahead</span></a></li>
@@ -231,10 +231,20 @@ body{background:var(--doc-paper)}
         <div data-seam="w-discovery"><p class="t-d1">Rooms measured Aug 19.</p><p class="t-meta ctx">Walkthrough with Edna · 14 photographs</p><div class="acts"><a href="#" class="act" data-press data-primary data-fixture><span class="w">See the measurements</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-discovery" aria-expanded="false" aria-controls="w-discovery"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="well" id="w-discovery" role="region" aria-label="Discovery detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">The entry wall runs 94 in between the door casing and the stair.</p><p class="fact">Living room: 16 ft 2 in by 13 ft 8 in</p><p class="fact">North light; low sun after four</p><a href="#" class="act" data-press data-fixture><span class="w">Open the room file</span><span class="rule" aria-hidden="true"></span></a></div></div>
       </section>
-      <section class="tsec needs" id="s-direction" data-region aria-labelledby="h-direction">
-        <h2 class="t-head sec-head" id="h-direction" tabindex="-1" data-part="head"><span>Direction</span><span class="state" data-part="settle">Needs you</span></h2>
-        <div data-seam="w-direction"><p class="t-d1" data-part="headline">Finish approval needed.</p><p class="t-meta ctx" data-part="f1">Install targeted for Oct 16.</p><p class="t-body-sm muted ball" data-part="f3">Your pen, due today; the workshop waits.</p><div class="acts"><button type="button" class="act act-primary" data-press data-primary data-open-record="rec" data-part="act"><span class="w">Review finish</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act seam" data-detail="w-direction" aria-expanded="false" aria-controls="w-direction"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
-        <div class="well" id="w-direction" role="region" aria-label="Direction detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">White oak sample recorded Sep 24.</p><p class="fact">Spring Green workshop waits on the finish before it cuts</p><p class="fact">Clear oil finish</p><button type="button" class="act" data-press data-open-record="rec"><span class="w">Open finish record</span><span class="rule" aria-hidden="true"></span></button></div></div>
+      <section class="tsec settled-sec" id="s-direction" data-region aria-labelledby="h-direction">
+        <h2 class="t-head sec-head" id="h-direction" tabindex="-1"><span>Direction</span><span class="state">Settled</span></h2>
+        <div data-seam="w-direction"><p class="t-d1">Direction chosen Aug 26.</p><p class="t-meta ctx">White oak, clear oil</p><div class="acts"><a href="#" class="act" data-press data-primary data-fixture><span class="w">See the direction</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-direction" aria-expanded="false" aria-controls="w-direction"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
+        <div class="well" id="w-direction" role="region" aria-label="Direction detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Edna chose white oak and clear oil over the walnut direction.</p><p class="fact">Walnut direction set aside Aug 26</p><p class="fact">Board held at Spring Green workshop</p><a href="#" class="act" data-press data-fixture><span class="w">Open the direction</span><span class="rule" aria-hidden="true"></span></a></div></div>
+      </section>
+      <section class="tsec settled-sec" id="s-agreement" data-region aria-labelledby="h-agreement">
+        <h2 class="t-head sec-head" id="h-agreement" tabindex="-1"><span>Agreement</span><span class="state">Settled</span></h2>
+        <div data-seam="w-agreement"><p class="t-d1">Agreement signed Sep 2.</p><p class="t-meta ctx">Deposit received Sep 4</p><div class="acts"><a href="#" class="act" data-press data-primary data-fixture><span class="w">Read the agreement</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-agreement" aria-expanded="false" aria-controls="w-agreement"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
+        <div class="well" id="w-agreement" role="region" aria-label="Agreement detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Edna signed with one change: delivery on a weekday morning.</p><p class="fact">Deposit: $11,400, received Sep 4</p><p class="fact">Balance due at install</p><a href="#" class="act" data-press data-fixture><span class="w">Open the agreement</span><span class="rule" aria-hidden="true"></span></a></div></div>
+      </section>
+      <section class="tsec needs" id="s-procurement" data-region aria-labelledby="h-procurement">
+        <h2 class="t-head sec-head" id="h-procurement" tabindex="-1" data-part="head"><span>Procurement</span><span class="state" data-part="settle">Needs you</span></h2>
+        <div data-seam="w-finish"><p class="t-d1" data-part="headline">Finish approval needed.</p><p class="t-meta ctx" data-part="f1">Install targeted for Oct 16.</p><p class="t-body-sm muted ball" data-part="f3">Your pen, due today; the workshop waits.</p><div class="acts"><button type="button" class="act act-primary" data-press data-primary data-open-record="rec" data-part="act"><span class="w">Review finish</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act seam" data-detail="w-finish" aria-expanded="false" aria-controls="w-finish"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
+        <div class="well" id="w-finish" role="region" aria-label="Finish detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">White oak sample recorded Sep 24.</p><p class="fact">Spring Green workshop waits on the finish before it cuts</p><p class="fact">Clear oil finish</p><button type="button" class="act" data-press data-open-record="rec"><span class="w">Open finish record</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="record" id="rec" data-record hidden>
           <p class="t-head sec-head">Finish record</p>
           <dl><dt>Species</dt><dd>White oak</dd><dt>Finish</dt><dd>Clear oil</dd><dt>Sample</dt><dd>Recorded Sep 24</dd><dt>Workshop</dt><dd>Spring Green workshop</dd></dl>
@@ -242,14 +252,6 @@ body{background:var(--doc-paper)}
           <p class="t-meta status" role="status" aria-live="polite"></p>
           <div class="acts"><button type="button" class="act act-primary" data-press data-save="Finish note saved."><span class="w">Save note</span><span class="rule" aria-hidden="true"></span></button><button type="button" class="act" data-press data-close-record><span class="w">Close record</span><span class="rule" aria-hidden="true"></span></button></div>
         </div>
-      </section>
-      <section class="tsec settled-sec" id="s-agreement" data-region aria-labelledby="h-agreement">
-        <h2 class="t-head sec-head" id="h-agreement" tabindex="-1"><span>Agreement</span><span class="state">Settled</span></h2>
-        <div data-seam="w-agreement"><p class="t-d1">Agreement signed Sep 2.</p><p class="t-meta ctx">Deposit received Sep 4</p><div class="acts"><a href="#" class="act" data-press data-primary data-fixture><span class="w">Read the agreement</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-agreement" aria-expanded="false" aria-controls="w-agreement"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
-        <div class="well" id="w-agreement" role="region" aria-label="Agreement detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Edna signed with one change: delivery on a weekday morning.</p><p class="fact">Deposit: $11,400, received Sep 4</p><p class="fact">Balance due at install</p><a href="#" class="act" data-press data-fixture><span class="w">Open the agreement</span><span class="rule" aria-hidden="true"></span></a></div></div>
-      </section>
-      <section class="tsec now" id="s-procurement" data-region aria-labelledby="h-procurement">
-        <h2 class="t-head sec-head" id="h-procurement" tabindex="-1"><span>Procurement</span><span class="state">Now</span></h2>
         <div data-seam="w-procurement"><p class="t-d1">Delivery not booked.</p><p class="t-meta ctx">4 of 6 pieces ordered; two wait on the finish · Tomás</p><div class="acts"><a href="#" class="act act-primary" data-press data-primary data-fixture><span class="w">Book delivery</span><span class="rule" aria-hidden="true"></span></a><button type="button" class="act seam" data-detail="w-procurement" aria-expanded="false" aria-controls="w-procurement"><span class="w">Detail</span><span class="rule" aria-hidden="true"></span></button></div></div>
         <div class="well" id="w-procurement" role="region" aria-label="Procurement detail"><div class="well-back" aria-hidden="true"></div><div class="well-body"><p class="reason">Delivery offered Oct 12–16.</p><p class="fact">Installer: Morgan Lee</p><p class="fact">Confirm access with household</p><a href="#" class="act" data-press data-fixture><span class="w">Open delivery record</span><span class="rule" aria-hidden="true"></span></a></div></div>
       </section>
@@ -310,8 +312,8 @@ body{background:var(--doc-paper)}
   "sections": ["brief", "discovery", "direction", "agreement", "procurement", "schedule", "install", "care"],
   "position": {"text": "Install targeted for Oct 16.", "fidelity": "exact"},
   "needs": [
-    {"kind": "finish_approval", "owner": "studio", "who": "Leah", "dueOn": "2026-09-25", "urgent": true, "line": "Finish approval needed.", "act": "Review finish", "ball": "the workshop waits", "section": "direction"},
-    {"kind": "order_send", "owner": "studio", "who": "Tomás", "line": "Delivery not booked.", "act": "Book delivery", "section": "procurement"}
+    {"kind": "finish_approval", "owner": "studio", "who": "Leah", "dueOn": "2026-09-25", "urgent": true, "line": "Finish approval needed.", "act": "Review finish", "ball": "the workshop waits", "section": "procurement"},
+    {"kind": "booking", "owner": "studio", "who": "Tomás", "line": "Delivery not booked.", "act": "Book delivery", "section": "procurement"}
   ],
   "milestone": {"label": "Install", "date": "2026-10-16", "fidelity": "band"},
   "since": {
@@ -678,7 +680,7 @@ K.page.putDown=function(){
   }
   var p=K.$('#paper');
   p.style.transformOrigin='50% '+(window.scrollY+window.innerHeight/2)+'px';
-  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc','1');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing */
+  K.tween(p,{s:.986,o:0},K.T.D,K.Q,function(){try{sessionStorage.setItem('pl-from-doc',(location.pathname||'').split('/').pop()||'document.html');}catch(err){}location.href='index.html';}); /* the Desk it returns to plays nothing and shows this job */
 };
 /* Paper is taken: 270ms O (reduced motion: 200ms opacity only), played only when she picked it up on the Desk. */
 K.page.pickUp=function(){
@@ -692,8 +694,12 @@ K.page.pickUp=function(){
 K.page.setup=function(){
   var carried=false;
   try{carried=sessionStorage.getItem('pl-carry')==='1';sessionStorage.removeItem('pl-carry');}catch(err){}
-  if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp(); /* one entry move only: the arrival, when it plays, replaces the pick-up */
-  if(location.hash==='#rec')K.openRecord('rec',K.$('#doc-title'));
+  /* arrival.js is deferred: it has run by DOMContentLoaded. One entry move only: the arrival, when it plays, replaces the pick-up. */
+  function go(){if(window.Arrival)Arrival.boot(K,function(){if(carried)K.page.pickUp();});else if(carried)K.page.pickUp();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go();
+  /* #rec opens the record, on load and whenever the hash names it later */
+  function rec(){if(location.hash!=='#rec')return;if(K.arrival)K.arrival.finish();K.openRecord('rec',K.$('#doc-title'));}
+  rec();window.addEventListener('hashchange',rec);
   /* Back from the Desk through the page cache: the paper is whole again, with no move. */
   window.addEventListener('pageshow',function(e){if(e.persisted){var p=K.$('#paper');p.getAnimations().forEach(function(a){a.cancel();});p.style.transform='';p.style.opacity='';}});
 };
@@ -710,7 +716,7 @@ K.page.onClick=function(e){
   var l=e.target.closest('[data-leave]');
   if(l&&!(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)){e.preventDefault();K.page.putDown();}
 };
-K.page.trigger1=function(){K.address(K.wells['w-direction']);};
+K.page.trigger1=function(){K.address(K.wells['w-finish']);};
 /* Arrival v3: the engine (arrival.js) reads the Briefing below and the data-part marks; nothing else is declared here. */
 K.init();
 </script>
