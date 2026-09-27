@@ -161,7 +161,7 @@ html.rm .seam,html.rm .seam .rule{transition:none}
 @media (max-width:700px){.contents{grid-template-columns:minmax(0,1fr)}}
 .contents .t-head{color:var(--text-faint);margin-bottom:4px}
 .door{display:flex;align-items:center;min-height:44px;font-size:15px;text-decoration:none;border-bottom:var(--rule-hair);width:100%}
-/* arrival:start (cinematic prototype, SQ-321: proposed rulings R-DM8..R-DM17, not doctrine; all of it leaves with the finish) */
+/* arrival:start (cinematic prototype, SQ-321/SQ-324: proposed rulings R-DM8..R-DM17, not doctrine; all of it leaves with the finish) */
 html.arr-pre body{opacity:0}
 html.arr-on{overflow-x:hidden}
 html.arr-on body{pointer-events:none} /* staged, faded layers take no hits: a press lands on the root and only skips; the real act is re-enabled inline */
@@ -180,7 +180,10 @@ html.arr-on .arr-skip,html.arr-on .mc{pointer-events:auto}
 .arr-foot{font-family:var(--font-body);font-size:16px;line-height:24.8px;color:var(--ink);max-width:64ch}
 .arr-skip{position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:41;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0 8px;font-family:var(--font-meta);font-size:11px;line-height:16.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
 .fixture-foot .act{vertical-align:middle}
-@media print{.arr-card,.arr-skip{display:none!important}}
+.arr-wait{position:fixed;left:16px;right:16px;z-index:40;width:max-content;max-width:calc(100% - 32px);margin:0 auto;pointer-events:none;text-align:center}
+.arr-cue{font-family:var(--font-meta);font-size:11px;line-height:16.5px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint)}
+.arr-line{display:block;height:1px;margin-top:8px;background:var(--aged-oak);transform-origin:0 50%;transform:scaleX(0)}
+@media print{.arr-card,.arr-skip,.arr-wait{display:none!important}}
 /* arrival:end */
 </style>
 <script>(function(s,c){if(/[?&]controls=1(&|$)/.test(s))c.add('controls');if(/[?&]rm=1(&|$)/.test(s))c.add('rm');})(location.search,document.documentElement.classList);</script>
@@ -295,6 +298,7 @@ html.arr-on .arr-skip,html.arr-on .mc{pointer-events:auto}
 </div>
 <button type="button" class="arr-skip" data-arr aria-describedby="arr-hint" hidden>Skip arrival</button>
 <span id="arr-hint" data-arr hidden>Escape or any key skips.</span>
+<div class="arr-wait" data-arr aria-hidden="true" hidden><p class="arr-cue">Click or press any key to open the page</p><span class="arr-line"></span></div>
 <script>
 (function(){
 'use strict';
@@ -636,17 +640,20 @@ function harness(){
 }
 /* shared:end */
 })();
-/* arrival:start. "The sentence finds its place" (SQ-321): a review prototype of proposed rulings R-DM8..R-DM17, not doctrine.
-   Frame 0 is the real sentence and its real act, centred on covered paper. At 560ms the owed facts print together and both
-   carriers travel home (640ms Q); the rest prints by hierarchy; the page is still at 1240ms and handed back at 1440ms.
-   Any input ends it at once, on the resting frame. One timeline: every move is scheduled at t0, a frame watch only guards. */
+/* arrival:start. "The sentence finds its place", v2 (SQ-324): a review prototype of proposed rulings R-DM8..R-DM17, not doctrine.
+   Act 1 composes the opening card line by line, each growing from the back. Act 2 holds it, still, until she answers or 10s
+   pass, counted only while the page is visible. Act 3 hands the real sentence and its real act home and assembles the page
+   from its own parts, nearest first, radiating out; then stillness. A frame watch guards Acts 1 and 3, never the hold. */
 (function(){
 'use strict';
-var root=document.documentElement,$=K.$,$$=K.$$,E=K.E,Q=K.Q;
+var root=document.documentElement,$=K.$,$$=K.$$,Q=K.Q;
 var A=window.ARR||{play:false,kbd:false};
-var osRM=window.matchMedia('(prefers-reduced-motion: reduce)');
+var osRM=window.matchMedia('(prefers-reduced-motion: reduce)'),coarse=window.matchMedia('(pointer: coarse)');
 var DOORWAY=/^(review|open|read|see|plan|draft)\b/i; /* a terminal verb (approve, send, sign, pay, book) never takes landing focus */
-var TIER={560:[0,'linear',0],760:[240,E,6],840:[240,E,0],920:[240,E,4],1000:[240,E,0]}; /* start: duration, curve, rise px */
+var X='cubic-bezier(.16,1,.3,1)',IO='cubic-bezier(.65,0,.35,1)';
+/* the score in ms at Slow 1: compose lines, the hold, the hand-off and the parts; rm = reduced motion */
+var S={line:720,stag:270,hold:10000,cue:1500,cueIn:600,hand:1100,part:880,base:140,cap:1900,step:110,out:160,
+  rmLine:150,rmStag:100,rmCueIn:200,rmPart:200,rmStep:40,rmCap:400};
 var GONE=[{opacity:1,visibility:'visible'},{opacity:0,visibility:'hidden'}];
 var st=null,swallow=false,quiet=false,wired=false,wait=null,press=null,own=false;
 K.arrScale0=/[?&]scale=0(&|$)/.test(location.search);
@@ -682,7 +689,7 @@ function busy(){
 }
 /* The initial reading position, chosen before frame 0, and the opening composition. Anything that does not fit: no arrival. */
 function plan(cfg,rm,flat){
-  var v=view(),hero=$(cfg.hero),act=$(cfg.act),top=$(cfg.top);
+  var v=view(),hero=$(cfg.hero),act=$(cfg.act),top=$(cfg.top),wt=rect($('.arr-wait'));
   if(!hero||!act||!top)return null;
   var y0=window.scrollY||0,max=Math.max(0,(root.scrollHeight||0)-window.innerHeight),bar=0,y;
   var h=rect(hero),a=rect(act),t=rect(top);
@@ -696,7 +703,7 @@ function plan(cfg,rm,flat){
   var dy=y-y0;
   if(t.top-dy<v.top+bar||a.bottom-dy>v.bottom)return null;
   if(cfg.warn){var o=rect($(cfg.warn),dy);if(o.top<v.top||o.bottom>v.bottom)return null;} /* the warning hands off only to a visible home */
-  if(rm)return {y:y};
+  if(rm){var wr=a.bottom-dy+24;return wr+wt.height+16>v.bottom?null:{y:y,wTop:wr};} /* the cue stands under the act at rest */
   var F=rect(hero,dy),G=ink(hero,dy),B=rect(act,dy);if(!G)return null;
   var s=K.arrScale0||flat?1:(v.vw>=1024?52/34:(v.vw>=761?42/34:1));
   if(G.w*s>Math.min(640,v.vw-32))return null;
@@ -705,17 +712,17 @@ function plan(cfg,rm,flat){
   if(aTop<v.top+16)return null;
   var be=$('.arr-below'),bTop=0,actTop;
   if(be){bTop=hBot+8;actTop=bTop+rect(be).height+12;}else actTop=hBot+20;
-  var actBot=actTop+B.height,sk=rect($('.arr-skip')),skOff=v.vh-v.bottom+16,skTop=v.vh-skOff-sk.height,skLeft=v.vw-16-sk.width;
+  var actBot=actTop+B.height,wTop=actBot+24,wBot=wTop+wt.height,sk=rect($('.arr-skip')),skOff=v.vh-v.bottom+16,skTop=v.vh-skOff-sk.height,skLeft=v.vw-16-sk.width;
   function hit(l,tp,r,b){return r>skLeft-8&&b>skTop-8;}
-  if(hit(cx-B.width/2,actTop,cx+B.width/2,actBot))return null;
+  if(hit(cx-B.width/2,actTop,cx+B.width/2,actBot)||hit(cx-wt.width/2,wTop,cx+wt.width/2,wBot))return null;
   var fe=$('.arr-foot'),fOff=0;
   if(fe){
     var f=rect(fe),fw=Math.min(f.width,v.vw-32),fl=(v.vw-fw)/2,fTop;
     fOff=v.vh-v.bottom+32;fTop=v.vh-fOff-f.height;
     if(hit(fl,fTop,fl+fw,fTop+f.height)){fOff=skOff+sk.height+12;fTop=v.vh-fOff-f.height;}
-    if(actBot+16>fTop)return null;
-  }else if(actBot+16>v.bottom)return null;
-  return {y:y,s:s,F:F,G:G,B:B,cx:cx,cy:cy,aTop:aTop,bTop:bTop,actTop:actTop,fOff:fOff,skOff:skOff};
+    if(wBot+16>fTop)return null;
+  }else if(wBot+16>v.bottom)return null;
+  return {y:y,s:s,F:F,G:G,B:B,cx:cx,cy:cy,aTop:aTop,bTop:bTop,actTop:actTop,wTop:wTop,fOff:fOff,skOff:skOff};
 }
 /* phone: the current stage stays in view in the sideways spine, without changing it */
 function current(){
@@ -725,9 +732,10 @@ function current(){
   if(a.right>b.right-16)sp.scrollLeft+=a.right-b.right+16;else if(a.left<b.left+16)sp.scrollLeft-=b.left+16-a.left;
 }
 function run(el,kf,t,d,e){var a=el.animate(kf,{delay:ms(t),duration:ms(d),easing:e,fill:'both'});st.anims.push(a);return a;}
-function tierOf(el,cfg){for(var i=0;i<cfg.tiers.length;i++){var s=cfg.tiers[i][1];if(el.matches(s)||el.querySelector(s))return cfg.tiers[i][0];}return 1000;}
-/* Cover the page by atoms: never an ancestor of the sentence or its act. Below the fold is final from frame 0. */
-function cover(keep,cfg,rm,vh){
+function later(fn,d){st.timers.push(setTimeout(fn,ms(d)));}
+/* Cover the page by parts: never an ancestor of the sentence or its act. Only parts in the first view are covered and later
+   assembled; below the fold is final from frame 0. The canonical job and stage facts are kept apart: they print, never grow. */
+function cover(keep,cfg,vh){
   var atoms=[],through=[];
   (function walk(el){
     [].slice.call(el.children).forEach(function(c){
@@ -737,95 +745,189 @@ function cover(keep,cfg,rm,vh){
     });
   })(document.body);
   function seen(el){var r=el.getBoundingClientRect();return r.bottom>r.top&&r.right>r.left&&r.bottom>0&&r.top<vh;}
+  var canon=[];
+  (cfg.canon||[]).forEach(function(s){var x=$(s);if(x)atoms.forEach(function(a){if(a.contains(x)&&canon.indexOf(a)<0)canon.push(a);});});
+  var f=ink($(cfg.hero),0)||{cx:0,cy:0},list=[];
+  function d(el){var r=el.getBoundingClientRect();return Math.sqrt(Math.pow((r.left+r.right)/2-f.cx,2)+Math.pow((r.top+r.bottom)/2-f.cy,2));}
   atoms.filter(seen).forEach(function(el){
-    var t=rm?120:tierOf(el,cfg),d=rm?[200,Q,0]:TIER[t],k0={opacity:0},k1={opacity:1};
-    if(d[2]){k0.transform=tf(0,d[2],1);k1.transform=tf(0,0,1);}
-    el.style.opacity='0';st.styled.push({el:el,props:['opacity']});
-    run(el,[k0,k1],t,d[0],d[1]);
+    el.style.opacity='0';st.styled.push({el:el,props:['opacity','transformOrigin']});
+    if(canon.indexOf(el)>=0)st.canon.push(el);else list.push({el:el,d:d(el)});
   });
-  /* separators on the sentence's own ancestors fade whole with the local tier; they never draw */
+  /* separators on the sentence's own ancestors come back as parts of their own: colour only, they never draw or move */
   through.filter(seen).forEach(function(el){
     var cs=getComputedStyle(el),k0={},k1={},props=[];
     ['Top','Right','Bottom','Left'].forEach(function(sd){
       if(num(cs['border'+sd+'Width'])>0&&cs['border'+sd+'Style']!=='none'){var p='border'+sd+'Color';k0[p]='transparent';k1[p]=cs[p];el.style[p]='transparent';props.push(p);}
     });
-    if(props.length){st.styled.push({el:el,props:props});run(el,[k0,k1],rm?120:760,rm?200:240,rm?Q:E);}
+    if(props.length){st.styled.push({el:el,props:props});list.push({el:el,d:d(el),sep:[k0,k1]});}
   });
+  st.parts=list.sort(function(a,b){return a.d-b.d;}); /* nearest the landed sentence first */
 }
-/* The two carriers (the real sentence, the real act) and the intro-only doubles */
+/* The two carriers (the real sentence, the real act) placed on the card, and the intro-only doubles around them */
 function stage(p,hero,act,card,skip){
-  var G=p.G,F=p.F,B=p.B,inv=tf(p.cx-G.cx,p.cy-G.cy,p.s),ai=tf(p.cx-(B.left+B.width/2),p.actTop-B.top,1);
-  hero.style.transformOrigin=r2(G.cx-F.left)+'px '+r2(G.cy-F.top)+'px';hero.style.transform=inv;hero.style.willChange='transform';
-  act.style.transform=ai;act.style.willChange='transform';
+  var G=p.G,F=p.F,B=p.B;
+  st.hx=p.cx-G.cx;st.hy=p.cy-G.cy;st.ax=p.cx-(B.left+B.width/2);st.ay=p.actTop-B.top;
+  st.inv=tf(st.hx,st.hy,p.s);st.ai=tf(st.ax,st.ay,1);
+  hero.style.transformOrigin=r2(G.cx-F.left)+'px '+r2(G.cy-F.top)+'px';hero.style.transform=st.inv;hero.style.willChange='transform';
+  act.style.transform=st.ai;act.style.willChange='transform';
   st.styled.push({el:hero,props:['transform','transformOrigin','willChange']},{el:act,props:['transform','willChange']});
-  st.carry=[run(hero,[{transform:inv},{transform:tf(0,0,1)}],560,640,Q),run(act,[{transform:ai},{transform:tf(0,0,1)}],560,640,Q)];
-  var ab=$('.arr-above',card),be=$('.arr-below',card),fe=$('.arr-foot',card);
-  ab.style.top=r2(p.aTop)+'px';run(ab,GONE,560,120,Q);
-  if(be){be.style.top=r2(p.bTop)+'px';run(be,GONE,560,120,Q);}
-  if(fe){fe.style.bottom=r2(p.fOff)+'px';run(fe,GONE,560,0,'linear');} /* the only visible warning never fades: it hands off in one frame */
-  skip.style.bottom=r2(p.skOff)+'px';run(skip,GONE,560,120,Q);
+  var be=$('.arr-below',card),fe=$('.arr-foot',card);
+  $('.arr-above',card).style.top=r2(p.aTop)+'px';
+  if(be)be.style.top=r2(p.bTop)+'px';
+  if(fe)fe.style.bottom=r2(p.fOff)+'px'; /* the past-due warning is readable from frame 0; it never composes */
+  skip.style.bottom=r2(p.skOff)+'px';
 }
 function start(o){
   finish();
   o=o||{};
-  var cfg=K.page.arrive,card=$('.arr-card'),skip=$('.arr-skip');
-  if(!cfg||!card||!skip||busy())return false;
+  var cfg=K.page.arrive,card=$('.arr-card'),skip=$('.arr-skip'),wt=$('.arr-wait');
+  if(!cfg||!card||!skip||!wt||busy())return false;
   var rm=!!o.rm||K.rm();
-  card.hidden=rm;skip.hidden=rm;
+  card.hidden=rm;skip.hidden=rm;wt.hidden=false;
+  $('.arr-cue',wt).textContent=coarse.matches?'Tap to open the page':'Click or press any key to open the page';
+  $('.arr-line',wt).hidden=rm; /* reduced motion: the cue alone, no moving rule */
   var p=plan(cfg,rm,o.flat);
-  if(!p){card.hidden=true;skip.hidden=true;return false;}
+  if(!p){card.hidden=true;skip.hidden=true;wt.hidden=true;return false;}
   if(Math.abs((window.scrollY||0)-p.y)>.5)window.scrollTo(0,p.y); /* one pre-paint position; zero scroll writes after t0 */
   current();
-  st={o:o,cfg:cfg,rm:rm,anims:[],styled:[],carry:[],t0:performance.now(),y:window.scrollY||0,last:0,gaps:[],landed:rm,raf:0,watch:0};
+  st={o:o,cfg:cfg,rm:rm,p:p,phase:'compose',anims:[],styled:[],timers:[],carryIn:[],carry:[],parts:[],canon:[],t0:performance.now(),y:window.scrollY||0,
+    raf:0,g0:0,last:0,gaps:[],actAt:0,hand:null,wheel:-1e9,left:0,at:0,paused:false,holdT:0,cue:[],landed:false};
   root.classList.add('arr-on');root.classList.remove('arr-pre');
   var hero=$(cfg.hero),act=$(cfg.act),keep=[hero,act];
   act.style.pointerEvents='auto';st.styled.push({el:act,props:['pointerEvents']}); /* the one live target while the rest takes no hits */
   if(rm)(cfg.keep||[]).forEach(function(s){var el=$(s);if(el)keep.push(el);});
-  cover(keep,cfg,rm,window.innerHeight);
+  cover(keep,cfg,window.innerHeight);
+  wt.style.top=r2(p.wTop)+'px';wt.style.opacity='0';st.styled.push({el:wt,props:['opacity']});
   if(!rm)stage(p,hero,act,card,skip);
-  st.watch=setTimeout(function(){finish(true);},ms(rm?320:1440));
-  st.raf=requestAnimationFrame(tick);
+  compose(hero,act);
+  guard();
   return true;
 }
-/* The frame watch: a dropped frame cuts to the resting page rather than stutter; 1200 lands the carriers; 1440 hands back. */
-function tick(now){
+/* Act 1: each line fades in while growing from the back (reduced motion: opacity only, quicker), one after another */
+function compose(hero,act){
+  var rm=st.rm,list=rm?st.cfg.rmCompose:st.cfg.compose,d=rm?S.rmLine:S.line,g=rm?S.rmStag:S.stag;
+  list.forEach(function(step,i){
+    [].concat(step).forEach(function(q){
+      var el=q==='@hero'?hero:q==='@act'?act:$(q),t=i*g,a;
+      if(!el)return;
+      if(el===act)st.actAt=st.t0+ms(t); /* hit-testable once it shows */
+      if(rm)a=run(el,[{opacity:0},{opacity:1}],t,d,Q);
+      else if(el===hero)a=run(el,[{opacity:0,transform:tf(st.hx,st.hy,st.p.s*.94)},{opacity:1,transform:st.inv}],t,d,X);
+      else if(el===act)a=run(el,[{opacity:0,transform:tf(st.ax,st.ay,.94)},{opacity:1,transform:st.ai}],t,d,X);
+      else a=run(el,[{opacity:0,transform:'scale(.94)'},{opacity:1,transform:'scale(1)'}],t,d,X);
+      if(el===hero||el===act)st.carryIn.push(a);
+    });
+  });
+  later(hold,(list.length-1)*g+d);
+}
+/* Act 2: still, waiting for her. The cue comes in quietly; one hairline fills once over what is left of the 10s. The timer counts
+   only while the page is visible: it never expires unseen. No frame watch runs here. */
+function hold(){
   if(!st)return;
-  st.raf=0;
-  var g=now-(st.last||st.t0),n=st.gaps.push(g); /* the first interval runs from t0, so a stalled first frame is measured too */
-  if((n<=3&&g>50)||g>100||(n>1&&g>34&&st.gaps[n-2]>34)){finish(true);return;}
-  st.last=now;
-  var t=(performance.now()-st.t0)/K.slow;
-  if(!st.landed&&t>=1200)land();
-  if(t>=(st.rm?320:1440)){finish(true);return;}
-  st.raf=requestAnimationFrame(tick);
+  st.phase='hold';
+  if(st.raf){cancelAnimationFrame(st.raf);st.raf=0;}
+  var wt=$('.arr-wait');
+  st.cue=[run(wt,[{opacity:0},{opacity:1}],S.cue,st.rm?S.rmCueIn:S.cueIn,st.rm?Q:X)];
+  if(!st.rm)st.cue.push(run($('.arr-line',wt),[{transform:'scaleX(0)'},{transform:'scaleX(1)'}],S.cue,S.hold-S.cue,'linear'));
+  st.left=ms(S.hold);
+  if(document.visibilityState&&document.visibilityState!=='visible'){st.paused=true;st.cue.forEach(function(a){a.pause();});}
+  else resume(true);
+}
+function pause(){
+  if(!st||st.phase!=='hold'||st.paused)return;
+  clearTimeout(st.holdT);st.left=Math.max(0,st.left-(performance.now()-st.at));st.paused=true;
+  st.cue.forEach(function(a){if(a.playState==='running')a.pause();});
+}
+function resume(first){
+  if(!st||st.phase!=='hold'||(!first&&!st.paused))return;
+  st.paused=false;st.at=performance.now();st.holdT=setTimeout(assemble,st.left);
+  st.cue.forEach(function(a){if(a.playState==='paused')a.play();});
+}
+/* Act 3: the carriers travel to their measured places; the canonical facts print, then the intro doubles dissolve; every other
+   part in the first view grows from the back, nearest the landed sentence first. Reduced motion: no travel, no scale. */
+function assemble(){
+  if(!st||st.phase==='assemble')return;
+  var s=st,rm=s.rm,hero=$(s.cfg.hero),act=$(s.cfg.act);
+  clearTimeout(s.holdT);
+  s.phase='assemble';
+  s.carryIn.forEach(function(a){a.cancel();});
+  var end=0;
+  if(!rm){
+    s.carry=[run(hero,[{transform:s.inv},{transform:tf(0,0,1)}],0,S.hand,IO),run(act,[{transform:s.ai},{transform:tf(0,0,1)}],0,S.hand,IO)];
+    later(land,S.hand);end=S.hand;
+    run($('.arr-above'),GONE,0,S.out,Q);
+    var be=$('.arr-below'),fe=$('.arr-foot');
+    if(be)run(be,GONE,0,S.out,Q);
+    if(fe)run(fe,GONE,0,0,'linear'); /* the only visible warning never fades: it hands off in one frame */
+    run($('.arr-skip'),GONE,0,120,Q);
+  }
+  s.canon.forEach(function(el){el.style.opacity='';}); /* printed in the same frame the doubles begin to go */
+  run($('.arr-wait'),GONE,0,S.out,Q);
+  var n=s.parts.length,base=rm?0:S.base,cap=rm?S.rmCap:S.cap,d=rm?S.rmPart:S.part;
+  var step=n>1?Math.min(rm?S.rmStep:S.step,(cap-base)/(n-1)):0;
+  s.parts.forEach(function(x,i){
+    var t=Math.round(base+i*step),el=x.el;
+    if(x.sep)run(el,x.sep,t,d,rm?Q:X);
+    else if(rm)run(el,[{opacity:0},{opacity:1}],t,d,Q);
+    else{el.style.transformOrigin='50% 50%';run(el,[{opacity:0,transform:tf(0,6,.92)},{opacity:1,transform:tf(0,0,1)}],t,d,X);}
+    end=Math.max(end,t+d);
+  });
+  later(function(){finish(true);},Math.max(end,S.out));
+  guard();
 }
 function land(){
+  if(!st)return;
   st.landed=true;
   st.carry.forEach(function(a){a.cancel();});
   [$(st.cfg.hero),$(st.cfg.act)].forEach(function(el){el.style.transform='';el.style.transformOrigin='';el.style.willChange='';});
+}
+/* The frame watch: a dropped frame cuts to the resting page rather than stutter. The first interval runs from the act's start. */
+function guard(){st.g0=performance.now();st.last=0;st.gaps=[];if(st.raf)cancelAnimationFrame(st.raf);st.raf=requestAnimationFrame(tick);}
+function tick(now){
+  if(!st)return;
+  st.raf=0;
+  if(st.phase==='hold')return;
+  var g=now-(st.last||st.g0),n=st.gaps.push(g);
+  if((n<=3&&g>50)||g>100||(n>1&&g>34&&st.gaps[n-2]>34)){finish(true);return;}
+  st.last=now;
+  st.raf=requestAnimationFrame(tick);
 }
 /* One idempotent finish: resting frame now, nothing pending. It never saves, sends, resets, opens or closes her work. */
 function finish(normal){
   if(!st)return;
   var s=st;st=null;
-  clearTimeout(s.watch);if(s.raf)cancelAnimationFrame(s.raf);
+  s.timers.forEach(function(id){clearTimeout(id);});clearTimeout(s.holdT);if(s.raf)cancelAnimationFrame(s.raf);
   s.anims.forEach(function(a){a.cancel();});
   s.styled.forEach(function(x){x.props.forEach(function(p){x.el.style[p]='';});});
   var skip=$('.arr-skip'),held=document.activeElement===skip;
-  $('.arr-card').hidden=true;skip.hidden=true;
+  $('.arr-card').hidden=true;skip.hidden=true;$('.arr-wait').hidden=true;
   root.classList.remove('arr-on','arr-pre');
   var a=document.activeElement,free=!a||a===document.body||held;
   if(held||(normal===true&&s.o.kbd&&free)){
     var act=$(s.cfg.act),w=$('.w',act),to=held||DOORWAY.test((w||act).textContent.trim())?act:$(s.cfg.head);
-    quiet=true;try{to.focus({preventScroll:true});}finally{quiet=false;} /* landing focus is not an address: no detail opens */
+    calm(to); /* landing focus is not an address: no detail opens */
   }
 }
+function calm(el){quiet=true;try{el.focus({preventScroll:true});}finally{quiet=false;}}
 function halt(){if(wait)wait(false,true);} /* input during the font wait ends it for good: the resting page, no later start */
 function cut(){halt();finish();}
+/* Keys. The hold answers: Escape rests, Tab moves between the act and Skip, Enter or Space on the act activates it, and any
+   other key opens the page (Act 3). Before and after the hold any key ends the arrival on the resting frame, as before. */
 function onKey(e){
   if(wait){halt();if(e.key==='Escape'){e.preventDefault();e.stopPropagation();}return;}
   if(!st)return;
-  var a=document.activeElement,free=!a||a===document.body||a===$('.arr-skip'),act=$(st.cfg.act);
+  var a=document.activeElement,skip=$('.arr-skip'),free=!a||a===document.body||a===skip,act=$(st.cfg.act);
+  if(st.phase==='hold'){
+    if(e.key==='Escape'){finish();e.preventDefault();e.stopPropagation();return;}
+    if(e.key==='Tab'){e.preventDefault();e.stopPropagation();calm(a===act&&!skip.hidden?skip:act);return;}
+    if(e.key==='Enter'||e.key===' '){
+      e.preventDefault();e.stopPropagation();
+      if(a===act){finish();own=true;try{act.click();}finally{own=false;}return;} /* the act she chose, exactly once, no assembly first */
+      if(a===skip){finish();return;}
+    }
+    assemble();return;
+  }
+  if(st.phase==='assemble'&&e.repeat)return; /* the held key that opened the page does not also end it */
   finish();
   if(e.key==='Escape'){e.preventDefault();e.stopPropagation();return;} /* skip only: never also the put-down */
   if(!free)return;
@@ -833,18 +935,23 @@ function onKey(e){
   if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();} /* nothing chosen yet: skip only */
 }
 /* A press on the real act she can see ends the arrival at once and acts on it exactly once, on release over the act she
-   pressed; a cancel, a scroll or a release elsewhere does not act. Any other press only finishes and cannot click through. */
+   pressed; a cancel, a scroll or a release elsewhere does not act. In the hold any other press opens the page and cannot
+   click through; before and after it, any other press finishes and cannot click through. */
 function onDown(e){
   if(wait){halt();swallow=true;return;}
   if(!st)return;
-  var t=e.target,act=$(st.cfg.act),ours=t.closest&&t.closest('.mc,[data-arr-replay]');
-  press=!ours&&act.contains(t)&&!(e.button>0)?{id:e.pointerId,r:act.getBoundingClientRect(),act:act,y:window.scrollY||0}:null;
+  var t=e.target,act=$(st.cfg.act),ours=t.closest&&t.closest('.mc,[data-arr-replay]'),sk=t.closest&&t.closest('.arr-skip');
+  if(st.phase==='assemble'&&st.hand==='touch'){st.hand=e.pointerId;swallow=true;return;} /* the tap that opened the page */
+  var on=!ours&&act.contains(t)&&!(e.button>0)&&performance.now()>=st.actAt;
+  if(st.phase==='hold'&&!ours&&!sk&&!on){st.hand=e.pointerId;swallow=true;assemble();return;}
+  press=on?{id:e.pointerId,r:act.getBoundingClientRect(),act:act,y:window.scrollY||0}:null;
   finish();
   if(ours)return;
   swallow=true;
 }
 function onUp(e){
   var p=press;press=null;
+  if(st&&st.hand!==null&&(st.hand===e.pointerId||st.hand==='touch'))st.hand=null;
   if(swallow)setTimeout(function(){swallow=false;},0);
   if(!p||e.pointerId!==p.id)return;
   var r=p.r,x=e.clientX,y=e.clientY;
@@ -858,6 +965,27 @@ function onClick(e){
   if(swallow){swallow=false;e.preventDefault();e.stopPropagation();return;}
   if(st)finish(); /* assistive activation without a press is honoured */
 }
+function onTouch(){
+  if(wait)return cut();
+  if(!st)return;
+  if(st.phase==='hold'){st.hand='touch';assemble();return;}
+  if(st.phase==='assemble'&&st.hand!==null)return; /* the same touch that opened the page */
+  cut();
+}
+function onWheel(){
+  press=null;
+  if(wait)return cut();
+  if(!st)return;
+  var now=performance.now();
+  if(st.phase==='hold'||(st.phase==='assemble'&&now-st.wheel<250)){st.wheel=now;assemble();return;} /* one wheel gesture opens the page */
+  cut();
+}
+function onScroll(){
+  if(press&&Math.abs((window.scrollY||0)-press.y)>.5)press=null;
+  if(!st||Math.abs((window.scrollY||0)-st.y)<=.5)return;
+  if(st.phase==='assemble'&&(st.hand!==null||performance.now()-st.wheel<250)){st.y=window.scrollY||0;return;} /* the gesture that opened it keeps its scroll */
+  finish();
+}
 function wire(){
   if(wired)return;
   wired=true;
@@ -865,18 +993,26 @@ function wire(){
   root.addEventListener('pointerdown',onDown,true);
   root.addEventListener('click',onClick,true);
   root.addEventListener('pointerup',onUp,true);
-  root.addEventListener('pointercancel',function(){press=null;swallow=false;},true);
+  root.addEventListener('pointercancel',function(){press=null;swallow=false;if(st)st.hand=null;},true);
   root.addEventListener('pointermove',function(e){if(st)e.stopPropagation();},true); /* assembly under a still pointer never addresses a line */
   root.addEventListener('focusin',function(e){if(quiet){e.stopPropagation();return;}if(st)finish();},true);
-  root.addEventListener('wheel',function(){press=null;cut();},{capture:true,passive:true});
-  root.addEventListener('touchstart',cut,{capture:true,passive:true});
+  root.addEventListener('wheel',onWheel,{capture:true,passive:true});
+  root.addEventListener('touchstart',onTouch,{capture:true,passive:true});
+  root.addEventListener('touchend',function(){if(st)st.hand=null;},{capture:true,passive:true});
+  root.addEventListener('touchcancel',function(){if(st)st.hand=null;},{capture:true,passive:true});
   document.addEventListener('selectionchange',function(){var s=st&&getSelection();if(s&&!s.isCollapsed)finish();});
-  window.addEventListener('scroll',function(){if(press&&Math.abs((window.scrollY||0)-press.y)>.5)press=null;if(st&&Math.abs((window.scrollY||0)-st.y)>.5)finish();},{passive:true});
+  window.addEventListener('scroll',onScroll,{passive:true});
   window.addEventListener('resize',cut);
   if(window.visualViewport)window.visualViewport.addEventListener('resize',cut);
-  window.addEventListener('blur',cut);window.addEventListener('pagehide',cut);window.addEventListener('beforeprint',cut);
+  window.addEventListener('blur',function(){if(!st||st.phase!=='hold')cut();}); /* the hold waits for her; it only pauses unseen */
+  window.addEventListener('pagehide',cut);window.addEventListener('beforeprint',cut);
   window.addEventListener('pageshow',function(e){if(e.persisted)finish();});
-  document.addEventListener('visibilitychange',function(){if(document.visibilityState&&document.visibilityState!=='visible')finish();});
+  document.addEventListener('visibilitychange',function(){
+    if(!st)return;
+    var hidden=document.visibilityState&&document.visibilityState!=='visible';
+    if(st.phase==='hold'){if(hidden)pause();else resume();}
+    else if(hidden)finish();
+  });
   if(osRM.addEventListener)osRM.addEventListener('change',cut);
   var rm=$('#mc-rm'),tr=$('#mc-tr');
   if(rm)rm.addEventListener('change',cut);
@@ -889,7 +1025,7 @@ K.arrival={
      Any input while the fonts are awaited ends the wait for good on the resting page. */
   boot:function(decline){
     wire();clearTimeout(A.safety);
-    function no(skip){$('.arr-card').hidden=true;$('.arr-skip').hidden=true;root.classList.remove('arr-pre');if(decline&&!skip)decline();}
+    function no(skip){$('.arr-card').hidden=true;$('.arr-skip').hidden=true;$('.arr-wait').hidden=true;root.classList.remove('arr-pre');if(decline&&!skip)decline();}
     function go(){var ok=false;try{ok=start({kbd:A.kbd});}catch(err){finish();}if(!ok)no();}
     if(!A.play||(document.visibilityState&&document.visibilityState!=='visible'))return no();
     var f=document.fonts;
@@ -910,7 +1046,8 @@ K.arrival={
     return start({kbd:kbd,replay:true,rm:m==='rm',flat:m==='translate'});
   },
   finish:function(){finish();},
-  running:function(){return !!st;}
+  running:function(){return !!st;},
+  phase:function(){return st?st.phase:null;}
 };
 })();
 /* arrival:end */
@@ -933,8 +1070,10 @@ K.page.onClick=function(e){
 };
 K.page.trigger1=function(){K.address(K.wells['w-ains']);};
 /* Arrival: the owed sentence and its act; context doubles above; the past-due warning stands as a footnote from frame 0. */
-K.page.arrive={page:'desk',hero:'[data-seam="w-ains"] > .t-d1',act:'[data-seam="w-ains"] [data-primary]',top:'#n-ains',head:'#roster-h',warn:'.overdue',gap:16,keep:['.overdue','[aria-labelledby="n-ains"] > .pl-id'],split:['.desk-head'],
-  tiers:[[560,'#greet,.overdue,.dayline,#claims > [data-region],.pl-id'],[760,'.mnote,[data-detail],.well'],[840,'.head-acts,.roster-head'],[920,'#ledger,.boards']]};
+K.page.arrive={page:'desk',hero:'[data-seam="w-ains"] > .t-d1',act:'[data-seam="w-ains"] [data-primary]',top:'#n-ains',head:'#roster-h',warn:'.overdue',gap:16,
+  keep:['.overdue','[aria-labelledby="n-ains"] > .pl-id'],canon:['.overdue','[aria-labelledby="n-ains"] > .pl-id'],
+  split:['.desk-head','.head-acts','.roster-head','.roster-head > .acts','#ledger','#ledger-stage'],
+  compose:['.arr-studio','.arr-day','.arr-job','@hero','@act'],rmCompose:['[aria-labelledby="n-ains"] > .pl-id','@hero','@act']};
 K.page.setup=function(){K.arrival.boot();};
 K.init();
 </script>

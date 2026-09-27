@@ -1,4 +1,4 @@
-// Cinematic arrival oracle (SQ-321). Node built-ins only; no browser, no jsdom.
+// Cinematic arrival oracle (SQ-321; v2 three-act score SQ-324). Node built-ins only; no browser, no jsdom.
 // Follows fullpage-oracle.mjs: each page's real inline scripts run in node:vm over a small DOM parsed from its own markup,
 // here with capture-phase events, a frame clock (requestAnimationFrame at a chosen cadence), WAAPI timing (delay, duration,
 // easing, fill) and a measured-layout fixture (page-coordinate rects; fixed and sticky boxes do not scroll).
@@ -15,7 +15,11 @@ const SRC = { 'index.html': read('cinematic', 'index.html'), 'document.html': re
 const BASE = { 'index.html': read('fullpage', 'index.html'), 'document.html': read('fullpage', 'document.html') };
 const concepts = read('concepts.md');
 const E = 'cubic-bezier(.22,1,.36,1)', Q = 'cubic-bezier(.42,0,.58,1)', O = 'cubic-bezier(0,0,.58,1)';
+const X = 'cubic-bezier(.16,1,.3,1)', IO = 'cubic-bezier(.65,0,.35,1)';
 const DESK = 'index.html', DOC = 'document.html';
+// v2 score (SQ-324): Act 1 compose ends at CE; Act 2 holds HOLD ms; with no input Act 3 starts at A3. RM compose ends earlier.
+const CE = 1800, HOLD = 10000, A3 = CE + HOLD, RMCE = { [DESK]: 350, [DOC]: 450 }, REST = 30000;
+const GROW = 'translate(0px,6px) scale(0.92)', HOME = 'translate(0px,0px) scale(1)';
 
 let pass = 0;
 const fails = [];
@@ -210,10 +214,18 @@ const parseTf = (s) => { const m = new Matrix(s); return { x: m.m41, y: m.m42, s
 /* the measured-layout fixture: page coordinates; later puts override earlier ones on the same subtree */
 const R = (left, right, top, bottom) => ({ left, right, top, bottom });
 function put(doc, s, r, lines) { for (const e of doc.querySelectorAll(s)) { e.r = r; for (const d of e.all()) d.r = r; if (lines) e.lines = lines; } }
+function putEach(doc, s, f) { doc.querySelectorAll(s).forEach((e, i) => { const r = f(i); e.r = r; for (const d of e.all()) d.r = r; }); }
 const LAYOUT = {
   'index.html@1440x900': (d) => {
     W.def = R(48, 1072, 300, 330);
+    put(d, '.desk-head > div', R(48, 420, 48, 110)); putEach(d, '.head-acts > .act', (i) => R(640 + i * 150, 760 + i * 150, 60, 104));
+    put(d, '.mnote', R(48, 808, 130, 190)); put(d, '.roster-head > h2', R(48, 300, 230, 262)); putEach(d, '.roster-head > .acts > .act', (i) => R(560 + i * 170, 700 + i * 170, 224, 268));
+    put(d, '.dayline', R(48, 808, 356, 368));
+    putEach(d, '#claims > [data-region]', (i) => (i === 0 ? d.querySelector('#claims > [data-region]').r : R(48, 808, 400 + i * 130, 510 + i * 130)));
+    put(d, '.ledger-h', R(48, 1072, 820, 842)); putEach(d, '#ledger-stage > li', (i) => R(48, 1072, 850 + i * 40, 885 + i * 40));
+    put(d, '.boards', R(48, 1072, 1300, 1400));
     put(d, '.contents', R(48, 1072, 1900, 2100));
+    put(d, '.arr-wait', R(560, 880, 0, 26));
     put(d, '.overdue', R(48, 808, 330, 355));
     put(d, '#n-ains', R(48, 200, 370, 388));
     put(d, '[data-seam="w-ains"] > .t-d1', R(48, 808, 402, 441), [R(48, 408, 404, 440)]);
@@ -228,7 +240,7 @@ const LAYOUT = {
     put(d, '#n-ains', R(16, 120, 600, 618));
     put(d, '[data-seam="w-ains"] > .t-d1', R(16, 374, 640, 718), [R(16, 300, 642, 680), R(16, 200, 681, 718)]);
     put(d, '[data-seam="w-ains"] [data-primary]', R(16, 128, 722, 766));
-    put(d, '.arr-above', R(16, 374, 0, 110)); put(d, '.arr-foot', R(16, 374, 0, 75)); put(d, '.arr-skip', R(254, 374, 784, 828));
+    put(d, '.arr-above', R(16, 374, 0, 110)); put(d, '.arr-foot', R(16, 374, 0, 75)); put(d, '.arr-skip', R(254, 374, 784, 828)); put(d, '.arr-wait', R(40, 350, 0, 26));
   },
   'index.html@390x480': (d) => LAYOUT['index.html@390x844'](d),
   'document.html@1440x900': (d) => {
@@ -241,7 +253,7 @@ const LAYOUT = {
     put(d, '#h-direction', R(328, 1048, 1370, 1386));
     put(d, '#s-direction [data-seam="w-direction"] > .t-d1', R(328, 1048, 1400, 1439), [R(328, 688, 1402, 1438)]);
     put(d, '#s-direction [data-primary]', R(328, 440, 1470, 1514));
-    put(d, '.arr-above', R(400, 1040, 0, 110)); put(d, '.arr-below', R(400, 1040, 0, 18)); put(d, '.arr-skip', R(1304, 1424, 840, 884));
+    put(d, '.arr-above', R(400, 1040, 0, 110)); put(d, '.arr-below', R(400, 1040, 0, 18)); put(d, '.arr-skip', R(1304, 1424, 840, 884)); put(d, '.arr-wait', R(560, 880, 0, 26));
     d.querySelector('#s-direction').cs = { borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: 'rgba(44, 41, 38, 0.1)' };
   },
   'document.html@390x844': (d) => {
@@ -252,11 +264,11 @@ const LAYOUT = {
     put(d, '#h-direction', R(16, 200, 1470, 1486));
     put(d, '#s-direction [data-seam="w-direction"] > .t-d1', R(16, 374, 1500, 1578), [R(16, 300, 1502, 1540), R(16, 200, 1541, 1578)]);
     put(d, '#s-direction [data-primary]', R(16, 128, 1600, 1644));
-    put(d, '.arr-above', R(16, 374, 0, 120)); put(d, '.arr-below', R(16, 374, 0, 18)); put(d, '.arr-skip', R(254, 374, 784, 828));
+    put(d, '.arr-above', R(16, 374, 0, 120)); put(d, '.arr-below', R(16, 374, 0, 18)); put(d, '.arr-skip', R(254, 374, 784, 828)); put(d, '.arr-wait', R(40, 350, 0, 26));
   },
 };
 
-function boot(file, { search = '', hash = '', osRM = false, session = {}, vp = [1440, 900], nav = 'navigate', fonts = true, gaps = [], base = false, visibility = 'visible' } = {}) {
+function boot(file, { search = '', hash = '', osRM = false, coarse = false, session = {}, vp = [1440, 900], nav = 'navigate', fonts = true, gaps = [], base = false, visibility = 'visible' } = {}) {
   const doc = parseHTML((base ? BASE : SRC)[file]);
   W = { doc, clock: 1000, tid: 0, timeouts: [], running: [], log: [], navs: [], defaultNav: [], dispatched: [], scrolled: [], scrolls: [], intervals: 0, rafs: 0, rafq: [], nextFrame: 1016, gaps: gaps.slice(),
     kbd: false, session: new Map(Object.entries(session)), win: { L: {}, C: {} }, fontsOK: fonts, fontWait: [], vp, def: R(0, 100, 100, 130), sel: true };
@@ -270,7 +282,7 @@ function boot(file, { search = '', hash = '', osRM = false, session = {}, vp = [
   const ctx = {
     document: doc, location: loc, innerWidth: vp[0], innerHeight: vp[1], scrollY: 0,
     scrollTo(x, y) { ctx.scrollY = y; W.scrolls.push(y); },
-    matchMedia: (q) => ({ matches: osRM && /reduce/.test(q), addEventListener() {} }),
+    matchMedia: (q) => ({ matches: (osRM && /reduce/.test(q)) || (coarse && /coarse/.test(q)), addEventListener() {} }),
     performance: { now: () => W.clock, getEntriesByType: () => [{ type: nav }] },
     getSelection: () => ({ isCollapsed: W.sel, anchorNode: null }),
     getComputedStyle: (el) => ({ transform: el.style.transform || 'none', opacity: el.style.opacity === undefined || el.style.opacity === '' ? '1' : el.style.opacity, backgroundColor: 'rgb(139, 115, 85)', ...el.cs }),
@@ -378,7 +390,9 @@ for (const f of [DESK, DOC]) {
   check(f + ' copy has no "!", AI or lorem', !/!/.test(p.text) && !/\bAI\b/.test(p.text) && !/lorem/i.test(p.text));
   const wide = [...p.css.replace(/@media[^{]*/g, '').matchAll(/(?<![-\w])(?:min-)?width:\s*(\d+)px/g)].filter((m) => +m[1] > 358);
   check(f + ' no CSS width/min-width over 358px (390 phone)', wide.length === 0, wide.map((m) => m[0]).join(','));
-  check(f + ' arrival overflow never scrolls sideways; print drops the card and Skip', /html\.arr-on\{overflow-x:hidden\}/.test(p.arrCss) && /@media print\{\.arr-card,\.arr-skip\{display:none!important\}\}/.test(p.arrCss));
+  check(f + ' arrival overflow never scrolls sideways; print drops the card, Skip and the hold cue', /html\.arr-on\{overflow-x:hidden\}/.test(p.arrCss) && /@media print\{\.arr-card,\.arr-skip,\.arr-wait\{display:none!important\}\}/.test(p.arrCss));
+  check(f + ' hold cue: aria-hidden, hidden at rest, DM Mono small label 11/16.5 .08em uppercase, one hairline beneath that fills from the left', s.includes('<div class="arr-wait" data-arr aria-hidden="true" hidden><p class="arr-cue">Click or press any key to open the page</p><span class="arr-line"></span></div>') && p.arrCss.includes('.arr-cue{font-family:var(--font-meta);font-size:11px;line-height:16.5px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint)}') && p.arrCss.includes('.arr-line{display:block;height:1px;margin-top:8px;background:var(--aged-oak);transform-origin:0 50%;transform:scaleX(0)}') && /\.arr-wait\{position:fixed;[^}]*pointer-events:none/.test(p.arrCss));
+  check(f + ' no sound, vignette, shadow or box in the arrival', !/<audio|AudioContext|new Audio|vignette|box-shadow|radial-gradient/.test(p.arrCss + p.arrJs) && !/border(-\w+)?:/.test(p.arrCss.replace(/\.arr-card[^{]*\{[^}]*\}/g, '')));
   check(f + ' Skip arrival: real button, DM Mono 11/16.5, 44px target, 16px safe inset, hint', /<button type="button" class="arr-skip" data-arr aria-describedby="arr-hint" hidden>Skip arrival<\/button>/.test(s) && /<span id="arr-hint" data-arr hidden>Escape or any key skips\.<\/span>/.test(s) && /\.arr-skip\{[^}]*right:calc\(16px \+ env\(safe-area-inset-right\)\);bottom:calc\(16px \+ env\(safe-area-inset-bottom\)\)[^}]*min-width:44px;min-height:44px[^}]*font-size:11px;line-height:16\.5px/.test(p.arrCss));
   check(f + ' the opening card is aria-hidden and starts hidden', /<div class="arr-card" data-arr aria-hidden="true" hidden>/.test(s));
   const RB = (v, w) => '<button type="button" class="act" data-press data-arr-replay' + v + '><span class="w">' + w + '</span><span class="rule" aria-hidden="true"></span></button>';
@@ -410,14 +424,52 @@ for (const f of [DESK, DOC]) {
   check('concepts.md §8 Cinematic arrival (proposal) names R-DM8..R-DM17', concepts.includes('## §8 Cinematic arrival (proposal)') && [8, 9, 10, 11, 12, 13, 14, 15, 16, 17].every((n) => s8.includes('R-DM' + n + ' ')));
 }
 
-/* ---------------- 2. the Desk arrival at 1440 ---------------- */
-attempt('Desk frame 0 (1440): only the card, the sentence, its act, the past-due footnote and Skip are visible', () => {
+/* ---------------- 2. the Desk arrival at 1440: compose, hold, hand-off and assembly ---------------- */
+const phase = (K) => K.arrival.phase();
+const visibleSet = (doc) => visibleWords(doc).sort().join(' | ');
+const act3 = (A) => arrAnims().filter((a) => a.start === A && !a.el.closest('[data-arr]'));
+const isSep = (a) => Object.keys(a.kf[0]).some((k) => /^border/.test(k));
+const partAnims = (A, hs, as) => act3(A).filter((a) => a.el !== hs && a.el !== as);
+const centre = (el) => { const r = el.getBoundingClientRect(); return [(r.left + r.right) / 2, (r.top + r.bottom) / 2]; };
+function inkCentre(el) { const rs = W.doc.createRange(); rs.selectNodeContents(el); const L = rs.getClientRects(); const l = Math.min(...L.map((r) => r.left)), r = Math.max(...L.map((r) => r.right)), t = Math.min(...L.map((r) => r.top)), b = Math.max(...L.map((r) => r.bottom)); return [(l + r) / 2, (t + b) / 2]; }
+const DESK_LINES = ['.arr-studio', '.arr-day', '.arr-job', 'HERO', 'ACT'];
+const DOC_LINES = ['.arr-title', '.arr-house', '.arr-stage', 'HERO', 'ACT'];
+function composeOrder(file, lines, opts) {
+  const { K, doc, $ } = boot(file, opts);
+  if (!K.arrival.running() || phase(K) !== 'compose') return 'did not open in Act 1';
+  const els = lines.map((s) => (s === 'HERO' ? $(hero[file]) : s === 'ACT' ? $(actSel[file]) : $(s)));
+  for (const [i, el] of els.entries()) {
+    const a = animOf(el)[0];
+    if (!a || a.delay !== i * 270 || a.duration !== 720 || a.easing !== X || a.fill !== 'both' || a.kf[0].opacity !== 0 || a.kf[1].opacity !== 1) return lines[i] + ' compose ' + (a && [a.delay, a.duration, a.easing]);
+    const t0 = parseTf(a.kf[0].transform), t1 = parseTf(a.kf[1].transform);
+    if (lines[i].startsWith('.') ? !(a.kf[0].transform === 'scale(.94)' && a.kf[1].transform === 'scale(1)') : !(t0.ok && t1.ok && near(t0.s, t1.s * 0.94, 1e-9) && t0.x === t1.x && t0.y === t1.y && a.kf[1].transform === el.style.transform)) return lines[i] + ' does not grow from the back: ' + a.kf[0].transform + ' > ' + a.kf[1].transform;
+  }
+  for (let i = 0; i < els.length; i++) {
+    until(i * 270 + 1);
+    if (!(opacity(els[i]) > 0) || (els[i + 1] && opacity(els[i + 1]) !== 0)) return 'order at ' + (i * 270 + 1) + ': ' + lines[i];
+  }
+  return { K, doc, $ };
+}
+attempt('Act 1 (Desk 1440): frame 0 shows only the past-due footnote and Skip; studio, day, job, sentence, act compose in that order, 720ms X, 270ms apart, each from scale .94', () => {
   const { K, doc } = boot(DESK);
-  if (!K.arrival.running()) return 'did not play on a fresh load';
   if (/arr-pre/.test(doc.documentElement.attrs.class) || !/arr-on/.test(doc.documentElement.attrs.class)) return 'html classes ' + doc.documentElement.attrs.class;
-  const words = visibleWords(doc).sort();
-  const want = ['Middle West Studio', 'Friday · Sep 25', 'Ainsworth · Procurement · Leah · due today', 'One reply is past due: the Delgado delivery window needed an answer by Sep 23.', 'Finish approval needed.', 'Review finish', 'Skip arrival'].sort();
-  return JSON.stringify(words) === JSON.stringify(want) ? true : words.join(' | ');
+  const f0 = visibleSet(doc);
+  if (f0 !== ['One reply is past due: the Delgado delivery window needed an answer by Sep 23.', 'Skip arrival'].sort().join(' | ')) return 'frame 0: ' + f0;
+  const r = composeOrder(DESK, DESK_LINES);
+  if (typeof r === 'string') return r;
+  until(CE - 1); if (phase(r.K) !== 'compose') return 'composed early';
+  until(CE);
+  const want = ['Middle West Studio', 'Friday · Sep 25', 'Ainsworth · Procurement · Leah · due today', 'One reply is past due: the Delgado delivery window needed an answer by Sep 23.', 'Finish approval needed.', 'Review finish', 'Skip arrival'].sort().join(' | ');
+  return K && visibleSet(r.doc) === want && phase(r.K) === 'hold' ? true :'at ' + CE + ': ' + visibleSet(r.doc) + ' / ' + phase(r.K);
+});
+attempt('Act 1 (Document 1440): place, room and client, stage, then the sentence with its context line, then the act', () => {
+  const r = composeOrder(DOC, DOC_LINES, { session: { 'pl-arrive': 'ptr' } });
+  if (typeof r === 'string') return r;
+  const b = animOf(r.$('.arr-below'))[0];
+  if (!b || b.delay !== 3 * 270 || b.duration !== 720) return 'context line ' + (b && b.delay);
+  until(CE);
+  const want = ['Ainsworth Residence', 'Edna Ainsworth · Living room and entry', 'Procurement · Madison · Target Oct 16', 'Finish approval needed.', 'White oak · due today · Leah', 'Review finish', 'Skip arrival'].sort().join(' | ');
+  return visibleSet(r.doc) === want ? true : visibleSet(r.doc);
 });
 attempt('Desk frame 0 (1440): the real sentence at 52/34 scale, its written text centred at 50%/46%, from its ink centre', () => {
   const { $ } = boot(DESK);
@@ -425,84 +477,154 @@ attempt('Desk frame 0 (1440): the real sentence at 52/34 scale, its written text
   if (!t.ok || !near(t.s, 52 / 34, 1e-9)) return 'scale ' + h.style.transform;
   // ink 48..408 x 404..440 -> centre (228,422); target (720, 0.46*900=414)
   if (!near(t.x, 492) || !near(t.y, -8)) return 'translate ' + t.x + ',' + t.y;
-  if (h.style.transformOrigin !== '180px 20px') return 'origin ' + h.style.transformOrigin;
-  const a = animOf(h)[0];
-  return a && a.delay === 560 && a.duration === 640 && a.easing === Q && a.fill === 'both' && a.kf[1].transform === 'translate(0px,0px) scale(1)' ? true : 'flight ' + (a && [a.delay, a.duration, a.easing]);
+  return h.style.transformOrigin === '180px 20px' ? true : 'origin ' + h.style.transformOrigin;
 });
-attempt('Desk frame 0: the real Review finish is a second carrier, scale 1, 20px under the sentence, straight to its box', () => {
+attempt('Desk frame 0: the real Review finish is a second carrier, scale 1, 20px under the sentence; neither carrier is aria-hidden', () => {
   const { $ } = boot(DESK);
-  const act = $(actSel[DESK]), t = parseTf(act.style.transform), a = animOf(act)[0];
+  const act = $(actSel[DESK]), t = parseTf(act.style.transform);
   if (!t.ok || t.s !== 1) return 'act scale ' + act.style.transform;
   const hBot = 414 + (36 * 52 / 34) / 2;
   if (!near(t.x, 720 - 104) || !near(t.y, hBot + 20 - 445)) return 'act translate ' + t.x + ',' + t.y;
-  if (act.closest('[aria-hidden="true"]') || $(hero[DESK]).closest('[aria-hidden="true"]')) return 'a carrier is aria-hidden';
-  return a && a.delay === 560 && a.duration === 640 && a.easing === Q && a.kf.length === 2 ? true : 'act flight';
+  return act.closest('[aria-hidden="true"]') || $(hero[DESK]).closest('[aria-hidden="true"]') ? 'a carrier is aria-hidden' : true;
 });
 attempt('Desk: no ancestor of the sentence or its act is hidden or moved; only separators on them fade', () => {
-  const { $ } = boot(DESK);
+  const { $ } = boot(DESK); until(A3 + 10);
   const h = $(hero[DESK]), act = $(actSel[DESK]);
   const bad = arrAnims().filter((a) => a.el !== h && a.el !== act && (a.el.contains(h) || a.el.contains(act)) && a.kf.some((k) => 'opacity' in k || 'transform' in k));
   return bad.length === 0 ? true : bad.map((a) => a.el.tagName + '.' + a.el.attrs.class).join(',');
 });
-const tierOf = (a) => [a.delay, a.duration, a.easing, a.kf[0].transform || '-', 'opacity' in a.kf[0] ? a.kf[0].opacity + '>' + a.kf[1].opacity : '-'].join(' ');
-attempt('Desk tiers: 560 owed facts print together; 760 local +6; 840 controls opacity; 920 ledger/Boards +4; 1000 outer; below the fold untouched', () => {
-  const { $, $$ } = boot(DESK);
-  const T = (el) => animOf(el).map(tierOf).join(' / ');
-  const exp = [
-    [$('#greet').parentNode, '560 0 linear - 0>1'], [$('.overdue'), '560 0 linear - 0>1'], [$('.dayline'), '560 0 linear - 0>1'],
-    [$$('#claims > [data-region]')[1], '560 0 linear - 0>1'], [$$('#claims > [data-region]')[2], '560 0 linear - 0>1'], [$('#claims .pl-id'), '560 0 linear - 0>1'],
-    [$('.mnote'), '760 240 ' + E + ' translate(0px,6px) scale(1) 0>1'], [$('[data-detail="w-ains"]'), '760 240 ' + E + ' translate(0px,6px) scale(1) 0>1'], [$('#w-ains'), '760 240 ' + E + ' translate(0px,6px) scale(1) 0>1'],
-    [$('.head-acts'), '840 240 ' + E + ' - 0>1'], [$('.roster-head'), '840 240 ' + E + ' - 0>1'],
-    [$('#ledger'), '920 240 ' + E + ' translate(0px,4px) scale(1) 0>1'], [$('.boards'), '920 240 ' + E + ' translate(0px,4px) scale(1) 0>1'],
-    [$('.fixture-foot'), '1000 240 ' + E + ' - 0>1'],
-  ];
-  for (const [el, want] of exp) if (T(el) !== want) return (el.id || el.attrs.class || el.tagName) + ': ' + T(el);
-  if (animOf($('.contents')).length) return 'below-fold contents animated';
-  const starts = new Set(arrAnims().filter((a) => !a.el.closest('[data-arr]') && a.el !== $(hero[DESK]) && a.el !== $(actSel[DESK])).map((a) => a.delay));
-  return [...starts].every((t) => [560, 760, 840, 920, 1000].includes(t)) ? true : 'stray start ' + [...starts];
+attempt('Act 2: the card holds, still; no frame watch; the cue fades in 1500ms into the hold and one hairline fills once over the rest of the 10s', () => {
+  const { K, $ } = boot(DESK);
+  until(CE);
+  if (phase(K) !== 'hold' || W.rafq.length) return 'hold ' + phase(K) + ' frames ' + W.rafq.length;
+  const wt = $('.arr-wait'), line = $('.arr-line');
+  if (wt.hidden || line.hidden || $('.arr-cue').textContent !== 'Click or press any key to open the page') return 'cue';
+  const c = animOf(wt)[0], l = animOf(line)[0];
+  if (!c || c.start !== W.t0 + CE || c.delay !== 1500 || c.duration !== 600 || c.easing !== X || c.kf[0].opacity !== 0 || c.kf[1].opacity !== 1) return 'cue fade ' + (c && [c.delay, c.duration]);
+  if (!l || l.delay !== 1500 || l.duration !== HOLD - 1500 || l.easing !== 'linear' || l.kf[0].transform !== 'scaleX(0)' || l.kf[1].transform !== 'scaleX(1)') return 'hairline ' + (l && [l.delay, l.duration, l.easing]);
+  until(CE + 1499); if (opacity(wt) !== 0) return 'cue early';
+  until(CE + 5000);
+  const moving = arrAnims().filter((a) => a.playState !== 'idle' && W.clock - a.start - a.delay >= 0 && W.clock - a.start - a.delay < a.duration);
+  if (moving.length !== 1 || moving[0].el !== line) return 'not still in the hold: ' + moving.map((a) => a.el.attrs.class).join(',');
+  if (opacity(wt) !== 1 || W.rafq.length) return 'cue or frames';
+  const t = boot(DESK, { coarse: true }); until(CE);
+  return t.$('.arr-cue').textContent === 'Tap to open the page' ? true : 'touch cue ' + t.$('.arr-cue').textContent;
 });
-attempt('Desk 560: canonical warning and owed facts print in the frame the doubles hand off; intro context gone by 680', () => {
+attempt('Act 2: with no input the hold persists for 9,999ms after compose and moves on at 10,000ms', () => {
+  for (const [f, o] of [[DESK, {}], [DOC, { session: { 'pl-arrive': 'ptr' } }]]) {
+    const { K } = boot(f, o);
+    until(CE + 9999); if (phase(K) !== 'hold' || act3(W.clock).length) return f + ' left the hold early';
+    until(A3); if (phase(K) !== 'assemble') return f + ' no auto-advance at 10,000ms: ' + phase(K);
+  }
+  return true;
+});
+attempt('Act 2: the timer pauses while the page is hidden and resumes when visible; it never expires unseen', () => {
+  const { K, doc } = boot(DESK);
+  const vis = (v) => { doc.visibilityState = v; for (const f of doc.L.visibilitychange || []) f({}); };
+  until(CE + 3000); vis('hidden');
+  advance(60000); if (phase(K) !== 'hold') return 'expired while hidden: ' + phase(K);
+  vis('visible'); advance(6999); if (phase(K) !== 'hold') return 'resumed with the wrong time left';
+  advance(1); if (phase(K) !== 'assemble') return 'did not resume: ' + phase(K);
+  const c = boot(DESK); until(300);
+  c.doc.visibilityState = 'hidden'; for (const f of c.doc.L.visibilitychange || []) f({});
+  return atRest(c.K, c.doc, c.$) === true ? true : 'hidden during Act 1 did not rest';
+});
+/* Act 3 from the hold with no input; returns the parts sorted by their start */
+function assembled(file, opts) {
+  const r = boot(file, opts); until(A3);
+  const A = W.clock, hs = r.$(hero[file]), as = r.$(actSel[file]);
+  return { ...r, A, hs, as, parts: partAnims(A, hs, as).filter((a) => !['arr-above', 'arr-below', 'arr-foot', 'arr-skip', 'arr-wait'].some((c) => a.el.classList.contains(c))).sort((a, b) => a.delay - b.delay) };
+}
+attempt('Act 3 hand-off: both carriers travel home over 1100ms (.65,0,.35,1) from their card frames; transforms clear on landing', () => {
+  const { K, hs, as, A } = assembled(DESK);
+  const h = animOf(hs).find((a) => a.start === A), a = animOf(as).find((x) => x.start === A);
+  if (!h || h.delay !== 0 || h.duration !== 1100 || h.easing !== IO || h.kf[0].transform !== hs.style.transform || h.kf[1].transform !== HOME) return 'sentence ' + (h && [h.delay, h.duration, h.easing]);
+  if (!a || a.delay !== 0 || a.duration !== 1100 || a.easing !== IO || a.kf[0].transform !== as.style.transform || a.kf[1].transform !== HOME) return 'act';
+  if (!near(parseTf(hs.style.transform).s, 52 / 34, 1e-9)) return 'desktop text scale lost';
+  if (animOf(hs).some((x) => x.start < A && x.playState !== 'idle')) return 'compose frame still applied under the flight';
+  until(A3 + 1099); if (!hs.style.transform) return 'landed early';
+  until(A3 + 1100);
+  return !hs.style.transform && !hs.style.transformOrigin && !hs.style.willChange && !as.style.transform && K.arrival.running() ? true : 'transforms not cleared at landing';
+});
+attempt('Act 3 (Desk): the warning and the job name and stage print in the hand-off frame; only then do the intro doubles dissolve (160ms)', () => {
   const { $ } = boot(DESK);
-  until(559);
-  if (opacity($('.overdue')) !== 0 || opacity($('.arr-foot')) !== 1 || opacity($('.arr-above')) !== 1) return 'frame 559';
-  until(560);
-  if (opacity($('.overdue')) !== 1 || opacity($('.arr-foot')) !== 0 || opacity($('#claims .pl-id')) !== 1) return 'frame 560: warning ' + opacity($('.overdue')) + ' footnote ' + opacity($('.arr-foot'));
+  until(A3 - 1);
+  if (opacity($('.overdue')) !== 0 || opacity($('.arr-foot')) !== 1 || opacity($('#claims .pl-id')) !== 0 || opacity($('.arr-above')) !== 1) return 'before the hand-off';
+  until(A3);
+  if (opacity($('.overdue')) !== 1 || opacity($('.arr-foot')) !== 0 || opacity($('#claims .pl-id')) !== 1) return 'hand-off frame: warning ' + opacity($('.overdue')) + ' name ' + opacity($('#claims .pl-id'));
   if (!(opacity($('.arr-above')) > 0.99)) return 'intro context faded before its canonical home printed';
-  until(680);
-  return opacity($('.arr-above')) === 0 && opacity($('.arr-skip')) === 0 && opacity($('.mnote')) === 0 ? true : 'frame 680';
+  until(A3 + 160);
+  return opacity($('.arr-above')) === 0 && opacity($('.arr-wait')) === 0 && opacity($('.mnote')) === 0 ? true : 'at +160';
 });
-attempt('Desk 1200: carriers land and their transforms and origins clear; 1240 still; 1440 handed back, nothing pending', () => {
-  const { K, doc, $ } = boot(DESK);
-  const h = $(hero[DESK]), act = $(actSel[DESK]);
-  until(1190);
-  if (!h.style.transform || !act.style.transform) return 'landed early';
-  until(1216);
-  if (h.style.transform || h.style.transformOrigin || h.style.willChange || act.style.transform || animOf(h).some((a) => a.playState === 'running')) return 'transforms not cleared at 1200';
-  until(1240);
-  const active = arrAnims().filter((a) => a.playState !== 'idle' && W.clock - a.start - a.delay < a.duration);
-  if (active.length) return 'still moving at 1240: ' + active.length;
-  if (Math.max(...arrAnims().map((a) => a.delay + a.duration)) !== 1240) return 'score does not end at 1240';
-  if (!K.arrival.running()) return 'handed back before 1440';
-  until(1440); advance(20);
-  const r = atRest(K, doc, $);
-  if (r !== true) return r;
+attempt('Act 3 (Desk) assembles from independent parts: each its own animation, scale .92 + 6px rise + opacity, 880ms X, origin at its own centre', () => {
+  const { parts, $, $$ } = assembled(DESK);
+  const want = ['.desk-head > div', '.mnote', '.dayline', '.ledger-h', '#w-ains', '[data-detail="w-ains"]'].map((s) => $(s)).concat($$('.head-acts > .act'), $$('#claims > [data-region]').slice(1), $$('#ledger-stage > li').slice(0, 2), $$('.roster-head > .acts > .act'), [$('#roster-h')]);
+  const els = parts.map((a) => a.el);
+  for (const w of want) if (!els.includes(w)) return 'not a part: ' + (w.id || w.attrs.class || w.tagName);
+  if (new Set(els).size !== els.length) return 'a part animates twice';
+  for (const a of parts.filter((x) => !isSep(x))) {
+    if (a.kf[0].transform !== GROW || a.kf[1].transform !== HOME || a.kf[0].opacity !== 0 || a.kf[1].opacity !== 1 || a.duration !== 880 || a.easing !== X || a.fill !== 'both') return 'part ' + (a.el.id || a.el.attrs.class) + ': ' + [a.kf[0].transform, a.duration, a.easing];
+    if (a.el.style.transformOrigin !== '50% 50%') return 'origin ' + a.el.style.transformOrigin;
+  }
+  const delays = parts.map((a) => a.delay);
+  return new Set(delays).size === delays.length ? true : 'parts share a start: they must be independent';
+});
+function staggerCheck(r) {
+  const [fx, fy] = inkCentre(r.hs);
+  const d = (a) => { const [x, y] = centre(a.el); return Math.hypot(x - fx, y - fy); };
+  const ps = r.parts, step = Math.min(110, (1900 - 140) / (ps.length - 1));
+  if (ps.length < 8) return 'only ' + ps.length + ' parts';
+  if (step < 70) return 'the cap forces ' + step.toFixed(1) + 'ms steps for ' + ps.length + ' parts';
+  for (let i = 1; i < ps.length; i++) {
+    if (d(ps[i]) + 1e-9 < d(ps[i - 1])) return 'farther part starts first: ' + (ps[i - 1].el.id || ps[i - 1].el.attrs.class) + ' before ' + (ps[i].el.id || ps[i].el.attrs.class);
+    const gap = ps[i].delay - ps[i - 1].delay;
+    if (Math.abs(gap - step) > 1) return 'stagger step ' + gap + 'ms, want ' + step.toFixed(1);
+  }
+  if (ps[0].delay !== 140) return 'first part at ' + ps[0].delay;
+  return ps[ps.length - 1].delay <= 1900 ? true : 'last part starts at ' + ps[ps.length - 1].delay;
+}
+attempt('Act 3 (Desk): the stagger radiates from the landed sentence, nearest first, about 70-110ms apart, the last part starting by +1900', () => staggerCheck(assembled(DESK)));
+attempt('Act 3 (Desk): parts below the first view are simply at rest (no animation, no inline style)', () => {
+  const { $, $$ } = assembled(DESK);
+  for (const el of [$('.contents'), $('.boards'), ...$$('#ledger-stage > li').slice(2)]) {
+    if (animOf(el).length || el.style.opacity || el.style.transform || el.style.transformOrigin) return 'touched ' + (el.attrs.class || el.tagName);
+  }
+  return true;
+});
+attempt('Act 3 total 2,800-3,400ms, then complete stillness: nothing pending, no frames, the fullpage resting page', () => {
+  const { K, doc, $, A } = assembled(DESK);
+  const end = Math.max(...arrAnims().filter((a) => a.start === A).map((a) => a.delay + a.duration));
+  if (end < 2600 || end > 3400) return 'Act 3 lasts ' + end;
+  until(A3 + end - 1); if (!K.arrival.running()) return 'handed back early';
+  until(A3 + end);
+  const r = atRest(K, doc, $); if (r !== true) return r;
   if (W.doc.activeElement !== doc.body) return 'pointer or unknown entry took focus';
-  return W.scrolls.length === 0 && W.intervals === 0 ? true : 'scroll writes or intervals';
+  const rafs = W.rafs; advance(2000);
+  return W.rafs === rafs && W.scrolls.length === 0 && W.intervals === 0 ? true : 'motion after stillness';
 });
 attempt('Desk at rest after the arrival is the fullpage resting page (DOM, attributes, inline style)', () => {
   boot(DESK, { base: true }); const want = ser(W.doc);
-  const { K } = boot(DESK); until(1500);
+  const { K } = boot(DESK); until(REST);
   if (K.arrival.running()) return 'still running';
   return ser(W.doc) === want ? true : 'differs';
 });
 attempt('Desk after rest keeps the fullpage grammar: hover dwell reveals at 160ms E, Show all latches at 0ms', () => {
-  const { K, $ } = boot(DESK); until(1500);
+  const { K, $ } = boot(DESK); until(REST);
   const seam = $('[data-seam="w-ains"]'), n = W.log.length;
   fire(seam.closest('[data-region]'), 'pointerenter'); fire(seam, 'pointermove'); advance(100);
   const a = W.log.slice(n).find((x) => x.el === $('#w-ains .well-body'));
   if (!K.wells['w-ains'].isOpen || !a || a.duration !== 160 || a.easing !== E) return 'reveal';
   fire($('[data-show-all]'), 'click');
   return Object.values(K.wells).every((w) => w.isOpen) ? true : 'show all';
+});
+attempt('frame watch runs in Acts 1 and 3 only: a stalled frame in Act 3 rests; the hold requests no frames at all', () => {
+  const r = boot(DESK); until(CE + 4000);
+  if (W.rafq.length) return 'a frame loop runs in the hold';
+  until(A3); if (!W.rafq.length) return 'no watch in Act 3';
+  W.nextFrame = W.clock + 200; advance(200);
+  const rest = atRest(r.K, r.doc, r.$); if (rest !== true) return 'Act 3 stall: ' + rest;
+  const ok = boot(DESK); until(A3 + 300);
+  return ok.K.arrival.running() && phase(ok.K) === 'assemble' ? true : 'steady Act 3 frames cut the arrival';
 });
 
 /* ---------------- 3. input: work wins ---------------- */
@@ -528,7 +650,7 @@ attempt('Escape skips only: the Document is never put down by the Escape that en
     advance(400);
     if (!out.defaultPrevented || W.navs.length || animOf($('#paper')).length) return 'put down at ' + t;
   }
-  const { K, $ } = boot(DOC, { session: s }); until(1500);
+  const { K, $ } = boot(DOC, { session: s }); until(REST);
   fire(W.doc.body, 'keydown', { key: 'Escape' });
   const p = animOf($('#paper')).pop();
   return !K.arrival.running() && p && p.duration === 200 && p.easing === Q ? true : 'resting Esc no longer puts down';
@@ -568,10 +690,10 @@ function pressAct(file, t, up, upInit = {}, opts = {}) {
 }
 attempt('F2: a press on the visible Review finish ends the arrival at once and acts only on release, exactly once (Desk: to #rec; Document: opens the record)', () => {
   const release = ({ $, doc }, { cx, cy }, init) => fire(doc.documentElement, 'pointerup', { pointerId: 7, clientX: cx, clientY: cy, ...init });
-  const d = pressAct(DESK, 700, release);
+  const d = pressAct(DESK, 1300, release);
   if (d.early) return 'Desk: acted on the down press';
   if (W.defaultNav.join() !== 'document.html#rec' || W.session.get('pl-carry') !== '1' || W.dispatched.length !== 1) return 'Desk act: ' + W.defaultNav + ' x' + W.dispatched.length;
-  const r = pressAct(DOC, 200, release, {}, { session: { 'pl-arrive': 'ptr' } });
+  const r = pressAct(DOC, 1300, release, {}, { session: { 'pl-arrive': 'ptr' } });
   if (r.early) return 'Document: acted on the down press';
   return r.opened() === 1 && !r.$('#rec').hidden && W.doc.activeElement === r.$('#rec-note') ? true : 'record opened ' + r.opened() + 'x';
 });
@@ -584,22 +706,22 @@ attempt('F2: a cancelled press, a scroll or wheel during the press, or a release
     'another pointer': ({ doc }, { cx, cy }) => fire(doc.documentElement, 'pointerup', { pointerId: 8, clientX: cx, clientY: cy }),
   };
   for (const [name, up] of Object.entries(cases)) {
-    const r = pressAct(DESK, 500, up);
+    const r = pressAct(DESK, 1300, up);
     if (W.defaultNav.length || W.dispatched.length || W.session.has('pl-carry')) return name + ' activated: ' + W.defaultNav;
     advance(1); fire(r.$(actSel[DESK]), 'click', { detail: 1 });
     if (W.defaultNav.join() !== 'document.html#rec') return name + ': the next ordinary click was lost';
   }
-  const o = pressAct(DOC, 300, cases.pointercancel, {}, { session: { 'pl-arrive': 'ptr' } });
+  const o = pressAct(DOC, 1300, cases.pointercancel, {}, { session: { 'pl-arrive': 'ptr' } });
   return o.opened() === 0 && o.$('#rec').hidden ? true : 'Document record opened on a cancelled press';
 });
 attempt('F2: modifier keys on the release pass through to the act; a secondary button never activates', () => {
   let seen = null;
-  const r = pressAct(DESK, 400, ({ $, doc }, { cx, cy }) => {
+  const r = pressAct(DESK, 1300, ({ $, doc }, { cx, cy }) => {
     $(actSel[DESK]).addEventListener('click', (e) => { seen = e; });
     fire(doc.documentElement, 'pointerup', { pointerId: 7, clientX: cx, clientY: cy, metaKey: true, shiftKey: true });
   });
   if (!seen || !seen.metaKey || !seen.shiftKey || seen.ctrlKey || seen.detail !== 1 || W.dispatched.length !== 1) return 'modifiers lost: ' + JSON.stringify(seen && { m: seen.metaKey, s: seen.shiftKey, d: seen.detail });
-  const s = boot(DESK); until(400);
+  const s = boot(DESK); until(1300);
   const act = s.$(actSel[DESK]), b = act.getBoundingClientRect();
   fire(act, 'pointerdown', { pointerId: 3, button: 2, clientX: b.left + 1, clientY: b.top + 1 });
   fire(s.doc.documentElement, 'pointerup', { pointerId: 3, button: 2, clientX: b.left + 1, clientY: b.top + 1 });
@@ -609,7 +731,7 @@ attempt('F1: the real act is the one live target during the arrival (inline poin
   for (const [f, o] of [[DESK, {}], [DOC, { session: { 'pl-arrive': 'ptr' } }], [DESK, { search: '?rm=1' }]]) {
     const r = boot(f, o); until(100);
     if (!r.K.arrival.running() || r.$(actSel[f]).style.pointerEvents !== 'auto' || !/arr-on/.test(r.doc.documentElement.attrs.class)) return f + ' act not live ' + o.search;
-    until(1500);
+    until(REST);
     if (r.$(actSel[f]).style.pointerEvents) return f + ' pointer-events residue';
   }
   return true;
@@ -636,32 +758,125 @@ attempt('pointer movement during assembly never addresses a line', () => {
   return !K.wells['w-delg'].isOpen && K.arrival.running() ? true : 'addressed under the arrival';
 });
 
+/* ---------------- 3b. the hold answers her ---------------- */
+function inHold(file, t = CE + 3000, opts = file === DOC ? { session: { 'pl-arrive': 'ptr' } } : {}) {
+  const r = boot(file, opts); until(t);
+  if (r.K.arrival.phase() !== 'hold') throw new Error('not holding at ' + t);
+  return r;
+}
+attempt('Act 2: any other click, tap, key, wheel or touch continues at once to Act 3 (not to rest), and a click cannot click through', () => {
+  const inputs = {
+    click: (r) => { fire(r.$('.ledger-h'), 'pointerdown', { pointerId: 4 }); fire(r.doc.documentElement, 'pointerup', { pointerId: 4 }); return fire(r.$('#n-ains a'), 'click', { detail: 1 }); },
+    tap: (r) => { fire(r.$('.ledger-h'), 'pointerdown', { pointerId: 5, pointerType: 'touch' }); fire(r.$('.ledger-h'), 'touchstart'); fire(r.doc.documentElement, 'pointerup', { pointerId: 5, pointerType: 'touch' }); for (const f of r.doc.documentElement.C.touchend || []) f({}); return fire(r.$('#n-ains a'), 'click', { detail: 1 }); },
+    'touch first': (r) => { fire(r.$('.ledger-h'), 'touchstart'); fire(r.$('.ledger-h'), 'pointerdown', { pointerId: 6, pointerType: 'touch' }); fire(r.doc.documentElement, 'pointerup', { pointerId: 6 }); return fire(r.$('#n-ains a'), 'click', { detail: 1 }); },
+    key: (r) => fire(r.doc.body, 'keydown', { key: 'a' }),
+    'Cmd+K': (r) => fire(r.doc.body, 'keydown', { key: 'k', metaKey: true }),
+    Enter: (r) => fire(r.doc.body, 'keydown', { key: 'Enter' }),
+    wheel: (r) => { fire(r.$('.ledger-h'), 'wheel'); advance(100); return fire(r.$('.ledger-h'), 'wheel'); },
+  };
+  for (const [name, input] of Object.entries(inputs)) {
+    const r = inHold(DESK); const A = W.clock;
+    const ev = input(r);
+    if (r.K.arrival.phase() !== 'assemble') return name + ': ' + (r.K.arrival.phase() || 'rested') + ' instead of Act 3';
+    const h = animOf(r.$(hero[DESK])).find((a) => a.duration === 1100);
+    if (!h || h.start !== A) return name + ': no hand-off from the input frame';
+    if (W.defaultNav.length || W.session.has('pl-carry') || W.dispatched.length) return name + ': clicked through ' + W.defaultNav;
+    if ((name === 'click' || name === 'tap' || name === 'touch first') && !ev.defaultPrevented) return name + ': the click was not swallowed';
+    if ((name === 'key' || name === 'Cmd+K') && (ev.defaultPrevented || ev.stop)) return name + ': swallowed, lost its meaning';
+    if (name === 'Enter' && !ev.defaultPrevented) return 'Enter with nothing chosen was not consumed';
+    advance(A + 4000 - W.clock); // well past its own Act 3
+    const rest = atRest(r.K, r.doc, r.$); if (rest !== true) return name + ': ' + rest;
+  }
+  return true;
+});
+attempt('Act 2: Escape jumps to the resting page at once (the Document is not also put down)', () => {
+  const r = inHold(DOC);
+  const ev = fire(r.doc.body, 'keydown', { key: 'Escape' });
+  const rest = atRest(r.K, r.doc, r.$); if (rest !== true) return rest;
+  advance(400);
+  return ev.defaultPrevented && !W.navs.length && !animOf(r.$('#paper')).length && !arrAnims().some((a) => a.start === W.clock - 400 && a.duration === 1100) ? true : 'Escape did more than rest';
+});
+attempt('Act 2: Tab moves focus within the arrival (the act, then Skip) and does not advance; Enter on the focused act activates it exactly once', () => {
+  const r = inHold(DESK);
+  const t1 = fire(r.doc.body, 'keydown', { key: 'Tab' });
+  if (W.doc.activeElement !== r.$(actSel[DESK]) || !t1.defaultPrevented || r.K.arrival.phase() !== 'hold') return 'Tab: ' + (W.doc.activeElement.attrs.class || W.doc.activeElement.tagName) + ' ' + r.K.arrival.phase();
+  fire(W.doc.activeElement, 'keydown', { key: 'Tab' });
+  if (W.doc.activeElement !== r.$('.arr-skip') || r.K.arrival.phase() !== 'hold') return 'second Tab';
+  fire(W.doc.activeElement, 'keydown', { key: 'Tab', shiftKey: true });
+  if (W.doc.activeElement !== r.$(actSel[DESK]) || r.K.arrival.phase() !== 'hold') return 'Shift+Tab';
+  until(CE + 9000); if (r.K.arrival.phase() !== 'hold') return 'Tab advanced or reset the hold';
+  const ev = fire(W.doc.activeElement, 'keydown', { key: 'Enter' });
+  if (!ev.defaultPrevented) return 'Enter default not consumed (would double-activate)';
+  const rest = atRest(r.K, r.doc, r.$); if (rest !== true) return 'no assembly first: ' + rest;
+  if (W.defaultNav.join() !== 'document.html#rec' || W.session.get('pl-carry') !== '1') return 'Desk Enter: ' + W.defaultNav;
+  const d = inHold(DOC);
+  let n = 0; const was = d.K.openRecord; d.K.openRecord = (...a) => { n++; return was(...a); };
+  fire(d.doc.body, 'keydown', { key: 'Tab' });
+  fire(W.doc.activeElement, 'keydown', { key: ' ' });
+  return n === 1 && !d.$('#rec').hidden && W.doc.activeElement === d.$('#rec-note') && atRest(d.K, d.doc, d.$) === true ? true : 'Document Space opened ' + n + 'x';
+});
+attempt('Act 2: a completed press on the visible Review finish activates it exactly once with no assembly first; an assistive click does too', () => {
+  const release = ({ doc }, { cx, cy }) => fire(doc.documentElement, 'pointerup', { pointerId: 7, clientX: cx, clientY: cy });
+  const d = pressAct(DESK, CE + 4000, release);
+  if (d.early) return 'Desk acted on the down press';
+  if (W.defaultNav.join() !== 'document.html#rec' || W.dispatched.length !== 1) return 'Desk: ' + W.defaultNav + ' x' + W.dispatched.length;
+  if (arrAnims().some((a) => a.duration === 1100 || (a.kf[0] && a.kf[0].transform === GROW))) return 'the page assembled before the act';
+  const o = pressAct(DOC, CE + 4000, release, {}, { session: { 'pl-arrive': 'ptr' } });
+  if (o.opened() !== 1 || o.$('#rec').hidden) return 'Document record opened ' + o.opened() + 'x';
+  const a = inHold(DESK);
+  fire(a.$(actSel[DESK]), 'click', { detail: 0 });
+  return W.defaultNav.join() === 'document.html#rec' && atRest(a.K, a.doc, a.$) === true ? true : 'assistive click: ' + W.defaultNav;
+});
+attempt('Act 2: Skip rests; a replay control restarts the arrival; blur only waits', () => {
+  const r = inHold(DESK);
+  fireWin('blur'); if (r.K.arrival.phase() !== 'hold') return 'blur ended the hold';
+  fire(r.$('.arr-skip'), 'pointerdown', { pointerId: 2 });
+  let rest = atRest(r.K, r.doc, r.$); if (rest !== true) return 'Skip: ' + rest;
+  const s = inHold(DESK, CE + 3000, { search: '?controls=1' });
+  fire(s.$('#mc-replay'), 'pointerdown'); fire(s.$('#mc-replay'), 'click');
+  return s.K.arrival.phase() === 'compose' ? true : 'replay in the hold: ' + s.K.arrival.phase();
+});
+attempt('Act 3 continues through the gesture that opened it, but any new input in Act 3 still rests at once', () => {
+  const r = inHold(DESK);
+  fire(r.doc.body, 'keydown', { key: 'a' });
+  fire(r.doc.body, 'keydown', { key: 'a', repeat: true });
+  if (r.K.arrival.phase() !== 'assemble') return 'key repeat ended Act 3';
+  advance(300);
+  fire(r.doc.body, 'keydown', { key: 'b' });
+  let rest = atRest(r.K, r.doc, r.$); if (rest !== true) return 'new key in Act 3: ' + rest;
+  const p = inHold(DESK);
+  fire(p.$('.ledger-h'), 'pointerdown', { pointerId: 9 }); fire(p.doc.documentElement, 'pointerup', { pointerId: 9 }); fire(p.doc.documentElement, 'click', { detail: 1 }); advance(200);
+  if (p.K.arrival.phase() !== 'assemble') return 'the opening click also rested';
+  fire(p.$('.ledger-h'), 'pointerdown', { pointerId: 10 });
+  rest = atRest(p.K, p.doc, p.$); return rest === true ? true : 'new press in Act 3: ' + rest;
+});
+
 /* ---------------- 4. focus: keyboard modality only; doorway rule ---------------- */
-attempt('landing focus at 1440 only for a keyboard entry, on the real Review finish, without opening its detail', () => {
+attempt('landing focus only for a keyboard entry, on the real Review finish, after the last part lands, without opening its detail', () => {
   const k = boot(DOC, { session: { 'pl-arrive': 'kbd', 'pl-carry': '1' } });
-  until(1439); if (W.doc.activeElement !== k.doc.body) return 'focused before 1440';
-  until(1460);
+  until(A3 + 2000); if (W.doc.activeElement !== k.doc.body) return 'focused before the page was still';
+  until(REST);
   if (W.doc.activeElement !== k.$(actSel[DOC])) return 'keyboard entry not focused on Review finish';
   if (k.K.wells['w-direction'].isOpen) return 'landing focus opened the detail';
-  const p = boot(DOC, { session: { 'pl-arrive': 'ptr', 'pl-carry': '1' } }); until(1460);
+  const p = boot(DOC, { session: { 'pl-arrive': 'ptr', 'pl-carry': '1' } }); until(REST);
   if (W.doc.activeElement !== p.doc.body) return 'pointer entry got an unsolicited focus';
-  const d = boot(DESK); until(1460);
+  const d = boot(DESK); until(REST);
   return W.doc.activeElement === d.doc.body ? true : 'a fresh load guessed a modality';
 });
 attempt('doorway rule: a terminal primary act (approve/send/sign/pay/book) never takes landing focus; the section heading does', () => {
   const { $ } = boot(DOC, { session: { 'pl-arrive': 'kbd' } });
   $(actSel[DOC]).querySelector('.w').textContent = 'Approve finish';
-  until(1460);
+  until(REST);
   return W.doc.activeElement === $('#h-direction') ? true : 'focus went to ' + (W.doc.activeElement.id || W.doc.activeElement.tagName);
 });
 attempt('the Desk name link records the entry modality for the Document; Review finish does not', () => {
-  const { $ } = boot(DESK); until(1500);
+  const { $ } = boot(DESK); until(REST);
   fire($('#n-ains a'), 'click', { detail: 0 });
   if (W.session.get('pl-arrive') !== 'kbd' || W.defaultNav.join() !== 'document.html') return 'name link: ' + W.session.get('pl-arrive');
-  const r = boot(DESK); until(1500);
+  const r = boot(DESK); until(REST);
   fire(r.$('#n-ains a'), 'click', { detail: 1 });
   if (W.session.get('pl-arrive') !== 'ptr') return 'pointer pick-up';
-  const s = boot(DESK); until(1500);
+  const s = boot(DESK); until(REST);
   fire(s.$(actSel[DESK]), 'click', { detail: 1 });
   return !W.session.has('pl-arrive') && W.session.get('pl-carry') === '1' ? true : 'Review finish carried an arrival token';
 });
@@ -761,36 +976,54 @@ attempt('a Sheet, an open record or a typed note holds the page: Replay does not
 });
 
 /* ---------------- 6. reduced motion, translate only, other widths ---------------- */
-attempt('reduced motion (?rm=1 and OS): line first in place; the rest fades 120-320ms opacity only; still at 320; no transform', () => {
+attempt('reduced motion (?rm=1 and OS): no card, no transform; the warning reads from frame 0; the hero block composes in place, opacity only, 150ms a line; the 10s hold; opacity-only parts; still', () => {
   for (const opt of [{ search: '?rm=1' }, { osRM: true }]) {
     const { K, doc, $ } = boot(DESK, opt);
-    if (!K.arrival.running()) return 'did not run the RM arrival';
+    if (!K.arrival.running() || K.arrival.phase() !== 'compose') return 'did not run the RM arrival';
     if (!$('.arr-card').hidden || !$('.arr-skip').hidden) return 'centred card under RM';
+    if (!$('.arr-line').hidden) return 'a moving hairline under RM';
     if (arrAnims().some((a) => a.kf.some((k) => 'transform' in k)) || $(hero[DESK]).style.transform) return 'transform under RM';
-    const words = visibleWords(doc).sort().join('|');
-    if (words !== ['Ainsworth', 'Procurement · Leah · due today', 'Finish approval needed.', 'One reply is past due: the Delgado delivery window needed an answer by Sep 23.', 'Review finish'].sort().join('|')) return 'RM frame 0: ' + words;
-    if (!arrAnims().every((a) => a.delay === 120 && a.duration === 200 && a.easing === Q)) return 'RM timings ' + [...new Set(arrAnims().map((a) => a.delay + '/' + a.duration))];
-    until(319); if (!K.arrival.running()) return 'ended early';
-    until(321);
+    if (visibleSet(doc) !== 'One reply is past due: the Delgado delivery window needed an answer by Sep 23.') return 'RM frame 0: ' + visibleSet(doc);
+    for (const [i, s] of ['[aria-labelledby="n-ains"] > .pl-id', hero[DESK], actSel[DESK]].entries()) {
+      const a = animOf($(s))[0];
+      if (!a || a.delay !== i * 100 || a.duration !== 150 || a.easing !== Q || a.kf[0].opacity !== 0) return 'RM compose ' + s + ' ' + (a && [a.delay, a.duration]);
+    }
+    until(RMCE[DESK] - 1); if (K.arrival.phase() !== 'compose') return 'RM composed early';
+    until(RMCE[DESK]);
+    const words = visibleSet(doc);
+    if (words !== ['Ainsworth', 'Procurement · Leah · due today', 'Finish approval needed.', 'One reply is past due: the Delgado delivery window needed an answer by Sep 23.', 'Review finish'].sort().join(' | ')) return 'RM block: ' + words;
+    if (K.arrival.phase() !== 'hold' || W.rafq.length) return 'RM hold';
+    const c = animOf($('.arr-wait'))[0];
+    if (!c || c.delay !== 1500 || c.duration !== 200 || 'transform' in c.kf[0]) return 'RM cue';
+    until(RMCE[DESK] + HOLD - 1); if (K.arrival.phase() !== 'hold') return 'RM hold shorter than 10s';
+    until(RMCE[DESK] + HOLD); if (K.arrival.phase() !== 'assemble') return 'RM hold did not time out';
+    const A = W.clock, parts = arrAnims().filter((a) => a.start === A && !a.el.closest('[data-arr]'));
+    if (parts.length < 8 || parts.some((a) => a.kf.some((k) => 'transform' in k) || a.duration !== 200 || a.delay > 400)) return 'RM Act 3 ' + parts.map((a) => a.delay + '/' + a.duration);
+    if (new Set(parts.map((a) => a.delay)).size < parts.length) return 'RM parts not staggered';
+    advance(Math.max(...parts.map((a) => a.delay + a.duration)));
     const rest = atRest(K, doc, $); if (rest !== true) return rest;
   }
   const d = boot(DOC, { search: '?rm=1', session: { 'pl-arrive': 'kbd' } });
   if (W.scrolls.join() !== '1160') return 'RM initial position ' + W.scrolls;
-  until(330);
+  until(REST);
   return W.doc.activeElement === d.$(actSel[DOC]) ? true : 'RM keyboard focus';
 });
-attempt('F5: reduced motion shows the whole hero block at full ink at t0 (Desk: name, owner and stage, sentence, act, warning; Document: heading, context line, sentence, act, Detail)', () => {
+attempt('F5 (v2): reduced motion keeps the whole hero block in place, composing in reading order to full ink (Desk warning from frame 0); the rest stays covered through the hold', () => {
   const blocks = {
     [DESK]: ['#n-ains', '#claims .pl-id .ctx', hero[DESK], actSel[DESK], '.overdue'],
     [DOC]: ['#h-direction', '#s-direction [data-seam="w-direction"] > .ctx', hero[DOC], actSel[DOC], '[data-detail="w-direction"]'],
   };
+  const order = [['#h-direction', 0], [hero[DOC], 100], ['#s-direction [data-seam="w-direction"] > .ctx', 200], [actSel[DOC], 300], ['[data-detail="w-direction"]', 300]];
   for (const [f, o] of [[DESK, { search: '?rm=1' }], [DOC, { search: '?rm=1', session: { 'pl-arrive': 'ptr' } }], [DOC, { osRM: true, session: { 'pl-arrive': 'ptr' } }]]) {
     const { K, $ } = boot(f, o);
     if (!K.arrival.running()) return f + ': the RM arrival did not run';
-    for (const s of blocks[f]) if (opacity($(s)) !== 1 || animOf($(s)).some((a) => 'opacity' in a.kf[0])) return f + ' t0: ' + s + ' at ' + opacity($(s));
-    const covered = f === DESK ? ['.mnote', '#ledger'] : ['#s-procurement', '#w-direction', '.spine-name'];
-    for (const s of covered) if (opacity($(s)) !== 0) return f + ' t0: ' + s + ' not covered';
-    until(320); for (const s of covered) if (opacity($(s)) !== 1) return f + ' 320: ' + s + ' not in';
+    if (f === DESK && opacity($('.overdue')) !== 1) return 'the warning is not readable from frame 0';
+    if (f === DOC) for (const [s, t] of order) { const a = animOf($(s))[0]; if (!a || a.delay !== t || a.duration !== 150) return 'Document RM order ' + s + ' ' + (a && a.delay); }
+    until(RMCE[f]);
+    for (const s of blocks[f]) if (opacity($(s)) !== 1 || animOf($(s)).some((a) => a.kf.some((k) => 'transform' in k))) return f + ' block: ' + s + ' at ' + opacity($(s));
+    const covered = f === DESK ? ['.mnote', '.ledger-h'] : ['#s-procurement .sec-head', '#w-direction', '.spine-name'];
+    until(RMCE[f] + HOLD - 1); for (const s of covered) if (opacity($(s)) !== 0) return f + ' hold: ' + s + ' not covered';
+    until(REST); for (const s of covered) if (opacity($(s)) !== 1) return f + ' rest: ' + s + ' not in';
   }
   return true;
 });
@@ -800,7 +1033,7 @@ attempt('?scale=0 (R-DM10 B): translate only, 34px throughout, same centre', () 
   return t.ok && t.s === 1 && near(t.x, 492) && near(t.y, -8) ? true : $(hero[DESK]).style.transform;
 });
 attempt('Translate only in the ?controls=1 strip switches the next Replay to scale 1', () => {
-  const { K, $ } = boot(DESK, { search: '?controls=1' }); until(1500);
+  const { K, $ } = boot(DESK, { search: '?controls=1' }); until(REST);
   const tr = $('#mc-tr'); tr.checked = true; fire(tr, 'change');
   fire($('#mc-replay'), 'click');
   return K.arrival.running() && parseTf($(hero[DESK]).style.transform).s === 1 ? true : 'strip toggle ' + $(hero[DESK]).style.transform;
@@ -822,14 +1055,12 @@ attempt('390 Desk: footnote rises clear of Skip; nothing overlaps; no scroll', (
 attempt('Document (1440): initial reading position puts the Direction hero top at clamp(160, .28 x usable, 240), once, before frame 0', () => {
   const { K } = boot(DOC, { session: { 'pl-arrive': 'ptr' } });
   if (W.scrolls.join() !== '1160') return 'scrolls ' + W.scrolls;
-  until(1500);
+  until(REST);
   return !K.arrival.running() && W.scrolls.length === 1 ? true : 'scroll writes after t0';
 });
-attempt('Document frame 0: where the project is, then what Leah can do; nothing else on the paper', () => {
+attempt('Document frame 0: covered paper and Skip only; the card composes from nothing', () => {
   const { doc } = boot(DOC, { session: { 'pl-arrive': 'ptr' } });
-  const words = visibleWords(doc).sort();
-  const want = ['Ainsworth Residence', 'Edna Ainsworth · Living room and entry', 'Procurement · Madison · Target Oct 16', 'Finish approval needed.', 'White oak · due today · Leah', 'Review finish', 'Skip arrival'].sort();
-  return JSON.stringify(words) === JSON.stringify(want) ? true : words.join(' | ');
+  return visibleSet(doc) === 'Skip arrival' ? true : visibleSet(doc);
 });
 attempt('Document carriers: 52/34 sentence to Direction, act 12px under the context line, same 560-1200 flight', () => {
   const { $ } = boot(DOC, { session: { 'pl-arrive': 'ptr' } });
@@ -840,42 +1071,40 @@ attempt('Document carriers: 52/34 sentence to Direction, act 12px under the cont
   if (a.s !== 1 || !near(a.x, 720 - 384) || !near(a.y, hBot + 8 + 18 + 12 - 310)) return 'act ' + $(actSel[DOC]).style.transform;
   return $('.arr-below').style.top === String(Math.round((hBot + 8) * 100) / 100) + 'px' ? true : 'context line ' + $('.arr-below').style.top;
 });
-attempt('F4: the job name and the current stage (Procurement) print at the 560 handoff and stay readable while the intro context dissolves', () => {
+attempt('F4 (v2): the job name and the current stage (Procurement) print in the hand-off frame and stay readable while the intro context dissolves', () => {
   const { $ } = boot(DOC, { session: { 'pl-arrive': 'ptr' } });
   const name = $('.spine-name'), cur = $('.spine [aria-current]');
-  until(559); if (opacity(name) !== 0 || opacity(cur) !== 0 || opacity($('.arr-above')) !== 1) return 'frame 559';
-  for (const t of [560, 620, 680, 760, 839]) {
-    until(t);
-    if (opacity(name) !== 1 || opacity(cur) !== 1) return 'frame ' + t + ': name ' + opacity(name) + ' stage ' + opacity(cur);
+  until(A3 - 1); if (opacity(name) !== 0 || opacity(cur) !== 0 || opacity($('.arr-above')) !== 1) return 'before the hand-off';
+  for (const t of [0, 80, 160, 400, 900]) {
+    until(A3 + t);
+    if (opacity(name) !== 1 || opacity(cur) !== 1 || opacity($('#h-direction')) !== 1 || opacity($('#s-direction .ctx')) !== 1) return '+' + t + ': name ' + opacity(name) + ' stage ' + opacity(cur);
+    if (t === 0 && (!(opacity($('.arr-above')) > 0.99) || opacity($('.spine .leave')) !== 0)) return 'intro context gone before the canonical facts printed, or optional navigation printed with them';
   }
-  return opacity($('.arr-above')) === 0 && opacity($('.spine .leave')) === 0 ? true : 'frame 839: intro context or optional navigation';
+  return opacity($('.arr-above')) === 0 && opacity($('.arr-below')) === 0 ? true : 'intro context lingers';
 });
-attempt('Document tiers: Direction head and context, later stages, job name and current stage at 560; detail 760; rest of the spine 840; settled and rail 920; above and below untouched', () => {
-  const { $ } = boot(DOC, { session: { 'pl-arrive': 'ptr' } });
-  const T = (el) => animOf(el).map(tierOf).join(' / ');
-  const exp = [
-    [$('#h-direction'), '560 0 linear - 0>1'], [$('#s-direction .ctx'), '560 0 linear - 0>1'], [$('#s-procurement'), '560 0 linear - 0>1'], [$('#s-schedule'), '560 0 linear - 0>1'],
-    [$('[data-detail="w-direction"]'), '760 240 ' + E + ' translate(0px,6px) scale(1) 0>1'], [$('#w-direction'), '760 240 ' + E + ' translate(0px,6px) scale(1) 0>1'],
-    [$('.spine-name'), '560 0 linear - 0>1'], [$('.spine [aria-current]').parentNode, '560 0 linear - 0>1'],
-    [$('.spine .leave'), '840 240 ' + E + ' - 0>1'], [$('.jumps > li'), '840 240 ' + E + ' - 0>1'], [$('.spine [href="#s-schedule"]').parentNode, '840 240 ' + E + ' - 0>1'],
-    [$('#s-discovery'), '920 240 ' + E + ' translate(0px,4px) scale(1) 0>1'], [$('#s-agreement'), '920 240 ' + E + ' translate(0px,4px) scale(1) 0>1'], [$('.rail'), '920 240 ' + E + ' translate(0px,4px) scale(1) 0>1'],
-  ];
-  for (const [el, want] of exp) if (T(el) !== want) return (el.id || el.attrs.class) + ': ' + T(el);
-  for (const s of ['#doc-title', '.sh-house', '#s-install', '#s-brief', '#paper']) if (animOf($(s)).length) return s + ' animated';
-  const b = animOf($('#s-direction'))[0];
-  if (!b || b.delay !== 760 || b.duration !== 240 || b.kf[0].borderTopColor !== 'transparent' || 'opacity' in b.kf[0]) return 'Direction separator';
+attempt('Document Act 3: spine pieces, section headings, lines, wells and the rail assemble as parts, nearest first; the Direction separator returns as colour only; above and below untouched; Procurement stays the stage', () => {
+  const r = assembled(DOC, { session: { 'pl-arrive': 'ptr' } });
+  const { $, parts } = r, els = parts.map((a) => a.el);
+  const want = [$('.spine .leave'), $('.spine [href="#s-schedule"]').parentNode, $('.spine [href="#s-brief"]').parentNode, $('[data-detail="w-direction"]'), $('#w-direction'), $('.rail'), $('#h-procurement'), $('#w-procurement'), $('#h-discovery'), $('#h-schedule')];
+  for (const w of want) if (!els.includes(w)) return 'not a part: ' + (w.id || w.attrs.class || w.tagName);
+  for (const s of ['.spine-name', '#h-direction', '#s-direction .ctx']) if (els.includes($(s))) return s + ' grows; it must print';
+  if (els.includes($('.spine [aria-current]').parentNode)) return 'the current stage grows; it must print';
+  for (const s of ['#doc-title', '.sh-house', '#s-install', '#h-install', '#h-brief', '#paper', '.spine', '.tsec']) if (animOf($(s)).length) return s + ' animated';
+  const b = parts.find((a) => a.el === $('#s-direction'));
+  if (!b || b.kf[0].borderTopColor !== 'transparent' || 'opacity' in b.kf[0] || 'transform' in b.kf[0] || b.duration !== 880) return 'Direction separator';
+  const sc = staggerCheck(r); if (sc !== true) return sc;
   const cur = W.doc.querySelectorAll('.spine [aria-current]');
   return cur.length === 1 && cur[0].textContent.startsWith('Procurement') ? true : 'current stage changed';
 });
 attempt('Document at rest after the arrival is the fullpage resting page; Procurement stays the stage', () => {
   boot(DOC, { base: true }); const want = ser(W.doc);
-  const { K } = boot(DOC, { session: { 'pl-arrive': 'ptr' } }); until(1500);
+  const { K } = boot(DOC, { session: { 'pl-arrive': 'ptr' } }); until(REST);
   return !K.arrival.running() && ser(W.doc) === want ? true : 'differs';
 });
 attempt('Document 390: hero top 160px, scale 1, sticky spine clear; same score', () => {
   const { K, $ } = boot(DOC, { vp: [390, 844], session: { 'pl-arrive': 'ptr' } });
   const t = parseTf($(hero[DOC]).style.transform);
-  return K.arrival.running() && W.scrolls.join() === '1340' && t.s === 1 && animOf($(hero[DOC]))[0].delay === 560 ? true : 'scroll ' + W.scrolls + ' ' + $(hero[DOC]).style.transform;
+  return K.arrival.running() && W.scrolls.join() === '1340' && t.s === 1 && animOf($(hero[DOC]))[0].delay === 810 ? true : 'scroll ' + W.scrolls + ' ' + $(hero[DOC]).style.transform;
 });
 
 /* ---------------- 8. slow devices and replay ---------------- */
@@ -898,27 +1127,32 @@ attempt('frame-drop guard: a first-three interval over 50ms, one over 100ms, or 
   const ok = boot(DESK, { gaps: [16, 16, 16, 55, 16, 40, 16] }); advance(260);
   return ok.K.arrival.running() ? true : 'a late 55ms frame or a single 40ms frame cut the arrival';
 });
-attempt('no frame loop, interval or timer survives rest; Slow x4 stretches the whole score', () => {
-  const r = boot(DESK); until(1500);
+attempt('no frame loop, interval or timer survives rest; Slow x4 stretches the whole score, the 10s hold included', () => {
+  const r = boot(DESK); until(REST);
   if (W.rafq.length || pendingTimers().length || W.intervals) return 'loop after rest';
   const rafs = W.rafs; advance(1000);
   if (W.rafs !== rafs) return 'frames requested after rest';
-  const s = boot(DESK, { search: '?controls=1' }); until(1500);
+  const s = boot(DESK, { search: '?controls=1' }); until(REST);
   const slow = s.$('#mc-slow'); slow.checked = true; fire(slow, 'change');
   fire(s.$('#mc-replay'), 'click');
-  const h = animOf(s.$(hero[DESK])).pop();
-  if (!h || h.delay !== 2240 || h.duration !== 2560) return 'slow flight ' + (h && [h.delay, h.duration]);
-  advance(5700); if (!s.K.arrival.running()) return 'slow ended early';
-  advance(100);
+  const R0 = W.clock, h = animOf(s.$(hero[DESK])).find((a) => a.start === R0);
+  if (!h || h.delay !== 3240 || h.duration !== 2880) return 'slow compose ' + (h && [h.delay, h.duration]);
+  advance(4 * CE - 1); if (s.K.arrival.phase() !== 'compose') return 'slow compose ended early';
+  advance(1); if (s.K.arrival.phase() !== 'hold') return 'slow hold';
+  advance(4 * HOLD - 1); if (s.K.arrival.phase() !== 'hold') return 'slow hold ended early';
+  advance(1); if (s.K.arrival.phase() !== 'assemble') return 'slow hold never ended';
+  const f = animOf(s.$(hero[DESK])).find((a) => a.start === W.clock);
+  if (!f || f.duration !== 4400) return 'slow flight ' + (f && f.duration);
+  advance(4 * 3400);
   return !s.K.arrival.running() ? true : 'slow never ended';
 });
 attempt('Replay arrival from the footer: back to the resting start, plays again, keyboard replay earns landing focus', () => {
-  const { K, $, ctx } = boot(DESK); until(1500);
+  const { K, $, ctx } = boot(DESK); until(REST);
   ctx.scrollY = 1400;
   const b = $('[data-arr-replay]'); focusTo(b);
   fire(b, 'click', { detail: 0 });
   if (!K.arrival.running() || ctx.scrollY !== 0 || W.doc.activeElement === b) return 'replay start';
-  until(3000);
+  advance(REST);
   return W.doc.activeElement === $(actSel[DESK]) ? true : 'no keyboard landing after replay';
 });
 attempt('pressing Replay mid-arrival restarts cleanly (its press is not spent as a skip)', () => {
@@ -931,17 +1165,18 @@ attempt('pressing Replay mid-arrival restarts cleanly (its press is not spent as
 
 attempt('F8: footer Replay reduced replays once under reduced motion; Replay without scale once translate-only; nothing is kept for the next Replay', () => {
   for (const [f, o] of [[DESK, {}], [DOC, { session: { 'pl-arrive': 'ptr' } }]]) {
-    const r = boot(f, o); until(1500);
+    const r = boot(f, o); until(REST);
     const btn = (v) => r.$('[data-arr-replay="' + v + '"]');
     fire(btn('rm').querySelector('.w'), 'click', { detail: 1 });
-    if (!r.K.arrival.running() || !r.$('.arr-card').hidden || r.$(hero[f]).style.transform || arrAnims().filter((a) => a.start === W.clock).some((a) => a.delay !== 120 || a.duration !== 200 || a.kf.some((k) => 'transform' in k))) return f + ': Replay reduced did not replay line-first';
-    if (opacity(r.$(actSel[f])) !== 1) return f + ': Replay reduced hid the act';
-    advance(330);
+    if (!r.K.arrival.running() || !r.$('.arr-card').hidden || r.$(hero[f]).style.transform || arrAnims().filter((a) => a.start === W.clock).some((a) => a.duration !== 150 || a.kf.some((k) => 'transform' in k))) return f + ': Replay reduced did not compose line-first';
+    advance(RMCE[f]); if (opacity(r.$(actSel[f])) !== 1 || r.K.arrival.phase() !== 'hold') return f + ': Replay reduced hid the act or skipped the hold';
+    advance(REST);
     let rest = atRest(r.K, r.doc, r.$); if (rest !== true) return f + ' reduced: ' + rest;
     fire(btn('translate'), 'click', { detail: 1 });
     const t = parseTf(r.$(hero[f]).style.transform);
     if (!r.K.arrival.running() || r.$('.arr-card').hidden || !t.ok || t.s !== 1 || r.K.arrScale0) return f + ': Replay without scale ' + r.$(hero[f]).style.transform;
-    advance(1500);
+    advance(A3); if (!arrAnims().some((a) => a.start === W.clock && a.kf[0].transform === GROW) || animOf(r.$(hero[f])).find((a) => a.start === W.clock).kf[0].transform !== r.$(hero[f]).style.transform) return f + ': without scale the parts must still grow from the back';
+    advance(REST);
     rest = atRest(r.K, r.doc, r.$); if (rest !== true) return f + ' without scale: ' + rest;
     fire(r.$('[data-arr-replay=""]'), 'click', { detail: 1 });
     if (!r.K.arrival.running() || r.$('.arr-card').hidden || !near(parseTf(r.$(hero[f]).style.transform).s, 52 / 34, 1e-9) || r.K.rm()) return f + ': a mode persisted into the plain Replay';
