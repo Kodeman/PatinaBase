@@ -379,6 +379,8 @@ machinery is fresh; storage is additive (margin_notes or equivalent — naming
 to repo conventions).
 
 ### R15 · Strata Mark fill-state + the breath — 2026-06-12
+Superseded by R154 (motion).
+
 Ratifying Leah's Question 9, moderated. The mark becomes a progress device:
 its three lines render as fill-state mapped to the engagement's three
 movements — line 1 fills through SHAPING (Brief→Direction), line 2 at
@@ -1430,6 +1432,8 @@ Accounts/Aesthete design session. Any future audit must scope these as
 not-yet-built, never regressions.
 
 ### R35 · Strata Mark progress system — extends R15 — 2026-06-13
+
+Superseded by R154 (motion) — the ambient-motion clause only; the fill-state/gradient/build-contract portions of this entry are untouched.
 
 Ratifies the Strata Mark as a working progress device and adds two things R15
 left open: the per-line gradient coloring and the component build contract.
@@ -10212,6 +10216,8 @@ architect audit, `build/w6-architect-audit.md`) and carried below and into I152.
 
 **Not superseded:** the R15 ambient breath (`DECISIONS.md:381`) stays exactly where it is — the proposal's one ambient move, confirmed at 3s/0s (no-preference/reduced) in the final walk. The R126 register (type scale, stock and ink, rule weights, stamps, the hover wash) is the floor this document does not touch.
 
+*(Superseded by R154 (motion) — 2026-09-27: the ambient-motion ban this line reaffirmed is retired; the R15 breath's `prefers-reduced-motion` fallback stays in force as the accessibility floor.)*
+
 **Debts carried into I152, not closed by this ruling:** D-B41's TLS WebKit ship-bar run (OWED, Kody); D-B44's per-stop margin-note anchor, which needs a schema change (`margin_notes.anchor_key`) — the program's first, explicitly deferred past this deploy; D-B5's `estimated_hours` editor, still unreachable since its Wave-1 fold deletion; the `/desk` `welcome-modal-overlay` help-system defect (pre-existing, unrelated to any lens file); the `get_project_ffe_readiness` per-line RPC fan-out (D-B28, logged not owned); a battery of non-gating nits across three review passes (N2-01…06, ~13 W4-correctness minors/nits, ~18 W4F3 items — 2 still open, P2-01…08, W5F2-01…03) — none gate, all named in I152.
 
 
@@ -11245,3 +11251,15 @@ copy in the `designer-invite`, `milestone-first-payment`, and `onboarding-aesthe
 R5's original text stands above as history; this entry records the supersession.
 
 *Entries add: R153 · last id = R153*
+
+### R154 · Motion freed — the no-motion rule set retired — 2026-09-27
+
+**Ruled by Kody, 2026-09-27, verbatim:** "we can remove the former no motion rule set from the design guidelines."
+
+This retires the ambient-motion ban and every restatement of it: **R15**'s "nothing on the Desk ever moves" / "'Pulsing' beyond this is declined — ambient motion is what the no-badge discipline exists to prevent" (`DECISIONS.md:381`); **R35**'s ambient clause defining `.breathing` as "R15's single sanctioned ambient motion... never on the Desk" (`DECISIONS.md:1432`); and R127's reaffirmation that "the R15 ambient breath... stays exactly where it is" (`DECISIONS.md:10213`), which no longer holds. The restatements of the ban in I19 (`:693`), the Slice 6 review (`:794`), and I107 (`:6584`) are historical record and stand as written, superseded by this entry. **D8**'s "no pulsing counts" is narrowed to its original target — Studio Drawer badge/count decoration — and no longer doubles as a general motion ban. The Desk and the Document may carry ambient and performed motion; "the studio won't notice Patina" is a promise about engagement pressure, not about pixels being still.
+
+**What stays — the accessibility floor does not move with this ruling.** `prefers-reduced-motion` is an accessibility obligation (WCAG 2.2.2 Pause, Stop, Hide; WCAG 2.3.3 Animation from Interactions), distinct from and independent of whether ambient motion is design-permitted. Every reduced-motion fallback already specified in this log stays in force exactly as written: R15's breath disabling under `prefers-reduced-motion`, R35's `.breathing` → steady glow and `.sweeping` → static partial, I107's press (no bead, instant flood, no travel), D12's pick-up crossfade, R72's folio lift gating, and the hover wash's flat-tint fallback. R69's minute-resolution timer readout (`:2555`) is unaffected — it addresses unbounded per-second motion in peripheral chrome, not ambient decoration, and was never part of this ban.
+
+**Motion-concepts deck rulings closed.** The open rulings R-DM1–R-DM7 in the motion-concepts deck (`artifacts/designer-portal-motion-2026-09-25/design/concepts.md`), which assumed an ambient ban survives in some narrowed form, are resolved by this ruling rather than answered individually — R154 goes further than any of R-DM1's three options.
+
+*Entries add: R154 · last id = R154*
