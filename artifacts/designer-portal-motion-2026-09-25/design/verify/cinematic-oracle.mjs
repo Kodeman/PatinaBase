@@ -26,6 +26,8 @@ const EXPECT = {
   Whitfield: { place: 'Whitfield · Install', headline: 'Install starts Oct 6; nothing needs you.', facts: ['All 14 lines delivered.', 'Since Sep 18: final delivery signed.', 'At rest; punch list opens at install.'], act: null },
   'Okafor-Bright': { place: 'Okafor-Bright · Discovery', headline: 'Yours to add: budget, how they live.', facts: ['Two of five essentials on record.', 'New to you: brief opened Sep 20.', 'No proposal drafted yet.'], act: 'Continue the brief' },
 };
+// A doorway verb may be phrasal ("Follow up on sample"): its particle counts with the verb, not as a word.
+const verbAct = (act) => act.replace(/^([A-Z][a-z]+) (up|out|in|on|back|over)\b/, '$1');
 const HINT = 'Skip goes straight to the page; any key opens it.';
 const CE = 1800, HOLD = 10000;
 
@@ -561,7 +563,7 @@ for (const file of PAGES) {
     if (words(card.place) > (desk ? 6 : 5)) return 'place ' + words(card.place);
     const hw = words(card.headline); if (hw < 3 || hw > 8 || !/\.$/.test(card.headline)) return 'headline ' + hw + ' words';
     for (const f of card.facts) if (words(f) > 7) return 'fact "' + f + '" ' + words(f);
-    if (card.act && (words(card.act) < 1 || words(card.act) > 3)) return 'act ' + words(card.act);
+    if (card.act && (words(verbAct(card.act)) < 1 || words(verbAct(card.act)) > 3)) return 'act ' + words(verbAct(card.act));
     if (words(card.place) + words(card.headline) > 12) return 'core ' + (words(card.place) + words(card.headline));
     const all = cardLines(card).reduce((n, s) => n + words(s), 0); if (all > 36) return 'card ' + all;
     const m = o.ctx.Arrival.message(card); return words(m) <= 45 || 'message ' + words(m);
@@ -601,7 +603,7 @@ for (const file of PAGES) {
       if (s !== card.place && !/\.$/.test(s)) return 'no period: ' + s;
       if (/!|\bAI\b|\bplease\b|\bsmart\b|\bjust\b|[\u{1F300}-\u{1FAFF}]/u.test(s)) return 'voice: ' + s;
     }
-    if (card.act && (/\.$/.test(card.act) || !/^[A-Z][a-z]+( [a-z]+){0,2}$/.test(card.act))) return 'act ' + card.act;
+    if (card.act && (/\.$/.test(card.act) || !/^[A-Z][a-z]+( [a-z]+){0,2}$/.test(verbAct(card.act)))) return 'act ' + card.act;
     return true;
   });
   if (o.inputs.kind === 'desk') {
