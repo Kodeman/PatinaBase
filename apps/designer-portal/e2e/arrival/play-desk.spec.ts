@@ -263,12 +263,20 @@ test.describe('Desk plays', () => {
 
     if (cardOrRest === 'played') {
       await page.locator(SKIP_SELECTOR).click();
+      // 'mutation' is an EndHow, never a cause: a played run a late commit cut
+      // short ends how:'mutation', so the played path must end on the Skip.
+      await expect
+        .poll(async () =>
+          (await arrivalEndedEvents(page)).filter((e) => e.surface === 'desk').at(-1)?.how,
+        )
+        .toBe('skip');
     }
     const events = await arrivalEndedEvents(page);
     const deskEvents = events.filter((e) => e.surface === 'desk');
     expect(deskEvents.length).toBeGreaterThan(0);
     for (const e of deskEvents) {
-      expect(e.cause).not.toBe('mutation');
+      expect(e.how).not.toBe('mutation');
+      expect(e.cause).not.toBe('drift');
       if (e.how === 'declined') {
         expect(['hidden', 'late']).toContain(e.cause);
       }

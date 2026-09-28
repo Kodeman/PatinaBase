@@ -1740,6 +1740,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // J1: the document's IDENTITY moves here — /doc/<designerClientId> stops
       // resolving the instant the draft proposal exists (00327), so the old
       // name is a dead end and the successor id is replaced onto, not pushed.
+      suppressNextArrival(`/doc/${proposalId}`);
       router.replace(`/doc/${proposalId}`);
     } catch (err) {
       setBeginDirectionLanding(false);

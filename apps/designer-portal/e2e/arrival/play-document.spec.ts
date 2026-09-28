@@ -209,14 +209,21 @@ test.describe('Document plays', () => {
     if (cardOrRest === 'played') {
       await page.locator(SKIP_SELECTOR).click();
       await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
+      // 'mutation' is an EndHow, never a cause: a played run a late commit cut
+      // short ends how:'mutation', so the played path must end on the Skip.
+      await expect
+        .poll(async () =>
+          (await arrivalEndedEvents(page)).filter((e) => e.surface === 'document').at(-1)?.how,
+        )
+        .toBe('skip');
     }
 
     const events = await arrivalEndedEvents(page);
     const docEvents = events.filter((e) => e.surface === 'document');
     expect(docEvents.length).toBeGreaterThan(0);
     for (const e of docEvents) {
+      expect(e.how).not.toBe('mutation');
       expect(e.cause).not.toBe('drift');
-      expect(e.cause).not.toBe('mutation');
       if (e.how === 'declined') {
         expect(['hidden', 'late']).toContain(e.cause);
       }

@@ -6,6 +6,7 @@ import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import { paperRegionsForSection } from '@/lib/document/document-index';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 import { documentEvents } from '@/lib/analytics/document-events';
+import { consumeSuppressed } from '@/lib/arrival/nav';
 import { EVENT_ENDED } from '@/lib/arrival/types';
 
 /**
@@ -2392,6 +2393,20 @@ describe('DocumentPage guide activation', () => {
           expect(mockRouter.replace).toHaveBeenCalledWith('/doc/proposal-9'),
         );
         expect(mockRouter.push).not.toHaveBeenCalled();
+      });
+
+      it('US-14 — the J1 identity move is announced as a replace, so no arrival plays', async () => {
+        openReadyDiscovery();
+        mockBeginDirectionMutateAsync.mockResolvedValue('proposal-9');
+        consumeSuppressed('/doc/proposal-9');
+
+        render(<DocumentPage params={fulfilledParams} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Begin the direction' }));
+
+        await waitFor(() =>
+          expect(mockRouter.replace).toHaveBeenCalledWith('/doc/proposal-9'),
+        );
+        expect(consumeSuppressed('/doc/proposal-9')).toBe(true);
       });
 
       it('holds the act while the seed is in flight', async () => {
