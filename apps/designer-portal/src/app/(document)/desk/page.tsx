@@ -327,9 +327,9 @@ export default function DeskPage() {
 
   // US-14 arrival marks (inert). The route root is marked only while the
   // roster itself renders — never the skeleton or the error state — and is
-  // ready at the first non-placeholder read.
+  // ready once hydrated and at the first non-placeholder read.
   const arrivalRoot = !isError && !!data;
-  const arrivalReady = arrivalRoot && isSuccess && !isPlaceholderData;
+  const arrivalReady = arrivalRoot && hydrated && isSuccess && !isPlaceholderData;
 
   return (
     <main
