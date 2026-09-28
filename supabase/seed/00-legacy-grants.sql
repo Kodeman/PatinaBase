@@ -18432,6 +18432,36 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00675_arrival_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.arrival_anchors FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00675_arrival_anchors.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.arrival_anchors TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00675_arrival_anchors.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.arrival_anchors TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00675_arrival_anchors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_arrival(text, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00675_arrival_anchors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_arrival(text, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
