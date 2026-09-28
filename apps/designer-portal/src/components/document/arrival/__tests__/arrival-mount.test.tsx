@@ -109,6 +109,90 @@ describe('forwarding', () => {
   });
 });
 
+describe('a press on the hidden route root during the wait', () => {
+  const push = jest.fn();
+
+  /** Next Link's shape: navigation happens in a click handler below the window capture. */
+  function mountPage() {
+    document.body.innerHTML = `
+      <nav><a id="chrome" href="/board/b1">Boards</a></nav>
+      <main data-arrival="desk"><a id="card" data-roster-name href="/doc/e1">Whitfield House</a></main>`;
+    for (const link of document.querySelectorAll('a')) {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        push(link.getAttribute('href'));
+      });
+    }
+    render(<ArrivalMount />);
+    return {
+      card: document.getElementById('card')!,
+      chrome: document.getElementById('chrome')!,
+    };
+  }
+
+  function click(el: Element): MouseEvent {
+    const e = new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1, button: 0 });
+    el.dispatchEvent(e);
+    return e;
+  }
+
+  beforeEach(() => push.mockReset());
+
+  it('ends the wait and swallows the click that follows: nothing navigates, no token', () => {
+    const { card } = mountPage();
+    const cancel = jest.fn();
+    setArrivalWaiting(cancel);
+
+    fireEvent.pointerDown(card);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    fireEvent.pointerUp(card);
+    const swallowed = click(card);
+    expect(swallowed.defaultPrevented).toBe(true);
+    expect(push).not.toHaveBeenCalled();
+    expect(token()).toBeNull();
+
+    // Once only: her next activation is hers.
+    click(card);
+    expect(push).toHaveBeenCalledWith('/doc/e1');
+    expect(token()).toMatchObject({ via: 'ptr', to: '/doc/e1' });
+  });
+
+  it('a press on the chrome ends the wait and acts', () => {
+    const { chrome } = mountPage();
+    const cancel = jest.fn();
+    setArrivalWaiting(cancel);
+    fireEvent.pointerDown(chrome);
+    fireEvent.pointerUp(chrome);
+    click(chrome);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith('/board/b1');
+  });
+
+  it('a press that makes no click leaves nothing armed: after the pointerup, or a pointercancel', async () => {
+    const { card } = mountPage();
+    setArrivalWaiting(jest.fn());
+    fireEvent.pointerDown(card);
+    fireEvent.pointerUp(document.body);
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    click(card);
+    expect(push).toHaveBeenCalledTimes(1);
+
+    setArrivalWaiting(jest.fn());
+    fireEvent.pointerDown(card);
+    fireEvent.pointerCancel(card);
+    click(card);
+    expect(push).toHaveBeenCalledTimes(2);
+  });
+
+  it('nothing is swallowed when no wait is running', () => {
+    const { card } = mountPage();
+    fireEvent.pointerDown(card);
+    fireEvent.pointerUp(card);
+    click(card);
+    expect(push).toHaveBeenCalledWith('/doc/e1');
+  });
+});
+
 describe('mark()', () => {
   it('refreshes the visit on her hand, at most every 10 s', () => {
     // Earlier cases in this file already touched the visit; step past the throttle.

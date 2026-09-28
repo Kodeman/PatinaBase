@@ -248,12 +248,12 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       } catch {
         return decline('error');
       }
+      let stampAt: number | null = null;
       if (!stampedRef.current) {
         stampedRef.current = true;
-        const now = Date.now();
-        markVisit(now);
-        if (surface === 'desk') setDeskShown(now);
-        consumeArriveToken(pathname, now);
+        stampAt = Date.now();
+        markVisit(stampAt);
+        consumeArriveToken(pathname, stampAt);
       }
       endWait();
       runRef.current = run;
@@ -267,10 +267,21 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
           if (getActiveRun() === run) setActiveRun(null);
         },
       );
+      let started = true;
       try {
         run.start();
       } catch {
-        run.finish('error');
+        started = false;
+        try {
+          run.finish('error');
+        } catch {
+          /* finish restores in its own finally */
+        }
+      }
+      // Only a Desk that actually played spends the visit's Desk (arrival.js:890): a decline
+      // inside start() (drift, no-root) costs nothing.
+      if (started && stampAt !== null && surface === 'desk' && run.phase !== 'done') {
+        setDeskShown(stampAt);
       }
     };
 

@@ -252,6 +252,48 @@ describe('the play path', () => {
     removeItem.mockRestore();
   });
 
+  it.each<DeclineCause>(['drift', 'no-root'])(
+    'an engine decline inside start() (%s) leaves pl-desk unset; the visit stamp stays',
+    async (cause) => {
+      addRoot('desk', true);
+      const { engine, runs } = makeEngine();
+      engine.createRun.mockImplementation((brief: Brief) => {
+        const run = fakeRun(brief.surface);
+        run.start.mockImplementation(() => run.finish('declined', cause));
+        runs.push(run);
+        return run;
+      });
+      render(<ArrivalRun engine={engine} pathname="/desk" />);
+      await toReady();
+
+      expect(runs[0].start).toHaveBeenCalledTimes(1);
+      expect(window.sessionStorage.getItem(KEYS.DESK)).toBeNull();
+      expect(window.sessionStorage.getItem(KEYS.VISIT)).not.toBeNull();
+      expect(capture.mock.calls).toEqual([declined('desk', cause)]);
+      expect(markArrival).toHaveBeenCalledTimes(1);
+      expect(html.classList.contains('arr-pre')).toBe(false);
+    },
+  );
+
+  it('start() throwing ends the run as error and leaves pl-desk unset', async () => {
+    addRoot('desk', true);
+    const { engine, runs } = makeEngine();
+    engine.createRun.mockImplementation((brief: Brief) => {
+      const run = fakeRun(brief.surface);
+      run.start.mockImplementation(() => {
+        throw new Error('measure failed');
+      });
+      runs.push(run);
+      return run;
+    });
+    render(<ArrivalRun engine={engine} pathname="/desk" />);
+    await toReady();
+
+    expect(runs[0].finish).toHaveBeenCalledWith('error');
+    expect(window.sessionStorage.getItem(KEYS.DESK)).toBeNull();
+    expect(capture.mock.calls).toEqual([['arrival_ended', { surface: 'desk', how: 'error' }]]);
+  });
+
   it('a hard entry never inherits a token: the gate sees none and it is spent at the commit', () => {
     mockPathname = '/doc/e1';
     window.sessionStorage.setItem(KEYS.ARRIVE, JSON.stringify({ via: 'act', to: '/doc/e1', at: Date.now() }));

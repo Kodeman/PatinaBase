@@ -3,8 +3,9 @@
 /**
  * US-14 arrival — the persistent mount (CONTRACT §3, split mount). Never keyed: it installs the
  * arrival's window-capture listeners exactly once for the tab's life, forwards every event to the
- * run ArrivalRun sets, ends the ready wait on her hand (swallowing Escape), refreshes the visit on
- * her hand, writes the click token, and lands the Desk on the row a Document was put down from.
+ * run ArrivalRun sets, ends the ready wait on her hand (swallowing Escape, and the click of a press
+ * on the hidden route root), refreshes the visit on her hand, writes the click token, and lands the
+ * Desk on the row a Document was put down from.
  */
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
@@ -23,6 +24,7 @@ import type { ArriveToken } from '@/lib/arrival/types';
 let installed = false;
 let activeRun: Run | null = null;
 let cancelWait: (() => void) | null = null;
+let swallowClick = false;
 
 /** ArrivalRun hands the started run here; the listeners forward to it. */
 export function setActiveRun(run: Run | null): void {
@@ -64,15 +66,34 @@ function onKeyDown(e: KeyboardEvent): void {
   haltWait();
 }
 
-/** Chrome stays visible and live under `arr-pre`, so a press during the wait is never swallowed. */
+/** A press during the wait ends it. On the hidden route root, the click it makes is swallowed:
+ *  `arr-pre` is gone by then, and that click would act on what she could not see (arrival.js:778).
+ *  Chrome stays visible under `arr-pre`, so a press on it stays live. */
 function onPointerDown(e: PointerEvent): void {
   mark();
-  if (activeRun) activeRun.onPointerDown(e);
-  else haltWait();
+  swallowClick = false;
+  if (activeRun) {
+    activeRun.onPointerDown(e);
+    return;
+  }
+  if (!cancelWait) return;
+  const target = e.target;
+  if (target instanceof Element && target.closest('[data-arrival]')) swallowClick = true;
+  haltWait();
 }
 
 function onPointerUp(e: PointerEvent): void {
+  if (swallowClick) {
+    window.setTimeout(() => {
+      swallowClick = false;
+    }, 0);
+  }
   activeRun?.onPointerUp(e);
+}
+
+/** The browser took the press over: no click follows. */
+function onPointerCancel(): void {
+  swallowClick = false;
 }
 
 function onWheel(e: WheelEvent): void {
@@ -109,6 +130,12 @@ const TOKEN_LINKS =
   '[data-register="act"] a, [data-roster-name], [data-claim-card] a[href^="/doc/"]';
 
 function onClick(e: MouseEvent): void {
+  if (swallowClick) {
+    swallowClick = false;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return;
+  }
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   const target = e.target;
   if (!(target instanceof Element)) return;
@@ -148,6 +175,7 @@ export function installArrivalListeners(): void {
   window.addEventListener('keydown', onKeyDown, active);
   window.addEventListener('pointerdown', onPointerDown, active);
   window.addEventListener('pointerup', onPointerUp, active);
+  window.addEventListener('pointercancel', onPointerCancel, { capture: true });
   window.addEventListener('focusin', onFocusIn, active);
   window.addEventListener('click', onClick, active);
   // The mockup's wheel/touch handlers never preventDefault; a non-passive window touchmove
