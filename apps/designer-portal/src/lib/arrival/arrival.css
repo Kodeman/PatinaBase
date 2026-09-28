@@ -57,7 +57,10 @@ html.arr-on .arr-rules-fix,html.arr-on .arr-rules-fix *{pointer-events:none}
 .arr-line{height:1px;width:160px;background:color-mix(in srgb,var(--text-primary) 40%,transparent);transform-origin:0 50%;transform:scaleX(0)} /* ink at 40%: one slow crawl */
 
 /* ---------- Skip, the hint, the one status ---------- */
-.arr-skip{position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:41;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;margin:0;padding:0 8px;border:0;background:transparent;cursor:pointer;font-family:var(--font-meta);font-size:11px;line-height:16.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+/* Skip clears the persistent bottom edge: below 1180 the MobileBar (its published height already holds the safe
+   area; 72px is its floor), above it the 60px Studio Drawer */
+.arr-skip{position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + max(var(--doc-mobile-bar-height,72px),env(safe-area-inset-bottom)));z-index:41;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;margin:0;padding:0 8px;border:0;background:transparent;cursor:pointer;font-family:var(--font-meta);font-size:11px;line-height:16.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+@media (min-width:1180px){.arr-skip{bottom:calc(76px + env(safe-area-inset-bottom))}}
 .arr-vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* ---------- the reduced-motion floor: the card is an opacity-only layer; nothing scales, draws or crawls ---------- */

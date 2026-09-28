@@ -476,6 +476,34 @@ describe('Skip and landing focus', () => {
     expect(run.phase).toBe('done')
     expect(ours()).toHaveLength(0)
   })
+  it('the displaced act snaps home at Skip: offset off and flushed before its own transition comes back', () => {
+    const root = deskDom()
+    const act = root.querySelector('[data-part~="act"]') as HTMLElement
+    act.style.transition = 'transform 240ms'
+    const { A } = go(root)
+    toHold()
+    expect(A.style.transition).toBe('none')
+    expect(A.style.transform).not.toBe('')
+    const atFlush: string[] = []
+    Object.defineProperty(html, 'offsetWidth', {
+      configurable: true,
+      get: () => {
+        atFlush.push(A.getAttribute('style') ?? '')
+        return 0
+      },
+    })
+    offs.push(() => delete (html as unknown as { offsetWidth?: number }).offsetWidth)
+    ;(document.querySelector('.arr-skip') as HTMLButtonElement).click()
+    expect(events).toEqual([{ surface: 'desk', how: 'skip' }])
+    expect(atFlush).toHaveLength(1)
+    const probe = document.createElement('i')
+    probe.setAttribute('style', atFlush[0])
+    expect(probe.style.transform).toBe('')
+    expect(probe.style.getPropertyValue('translate')).toBe('')
+    expect(probe.style.transition).toBe('none')
+    expect(A.style.transition).toBe('transform 240ms')
+    expect(A.style.transform).toBe('')
+  })
   it('a kbd token lands focus at hold timeout: a doorway act takes it', async () => {
     const { run, A } = go(documentDom(), { via: 'kbd' })
     toHold()
@@ -610,6 +638,12 @@ describe('B7 / B8 / B10 — the stylesheet the run relies on', () => {
     expect(CSS).toContain('html.arr-pre [data-arrival]{opacity:0;animation-play-state:paused}')
     expect(CSS).toMatch(/html\.arr-pre:has\(\[data-arrival\]\)\{animation:arr-reveal 1ms linear 1500ms both\}/)
     expect(CSS).not.toMatch(/arr-pre body\{opacity/)
+  })
+  it('Skip clears the persistent bottom edge: the MobileBar below 1180, the Studio Drawer above', () => {
+    expect(CSS).toMatch(
+      /\.arr-skip\{[^}]*bottom:calc\(16px \+ max\(var\(--doc-mobile-bar-height,72px\),env\(safe-area-inset-bottom\)\)\);z-index:41;/,
+    )
+    expect(CSS).toContain('@media (min-width:1180px){.arr-skip{bottom:calc(76px + env(safe-area-inset-bottom))}}')
   })
   it('B10: Acts 1-2 take no page hits; engine nodes stay live; the entry moves never replay after a played run', () => {
     expect(CSS).toContain('html.arr-on:not(.arr-asm) body')

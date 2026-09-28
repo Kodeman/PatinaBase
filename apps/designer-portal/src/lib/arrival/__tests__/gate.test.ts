@@ -65,7 +65,10 @@ describe('gate — the decline order', () => {
     ).toEqual({ play: true, via: null, reduced: false })
     expect(
       gate(input({ surface: 'document', pathname: '/doc/w1', entry: 'reload', token: token({ landing }) })),
-    ).toEqual({ play: false, cause: 'reload' })
+    ).toEqual({ play: true, via: null, reduced: false })
+    expect(gate(input({ surface: 'document', pathname: '/doc/w1', entry: 'reload', token: token() }))).toEqual({
+      play: true, via: null, reduced: false,
+    })
   })
   it('navigator.webdriver declines unless the e2e seam opts in', () => {
     expect(gate(input({ webdriver: true }))).toEqual({ play: false, cause: 'webdriver' })
@@ -76,9 +79,18 @@ describe('gate — the decline order', () => {
     expect(gate(input({ suppressedPath: '/desk' }))).toEqual({ play: false, cause: 'replace' })
     expect(gate(input({ suppressedPath: '/doc/w1' }))).toMatchObject({ play: true })
   })
-  it('back/forward → back_forward; reload → reload', () => {
+  it('back/forward → back_forward', () => {
     expect(gate(input({ entry: 'back_forward' }))).toEqual({ play: false, cause: 'back_forward' })
-    expect(gate(input({ entry: 'reload' }))).toEqual({ play: false, cause: 'reload' })
+  })
+  it('a reload plays (the overnight tab refreshed in the morning); only the Desk visit rule suppresses it', () => {
+    expect(gate(input({ entry: 'reload' }))).toEqual({ play: true, via: null, reduced: false })
+    expect(gate(input({ surface: 'document', pathname: '/doc/w1', entry: 'reload', deskShown: true, visitAt: NOW - 1000 }))).toEqual({
+      play: true, via: null, reduced: false,
+    })
+    expect(gate(input({ entry: 'reload', deskShown: true, visitAt: NOW - 60_000 }))).toEqual({
+      play: false, cause: 'desk-shown',
+    })
+    expect(gate(input({ entry: 'reload', deskShown: true, visitAt: NOW - BUDGET.VISIT_MS }))).toMatchObject({ play: true })
   })
   it('the Desk already shown in a live visit → desk-shown', () => {
     expect(gate(input({ deskShown: true, visitAt: NOW - 60_000 }))).toEqual({ play: false, cause: 'desk-shown' })

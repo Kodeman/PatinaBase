@@ -23,7 +23,6 @@ export function gate(input: GateInput): GateResult {
     return { play: false, cause: 'replace' }
   }
   if (input.entry === 'back_forward') return { play: false, cause: 'back_forward' }
-  if (input.entry === 'reload') return { play: false, cause: 'reload' }
   // arrival.js:36-38, 47 — the Desk briefs once a visit; a visit lapses after VISIT_MS without her
   // hand, and a lapsed visit forgets the Desk was shown. A Document arrives on every open.
   const visitLive = input.visitAt !== null && input.now - input.visitAt < BUDGET.VISIT_MS

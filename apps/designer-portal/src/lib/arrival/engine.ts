@@ -226,11 +226,20 @@ export const createRun: CreateRun = (b, host, opts): Run => {
       })
       for (const off of offs.splice(0)) safe(off)
       for (const a of anims.splice(0)) safe(() => a.cancel())
-      for (let i = saved.length - 1; i >= 0; i--) {
-        const [el, prop, prev, prio] = saved[i]
+      const back = ([el, prop, prev, prio]: (typeof saved)[number]) =>
         safe(() => (prev === '' ? el.style.removeProperty(prop) : el.style.setProperty(prop, prev, prio)))
+      const transitions: typeof saved = []
+      for (let i = saved.length - 1; i >= 0; i--) {
+        if (saved[i][1] === 'transition') transitions.push(saved[i])
+        else back(saved[i])
       }
       saved.length = 0
+      // a transition restored in the same style change would animate the restore: snap home first, flush, then
+      // hand the page its own transitions back
+      if (transitions.length) {
+        safe(() => void html.offsetWidth)
+        transitions.forEach(back)
+      }
       for (let i = attrs.length - 1; i >= 0; i--) {
         const [el, name, prev] = attrs[i]
         safe(() => (prev === null ? el.removeAttribute(name) : el.setAttribute(name, prev)))
@@ -456,6 +465,8 @@ export const createRun: CreateRun = (b, host, opts): Run => {
       for (const a of unclip(A, root)) setAttr(a, 'data-arr-unclip', '')
       listen(A, 'focusout', refocus)
       if (pl.act) {
+        // .da-act transitions transform (globals.css): the staged offset must never glide, in or home
+        put(A, 'transition', 'none')
         put(A, 'translate', `0px ${px(pl.act.y)}`)
         put(A, 'transform', tfx(pl.act.x, 1))
       }
