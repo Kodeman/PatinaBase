@@ -94,7 +94,12 @@ export function resetDeskVisit(): void {
   visit = null;
 }
 
-export function useDeskLine({
+export function useDeskLine(args: Parameters<typeof useDeskLineState>[0]): ReactNode {
+  return useDeskLineState(args).node;
+}
+
+/** US-14 — the line and whether the visit's pick has been made (the arrival waits on it). */
+export function useDeskLineState({
   ready,
   pinnedProjectIds,
   lines,
@@ -103,7 +108,7 @@ export function useDeskLine({
   ready: boolean;
   pinnedProjectIds: string[];
   lines: DeskLineCandidates;
-}): ReactNode {
+}): { node: ReactNode; decided: boolean } {
   const walkthroughOnScreen = useSuppressDeskFirstTouch();
   const [line, setLine] = useState(carriedLine);
 
@@ -146,20 +151,28 @@ export function useDeskLine({
     if (carried !== undefined && visit) visit.line = carried;
   }, [carried]);
 
-  if (walkthroughOnScreen || line == null) return null;
+  const decided = line !== undefined;
+  if (walkthroughOnScreen || line == null) return { node: null, decided };
   if (line === 'teaching-note') {
     if (teaching.sinceLine) {
-      return (
-        <div className="mb-10">
-          <SinceLine items={teaching.sinceLine.items} changesHref={teaching.sinceLine.changesHref} />
-        </div>
-      );
+      return {
+        node: (
+          <div className="mb-10">
+            <SinceLine items={teaching.sinceLine.items} changesHref={teaching.sinceLine.changesHref} />
+          </div>
+        ),
+        decided,
+      };
     }
-    return teaching.note && teaching.bind ? (
-      <MarginNote {...teaching.bind} className="mb-10">
-        {teaching.note.body}
-      </MarginNote>
-    ) : null;
+    return {
+      node:
+        teaching.note && teaching.bind ? (
+          <MarginNote {...teaching.bind} className="mb-10">
+            {teaching.note.body}
+          </MarginNote>
+        ) : null,
+      decided,
+    };
   }
-  return states[line] === true ? lines[line].node : null;
+  return { node: states[line] === true ? lines[line].node : null, decided };
 }

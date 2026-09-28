@@ -67,6 +67,7 @@ import {
 } from '@/lib/document/section-derivation';
 import { type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
 import {
+  DOCUMENT_INDEX_LABELS,
   paperRegionsForSection,
   requestRegionUnfold,
   type DocumentIndexKey,
@@ -231,6 +232,10 @@ import {
 } from '@/lib/document/shelves';
 import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
 import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
+import { ROSTER_STAGE_ORDER } from '@/lib/document/desk-roster-derivation';
+import { suppressNextArrival } from '@/lib/arrival/nav';
+import { consumeArriveToken } from '@/lib/arrival/session';
+import { EVENT_ENDED, type Landing } from '@/lib/arrival/types';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -1267,6 +1272,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     if (resolution?.kind !== 'redirect') return;
     // W2 — the turn the seal performs is announced on the destination's paper.
     if (worktableOn) markSealTurn(resolution.projectId);
+    suppressNextArrival(`/doc/${resolution.projectId}`);
     router.replace(`/doc/${resolution.projectId}`);
   }, [resolution, router, worktableOn]);
 
@@ -1275,7 +1281,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // the authorization opens in the project's ledger instead of dead-ending on
   // the read-only proposal shell.
   useEffect(() => {
-    if (authorizationDoorway) router.replace(authorizationDoorway);
+    if (!authorizationDoorway) return;
+    suppressNextArrival(authorizationDoorway);
+    router.replace(authorizationDoorway);
   }, [authorizationDoorway, router]);
 
   // W4 — the recap line's approvals clause is a door to the approvals record,
@@ -1321,6 +1329,15 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     };
     window.addEventListener(DOCUMENT_WRITE_EVENT, onWrite);
     return () => window.removeEventListener(DOCUMENT_WRITE_EVENT, onWrite);
+  }, []);
+  // US-14 — the pick-up is the arrival's end, played or declined: the card's
+  // ten-second hold never eats the ten-second thrash window.
+  useEffect(() => {
+    const onArrivalEnded = () => {
+      zoneFlightRef.current.pickedUpAt = Date.now();
+    };
+    window.addEventListener(EVENT_ENDED, onArrivalEnded);
+    return () => window.removeEventListener(EVENT_ENDED, onArrivalEnded);
   }, []);
   // ZF-1 fix — `nextPath: null` means an explicit put-down (Esc / a "Put
   // down" action): those are genuine exits regardless of destination. A
@@ -2421,6 +2438,28 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     deskEnrichmentSettled &&
     ticketRowsSettled &&
     !guideInputsInFlight;
+  // US-14 R-DM21 — the Desk act's token names where it lands. Spent on this
+  // mount (a hard entry already spent it at the commit, so a refresh never
+  // lands); carried out once the paper is ready, when its regions exist.
+  const arrivalLandingRef = useRef<Landing | null>(null);
+  useEffect(() => {
+    const token = consumeArriveToken(window.location.pathname, Date.now());
+    if (token?.landing) arrivalLandingRef.current = token.landing;
+  }, []);
+  useEffect(() => {
+    const landing = arrivalLandingRef.current;
+    if (!landing || !arrivalReady) return;
+    arrivalLandingRef.current = null;
+    if (landing.kind === 'region') {
+      if (Object.prototype.hasOwnProperty.call(DOCUMENT_INDEX_LABELS, landing.region)) {
+        jumpToRegion(landing.region as DocumentIndexKey);
+      }
+    } else if (landing.kind === 'ffe') {
+      jumpToLine(landing.ffeItemId);
+    } else if ((ROSTER_STAGE_ORDER as readonly string[]).includes(landing.sectionKey)) {
+      jumpToSection(landing.sectionKey as SectionKey);
+    }
+  }, [arrivalReady, jumpToRegion, jumpToLine, jumpToSection]);
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;

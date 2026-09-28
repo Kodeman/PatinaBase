@@ -13,8 +13,11 @@ import {
   useOrganizations,
   useOrganizationMembers,
   useBoardsReactionRollup,
+  useRecentBoards,
+  useStudioUnbilledTime,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
+import { useViewerStudio } from '@/hooks/use-viewer-studio';
 import { useAnsweredNotes } from '@/hooks/use-answered-notes';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
@@ -30,7 +33,7 @@ import {
   deriveDeskRoster,
   pinnedProjectIdsFromRoster,
 } from '@/lib/document/desk-roster-derivation';
-import { useDeskLine } from '@/components/document/desk-arbiter';
+import { useDeskLineState } from '@/components/document/desk-arbiter';
 import { WEEKDAY_FORMAT, dayMonth } from '@/lib/document/dates';
 import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
@@ -218,7 +221,7 @@ export default function DeskPage() {
   const accountAgeMs = profile?.created_at
     ? now.getTime() - Date.parse(profile.created_at)
     : Number.NaN;
-  const deskLine = useDeskLine({
+  const { node: deskLine, decided: deskLineDecided } = useDeskLineState({
     ready: hydrated && !!data && !isError,
     pinnedProjectIds,
     lines: {
@@ -332,10 +335,14 @@ export default function DeskPage() {
   // ready once hydrated and at the first non-placeholder read. Ready also
   // waits for the reads that print inside the root after the roster mounts
   // (the day's line's answered notes, the boards rollup): an answer landing
-  // mid-arrival would end it as a mutation. Same query keys as DeskRoster
-  // and DeskBoardsReactionRollup, so these share their fetches.
+  // mid-arrival would end it as a mutation. Same query keys as DeskRoster,
+  // DeskBoardsReactionRollup, RecentBoardsStrip and DeskContents, so these
+  // share their fetches. The day's line must also be picked.
   const answeredNotesRead = useAnsweredNotes();
   const reactionRollupRead = useBoardsReactionRollup();
+  const recentBoardsRead = useRecentBoards(8);
+  const viewerStudio = useViewerStudio();
+  const unbilledTimeRead = useStudioUnbilledTime();
   const arrivalRoot = !isError && !!data;
   const arrivalReady =
     arrivalRoot &&
@@ -343,7 +350,11 @@ export default function DeskPage() {
     isSuccess &&
     !isPlaceholderData &&
     !answeredNotesRead.isPending &&
-    !reactionRollupRead.isPending;
+    !reactionRollupRead.isPending &&
+    !recentBoardsRead.isPending &&
+    viewerStudio.isSettled &&
+    !unbilledTimeRead.isPending &&
+    deskLineDecided;
 
   return (
     <main

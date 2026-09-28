@@ -65,11 +65,14 @@ function fakeRun(surface: Surface): FakeRun {
       html.classList.remove('arr-pre');
       html.classList.add('arr-on');
     }),
+    // As engine.ts end(): resolves `ended` and dispatches EVENT_ENDED itself, once per run.
     finish: jest.fn((how: EndHow, cause?: DeclineCause) => {
       if (run.phase === 'done') return;
       run.phase = 'done';
       html.classList.remove('arr-pre', 'arr-on');
-      resolveEnded(cause ? { surface, how, cause } : { surface, how });
+      const detail: ArrivalEnded = cause ? { surface, how, cause } : { surface, how };
+      resolveEnded(detail);
+      window.dispatchEvent(new CustomEvent(EVENT_ENDED, { detail }));
     }),
     onKeyDown: jest.fn(),
     onPointerDown: jest.fn(),
@@ -307,6 +310,78 @@ describe('the play path', () => {
     render(<ArrivalRun engine={engine} pathname="/doc/e1" />);
     expect(engine.gate.mock.calls[0][0].token).toBeNull();
     expect(window.sessionStorage.getItem(KEYS.ARRIVE)).toBeNull();
+  });
+});
+
+describe('EVENT_ENDED — exactly one per entry', () => {
+  const events: ArrivalEnded[] = [];
+  const onEnded = (e: Event) => events.push((e as CustomEvent<ArrivalEnded>).detail);
+  beforeEach(() => {
+    events.length = 0;
+    window.addEventListener(EVENT_ENDED, onEnded);
+  });
+  afterEach(() => window.removeEventListener(EVENT_ENDED, onEnded));
+
+  it('a played run: the engine dispatches it; the host adds none', async () => {
+    addRoot('desk', true);
+    const { engine, runs } = makeEngine();
+    render(<ArrivalRun engine={engine} pathname="/desk" />);
+    await toReady();
+    runs[0].finish('skip');
+    await flush();
+    expect(events).toEqual([{ surface: 'desk', how: 'skip' }]);
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('an engine decline inside start(): the engine dispatches it; the host adds none', async () => {
+    addRoot('desk', true);
+    const { engine, runs } = makeEngine();
+    engine.createRun.mockImplementation((brief: Brief) => {
+      const run = fakeRun(brief.surface);
+      run.start.mockImplementation(() => run.finish('declined', 'drift'));
+      runs.push(run);
+      return run;
+    });
+    render(<ArrivalRun engine={engine} pathname="/desk" />);
+    await toReady();
+    await flush();
+    expect(events).toEqual([{ surface: 'desk', how: 'declined', cause: 'drift' }]);
+  });
+
+  it('a run cut off by unmount: one event, from the engine', async () => {
+    addRoot('desk', true);
+    const { engine } = makeEngine();
+    const view = render(<ArrivalRun engine={engine} pathname="/desk" />);
+    await toReady();
+    view.unmount();
+    await flush();
+    expect(events).toEqual([{ surface: 'desk', how: 'mutation' }]);
+  });
+
+  it.each<[string, () => void]>([
+    ['a gate decline', () => undefined],
+    ['a busy decline at ready', () => {
+      const dialog = document.createElement('div');
+      dialog.setAttribute('role', 'dialog');
+      document.body.appendChild(dialog);
+    }],
+  ])('%s before any run: the host dispatches it, once', async (label, arrange) => {
+    addRoot('desk', true);
+    arrange();
+    const gate = label === 'a gate decline'
+      ? (): GateResult => ({ play: false, cause: 'desk-shown' })
+      : undefined;
+    const { engine } = makeEngine(gate);
+    render(
+      <StrictMode>
+        <ArrivalRun engine={engine} pathname="/desk" />
+      </StrictMode>,
+    );
+    await toReady();
+    expect(engine.createRun).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      { surface: 'desk', how: 'declined', cause: label === 'a gate decline' ? 'desk-shown' : 'busy' },
+    ]);
   });
 });
 

@@ -10,6 +10,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { callSheetPending } from '@/components/document/command-bar';
 import { useSuppressDeskFirstTouch } from '@/components/document/help/desk-walkthrough';
 import { useDocumentTime } from '@/hooks/document-time-provider';
+import { loadFaces } from '@/lib/arrival/faces';
 import { createHost } from '@/lib/arrival/host';
 import { docIdOf, enterRoute } from '@/lib/arrival/nav';
 import type { ArrivalEngine, Run } from '@/lib/arrival/run-contract';
@@ -67,38 +68,6 @@ function sentinelPresent(): boolean {
   }
 }
 
-/** Every card face loaded, or false within FONTS_MS (the mockup's FACES, arrival.js:868-874). */
-function loadFaces(families: string[]): Promise<boolean> {
-  const fonts = document.fonts;
-  const [display, body, meta] = families;
-  const specs = [
-    `500 34px ${display}`,
-    `500 20px ${display}`,
-    `400 16px ${body}`,
-    `400 14px ${body}`,
-    `400 11px ${meta}`,
-    `500 11px ${meta}`,
-  ];
-  return new Promise((resolve) => {
-    const timer = window.setTimeout(() => resolve(false), BUDGET.FONTS_MS);
-    const settle = (ok: boolean) => {
-      window.clearTimeout(timer);
-      resolve(ok);
-    };
-    try {
-      Promise.all(specs.map((spec) => fonts.load(spec))).then(
-        (loaded) =>
-          settle(
-            loaded.every((faces) => faces.length > 0) && specs.every((spec) => fonts.check(spec)),
-          ),
-        () => settle(false),
-      );
-    } catch {
-      settle(false);
-    }
-  });
-}
-
 export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
   const { offer } = useDocumentTime();
   const walkthroughOnScreen = useSuppressDeskFirstTouch();
@@ -125,13 +94,14 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
     const html = document.documentElement;
 
     // The one end-of-entry funnel: every end — played, or declined at the gate, the commit, a cap
-    // or ready — reports once and writes the D3 anchor once.
-    const report = (e: ArrivalEnded) => {
+    // or ready — reports once and writes the D3 anchor once. EVENT_ENDED goes out here only for a
+    // decline before any run exists: the engine dispatches it itself for every run it created.
+    const report = (e: ArrivalEnded, dispatch: boolean) => {
       if (reportedRef.current) return;
       reportedRef.current = true;
       try {
         host.telemetry(e);
-        window.dispatchEvent(new CustomEvent<ArrivalEnded>(EVENT_ENDED, { detail: e }));
+        if (dispatch) window.dispatchEvent(new CustomEvent<ArrivalEnded>(EVENT_ENDED, { detail: e }));
       } catch {
         /* telemetry never breaks the page */
       }
@@ -174,7 +144,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
     if (reportedRef.current || runRef.current) return;
 
     const declineNow = (cause: DeclineCause) =>
-      report({ surface, how: 'declined', cause });
+      report({ surface, how: 'declined', cause }, true);
 
     const { input, result } = entry;
     if (!result.play) return declineNow(result.cause);
@@ -224,7 +194,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       if (!waitingNow) return;
       endWait();
       html.classList.remove('arr-pre');
-      report({ surface, how: 'declined', cause });
+      report({ surface, how: 'declined', cause }, true);
     };
 
     const begin = (root: HTMLElement) => {
@@ -260,7 +230,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       setActiveRun(run);
       run.ended.then(
         (e) => {
-          report(e);
+          report(e, false);
           if (getActiveRun() === run) setActiveRun(null);
         },
         () => {
@@ -314,7 +284,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       }
       if (faces === 'idle') {
         faces = 'pending';
-        void loadFaces(host.faces()).then((ok) => {
+        void loadFaces(host).then((ok) => {
           if (!waitingNow) return;
           if (!ok) return decline('fonts');
           faces = 'ok';

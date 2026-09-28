@@ -18,6 +18,7 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
+  useStudioUnbilledTime: () => ({ data: [], isLoading: false, isError: false, isPending: false }),
   // The remaining exports are only exercised by the DeskPage-level describe
   // block below (the grid/rail wiring) — inert defaults, nothing under test
   // there reads them.
@@ -52,6 +53,18 @@ jest.mock('@/hooks/use-answered-notes', () => ({
 }));
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ user: { id: 'me', name: 'Leah' } }) }));
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
+
+// US-14 — the Desk's arrival ready mark reads the viewer's studio (settled here).
+jest.mock('@/hooks/use-viewer-studio', () => ({
+  useViewerStudio: () => ({
+    organizations: [],
+    studio: null,
+    candidates: [],
+    selectStudio: jest.fn(),
+    isOwnerOrAdmin: false,
+    isSettled: true,
+  }),
+}));
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: () => ({ value: false, isLoading: false }),
 }));

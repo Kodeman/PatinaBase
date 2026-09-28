@@ -22,7 +22,14 @@ const mockContacts = jest.fn();
 // below) can resolve without throwing.
 const mockRecentBoards = jest.fn();
 /** US-14 — the read after the roster that is still pending, if any. */
-let mockPendingRead: 'answered' | 'rollup' | null = null;
+let mockPendingRead:
+  | 'answered'
+  | 'rollup'
+  | 'boards'
+  | 'studio'
+  | 'unbilled'
+  | 'line'
+  | null = null;
 
 jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
@@ -30,7 +37,15 @@ jest.mock('@patina/supabase', () => ({
   useOrganizationMembers: () => ({ data: mockMembers() }),
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
-  useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
+  useRecentBoards: (...args: unknown[]) =>
+    mockPendingRead === 'boards'
+      ? { data: undefined, isLoading: true, isError: false, isPending: true }
+      : mockRecentBoards(...args),
+  // DeskContents is stubbed below; the Desk reads this only for its ready mark.
+  useStudioUnbilledTime: () =>
+    mockPendingRead === 'unbilled'
+      ? { data: undefined, isLoading: true, isError: false, isPending: true }
+      : { data: [], isLoading: false, isError: false, isPending: false },
   // Desk rollup line (board-paths W2b #3) — no boards behind any bucket in
   // this suite's fixtures, so the strip renders nothing.
   useBoardsReactionRollup: () =>
@@ -73,6 +88,17 @@ jest.mock('@/hooks/use-answered-notes', () => ({
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
 
+jest.mock('@/hooks/use-viewer-studio', () => ({
+  useViewerStudio: () => ({
+    organizations: [],
+    studio: null,
+    candidates: [],
+    selectStudio: jest.fn(),
+    isOwnerOrAdmin: false,
+    isSettled: mockPendingRead !== 'studio',
+  }),
+}));
+
 jest.mock('@/hooks/use-feature-flag', () => ({
   // studio-workspaces — the whisper's own gate, always on here. `call-sheet`
   // is retired (rulings §6) and no longer read anywhere on this page.
@@ -99,7 +125,12 @@ jest.mock('@/components/document/margin-note', () => ({
 }));
 // The Desk arbiter's teaching slot (return teaching): nothing to teach here.
 jest.mock('@/hooks/use-teaching-note', () => ({
-  useReturnNote: () => ({ note: null, bind: null, sinceLine: null, decided: true }),
+  useReturnNote: () => ({
+    note: null,
+    bind: null,
+    sinceLine: null,
+    decided: mockPendingRead !== 'line',
+  }),
 }));
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
   START_DESK_WALKTHROUGH_EVENT: 'document:start-desk-walkthrough',
@@ -300,6 +331,10 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
   it.each([
     ['the answered notes', 'answered'],
     ['the boards rollup', 'rollup'],
+    ['the recent boards', 'boards'],
+    ['the viewer studio', 'studio'],
+    ['the unbilled time', 'unbilled'],
+    ['the day’s line pick', 'line'],
   ] as const)('holds ready while %s read is pending', (_read, pending) => {
     mockPendingRead = pending;
     const { container } = render(<DeskPage />);

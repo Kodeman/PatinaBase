@@ -5,6 +5,8 @@ import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import { paperRegionsForSection } from '@/lib/document/document-index';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { documentEvents } from '@/lib/analytics/document-events';
+import { EVENT_ENDED } from '@/lib/arrival/types';
 
 /**
  * W3 — the band's line 2, the one printing of the sentence that changes (L-1).
@@ -2907,6 +2909,64 @@ describe('DocumentPage guide activation', () => {
       mockDiscoveryQuery = { data: undefined, isLoading: false, isError: true };
       rerender(<DocumentPage params={fulfilledParams} />);
       expect(shell()).toHaveAttribute('data-arrival-ready', '');
+    });
+
+    // R-DM21 — the Desk act's token names where it lands.
+    it('spends the act token on mount and lands its region once, when the paper is ready', () => {
+      window.history.replaceState({}, '', '/doc/missing-document');
+      window.sessionStorage.setItem(
+        'pl-arrive',
+        JSON.stringify({
+          via: 'act',
+          to: '/doc/missing-document',
+          at: Date.now(),
+          landing: { kind: 'region', region: 'money' },
+        }),
+      );
+      pressOrder.length = 0;
+      mockDeskLoading = true;
+      try {
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(window.sessionStorage.getItem('pl-arrive')).toBeNull();
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+        expect(pressOrder).toEqual([]);
+
+        mockDeskLoading = false;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+        expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
+
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
+      } finally {
+        window.sessionStorage.removeItem('pl-arrive');
+        window.history.replaceState({}, '', '/');
+      }
+    });
+
+    it('restarts the zone-flight pick-up when the arrival ends', () => {
+      let now = 1_000_000;
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+      const zoneFlight = documentEvents.zoneFlight as jest.Mock;
+      zoneFlight.mockClear();
+      try {
+        const held = render(<DocumentPage params={fulfilledParams} />);
+        now += 12_000;
+        held.unmount();
+        expect(zoneFlight).not.toHaveBeenCalled();
+
+        const { unmount } = render(<DocumentPage params={fulfilledParams} />);
+        now += 12_000;
+        act(() => {
+          window.dispatchEvent(new CustomEvent(EVENT_ENDED));
+        });
+        now += 2_000;
+        unmount();
+        expect(zoneFlight).toHaveBeenCalledTimes(1);
+        expect(zoneFlight).toHaveBeenCalledWith(expect.objectContaining({ held_ms: 2_000 }));
+      } finally {
+        clock.mockRestore();
+      }
     });
   });
 });

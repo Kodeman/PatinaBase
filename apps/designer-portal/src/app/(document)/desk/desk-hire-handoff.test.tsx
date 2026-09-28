@@ -26,6 +26,7 @@ jest.mock('@patina/supabase', () => ({
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
   useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
+  useStudioUnbilledTime: () => ({ data: [], isLoading: false, isError: false, isPending: false }),
   useBoardsReactionRollup: () => ({
     data: { awaitingReaction: [], reactionsIn: [], approvedPipeline: [], capped: false },
     isLoading: false,
@@ -53,6 +54,18 @@ jest.mock('@/hooks/use-answered-notes', () => ({
 }));
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
+
+// US-14 — the Desk's arrival ready mark reads the viewer's studio (settled here).
+jest.mock('@/hooks/use-viewer-studio', () => ({
+  useViewerStudio: () => ({
+    organizations: [],
+    studio: null,
+    candidates: [],
+    selectStudio: jest.fn(),
+    isOwnerOrAdmin: false,
+    isSettled: true,
+  }),
+}));
 
 jest.mock('@/hooks/use-feature-flag', () => ({
   useFeatureFlag: (name: string) =>

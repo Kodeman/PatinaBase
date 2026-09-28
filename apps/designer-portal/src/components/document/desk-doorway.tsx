@@ -64,6 +64,7 @@ import {
 } from './account/account-sheet';
 import { openPost } from './overlays/post-sheet';
 import { DESK_WALKTHROUGH_REPLAY_PARAM } from './help/desk-walkthrough-gate';
+import { suppressNextArrival } from '@/lib/arrival/nav';
 
 /** The books a doorway can open, with the page set each one validates. The
  *  Library, People and Rooms are ROOMS with real routes — they are never
@@ -145,9 +146,9 @@ function DeskDoorwayInner() {
         authorization,
         from: 'desk',
       });
-      router.replace(
-        `/doc/${encodeURIComponent(projectId)}?${destination.toString()}`,
-      );
+      const target = `/doc/${encodeURIComponent(projectId)}?${destination.toString()}`;
+      suppressNextArrival(target);
+      router.replace(target);
       return;
     }
 
@@ -200,7 +201,9 @@ function DeskDoorwayInner() {
     // The replace changes the query, so this effect re-runs — the stripped URL
     // carries no doorway key, so the `present` guard above ends the pass (and
     // re-arms for the next doorway).
-    router.replace(qs ? `/desk?${qs}` : '/desk');
+    const stripped = qs ? `/desk?${qs}` : '/desk';
+    suppressNextArrival(stripped);
+    router.replace(stripped);
   }, [pathname, params, router]);
 
   return null;
