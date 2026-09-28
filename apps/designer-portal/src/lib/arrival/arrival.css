@@ -1,0 +1,70 @@
+/* US-14 arrival v3 — the mockup's arrival.css (designer-portal-motion-2026-09-25, artifact v4) ported to the portal's
+   tokens. Every element, class, inline style and attribute the run adds leaves with finish(); only data-arr-played
+   stays on the route root for that mount. Only the route root is ever hidden, never body or chrome. */
+
+:root{--arr-ok:1} /* the sentinel: the run plays only when this file loaded */
+
+/* ---------- the wait: the route root hides from its first paint, its entry move paused at frame 0 ---------- */
+html.arr-pre [data-arrival]{opacity:0;animation-play-state:paused}
+html.arr-pre [data-arrival] .desk-settle{animation-play-state:paused}
+/* failsafe: 1.5s after the route root appears under arr-pre, a thrown gate still shows the page and its entry move
+   plays. The clock starts at [data-arrival] (:has), not at arr-pre: a cold Desk renders its root seconds later. */
+@property --arr-veil{syntax:'<number>';inherits:true;initial-value:1}
+@property --arr-play{syntax:'paused | running';inherits:true;initial-value:running}
+@keyframes arr-reveal{from{--arr-veil:0;--arr-play:paused}to{--arr-veil:1;--arr-play:running}}
+html.arr-pre:has([data-arrival]){animation:arr-reveal 1ms linear 1500ms both}
+html.arr-pre [data-arrival]{opacity:var(--arr-veil,0);animation-play-state:var(--arr-play,paused)}
+html.arr-pre [data-arrival] .desk-settle{animation-play-state:var(--arr-play,paused)}
+
+html.arr-pre,html.arr-pre body,html.arr-on,html.arr-on body{overflow-anchor:none} /* a reflow never scrolls the page under the card */
+html.arr-on body,html.arr-on [data-arrival]{overflow-x:clip} /* clip, not hidden: no scroll container, so the phone viewport never widens */
+
+/* ---------- Acts 1-2: chrome is inert; the engine's own nodes and the real act (inline) stay live ---------- */
+html.arr-on:not(.arr-asm) body,html.arr-press body{pointer-events:none}
+html.arr-on [data-arr]{pointer-events:auto}
+html.arr-on .arr-card,html.arr-on .arr-card *,html.arr-on .arr-rules,html.arr-on .arr-rules *,
+html.arr-on .arr-rules-fix,html.arr-on .arr-rules-fix *{pointer-events:none}
+
+/* ---------- after a played arrival the page's own entry move never replays for that mount ---------- */
+[data-arr-played][data-arrival="document"]{animation:none}
+[data-arr-played] .desk-settle{animation:none}
+
+/* the act flies itself: its clipping ancestors open for the run only */
+[data-arr-unclip]{overflow:visible!important}
+
+/* ---------- the card layer: document coordinates (fixed only for a pinned headline) ---------- */
+.arr-card,.arr-rules{position:absolute;left:0;top:0;width:100%;height:0;pointer-events:none}
+.arr-card{z-index:40}
+.arr-card-fix{position:fixed}
+.arr-rules{z-index:6}
+.arr-rules-fix{position:fixed;left:0;top:0;width:100%;height:0;z-index:6;pointer-events:none}
+.arr-card>*{position:absolute;margin:0;width:max-content;max-width:640px}
+.arr-rule{position:absolute;display:block;transform:scaleX(0)}
+.arr-h{font-weight:500;color:var(--text-primary);white-space:normal;letter-spacing:normal}
+.arr-crown{display:block;line-height:0}
+.arr-crown .strata-mark{display:inline-flex;flex-direction:column}
+.arr-crown .strata-fill{transition:none}
+.arr-place{font-family:var(--font-display);font-size:20px;line-height:26px;font-weight:500;color:var(--text-muted)}
+.arr-slug{font-family:var(--font-meta);font-size:11px;line-height:16.5px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.arr-job{font-family:var(--font-display);font-size:20px;line-height:26px;font-weight:500;color:var(--text-primary)} /* the job has the place's weight */
+.arr-f1{font-family:var(--font-meta);font-size:12px;line-height:18px;letter-spacing:.08em;color:var(--text-faint)}
+.arr-f{font-family:var(--font-body);font-size:16px;line-height:24.8px;color:var(--text-muted);max-width:min(52ch,640px)}
+.arr-cue{font-family:var(--font-meta);font-size:11px;line-height:16.5px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint)}
+.arr-line{height:1px;width:160px;background:color-mix(in srgb,var(--text-primary) 40%,transparent);transform-origin:0 50%;transform:scaleX(0)} /* ink at 40%: one slow crawl */
+
+/* ---------- Skip, the hint, the one status ---------- */
+.arr-skip{position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:41;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;margin:0;padding:0 8px;border:0;background:transparent;cursor:pointer;font-family:var(--font-meta);font-size:11px;line-height:16.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.arr-vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* ---------- the reduced-motion floor: the card is an opacity-only layer; nothing scales, draws or crawls ---------- */
+@media (prefers-reduced-motion:reduce){
+  .arr-card>*{filter:none}
+  .arr-line{visibility:hidden}
+  .arr-rule{transform:none}
+}
+
+@media (max-width:760px){
+  .arr-f{font-size:14px;line-height:21px;max-width:calc(100vw - 32px)}
+  .arr-card>*{max-width:calc(100vw - 32px)}
+}
+@media print{.arr-card,.arr-skip,.arr-rules,.arr-rules-fix{display:none!important}}
