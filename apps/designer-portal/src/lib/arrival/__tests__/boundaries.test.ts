@@ -56,3 +56,36 @@ describe('arrival types.ts — the types-only layer', () => {
     expect(exported.sort()).toEqual([...EXPORTS].sort());
   });
 });
+
+/**
+ * `run-contract.ts` (CONTRACT §4a / W1.5) is the frozen seam between the engine and the
+ * host: types only, so neither layer pulls a runtime import of the other in.
+ */
+
+const RUN_CONTRACT_SOURCE = readFileSync(join(__dirname, '../run-contract.ts'), 'utf8');
+
+const RUN_CONTRACT_EXPORTS = [
+  'RunPhase',
+  'RunOptions',
+  'Run',
+  'CreateRun',
+  'ArrivalEngine',
+] as const;
+
+describe('arrival run-contract.ts — the frozen engine/host seam', () => {
+  it('imports no runtime module', () => {
+    const imports = RUN_CONTRACT_SOURCE.split('\n').filter((line) => /^\s*import\b/.test(line));
+    expect(imports.length).toBeGreaterThan(0);
+    for (const line of imports) {
+      expect(line).toMatch(/^\s*import\s+type\b/);
+    }
+    expect(RUN_CONTRACT_SOURCE).not.toMatch(/\brequire\s*\(/);
+    expect(RUN_CONTRACT_SOURCE).not.toMatch(/\bimport\s*\(/);
+  });
+
+  it.each(RUN_CONTRACT_EXPORTS)('exports %s', (name) => {
+    expect(RUN_CONTRACT_SOURCE).toMatch(
+      new RegExp(`^export (?:type|interface) ${name}\\b`, 'm'),
+    );
+  });
+});
