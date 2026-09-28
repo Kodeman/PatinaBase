@@ -2401,13 +2401,26 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       : null;
   const lensLinePropsRef = useRef(lensLineProps);
   lensLinePropsRef.current = lensLineProps;
-  // US-14 arrival mark (inert): the band has settled and so has the Desk
-  // composition it reads its needs from, where one applies.
+  // US-14 arrival mark (inert): the band has settled and so has every read
+  // its line 2 is chosen from — the Desk composition where one applies, the
+  // ticket's rows (the standing set) and the stage's own guide read. An
+  // errored read is settled: waiting never answers it.
   const deskEnrichmentSettled =
     !deskEnrichment ||
     (!enrichedOperationalQuery.isPending &&
       !enrichedOperationalQuery.isPlaceholderData);
-  const arrivalReady = lensLineSettled && deskEnrichmentSettled;
+  // ticket-derivation.ts stays byte-untouched (OD-8), so its unexported
+  // `Reading…` face is matched by value; a row still reading has no exception.
+  const ticketRowsSettled =
+    ticketRows !== null && ticketRows.every((r) => r.value !== 'Reading…');
+  const guideInputsInFlight =
+    (row?.active_section === 'discovery' && discoveryReadiness.state === 'loading') ||
+    (row?.active_section === 'direction' && draftingReadiness.state === 'loading');
+  const arrivalReady =
+    lensLineSettled &&
+    deskEnrichmentSettled &&
+    ticketRowsSettled &&
+    !guideInputsInFlight;
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;

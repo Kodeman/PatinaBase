@@ -356,9 +356,13 @@ export default function DeskPage() {
               <>{greetingWord}.</>
             )}
           </h1>
+          {/* US-14 `head` is the arrival's landing focus on both surfaces
+              (the Document's is its letterhead header); here its text is
+              also the card's place line. */}
           <p
             data-part="head"
-            className="doc-type-meta mt-1 uppercase tracking-[0.09em]"
+            tabIndex={-1}
+            className="doc-type-meta mt-1 uppercase tracking-[0.09em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             {dateLabel || ' '}
           </p>

@@ -221,20 +221,25 @@ function VitalDate({
   }
 
   return (
-    <span data-part={part} className="relative inline-flex items-baseline gap-1">
-      <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-        {label}
+    <span className="relative inline-flex items-baseline gap-1">
+      {/* US-14 — the mark holds the vital as it prints, label and value
+          only: the × and the save status are never card text. Same flex,
+          gap and baseline as its parent, so the boxes land where they did. */}
+      <span data-part={part} className="inline-flex items-baseline gap-1">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          {label}
+        </span>
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-label={label}
+          onClick={() => setOpen(true)}
+          disabled={state === 'saving'}
+          className="border-b border-transparent bg-transparent font-mono text-[11px] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
+        >
+          {fmtDay(value)}
+        </button>
       </span>
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label={label}
-        onClick={() => setOpen(true)}
-        disabled={state === 'saving'}
-        className="border-b border-transparent bg-transparent font-mono text-[11px] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
-      >
-        {fmtDay(value)}
-      </button>
       <button
         type="button"
         aria-label={`Clear ${label.toLowerCase()}`}

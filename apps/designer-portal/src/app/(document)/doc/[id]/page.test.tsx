@@ -95,6 +95,7 @@ const mockRetryDesk = jest.fn();
 const mockUseDeskEngagements = jest.fn((_options?: { enabled?: boolean }) => ({
   data: mockDeskData,
   isLoading: mockDeskLoading,
+  isPending: mockDeskLoading,
   isError: mockDeskError,
   refetch: mockRetryDesk,
 }));
@@ -131,12 +132,14 @@ jest.mock('next/navigation', () => ({
 }));
 
 let mockInvoices: Record<string, unknown>[] = [];
+/** US-14 — one of the ticket's own reads, held in flight. */
+let mockPlanRoomLoading = false;
 
 jest.mock('@patina/supabase', () => ({
   /* B1 — the job ticket's own reads. The ticket is mounted by every
      project-kind document now, so every suite that renders one pays for
      these; none of them is this suite's subject. */
-  usePlanRoom: () => ({ data: { sheets: [] }, isLoading: false }),
+  usePlanRoom: () => ({ data: { sheets: [] }, isLoading: mockPlanRoomLoading }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   // The ticket reads the PROPOSAL's own three populations on a paper with no
   // project (B2). All three are `enabled` on a proposal id, so a document
@@ -2847,6 +2850,65 @@ describe('DocumentPage guide activation', () => {
     });
   });
 
+  // US-14 — the arrival's route root (inert marks). The resolved shell is the
+  // root; it is ready only once every read line 2 is chosen from has answered,
+  // so the card never briefs a sentence the band is about to turn.
+  describe('US-14 arrival route root', () => {
+    const shell = () =>
+      document.querySelector<HTMLElement>(
+        '[data-document-shell][data-arrival="document"]',
+      );
+
+    afterEach(() => {
+      mockPlanRoomLoading = false;
+    });
+
+    it('is not ready while the Desk composition is in flight, and is once it settles', () => {
+      mockDeskLoading = true;
+      const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).not.toBeNull();
+      expect(shell()).not.toHaveAttribute('data-arrival-ready');
+
+      mockDeskLoading = false;
+      rerender(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arrival-ready', '');
+    });
+
+    it('is not ready while a ticket row is still reading, and is once it answers', () => {
+      asProjectDocument();
+      mockPlanRoomLoading = true;
+      const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).not.toBeNull();
+      expect(shell()).not.toHaveAttribute('data-arrival-ready');
+
+      mockPlanRoomLoading = false;
+      rerender(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arrival-ready', '');
+    });
+
+    it('is not ready while the stage’s own guide read is in flight; an answer or an error settles it', () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: {
+          ...current, engagement_kind: 'relationship', active_section: 'discovery',
+          engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+        } },
+      };
+      mockDiscoveryQuery = { data: undefined, isLoading: true, isError: false };
+      const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).not.toBeNull();
+      expect(shell()).not.toHaveAttribute('data-arrival-ready');
+
+      mockDiscoveryQuery = { data: { row: null, prefill: null }, isLoading: false, isError: false };
+      rerender(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arrival-ready', '');
+
+      mockDiscoveryQuery = { data: undefined, isLoading: false, isError: true };
+      rerender(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arrival-ready', '');
+    });
+  });
 });
 
 describe('DocumentPage landedRef — A8 first-open gate', () => {

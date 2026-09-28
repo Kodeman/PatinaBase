@@ -386,6 +386,7 @@ describe('the Document marks', () => {
     expectPrinted(headline);
     expect(headline).toHaveAttribute('data-lens-sentence');
     expect(headline.textContent).toBe(model.line2.sentence);
+    expect(headline).toHaveAttribute('data-arr-long', model.line2.long.sentence);
 
     const act = part(container, 'act');
     expectPrinted(act);
@@ -401,6 +402,31 @@ describe('the Document marks', () => {
     expect(part(container, 'headline')).toBeNull();
     expect(part(container, 'act')).toBeNull();
     expect(container.querySelector('[data-lens-sentence]')).not.toBeNull();
+    expect(container.querySelector('[data-arr-long]')).toBeNull();
+  });
+
+  it('carries the long form on the headline where the tier prints a shorter one (D2)', () => {
+    const model = deriveLensBand(
+      bandInput({
+        tier: 'mobile',
+        needs: [
+          need(
+            'a',
+            'overdue_decision',
+            'Primary bedroom approval overdue 6 days',
+            'Send a reminder',
+          ),
+        ],
+      }),
+    );
+    expect(model.line2.form).not.toBe('long');
+    expect(model.line2.long.sentence).not.toBe(model.line2.sentence);
+    const { container } = render(<LensBand model={model} docId="doc-1" />);
+
+    const headline = part(container, 'headline');
+    expectPrinted(headline);
+    expect(headline.textContent).toBe(model.line2.sentence);
+    expect(headline).toHaveAttribute('data-arr-long', model.line2.long.sentence);
   });
 
   it('marks the letterhead itself as head — the focusable landing, holding the name', () => {
@@ -488,8 +514,21 @@ describe('the Document marks', () => {
       expectPrinted(node);
       expect(node.closest('[data-letterhead-vitals]')).not.toBeNull();
     }
-    expect(part(container, 'f1')!.textContent).toMatch(/^Start/);
-    expect(part(container, 'f2')!.textContent).toMatch(/^Target/);
+    // The date vitals as they print — the label and the value, never the ×
+    // that clears one or a save status beside it.
+    for (const [name, printed] of [
+      ['f1', ['Start', '3 August']],
+      ['f2', ['Target', '16 October']],
+    ] as const) {
+      const vital = part(container, name)!;
+      expect(Array.from(vital.children, (child) => child.textContent)).toEqual(
+        printed,
+      );
+      expect(vital.textContent).toBe(printed.join(''));
+      expect(
+        vital.querySelector('[aria-label^="Clear"], [role="status"]'),
+      ).toBeNull();
+    }
     expect(part(container, 'f3')!.textContent).toBe('$52,000');
     expect(part(container, 'crown')).not.toBeNull();
   });

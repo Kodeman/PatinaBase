@@ -38,13 +38,18 @@ jest.mock('@patina/supabase', () => ({
   }),
 }));
 
+/** The Desk read's settled shape; US-14's route-root cases vary it. */
+const settledDeskRead = () => ({
+  data: { folders: [], chips: [], live: [] } as Record<string, unknown> | undefined,
+  isLoading: false,
+  isError: false,
+  isSuccess: true,
+  isPlaceholderData: false,
+  refetch: jest.fn(),
+});
+let mockDeskRead = settledDeskRead();
 jest.mock('@/hooks/use-desk-engagements', () => ({
-  useDeskEngagements: () => ({
-    data: { folders: [], chips: [], live: [] },
-    isLoading: false,
-    isError: false,
-    refetch: jest.fn(),
-  }),
+  useDeskEngagements: () => mockDeskRead,
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -133,6 +138,7 @@ function studio(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   // Each test is a fresh Desk visit for the arbiter.
   resetDeskVisit();
+  mockDeskRead = settledDeskRead();
   mockOrgs.mockReturnValue([studio()]);
   // Own title set; nobody else on the crew (one open step).
   mockMembers.mockReturnValue([{ user_id: 'me', job_title: 'Principal' }]);
@@ -263,5 +269,35 @@ describe('Desk — D5 the recents strip returns beside the roster', () => {
     // The roster still stands as the Desk's own population — the strip is a
     // second, quiet doorway beside it, not a replacement for it (B2-L2).
     expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+  });
+});
+
+describe('Desk — US-14 arrival marks on the route root (inert)', () => {
+  const main = (container: HTMLElement) => container.querySelector('main')!;
+
+  it.each([
+    ['the first settled read', {}, 'desk', true],
+    ['placeholder data', { isPlaceholderData: true }, 'desk', false],
+    ['the skeleton', { data: undefined, isLoading: true, isSuccess: false }, null, false],
+    ['the error state', { isError: true, isSuccess: false }, null, false],
+  ] as const)('on %s: data-arrival=%s, ready=%s', (_state, over, root, ready) => {
+    mockDeskRead = { ...settledDeskRead(), ...over };
+    const { container } = render(<DeskPage />);
+    expect(main(container).getAttribute('data-arrival')).toBe(root);
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(ready);
+  });
+
+  it('marks the date line as head — the landing focus, never the greeting', () => {
+    const { container } = render(<DeskPage />);
+    const heads = container.querySelectorAll<HTMLElement>('[data-part~="head"]');
+    expect(heads).toHaveLength(1);
+    const head = heads[0];
+    expect(head.tagName).toBe('P');
+    expect(head.closest('h1')).toBeNull();
+    expect(head.closest('main')).toHaveAttribute('data-arrival', 'desk');
+    expect(head.textContent).toMatch(/^[A-Z]+ · [0-9A-Z ]+$/);
+    expect(head.tabIndex).toBe(-1);
+    head.focus();
+    expect(head).toHaveFocus();
   });
 });

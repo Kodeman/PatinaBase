@@ -273,8 +273,11 @@ export function LensBand({
           <span
             data-lens-sentence
             // US-14 — a quiet line prints no sentence; the letterhead's name
-            // is then the arrival's headline.
+            // is then the arrival's headline. D2: the card headline is the
+            // long form, which a tier that prints a shorter one leaves on no
+            // node, so it rides here.
             data-part={printed.sentence ? 'headline' : undefined}
+            data-arr-long={printed.sentence ? printed.long.sentence : undefined}
             className={`min-w-0 ease-[var(--ease-editorial)] transition-opacity motion-reduce:transition-none ${LINE_CLIP} ${
               turning
                 ? 'opacity-0 duration-[90ms]'
