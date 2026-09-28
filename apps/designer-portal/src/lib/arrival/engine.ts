@@ -32,6 +32,28 @@ function safe(fn: () => void): void {
 
 const find = (b: Brief, k: Part) => b.parts.find((x) => x.part === k) ?? null
 
+const NONE_STACKING = ['transform', 'translate', 'scale', 'rotate', 'filter', 'backdrop-filter', 'perspective', 'clip-path', 'mask-image']
+
+function laidOut(el: Element, win: Window): boolean {
+  const parent = el.parentElement
+  return !!parent && /flex|grid/.test(win.getComputedStyle(parent).display)
+}
+
+function positioned(cs: CSSStyleDeclaration): boolean {
+  return !!cs.position && cs.position !== 'static'
+}
+
+/** Whether el forms a stacking context (CSS 2.1 §9.9 + the properties that create one since). */
+function stacks(el: HTMLElement, cs: CSSStyleDeclaration, win: Window): boolean {
+  if (cs.position === 'fixed' || cs.position === 'sticky') return true
+  if (cs.zIndex && cs.zIndex !== 'auto' && (positioned(cs) || laidOut(el, win))) return true
+  if (parseFloat(cs.opacity) < 1 || cs.isolation === 'isolate') return true
+  if (cs.mixBlendMode && cs.mixBlendMode !== 'normal') return true
+  if (NONE_STACKING.some((p) => { const v = cs.getPropertyValue(p); return !!v && v !== 'none' })) return true
+  if (/paint|layout|strict|content/.test(cs.getPropertyValue('contain'))) return true
+  return /transform|translate|scale|rotate|opacity|filter|perspective|isolation|z-index/.test(cs.getPropertyValue('will-change'))
+}
+
 /** arrival.js:190-194 — the one polite message: the card in slot order, then the instruction. */
 export function message(b: Brief): string {
   const place =
@@ -148,6 +170,16 @@ export const createRun: CreateRun = (b, host, opts): Run => {
     if (!first) return
     if (first[2] === '') el.style.removeProperty(prop)
     else el.style.setProperty(prop, first[2], first[3])
+  }
+  /** z-index orders the act only inside its nearest stacking context (a claim card's .has-wash isolates), so every
+   *  stacking context between it and the route root rises with it, or a later sibling card paints over the act. */
+  function raise(el: HTMLElement, root: HTMLElement) {
+    for (let a = el.parentElement; a && a !== root && root.contains(a); a = a.parentElement) {
+      const cs = win.getComputedStyle(a)
+      if (!stacks(a, cs, win)) continue
+      if (!positioned(cs) && !laidOut(a, win)) put(a, 'position', 'relative')
+      put(a, 'z-index', '39')
+    }
   }
   function setAttr(el: Element, name: string, val: string) {
     attrs.push([el, name, el.getAttribute(name)])
@@ -461,6 +493,7 @@ export const createRun: CreateRun = (b, host, opts): Run => {
       put(A, 'pointer-events', 'auto', 'important')
       put(A, 'position', 'relative')
       put(A, 'z-index', '39')
+      raise(A, root)
       if (A.tagName === 'A') setAttr(A, 'draggable', 'false')
       for (const a of unclip(A, root)) setAttr(a, 'data-arr-unclip', '')
       listen(A, 'focusout', refocus)

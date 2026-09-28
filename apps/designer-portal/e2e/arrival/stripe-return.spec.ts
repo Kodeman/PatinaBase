@@ -39,8 +39,7 @@ test.describe('Stripe Checkout return doorway', () => {
     // The address is stripped back to /desk (doorway hygiene) — assert this
     // AFTER the sheet is confirmed open, since the strip's router.replace is
     // what the second, suppressed entry rides on.
-    await expect(page).toHaveURL(/\/desk(\?.*)?$/);
-    await page.waitForURL((url) => !url.search.includes('checkout'), { timeout: 5_000 });
+    await expect(page).toHaveURL(/\/desk$/);
 
     // The whole round trip — the doorway's own filled-query entry AND the
     // stripped, suppressed replace that follows it — must never have played

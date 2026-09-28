@@ -139,8 +139,18 @@ test.describe('Arrival failure injection', () => {
     await page.addInitScript(() => {
       // Runs before any of the page's own scripts (and before hydration);
       // an inline style on `html` outranks the `:root{--arr-ok:1}` stylesheet
-      // rule regardless of load order.
-      document.documentElement.style.setProperty('--arr-ok', '0');
+      // rule regardless of load order. An init script can run before the
+      // parser has created `<html>`, so it waits for the element.
+      const zero = (el: HTMLElement) => el.style.setProperty('--arr-ok', '0');
+      if (document.documentElement) {
+        zero(document.documentElement);
+        return;
+      }
+      new MutationObserver((_, observer) => {
+        if (!document.documentElement) return;
+        observer.disconnect();
+        zero(document.documentElement);
+      }).observe(document, { childList: true });
     });
 
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });

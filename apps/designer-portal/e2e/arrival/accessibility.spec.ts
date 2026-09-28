@@ -13,7 +13,7 @@
  */
 import { test, expect } from '../fixtures/auth';
 import { seedWorkflowGateFixture } from '../helpers/workflow-gate-fixture';
-import { ARRIVAL_PROJECT_ID, armE2EOptIn, installArrivalInstruments, settleDeskWalkthrough, CARD_SELECTOR } from './helpers';
+import { ARRIVAL_PROJECT_ID, armE2EOptIn, installArrivalInstruments, settleDeskWalkthrough, topmostAtCentre, waitForHold, CARD_SELECTOR } from './helpers';
 
 test.describe('Arrival accessibility', () => {
   test.beforeAll(() => {
@@ -72,27 +72,17 @@ test.describe('Arrival accessibility', () => {
     await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
 
-    const clone = page.locator('.arr-h').first();
+    const clone = page.locator(CARD_SELECTOR);
     await expect(clone).toBeVisible();
     // Mid-hold, after the compose-in animation has settled to its resting
     // opacity/transform, so the rect read below is the clone's true landed
     // position, not a mid-tween one.
-    await page.waitForTimeout(1_600);
+    await waitForHold(page);
 
-    const hit = await clone.evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      const at = document.elementFromPoint(cx, cy);
-      return {
-        isSelfOrDescendantHit: at === el || (at !== null && el.contains(at)),
-        rectNonEmpty: r.width > 0 && r.height > 0,
-        opacity: getComputedStyle(el).opacity,
-      };
-    });
+    const hit = await topmostAtCentre(page, CARD_SELECTOR);
     expect(hit.rectNonEmpty).toBe(true);
     expect(hit.opacity).toBe('1');
-    expect(hit.isSelfOrDescendantHit).toBe(true);
+    expect(hit.own, hit.hit).toBe(true);
 
     // A screenshot of the clone's own bounding box must not be visually
     // empty (a fully-clipped element can still report a rect and pass

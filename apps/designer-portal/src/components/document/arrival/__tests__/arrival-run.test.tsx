@@ -51,6 +51,17 @@ jest.mock('next/navigation', () => ({ usePathname: () => mockPathname }));
 const capture = (posthog as unknown as { capture: jest.Mock }).capture;
 const html = document.documentElement;
 
+// ArrivalMount subscribes to the reduced-motion query once per module (installArrivalListeners);
+// kept outside jest's mock state so clearMocks cannot lose the listener between tests.
+const motionListeners: Array<() => void> = [];
+const setupMatchMedia = window.matchMedia;
+window.matchMedia = (query: string) => ({
+  ...setupMatchMedia(query),
+  addEventListener: (_type: string, listener: () => void) => {
+    if (query === '(prefers-reduced-motion: reduce)') motionListeners.push(listener);
+  },
+});
+
 type FakeRun = Run & { phase: RunPhase; start: jest.Mock; finish: jest.Mock };
 
 function fakeRun(surface: Surface): FakeRun {
@@ -651,6 +662,108 @@ describe('her hand during the wait', () => {
     document.body.dispatchEvent(second);
     expect(second.defaultPrevented).toBe(false);
     await staysAtRest(engine);
+  });
+});
+
+describe('the host finishes (CONTRACT §4b)', () => {
+  async function mountPlaying() {
+    addRoot('desk', true);
+    const { engine, runs } = makeEngine();
+    render(
+      <>
+        <ArrivalMount />
+        <ArrivalRun engine={engine} pathname="/desk" />
+      </>,
+    );
+    await toReady();
+    const run = runs[0];
+    expect(html.classList.contains('arr-on')).toBe(true);
+    return run;
+  }
+
+  async function restored(run: FakeRun, how: EndHow) {
+    expect(run.finish).toHaveBeenCalledTimes(1);
+    expect(run.finish).toHaveBeenCalledWith(how);
+    expect(html.classList.contains('arr-on')).toBe(false);
+    expect(html.classList.contains('arr-pre')).toBe(false);
+    await flush();
+    expect(capture.mock.calls).toEqual([['arrival_ended', { surface: 'desk', how }]]);
+  }
+
+  function selectHeadline() {
+    const range = document.createRange();
+    range.selectNodeContents(document.querySelector('[data-part~=headline]')!);
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  }
+
+  afterEach(() => {
+    document.getSelection()?.removeAllRanges();
+  });
+
+  it('pagehide → finish, the page at rest', async () => {
+    const run = await mountPlaying();
+    window.dispatchEvent(new Event('pagehide'));
+    await restored(run, 'hidden-tab');
+  });
+
+  it('pageshow from the BFCache → finish; an ordinary pageshow does nothing', async () => {
+    const run = await mountPlaying();
+    window.dispatchEvent(new Event('pageshow'));
+    expect(run.finish).not.toHaveBeenCalled();
+    const fromCache = new Event('pageshow');
+    Object.defineProperty(fromCache, 'persisted', { value: true });
+    window.dispatchEvent(fromCache);
+    await restored(run, 'hidden-tab');
+  });
+
+  it('beforeprint → finish, the page at rest', async () => {
+    const run = await mountPlaying();
+    window.dispatchEvent(new Event('beforeprint'));
+    await restored(run, 'mutation');
+  });
+
+  it('a selection in Acts 1–2 → finish; a collapsed one does nothing', async () => {
+    const run = await mountPlaying();
+    document.dispatchEvent(new Event('selectionchange'));
+    expect(run.finish).not.toHaveBeenCalled();
+    run.phase = 'hold';
+    selectHeadline();
+    await restored(run, 'input');
+  });
+
+  it('a selection in Act 3 does not end the run', async () => {
+    const run = await mountPlaying();
+    run.phase = 'assemble';
+    selectHeadline();
+    expect(run.finish).not.toHaveBeenCalled();
+    expect(html.classList.contains('arr-on')).toBe(true);
+  });
+
+  it('a reduced-motion change → finish, the page at rest', async () => {
+    const run = await mountPlaying();
+    expect(motionListeners).toHaveLength(1);
+    motionListeners[0]();
+    await restored(run, 'mutation');
+  });
+
+  it('pagehide during the wait ends it for good', async () => {
+    const { engine } = makeEngine();
+    render(
+      <>
+        <ArrivalMount />
+        <ArrivalRun engine={engine} pathname="/desk" />
+      </>,
+    );
+    expect(html.classList.contains('arr-pre')).toBe(true);
+    window.dispatchEvent(new Event('pagehide'));
+    expect(html.classList.contains('arr-pre')).toBe(false);
+    addRoot('desk', true);
+    await toReady();
+    expect(engine.createRun).not.toHaveBeenCalled();
+    expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
   });
 });
 

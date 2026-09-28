@@ -25,7 +25,10 @@ import base from './playwright.config';
  * the compiled `arrival.css` sentinel (`--arr-ok`), and production chunk boundaries
  * (CONTRACT §5 "grep -rl bkvcixdmuyejfzcijpdg .next/static must be empty") — none
  * of which a dev-mode HMR server represents faithfully. The build already exists
- * at `.next` (built by the integrator's setup step); this config only serves it.
+ * at `.next` (built by the integrator's setup step, with `ARRIVAL_E2E=1` so the
+ * CSP carries no `upgrade-insecure-requests` — next.config.js; WebKit would
+ * otherwise upgrade every http://127.0.0.1 subresource to https and the auth
+ * fixture never signs in); this config only serves it.
  */
 
 const PORT = 3107;
@@ -37,16 +40,11 @@ export default defineConfig({
   ...base,
   testDir: './e2e/arrival',
   timeout: 90_000,
-  // This lane's card-visibility assertions were observed failing
-  // non-deterministically under demonstrated shared-machine CPU contention
-  // (concurrent unrelated agent/session load on this box; confirmed via
-  // `uptime` load averages during two full-lane attempts) even though an
-  // isolated single-test rerun against the same build, with no concurrent
-  // load, passed cleanly and repeatably. One retry absorbs that transient
-  // contention without masking a real regression — a flake that clears on
-  // retry is contention; one that doesn't is reported as a finding, not
-  // silently retried away.
-  retries: 1,
+  // Serial, and no retry: the lane's earlier reds were the probes (a zero-height
+  // `.arr-card` that `toBeVisible()` never reports visible) and WebKit's
+  // https upgrade, not machine contention — a retry would only hide a real red.
+  workers: 1,
+  retries: 0,
   use: {
     ...base.use,
     baseURL: BASE_URL,

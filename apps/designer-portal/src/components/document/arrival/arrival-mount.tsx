@@ -126,6 +126,56 @@ function onPopState(): void {
   notePopState(Date.now());
 }
 
+// ── The host's own finishes (CONTRACT §4b): the frozen Run has no hook for these (arrival.js:848-863).
+
+/** The page is leaving: nothing may stay hidden, staged or inert behind it, nor come back so. */
+function onPageHide(): void {
+  haltWait();
+  activeRun?.finish('hidden-tab');
+}
+
+/** A BFCache restore: the run that went into the cache comes back at rest. */
+function onPageShow(e: PageTransitionEvent): void {
+  if (!e.persisted) return;
+  haltWait();
+  activeRun?.finish('hidden-tab');
+}
+
+/** Print the resting page, never the card's staging. */
+function onBeforePrint(): void {
+  haltWait();
+  activeRun?.finish('mutation');
+}
+
+/** Selecting text in Acts 1–2 is her hand on the page; Act 3 is never cancelled by a selection. */
+function onSelectionChange(): void {
+  const run = activeRun;
+  if (!run || (run.phase !== 'compose' && run.phase !== 'hold')) return;
+  const selection = document.getSelection();
+  if (selection && !selection.isCollapsed) run.finish('input');
+}
+
+/** The motion she asked for changed under the run: the page at rest, either way. */
+function onReducedMotionChange(): void {
+  haltWait();
+  activeRun?.finish('mutation');
+}
+
+function watchReducedMotion(): void {
+  let query: MediaQueryList | undefined;
+  try {
+    query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  } catch {
+    return;
+  }
+  if (!query) return;
+  if (typeof query.addEventListener === 'function') {
+    query.addEventListener('change', onReducedMotionChange);
+  } else if (typeof query.addListener === 'function') {
+    query.addListener(onReducedMotionChange);
+  }
+}
+
 const TOKEN_LINKS =
   '[data-register="act"] a, [data-roster-name], [data-claim-card] a[href^="/doc/"]';
 
@@ -185,6 +235,11 @@ export function installArrivalListeners(): void {
   window.addEventListener('scroll', onScroll, passive);
   window.addEventListener('visibilitychange', onVisibilityChange, { capture: true });
   window.addEventListener('popstate', onPopState, { capture: true });
+  window.addEventListener('pagehide', onPageHide, { capture: true });
+  window.addEventListener('pageshow', onPageShow, { capture: true });
+  window.addEventListener('beforeprint', onBeforePrint, { capture: true });
+  document.addEventListener('selectionchange', onSelectionChange);
+  watchReducedMotion();
 }
 
 const DESK_READY = '[data-arrival="desk"][data-arrival-ready]';

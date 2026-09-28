@@ -160,6 +160,20 @@ describe('start', () => {
     expect(A.getAttribute('draggable')).toBe('false')
     expect(card.hasAttribute('data-arr-unclip')).toBe(true)
   })
+  it("the act's stacking contexts rise with it for the run, so no later card paints over it", () => {
+    const root = deskDom()
+    const card = root.querySelector('.desk-claim-card') as HTMLElement
+    card.style.position = 'relative'
+    card.style.zIndex = '0'
+    const band = card.querySelector('.desk-claim-band') as HTMLElement
+    const { run } = go(root)
+    expect(card.style.zIndex).toBe('39')
+    expect(band.style.zIndex).toBe('')
+    expect((root.querySelector('#roster') as HTMLElement).style.zIndex).toBe('')
+    run.finish('skip')
+    expect(card.style.zIndex).toBe('0')
+    expect(card.style.position).toBe('relative')
+  })
   it('frame-0 hides are instant: every hidden page node has its own transition off, restored at finish', () => {
     const root = documentDom()
     const H = root.querySelector('[data-lens-sentence]') as HTMLElement

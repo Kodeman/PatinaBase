@@ -157,17 +157,21 @@ export async function analyticsEverInitializes(page: Page, waitMs = 2_000): Prom
  * it is not gated behind an analytics key, so it is observable in this build
  * regardless of the POSTHOG_KEY gap documented in arrival-lane.md.
  */
-export function countMarkArrivalCalls(page: Page): { get(): number } {
+export function countMarkArrivalCalls(page: Page, scope?: 'desk' | 'document'): { get(): number } {
   let count = 0;
   page.on('request', (req) => {
     if (req.method() !== 'POST') return;
-    if (/\/rest\/v1\/rpc\/mark_arrival(\?|$)/.test(req.url())) count += 1;
+    if (!/\/rest\/v1\/rpc\/mark_arrival(\?|$)/.test(req.url())) return;
+    if (scope && (req.postDataJSON() as { p_scope?: string } | null)?.p_scope !== scope) return;
+    count += 1;
   });
   return { get: () => count };
 }
 
-/** The card layer the engine mounts (`arrival.css` `.arr-card`). */
-export const CARD_SELECTOR = '.arr-card';
+/** The card's painted headline clone (`engine.ts` `make('p', 'arr-h', …)`), inside the card
+ *  layer or its pinned `.arr-card.arr-card-fix` holder. Never the bare `.arr-card`: that layer is
+ *  a zero-height positioned box (arrival.css), which `toBeVisible()` never reports visible. */
+export const CARD_SELECTOR = '.arr-card .arr-h';
 /** The Skip control (`engine.ts` — `make('button', 'arr-skip', 'Skip arrival')`). */
 export const SKIP_SELECTOR = '.arr-skip';
 
@@ -201,4 +205,55 @@ export function delayedRoute(delayMs: number) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     await route.continue();
   };
+}
+
+/** Acts 1–2 are over and the card holds (`engine.ts` `hold()` writes the status message; Act 3
+ *  adds `arr-asm`). */
+export async function waitForHold(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      !!document.querySelector('[role="status"].arr-vh')?.textContent &&
+      !document.documentElement.classList.contains('arr-asm'),
+    undefined,
+    { timeout: 20_000 },
+  );
+}
+
+/**
+ * What paints topmost at the centre of the first `selector` match. arrival.css makes every node
+ * but the act hit-transparent in Acts 1–2, which would hide both the card and anything painted
+ * over it from `elementFromPoint`; this one synchronous read runs with every node hit-testable
+ * (an id inside `:is()` outranks the forced-inert rule), then removes the override. The style
+ * goes in `<head>`, outside the route root the engine watches for foreign mutations.
+ */
+export async function topmostAtCentre(
+  page: Page,
+  selector: string,
+): Promise<{ own: boolean; hit: string; rectNonEmpty: boolean; opacity: string }> {
+  return page.evaluate((sel) => {
+    const el = document.querySelector<HTMLElement>(sel);
+    if (!el) return { own: false, hit: `no ${sel}`, rectNonEmpty: false, opacity: '' };
+    const probe = document.createElement('style');
+    probe.textContent = ':is(:root, #arr-hit-probe) *{pointer-events:auto!important}';
+    document.head.appendChild(probe);
+    try {
+      const r = el.getBoundingClientRect();
+      const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const name = at
+        ? `${at.tagName.toLowerCase()}${at.id ? `#${at.id}` : ''}${
+            typeof at.className === 'string' && at.className.trim()
+              ? `.${at.className.trim().split(/\s+/).join('.')}`
+              : ''
+          }`
+        : 'null';
+      return {
+        own: !!at && (at === el || el.contains(at)),
+        hit: name,
+        rectNonEmpty: r.width > 0 && r.height > 0,
+        opacity: getComputedStyle(el).opacity,
+      };
+    } finally {
+      probe.remove();
+    }
+  }, selector);
 }

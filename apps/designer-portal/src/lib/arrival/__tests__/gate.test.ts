@@ -50,10 +50,25 @@ describe('gate — the decline order', () => {
     const t = token({ via: 'act', to: '/doc/w1', landing: { kind: 'region', region: 'ledger' } })
     expect(gate(input({ surface: 'document', pathname: '/doc/w1', token: t }))).toEqual({ play: false, cause: 'token' })
   })
-  it('a token without a landing plays, carrying its via', () => {
+  it('R-DM21 A: the Desk act → token, with or without a landing', () => {
+    const t = token({ via: 'act', to: '/doc/w1' })
+    expect(gate(input({ surface: 'document', pathname: '/doc/w1', token: t }))).toEqual({ play: false, cause: 'token' })
+  })
+  it('a name-link token without a landing plays, carrying its via', () => {
     expect(gate(input({ surface: 'document', pathname: '/doc/w1', token: token() }))).toEqual({
       play: true, via: 'kbd', reduced: false,
     })
+    expect(gate(input({ surface: 'document', pathname: '/doc/w1', token: token({ via: 'ptr' }) }))).toEqual({
+      play: true, via: 'ptr', reduced: false,
+    })
+  })
+  it('an act token for another path, a stale one or a refresh is not honoured', () => {
+    const t = token({ via: 'act', to: '/doc/w1' })
+    expect(gate(input({ surface: 'document', pathname: '/doc/w2', token: t }))).toMatchObject({ play: true })
+    expect(
+      gate(input({ surface: 'document', pathname: '/doc/w1', token: { ...t, at: NOW - BUDGET.TOKEN_TTL_MS } })),
+    ).toMatchObject({ play: true })
+    expect(gate(input({ surface: 'document', pathname: '/doc/w1', entry: 'reload', token: t }))).toMatchObject({ play: true })
   })
   it('a token for another path, a stale token or a refresh is not honoured', () => {
     const landing = { kind: 'region', region: 'ledger' } as const

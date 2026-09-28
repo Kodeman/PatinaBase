@@ -31,9 +31,14 @@ import {
   arrivalEndedEvents,
   settleDeskWalkthrough,
   delayedRoute,
+  topmostAtCentre,
+  waitForHold,
   CARD_SELECTOR,
   SKIP_SELECTOR,
 } from './helpers';
+
+/** The top claim card's one act (desk-claim-card.tsx `data-part="act"`). */
+const ACT_SELECTOR = '[data-arrival="desk"] [data-part~="act"]';
 
 test.describe('Desk plays', () => {
   test.beforeAll(() => {
@@ -52,6 +57,16 @@ test.describe('Desk plays', () => {
 
     await expect(page.locator(CARD_SELECTOR)).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('[data-arrival="desk"][data-arr-played]')).toHaveCount(1);
+
+    // Act 2: the card paints on top, and so does the act — its card's stacking
+    // context rises with it, so no later card paints over it.
+    await waitForHold(page);
+    const head = await topmostAtCentre(page, CARD_SELECTOR);
+    expect(head.rectNonEmpty).toBe(true);
+    expect(head.own, head.hit).toBe(true);
+    const act = await topmostAtCentre(page, ACT_SELECTOR);
+    expect(act.rectNonEmpty).toBe(true);
+    expect(act.own, act.hit).toBe(true);
     // Chrome stays interactive under the card (arrival.css `[data-arr]` is the
     // only pointer-events exemption while `arr-on:not(.arr-asm)`) — Skip is
     // itself `data-arr` and is the fastest, most deterministic way to close
@@ -124,6 +139,61 @@ test.describe('Desk plays', () => {
     // consume the Desk's gate (no 'desk-shown' decline was recorded for the
     // Desk surface at any point in this session).
     expect(events.every((e) => !(e.surface === 'desk' && e.cause === 'desk-shown'))).toBe(true);
+  });
+
+  test('R-DM21 A: the Desk act opens its Document at the landing, and no card ever mounts', async ({
+    authenticatedPage: page,
+  }) => {
+    await armE2EOptIn(page);
+    await installArrivalInstruments(page);
+    await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator(CARD_SELECTOR)).toBeVisible({ timeout: 20_000 });
+    await page.locator(SKIP_SELECTOR).click();
+    await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
+
+    const act = page.locator(ACT_SELECTOR);
+    const href = await act.getAttribute('href');
+    expect(href).toMatch(/^\/doc\//);
+    const raw = await act.getAttribute('data-landing');
+    expect(raw, 'the top card act opens its Document and names a landing').not.toBeNull();
+    const landing = JSON.parse(raw!) as { kind: 'region'; region: string } | { kind: 'section'; sectionKey: string };
+
+    // From before the click to the end of the test: any card node the engine mounts is seen.
+    await page.evaluate(() => {
+      const w = window as unknown as { __arrCardSeen?: boolean };
+      w.__arrCardSeen = false;
+      new MutationObserver(() => {
+        if (document.querySelector('.arr-card [data-arr]')) w.__arrCardSeen = true;
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+    await act.click();
+    await expect(page).toHaveURL(new RegExp(`${href}$`), { timeout: 20_000 });
+
+    await page.waitForFunction(
+      () =>
+        (
+          (window as unknown as { __arrivalEndedEvents?: Array<{ detail: { surface?: string } }> })
+            .__arrivalEndedEvents ?? []
+        ).some((e) => e.detail?.surface === 'document'),
+      undefined,
+      { timeout: 20_000 },
+    );
+    const events = await arrivalEndedEvents(page);
+    expect(events.filter((e) => e.surface === 'document')).toEqual([
+      expect.objectContaining({ surface: 'document', how: 'declined', cause: 'token' }),
+    ]);
+
+    const target =
+      landing.kind === 'region'
+        ? page.locator(`[data-index-region="${landing.region}"]`).first()
+        : page.locator(`#doc-section-${landing.sectionKey}`);
+    await expect(target).toBeInViewport({ timeout: 10_000 });
+
+    await page.waitForTimeout(1_500);
+    await expect(page.locator('.arr-card [data-arr]')).toHaveCount(0);
+    expect(
+      await page.evaluate(() => (window as unknown as { __arrCardSeen?: boolean }).__arrCardSeen),
+    ).toBe(false);
   });
 
   test('setup-whisper coexistence: studio-workspaces is off in this build, so the Desk still plays untouched', async ({

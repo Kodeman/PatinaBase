@@ -4,13 +4,30 @@
  * on the Desk after its ready mark.
  */
 import { fireEvent, render, waitFor } from '@testing-library/react';
+import { DeskClaimCard } from '@/components/document/desk-claim-card';
+import { gate } from '@/lib/arrival/gate';
 import type { Run } from '@/lib/arrival/run-contract';
 import { enterRoute } from '@/lib/arrival/nav';
+import { readArriveToken } from '@/lib/arrival/session';
 import { KEYS } from '@/lib/arrival/types';
+import type { ClaimCard, RosterLine } from '@/lib/document/desk-roster-derivation';
 import { ArrivalMount, setActiveRun, setArrivalWaiting } from '../arrival-mount';
 
 let mockPathname = '/desk';
 jest.mock('next/navigation', () => ({ usePathname: () => mockPathname }));
+
+jest.mock('next/link', () => ({
+  __esModule: true,
+  default: ({ children, href, ...props }: React.ComponentProps<'a'>) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+jest.mock('@/lib/analytics/document-events', () => ({
+  documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
+}));
+jest.mock('@/components/document/command-bar', () => ({ openLedger: jest.fn() }));
 
 function fakeRun(): Run {
   return {
@@ -270,6 +287,88 @@ describe('the click token', () => {
     fireEvent.click(document.getElementById('other')!, { detail: 1 });
     fireEvent.click(document.getElementById('offsite')!, { detail: 1 });
     expect(token()).toBeNull();
+  });
+});
+
+describe('R-DM21 A — the Desk act on the real claim card', () => {
+  function claim(over: Partial<RosterLine> = {}): ClaimCard {
+    return {
+      stage: 'project',
+      stageLabel: 'Project',
+      custody: 'Your pen',
+      band: 0,
+      line: {
+        engagementId: 'e1',
+        name: 'Whitfield House',
+        stage: 'project',
+        designerId: null,
+        state: 'Leah Whitfield · Procurement And Orders',
+        personLine: 'Leah Whitfield · Procurement And Orders',
+        overdueText: null,
+        mark: 'quiet',
+        needKind: 'overdue_decision',
+        overdue: { isOverdue: false, days: 0 },
+        jobHref: '/doc/e1',
+        act: { label: 'Review decisions', href: '/doc/e1' },
+        client: 'Leah Whitfield',
+        custody: 'Your pen',
+        needOwner: 'designer',
+        dueOn: null,
+        valueText: null,
+        needText: 'Two selections are waiting on Leah',
+        motionText: null,
+        projectId: 'p1',
+        ...over,
+      } as RosterLine,
+    };
+  }
+
+  function clickAct(card: ClaimCard) {
+    const { container } = render(
+      <ul>
+        <DeskClaimCard card={card} tone="project" index={0} settle={false} />
+      </ul>,
+    );
+    render(<ArrivalMount />);
+    fireEvent.click(container.querySelector('[data-part~="act"]')!, { detail: 1 });
+  }
+
+  function gateFor(pathname: string) {
+    const now = Date.now();
+    return gate({
+      surface: 'document', pathname, search: '', hash: '', entry: 'soft', entryAt: now, now,
+      webdriver: false, e2eOptIn: false, visitAt: null, deskShown: false,
+      token: readArriveToken(pathname, now), suppressedPath: null, reducedMotion: false,
+    });
+  }
+
+  it('writes a token with the landing, and the gate declines token: straight to the record', () => {
+    clickAct(claim());
+    expect(token()).toEqual({
+      via: 'act',
+      to: '/doc/e1',
+      at: expect.any(Number),
+      landing: { kind: 'section', sectionKey: 'project' },
+    });
+    expect(gateFor('/doc/e1')).toEqual({ play: false, cause: 'token' });
+  });
+
+  it('a purchase order lands on the FF&E region', () => {
+    clickAct(claim({ needKind: 'po_unsent', act: { label: 'Review the purchase order', href: '/doc/e1' } }));
+    expect(token()).toMatchObject({ via: 'act', landing: { kind: 'region', region: 'ffe' } });
+    expect(gateFor('/doc/e1')).toEqual({ play: false, cause: 'token' });
+  });
+
+  it('the name link on the same card writes no landing, and the Document plays', () => {
+    render(
+      <ul>
+        <DeskClaimCard card={claim()} tone="project" index={0} settle={false} />
+      </ul>,
+    );
+    render(<ArrivalMount />);
+    fireEvent.click(document.querySelector('[data-roster-name]')!, { detail: 1 });
+    expect(token()).toEqual({ via: 'ptr', to: '/doc/e1', at: expect.any(Number) });
+    expect(gateFor('/doc/e1')).toEqual({ play: true, via: 'ptr', reduced: false });
   });
 });
 

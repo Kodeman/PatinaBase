@@ -71,7 +71,10 @@ test.describe('Webdriver decline, origin probe, telemetry', () => {
   }) => {
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
-    const markArrivalCalls = countMarkArrivalCalls(page);
+    // The Document entry's own anchor. The fixture's /desk entry, still in its
+    // ready wait when goto leaves it, ends on pagehide and writes its own
+    // anchor (CONTRACT §4b: once per entry, on every end).
+    const markArrivalCalls = countMarkArrivalCalls(page, 'document');
 
     await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });

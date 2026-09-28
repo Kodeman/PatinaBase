@@ -134,8 +134,10 @@ const nextConfig = {
       "frame-ancestors 'none'",
     ];
 
-    // Only upgrade insecure requests in production
-    if (!isDevelopment) {
+    // Only upgrade insecure requests in production. ARRIVAL_E2E=1 is the arrival
+    // lane's build (playwright.arrival.config.ts): it is served over
+    // http://127.0.0.1, where WebKit would upgrade every subresource to https.
+    if (!isDevelopment && process.env.ARRIVAL_E2E !== '1') {
       cspDirectives.push('upgrade-insecure-requests');
     }
 

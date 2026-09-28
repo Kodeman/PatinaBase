@@ -17,7 +17,8 @@ function honoured(input: GateInput): ArriveToken | null {
 export function gate(input: GateInput): GateResult {
   if (filled(input.search, '?') || filled(input.hash, '#')) return { play: false, cause: 'query' }
   const token = honoured(input)
-  if (token?.landing) return { play: false, cause: 'token' }
+  // R-DM21 A: the Desk's act opens straight to the record — she was briefed by the Desk card a second ago.
+  if (token && (token.via === 'act' || token.landing)) return { play: false, cause: 'token' }
   if (input.webdriver && !input.e2eOptIn) return { play: false, cause: 'webdriver' }
   if (input.entry === 'replace' || input.suppressedPath === input.pathname) {
     return { play: false, cause: 'replace' }

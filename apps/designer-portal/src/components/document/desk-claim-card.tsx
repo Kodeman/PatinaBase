@@ -14,8 +14,10 @@
 
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
+import type { Landing } from '@/lib/arrival/types';
 import type { SectionKey } from '@/lib/document/desk-derivation';
-import type { ClaimCard } from '@/lib/document/desk-roster-derivation';
+import { paperRegionsForSection } from '@/lib/document/document-index';
+import type { ClaimCard, RosterLine } from '@/lib/document/desk-roster-derivation';
 import { DocumentAction } from './document-action';
 import { openLedger } from './command-bar';
 import { RowWash, useRowWash, type RowWashTone } from './row-wash';
@@ -63,6 +65,20 @@ export function rosterLineAnchorId(engagementId: string): string {
   return `roster-line-${engagementId}`;
 }
 
+/** US-14 R-DM21 A — where the act lands when it opens the job's own
+ *  Document: where the Document's own act for the same need lands
+ *  (needGuideAction, document-guide.ts), in the arrival token's shape. A
+ *  purchase order lands on the FF&E region; every other need on its stage's
+ *  section. An act that opens a sheet or another room carries none. */
+export function actLanding(line: RosterLine): Landing | null {
+  if (line.act.ledger || line.act.href !== line.jobHref) return null;
+  const po = line.needKind === 'po_unsent' || line.needKind === 'po_unacknowledged';
+  if (po && line.projectId && paperRegionsForSection(line.stage).some((r) => r.key === 'ffe')) {
+    return { kind: 'region', region: 'ffe' };
+  }
+  return { kind: 'section', sectionKey: line.stage };
+}
+
 export function DeskClaimCard({
   card,
   tone,
@@ -88,6 +104,7 @@ export function DeskClaimCard({
   // only opens something. Consequence, not emphasis.
   const variant = line.act.ledger ? 'secondary' : 'tertiary';
   const top = index === 0;
+  const landing = actLanding(line);
 
   return (
     <li
@@ -203,6 +220,7 @@ export function DeskClaimCard({
             aria-label={ariaLabel}
             variant={variant}
             data-part={top ? 'act' : undefined}
+            data-landing={landing ? JSON.stringify(landing) : undefined}
             href={line.act.href}
           >
             {line.act.label}
