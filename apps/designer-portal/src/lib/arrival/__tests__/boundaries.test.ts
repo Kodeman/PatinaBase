@@ -89,3 +89,39 @@ describe('arrival run-contract.ts — the frozen engine/host seam', () => {
     );
   });
 });
+
+/**
+ * W2-B layering: the pure and measuring modules sit on `types.ts` alone; the engine composes them and never
+ * pulls React in (the host injects it; CONTRACT §1 "types → pure → DOM → host").
+ */
+
+const read = (file: string) => readFileSync(join(__dirname, '..', file), 'utf8');
+const importsOf = (source: string) =>
+  Array.from(source.matchAll(/^\s*(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]/gm), (m) => m[1]);
+
+describe('arrival layering — pure modules import only ./types', () => {
+  it.each(['gate.ts', 'brief.ts', 'collect.ts', 'plan.ts'])('%s', (file) => {
+    const source = read(file);
+    const specifiers = importsOf(source);
+    expect(specifiers.length).toBeGreaterThan(0);
+    expect(specifiers.filter((s) => s !== './types')).toEqual([]);
+    expect(source).not.toMatch(/\brequire\s*\(/);
+    expect(source).not.toMatch(/\bimport\s*\(/);
+  });
+});
+
+describe('arrival layering — the engine', () => {
+  const source = read('engine.ts');
+
+  it('imports no React and nothing outside src/lib/arrival', () => {
+    const specifiers = importsOf(source);
+    expect(specifiers.filter((s) => !s.startsWith('./'))).toEqual([]);
+    expect(source).not.toMatch(/['"]react(?:-dom)?(?:\/[^'"]*)?['"]/);
+    expect(source).not.toMatch(/\brequire\s*\(/);
+  });
+
+  it('exports the ArrivalEngine seam', () => {
+    expect(source).toMatch(/^export const engine: ArrivalEngine = \{ gate, brief, verifyFrame0, createRun \}/m);
+    expect(source).toMatch(/^export const createRun: CreateRun\b/m);
+  });
+});
