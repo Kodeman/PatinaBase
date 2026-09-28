@@ -59,10 +59,12 @@ function expectPrinted(node: Element | null): asserts node is Element {
   expect(node!.closest('.sr-only, [aria-hidden="true"], [hidden]')).toBeNull();
 }
 
+// A mark is a token list, read as the mockup's part() reads it
+// (`[data-part~=name]`, arrival.js:225): one node may carry two parts.
 const part = (root: ParentNode, name: string) =>
-  root.querySelector(`[data-part="${name}"]`);
+  root.querySelector(`[data-part~="${name}"]`);
 const parts = (root: ParentNode, name: string) =>
-  Array.from(root.querySelectorAll(`[data-part="${name}"]`));
+  Array.from(root.querySelectorAll(`[data-part~="${name}"]`));
 
 // ── The Desk ────────────────────────────────────────────────────────────
 
@@ -265,6 +267,7 @@ describe('the Desk marks', () => {
     const settle = part(container, 'settle');
     expectPrinted(settle);
     expect(settle.textContent).toBe('One thing is overdue — Vandersteen.');
+    expect(settle).not.toBe(headline);
   });
 
   it('never marks the answered note as a fact', () => {
@@ -284,7 +287,7 @@ describe('the Desk marks', () => {
     expect(answered!.hasAttribute('data-part')).toBe(false);
   });
 
-  it('on a quiet roster, marks the always-printed overdue line as settle', () => {
+  it('on a quiet roster, the always-printed overdue line is the one headline and the settle', () => {
     const model = roster();
     for (const group of model.groups) {
       for (const line of group.lines) {
@@ -298,14 +301,16 @@ describe('the Desk marks', () => {
     model.overdueLine = 'Nothing is overdue.';
     const { container } = render(<DeskRoster roster={model} />);
 
-    expect(part(container, 'headline')).toBeNull();
-    expect(parts(container, 'settle')).toHaveLength(1);
-    const settle = part(container, 'settle');
-    expectPrinted(settle);
-    expect(settle.textContent).toBe('Nothing is overdue.');
+    expect(container.querySelector('[data-claim-card]')).toBeNull();
+    expect(parts(container, 'headline')).toHaveLength(1);
+    const headline = part(container, 'headline');
+    expectPrinted(headline);
+    expect(headline.textContent).toBe('Nothing is overdue.');
+    expect(parts(container, 'settle')).toEqual([headline]);
+    expect(parts(container, 'act')).toHaveLength(0);
   });
 
-  it('with no live jobs, moves settle to the quiet line — one node, never two', () => {
+  it('with no live jobs, the quiet line is the one headline and the settle — never two nodes', () => {
     const { container } = render(
       <DeskRoster
         roster={roster({
@@ -317,12 +322,14 @@ describe('the Desk marks', () => {
       />,
     );
 
-    expect(parts(container, 'settle')).toHaveLength(1);
-    const settle = part(container, 'settle');
-    expectPrinted(settle);
-    expect(settle.textContent).toBe(
+    expect(parts(container, 'headline')).toHaveLength(1);
+    const headline = part(container, 'headline');
+    expectPrinted(headline);
+    expect(headline.textContent).toBe(
       'Nothing needs your hand. The work is in motion.',
     );
+    expect(parts(container, 'settle')).toEqual([headline]);
+    expect(parts(container, 'act')).toHaveLength(0);
   });
 });
 
@@ -394,6 +401,36 @@ describe('the Document marks', () => {
     expect(part(container, 'headline')).toBeNull();
     expect(part(container, 'act')).toBeNull();
     expect(container.querySelector('[data-lens-sentence]')).not.toBeNull();
+  });
+
+  it('marks the letterhead itself as head — the focusable landing, holding the name', () => {
+    mockProject = {
+      current_phase: 'procurement',
+      start_date: null,
+      target_end_date: null,
+      budget_min: null,
+      budget_max: null,
+      total_amount_cents: null,
+    };
+    for (const projectId of [null, 'project-1']) {
+      const { container, unmount } = render(
+        <DocLetterhead
+          title="Vandersteen residence"
+          vitals="$12,400 proposed"
+          projectId={projectId}
+          fill={[1, 0.4, 0]}
+        />,
+      );
+
+      expect(parts(container, 'head')).toHaveLength(1);
+      const head = part(container, 'head') as HTMLElement;
+      expect(head.tagName).toBe('HEADER');
+      expect(head.id).toBe('document-project-status');
+      expect(head.tabIndex).toBe(-1);
+      expect(head.closest('[aria-hidden="true"], [hidden]')).toBeNull();
+      expect(head.contains(part(container, 'name'))).toBe(true);
+      unmount();
+    }
   });
 
   it('marks the pre-project letterhead: its name, its crown and its one vital', () => {

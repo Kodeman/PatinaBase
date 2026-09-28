@@ -291,9 +291,16 @@ export function DeskRoster({
         </div>
       </div>
       {/* US-14 `settle`: one node at a time — with no groups the quiet line
-          below carries it, though this line still prints. */}
+          below carries it, though this line still prints. With no top card
+          on the page (R4 quiet form) the settle node is also the headline. */}
       <p
-        data-part={roster.groups.length > 0 ? 'settle' : undefined}
+        data-part={
+          roster.groups.length === 0
+            ? undefined
+            : claims.cards.length > 0
+              ? 'settle'
+              : 'headline settle'
+        }
         className="doc-type-body mb-8 text-[var(--text-body)]"
       >
         {roster.overdueLine}
@@ -415,7 +422,7 @@ export function DeskRoster({
       {roster.groups.length === 0 && (
         <p
           data-tour-anchor="desk-folio"
-          data-part="settle"
+          data-part="headline settle"
           className="font-heading text-[15px] italic text-[var(--text-muted)]"
         >
           Nothing needs your hand. The work is in motion.

@@ -62,7 +62,14 @@ export function DocLetterhead({
   instruments?: ReactNode;
 }) {
   return (
-    <header id="document-project-status" tabIndex={-1} className="doc-rule-mid mb-4 pb-[18px] pt-[14px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
+    <header
+      id="document-project-status"
+      tabIndex={-1}
+      // US-14 `head`: the arrival's landing focus for a terminal verb or no
+      // act — a focus target only, never card text.
+      data-part="head"
+      className="doc-rule-mid mb-4 pb-[18px] pt-[14px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+    >
       <div data-part="crown" className="mb-2.5">
         <StrataMark state="active" size="lg" fill={fill} label={fill ? 'Document progress' : undefined} />
       </div>
