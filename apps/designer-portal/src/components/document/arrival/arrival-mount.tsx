@@ -21,10 +21,16 @@ import {
 import { BUDGET } from '@/lib/arrival/types';
 import type { ArriveToken } from '@/lib/arrival/types';
 
+/** A tap's click is its own input task after the pointerup; a mouse's follows in the same task. */
+const TAP_CLICK_MS = 400;
+
 let installed = false;
 let activeRun: Run | null = null;
 let cancelWait: (() => void) | null = null;
 let swallowClick = false;
+let swallowTimer = 0;
+/** The run swallowed this press at its pointerdown. */
+let pressHeld = false;
 
 /** ArrivalRun hands the started run here; the listeners forward to it. */
 export function setActiveRun(run: Run | null): void {
@@ -52,6 +58,11 @@ function mark(): void {
   touchVisit(Date.now());
 }
 
+function clearSwallow(): void {
+  swallowClick = false;
+  window.clearTimeout(swallowTimer);
+}
+
 function onKeyDown(e: KeyboardEvent): void {
   mark();
   if (activeRun) {
@@ -68,12 +79,15 @@ function onKeyDown(e: KeyboardEvent): void {
 
 /** A press during the wait ends it. On the hidden route root, the click it makes is swallowed:
  *  `arr-pre` is gone by then, and that click would act on what she could not see (arrival.js:778).
- *  Chrome stays visible under `arr-pre`, so a press on it stays live. */
+ *  Chrome stays visible under `arr-pre`, so a press on it stays live. A press the run swallowed
+ *  (Acts 1–2, or a double in Act 3) never clicks either. */
 function onPointerDown(e: PointerEvent): void {
   mark();
-  swallowClick = false;
+  clearSwallow();
+  pressHeld = false;
   if (activeRun) {
     activeRun.onPointerDown(e);
+    pressHeld = e.defaultPrevented;
     return;
   }
   if (!cancelWait) return;
@@ -83,17 +97,22 @@ function onPointerDown(e: PointerEvent): void {
 }
 
 function onPointerUp(e: PointerEvent): void {
-  if (swallowClick) {
-    window.setTimeout(() => {
-      swallowClick = false;
-    }, 0);
-  }
-  activeRun?.onPointerUp(e);
+  const run = activeRun;
+  const mouse = e.pointerType === 'mouse';
+  const before = run?.phase;
+  run?.onPointerUp(e);
+  // A mouse released on the act ends the run here and its own click is the act's activation. A
+  // tap's click lands where the finger was after the act went home, so the run forwarded one.
+  const toAct = mouse && before !== undefined && before !== 'done' && run?.phase === 'done';
+  if (pressHeld && !toAct) swallowClick = true;
+  pressHeld = false;
+  if (swallowClick) swallowTimer = window.setTimeout(clearSwallow, mouse ? 0 : TAP_CLICK_MS);
 }
 
 /** The browser took the press over: no click follows. */
 function onPointerCancel(): void {
-  swallowClick = false;
+  clearSwallow();
+  pressHeld = false;
 }
 
 function onWheel(e: WheelEvent): void {
@@ -181,9 +200,11 @@ const TOKEN_LINKS =
 
 function onClick(e: MouseEvent): void {
   if (swallowClick) {
-    swallowClick = false;
+    clearSwallow();
     e.preventDefault();
     e.stopImmediatePropagation();
+    // The click the run kept its press inert for has landed; its own release sits behind this.
+    document.documentElement.classList.remove('arr-press');
     return;
   }
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;

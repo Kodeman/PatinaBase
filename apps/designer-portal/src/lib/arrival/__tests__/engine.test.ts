@@ -93,9 +93,12 @@ function key(k: string, init: KeyboardEventInit = {}, target: EventTarget = docu
   return { e, stop }
 }
 
-function pointer(type: 'pointerdown' | 'pointerup', target: EventTarget, x: number, y: number, id = 1) {
+function pointer(
+  type: 'pointerdown' | 'pointerup', target: EventTarget, x: number, y: number, id = 1, pointerType = 'mouse',
+) {
   const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })
   Object.defineProperty(e, 'pointerId', { value: id })
+  Object.defineProperty(e, 'pointerType', { value: pointerType })
   const stop = jest.spyOn(e, 'stopImmediatePropagation')
   target.dispatchEvent(e)
   return { e, stop }
@@ -604,6 +607,50 @@ describe('pointer (O1)', () => {
     pointer('pointerup', document.body, AX - 60, AY - 160)
     expect(run.phase).toBe('assemble')
     expect(acts).not.toHaveBeenCalled()
+  })
+  it('a mouse press in Acts 1-2 is inert only until its own click has landed (0 ms)', () => {
+    go(deskDom())
+    toHold()
+    pointer('pointerdown', document.body, 50, 50)
+    expect(html.classList.contains('arr-press')).toBe(true)
+    pointer('pointerup', document.body, 50, 50)
+    expect(html.classList.contains('arr-press')).toBe(true)
+    jest.advanceTimersByTime(0)
+    expect(html.classList.contains('arr-press')).toBe(false)
+  })
+  it('a tap in Acts 1-2 stays inert past a 0 ms tick, until its click lands', () => {
+    go(deskDom())
+    toHold()
+    pointer('pointerdown', document.body, 50, 50, 1, 'touch')
+    pointer('pointerup', document.body, 50, 50, 1, 'touch')
+    jest.advanceTimersByTime(0)
+    expect(html.classList.contains('arr-press')).toBe(true)
+    html.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(html.classList.contains('arr-press')).toBe(false)
+  })
+  it('a tap with no click is released by the next press, or after 400 ms', () => {
+    go(deskDom())
+    toHold()
+    pointer('pointerdown', document.body, 50, 50, 1, 'pen')
+    pointer('pointerup', document.body, 50, 50, 1, 'pen')
+    jest.advanceTimersByTime(399)
+    expect(html.classList.contains('arr-press')).toBe(true)
+    jest.advanceTimersByTime(1)
+    expect(html.classList.contains('arr-press')).toBe(false)
+    const bar = document.getElementById('bar') as HTMLElement
+    pointer('pointerdown', bar, 5, 5, 2, 'touch') // Act 3 now: a control snaps to rest
+    pointer('pointerup', bar, 5, 5, 2, 'touch')
+    expect(html.classList.contains('arr-press')).toBe(false)
+  })
+  it('B4 on touch — a tap on the act in the hold forwards exactly one click to it', () => {
+    const { A } = go(deskDom())
+    const acts = counter(A, 'click')
+    toHold()
+    pointer('pointerdown', A, AX, AY, 3, 'touch')
+    pointer('pointerup', A, AX, AY, 3, 'touch') // touch keeps the act as its target; the click comes later
+    expect(events).toEqual([{ surface: 'desk', how: 'input' }])
+    expect(acts).toHaveBeenCalledTimes(1)
+    expect(html.classList.contains('arr-press')).toBe(false)
   })
   it('in Act 3 a control snaps to rest, then acts natively (not swallowed)', () => {
     const { run } = go(deskDom())

@@ -74,7 +74,7 @@ test.describe('Document plays', () => {
 
   test('a warm soft entry via a claim card plays, and T3: every card part is live on the rested page', async ({
     authenticatedPage: page,
-  }) => {
+  }, testInfo) => {
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
@@ -94,8 +94,24 @@ test.describe('Document plays', () => {
 
     const card = page.locator(CARD_SELECTOR).first();
     await expect(card).toBeVisible({ timeout: 20_000 });
-    const cardTexts = await captureCardTexts(page);
+    let cardTexts = await captureCardTexts(page);
     expect(cardTexts.length).toBeGreaterThan(0);
+
+    // D2 (CONTRACT §2, §4a): on the phone the card headline is the long form the band carries in
+    // `data-arr-long`, while the page keeps its short form at rest, so the headline is held to that
+    // attribute (period(collapse(...)), brief.ts) instead of to the page's innerText.
+    if (testInfo.project.name === 'mobile-chrome') {
+      const longForm = await page
+        .locator('[data-lens-sentence][data-part~="headline"]')
+        .getAttribute('data-arr-long');
+      expect(longForm, 'the phone headline carrier must carry data-arr-long').toBeTruthy();
+      const cardHeadline = ((await page.locator('.arr-h').first().textContent()) ?? '').trim();
+      const long = longForm!.replace(/\s+/g, ' ').trim();
+      expect(cardHeadline).toBe(/[.!?…]["'”’)\]]*$/.test(long) ? long : `${long}.`);
+      const skipped = cardTexts.indexOf(cardHeadline);
+      expect(skipped).toBeGreaterThanOrEqual(0);
+      cardTexts = cardTexts.filter((_, i) => i !== skipped);
+    }
 
     await page.locator(SKIP_SELECTOR).click();
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);

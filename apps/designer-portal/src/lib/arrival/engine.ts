@@ -21,6 +21,8 @@ const CTRL =
 const GONE: Keyframe[] = [{ opacity: 1, visibility: 'visible' }, { opacity: 0, visibility: 'hidden' }]
 const SHOW: Keyframe[] = [{ opacity: 0 }, { opacity: 1 }]
 const HIDE: Keyframe[] = [{ opacity: 1 }, { opacity: 0 }]
+/** A tap's click is its own input task after the pointerup, hit-tested where the finger is then. */
+const TAP_CLICK_MS = 400
 
 function safe(fn: () => void): void {
   try {
@@ -108,6 +110,7 @@ export const createRun: CreateRun = (b, host, opts): Run => {
   let quiet = false
   let press: { id: number; r: DOMRect; act: HTMLElement; y: number } | null = null
   let dbl: { t: number; x: number; y: number } | null = null
+  let tapHold: (() => void) | null = null
   let baseY = 0
   let actAt = Infinity
   let left = 0
@@ -281,6 +284,7 @@ export const createRun: CreateRun = (b, host, opts): Run => {
       const free = !active || active === doc.body || held
       if (held || (normal && kbd && free)) to = landing()
     } finally {
+      releaseTap()
       html.classList.remove('arr-on', 'arr-asm', 'arr-pre', 'arr-press')
       const target = to
       if (target) safe(() => calm(target))
@@ -833,6 +837,24 @@ export const createRun: CreateRun = (b, host, opts): Run => {
     if (e.cancelable) e.preventDefault()
     html.classList.add('arr-press') // the release and its click land on <html>, never on a page control
   }
+  function releaseTap() {
+    const off = tapHold
+    tapHold = null
+    off?.()
+  }
+  /** A swallowed tap stays inert until its click has landed, the next press, or TAP_CLICK_MS. */
+  function holdTap() {
+    releaseTap()
+    if (!html.classList.contains('arr-press')) return
+    const onClick = () => releaseTap()
+    const t = win.setTimeout(releaseTap, TAP_CLICK_MS)
+    win.addEventListener('click', onClick, true)
+    tapHold = () => {
+      win.clearTimeout(t)
+      win.removeEventListener('click', onClick, true)
+      html.classList.remove('arr-press')
+    }
+  }
   function focusables(): HTMLElement[] {
     const act = A && now() >= actAt ? A : null
     return [act, skip].filter((el): el is HTMLElement => !!el)
@@ -900,6 +922,7 @@ export const createRun: CreateRun = (b, host, opts): Run => {
   }
 
   function onPointerDown(e: PointerEvent) {
+    releaseTap()
     if (!running()) return
     inputAt = now()
     guarded(() => {
@@ -937,8 +960,10 @@ export const createRun: CreateRun = (b, host, opts): Run => {
   function onPointerUp(e: PointerEvent) {
     const pr = press
     press = null
-    // after this release's click has landed on <html> (arrival.js:806)
-    win.setTimeout(() => html.classList.remove('arr-press'), 0)
+    const mouse = e.pointerType === 'mouse'
+    // a mouse click lands on <html> in this same task (arrival.js:806); a tap's comes later
+    if (mouse) win.setTimeout(() => html.classList.remove('arr-press'), 0)
+    else holdTap()
     if (!running()) return
     guarded(() => {
       if (!pr || e.pointerId !== pr.id) return
@@ -953,9 +978,10 @@ export const createRun: CreateRun = (b, host, opts): Run => {
         return
       }
       end(how ?? 'input', undefined, false)
-      // released on the act itself: the native click reaches it; released where she SAW it: forward one
+      // a mouse released on the act itself: the native click reaches it. Released where she SAW it, or a
+      // tap (its click is hit-tested after the act went home): forward one
       const t = e.target as Node | null
-      if (!(t && pr.act.contains(t))) {
+      if (!mouse || !(t && pr.act.contains(t))) {
         pr.act.dispatchEvent(
           new MouseEvent('click', {
             bubbles: true, cancelable: true, view: win, detail: 1, button: 0, clientX: x, clientY: y,

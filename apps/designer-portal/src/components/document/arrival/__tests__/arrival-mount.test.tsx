@@ -53,6 +53,14 @@ function token() {
 
 const stopNavigation = (e: Event) => e.preventDefault();
 
+/** jsdom has no PointerEvent: a MouseEvent carrying the pointer's type. */
+function pointer(type: 'pointerdown' | 'pointerup', el: Element, pointerType: string): Event {
+  const e = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 });
+  Object.defineProperty(e, 'pointerType', { value: pointerType });
+  el.dispatchEvent(e);
+  return e;
+}
+
 beforeEach(() => {
   window.sessionStorage.clear();
   document.body.innerHTML = '';
@@ -185,11 +193,11 @@ describe('a press on the hidden route root during the wait', () => {
     expect(push).toHaveBeenCalledWith('/board/b1');
   });
 
-  it('a press that makes no click leaves nothing armed: after the pointerup, or a pointercancel', async () => {
+  it('a press that makes no click leaves nothing armed: after a mouse pointerup, or a pointercancel', async () => {
     const { card } = mountPage();
     setArrivalWaiting(jest.fn());
     fireEvent.pointerDown(card);
-    fireEvent.pointerUp(document.body);
+    pointer('pointerup', document.body, 'mouse');
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     click(card);
     expect(push).toHaveBeenCalledTimes(1);
@@ -201,12 +209,120 @@ describe('a press on the hidden route root during the wait', () => {
     expect(push).toHaveBeenCalledTimes(2);
   });
 
+  it('a tap’s click is a later task: the swallow outlives a 0 ms tick, and clears after 400 ms', () => {
+    jest.useFakeTimers();
+    try {
+      const { card } = mountPage();
+      setArrivalWaiting(jest.fn());
+      pointer('pointerdown', card, 'touch');
+      pointer('pointerup', card, 'touch');
+      jest.advanceTimersByTime(0);
+      expect(click(card).defaultPrevented).toBe(true);
+      expect(push).not.toHaveBeenCalled();
+
+      setArrivalWaiting(jest.fn());
+      pointer('pointerdown', card, 'pen');
+      pointer('pointerup', card, 'pen');
+      jest.advanceTimersByTime(399);
+      jest.advanceTimersByTime(1);
+      click(card);
+      expect(push).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('nothing is swallowed when no wait is running', () => {
     const { card } = mountPage();
     fireEvent.pointerDown(card);
     fireEvent.pointerUp(card);
     click(card);
     expect(push).toHaveBeenCalledWith('/doc/e1');
+  });
+});
+
+describe('a press the run swallowed', () => {
+  const acted = jest.fn();
+
+  function mountRun(opts: { swallow: boolean; endsOnUp?: boolean }) {
+    document.body.innerHTML = '<main data-arrival="document"><button id="ctl">Rename</button></main>';
+    document.getElementById('ctl')!.addEventListener('click', acted);
+    render(<ArrivalMount />);
+    const run = fakeRun() as Run & { phase: string };
+    run.onPointerDown = jest.fn((e: PointerEvent) => {
+      if (opts.swallow) e.preventDefault();
+    });
+    run.onPointerUp = jest.fn(() => {
+      if (opts.endsOnUp) run.phase = 'done';
+    });
+    setActiveRun(run);
+    return document.getElementById('ctl')!;
+  }
+
+  function click(el: Element): MouseEvent {
+    const e = new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1, button: 0 });
+    el.dispatchEvent(e);
+    return e;
+  }
+
+  beforeEach(() => {
+    acted.mockReset();
+    document.documentElement.classList.remove('arr-press');
+  });
+
+  it('a tap in Acts 1–2 never clicks the control under it, however late its click lands', () => {
+    jest.useFakeTimers();
+    try {
+      const ctl = mountRun({ swallow: true });
+      pointer('pointerdown', ctl, 'touch');
+      document.documentElement.classList.add('arr-press');
+      pointer('pointerup', ctl, 'touch');
+      jest.advanceTimersByTime(0);
+      click(ctl);
+      expect(acted).not.toHaveBeenCalled();
+      expect(document.documentElement.classList.contains('arr-press')).toBe(false);
+      click(ctl);
+      expect(acted).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a mouse press in Acts 1–2 swallows the click in its own task, and nothing after it', async () => {
+    const ctl = mountRun({ swallow: true });
+    pointer('pointerdown', ctl, 'mouse');
+    pointer('pointerup', ctl, 'mouse');
+    click(ctl);
+    expect(acted).not.toHaveBeenCalled();
+    pointer('pointerdown', ctl, 'mouse');
+    pointer('pointerup', ctl, 'mouse');
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    click(ctl);
+    expect(acted).toHaveBeenCalledTimes(1);
+  });
+
+  it('a mouse released on the act: its own click is the activation', () => {
+    const ctl = mountRun({ swallow: true, endsOnUp: true });
+    pointer('pointerdown', ctl, 'mouse');
+    pointer('pointerup', ctl, 'mouse');
+    click(ctl);
+    expect(acted).toHaveBeenCalledTimes(1);
+  });
+
+  it('a tap released on the act: the run forwarded the activation, so the late click is swallowed', () => {
+    const ctl = mountRun({ swallow: true, endsOnUp: true });
+    pointer('pointerdown', ctl, 'touch');
+    pointer('pointerup', ctl, 'touch');
+    click(ctl);
+    expect(acted).not.toHaveBeenCalled();
+  });
+
+  it('a press the run let through (Skip, an Act 3 control) clicks', () => {
+    const ctl = mountRun({ swallow: false });
+    pointer('pointerdown', ctl, 'touch');
+    pointer('pointerup', ctl, 'touch');
+    click(ctl);
+    expect(acted).toHaveBeenCalledTimes(1);
   });
 });
 
