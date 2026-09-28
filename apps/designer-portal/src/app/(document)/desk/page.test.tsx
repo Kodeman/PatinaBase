@@ -21,6 +21,8 @@ const mockContacts = jest.fn();
 // the real component (not stubbed here — see B2-L2's "one population" test
 // below) can resolve without throwing.
 const mockRecentBoards = jest.fn();
+/** US-14 — the read after the roster that is still pending, if any. */
+let mockPendingRead: 'answered' | 'rollup' | null = null;
 
 jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
@@ -31,11 +33,15 @@ jest.mock('@patina/supabase', () => ({
   useRecentBoards: (...args: unknown[]) => mockRecentBoards(...args),
   // Desk rollup line (board-paths W2b #3) — no boards behind any bucket in
   // this suite's fixtures, so the strip renders nothing.
-  useBoardsReactionRollup: () => ({
-    data: { awaitingReaction: [], reactionsIn: [], approvedPipeline: [], capped: false },
-    isLoading: false,
-    isError: false,
-  }),
+  useBoardsReactionRollup: () =>
+    mockPendingRead === 'rollup'
+      ? { data: undefined, isLoading: true, isError: false, isPending: true }
+      : {
+          data: { awaitingReaction: [], reactionsIn: [], approvedPipeline: [], capped: false },
+          isLoading: false,
+          isError: false,
+          isPending: false,
+        },
 }));
 
 /** The Desk read's settled shape; US-14's route-root cases vary it. */
@@ -59,7 +65,10 @@ jest.mock('@/hooks/use-auth', () => ({
 // The roster's day's line reads project_notes; this suite mounts no
 // QueryClient, so the read is stubbed like every other Desk feed here.
 jest.mock('@/hooks/use-answered-notes', () => ({
-  useAnsweredNotes: () => ({ data: [] }),
+  useAnsweredNotes: () =>
+    mockPendingRead === 'answered'
+      ? { data: undefined, isPending: true }
+      : { data: [], isPending: false },
 }));
 
 jest.mock('@/hooks/use-hydrated', () => ({ useHydrated: () => true }));
@@ -139,6 +148,7 @@ beforeEach(() => {
   // Each test is a fresh Desk visit for the arbiter.
   resetDeskVisit();
   mockDeskRead = settledDeskRead();
+  mockPendingRead = null;
   mockOrgs.mockReturnValue([studio()]);
   // Own title set; nobody else on the crew (one open step).
   mockMembers.mockReturnValue([{ user_id: 'me', job_title: 'Principal' }]);
@@ -285,6 +295,16 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     const { container } = render(<DeskPage />);
     expect(main(container).getAttribute('data-arrival')).toBe(root);
     expect(main(container).hasAttribute('data-arrival-ready')).toBe(ready);
+  });
+
+  it.each([
+    ['the answered notes', 'answered'],
+    ['the boards rollup', 'rollup'],
+  ] as const)('holds ready while %s read is pending', (_read, pending) => {
+    mockPendingRead = pending;
+    const { container } = render(<DeskPage />);
+    expect(main(container).getAttribute('data-arrival')).toBe('desk');
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
   });
 
   it('marks the date line as head — the landing focus, never the greeting', () => {

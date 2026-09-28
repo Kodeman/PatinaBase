@@ -524,7 +524,7 @@ describe('the Document marks', () => {
       expect(Array.from(vital.children, (child) => child.textContent)).toEqual(
         printed,
       );
-      expect(vital.textContent).toBe(printed.join(''));
+      expect(vital.textContent).toBe(printed.join(' '));
       expect(
         vital.querySelector('[aria-label^="Clear"], [role="status"]'),
       ).toBeNull();

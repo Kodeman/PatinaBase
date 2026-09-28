@@ -12,8 +12,10 @@ import {
   useProfile,
   useOrganizations,
   useOrganizationMembers,
+  useBoardsReactionRollup,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
+import { useAnsweredNotes } from '@/hooks/use-answered-notes';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -327,9 +329,21 @@ export default function DeskPage() {
 
   // US-14 arrival marks (inert). The route root is marked only while the
   // roster itself renders — never the skeleton or the error state — and is
-  // ready once hydrated and at the first non-placeholder read.
+  // ready once hydrated and at the first non-placeholder read. Ready also
+  // waits for the reads that print inside the root after the roster mounts
+  // (the day's line's answered notes, the boards rollup): an answer landing
+  // mid-arrival would end it as a mutation. Same query keys as DeskRoster
+  // and DeskBoardsReactionRollup, so these share their fetches.
+  const answeredNotesRead = useAnsweredNotes();
+  const reactionRollupRead = useBoardsReactionRollup();
   const arrivalRoot = !isError && !!data;
-  const arrivalReady = arrivalRoot && hydrated && isSuccess && !isPlaceholderData;
+  const arrivalReady =
+    arrivalRoot &&
+    hydrated &&
+    isSuccess &&
+    !isPlaceholderData &&
+    !answeredNotesRead.isPending &&
+    !reactionRollupRead.isPending;
 
   return (
     <main

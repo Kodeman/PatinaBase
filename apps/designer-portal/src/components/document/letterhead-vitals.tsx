@@ -229,6 +229,10 @@ function VitalDate({
         <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {label}
         </span>
+        {/* The card lifts textContent: this space keeps "Start 3 August"
+            from reading "Start3 August". A whitespace-only run in a flex
+            box renders nothing, so the layout is unchanged. */}
+        {' '}
         <button
           ref={triggerRef}
           type="button"
