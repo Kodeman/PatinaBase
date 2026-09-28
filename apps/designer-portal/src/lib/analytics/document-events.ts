@@ -51,6 +51,7 @@
  */
 
 import posthog from "posthog-js";
+import type { ArrivalEnded } from "@/lib/arrival/types";
 import { isAnalyticsEnabled } from "./posthog";
 
 function track(event: string, properties?: Record<string, unknown>): void {
@@ -556,6 +557,16 @@ export const documentEvents = {
     variant: string | null;
     client_visible: boolean;
   }) => track("agreement_part_visibility_changed", props),
+
+  /** US-14 (CONTRACT D4) — one arrival ended: `{ surface, how, cause? }`, `cause` only on a
+   *  decline. No durations, no dwell. */
+  arrivalEnded: (e: ArrivalEnded) =>
+    track(
+      "arrival_ended",
+      e.how === "declined" && e.cause !== undefined
+        ? { surface: e.surface, how: e.how, cause: e.cause }
+        : { surface: e.surface, how: e.how },
+    ),
 
   commandBar,
   wayfinding,
