@@ -30,13 +30,16 @@ test.describe('Arrival accessibility', () => {
 
     const region = page.locator('[data-lens-announce]').locator('xpath=ancestor::*[@aria-live][1]');
     await expect(region).toHaveAttribute('aria-live', 'polite');
-
-    await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
-    // The run's own status node is a NEW `role="status"` while it is up — a
-    // delta against whatever pre-existing `role="status"` widgets the
+    // The run's own `role="status"` node mounts at compose start (engine.ts
+    // `start()`, well before the card's own transition settles), not at
+    // hold() — so the baseline must be read HERE, before the card is even
+    // visible, or it already includes the run's own (still textless) node.
+    // A delta against whatever pre-existing `role="status"` widgets the
     // Document already renders (business content, unrelated to arrival),
     // rather than assuming arrival's is the page's only one.
     const statusBefore = await page.locator('[role="status"]').count();
+
+    await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
 
     // aria-live forced off for the run's whole duration.
     await expect(region).toHaveAttribute('aria-live', 'off');

@@ -28,16 +28,42 @@ import {
   SKIP_SELECTOR,
 } from './helpers';
 
-/** Every text node the engine mounted under `.arr-card`/`.arr-card-fix`
- *  while the card is up (T3's own falsifier operand). */
+/** Every content text node the engine mounted under `.arr-card`/`.arr-card-fix`
+ *  while the card is up (T3's own falsifier operand) — T3 (engine-spec.md:73)
+ *  is about lines drawn from the brief's own `select()` output (headline,
+ *  place, f1/f2/f3, job/slug), which the page must also print. `.arr-cue` is
+ *  excluded: its text is a fixed UI instruction ("Click, scroll or press any
+ *  key to open the page" / "Tap or scroll…", engine-spec.md:107), never
+ *  content the real page renders. */
 async function captureCardTexts(page: Page): Promise<string[]> {
   return page.$$eval(
-    '.arr-card [data-arr], .arr-card-fix [data-arr]',
+    '.arr-card [data-arr]:not(.arr-cue), .arr-card-fix [data-arr]:not(.arr-cue)',
     (els) =>
       els
         .map((e) => (e.textContent ?? '').trim())
         .filter((t) => t.length > 0),
   );
+}
+
+/** T3 preview rule (engine-spec.md:73, ORC:582-589): "every card line, split
+ *  on ` · ` and `X: y`, must appear in the page's own text" — not the whole
+ *  joined line as one substring. A card line like "Aspen Loft Refresh ·
+ *  Installation" is the card's own `place` join of two independently-live
+ *  parts; the page's rendered text joins them differently (e.g. with an
+ *  intervening client-name link), so each part is checked on its own.
+ *  T7 (ORC:612-619) separately requires the card's own headline/facts to end
+ *  with a period — a card-only voice decoration, not part of the underlying
+ *  `select()` label the page renders. `desk-derivation.ts`'s need label (e.g.
+ *  `${n} decisions overdue — oldest due ${day}`) carries no terminal
+ *  punctuation; the card appends the period per T7, so a trailing "." is
+ *  stripped from each part before the page-substring check — otherwise T3
+ *  would fail on the period alone, on a page that is genuinely rendering the
+ *  same underlying fact. */
+function splitCardLine(text: string): string[] {
+  return text
+    .split(/ · |: /)
+    .map((part) => part.trim().replace(/\.$/, ''))
+    .filter((part) => part.length > 0);
 }
 
 test.describe('Document plays', () => {
@@ -76,10 +102,11 @@ test.describe('Document plays', () => {
 
     const bodyText = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
     for (const text of cardTexts) {
-      const needle = text.replace(/\s+/g, ' ');
-      expect(bodyText, `card text "${needle}" must be a live substring of the rested page`).toContain(
-        needle,
-      );
+      for (const part of splitCardLine(text.replace(/\s+/g, ' '))) {
+        expect(bodyText, `card line "${text}" part "${part}" must be a live substring of the rested page`).toContain(
+          part,
+        );
+      }
     }
 
     const events = await arrivalEndedEvents(page);
@@ -155,9 +182,34 @@ test.describe('Document plays', () => {
     await page.route('**/rest/v1/proposals*', delayedRoute(2_500));
 
     await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
-    await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
-    await page.locator(SKIP_SELECTOR).click();
-    await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
+
+    // CONTRACT §4b: a slow read declines `hidden`/`late` (the ordinary page)
+    // rather than cutting a played run — it does NOT guarantee the card
+    // shows on every cold load. The falsifier is "never drift/mutation", not
+    // "always plays" (play-desk.spec.ts's staggered-reads test asserts the
+    // Desk side of this same rule the same way).
+    const cardOrRest = await Promise.race([
+      page
+        .locator(CARD_SELECTOR)
+        .first()
+        .waitFor({ state: 'visible', timeout: 20_000 })
+        .then(() => 'played' as const),
+      page
+        .waitForFunction(
+          () =>
+            (window as unknown as { __arrivalEndedEvents?: unknown[] }).__arrivalEndedEvents
+              ?.length,
+          undefined,
+          { timeout: 20_000 },
+        )
+        .then(() => 'ended' as const)
+        .catch(() => 'neither' as const),
+    ]);
+    expect(cardOrRest).not.toBe('neither');
+    if (cardOrRest === 'played') {
+      await page.locator(SKIP_SELECTOR).click();
+      await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
+    }
 
     const events = await arrivalEndedEvents(page);
     const docEvents = events.filter((e) => e.surface === 'document');
@@ -165,6 +217,9 @@ test.describe('Document plays', () => {
     for (const e of docEvents) {
       expect(e.cause).not.toBe('drift');
       expect(e.cause).not.toBe('mutation');
+      if (e.how === 'declined') {
+        expect(['hidden', 'late']).toContain(e.cause);
+      }
     }
   });
 });

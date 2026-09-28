@@ -38,10 +38,18 @@ test.describe('Arrival failure injection', () => {
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator(CARD_SELECTOR)).toBeVisible({ timeout: 20_000 });
-
+    // `hide(H)` (engine.ts) sets the real headline's inline `opacity`/
+    // `transition` at compose start — on this route that lands well within
+    // one `domcontentloaded`-to-next-script-line gap (the fixture's own
+    // earlier /desk visit already warms data/fonts), so there is no reliable
+    // pre-run vantage point from test script timing to snapshot a "before"
+    // value; a read here already carries the override, every time. The
+    // headline never carries any inline style outside the engine's own
+    // touch (a plain server-rendered job-name line, Tailwind classes only),
+    // so the falsifier is the restored value's own content, not equality to
+    // an uncapturable snapshot.
     const headline = page.locator('[data-part="headline"]').first();
-    const styleBefore = await headline.getAttribute('style');
+    await expect(page.locator(CARD_SELECTOR)).toBeVisible({ timeout: 20_000 });
 
     // Well past compose into hold (Act 2) — the card is still up (HOLD_MS is
     // 10s) so this lands mid-hold, not mid-compose.
@@ -61,10 +69,10 @@ test.describe('Arrival failure injection', () => {
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0, { timeout: 3_000 });
     const styleAfter = await headline.getAttribute('style');
     // `hide(H)` had set inline `opacity`/`transition`; `end()`'s restoration
-    // must return the real headline to whatever it carried before the run
-    // (here: unchanged from baseline — no leftover engine-authored inline
-    // style survives the decline).
-    expect(styleAfter).toBe(styleBefore);
+    // must return the real headline to its pre-run baseline — empty, since
+    // nothing else in this markup sets an inline style on it — with no
+    // leftover engine-authored override surviving the decline.
+    expect(styleAfter ?? '').toBe('');
     expect(styleAfter ?? '').not.toContain('opacity: 0');
     expect(styleAfter ?? '').not.toContain('transition: none');
 

@@ -169,8 +169,12 @@ test.describe('Arrival input handling', () => {
     // the ordinary page: the Document's own root chrome is live (checked via
     // `data-arrival="document"` rather than the spine's "Put down" link,
     // which is desktop-only — `min-[1180px]:block` — and this assertion must
-    // hold on the phone-viewport `mobile-chrome` project too).
-    await expect(page.locator('[data-arrival="document"]')).toBeVisible({ timeout: 2_000 });
+    // hold on the phone-viewport `mobile-chrome` project too). `[data-arrival]`
+    // only mounts once the Document's own reads land, and this test's own
+    // `**/rest/v1/**` route delays every one of them by 3s — so this wait
+    // must clear that delay, not just the halt's own (much faster) ~1.3s busy
+    // decline.
+    await expect(page.locator('[data-arrival="document"]')).toBeVisible({ timeout: 5_000 });
 
     await page.waitForTimeout(3_500); // let the delayed reads land — no late run must start
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);

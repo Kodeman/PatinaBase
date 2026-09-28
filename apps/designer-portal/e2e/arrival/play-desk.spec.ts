@@ -91,8 +91,13 @@ test.describe('Desk plays', () => {
 
     // Chrome (header + the "Find anything" affordance) renders unconditionally
     // — desk/page.tsx's <header> is above the isLoading/isError branch — so it
-    // must be visible well before the delayed reads land.
-    const findAnything = page.getByRole('button', { name: /find anything/i });
+    // must be visible well before the delayed reads land. The studio drawer
+    // renders its OWN "Find anything (⌘K), from the studio drawer" act
+    // unconditionally too (studio-drawer.tsx C-AP-05 — two doors, one
+    // accessible-name prefix, by design), so `getByRole(...,{name:/find
+    // anything/i})` is a strict-mode violation; the Desk header's own act is
+    // `[data-tour-anchor="desk-find-anything"]`.
+    const findAnything = page.locator('[data-tour-anchor="desk-find-anything"]');
     await expect(findAnything).toBeVisible({ timeout: 2_000 });
 
     // The card must not mount before `host.ready()` (arrival-run.tsx
