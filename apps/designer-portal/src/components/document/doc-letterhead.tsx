@@ -63,7 +63,7 @@ export function DocLetterhead({
 }) {
   return (
     <header id="document-project-status" tabIndex={-1} className="doc-rule-mid mb-4 pb-[18px] pt-[14px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]">
-      <div className="mb-2.5">
+      <div data-part="crown" className="mb-2.5">
         <StrataMark state="active" size="lg" fill={fill} label={fill ? 'Document progress' : undefined} />
       </div>
       <div className="grid grid-cols-1 items-start gap-x-[1.5rem] gap-y-[0.5rem] min-[1180px]:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
@@ -80,7 +80,10 @@ export function DocLetterhead({
                tracking both went with it: 40px of Playfair spent ~11
                characters of a 390 measure, and the standing sentence, not the
                name, is the head's largest true fact. */
-            <h1 className="min-w-0 break-words font-heading text-[34px] font-medium leading-[1.08] text-[var(--text-primary)]">
+            <h1
+              data-part="name"
+              className="min-w-0 break-words font-heading text-[34px] font-medium leading-[1.08] text-[var(--text-primary)]"
+            >
               {title}
             </h1>
           )}
@@ -98,6 +101,7 @@ export function DocLetterhead({
                  is not a vital. */
               <p
                 data-letterhead-vitals
+                data-part="f1"
                 className="mt-1 text-[15px] text-[var(--text-muted)]"
               >
                 {vitals}

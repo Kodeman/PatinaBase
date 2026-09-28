@@ -197,7 +197,7 @@ export function DocSpine({
             jumps have no single honest successor. The breath is the one
             ambient move the system keeps, and it stills under reduce
             (`.doc-breath`, globals.css). */}
-          <div data-spine-mark className="mt-2 flex items-center">
+          <div data-spine-mark data-part="crown" className="mt-2 flex items-center">
             <StrataMark
               size="md"
               fill={markFill}

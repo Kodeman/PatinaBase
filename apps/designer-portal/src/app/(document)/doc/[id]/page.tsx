@@ -2401,6 +2401,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       : null;
   const lensLinePropsRef = useRef(lensLineProps);
   lensLinePropsRef.current = lensLineProps;
+  // US-14 arrival mark (inert): the band has settled and so has the Desk
+  // composition it reads its needs from, where one applies.
+  const deskEnrichmentSettled =
+    !deskEnrichment ||
+    (!enrichedOperationalQuery.isPending &&
+      !enrichedOperationalQuery.isPlaceholderData);
+  const arrivalReady = lensLineSettled && deskEnrichmentSettled;
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;
@@ -2738,6 +2745,8 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     <div
       ref={lensShellRef}
       data-document-shell
+      data-arrival="document"
+      data-arrival-ready={arrivalReady ? '' : undefined}
       data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"
       // W3 · the reading stop, published where the rail and the mobile bar
       // already publish it. Absent rather than `"null"` when nothing reads.

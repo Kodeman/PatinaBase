@@ -72,7 +72,8 @@ export function DeskClaimCard({
 }: {
   card: ClaimCard;
   tone: RowWashTone;
-  /** The settle stagger index; ignored when `settle` is false. */
+  /** The card's place in the grid — the settle stagger index, and 0 is the
+   *  top card, which carries the US-14 arrival marks. */
   index?: number;
   settle: boolean;
   tourAnchor?: string;
@@ -86,6 +87,7 @@ export function DeskClaimCard({
   // Secondary where the act moves a reminder or opens money; tertiary where it
   // only opens something. Consequence, not emphasis.
   const variant = line.act.ledger ? 'secondary' : 'tertiary';
+  const top = index === 0;
 
   return (
     <li
@@ -146,6 +148,7 @@ export function DeskClaimCard({
           href={line.jobHref}
           data-roster-name
           data-register="name"
+          data-part={top ? 'job' : undefined}
           className="mt-2 block min-w-0 font-heading text-[20px] font-medium leading-[1.3] text-[var(--text-primary)] no-underline transition-colors motion-reduce:transition-none"
         >
           <span className="row-wash-score [overflow-wrap:anywhere]">
@@ -169,6 +172,7 @@ export function DeskClaimCard({
           ink, and never a growing day count beside a date. Selectable. */}
       <p
         data-register="sentence"
+        data-part={top ? 'headline' : undefined}
         className="desk-claim-sentence mt-3 text-[15px] leading-[1.5] text-[var(--text-muted)] [overflow-wrap:anywhere]"
       >
         {line.overdueText ? (
@@ -186,6 +190,7 @@ export function DeskClaimCard({
             actionKey={actionKey}
             aria-label={ariaLabel}
             variant={variant}
+            data-part={top ? 'act' : undefined}
             onClick={() =>
               openLedger(line.act.ledger!.name, line.act.ledger!.context)
             }
@@ -197,6 +202,7 @@ export function DeskClaimCard({
             actionKey={actionKey}
             aria-label={ariaLabel}
             variant={variant}
+            data-part={top ? 'act' : undefined}
             href={line.act.href}
           >
             {line.act.label}

@@ -70,7 +70,8 @@ const FIRST_HOUR_MS = 60 * 60 * 1000;
 
 export default function DeskPage() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.desk); // R89 — scope help to the Desk
-  const { data, isLoading, isError, refetch } = useDeskEngagements();
+  const { data, isLoading, isError, isSuccess, isPlaceholderData, refetch } =
+    useDeskEngagements();
   const { user } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const hydrated = useHydrated();
@@ -324,8 +325,18 @@ export default function DeskPage() {
       />
     );
 
+  // US-14 arrival marks (inert). The route root is marked only while the
+  // roster itself renders — never the skeleton or the error state — and is
+  // ready at the first non-placeholder read.
+  const arrivalRoot = !isError && !!data;
+  const arrivalReady = arrivalRoot && isSuccess && !isPlaceholderData;
+
   return (
-    <main className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14">
+    <main
+      data-arrival={arrivalRoot ? 'desk' : undefined}
+      data-arrival-ready={arrivalReady ? '' : undefined}
+      className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14"
+    >
       <header className="mb-12 flex items-baseline justify-between gap-4">
         <div>
           {/* The signature move: greeting in Playfair, the first name in
@@ -345,7 +356,10 @@ export default function DeskPage() {
               <>{greetingWord}.</>
             )}
           </h1>
-          <p className="doc-type-meta mt-1 uppercase tracking-[0.09em]">
+          <p
+            data-part="head"
+            className="doc-type-meta mt-1 uppercase tracking-[0.09em]"
+          >
             {dateLabel || ' '}
           </p>
         </div>
