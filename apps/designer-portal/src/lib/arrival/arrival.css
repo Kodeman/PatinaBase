@@ -21,6 +21,10 @@ html.arr-on body,html.arr-on [data-arrival]{overflow-x:clip} /* clip, not hidden
 
 /* ---------- Acts 1-2: chrome is inert; the engine's own nodes and the real act (inline) stay live ---------- */
 html.arr-on:not(.arr-asm) body,html.arr-press body{pointer-events:none}
+/* a page node that sets pointer-events:auto itself (MarginRail at >=1440, toasts) would still take the click after the
+   advancing press, and the run has no click hook: every non-engine node is forced inert. The act wins inline !important. */
+html.arr-on:not(.arr-asm) body *:not([data-arr]):not([data-arr] *),
+html.arr-press body *:not([data-arr]):not([data-arr] *){pointer-events:none!important}
 html.arr-on [data-arr]{pointer-events:auto}
 html.arr-on .arr-card,html.arr-on .arr-card *,html.arr-on .arr-rules,html.arr-on .arr-rules *,
 html.arr-on .arr-rules-fix,html.arr-on .arr-rules-fix *{pointer-events:none}

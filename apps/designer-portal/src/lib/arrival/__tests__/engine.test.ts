@@ -156,8 +156,29 @@ describe('start', () => {
     card.style.overflow = 'hidden'
     const { A } = go(root)
     expect(A.style.pointerEvents).toBe('auto')
+    expect(A.style.getPropertyPriority('pointer-events')).toBe('important')
     expect(A.getAttribute('draggable')).toBe('false')
     expect(card.hasAttribute('data-arr-unclip')).toBe(true)
+  })
+  it('frame-0 hides are instant: every hidden page node has its own transition off, restored at finish', () => {
+    const root = documentDom()
+    const H = root.querySelector('[data-lens-sentence]') as HTMLElement
+    const name = root.querySelector('[data-part~="name"]') as HTMLElement
+    H.style.transition = 'opacity 150ms'
+    name.style.transition = 'opacity 150ms'
+    const { run } = go(root)
+    expect(H.style.opacity).toBe('0')
+    expect(H.style.transition).toBe('none')
+    expect(name.style.opacity).toBe('0')
+    expect(name.style.transition).toBe('none')
+    const hidden = Array.from(root.querySelectorAll<HTMLElement>('[style]')).filter((el) => el.style.opacity === '0')
+    expect(hidden.length).toBeGreaterThan(2)
+    for (const el of hidden) expect(el.style.transition).toBe('none')
+    run.finish('skip')
+    expect(H.style.transition).toBe('opacity 150ms')
+    expect(H.style.opacity).toBe('')
+    expect(name.style.transition).toBe('opacity 150ms')
+    for (const el of hidden) expect(el.style.getPropertyValue('transition')).not.toBe('none')
   })
   it('declines drift before touching the page: no played mark, the entry move plays', () => {
     const root = deskDom()
@@ -282,6 +303,7 @@ describe('guards', () => {
     toHold()
     expect(events).toEqual([{ surface: 'desk', how: 'error' }])
     expect(A.style.pointerEvents).toBe('')
+    expect(A.style.getPropertyPriority('pointer-events')).toBe('')
     expect(html.classList.contains('arr-on')).toBe(false)
     expect(ours()).toHaveLength(0)
   })
@@ -592,6 +614,10 @@ describe('B7 / B8 / B10 — the stylesheet the run relies on', () => {
   it('B10: Acts 1-2 take no page hits; engine nodes stay live; the entry moves never replay after a played run', () => {
     expect(CSS).toContain('html.arr-on:not(.arr-asm) body')
     expect(CSS).toContain('html.arr-on [data-arr]{pointer-events:auto}')
+    // a page node's own pointer-events:auto (MarginRail, toasts) cannot take the click after the advancing press
+    expect(CSS).toMatch(
+      /html\.arr-on:not\(\.arr-asm\) body \*:not\(\[data-arr\]\):not\(\[data-arr\] \*\),\s*html\.arr-press body \*:not\(\[data-arr\]\):not\(\[data-arr\] \*\)\{pointer-events:none!important\}/,
+    )
     expect(CSS).toContain('[data-arr-played][data-arrival="document"]{animation:none}')
     expect(CSS).toContain('[data-arr-played] .desk-settle{animation:none}')
     expect(CSS).toContain('[data-arr-unclip]{overflow:visible!important}')
@@ -600,6 +626,24 @@ describe('B7 / B8 / B10 — the stylesheet the run relies on', () => {
     expect(html.classList.contains('arr-on') && !html.classList.contains('arr-asm')).toBe(true)
     expect(A.style.pointerEvents).toBe('auto')
     expect(document.querySelector('.arr-card')?.getAttribute('aria-hidden')).toBe('true')
+  })
+})
+
+describe('B10 — the forced-inert rule', () => {
+  it('reaches a page node that sets pointer-events:auto itself, never an engine node or its contents', () => {
+    const root = documentDom()
+    const rail = document.createElement('aside')
+    rail.className = 'min-[1440px]:pointer-events-auto'
+    root.appendChild(rail)
+    const toast = document.createElement('div')
+    toast.className = 'pointer-events-auto'
+    document.body.appendChild(toast)
+    go(root)
+    const inert = new Set(document.querySelectorAll('html.arr-on:not(.arr-asm) body *:not([data-arr]):not([data-arr] *)'))
+    expect(inert.has(rail)).toBe(true)
+    expect(inert.has(toast)).toBe(true)
+    expect(document.querySelectorAll('.arr-crown *').length).toBeGreaterThan(0)
+    for (const n of [...ours(), ...Array.from(document.querySelectorAll('[data-arr] *'))]) expect(inert.has(n)).toBe(false)
   })
 })
 

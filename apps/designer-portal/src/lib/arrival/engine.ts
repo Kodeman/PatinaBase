@@ -73,6 +73,7 @@ export const createRun: CreateRun = (b, host, opts): Run => {
   const saved: Array<[ElementCSSInlineStyle, string, string, string]> = []
   const attrs: Array<[Element, string, string | null]> = []
   const nodes: Element[] = []
+  const still = new Set<HTMLElement>()
   const anims: Animation[] = []
   const phaseTimers = new Set<number>()
   const offs: Array<() => void> = []
@@ -129,9 +130,17 @@ export const createRun: CreateRun = (b, host, opts): Run => {
     nodes.push(e)
     return e
   }
-  function put(el: ElementCSSInlineStyle, prop: string, val: string) {
+  function put(el: ElementCSSInlineStyle, prop: string, val: string, prio = '') {
     saved.push([el, prop, el.style.getPropertyValue(prop), el.style.getPropertyPriority(prop)])
-    el.style.setProperty(prop, val)
+    el.style.setProperty(prop, val, prio)
+  }
+  /** A frame-0 hide is instant: the node's own transition (the band sentence's 150ms opacity) must not play it out. */
+  function hide(el: HTMLElement, prop = 'opacity', val = '0') {
+    if (!still.has(el)) {
+      still.add(el)
+      put(el, 'transition', 'none')
+    }
+    put(el, prop, val)
   }
   /** Back to the page's own value now; finish() restores it again (idempotent). */
   function reset(el: ElementCSSInlineStyle, prop: string) {
@@ -417,7 +426,7 @@ export const createRun: CreateRun = (b, host, opts): Run => {
     const rf = mount(make('div', 'arr-rules-fix'))
     for (const u of units) {
       for (const r of u.rules) {
-        put(u.el, r.prop, 'transparent')
+        hide(u.el, r.prop, 'transparent')
         const e = make('span', 'arr-rule')
         e.style.cssText = r.css
         if (rm) {
@@ -428,18 +437,19 @@ export const createRun: CreateRun = (b, host, opts): Run => {
         ruleEl.set(r, e)
       }
       if (u.kind === 'rules') continue
-      if (u.kids.length) u.kids.forEach((k) => put(k.el, 'opacity', '0'))
-      else put(u.el, 'opacity', '0')
+      if (u.kids.length) u.kids.forEach((k) => hide(k.el))
+      else hide(u.el)
     }
     settle = b.parts
       .filter((x) => x.part === 'settle')
       .map((x) => ({ el: x.node, col: win.getComputedStyle(x.node).color }))
     faint = win.getComputedStyle(html).getPropertyValue('--text-faint').trim()
-    canon.forEach((el) => put(el, 'opacity', '0'))
-    put(H, 'opacity', '0') // the real carrier holds still while its clone flies
+    canon.forEach((el) => hide(el))
+    hide(H) // the real carrier holds still while its clone flies
 
     if (A) {
-      put(A, 'pointer-events', 'auto') // the one live target while the rest takes no hits
+      // the one live target while the rest takes no hits: important, to beat arrival.css's forced-inert rule
+      put(A, 'pointer-events', 'auto', 'important')
       put(A, 'position', 'relative')
       put(A, 'z-index', '39')
       if (A.tagName === 'A') setAttr(A, 'draggable', 'false')
