@@ -1,7 +1,8 @@
 /**
  * US-14 arrival — one route's run (arrival-run.tsx) against a fake engine: gate at the commit,
- * hide/ready/quiet/faces, the caps, the guards at ready, the one-time writes under StrictMode, and
- * the end report (telemetry + EVENT_ENDED + the anchor).
+ * hide/ready/quiet/faces, the caps, the guards at ready, her hand during the wait, the one-time
+ * writes under StrictMode, and the end report (telemetry + EVENT_ENDED + the anchor, once per entry
+ * for every end).
  */
 import { StrictMode, useEffect } from 'react';
 import { act, render } from '@testing-library/react';
@@ -289,8 +290,24 @@ describe('the gate at the commit', () => {
     expect(window.location.search).toBe('');
     expect(capture.mock.calls).toEqual([declined('desk', 'query')]);
     expect(html.classList.contains('arr-pre')).toBe(false);
-    expect(markArrival).not.toHaveBeenCalled();
+    expect(markArrival).toHaveBeenCalledTimes(1);
   });
+
+  it.each<DeclineCause>(['token', 'reload'])(
+    'a gate decline (%s) writes the anchor exactly once, StrictMode included',
+    (cause) => {
+      mockPathname = '/doc/e1';
+      const { engine } = makeEngine(() => ({ play: false, cause }));
+      render(
+        <StrictMode>
+          <ArrivalRun engine={engine} pathname="/doc/e1" />
+        </StrictMode>,
+      );
+      expect(capture.mock.calls).toEqual([declined('document', cause)]);
+      expect(markArrival).toHaveBeenCalledTimes(1);
+      expect(markArrival).toHaveBeenCalledWith('document', 'e1');
+    },
+  );
 
   it('a decline reports its cause and never hides the page', () => {
     const { engine } = makeEngine(() => ({ play: false, cause: 'desk-shown' }));
@@ -344,7 +361,7 @@ describe('the caps', () => {
     expect(capture.mock.calls).toEqual([declined('desk', 'hidden')]);
     expect(html.classList.contains('arr-pre')).toBe(false);
     expect(engine.createRun).not.toHaveBeenCalled();
-    expect(markArrival).not.toHaveBeenCalled();
+    expect(markArrival).toHaveBeenCalledTimes(1);
   });
 
   it('entry (soft): no ready within SOFT_ENTRY_READY_MS of the commit → late', async () => {
@@ -355,6 +372,8 @@ describe('the caps', () => {
     await advance(1);
     expect(capture.mock.calls).toEqual([declined('desk', 'late')]);
     expect(html.classList.contains('arr-pre')).toBe(false);
+    expect(markArrival).toHaveBeenCalledTimes(1);
+    expect(markArrival).toHaveBeenCalledWith('desk', null);
   });
 
   it('entry (hard): counted from timeOrigin; already spent at the commit → late without hiding', async () => {
@@ -446,12 +465,13 @@ describe('the guards at ready', () => {
     render(<ArrivalRun engine={engine} pathname="/desk" />);
     await toReady();
     expect(capture.mock.calls).toEqual([declined('desk', 'hidden')]);
+    expect(markArrival).toHaveBeenCalledTimes(1);
     visibility.mockRestore();
   });
 });
 
-describe('Escape during the wait', () => {
-  it('is swallowed until the wait ends, then passes', async () => {
+describe('her hand during the wait', () => {
+  function mountWaiting() {
     const { engine } = makeEngine();
     render(
       <>
@@ -459,14 +479,61 @@ describe('Escape during the wait', () => {
         <ArrivalRun engine={engine} pathname="/desk" />
       </>,
     );
+    expect(html.classList.contains('arr-pre')).toBe(true);
+    return engine;
+  }
+
+  /** The page then reaches ready: nothing starts, nothing more is reported. */
+  async function staysAtRest(engine: ReturnType<typeof makeEngine>['engine']) {
+    addRoot('desk', true);
+    await toReady();
+    await advance(BUDGET.SOFT_ENTRY_READY_MS);
+    expect(engine.createRun).not.toHaveBeenCalled();
+    expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
+    expect(markArrival).toHaveBeenCalledTimes(1);
+    expect(html.classList.contains('arr-pre')).toBe(false);
+  }
+
+  it('a key ends the wait for good (arr-pre gone, no run) and is not swallowed', async () => {
+    const engine = mountWaiting();
+    const key = new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(key);
+    expect(key.defaultPrevented).toBe(false);
+    expect(html.classList.contains('arr-pre')).toBe(false);
+    await staysAtRest(engine);
+  });
+
+  it('a press ends the wait for good and reaches the chrome', async () => {
+    const engine = mountWaiting();
+    const chrome = jest.fn();
+    document.body.addEventListener('pointerdown', chrome);
+    const press = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+    document.body.dispatchEvent(press);
+    document.body.removeEventListener('pointerdown', chrome);
+    expect(chrome).toHaveBeenCalledTimes(1);
+    expect(press.defaultPrevented).toBe(false);
+    expect(html.classList.contains('arr-pre')).toBe(false);
+    await staysAtRest(engine);
+  });
+
+  it.each(['wheel', 'touchmove'])('%s ends the wait for good', async (type) => {
+    const engine = mountWaiting();
+    document.body.dispatchEvent(new Event(type, { bubbles: true }));
+    expect(html.classList.contains('arr-pre')).toBe(false);
+    await staysAtRest(engine);
+  });
+
+  it('Escape is swallowed and ends the wait; once it has ended, Escape passes', async () => {
+    const engine = mountWaiting();
     const first = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     document.body.dispatchEvent(first);
     expect(first.defaultPrevented).toBe(true);
+    expect(html.classList.contains('arr-pre')).toBe(false);
 
-    await advance(BUDGET.SOFT_ENTRY_READY_MS);
     const second = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     document.body.dispatchEvent(second);
     expect(second.defaultPrevented).toBe(false);
+    await staysAtRest(engine);
   });
 });
 

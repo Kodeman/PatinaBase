@@ -76,6 +76,31 @@ describe('busy()', () => {
     expect(host().busy()).toBe(false);
   });
 
+  it('is NOT busy for the margin panel’s notes (file-change:*, doc-first-touch); an arbiter line is', () => {
+    // MarginNote's shape (margin-note.tsx): a direct-child Dismiss button.
+    const note = (body: string) =>
+      `<aside role="note"><p>${body}</p><button aria-label="Dismiss note">×</button></aside>`;
+    document.body.innerHTML =
+      '<aside data-margin-panel data-margin-mode="rail">' +
+      '<div class="px-4">' +
+      note('One client, one paper.') +
+      note('Ana changed plan.pdf.') +
+      '</div></aside>';
+    expect(host().busy()).toBe(false);
+    // desk-walkthrough-offer (desk/page.tsx) stands outside the margin panel.
+    document.body.insertAdjacentHTML('afterbegin', `<main data-arrival="desk">${note('Want the walk?')}</main>`);
+    expect(host().busy()).toBe(true);
+  });
+
+  it('is busy while the Accept · begin Undo offer stands, not while its region is empty', () => {
+    document.body.innerHTML = '<div role="status" aria-live="polite" class="sr-only"></div>';
+    expect(host().busy()).toBe(false);
+    document.body.innerHTML =
+      '<div role="status" aria-live="polite"><div data-testid="return-to-lead-undo">' +
+      '<span>Moved to discovery.</span><button>Undo</button></div></div>';
+    expect(host().busy()).toBe(true);
+  });
+
   it('is NOT busy for a dismissible note that is not rendered', () => {
     document.body.innerHTML =
       '<div hidden><aside role="note"><button aria-label="Dismiss note">×</button></aside></div>';
@@ -113,6 +138,24 @@ describe('faces()', () => {
 });
 
 describe('view()', () => {
+  it('never touches <body>’s children — the running engine ends on any foreign one', () => {
+    document.body.innerHTML = '<main data-arrival="desk"></main>';
+    const records: MutationRecord[] = [];
+    const ours = (n: Node) => n.nodeType === 1 && (n as Element).hasAttribute('data-arr');
+    // The engine's guard (CONTRACT §3): body childList, ignoring [data-arr].
+    const guard = new MutationObserver((recs) => records.push(...recs));
+    guard.observe(document.body, { childList: true });
+    const h = host();
+    h.view();
+    h.view();
+    records.push(...guard.takeRecords());
+    guard.disconnect();
+    const foreign = records.filter((r) =>
+      [...Array.from(r.addedNodes), ...Array.from(r.removedNodes)].some((n) => !ours(n)),
+    );
+    expect(foreign).toHaveLength(0);
+  });
+
   it('is the viewport minus the MobileBar', () => {
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 844 });
     Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 390 });

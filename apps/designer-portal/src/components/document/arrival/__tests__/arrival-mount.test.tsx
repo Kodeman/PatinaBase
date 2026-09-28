@@ -45,7 +45,7 @@ beforeEach(() => {
 afterEach(() => {
   document.removeEventListener('click', stopNavigation);
   setActiveRun(null);
-  setArrivalWaiting(false);
+  setArrivalWaiting(null);
 });
 
 describe('forwarding', () => {
@@ -91,6 +91,21 @@ describe('forwarding', () => {
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     document.body.dispatchEvent(escape);
     expect(escape.defaultPrevented).toBe(false);
+  });
+
+  it('during the wait, a press, wheel or swipe ends it once and is never swallowed', () => {
+    render(<ArrivalMount />);
+    for (const fire of [
+      () => fireEvent.pointerDown(document.body),
+      () => fireEvent.wheel(document.body),
+      () => fireEvent.touchMove(document.body),
+    ]) {
+      const cancel = jest.fn();
+      setArrivalWaiting(cancel);
+      expect(fire()).toBe(true);
+      fire();
+      expect(cancel).toHaveBeenCalledTimes(1);
+    }
   });
 });
 

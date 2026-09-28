@@ -26,16 +26,26 @@ function firstFamily(stack: string): string | null {
 }
 
 /** A MarginNote (arbiter line, teaching note, walkthrough offer) wears its Dismiss button as a
- *  direct child; the setup whisper and the since line wear none and are not busy. */
+ *  direct child; the setup whisper and the since line wear none and are not busy. The margin
+ *  panel's notes (`doc-first-touch`, `file-change:*` — margin-rail.tsx) are off the §3 list:
+ *  MarginNote prints no key, so they are told apart by where they stand. */
 function dismissibleNoteOnScreen(): boolean {
   const notes = document.querySelectorAll<HTMLElement>('aside[role="note"]');
   for (const note of Array.from(notes)) {
+    if (note.closest('[data-margin-panel]')) continue;
     const dismiss = Array.from(note.children).some((child) =>
       child.matches('button[aria-label="Dismiss note"]'),
     );
     if (dismiss && isElementRendered(note)) return true;
   }
   return false;
+}
+
+/** The Accept · begin Undo band (return-to-lead-undo.tsx) renders its inner band only while its
+ *  eight-second offer (or its refusal) stands. */
+function undoOfferOnScreen(): boolean {
+  const band = document.querySelector<HTMLElement>('[data-testid="return-to-lead-undo"]');
+  return !!band && isElementRendered(band);
 }
 
 function dialogOnScreen(): boolean {
@@ -52,13 +62,15 @@ function selectionLive(): boolean {
   }
 }
 
+/** Measured once per host, before any run, on `<html>` — never under `<body>`, whose children the
+ *  running engine guards (a foreign child there ends the run 'mutation'). */
 function safeInsets(): { top: number; bottom: number } {
   const probe = document.createElement('div');
   probe.setAttribute('aria-hidden', 'true');
   probe.style.cssText =
     'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
     'padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;';
-  document.body.appendChild(probe);
+  document.documentElement.appendChild(probe);
   try {
     const cs = window.getComputedStyle(probe);
     return { top: parseFloat(cs.paddingTop) || 0, bottom: parseFloat(cs.paddingBottom) || 0 };
@@ -73,6 +85,7 @@ export function createHost(
   deps: HostDeps,
 ): Host {
   const selector = `[data-arrival="${surface}"]`;
+  const inset = safeInsets();
   return {
     root() {
       return document.querySelector<HTMLElement>(selector);
@@ -88,6 +101,7 @@ export function createHost(
         document.querySelector('[data-shelf-open]') !== null ||
         deps.walkthroughOnScreen() ||
         dismissibleNoteOnScreen() ||
+        undoOfferOnScreen() ||
         deps.logOfferPending() ||
         selectionLive()
       );
@@ -101,7 +115,6 @@ export function createHost(
     view() {
       const vh = window.innerHeight || document.documentElement.clientHeight || 0;
       const width = document.documentElement.clientWidth || window.innerWidth || 0;
-      const inset = safeInsets();
       let barHeight = 0;
       const bar = document.querySelector<HTMLElement>('[data-testid="mobile-bar"]');
       if (bar && isElementRendered(bar)) {

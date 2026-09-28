@@ -86,7 +86,7 @@ function Layout() {
 
 afterEach(() => {
   setActiveRun(null);
-  setArrivalWaiting(false);
+  setArrivalWaiting(null);
 });
 
 describe('ArrivalMount listener order', () => {
@@ -128,22 +128,28 @@ describe('ArrivalMount listener order', () => {
     expect(chromeSpy).not.toHaveBeenCalled();
   });
 
-  it('swallows Escape during the ready wait; other keys pass', () => {
+  it('swallows Escape during the ready wait; other keys pass; either one ends the wait', () => {
     mockOffer = offer(26);
     render(<Layout />);
-    setArrivalWaiting(true);
+    const cancelOnEscape = jest.fn();
+    setArrivalWaiting(cancelOnEscape);
 
     const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     document.body.dispatchEvent(escape);
     expect(escape.defaultPrevented).toBe(true);
     expect(mockDiscardOffer).not.toHaveBeenCalled();
     expect(chromeSpy).not.toHaveBeenCalled();
+    expect(cancelOnEscape).toHaveBeenCalledTimes(1);
 
+    const cancelOnKey = jest.fn();
+    setArrivalWaiting(cancelOnKey);
     fireEvent.keyDown(document.body, { key: 'k', metaKey: true });
     expect(chromeSpy).toHaveBeenCalledTimes(1);
+    expect(cancelOnKey).toHaveBeenCalledTimes(1);
 
-    setArrivalWaiting(false);
+    // The wait is over: the next Escape is hers again.
     fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(mockDiscardOffer).toHaveBeenCalledTimes(1);
+    expect(cancelOnEscape).toHaveBeenCalledTimes(1);
   });
 });

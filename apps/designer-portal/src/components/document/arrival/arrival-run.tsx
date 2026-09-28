@@ -124,6 +124,8 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
     });
     const html = document.documentElement;
 
+    // The one end-of-entry funnel: every end — played, or declined at the gate, the commit, a cap
+    // or ready — reports once and writes the D3 anchor once.
     const report = (e: ArrivalEnded) => {
       if (reportedRef.current) return;
       reportedRef.current = true;
@@ -133,6 +135,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       } catch {
         /* telemetry never breaks the page */
       }
+      host.markArrival(surface, engagementId);
     };
 
     let entry = entryRef.current;
@@ -214,28 +217,26 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       stopQuiet();
       window.clearTimeout(hiddenTimer);
       window.clearTimeout(entryTimer);
-      setArrivalWaiting(false);
+      setArrivalWaiting(null);
     };
 
-    /** `atReady`: the route reached ready and a guard declined — the anchor is still written. */
-    const decline = (cause: DeclineCause, atReady: boolean) => {
+    const decline = (cause: DeclineCause) => {
       if (!waitingNow) return;
       endWait();
       html.classList.remove('arr-pre');
       report({ surface, how: 'declined', cause });
-      if (atReady) host.markArrival(surface, engagementId);
     };
 
     const begin = (root: HTMLElement) => {
-      if (document.visibilityState === 'hidden') return decline('hidden', false);
-      if (host.busy()) return decline('busy', true);
+      if (document.visibilityState === 'hidden') return decline('hidden');
+      if (host.busy()) return decline('busy');
       let brief: ReturnType<ArrivalEngine['brief']>;
       try {
         brief = engine.brief(root, surface);
       } catch {
-        return decline('error', true);
+        return decline('error');
       }
-      if (!brief) return decline('no-headline', true);
+      if (!brief) return decline('no-headline');
       let run: Run;
       try {
         run = engine.createRun(brief, host, {
@@ -245,7 +246,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
           now: () => Date.now(),
         });
       } catch {
-        return decline('error', true);
+        return decline('error');
       }
       if (!stampedRef.current) {
         stampedRef.current = true;
@@ -260,7 +261,6 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       run.ended.then(
         (e) => {
           report(e);
-          host.markArrival(surface, engagementId);
           if (getActiveRun() === run) setActiveRun(null);
         },
         () => {
@@ -295,7 +295,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       const root = host.root();
       if (root && !rootSeen) {
         rootSeen = true;
-        hiddenTimer = window.setTimeout(() => decline('hidden', false), BUDGET.HIDDEN_CAP_MS);
+        hiddenTimer = window.setTimeout(() => decline('hidden'), BUDGET.HIDDEN_CAP_MS);
       }
       if (!root || !host.ready()) {
         stopQuiet();
@@ -305,7 +305,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
         faces = 'pending';
         void loadFaces(host.faces()).then((ok) => {
           if (!waitingNow) return;
-          if (!ok) return decline('fonts', true);
+          if (!ok) return decline('fonts');
           faces = 'ok';
           maybeBegin();
         });
@@ -320,8 +320,10 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
     };
 
     html.classList.add('arr-pre');
-    setArrivalWaiting(true);
-    entryTimer = window.setTimeout(() => decline('late', false), left);
+    // Her hand during the wait ends it for good. DeclineCause has no 'input' member (types.ts is
+    // frozen); 'busy' is the nearest.
+    setArrivalWaiting(() => decline('busy'));
+    entryTimer = window.setTimeout(() => decline('late'), left);
     watch = new MutationObserver(check);
     watch.observe(document.body, {
       subtree: true,

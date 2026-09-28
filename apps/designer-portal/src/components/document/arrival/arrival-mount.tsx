@@ -3,8 +3,8 @@
 /**
  * US-14 arrival — the persistent mount (CONTRACT §3, split mount). Never keyed: it installs the
  * arrival's window-capture listeners exactly once for the tab's life, forwards every event to the
- * run ArrivalRun sets, swallows Escape during the ready wait, refreshes the visit on her hand,
- * writes the click token, and lands the Desk on the row a Document was put down from.
+ * run ArrivalRun sets, ends the ready wait on her hand (swallowing Escape), refreshes the visit on
+ * her hand, writes the click token, and lands the Desk on the row a Document was put down from.
  */
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
@@ -22,7 +22,7 @@ import type { ArriveToken } from '@/lib/arrival/types';
 
 let installed = false;
 let activeRun: Run | null = null;
-let waiting = false;
+let cancelWait: (() => void) | null = null;
 
 /** ArrivalRun hands the started run here; the listeners forward to it. */
 export function setActiveRun(run: Run | null): void {
@@ -33,9 +33,17 @@ export function getActiveRun(): Run | null {
   return activeRun;
 }
 
-/** True from `arr-pre` until the run starts or the wait declines: Escape is swallowed. */
-export function setArrivalWaiting(on: boolean): void {
-  waiting = on;
+/** ArrivalRun hands its wait-cancel here from `arr-pre` until the run starts or the wait declines
+ *  (then null). Meanwhile Escape is swallowed, and any key, press, wheel or swipe ends the wait for
+ *  good: the resting page, no later start (arrival.js `halt()`). */
+export function setArrivalWaiting(cancel: (() => void) | null): void {
+  cancelWait = cancel;
+}
+
+function haltWait(): void {
+  const cancel = cancelWait;
+  cancelWait = null;
+  cancel?.();
 }
 
 function mark(): void {
@@ -48,15 +56,19 @@ function onKeyDown(e: KeyboardEvent): void {
     activeRun.onKeyDown(e);
     return;
   }
-  if (waiting && e.key === 'Escape') {
+  if (!cancelWait) return;
+  if (e.key === 'Escape') {
     e.preventDefault();
     e.stopImmediatePropagation();
   }
+  haltWait();
 }
 
+/** Chrome stays visible and live under `arr-pre`, so a press during the wait is never swallowed. */
 function onPointerDown(e: PointerEvent): void {
   mark();
-  activeRun?.onPointerDown(e);
+  if (activeRun) activeRun.onPointerDown(e);
+  else haltWait();
 }
 
 function onPointerUp(e: PointerEvent): void {
@@ -65,12 +77,14 @@ function onPointerUp(e: PointerEvent): void {
 
 function onWheel(e: WheelEvent): void {
   mark();
-  activeRun?.onWheel(e);
+  if (activeRun) activeRun.onWheel(e);
+  else haltWait();
 }
 
 function onTouchMove(e: TouchEvent): void {
   mark();
-  activeRun?.onTouchMove(e);
+  if (activeRun) activeRun.onTouchMove(e);
+  else haltWait();
 }
 
 function onScroll(e: Event): void {
