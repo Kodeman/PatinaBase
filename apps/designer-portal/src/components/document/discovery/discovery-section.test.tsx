@@ -7,6 +7,7 @@
  */
 import { fireEvent, render, screen } from '@testing-library/react';
 import { DiscoverySection } from './discovery-section';
+import { consumeSuppressed } from '@/lib/arrival/nav';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -15,6 +16,8 @@ jest.mock('next/navigation', () => ({
 }));
 
 const mockUpsertMutateAsync = jest.fn().mockResolvedValue({});
+let mockReturnCheck: { lead_id: string; allowed: boolean; reason: string | null } | null = null;
+const mockReturnToLeadMutate = jest.fn();
 
 // A fully-ready discovery row — all five essentials captured, so the
 // Begin-the-Direction button is enabled without needing to open (and
@@ -52,8 +55,8 @@ jest.mock('@patina/supabase', () => ({
   useStyles: () => ({ data: [] }),
   // F2 — DiscoverySection now reads the return-to-lead door. A non-lead
   // relationship has no lead_id, which is how the action stays unrendered here.
-  useReturnToLeadCheck: () => ({ data: null }),
-  useReturnToLead: () => ({ mutate: jest.fn(), isPending: false }),
+  useReturnToLeadCheck: () => ({ data: mockReturnCheck }),
+  useReturnToLead: () => ({ mutate: mockReturnToLeadMutate, isPending: false }),
   useClientRoomScans: () => ({ data: [] }),
 }));
 
@@ -159,5 +162,31 @@ describe('DiscoverySection — custom project type', () => {
     });
 
     expect(screen.queryByLabelText('Describe the scope')).toBeNull();
+  });
+});
+
+describe('DiscoverySection — Move back to New Lead (US-14)', () => {
+  beforeEach(() => {
+    mockReplace.mockClear();
+    mockReturnToLeadMutate.mockReset();
+    mockReturnCheck = { lead_id: 'lead-7', allowed: true, reason: null };
+  });
+
+  afterEach(() => {
+    mockReturnCheck = null;
+  });
+
+  it('announces its replace onto the lead, so no arrival plays', () => {
+    mockReturnToLeadMutate.mockImplementation(
+      (_id: string, options: { onSuccess?: (value: { lead_id: string }) => void }) =>
+        options.onSuccess?.({ lead_id: 'lead-7' }),
+    );
+    consumeSuppressed('/doc/lead-7');
+    render(<DiscoverySection {...PROPS} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move back to New Lead' }));
+
+    expect(mockReplace).toHaveBeenCalledWith('/doc/lead-7');
+    expect(consumeSuppressed('/doc/lead-7')).toBe(true);
   });
 });

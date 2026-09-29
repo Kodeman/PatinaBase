@@ -455,5 +455,16 @@ column or index and does not clean up duplicate rows. The revert is in the
 migration header. It joins the ordered Strata push after 00670 and needs no
 edge-function or app deploy. Re-check the Strata head before pushing.
 
+00675 `arrival_anchors`, reserved 2026-09-28 by the orchestrator (story US-14,
+arrival v3 production). It draws above the head per discipline rule 2. At
+reservation, no file at or above 00675 existed on `main` (tip 7dbd203bc, head
+00674), in `git log --all`, or in any sibling Sidequest worktree, and the local
+applied head was 00674. It adds the `arrival_anchors` table (RLS, owner-only
+SELECT) and `mark_arrival(text, uuid)`, a SECURITY DEFINER writer executable by
+`authenticated` only. The anchor ships write-only in v1 (ruling D3): nothing
+reads it yet. It redefines nothing. It joins the ordered Strata push after
+00674, before the designer-portal deploy that calls it. Re-check the Strata
+head before pushing.
+
 Registration itself needs **no** migration: 00455 already accepts
 `media_kind = 'source_document'` and all four content types.

@@ -50,6 +50,7 @@ import {
 import { CallPlan } from './call-plan';
 import { DiscoveryScheduleLine } from './discovery-schedule-line';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { suppressNextArrival } from '@/lib/arrival/nav';
 
 /** D7 — the undo always points at a sentence saying what it does; when the
  *  door is shut that sentence is the server's refusal instead. */
@@ -483,7 +484,10 @@ export function DiscoverySection({
               if (returnRefused) return;
               setReturnError(null);
               returnToLead.mutate(engagementId, {
-                onSuccess: ({ lead_id }) => router.replace(`/doc/${lead_id}`),
+                onSuccess: ({ lead_id }) => {
+                  suppressNextArrival(`/doc/${lead_id}`);
+                  router.replace(`/doc/${lead_id}`);
+                },
                 onError: (error) => {
                   // The RPC rejects with a PostgrestError — message-shaped, not
                   // always an `instanceof Error`. Read `.message` off whatever

@@ -290,7 +290,19 @@ export function DeskRoster({
           )}
         </div>
       </div>
-      <p className="doc-type-body mb-8 text-[var(--text-body)]">
+      {/* US-14 `settle`: one node at a time — with no groups the quiet line
+          below carries it, though this line still prints. With no top card
+          on the page (R4 quiet form) the settle node is also the headline. */}
+      <p
+        data-part={
+          roster.groups.length === 0
+            ? undefined
+            : claims.cards.length > 0
+              ? 'settle'
+              : 'headline settle'
+        }
+        className="doc-type-body mb-8 text-[var(--text-body)]"
+      >
         {roster.overdueLine}
       </p>
       {belowHead}
@@ -304,10 +316,18 @@ export function DeskRoster({
           data-desk-day-line
           className="mb-8 border-t border-[color:var(--doc-ink-border)] pt-3"
         >
-          {claims.dayLine.lines.map((line) => (
+          {claims.dayLine.lines.map((line, index) => (
             <p
               key={line.key}
               data-day-line={line.key}
+              // US-14 — the lines quoting cards 2 and 3. Card lines lead the
+              // list in grid order, so position is the card's; the answered
+              // note is never one of them.
+              data-part={
+                line.key.startsWith('card-') && (index === 1 || index === 2)
+                  ? `f${index}`
+                  : undefined
+              }
               className="doc-type-body mb-3 text-[var(--text-body)] last:mb-0"
             >
               <DayLineText parts={line.parts} />
@@ -402,6 +422,7 @@ export function DeskRoster({
       {roster.groups.length === 0 && (
         <p
           data-tour-anchor="desk-folio"
+          data-part="headline settle"
           className="font-heading text-[15px] italic text-[var(--text-muted)]"
         >
           Nothing needs your hand. The work is in motion.

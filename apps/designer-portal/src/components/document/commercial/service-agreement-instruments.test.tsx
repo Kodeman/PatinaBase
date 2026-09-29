@@ -31,9 +31,10 @@ const READY_RATES = [
   { roleName: "Lead Designer", hourlyRateCents: 15000, version: 1 },
 ];
 
+const mockPush = jest.fn();
 jest.mock("next/navigation", () => ({
   usePathname: () => "/doc/agreement-1",
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 // The countersign's IMPACT block (R110) reads the resolver's one door; these
@@ -108,6 +109,7 @@ jest.mock("@/lib/analytics/document-events", () => ({
   },
 }));
 
+import { consumeSuppressed } from "@/lib/arrival/nav";
 import { ServiceAgreementInstruments } from "./service-agreement-instruments";
 
 describe("ServiceAgreementInstruments notification recovery", () => {
@@ -170,6 +172,59 @@ describe("ServiceAgreementInstruments notification recovery", () => {
     expect(
       await screen.findByText(/agreement executed.*execution notice is pending/i),
     ).toBeVisible();
+  });
+
+  it("US-14 — Open the project after the countersign is the same engagement: announced, so no arrival plays", async () => {
+    mockDocumentState = "client_signed";
+    mockCountersign.mockResolvedValue({
+      projectId: "project-1",
+      newlyExecuted: true,
+      notificationDelivery: "delivered",
+    });
+    consumeSuppressed("/doc/project-1");
+    mockPush.mockClear();
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: {} }}
+        clientName="Avery Client"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Studio signer name"), {
+      target: { value: "Morgan Designer" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Countersign agreement" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: /open the project/i }),
+    );
+
+    expect(mockPush).toHaveBeenCalledWith("/doc/project-1");
+    expect(consumeSuppressed("/doc/project-1")).toBe(true);
+  });
+
+  it("US-14 — the executed agreement's link into its project is announced on click", () => {
+    consumeSuppressed("/doc/project-1");
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: {} }}
+        clientName="Avery Client"
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: /open the project/i });
+    expect(link).toHaveAttribute("href", "/doc/project-1");
+    // jsdom cannot navigate; the click's own handlers are what is under test.
+    const stay = (e: Event) => e.preventDefault();
+    document.addEventListener("click", stay);
+    try {
+      fireEvent.click(link);
+    } finally {
+      document.removeEventListener("click", stay);
+    }
+
+    expect(consumeSuppressed("/doc/project-1")).toBe(true);
   });
 
   it("records a paper signature while the agreement is with the client, prefilled with the client's name", async () => {

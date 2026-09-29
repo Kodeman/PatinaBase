@@ -26,6 +26,9 @@ import { DocumentTimeProvider } from '@/hooks/document-time-provider';
 import { DocumentRouteBoundary } from '@/components/document/document-route-boundary';
 import { ReturnToLeadUndo } from '@/components/document/return-to-lead-undo';
 import { SkipToPaper } from '@/components/document/skip-to-paper';
+import { ArrivalMount } from '@/components/document/arrival/arrival-mount';
+import { ArrivalRoute } from '@/components/document/arrival/arrival-route';
+import '@/lib/arrival/arrival.css';
 
 export const metadata: Metadata = {
   title: 'The Desk · Patina',
@@ -66,6 +69,10 @@ export default function DocumentLayout({
 }) {
   return (
     <>
+      {/* US-14 — the arrival's window-capture listeners install from this
+          render, ahead of every chrome listener below (all register in
+          effects). Unconditional and outside the route boundary. */}
+      <ArrivalMount />
       {/* F55 — the skip link, first focusable node in the tree, ahead of the
           route boundary so it survives even the bare /board/* render. */}
       <SkipToPaper />
@@ -88,6 +95,11 @@ export default function DocumentLayout({
                 {/* R97 — the Desk Walkthrough publishes first-touch suppression +
                     offer eligibility to desk/page through this provider. */}
                 <DeskWalkthroughProvider>
+                  {/* US-14 — one route's arrival. Inside the time and
+                      walkthrough providers (its busy signals read both) and
+                      before the page, so it hides the route root at the
+                      commit ahead of any page effect. */}
+                  <ArrivalRoute />
                   {children}
                   <LogStrip />
                   <StudioDrawer />

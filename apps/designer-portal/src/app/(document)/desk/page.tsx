@@ -12,8 +12,13 @@ import {
   useProfile,
   useOrganizations,
   useOrganizationMembers,
+  useBoardsReactionRollup,
+  useRecentBoards,
+  useStudioUnbilledTime,
 } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
+import { useViewerStudio } from '@/hooks/use-viewer-studio';
+import { useAnsweredNotes } from '@/hooks/use-answered-notes';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
@@ -28,7 +33,7 @@ import {
   deriveDeskRoster,
   pinnedProjectIdsFromRoster,
 } from '@/lib/document/desk-roster-derivation';
-import { useDeskLine } from '@/components/document/desk-arbiter';
+import { useDeskLineState } from '@/components/document/desk-arbiter';
 import { WEEKDAY_FORMAT, dayMonth } from '@/lib/document/dates';
 import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
@@ -70,7 +75,8 @@ const FIRST_HOUR_MS = 60 * 60 * 1000;
 
 export default function DeskPage() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.desk); // R89 — scope help to the Desk
-  const { data, isLoading, isError, refetch } = useDeskEngagements();
+  const { data, isLoading, isError, isSuccess, isPlaceholderData, refetch } =
+    useDeskEngagements();
   const { user } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const hydrated = useHydrated();
@@ -215,7 +221,7 @@ export default function DeskPage() {
   const accountAgeMs = profile?.created_at
     ? now.getTime() - Date.parse(profile.created_at)
     : Number.NaN;
-  const deskLine = useDeskLine({
+  const { node: deskLine, decided: deskLineDecided } = useDeskLineState({
     ready: hydrated && !!data && !isError,
     pinnedProjectIds,
     lines: {
@@ -324,8 +330,38 @@ export default function DeskPage() {
       />
     );
 
+  // US-14 arrival marks (inert). The route root is marked only while the
+  // roster itself renders — never the skeleton or the error state — and is
+  // ready once hydrated and at the first non-placeholder read. Ready also
+  // waits for the reads that print inside the root after the roster mounts
+  // (the day's line's answered notes, the boards rollup): an answer landing
+  // mid-arrival would end it as a mutation. Same query keys as DeskRoster,
+  // DeskBoardsReactionRollup, RecentBoardsStrip and DeskContents, so these
+  // share their fetches. The day's line must also be picked.
+  const answeredNotesRead = useAnsweredNotes();
+  const reactionRollupRead = useBoardsReactionRollup();
+  const recentBoardsRead = useRecentBoards(8);
+  const viewerStudio = useViewerStudio();
+  const unbilledTimeRead = useStudioUnbilledTime();
+  const arrivalRoot = !isError && !!data;
+  const arrivalReady =
+    arrivalRoot &&
+    hydrated &&
+    isSuccess &&
+    !isPlaceholderData &&
+    !answeredNotesRead.isPending &&
+    !reactionRollupRead.isPending &&
+    !recentBoardsRead.isPending &&
+    viewerStudio.isSettled &&
+    !unbilledTimeRead.isPending &&
+    deskLineDecided;
+
   return (
-    <main className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14">
+    <main
+      data-arrival={arrivalRoot ? 'desk' : undefined}
+      data-arrival-ready={arrivalReady ? '' : undefined}
+      className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14"
+    >
       <header className="mb-12 flex items-baseline justify-between gap-4">
         <div>
           {/* The signature move: greeting in Playfair, the first name in
@@ -345,7 +381,14 @@ export default function DeskPage() {
               <>{greetingWord}.</>
             )}
           </h1>
-          <p className="doc-type-meta mt-1 uppercase tracking-[0.09em]">
+          {/* US-14 `head` is the arrival's landing focus on both surfaces
+              (the Document's is its letterhead header); here its text is
+              also the card's place line. */}
+          <p
+            data-part="head"
+            tabIndex={-1}
+            className="doc-type-meta mt-1 uppercase tracking-[0.09em] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          >
             {dateLabel || ' '}
           </p>
         </div>

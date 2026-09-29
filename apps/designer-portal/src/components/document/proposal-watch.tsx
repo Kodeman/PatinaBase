@@ -31,6 +31,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useActivateProposal } from '@patina/supabase';
 import { familyLabel } from '@/lib/document/family-label';
+import { suppressNextArrival } from '@/lib/arrival/nav';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
 import { useProposalProject } from '@/hooks/use-proposal-project';
 import { useProposal } from '@/hooks/use-proposals';
@@ -343,8 +344,10 @@ export function ProposalWatch({
         onClose={() => setMarkSignedOpen(false)}
         onSigned={(projectId) => {
           // One act, many surfaces: the signed proposal folder re-derives away
-          // (shape B → A) and we walk into the new document.
+          // (shape B → A) and we walk into the new document. US-14: the same
+          // engagement under its project id, not a new arrival.
           void qc.invalidateQueries({ queryKey: ['document-state'] });
+          suppressNextArrival(`/doc/${projectId}`);
           router.push(`/doc/${projectId}`);
         }}
       />
@@ -402,6 +405,7 @@ function SignedSeal({
       // the signed folder re-derives away, then walk into the new document.
       void qc.invalidateQueries({ queryKey: ['document-state'] });
       void qc.invalidateQueries({ queryKey: ['proposal-project', proposalId] });
+      suppressNextArrival(`/doc/${newProjectId}`);
       router.push(`/doc/${newProjectId}`);
     } catch (e) {
       setActivateError(
@@ -450,6 +454,7 @@ function SignedSeal({
               variant="primary"
               trailing="→"
               href={`/doc/${projectId}`}
+              onClick={() => suppressNextArrival(`/doc/${projectId}`)}
             >
               Open the project
             </DocumentAction>

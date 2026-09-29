@@ -38,6 +38,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { documentEvents } from '@/lib/analytics/document-events';
+import { suppressNextArrival } from '@/lib/arrival/nav';
 import {
   assembleContextLine,
   isCeremonySendable,
@@ -214,10 +215,14 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
   const notYours = !ceremonyLoading && !ceremony;
   const alreadySent = ceremony != null && ceremony.state !== 'draft';
   useEffect(() => {
+    // US-14 — the same engagement's own paper, not a new arrival.
     if (flagOff || notYours) {
+      suppressNextArrival(`/doc/${leadId}`);
       router.replace(`/doc/${leadId}`);
     } else if (alreadySent) {
-      router.replace(`/doc/${ceremony?.designer_client_id ?? leadId}`);
+      const target = `/doc/${ceremony?.designer_client_id ?? leadId}`;
+      suppressNextArrival(target);
+      router.replace(target);
     }
   }, [
     flagOff,
@@ -276,6 +281,8 @@ export function CeremonySurface({ leadId }: { leadId: string }) {
           // One-act-many-surfaces: the Desk (chip) and the new Document derive
           // from document_state — the app owns these keys (TriageBar pattern).
           void queryClient.invalidateQueries({ queryKey: ['document-state'] });
+          // US-14 — the lead's identity moves forward: the same engagement.
+          suppressNextArrival(`/doc/${result.designer_client_id}`);
           router.push(`/doc/${result.designer_client_id}`);
         },
         onError: () => setSendError(true),

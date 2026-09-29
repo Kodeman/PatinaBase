@@ -22,6 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StrataMark } from '@/components/document/strata-mark';
+import { suppressNextArrival } from '@/lib/arrival/nav';
 import {
   clearRoomOrigin,
   originLabel,
@@ -95,6 +96,8 @@ export function RoomShell({
       const dest = backTo ?? readRoomOrigin();
       const go = () => {
         if (!backTo) clearRoomOrigin();
+        // US-14 — back onto the paper the Room was opened from: a return, not an arrival.
+        if (dest.startsWith('/doc/')) suppressNextArrival(dest);
         router.push(dest);
       };
       const reduced =

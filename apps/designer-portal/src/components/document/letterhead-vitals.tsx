@@ -37,6 +37,7 @@ import {
 import { centsToDollarString, dollarsToCents } from '@/lib/document/closure-derivation';
 import { FolioCalendar, FolioPopover, type FolioSelection } from '@/components/document/date';
 import { fmtDay, todayYmd } from '@/lib/document/format';
+import type { Part } from '@/lib/arrival/types';
 
 
 type AnyRecord = any;
@@ -121,12 +122,15 @@ function VitalDate({
   serverValue,
   label,
   emptyAct,
+  part,
 }: {
   projectId: string;
   column: 'start_date' | 'target_end_date';
   serverValue: string | null;
   label: string;
   emptyAct: string | null;
+  /** US-14 — the arrival mark for the recorded value; the empty act is never one. */
+  part?: Part;
 }) {
   const [value, setValue] = useState(serverValue ?? '');
   const [open, setOpen] = useState(false);
@@ -218,19 +222,28 @@ function VitalDate({
 
   return (
     <span className="relative inline-flex items-baseline gap-1">
-      <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
-        {label}
+      {/* US-14 — the mark holds the vital as it prints, label and value
+          only: the × and the save status are never card text. Same flex,
+          gap and baseline as its parent, so the boxes land where they did. */}
+      <span data-part={part} className="inline-flex items-baseline gap-1">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          {label}
+        </span>
+        {/* The card lifts textContent: this space keeps "Start 3 August"
+            from reading "Start3 August". A whitespace-only run in a flex
+            box renders nothing, so the layout is unchanged. */}
+        {' '}
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-label={label}
+          onClick={() => setOpen(true)}
+          disabled={state === 'saving'}
+          className="border-b border-transparent bg-transparent font-mono text-[11px] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
+        >
+          {fmtDay(value)}
+        </button>
       </span>
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label={label}
-        onClick={() => setOpen(true)}
-        disabled={state === 'saving'}
-        className="border-b border-transparent bg-transparent font-mono text-[11px] text-[var(--text-primary)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
-      >
-        {fmtDay(value)}
-      </button>
       <button
         type="button"
         aria-label={`Clear ${label.toLowerCase()}`}
@@ -420,13 +433,14 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
         // own to elide.
         className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 overflow-clip [overflow-clip-margin:6px] whitespace-nowrap text-[11px] text-[var(--text-primary)] min-[1180px]:flex-nowrap"
       >
-        {phaseWord && <span>{phaseWord}</span>}
+        {phaseWord && <span data-part="stage">{phaseWord}</span>}
         <VitalDate
           projectId={projectId}
           column="start_date"
           serverValue={startDate}
           label="Start"
           emptyAct={noDates ? 'Set dates' : 'Set start'}
+          part="f1"
         />
         <VitalDate
           projectId={projectId}
@@ -434,6 +448,7 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           serverValue={targetDate}
           label="Target"
           emptyAct={noDates ? null : 'Set target'}
+          part="f2"
         />
         <VitalBand
           projectId={projectId}
@@ -441,7 +456,9 @@ export function LetterheadVitals({ projectId }: { projectId: string }) {
           maxCents={project.budget_max ?? null}
         />
         {totalSet && (
-          <span className="font-mono text-[11px]">{contractTotal(total)}</span>
+          <span data-part="f3" className="font-mono text-[11px]">
+            {contractTotal(total)}
+          </span>
         )}
       </div>
     </div>
@@ -506,6 +523,7 @@ export function LetterheadTitle({
        anywhere`, no `text-wrap: balance`: the em-dash form breaks after the
        dash as the mockup does, and balancing would move that break. */
     <h1
+      data-part="name"
       // NOT `flex-wrap`: the two flex ITEMS are the name and the SaveDot, and
       // they do not wrap — the NAME wraps, inside its own box, which is what
       // `break-words` on the button does. Adding it here moved the baseline by

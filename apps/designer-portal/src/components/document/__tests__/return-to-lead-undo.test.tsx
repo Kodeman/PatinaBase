@@ -9,6 +9,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { TriageBar } from '../triage-bar';
 import { ReturnToLeadUndo, dismissReturnToLeadUndo } from '../return-to-lead-undo';
+import { consumeSuppressed } from '@/lib/arrival/nav';
 
 const replace = jest.fn();
 const push = jest.fn();
@@ -101,6 +102,17 @@ describe('the Undo offer after Accept · begin', () => {
     );
     expect(replace).toHaveBeenCalledWith('/doc/lead-1');
     expect(screen.queryByTestId('return-to-lead-undo')).not.toBeInTheDocument();
+  });
+
+  it('US-14 — the Undo’s replace onto the lead is announced, so no arrival plays', () => {
+    consumeSuppressed('/doc/lead-1');
+    renderBoth();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept · begin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    expect(replace).toHaveBeenCalledWith('/doc/lead-1');
+    expect(consumeSuppressed('/doc/lead-1')).toBe(true);
   });
 
   it('never offers an Undo on the ceremony path, where the check would refuse', () => {

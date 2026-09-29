@@ -67,6 +67,7 @@ import {
 } from '@/lib/document/section-derivation';
 import { type DocumentStateRow, type SectionKey } from '@/lib/document/desk-derivation';
 import {
+  DOCUMENT_INDEX_LABELS,
   paperRegionsForSection,
   requestRegionUnfold,
   type DocumentIndexKey,
@@ -85,7 +86,7 @@ import {
   deriveSendWallLine,
 } from '@/lib/document/proposal-watch-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
-import { shouldFireZoneFlight } from '@/lib/document/zone-flight';
+import { isSameDocumentPath, shouldFireZoneFlight } from '@/lib/document/zone-flight';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
 import { documentResolutionState } from '@/lib/document/document-resolution-state';
 import { DocSpine } from '@/components/document/doc-spine';
@@ -231,6 +232,11 @@ import {
 } from '@/lib/document/shelves';
 import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
 import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
+import { ROSTER_STAGE_ORDER } from '@/lib/document/desk-roster-derivation';
+import { afterArrival } from '@/components/document/arrival/arrival-mount';
+import { suppressNextArrival } from '@/lib/arrival/nav';
+import { consumeArriveToken } from '@/lib/arrival/session';
+import { EVENT_ENDED, type ArrivalEnded, type Landing } from '@/lib/arrival/types';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -1267,6 +1273,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     if (resolution?.kind !== 'redirect') return;
     // W2 — the turn the seal performs is announced on the destination's paper.
     if (worktableOn) markSealTurn(resolution.projectId);
+    suppressNextArrival(`/doc/${resolution.projectId}`);
     router.replace(`/doc/${resolution.projectId}`);
   }, [resolution, router, worktableOn]);
 
@@ -1275,7 +1282,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // the authorization opens in the project's ledger instead of dead-ending on
   // the read-only proposal shell.
   useEffect(() => {
-    if (authorizationDoorway) router.replace(authorizationDoorway);
+    if (!authorizationDoorway) return;
+    suppressNextArrival(authorizationDoorway);
+    router.replace(authorizationDoorway);
   }, [authorizationDoorway, router]);
 
   // W4 — the recap line's approvals clause is a door to the approvals record,
@@ -1322,6 +1331,21 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     window.addEventListener(DOCUMENT_WRITE_EVENT, onWrite);
     return () => window.removeEventListener(DOCUMENT_WRITE_EVENT, onWrite);
   }, []);
+  // US-14 — the pick-up is the arrival's end, played or declined: the card's
+  // ten-second hold never eats the ten-second thrash window. Only this
+  // Document's own entry counts: on a put-down the next route (the Desk, or
+  // another Document) can end its entry at its commit, before this listener is
+  // removed; Next has written that route's URL by then.
+  useEffect(() => {
+    const onArrivalEnded = (e: Event) => {
+      if (!isSameDocumentPath(window.location.pathname, id)) return;
+      const detail = (e as CustomEvent<ArrivalEnded | null>).detail;
+      if (detail?.surface && detail.surface !== 'document') return;
+      zoneFlightRef.current.pickedUpAt = Date.now();
+    };
+    window.addEventListener(EVENT_ENDED, onArrivalEnded);
+    return () => window.removeEventListener(EVENT_ENDED, onArrivalEnded);
+  }, [id]);
   // ZF-1 fix — `nextPath: null` means an explicit put-down (Esc / a "Put
   // down" action): those are genuine exits regardless of destination. A
   // route-away instead passes the actual destination path so a same-document
@@ -1454,18 +1478,41 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // recent-documents-in-hand MRU this page writes to below via
   // rememberDocumentInHand — that write runs later in this same commit
   // (React runs effects in declaration order), so this read never races it
-  // for the current visit.
-  const landedRef = useRef(false);
+  // for the current visit. US-14: a played arrival owns the viewport, so the
+  // jump waits for this entry's end and runs only if it did not play
+  // (afterArrival). The decision is kept in the ref: StrictMode's re-run reads
+  // the MRU after that write.
+  //
+  // US-14 R-DM21 — the Desk act's token names where it lands. Spent on this
+  // mount, ahead of the jump (a hard entry already spent it at the commit, so
+  // a refresh never lands): one landing per entry, and a token that names one
+  // owns it, so the jump stands down.
+  const arrivalLandingRef = useRef<{ landing: Landing; done: boolean } | null>(null);
   useEffect(() => {
-    if (!row || landedRef.current) return;
-    landedRef.current = true;
-    const seenBefore = readRecentDocumentsInHand().some((d) => d.id === row.engagement_id);
-    if (!seenBefore) return;
-    const el = mainRef.current?.querySelector('[data-active-section]');
-    if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
-      el.scrollIntoView({ block: 'start' });
+    const token = consumeArriveToken(window.location.pathname, Date.now());
+    if (token?.landing) arrivalLandingRef.current = { landing: token.landing, done: false };
+  }, []);
+  const landedRef = useRef<{ seen: boolean; done: boolean } | null>(null);
+  const landingEngagementId = row?.engagement_id ?? null;
+  useEffect(() => {
+    if (!landingEngagementId || arrivalLandingRef.current) return;
+    if (!landedRef.current) {
+      landedRef.current = {
+        seen: readRecentDocumentsInHand().some((d) => d.id === landingEngagementId),
+        done: false,
+      };
     }
-  }, [row]);
+    const landing = landedRef.current;
+    if (!landing.seen || landing.done) return;
+    return afterArrival((unplayed) => {
+      landing.done = true;
+      if (!unplayed) return;
+      const el = mainRef.current?.querySelector('[data-active-section]');
+      if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
+        el.scrollIntoView({ block: 'start' });
+      }
+    });
+  }, [landingEngagementId]);
 
   // Lineage (R1): activating proposal for signed work; live proposal pre-signing.
   const lineage: SectionLineage | null = useMemo(() => {
@@ -1723,6 +1770,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // J1: the document's IDENTITY moves here — /doc/<designerClientId> stops
       // resolving the instant the draft proposal exists (00327), so the old
       // name is a dead end and the successor id is replaced onto, not pushed.
+      suppressNextArrival(`/doc/${proposalId}`);
       router.replace(`/doc/${proposalId}`);
     } catch (err) {
       setBeginDirectionLanding(false);
@@ -1752,7 +1800,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // W3 — the guide's deep links used to be an `<a href>` the zone rendered
       // itself. The band prints one act, as a press, so the switch has to carry
       // the fourth destination or a deep-linked guide act would open nothing.
-      if (destination.kind === 'href') router.push(destination.href);
+      if (destination.kind === 'href') {
+        // The guide's only `/doc/` href is the executed proposal's "Open the
+        // project": the same engagement under its successor id.
+        if (destination.href.startsWith('/doc/')) suppressNextArrival(destination.href);
+        router.push(destination.href);
+      }
     },
     [enrichedOperationalQuery, jumpToSection, router, runBeginDirection],
   );
@@ -2401,6 +2454,43 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       : null;
   const lensLinePropsRef = useRef(lensLineProps);
   lensLinePropsRef.current = lensLineProps;
+  // US-14 arrival mark (inert): the band has settled and so has every read
+  // its line 2 is chosen from — the Desk composition where one applies, the
+  // ticket's rows (the standing set) and the stage's own guide read. An
+  // errored read is settled: waiting never answers it.
+  const deskEnrichmentSettled =
+    !deskEnrichment ||
+    (!enrichedOperationalQuery.isPending &&
+      !enrichedOperationalQuery.isPlaceholderData);
+  // ticket-derivation.ts stays byte-untouched (OD-8), so its unexported
+  // `Reading…` face is matched by value; a row still reading has no exception.
+  const ticketRowsSettled =
+    ticketRows !== null && ticketRows.every((r) => r.value !== 'Reading…');
+  const guideInputsInFlight =
+    (row?.active_section === 'discovery' && discoveryReadiness.state === 'loading') ||
+    (row?.active_section === 'direction' && draftingReadiness.state === 'loading');
+  const arrivalReady =
+    lensLineSettled &&
+    deskEnrichmentSettled &&
+    ticketRowsSettled &&
+    !guideInputsInFlight;
+  // US-14 R-DM21 — the Desk act's token landing (spent on mount, above the
+  // resume jump), carried out once the paper is ready, when its regions exist.
+  useEffect(() => {
+    const pending = arrivalLandingRef.current;
+    if (!pending || pending.done || !arrivalReady) return;
+    pending.done = true;
+    const { landing } = pending;
+    if (landing.kind === 'region') {
+      if (Object.prototype.hasOwnProperty.call(DOCUMENT_INDEX_LABELS, landing.region)) {
+        jumpToRegion(landing.region as DocumentIndexKey);
+      }
+    } else if (landing.kind === 'ffe') {
+      jumpToLine(landing.ffeItemId);
+    } else if ((ROSTER_STAGE_ORDER as readonly string[]).includes(landing.sectionKey)) {
+      jumpToSection(landing.sectionKey as SectionKey);
+    }
+  }, [arrivalReady, jumpToRegion, jumpToLine, jumpToSection]);
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;
@@ -2738,6 +2828,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     <div
       ref={lensShellRef}
       data-document-shell
+      data-arrival="document"
+      data-arrival-ready={arrivalReady ? '' : undefined}
+      data-arr-engagement={row.engagement_id}
       data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"
       // W3 · the reading stop, published where the rail and the mobile bar
       // already publish it. Absent rather than `"null"` when nothing reads.

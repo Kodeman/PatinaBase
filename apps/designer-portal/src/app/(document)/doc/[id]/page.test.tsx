@@ -1,10 +1,17 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { useInsertionEffect, type ReactNode } from 'react';
 import DocumentPage from './page';
+import { beginEntry, noteRunStarted } from '@/components/document/arrival/arrival-mount';
+import { ArrivalRun } from '@/components/document/arrival/arrival-run';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import { paperRegionsForSection } from '@/lib/document/document-index';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { documentEvents } from '@/lib/analytics/document-events';
+import { engine as arrivalEngine } from '@/lib/arrival/engine';
+import { consumeSuppressed, suppressNextArrival } from '@/lib/arrival/nav';
+import { markVisit, setDeskShown } from '@/lib/arrival/session';
+import { EVENT_ENDED, type ArrivalEnded } from '@/lib/arrival/types';
 
 /**
  * W3 — the band's line 2, the one printing of the sentence that changes (L-1).
@@ -95,6 +102,7 @@ const mockRetryDesk = jest.fn();
 const mockUseDeskEngagements = jest.fn((_options?: { enabled?: boolean }) => ({
   data: mockDeskData,
   isLoading: mockDeskLoading,
+  isPending: mockDeskLoading,
   isError: mockDeskError,
   refetch: mockRetryDesk,
 }));
@@ -131,12 +139,14 @@ jest.mock('next/navigation', () => ({
 }));
 
 let mockInvoices: Record<string, unknown>[] = [];
+/** US-14 — one of the ticket's own reads, held in flight. */
+let mockPlanRoomLoading = false;
 
 jest.mock('@patina/supabase', () => ({
   /* B1 — the job ticket's own reads. The ticket is mounted by every
      project-kind document now, so every suite that renders one pays for
      these; none of them is this suite's subject. */
-  usePlanRoom: () => ({ data: { sheets: [] }, isLoading: false }),
+  usePlanRoom: () => ({ data: { sheets: [] }, isLoading: mockPlanRoomLoading }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   // The ticket reads the PROPOSAL's own three populations on a paper with no
   // project (B2). All three are `enabled` on a proposal id, so a document
@@ -311,6 +321,7 @@ jest.mock('@/hooks/use-document-state', () => ({
 
 jest.mock('@/hooks/document-time-provider', () => ({
   useHoldDocument: jest.fn(),
+  useDocumentTime: () => ({ offer: null }),
 }));
 
 jest.mock('@/components/document/mobile/mobile-shell', () => ({
@@ -549,6 +560,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     zoneFlight: jest.fn(),
+    arrivalEnded: jest.fn(),
     // The real MarginRail leads with the R94 first-touch margin note.
     wayfinding: { marginNote: jest.fn() },
   },
@@ -1009,6 +1021,53 @@ describe('DocumentPage guide activation', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/drafting/proposal-1');
     // `Input needed · phases & fees` is deleted with the guide strip (see the
     // Discovery case above); the gap still elects the act.
+  });
+
+  it('US-14 — "Open the project" on an executed agreement is the same engagement: announced, so no arrival plays', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'proposal',
+        engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+        client_profile_id: 'client-1', proposal_status: 'accepted',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-1', status: 'accepted', document_kind: 'design_services',
+      commercial_state: 'executed', project_id: 'project-1',
+    };
+    consumeSuppressed('/doc/project-1');
+
+    render(<DocumentPage params={fulfilledParams} />);
+    fireEvent.click(screen.getByRole('button', { name: /open the project/i }));
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/doc/project-1');
+    expect(consumeSuppressed('/doc/project-1')).toBe(true);
+  });
+
+  it('US-14 — a guide href off the Document is her own walk: not announced', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'direction',
+        engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+        client_profile_id: 'client-1', proposal_status: 'draft',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-1', status: 'draft', document_kind: 'design_services',
+      commercial_state: 'draft', project_id: null,
+    };
+    mockDraftingState = { gaps: ['phases & fees'], isLoading: false, error: null };
+    consumeSuppressed('/drafting/proposal-1');
+
+    render(<DocumentPage params={fulfilledParams} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open the Contract Room' }));
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/drafting/proposal-1');
+    expect(consumeSuppressed('/drafting/proposal-1')).toBe(false);
   });
 
   it('J1 — the successor id begin() lands on renders the doc\'s own Direction section', () => {
@@ -2389,6 +2448,20 @@ describe('DocumentPage guide activation', () => {
         expect(mockRouter.push).not.toHaveBeenCalled();
       });
 
+      it('US-14 — the J1 identity move is announced as a replace, so no arrival plays', async () => {
+        openReadyDiscovery();
+        mockBeginDirectionMutateAsync.mockResolvedValue('proposal-9');
+        consumeSuppressed('/doc/proposal-9');
+
+        render(<DocumentPage params={fulfilledParams} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Begin the direction' }));
+
+        await waitFor(() =>
+          expect(mockRouter.replace).toHaveBeenCalledWith('/doc/proposal-9'),
+        );
+        expect(consumeSuppressed('/doc/proposal-9')).toBe(true);
+      });
+
       it('holds the act while the seed is in flight', async () => {
         openReadyDiscovery();
         let resolveBegin: (id: string) => void = () => undefined;
@@ -2847,6 +2920,226 @@ describe('DocumentPage guide activation', () => {
     });
   });
 
+  // US-14 — the arrival's route root (inert marks). The resolved shell is the
+  // root; it is ready only once every read line 2 is chosen from has answered,
+  // so the card never briefs a sentence the band is about to turn.
+  describe('US-14 arrival route root', () => {
+    const shell = () =>
+      document.querySelector<HTMLElement>(
+        '[data-document-shell][data-arrival="document"]',
+      );
+
+    afterEach(() => {
+      mockPlanRoomLoading = false;
+    });
+
+    it('is not ready while the Desk composition is in flight, and is once it settles', () => {
+      mockDeskLoading = true;
+      const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).not.toBeNull();
+      expect(shell()).not.toHaveAttribute('data-arrival-ready');
+
+      mockDeskLoading = false;
+      rerender(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arrival-ready', '');
+    });
+
+    it('is not ready while a ticket row is still reading, and is once it answers', () => {
+      asProjectDocument();
+      mockPlanRoomLoading = true;
+      const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).not.toBeNull();
+      expect(shell()).not.toHaveAttribute('data-arrival-ready');
+
+      mockPlanRoomLoading = false;
+      rerender(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arrival-ready', '');
+    });
+
+    it('names its engagement on the root (data-arr-engagement), whatever id the route carries', () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: {
+          ...current, engagement_kind: 'relationship', active_section: 'discovery',
+          engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+        } },
+      };
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arr-engagement', 'relationship-1');
+    });
+
+    it('is not ready while the stage’s own guide read is in flight; an answer or an error settles it', () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: {
+          ...current, engagement_kind: 'relationship', active_section: 'discovery',
+          engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+        } },
+      };
+      mockDiscoveryQuery = { data: undefined, isLoading: true, isError: false };
+      const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).not.toBeNull();
+      expect(shell()).not.toHaveAttribute('data-arrival-ready');
+
+      mockDiscoveryQuery = { data: { row: null, prefill: null }, isLoading: false, isError: false };
+      rerender(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arrival-ready', '');
+
+      mockDiscoveryQuery = { data: undefined, isLoading: false, isError: true };
+      rerender(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arrival-ready', '');
+    });
+
+    // R-DM21 — the Desk act's token names where it lands.
+    it('spends the act token on mount and lands its region once, when the paper is ready', () => {
+      window.history.replaceState({}, '', '/doc/missing-document');
+      window.sessionStorage.setItem(
+        'pl-arrive',
+        JSON.stringify({
+          via: 'act',
+          to: '/doc/missing-document',
+          at: Date.now(),
+          landing: { kind: 'region', region: 'money' },
+        }),
+      );
+      pressOrder.length = 0;
+      mockDeskLoading = true;
+      try {
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(window.sessionStorage.getItem('pl-arrive')).toBeNull();
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+        expect(pressOrder).toEqual([]);
+
+        mockDeskLoading = false;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+        expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
+
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
+      } finally {
+        window.sessionStorage.removeItem('pl-arrive');
+        window.history.replaceState({}, '', '/');
+      }
+    });
+
+    it('restarts the zone-flight pick-up when the arrival ends', () => {
+      let now = 1_000_000;
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+      const zoneFlight = documentEvents.zoneFlight as jest.Mock;
+      zoneFlight.mockClear();
+      try {
+        window.history.replaceState({}, '', '/doc/missing-document');
+        const held = render(<DocumentPage params={fulfilledParams} />);
+        now += 12_000;
+        window.history.replaceState({}, '', '/desk');
+        held.unmount();
+        expect(zoneFlight).not.toHaveBeenCalled();
+
+        window.history.replaceState({}, '', '/doc/missing-document');
+        const { unmount } = render(<DocumentPage params={fulfilledParams} />);
+        now += 12_000;
+        act(() => {
+          window.dispatchEvent(
+            new CustomEvent(EVENT_ENDED, { detail: { surface: 'document', how: 'settled' } }),
+          );
+        });
+        now += 2_000;
+        window.history.replaceState({}, '', '/desk');
+        unmount();
+        expect(zoneFlight).toHaveBeenCalledTimes(1);
+        expect(zoneFlight).toHaveBeenCalledWith(expect.objectContaining({ held_ms: 2_000 }));
+      } finally {
+        clock.mockRestore();
+        window.history.replaceState({}, '', '/');
+      }
+    });
+
+    // The next route's entry can end at its own commit (a Desk already shown this visit, an
+    // announced replace) while this page is still mounted: its layout effect runs before this
+    // page's passive cleanups. That end is not this Document's pick-up.
+    describe('when the next route ends its entry at the commit', () => {
+      /** The (document) layout's slice: Next writes the URL in an insertion effect (HistoryUpdater),
+       *  then the route's ArrivalRun gates in its layout effect, ahead of the page. */
+      function Route({ path, children }: { path: string; children?: ReactNode }) {
+        useInsertionEffect(() => {
+          window.history.pushState({}, '', path);
+        }, [path]);
+        return (
+          <>
+            <ArrivalRun key={`run:${path}`} engine={arrivalEngine} pathname={path} />
+            {children}
+          </>
+        );
+      }
+      const paramsFor = (id: string) =>
+        ({ status: 'fulfilled', value: { id }, then: () => undefined }) as unknown as Promise<{
+          id: string;
+        }>;
+
+      let now = 2_000_000;
+      let clock: jest.SpyInstance<number, []>;
+      const ended: ArrivalEnded[] = [];
+      const record = (e: Event) => ended.push((e as CustomEvent<ArrivalEnded>).detail);
+
+      beforeEach(() => {
+        clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        ended.length = 0;
+        window.addEventListener(EVENT_ENDED, record);
+        (documentEvents.zoneFlight as jest.Mock).mockClear();
+        window.sessionStorage.clear();
+      });
+
+      afterEach(() => {
+        cleanup();
+        window.removeEventListener(EVENT_ENDED, record);
+        window.sessionStorage.clear();
+        window.history.replaceState({}, '', '/');
+        clock.mockRestore();
+      });
+
+      it('a put-down onto a Desk already shown this visit keeps the Document’s own pick-up', () => {
+        const path = '/doc/missing-document';
+        const { rerender } = render(
+          <Route path={path}>
+            <DocumentPage key={path} params={fulfilledParams} />
+          </Route>,
+        );
+        now += 12_000;
+        markVisit(now);
+        setDeskShown(now);
+
+        rerender(<Route path="/desk" />);
+
+        expect(ended.at(-1)).toEqual({ surface: 'desk', how: 'declined', cause: 'desk-shown' });
+        expect(documentEvents.zoneFlight).not.toHaveBeenCalled();
+      });
+
+      it('an announced move onto another Document keeps this Document’s own pick-up', () => {
+        const from = '/doc/missing-document';
+        const to = '/doc/other-document';
+        const { rerender, unmount } = render(
+          <Route path={from}>
+            <DocumentPage key={from} params={fulfilledParams} />
+          </Route>,
+        );
+        now += 12_000;
+
+        suppressNextArrival(to);
+        rerender(
+          <Route path={to}>
+            <DocumentPage key={to} params={paramsFor('other-document')} />
+          </Route>,
+        );
+
+        expect(ended.at(-1)).toEqual({ surface: 'document', how: 'declined', cause: 'replace' });
+        expect(documentEvents.zoneFlight).not.toHaveBeenCalled();
+        unmount();
+      });
+    });
+  });
 });
 
 describe('DocumentPage landedRef — A8 first-open gate', () => {
@@ -2934,6 +3227,84 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  // US-14 §4d — one landing per entry: an act token that names its landing
+  // stands the resume jump down.
+  describe('with the Desk act’s token', () => {
+    const arriveWith = (landing?: { kind: 'section'; sectionKey: string }) => {
+      window.history.replaceState({}, '', '/doc/lead-1');
+      window.sessionStorage.setItem(
+        'pl-arrive',
+        JSON.stringify({ via: 'act', to: '/doc/lead-1', at: Date.now(), ...(landing ? { landing } : {}) }),
+      );
+    };
+
+    afterEach(() => {
+      window.sessionStorage.removeItem('pl-arrive');
+      window.history.replaceState({}, '', '/');
+    });
+
+    it('lands where the token names and never runs the resume jump', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      arriveWith({ kind: 'section', sectionKey: 'brief' });
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(window.sessionStorage.getItem('pl-arrive')).toBeNull();
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
+      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalledWith({ block: 'start' });
+    });
+
+    it('runs the resume jump when the token names no landing', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      arriveWith();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(window.sessionStorage.getItem('pl-arrive')).toBeNull();
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    });
+  });
+
+  // US-14 — a played arrival owns the viewport: the resume jump is for an
+  // entry that ended declined.
+  describe('while an arrival holds the page', () => {
+    const html = document.documentElement;
+    const end = (detail: { surface: 'document'; how: 'declined' | 'settled'; cause?: 'late' }) =>
+      act(() => {
+        window.dispatchEvent(new CustomEvent(EVENT_ENDED, { detail }));
+      });
+
+    afterEach(() => {
+      html.className = '';
+      beginEntry();
+    });
+
+    it('waits for the entry to end, then jumps on a declined end', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      html.classList.add('arr-pre');
+
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+      html.classList.remove('arr-pre');
+      end({ surface: 'document', how: 'declined', cause: 'late' });
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    });
+
+    it('never jumps after a played arrival', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      html.classList.add('arr-on');
+
+      render(<DocumentPage params={fulfilledParams} />);
+      noteRunStarted();
+      html.classList.remove('arr-on');
+      end({ surface: 'document', how: 'settled' });
+
+      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+    });
   });
 });
 

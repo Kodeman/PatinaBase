@@ -42,6 +42,7 @@ import {
   useAcceptDesignRequest,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { suppressNextArrival } from '@/lib/arrival/nav';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { offerReturnToLeadUndo } from './return-to-lead-undo';
 
@@ -140,8 +141,10 @@ export function TriageBar({
         const destination = `/doc/${designerClientId}`;
         // The open Brief is the same engagement before its identity moves, so
         // replace it. From the Desk this is a new picked-up document.
-        if (variant === 'brief') router.replace(destination);
-        else router.push(destination);
+        if (variant === 'brief') {
+          suppressNextArrival(destination);
+          router.replace(destination);
+        } else router.push(destination);
         // F2 — the offer to take it back, published to the shell-level band
         // (this bar unmounts on the navigation above). Only on this path: the
         // ceremony path writes to the client, and return_to_lead_check refuses

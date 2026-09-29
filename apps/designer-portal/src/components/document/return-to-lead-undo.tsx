@@ -44,6 +44,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useReturnToLead } from '@patina/supabase';
 import { DocumentAction } from './document-action';
+import { suppressNextArrival } from '@/lib/arrival/nav';
 
 /** How long the offer stands. Long enough to notice, short enough to mean it. */
 const OFFER_MS = 8000;
@@ -141,6 +142,7 @@ export function ReturnToLeadUndo() {
         acting.current = false;
         dismissReturnToLeadUndo();
         setOffer(null);
+        suppressNextArrival(`/doc/${lead_id}`);
         router.replace(`/doc/${lead_id}`);
       },
       onError: (error) => {

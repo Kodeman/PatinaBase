@@ -77,6 +77,7 @@ import { DocumentAction, DocumentActionGroup } from '../../document-action';
 import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
 import { commercialDocumentExperience } from '@/lib/document/commercial-documents';
 import { draftingEditability } from '@/lib/document/drafting-editability';
+import { suppressNextArrival } from '@/lib/arrival/nav';
 import { ServiceAgreementDraftingRoom } from './service-agreement-drafting-room';
 
 const STATE_TONE: Record<string, { color: string; bg: string }> = {
@@ -160,6 +161,8 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   // sent document (the composer reads `document.state` itself).
   useEffect(() => {
     if (proposal && editability !== 'editable' && editability !== 'ledger') {
+      // US-14 — evicted to the same engagement's own paper, not a new arrival.
+      suppressNextArrival(`/doc/${proposalId}`);
       router.replace(`/doc/${proposalId}`);
     }
   }, [editability, proposal, proposalId, router]);
