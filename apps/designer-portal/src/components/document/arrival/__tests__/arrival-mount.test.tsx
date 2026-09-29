@@ -279,6 +279,48 @@ describe('a press on the hidden route root during the wait', () => {
     }
   });
 
+  it('a landing that throws on the tap’s release costs neither the other landing nor the swallow (CONTRACT §4e)', () => {
+    jest.useFakeTimers();
+    const escaped = jest.fn();
+    window.addEventListener('error', escaped);
+    try {
+      const { card } = mountPage();
+      const broken = jest.fn(() => {
+        throw new Error('landing');
+      });
+      const other = jest.fn();
+
+      setArrivalWaiting(jest.fn());
+      pointer('pointerdown', card, 'touch', 7);
+      afterArrival(broken);
+      afterArrival(other);
+      expect(other).not.toHaveBeenCalled();
+      pointer('pointerup', card, 'touch', 7);
+      expect(broken).toHaveBeenCalledTimes(1);
+      expect(other).toHaveBeenCalledWith(true);
+      expect(escaped).not.toHaveBeenCalled();
+      // The tap's click, a later task, is swallowed.
+      jest.advanceTimersByTime(0);
+      expect(click(card).defaultPrevented).toBe(true);
+      expect(push).not.toHaveBeenCalled();
+
+      // A tap that makes no click: its swallow still clears on the release's timer.
+      beginEntry();
+      setArrivalWaiting(jest.fn());
+      pointer('pointerdown', card, 'touch', 8);
+      afterArrival(broken);
+      pointer('pointerup', card, 'touch', 8);
+      expect(broken).toHaveBeenCalledTimes(2);
+      jest.advanceTimersByTime(400);
+      click(card);
+      expect(push).toHaveBeenCalledWith('/doc/e1');
+      expect(escaped).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('error', escaped);
+      jest.useRealTimers();
+    }
+  });
+
   it('nothing is swallowed when no wait is running', () => {
     const { card } = mountPage();
     fireEvent.pointerDown(card);

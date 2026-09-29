@@ -15,7 +15,7 @@ import type { Plan, RuleSpec, Unit } from './plan'
 /** arrival.js:124 — a doorway verb takes landing focus on the act; anything else on `head`. */
 export const DOORWAY = /^(review|open|read|see|plan|draft|continue|follow up|inspect|resolve)\b/i
 const LONE = /^(Shift|Control|Alt|Meta|CapsLock|Fn|FnLock|Hyper|Super|OS|AltGraph)$/
-const SCROLL = /^(ArrowUp|ArrowDown|ArrowLeft|ArrowRight|PageUp|PageDown|Home|End| |Spacebar)$/
+export const SCROLL = /^(ArrowUp|ArrowDown|ArrowLeft|ArrowRight|PageUp|PageDown|Home|End| |Spacebar)$/
 const CTRL =
   'a[href],button,input,textarea,select,summary,label,[role="button"],[tabindex]:not([tabindex="-1"]),[data-open-record],[data-sheet-open]'
 const GONE: Keyframe[] = [{ opacity: 1, visibility: 'visible' }, { opacity: 0, visibility: 'hidden' }]

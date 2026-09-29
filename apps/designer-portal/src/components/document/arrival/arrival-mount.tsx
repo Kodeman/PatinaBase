@@ -11,6 +11,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { isBareDocumentRoute } from '@/components/document/document-route-boundary';
+import { isEditableTarget } from '@/hooks/use-lens-state';
+import { SCROLL } from '@/lib/arrival/engine';
 import { enterRoute, notePopState } from '@/lib/arrival/nav';
 import type { Run } from '@/lib/arrival/run-contract';
 import {
@@ -56,6 +58,8 @@ let waitScrolled = false;
 let waitGesture: number | null = null;
 /** Landings waiting on that press to tell. */
 const gestureWaiters = new Set<() => void>();
+/** Drops the put-down row's landing: set from its unplayed decision until it has run. */
+let cancelLanding: (() => void) | null = null;
 
 /** ArrivalRun hands the started run here; the listeners forward to it. */
 export function setActiveRun(run: Run | null): void {
@@ -101,7 +105,25 @@ function closeGesture(scrolled: boolean): void {
   if (scrolled) waitScrolled = true;
   const waiting = [...gestureWaiters];
   gestureWaiters.clear();
-  for (const decide of waiting) decide();
+  for (const decide of waiting) {
+    try {
+      decide();
+    } catch {
+      // A landing that throws costs neither the other landings nor the release that closed it.
+    }
+  }
+}
+
+/** A key that scrolls the page: the run's own list, outside a text field. */
+function scrollKey(e: KeyboardEvent): boolean {
+  return SCROLL.test(e.key) && !isEditableTarget(e.target);
+}
+
+/** Her own scroll before a decided landing has run: the page stays where she put it. */
+function herScroll(): void {
+  const cancel = cancelLanding;
+  cancelLanding = null;
+  cancel?.();
 }
 
 function arrivalHolds(html: HTMLElement): boolean {
@@ -163,6 +185,8 @@ function clearSwallow(): void {
 
 function onKeyDown(e: KeyboardEvent): void {
   mark();
+  const scroll = scrollKey(e);
+  if (scroll) herScroll();
   if (activeRun) {
     activeRun.onKeyDown(e);
     return;
@@ -173,6 +197,8 @@ function onKeyDown(e: KeyboardEvent): void {
     e.preventDefault();
     e.stopImmediatePropagation();
   }
+  // Before the halt: it reports, and the landings read this on that same EVENT_ENDED.
+  if (scroll) waitScrolled = true;
   haltWait(escape ? 'escape' : 'key');
 }
 
@@ -229,12 +255,14 @@ function onPointerCancel(e: PointerEvent): void {
 
 function onWheel(e: WheelEvent): void {
   mark();
+  herScroll();
   if (activeRun) activeRun.onWheel(e);
   else haltWait('wheel');
 }
 
 function onTouchMove(e: TouchEvent): void {
   mark();
+  herScroll();
   closeGesture(true);
   if (activeRun) activeRun.onTouchMove(e);
   else haltWait('touchmove');
@@ -392,7 +420,8 @@ export function ArrivalMount(): null {
   }, [pathname]);
 
   // The put-down's row: spent at the Desk's commit, landed only if the Desk's arrival did not play
-  // (afterArrival), once the Desk is ready, one frame after Next's own post-navigation scroll.
+  // (afterArrival), once the Desk is ready, one frame after Next's own post-navigation scroll. Her
+  // own wheel, swipe or scroll key before it has run drops it (herScroll).
   useEffect(() => {
     if (pathname !== '/desk') {
       fromDocRef.current = null;
@@ -405,12 +434,24 @@ export function ArrivalMount(): null {
     let timer = 0;
     let observer: MutationObserver | null = null;
     let landed = false;
+    // Never clears pending.id: StrictMode's simulated remount lands on the second pass.
+    const stopWatching = () => {
+      observer?.disconnect();
+      window.clearTimeout(timer);
+      window.cancelAnimationFrame(frame);
+      if (cancelLanding === drop) cancelLanding = null;
+    };
+    const drop = () => {
+      pending.id = null;
+      stopWatching();
+    };
     const land = () => {
       if (landed || !document.querySelector(DESK_READY)) return;
       landed = true;
       observer?.disconnect();
       window.clearTimeout(timer);
       frame = window.requestAnimationFrame(() => {
+        if (cancelLanding === drop) cancelLanding = null;
         const id = pending.id;
         pending.id = null;
         if (id) document.getElementById(`roster-line-${id}`)?.scrollIntoView({ block: 'center' });
@@ -421,6 +462,7 @@ export function ArrivalMount(): null {
         pending.id = null;
         return;
       }
+      cancelLanding = drop;
       land();
       if (landed) return;
       observer = new MutationObserver(land);
@@ -430,13 +472,11 @@ export function ArrivalMount(): null {
         attributes: true,
         attributeFilter: ['data-arrival', 'data-arrival-ready'],
       });
-      timer = window.setTimeout(() => observer?.disconnect(), BUDGET.HARD_ENTRY_READY_MS);
+      timer = window.setTimeout(stopWatching, BUDGET.HARD_ENTRY_READY_MS);
     });
     return () => {
       stop();
-      observer?.disconnect();
-      window.clearTimeout(timer);
-      window.cancelAnimationFrame(frame);
+      stopWatching();
     };
   }, [pathname]);
 

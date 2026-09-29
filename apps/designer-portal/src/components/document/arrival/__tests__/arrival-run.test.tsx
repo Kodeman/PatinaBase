@@ -832,6 +832,14 @@ describe('the put-down row after the wait (CONTRACT §4d)', () => {
   };
   const touchMove = () => document.body.dispatchEvent(new Event('touchmove', { bubbles: true }));
   const wheel = () => document.body.dispatchEvent(new Event('wheel', { bubbles: true }));
+  const key = (k: string, target: () => Element = () => document.body) => () => {
+    target().dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  };
+  const inField = () => {
+    const field = document.createElement('input');
+    document.body.appendChild(field);
+    return field;
+  };
 
   // A browser's order: a touch or pen press's pointerdown comes first and ends the wait; its
   // touchmove follows, and a pointercancel once the browser takes the press for a pan.
@@ -841,6 +849,7 @@ describe('the put-down row after the wait (CONTRACT §4d)', () => {
     ['a touch swipe the browser pans at once (pointerdown → pointercancel)', [pointer('pointerdown', 'touch'), pointer('pointercancel', 'touch')]],
     ['a pen drag the browser pans (pointerdown → pointercancel)', [pointer('pointerdown', 'pen'), pointer('pointercancel', 'pen')]],
     ['a swipe already under way when the wait began (touchmove alone)', [touchMove]],
+    ['a scroll key (PageDown)', [key('PageDown')]],
   ])('%s during the wait is her own scroll: busy, and the row never lands', async (_label, fire) => {
     mountDesk();
     for (const step of fire) step();
@@ -875,6 +884,47 @@ describe('the put-down row after the wait (CONTRACT §4d)', () => {
     for (const step of then) step();
     await advance(16);
     expect(landed()).toBe(rows);
+  });
+
+  // CONTRACT §4e: a landing decided unplayed waits for the Desk's ready; her scroll before it runs stands.
+  describe('decided unplayed (the Desk already shown), waiting for the Desk’s ready', () => {
+    function mountDeclined() {
+      const { engine } = makeEngine(() => ({ play: false, cause: 'desk-shown' }));
+      render(
+        <>
+          <ArrivalMount />
+          <ArrivalRun engine={engine} pathname="/desk" />
+        </>,
+      );
+      expect(html.classList.contains('arr-pre')).toBe(false);
+      expect(capture.mock.calls).toEqual([declined('desk', 'desk-shown')]);
+    }
+
+    it.each<[string, () => void, number]>([
+      ['a wheel drops the row', wheel, 0],
+      ['a swipe (touchmove) drops the row', touchMove, 0],
+      ['Space on the page drops the row', key(' '), 0],
+      ['Space in a text field: the row still lands', key(' ', inField), 1],
+      ['a key that does not scroll: the row still lands', key('j'), 1],
+    ])('%s', async (_label, fire, rows) => {
+      mountDeclined();
+      fire();
+      await deskReady();
+      expect(landed()).toBe(rows);
+    });
+
+    it.each<[string, () => void, number]>([
+      ['her wheel drops the row', wheel, 0],
+      ['nothing: the row lands', () => {}, 1],
+    ])('between the ready mark and the landing’s frame, %s', async (_label, fire, rows) => {
+      mountDeclined();
+      const root = addRoot('desk', true);
+      root.insertAdjacentHTML('beforeend', '<ul><li id="roster-line-e2"></li></ul>');
+      await flush();
+      fire();
+      await advance(16);
+      expect(landed()).toBe(rows);
+    });
   });
 
   it('only that press tells: another pointer’s end leaves the row waiting', async () => {
