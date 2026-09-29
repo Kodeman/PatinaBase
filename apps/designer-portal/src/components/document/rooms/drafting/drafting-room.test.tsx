@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { consumeSuppressed } from '@/lib/arrival/nav';
 import { DraftingRoom } from './drafting-room';
 import { useMobilePrimaryAction } from '../../mobile/mobile-shell';
 
@@ -339,6 +340,21 @@ describe('DraftingRoom quiet deep work', () => {
     await waitFor(() =>
       expect(mockReplace).toHaveBeenCalledWith('/doc/proposal-1'),
     );
+  });
+
+  it('US-14 — the eviction is the same engagement’s paper: announced, so no arrival plays', async () => {
+    mockProposalResult = {
+      ...mockProposalResult,
+      data: { ...mockProposalResult.data, status: 'sent' },
+    };
+    consumeSuppressed('/doc/proposal-1');
+
+    render(<DraftingRoom proposalId="proposal-1" />);
+
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/doc/proposal-1'),
+    );
+    expect(consumeSuppressed('/doc/proposal-1')).toBe(true);
   });
 
   it('fails closed and retries when draft status cannot be verified', () => {

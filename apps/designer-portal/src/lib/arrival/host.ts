@@ -5,6 +5,7 @@
 import { isElementRendered } from '@/components/document/overlays/active-dialog';
 import { isEditableTarget } from '@/hooks/use-lens-state';
 import { documentEvents } from '@/lib/analytics/document-events';
+import { readFaces } from './faces';
 import { markArrival } from './mark-arrival';
 import type { ArrivalEnded, Host, Surface } from './types';
 
@@ -17,13 +18,6 @@ export interface HostDeps {
   logOfferPending: () => boolean;
 }
 
-const FACE_FALLBACKS = ['"Playfair Display"', 'Inter', '"DM Mono"'] as const;
-const FACE_VARS = ['--font-heading', '--font-inter', '--font-mono'] as const;
-
-function firstFamily(stack: string): string | null {
-  const first = stack.split(',')[0]?.trim();
-  return first ? first : null;
-}
 
 /** A MarginNote (arbiter line, teaching note, walkthrough offer) wears its Dismiss button as a
  *  direct child; the setup whisper and the since line wear none and are not busy. The margin
@@ -107,10 +101,7 @@ export function createHost(
       );
     },
     faces() {
-      const cs = window.getComputedStyle(document.body);
-      return FACE_VARS.map(
-        (name, i) => firstFamily(cs.getPropertyValue(name)) ?? FACE_FALLBACKS[i],
-      );
+      return readFaces();
     },
     view() {
       const vh = window.innerHeight || document.documentElement.clientHeight || 0;

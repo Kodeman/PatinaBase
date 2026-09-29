@@ -9,10 +9,11 @@ const VARS = [
   ['--font-mono', "'DM Mono'"],
 ] as const
 
-/** [heading, body, meta] families, read from the body's custom properties. */
+/** [heading, body, meta]: the first family of each body custom property (next/font appends its
+ *  metric fallback), else the literal family. The one face reader: `host.faces()` is this. */
 export function readFaces(doc: Document = document): string[] {
   const cs = doc.defaultView?.getComputedStyle(doc.body)
-  return VARS.map(([name, fallback]) => cs?.getPropertyValue(name).trim() || fallback)
+  return VARS.map(([name, fallback]) => cs?.getPropertyValue(name).split(',')[0]?.trim() || fallback)
 }
 
 /** arrival.js:868 — every face the card sets. */

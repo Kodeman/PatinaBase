@@ -48,7 +48,7 @@ test.describe('Arrival failure injection', () => {
     // touch (a plain server-rendered job-name line, Tailwind classes only),
     // so the falsifier is the restored value's own content, not equality to
     // an uncapturable snapshot.
-    const headline = page.locator('[data-part="headline"]').first();
+    const headline = page.locator('[data-part~="headline"]').first();
     await expect(page.locator(CARD_SELECTOR)).toBeVisible({ timeout: 20_000 });
 
     // Well past compose into hold (Act 2) — the card is still up (HOLD_MS is

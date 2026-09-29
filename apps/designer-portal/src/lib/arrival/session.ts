@@ -195,19 +195,40 @@ export function consumeArriveToken(pathname: string, now: number): ArriveToken |
 
 // ── the put-down's row (pl-from-doc) ────────────────────────────────────────
 
-export function writeFromDoc(engagementId: string): void {
-  set(KEYS.FROM_DOC, engagementId);
+/** A put-down is honoured only this long after it was written (CONTRACT §4c). */
+export const FROM_DOC_TTL_MS = 15_000;
+
+export function writeFromDoc(engagementId: string, now: number = Date.now()): void {
+  set(KEYS.FROM_DOC, JSON.stringify({ id: engagementId, at: now }));
 }
 
-export function readFromDoc(): string | null {
-  const id = get(KEYS.FROM_DOC);
-  return id ? id : null;
+/** Peek: the put-down's engagement id while it is younger than FROM_DOC_TTL_MS. */
+export function readFromDoc(now: number = Date.now()): string | null {
+  const raw = get(KEYS.FROM_DOC);
+  if (raw === null) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.id !== 'string' || !v.id) return null;
+  if (typeof v.at !== 'number' || !Number.isFinite(v.at)) return null;
+  const age = now - v.at;
+  return age >= 0 && age < FROM_DOC_TTL_MS ? v.id : null;
 }
 
-export function consumeFromDoc(): string | null {
-  const id = readFromDoc();
+/** Read once: whatever was stored, it is gone after this call. */
+export function consumeFromDoc(now: number = Date.now()): string | null {
+  const id = readFromDoc(now);
   del(KEYS.FROM_DOC);
   return id;
+}
+
+export function clearFromDoc(): void {
+  del(KEYS.FROM_DOC);
 }
 
 // ── the e2e opt-in (pl-arrive-e2e) ──────────────────────────────────────────

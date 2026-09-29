@@ -386,7 +386,9 @@ describe('the Document marks', () => {
     expectPrinted(headline);
     expect(headline).toHaveAttribute('data-lens-sentence');
     expect(headline.textContent).toBe(model.line2.sentence);
-    expect(headline).toHaveAttribute('data-arr-long', model.line2.long.sentence);
+    // The full tier prints the long form: the card reads the page itself.
+    expect(model.line2.form).toBe('long');
+    expect(headline).not.toHaveAttribute('data-arr-long');
 
     const act = part(container, 'act');
     expectPrinted(act);
@@ -405,6 +407,46 @@ describe('the Document marks', () => {
     expect(container.querySelector('[data-arr-long]')).toBeNull();
   });
 
+  it.each(['full', 'narrow'] as const)(
+    'prints the long sentence at the %s tier and carries no data-arr-long',
+    (tier) => {
+      const model = deriveLensBand(
+        bandInput({
+          tier,
+          needs: [
+            need('a', 'overdue_decision', 'Primary bedroom approval overdue 6 days', 'Send a reminder'),
+          ],
+        }),
+      );
+      expect(model.line2.form).toBe('long');
+      const { container } = render(<LensBand model={model} docId="doc-1" />);
+      const headline = part(container, 'headline');
+      expect(headline.textContent).toBe(model.line2.long.sentence);
+      expect(headline).not.toHaveAttribute('data-arr-long');
+    },
+  );
+
+  it('prints a medium guide sentence at the mobile tier and carries no data-arr-long (D2)', () => {
+    const model = deriveLensBand(
+      bandInput({
+        tier: 'mobile',
+        guide: {
+          text: 'Client signature is due before the Vandersteen project can be activated.',
+          act: null,
+          medium: 'Signature due from the Vandersteens.',
+          short: 'SIGNATURE DUE',
+        },
+      }),
+    );
+    expect(model.line2.kind).toBe('guide');
+    expect(model.line2.form).toBe('medium');
+    const { container } = render(<LensBand model={model} docId="doc-1" />);
+    const headline = part(container, 'headline');
+    expectPrinted(headline);
+    expect(headline.textContent).toBe('Signature due from the Vandersteens.');
+    expect(headline).not.toHaveAttribute('data-arr-long');
+  });
+
   it('carries the long form on the headline where the tier prints a shorter one (D2)', () => {
     const model = deriveLensBand(
       bandInput({
@@ -419,7 +461,7 @@ describe('the Document marks', () => {
         ],
       }),
     );
-    expect(model.line2.form).not.toBe('long');
+    expect(model.line2.form).toBe('short');
     expect(model.line2.long.sentence).not.toBe(model.line2.sentence);
     const { container } = render(<LensBand model={model} docId="doc-1" />);
 

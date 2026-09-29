@@ -2,21 +2,24 @@
  * US-14 arrival — entry classification (CONTRACT §3 "Entry classification"). Module state lives
  * for the tab's JS runtime: the first route commit is the hard load; every later commit is a soft
  * (client) navigation, a Back/Forward when a popstate preceded it, or a replace the page announced
- * with `suppressNextArrival`.
+ * with `suppressNextArrival` (or a return from the Document's own sub-route).
  */
 import { BUDGET } from './types';
 import type { EntryKind } from './types';
-import { writeFromDoc } from './session';
+import { clearFromDoc, writeFromDoc } from './session';
 
 /** A route commit this soon after a popstate is that Back/Forward's commit. */
 export const POP_AGO_MS = 1_000;
 
 const DOC_PATH = /^\/doc\/([^/]+)\/?$/;
+const DOC_SUB_PATH = /^\/doc\/([^/]+)\/[^/]/;
 
 let firstCommitSeen = false;
 let lastPopAt = -Infinity;
 let previousPath: string | null = null;
 const suppressed = new Map<string, number>();
+/** The engagement the Document at `path` stamped on its root (`data-arr-engagement`). */
+let docEngagement: { path: string; id: string } | null = null;
 
 function toPathname(path: string): string {
   try {
@@ -26,15 +29,24 @@ function toPathname(path: string): string {
   }
 }
 
-/** `/doc/{id}` → the decoded id; any other path → null. */
-export function docIdOf(pathname: string): string | null {
-  const m = DOC_PATH.exec(pathname);
+function decodedId(m: RegExpExecArray | null): string | null {
   if (!m) return null;
   try {
     return decodeURIComponent(m[1]);
   } catch {
     return null;
   }
+}
+
+/** `/doc/{id}` → the decoded id; any other path → null. */
+export function docIdOf(pathname: string): string | null {
+  return decodedId(DOC_PATH.exec(pathname));
+}
+
+/** The Document at `path` is the engagement `id`: a put-down from it names that id, which the
+ *  Desk's roster rows are keyed by, even when the route carries a project, proposal or lead id. */
+export function noteDocEngagement(path: string, id: string): void {
+  docEngagement = { path, id };
 }
 
 /** The page is about to replace the route with `path`: that commit must not perform. */
@@ -87,9 +99,10 @@ export interface RouteEntry {
 }
 
 /**
- * Classifies the route commit for `pathname`. Call once per commit (the caller caches it for
- * StrictMode): it spends the popstate and suppression marks, tracks the previous pathname, and
- * writes `pl-from-doc` when a Document is put down onto the Desk.
+ * Classifies the route commit for `pathname`. Call once per commit, on every `(document)` route
+ * (the caller caches it for StrictMode): it spends the popstate and suppression marks, tracks the
+ * previous pathname, writes `pl-from-doc` when a Document is put down onto the Desk, and clears it
+ * when the Desk is left.
  */
 export function enterRoute(pathname: string, now: number = Date.now()): RouteEntry {
   const nav = navigationEntry();
@@ -103,9 +116,13 @@ export function enterRoute(pathname: string, now: number = Date.now()): RouteEnt
 
   const prev = previousPath;
   previousPath = pathname;
-  if (prev !== null && prev !== pathname && pathname === '/desk') {
-    const id = docIdOf(prev);
-    if (id) writeFromDoc(id);
+  if (prev !== null && prev !== pathname) {
+    if (pathname === '/desk') {
+      const id = docIdOf(prev);
+      if (id) writeFromDoc(docEngagement?.path === prev ? docEngagement.id : id, now);
+    } else if (prev === '/desk') {
+      clearFromDoc();
+    }
   }
 
   let entry: EntryKind;
@@ -117,6 +134,9 @@ export function enterRoute(pathname: string, now: number = Date.now()): RouteEnt
     entry = 'back_forward';
   } else {
     entry = 'soft';
+    // Back on the Document from its own sub-route (Plans, Spec Book, Boards): the same paper.
+    const id = docIdOf(pathname);
+    if (id !== null && prev !== null && decodedId(DOC_SUB_PATH.exec(prev)) === id) entry = 'replace';
   }
   lastPopAt = -Infinity;
 

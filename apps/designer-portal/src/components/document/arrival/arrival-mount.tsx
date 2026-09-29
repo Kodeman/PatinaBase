@@ -4,29 +4,30 @@
  * US-14 arrival — the persistent mount (CONTRACT §3, split mount). Never keyed: it installs the
  * arrival's window-capture listeners exactly once for the tab's life, forwards every event to the
  * run ArrivalRun sets, ends the ready wait on her hand (swallowing Escape, and the click of a press
- * on the hidden route root), refreshes the visit on her hand, writes the click token, and lands the
- * Desk on the row a Document was put down from.
+ * on the hidden route root), refreshes the visit on her hand, writes the click token, advances the
+ * nav state on the bare routes ArrivalRoute never renders on, and lands the Desk on the row a
+ * Document was put down from when the Desk's own arrival declined.
  */
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { notePopState } from '@/lib/arrival/nav';
+import { isBareDocumentRoute } from '@/components/document/document-route-boundary';
+import { enterRoute, notePopState } from '@/lib/arrival/nav';
 import type { Run } from '@/lib/arrival/run-contract';
 import {
   consumeFromDoc,
   parseLanding,
-  readFromDoc,
   touchVisit,
   writeArriveToken,
 } from '@/lib/arrival/session';
-import { BUDGET } from '@/lib/arrival/types';
-import type { ArriveToken } from '@/lib/arrival/types';
+import { BUDGET, EVENT_ENDED } from '@/lib/arrival/types';
+import type { ArrivalEnded, ArriveToken } from '@/lib/arrival/types';
 
 /** A tap's click is its own input task after the pointerup; a mouse's follows in the same task. */
 const TAP_CLICK_MS = 400;
 
 let installed = false;
 let activeRun: Run | null = null;
-let cancelWait: (() => void) | null = null;
+let cancelWait: ((escape: boolean) => void) | null = null;
 let swallowClick = false;
 let swallowTimer = 0;
 /** The run swallowed this press at its pointerdown. */
@@ -42,16 +43,41 @@ export function getActiveRun(): Run | null {
 }
 
 /** ArrivalRun hands its wait-cancel here from `arr-pre` until the run starts or the wait declines
- *  (then null). Meanwhile Escape is swallowed, and any key, press, wheel or swipe ends the wait for
- *  good: the resting page, no later start (arrival.js `halt()`). */
-export function setArrivalWaiting(cancel: (() => void) | null): void {
+ *  (then null). Meanwhile any key, press, wheel or swipe ends the wait for good: the resting page,
+ *  no later start (arrival.js `halt()`). Escape is swallowed and ends it as `escape`. */
+export function setArrivalWaiting(cancel: ((escape: boolean) => void) | null): void {
   cancelWait = cancel;
 }
 
-function haltWait(): void {
+function haltWait(escape = false): void {
   const cancel = cancelWait;
   cancelWait = null;
-  cancel?.();
+  cancel?.(escape);
+}
+
+function arrivalHolds(html: HTMLElement): boolean {
+  return html.classList.contains('arr-pre') || html.classList.contains('arr-on');
+}
+
+/**
+ * A played arrival owns the viewport: `onEnd(true)` only for an entry that ends declined. Called at
+ * once when no arrival holds the page (neither `arr-pre` nor `arr-on`), else on the entry's
+ * EVENT_ENDED. Every end drops both classes before it dispatches, so an event that arrives while
+ * one is still set is an earlier route's end, not this entry's. Returns the unsubscribe.
+ */
+export function afterArrival(onEnd: (declined: boolean) => void): () => void {
+  const html = document.documentElement;
+  if (!arrivalHolds(html)) {
+    onEnd(true);
+    return () => {};
+  }
+  const onEnded = (e: Event) => {
+    if (arrivalHolds(html)) return;
+    window.removeEventListener(EVENT_ENDED, onEnded);
+    onEnd((e as CustomEvent<ArrivalEnded>).detail?.how === 'declined');
+  };
+  window.addEventListener(EVENT_ENDED, onEnded);
+  return () => window.removeEventListener(EVENT_ENDED, onEnded);
 }
 
 function mark(): void {
@@ -70,11 +96,12 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   }
   if (!cancelWait) return;
-  if (e.key === 'Escape') {
+  const escape = e.key === 'Escape';
+  if (escape) {
     e.preventDefault();
     e.stopImmediatePropagation();
   }
-  haltWait();
+  haltWait(escape);
 }
 
 /** A press during the wait ends it. On the hidden route root, the click it makes is swallowed:
@@ -268,10 +295,26 @@ const DESK_READY = '[data-arrival="desk"][data-arrival-ready]';
 export function ArrivalMount(): null {
   installArrivalListeners();
   const pathname = usePathname();
+  // Refs survive StrictMode's simulated remount: one nav entry and one pl-from-doc read per commit.
+  const enteredRef = useRef<string | null>(null);
+  const fromDocRef = useRef<{ id: string | null } | null>(null);
 
-  // The put-down's row: once the Desk is ready, one frame after Next's own post-navigation scroll.
+  useLayoutEffect(() => {
+    if (enteredRef.current === pathname) return;
+    enteredRef.current = pathname;
+    if (isBareDocumentRoute(pathname)) enterRoute(pathname);
+  }, [pathname]);
+
+  // The put-down's row: spent at the Desk's commit, landed only if the Desk's arrival declined,
+  // once the Desk is ready, one frame after Next's own post-navigation scroll.
   useEffect(() => {
-    if (pathname !== '/desk' || readFromDoc() === null) return;
+    if (pathname !== '/desk') {
+      fromDocRef.current = null;
+      return;
+    }
+    if (fromDocRef.current === null) fromDocRef.current = { id: consumeFromDoc(Date.now()) };
+    const pending = fromDocRef.current;
+    if (pending.id === null) return;
     let frame = 0;
     let timer = 0;
     let observer: MutationObserver | null = null;
@@ -282,12 +325,18 @@ export function ArrivalMount(): null {
       observer?.disconnect();
       window.clearTimeout(timer);
       frame = window.requestAnimationFrame(() => {
-        const id = consumeFromDoc();
+        const id = pending.id;
+        pending.id = null;
         if (id) document.getElementById(`roster-line-${id}`)?.scrollIntoView({ block: 'center' });
       });
     };
-    land();
-    if (!landed) {
+    const stop = afterArrival((declined) => {
+      if (!declined) {
+        pending.id = null;
+        return;
+      }
+      land();
+      if (landed) return;
       observer = new MutationObserver(land);
       observer.observe(document.body, {
         subtree: true,
@@ -296,8 +345,9 @@ export function ArrivalMount(): null {
         attributeFilter: ['data-arrival', 'data-arrival-ready'],
       });
       timer = window.setTimeout(() => observer?.disconnect(), BUDGET.HARD_ENTRY_READY_MS);
-    }
+    });
     return () => {
+      stop();
       observer?.disconnect();
       window.clearTimeout(timer);
       window.cancelAnimationFrame(frame);

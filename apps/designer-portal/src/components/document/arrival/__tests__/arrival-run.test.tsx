@@ -7,7 +7,11 @@
 import { StrictMode, useEffect } from 'react';
 import { act, render } from '@testing-library/react';
 import posthog from 'posthog-js';
-import { callSheetPending } from '@/components/document/command-bar';
+import {
+  callSheetPending,
+  captureLeadPending,
+  openProjectPending,
+} from '@/components/document/command-bar';
 import { markArrival } from '@/lib/arrival/mark-arrival';
 import type { RouteEntry } from '@/lib/arrival/nav';
 import type { ArrivalEngine, Run, RunPhase } from '@/lib/arrival/run-contract';
@@ -27,7 +31,11 @@ import { ArrivalRun } from '../arrival-run';
 jest.mock('posthog-js', () => ({ __esModule: true, default: { capture: jest.fn() } }));
 jest.mock('@/lib/analytics/posthog', () => ({ isAnalyticsEnabled: () => true }));
 jest.mock('@/lib/arrival/mark-arrival', () => ({ markArrival: jest.fn() }));
-jest.mock('@/components/document/command-bar', () => ({ callSheetPending: { value: false } }));
+jest.mock('@/components/document/command-bar', () => ({
+  callSheetPending: { value: false },
+  captureLeadPending: { value: false },
+  openProjectPending: { value: false },
+}));
 
 let mockWalkthrough = false;
 jest.mock('@/components/document/help/desk-walkthrough', () => ({
@@ -40,9 +48,11 @@ jest.mock('@/hooks/document-time-provider', () => ({
 }));
 
 const mockEnterRoute = jest.fn();
+const mockNoteDocEngagement = jest.fn();
 jest.mock('@/lib/arrival/nav', () => ({
   ...jest.requireActual('@/lib/arrival/nav'),
   enterRoute: (...args: unknown[]) => mockEnterRoute(...args),
+  noteDocEngagement: (...args: unknown[]) => mockNoteDocEngagement(...args),
 }));
 
 let mockPathname = '/desk';
@@ -179,6 +189,8 @@ beforeEach(() => {
   mockOffer = null;
   mockPathname = '/desk';
   callSheetPending.value = false;
+  captureLeadPending.value = false;
+  openProjectPending.value = false;
   window.history.replaceState(null, '', '/desk');
 });
 
@@ -452,6 +464,18 @@ describe('the gate at the commit', () => {
     expect(html.classList.contains('arr-pre')).toBe(false);
   });
 
+  it.each<[string, { value: boolean }]>([
+    ['capture-lead', captureLeadPending],
+    ['open-project', openProjectPending],
+  ])('the ⌘K %s walk to the Desk declines busy at the commit', (_name, flag) => {
+    flag.value = true;
+    const { engine } = makeEngine();
+    render(<ArrivalRun engine={engine} pathname="/desk" />);
+    expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
+    expect(html.classList.contains('arr-pre')).toBe(false);
+    expect(engine.createRun).not.toHaveBeenCalled();
+  });
+
   it('missing arrival CSS declines sentinel; missing FontFaceSet declines unsupported', () => {
     html.style.removeProperty('--arr-ok');
     const first = makeEngine();
@@ -465,12 +489,49 @@ describe('the gate at the commit', () => {
     expect(html.classList.contains('arr-pre')).toBe(false);
   });
 
-  it('does nothing on a route that is not an arrival surface', () => {
+  it('on a route that is not an arrival surface: advances the nav state once, and nothing else', async () => {
+    mockPathname = '/library';
     const { engine } = makeEngine();
-    render(<ArrivalRun engine={engine} pathname="/board/b1" />);
+    render(
+      <StrictMode>
+        <ArrivalRun engine={engine} pathname="/library" />
+      </StrictMode>,
+    );
+    await flush();
+    expect(mockEnterRoute).toHaveBeenCalledTimes(1);
+    expect(mockEnterRoute).toHaveBeenCalledWith('/library');
     expect(engine.gate).not.toHaveBeenCalled();
-    expect(mockEnterRoute).not.toHaveBeenCalled();
     expect(html.classList.contains('arr-pre')).toBe(false);
+    expect(capture).not.toHaveBeenCalled();
+    expect(markArrival).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Document names its engagement', () => {
+  function docRoot(engagement: string | null): HTMLElement {
+    const root = addRoot('document', true);
+    if (engagement) root.setAttribute('data-arr-engagement', engagement);
+    return root;
+  }
+
+  it('notes the root’s data-arr-engagement for this path when it is there at the commit', () => {
+    mockPathname = '/doc/project-9';
+    docRoot('engagement-3');
+    const { engine } = makeEngine(() => ({ play: false, cause: 'token' }));
+    render(<ArrivalRun engine={engine} pathname="/doc/project-9" />);
+    expect(mockNoteDocEngagement).toHaveBeenCalledWith('/doc/project-9', 'engagement-3');
+  });
+
+  it('notes it once the Document stamps it later', async () => {
+    mockPathname = '/doc/project-9';
+    const root = docRoot(null);
+    const { engine } = makeEngine(() => ({ play: false, cause: 'token' }));
+    render(<ArrivalRun engine={engine} pathname="/doc/project-9" />);
+    expect(mockNoteDocEngagement).not.toHaveBeenCalled();
+    root.setAttribute('data-arr-engagement', 'engagement-3');
+    await flush();
+    expect(mockNoteDocEngagement).toHaveBeenCalledTimes(1);
+    expect(mockNoteDocEngagement).toHaveBeenCalledWith('/doc/project-9', 'engagement-3');
   });
 });
 
@@ -651,17 +712,35 @@ describe('her hand during the wait', () => {
     await staysAtRest(engine);
   });
 
-  it('Escape is swallowed and ends the wait; once it has ended, Escape passes', async () => {
+  it('Escape halts the wait: swallowed, the page shown, one end reported as escape; then Escape passes', async () => {
+    const events: ArrivalEnded[] = [];
+    const onEnded = (e: Event) => events.push((e as CustomEvent<ArrivalEnded>).detail);
+    window.addEventListener(EVENT_ENDED, onEnded);
     const engine = mountWaiting();
+    const chrome = jest.fn();
+    document.body.addEventListener('keydown', chrome);
     const first = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     document.body.dispatchEvent(first);
     expect(first.defaultPrevented).toBe(true);
+    expect(chrome).not.toHaveBeenCalled();
     expect(html.classList.contains('arr-pre')).toBe(false);
+    expect(events).toEqual([{ surface: 'desk', how: 'escape' }]);
+    expect(capture.mock.calls).toEqual([['arrival_ended', { surface: 'desk', how: 'escape' }]]);
 
     const second = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     document.body.dispatchEvent(second);
     expect(second.defaultPrevented).toBe(false);
-    await staysAtRest(engine);
+    expect(chrome).toHaveBeenCalledTimes(1);
+    document.body.removeEventListener('keydown', chrome);
+
+    addRoot('desk', true);
+    await toReady();
+    await advance(BUDGET.SOFT_ENTRY_READY_MS);
+    expect(engine.createRun).not.toHaveBeenCalled();
+    expect(events).toHaveLength(1);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(markArrival).toHaveBeenCalledTimes(1);
+    window.removeEventListener(EVENT_ENDED, onEnded);
   });
 });
 
@@ -788,16 +867,62 @@ describe('unmount', () => {
     expect(capture.mock.calls).toEqual([['arrival_ended', { surface: 'desk', how: 'mutation' }]]);
   });
 
-  it('mid-wait: the page is shown, nothing starts later, nothing is reported', async () => {
-    const { engine } = makeEngine();
-    const view = render(<ArrivalRun engine={engine} pathname="/desk" />);
-    expect(html.classList.contains('arr-pre')).toBe(true);
-    view.unmount();
-    expect(html.classList.contains('arr-pre')).toBe(false);
-    addRoot('desk', true);
-    await toReady();
-    await advance(BUDGET.SOFT_ENTRY_READY_MS);
-    expect(engine.createRun).not.toHaveBeenCalled();
-    expect(capture).not.toHaveBeenCalled();
+  describe('mid-wait', () => {
+    const events: ArrivalEnded[] = [];
+    const onEnded = (e: Event) => events.push((e as CustomEvent<ArrivalEnded>).detail);
+    beforeEach(() => {
+      events.length = 0;
+      window.addEventListener(EVENT_ENDED, onEnded);
+    });
+    afterEach(() => window.removeEventListener(EVENT_ENDED, onEnded));
+
+    it('an unmount shows the page, starts nothing later, and reports mutation exactly once', async () => {
+      const { engine } = makeEngine();
+      const view = render(<ArrivalRun engine={engine} pathname="/desk" />);
+      expect(html.classList.contains('arr-pre')).toBe(true);
+      view.unmount();
+      expect(html.classList.contains('arr-pre')).toBe(false);
+      await flush();
+      expect(events).toEqual([{ surface: 'desk', how: 'mutation' }]);
+      expect(capture.mock.calls).toEqual([['arrival_ended', { surface: 'desk', how: 'mutation' }]]);
+      expect(markArrival).toHaveBeenCalledTimes(1);
+      addRoot('desk', true);
+      await toReady();
+      await advance(BUDGET.SOFT_ENTRY_READY_MS);
+      expect(engine.createRun).not.toHaveBeenCalled();
+      expect(events).toHaveLength(1);
+      expect(capture).toHaveBeenCalledTimes(1);
+    });
+
+    it('a pathname change reports the left entry as mutation exactly once; the next entry waits', async () => {
+      const { engine } = makeEngine();
+      const view = render(<ArrivalRun key="/desk" engine={engine} pathname="/desk" />);
+      expect(html.classList.contains('arr-pre')).toBe(true);
+      mockPathname = '/doc/e1';
+      view.rerender(<ArrivalRun key="/doc/e1" engine={engine} pathname="/doc/e1" />);
+      await flush();
+      expect(events).toEqual([{ surface: 'desk', how: 'mutation' }]);
+      expect(capture.mock.calls).toEqual([['arrival_ended', { surface: 'desk', how: 'mutation' }]]);
+      expect(markArrival).toHaveBeenCalledTimes(1);
+      expect(markArrival).toHaveBeenCalledWith('desk', null);
+      expect(html.classList.contains('arr-pre')).toBe(true);
+      expect(engine.gate).toHaveBeenCalledTimes(2);
+    });
+
+    it("StrictMode's simulated remount is not an end: nothing is reported, the wait stands", async () => {
+      const { engine } = makeEngine();
+      render(
+        <StrictMode>
+          <ArrivalRun engine={engine} pathname="/desk" />
+        </StrictMode>,
+      );
+      await flush();
+      expect(events).toEqual([]);
+      expect(capture).not.toHaveBeenCalled();
+      expect(html.classList.contains('arr-pre')).toBe(true);
+      addRoot('desk', true);
+      await toReady();
+      expect(engine.createRun).toHaveBeenCalledTimes(1);
+    });
   });
 });

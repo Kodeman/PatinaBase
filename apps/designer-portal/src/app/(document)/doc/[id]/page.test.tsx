@@ -1017,6 +1017,53 @@ describe('DocumentPage guide activation', () => {
     // Discovery case above); the gap still elects the act.
   });
 
+  it('US-14 — "Open the project" on an executed agreement is the same engagement: announced, so no arrival plays', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'proposal',
+        engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+        client_profile_id: 'client-1', proposal_status: 'accepted',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-1', status: 'accepted', document_kind: 'design_services',
+      commercial_state: 'executed', project_id: 'project-1',
+    };
+    consumeSuppressed('/doc/project-1');
+
+    render(<DocumentPage params={fulfilledParams} />);
+    fireEvent.click(screen.getByRole('button', { name: /open the project/i }));
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/doc/project-1');
+    expect(consumeSuppressed('/doc/project-1')).toBe(true);
+  });
+
+  it('US-14 — a guide href off the Document is her own walk: not announced', () => {
+    const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+    mockDocumentQuery = {
+      ...mockDocumentQuery,
+      data: { kind: 'engagement', row: {
+        ...current, engagement_kind: 'proposal', active_section: 'direction',
+        engagement_id: 'proposal-1', proposal_id: 'proposal-1', lead_id: null,
+        client_profile_id: 'client-1', proposal_status: 'draft',
+      } },
+    };
+    mockProposalData = {
+      id: 'proposal-1', status: 'draft', document_kind: 'design_services',
+      commercial_state: 'draft', project_id: null,
+    };
+    mockDraftingState = { gaps: ['phases & fees'], isLoading: false, error: null };
+    consumeSuppressed('/drafting/proposal-1');
+
+    render(<DocumentPage params={fulfilledParams} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open the Contract Room' }));
+
+    expect(mockRouter.push).toHaveBeenCalledWith('/drafting/proposal-1');
+    expect(consumeSuppressed('/drafting/proposal-1')).toBe(false);
+  });
+
   it('J1 — the successor id begin() lands on renders the doc\'s own Direction section', () => {
     const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
     // The REAL post-begin row, not an invented one: document_state shape B
@@ -2903,6 +2950,19 @@ describe('DocumentPage guide activation', () => {
       expect(shell()).toHaveAttribute('data-arrival-ready', '');
     });
 
+    it('names its engagement on the root (data-arr-engagement), whatever id the route carries', () => {
+      const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
+      mockDocumentQuery = {
+        ...mockDocumentQuery,
+        data: { kind: 'engagement', row: {
+          ...current, engagement_kind: 'relationship', active_section: 'discovery',
+          engagement_id: 'relationship-1', lead_id: null, client_profile_id: 'client-1',
+        } },
+      };
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(shell()).toHaveAttribute('data-arr-engagement', 'relationship-1');
+    });
+
     it('is not ready while the stage’s own guide read is in flight; an answer or an error settles it', () => {
       const current = (mockDocumentQuery.data as { row: Record<string, unknown> }).row;
       mockDocumentQuery = {
@@ -3071,6 +3131,44 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
     render(<DocumentPage params={fulfilledParams} />);
 
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  // US-14 — a played arrival owns the viewport: the resume jump is for an
+  // entry that ended declined.
+  describe('while an arrival holds the page', () => {
+    const html = document.documentElement;
+    const end = (detail: { surface: 'document'; how: 'declined' | 'settled'; cause?: 'late' }) =>
+      act(() => {
+        window.dispatchEvent(new CustomEvent(EVENT_ENDED, { detail }));
+      });
+
+    afterEach(() => {
+      html.className = '';
+    });
+
+    it('waits for the entry to end, then jumps on a declined end', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      html.classList.add('arr-pre');
+
+      render(<DocumentPage params={fulfilledParams} />);
+      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+      html.classList.remove('arr-pre');
+      end({ surface: 'document', how: 'declined', cause: 'late' });
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    });
+
+    it('never jumps after a played arrival', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      html.classList.add('arr-on');
+
+      render(<DocumentPage params={fulfilledParams} />);
+      html.classList.remove('arr-on');
+      end({ surface: 'document', how: 'settled' });
+
+      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+    });
   });
 });
 

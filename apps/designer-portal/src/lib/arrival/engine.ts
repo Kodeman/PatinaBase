@@ -352,6 +352,14 @@ export const createRun: CreateRun = (b, host, opts): Run => {
       win.removeEventListener('error', onError)
       win.removeEventListener('unhandledrejection', onError)
     })
+    // the browser took the press over (a pan, a palm): no release follows, so nothing stays pressed
+    const onCancel = () => {
+      press = null
+      releaseTap()
+      html.classList.remove('arr-press')
+    }
+    win.addEventListener('pointercancel', onCancel, true)
+    offs.push(() => win.removeEventListener('pointercancel', onCancel, true))
     const dog = win.setTimeout(
       () => end('watchdog', undefined, false),
       S.CE + BUDGET.HOLD_MS + BUDGET.WATCHDOG_MARGIN_MS,

@@ -7,8 +7,9 @@
  *  - Escape during the ready wait (`html.arr-pre`, before any run exists) is
  *    swallowed at capture (arrival-mount.tsx `onKeyDown`:
  *    `e.stopImmediatePropagation()` for Escape specifically) — proven by a
- *    bubble-phase probe on `window` that never sees the event — and still
- *    halts the wait (any key does)
+ *    bubble-phase probe on `window` that never sees the event — and halts the
+ *    wait as Escape: the ordinary page, no card, exactly one `arrival_ended`
+ *    with `{how:'escape'}` and no cause (CONTRACT §4c(b))
  *  - a chrome click and the `t` / `?` / `g`,`l` bare-key shortcuts in Acts
  *    1-2 only advance the run (`engine.ts` `early()` branch —
  *    `stopImmediatePropagation()` before the page's own handlers run) — no
@@ -75,7 +76,7 @@ test.describe('Arrival input handling', () => {
     expect(events.at(-1)).toMatchObject({ surface: 'document', how: 'escape' });
   });
 
-  test('Escape during the ready wait is swallowed at capture, and still halts the wait', async ({
+  test('Escape during the ready wait is swallowed at capture, and halts the wait as escape', async ({
     authenticatedPage: page,
   }) => {
     await armE2EOptIn(page);
@@ -91,14 +92,17 @@ test.describe('Arrival input handling', () => {
     // Swallowed: no bubble-phase window listener (including this test's own)
     // ever received it.
     expect(await bubbledKeys(page)).not.toContain('Escape');
-    // Still halts: arr-pre clears, the card never mounts, one busy decline.
+    // Halts: arr-pre clears and the ordinary page shows once the delayed reads
+    // land (see the wheel case below for why this waits past the 3s delay).
     await expect(page.locator('html.arr-pre')).toHaveCount(0, { timeout: 2_000 });
-    await page.waitForTimeout(3_500); // let the still-in-flight delayed reads land harmlessly
+    await expect(page.locator('[data-arrival="document"]')).toBeVisible({ timeout: 5_000 });
+    await page.waitForTimeout(3_500); // no late run must start
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
 
     const events = await arrivalEndedEvents(page);
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ surface: 'document', how: 'declined', cause: 'busy' });
+    expect(events[0]).toMatchObject({ surface: 'document', how: 'escape' });
+    expect(events[0]).not.toHaveProperty('cause');
   });
 
   test('a chrome click and t/?/g,l bare-key shortcuts in Acts 1-2 only advance — no overlay opens', async ({

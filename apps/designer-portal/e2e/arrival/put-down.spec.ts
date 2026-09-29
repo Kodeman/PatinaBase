@@ -11,6 +11,10 @@
  * (via `addInitScript`, before any app script runs) to record which element
  * it was called on.
  *
+ * The row lands only when the Desk's own entry ends declined (CONTRACT §4c(g)):
+ * a Desk that plays owns the viewport. So the spec lets the Desk brief once
+ * first; the put-down's soft entry then declines `desk-shown` and the row lands.
+ *
  * The spine's "Put down document" link only renders `min-[1180px]:block`
  * (desktop) — this spec runs on `chromium`/`webkit` only.
  */
@@ -45,6 +49,12 @@ test.describe('Put-down lands the roster row', () => {
         return orig.apply(this, args);
       };
     });
+
+    // The Desk briefs once a visit: spend it here so the put-down below declines `desk-shown`.
+    await page.goto('/desk', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
+    await page.locator('.arr-skip').click();
+    await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
 
     await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });

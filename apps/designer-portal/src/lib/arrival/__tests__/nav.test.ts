@@ -113,17 +113,68 @@ describe('suppressNextArrival', () => {
 });
 
 describe('the put-down', () => {
-  it('writes pl-from-doc = id on /doc/[id] → /desk', () => {
+  const fromDoc = () => {
+    const raw = window.sessionStorage.getItem(KEYS.FROM_DOC);
+    return raw === null ? null : JSON.parse(raw);
+  };
+
+  it('writes pl-from-doc = {id, at} on /doc/[id] → /desk', () => {
     nav.enterRoute('/doc/e%201', NOW);
-    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBeNull();
+    expect(fromDoc()).toBeNull();
     nav.enterRoute('/desk', NOW + 10);
-    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBe('e 1');
+    expect(fromDoc()).toEqual({ id: 'e 1', at: NOW + 10 });
+  });
+
+  it('writes the engagement the Document named on its root, where the route carries another id', () => {
+    nav.enterRoute('/doc/project-9', NOW);
+    nav.noteDocEngagement('/doc/project-9', 'engagement-3');
+    nav.enterRoute('/desk', NOW + 10);
+    expect(fromDoc()).toEqual({ id: 'engagement-3', at: NOW + 10 });
+  });
+
+  it("ignores another Document's note", () => {
+    nav.noteDocEngagement('/doc/other', 'engagement-x');
+    nav.enterRoute('/doc/project-9', NOW);
+    nav.enterRoute('/desk', NOW + 10);
+    expect(fromDoc()).toEqual({ id: 'project-9', at: NOW + 10 });
   });
 
   it('writes nothing for any other walk', () => {
     nav.enterRoute('/desk', NOW);
     nav.enterRoute('/doc/e1', NOW + 10);
     nav.enterRoute('/doc/e2', NOW + 20);
-    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBeNull();
+    expect(fromDoc()).toBeNull();
+  });
+
+  it('clears an unconsumed row when the Desk is left', () => {
+    nav.enterRoute('/doc/e1', NOW);
+    nav.enterRoute('/desk', NOW + 10);
+    expect(fromDoc()).not.toBeNull();
+    nav.enterRoute('/library', NOW + 20);
+    expect(fromDoc()).toBeNull();
+  });
+});
+
+describe('a return from the Document’s own sub-route', () => {
+  it('is a replace: the same paper', () => {
+    nav.enterRoute('/desk', NOW);
+    nav.enterRoute('/doc/e1', NOW + 10);
+    nav.enterRoute('/doc/e1/plans', NOW + 20);
+    expect(nav.enterRoute('/doc/e1', NOW + 30)).toMatchObject({ entry: 'replace', suppressedPath: null });
+    nav.enterRoute('/doc/e1/boards/b2', NOW + 40);
+    expect(nav.enterRoute('/doc/e1', NOW + 50).entry).toBe('replace');
+  });
+
+  it("is a soft entry from another Document's sub-route", () => {
+    nav.enterRoute('/desk', NOW);
+    nav.enterRoute('/doc/e2/plans', NOW + 10);
+    expect(nav.enterRoute('/doc/e1', NOW + 20).entry).toBe('soft');
+  });
+
+  it('stays back_forward when a popstate brought her back', () => {
+    nav.enterRoute('/desk', NOW);
+    nav.enterRoute('/doc/e1/plans', NOW + 10);
+    nav.notePopState(NOW + 15);
+    expect(nav.enterRoute('/doc/e1', NOW + 20).entry).toBe('back_forward');
   });
 });

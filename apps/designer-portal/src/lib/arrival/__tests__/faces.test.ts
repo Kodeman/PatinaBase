@@ -32,6 +32,11 @@ describe('readFaces', () => {
   it('falls back to the literal families', () => {
     expect(readFaces()).toEqual(["'Playfair Display'", "'Inter'", "'DM Mono'"])
   })
+  it('keeps only the first family of a stack (next/font appends its metric fallback)', () => {
+    document.body.style.setProperty('--font-heading', "'__Playfair_a1', '__Playfair_Fallback_a1'")
+    document.body.style.setProperty('--font-inter', "'__Inter_b2', '__Inter_Fallback_b2'")
+    expect(readFaces()).toEqual(["'__Playfair_a1'", "'__Inter_b2'", "'DM Mono'"])
+  })
 })
 
 describe('loadFaces', () => {

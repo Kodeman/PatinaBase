@@ -67,10 +67,10 @@ describe('classify — the carrier table', () => {
   it('a fully clipped part leaves the card; the headline and act never do', () => {
     const root = documentDom()
     const vitals = root.querySelector('.vitals') as HTMLElement
-    const f3 = root.querySelector('[data-part="f3"]') as HTMLElement
+    const f3 = root.querySelector('[data-part~="f3"]') as HTMLElement
     place(vitals, { left: 0, top: 100, width: 400, height: 20 })
     for (const k of ['stage', 'f1', 'f2']) {
-      place(root.querySelector(`[data-part="${k}"]`) as HTMLElement, { left: 0, top: 100, width: 80, height: 20 })
+      place(root.querySelector(`[data-part~="${k}"]`) as HTMLElement, { left: 0, top: 100, width: 80, height: 20 })
     }
     place(f3, { left: 420, top: 100, width: 80, height: 20 })
     expect(clippedAway(f3, root)).toBe(true)

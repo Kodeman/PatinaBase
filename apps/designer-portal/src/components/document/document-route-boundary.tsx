@@ -7,6 +7,10 @@ import { usePathname } from 'next/navigation';
  * every Desk-global sibling. Rendering only `bare` also keeps those hidden
  * overlays out of the focus tree, which CSS alone cannot guarantee.
  */
+export function isBareDocumentRoute(pathname: string | null | undefined): boolean {
+  return !!pathname?.startsWith('/board/');
+}
+
 export function DocumentRouteBoundary({
   bare,
   children,
@@ -15,6 +19,6 @@ export function DocumentRouteBoundary({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  if (pathname?.startsWith('/board/')) return bare;
+  if (isBareDocumentRoute(pathname)) return bare;
   return children;
 }

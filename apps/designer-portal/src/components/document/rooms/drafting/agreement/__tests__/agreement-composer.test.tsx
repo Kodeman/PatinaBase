@@ -8,6 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import type { AgreementPart } from "@patina/types";
+import { consumeSuppressed } from "@/lib/arrival/nav";
 import { AgreementComposer } from "../agreement-composer";
 import type { CommercialDocumentBundle } from "@/hooks/use-commercial-documents";
 
@@ -22,8 +23,9 @@ jest.mock('@/hooks/use-teaching-note', () => ({
   useTeachingNoteFor: () => ({ note: null, bind: null }),
 }));
 
+const mockPush = jest.fn();
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 // FS-12 — the galley takes neither `count` nor `action` from the shell: one
@@ -160,13 +162,24 @@ jest.mock("../../../../commercial/service-agreement-preview", () => ({
   ServiceAgreementPreview: () => <div>Agreement preview</div>,
 }));
 
+/** US-14 — lets a case fire the sheet's onSent without walking its send flow. */
+let mockSendable = false;
 jest.mock("../../../../commercial/service-agreement-send-sheet", () => ({
-  ServiceAgreementSendSheet: ({ open }: { open: boolean }) =>
-    open ? <div>Send sheet</div> : null,
+  ServiceAgreementSendSheet: ({ open, onSent }: { open: boolean; onSent: () => void }) => (
+    <>
+      {open ? <div>Send sheet</div> : null}
+      {mockSendable ? (
+        <button type="button" onClick={onSent}>
+          Mock sent
+        </button>
+      ) : null}
+    </>
+  ),
 }));
 
+let mockRoomOrigin = "/desk";
 jest.mock("@/lib/document/room-origin", () => ({
-  readRoomOrigin: () => "/desk",
+  readRoomOrigin: () => mockRoomOrigin,
   clearRoomOrigin: jest.fn(),
 }));
 
@@ -303,6 +316,34 @@ beforeEach(() => {
   mockSaveParts.mockImplementation(async (parts: AgreementPart[]) =>
     bundleWith(parts.map((p, index) => ({ ...p, position: index + 1 }))),
   );
+});
+
+describe("AgreementComposer · sent (US-14)", () => {
+  afterEach(() => {
+    mockSendable = false;
+    mockRoomOrigin = "/desk";
+    mockPush.mockClear();
+  });
+
+  it("returns onto the Document it was opened from, announced, so no arrival plays", () => {
+    mockSendable = true;
+    mockRoomOrigin = "/doc/agreement-1";
+    consumeSuppressed("/doc/agreement-1");
+    render(<AgreementComposer proposal={proposal} bundle={bundleWith(threeParts())} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mock sent" }));
+    expect(mockPush).toHaveBeenCalledWith("/doc/agreement-1");
+    expect(consumeSuppressed("/doc/agreement-1")).toBe(true);
+  });
+
+  it("an origin off the Document is not announced", () => {
+    mockSendable = true;
+    mockRoomOrigin = "/desk";
+    consumeSuppressed("/desk");
+    render(<AgreementComposer proposal={proposal} bundle={bundleWith(threeParts())} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mock sent" }));
+    expect(mockPush).toHaveBeenCalledWith("/desk");
+    expect(consumeSuppressed("/desk")).toBe(false);
+  });
 });
 
 describe("AgreementComposer · materialize", () => {

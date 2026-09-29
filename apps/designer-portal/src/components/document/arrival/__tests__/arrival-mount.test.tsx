@@ -8,10 +8,11 @@ import { DeskClaimCard } from '@/components/document/desk-claim-card';
 import { gate } from '@/lib/arrival/gate';
 import type { Run } from '@/lib/arrival/run-contract';
 import { enterRoute } from '@/lib/arrival/nav';
-import { readArriveToken } from '@/lib/arrival/session';
-import { KEYS } from '@/lib/arrival/types';
+import { readArriveToken, writeFromDoc } from '@/lib/arrival/session';
+import { EVENT_ENDED, KEYS } from '@/lib/arrival/types';
+import type { ArrivalEnded } from '@/lib/arrival/types';
 import type { ClaimCard, RosterLine } from '@/lib/document/desk-roster-derivation';
-import { ArrivalMount, setActiveRun, setArrivalWaiting } from '../arrival-mount';
+import { afterArrival, ArrivalMount, setActiveRun, setArrivalWaiting } from '../arrival-mount';
 
 let mockPathname = '/desk';
 jest.mock('next/navigation', () => ({ usePathname: () => mockPathname }));
@@ -130,7 +131,31 @@ describe('forwarding', () => {
       expect(fire()).toBe(true);
       fire();
       expect(cancel).toHaveBeenCalledTimes(1);
+      expect(cancel).toHaveBeenCalledWith(false);
     }
+  });
+
+  it('during the wait, Escape is swallowed and halts it as escape; any other key ends it unswallowed', () => {
+    render(<ArrivalMount />);
+    const chrome = jest.fn();
+    document.body.addEventListener('keydown', chrome);
+    const halt = jest.fn();
+    setArrivalWaiting(halt);
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(true);
+    expect(chrome).not.toHaveBeenCalled();
+    expect(halt).toHaveBeenCalledTimes(1);
+    expect(halt).toHaveBeenCalledWith(true);
+
+    const cancel = jest.fn();
+    setArrivalWaiting(cancel);
+    const key = new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(key);
+    expect(key.defaultPrevented).toBe(false);
+    expect(chrome).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledWith(false);
+    document.body.removeEventListener('keydown', chrome);
   });
 });
 
@@ -355,6 +380,65 @@ describe('popstate', () => {
   });
 });
 
+describe('the bare /board route', () => {
+  it('advances the nav state at its commit, which ArrivalRoute never renders on', () => {
+    enterRoute('/doc/e3');
+    mockPathname = '/board/b1';
+    render(<ArrivalMount />);
+    // The previous path is now /board/b1: walking on to the Desk is no put-down from /doc/e3.
+    enterRoute('/desk');
+    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBeNull();
+    mockPathname = '/desk';
+  });
+});
+
+describe('afterArrival', () => {
+  const html = document.documentElement;
+  const end = (detail: ArrivalEnded) =>
+    window.dispatchEvent(new CustomEvent<ArrivalEnded>(EVENT_ENDED, { detail }));
+  afterEach(() => {
+    html.className = '';
+  });
+
+  it('runs at once, as declined, when no arrival holds the page', () => {
+    const onEnd = jest.fn();
+    afterArrival(onEnd);
+    expect(onEnd).toHaveBeenCalledWith(true);
+  });
+
+  it.each(['arr-pre', 'arr-on'])('waits on the entry’s end while %s holds the page', (cls) => {
+    html.classList.add(cls);
+    const onEnd = jest.fn();
+    afterArrival(onEnd);
+    expect(onEnd).not.toHaveBeenCalled();
+    // An earlier route's end arriving while this entry still holds the page is not this end.
+    end({ surface: 'document', how: 'mutation' });
+    expect(onEnd).not.toHaveBeenCalled();
+    html.classList.remove(cls);
+    end({ surface: 'desk', how: 'declined', cause: 'late' });
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(onEnd).toHaveBeenCalledWith(true);
+    end({ surface: 'desk', how: 'declined', cause: 'late' });
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a played end as not declined, and the unsubscribe stops listening', () => {
+    html.classList.add('arr-on');
+    const played = jest.fn();
+    afterArrival(played);
+    html.classList.remove('arr-on');
+    end({ surface: 'desk', how: 'settled' });
+    expect(played).toHaveBeenCalledWith(false);
+
+    html.classList.add('arr-pre');
+    const gone = jest.fn();
+    afterArrival(gone)();
+    html.classList.remove('arr-pre');
+    end({ surface: 'desk', how: 'declined', cause: 'busy' });
+    expect(gone).not.toHaveBeenCalled();
+  });
+});
+
 describe('the click token', () => {
   const card = `
     <ul>
@@ -494,15 +578,24 @@ describe('the put-down row', () => {
     Element.prototype.scrollIntoView = jest.fn();
   });
 
-  it('/doc/x → /desk writes pl-from-doc; the Desk scrolls to its row only after ready, then spends it', async () => {
+  const html = document.documentElement;
+  const frame = () => new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+  const deskDom = (ready: boolean) => {
+    document.body.innerHTML = `<main data-arrival="desk"${ready ? ' data-arrival-ready' : ''}><ul><li id="roster-line-e1"></li><li id="roster-line-e2"></li></ul></main>`;
+  };
+  afterEach(() => {
+    html.className = '';
+  });
+
+  it('/doc/x → /desk writes pl-from-doc, spent at the Desk commit; the row lands only after ready', async () => {
     enterRoute('/doc/e2');
     enterRoute('/desk');
-    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBe('e2');
+    expect(JSON.parse(window.sessionStorage.getItem(KEYS.FROM_DOC)!)).toMatchObject({ id: 'e2' });
 
-    document.body.innerHTML =
-      '<main data-arrival="desk"><ul><li id="roster-line-e1"></li><li id="roster-line-e2"></li></ul></main>';
+    deskDom(false);
     render(<ArrivalMount />);
-    await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBeNull();
+    await frame();
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
 
     document.querySelector('main')!.setAttribute('data-arrival-ready', '');
@@ -510,16 +603,70 @@ describe('the put-down row', () => {
     const [call] = (Element.prototype.scrollIntoView as jest.Mock).mock.instances;
     expect(call).toBe(document.getElementById('roster-line-e2'));
     expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+  });
+
+  it('is spent at the Desk commit even when the Desk never becomes ready', async () => {
+    writeFromDoc('e2');
+    deskDom(false);
+    const view = render(<ArrivalMount />);
+    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBeNull();
+    view.unmount();
+    deskDom(true);
+    render(<ArrivalMount />);
+    await frame();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('a stale row (older than FROM_DOC_TTL_MS) lands nothing', async () => {
+    writeFromDoc('e2', Date.now() - 15_000);
+    deskDom(true);
+    render(<ArrivalMount />);
+    await frame();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBeNull();
+  });
+
+  it('while the Desk’s arrival holds the page, waits for its end and lands on a declined one', async () => {
+    writeFromDoc('e2');
+    html.classList.add('arr-pre');
+    deskDom(true);
+    render(<ArrivalMount />);
+    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBeNull();
+    await frame();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+    html.classList.remove('arr-pre');
+    window.dispatchEvent(
+      new CustomEvent<ArrivalEnded>(EVENT_ENDED, { detail: { surface: 'desk', how: 'declined', cause: 'late' } }),
+    );
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1));
+    expect((Element.prototype.scrollIntoView as jest.Mock).mock.instances[0]).toBe(
+      document.getElementById('roster-line-e2'),
+    );
+  });
+
+  it('a played Desk owns the viewport: the row never lands', async () => {
+    writeFromDoc('e2');
+    html.classList.add('arr-on');
+    deskDom(true);
+    render(<ArrivalMount />);
+    html.classList.remove('arr-on');
+    window.dispatchEvent(
+      new CustomEvent<ArrivalEnded>(EVENT_ENDED, { detail: { surface: 'desk', how: 'settled' } }),
+    );
+    await frame();
+    await frame();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
     expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBeNull();
   });
 
   it('does nothing off the Desk', async () => {
-    window.sessionStorage.setItem(KEYS.FROM_DOC, 'e2');
+    writeFromDoc('e2');
     mockPathname = '/doc/e1';
-    document.body.innerHTML = '<main data-arrival="desk" data-arrival-ready><li id="roster-line-e2"></li></main>';
+    deskDom(true);
     render(<ArrivalMount />);
-    await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+    await frame();
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
-    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBe('e2');
+    expect(JSON.parse(window.sessionStorage.getItem(KEYS.FROM_DOC)!)).toMatchObject({ id: 'e2' });
   });
 });

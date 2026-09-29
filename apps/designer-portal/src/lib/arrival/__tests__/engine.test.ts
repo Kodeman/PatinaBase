@@ -380,7 +380,7 @@ describe('finish', () => {
     get.mockRestore()
     set.mockRestore()
   })
-  it('adds no window listener but error/unhandledrejection, and removes those', () => {
+  it('adds no window listener but error/unhandledrejection/pointercancel, and removes those', () => {
     const add = jest.spyOn(window, 'addEventListener')
     const remove = jest.spyOn(window, 'removeEventListener')
     const root = deskDom()
@@ -390,8 +390,8 @@ describe('finish', () => {
     toHold()
     toRest()
     const types = (spy: jest.SpyInstance) => spy.mock.calls.map((c) => c[0]).filter((t) => t !== EVENT_ENDED)
-    expect(types(add).sort()).toEqual(['error', 'unhandledrejection'])
-    expect(types(remove).sort()).toEqual(['error', 'unhandledrejection'])
+    expect(types(add).sort()).toEqual(['error', 'pointercancel', 'unhandledrejection'])
+    expect(types(remove).sort()).toEqual(['error', 'pointercancel', 'unhandledrejection'])
     add.mockRestore()
     remove.mockRestore()
   })
@@ -532,7 +532,7 @@ describe('Skip and landing focus', () => {
     const { root } = go(deskDom(), { via: 'kbd' })
     toHold()
     toRest()
-    expect(document.activeElement).toBe(root.querySelector('[data-part="head"]'))
+    expect(document.activeElement).toBe(root.querySelector('[data-part~="head"]'))
   })
   it('a pointer entry takes no landing focus', () => {
     go(documentDom(), { via: 'ptr' })
@@ -640,6 +640,29 @@ describe('pointer (O1)', () => {
     const bar = document.getElementById('bar') as HTMLElement
     pointer('pointerdown', bar, 5, 5, 2, 'touch') // Act 3 now: a control snaps to rest
     pointer('pointerup', bar, 5, 5, 2, 'touch')
+    expect(html.classList.contains('arr-press')).toBe(false)
+  })
+  it('pointercancel releases a press on the act: arr-press drops and no later release activates it', () => {
+    const { run, A } = go(deskDom())
+    const acts = counter(A, 'click')
+    toHold()
+    pointer('pointerdown', A, AX, AY, 4, 'touch')
+    expect(html.classList.contains('arr-press')).toBe(true)
+    document.body.dispatchEvent(new Event('pointercancel', { bubbles: true }))
+    expect(html.classList.contains('arr-press')).toBe(false)
+    pointer('pointerup', A, AX, AY, 4, 'touch')
+    expect(acts).not.toHaveBeenCalled()
+    expect(run.phase).toBe('hold')
+    expect(html.classList.contains('arr-press')).toBe(false)
+  })
+  it('pointercancel releases a pending tap hold', () => {
+    go(deskDom())
+    toHold()
+    pointer('pointerdown', document.body, 50, 50, 1, 'touch')
+    pointer('pointerup', document.body, 50, 50, 1, 'touch')
+    jest.advanceTimersByTime(0)
+    expect(html.classList.contains('arr-press')).toBe(true)
+    window.dispatchEvent(new Event('pointercancel'))
     expect(html.classList.contains('arr-press')).toBe(false)
   })
   it('B4 on touch — a tap on the act in the hold forwards exactly one click to it', () => {
@@ -769,7 +792,7 @@ describe('B11 — reduced motion: the opacity-only card layer', () => {
 describe('D1 landing and the closing settle', () => {
   it('the clone crossfades into the real node in LANDING_FADE_MS; the settle tween starts after it', () => {
     const root = deskDom()
-    const settleNode = root.querySelector('[data-part="settle"]') as HTMLElement
+    const settleNode = root.querySelector('[data-part~="settle"]') as HTMLElement
     html.style.setProperty('--text-faint', '#65594E')
     offs.push(() => html.style.removeProperty('--text-faint'))
     const { H } = go(root)

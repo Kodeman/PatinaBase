@@ -5,9 +5,10 @@
  *  - T3 live: every card part's text is a substring of the page's own visible
  *    text once the card has rested (both routes — the Desk half lives in
  *    play-desk.spec.ts's hard-entry test via a shared assertion helper here)
- *  - the phone long-form headline (`mobile-chrome` only): the card's headline
- *    reads the `data-arr-long` token list while the page itself keeps its
- *    short form (CONTRACT §4a — Document phone long form)
+ *  - the lens headline on every project: where the band prints its short
+ *    (label) form it carries `data-arr-long` and the card's headline is that
+ *    long sentence; where it prints a sentence it carries none and the card's
+ *    headline is the page's own (CONTRACT §4a, §4c(j))
  *  - a reload of an open Document plays with `via:null`, and a pending token
  *    is never honoured on a reload (gate.ts `honoured()` — `input.entry ===
  *    'reload'` always returns null)
@@ -59,6 +60,13 @@ async function captureCardTexts(page: Page): Promise<string[]> {
  *  stripped from each part before the page-substring check — otherwise T3
  *  would fail on the period alone, on a page that is genuinely rendering the
  *  same underlying fact. */
+const collapse = (s: string): string => s.replace(/\s+/g, ' ').trim();
+/** brief.ts `period()`: the card's terminal period when the page printed none (T7). */
+const period = (s: string): string => (s === '' || /[.!?…]["'”’)\]]*$/.test(s) ? s : `${s}.`);
+
+/** The lens band's headline sentence (lens-band.tsx), the carrier of `data-arr-long`. */
+const LENS_HEADLINE = '[data-lens-sentence][data-part~="headline"]';
+
 function splitCardLine(text: string): string[] {
   return text
     .split(/ · |: /)
@@ -74,7 +82,7 @@ test.describe('Document plays', () => {
 
   test('a warm soft entry via a claim card plays, and T3: every card part is live on the rested page', async ({
     authenticatedPage: page,
-  }, testInfo) => {
+  }) => {
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
@@ -97,17 +105,17 @@ test.describe('Document plays', () => {
     let cardTexts = await captureCardTexts(page);
     expect(cardTexts.length).toBeGreaterThan(0);
 
-    // D2 (CONTRACT §2, §4a): on the phone the card headline is the long form the band carries in
-    // `data-arr-long`, while the page keeps its short form at rest, so the headline is held to that
-    // attribute (period(collapse(...)), brief.ts) instead of to the page's innerText.
-    if (testInfo.project.name === 'mobile-chrome') {
-      const longForm = await page
-        .locator('[data-lens-sentence][data-part~="headline"]')
-        .getAttribute('data-arr-long');
-      expect(longForm, 'the phone headline carrier must carry data-arr-long').toBeTruthy();
-      const cardHeadline = ((await page.locator('.arr-h').first().textContent()) ?? '').trim();
-      const long = longForm!.replace(/\s+/g, ' ').trim();
-      expect(cardHeadline).toBe(/[.!?…]["'”’)\]]*$/.test(long) ? long : `${long}.`);
+    // D2 (CONTRACT §2, §4a, §4c(j)): where the band prints its short (label) form at rest it
+    // carries the long sentence in `data-arr-long`, and the card headline is that sentence
+    // (period(collapse(...)), brief.ts) rather than the page's words. Wherever it is absent the
+    // headline is held to the page like every other line.
+    const longForm = await page.evaluate(
+      (sel) => document.querySelector(sel)?.getAttribute('data-arr-long') ?? null,
+      LENS_HEADLINE,
+    );
+    if (longForm !== null) {
+      const cardHeadline = collapse((await page.locator('.arr-h').first().textContent()) ?? '');
+      expect(cardHeadline).toBe(period(collapse(longForm)));
       const skipped = cardTexts.indexOf(cardHeadline);
       expect(skipped).toBeGreaterThanOrEqual(0);
       cardTexts = cardTexts.filter((_, i) => i !== skipped);
@@ -130,30 +138,30 @@ test.describe('Document plays', () => {
     expect(played).toBeTruthy();
   });
 
-  test('the phone long-form headline reads data-arr-long while the page keeps the short form', async ({
+  test('the lens headline: data-arr-long only on the short form, and the card reads it; else the page sentence', async ({
     authenticatedPage: page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== 'mobile-chrome', 'phone long-form is a mobile-chrome-only assertion');
+  }) => {
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
     await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
 
-    const headline = page.locator('[data-lens-sentence][data-part="headline"]');
+    const headline = page.locator(LENS_HEADLINE);
     await expect(headline).toBeVisible({ timeout: 20_000 });
-    const longForm = await headline.getAttribute('data-arr-long');
-    const shortForm = (await headline.textContent())?.trim() ?? '';
-    expect(longForm, 'the lens sentence must carry a data-arr-long token list on phone').toBeTruthy();
-    expect(longForm).not.toEqual(shortForm);
+    await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
 
-    const card = page.locator(CARD_SELECTOR).first();
-    await expect(card).toBeVisible({ timeout: 20_000 });
-    const cardHeadline = (await page.locator('.arr-h').first().textContent())?.trim() ?? '';
-    // The card's own headline is built from the brief's long-form token list
-    // on a phone viewport; the page's own headline text is the short form —
-    // the two must differ, and the card's text must be drawn from the long
-    // form (a substring/equal to the long-form's own rendered sentence).
+    const longForm = await headline.getAttribute('data-arr-long');
+    const printedForm = collapse((await headline.textContent()) ?? '');
+    const form = await page.locator('[data-lens-line="2"]').getAttribute('data-lens-line2-form');
+    const cardHeadline = collapse((await page.locator('.arr-h').first().textContent()) ?? '');
     expect(cardHeadline.length).toBeGreaterThan(0);
-    expect(cardHeadline).not.toEqual(shortForm);
+
+    if (longForm !== null) {
+      expect(form, 'data-arr-long rides only on the short (label) form').toBe('short');
+      expect(cardHeadline).toBe(period(collapse(longForm)));
+    } else {
+      expect(form).not.toBe('short');
+      expect(cardHeadline).toBe(period(printedForm));
+    }
 
     await page.locator(SKIP_SELECTOR).click();
   });

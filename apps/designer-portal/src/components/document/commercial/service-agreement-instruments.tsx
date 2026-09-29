@@ -12,6 +12,7 @@ import { commercialStatusView } from "@/lib/document/commercial-documents";
 import { draftingEditability } from "@/lib/document/drafting-editability";
 import { assessAgreementReadiness } from "../rooms/drafting/agreement/readiness";
 import { rememberRoomOrigin } from "@/lib/document/room-origin";
+import { suppressNextArrival } from "@/lib/arrival/nav";
 import { DocumentAction, DocumentActionGroup } from "../document-action";
 import { DocSheet } from "../overlays/doc-sheet";
 import {
@@ -348,7 +349,12 @@ export function ServiceAgreementInstruments({
                 <button
                   type="button"
                   className="ml-2 underline underline-offset-4"
-                  onClick={() => router.push(`/doc/${resultProjectId}`)}
+                  onClick={() => {
+                    // US-14 — the signed agreement's own project: the same
+                    // engagement, not a new arrival.
+                    suppressNextArrival(`/doc/${resultProjectId}`);
+                    router.push(`/doc/${resultProjectId}`);
+                  }}
                 >
                   Open the project →
                 </button>

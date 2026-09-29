@@ -55,6 +55,7 @@ import type { CommercialDocument } from "@/lib/document/commercial-documents";
 import { partDrawsNothing } from "../../../commercial/agreement-parts-body";
 import { ServiceAgreementSendSheet } from "../../../commercial/service-agreement-send-sheet";
 import { clearRoomOrigin, readRoomOrigin } from "@/lib/document/room-origin";
+import { suppressNextArrival } from "@/lib/arrival/nav";
 import { useTeachingHold } from "@/lib/teaching/hold-registry";
 import {
   createBlankPart,
@@ -1607,6 +1608,8 @@ export function AgreementComposer({
         onSent={() => {
           const destination = readRoomOrigin();
           clearRoomOrigin();
+          // US-14 — back onto the paper the Room was opened from: a return, not an arrival.
+          if (destination.startsWith('/doc/')) suppressNextArrival(destination);
           router.push(destination);
         }}
         document={document}

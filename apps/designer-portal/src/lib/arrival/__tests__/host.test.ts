@@ -133,7 +133,7 @@ describe('faces()', () => {
   });
 
   it('falls back to the literal families', () => {
-    expect(host().faces()).toEqual(['"Playfair Display"', 'Inter', '"DM Mono"']);
+    expect(host().faces()).toEqual(["'Playfair Display'", "'Inter'", "'DM Mono'"]);
   });
 });
 

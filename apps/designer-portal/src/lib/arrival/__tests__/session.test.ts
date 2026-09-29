@@ -108,10 +108,36 @@ describe('the visit and the Desk mark', () => {
 
 describe('pl-from-doc and the e2e opt-in', () => {
   it('reads and consumes the put-down row once', () => {
-    s.writeFromDoc('e7');
-    expect(s.readFromDoc()).toBe('e7');
-    expect(s.consumeFromDoc()).toBe('e7');
-    expect(s.consumeFromDoc()).toBeNull();
+    s.writeFromDoc('e7', NOW);
+    expect(JSON.parse(window.sessionStorage.getItem(KEYS.FROM_DOC)!)).toEqual({ id: 'e7', at: NOW });
+    expect(s.readFromDoc(NOW + 1)).toBe('e7');
+    expect(s.consumeFromDoc(NOW + 1)).toBe('e7');
+    expect(s.consumeFromDoc(NOW + 2)).toBeNull();
+  });
+
+  it('honours the row only within FROM_DOC_TTL_MS, and a stale one is still spent', () => {
+    expect(s.FROM_DOC_TTL_MS).toBe(15_000);
+    s.writeFromDoc('e7', NOW);
+    expect(s.readFromDoc(NOW + s.FROM_DOC_TTL_MS - 1)).toBe('e7');
+    expect(s.readFromDoc(NOW + s.FROM_DOC_TTL_MS)).toBeNull();
+    expect(s.readFromDoc(NOW - 1)).toBeNull();
+    expect(s.consumeFromDoc(NOW + s.FROM_DOC_TTL_MS)).toBeNull();
+    expect(window.sessionStorage.getItem(KEYS.FROM_DOC)).toBeNull();
+  });
+
+  it('reads an untimed or malformed row as nothing', () => {
+    window.sessionStorage.setItem(KEYS.FROM_DOC, 'e7');
+    expect(s.readFromDoc(NOW)).toBeNull();
+    window.sessionStorage.setItem(KEYS.FROM_DOC, JSON.stringify({ id: 'e7' }));
+    expect(s.readFromDoc(NOW)).toBeNull();
+    window.sessionStorage.setItem(KEYS.FROM_DOC, JSON.stringify({ id: '', at: NOW }));
+    expect(s.readFromDoc(NOW)).toBeNull();
+  });
+
+  it('clearFromDoc drops the row', () => {
+    s.writeFromDoc('e7', NOW);
+    s.clearFromDoc();
+    expect(s.readFromDoc(NOW)).toBeNull();
   });
 
   it('opts in only on the literal "1"', () => {

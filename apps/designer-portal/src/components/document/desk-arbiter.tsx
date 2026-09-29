@@ -25,6 +25,11 @@
  * on different loads of the same visit, in either order. Nothing renders
  * while the walkthrough is on screen (R-RT2), and nothing at all when no line
  * is eligible: no placeholder, no space kept.
+ *
+ * US-14: a line whose read is still pending DESK_LINE_BOUND_MS after the
+ * ready render (a PostHog flag request hangs for up to its own 3 s timeout)
+ * takes its fail-closed default, so the pick is made and a late answer never
+ * changes the printed line. That pick is not carried either.
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
@@ -51,6 +56,15 @@ export const DESK_LINE_PRIORITY: readonly DeskLineKey[] = [
 
 /** Eligible now, not eligible, or its inputs are still loading. */
 export type DeskLineState = boolean | 'pending';
+
+/** How long after the ready render a pending line may hold the pick. */
+export const DESK_LINE_BOUND_MS = 800;
+
+function failClosed(states: Record<DeskLineKey, DeskLineState>): Record<DeskLineKey, DeskLineState> {
+  const settled = { ...states };
+  for (const key of DESK_LINE_PRIORITY) if (settled[key] === 'pending') settled[key] = false;
+  return settled;
+}
 
 /**
  * The first eligible line in priority order, or null when none is. Undefined
@@ -111,6 +125,13 @@ export function useDeskLineState({
 }): { node: ReactNode; decided: boolean } {
   const walkthroughOnScreen = useSuppressDeskFirstTouch();
   const [line, setLine] = useState(carriedLine);
+  const [bounded, setBounded] = useState(false);
+  const undecided = ready && line === undefined;
+  useEffect(() => {
+    if (!undecided) return;
+    const timer = window.setTimeout(() => setBounded(true), DESK_LINE_BOUND_MS);
+    return () => window.clearTimeout(timer);
+  }, [undecided]);
 
   const stateOf = (key: Exclude<DeskLineKey, 'teaching-note'>): DeskLineState => {
     const { when } = lines[key];
@@ -140,13 +161,15 @@ export function useDeskLineState({
   };
 
   if (ready && line === undefined) {
-    const pick = pickDeskLine(states);
+    const pick = pickDeskLine(bounded ? failClosed(states) : states);
     if (pick !== undefined) setLine(pick);
   }
 
   // A pick at or behind teaching's place, made while teaching sat the load
-  // out, is not the visit's line: the next Desk load picks again.
-  const carried = teaching.yielded && (line === null || line === 'setup-whisper') ? undefined : line;
+  // out, is not the visit's line: the next Desk load picks again. Nor is a
+  // pick the bound forced.
+  const carried =
+    bounded || (teaching.yielded && (line === null || line === 'setup-whisper')) ? undefined : line;
   useEffect(() => {
     if (carried !== undefined && visit) visit.line = carried;
   }, [carried]);

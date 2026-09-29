@@ -233,6 +233,7 @@ import {
 import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
 import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
 import { ROSTER_STAGE_ORDER } from '@/lib/document/desk-roster-derivation';
+import { afterArrival } from '@/components/document/arrival/arrival-mount';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { consumeArriveToken } from '@/lib/arrival/session';
 import { EVENT_ENDED, type Landing } from '@/lib/arrival/types';
@@ -1471,18 +1472,30 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // recent-documents-in-hand MRU this page writes to below via
   // rememberDocumentInHand — that write runs later in this same commit
   // (React runs effects in declaration order), so this read never races it
-  // for the current visit.
-  const landedRef = useRef(false);
+  // for the current visit. US-14: a played arrival owns the viewport, so the
+  // jump waits for this entry's end and runs only if it declined. The decision
+  // is kept in the ref: StrictMode's re-run reads the MRU after that write.
+  const landedRef = useRef<{ seen: boolean; done: boolean } | null>(null);
+  const landingEngagementId = row?.engagement_id ?? null;
   useEffect(() => {
-    if (!row || landedRef.current) return;
-    landedRef.current = true;
-    const seenBefore = readRecentDocumentsInHand().some((d) => d.id === row.engagement_id);
-    if (!seenBefore) return;
-    const el = mainRef.current?.querySelector('[data-active-section]');
-    if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
-      el.scrollIntoView({ block: 'start' });
+    if (!landingEngagementId) return;
+    if (!landedRef.current) {
+      landedRef.current = {
+        seen: readRecentDocumentsInHand().some((d) => d.id === landingEngagementId),
+        done: false,
+      };
     }
-  }, [row]);
+    const landing = landedRef.current;
+    if (!landing.seen || landing.done) return;
+    return afterArrival((declined) => {
+      landing.done = true;
+      if (!declined) return;
+      const el = mainRef.current?.querySelector('[data-active-section]');
+      if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
+        el.scrollIntoView({ block: 'start' });
+      }
+    });
+  }, [landingEngagementId]);
 
   // Lineage (R1): activating proposal for signed work; live proposal pre-signing.
   const lineage: SectionLineage | null = useMemo(() => {
@@ -1770,7 +1783,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       // W3 — the guide's deep links used to be an `<a href>` the zone rendered
       // itself. The band prints one act, as a press, so the switch has to carry
       // the fourth destination or a deep-linked guide act would open nothing.
-      if (destination.kind === 'href') router.push(destination.href);
+      if (destination.kind === 'href') {
+        // The guide's only `/doc/` href is the executed proposal's "Open the
+        // project": the same engagement under its successor id.
+        if (destination.href.startsWith('/doc/')) suppressNextArrival(destination.href);
+        router.push(destination.href);
+      }
     },
     [enrichedOperationalQuery, jumpToSection, router, runBeginDirection],
   );
@@ -2800,6 +2818,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       data-document-shell
       data-arrival="document"
       data-arrival-ready={arrivalReady ? '' : undefined}
+      data-arr-engagement={row.engagement_id}
       data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"
       // W3 · the reading stop, published where the rail and the mobile bar
       // already publish it. Absent rather than `"null"` when nothing reads.

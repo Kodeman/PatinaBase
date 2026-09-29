@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { consumeSuppressed } from '@/lib/arrival/nav';
 import { TriageBar } from '../triage-bar';
 
 const replace = jest.fn();
@@ -52,6 +53,26 @@ describe('TriageBar post-accept destination', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept · begin' }));
 
     expect(replace).toHaveBeenCalledWith('/doc/designer-client-1');
+  });
+
+  it('US-14 — the open Brief’s replace is its identity moving: announced, so no arrival plays', () => {
+    consumeSuppressed('/doc/designer-client-1');
+    render(<TriageBar leadId="lead-1" variant="brief" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept · begin' }));
+
+    expect(replace).toHaveBeenCalledWith('/doc/designer-client-1');
+    expect(consumeSuppressed('/doc/designer-client-1')).toBe(true);
+  });
+
+  it('US-14 — accepting from the Desk picks up a document: not announced', () => {
+    consumeSuppressed('/doc/designer-client-1');
+    render(<TriageBar leadId="lead-1" variant="desk" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept · begin' }));
+
+    expect(push).toHaveBeenCalledWith('/doc/designer-client-1');
+    expect(consumeSuppressed('/doc/designer-client-1')).toBe(false);
   });
 
   it('opens the canonical Discovery document after accepting from the Desk', () => {

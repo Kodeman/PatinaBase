@@ -7,12 +7,16 @@
  * ordinary page.
  */
 import { useLayoutEffect, useRef } from 'react';
-import { callSheetPending } from '@/components/document/command-bar';
+import {
+  callSheetPending,
+  captureLeadPending,
+  openProjectPending,
+} from '@/components/document/command-bar';
 import { useSuppressDeskFirstTouch } from '@/components/document/help/desk-walkthrough';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { loadFaces } from '@/lib/arrival/faces';
 import { createHost } from '@/lib/arrival/host';
-import { docIdOf, enterRoute } from '@/lib/arrival/nav';
+import { docIdOf, enterRoute, noteDocEngagement } from '@/lib/arrival/nav';
 import type { ArrivalEngine, Run } from '@/lib/arrival/run-contract';
 import {
   consumeArriveToken,
@@ -42,7 +46,8 @@ interface Entry {
   input: GateInput;
   hard: boolean;
   result: GateResult;
-  callSheet: boolean;
+  /** A sheet flagged to open on this route's mount (⌘K's Call Sheet, capture-lead, open-project). */
+  busy: boolean;
 }
 
 function surfaceOf(pathname: string): Surface | null {
@@ -82,10 +87,23 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
   const reportedRef = useRef(false);
   const stampedRef = useRef(false);
   const runRef = useRef<Run | null>(null);
+  const routedRef = useRef(false);
+  /** An abandoned wait's report, deferred one microtask so StrictMode's re-run can take it back. */
+  const abandonRef = useRef<{ cancelled: boolean } | null>(null);
 
   useLayoutEffect(() => {
+    if (abandonRef.current) {
+      abandonRef.current.cancelled = true;
+      abandonRef.current = null;
+    }
     const surface = surfaceOf(pathname);
-    if (!surface) return;
+    if (!surface) {
+      if (!routedRef.current) {
+        routedRef.current = true;
+        enterRoute(pathname);
+      }
+      return;
+    }
     const engagementId = surface === 'document' ? docIdOf(pathname) : null;
     const host = createHost(surface, engagementId, {
       walkthroughOnScreen: () => walkthroughRef.current,
@@ -137,18 +155,50 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       } catch {
         result = { play: false, cause: 'error' };
       }
-      // The ⌘K Call Sheet walk: the Document opens its sheet on mount and clears the flag.
-      entry = { input, hard: route.hard, result, callSheet: callSheetPending.value };
+      // The walks that open a sheet on mount (the Document's Call Sheet, the Desk's capture-lead
+      // and open-project): each page reads and clears its flag after this commit.
+      const busy = callSheetPending.value || captureLeadPending.value || openProjectPending.value;
+      entry = { input, hard: route.hard, result, busy };
       entryRef.current = entry;
     }
-    if (reportedRef.current || runRef.current) return;
 
-    const declineNow = (cause: DeclineCause) =>
+    // The Document names its engagement on its root (`data-arr-engagement`): a put-down from this
+    // path writes that id, which the Desk's roster rows are keyed by.
+    let engagementWatch: MutationObserver | null = null;
+    const noteEngagement = (): boolean => {
+      const id = host.root()?.getAttribute('data-arr-engagement');
+      if (!id) return false;
+      noteDocEngagement(pathname, id);
+      return true;
+    };
+    if (surface === 'document' && !noteEngagement() && typeof MutationObserver !== 'undefined') {
+      engagementWatch = new MutationObserver(() => {
+        if (!noteEngagement()) return;
+        engagementWatch?.disconnect();
+        engagementWatch = null;
+      });
+      engagementWatch.observe(document.body, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ['data-arr-engagement'],
+      });
+    }
+    const stopEngagementWatch = () => {
+      engagementWatch?.disconnect();
+      engagementWatch = null;
+    };
+
+    if (reportedRef.current || runRef.current) return stopEngagementWatch;
+
+    const declineNow = (cause: DeclineCause) => {
       report({ surface, how: 'declined', cause }, true);
+      return stopEngagementWatch;
+    };
 
     const { input, result } = entry;
     if (!result.play) return declineNow(result.cause);
-    if (entry.callSheet) return declineNow('busy');
+    if (entry.busy) return declineNow('busy');
     if (
       typeof MutationObserver === 'undefined' ||
       !document.fonts ||
@@ -195,6 +245,15 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       endWait();
       html.classList.remove('arr-pre');
       report({ surface, how: 'declined', cause }, true);
+    };
+
+    // Escape during the wait is "no ceremony" (the mockup's halt()): the ordinary page, reported
+    // as her escape rather than a decline.
+    const halt = () => {
+      if (!waitingNow) return;
+      endWait();
+      html.classList.remove('arr-pre');
+      report({ surface, how: 'escape' }, true);
     };
 
     const begin = (root: HTMLElement) => {
@@ -303,7 +362,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
     html.classList.add('arr-pre');
     // Her hand during the wait ends it for good. DeclineCause has no 'input' member (types.ts is
     // frozen); 'busy' is the nearest.
-    setArrivalWaiting(() => decline('busy'));
+    setArrivalWaiting((escape) => (escape ? halt() : decline('busy')));
     entryTimer = window.setTimeout(() => decline('late'), left);
     watch = new MutationObserver(check);
     watch.observe(document.body, {
@@ -315,7 +374,18 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
     check();
 
     return () => {
-      if (waitingNow) endWait();
+      stopEngagementWatch();
+      if (waitingNow) {
+        endWait();
+        // Unmounted or navigated away mid-wait: the entry ends as a navigation cut, once.
+        const abandon = { cancelled: false };
+        abandonRef.current = abandon;
+        queueMicrotask(() => {
+          if (abandon.cancelled) return;
+          if (abandonRef.current === abandon) abandonRef.current = null;
+          report({ surface, how: 'mutation' }, true);
+        });
+      }
       const run = runRef.current;
       if (run) {
         if (run.phase !== 'done') run.finish('mutation');
