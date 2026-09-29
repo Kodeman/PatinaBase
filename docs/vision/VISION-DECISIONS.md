@@ -296,3 +296,34 @@ https://claude.ai/code/artifact/9be6c6e0-af40-43be-a46f-4ba6f29ab766. Built in P
 CRM program; see `docs/design/the-document/DECISIONS.md` **R151**.
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · last id = V11*
+
+## Ruled — 2026-09-29 (arrival v3 ship)
+
+### V12 · Arrival v3 in production, no flag, 100% — 2026-09-29
+
+**Shipped.** The sentence-finds-its-place arrival plays on `/desk` and every `/doc/[id]`, no feature
+flag, 100% of production (CONTRACT §0.1). D1–D4 as ruled: display-clone headline, card prints the
+page's own words, write-only anchor `00675` (`arrival_anchors`, no since-line in v1), telemetry
+`arrival_ended {surface, how, cause?}` only.
+
+**Promise served.** The homeowner's studio front door in miniature — the designer's morning Desk open,
+each Document's arrival — built to §4/§6's engagement refusal: any input advances, Skip is the only
+path to rest, every decline (busy/late/hidden/error/webdriver) falls back silently to today's
+ordinary page. Nothing here optimizes for time-on-page.
+
+**First-day watch (CONTRACT §4g).** `arrival_ended` where `how='declined'`, `cause` in
+(`hidden`,`late`), share of all `arrival_ended` per surface, first 24h. >25% → investigate readiness
+marks; >50% → redeploy prior via the rollback worktree (`.codex/worktrees/agent-arr-rollback`,
+`infra/deploy-portal.sh designer`, or `wrangler rollback 96580aea-… --yes`); migration `00675` stays
+either way (additive).
+
+**Owed.** Kody's signed-in walk — screen, phone (swipe-during-wait must not land the roster row;
+tap-during-wait must), VoiceOver. The v2 since line (F2, omitted in v1 by D3) reads `arrival_anchors`
+normalised through `document_state`, never inside the SECURITY DEFINER RPC. Open R-DM rulings
+(R-DM1–7, R-DM8–38) stay assumed as built.
+
+**Source:** `artifacts/arrival-production-2026-09-27/design/{CONTRACT.md,build/ship-record.md}`.
+Filed as **V12**, this file's own id scheme — the ship task's working title called it "R155", the
+unrelated `docs/design/the-document/DECISIONS.md` log's scheme (there at R154, about motion).
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · last id = V12*
