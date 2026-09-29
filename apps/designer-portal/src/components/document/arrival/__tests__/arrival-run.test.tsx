@@ -823,25 +823,69 @@ describe('the put-down row after the wait (CONTRACT §4d)', () => {
     expect(landed()).toBe(0);
   });
 
-  it.each<[string, () => void]>([
-    ['a wheel', () => document.body.dispatchEvent(new Event('wheel', { bubbles: true }))],
-    ['a swipe', () => document.body.dispatchEvent(new Event('touchmove', { bubbles: true }))],
+  /** jsdom has no PointerEvent: a MouseEvent carrying the pointer's id and type. */
+  const pointer = (type: 'pointerdown' | 'pointerup' | 'pointercancel', pointerType: string, pointerId = 1) => () => {
+    const e = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 });
+    Object.defineProperty(e, 'pointerType', { value: pointerType });
+    Object.defineProperty(e, 'pointerId', { value: pointerId });
+    document.body.dispatchEvent(e);
+  };
+  const touchMove = () => document.body.dispatchEvent(new Event('touchmove', { bubbles: true }));
+  const wheel = () => document.body.dispatchEvent(new Event('wheel', { bubbles: true }));
+
+  // A browser's order: a touch or pen press's pointerdown comes first and ends the wait; its
+  // touchmove follows, and a pointercancel once the browser takes the press for a pan.
+  it.each<[string, Array<() => void>]>([
+    ['a wheel', [wheel]],
+    ['a touch swipe (pointerdown → touchmove → pointercancel)', [pointer('pointerdown', 'touch'), touchMove, pointer('pointercancel', 'touch')]],
+    ['a touch swipe the browser pans at once (pointerdown → pointercancel)', [pointer('pointerdown', 'touch'), pointer('pointercancel', 'touch')]],
+    ['a pen drag the browser pans (pointerdown → pointercancel)', [pointer('pointerdown', 'pen'), pointer('pointercancel', 'pen')]],
+    ['a swipe already under way when the wait began (touchmove alone)', [touchMove]],
   ])('%s during the wait is her own scroll: busy, and the row never lands', async (_label, fire) => {
     mountDesk();
-    fire();
+    for (const step of fire) step();
     expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
     await deskReady();
     expect(landed()).toBe(0);
   });
 
-  it.each<[string, () => void]>([
-    ['a key', () => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }))],
-    ['a press', () => document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))],
+  it.each<[string, Array<() => void>]>([
+    ['a key', [() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }))]],
+    ['a mouse press', [pointer('pointerdown', 'mouse'), pointer('pointerup', 'mouse')]],
+    ['a touch tap (pointerdown → pointerup, no move)', [pointer('pointerdown', 'touch'), pointer('pointerup', 'touch')]],
+    ['a pen tap (pointerdown → pointerup, no move)', [pointer('pointerdown', 'pen'), pointer('pointerup', 'pen')]],
   ])('%s during the wait declines busy and the row still lands', async (_label, fire) => {
     mountDesk();
-    fire();
+    for (const step of fire) step();
     expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
     await deskReady();
+    expect(landed()).toBe(1);
+  });
+
+  it.each<[string, Array<() => void>, number]>([
+    ['it lifts: a tap, and the row lands', [pointer('pointerup', 'touch')], 1],
+    ['it moves: her swipe, and the row never lands', [touchMove, pointer('pointercancel', 'touch')], 0],
+    ['the browser pans it: her swipe, and the row never lands', [pointer('pointercancel', 'touch')], 0],
+  ])('a touch press that ended the wait is still down when the Desk is ready; then %s', async (_label, then, rows) => {
+    mountDesk();
+    pointer('pointerdown', 'touch')();
+    expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
+    await deskReady();
+    expect(landed()).toBe(0);
+    for (const step of then) step();
+    await advance(16);
+    expect(landed()).toBe(rows);
+  });
+
+  it('only that press tells: another pointer’s end leaves the row waiting', async () => {
+    mountDesk();
+    pointer('pointerdown', 'touch', 1)();
+    await deskReady();
+    pointer('pointerup', 'touch', 2)();
+    await advance(16);
+    expect(landed()).toBe(0);
+    pointer('pointerup', 'touch', 1)();
+    await advance(16);
     expect(landed()).toBe(1);
   });
 });

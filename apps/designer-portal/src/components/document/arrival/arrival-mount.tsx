@@ -50,6 +50,12 @@ let pressRun: Run | null = null;
 let runStarted = false;
 /** Her own scroll (a wheel or a swipe) ended this entry's wait. */
 let waitScrolled = false;
+/** The touch or pen press that ended this entry's wait, still down. A tap or the start of her
+ *  swipe: only its touchmove, its pointercancel (the browser took it for a pan) or its pointerup
+ *  tells, and each of those comes after the pointerdown that ended the wait. */
+let waitGesture: number | null = null;
+/** Landings waiting on that press to tell. */
+const gestureWaiters = new Set<() => void>();
 
 /** ArrivalRun hands the started run here; the listeners forward to it. */
 export function setActiveRun(run: Run | null): void {
@@ -71,6 +77,8 @@ export function setArrivalWaiting(cancel: ((halt: WaitHalt) => void) | null): vo
 export function beginEntry(): void {
   runStarted = false;
   waitScrolled = false;
+  waitGesture = null;
+  gestureWaiters.clear();
 }
 
 /** ArrivalRun, once start() returned with the run not done. */
@@ -87,6 +95,15 @@ function haltWait(halt: WaitHalt): void {
   cancel(halt);
 }
 
+function closeGesture(scrolled: boolean): void {
+  if (waitGesture === null) return;
+  waitGesture = null;
+  if (scrolled) waitScrolled = true;
+  const waiting = [...gestureWaiters];
+  gestureWaiters.clear();
+  for (const decide of waiting) decide();
+}
+
 function arrivalHolds(html: HTMLElement): boolean {
   return html.classList.contains('arr-pre') || html.classList.contains('arr-on');
 }
@@ -97,22 +114,42 @@ function arrivalHolds(html: HTMLElement): boolean {
  * wait no wheel or swipe of hers ended. Called at once when no arrival holds the page (neither
  * `arr-pre` nor `arr-on`), else on the entry's EVENT_ENDED. Every end drops both classes before it
  * dispatches, so an event that arrives while one is still set is an earlier route's end, not this
- * entry's. Returns the unsubscribe.
+ * entry's. When a touch or pen press ended the wait and is still down, the call waits for that
+ * press to lift (a tap) or move (her swipe). Returns the unsubscribe.
  */
 export function afterArrival(onEnd: (unplayed: boolean) => void): () => void {
   const html = document.documentElement;
+  let pending: (() => void) | null = null;
+  const settle = (declined: boolean) => {
+    const decide = () => {
+      pending = null;
+      onEnd((declined || !runStarted) && !waitScrolled);
+    };
+    if (waitGesture === null) {
+      decide();
+      return;
+    }
+    pending = decide;
+    gestureWaiters.add(decide);
+  };
+  const stopPending = () => {
+    if (pending) gestureWaiters.delete(pending);
+    pending = null;
+  };
   if (!arrivalHolds(html)) {
-    onEnd(!runStarted && !waitScrolled);
-    return () => {};
+    settle(false);
+    return stopPending;
   }
   const onEnded = (e: Event) => {
     if (arrivalHolds(html)) return;
     window.removeEventListener(EVENT_ENDED, onEnded);
-    const how = (e as CustomEvent<ArrivalEnded>).detail?.how;
-    onEnd((how === 'declined' || !runStarted) && !waitScrolled);
+    settle((e as CustomEvent<ArrivalEnded>).detail?.how === 'declined');
   };
   window.addEventListener(EVENT_ENDED, onEnded);
-  return () => window.removeEventListener(EVENT_ENDED, onEnded);
+  return () => {
+    window.removeEventListener(EVENT_ENDED, onEnded);
+    stopPending();
+  };
 }
 
 function mark(): void {
@@ -158,10 +195,13 @@ function onPointerDown(e: PointerEvent): void {
   if (!cancelWait) return;
   const target = e.target;
   if (target instanceof Element && target.closest('[data-arrival]')) swallowClick = true;
+  // Before the halt: it reports, and the landings read this on that same EVENT_ENDED.
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') waitGesture = e.pointerId;
   haltWait('pointer');
 }
 
 function onPointerUp(e: PointerEvent): void {
+  if (e.pointerId === waitGesture) closeGesture(false);
   const run = activeRun;
   const held = pressHeld ? pressRun : null;
   const mouse = e.pointerType === 'mouse';
@@ -179,8 +219,9 @@ function onPointerUp(e: PointerEvent): void {
   if (swallowClick) swallowTimer = window.setTimeout(clearSwallow, mouse ? 0 : TAP_CLICK_MS);
 }
 
-/** The browser took the press over: no click follows. */
-function onPointerCancel(): void {
+/** The browser took the press over: no click follows. A press that ended the wait was her pan. */
+function onPointerCancel(e: PointerEvent): void {
+  if (e.pointerId === waitGesture) closeGesture(true);
   clearSwallow();
   pressHeld = false;
   pressRun = null;
@@ -194,6 +235,7 @@ function onWheel(e: WheelEvent): void {
 
 function onTouchMove(e: TouchEvent): void {
   mark();
+  closeGesture(true);
   if (activeRun) activeRun.onTouchMove(e);
   else haltWait('touchmove');
 }

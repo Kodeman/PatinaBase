@@ -69,10 +69,16 @@ function token() {
 
 const stopNavigation = (e: Event) => e.preventDefault();
 
-/** jsdom has no PointerEvent: a MouseEvent carrying the pointer's type. */
-function pointer(type: 'pointerdown' | 'pointerup', el: Element, pointerType: string): Event {
+/** jsdom has no PointerEvent: a MouseEvent carrying the pointer's type (and id). */
+function pointer(
+  type: 'pointerdown' | 'pointerup' | 'pointercancel',
+  el: Element,
+  pointerType: string,
+  pointerId?: number,
+): Event {
   const e = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 });
   Object.defineProperty(e, 'pointerType', { value: pointerType });
+  if (pointerId !== undefined) Object.defineProperty(e, 'pointerId', { value: pointerId });
   el.dispatchEvent(e);
   return e;
 }
@@ -516,6 +522,44 @@ describe('afterArrival', () => {
     afterArrival(gone)();
     html.classList.remove('arr-pre');
     end({ surface: 'desk', how: 'declined', cause: 'busy' });
+    expect(gone).not.toHaveBeenCalled();
+  });
+
+  // The Document's section landing asks after the wait has ended, while her finger may still be down.
+  it.each<[string, string, () => void, boolean]>([
+    ['a touch press that lifts is a tap: unplayed', 'touch', () => pointer('pointerup', document.body, 'touch', 7), true],
+    ['a touch press that moves is her swipe', 'touch', () => fireEvent.touchMove(document.body), false],
+    ['a touch press the browser pans is her swipe', 'touch', () => pointer('pointercancel', document.body, 'touch', 7), false],
+    ['a pen press the browser pans is her swipe', 'pen', () => pointer('pointercancel', document.body, 'pen', 7), false],
+  ])('%s, and the answer waits for the press to end', (_label, pointerType, close, unplayed) => {
+    render(<ArrivalMount />);
+    const cancel = jest.fn();
+    setArrivalWaiting(cancel);
+    pointer('pointerdown', document.body, pointerType, 7);
+    expect(cancel).toHaveBeenCalledWith('pointer');
+    const onEnd = jest.fn();
+    afterArrival(onEnd);
+    pointer('pointerup', document.body, pointerType, 8); // another pointer's end tells nothing
+    expect(onEnd).not.toHaveBeenCalled();
+    close();
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(onEnd).toHaveBeenCalledWith(unplayed);
+  });
+
+  it('a mouse press answers at once; an unsubscribe before a touch press ends drops the answer', () => {
+    render(<ArrivalMount />);
+    setArrivalWaiting(jest.fn());
+    pointer('pointerdown', document.body, 'mouse', 1);
+    const mouse = jest.fn();
+    afterArrival(mouse);
+    expect(mouse).toHaveBeenCalledWith(true);
+
+    beginEntry();
+    setArrivalWaiting(jest.fn());
+    pointer('pointerdown', document.body, 'touch', 7);
+    const gone = jest.fn();
+    afterArrival(gone)();
+    pointer('pointerup', document.body, 'touch', 7);
     expect(gone).not.toHaveBeenCalled();
   });
 });
