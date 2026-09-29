@@ -57,7 +57,7 @@ describe('brief — the Desk', () => {
       ['settle', ''],
     ])
     expect(b.headline.node.getAttribute('data-register')).toBe('sentence')
-    expect(b.act?.node.getAttribute('data-part')).toBe('act')
+    expect((b.act?.node.getAttribute('data-part') ?? '').split(/\s+/)).toContain('act')
     expect(b.today).toBe(TODAY)
     // F3 is a substring of the headline's own node: no node of its own
     expect(b.parts.find((p) => p.part === 'f3')?.node).toBe(b.headline.node)

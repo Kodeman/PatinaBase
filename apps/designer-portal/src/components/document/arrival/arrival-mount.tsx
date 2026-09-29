@@ -25,13 +25,31 @@ import type { ArrivalEnded, ArriveToken } from '@/lib/arrival/types';
 /** A tap's click is its own input task after the pointerup; a mouse's follows in the same task. */
 const TAP_CLICK_MS = 400;
 
+/** What ended the wait: her hand, by kind, or the page's own lifecycle. */
+export type WaitHalt =
+  | 'escape'
+  | 'key'
+  | 'pointer'
+  | 'wheel'
+  | 'touchmove'
+  | 'pagehide'
+  | 'pageshow'
+  | 'beforeprint'
+  | 'reduced-motion';
+
 let installed = false;
 let activeRun: Run | null = null;
-let cancelWait: ((escape: boolean) => void) | null = null;
+let cancelWait: ((halt: WaitHalt) => void) | null = null;
 let swallowClick = false;
 let swallowTimer = 0;
 /** The run swallowed this press at its pointerdown. */
 let pressHeld = false;
+/** The run that swallowed it: its release is still that run's, even once the run has ended. */
+let pressRun: Run | null = null;
+/** This entry's run started and did not end inside start(): it played. */
+let runStarted = false;
+/** Her own scroll (a wheel or a swipe) ended this entry's wait. */
+let waitScrolled = false;
 
 /** ArrivalRun hands the started run here; the listeners forward to it. */
 export function setActiveRun(run: Run | null): void {
@@ -45,14 +63,28 @@ export function getActiveRun(): Run | null {
 /** ArrivalRun hands its wait-cancel here from `arr-pre` until the run starts or the wait declines
  *  (then null). Meanwhile any key, press, wheel or swipe ends the wait for good: the resting page,
  *  no later start (arrival.js `halt()`). Escape is swallowed and ends it as `escape`. */
-export function setArrivalWaiting(cancel: ((escape: boolean) => void) | null): void {
+export function setArrivalWaiting(cancel: ((halt: WaitHalt) => void) | null): void {
   cancelWait = cancel;
 }
 
-function haltWait(escape = false): void {
+/** ArrivalRun, at each new entry: nothing has played and nothing has ended its wait yet. */
+export function beginEntry(): void {
+  runStarted = false;
+  waitScrolled = false;
+}
+
+/** ArrivalRun, once start() returned with the run not done. */
+export function noteRunStarted(): void {
+  runStarted = true;
+}
+
+function haltWait(halt: WaitHalt): void {
   const cancel = cancelWait;
   cancelWait = null;
-  cancel?.(escape);
+  if (!cancel) return;
+  // Before the cancel: it reports, and the landings read this on that same EVENT_ENDED.
+  if (halt === 'wheel' || halt === 'touchmove') waitScrolled = true;
+  cancel(halt);
 }
 
 function arrivalHolds(html: HTMLElement): boolean {
@@ -60,21 +92,24 @@ function arrivalHolds(html: HTMLElement): boolean {
 }
 
 /**
- * A played arrival owns the viewport: `onEnd(true)` only for an entry that ends declined. Called at
- * once when no arrival holds the page (neither `arr-pre` nor `arr-on`), else on the entry's
- * EVENT_ENDED. Every end drops both classes before it dispatches, so an event that arrives while
- * one is still set is an earlier route's end, not this entry's. Returns the unsubscribe.
+ * A played arrival owns the viewport, and so does her own scroll: `onEnd(true)` only for an entry
+ * that did not play — it ended declined, or no run ever started (an Escape-halted wait) — and whose
+ * wait no wheel or swipe of hers ended. Called at once when no arrival holds the page (neither
+ * `arr-pre` nor `arr-on`), else on the entry's EVENT_ENDED. Every end drops both classes before it
+ * dispatches, so an event that arrives while one is still set is an earlier route's end, not this
+ * entry's. Returns the unsubscribe.
  */
-export function afterArrival(onEnd: (declined: boolean) => void): () => void {
+export function afterArrival(onEnd: (unplayed: boolean) => void): () => void {
   const html = document.documentElement;
   if (!arrivalHolds(html)) {
-    onEnd(true);
+    onEnd(!runStarted && !waitScrolled);
     return () => {};
   }
   const onEnded = (e: Event) => {
     if (arrivalHolds(html)) return;
     window.removeEventListener(EVENT_ENDED, onEnded);
-    onEnd((e as CustomEvent<ArrivalEnded>).detail?.how === 'declined');
+    const how = (e as CustomEvent<ArrivalEnded>).detail?.how;
+    onEnd((how === 'declined' || !runStarted) && !waitScrolled);
   };
   window.addEventListener(EVENT_ENDED, onEnded);
   return () => window.removeEventListener(EVENT_ENDED, onEnded);
@@ -101,7 +136,7 @@ function onKeyDown(e: KeyboardEvent): void {
     e.preventDefault();
     e.stopImmediatePropagation();
   }
-  haltWait(escape);
+  haltWait(escape ? 'escape' : 'key');
 }
 
 /** A press during the wait ends it. On the hidden route root, the click it makes is swallowed:
@@ -112,27 +147,35 @@ function onPointerDown(e: PointerEvent): void {
   mark();
   clearSwallow();
   pressHeld = false;
+  pressRun = null;
   if (activeRun) {
-    activeRun.onPointerDown(e);
+    const run = activeRun;
+    run.onPointerDown(e);
     pressHeld = e.defaultPrevented;
+    if (pressHeld) pressRun = run;
     return;
   }
   if (!cancelWait) return;
   const target = e.target;
   if (target instanceof Element && target.closest('[data-arrival]')) swallowClick = true;
-  haltWait();
+  haltWait('pointer');
 }
 
 function onPointerUp(e: PointerEvent): void {
   const run = activeRun;
+  const held = pressHeld ? pressRun : null;
   const mouse = e.pointerType === 'mouse';
   const before = run?.phase;
+  // The run ended under the press (its hold ran out, a guard fired): the release is still its own,
+  // and a press on its act forwards the act's one click. The native click that follows is swallowed.
+  if (held && held !== run) held.onPointerUp(e);
   run?.onPointerUp(e);
   // A mouse released on the act ends the run here and its own click is the act's activation. A
   // tap's click lands where the finger was after the act went home, so the run forwarded one.
   const toAct = mouse && before !== undefined && before !== 'done' && run?.phase === 'done';
   if (pressHeld && !toAct) swallowClick = true;
   pressHeld = false;
+  pressRun = null;
   if (swallowClick) swallowTimer = window.setTimeout(clearSwallow, mouse ? 0 : TAP_CLICK_MS);
 }
 
@@ -140,18 +183,19 @@ function onPointerUp(e: PointerEvent): void {
 function onPointerCancel(): void {
   clearSwallow();
   pressHeld = false;
+  pressRun = null;
 }
 
 function onWheel(e: WheelEvent): void {
   mark();
   if (activeRun) activeRun.onWheel(e);
-  else haltWait();
+  else haltWait('wheel');
 }
 
 function onTouchMove(e: TouchEvent): void {
   mark();
   if (activeRun) activeRun.onTouchMove(e);
-  else haltWait();
+  else haltWait('touchmove');
 }
 
 function onScroll(e: Event): void {
@@ -176,20 +220,20 @@ function onPopState(): void {
 
 /** The page is leaving: nothing may stay hidden, staged or inert behind it, nor come back so. */
 function onPageHide(): void {
-  haltWait();
+  haltWait('pagehide');
   activeRun?.finish('hidden-tab');
 }
 
 /** A BFCache restore: the run that went into the cache comes back at rest. */
 function onPageShow(e: PageTransitionEvent): void {
   if (!e.persisted) return;
-  haltWait();
+  haltWait('pageshow');
   activeRun?.finish('hidden-tab');
 }
 
 /** Print the resting page, never the card's staging. */
 function onBeforePrint(): void {
-  haltWait();
+  haltWait('beforeprint');
   activeRun?.finish('mutation');
 }
 
@@ -203,7 +247,7 @@ function onSelectionChange(): void {
 
 /** The motion she asked for changed under the run: the page at rest, either way. */
 function onReducedMotionChange(): void {
-  haltWait();
+  haltWait('reduced-motion');
   activeRun?.finish('mutation');
 }
 
@@ -305,8 +349,8 @@ export function ArrivalMount(): null {
     if (isBareDocumentRoute(pathname)) enterRoute(pathname);
   }, [pathname]);
 
-  // The put-down's row: spent at the Desk's commit, landed only if the Desk's arrival declined,
-  // once the Desk is ready, one frame after Next's own post-navigation scroll.
+  // The put-down's row: spent at the Desk's commit, landed only if the Desk's arrival did not play
+  // (afterArrival), once the Desk is ready, one frame after Next's own post-navigation scroll.
   useEffect(() => {
     if (pathname !== '/desk') {
       fromDocRef.current = null;
@@ -330,8 +374,8 @@ export function ArrivalMount(): null {
         if (id) document.getElementById(`roster-line-${id}`)?.scrollIntoView({ block: 'center' });
       });
     };
-    const stop = afterArrival((declined) => {
-      if (!declined) {
+    const stop = afterArrival((unplayed) => {
+      if (!unplayed) {
         pending.id = null;
         return;
       }

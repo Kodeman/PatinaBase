@@ -454,6 +454,7 @@ function SignedSeal({
               variant="primary"
               trailing="→"
               href={`/doc/${projectId}`}
+              onClick={() => suppressNextArrival(`/doc/${projectId}`)}
             >
               Open the project
             </DocumentAction>

@@ -1,6 +1,7 @@
 /**
  * US-14 §4c(e) — a proposal becoming its project is the same engagement: MarkSigned's walk into
- * the new project and the seal's activation are each announced with `suppressNextArrival`.
+ * the new project, the seal's activation and the seal's link into an open project are each
+ * announced with `suppressNextArrival`.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -36,8 +37,9 @@ let mockWatch: Record<string, unknown> = awaiting;
 jest.mock('@/hooks/use-proposal-watch', () => ({
   useProposalWatch: () => ({ watch: mockWatch }),
 }));
+let mockProjectLink: { projectId: string } | null = null;
 jest.mock('@/hooks/use-proposal-project', () => ({
-  useProposalProject: () => ({ data: null, isLoading: false }),
+  useProposalProject: () => ({ data: mockProjectLink, isLoading: false }),
 }));
 jest.mock('@/hooks/use-proposals', () => ({ useProposal: () => ({ data: null }) }));
 
@@ -74,8 +76,10 @@ jest.mock('../document-action', () => ({
 beforeEach(() => {
   mockPush.mockClear();
   mockWatch = awaiting;
+  mockProjectLink = null;
   consumeSuppressed('/doc/project-5');
   consumeSuppressed('/doc/project-7');
+  consumeSuppressed('/doc/project-9');
 });
 
 describe('ProposalWatch — the proposal becoming its project (US-14)', () => {
@@ -93,5 +97,13 @@ describe('ProposalWatch — the proposal becoming its project (US-14)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open the project' }));
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/doc/project-7'));
     expect(consumeSuppressed('/doc/project-7')).toBe(true);
+  });
+
+  it("the seal's link into the project already open is announced on click", () => {
+    mockWatch = { ...awaiting, status: 'accepted', awaitingClient: false, settled: true };
+    mockProjectLink = { projectId: 'project-9' };
+    render(<ProposalWatch proposalId="proposal-1" clientName="Ana Reyes" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open the project' }));
+    expect(consumeSuppressed('/doc/project-9')).toBe(true);
   });
 });

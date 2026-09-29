@@ -1479,12 +1479,23 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   // rememberDocumentInHand — that write runs later in this same commit
   // (React runs effects in declaration order), so this read never races it
   // for the current visit. US-14: a played arrival owns the viewport, so the
-  // jump waits for this entry's end and runs only if it declined. The decision
-  // is kept in the ref: StrictMode's re-run reads the MRU after that write.
+  // jump waits for this entry's end and runs only if it did not play
+  // (afterArrival). The decision is kept in the ref: StrictMode's re-run reads
+  // the MRU after that write.
+  //
+  // US-14 R-DM21 — the Desk act's token names where it lands. Spent on this
+  // mount, ahead of the jump (a hard entry already spent it at the commit, so
+  // a refresh never lands): one landing per entry, and a token that names one
+  // owns it, so the jump stands down.
+  const arrivalLandingRef = useRef<{ landing: Landing; done: boolean } | null>(null);
+  useEffect(() => {
+    const token = consumeArriveToken(window.location.pathname, Date.now());
+    if (token?.landing) arrivalLandingRef.current = { landing: token.landing, done: false };
+  }, []);
   const landedRef = useRef<{ seen: boolean; done: boolean } | null>(null);
   const landingEngagementId = row?.engagement_id ?? null;
   useEffect(() => {
-    if (!landingEngagementId) return;
+    if (!landingEngagementId || arrivalLandingRef.current) return;
     if (!landedRef.current) {
       landedRef.current = {
         seen: readRecentDocumentsInHand().some((d) => d.id === landingEngagementId),
@@ -1493,9 +1504,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     }
     const landing = landedRef.current;
     if (!landing.seen || landing.done) return;
-    return afterArrival((declined) => {
+    return afterArrival((unplayed) => {
       landing.done = true;
-      if (!declined) return;
+      if (!unplayed) return;
       const el = mainRef.current?.querySelector('[data-active-section]');
       if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
         el.scrollIntoView({ block: 'start' });
@@ -2463,18 +2474,13 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     deskEnrichmentSettled &&
     ticketRowsSettled &&
     !guideInputsInFlight;
-  // US-14 R-DM21 — the Desk act's token names where it lands. Spent on this
-  // mount (a hard entry already spent it at the commit, so a refresh never
-  // lands); carried out once the paper is ready, when its regions exist.
-  const arrivalLandingRef = useRef<Landing | null>(null);
+  // US-14 R-DM21 — the Desk act's token landing (spent on mount, above the
+  // resume jump), carried out once the paper is ready, when its regions exist.
   useEffect(() => {
-    const token = consumeArriveToken(window.location.pathname, Date.now());
-    if (token?.landing) arrivalLandingRef.current = token.landing;
-  }, []);
-  useEffect(() => {
-    const landing = arrivalLandingRef.current;
-    if (!landing || !arrivalReady) return;
-    arrivalLandingRef.current = null;
+    const pending = arrivalLandingRef.current;
+    if (!pending || pending.done || !arrivalReady) return;
+    pending.done = true;
+    const { landing } = pending;
     if (landing.kind === 'region') {
       if (Object.prototype.hasOwnProperty.call(DOCUMENT_INDEX_LABELS, landing.region)) {
         jumpToRegion(landing.region as DocumentIndexKey);

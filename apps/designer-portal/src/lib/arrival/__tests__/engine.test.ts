@@ -675,6 +675,32 @@ describe('pointer (O1)', () => {
     expect(acts).toHaveBeenCalledTimes(1)
     expect(html.classList.contains('arr-press')).toBe(false)
   })
+  it.each(['touch', 'pen', 'mouse'])(
+    'a %s press on the act in the hold, released on it after the run ended, forwards exactly one click',
+    (type) => {
+      const { run, A } = go(deskDom())
+      const acts = counter(A, 'click')
+      toHold()
+      pointer('pointerdown', A, AX, AY, 9, type)
+      toRest()
+      expect(run.phase).toBe('done')
+      expect(acts).not.toHaveBeenCalled()
+      pointer('pointerup', A, AX, AY, 9, type)
+      expect(acts).toHaveBeenCalledTimes(1)
+      pointer('pointerup', A, AX, AY, 9, type) // the press is spent: no second release forwards
+      expect(acts).toHaveBeenCalledTimes(1)
+    },
+  )
+  it('a press on the act released off it after the run ended forwards nothing', () => {
+    const { run, A } = go(deskDom())
+    const acts = counter(A, 'click')
+    toHold()
+    pointer('pointerdown', A, AX, AY, 9, 'touch')
+    toRest()
+    expect(run.phase).toBe('done')
+    pointer('pointerup', document.body, AX - 60, AY - 160, 9, 'touch')
+    expect(acts).not.toHaveBeenCalled()
+  })
   it('in Act 3 a control snaps to rest, then acts natively (not swallowed)', () => {
     const { run } = go(deskDom())
     const bar = document.getElementById('bar') as HTMLElement

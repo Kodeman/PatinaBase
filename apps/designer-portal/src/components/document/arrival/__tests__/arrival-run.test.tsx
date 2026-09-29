@@ -14,6 +14,7 @@ import {
 } from '@/components/document/command-bar';
 import { markArrival } from '@/lib/arrival/mark-arrival';
 import type { RouteEntry } from '@/lib/arrival/nav';
+import { writeFromDoc } from '@/lib/arrival/session';
 import type { ArrivalEngine, Run, RunPhase } from '@/lib/arrival/run-contract';
 import { BUDGET, EVENT_ENDED, KEYS } from '@/lib/arrival/types';
 import type {
@@ -456,24 +457,50 @@ describe('the gate at the commit', () => {
     expect(html.classList.contains('arr-pre')).toBe(false);
   });
 
-  it('the ⌘K Call Sheet walk declines busy at the commit', () => {
-    callSheetPending.value = true;
+  // The ⌘K walks that open a sheet on mount: the Call Sheet on the Document, capture-lead and
+  // open-project on the Desk. Each is busy only on its own surface.
+  const PENDING = { callSheetPending, captureLeadPending, openProjectPending };
+  it.each<[Surface, keyof typeof PENDING, boolean]>([
+    ['document', 'callSheetPending', true],
+    ['document', 'captureLeadPending', false],
+    ['document', 'openProjectPending', false],
+    ['desk', 'callSheetPending', false],
+    ['desk', 'captureLeadPending', true],
+    ['desk', 'openProjectPending', true],
+  ])('a %s entry with %s standing — busy at the commit: %s', async (surface, flag, busy) => {
+    PENDING[flag].value = true;
+    const pathname = surface === 'desk' ? '/desk' : '/doc/e1';
+    mockPathname = pathname;
     const { engine } = makeEngine();
-    render(<ArrivalRun engine={engine} pathname="/doc/e1" />);
-    expect(capture.mock.calls).toEqual([declined('document', 'busy')]);
-    expect(html.classList.contains('arr-pre')).toBe(false);
+    render(<ArrivalRun engine={engine} pathname={pathname} />);
+    if (busy) {
+      expect(capture.mock.calls).toEqual([declined(surface, 'busy')]);
+      expect(html.classList.contains('arr-pre')).toBe(false);
+      expect(engine.createRun).not.toHaveBeenCalled();
+      return;
+    }
+    // A stale flag for the other surface: the entry waits and plays.
+    expect(capture).not.toHaveBeenCalled();
+    expect(html.classList.contains('arr-pre')).toBe(true);
+    addRoot(surface, true);
+    await toReady();
+    expect(engine.createRun).toHaveBeenCalledTimes(1);
+    expect(capture).not.toHaveBeenCalled();
   });
 
-  it.each<[string, { value: boolean }]>([
-    ['capture-lead', captureLeadPending],
-    ['open-project', openProjectPending],
-  ])('the ⌘K %s walk to the Desk declines busy at the commit', (_name, flag) => {
-    flag.value = true;
-    const { engine } = makeEngine();
+  it('a telemetry client that throws still dispatches EVENT_ENDED and writes the anchor', () => {
+    const events: ArrivalEnded[] = [];
+    const onEnded = (e: Event) => events.push((e as CustomEvent<ArrivalEnded>).detail);
+    window.addEventListener(EVENT_ENDED, onEnded);
+    capture.mockImplementationOnce(() => {
+      throw new Error('posthog unavailable');
+    });
+    const { engine } = makeEngine(() => ({ play: false, cause: 'desk-shown' }));
     render(<ArrivalRun engine={engine} pathname="/desk" />);
-    expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
-    expect(html.classList.contains('arr-pre')).toBe(false);
-    expect(engine.createRun).not.toHaveBeenCalled();
+    window.removeEventListener(EVENT_ENDED, onEnded);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([{ surface: 'desk', how: 'declined', cause: 'desk-shown' }]);
+    expect(markArrival).toHaveBeenCalledTimes(1);
   });
 
   it('missing arrival CSS declines sentinel; missing FontFaceSet declines unsupported', () => {
@@ -744,6 +771,81 @@ describe('her hand during the wait', () => {
   });
 });
 
+describe('the put-down row after the wait (CONTRACT §4d)', () => {
+  const scrolled = jest.fn();
+  beforeEach(() => {
+    scrolled.mockReset();
+    Element.prototype.scrollIntoView = scrolled;
+    writeFromDoc('e2');
+  });
+
+  function mountDesk() {
+    const { engine, runs } = makeEngine();
+    render(
+      <>
+        <ArrivalMount />
+        <ArrivalRun engine={engine} pathname="/desk" />
+      </>,
+    );
+    expect(html.classList.contains('arr-pre')).toBe(true);
+    return { engine, runs };
+  }
+
+  /** The Desk's roster reaches ready with the put-down's row on it. */
+  async function deskReady() {
+    const root = addRoot('desk', true);
+    root.insertAdjacentHTML('beforeend', '<ul><li id="roster-line-e2"></li></ul>');
+    await flush();
+    await advance(16);
+  }
+
+  const landed = () =>
+    scrolled.mock.instances.filter((el) => el === document.getElementById('roster-line-e2')).length;
+
+  it('Escape halts the wait: nothing played, so the row lands', async () => {
+    const { engine } = mountDesk();
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(capture.mock.calls).toEqual([['arrival_ended', { surface: 'desk', how: 'escape' }]]);
+    await deskReady();
+    expect(engine.createRun).not.toHaveBeenCalled();
+    expect(landed()).toBe(1);
+  });
+
+  it('a played run ended by Escape owns the viewport: the row never lands', async () => {
+    const { runs } = mountDesk();
+    await deskReady();
+    await toReady();
+    expect(runs).toHaveLength(1);
+    runs[0].finish('escape');
+    await flush();
+    await advance(16);
+    expect(capture.mock.calls).toEqual([['arrival_ended', { surface: 'desk', how: 'escape' }]]);
+    expect(landed()).toBe(0);
+  });
+
+  it.each<[string, () => void]>([
+    ['a wheel', () => document.body.dispatchEvent(new Event('wheel', { bubbles: true }))],
+    ['a swipe', () => document.body.dispatchEvent(new Event('touchmove', { bubbles: true }))],
+  ])('%s during the wait is her own scroll: busy, and the row never lands', async (_label, fire) => {
+    mountDesk();
+    fire();
+    expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
+    await deskReady();
+    expect(landed()).toBe(0);
+  });
+
+  it.each<[string, () => void]>([
+    ['a key', () => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }))],
+    ['a press', () => document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))],
+  ])('%s during the wait declines busy and the row still lands', async (_label, fire) => {
+    mountDesk();
+    fire();
+    expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
+    await deskReady();
+    expect(landed()).toBe(1);
+  });
+});
+
 describe('the host finishes (CONTRACT §4b)', () => {
   async function mountPlaying() {
     addRoot('desk', true);
@@ -828,7 +930,18 @@ describe('the host finishes (CONTRACT §4b)', () => {
     await restored(run, 'mutation');
   });
 
-  it('pagehide during the wait ends it for good', async () => {
+  function persistedPageShow(): Event {
+    const e = new Event('pageshow');
+    Object.defineProperty(e, 'persisted', { value: true });
+    return e;
+  }
+
+  it.each<[string, DeclineCause, () => void]>([
+    ['pagehide', 'hidden', () => window.dispatchEvent(new Event('pagehide'))],
+    ['pageshow from the BFCache', 'hidden', () => window.dispatchEvent(persistedPageShow())],
+    ['beforeprint', 'busy', () => window.dispatchEvent(new Event('beforeprint'))],
+    ['a reduced-motion change', 'unsupported', () => motionListeners[0]()],
+  ])('%s during the wait ends it for good, declined %s', async (_label, cause, fire) => {
     const { engine } = makeEngine();
     render(
       <>
@@ -837,12 +950,13 @@ describe('the host finishes (CONTRACT §4b)', () => {
       </>,
     );
     expect(html.classList.contains('arr-pre')).toBe(true);
-    window.dispatchEvent(new Event('pagehide'));
+    fire();
     expect(html.classList.contains('arr-pre')).toBe(false);
+    expect(capture.mock.calls).toEqual([declined('desk', cause)]);
     addRoot('desk', true);
     await toReady();
     expect(engine.createRun).not.toHaveBeenCalled();
-    expect(capture.mock.calls).toEqual([declined('desk', 'busy')]);
+    expect(capture).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -965,6 +965,18 @@ export const createRun: CreateRun = (b, host, opts): Run => {
     })
   }
 
+  const within = (r: DOMRect, e: PointerEvent) =>
+    e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
+  /** The act she chose, one click, carrying her modifiers. */
+  function forward(act: HTMLElement, e: PointerEvent) {
+    act.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true, cancelable: true, view: win, detail: 1, button: 0, clientX: e.clientX, clientY: e.clientY,
+        ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, altKey: e.altKey,
+      }),
+    )
+  }
+
   function onPointerUp(e: PointerEvent) {
     const pr = press
     press = null
@@ -972,13 +984,16 @@ export const createRun: CreateRun = (b, host, opts): Run => {
     // a mouse click lands on <html> in this same task (arrival.js:806); a tap's comes later
     if (mouse) win.setTimeout(() => html.classList.remove('arr-press'), 0)
     else holdTap()
-    if (!running()) return
+    if (!running()) {
+      // the run ended under a press on the act (the hold ran out, a guard fired): released where she
+      // saw it, the act still takes its one click, forwarded on any pointer. The host swallows the
+      // native click of a press the run held, since arr-press is gone and it would land on the page.
+      if (pr && e.pointerId === pr.id && within(pr.r, e) && pr.act.isConnected) safe(() => forward(pr.act, e))
+      return
+    }
     guarded(() => {
       if (!pr || e.pointerId !== pr.id) return
-      const r = pr.r
-      const x = e.clientX
-      const y = e.clientY
-      if (!(x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) {
+      if (!within(pr.r, e)) {
         if (early()) {
           kbd = false
           advance('input')
@@ -989,14 +1004,7 @@ export const createRun: CreateRun = (b, host, opts): Run => {
       // a mouse released on the act itself: the native click reaches it. Released where she SAW it, or a
       // tap (its click is hit-tested after the act went home): forward one
       const t = e.target as Node | null
-      if (!mouse || !(t && pr.act.contains(t))) {
-        pr.act.dispatchEvent(
-          new MouseEvent('click', {
-            bubbles: true, cancelable: true, view: win, detail: 1, button: 0, clientX: x, clientY: y,
-            ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, altKey: e.altKey,
-          }),
-        )
-      }
+      if (!mouse || !(t && pr.act.contains(t))) forward(pr.act, e)
     })
   }
 

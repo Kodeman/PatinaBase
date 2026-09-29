@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useInsertionEffect, type ReactNode } from 'react';
 import DocumentPage from './page';
+import { beginEntry, noteRunStarted } from '@/components/document/arrival/arrival-mount';
 import { ArrivalRun } from '@/components/document/arrival/arrival-run';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
@@ -3068,7 +3069,7 @@ describe('DocumentPage guide activation', () => {
         }, [path]);
         return (
           <>
-            <ArrivalRun key={path} engine={arrivalEngine} pathname={path} />
+            <ArrivalRun key={`run:${path}`} engine={arrivalEngine} pathname={path} />
             {children}
           </>
         );
@@ -3228,6 +3229,44 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 
+  // US-14 §4d — one landing per entry: an act token that names its landing
+  // stands the resume jump down.
+  describe('with the Desk act’s token', () => {
+    const arriveWith = (landing?: { kind: 'section'; sectionKey: string }) => {
+      window.history.replaceState({}, '', '/doc/lead-1');
+      window.sessionStorage.setItem(
+        'pl-arrive',
+        JSON.stringify({ via: 'act', to: '/doc/lead-1', at: Date.now(), ...(landing ? { landing } : {}) }),
+      );
+    };
+
+    afterEach(() => {
+      window.sessionStorage.removeItem('pl-arrive');
+      window.history.replaceState({}, '', '/');
+    });
+
+    it('lands where the token names and never runs the resume jump', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      arriveWith({ kind: 'section', sectionKey: 'brief' });
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(window.sessionStorage.getItem('pl-arrive')).toBeNull();
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' });
+      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalledWith({ block: 'start' });
+    });
+
+    it('runs the resume jump when the token names no landing', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      arriveWith();
+
+      render(<DocumentPage params={fulfilledParams} />);
+
+      expect(window.sessionStorage.getItem('pl-arrive')).toBeNull();
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    });
+  });
+
   // US-14 — a played arrival owns the viewport: the resume jump is for an
   // entry that ended declined.
   describe('while an arrival holds the page', () => {
@@ -3239,6 +3278,7 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
 
     afterEach(() => {
       html.className = '';
+      beginEntry();
     });
 
     it('waits for the entry to end, then jumps on a declined end', () => {
@@ -3259,6 +3299,7 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
       html.classList.add('arr-on');
 
       render(<DocumentPage params={fulfilledParams} />);
+      noteRunStarted();
       html.classList.remove('arr-on');
       end({ surface: 'document', how: 'settled' });
 

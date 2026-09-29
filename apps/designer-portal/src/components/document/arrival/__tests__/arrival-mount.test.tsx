@@ -6,13 +6,28 @@
 import { fireEvent, render, waitFor } from '@testing-library/react';
 import { DeskClaimCard } from '@/components/document/desk-claim-card';
 import { gate } from '@/lib/arrival/gate';
+import { createRun, engine } from '@/lib/arrival/engine';
+import { S } from '@/lib/arrival/plan';
 import type { Run } from '@/lib/arrival/run-contract';
 import { enterRoute } from '@/lib/arrival/nav';
 import { readArriveToken, writeFromDoc } from '@/lib/arrival/session';
-import { EVENT_ENDED, KEYS } from '@/lib/arrival/types';
-import type { ArrivalEnded } from '@/lib/arrival/types';
+import { BUDGET, EVENT_ENDED, KEYS } from '@/lib/arrival/types';
+import type { ArrivalEnded, Brief } from '@/lib/arrival/types';
+import {
+  deskDom as harnessDesk,
+  installDom,
+  makeHost,
+  place,
+} from '@/lib/arrival/__tests__/dom-harness.test';
 import type { ClaimCard, RosterLine } from '@/lib/document/desk-roster-derivation';
-import { afterArrival, ArrivalMount, setActiveRun, setArrivalWaiting } from '../arrival-mount';
+import {
+  afterArrival,
+  ArrivalMount,
+  beginEntry,
+  noteRunStarted,
+  setActiveRun,
+  setArrivalWaiting,
+} from '../arrival-mount';
 
 let mockPathname = '/desk';
 jest.mock('next/navigation', () => ({ usePathname: () => mockPathname }));
@@ -72,6 +87,7 @@ afterEach(() => {
   document.removeEventListener('click', stopNavigation);
   setActiveRun(null);
   setArrivalWaiting(null);
+  beginEntry();
 });
 
 describe('forwarding', () => {
@@ -119,19 +135,19 @@ describe('forwarding', () => {
     expect(escape.defaultPrevented).toBe(false);
   });
 
-  it('during the wait, a press, wheel or swipe ends it once and is never swallowed', () => {
+  it('during the wait, a press, wheel or swipe ends it once, by its kind, and is never swallowed', () => {
     render(<ArrivalMount />);
-    for (const fire of [
-      () => fireEvent.pointerDown(document.body),
-      () => fireEvent.wheel(document.body),
-      () => fireEvent.touchMove(document.body),
-    ]) {
+    for (const [fire, kind] of [
+      [() => fireEvent.pointerDown(document.body), 'pointer'],
+      [() => fireEvent.wheel(document.body), 'wheel'],
+      [() => fireEvent.touchMove(document.body), 'touchmove'],
+    ] as const) {
       const cancel = jest.fn();
       setArrivalWaiting(cancel);
       expect(fire()).toBe(true);
       fire();
       expect(cancel).toHaveBeenCalledTimes(1);
-      expect(cancel).toHaveBeenCalledWith(false);
+      expect(cancel).toHaveBeenCalledWith(kind);
     }
   });
 
@@ -146,7 +162,7 @@ describe('forwarding', () => {
     expect(escape.defaultPrevented).toBe(true);
     expect(chrome).not.toHaveBeenCalled();
     expect(halt).toHaveBeenCalledTimes(1);
-    expect(halt).toHaveBeenCalledWith(true);
+    expect(halt).toHaveBeenCalledWith('escape');
 
     const cancel = jest.fn();
     setArrivalWaiting(cancel);
@@ -154,7 +170,7 @@ describe('forwarding', () => {
     document.body.dispatchEvent(key);
     expect(key.defaultPrevented).toBe(false);
     expect(chrome).toHaveBeenCalledTimes(1);
-    expect(cancel).toHaveBeenCalledWith(false);
+    expect(cancel).toHaveBeenCalledWith('key');
     document.body.removeEventListener('keydown', chrome);
   });
 });
@@ -351,6 +367,70 @@ describe('a press the run swallowed', () => {
   });
 });
 
+describe('a press on the act that the run outlived (CONTRACT §4d)', () => {
+  const html = document.documentElement;
+  /** Where the act is laid out; its centre is where she presses it. */
+  const ACT = { left: 400, top: 300, width: 160, height: 44 };
+  const at = { clientX: 480, clientY: 322 };
+
+  function press(type: 'pointerdown' | 'pointerup', el: Element, pointerType: string): void {
+    const e = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, ...at });
+    Object.defineProperty(e, 'pointerId', { value: 5 });
+    Object.defineProperty(e, 'pointerType', { value: pointerType });
+    el.dispatchEvent(e);
+  }
+
+  function click(el: Element): void {
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1, button: 0, ...at }));
+  }
+
+  it.each(['touch', 'pen', 'mouse'])(
+    'a %s press begun in the hold and released after the run ended activates the act exactly once',
+    async (pointerType) => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+      const dom = installDom();
+      try {
+        const root = harnessDesk();
+        const act = root.querySelector<HTMLElement>('[data-part~="act"]')!;
+        place(act, ACT);
+        const acted = jest.fn();
+        act.addEventListener('click', acted);
+        render(<ArrivalMount />);
+        html.className = 'arr-pre';
+        const run = createRun(engine.brief(root, 'desk') as Brief, makeHost(root), {
+          via: null,
+          reduced: false,
+          entryAt: Date.now(),
+          now: () => Date.now(),
+        });
+        setActiveRun(run);
+        void run.ended.then(() => setActiveRun(null));
+        run.start();
+        jest.advanceTimersByTime(S.CE);
+
+        press('pointerdown', act, pointerType);
+        jest.advanceTimersByTime(BUDGET.HOLD_MS + 6000);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(run.phase).toBe('done');
+        expect(acted).not.toHaveBeenCalled();
+
+        press('pointerup', act, pointerType);
+        click(act); // the browser's own click for that press
+        expect(acted).toHaveBeenCalledTimes(1);
+
+        jest.advanceTimersByTime(400);
+        click(act); // a later click of hers is her own
+        expect(acted).toHaveBeenCalledTimes(2);
+      } finally {
+        dom.restore();
+        jest.useRealTimers();
+        html.className = '';
+      }
+    },
+  );
+});
+
 describe('mark()', () => {
   it('refreshes the visit on her hand, at most every 10 s', () => {
     // Earlier cases in this file already touched the visit; step past the throttle.
@@ -424,6 +504,7 @@ describe('afterArrival', () => {
 
   it('reports a played end as not declined, and the unsubscribe stops listening', () => {
     html.classList.add('arr-on');
+    noteRunStarted();
     const played = jest.fn();
     afterArrival(played);
     html.classList.remove('arr-on');
@@ -648,6 +729,7 @@ describe('the put-down row', () => {
   it('a played Desk owns the viewport: the row never lands', async () => {
     writeFromDoc('e2');
     html.classList.add('arr-on');
+    noteRunStarted();
     deskDom(true);
     render(<ArrivalMount />);
     html.classList.remove('arr-on');

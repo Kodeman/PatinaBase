@@ -1,3 +1,4 @@
+import { suppressNextArrival } from '@/lib/arrival/nav';
 import type { MobilePrimaryAction } from './mobile-shell';
 
 export const MOBILE_ACTION_PRIORITY = {
@@ -18,12 +19,14 @@ export function signedProposalMobileAction({
   onActivate: () => void;
 }): MobilePrimaryAction | null {
   if (projectId) {
+    const href = `/doc/${projectId}`;
     return {
       actionKey: 'open-project',
       surfaceKey: 'open-document',
       regionKey: 'signed-proposal',
       label: 'Open the project',
-      target: { kind: 'href', href: `/doc/${projectId}` },
+      target: { kind: 'href', href },
+      onSelected: () => suppressNextArrival(href),
     };
   }
   if (isLoading) return null;

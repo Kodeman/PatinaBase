@@ -11,6 +11,7 @@ import {
 import { ProposalShareInstrument } from '../proposal-share-instrument';
 import { DocumentGuide } from '../document-guide';
 import { MOBILE_ACTION_PRIORITY, signedProposalMobileAction } from './lifecycle-mobile-action';
+import { consumeSuppressed } from '@/lib/arrival/nav';
 
 const mockOpenPost = jest.fn();
 let mockPathname = '/desk';
@@ -175,6 +176,37 @@ describe('unified mobile edge owner', () => {
     fireEvent.click(mobileBar.getByRole('button', { name: 'Open the project' }));
     expect(activate).toHaveBeenCalledTimes(1);
     expect(guideActivate).not.toHaveBeenCalled();
+  });
+
+  it('US-14 — the signed proposal’s link into its open project is announced on click', () => {
+    consumeSuppressed('/doc/project-9');
+    render(
+      <MobileShellProvider>
+        <Registration
+          action={signedProposalMobileAction({
+            projectId: 'project-9',
+            isLoading: false,
+            isPending: false,
+            onActivate: jest.fn(),
+          })}
+          priority={MOBILE_ACTION_PRIORITY.lifecycle}
+        />
+        <MobileBar />
+      </MobileShellProvider>,
+    );
+
+    const link = within(screen.getByTestId('mobile-bar')).getByRole('link', { name: 'Open the project' });
+    expect(link).toHaveAttribute('href', '/doc/project-9');
+    // jsdom cannot navigate; the click's own handlers are what is under test.
+    const stay = (e: Event) => e.preventDefault();
+    document.addEventListener('click', stay);
+    try {
+      fireEvent.click(link);
+    } finally {
+      document.removeEventListener('click', stay);
+    }
+
+    expect(consumeSuppressed('/doc/project-9')).toBe(true);
   });
 
   // W3 rewrite (OD-11 / DL-05, D-B22): the guide no longer registers the bar's

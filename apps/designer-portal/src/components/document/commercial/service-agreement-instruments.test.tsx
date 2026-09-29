@@ -204,6 +204,29 @@ describe("ServiceAgreementInstruments notification recovery", () => {
     expect(consumeSuppressed("/doc/project-1")).toBe(true);
   });
 
+  it("US-14 — the executed agreement's link into its project is announced on click", () => {
+    consumeSuppressed("/doc/project-1");
+    render(
+      <ServiceAgreementInstruments
+        proposal={{ id: "agreement-1", client: {} }}
+        clientName="Avery Client"
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: /open the project/i });
+    expect(link).toHaveAttribute("href", "/doc/project-1");
+    // jsdom cannot navigate; the click's own handlers are what is under test.
+    const stay = (e: Event) => e.preventDefault();
+    document.addEventListener("click", stay);
+    try {
+      fireEvent.click(link);
+    } finally {
+      document.removeEventListener("click", stay);
+    }
+
+    expect(consumeSuppressed("/doc/project-1")).toBe(true);
+  });
+
   it("records a paper signature while the agreement is with the client, prefilled with the client's name", async () => {
     mockDocumentState = "sent";
     mockRecordPaperSignature.mockResolvedValue({

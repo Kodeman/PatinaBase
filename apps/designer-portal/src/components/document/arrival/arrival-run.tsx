@@ -35,7 +35,14 @@ import type {
   GateResult,
   Surface,
 } from '@/lib/arrival/types';
-import { getActiveRun, setActiveRun, setArrivalWaiting } from './arrival-mount';
+import {
+  beginEntry,
+  getActiveRun,
+  noteRunStarted,
+  setActiveRun,
+  setArrivalWaiting,
+} from './arrival-mount';
+import type { WaitHalt } from './arrival-mount';
 
 export interface ArrivalRunProps {
   engine: ArrivalEngine;
@@ -49,6 +56,20 @@ interface Entry {
   /** A sheet flagged to open on this route's mount (⌘K's Call Sheet, capture-lead, open-project). */
   busy: boolean;
 }
+
+/** A wait ended by anything but Escape declines. DeclineCause has no 'input' member (types.ts is
+ *  frozen): her hand is 'busy'; the page leaving or coming back from the BFCache is 'hidden', never
+ *  'busy'; printing is 'busy'; her motion setting changing is 'unsupported'. */
+const WAIT_DECLINE: Record<Exclude<WaitHalt, 'escape'>, DeclineCause> = {
+  key: 'busy',
+  pointer: 'busy',
+  wheel: 'busy',
+  touchmove: 'busy',
+  pagehide: 'hidden',
+  pageshow: 'hidden',
+  beforeprint: 'busy',
+  'reduced-motion': 'unsupported',
+};
 
 function surfaceOf(pathname: string): Surface | null {
   if (pathname === '/desk') return 'desk';
@@ -119,15 +140,22 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       reportedRef.current = true;
       try {
         host.telemetry(e);
-        if (dispatch) window.dispatchEvent(new CustomEvent<ArrivalEnded>(EVENT_ENDED, { detail: e }));
       } catch {
         /* telemetry never breaks the page */
+      }
+      if (dispatch) {
+        try {
+          window.dispatchEvent(new CustomEvent<ArrivalEnded>(EVENT_ENDED, { detail: e }));
+        } catch {
+          /* the landings and the zone-flight clock wait on this; nothing here may stop it */
+        }
       }
       host.markArrival(surface, engagementId);
     };
 
     let entry = entryRef.current;
     if (!entry) {
+      beginEntry();
       const now = Date.now();
       const route = enterRoute(pathname, now);
       // A refresh never inherits a token: spent here, before the page's own consumer mounts.
@@ -155,9 +183,13 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       } catch {
         result = { play: false, cause: 'error' };
       }
-      // The walks that open a sheet on mount (the Document's Call Sheet, the Desk's capture-lead
-      // and open-project): each page reads and clears its flag after this commit.
-      const busy = callSheetPending.value || captureLeadPending.value || openProjectPending.value;
+      // The walks that open a sheet on mount, each busy only on the surface whose page reads and
+      // clears it after this commit: the Document's Call Sheet; the Desk's capture-lead and
+      // open-project. A flag left standing for the other surface is not this entry's.
+      const busy =
+        surface === 'desk'
+          ? captureLeadPending.value || openProjectPending.value
+          : callSheetPending.value;
       entry = { input, hard: route.hard, result, busy };
       entryRef.current = entry;
     }
@@ -307,10 +339,11 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
           /* finish restores in its own finally */
         }
       }
-      // Only a Desk that actually played spends the visit's Desk (arrival.js:890): a decline
-      // inside start() (drift, no-root) costs nothing.
-      if (started && stampAt !== null && surface === 'desk' && run.phase !== 'done') {
-        setDeskShown(stampAt);
+      if (started && run.phase !== 'done') {
+        noteRunStarted();
+        // Only a Desk that actually played spends the visit's Desk (arrival.js:890): a decline
+        // inside start() (drift, no-root) costs nothing.
+        if (stampAt !== null && surface === 'desk') setDeskShown(stampAt);
       }
     };
 
@@ -360,9 +393,8 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
     };
 
     html.classList.add('arr-pre');
-    // Her hand during the wait ends it for good. DeclineCause has no 'input' member (types.ts is
-    // frozen); 'busy' is the nearest.
-    setArrivalWaiting((escape) => (escape ? halt() : decline('busy')));
+    // Her hand during the wait, or the page's own lifecycle, ends it for good.
+    setArrivalWaiting((why) => (why === 'escape' ? halt() : decline(WAIT_DECLINE[why])));
     entryTimer = window.setTimeout(() => decline('late'), left);
     watch = new MutationObserver(check);
     watch.observe(document.body, {

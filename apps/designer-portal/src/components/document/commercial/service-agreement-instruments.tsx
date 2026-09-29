@@ -267,6 +267,7 @@ export function ServiceAgreementInstruments({
                   variant="primary"
                   trailing="→"
                   href={`/doc/${projectId}`}
+                  onClick={() => suppressNextArrival(`/doc/${projectId}`)}
                 >
                   Open the project
                 </DocumentAction>
