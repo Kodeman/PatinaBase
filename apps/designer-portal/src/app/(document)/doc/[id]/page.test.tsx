@@ -1,13 +1,16 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { useInsertionEffect, type ReactNode } from 'react';
 import DocumentPage from './page';
+import { ArrivalRun } from '@/components/document/arrival/arrival-run';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import { paperRegionsForSection } from '@/lib/document/document-index';
 import { __setDensityForTest } from '@/hooks/use-lens-density';
 import { documentEvents } from '@/lib/analytics/document-events';
-import { consumeSuppressed } from '@/lib/arrival/nav';
-import { EVENT_ENDED } from '@/lib/arrival/types';
+import { engine as arrivalEngine } from '@/lib/arrival/engine';
+import { consumeSuppressed, suppressNextArrival } from '@/lib/arrival/nav';
+import { markVisit, setDeskShown } from '@/lib/arrival/session';
+import { EVENT_ENDED, type ArrivalEnded } from '@/lib/arrival/types';
 
 /**
  * W3 — the band's line 2, the one printing of the sentence that changes (L-1).
@@ -317,6 +320,7 @@ jest.mock('@/hooks/use-document-state', () => ({
 
 jest.mock('@/hooks/document-time-provider', () => ({
   useHoldDocument: jest.fn(),
+  useDocumentTime: () => ({ offer: null }),
 }));
 
 jest.mock('@/components/document/mobile/mobile-shell', () => ({
@@ -555,6 +559,7 @@ jest.mock('@/lib/analytics/document-events', () => ({
     actionShown: jest.fn(),
     actionSelected: jest.fn(),
     zoneFlight: jest.fn(),
+    arrivalEnded: jest.fn(),
     // The real MarginRail leads with the R94 first-touch margin note.
     wayfinding: { marginNote: jest.fn() },
   },
@@ -3025,23 +3030,113 @@ describe('DocumentPage guide activation', () => {
       const zoneFlight = documentEvents.zoneFlight as jest.Mock;
       zoneFlight.mockClear();
       try {
+        window.history.replaceState({}, '', '/doc/missing-document');
         const held = render(<DocumentPage params={fulfilledParams} />);
         now += 12_000;
+        window.history.replaceState({}, '', '/desk');
         held.unmount();
         expect(zoneFlight).not.toHaveBeenCalled();
 
+        window.history.replaceState({}, '', '/doc/missing-document');
         const { unmount } = render(<DocumentPage params={fulfilledParams} />);
         now += 12_000;
         act(() => {
-          window.dispatchEvent(new CustomEvent(EVENT_ENDED));
+          window.dispatchEvent(
+            new CustomEvent(EVENT_ENDED, { detail: { surface: 'document', how: 'settled' } }),
+          );
         });
         now += 2_000;
+        window.history.replaceState({}, '', '/desk');
         unmount();
         expect(zoneFlight).toHaveBeenCalledTimes(1);
         expect(zoneFlight).toHaveBeenCalledWith(expect.objectContaining({ held_ms: 2_000 }));
       } finally {
         clock.mockRestore();
+        window.history.replaceState({}, '', '/');
       }
+    });
+
+    // The next route's entry can end at its own commit (a Desk already shown this visit, an
+    // announced replace) while this page is still mounted: its layout effect runs before this
+    // page's passive cleanups. That end is not this Document's pick-up.
+    describe('when the next route ends its entry at the commit', () => {
+      /** The (document) layout's slice: Next writes the URL in an insertion effect (HistoryUpdater),
+       *  then the route's ArrivalRun gates in its layout effect, ahead of the page. */
+      function Route({ path, children }: { path: string; children?: ReactNode }) {
+        useInsertionEffect(() => {
+          window.history.pushState({}, '', path);
+        }, [path]);
+        return (
+          <>
+            <ArrivalRun key={path} engine={arrivalEngine} pathname={path} />
+            {children}
+          </>
+        );
+      }
+      const paramsFor = (id: string) =>
+        ({ status: 'fulfilled', value: { id }, then: () => undefined }) as unknown as Promise<{
+          id: string;
+        }>;
+
+      let now = 2_000_000;
+      let clock: jest.SpyInstance<number, []>;
+      const ended: ArrivalEnded[] = [];
+      const record = (e: Event) => ended.push((e as CustomEvent<ArrivalEnded>).detail);
+
+      beforeEach(() => {
+        clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        ended.length = 0;
+        window.addEventListener(EVENT_ENDED, record);
+        (documentEvents.zoneFlight as jest.Mock).mockClear();
+        window.sessionStorage.clear();
+      });
+
+      afterEach(() => {
+        cleanup();
+        window.removeEventListener(EVENT_ENDED, record);
+        window.sessionStorage.clear();
+        window.history.replaceState({}, '', '/');
+        clock.mockRestore();
+      });
+
+      it('a put-down onto a Desk already shown this visit keeps the Document’s own pick-up', () => {
+        const path = '/doc/missing-document';
+        const { rerender } = render(
+          <Route path={path}>
+            <DocumentPage key={path} params={fulfilledParams} />
+          </Route>,
+        );
+        now += 12_000;
+        markVisit(now);
+        setDeskShown(now);
+
+        rerender(<Route path="/desk" />);
+
+        expect(ended.at(-1)).toEqual({ surface: 'desk', how: 'declined', cause: 'desk-shown' });
+        expect(documentEvents.zoneFlight).not.toHaveBeenCalled();
+      });
+
+      it('an announced move onto another Document keeps this Document’s own pick-up', () => {
+        const from = '/doc/missing-document';
+        const to = '/doc/other-document';
+        const { rerender, unmount } = render(
+          <Route path={from}>
+            <DocumentPage key={from} params={fulfilledParams} />
+          </Route>,
+        );
+        now += 12_000;
+
+        suppressNextArrival(to);
+        rerender(
+          <Route path={to}>
+            <DocumentPage key={to} params={paramsFor('other-document')} />
+          </Route>,
+        );
+
+        expect(ended.at(-1)).toEqual({ surface: 'document', how: 'declined', cause: 'replace' });
+        expect(documentEvents.zoneFlight).not.toHaveBeenCalled();
+        unmount();
+      });
     });
   });
 });

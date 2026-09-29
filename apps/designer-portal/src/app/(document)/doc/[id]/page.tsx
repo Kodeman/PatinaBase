@@ -86,7 +86,7 @@ import {
   deriveSendWallLine,
 } from '@/lib/document/proposal-watch-derivation';
 import { sectionAnchorId } from '@/lib/document/section-anchor';
-import { shouldFireZoneFlight } from '@/lib/document/zone-flight';
+import { isSameDocumentPath, shouldFireZoneFlight } from '@/lib/document/zone-flight';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
 import { documentResolutionState } from '@/lib/document/document-resolution-state';
 import { DocSpine } from '@/components/document/doc-spine';
@@ -236,7 +236,7 @@ import { ROSTER_STAGE_ORDER } from '@/lib/document/desk-roster-derivation';
 import { afterArrival } from '@/components/document/arrival/arrival-mount';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { consumeArriveToken } from '@/lib/arrival/session';
-import { EVENT_ENDED, type Landing } from '@/lib/arrival/types';
+import { EVENT_ENDED, type ArrivalEnded, type Landing } from '@/lib/arrival/types';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -1332,14 +1332,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     return () => window.removeEventListener(DOCUMENT_WRITE_EVENT, onWrite);
   }, []);
   // US-14 — the pick-up is the arrival's end, played or declined: the card's
-  // ten-second hold never eats the ten-second thrash window.
+  // ten-second hold never eats the ten-second thrash window. Only this
+  // Document's own entry counts: on a put-down the next route (the Desk, or
+  // another Document) can end its entry at its commit, before this listener is
+  // removed; Next has written that route's URL by then.
   useEffect(() => {
-    const onArrivalEnded = () => {
+    const onArrivalEnded = (e: Event) => {
+      if (!isSameDocumentPath(window.location.pathname, id)) return;
+      const detail = (e as CustomEvent<ArrivalEnded | null>).detail;
+      if (detail?.surface && detail.surface !== 'document') return;
       zoneFlightRef.current.pickedUpAt = Date.now();
     };
     window.addEventListener(EVENT_ENDED, onArrivalEnded);
     return () => window.removeEventListener(EVENT_ENDED, onArrivalEnded);
-  }, []);
+  }, [id]);
   // ZF-1 fix — `nextPath: null` means an explicit put-down (Esc / a "Put
   // down" action): those are genuine exits regardless of destination. A
   // route-away instead passes the actual destination path so a same-document
