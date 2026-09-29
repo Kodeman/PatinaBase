@@ -39,6 +39,11 @@ const baseWebServer = Array.isArray(base.webServer) ? base.webServer[0] : base.w
 export default defineConfig({
   ...base,
   testDir: './e2e/arrival',
+  // Absorbs the first-real-request cost of a freshly started `next start`
+  // process (Supabase server client construction, the auth middleware's
+  // first JWT verify) before any spec's own clock starts — see
+  // `global-setup.ts`'s header for the recurring flake this fixes.
+  globalSetup: require.resolve('./e2e/arrival/global-setup'),
   timeout: 90_000,
   // Serial, and no retry: the lane's earlier reds were the probes (a zero-height
   // `.arr-card` that `toBeVisible()` never reports visible) and WebKit's
