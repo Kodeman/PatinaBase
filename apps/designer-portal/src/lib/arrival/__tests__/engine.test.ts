@@ -746,9 +746,26 @@ describe('B7 / B8 / B10 — the stylesheet the run relies on', () => {
   })
   it('B8: hides only the route root (and the Document paper held unmarked) under arr-pre, with a 1.5s reveal failsafe', () => {
     expect(CSS).toContain('html.arr-pre [data-arrival]{opacity:0;animation-play-state:paused}')
-    expect(CSS).toContain('html.arr-pre [data-arrival-held="document"]{opacity:0;animation-play-state:paused}')
     expect(CSS).toMatch(/html\.arr-pre:has\(\[data-arrival\]\)\{animation:arr-reveal 1ms linear 1500ms both\}/)
     expect(CSS).not.toMatch(/arr-pre body\{opacity/)
+  })
+  it('B8 (round 4): the held paper has its own 8.5s failsafe, which the root mark replaces rather than shortens', () => {
+    expect(CSS).toContain(
+      'html.arr-pre [data-arrival-held="document"]{opacity:var(--arr-veil,0);animation-play-state:var(--arr-play,paused)}',
+    )
+    expect(CSS).toContain(
+      'html.arr-pre:has([data-arrival-held="document"]){animation:arr-reveal-held 1ms linear 8500ms both}',
+    )
+    // The same keyframes under another name: a running animation keeps its start time when only its
+    // delay changes, so a shared name would reveal a root held longer than 1.5s the moment it appears.
+    expect(CSS).toContain(
+      '@keyframes arr-reveal-held{from{--arr-veil:0;--arr-play:paused}to{--arr-veil:1;--arr-play:running}}',
+    )
+    expect(CSS).toContain('@keyframes arr-reveal{from{--arr-veil:0;--arr-play:paused}to{--arr-veil:1;--arr-play:running}}')
+    // Past the 8s hard entry cap, so it only ever shows a paper a thrown run left held.
+    const heldDelay = Number(/animation:arr-reveal-held 1ms linear (\d+)ms both/.exec(CSS)?.[1])
+    expect(heldDelay).toBeGreaterThan(BUDGET.HARD_ENTRY_READY_MS)
+    expect(CSS).not.toContain('html.arr-pre [data-arrival-held="document"]{opacity:0')
   })
   it('Skip clears the persistent bottom edge: the MobileBar below 1180, the Studio Drawer above', () => {
     expect(CSS).toMatch(

@@ -27,12 +27,17 @@ import type { LensDensityApi } from '../use-lens-density';
  * can be held "still loading" for as long as a case needs.
  */
 let fetching = 0;
+/** Queries in flight by key, for the cases that ask which ones the gate counts. */
+let fetchingKeys: unknown[][] = [];
 let notifyCache: () => void = () => {};
 jest.mock('@tanstack/react-query', () => ({
   QueryClientContext: jest.requireActual('react').createContext(undefined),
   QueryClient: class {
-    isFetching() {
-      return fetching;
+    isFetching(filters?: { predicate?: (query: { queryKey: unknown[] }) => boolean }) {
+      const keyed = fetchingKeys.filter(
+        (queryKey) => !filters?.predicate || filters.predicate({ queryKey }),
+      );
+      return fetching + keyed.length;
     }
     getQueryCache() {
       return {
@@ -50,6 +55,11 @@ jest.mock('@tanstack/react-query', () => ({
 /** The query count moved: the cache tells its subscribers, as it would. */
 function setFetching(count: number) {
   fetching = count;
+  notifyCache();
+}
+
+function setFetchingKeys(keys: unknown[][]) {
+  fetchingKeys = keys;
   notifyCache();
 }
 
@@ -212,6 +222,7 @@ describe('useLensDensity', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     fetching = 0;
+    fetchingKeys = [];
     notifyCache = () => {};
     document.body.innerHTML = '';
     CapturingIntersectionObserver.instances = [];
@@ -519,6 +530,37 @@ describe('useLensDensity', () => {
     // Observed, ordered, waiting — the gate defers the promotion, it does not
     // drop the root.
     expect(observer().observed.has(regionRoot('approvals'))).toBe(true);
+  });
+
+  it('counts only the paper’s reads: the layout chrome’s own reads in flight do not hold the gate', async () => {
+    // US-14 post-ship patch 1, round 4 — the Desk walkthrough's and the help
+    // panel's Sanity reads, the drawer's badges and its in-hand readout.
+    setFetchingKeys([
+      ['help-content', 'designer-portal/document/welcome', 'welcomeModal', 'designer'],
+      ['inbox', 'unread-count'],
+      ['procurement-unread-count'],
+      ['document-time-today'],
+    ]);
+    const { shell } = mountPaper();
+    topAt(regionRoot('approvals'), 40);
+    render(<Probe watch="approvals" />);
+    await flush();
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'full');
+  });
+
+  it('still counts a paper read that shares a family root with the chrome (the margin rail’s inbox read)', async () => {
+    setFetchingKeys([['help-content', 'x', 'tooltip', 'all'], ['inbox', 'notifications', { limit: 100 }]]);
+    const { shell } = mountPaper();
+    topAt(regionRoot('approvals'), 40);
+    render(<Probe watch="approvals" />);
+    await flush(320);
+    expect(shell).not.toHaveAttribute('data-lens-resolved');
+    expect(regionRoot('approvals')).toHaveAttribute('data-density', 'quiet');
+
+    setFetchingKeys([['help-content', 'x', 'tooltip', 'all']]);
+    await flush();
+    expect(shell).toHaveAttribute('data-lens-resolved', 'true');
   });
 
   it('runs D-B15(c)\u2019s pass the moment the paper resolves, and only on the roots at the line', async () => {

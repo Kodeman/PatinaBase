@@ -213,7 +213,9 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
         subtree: true,
         childList: true,
         attributes: true,
-        attributeFilter: ['data-arr-engagement'],
+        // `data-arrival` too: a held Document mounts its shell already naming the engagement and
+        // only takes the root mark at ready, when host.root() can first read the id.
+        attributeFilter: ['data-arr-engagement', 'data-arrival'],
       });
     }
     const stopEngagementWatch = () => {
@@ -242,6 +244,9 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
     const cap = entry.hard ? BUDGET.HARD_ENTRY_READY_MS : BUDGET.SOFT_ENTRY_READY_MS;
     const left = cap - (Date.now() - input.entryAt);
     if (left <= 0) return declineNow('late');
+    // A tab opened in the background: no visibilitychange will come to end a wait armed now, and
+    // the held page would stand hidden until the entry cap.
+    if (document.visibilityState === 'hidden') return declineNow('hidden');
 
     let waitingNow = true;
     let watch: MutationObserver | null = null;

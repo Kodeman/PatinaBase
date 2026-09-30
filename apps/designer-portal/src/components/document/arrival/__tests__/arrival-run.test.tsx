@@ -560,6 +560,19 @@ describe('the Document names its engagement', () => {
     expect(mockNoteDocEngagement).toHaveBeenCalledTimes(1);
     expect(mockNoteDocEngagement).toHaveBeenCalledWith('/doc/project-9', 'engagement-3');
   });
+
+  it('notes it when a held shell, already naming it, takes the root mark (round 4)', async () => {
+    mockPathname = '/doc/project-9';
+    const shell = docRoot('engagement-3');
+    shell.removeAttribute('data-arrival');
+    const { engine } = makeEngine(() => ({ play: false, cause: 'token' }));
+    render(<ArrivalRun engine={engine} pathname="/doc/project-9" />);
+    expect(mockNoteDocEngagement).not.toHaveBeenCalled();
+    shell.setAttribute('data-arrival', 'document');
+    await flush();
+    expect(mockNoteDocEngagement).toHaveBeenCalledTimes(1);
+    expect(mockNoteDocEngagement).toHaveBeenCalledWith('/doc/project-9', 'engagement-3');
+  });
 });
 
 describe('the caps', () => {
@@ -676,9 +689,10 @@ describe('the guards at ready', () => {
 
   it('a background tab at ready → hidden', async () => {
     addRoot('desk', true);
-    const visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     const { engine } = makeEngine();
     render(<ArrivalRun engine={engine} pathname="/desk" />);
+    // Visible when the wait armed; sent to the background before ready.
+    const visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     await toReady();
     expect(capture.mock.calls).toEqual([declined('desk', 'hidden')]);
     expect(markArrival).toHaveBeenCalledTimes(1);
@@ -1218,5 +1232,22 @@ describe('the page’s wait (post-ship patch 1)', () => {
     await flush();
     expect(capture.mock.calls).toEqual([declined('desk', 'desk-shown')]);
     expect(waiting['/desk']).toBe(false);
+  });
+
+  // Round 4 — a tab opened in the background gets no visibilitychange to end a wait, so a wait
+  // armed there would hold the page hidden until the entry cap.
+  it('is never true when the tab is hidden as the wait would arm: declined hidden at once', async () => {
+    const visibility = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const { engine } = makeEngine();
+    render(<Harness engine={engine} />);
+    await flush();
+    expect(capture.mock.calls).toEqual([declined('desk', 'hidden')]);
+    expect(waiting['/desk']).toBe(false);
+    expect(html.classList.contains('arr-pre')).toBe(false);
+    addRoot('desk', true);
+    await advance(BUDGET.SOFT_ENTRY_READY_MS);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(engine.createRun).not.toHaveBeenCalled();
+    visibility.mockRestore();
   });
 });

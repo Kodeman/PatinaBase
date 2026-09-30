@@ -9,9 +9,9 @@
  * presence. Esc puts down (sheet-first priority, §3).
  */
 
-import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   computeArAging,
   invoiceDaysOverdue,
@@ -2476,17 +2476,32 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     !guideInputsInFlight;
   // US-14 post-ship patch 1 — and the lens has resolved the paper (D-B46): its
   // first pass promotes the in-frame regions quiet → full, a root mutation that
-  // would cut a played card. It waits on every query in flight, not only this
-  // page's, and is bounded by LENS_RESOLVE_MAX_MS from the paper's first layout
-  // (a held paper lays out too).
+  // would cut a played card. It waits on the queries the paper reads, not the
+  // layout chrome's (round 4), and is bounded by LENS_RESOLVE_MAX_MS from the
+  // paper's first layout (a held paper lays out too).
   const lensResolved = useLensResolved();
   const arrivalReady = paperSettled && lensResolved;
   // US-14 post-ship patch 1 — while this path's arrival wait is armed the paper
   // stands mounted but unmarked (and hidden) until ready, so the route root
   // first appears ready. A root this mount has shown is never taken back.
-  const arrivalWaiting = useArrivalWaiting(`/doc/${id}`);
+  // Keyed on the path the wait was armed for, as the router reports it.
+  const pathname = usePathname();
+  const arrivalWaiting = useArrivalWaiting(pathname);
   const arrivalRootShown = useRef(false);
   const arrivalHeld = arrivalWaiting && !arrivalReady && !arrivalRootShown.current;
+  // The shell (and so the root) prints only past the loading, error and
+  // missing trees below; latched at commit, so a render React throws away
+  // never counts as a shown root.
+  const arrivalRootPrinted =
+    hydrated &&
+    resolutionState !== 'loading' &&
+    resolutionState !== 'error' &&
+    resolutionState !== 'missing' &&
+    !!row &&
+    !arrivalHeld;
+  useLayoutEffect(() => {
+    if (arrivalRootPrinted) arrivalRootShown.current = true;
+  }, [arrivalRootPrinted]);
   // US-14 R-DM21 — the Desk act's token landing (spent on mount, above the
   // resume jump), carried out once the paper is ready, when its regions exist.
   // A press promotes without the lens, so it does not wait for its resolution.
@@ -2838,8 +2853,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
             : liveProposal?.signed_by_name) ?? null,
       }
     : null;
-
-  if (!arrivalHeld) arrivalRootShown.current = true;
 
   return (
     <>

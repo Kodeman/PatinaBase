@@ -22,6 +22,7 @@
  *    `late`, but never `mutation` (a late read repainting the roster while
  *    the card is up would be a foreign mutation).
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from '../fixtures/auth';
 import { seedWorkflowGateFixture } from '../helpers/workflow-gate-fixture';
 import {
@@ -31,11 +32,21 @@ import {
   arrivalEndedEvents,
   settleDeskWalkthrough,
   delayedRoute,
+  dwellOnCard,
   topmostAtCentre,
   waitForHold,
+  watchReads,
   CARD_SELECTOR,
   SKIP_SELECTOR,
 } from './helpers';
+import type { ReadWatch } from './helpers';
+
+/** Every played path dwells on the card before Skip (play-document.spec.ts's rule): a late read
+ *  printing into the route root ends the run `how: 'mutation'`, which an instant Skip would hide. */
+async function expectCardThroughDwell(page: Page, reads: ReadWatch): Promise<void> {
+  const held = await dwellOnCard(page, reads);
+  expect(held, `the card through the dwell: ${JSON.stringify(await arrivalEndedEvents(page))}`).toBe(true);
+}
 
 /** The top claim card's one act (desk-claim-card.tsx `data-part="act"`). */
 const ACT_SELECTOR = '[data-arrival="desk"] [data-part~="act"]';
@@ -53,10 +64,12 @@ test.describe('Desk plays', () => {
     // entry (its hard-loaded document was /auth/signin). A second, real
     // navigation to /desk is the hard entry under test (nav.ts `hard =
     // nav === null || toPathname(nav.name) === pathname`, true for THIS load).
+    const reads = watchReads(page);
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator(CARD_SELECTOR)).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('[data-arrival="desk"][data-arr-played]')).toHaveCount(1);
+    await expectCardThroughDwell(page, reads);
 
     // Act 2: the card paints on top, and so does the act — its card's stacking
     // context rises with it, so no later card paints over it.
@@ -85,6 +98,7 @@ test.describe('Desk plays', () => {
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
     await page.route('**/rest/v1/**', delayedRoute(3_000));
+    const reads = watchReads(page);
 
     const nav = page.goto('/desk', { waitUntil: 'domcontentloaded' });
     await nav;
@@ -115,6 +129,7 @@ test.describe('Desk plays', () => {
     await expect(page.locator(CARD_SELECTOR)).toBeVisible({ timeout: 8_000 });
     await expect(findAnything).toBeVisible();
 
+    await expectCardThroughDwell(page, reads);
     await page.locator(SKIP_SELECTOR).click();
     const events = await arrivalEndedEvents(page);
     expect(events.at(-1)).toMatchObject({ surface: 'desk', how: 'skip' });
@@ -127,8 +142,10 @@ test.describe('Desk plays', () => {
     await installArrivalInstruments(page);
 
     // Visit the Document FIRST — a fresh hard entry there.
+    const reads = watchReads(page);
     await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
+    await expectCardThroughDwell(page, reads);
     await page.locator(SKIP_SELECTOR).click();
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
 
@@ -151,8 +168,10 @@ test.describe('Desk plays', () => {
   }) => {
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
+    const reads = watchReads(page);
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
     await expect(page.locator(CARD_SELECTOR)).toBeVisible({ timeout: 20_000 });
+    await expectCardThroughDwell(page, reads);
     await page.locator(SKIP_SELECTOR).click();
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
 
@@ -206,6 +225,7 @@ test.describe('Desk plays', () => {
   }) => {
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
+    const reads = watchReads(page);
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
     await expect(page.locator(CARD_SELECTOR)).toBeVisible({ timeout: 20_000 });
 
@@ -217,6 +237,7 @@ test.describe('Desk plays', () => {
     // without a rebuild this piece must not force. This assertion is the
     // honest negative: the whisper is absent, and the Desk plays regardless.
     await expect(page.locator('aside[role="note"]')).toHaveCount(0);
+    await expectCardThroughDwell(page, reads);
     await page.locator(SKIP_SELECTOR).click();
     const events = await arrivalEndedEvents(page);
     expect(events.at(-1)).toMatchObject({ surface: 'desk', how: 'skip' });
@@ -240,6 +261,7 @@ test.describe('Desk plays', () => {
     for (const { pattern, delayMs } of STAGGERED) {
       await page.route(pattern, delayedRoute(delayMs));
     }
+    const reads = watchReads(page);
 
     await page.goto('/desk', { waitUntil: 'domcontentloaded' });
 
@@ -262,6 +284,7 @@ test.describe('Desk plays', () => {
     expect(cardOrRest).not.toBe('neither');
 
     if (cardOrRest === 'played') {
+      await expectCardThroughDwell(page, reads);
       await page.locator(SKIP_SELECTOR).click();
       // 'mutation' is an EndHow, never a cause: a played run a late commit cut
       // short ends how:'mutation', so the played path must end on the Skip.

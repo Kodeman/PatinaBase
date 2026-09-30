@@ -7,7 +7,7 @@
  * No metric tiles, badges, feeds, or dashboard furniture.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   useProfile,
   useOrganizations,
@@ -341,7 +341,11 @@ export default function DeskPage() {
   const arrivalRootShown = useRef(false);
   const arrivalHeld = arrivalWaiting && !arrivalReady && !arrivalRootShown.current;
   const arrivalRoot = deskRead && !arrivalHeld;
-  if (arrivalRoot) arrivalRootShown.current = true;
+  // Latched at commit, not in render: a render React throws away must not
+  // count as a shown root.
+  useLayoutEffect(() => {
+    if (arrivalRoot) arrivalRootShown.current = true;
+  }, [arrivalRoot]);
 
   const rosterBlock =
     (isLoading && !data) || arrivalHeld ? (
@@ -368,9 +372,6 @@ export default function DeskPage() {
   return (
     <main
       data-arrival={arrivalRoot ? 'desk' : undefined}
-      // Held with its read in hand: a press here ends the wait and the roster
-      // prints under her finger, so the arrival swallows that press's click.
-      data-arrival-held={deskRead && arrivalHeld ? 'desk' : undefined}
       data-arrival-ready={arrivalReady ? '' : undefined}
       className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14"
     >
@@ -497,7 +498,11 @@ export default function DeskPage() {
           </DocumentActionGroup>
         </div>
       ) : (
-        <>
+        // Held with its read in hand, the block the ready Desk replaces is
+        // marked: a press on it ends the wait and the roster prints under her
+        // finger, so the arrival swallows that press's click. The header above
+        // stays live chrome (round 4).
+        <div data-arrival-held={deskRead && arrivalHeld ? 'desk' : undefined}>
           {/* The roster takes the full width of the desk at every viewport.
               IA-17's ≥1280px boards rail took a 260px column out of it, which
               left the ledger row narrower than its own fixed tracks — the
@@ -523,7 +528,7 @@ export default function DeskPage() {
               here as quiet front matter after the roster; on a quiet Desk it
               has already risen above (deskEmpty), so it renders in exactly one place. */}
           {!deskEmpty && <DeskContents />}
-        </>
+        </div>
       )}
 
       {/* The capture front door (G1 · R62) — an overlay over the Desk, never a

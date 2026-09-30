@@ -140,6 +140,7 @@ jest.mock('@portabletext/react', () => ({
 const mockRouter = { push: jest.fn(), replace: jest.fn() };
 jest.mock('next/navigation', () => ({
   useRouter: () => mockRouter,
+  usePathname: () => '/doc/missing-document',
 }));
 
 let mockInvoices: Record<string, unknown>[] = [];
@@ -3021,6 +3022,24 @@ describe('DocumentPage guide activation', () => {
         rerender(<DocumentPage params={fulfilledParams} />);
         expect(shell()).not.toBeNull();
         expect(shell()).not.toHaveAttribute('data-arrival-ready');
+      });
+
+      // Round 4 — the shown-root latch is written at commit, and only by a
+      // commit that printed the shell: the page's loading tree commits before
+      // the route's wait arms, and must not count as a root shown.
+      it('a loading tree committed before the wait arms is no shown root: the paper is still held once read', () => {
+        asProjectDocument();
+        const read = mockDocumentQuery;
+        mockDocumentQuery = { isLoading: true, isFetching: true, isError: false, data: undefined };
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-document-shell]')).toBeNull();
+
+        armWait();
+        mockDocumentQuery = read;
+        mockPlanRoomLoading = true;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-arrival]')).toBeNull();
+        expect(held()).not.toBeNull();
       });
 
       it('another path’s wait holds nothing here', () => {

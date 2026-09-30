@@ -53,7 +53,9 @@
  * dwell of at least 1.5 s and until the page's reads have been quiet for 2 s,
  * Skip is pressed, and its last end is `how: 'skip'`). The dwell is what lets
  * a late read that would cut the run `how: 'mutation'` show; an instant Skip
- * hides it.
+ * hides it. The four +350 cells are marked `test.fail`: the rig limits above
+ * end them late, and they stay owed (CONTRACT §4h). Should one start to play,
+ * the mark fails it, so the note is revisited rather than left stale.
  */
 import fs from 'fs';
 import path from 'path';
@@ -329,6 +331,11 @@ test.describe('Arrival under emulated latency', () => {
   for (const latency of LATENCIES) {
     for (const mode of MODES) {
       test(`${mode} Document entry at +${latency} ms per request`, async ({ authenticatedPage: page }, info) => {
+        test.fail(
+          latency === 350,
+          'rig limit: at +350 ms the local stack’s six HTTP/1.1 connections and the stolen auth lock (hard), and ' +
+            'the lens deadline counted from the paper’s first layout (soft), put ready past the entry cap — CONTRACT §4h Owed',
+        );
         test.setTimeout(150_000);
         await armE2EOptIn(page);
         await installArrivalInstruments(page);

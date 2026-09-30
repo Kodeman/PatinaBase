@@ -182,7 +182,8 @@ test.describe('A tap never clicks through', () => {
 
   // Post-ship patch 1 — a hard Desk entry now holds its skeleton (no route root) until ready, with
   // the roster's read already in hand: the tap ends the wait, the roster prints in the skeleton's
-  // place before the tap's click is hit-tested, and that click is swallowed.
+  // place before the tap's click is hit-tested, and that click is swallowed. Round 4: the held mark
+  // sits on the block the roster replaces, not on <main>, so the header's acts stay live chrome.
   test('a tap on the held Desk skeleton ends the wait, and the roster printed under her finger sees no click', async ({
     authenticatedPage: page,
   }) => {
@@ -204,13 +205,13 @@ test.describe('A tap never clicks through', () => {
     await page.waitForFunction(
       () =>
         document.documentElement.classList.contains('arr-pre') &&
-        !!document.querySelector('main[data-arrival-held="desk"]'),
+        !!document.querySelector('main:not([data-arrival-held]) [data-arrival-held="desk"]'),
       undefined,
       { timeout: 20_000, polling: 16 },
     );
     const spot = await page.evaluate(() => {
       const skeleton = document.querySelector(
-        'main[data-arrival-held="desk"] [data-tour-anchor="desk-needs-your-hand"][aria-hidden]',
+        '[data-arrival-held="desk"] [data-tour-anchor="desk-needs-your-hand"][aria-hidden]',
       );
       if (!skeleton) return null;
       const r = skeleton.getBoundingClientRect();
