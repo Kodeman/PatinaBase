@@ -4,7 +4,7 @@
  * Not a `*.spec.ts` file itself (Playwright's default `testMatch` ignores it),
  * mirroring `e2e/helpers/*` for the rest of the suite.
  */
-import type { Page, Route } from '@playwright/test';
+import type { Page, Request, Route } from '@playwright/test';
 import { psqlRun } from '../helpers/psql';
 import { WORKFLOW_GATE_PROJECT_ID } from '../helpers/workflow-gate-fixture';
 
@@ -205,6 +205,43 @@ export function delayedRoute(delayMs: number) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     await route.continue();
   };
+}
+
+/** The page's Supabase reads, seen from the test side: none in flight → ms since the last one ended. */
+export interface ReadWatch {
+  quietFor(): number;
+}
+
+/** Call before the navigation whose reads matter: a read already in flight is otherwise unseen. */
+export function watchReads(page: Page): ReadWatch {
+  const inFlight = new Set<Request>();
+  let lastEnd = Date.now();
+  const isRead = (r: Request) => /\/(rest|auth|functions|storage)\/v1\//.test(r.url());
+  const done = (r: Request) => {
+    if (inFlight.delete(r)) lastEnd = Date.now();
+  };
+  page.on('request', (r) => {
+    if (isRead(r)) inFlight.add(r);
+  });
+  page.on('requestfinished', done);
+  page.on('requestfailed', done);
+  return { quietFor: () => (inFlight.size > 0 ? 0 : Date.now() - lastEnd) };
+}
+
+/**
+ * Leaves a played card on screen before anything presses it: at least 1.5 s, and until the page's
+ * reads have been quiet for 2 s (never past 6 s, well inside `HOLD_MS`). A read that prints into the
+ * route root meanwhile ends the run `how: 'mutation'`, which an instant Skip would hide. Returns
+ * whether the card is still up.
+ */
+export async function dwellOnCard(page: Page, reads: ReadWatch): Promise<boolean> {
+  const start = Date.now();
+  for (;;) {
+    const elapsed = Date.now() - start;
+    if (elapsed >= 6_000 || (elapsed >= 1_500 && reads.quietFor() >= 2_000)) break;
+    await page.waitForTimeout(100);
+  }
+  return page.locator(CARD_SELECTOR).first().isVisible();
 }
 
 /** Acts 1–2 are over and the card holds (`engine.ts` `hold()` writes the status message; Act 3

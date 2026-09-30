@@ -185,10 +185,12 @@ describe('a press on the hidden route root during the wait', () => {
   const push = jest.fn();
 
   /** Next Link's shape: navigation happens in a click handler below the window capture. */
-  function mountPage() {
+  function mountPage(
+    main = '<main data-arrival="desk"><a id="card" data-roster-name href="/doc/e1">Whitfield House</a></main>',
+  ) {
     document.body.innerHTML = `
       <nav><a id="chrome" href="/board/b1">Boards</a></nav>
-      <main data-arrival="desk"><a id="card" data-roster-name href="/doc/e1">Whitfield House</a></main>`;
+      ${main}`;
     for (const link of document.querySelectorAll('a')) {
       link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -227,6 +229,46 @@ describe('a press on the hidden route root during the wait', () => {
     click(card);
     expect(push).toHaveBeenCalledWith('/doc/e1');
     expect(token()).toMatchObject({ via: 'ptr', to: '/doc/e1' });
+  });
+
+  // Post-ship patch 1 — a page held unmarked (`data-arrival-held`) shows its root in place the
+  // moment the wait ends, before the press's click is hit-tested. Round 4: the Desk marks only
+  // the block the ready page replaces, inside its unmarked <main>; its header acts stay live.
+  const HELD_DESK = `
+    <main>
+      <header><a id="head-act" href="/leads/new">Capture a lead</a></header>
+      <div id="held" data-arrival-held="desk"><a id="card" data-roster-name href="/doc/e1">Whitfield House</a></div>
+    </main>`;
+
+  it('a press on a page held unmarked ends the wait and swallows the click that follows', () => {
+    const { card } = mountPage(HELD_DESK);
+    const main = document.querySelector('main')!;
+    const held = document.getElementById('held')!;
+    const cancel = jest.fn();
+    setArrivalWaiting(cancel);
+
+    fireEvent.pointerDown(card);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    // The root prints in the held tree's place before the click.
+    held.removeAttribute('data-arrival-held');
+    main.setAttribute('data-arrival', 'desk');
+    fireEvent.pointerUp(card);
+    expect(click(card).defaultPrevented).toBe(true);
+    expect(push).not.toHaveBeenCalled();
+    expect(token()).toBeNull();
+  });
+
+  it('a press on a held page’s header act, outside the held block, ends the wait and acts', () => {
+    mountPage(HELD_DESK);
+    const act = document.getElementById('head-act')!;
+    const cancel = jest.fn();
+    setArrivalWaiting(cancel);
+
+    fireEvent.pointerDown(act);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    fireEvent.pointerUp(act);
+    click(act);
+    expect(push).toHaveBeenCalledWith('/leads/new');
   });
 
   it('a press on the chrome ends the wait and acts', () => {

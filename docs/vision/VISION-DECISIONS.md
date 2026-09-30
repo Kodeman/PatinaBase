@@ -322,6 +322,14 @@ tap-during-wait must), VoiceOver. The v2 since line (F2, omitted in v1 by D3) re
 normalised through `document_state`, never inside the SECURITY DEFINER RPC. Open R-DM rulings
 (R-DM1–7, R-DM8–38) stay assumed as built.
 
+**2026-09-30 · post-ship patch 1** — hold until ready while a wait is armed: a wait that has not
+reached ready now holds "Picking up…" (Document) or the skeleton (Desk) over the hidden paper, chrome
+visible, until the entry cap. §3 amendment: the Document's ready mark waits for the lens resolve pass,
+scoped to the paper's own queries by denylist, bounded 3 s — narrowing §3's "never global
+`useIsFetching`" to that scope rather than lifting it. Late-hold bound = entry caps (4 s soft / 8 s
+hard), watched via PostHog `arrival_ended` `how='declined'` `cause='late'` per surface, >10% →
+revisit. Detail: `artifacts/arrival-production-2026-09-27/design/CONTRACT.md` §4h.
+
 **Source:** `artifacts/arrival-production-2026-09-27/design/{CONTRACT.md,build/ship-record.md}`.
 Filed as **V12**, this file's own id scheme — the ship task's working title called it "R155", the
 unrelated `docs/design/the-document/DECISIONS.md` log's scheme (there at R154, about motion).

@@ -7,7 +7,7 @@
  * No metric tiles, badges, feeds, or dashboard furniture.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   useProfile,
   useOrganizations,
@@ -39,6 +39,7 @@ import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reaction-rollup';
 import { MarginNote } from '@/components/document/margin-note';
+import { useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import {
   StudioSetupWhisper,
   useStudioSetupWhisperEligible,
@@ -93,8 +94,11 @@ export default function DeskPage() {
     useFeatureFlag('onboarding-teammate-persona');
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
-  const { data: studioMembers, isLoading: studioMembersLoading } =
-    useOrganizationMembers(studio?.id ?? '');
+  const {
+    data: studioMembers,
+    isLoading: studioMembersLoading,
+    isPending: studioMembersPending,
+  } = useOrganizationMembers(studio?.id ?? '');
 
   // L8 — the hire-handoff margin note. Reads the signed-in member's OWN
   // organization_members row for a note the owner wrote on the invite; the
@@ -308,8 +312,54 @@ export default function DeskPage() {
     },
   });
 
+  // US-14 arrival marks (inert). The route root is marked only while the
+  // roster itself renders — never the skeleton or the error state — and is
+  // ready once hydrated and at the first non-placeholder read. Ready also
+  // waits for the reads that print inside the root after the roster mounts
+  // (the day's line's answered notes, the boards rollup): an answer landing
+  // mid-arrival would end it as a mutation. Same query keys as DeskRoster,
+  // DeskBoardsReactionRollup, RecentBoardsStrip and DeskContents, so these
+  // share their fetches. The day's line must also be picked.
+  //
+  // Round 5 — the studio members print the roster's "By person" facet, a
+  // second-wave read behind the organizations read. With no studio the query
+  // is disabled, and a disabled query with no data stays `isPending` in
+  // TanStack v5, so it counts as settled only once there is a studio to read.
+  // While the organizations read is out, `viewerStudio.isSettled` holds ready.
+  const studioMembersSettled = !studio || !studioMembersPending;
+  const answeredNotesRead = useAnsweredNotes();
+  const reactionRollupRead = useBoardsReactionRollup();
+  const recentBoardsRead = useRecentBoards(8);
+  const viewerStudio = useViewerStudio();
+  const unbilledTimeRead = useStudioUnbilledTime();
+  const deskRead = !isError && !!data;
+  const arrivalReady =
+    deskRead &&
+    hydrated &&
+    isSuccess &&
+    !isPlaceholderData &&
+    !answeredNotesRead.isPending &&
+    !reactionRollupRead.isPending &&
+    !recentBoardsRead.isPending &&
+    viewerStudio.isSettled &&
+    studioMembersSettled &&
+    !unbilledTimeRead.isPending &&
+    deskLineDecided;
+  // US-14 post-ship patch 1 — while the Desk's arrival wait is armed the
+  // skeleton stands until ready, so the route root first appears ready. A root
+  // this mount has shown is never taken back.
+  const arrivalWaiting = useArrivalWaiting('/desk');
+  const arrivalRootShown = useRef(false);
+  const arrivalHeld = arrivalWaiting && !arrivalReady && !arrivalRootShown.current;
+  const arrivalRoot = deskRead && !arrivalHeld;
+  // Latched at commit, not in render: a render React throws away must not
+  // count as a shown root.
+  useLayoutEffect(() => {
+    if (arrivalRoot) arrivalRootShown.current = true;
+  }, [arrivalRoot]);
+
   const rosterBlock =
-    isLoading && !data ? (
+    (isLoading && !data) || arrivalHeld ? (
       <div
         className="space-y-3"
         aria-hidden
@@ -329,32 +379,6 @@ export default function DeskPage() {
         belowHead={deskLine}
       />
     );
-
-  // US-14 arrival marks (inert). The route root is marked only while the
-  // roster itself renders — never the skeleton or the error state — and is
-  // ready once hydrated and at the first non-placeholder read. Ready also
-  // waits for the reads that print inside the root after the roster mounts
-  // (the day's line's answered notes, the boards rollup): an answer landing
-  // mid-arrival would end it as a mutation. Same query keys as DeskRoster,
-  // DeskBoardsReactionRollup, RecentBoardsStrip and DeskContents, so these
-  // share their fetches. The day's line must also be picked.
-  const answeredNotesRead = useAnsweredNotes();
-  const reactionRollupRead = useBoardsReactionRollup();
-  const recentBoardsRead = useRecentBoards(8);
-  const viewerStudio = useViewerStudio();
-  const unbilledTimeRead = useStudioUnbilledTime();
-  const arrivalRoot = !isError && !!data;
-  const arrivalReady =
-    arrivalRoot &&
-    hydrated &&
-    isSuccess &&
-    !isPlaceholderData &&
-    !answeredNotesRead.isPending &&
-    !reactionRollupRead.isPending &&
-    !recentBoardsRead.isPending &&
-    viewerStudio.isSettled &&
-    !unbilledTimeRead.isPending &&
-    deskLineDecided;
 
   return (
     <main
@@ -485,7 +509,11 @@ export default function DeskPage() {
           </DocumentActionGroup>
         </div>
       ) : (
-        <>
+        // Held with its read in hand, the block the ready Desk replaces is
+        // marked: a press on it ends the wait and the roster prints under her
+        // finger, so the arrival swallows that press's click. The header above
+        // stays live chrome (round 4).
+        <div data-arrival-held={deskRead && arrivalHeld ? 'desk' : undefined}>
           {/* The roster takes the full width of the desk at every viewport.
               IA-17's ≥1280px boards rail took a 260px column out of it, which
               left the ledger row narrower than its own fixed tracks — the
@@ -511,7 +539,7 @@ export default function DeskPage() {
               here as quiet front matter after the roster; on a quiet Desk it
               has already risen above (deskEmpty), so it renders in exactly one place. */}
           {!deskEmpty && <DeskContents />}
-        </>
+        </div>
       )}
 
       {/* The capture front door (G1 · R62) — an overlay over the Desk, never a

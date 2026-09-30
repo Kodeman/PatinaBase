@@ -25,6 +25,8 @@ import {
   arrivalEndedEvents,
   settleDeskWalkthrough,
   delayedRoute,
+  dwellOnCard,
+  watchReads,
   CARD_SELECTOR,
   SKIP_SELECTOR,
 } from './helpers';
@@ -204,6 +206,7 @@ test.describe('Document plays', () => {
     await installArrivalInstruments(page);
     await page.route('**/rest/v1/projects*', delayedRoute(2_500));
     await page.route('**/rest/v1/proposals*', delayedRoute(2_500));
+    const reads = watchReads(page);
 
     await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
 
@@ -231,6 +234,10 @@ test.describe('Document plays', () => {
     ]);
     expect(cardOrRest).not.toBe('neither');
     if (cardOrRest === 'played') {
+      // The card dwells before the Skip: a delayed answer printing into the root would cut it
+      // `how: 'mutation'`, which an instant Skip would hide.
+      const held = await dwellOnCard(page, reads);
+      expect(held, `the card through the dwell: ${JSON.stringify(await arrivalEndedEvents(page))}`).toBe(true);
       await page.locator(SKIP_SELECTOR).click();
       await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
       // 'mutation' is an EndHow, never a cause: a played run a late commit cut

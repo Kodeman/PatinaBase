@@ -9,9 +9,9 @@
  * presence. Esc puts down (sheet-first priority, §3).
  */
 
-import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { use, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   computeArAging,
   invoiceDaysOverdue,
@@ -78,7 +78,7 @@ import {
   useDocumentRunningIndex,
 } from '@/hooks/use-document-running-index';
 import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
-import { useLensDensity } from '@/hooks/use-lens-density';
+import { useLensDensity, useLensResolved } from '@/hooks/use-lens-density';
 import { isEditableTarget, useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
 import {
@@ -233,7 +233,7 @@ import {
 import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
 import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
 import { ROSTER_STAGE_ORDER } from '@/lib/document/desk-roster-derivation';
-import { afterArrival } from '@/components/document/arrival/arrival-mount';
+import { afterArrival, useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { consumeArriveToken } from '@/lib/arrival/session';
 import { EVENT_ENDED, type ArrivalEnded, type Landing } from '@/lib/arrival/types';
@@ -2469,16 +2469,45 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const guideInputsInFlight =
     (row?.active_section === 'discovery' && discoveryReadiness.state === 'loading') ||
     (row?.active_section === 'direction' && draftingReadiness.state === 'loading');
-  const arrivalReady =
+  const paperSettled =
     lensLineSettled &&
     deskEnrichmentSettled &&
     ticketRowsSettled &&
     !guideInputsInFlight;
+  // US-14 post-ship patch 1 — and the lens has resolved the paper (D-B46): its
+  // first pass promotes the in-frame regions quiet → full, a root mutation that
+  // would cut a played card. It waits on the queries the paper reads, not the
+  // layout chrome's (round 4), and is bounded by LENS_RESOLVE_MAX_MS from the
+  // paper's first layout (a held paper lays out too).
+  const lensResolved = useLensResolved();
+  const arrivalReady = paperSettled && lensResolved;
+  // US-14 post-ship patch 1 — while this path's arrival wait is armed the paper
+  // stands mounted but unmarked (and hidden) until ready, so the route root
+  // first appears ready. A root this mount has shown is never taken back.
+  // Keyed on the path the wait was armed for, as the router reports it.
+  const pathname = usePathname();
+  const arrivalWaiting = useArrivalWaiting(pathname);
+  const arrivalRootShown = useRef(false);
+  const arrivalHeld = arrivalWaiting && !arrivalReady && !arrivalRootShown.current;
+  // The shell (and so the root) prints only past the loading, error and
+  // missing trees below; latched at commit, so a render React throws away
+  // never counts as a shown root.
+  const arrivalRootPrinted =
+    hydrated &&
+    resolutionState !== 'loading' &&
+    resolutionState !== 'error' &&
+    resolutionState !== 'missing' &&
+    !!row &&
+    !arrivalHeld;
+  useLayoutEffect(() => {
+    if (arrivalRootPrinted) arrivalRootShown.current = true;
+  }, [arrivalRootPrinted]);
   // US-14 R-DM21 — the Desk act's token landing (spent on mount, above the
   // resume jump), carried out once the paper is ready, when its regions exist.
+  // A press promotes without the lens, so it does not wait for its resolution.
   useEffect(() => {
     const pending = arrivalLandingRef.current;
-    if (!pending || pending.done || !arrivalReady) return;
+    if (!pending || pending.done || !paperSettled) return;
     pending.done = true;
     const { landing } = pending;
     if (landing.kind === 'region') {
@@ -2490,15 +2519,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     } else if ((ROSTER_STAGE_ORDER as readonly string[]).includes(landing.sectionKey)) {
       jumpToSection(landing.sectionKey as SectionKey);
     }
-  }, [arrivalReady, jumpToRegion, jumpToLine, jumpToSection]);
+  }, [paperSettled, jumpToRegion, jumpToLine, jumpToSection]);
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;
   useEffect(() => {
     const props = lensLinePropsRef.current;
-    if (!props) return;
+    // N-11 — nor does the held paper: its band is not on screen yet.
+    if (!props || arrivalHeld) return;
     documentEvents.lensLineShown(props);
-  }, [id, lensLineKind, lensLineActKey, lensStandingCount, lensLineSettled]);
+  }, [id, lensLineKind, lensLineActKey, lensStandingCount, lensLineSettled, arrivalHeld]);
   const onLensActed = useCallback(() => {
     const props = lensLinePropsRef.current;
     if (props) documentEvents.lensLineActed(props);
@@ -2825,10 +2855,23 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     : null;
 
   return (
+    <>
+    {/* The held paper's loading line. Zero height, so the paper beneath lays
+        out exactly as it will once shown. */}
+    {arrivalHeld && (
+      <div className="h-0" aria-busy>
+        <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
+          Picking up…
+        </p>
+      </div>
+    )}
     <div
       ref={lensShellRef}
       data-document-shell
-      data-arrival="document"
+      // Held, the paper is mounted (every read runs beside the ready
+      // waterfall) but unmarked, and arrival.css hides it under `arr-pre`.
+      data-arrival={arrivalHeld ? undefined : 'document'}
+      data-arrival-held={arrivalHeld ? 'document' : undefined}
       data-arrival-ready={arrivalReady ? '' : undefined}
       data-arr-engagement={row.engagement_id}
       data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"
@@ -3523,5 +3566,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         />
       )}
     </div>
+    </>
   );
 }

@@ -1,12 +1,16 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useInsertionEffect, type ReactNode } from 'react';
 import DocumentPage from './page';
-import { beginEntry, noteRunStarted } from '@/components/document/arrival/arrival-mount';
+import {
+  beginEntry,
+  noteRunStarted,
+  setArrivalWaiting,
+} from '@/components/document/arrival/arrival-mount';
 import { ArrivalRun } from '@/components/document/arrival/arrival-run';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import { paperRegionsForSection } from '@/lib/document/document-index';
-import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { __setDensityForTest, __setResolvedForTest } from '@/hooks/use-lens-density';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { engine as arrivalEngine } from '@/lib/arrival/engine';
 import { consumeSuppressed, suppressNextArrival } from '@/lib/arrival/nav';
@@ -136,17 +140,19 @@ jest.mock('@portabletext/react', () => ({
 const mockRouter = { push: jest.fn(), replace: jest.fn() };
 jest.mock('next/navigation', () => ({
   useRouter: () => mockRouter,
+  usePathname: () => '/doc/missing-document',
 }));
 
 let mockInvoices: Record<string, unknown>[] = [];
 /** US-14 — one of the ticket's own reads, held in flight. */
 let mockPlanRoomLoading = false;
+const mockUsePlanRoom = jest.fn(() => ({ data: { sheets: [] }, isLoading: mockPlanRoomLoading }));
 
 jest.mock('@patina/supabase', () => ({
   /* B1 — the job ticket's own reads. The ticket is mounted by every
      project-kind document now, so every suite that renders one pays for
      these; none of them is this suite's subject. */
-  usePlanRoom: () => ({ data: { sheets: [] }, isLoading: mockPlanRoomLoading }),
+  usePlanRoom: () => mockUsePlanRoom(),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   // The ticket reads the PROPOSAL's own three populations on a paper with no
   // project (B2). All three are `enabled` on a proposal id, so a document
@@ -1941,6 +1947,25 @@ describe('DocumentPage guide activation', () => {
       expect(mockLensLineShown).not.toHaveBeenCalled();
     });
 
+    it('fires nothing from the paper an armed arrival wait holds unmarked, and once when it shows', () => {
+      asProjectDocument();
+      mockPlanRoomLoading = true;
+      act(() => setArrivalWaiting(jest.fn(), '/doc/missing-document'));
+      try {
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-arrival-held="document"]')).not.toBeNull();
+        expect(mockLensLineShown).not.toHaveBeenCalled();
+
+        mockPlanRoomLoading = false;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(bandLine2()).not.toBeNull();
+        expect(mockLensLineShown).toHaveBeenCalledTimes(1);
+      } finally {
+        mockPlanRoomLoading = false;
+        act(() => setArrivalWaiting(null));
+      }
+    });
+
     it('fires on the act and on the door, and never from the band itself', () => {
       asProjectDocument();
       const needs = [
@@ -2931,6 +2956,122 @@ describe('DocumentPage guide activation', () => {
 
     afterEach(() => {
       mockPlanRoomLoading = false;
+      act(() => setArrivalWaiting(null));
+    });
+
+    // Post-ship patch 1 — while this path's wait is armed, the paper stands
+    // mounted but unmarked until ready: the root first appears already ready.
+    describe('while its arrival wait is armed', () => {
+      const armWait = (path = '/doc/missing-document') =>
+        act(() => setArrivalWaiting(jest.fn(), path));
+      const held = () =>
+        document.querySelector<HTMLElement>('[data-document-shell][data-arrival-held="document"]');
+
+      it('not ready: the whole paper mounted but unmarked, "Picking up…" beside it; ready marks the same node', () => {
+        asProjectDocument();
+        mockPlanRoomLoading = true;
+        armWait();
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-arrival]')).toBeNull();
+        const paper = held();
+        expect(paper).not.toBeNull();
+        expect(paper).not.toHaveAttribute('data-arrival-ready');
+        // Every read of the paper runs beside the ready waterfall, not after it.
+        expect(paper!.querySelector('[data-document-paper] [data-active-section]')).not.toBeNull();
+        expect(mockUsePlanRoom).toHaveBeenCalled();
+        expect(screen.getByText('Picking up…')).toBeInTheDocument();
+        expect(paper!.contains(screen.getByText('Picking up…'))).toBe(false);
+
+        mockPlanRoomLoading = false;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).toBe(paper);
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+        expect(shell()).not.toHaveAttribute('data-arrival-held');
+        expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+      });
+
+      it('ready: the root appears carrying data-arrival-ready', () => {
+        asProjectDocument();
+        armWait();
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+        expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+      });
+
+      it('the wait ending before ready shows the root as it stands', () => {
+        mockDeskLoading = true;
+        armWait();
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-arrival]')).toBeNull();
+        const paper = held();
+        expect(paper).not.toBeNull();
+
+        act(() => setArrivalWaiting(null));
+        expect(shell()).toBe(paper);
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+        expect(shell()).not.toHaveAttribute('data-arrival-held');
+        expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+      });
+
+      it('a root already shown is never taken back when ready drops', () => {
+        armWait();
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+
+        mockDeskLoading = true;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).not.toBeNull();
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+      });
+
+      // Round 4 — the shown-root latch is written at commit, and only by a
+      // commit that printed the shell: the page's loading tree commits before
+      // the route's wait arms, and must not count as a root shown.
+      it('a loading tree committed before the wait arms is no shown root: the paper is still held once read', () => {
+        asProjectDocument();
+        const read = mockDocumentQuery;
+        mockDocumentQuery = { isLoading: true, isFetching: true, isError: false, data: undefined };
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-document-shell]')).toBeNull();
+
+        armWait();
+        mockDocumentQuery = read;
+        mockPlanRoomLoading = true;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-arrival]')).toBeNull();
+        expect(held()).not.toBeNull();
+      });
+
+      it('another path’s wait holds nothing here', () => {
+        mockDeskLoading = true;
+        armWait('/desk');
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).not.toBeNull();
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+      });
+
+      // Post-ship patch 1, round 3 — the lens's first pass (D-B46) promotes the
+      // in-frame regions, a root mutation that would cut a played card.
+      it('holds until the lens has resolved the paper, then marks the same node ready', () => {
+        asProjectDocument();
+        __setResolvedForTest(false);
+        try {
+          armWait();
+          render(<DocumentPage params={fulfilledParams} />);
+          expect(document.querySelector('[data-arrival]')).toBeNull();
+          const paper = held();
+          expect(paper).not.toBeNull();
+          expect(paper).not.toHaveAttribute('data-arrival-ready');
+          expect(screen.getByText('Picking up…')).toBeInTheDocument();
+
+          act(() => __setResolvedForTest(true));
+          expect(shell()).toBe(paper);
+          expect(shell()).toHaveAttribute('data-arrival-ready', '');
+          expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+        } finally {
+          __setResolvedForTest(undefined);
+        }
+      });
     });
 
     it('is not ready while the Desk composition is in flight, and is once it settles', () => {
@@ -3020,6 +3161,34 @@ describe('DocumentPage guide activation', () => {
         rerender(<DocumentPage params={fulfilledParams} />);
         expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
       } finally {
+        window.sessionStorage.removeItem('pl-arrive');
+        window.history.replaceState({}, '', '/');
+      }
+    });
+
+    it('lands the act token once the paper settles, without waiting for the lens to resolve', () => {
+      window.history.replaceState({}, '', '/doc/missing-document');
+      window.sessionStorage.setItem(
+        'pl-arrive',
+        JSON.stringify({
+          via: 'act',
+          to: '/doc/missing-document',
+          at: Date.now(),
+          landing: { kind: 'region', region: 'money' },
+        }),
+      );
+      pressOrder.length = 0;
+      __setResolvedForTest(false);
+      try {
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+        expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
+
+        act(() => __setResolvedForTest(true));
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+        expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
+      } finally {
+        __setResolvedForTest(undefined);
         window.sessionStorage.removeItem('pl-arrive');
         window.history.replaceState({}, '', '/');
       }
@@ -3292,6 +3461,40 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
       end({ surface: 'document', how: 'declined', cause: 'late' });
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    });
+
+    // Post-ship patch 1 — a wait that ends before ready ends over the held
+    // paper, which is already mounted and laid out where it will show.
+    it('a declined end over the held paper jumps at once', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      mockDocumentQuery = { ...mockDocumentQuery, data: { kind: 'engagement', row: rowFor('lead-1', 'discovery') } };
+      mockDiscoveryQuery = { data: undefined, isLoading: true, isError: false };
+      html.classList.add('arr-pre');
+      act(() => setArrivalWaiting(jest.fn(), '/doc/missing-document'));
+
+      try {
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(
+          document.querySelector('[data-arrival-held="document"] [data-active-section]'),
+        ).not.toBeNull();
+        expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+
+        html.classList.remove('arr-pre');
+        act(() => {
+          setArrivalWaiting(null);
+          window.dispatchEvent(
+            new CustomEvent(EVENT_ENDED, {
+              detail: { surface: 'document', how: 'declined', cause: 'late' },
+            }),
+          );
+          // The end reaches the jump before React re-renders the paper shown.
+          expect(document.querySelector('[data-arrival-held="document"]')).not.toBeNull();
+          expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+        });
+        expect(document.querySelector('[data-arrival-held]')).toBeNull();
+      } finally {
+        act(() => setArrivalWaiting(null));
+      }
     });
 
     it('never jumps after a played arrival', () => {

@@ -45,8 +45,8 @@
  * bodies are still loading measures a fiction: on a cold load the first five
  * roots mount into a ~2,600px skeleton, so stops that settle 7,000–9,000px down
  * are inside `innerHeight + 240` at that instant, and one direction means the
- * lens can never take those promotions back. Resolved means no query is
- * fetching AND `scrollHeight` has held for three frames — or, if that never
+ * lens can never take those promotions back. Resolved means no query the paper
+ * reads is fetching AND `scrollHeight` has held for three frames — or, if that never
  * comes, 3,000ms after mount against whatever is laid out, so the lens cannot
  * hang quiet. Until then discovery observes and orders roots but promotes
  * nothing, and crossings buffer; a press still promotes at once, because a
@@ -68,6 +68,7 @@ import {
 import type { RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { QueryClient, QueryClientContext } from '@tanstack/react-query';
+import type { Query } from '@tanstack/react-query';
 import {
   LENS_LOOKAHEAD_PX,
   LENS_RESOLVE_MAX_MS,
@@ -96,6 +97,30 @@ export const LOADING_SELECTOR = '[aria-busy="true"], .animate-pulse';
 
 /** Never mounted, never fetching: the count it reports is 0 forever. */
 const STANDBY_CLIENT = new QueryClient();
+
+/**
+ * Query-key prefixes that only the (document) layout's own chrome reads, never
+ * the paper, so no answer to one can move the paper's height. The resolution
+ * gate leaves them out of its count (US-14 post-ship patch 1, round 4): the
+ * help reads are serial Sanity fallback chains that outlast the paper's own
+ * reads by seconds, and the badges and the in-hand readout poll. Matched as
+ * prefixes, so the margin rail's `['inbox', 'notifications', …]` still counts.
+ */
+const OFF_PAPER_QUERY_KEYS: ReadonlyArray<readonly string[]> = [
+  // DeskWalkthrough (WelcomeModal, TourController) and the ContextualHelpPanel.
+  ['help-content'],
+  // The StudioDrawer's and the MobileBar's badges (the inbox's polls every 30s).
+  ['inbox', 'unread-count'],
+  ['procurement-unread-count'],
+  // DocumentTimeProvider's in-hand readout for the drawer (polls every 60s).
+  ['document-time-today'],
+];
+
+function readsPaper(query: Query): boolean {
+  return !OFF_PAPER_QUERY_KEYS.some((prefix) =>
+    prefix.every((part, index) => query.queryKey[index] === part),
+  );
+}
 
 
 declare global {
@@ -297,8 +322,9 @@ export function useLensDensity(
   // That hook re-renders the whole document page on EVERY query in the app
   // starting or finishing — a mood-board thumbnail, a header count — to feed a
   // number only a `requestAnimationFrame` ever reads. The cache subscription
-  // costs no render at all, and it needs no list of the paper's query keys to
-  // stay honest.
+  // costs no render at all. It does carry a list: OFF_PAPER_QUERY_KEYS (above),
+  // a denylist of the chrome's key families, which must be kept in step with
+  // those hooks' keys by hand.
   //
   // The client comes from context rather than a hook lookup, which THROWS
   // where there is no provider: the lens attaches unconditionally, including
@@ -306,11 +332,14 @@ export function useLensDensity(
   // client, and a gate that crashed the page it was protecting would cost more
   // than the defect. With no provider the standby client reads 0 forever and
   // the paper's own height and registers carry the gate alone.
+  //
+  // The count leaves out OFF_PAPER_QUERY_KEYS: the layout's chrome reads, whose
+  // answers never land in the paper. The 3,000ms deadline still bounds the gate.
   const client = useContext(QueryClientContext) ?? STANDBY_CLIENT;
   const fetchingRef = useRef(0);
   useLayoutEffect(() => {
     const read = () => {
-      fetchingRef.current = client.isFetching();
+      fetchingRef.current = client.isFetching({ predicate: readsPaper });
     };
     read();
     return client.getQueryCache().subscribe(read);

@@ -8,7 +8,7 @@
  * nav state on the bare routes ArrivalRoute never renders on, and lands the Desk on the row a
  * Document was put down from when the Desk's own arrival declined.
  */
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import { usePathname } from 'next/navigation';
 import { isBareDocumentRoute } from '@/components/document/document-route-boundary';
 import { isEditableTarget } from '@/hooks/use-lens-state';
@@ -70,11 +70,39 @@ export function getActiveRun(): Run | null {
   return activeRun;
 }
 
+/** The pathname whose wait is armed, for its page (useArrivalWaiting); null when none is. */
+let waitingPath: string | null = null;
+const waitingListeners = new Set<() => void>();
+
 /** ArrivalRun hands its wait-cancel here from `arr-pre` until the run starts or the wait declines
  *  (then null). Meanwhile any key, press, wheel or swipe ends the wait for good: the resting page,
  *  no later start (arrival.js `halt()`). Escape is swallowed and ends it as `escape`. */
-export function setArrivalWaiting(cancel: ((halt: WaitHalt) => void) | null): void {
+export function setArrivalWaiting(
+  cancel: ((halt: WaitHalt) => void) | null,
+  pathname: string | null = null,
+): void {
   cancelWait = cancel;
+  const next = cancel ? pathname : null;
+  if (next === waitingPath) return;
+  waitingPath = next;
+  for (const notify of [...waitingListeners]) notify();
+}
+
+function subscribeWaiting(notify: () => void): () => void {
+  waitingListeners.add(notify);
+  return () => {
+    waitingListeners.delete(notify);
+  };
+}
+
+/** True while this path's arrival wait is armed: its page keeps its own loading state until its
+ *  ready mark, so the route root first appears ready. The server never waits. */
+export function useArrivalWaiting(pathname: string): boolean {
+  return useSyncExternalStore(
+    subscribeWaiting,
+    () => waitingPath === pathname,
+    () => false,
+  );
 }
 
 /** ArrivalRun, at each new entry: nothing has played and nothing has ended its wait yet. */
@@ -204,8 +232,9 @@ function onKeyDown(e: KeyboardEvent): void {
 
 /** A press during the wait ends it. On the hidden route root, the click it makes is swallowed:
  *  `arr-pre` is gone by then, and that click would act on what she could not see (arrival.js:778).
- *  Chrome stays visible under `arr-pre`, so a press on it stays live. A press the run swallowed
- *  (Acts 1–2, or a double in Act 3) never clicks either. */
+ *  So is a press on a page held unmarked (`data-arrival-held`): ending the wait shows the root in
+ *  its place before the click is hit-tested. Chrome stays visible under `arr-pre`, so a press on it
+ *  stays live. A press the run swallowed (Acts 1–2, or a double in Act 3) never clicks either. */
 function onPointerDown(e: PointerEvent): void {
   mark();
   clearSwallow();
@@ -220,7 +249,7 @@ function onPointerDown(e: PointerEvent): void {
   }
   if (!cancelWait) return;
   const target = e.target;
-  if (target instanceof Element && target.closest('[data-arrival]')) swallowClick = true;
+  if (target instanceof Element && target.closest('[data-arrival],[data-arrival-held]')) swallowClick = true;
   // Before the halt: it reports, and the landings read this on that same EVENT_ENDED.
   if (e.pointerType === 'touch' || e.pointerType === 'pen') waitGesture = e.pointerId;
   haltWait('pointer');

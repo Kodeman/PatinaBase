@@ -25,6 +25,7 @@ jest.mock('@portabletext/react', () => ({
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+  usePathname: () => '/doc/project-1',
 }));
 
 jest.mock('@patina/supabase', () => ({

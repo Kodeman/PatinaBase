@@ -11,7 +11,7 @@
  * Everything the Desk renders besides the whisper is stubbed — this file is
  * about one derivation's inputs, not the Desk's composition.
  */
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 const mockOrgs = jest.fn();
 const mockMembers = jest.fn();
@@ -27,14 +27,23 @@ let mockPendingRead:
   | 'rollup'
   | 'boards'
   | 'studio'
+  | 'members'
   | 'unbilled'
   | 'line'
   | null = null;
+let mockMemberLineFlags = true;
 
 jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
   useOrganizations: () => ({ data: mockOrgs() }),
-  useOrganizationMembers: () => ({ data: mockMembers() }),
+  // TanStack v5's shapes: a disabled query (no studio id) with no data is
+  // `isPending` but not `isLoading`.
+  useOrganizationMembers: (organizationId: string) =>
+    !organizationId
+      ? { data: undefined, isLoading: false, isPending: true }
+      : mockPendingRead === 'members'
+        ? { data: undefined, isLoading: true, isPending: true }
+        : { data: mockMembers(), isLoading: false, isPending: false },
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
   useRecentBoards: (...args: unknown[]) =>
@@ -102,7 +111,16 @@ jest.mock('@/hooks/use-viewer-studio', () => ({
 jest.mock('@/hooks/use-feature-flag', () => ({
   // studio-workspaces — the whisper's own gate, always on here. `call-sheet`
   // is retired (rulings §6) and no longer read anywhere on this page.
-  useFeatureFlag: () => ({ value: true, isLoading: false }),
+  // The two flags whose lines read the studio members are variable: with
+  // either on (the setup whisper's `studio-workspaces`, the hire-handoff's
+  // `onboarding-teammate-persona`), the Desk's line pick waits on that read.
+  useFeatureFlag: (key: string) => ({
+    value:
+      key === 'studio-workspaces' || key === 'onboarding-teammate-persona'
+        ? mockMemberLineFlags
+        : true,
+    isLoading: false,
+  }),
 }));
 
 // ── Everything else the Desk mounts. ──────────────────────────────────────
@@ -159,6 +177,7 @@ jest.mock('@/components/document/mobile/mobile-shell', () => ({
 
 import DeskPage from './page';
 import { resetDeskVisit } from '@/components/document/desk-arbiter';
+import { setArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import { useMobilePrimaryAction } from '@/components/document/mobile/mobile-shell';
 
 const WHISPER = 'The studio isn’t fully set up.';
@@ -180,6 +199,7 @@ beforeEach(() => {
   resetDeskVisit();
   mockDeskRead = settledDeskRead();
   mockPendingRead = null;
+  mockMemberLineFlags = true;
   mockOrgs.mockReturnValue([studio()]);
   // Own title set; nobody else on the crew (one open step).
   mockMembers.mockReturnValue([{ user_id: 'me', job_title: 'Principal' }]);
@@ -333,6 +353,7 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     ['the boards rollup', 'rollup'],
     ['the recent boards', 'boards'],
     ['the viewer studio', 'studio'],
+    ['the studio members', 'members'],
     ['the unbilled time', 'unbilled'],
     ['the day’s line pick', 'line'],
   ] as const)('holds ready while %s read is pending', (_read, pending) => {
@@ -340,6 +361,29 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     const { container } = render(<DeskPage />);
     expect(main(container).getAttribute('data-arrival')).toBe('desk');
     expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+  });
+
+  // Round 5 — the members print the roster's "By person" facet inside the
+  // root; an answer landing after the card shows cut a played run `mutation`.
+  // The flags of the two lines that read the members are off here, as on the
+  // lane: with either on, the line pick waits on the same read.
+  it('holds ready while the studio members are in flight, and marks it once they settle', () => {
+    mockMemberLineFlags = false;
+    mockPendingRead = 'members';
+    const { container, rerender } = render(<DeskPage />);
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+
+    mockPendingRead = null;
+    rerender(<DeskPage />);
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
+  });
+
+  it('with no studio the disabled members read does not hold ready', () => {
+    mockMemberLineFlags = false;
+    mockOrgs.mockReturnValue([]);
+    const { container } = render(<DeskPage />);
+    expect(main(container).getAttribute('data-arrival')).toBe('desk');
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
   });
 
   it('marks the date line as head — the landing focus, never the greeting', () => {
@@ -354,5 +398,100 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     expect(head.tabIndex).toBe(-1);
     head.focus();
     expect(head).toHaveFocus();
+  });
+
+  // Post-ship patch 1 — while the Desk's wait is armed the skeleton stands
+  // until ready: the route root first appears already ready.
+  describe('while its arrival wait is armed', () => {
+    const skeleton = (container: HTMLElement) =>
+      container.querySelector('[data-tour-anchor="desk-needs-your-hand"][aria-hidden]');
+    const held = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-arrival-held]');
+    const armWait = (path = '/desk') => act(() => setArrivalWaiting(jest.fn(), path));
+    afterEach(() => act(() => setArrivalWaiting(null)));
+
+    it('not ready: no route root, the skeleton marked held, and no roster until ready', () => {
+      mockPendingRead = 'answered';
+      armWait();
+      const { container, rerender } = render(<DeskPage />);
+      expect(main(container).hasAttribute('data-arrival')).toBe(false);
+      expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+      // Her press on the skeleton would print the roster under her finger: its
+      // click is swallowed. Only the block the roster replaces is marked, so the
+      // header's acts stay live chrome (round 4).
+      expect(main(container).hasAttribute('data-arrival-held')).toBe(false);
+      expect(held(container)?.getAttribute('data-arrival-held')).toBe('desk');
+      expect(held(container)).toContainElement(skeleton(container) as HTMLElement);
+      expect(held(container)).not.toContainElement(
+        screen.getByRole('button', { name: /Capture a lead/ }),
+      );
+      expect(skeleton(container)).not.toBeNull();
+      expect(screen.queryByTestId('desk-roster')).toBeNull();
+
+      mockPendingRead = null;
+      rerender(<DeskPage />);
+      expect(main(container).getAttribute('data-arrival')).toBe('desk');
+      expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
+      expect(held(container)).toBeNull();
+      expect(skeleton(container)).toBeNull();
+      expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+    });
+
+    it('with no read in hand yet the skeleton is not marked held: a press there cannot print the roster', () => {
+      mockDeskRead = { ...settledDeskRead(), data: undefined, isLoading: true, isSuccess: false };
+      armWait();
+      const { container } = render(<DeskPage />);
+      expect(skeleton(container)).not.toBeNull();
+      expect(main(container).hasAttribute('data-arrival')).toBe(false);
+      expect(held(container)).toBeNull();
+    });
+
+    it('ready: the root appears carrying data-arrival-ready', () => {
+      armWait();
+      const { container } = render(<DeskPage />);
+      expect(main(container).getAttribute('data-arrival')).toBe('desk');
+      expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
+      expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+    });
+
+    it('the wait ending before ready shows the root as it stands', () => {
+      mockPendingRead = 'rollup';
+      armWait();
+      const { container } = render(<DeskPage />);
+      expect(main(container).hasAttribute('data-arrival')).toBe(false);
+
+      act(() => setArrivalWaiting(null));
+      expect(main(container).getAttribute('data-arrival')).toBe('desk');
+      expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+      expect(held(container)).toBeNull();
+      expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+    });
+
+    it('a root already shown is never taken back (a warm entry, or ready dropping)', () => {
+      mockPendingRead = 'unbilled';
+      const { container, rerender } = render(<DeskPage />);
+      expect(main(container).getAttribute('data-arrival')).toBe('desk');
+
+      armWait();
+      rerender(<DeskPage />);
+      expect(main(container).getAttribute('data-arrival')).toBe('desk');
+      expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+      expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+    });
+
+    it('the error state is never held, and another path’s wait holds nothing here', () => {
+      mockDeskRead = { ...settledDeskRead(), isError: true, isSuccess: false };
+      armWait();
+      const errored = render(<DeskPage />);
+      expect(screen.getByTestId('desk-error-state')).toBeInTheDocument();
+      expect(held(errored.container)).toBeNull();
+      errored.unmount();
+
+      mockDeskRead = settledDeskRead();
+      mockPendingRead = 'boards';
+      armWait('/doc/e1');
+      const { container } = render(<DeskPage />);
+      expect(main(container).getAttribute('data-arrival')).toBe('desk');
+      expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+    });
   });
 });

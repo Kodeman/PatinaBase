@@ -153,3 +153,65 @@ inert on the prior code).
   normalizes `arrival_anchors` rows through `document_state` (never inside the SECURITY DEFINER RPC).
 - Open R-DM rulings (R-DM1–7, R-DM8–38) stay assumed as built per the resume record; not reopened by
   this ship.
+  this ship.
+
+## Post-ship patch 1 — 2026-09-30
+
+**Symptom.** Production arrivals could show their own hidden cap: the root (Document or Desk) surfaced
+before its ready waterfall settled, then the 1.2 s hidden cap could decline the entry `hidden` while
+readiness was still catching up underneath — the before-matrix is CONTRACT §4h's soft/hard latency
+cells at +0/+150/+350.
+
+**Cause.** Hidden cap vs. ready waterfall (CONTRACT §4h): the root showed as soon as it could render,
+and the hidden cap ran from that same commit, independent of how far the surface's own ready
+conditions (the paper's reads, the lens gate, the Desk's second-wave reads) still had to go.
+
+**What changed.**
+- The wait now holds "Picking up…" over the hidden paper (Document) or the skeleton (Desk), chrome
+  visible, until the entry cap (4 s soft / 8 s hard), instead of showing the root immediately and
+  declining `hidden` 1.2 s later.
+- The Document's ready mark now waits for the lens resolve pass, bounded `LENS_RESOLVE_MAX_MS` (3 s)
+  from the paper's first layout — a §3 amendment, narrowed from "never global `useIsFetching`" to "the
+  paper's own queries, by denylist."
+- The lens gate's count excludes a denylist of four chrome query families
+  (`OFF_PAPER_QUERY_KEYS` in `use-lens-density.ts`): `inboxKeys.unreadCount()`,
+  `['procurement-unread-count']`, `['help-content', …]`, `['document-time-today']` — so those chrome
+  reads no longer hold the lens open.
+- A press, key, wheel or swipe still ends the hold at once, same as before the patch.
+
+**Rulings (Kody, 2026-09-30, interview).**
+1. Late-hold bound — entry caps as built (4 s soft / 8 s hard of "Picking up…"/skeleton, chrome
+   visible); watch PostHog `arrival_ended` `how='declined'` `cause='late'` per surface, >10% → revisit.
+2. The four +350 ms latency cells — rig limit (HTTP/1.1 six connections + serial `auth.getUser` lock);
+   stay `test.fail`; the first-24 h PostHog `arrival_ended` watch (late/hidden/mutation per surface) is
+   the acceptance gate.
+3. Lens gate — accept the scoped denylist (four chrome query families, bounded 3 s) as a §3 amendment
+   ("never global `useIsFetching`" → "the paper's own queries, by denylist"); recorded in
+   `docs/vision/VISION-DECISIONS.md` V12.
+4. Follow-ups to ticket, not in this ship: warm Desk/Document hold gap; Desk reads outside ready
+   (`useRunningTimer`, `useProfile`); m9 paint + denylist dedupe next to the key owners.
+
+**Evidence at `99df90280`** (branch `arrival/hidden-cap-fix`, worktree `agent-arr-hidden`, six commits
+over main `989a8762d`): review clean; arrival lane green (3 projects); legacy 36 byte-identical to
+baseline; designer-portal jest 8854/8854 passed.
+
+**Rollback.**
+- Patch only: `npx --prefix /Users/kody/Code/patina-merged/apps/designer-portal wrangler rollback
+  9c599663-30ce-4ccf-8116-0ab15478a3f1 --name patina-designer-portal --yes` (returns to arrival v3 as
+  shipped, without patch 1).
+- Full revert: worktree `agent-arr-rollback`, or Worker version `96580aea-2388-4fdc-b372-b23cbb606947`
+  (pre-arrival).
+
+**24 h PostHog watch thresholds** (per `surface`, `desk` / `document`):
+- `arrival_ended` `how='declined'` `cause='late'`, share of all `arrival_ended` for that surface:
+  **>10% → revisit** the late-hold bound (ruling 1) / accept the +350 rig-limit ruling as closed
+  (ruling 2). §4g's existing `hidden`+`late` thresholds (25% investigate, 50% roll back) still stand
+  independently.
+- `arrival_ended` `how='mutation'`, share of **played** runs for that surface: **>10% → find the read**
+  still printing into the root after ready (Document: the soft +150 lens ruling is no longer
+  theoretical; Desk: a second-wave read beyond the round-5 studio-members fix).
+
+**Deploy record (filled by the deploy step).**
+- `DEPLOYED_VERSION: TBD`
+- `DEPLOYED_AT: TBD`
+- `MERGE_SHA: TBD`

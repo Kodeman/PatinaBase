@@ -15,6 +15,13 @@ html.arr-pre [data-arrival] .desk-settle{animation-play-state:paused}
 html.arr-pre:has([data-arrival]){animation:arr-reveal 1ms linear 1500ms both}
 html.arr-pre [data-arrival]{opacity:var(--arr-veil,0);animation-play-state:var(--arr-play,paused)}
 html.arr-pre [data-arrival] .desk-settle{animation-play-state:var(--arr-play,paused)}
+/* post-ship patch 1: the Document's paper held unmarked until ready hides the same way (the Desk holds a visible
+   skeleton instead). Round 4: its own failsafe, 8.5s from the held paper's first paint, past the 8s hard entry cap.
+   A second keyframes name, so the root mark replacing the held one restarts the 1.5s clock rather than shortening
+   this one; and the play state follows the veil, or the paper's own entry move stays paused at its first frame. */
+@keyframes arr-reveal-held{from{--arr-veil:0;--arr-play:paused}to{--arr-veil:1;--arr-play:running}}
+html.arr-pre:has([data-arrival-held="document"]){animation:arr-reveal-held 1ms linear 8500ms both}
+html.arr-pre [data-arrival-held="document"]{opacity:var(--arr-veil,0);animation-play-state:var(--arr-play,paused)}
 
 html.arr-pre,html.arr-pre body,html.arr-on,html.arr-on body{overflow-anchor:none} /* a reflow never scrolls the page under the card */
 html.arr-on body,html.arr-on [data-arrival]{overflow-x:clip} /* clip, not hidden: no scroll container, so the phone viewport never widens */
