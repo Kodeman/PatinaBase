@@ -15,6 +15,9 @@ import { test, expect } from '../fixtures/auth';
 import { seedWorkflowGateFixture } from '../helpers/workflow-gate-fixture';
 import { ARRIVAL_PROJECT_ID, armE2EOptIn, installArrivalInstruments, settleDeskWalkthrough, topmostAtCentre, waitForHold, CARD_SELECTOR } from './helpers';
 
+/** The engine's one announcement node (engine.ts `start()`). */
+const ENGINE_STATUS = '.arr-vh[role="status"]';
+
 test.describe('Arrival accessibility', () => {
   test.beforeAll(() => {
     seedWorkflowGateFixture();
@@ -31,13 +34,32 @@ test.describe('Arrival accessibility', () => {
     const region = page.locator('[data-lens-announce]').locator('xpath=ancestor::*[@aria-live][1]');
     await expect(region).toHaveAttribute('aria-live', 'polite');
     // The run's own `role="status"` node mounts at compose start (engine.ts
-    // `start()`, well before the card's own transition settles), not at
-    // hold() — so the baseline must be read HERE, before the card is even
-    // visible, or it already includes the run's own (still textless) node.
-    // A delta against whatever pre-existing `role="status"` widgets the
-    // Document already renders (business content, unrelated to arrival),
-    // rather than assuming arrival's is the page's only one.
-    const statusBefore = await page.locator('[role="status"]').count();
+    // `start()`, on <body>), not at hold(), so the baseline is read HERE,
+    // before the card is visible. It is a set of nodes, not a count, and
+    // only nodes outside the route root: at this point the paper is held
+    // (`data-arrival-held`), and its SectionLoadingLine `role="status"`
+    // nodes unmount before ready, so a whole-page count raced them
+    // (CONTRACT §4h round 6). The paper's own status nodes are business
+    // content; the run's announcement is whatever the run adds outside it.
+    const baseline = await page.evaluate((sel) => {
+      const w = window as unknown as { __srBaseline?: Set<Element> };
+      w.__srBaseline = new Set(
+        Array.from(document.querySelectorAll('[role="status"]')).filter(
+          (el) => !el.closest('[data-arrival],[data-arrival-held]'),
+        ),
+      );
+      return { engine: document.querySelectorAll(sel).length };
+    }, ENGINE_STATUS);
+    expect(baseline.engine, 'the baseline was read after the run mounted its node').toBe(0);
+    // Every `role="status"` node outside the route root that was not there
+    // at baseline, with whether it is the engine's own.
+    const added = () =>
+      page.evaluate((sel) => {
+        const w = window as unknown as { __srBaseline?: Set<Element> };
+        return Array.from(document.querySelectorAll('[role="status"]'))
+          .filter((el) => !el.closest('[data-arrival],[data-arrival-held]') && !w.__srBaseline!.has(el))
+          .map((el) => ({ engine: el.matches(sel), text: (el.textContent ?? '').trim() }));
+      }, ENGINE_STATUS);
 
     await expect(page.locator(CARD_SELECTOR).first()).toBeVisible({ timeout: 20_000 });
 
@@ -45,26 +67,26 @@ test.describe('Arrival accessibility', () => {
     await expect(region).toHaveAttribute('aria-live', 'off');
 
     // hold() (Act 2) sets the status text once the card has composed in —
-    // give it a moment past compose, then read the delta status node's text.
+    // give it a moment past compose, then read what the run added.
     await page.waitForTimeout(1_800);
-    const statusCount = await page.locator('[role="status"]').count();
-    expect(statusCount).toBe(statusBefore + 1);
-    const allStatusTexts = await page.locator('[role="status"]').allTextContents();
-    const nonEmptyStatuses = allStatusTexts.filter((t) => t.trim().length > 0);
-    expect(nonEmptyStatuses.length).toBeGreaterThanOrEqual(1);
+    const during = await added();
+    expect(during, JSON.stringify(during)).toHaveLength(1);
+    expect(during[0].engine, JSON.stringify(during)).toBe(true);
+    expect(during[0].text.length).toBeGreaterThan(0);
 
     // Text is set exactly once for the run (re-reading after another beat
     // must be stable, not re-announced).
-    const textsAgain = await page.locator('[role="status"]').allTextContents();
-    expect(textsAgain).toEqual(allStatusTexts);
+    expect(await added()).toEqual(during);
 
     await page.locator('.arr-skip').click();
     await expect(page.locator(CARD_SELECTOR)).toHaveCount(0);
 
-    // Restored: back to the page's own baseline, and the run's own status
-    // node is gone (the engine removes every node it mounted on end()).
+    // Restored: the run's own status node is gone (the engine removes every
+    // node it mounted on end()), and nothing the run added outside the
+    // route root is left.
     await expect(region).toHaveAttribute('aria-live', 'polite');
-    await expect(page.locator('[role="status"]')).toHaveCount(statusBefore);
+    await expect(page.locator(ENGINE_STATUS)).toHaveCount(0);
+    await expect.poll(added).toEqual([]);
   });
 
   test('the flying headline clone genuinely hit-tests where it visually sits', async ({
