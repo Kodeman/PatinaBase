@@ -365,12 +365,14 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     const armWait = (path = '/desk') => act(() => setArrivalWaiting(jest.fn(), path));
     afterEach(() => act(() => setArrivalWaiting(null)));
 
-    it('not ready: no route root, the skeleton, and no roster until ready', () => {
+    it('not ready: no route root, the skeleton marked held, and no roster until ready', () => {
       mockPendingRead = 'answered';
       armWait();
       const { container, rerender } = render(<DeskPage />);
       expect(main(container).hasAttribute('data-arrival')).toBe(false);
       expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+      // Her press here would print the roster under her finger: its click is swallowed.
+      expect(main(container).getAttribute('data-arrival-held')).toBe('desk');
       expect(skeleton(container)).not.toBeNull();
       expect(screen.queryByTestId('desk-roster')).toBeNull();
 
@@ -378,8 +380,18 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
       rerender(<DeskPage />);
       expect(main(container).getAttribute('data-arrival')).toBe('desk');
       expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
+      expect(main(container).hasAttribute('data-arrival-held')).toBe(false);
       expect(skeleton(container)).toBeNull();
       expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
+    });
+
+    it('with no read in hand yet the skeleton is not marked held: a press there cannot print the roster', () => {
+      mockDeskRead = { ...settledDeskRead(), data: undefined, isLoading: true, isSuccess: false };
+      armWait();
+      const { container } = render(<DeskPage />);
+      expect(skeleton(container)).not.toBeNull();
+      expect(main(container).hasAttribute('data-arrival')).toBe(false);
+      expect(main(container).hasAttribute('data-arrival-held')).toBe(false);
     });
 
     it('ready: the root appears carrying data-arrival-ready', () => {
@@ -399,6 +411,7 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
       act(() => setArrivalWaiting(null));
       expect(main(container).getAttribute('data-arrival')).toBe('desk');
       expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+      expect(main(container).hasAttribute('data-arrival-held')).toBe(false);
       expect(screen.getByTestId('desk-roster')).toBeInTheDocument();
     });
 
@@ -419,6 +432,7 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
       armWait();
       const errored = render(<DeskPage />);
       expect(screen.getByTestId('desk-error-state')).toBeInTheDocument();
+      expect(main(errored.container).hasAttribute('data-arrival-held')).toBe(false);
       errored.unmount();
 
       mockDeskRead = settledDeskRead();

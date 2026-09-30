@@ -7,6 +7,9 @@
 /* ---------- the wait: the route root hides from its first paint, its entry move paused at frame 0 ---------- */
 html.arr-pre [data-arrival]{opacity:0;animation-play-state:paused}
 html.arr-pre [data-arrival] .desk-settle{animation-play-state:paused}
+/* post-ship patch 1: the Document's paper held unmarked until ready hides the same way (the Desk holds a visible
+   skeleton instead) */
+html.arr-pre [data-arrival-held="document"]{opacity:0;animation-play-state:paused}
 /* failsafe: 1.5s after the route root appears under arr-pre, a thrown gate still shows the page and its entry move
    plays. The clock starts at [data-arrival] (:has), not at arr-pre: a cold Desk renders its root seconds later. */
 @property --arr-veil{syntax:'<number>';inherits:true;initial-value:1}

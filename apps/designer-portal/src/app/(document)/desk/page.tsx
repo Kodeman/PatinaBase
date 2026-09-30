@@ -368,6 +368,9 @@ export default function DeskPage() {
   return (
     <main
       data-arrival={arrivalRoot ? 'desk' : undefined}
+      // Held with its read in hand: a press here ends the wait and the roster
+      // prints under her finger, so the arrival swallows that press's click.
+      data-arrival-held={deskRead && arrivalHeld ? 'desk' : undefined}
       data-arrival-ready={arrivalReady ? '' : undefined}
       className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14"
     >

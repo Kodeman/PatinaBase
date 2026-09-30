@@ -1507,16 +1507,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     return afterArrival((unplayed) => {
       landing.done = true;
       if (!unplayed) return;
-      const jump = () => {
-        const el = mainRef.current?.querySelector('[data-active-section]');
-        if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
-          el.scrollIntoView({ block: 'start' });
-        }
-      };
-      // A wait that ends before ready ends under the held loading tree: the
-      // paper mounts on the next render.
-      if (mainRef.current) jump();
-      else window.requestAnimationFrame(jump);
+      const el = mainRef.current?.querySelector('[data-active-section]');
+      if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
+        el.scrollIntoView({ block: 'start' });
+      }
     });
   }, [landingEngagementId]);
 
@@ -2480,9 +2474,9 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     deskEnrichmentSettled &&
     ticketRowsSettled &&
     !guideInputsInFlight;
-  // US-14 post-ship patch 1 — while this path's arrival wait is armed the page
-  // keeps its loading state until ready, so the route root first appears ready.
-  // A root this mount has shown is never taken back.
+  // US-14 post-ship patch 1 — while this path's arrival wait is armed the paper
+  // stands mounted but unmarked (and hidden) until ready, so the route root
+  // first appears ready. A root this mount has shown is never taken back.
   const arrivalWaiting = useArrivalWaiting(`/doc/${id}`);
   const arrivalRootShown = useRef(false);
   const arrivalHeld = arrivalWaiting && !arrivalReady && !arrivalRootShown.current;
@@ -2508,7 +2502,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const lensStandingCount = bandModel?.line2.standingCount ?? null;
   useEffect(() => {
     const props = lensLinePropsRef.current;
-    // N-11 — the held loading tree prints no band either.
+    // N-11 — nor does the held paper: its band is not on screen yet.
     if (!props || arrivalHeld) return;
     documentEvents.lensLineShown(props);
   }, [id, lensLineKind, lensLineActKey, lensStandingCount, lensLineSettled, arrivalHeld]);
@@ -2808,20 +2802,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     />
   );
 
-  // The ticket's rows reach `arrivalReady` only through this mount's reports,
-  // so the held loading tree keeps it standing.
-  if (arrivalHeld) {
-    return (
-      <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
-        <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
-          Picking up…
-        </p>
-        {ticketFacts}
-      </div>
-    );
-  }
-  arrivalRootShown.current = true;
-
   // The letterhead instruments, mounted ONCE and handed to the letterhead's
   // ledger column: at ≥1180 they print beside the title block, below it they
   // fall under the vitals (the same `grid-cols-1` collapse `region-head.tsx`
@@ -2851,11 +2831,26 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       }
     : null;
 
+  if (!arrivalHeld) arrivalRootShown.current = true;
+
   return (
+    <>
+    {/* The held paper's loading line. Zero height, so the paper beneath lays
+        out exactly as it will once shown. */}
+    {arrivalHeld && (
+      <div className="h-0" aria-busy>
+        <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
+          Picking up…
+        </p>
+      </div>
+    )}
     <div
       ref={lensShellRef}
       data-document-shell
-      data-arrival="document"
+      // Held, the paper is mounted (every read runs beside the ready
+      // waterfall) but unmarked, and arrival.css hides it under `arr-pre`.
+      data-arrival={arrivalHeld ? undefined : 'document'}
+      data-arrival-held={arrivalHeld ? 'document' : undefined}
       data-arrival-ready={arrivalReady ? '' : undefined}
       data-arr-engagement={row.engagement_id}
       data-shell-regime="single-below-1180-narrow-to-1439-full-from-1440"
@@ -3550,5 +3545,6 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         />
       )}
     </div>
+    </>
   );
 }

@@ -34,7 +34,8 @@
  *    restarts the 200 ms quiet window);
  *  - every `patina:arrival-ended` detail.
  * rootToReadyMs is the span the hidden cap has to cover. The patch (option A,
- * CONTRACT §4h): while a wait is armed the page keeps its loading state until
+ * CONTRACT §4h): while a wait is armed the Document's paper stands mounted
+ * (its reads run beside the ready waterfall) but unmarked and hidden until
  * ready, so the root first appears ready and rootToReadyMs is ~0.
  *
  * Two rig limits apply. The local stack (127.0.0.1:54321) speaks HTTP/1.1,
@@ -48,8 +49,11 @@
  * Each cell prints one `LATENCY-PROBE {json}` line, adds a test annotation,
  * and merges into the JSON matrix at `LATENCY_PROBE_OUT` (default: this test's
  * output dir) under the run label `LATENCY_PROBE_RUN`. Then it asserts: the
- * Document PLAYS in every cell (its card is visible, Skip is pressed, and its
- * last end is `how: 'skip'`).
+ * Document PLAYS in every cell (its card is visible, it is still up after a
+ * dwell of at least 1.5 s and until the page's reads have been quiet for 2 s,
+ * Skip is pressed, and its last end is `how: 'skip'`). The dwell is what lets
+ * a late read that would cut the run `how: 'mutation'` show; an instant Skip
+ * hides it.
  */
 import fs from 'fs';
 import path from 'path';
@@ -59,10 +63,13 @@ import { seedWorkflowGateFixture } from '../helpers/workflow-gate-fixture';
 import {
   ARRIVAL_PROJECT_ID,
   armE2EOptIn,
+  dwellOnCard,
   installArrivalInstruments,
   settleDeskWalkthrough,
+  watchReads,
   CARD_SELECTOR,
   SKIP_SELECTOR,
+  type ReadWatch,
 } from './helpers';
 
 const LATENCIES = [0, 150, 350] as const;
@@ -188,8 +195,13 @@ async function emulate(cdp: CDPSession, latency: number): Promise<void> {
   });
 }
 
-/** Resolves once `surface` has ended, or its card is up (then Skip ends it). */
-async function settleSurface(page: Page, surface: string): Promise<'card' | 'ended' | 'neither'> {
+/** Resolves once `surface` has ended, or its card is up (then Skip ends it). With `reads`, the card
+ *  first dwells on screen (dwellOnCard), and `cardHeld` says whether it was still up after. */
+async function settleSurface(
+  page: Page,
+  surface: string,
+  reads?: ReadWatch,
+): Promise<{ outcome: 'card' | 'ended' | 'neither'; cardHeld: boolean | null }> {
   const outcome = await page
     .waitForFunction(
       ({ s, card }) => {
@@ -204,8 +216,10 @@ async function settleSurface(page: Page, surface: string): Promise<'card' | 'end
     )
     .then((h) => (h.jsonValue() as Promise<'card' | 'ended'>))
     .catch(() => 'neither' as const);
+  let cardHeld: boolean | null = null;
   if (outcome === 'card') {
-    await page.locator(SKIP_SELECTOR).click();
+    if (reads) cardHeld = await dwellOnCard(page, reads);
+    if (cardHeld !== false) await page.locator(SKIP_SELECTOR).click();
     await page
       .waitForFunction(
         (s) =>
@@ -217,7 +231,7 @@ async function settleSurface(page: Page, surface: string): Promise<'card' | 'end
       )
       .catch(() => undefined);
   }
-  return outcome;
+  return { outcome, cardHeld };
 }
 
 /** Declined runs still earn ready later; wait for it so rootToReadyMs is measured, not guessed. */
@@ -230,8 +244,8 @@ async function awaitReady(page: Page, surface: string): Promise<void> {
       { timeout: 20_000 },
     )
     .catch(() => undefined);
-  // Trailing commits after ready (the quiet window's restarts) settle into the count.
-  await page.waitForTimeout(1_000);
+  // Trailing commits after ready (the quiet window's restarts, late answers) settle into the count.
+  await page.waitForTimeout(3_000);
 }
 
 type Req = { path: string; start: number; end: number };
@@ -319,6 +333,7 @@ test.describe('Arrival under emulated latency', () => {
         await armE2EOptIn(page);
         await installArrivalInstruments(page);
         await installLatencyProbe(page);
+        const reads = watchReads(page);
         const cdp = await page.context().newCDPSession(page);
         await emulate(cdp, latency);
 
@@ -336,6 +351,7 @@ test.describe('Arrival under emulated latency', () => {
         let deskCell: ReturnType<typeof surfaceCell> | null = null;
         let deskRetries = 0;
         let docOutcome: 'card' | 'ended' | 'neither' | 'unreached' = 'unreached';
+        let cardHeld: boolean | null = null;
         let entryAt = 0;
         try {
           if (mode === 'hard') {
@@ -344,7 +360,7 @@ test.describe('Arrival under emulated latency', () => {
           } else {
             await page.goto('/desk', { waitUntil: 'domcontentloaded' });
             await emulate(cdp, latency);
-            deskOutcome = await settleSurface(page, 'desk');
+            deskOutcome = (await settleSurface(page, 'desk')).outcome;
             await page.locator(CARD_SELECTOR).waitFor({ state: 'detached', timeout: 10_000 }).catch(() => undefined);
             await awaitReady(page, 'desk');
             // The Desk is only the way in: an unreadable Desk is retried, never the cell's result.
@@ -366,7 +382,7 @@ test.describe('Arrival under emulated latency', () => {
               await page.locator(NAME_LINK).click();
               await page.waitForURL(new RegExp(`/doc/${ARRIVAL_PROJECT_ID}`), { timeout: 30_000 });
             }
-            docOutcome = await settleSurface(page, 'document');
+            ({ outcome: docOutcome, cardHeld } = await settleSurface(page, 'document', reads));
             await awaitReady(page, 'document');
           }
           const { probe, reqs } = await snapshot(page);
@@ -392,6 +408,7 @@ test.describe('Arrival under emulated latency', () => {
             latencyMs: latency,
             mode,
             outcome: docOutcome,
+            cardHeld,
             how: last?.how ?? null,
             cause: last?.cause ?? null,
             ...doc,
@@ -417,8 +434,10 @@ test.describe('Arrival under emulated latency', () => {
             requests: toReady.map((r) => ({ ...r, start: r.start - Math.round(entryAt), end: r.end - Math.round(entryAt) })),
           });
 
-          // The Document plays: its card showed and Skip (pressed by settleSurface) ended it.
+          // The Document plays: its card showed, stayed up through the dwell (no late read cut it
+          // `how: 'mutation'`), and Skip (pressed by settleSurface) ended it.
           expect(docOutcome, `the Document's card at +${latency} ms (${mode}): ${line}`).toBe('card');
+          expect(cardHeld, `the Document's card through the dwell at +${latency} ms (${mode}): ${line}`).toBe(true);
           expect(last?.how, `the Document's end at +${latency} ms (${mode}): ${line}`).toBe('skip');
         } finally {
           await emulate(cdp, 0).catch(() => undefined);

@@ -229,6 +229,27 @@ describe('a press on the hidden route root during the wait', () => {
     expect(token()).toMatchObject({ via: 'ptr', to: '/doc/e1' });
   });
 
+  // Post-ship patch 1 — a page held unmarked (`data-arrival-held`) shows its root in place the
+  // moment the wait ends, before the press's click is hit-tested.
+  it('a press on a page held unmarked ends the wait and swallows the click that follows', () => {
+    const { card } = mountPage();
+    const main = document.querySelector('main')!;
+    main.removeAttribute('data-arrival');
+    main.setAttribute('data-arrival-held', 'desk');
+    const cancel = jest.fn();
+    setArrivalWaiting(cancel);
+
+    fireEvent.pointerDown(card);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    // The root prints in the held tree's place before the click.
+    main.removeAttribute('data-arrival-held');
+    main.setAttribute('data-arrival', 'desk');
+    fireEvent.pointerUp(card);
+    expect(click(card).defaultPrevented).toBe(true);
+    expect(push).not.toHaveBeenCalled();
+    expect(token()).toBeNull();
+  });
+
   it('a press on the chrome ends the wait and acts', () => {
     const { chrome } = mountPage();
     const cancel = jest.fn();

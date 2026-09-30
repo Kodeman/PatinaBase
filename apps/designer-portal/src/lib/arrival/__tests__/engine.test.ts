@@ -744,8 +744,9 @@ describe('B7 / B8 / B10 — the stylesheet the run relies on', () => {
   it('B7: carries the sentinel', () => {
     expect(CSS).toMatch(/:root\{--arr-ok:1\}/)
   })
-  it('B8: hides only the route root under arr-pre, with a 1.5s reveal failsafe', () => {
+  it('B8: hides only the route root (and the Document paper held unmarked) under arr-pre, with a 1.5s reveal failsafe', () => {
     expect(CSS).toContain('html.arr-pre [data-arrival]{opacity:0;animation-play-state:paused}')
+    expect(CSS).toContain('html.arr-pre [data-arrival-held="document"]{opacity:0;animation-play-state:paused}')
     expect(CSS).toMatch(/html\.arr-pre:has\(\[data-arrival\]\)\{animation:arr-reveal 1ms linear 1500ms both\}/)
     expect(CSS).not.toMatch(/arr-pre body\{opacity/)
   })

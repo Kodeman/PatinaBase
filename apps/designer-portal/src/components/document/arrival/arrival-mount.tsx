@@ -232,8 +232,9 @@ function onKeyDown(e: KeyboardEvent): void {
 
 /** A press during the wait ends it. On the hidden route root, the click it makes is swallowed:
  *  `arr-pre` is gone by then, and that click would act on what she could not see (arrival.js:778).
- *  Chrome stays visible under `arr-pre`, so a press on it stays live. A press the run swallowed
- *  (Acts 1–2, or a double in Act 3) never clicks either. */
+ *  So is a press on a page held unmarked (`data-arrival-held`): ending the wait shows the root in
+ *  its place before the click is hit-tested. Chrome stays visible under `arr-pre`, so a press on it
+ *  stays live. A press the run swallowed (Acts 1–2, or a double in Act 3) never clicks either. */
 function onPointerDown(e: PointerEvent): void {
   mark();
   clearSwallow();
@@ -248,7 +249,7 @@ function onPointerDown(e: PointerEvent): void {
   }
   if (!cancelWait) return;
   const target = e.target;
-  if (target instanceof Element && target.closest('[data-arrival]')) swallowClick = true;
+  if (target instanceof Element && target.closest('[data-arrival],[data-arrival-held]')) swallowClick = true;
   // Before the halt: it reports, and the landings read this on that same EVENT_ENDED.
   if (e.pointerType === 'touch' || e.pointerType === 'pen') waitGesture = e.pointerId;
   haltWait('pointer');

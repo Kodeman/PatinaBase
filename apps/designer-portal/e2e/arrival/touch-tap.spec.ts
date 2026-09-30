@@ -7,8 +7,9 @@
  * The taps below:
  *
  *  - in Act 2 (the hold), on a control: the tap advances the run and the control never sees a click
- *  - during the ready wait (the root hidden under `arr-pre`), on a control of the root: the tap ends
- *    the wait and the control she could not see never sees a click
+ *  - during the ready wait, on a page held unmarked until ready (post-ship patch 1): on the Desk's
+ *    skeleton, or on the Document's "Picking up…" over its hidden paper, the tap ends the wait and
+ *    the page shown in its place never sees the tap's click
  *  - in Act 2, on the act (B4): the act is activated exactly once and nothing else sees a click —
  *    a tap's click is hit-tested after the act has gone home, so the run forwards the activation
  *
@@ -51,8 +52,9 @@ interface PageClick {
  *  phone's click latency. */
 async function installPageClickProbe(page: Page): Promise<void> {
   await page.addInitScript((controls) => {
-    const w = window as unknown as { __pageClicks: PageClick[] };
+    const w = window as unknown as { __pageClicks: PageClick[]; __tapClicks: number };
     w.__pageClicks = [];
+    w.__tapClicks = 0;
     document.addEventListener(
       'click',
       (e) => {
@@ -74,6 +76,7 @@ async function installPageClickProbe(page: Page): Promise<void> {
       'click',
       (e) => {
         if (!e.isTrusted) return;
+        w.__tapClicks += 1;
         e.stopImmediatePropagation();
         e.preventDefault();
         const { clientX: x, clientY: y } = e;
@@ -93,6 +96,12 @@ async function installPageClickProbe(page: Page): Promise<void> {
 
 async function pageClicks(page: Page): Promise<PageClick[]> {
   return page.evaluate(() => (window as unknown as { __pageClicks?: PageClick[] }).__pageClicks ?? []);
+}
+
+/** The taps' own (trusted) clicks the probe held: an empty `pageClicks` means a swallow only if
+ *  the tap made a click at all. */
+async function tapClicks(page: Page): Promise<number> {
+  return page.evaluate(() => (window as unknown as { __tapClicks?: number }).__tapClicks ?? 0);
 }
 
 /**
@@ -171,14 +180,17 @@ test.describe('A tap never clicks through', () => {
     expect(page.url()).toMatch(new RegExp(`/doc/${ARRIVAL_PROJECT_ID}$`));
   });
 
-  test('a tap on the hidden route root during the wait ends it and the control never sees a click', async ({
+  // Post-ship patch 1 — a hard Desk entry now holds its skeleton (no route root) until ready, with
+  // the roster's read already in hand: the tap ends the wait, the roster prints in the skeleton's
+  // place before the tap's click is hit-tested, and that click is swallowed.
+  test('a tap on the held Desk skeleton ends the wait, and the roster printed under her finger sees no click', async ({
     authenticatedPage: page,
   }) => {
     await armE2EOptIn(page);
     await installArrivalInstruments(page);
     await installPageClickProbe(page);
-    // The roster renders at once; the Desk's other gating reads hold its ready mark back, so the
-    // root stays hidden under arr-pre (the staggered-reads patterns, play-desk.spec.ts).
+    // The roster's own read answers at once; the Desk's other gating reads hold its ready mark back
+    // (the staggered-reads patterns, play-desk.spec.ts), so the Desk stands held.
     for (const pattern of [
       '**/rest/v1/rpc/studio_boards_overview*',
       '**/rest/v1/project_unbilled_time*',
@@ -192,26 +204,100 @@ test.describe('A tap never clicks through', () => {
     await page.waitForFunction(
       () =>
         document.documentElement.classList.contains('arr-pre') &&
-        !!document.querySelector('[data-arrival="desk"]'),
+        !!document.querySelector('main[data-arrival-held="desk"]'),
       undefined,
       { timeout: 20_000, polling: 16 },
     );
-    const target = await controlUnderRoot(page, '[data-arrival="desk"]');
-    expect(target, 'a control of the hidden Desk root is under her finger').not.toBeNull();
-    test.info().annotations.push({ type: 'tapped', description: target!.label });
+    const spot = await page.evaluate(() => {
+      const skeleton = document.querySelector(
+        'main[data-arrival-held="desk"] [data-tour-anchor="desk-needs-your-hand"][aria-hidden]',
+      );
+      if (!skeleton) return null;
+      const r = skeleton.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    expect(spot, 'the held Desk shows its skeleton').not.toBeNull();
     expect(
-      await page.evaluate(() => document.documentElement.classList.contains('arr-pre')),
-      'the tap lands while the root is still hidden',
+      await page.evaluate(
+        () =>
+          document.documentElement.classList.contains('arr-pre') &&
+          !document.querySelector('[data-arrival="desk"]'),
+      ),
+      'the tap lands while the Desk is still held',
     ).toBe(true);
 
-    await page.touchscreen.tap(target!.x, target!.y);
+    await page.touchscreen.tap(spot!.x, spot!.y);
 
     await expect(page.locator('html.arr-pre')).toHaveCount(0, { timeout: 2_000 });
+    await expect(page.locator('[data-arrival="desk"]')).toHaveCount(1);
     await page.waitForTimeout(800);
-    expect((await pageClicks(page)).filter((c) => c.control)).toEqual([]);
+    const under = await page.evaluate(
+      ({ x, y, controls }) => {
+        const control = document.elementFromPoint(x, y)?.closest(controls);
+        return control ? `${control.tagName.toLowerCase()} "${(control.textContent ?? '').trim().slice(0, 40)}"` : 'no control';
+      },
+      { ...spot!, controls: CONTROLS },
+    );
+    test.info().annotations.push({ type: 'under her finger once the roster printed', description: under });
+    expect(await tapClicks(page), 'the tap made its click').toBe(1);
+    expect(await pageClicks(page), 'the tap’s click was swallowed').toEqual([]);
     expect(page.url()).toMatch(/\/desk$/);
     const events = await arrivalEndedEvents(page);
     expect(events).toEqual([{ surface: 'desk', how: 'declined', cause: 'busy' }]);
+  });
+
+  // Post-ship patch 1 — the Document holds its whole paper mounted, unmarked and hidden, behind
+  // "Picking up…" until ready: a tap on that line ends the wait, the paper shows in place before the
+  // tap's click is hit-tested, and that click is swallowed.
+  test('a tap on the Document’s "Picking up…" ends the wait, and the paper shown under her finger sees no click', async ({
+    authenticatedPage: page,
+  }) => {
+    await armE2EOptIn(page);
+    await installArrivalInstruments(page);
+    await installPageClickProbe(page);
+    // The row resolves at once; the ticket's plan read (usePlanRoom) holds the ready mark back.
+    await page.route('**/rest/v1/plan_sheets*', delayedRoute(4_000));
+
+    await page.goto(`/doc/${ARRIVAL_PROJECT_ID}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+      () =>
+        document.documentElement.classList.contains('arr-pre') &&
+        !!document.querySelector('[data-arrival-held="document"]'),
+      undefined,
+      { timeout: 20_000, polling: 16 },
+    );
+    const line = page.getByText('Picking up…');
+    await expect(line).toHaveCount(1);
+    const box = await line.boundingBox();
+    expect(box, 'the held Document shows its loading line').not.toBeNull();
+    const spot = { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.classList.contains('arr-pre') &&
+          !document.querySelector('[data-arrival="document"]'),
+      ),
+      'the tap lands while the paper is still held',
+    ).toBe(true);
+
+    await page.touchscreen.tap(spot.x, spot.y);
+
+    await expect(page.locator('html.arr-pre')).toHaveCount(0, { timeout: 2_000 });
+    await expect(page.locator('[data-arrival="document"]')).toHaveCount(1);
+    await page.waitForTimeout(800);
+    const under = await page.evaluate(
+      ({ x, y, controls }) => {
+        const control = document.elementFromPoint(x, y)?.closest(controls);
+        return control ? `${control.tagName.toLowerCase()} "${(control.textContent ?? '').trim().slice(0, 40)}"` : 'no control';
+      },
+      { ...spot, controls: CONTROLS },
+    );
+    test.info().annotations.push({ type: 'under her finger once the paper showed', description: under });
+    expect(await tapClicks(page), 'the tap made its click').toBe(1);
+    expect(await pageClicks(page), 'the tap’s click was swallowed').toEqual([]);
+    expect(page.url()).toMatch(new RegExp(`/doc/${ARRIVAL_PROJECT_ID}$`));
+    const events = await arrivalEndedEvents(page);
+    expect(events).toEqual([{ surface: 'document', how: 'declined', cause: 'busy' }]);
   });
 
   test('B4 on touch: a tap on the act in the hold activates it exactly once, and nothing else sees a click', async ({
