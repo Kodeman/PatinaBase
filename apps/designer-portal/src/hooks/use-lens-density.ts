@@ -322,8 +322,9 @@ export function useLensDensity(
   // That hook re-renders the whole document page on EVERY query in the app
   // starting or finishing — a mood-board thumbnail, a header count — to feed a
   // number only a `requestAnimationFrame` ever reads. The cache subscription
-  // costs no render at all, and it needs no list of the paper's query keys to
-  // stay honest.
+  // costs no render at all. It does carry a list: OFF_PAPER_QUERY_KEYS (above),
+  // a denylist of the chrome's key families, which must be kept in step with
+  // those hooks' keys by hand.
   //
   // The client comes from context rather than a hook lookup, which THROWS
   // where there is no provider: the lens attaches unconditionally, including

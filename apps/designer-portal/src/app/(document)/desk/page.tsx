@@ -94,8 +94,11 @@ export default function DeskPage() {
     useFeatureFlag('onboarding-teammate-persona');
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   const studio = orgs?.find((o) => o.type === 'design_studio') ?? orgs?.[0] ?? null;
-  const { data: studioMembers, isLoading: studioMembersLoading } =
-    useOrganizationMembers(studio?.id ?? '');
+  const {
+    data: studioMembers,
+    isLoading: studioMembersLoading,
+    isPending: studioMembersPending,
+  } = useOrganizationMembers(studio?.id ?? '');
 
   // L8 — the hire-handoff margin note. Reads the signed-in member's OWN
   // organization_members row for a note the owner wrote on the invite; the
@@ -317,6 +320,13 @@ export default function DeskPage() {
   // mid-arrival would end it as a mutation. Same query keys as DeskRoster,
   // DeskBoardsReactionRollup, RecentBoardsStrip and DeskContents, so these
   // share their fetches. The day's line must also be picked.
+  //
+  // Round 5 — the studio members print the roster's "By person" facet, a
+  // second-wave read behind the organizations read. With no studio the query
+  // is disabled, and a disabled query with no data stays `isPending` in
+  // TanStack v5, so it counts as settled only once there is a studio to read.
+  // While the organizations read is out, `viewerStudio.isSettled` holds ready.
+  const studioMembersSettled = !studio || !studioMembersPending;
   const answeredNotesRead = useAnsweredNotes();
   const reactionRollupRead = useBoardsReactionRollup();
   const recentBoardsRead = useRecentBoards(8);
@@ -332,6 +342,7 @@ export default function DeskPage() {
     !reactionRollupRead.isPending &&
     !recentBoardsRead.isPending &&
     viewerStudio.isSettled &&
+    studioMembersSettled &&
     !unbilledTimeRead.isPending &&
     deskLineDecided;
   // US-14 post-ship patch 1 — while the Desk's arrival wait is armed the

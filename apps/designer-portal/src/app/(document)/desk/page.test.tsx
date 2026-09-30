@@ -27,14 +27,23 @@ let mockPendingRead:
   | 'rollup'
   | 'boards'
   | 'studio'
+  | 'members'
   | 'unbilled'
   | 'line'
   | null = null;
+let mockMemberLineFlags = true;
 
 jest.mock('@patina/supabase', () => ({
   useProfile: () => ({ data: { display_name: 'Leah Warner' } }),
   useOrganizations: () => ({ data: mockOrgs() }),
-  useOrganizationMembers: () => ({ data: mockMembers() }),
+  // TanStack v5's shapes: a disabled query (no studio id) with no data is
+  // `isPending` but not `isLoading`.
+  useOrganizationMembers: (organizationId: string) =>
+    !organizationId
+      ? { data: undefined, isLoading: false, isPending: true }
+      : mockPendingRead === 'members'
+        ? { data: undefined, isLoading: true, isPending: true }
+        : { data: mockMembers(), isLoading: false, isPending: false },
   useProjects: () => ({ data: mockProjects() }),
   useStudioContacts: (...args: unknown[]) => ({ data: mockContacts(...args) }),
   useRecentBoards: (...args: unknown[]) =>
@@ -102,7 +111,16 @@ jest.mock('@/hooks/use-viewer-studio', () => ({
 jest.mock('@/hooks/use-feature-flag', () => ({
   // studio-workspaces — the whisper's own gate, always on here. `call-sheet`
   // is retired (rulings §6) and no longer read anywhere on this page.
-  useFeatureFlag: () => ({ value: true, isLoading: false }),
+  // The two flags whose lines read the studio members are variable: with
+  // either on (the setup whisper's `studio-workspaces`, the hire-handoff's
+  // `onboarding-teammate-persona`), the Desk's line pick waits on that read.
+  useFeatureFlag: (key: string) => ({
+    value:
+      key === 'studio-workspaces' || key === 'onboarding-teammate-persona'
+        ? mockMemberLineFlags
+        : true,
+    isLoading: false,
+  }),
 }));
 
 // ── Everything else the Desk mounts. ──────────────────────────────────────
@@ -181,6 +199,7 @@ beforeEach(() => {
   resetDeskVisit();
   mockDeskRead = settledDeskRead();
   mockPendingRead = null;
+  mockMemberLineFlags = true;
   mockOrgs.mockReturnValue([studio()]);
   // Own title set; nobody else on the crew (one open step).
   mockMembers.mockReturnValue([{ user_id: 'me', job_title: 'Principal' }]);
@@ -334,6 +353,7 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     ['the boards rollup', 'rollup'],
     ['the recent boards', 'boards'],
     ['the viewer studio', 'studio'],
+    ['the studio members', 'members'],
     ['the unbilled time', 'unbilled'],
     ['the day’s line pick', 'line'],
   ] as const)('holds ready while %s read is pending', (_read, pending) => {
@@ -341,6 +361,29 @@ describe('Desk — US-14 arrival marks on the route root (inert)', () => {
     const { container } = render(<DeskPage />);
     expect(main(container).getAttribute('data-arrival')).toBe('desk');
     expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+  });
+
+  // Round 5 — the members print the roster's "By person" facet inside the
+  // root; an answer landing after the card shows cut a played run `mutation`.
+  // The flags of the two lines that read the members are off here, as on the
+  // lane: with either on, the line pick waits on the same read.
+  it('holds ready while the studio members are in flight, and marks it once they settle', () => {
+    mockMemberLineFlags = false;
+    mockPendingRead = 'members';
+    const { container, rerender } = render(<DeskPage />);
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(false);
+
+    mockPendingRead = null;
+    rerender(<DeskPage />);
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
+  });
+
+  it('with no studio the disabled members read does not hold ready', () => {
+    mockMemberLineFlags = false;
+    mockOrgs.mockReturnValue([]);
+    const { container } = render(<DeskPage />);
+    expect(main(container).getAttribute('data-arrival')).toBe('desk');
+    expect(main(container).hasAttribute('data-arrival-ready')).toBe(true);
   });
 
   it('marks the date line as head — the landing focus, never the greeting', () => {
