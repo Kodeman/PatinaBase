@@ -212,6 +212,6 @@ baseline; designer-portal jest 8854/8854 passed.
   theoretical; Desk: a second-wave read beyond the round-5 studio-members fix).
 
 **Deploy record (filled by the deploy step).**
-- `DEPLOYED_VERSION: TBD`
-- `DEPLOYED_AT: TBD`
-- `MERGE_SHA: TBD`
+- `DEPLOYED_VERSION: f596093d-4815-4325-b748-1346ea692bdb`
+- `DEPLOYED_AT: 2026-09-30T23:23:54.250Z`
+- `MERGE_SHA: 3cad15918d6ed8fea544f10f940f60d593be6d1e`
