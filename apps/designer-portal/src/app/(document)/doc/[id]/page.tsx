@@ -78,7 +78,7 @@ import {
   useDocumentRunningIndex,
 } from '@/hooks/use-document-running-index';
 import { approvalsQuietLeader } from '@/lib/document/lens-quiet-status';
-import { useLensDensity } from '@/hooks/use-lens-density';
+import { useLensDensity, useLensResolved } from '@/hooks/use-lens-density';
 import { isEditableTarget, useLensState } from '@/hooks/use-lens-state';
 import { rankOperationalNeeds } from '@/lib/document/need-tie-break';
 import {
@@ -2469,11 +2469,18 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const guideInputsInFlight =
     (row?.active_section === 'discovery' && discoveryReadiness.state === 'loading') ||
     (row?.active_section === 'direction' && draftingReadiness.state === 'loading');
-  const arrivalReady =
+  const paperSettled =
     lensLineSettled &&
     deskEnrichmentSettled &&
     ticketRowsSettled &&
     !guideInputsInFlight;
+  // US-14 post-ship patch 1 — and the lens has resolved the paper (D-B46): its
+  // first pass promotes the in-frame regions quiet → full, a root mutation that
+  // would cut a played card. It waits on every query in flight, not only this
+  // page's, and is bounded by LENS_RESOLVE_MAX_MS from the paper's first layout
+  // (a held paper lays out too).
+  const lensResolved = useLensResolved();
+  const arrivalReady = paperSettled && lensResolved;
   // US-14 post-ship patch 1 — while this path's arrival wait is armed the paper
   // stands mounted but unmarked (and hidden) until ready, so the route root
   // first appears ready. A root this mount has shown is never taken back.
@@ -2482,9 +2489,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const arrivalHeld = arrivalWaiting && !arrivalReady && !arrivalRootShown.current;
   // US-14 R-DM21 — the Desk act's token landing (spent on mount, above the
   // resume jump), carried out once the paper is ready, when its regions exist.
+  // A press promotes without the lens, so it does not wait for its resolution.
   useEffect(() => {
     const pending = arrivalLandingRef.current;
-    if (!pending || pending.done || !arrivalReady) return;
+    if (!pending || pending.done || !paperSettled) return;
     pending.done = true;
     const { landing } = pending;
     if (landing.kind === 'region') {
@@ -2496,7 +2504,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     } else if ((ROSTER_STAGE_ORDER as readonly string[]).includes(landing.sectionKey)) {
       jumpToSection(landing.sectionKey as SectionKey);
     }
-  }, [arrivalReady, jumpToRegion, jumpToLine, jumpToSection]);
+  }, [paperSettled, jumpToRegion, jumpToLine, jumpToSection]);
   const lensLineKind = bandModel?.line2.kind ?? null;
   const lensLineActKey = bandModel?.line2.act?.key ?? null;
   const lensStandingCount = bandModel?.line2.standingCount ?? null;

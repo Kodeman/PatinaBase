@@ -10,7 +10,7 @@ import { ArrivalRun } from '@/components/document/arrival/arrival-run';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
 import { paperRegionsForSection } from '@/lib/document/document-index';
-import { __setDensityForTest } from '@/hooks/use-lens-density';
+import { __setDensityForTest, __setResolvedForTest } from '@/hooks/use-lens-density';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { engine as arrivalEngine } from '@/lib/arrival/engine';
 import { consumeSuppressed, suppressNextArrival } from '@/lib/arrival/nav';
@@ -3030,6 +3030,29 @@ describe('DocumentPage guide activation', () => {
         expect(shell()).not.toBeNull();
         expect(shell()).not.toHaveAttribute('data-arrival-ready');
       });
+
+      // Post-ship patch 1, round 3 — the lens's first pass (D-B46) promotes the
+      // in-frame regions, a root mutation that would cut a played card.
+      it('holds until the lens has resolved the paper, then marks the same node ready', () => {
+        asProjectDocument();
+        __setResolvedForTest(false);
+        try {
+          armWait();
+          render(<DocumentPage params={fulfilledParams} />);
+          expect(document.querySelector('[data-arrival]')).toBeNull();
+          const paper = held();
+          expect(paper).not.toBeNull();
+          expect(paper).not.toHaveAttribute('data-arrival-ready');
+          expect(screen.getByText('Picking up…')).toBeInTheDocument();
+
+          act(() => __setResolvedForTest(true));
+          expect(shell()).toBe(paper);
+          expect(shell()).toHaveAttribute('data-arrival-ready', '');
+          expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+        } finally {
+          __setResolvedForTest(undefined);
+        }
+      });
     });
 
     it('is not ready while the Desk composition is in flight, and is once it settles', () => {
@@ -3119,6 +3142,34 @@ describe('DocumentPage guide activation', () => {
         rerender(<DocumentPage params={fulfilledParams} />);
         expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
       } finally {
+        window.sessionStorage.removeItem('pl-arrive');
+        window.history.replaceState({}, '', '/');
+      }
+    });
+
+    it('lands the act token once the paper settles, without waiting for the lens to resolve', () => {
+      window.history.replaceState({}, '', '/doc/missing-document');
+      window.sessionStorage.setItem(
+        'pl-arrive',
+        JSON.stringify({
+          via: 'act',
+          to: '/doc/missing-document',
+          at: Date.now(),
+          landing: { kind: 'region', region: 'money' },
+        }),
+      );
+      pressOrder.length = 0;
+      __setResolvedForTest(false);
+      try {
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+        expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
+
+        act(() => __setResolvedForTest(true));
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+        expect(pressOrder).toEqual(['unfold:money', 'promote:money']);
+      } finally {
+        __setResolvedForTest(undefined);
         window.sessionStorage.removeItem('pl-arrive');
         window.history.replaceState({}, '', '/');
       }
