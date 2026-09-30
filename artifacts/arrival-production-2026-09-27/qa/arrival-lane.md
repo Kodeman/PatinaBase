@@ -1,5 +1,1052 @@
 # W3b — arrival Playwright lane + legacy regression (US-14)
 
+## AH. Post-ship patch 1, round 5 at `ff5b4eec7a29a7399edc0947015acf3babb2dfe9` on `arrival/hidden-cap-fix` (parent `163419f86e6ad4bcf3c30b88240531703074bd55`). Commit subject: "fix(arrival): Desk ready waits for the studio-members read — round 5 (US-14)". Touches `desk/page.tsx` + `desk/page.test.tsx` (the `studioMembersSettled` fix — CONTRACT §4h round 5) + `use-lens-density.ts` (comment correction, no logic change) + `CONTRACT.md`. Not pushed: `arrival/hidden-cap-fix` has no upstream. (2026-09-30, this piece — lane rerun only, no further source edit.)
+
+This piece made no source edit and no commit; HEAD stays at `ff5b4eec7a29a7399edc0947015acf3babb2dfe9`.
+
+### AH.0 Preflight — build currency, build-tooling mistake and fix, build sanity
+
+```
+find apps/designer-portal/src -newer apps/designer-portal/.next/BUILD_ID
+```
+→ non-empty (`use-lens-density.ts` newer than the round-4 `BUILD_ID`) — round 5's commit
+touches `src`, so a rebuild was required per the task brief.
+
+**Build attempt 1 — self-inflicted env-export bug, self-corrected.** The prescribed env trio
+was first set via `eval "$(supabase status -o env --workdir <WT> | sed -n '...VAR="value"...')"`.
+The `sed`-generated text was plain `VAR="value"` with no `export` keyword, so `eval` set these
+as **shell-local** variables only — never propagated to the `next build --webpack` child
+process. Effect: `next.config.js`'s `headers()` CSP builder read
+`process.env.NEXT_PUBLIC_SUPABASE_URL` as `undefined`, its try/catch silently nulled the
+computed local-Supabase CSP origins, and the production CSP branch's `connect-src` fell back
+to **only** the hardcoded prod ref (`https://bkvcixdmuyejfzcijpdg.supabase.co`) — blocking
+every local Supabase call from the browser. Built and ran the chromium project against this
+build: **100% auth-fixture failure** (`Authentication failed after 3 attempts`, 21/21 tests
+run before the run was killed). Diagnosed via: system load/Docker health (clean), static
+chunk availability (all 200), `error-context.md` snapshots (all "This page couldn't load",
+traced to Next's own framework runtime string), then `curl -sI` on the signin route showing
+the prod-only `connect-src` header directly. Root-caused and reproduced in isolation
+(`eval "$(...)"` without `export` in the generated text does not propagate to child
+processes) — a build-tooling mistake, **not** an arrival-code regression; no `src/` file was
+implicated. Killed the contaminated run and its stale server.
+
+**Build attempt 2 — corrected.** Parsed `supabase status -o env --workdir <WT>` into shell
+variables and `export`ed each explicitly (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_STORAGE_KEY`, plus
+`NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,the-document-pilot:true,client-invite-letter:true'`
+and `ARRIVAL_E2E=1`, with `SUPABASE_ORIGIN_RUNTIME`/`OPEN_NEXT`/`CI` confirmed unset) — values
+piped directly from `supabase status -o env`, never echoed. `next build --webpack` succeeded.
+
+```
+grep -rl bkvcixdmuyejfzcijpdg apps/designer-portal/.next/static   → empty (exit 1)
+grep -l -- '--arr-ok' apps/designer-portal/.next/static/css/*.css → .next/static/css/0aa6220cd0b96ae5.css (exit 0)
+find apps/designer-portal/src -newer apps/designer-portal/.next/BUILD_ID → 0 files (current)
+```
+Both build-sanity gates pass on the corrected build; a standalone verify `next start` server
+was also checked directly and showed `http://127.0.0.1:54321 ws://127.0.0.1:54321` correctly
+appended to `connect-src`/`frame-src`, confirming the CSP fix before any lane test was run
+against this build.
+
+```
+lsof -nP -iTCP:3107 -sTCP:LISTEN   # empty before the lane
+lsof -nP -iTCP:3000 -sTCP:LISTEN   # empty before the legacy batches
+```
+
+### AH.1 Arrival lane — full 40-spec × 3-project run (unsandboxed)
+
+Per-project results (all against the corrected build above, `playwright.arrival.config.ts`,
+port 3107, `next start` — never `next dev`):
+
+| Project | Dispatched | Passed | Failed | Skipped | Duration |
+|---|---|---|---|---|---|
+| chromium | 40 | 34 | 0 | 6 | 6.3m |
+| mobile-chrome | 40 | 39 | 0 | 1 | 5.9m |
+| webkit | 40 | 27 | 1 | 12 | 3.7m |
+| **Sum** | **120** | **100** | **1** | **19** | — |
+
+The 4 `test.fail`-marked `latency.spec.ts:333` `+350ms` rig-limit cells (2 in chromium, 2 in
+`mobile-chrome` — that project's `browserName` is chromium under the hood, so it also runs
+the Chromium-only CDP-latency describe block; `webkit`'s true `browserName` skips it) failed
+internally as expected and are counted by Playwright as **passed**, included in the 34/39
+above — none flipped to an unexpected pass this round.
+
+**Round-5 fix confirmed clean across all three projects.** Every `play-desk.spec.ts` test
+(`:60`, `:95`, `:138`, `:166`, `:223`, `:246`) passed on chromium, mobile-chrome, and webkit —
+the round-4 gap (`play-desk.spec.ts:95` deterministic ×3, `:166` webkit-flaky) that round 5's
+`studioMembersSettled` fix targeted does not reproduce anywhere in this full 120-test lane,
+a strict improvement over round 4's 97/4/19 (chromium 33/1/6, mobile-chrome 38/1/1, webkit
+26/2/12).
+
+**Skip accounting (19, identical shape to round 4):** `latency.spec.ts:333` `+0/+150/+350 ×
+hard/soft` (6, webkit-only — CDP network emulation is chromium-only, gated by `browserName`);
+`touch-tap.spec.ts` 4 tests × {chromium, webkit} (8, `hasTouch`-gated, neither desktop project
+emulates touch); `touch-wait-gesture.spec.ts` 2 tests × {chromium, webkit} (4, same
+`hasTouch` gate); `put-down.spec.ts:31` (1, `mobile-chrome` only — desktop-only test
+excluded). `6+8+4+1 = 19`; per-project split (chromium 6, mobile-chrome 1, webkit 12) matches
+each project's reported skip count exactly.
+
+### AH.2 New, unrelated webkit failure — `accessibility.spec.ts:24` — isolated retry also failed
+
+One unexpected failure, **not** one of round 4's four known Desk-gap cells and **not** a
+`test.fail` cell:
+
+```
+[webkit] › e2e/arrival/accessibility.spec.ts:24:7 › Arrival accessibility › exactly one SR
+announcement; the lens band aria-live goes off for the run and is restored
+Error: expect(received).toBe(expected) // Object.is equality
+Expected: 5   Received: 3
+    at accessibility.spec.ts:51:25  (expect(statusCount).toBe(statusBefore + 1))
+```
+
+This is the run's **first scheduled test** (`[1/40]`) — the same pre-existing "first test off
+a cold server" `role="status"`-baseline race extensively documented in this file's earlier
+sections (§AA.4, §T.6, etc.) as a known, non-arrival-code lane flake, previously always
+cleared by an isolated single-test rerun ("flake-then-pass"). Per the task's one-retry
+instruction, reran it alone on webkit, freshly (port 3107 confirmed free first):
+
+```
+pnpm exec playwright test -c playwright.arrival.config.ts --project webkit -g "exactly one SR announcement" --reporter=line
+Error: expect(received).toBe(expected)
+Expected: 4   Received: 3
+    at accessibility.spec.ts:51:25
+```
+
+**The isolated retry also failed** — a different `statusBefore` baseline (4, vs. 5 in the
+full-lane run) but the same actual-count-after (3) both times, and the same assertion line.
+This is **not** the established "flake-then-pass" outcome every prior round recorded for this
+test; it is being reported honestly as a confirmed 2-for-2 failure this round, on webkit only.
+No `src/` was touched (per instruction) and the spec itself was not patched (out of this
+piece's scope — the baseline-capture-ordering fix for this exact test already landed in a
+prior round's `5924480f4` "test(arrival): lane fixes" commit, which is an ancestor of
+`ff5b4eec7`; whatever residual raciness remains is a cold-start timing race in the test's own
+`role="status"` delta logic, not a round-5 regression and not related to the Desk
+`studioMembersSettled` fix). Flagged below as an `arrivalFault` for the integrator.
+
+### AH.3 Legacy 36 — three batches of 12 on `:3000`, chromium, `--workers=2`, server restarted per batch, port reconfirmed free before/after each
+
+```
+Batch 1 (files 1–12):   9 failed · 3 skipped · 40 did not run · 14 passed (2.5m)
+Batch 2 (files 13–24): 12 failed · 1 skipped · 41 did not run · 16 passed (2.4m)
+Batch 3 (files 25–36): 16 failed · 0 skipped ·  5 did not run · 15 passed (3.5m)
+Sum:                   37 failed · 4 skipped · 86 did not run · 45 passed (172 total)
+```
+
+**Totals identical to `legacy-baseline.md` and every prior confirming round.** Port 3000
+confirmed free (`lsof` empty) before and after each of the three batches — six checks, all
+empty. Failing-file set (29 files, verified against the baseline's §9 table):
+
+- Batch 1 (9): `census/lens-cost-census`, `document/action-visibility`,
+  `document/desk-error-state`, `document/desk-walkthrough`, `document/help-panel`,
+  `document/hours`, `document/lens-a11y`, `document/lens-band-height`, `document/lens-cls`.
+- Batch 2 (11): `document/lens-contrast`, `document/lens-density`, `document/lens-fling`,
+  `document/lens-rail-budget`, `document/lens-reduced-motion`, `document/margin-handoffs`,
+  `document/mobile-margin-sheet`, `document/plan-room`, `document/prework-regions`,
+  `document/quiet-release-contracts`, `document/quiet-responsive-shell`.
+- Batch 3 (9): `document/workflow-stage-responsive`, `field/field-coordination`,
+  `library-configuration/commission-walk`, `library-configuration/decisions-compare`,
+  `library-configuration/picker-configure`, `library-configuration/spec-book-dimensions`,
+  `wave2-screenshots`, `wp3-screenshots`, `wp4-screenshots`.
+
+`9 + 11 + 9 = 29`, identical to `legacy-baseline.md`'s 29-file list; the same 7 files
+pass/skip cleanly (`document/desk-claims`, `document/gate-ceremony`,
+`document/spec-book-workspace`, `mood-board/project-board-paths`, `people/bring-forward`,
+`people/call-sheet`, `document/arrival-arc` fixme-skip). **Zero new legacy reds, zero
+newly-green.** Legacy specs never arm `ARRIVAL_E2E`/`?arrive=`, so round 5's `desk/page.tsx`
+and `use-lens-density.ts` changes are provably inert for all 36 — the byte-identical
+failing-file set is the empirical confirmation.
+
+**Cleanup.** The same 16 tracked screenshot PNGs plus 1 untracked PNG that every prior round
+has documented appeared in the worktree after the batches ran
+(`docs/design/the-document/screenshots/help-walkthrough/*`,
+`docs/design/workflow-alignment/screenshots/wp3/*`,
+`margin-handoff-overdue-1440-collapsed.png`). Restored the 16 with `git checkout --`, removed
+the untracked one; `git status --porcelain` (excluding the sandbox's own `.env`/`.env.*`
+read-deny lines) came back empty afterward. HEAD unchanged at
+`ff5b4eec7a29a7399edc0947015acf3babb2dfe9`.
+
+### AH.4 `arrivalFaults` — for the integrator, no `src/` touched this round
+
+- `apps/designer-portal/e2e/arrival/accessibility.spec.ts:51` — webkit only, the run's first
+  scheduled test, the pre-existing "first test off a cold server" `role="status"`-baseline
+  race (documented since §AA.4 and earlier). Failed on the full-lane pass (`Expected: 5,
+  Received: 3`) **and** on an isolated single-test retry (`Expected: 4, Received: 3`) — unlike
+  every prior round, the isolated retry did not clear it this time. Not fixed here (no `src/`
+  or spec touched, per instruction, and out of this piece's narrower round-5 scope). Worth a
+  dedicated look: the baseline-capture-ordering fix already landed (`5924480f4`, ancestor of
+  `ff5b4eec7`) but evidently doesn't fully close the race under webkit's cold-start timing.
+- No other arrival faults. Round 4's two `play-desk.spec.ts` findings (`:95` deterministic
+  ×3, `:166` webkit-flaky) are both confirmed **fixed** by round 5's `studioMembersSettled`
+  change — see §AH.1.
+
+### AH.5 Bottom line
+
+- **Arrival lane: NOT green.** 100 passed (incl. 4 `test.fail`-expected cells), 1 unexpected
+  failed, 19 skipped, across 120 tests / 3 projects. Round 5's Desk fix (`studioMembersSettled`)
+  is confirmed working in the full 40-test lane on all three projects — zero recurrence of the
+  round-4 `play-desk.spec.ts:95`/`:166` gap. The lane's only unexpected failure is a new
+  (to this round's evidence — previously always flake-then-pass), unrelated, webkit-only,
+  first-test cold-server `role="status"`-baseline race in `accessibility.spec.ts:24`, confirmed
+  on both the full-lane run and an isolated single-retry.
+- **Zero new arrival-code faults from round 5's change.** The one lane failure traces to a
+  pre-existing test-timing race, not the `desk/page.tsx`/`use-lens-density.ts` edits.
+- **Legacy 36: CLEAN, zero new reds, zero newly-green.** Byte-identical to `legacy-baseline.md`
+  and every prior confirming round (45 passed / 37 failed / 4 skipped / 86 did not run).
+- **No commit this round.** No spec was patched and no source was touched beyond the round-5
+  commit already on HEAD; HEAD stays at `ff5b4eec7a29a7399edc0947015acf3babb2dfe9` (one commit
+  on top of `163419f86`, not amended, not pushed, no upstream).
+- **A build-tooling mistake was made and self-corrected during this piece** (§AH.0): the
+  first `next build --webpack` attempt silently broke the app's CSP via an `eval`-without-
+  `export` bug in how the Supabase env trio was set, causing a 100%-reproducible, app-wide
+  auth-fixture failure that was **not** an arrival-code regression. Diagnosed, root-caused,
+  and rebuilt correctly before any lane result in this section was recorded; the corrected
+  build passed both build-sanity gates (§AH.0) before testing began.
+- **Commands, in order:** build-currency `find` (non-empty, rebuild required) → build attempt
+  1 (env-export bug, CSP broken, chromium run killed after 21/21 auth failures) → diagnosis →
+  build attempt 2 (corrected, both sanity greps pass) → three full per-project lane runs
+  (§AH.1) → one isolated retry of `accessibility.spec.ts:24` on webkit, confirmed failing
+  twice, not flaky-then-clean (§AH.2) → legacy batches 1–3 with per-batch server restart,
+  byte-identical to baseline (§AH.3) → screenshot-fixture cleanup, tree clean, HEAD unchanged,
+  both ports (3000, 3107) confirmed free.
+- **Not independently rerun this piece:** the latency-probe exact-timing cross-check against
+  the round-5 commit's own matrix (round 5's commit touched no latency-relevant code path —
+  `desk/page.tsx` and `use-lens-density.ts` — so this was judged out of scope for a lane-only
+  rerun task; flagged here for the integrator's awareness, not performed).
+
+## AG. Post-ship patch 1, round 4 at `163419f86e6ad4bcf3c30b88240531703074bd55` on `arrival/hidden-cap-fix` (parent `5a478c1f7`). This is one commit with the required message: "fix(arrival): round 4 — paper-scoped lens count, honest latency cells, live Desk chrome while held (US-14)". The body carries the per-finding map, the before/after matrix, the lane's not-green verdict and the gates. There is no trailer, matching round 3. It is not pushed: the branch has no upstream and the brief did not ask for a push. The staged set was exactly the 18 files listed in the brief, with no scratch or zz files in the commit, checked by grep. (2026-09-30, this piece)
+
+This piece made no source edit and no commit; HEAD stays at `163419f86e6ad4bcf3c30b88240531703074bd55`. The commit was independently verified before running anything: `git show --name-only` lists exactly the 18 files the brief named (`git show --name-only --format='' 163419f86 | grep -v '^$' | wc -l` → `18`); `grep -iE 'scratch|zz|tmp'` over that same file list → empty (exit 1); parent is `5a478c1f711788340013eeddf96b7ac1ad3d5afc` (`git log -1 --format='%P'`); `arrival/hidden-cap-fix@{upstream}` → `fatal: no upstream configured` (not pushed); `git status --porcelain` (excluding the sandbox's own `.env`/`.env.*` read-deny lines) was empty before any run.
+
+### AG.0 Preflight — build currency, ports, build sanity
+
+```
+find apps/designer-portal/src -newer apps/designer-portal/.next/BUILD_ID   → empty, 0 files
+  — build current for HEAD 163419f86 (.next/BUILD_ID unchanged since the round-3 build
+    referenced in §AF); no rebuild performed
+lsof -nP -iTCP:3107 -sTCP:LISTEN   # empty before the lane (exit 1)
+lsof -nP -iTCP:3000 -sTCP:LISTEN   # empty before the legacy batches (exit 1)
+lsof -nP -iTCP:54321 -sTCP:LISTEN  # local Supabase up (docker, LISTEN)
+df -h /   → 926Gi total, 157Gi avail
+```
+
+Ran the two build-sanity checks against the existing (unrebuilt) build anyway, since the lane
+exercises it directly:
+
+```
+grep -rl bkvcixdmuyejfzcijpdg apps/designer-portal/.next/static
+  → empty (exit 1) — no prod Supabase ref inlined
+grep -l -- '--arr-ok' apps/designer-portal/.next/static/css/*.css
+  → .next/static/css/0aa6220cd0b96ae5.css — arrival CSS sentinel present
+```
+
+The arrival config's `webServer.env` is the base `playwright.config.ts`'s own committed,
+non-secret local trio (passed through by reference — see `playwright.arrival.config.ts`'s own
+header comment), so no env was exported by hand for the Playwright process itself; only the
+legacy batches' bare `next start` process and the `SUPABASE_SERVICE_ROLE_KEY` the legacy specs'
+`e2e/helpers/supabase-admin.ts` import needed it, piped from `supabase status -o env
+--workdir <worktree>` into shell variables, never echoed, per `§AC.0`/`§AF.0`'s recipe.
+
+### AG.1 Arrival lane — three separate per-project runs, unsandboxed foreground, all specs
+
+```
+pnpm exec playwright test -c playwright.arrival.config.ts --project chromium --reporter=line
+  → Running 40 tests using 1 worker
+    1 failed: play-desk.spec.ts:95 "a cold Desk shows chrome immediately…"
+    6 skipped
+    33 passed (6.2m)
+
+pnpm exec playwright test -c playwright.arrival.config.ts --project mobile-chrome --reporter=line
+  → Running 40 tests using 1 worker
+    1 failed: play-desk.spec.ts:95 "a cold Desk shows chrome immediately…"
+    1 skipped
+    38 passed (5.9m)
+
+pnpm exec playwright test -c playwright.arrival.config.ts --project webkit --reporter=line
+  → Running 40 tests using 1 worker
+    2 failed: play-desk.spec.ts:95 "a cold Desk shows chrome immediately…";
+              play-desk.spec.ts:166 "R-DM21 A: the Desk act opens its Document…"
+    12 skipped
+    26 passed (3.7m)
+```
+
+**Per-project breakdown** (40 unique tests × 3 projects = 120):
+
+| Project | Dispatched | Passed | Failed (unexpected) | Skipped |
+|---|---|---|---|---|
+| chromium | 40 | 33 | 1 | 6 |
+| mobile-chrome | 40 | 38 | 1 | 1 |
+| webkit | 40 | 26 | 2 | 12 |
+| **Sum** | **120** | **97** | **4** | **19** |
+
+Within each project's "passed" count, 2 (chromium, mobile-chrome) are the `test.fail(latency ===
+350, …)` cells from M2 — they failed their internal assertion exactly as the `test.fail()`
+annotation expects, so Playwright's own reporter counts them as passed, not failed (webkit has
+0, since `latency.spec.ts:322` skips it entirely — CDP is Chromium-only). This is the intended
+effect of M2: the four `+350` cells no longer show as bare reds in a lane summary while still
+going hard-red if they ever pass unexpectedly (none did, this round — see AG.2).
+
+**Skip accounting** (`grep -n "test.skip(" e2e/arrival/*.spec.ts`, same 4 call sites as `§AF`):
+`latency.spec.ts:322` skips on `browserName !== 'chromium'` → webkit only, 6 tests;
+`touch-tap.spec.ts:155` skips on `!hasTouch` → chromium + webkit, 4 each (8);
+`touch-wait-gesture.spec.ts:150` skips on `!hasTouch` → chromium + webkit, 2 each (4);
+`put-down.spec.ts:34` skips its one desktop-only test on `mobile-chrome` only (1).
+`6 + 8 + 4 + 1 = 19`, matching `6 (chromium) + 1 (mobile-chrome) + 12 (webkit) = 19`.
+
+### AG.2 Latency matrix — M1 and M2 verification (isolated `latency.spec.ts`-only reruns per project, full `LATENCY-PROBE` telemetry; identical pass/fail shape to the full-lane run above)
+
+| project · mode | +0 ms | +150 ms | +350 ms (`test.fail`) |
+|---|---|---|---|
+| chromium · hard | skip · entry→ready **1028** | skip · entry→ready **5916** | fails as expected: `declined·late`, entry→end 8002, `docError:true`, `rootNodes:0`, auth lock 23/11 |
+| chromium · soft | skip · entry→ready **530** (desk 694) | skip · entry→ready **3012** (desk 3306) — no `mutation` cut | fails as expected: `declined·late` entry→end 5118 (ready 6613, root→ready 1475); desk `declined·late` 8002; auth lock 26/14 |
+| mobile-chrome · hard | skip · entry→ready **1122** | skip · entry→ready **5896** | fails as expected: `declined·late`, entry→end 8001, `docError:true`, `rootNodes:0`, auth lock 23/11 |
+| mobile-chrome · soft | skip · entry→ready **511** (desk 659) | skip · entry→ready **3052** (desk 3330) — no `mutation` cut | fails as expected: `declined·late` entry→end 5139 (ready 6661, root→ready 1502); desk `declined·late` 8002; auth lock 26/14 |
+| webkit | skipped (CDP is Chromium-only) | skipped | skipped |
+
+Isolated reruns: `pnpm exec playwright test -c playwright.arrival.config.ts --project=chromium
+e2e/arrival/latency.spec.ts --reporter=line` → **6 passed (2.5m)**; same command with
+`--project=mobile-chrome` → **6 passed (2.3m)**. Both include their 2 `test.fail` cells among the
+6 passed — neither +350 cell passed unexpectedly (which M2's inversion would have turned into a
+hard red). Matches the commit body's own "After, round 4" matrix within normal run-to-run jitter
+(commit: chromium hard +0 1253/1248, +150 5875/5886; chromium soft +0 525/528, +150 2982/3030;
+mobile-chrome hard +0 967/977, +150 5895/5883; mobile-chrome soft +0 479/503, +150 3039/3038 — the
+hard +150/soft +150 cells for mobile-chrome land within single-digit ms of the commit's own
+numbers; the +0 cells are all comfortably under budget either way).
+
+**Expected-failure accounting: 4 of 4 `test.fail(latency === 350, …)` cells failed as expected,
+0 passed unexpectedly.** Per M2's rule, a pass here would be the red; none occurred, in either the
+full-lane pass or the isolated rerun, across both projects that dispatch these cells.
+
+**M1 verification — soft +0, the exact defect M1 targeted:** chromium **530 ms**, mobile-chrome
+**511 ms**, both back under 1 s. Round-3's regression (before this fix) was 3.24–3.26 s; round-2's
+original baseline was 0.45–0.51 s. This matches the commit body's own pre-commit diagnostic almost
+exactly ("soft +0: the paper's reads were done by 511 ms and ready came at 542"). **M1 confirmed:
+the paper-scoped `isFetching({ predicate })` count removed the layout-level help-content reads
+from the lens's gate, and ordinary soft Document opens are no longer held to the 3 s deadline.**
+Soft +150 still plays clean with no `mutation` cut (the round-3 fix holds) on both projects.
+
+### AG.3 The two unexpected failures (not `test.fail` cells) — why the lane is NOT green
+
+1. **`play-desk.spec.ts:95` "a cold Desk shows chrome immediately, plays once delayed reads land,
+   and never hides chrome"** — FAILED deterministically in all three projects (chromium,
+   mobile-chrome, webkit), same error every time: `the card through the dwell:
+   [{"surface":"desk","how":"mutation"}]` (`expectCardThroughDwell`/`dwellOnCard`, expected `true`,
+   received `false`). This is the exact, already-documented, already-owed defect the round-4
+   commit body itself reports finding pre-commit: "In chromium, mobile-chrome and webkit the Desk
+   card is cut `how:'mutation'`, because the roster's 'By person' facet prints when
+   `useOrganizationMembers` answers. That second-wave read is not in the Desk's `arrivalReady`.
+   This is not a round-4 change; the fix is owed and needs a ruling (CONTRACT §4h Owed)."
+   Reproduced here byte-for-byte; **not a new arrival fault.**
+2. **`play-desk.spec.ts:166` "R-DM21 A: the Desk act opens its Document at the landing, and no
+   card ever mounts"** — FAILED in the full **webkit** lane run only (identical error signature,
+   same `expectCardThroughDwell` helper — m7 widened the dwell assertion to 6 Desk-play tests, this
+   one among them, so the same race can now surface through a second call site). NOT observed in
+   the chromium or mobile-chrome full runs. **Retried once in isolation**, as instructed: `pnpm
+   exec playwright test -c playwright.arrival.config.ts --project=webkit e2e/arrival/play-desk.spec.ts
+   --reporter=line` (fresh server, port 3107 reconfirmed free before/after) → **1 failed (only
+   `:95`), 5 passed (54.1s)** — `:166` passed clean on retry. **Confirmed flaky, not deterministic**:
+   same root cause as #1 (the `useOrganizationMembers` second-wave-read race), surfacing
+   intermittently in whichever of the 6 now-dwelling Desk-play tests loses the race on a given run,
+   not a second distinct defect.
+
+**Net: 4 unexpected test-failure occurrences across the full lane** (3× `:95`, deterministic,
+one per project; 1× `:166`, webkit only, did not reproduce on isolated retry) — **all tracing to
+the single pre-existing root cause CONTRACT §4h already records as Owed** (the Desk's
+`arrivalReady` not covering the `useOrganizationMembers` read that prints the roster's "By person"
+facet). **`arrivalFaults` below lists the observed call sites; zero NEW arrival-code faults found
+this round — no `src/` was touched by this piece.**
+
+**`laneGreen: false`**, per the task's rule (zero unexpected failures required; `test.fail` cells
+excluded from that count). This matches the round-4 commit's own "Lane NOT green" verdict exactly
+— the commit body reports the identical `play-desk` cold-Desk failure as its own pre-commit
+finding, un-fixed and owed a ruling, not claimed clean.
+
+### AG.4 Legacy 36 — three batches of 12 on `:3000`, chromium, `--workers=2`, server restarted per batch, port reconfirmed free before/after each
+
+```
+Batch 1 (files 1–12):  9 failed · 3 skipped · 40 did not run · 14 passed (~2.4m)
+Batch 2 (files 13–24): 12 failed · 1 skipped · 41 did not run · 16 passed (~2.4m)
+Batch 3 (files 25–36): 16 failed · 0 skipped ·  5 did not run · 15 passed (~3.5m)
+Sum:                   37 failed · 4 skipped · 86 did not run · 45 passed (172 total)
+```
+
+**Totals identical to `legacy-baseline.md` and every prior confirming round.** Failing-file set
+(29 files, verified file-for-file against the baseline's §9 result table):
+- Batch 1 (9): `census/lens-cost-census`, `document/action-visibility`,
+  `document/desk-error-state`, `document/desk-walkthrough`, `document/help-panel`,
+  `document/hours`, `document/lens-a11y`, `document/lens-band-height`, `document/lens-cls`.
+- Batch 2 (11): `document/lens-contrast`, `document/lens-density`, `document/lens-fling`,
+  `document/lens-rail-budget`, `document/lens-reduced-motion`, `document/margin-handoffs`,
+  `document/mobile-margin-sheet`, `document/plan-room`, `document/prework-regions`,
+  `document/quiet-release-contracts`, `document/quiet-responsive-shell`.
+- Batch 3 (9): `document/workflow-stage-responsive`, `field/field-coordination`,
+  `library-configuration/commission-walk`, `library-configuration/decisions-compare`,
+  `library-configuration/picker-configure`, `library-configuration/spec-book-dimensions`,
+  `wave2-screenshots`, `wp3-screenshots`, `wp4-screenshots`.
+
+`9 + 11 + 9 = 29`, identical to `legacy-baseline.md`'s 29-file list; the same 7 files pass/skip
+cleanly (`document/desk-claims`, `document/gate-ceremony`, `document/spec-book-workspace`,
+`mood-board/project-board-paths`, `people/bring-forward`, `people/call-sheet`,
+`document/arrival-arc` fixme-skip). **Zero new legacy reds, zero newly-green.** Legacy specs never
+arm `ARRIVAL_E2E`/`?arrive=`, so the round-4 loading-gate and lens-predicate changes are provably
+inert for all 36 — the byte-identical failing-file set is the empirical confirmation.
+
+**Cleanup.** The same 16 tracked screenshot PNGs plus 1 untracked PNG that every prior round has
+documented appeared in the worktree after the batches ran (`docs/design/the-document/screenshots/
+help-walkthrough/*`, `docs/design/workflow-alignment/screenshots/wp3/*`,
+`margin-handoff-overdue-1440-collapsed.png`). Restored the 16 with `git checkout --`, removed the
+untracked one; `git status --porcelain` (excluding the sandbox's own `.env`/`.env.*` read-deny
+lines) came back empty afterward. HEAD unchanged at `163419f86e6ad4bcf3c30b88240531703074bd55`.
+
+### AG.5 `arrivalFaults` — for the integrator, no `src/` touched this round
+
+- `apps/designer-portal/e2e/arrival/play-desk.spec.ts:95` — deterministic, all 3 projects: Desk
+  card cut `how:'mutation'` when `useOrganizationMembers` answers mid-dwell; root cause already
+  named in CONTRACT §4h ("Owed") and in the round-4 commit body itself — the Desk's `arrivalReady`
+  does not cover that second-wave read. Not fixed here (no `src/` touched, per instruction).
+- `apps/designer-portal/e2e/arrival/play-desk.spec.ts:166` — same root cause, webkit-only, flaky
+  (did not reproduce on isolated retry). Recorded for the same Owed ruling; m7's widened dwell
+  assertion is what exposes it through this second call site.
+
+### AG.6 Bottom line
+
+- **Arrival lane: NOT green.** 97 passed (incl. 4 `test.fail`-expected cells), 4 unexpected
+  failed, 19 skipped, across 120 tests / 3 projects. M1 confirmed fixed (soft +0 back under 1 s,
+  530/511 ms; no soft +150 `mutation` cut). M2 confirmed fixed (0/4 `test.fail` cells passed
+  unexpectedly; the +350 rig-limit cells no longer show as bare lane reds). The lane's only
+  unexpected failures are the single pre-existing, CONTRACT-§4h-Owed Desk `arrivalReady` gap
+  (`useOrganizationMembers` race), surfacing deterministically through `play-desk.spec.ts:95`
+  (3×) and flakily through `:166` (webkit only, 1×, not reproduced on retry) — exactly the defect
+  the round-4 commit's own pre-commit diagnostic already reported as found-but-not-fixed.
+- **Zero NEW arrival-code faults.** Both failure call sites trace to the one already-documented,
+  already-escalated root cause; no `src/` was touched by this piece.
+- **Legacy 36: CLEAN, zero new reds, zero newly-green.** Byte-identical to `legacy-baseline.md`
+  and every prior confirming round (45 passed / 37 failed / 4 skipped / 86 did not run).
+- **No commit this round.** No spec was found wrong and no source was touched; HEAD stays at
+  `163419f86e6ad4bcf3c30b88240531703074bd55` (one commit on top of `5a478c1f7`, not amended, not
+  pushed, no upstream — verified directly, see the section intro above).
+- **Commands, in order:** preflight incl. build-currency `find` and the two build-sanity `grep`s
+  (§AG.0) → three full per-project lane runs (§AG.1) → two isolated `latency.spec.ts`-only reruns
+  per project for exact `LATENCY-PROBE` timings, cross-checked against the commit's own matrix
+  (§AG.2) → one isolated retry of webkit's `play-desk.spec.ts` to test `:166` for flakiness,
+  confirmed flaky (§AG.3) → legacy batches 1–3 with per-batch server restart, byte-identical to
+  baseline (§AG.4) → cleanup, tree clean, HEAD unchanged. **Not independently rerun this piece:**
+  the jest suite (the commit body's own claimed "654 suites / 8851 tests passed" was not
+  reproduced here — out of this piece's scope, which was the Playwright lane + legacy 36 only).
+
+## AF. Post-ship patch 1, round 3 (review fixes) at `5a478c1f711788340013eeddf96b7ac1ad3d5afc` on `arrival/hidden-cap-fix` (worktree `agent-arr-hidden`, one commit on top of `07a4d1291e`). Committed, not pushed. (2026-09-30, this piece)
+
+**Supersedes §AE for the current branch HEAD.** §AE ran the lane against `07a4d1291e` (round 2: the whole paper held mounted, unmarked, at its own tree position). This piece reruns the full lane and the legacy 36 against `5a478c1f7`, the round-3 review-fix commit on top of it — `data-arrival-ready` now also requires `useLensResolved()` (CONTRACT §4h, option (a)), fixing round 2's soft-+150 `mutation` cut — plus an isolated rerun of the known first-test SR flake and a retry of the +350 ms cells to confirm they are deterministic, not flaky. **This piece made no source edit and no commit**; HEAD stays at `5a478c1f711788340013eeddf96b7ac1ad3d5afc` (the input head, confirmed current for the existing `.next` build — `find src -newer .next/BUILD_ID` returned 0 files).
+
+### AF.0 Preflight — build currency, ports, quiet window
+
+```
+git -C <worktree> log -1 --format='%H %s'
+→ 5a478c1f711788340013eeddf96b7ac1ad3d5afc fix(arrival): keep the page's loading state
+  until ready while a wait is armed — post-ship patch 1 (US-14)
+find apps/designer-portal/src -newer apps/designer-portal/.next/BUILD_ID  → empty, 0 files
+  — build current for HEAD (.next/BUILD_ID = QnO7E6s9p2e77TgrCzx-C), no rebuild performed
+lsof -nP -iTCP:3107 -sTCP:LISTEN   # empty before start (exit 1)
+lsof -nP -iTCP:3000 -sTCP:LISTEN   # empty before start (exit 1)
+lsof -nP -iTCP:54321 -sTCP:LISTEN  # local Supabase up
+ListAgents  → 3 peer sessions, all idle
+df -h /     → 926Gi total, 161Gi avail
+```
+
+Env recipe followed `§AC.0`/`§AE.0`: a scratchpad `extract-pw-env.mjs` regexes the 6 literal
+`webServer.env` keys out of `playwright.config.ts` and prints `export KEY='value'` lines, consumed
+via `eval "$(...)"` in the same shell as the command that needs them (no value ever printed by this
+piece). `NEXT_PUBLIC_SUPABASE_STORAGE_KEY` set to the same anon key,
+`NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,the-document-pilot:true,client-invite-letter:true'`
+and `ARRIVAL_E2E=1` set for the lane run; `SUPABASE_ORIGIN_RUNTIME`/`OPEN_NEXT`/`CI` unset
+throughout; `ARRIVAL_E2E` also unset for the legacy batches. For the legacy batches, the trio +
+`SUPABASE_SERVICE_ROLE_KEY` were piped from `supabase status -o env` into shell variables, never
+echoed.
+
+### AF.1 Arrival lane — three separate per-project runs, unsandboxed foreground
+
+Run per project rather than one combined dispatch (matching `§AA`'s pattern), port 3107 confirmed
+free before each and after the last:
+
+```
+pnpm exec playwright test -c playwright.arrival.config.ts --project chromium --reporter=line
+  → Running 40 tests using 1 worker
+    2 failed: latency.spec.ts:331 hard Document entry at +350 ms; soft Document entry at +350 ms
+    6 skipped
+    32 passed (6.2m)
+
+pnpm exec playwright test -c playwright.arrival.config.ts --project mobile-chrome --reporter=line
+  → Running 40 tests using 1 worker
+    2 failed: latency.spec.ts:331 hard Document entry at +350 ms; soft Document entry at +350 ms
+    1 skipped
+    37 passed (5.8m)
+
+pnpm exec playwright test -c playwright.arrival.config.ts --project webkit --reporter=line
+  → Running 40 tests using 1 worker
+    1 failed: accessibility.spec.ts:24 exactly one SR announcement … (the run's first test)
+    12 skipped
+    27 passed (3.6m)
+```
+
+**Per-project breakdown** (40 unique tests × 3 projects = 120; `touch-tap.spec.ts` now has 4 tests,
+up from round 8's 3 — a new case, "a tap on the held Desk skeleton ends the wait…", landed with the
+round-2 held-tree swallow fix):
+
+| Project | Dispatched | Passed | Failed (1st pass) | Skipped |
+|---|---|---|---|---|
+| chromium | 40 | 32 | 2 | 6 |
+| mobile-chrome | 40 | 37 | 2 | 1 |
+| webkit | 40 | 27 | 1 | 12 |
+| **Sum** | **120** | **96** | **5** | **19** |
+
+Skip accounting (`grep -n "test.skip(" e2e/arrival/*.spec.ts`, 4 call sites, same sites as `§AE.1`):
+`latency.spec.ts:322` skips on `browserName !== 'chromium'` → webkit only, 6 tests (6);
+`touch-tap.spec.ts:155` skips on `!hasTouch` → chromium + webkit, 4 tests each (8);
+`touch-wait-gesture.spec.ts:150` skips on `!hasTouch` → chromium + webkit, 2 tests each (4);
+`put-down.spec.ts:34` skips its one desktop-only test on `mobile-chrome` only (1).
+`6 + 8 + 4 + 1 = 19`, matching `6 (chromium) + 1 (mobile-chrome) + 12 (webkit) = 19`.
+
+**The known first-test SR-announcement flake recurred once, on webkit only** this round (chromium
+and mobile-chrome both passed `accessibility.spec.ts:24` clean on the first pass — unlike `§AA`/`§AC`
+where it hit chromium+webkit or neither). Isolated rerun, all three projects, fresh server, port
+3107 reconfirmed free before and after:
+
+```
+pnpm exec playwright test -c playwright.arrival.config.ts e2e/arrival/accessibility.spec.ts:24 --reporter=line
+  Running 3 tests using 1 worker
+  3 passed (23.1s)
+```
+
+Clean on all three — recorded as **flake-then-pass** for webkit (chromium/mobile-chrome already
+passed outright in the full run, so this is confirmatory only for them).
+
+### AF.2 The four latency reds — exact reproduction of the commit's own round-3 diagnostic; not a new arrival fault, still awaiting Kody's ruling (CONTRACT §4h)
+
+The `5a478c1f7` commit body already records this exact four-cell "After, round 3" pattern
+pre-commit, from two of its own diagnostic runs. This piece's run reproduces the identical shape,
+cell for cell, within normal run-to-run jitter (tens of ms) — **and matches on the two rig-limit
+signatures exactly**: `auth lock 23/11` on both hard +350 cells, and `docError:true` /
+`rootNodes:0` (no route root ever rendered) on both:
+
+| project · mode | +0 ms | +150 ms | +350 ms |
+|---|---|---|---|
+| chromium · hard | played (skip) · entry→ready 1051 | played (skip) · entry→ready 5880 | **RED** — `declined·late` at entry→end 8002; no root (`rootNodes:0`), `docError:true`, auth lock 23 not released / 11 broken |
+| chromium · soft | played (skip) · entry→ready 3242 | **played (skip) · entry→ready 3753 — no `mutation` cut, round-3 fix holds** | **RED** — `declined·late` at entry→end 5109 (ready at entry→ready 6599, root→ready 1480); Desk retried once; auth lock 26/14 |
+| mobile-chrome · hard | played (skip) · entry→ready 950 | played (skip) · entry→ready 5927 | **RED** — `declined·late` at entry→end 8002; no root, `docError:true`, auth lock 23/11 |
+| mobile-chrome · soft | played (skip) · entry→ready 3248 | **played (skip) · entry→ready 3756 — no `mutation` cut** | **RED** — `declined·late` at entry→end 5138 (ready at entry→ready 6667, root→ready 1517); Desk retried once; auth lock 26/14 |
+| webkit | skipped (CDP is Chromium-only, `latency.spec.ts:322`) | skipped | skipped |
+
+Compare to CONTRACT §4h's own "After, round 3" table (lane build `QnO7E6s9p2e77TgrCzx-C`, same as
+this piece's): chromium hard 1317/5906/RED-8002-lock23·11; chromium soft 3256/3733/RED-late-5119
+(ready 6618)-lock25·13; mobile-chrome hard 966/5942/RED-8003-lock23·11; mobile-chrome soft
+3241/3746/RED-late-5132(ready 6624)-lock26·14. Every cell in this piece's run lands within the same
+range the commit's own two runs span (chromium hard +0: commit 1251–1317, this run 1051; all other
+cells within ~30 ms of the commit's own run-to-run spread), and the two rig-limit signatures —
+`auth lock 23/11` on hard +350, `auth lock 26/14` on mobile-chrome soft +350 — match exactly.
+
+**Retried the two chromium +350 ms cells once more in isolation** (beyond the two full-project runs
+above, which already reproduced them independently on chromium and mobile-chrome) to confirm
+determinism rather than machine-contention flakiness:
+
+```
+pnpm exec playwright test -c playwright.arrival.config.ts --project chromium -g "\+350 ms per request" --reporter=line
+  2 failed (hard: declined·late entry→end 8001, docError:true, lock 23/11;
+            soft: declined·late entry→end 5113 (ready 6576), lock 26/14)
+```
+
+Same shape, same lock counts, a third independent time — **not flaky, fully deterministic** at this
+latency on this rig.
+
+**What this is, per CONTRACT §4h (round 3's own "What round 3 shows" / "Owed" sections):**
+- **Soft +150 is now fixed** — the round-3 patch (`data-arrival-ready` also requires
+  `useLensResolved()`) removes the `mutation` cut `§AE.2` found. Confirmed here: both soft +150
+  cells play clean with no cut, on both chromium and mobile-chrome.
+- **The +350 ms column is unchanged from round 2 and explicitly not patched in round 3** — per the
+  commit body: "The +350 column stays red with round 2's causes. These are the rig limits (auth
+  lock; HTTP/1.1 to 127.0.0.1:54321) and are owed Kody rulings; they are not patched here." The
+  hard-mode failure is `supabase-js`'s one navigator lock serialising `auth.getUser()`, stolen past
+  5 s under CDP-emulated +350 ms/request latency before the route root ever renders (`rootNodes:0`,
+  `docError:true` — the page shows "This document could not be picked up", not an arrival decline).
+  The soft-mode failure is the same lock contention plus the rig's HTTP/1.1 six-connection limit to
+  `127.0.0.1:54321` (production Supabase is HTTP/2, not measured there). Code in play:
+  `src/lib/arrival/types.ts:57` (`BUDGET.HARD_ENTRY_READY_MS: 8_000, SOFT_ENTRY_READY_MS: 4_000` —
+  the cap actually hit here, **not** `HIDDEN_CAP_MS` which the original post-ship patch targeted),
+  `src/components/document/arrival/arrival-run.tsx:242-244` (`cap = entry.hard ?
+  HARD_ENTRY_READY_MS : SOFT_ENTRY_READY_MS`) and `:399` (`entryTimer =
+  setTimeout(() => decline('late'), left)`), `src/app/(document)/doc/[id]/page.tsx:2860-2862`
+  (`data-arrival` only appears once `!arrivalHeld` — so if `entryTimer`'s 8 s/4 s deadline fires
+  before the held waterfall completes, the route root never appears at all before the decline).
+- **This piece's verdict: zero NEW arrival faults.** The four reds are an exact, independently
+  reproduced confirmation of CONTRACT §4h's own already-documented, already-escalated-to-Kody rig
+  limit (the "Kody ruling — soft +350 on the rig" and "Kody ruling — the hard +350 red" items in
+  §4h's Owed list), not a regression and not a new finding. Not patched here, per the task brief's
+  instruction not to patch `src` for the arrival's own documented behavior, and per CONTRACT §4h's
+  own ruling that these are Kody's calls.
+
+### AF.3 Legacy 36 — three batches of 12 on `:3000`, restarted per batch — byte-identical to `legacy-baseline.md`
+
+Same recipe as `§AC.0`/`§AE.4`: the existing `.next` build served via `next start -p 3000` per
+batch (backgrounded, `/auth/signin` polled — ready within 2s every time), `pnpm exec playwright
+test --project=chromium <12 files> --reporter=line --workers=2 --output=<scratchpad>/ad-legacy-b{N}-out`,
+then the server process killed and `:3000` reconfirmed free before starting the next batch.
+
+| Batch | Failed | Skipped | Did not run | Passed | Wall time |
+|---|---|---|---|---|---|
+| 1 (files 1–12) | 9 | 3 | 40 | 14 | ~2.4m |
+| 2 (files 13–24) | 12 | 1 | 41 | 16 | ~2.4m |
+| 3 (files 25–36) | 16 | 0 | 5 | 15 | ~3.5m |
+| **Sum** | **37** | **4** | **86** | **45** | 172 tests |
+
+**Totals are identical to `legacy-baseline.md` and every prior confirming round**: 45 passed, 37
+failed, 4 skipped, 86 did not run (172 total).
+
+**Failing-file set**, one file per batch's failing-test list, deduplicated: batch 1 — 9 files
+(`census/lens-cost-census`, `document/action-visibility`, `document/desk-error-state`,
+`document/desk-walkthrough`, `document/help-panel`, `document/hours`, `document/lens-a11y`,
+`document/lens-band-height`, `document/lens-cls`); batch 2 — 11 files (`document/lens-contrast`,
+`document/lens-density`, `document/lens-fling`, `document/lens-rail-budget`,
+`document/lens-reduced-motion`, `document/margin-handoffs`, `document/mobile-margin-sheet`,
+`document/plan-room`, `document/prework-regions`, `document/quiet-release-contracts`,
+`document/quiet-responsive-shell`); batch 3 — 9 files (`document/workflow-stage-responsive`,
+`field/field-coordination`, `library-configuration/commission-walk`,
+`library-configuration/decisions-compare`, `library-configuration/picker-configure`,
+`library-configuration/spec-book-dimensions`, `wave2-screenshots`, `wp3-screenshots`,
+`wp4-screenshots`). `9 + 11 + 9 = 29`, **identical, file for file, to `legacy-baseline.md`'s 29-file
+list** (verified by direct comparison against the baseline's §9 result table — every file the
+baseline marks FAIL is red here and vice versa; `document/desk-claims`, `document/gate-ceremony`,
+`document/spec-book-workspace`, `mood-board/project-board-paths`, `people/bring-forward`,
+`people/call-sheet`, `document/arrival-arc` (fixme skip) all pass/skip cleanly, matching the
+baseline's 6 PASS + 1 SKIP).
+
+**Zero new legacy reds, zero newly-green.** The three files `§AB` (round 8) found contention-flaky
+under load (`mood-board/project-board-paths.spec.ts`, `people/bring-forward.spec.ts`,
+`people/call-sheet.spec.ts`) passed cleanly again here, inside batch 3's normal 12-file/2-worker
+grouping.
+
+**Legacy specs never arm the e2e opt-in** (no `ARRIVAL_E2E=1`, no `?arrive=` token), so the
+`arrivalWaiting && !arrivalReady` loading-gate branch this patch adds is inert for all 36 —
+`useArrivalWaiting()` reads `false` throughout. The byte-identical failing-file set is the empirical
+confirmation.
+
+**Cleanup.** 16 tracked screenshot PNGs (`docs/design/the-document/screenshots/help-walkthrough/*`,
+`docs/design/workflow-alignment/screenshots/wp3/*`) plus one untracked
+`margin-handoff-overdue-1440-collapsed.png` appeared in the worktree after the run — the identical
+set every prior round has documented. Restored the 16 with `git checkout --`, removed the untracked
+one; `git status --porcelain` (excluding the sandbox's own `.env.example`/`.env.*` read-deny noise)
+came back empty afterward. HEAD unchanged at `5a478c1f711788340013eeddf96b7ac1ad3d5afc`.
+
+### AF.4 Bottom line
+
+- **Arrival lane: GREEN with 4 known/expected reds (exact reproduction of the fixer's own pre-commit
+  round-3 matrix, CONTRACT §4h) plus 1 known first-test SR flake confirmed clean on isolated
+  rerun.** 96 passed, 5 failed (1st pass), 19 skipped across 120 tests / 3 projects. The round-3 fix
+  (lens-gated `data-arrival-ready`) is confirmed: the soft +150 `mutation` cut `§AE.2` found is
+  gone — both soft +150 cells now play clean. The 4 remaining latency reds (hard +350 ×2,
+  soft +350 ×2) are CONTRACT §4h's pre-flagged, still-open "Owed Kody" rig-limit items (the
+  `auth.getUser()` navigator-lock convoy under CDP-emulated +350 ms/request latency against a local
+  HTTP/1.1 Supabase) — reproduced with matching lock counts across three independent runs (two
+  full-project passes + one isolated retry), not a regression, not patched here.
+- **`arrivalFaults: []` — no new arrival-code fault found this round.** The four reds are a
+  reproduction of an already-documented, already-escalated rig limit, not a new defect; no failure
+  in this round traces to arrival code behaving differently than CONTRACT §4h already describes.
+- **Legacy 36: CLEAN, zero new reds.** Byte-identical failing-file set to `legacy-baseline.md` and
+  every prior confirming round (45 passed / 37 failed / 4 skipped / 86 did not run). Legacy specs
+  never arm the e2e opt-in, so the new loading-gate branch is provably inert for them.
+- **No commit this round.** No spec was wrong, no source was touched; HEAD stays at
+  `5a478c1f711788340013eeddf96b7ac1ad3d5afc` (one commit on top of `07a4d1291e`, not amended, not
+  pushed, no upstream).
+- **Commands, in order:** preflight (§AF.0) → three per-project lane runs, 2+2+1 failures on the 1st
+  pass (§AF.1) → isolated rerun of the known SR flake, clean (§AF.1) → the four latency reds
+  cross-checked against the commit's own round-3 table plus one isolated retry, deterministic
+  (§AF.2) → legacy batches 1–3 with per-batch server restart, byte-identical to baseline (§AF.3) →
+  cleanup, tree clean, HEAD unchanged.
+
+## AE. Post-ship patch 1, round 2 (review fixes) at `07a4d1291efbdbf9e9bef0df51cc5fa2ab1387ff` on `arrival/hidden-cap-fix` (worktree `agent-arr-hidden`, one commit on top of `4a684525b`). Committed, not pushed. (2026-09-30, this piece)
+
+**Supersedes §AD for the current branch HEAD.** §AD ran the lane against `4a684525b` (round 1: only `{ticketFacts}` held mounted during the wait). This piece reruns the full lane and the legacy 36 against `07a4d1291e`, the round-2 review-fix commit on top of it — "keeps the whole paper mounted at its own tree position" per the commit body — plus the isolated-rerun proof for one new-shape webkit flake. **This piece made no source edit and no commit** (test-only scratchpad scripts stayed in the scratchpad, nothing under `src/` or `e2e/` was touched); HEAD stays at `07a4d1291efbdbf9e9bef0df51cc5fa2ab1387ff` (the input head).
+
+### AE.0 Preflight — build currency, ports
+
+```
+git -C <worktree> log -1 --format='%H %s'
+→ 07a4d1291efbdbf9e9bef0df51cc5fa2ab1387ff fix(arrival): keep the page's loading state
+  until ready while a wait is armed — post-ship patch 1 (US-14)
+git -C <worktree> status --porcelain   → clean (only the sandbox's own .env.example lstat noise)
+
+find apps/designer-portal/src -newer apps/designer-portal/.next/BUILD_ID  → empty, 0 files
+  — build current for HEAD (.next/BUILD_ID = BeIJMW1iRpgY5tTZ_LxFu, 10:57 local), no rebuild
+grep -rl bkvcixdmuyejfzcijpdg apps/designer-portal/.next/static   → empty (exit 1)
+grep -l -- '--arr-ok' apps/designer-portal/.next/static/css/*.css → 595a21143f7eec77.css (present)
+lsof -nP -iTCP:3107 -sTCP:LISTEN   # empty before start (exit 1)
+lsof -nP -iTCP:3000 -sTCP:LISTEN   # empty before start (exit 1)
+```
+
+Env recipe followed `§AC.0`/`§AD.0`: a scratchpad `extract-pw-env.mjs` regexes the 6 literal
+`webServer.env` keys out of `playwright.config.ts` and prints `export KEY='value'` lines, consumed
+via `eval "$(...)"` in the same shell as the command that needs them (no value ever printed by
+this piece). `NEXT_PUBLIC_SUPABASE_STORAGE_KEY` set to the same anon key,
+`NEXT_PUBLIC_FLAG_OVERRIDES='procurement-workspace-pilot:true,the-document-pilot:true,client-invite-letter:true'`
+and `ARRIVAL_E2E=1` set for the lane run; `SUPABASE_ORIGIN_RUNTIME`/`OPEN_NEXT`/`CI` unset
+throughout; `ARRIVAL_E2E` also unset for the legacy batches.
+
+### AE.1 Arrival lane — full run, all three projects, one pass (unsandboxed, backgrounded + polled to completion)
+
+```
+pnpm exec playwright test -c playwright.arrival.config.ts --reporter=line
+Running 120 tests using 1 worker
+  7 failed
+    [chromium]      › latency.spec.ts:331 soft Document entry at +150 ms per request
+    [chromium]      › latency.spec.ts:331 hard Document entry at +350 ms per request
+    [chromium]      › latency.spec.ts:331 soft Document entry at +350 ms per request
+    [mobile-chrome]  › latency.spec.ts:331 soft Document entry at +150 ms per request
+    [mobile-chrome]  › latency.spec.ts:331 hard Document entry at +350 ms per request
+    [mobile-chrome]  › latency.spec.ts:331 soft Document entry at +350 ms per request
+    [webkit]         › input-and-escape.spec.ts:140 Skip goes straight to rest, not through the remaining hold
+  19 skipped
+  94 passed (15.6m)
+LANE_EXIT=0
+```
+
+**Per-project breakdown** (40 unique tests × 3 projects = 120; the lane grew by one test since
+`§AD` — `latency.spec.ts` now has 6 cases, up from whatever count fed `§AD`'s 39-unique-test total,
+because this piece's `--list` was not run separately; the dispatch log's own `[n/120]` tags and the
+4 `test.skip()` sites below account for the total exactly):
+
+| Project | Dispatched | Passed | Failed (1st pass) | Skipped |
+|---|---|---|---|---|
+| chromium | 40 | 31 | 3 | 6 |
+| mobile-chrome | 40 | 36 | 3 | 1 |
+| webkit | 40 | 27 | 1 | 12 |
+| **Sum** | **120** | **94** | **7** | **19** |
+
+Skip accounting (`grep -n "test.skip(" e2e/arrival/*.spec.ts`, 4 call sites):
+`latency.spec.ts:322` skips on `browserName !== 'chromium'` → webkit only, 6 tests (6);
+`touch-tap.spec.ts:155` skips on `!hasTouch` → chromium + webkit, 4 tests each (8);
+`touch-wait-gesture.spec.ts:150` skips on `!hasTouch` → chromium + webkit, 2 tests each (4);
+`put-down.spec.ts:34` skips its one desktop-only test on `mobile-chrome` only (1).
+`6 + 8 + 4 + 1 = 19`, matching `6 (chromium) + 1 (mobile-chrome) + 12 (webkit) = 19`.
+
+**The known first-test SR-announcement flake did not recur** — `accessibility.spec.ts:24` passed
+cleanly on all three projects.
+
+### AE.2 The six latency reds — match the fixer's own round-2 before/after table exactly; not a new arrival fault, awaiting Kody's ruling (CONTRACT §4h)
+
+The commit body for `07a4d1291e` already records this exact six-cell pattern as **round 2**'s
+result, pre-commit ("After, round 2 … two runs, each 6 passed / 6 failed / 6 skipped (webkit), the
+same six cells red"). This piece's run reproduces the identical shape, cell for cell:
+
+| project · mode | +0 ms | +150 ms | +350 ms |
+|---|---|---|---|
+| chromium · hard | played (skip) · entry→ready 1021 | played (skip) · entry→ready 5697 | **RED** — `declined·late` at entry→end 8000; no root rendered (`rootNodes:0`), `docError:true`, auth lock 23 not released / 11 broken |
+| chromium · soft | played (skip) · entry→ready 491 | **RED** — `cardHeld:false`, `how:'mutation'`, cut ~1041 ms after ready (ready at entry→ready 2693) | **RED** — `declined·late` at entry→end 5125 (ready at entry→ready 6618, root→ready 1482); Desk retried once; auth lock 26/14 |
+| mobile-chrome · hard | played (skip) · entry→ready 932 | played (skip) · entry→ready 5732 | **RED** — `declined·late` at entry→end 8002; no root, `docError:true`, auth lock 23/11 |
+| mobile-chrome · soft | played (skip) · entry→ready 445 | **RED** — `cardHeld:false`, `how:'mutation'`, cut ~1075 ms after ready (ready at entry→ready 2664) | **RED** — `declined·late` at entry→end 5132 (ready at entry→ready 6641, root→ready 1497); Desk retried once; auth lock 26/14 |
+| webkit | skipped (CDP is Chromium-only, `latency.spec.ts:322`) | skipped | skipped |
+
+`rootToReadyMs: 0` in every cell whose root rendered (confirms Option A's intended effect — the
+route root, once it appears, is already ready). The two failure shapes are exactly what CONTRACT
+§4h's "Owed" section pre-authorizes and asks Kody to rule on, not code this piece patches:
+
+- **+150 ms soft (2 instances, `latency.spec.ts:440`)** — the lens's resolve pass (`use-lens-density.ts`,
+  D-B46) promotes the in-frame `approvals` region `quiet → full` ~1.0–1.1 s after ready, which counts
+  as a root mutation and cuts the card's `how` to `'mutation'` before the test's own dwell/Skip. This
+  is CONTRACT §4h's "Kody ruling — the soft +150 cut" (accept it, or bound ready on
+  `data-lens-resolved`, or have the lens hold its resolve pass during Acts 1–2 — neither fix is
+  built).
+- **+350 ms hard and soft (4 instances, `latency.spec.ts:439`)** — `supabase-js`'s one navigator lock
+  serialising `auth.getUser()` is stolen past 5 s under CDP-emulated +350 ms/request latency (auth
+  lock 23–26 not-released / 11–14 broken per cell); the hard-mode Document errors outright
+  (`docError:true`, no root ever renders) and the soft-mode Document/Desk both decline `late`. This
+  is CONTRACT §4h's "Kody ruling — the hard +350 red" and "Kody ruling — soft +350 on the rig" (the
+  rig's HTTP/1.1, six-connection limit to `127.0.0.1:54321`; production Supabase is HTTP/2 and this
+  was not measured there).
+
+Code in play for both: `doc/[id]/page.tsx:2482` (`arrivalHeld = arrivalWaiting && !arrivalReady &&
+!arrivalRootShown.current`), `:2834/:2852-2853` (the held/ready render branch), `arrival-run.tsx:372`
+(`BUDGET.HIDDEN_CAP_MS` — not the blocker at +350 ms; the 8 s/4 s entry→ready caps are), and
+`arrival.css:8-19` (`html.arr-pre [data-arrival-held="document"]{opacity:0}`).
+
+**Not patched, per the task brief and CONTRACT §4h's own ruling that these are Kody's calls, not
+this piece's.**
+
+### AE.3 The one non-latency failure — webkit `input-and-escape.spec.ts:140`, isolated rerun clean (flake-then-pass, new shape)
+
+```
+  7) [webkit] › e2e/arrival/input-and-escape.spec.ts:140:7 › Skip goes straight to rest, not through the remaining hold
+     Error: expect(locator).toBeVisible() failed
+     Locator: locator('.arr-card .arr-h').first()
+     Timeout: 20000ms — element(s) not found
+     at e2e/arrival/input-and-escape.spec.ts:146:55
+```
+
+Not one of the six documented round-2 cells, and not the well-known first-test SR-announcement
+flake (this was webkit's 8th dispatched test, not the run's first). Isolated rerun, same build,
+fresh server, port 3107 reconfirmed free before and after:
+
+```
+pnpm exec playwright test -c playwright.arrival.config.ts e2e/arrival/input-and-escape.spec.ts:140 --project=webkit --reporter=line
+Running 1 test using 1 worker
+  1 passed (7.9s)
+ISO_EXIT=0
+```
+
+Clean on the isolated rerun — recorded as **flake-then-pass**, matching the task brief's own
+allowance to retry one flaky spec once. Flagged here (not folded silently into "passed") because
+its failure shape — the route root's card head never appearing within 20 s, mid-run on a warmed
+server — does not match any previously documented flake pattern in this file; a repeat in a future
+round would be worth a closer look at webkit-specific timing in the held→ready transition
+(`doc/[id]/page.tsx:2834`), but one occurrence, clean on isolated rerun, is not evidence of a code
+defect today.
+
+### AE.4 Legacy 36 — three-batches-of-12 on `:3000`, restarted per batch — byte-identical to `legacy-baseline.md`
+
+Same recipe as `§AC.0`/`§AD.4`: the existing `.next` build served via `next start -p 3000` per
+batch (backgrounded, `/auth/signin` polled — ready within 2 polls every time), `pnpm exec
+playwright test --project=chromium <12 files> --reporter=line --workers=2
+--output=<scratchpad>/legacy-batch{N}-results`, then the actual listening PID on `:3000` (not the
+`npx`/`nohup` wrapper PID, which does not own the socket) killed with `kill -9` and `:3000`
+reconfirmed free before starting the next batch.
+
+| Batch | Failed | Skipped | Did not run | Passed | Wall time |
+|---|---|---|---|---|---|
+| 1 (files 1–12) | 9 | 3 | 40 | 14 | 2.4m |
+| 2 (files 13–24) | 12 | 1 | 41 | 16 | 2.4m |
+| 3 (files 25–36) | 16 | 0 | 5 | 15 | 3.5m |
+| **Sum** | **37** | **4** | **86** | **45** | 172 tests |
+
+**Totals are identical to `legacy-baseline.md` and every prior confirming round**: 45 passed, 37
+failed, 4 skipped, 86 did not run (172 total).
+
+**Failing-file set**, extracted from each batch's own `N failed` block (ANSI escapes stripped with
+a Perl one-liner, deduplicated, sorted) and diffed against `legacy-baseline.md`'s 29-file list:
+
+```
+ae-failed-files-sorted.txt: 29 files
+diff ae-failed-files-sorted.txt baseline-29-failing-sorted.txt   → exit 0, no output (IDENTICAL)
+comm -23 (new reds, only in this run):     (empty)
+comm -13 (newly green, only in baseline):  (empty)
+cmp ae-failed-files-sorted.txt baseline-29-failing-sorted.txt → IDENTICAL
+```
+
+**Zero new legacy reds, zero newly-green.** The three files round 8 (`§AB`) found contention-flaky
+under load (`mood-board/project-board-paths.spec.ts`, `people/bring-forward.spec.ts`,
+`people/call-sheet.spec.ts`) passed cleanly again, inside batch 3's normal 12-file/2-worker
+grouping, the same grouping that was contention-flaky in round 8.
+
+**Legacy specs never arm the e2e opt-in** (no `ARRIVAL_E2E=1`, no `?arrive=` token,
+`navigator.webdriver` true under Playwright without the e2e opt-in cookie), so the loading-gate
+branch this patch adds (`arrivalWaiting && !arrivalReady`) is inert for all 36 — `useArrivalWaiting()`
+reads `false` throughout. The byte-identical failing-file set is the empirical confirmation.
+
+**Cleanup.** 16 tracked screenshot PNGs (`docs/design/the-document/screenshots/help-walkthrough/*`,
+`docs/design/workflow-alignment/screenshots/wp3/*`) plus one untracked
+`margin-handoff-overdue-1440-collapsed.png` appeared after the run — the identical set every prior
+round has documented. Restored the 16 with `git checkout --`, removed the untracked one;
+`git status --porcelain` (excluding the sandbox's own `.env.example` lstat noise) came back empty
+afterward. HEAD unchanged at `07a4d1291efbdbf9e9bef0df51cc5fa2ab1387ff`.
+
+### AE.5 Bottom line
+
+- **Arrival lane: GREEN with 6 known/expected reds (matching the fixer's own pre-commit round-2
+  matrix exactly) plus 1 new-shape flake confirmed clean on isolated rerun.** 94 passed, 7 failed
+  (1st pass), 19 skipped across 120 tests / 3 projects. The 6 latency reds are CONTRACT §4h's
+  pre-flagged, still-open "Owed Kody" items (the soft +150 lens-resolve cut; the hard/soft +350
+  `auth.getUser()` navigator-lock rig limit) — not new findings, not patched here, consistent with
+  the task brief's instruction not to patch `src` for the arrival's own documented behavior. The
+  7th failure (webkit `input-and-escape.spec.ts:140`) is not one of those six cells and not the
+  known first-test SR flake; isolated rerun passed cleanly (flake-then-pass), recorded rather than
+  silently dropped because its shape is new to this file.
+- **Legacy 36: CLEAN, zero new reds.** Byte-identical failing-file set to `legacy-baseline.md` and
+  every prior confirming round (45 passed / 37 failed / 4 skipped / 86 did not run). Legacy specs
+  never arm the e2e opt-in, so the new loading-gate branch is provably inert for them.
+- **No commit this round.** No spec was wrong, no source was touched; HEAD stays at
+  `07a4d1291efbdbf9e9bef0df51cc5fa2ab1387ff` (one commit on top of `4a684525b`, not amended, not
+  pushed, no upstream).
+- **Commands, in order:** preflight (§AE.0) → full arrival lane, one pass, backgrounded + polled to
+  completion, 7 failures on the 1st pass (§AE.1) → the six documented latency reds cross-checked
+  against the commit's own round-2 table (§AE.2) → isolated rerun of the one new-shape webkit
+  failure, clean (§AE.3) → legacy batches 1–3 with per-batch server restart, byte-identical to
+  baseline (§AE.4) → cleanup, tree clean, HEAD unchanged.
+
+## AD. Post-ship patch 1 at `4a684525b3c55d626262e9a796a03b4272102bd0` on `arrival/hidden-cap-fix` (worktree `agent-arr-hidden`). Committed, not pushed. (2026-09-30, this piece)
+
+**Scope:** rerun the arrival lane (now 39 unique tests × 3 projects = 117, up from round 9's 33×3=99 — `e2e/arrival/latency.spec.ts` is new this round, CONTRACT §4h's real-latency proof for the Option-A loading-gate fix) and the legacy 36-file regression, against the fixer's own build, in a quiet window. **This piece made no source edit and no commit** — every lane result matched the fixer's own pre-commit numbers exactly, and the legacy comparison is a byte-identical match to `legacy-baseline.md`. HEAD stays at `4a684525b3c55d626262e9a796a03b4272102bd0` (the input head).
+
+### AD.0 Preflight — build currency, ports, quiet window
+
+```
+git -C <worktree> log -1 --format='%H %s'
+→ 4a684525b3c55d626262e9a796a03b4272102bd0 fix(arrival): keep the page's loading state
+  until ready while a wait is armed — post-ship patch 1 (US-14)
+
+find apps/designer-portal/src -newer apps/designer-portal/.next/BUILD_ID → (empty, 0 files)
+  — build current for HEAD, no rebuild performed
+lsof -nP -iTCP:3107 -sTCP:LISTEN   # empty before start (exit 1)
+lsof -nP -iTCP:3000 -sTCP:LISTEN   # empty before start (exit 1)
+df -h /   → 926Gi total, 179–180Gi avail (OK)
+ListAgents → 3 peer sessions, all "idle" — quiet window confirmed before both runs
+```
+
+Env recipe followed `§AC.0`/`§AA.0` exactly: `extract-pw-env.mjs playwright.config.ts` piped
+through `eval "$(...)"` (6 keys exported, never echoed), `NEXT_PUBLIC_SUPABASE_STORAGE_KEY` set to
+the same anon key, `ARRIVAL_E2E=1` set for the lane run only (unset for the legacy batches, per the
+established recipe), `SUPABASE_ORIGIN_RUNTIME`/`OPEN_NEXT`/`CI` unset throughout.
+
+### AD.1 Arrival lane — full run, all three projects, one pass (unsandboxed, backgrounded + Monitor-watched)
+
+```
+pnpm exec playwright test -c playwright.arrival.config.ts --reporter=line
+Running 117 tests using 1 worker
+  2 failed
+    [chromium] › e2e/arrival/latency.spec.ts:317:11 › hard Document entry at +350 ms per request
+    [mobile-chrome] › e2e/arrival/latency.spec.ts:317:11 › hard Document entry at +350 ms per request
+  17 skipped
+  98 passed (14.0m)
+```
+
+**Per-project breakdown** (39 unique tests × 3 projects = 117; derived from the dispatch log's
+`[n/117] [project]` tags, cross-checked against the 4 `test.skip()` call sites in `e2e/arrival/*.spec.ts`):
+
+| Project | Dispatched | Passed | Failed | Skipped |
+|---|---|---|---|---|
+| chromium | 39 | 33 | 1 | 5 |
+| mobile-chrome | 39 | 37 | 1 | 1 |
+| webkit | 39 | 28 | 0 | 11 |
+| **Sum** | **117** | **98** | **2** | **17** |
+
+Skip accounting (`grep -n "test.skip(" e2e/arrival/*.spec.ts`, 4 call sites, matches the sum exactly):
+`latency.spec.ts:308` skips on `browserName !== 'chromium'` → webkit only, 6 tests (6); `put-down.spec.ts:34`
+skips its one desktop-only test on `mobile-chrome` only (1); `touch-wait-gesture.spec.ts:150` and
+`touch-tap.spec.ts:146` both skip on `!hasTouch` → chromium + webkit, 2 and 3 tests respectively
+(4 + 6 = 10). `6 + 1 + 4 + 6 = 17`, matching `5 (chromium) + 1 (mobile-chrome) + 11 (webkit) = 17`.
+
+**The known first-test SR-announcement flake did not recur this round** — `accessibility.spec.ts:24`
+passed cleanly on all three projects (0 occurrences of it in the failure list), so no isolated rerun
+was needed for it.
+
+### AD.2 The two failures — the exact pre-documented rig limit, not a new arrival fault
+
+Both failures are `latency.spec.ts:317` "hard Document entry at +350 ms per request", one on
+`chromium` and one on `mobile-chrome` (both `browserName: 'chromium'`; `webkit` skips the whole spec
+per `AD.1`). Both assert `docOutcome` to be `'card'` and instead get `'ended'` (`declined`, `cause:
+'late'`), at `latency.spec.ts:421`. The `LATENCY-PROBE` telemetry line for each is byte-for-byte the
+same shape the fixer's own commit message records pre-commit:
+
+```
+chromium:      entryToEndMs=8002, docError=true, authLock={notReleased:23, broken:11}
+mobile-chrome: entryToEndMs=8000, docError=true, authLock={notReleased:23, broken:11}
+```
+
+This matches the commit message's own "the two reds come from the Document's own resolution failing
+behind the supabase-js `auth.getUser()` navigator lock (23 not released / 11 broken, the same counts
+as before)" precisely, and matches CONTRACT §4h line 314's own pre-authorization: *"Owed. After
+deploy: … Kody rules on the hard +350 red: accept it as the rig's auth-lock limit, or open the
+hard-load `auth.getUser()` waterfall as its own item."* This is a pre-flagged, deterministic (not
+flaky — identical failure shape and near-identical counts both times), documented rig/auth-lock
+limit under extreme CDP-emulated per-request latency, not a code regression introduced by this
+commit and not something this piece patches. Recorded below in `arrivalFaults` per the task brief's
+own instruction to report every arrival-touching failure with evidence, flagged as **awaiting Kody's
+ruling per CONTRACT §4h**, not a new finding.
+
+### AD.3 The latency matrix — `rootToReadyMs` is 0 everywhere a root rendered (the fix's own proof)
+
+All ten non-`docError` probes show `rootToReadyMs: 0` — the route root, when it appears, is already
+ready (Option A's intended effect: the hidden cap now covers only quiet + faces, never the ready
+waterfall):
+
+| Project | Mode | +0 ms | +150 ms | +350 ms |
+|---|---|---|---|---|
+| chromium | hard | played, root→ready 0, entry→ready 815 | played, root→ready 0, entry→ready 4665 | **RED** — declined/late at 8002, no root (docError, authLock 23/11) |
+| chromium | soft | played, root→ready 0, entry→ready 282 | played, root→ready 0, entry→ready 1572 | played, root→ready 0, entry→ready 3724 (Desk retried once, its own end at 8002) |
+| mobile-chrome | hard | played, root→ready 0, entry→ready 734 | played, root→ready 0, entry→ready 4595 | **RED** — declined/late at 8000, no root (docError, authLock 23/11) |
+| mobile-chrome | soft | played, root→ready 0, entry→ready 262 | played, root→ready 0, entry→ready 1574 | played, root→ready 0, entry→ready 3755 (Desk retried once, its own end at 8002) |
+
+These numbers are consistent with the fixer's own before/after table in the commit message ("After …
+root→ready 0 wherever a root rendered"). `webkit` is not in this matrix — `latency.spec.ts` skips it
+entirely (CDP network emulation is Chromium-only, `latency.spec.ts:308`).
+
+### AD.4 Legacy 36 — three-batches-of-12 on `:3000`, restarted per batch, quiet window — byte-identical to `legacy-baseline.md`
+
+Same recipe as `§AC.0`/`§Y.3`: `next start -p 3000` per batch (backgrounded, `/auth/signin` polled to
+200 — ready within 2 attempts each time), `pnpm exec playwright test --project=chromium <12 files>
+--reporter=line --workers=2 --output=<scratchpad>/out-bN`, then `kill -9` the listener and confirm
+`:3000` free before starting the next batch.
+
+| Batch | Failed | Skipped | Did not run | Passed | Wall time |
+|---|---|---|---|---|---|
+| 1 (files 1–12) | 9 | 3 | 40 | 14 | 2.4m |
+| 2 (files 13–24) | 12 | 1 | 41 | 16 | 2.4m |
+| 3 (files 25–36) | 16 | 0 | 5 | 15 | 3.5m |
+| **Sum** | **37** | **4** | **86** | **45** | 172 tests |
+
+**Totals are identical to `legacy-baseline.md` and every prior confirming round**: 45 passed, 37
+failed, 4 skipped, 86 did not run (172 total).
+
+**Failing-file set**, extracted from each batch's own `N failed` block (ANSI-stripped, deduplicated,
+sorted) and diffed against `legacy-baseline.md`'s 29-file list:
+
+```
+ad-failed-files-sorted.txt: 29 files
+diff ad-failed-files-sorted.txt baseline-29-failing-sorted.txt   → exit 0, no output (IDENTICAL)
+comm -23 (new reds, only in this run):     (empty)
+comm -13 (newly green, only in baseline):  (empty)
+sha256 ad-failed-files-sorted.txt → ae0130ddab1dd5e8cebd6c57454c76a214e998c10f52bd8c5a0b8c2c089f2bc3
+```
+
+That sha256 is **byte-identical to the hash `legacy-lane.md §AC.3` recorded for round 9's two passes
+and the baseline itself** — the eighth independent confirmation of this exact 29-file table (W0,
+`T.6`, `U.3`, `V.2`, `W.4`, `X.3`, `Y.3`, round 9 `§AC`, this piece). **Zero new legacy reds, zero
+newly-green.** The three files round 8 (`§AB`) found contention-flaky under load —
+`mood-board/project-board-paths.spec.ts`, `people/bring-forward.spec.ts`, `people/call-sheet.spec.ts`
+— passed cleanly again this round (all three ran inside batch 3's normal 12-file, 2-worker grouping,
+the same grouping that was contention-flaky in round 8), consistent with round 9's finding that it
+was contention, not a code or test-order defect.
+
+**Legacy specs never arm the e2e opt-in**, so the new loading-gate branch (`arrivalWaiting &&
+!arrivalReady`) is inert for all 36 of them — the gate declines at the commit (no `ARRIVAL_E2E=1`, no
+`?arrive=` token, `navigator.webdriver` true under Playwright) before `setArrivalWaiting` is ever
+called with a non-null cancel, so `useArrivalWaiting()` reads `false` throughout every legacy spec.
+The byte-identical match above is the empirical confirmation of that reasoning: nothing in the 36-file
+set moved.
+
+**Cleanup:** the same 16 tracked screenshot PNGs (`docs/design/the-document/screenshots/help-walkthrough/*`,
+`docs/design/workflow-alignment/screenshots/wp3/*`) plus the one untracked
+`margin-handoff-overdue-1440-collapsed.png` appeared after the run — the identical set every prior
+round has documented. Restored the 16 with `git checkout --`, removed the untracked one;
+`git status --porcelain` (excluding the sandbox's own `.env*` lstat noise) came back empty afterward.
+HEAD unchanged at `4a684525b3c55d626262e9a796a03b4272102bd0`.
+
+### AD.5 Skip accounting cross-check (arrival lane)
+
+```
+grep -n "test.skip(" e2e/arrival/*.spec.ts
+→ latency.spec.ts:308            test.skip(({ browserName }) => browserName !== 'chromium', …)
+  put-down.spec.ts:34             test.skip(…, 'the spine Put down document link is desktop-only')
+  touch-wait-gesture.spec.ts:150  test.skip(({ hasTouch }) => !hasTouch, …)
+  touch-tap.spec.ts:146           test.skip(({ hasTouch }) => !hasTouch, …)
+```
+4 call sites account for all 17 skip-instances exactly (§AD.1). No retry was needed for any single
+spec — every result matched either the fixer's own pre-commit numbers or the established baseline
+without ambiguity, so the "retry a flaky spec once" allowance was not invoked this round.
+
+### AD.6 Bottom line
+
+- **Arrival lane: GREEN with 2 known/expected reds, both pre-flagged for Kody's ruling.** 98
+  passed, 2 failed, 17 skipped across 117 tests / 3 projects. Both failures are
+  `latency.spec.ts:317` "hard Document entry at +350 ms" (chromium, mobile-chrome) — the exact
+  documented `auth.getUser()` navigator-lock rig limit the fixer's own commit message and CONTRACT
+  §4h line 314 already named and asked Kody to rule on. Not a new arrival fault, not patched. The
+  known first-test SR flake did not recur. `rootToReadyMs: 0` on all ten non-`docError` latency
+  probes — the fix's intended effect is directly confirmed.
+- **Legacy 36: CLEAN, zero new reds.** Byte-identical failing-file set and sha256 to
+  `legacy-baseline.md` and every one of the seven prior confirming rounds (45 passed / 37 failed / 4
+  skipped / 86 did not run). Legacy specs never arm the e2e opt-in, so the new loading-gate branch
+  is provably inert for them.
+- **No commit this round.** No spec was wrong, no source was touched; HEAD stays at
+  `4a684525b3c55d626262e9a796a03b4272102bd0`.
+- **Commands, in order:** preflight (§AD.0) → full arrival lane, one pass, backgrounded +
+  Monitor-watched, 2 known reds (§AD.1–AD.3) → legacy batches 1–3 with per-batch server restart,
+  byte-identical to baseline (§AD.4) → skip cross-check (§AD.5) → cleanup, tree clean, HEAD
+  unchanged.
+
 ## AC. Legacy 36, round 9 at `e2aabbe367ef04f69dc755980ee10567c695cfd1`: a quiet-window rerun matches the baseline byte for byte (2026-09-29, W3f fix round 9)
 
 **This section supersedes the §AB verdict.** The round-8 reviewer raised one MAJOR finding: the gate was incomplete because 3 files went red in §AB (`mood-board/project-board-paths`, `people/bring-forward`, `people/call-sheet`, plus `document/desk-claims` in one run). The fix was to rerun the baseline recipe in a quiet window and require the failing-file set to be byte-identical to `legacy-baseline.md`.
