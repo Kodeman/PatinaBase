@@ -26,7 +26,7 @@ import type {
   GateResult,
   Surface,
 } from '@/lib/arrival/types';
-import { ArrivalMount } from '../arrival-mount';
+import { ArrivalMount, useArrivalWaiting } from '../arrival-mount';
 import { ArrivalRun } from '../arrival-run';
 
 jest.mock('posthog-js', () => ({ __esModule: true, default: { capture: jest.fn() } }));
@@ -1132,5 +1132,91 @@ describe('unmount', () => {
       await toReady();
       expect(engine.createRun).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('the page’s wait (post-ship patch 1)', () => {
+  const waiting: Record<string, boolean> = {};
+  function Probe({ path }: { path: string }) {
+    waiting[path] = useArrivalWaiting(path);
+    return null;
+  }
+  function Harness({
+    engine,
+    pathname = '/desk',
+    run = true,
+  }: {
+    engine: ReturnType<typeof makeEngine>['engine'];
+    pathname?: string;
+    run?: boolean;
+  }) {
+    return (
+      <>
+        <ArrivalMount />
+        {run ? <ArrivalRun key={pathname} engine={engine} pathname={pathname} /> : null}
+        <Probe path="/desk" />
+        <Probe path="/doc/e1" />
+      </>
+    );
+  }
+
+  it('is true for its own path from the arm, and false once the run begins', async () => {
+    const { engine } = makeEngine();
+    render(<Harness engine={engine} />);
+    await flush();
+    expect(waiting['/desk']).toBe(true);
+    expect(waiting['/doc/e1']).toBe(false);
+    addRoot('desk', true);
+    await toReady();
+    expect(engine.createRun).toHaveBeenCalledTimes(1);
+    expect(waiting['/desk']).toBe(false);
+  });
+
+  it('is false after a decline (the entry cap)', async () => {
+    const { engine } = makeEngine();
+    render(<Harness engine={engine} />);
+    await flush();
+    expect(waiting['/desk']).toBe(true);
+    await advance(BUDGET.SOFT_ENTRY_READY_MS);
+    expect(capture.mock.calls).toEqual([declined('desk', 'late')]);
+    expect(waiting['/desk']).toBe(false);
+  });
+
+  it('is false after her hand ends the wait', async () => {
+    const { engine } = makeEngine();
+    render(<Harness engine={engine} />);
+    await flush();
+    expect(waiting['/desk']).toBe(true);
+    await act(async () => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }));
+    });
+    expect(waiting['/desk']).toBe(false);
+  });
+
+  it('is false after an abandon, and moves with the route', async () => {
+    const { engine } = makeEngine();
+    const view = render(<Harness engine={engine} />);
+    await flush();
+    expect(waiting['/desk']).toBe(true);
+    mockPathname = '/doc/e1';
+    view.rerender(<Harness engine={engine} pathname="/doc/e1" />);
+    await flush();
+    expect(waiting['/desk']).toBe(false);
+    expect(waiting['/doc/e1']).toBe(true);
+    view.rerender(<Harness engine={engine} pathname="/doc/e1" run={false} />);
+    await flush();
+    expect(capture.mock.calls).toEqual([
+      ['arrival_ended', { surface: 'desk', how: 'mutation' }],
+      ['arrival_ended', { surface: 'document', how: 'mutation' }],
+    ]);
+    expect(waiting['/doc/e1']).toBe(false);
+  });
+
+  it('is never true when the gate declines at the commit', async () => {
+    const { engine } = makeEngine(() => ({ play: false, cause: 'desk-shown' }));
+    render(<Harness engine={engine} />);
+    await flush();
+    expect(capture.mock.calls).toEqual([declined('desk', 'desk-shown')]);
+    expect(waiting['/desk']).toBe(false);
   });
 });

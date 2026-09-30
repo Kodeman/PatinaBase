@@ -233,7 +233,7 @@ import {
 import { deriveSectionStageLine } from '@/lib/document/section-stage-line';
 import { deriveSectionWorkflowStageDocument } from '@/lib/document/workflow-stage-derivation';
 import { ROSTER_STAGE_ORDER } from '@/lib/document/desk-roster-derivation';
-import { afterArrival } from '@/components/document/arrival/arrival-mount';
+import { afterArrival, useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import { suppressNextArrival } from '@/lib/arrival/nav';
 import { consumeArriveToken } from '@/lib/arrival/session';
 import { EVENT_ENDED, type ArrivalEnded, type Landing } from '@/lib/arrival/types';
@@ -1507,10 +1507,16 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     return afterArrival((unplayed) => {
       landing.done = true;
       if (!unplayed) return;
-      const el = mainRef.current?.querySelector('[data-active-section]');
-      if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
-        el.scrollIntoView({ block: 'start' });
-      }
+      const jump = () => {
+        const el = mainRef.current?.querySelector('[data-active-section]');
+        if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6) {
+          el.scrollIntoView({ block: 'start' });
+        }
+      };
+      // A wait that ends before ready ends under the held loading tree: the
+      // paper mounts on the next render.
+      if (mainRef.current) jump();
+      else window.requestAnimationFrame(jump);
     });
   }, [landingEngagementId]);
 
@@ -2474,6 +2480,12 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
     deskEnrichmentSettled &&
     ticketRowsSettled &&
     !guideInputsInFlight;
+  // US-14 post-ship patch 1 — while this path's arrival wait is armed the page
+  // keeps its loading state until ready, so the route root first appears ready.
+  // A root this mount has shown is never taken back.
+  const arrivalWaiting = useArrivalWaiting(`/doc/${id}`);
+  const arrivalRootShown = useRef(false);
+  const arrivalHeld = arrivalWaiting && !arrivalReady && !arrivalRootShown.current;
   // US-14 R-DM21 — the Desk act's token landing (spent on mount, above the
   // resume jump), carried out once the paper is ready, when its regions exist.
   useEffect(() => {
@@ -2496,9 +2508,10 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
   const lensStandingCount = bandModel?.line2.standingCount ?? null;
   useEffect(() => {
     const props = lensLinePropsRef.current;
-    if (!props) return;
+    // N-11 — the held loading tree prints no band either.
+    if (!props || arrivalHeld) return;
     documentEvents.lensLineShown(props);
-  }, [id, lensLineKind, lensLineActKey, lensStandingCount, lensLineSettled]);
+  }, [id, lensLineKind, lensLineActKey, lensStandingCount, lensLineSettled, arrivalHeld]);
   const onLensActed = useCallback(() => {
     const props = lensLinePropsRef.current;
     if (props) documentEvents.lensLineActed(props);
@@ -2794,6 +2807,20 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
       onInput={acceptTicketInput}
     />
   );
+
+  // The ticket's rows reach `arrivalReady` only through this mount's reports,
+  // so the held loading tree keeps it standing.
+  if (arrivalHeld) {
+    return (
+      <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
+        <p className="px-10 py-12 font-heading text-[14px] italic text-[var(--text-muted)]">
+          Picking up…
+        </p>
+        {ticketFacts}
+      </div>
+    );
+  }
+  arrivalRootShown.current = true;
 
   // The letterhead instruments, mounted ONCE and handed to the letterhead's
   // ledger column: at ≥1180 they print beside the title block, below it they

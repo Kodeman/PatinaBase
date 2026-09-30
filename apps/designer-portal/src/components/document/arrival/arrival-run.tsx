@@ -368,6 +368,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
       const root = host.root();
       if (root && !rootSeen) {
         rootSeen = true;
+        // A waiting page keeps its own loading state until ready, so this cap covers only quiet + faces.
         hiddenTimer = window.setTimeout(() => decline('hidden'), BUDGET.HIDDEN_CAP_MS);
       }
       if (!root || !host.ready()) {
@@ -394,7 +395,7 @@ export function ArrivalRun({ engine, pathname }: ArrivalRunProps): null {
 
     html.classList.add('arr-pre');
     // Her hand during the wait, or the page's own lifecycle, ends it for good.
-    setArrivalWaiting((why) => (why === 'escape' ? halt() : decline(WAIT_DECLINE[why])));
+    setArrivalWaiting((why) => (why === 'escape' ? halt() : decline(WAIT_DECLINE[why])), pathname);
     entryTimer = window.setTimeout(() => decline('late'), left);
     watch = new MutationObserver(check);
     watch.observe(document.body, {

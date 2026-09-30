@@ -274,6 +274,45 @@ Every §4e ruling is implemented. The three legacy reds (`e2e/mood-board/project
 - **Ship record figures come from raw evidence, not summaries:** the lane line is §AA.5 of `qa/arrival-lane.md` — 99 test instances at e2aabbe36: chromium 27 pass / 1 flake-then-pass / 5 skip, mobile-chrome 32 pass / 1 skip, webkit 27 pass / 1 flake-then-pass / 5 skip; the one flake is `accessibility.spec.ts:24` (first test, cold server; the review reads it as a baseline-read race in the spec, not an announcement defect). The legacy line is §AC (two identical quiet-window passes). Bundle figures: lane build ≈ 45.7 KB minified / 18.0 KB gzip of arrival JS across the shared chunk and the (document) layout chunk plus a 3.9 KB CSS file; the deploy build's figures are taken from `.open-next/assets` at ship time.
 - **Owed to Kody after the ship:** the signed-in walk on a real screen, phone and VoiceOver (with §4f's swipe-during-wait and tap cases); the first post-ship patch (this section's long-press advance + §4f's `closeGesture(true)`); retire the rollback worktree after the walk; the deferred lists in §4c–§4g stay open as recorded.
 
+### 4h. Post-ship patch 1 — the hidden cap on production latency (2026-09-30)
+
+**Symptom.** In production, opening a Document shows no arrival. The wait arms `HIDDEN_CAP_MS` (1200 ms) at its first sighting of `[data-arrival]`. The Document paints that root as soon as its row resolves, but it earns `data-arrival-ready` only after a waterfall of project-keyed reads (the ticket's rows, the Desk composition, the stage's guide read). At production round trips (Worker → Strata, roughly 300–400 ms) that waterfall outlasts the cap, so the entry ends `declined · hidden` (or `late`) and she sees the ordinary page.
+
+**Before** (`e2e/arrival/latency.spec.ts`, CDP latency added to every request, lane build at 989a8762d; two runs agreed; ms are root → ready):
+
+| project · mode | +0 ms | +150 ms | +350 ms |
+|---|---|---|---|
+| chromium · hard | played (skip) · 287 | declined hidden · 2558 | declined late at 8003 · page error ("could not be picked up"), auth lock 23 not released / 11 broken |
+| chromium · soft | played (skip) · 284 | declined hidden · 2087 | declined hidden · 5042 (entry → ready 6588) |
+| mobile-chrome · hard | played (skip) · 255 | declined hidden · 2568 | declined late at 8001 · page error, same lock counts |
+| mobile-chrome · soft | played (skip) · 251 | declined hidden · 2111 | declined hidden · 5093 (entry → ready 6643) |
+
+**Ruling: option A.** While an arrival wait is armed for a path, that path's page keeps its own loading state until ready, so the route root first appears already ready and the hidden cap covers only quiet + faces. The budget is unchanged (§4g: Kody rules on any change to it); `types.ts` stays frozen.
+
+**Changes.**
+- `arrival-mount.tsx` — a `useSyncExternalStore` store: `setArrivalWaiting(cancel, pathname)` records the armed path; `useArrivalWaiting(pathname)` is true while that path's wait is armed (server snapshot false). It goes false when the wait ends (begin, decline, her hand, Escape), on abandon and on route exit.
+- `arrival-run.tsx` — the arm passes `pathname`; one comment at the hidden cap on why it now covers only quiet + faces. The `arr-pre` CSS failsafe (1.5 s from the root's first appearance) still composes: the root now first appears ready.
+- `doc/[id]/page.tsx` — after the error and missing returns, `arrivalHeld = waiting && !arrivalReady && !rootShownThisMount` renders the same "Picking up…" tree with `{ticketFacts}` mounted beneath it (the ticket's rows reach `arrivalReady` only through that mount). All four ready conditions are kept. A root this mount has shown is never taken back. The lens line's impression does not fire from the held tree (N-11). The resume jump waits one frame when the wait ends before the paper mounts.
+- `desk/page.tsx` — the skeleton stands (no route root, no roster) while `arrivalHeld`; the same latch. The error state is never held.
+- Tests: the store (arrival-run.test.tsx), the Document hold (page.test.tsx), the Desk mirror (desk/page.test.tsx); `latency.spec.ts` now asserts that the Document plays in every cell (card visible → Skip → last end `how: 'skip'`).
+
+**After** (same spec, now asserting; lane build `nUjk05YEzwtRsy5koUGVs` of this patch; 10 passed / 2 failed / 6 skipped (webkit); root → ready is 0 ms in every cell whose root rendered; ms are entry → ready):
+
+| project · mode | +0 ms | +150 ms | +350 ms |
+|---|---|---|---|
+| chromium · hard | played (skip) · 1129 | played (skip) · 4734 | **red**: declined late at 8002 · page error ("could not be picked up"), no root ever rendered, auth lock 23 not released / 11 broken (unchanged from before) |
+| chromium · soft | played (skip) · 309 | played (skip) · 1547 | played (skip) · 3741 |
+| mobile-chrome · hard | played (skip) · 756 | played (skip) · 4746 | **red**: declined late at 8001 · page error, same lock counts |
+| mobile-chrome · soft | played (skip) · 272 | played (skip) · 1541 | played (skip) · 3721 |
+
+The two reds are not arrival declines. The Document's own resolution fails behind supabase-js's `auth.getUser()` navigator lock (16 serial `/auth/v1/user` calls, the lock stolen past 5 s), which is the rig limit the spec's header names (HTTP/1.1, six connections). The incident report saw "no arrival" in production, not this error page. Soft +350 now plays with ~260 ms to spare under `SOFT_ENTRY_READY_MS` (entry → ready 3721–3741 ms, down from ~6.6 s before). That the held tree's fewer competing reads explain the drop is an inference; it was not measured.
+
+**Known limits.**
+- A warm Desk entry whose root renders in the same commit that arms the wait (the put-down, the CommandBar keeps the Desk read hot) is not held; the cap runs from that commit as before. Restarting the cap per root appearance, or holding on `!hydrated`, would each need a ruling.
+- A wait that ends `late` now shows "Picking up…" (Document) or the skeleton (Desk) until the entry cap (4 s soft / 8 s hard) instead of the root plus 1.2 s.
+
+**Owed.** After deploy: re-check PostHog `arrival_ended` (`how = 'declined'`, `cause in ('hidden', 'late')` per surface) against §4g's thresholds. Kody rules on the hard +350 red: accept it as the rig's auth-lock limit, or open the hard-load `auth.getUser()` waterfall as its own item. Option C (prefetch the Document's ready reads from the name link) is parked.
+
 ## 5. Pieces, owners, file boundaries, scoped verify
 
 Fixed shared runtime: **one** local Postgres (:54322, shared across sessions — `migration up`, never reset), lane port **3107**, legacy port **3000** (assert free first). Disk: ≥ 45 GiB before any wave.

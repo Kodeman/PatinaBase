@@ -7,7 +7,7 @@
  * No metric tiles, badges, feeds, or dashboard furniture.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useProfile,
   useOrganizations,
@@ -39,6 +39,7 @@ import { DeskContents } from '@/components/document/desk-contents';
 import { RecentBoardsStrip } from '@/components/document/recent-boards-strip';
 import { DeskBoardsReactionRollup } from '@/components/document/desk-boards-reaction-rollup';
 import { MarginNote } from '@/components/document/margin-note';
+import { useArrivalWaiting } from '@/components/document/arrival/arrival-mount';
 import {
   StudioSetupWhisper,
   useStudioSetupWhisperEligible,
@@ -308,8 +309,42 @@ export default function DeskPage() {
     },
   });
 
+  // US-14 arrival marks (inert). The route root is marked only while the
+  // roster itself renders — never the skeleton or the error state — and is
+  // ready once hydrated and at the first non-placeholder read. Ready also
+  // waits for the reads that print inside the root after the roster mounts
+  // (the day's line's answered notes, the boards rollup): an answer landing
+  // mid-arrival would end it as a mutation. Same query keys as DeskRoster,
+  // DeskBoardsReactionRollup, RecentBoardsStrip and DeskContents, so these
+  // share their fetches. The day's line must also be picked.
+  const answeredNotesRead = useAnsweredNotes();
+  const reactionRollupRead = useBoardsReactionRollup();
+  const recentBoardsRead = useRecentBoards(8);
+  const viewerStudio = useViewerStudio();
+  const unbilledTimeRead = useStudioUnbilledTime();
+  const deskRead = !isError && !!data;
+  const arrivalReady =
+    deskRead &&
+    hydrated &&
+    isSuccess &&
+    !isPlaceholderData &&
+    !answeredNotesRead.isPending &&
+    !reactionRollupRead.isPending &&
+    !recentBoardsRead.isPending &&
+    viewerStudio.isSettled &&
+    !unbilledTimeRead.isPending &&
+    deskLineDecided;
+  // US-14 post-ship patch 1 — while the Desk's arrival wait is armed the
+  // skeleton stands until ready, so the route root first appears ready. A root
+  // this mount has shown is never taken back.
+  const arrivalWaiting = useArrivalWaiting('/desk');
+  const arrivalRootShown = useRef(false);
+  const arrivalHeld = arrivalWaiting && !arrivalReady && !arrivalRootShown.current;
+  const arrivalRoot = deskRead && !arrivalHeld;
+  if (arrivalRoot) arrivalRootShown.current = true;
+
   const rosterBlock =
-    isLoading && !data ? (
+    (isLoading && !data) || arrivalHeld ? (
       <div
         className="space-y-3"
         aria-hidden
@@ -329,32 +364,6 @@ export default function DeskPage() {
         belowHead={deskLine}
       />
     );
-
-  // US-14 arrival marks (inert). The route root is marked only while the
-  // roster itself renders — never the skeleton or the error state — and is
-  // ready once hydrated and at the first non-placeholder read. Ready also
-  // waits for the reads that print inside the root after the roster mounts
-  // (the day's line's answered notes, the boards rollup): an answer landing
-  // mid-arrival would end it as a mutation. Same query keys as DeskRoster,
-  // DeskBoardsReactionRollup, RecentBoardsStrip and DeskContents, so these
-  // share their fetches. The day's line must also be picked.
-  const answeredNotesRead = useAnsweredNotes();
-  const reactionRollupRead = useBoardsReactionRollup();
-  const recentBoardsRead = useRecentBoards(8);
-  const viewerStudio = useViewerStudio();
-  const unbilledTimeRead = useStudioUnbilledTime();
-  const arrivalRoot = !isError && !!data;
-  const arrivalReady =
-    arrivalRoot &&
-    hydrated &&
-    isSuccess &&
-    !isPlaceholderData &&
-    !answeredNotesRead.isPending &&
-    !reactionRollupRead.isPending &&
-    !recentBoardsRead.isPending &&
-    viewerStudio.isSettled &&
-    !unbilledTimeRead.isPending &&
-    deskLineDecided;
 
   return (
     <main

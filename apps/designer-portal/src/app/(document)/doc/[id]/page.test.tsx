@@ -1,7 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useInsertionEffect, type ReactNode } from 'react';
 import DocumentPage from './page';
-import { beginEntry, noteRunStarted } from '@/components/document/arrival/arrival-mount';
+import {
+  beginEntry,
+  noteRunStarted,
+  setArrivalWaiting,
+} from '@/components/document/arrival/arrival-mount';
 import { ArrivalRun } from '@/components/document/arrival/arrival-run';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
 import { authorizationDoorwayFor } from '@/lib/document/authorization-doorway';
@@ -141,12 +145,13 @@ jest.mock('next/navigation', () => ({
 let mockInvoices: Record<string, unknown>[] = [];
 /** US-14 — one of the ticket's own reads, held in flight. */
 let mockPlanRoomLoading = false;
+const mockUsePlanRoom = jest.fn(() => ({ data: { sheets: [] }, isLoading: mockPlanRoomLoading }));
 
 jest.mock('@patina/supabase', () => ({
   /* B1 — the job ticket's own reads. The ticket is mounted by every
      project-kind document now, so every suite that renders one pays for
      these; none of them is this suite's subject. */
-  usePlanRoom: () => ({ data: { sheets: [] }, isLoading: mockPlanRoomLoading }),
+  usePlanRoom: () => mockUsePlanRoom(),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   // The ticket reads the PROPOSAL's own three populations on a paper with no
   // project (B2). All three are `enabled` on a proposal id, so a document
@@ -1941,6 +1946,25 @@ describe('DocumentPage guide activation', () => {
       expect(mockLensLineShown).not.toHaveBeenCalled();
     });
 
+    it('fires nothing from the loading tree an armed arrival wait holds, and once when the band prints', () => {
+      asProjectDocument();
+      mockPlanRoomLoading = true;
+      act(() => setArrivalWaiting(jest.fn(), '/doc/missing-document'));
+      try {
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-lens-line="2"]')).toBeNull();
+        expect(mockLensLineShown).not.toHaveBeenCalled();
+
+        mockPlanRoomLoading = false;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(bandLine2()).not.toBeNull();
+        expect(mockLensLineShown).toHaveBeenCalledTimes(1);
+      } finally {
+        mockPlanRoomLoading = false;
+        act(() => setArrivalWaiting(null));
+      }
+    });
+
     it('fires on the act and on the door, and never from the band itself', () => {
       asProjectDocument();
       const needs = [
@@ -2931,6 +2955,67 @@ describe('DocumentPage guide activation', () => {
 
     afterEach(() => {
       mockPlanRoomLoading = false;
+      act(() => setArrivalWaiting(null));
+    });
+
+    // Post-ship patch 1 — while this path's wait is armed, the page keeps its
+    // loading state until ready: the root first appears already ready.
+    describe('while its arrival wait is armed', () => {
+      const armWait = (path = '/doc/missing-document') =>
+        act(() => setArrivalWaiting(jest.fn(), path));
+
+      it('not ready: no root, the loading state, and the ticket still reading beneath it', () => {
+        asProjectDocument();
+        mockPlanRoomLoading = true;
+        armWait();
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-arrival]')).toBeNull();
+        expect(screen.getByText('Picking up…')).toBeVisible();
+        expect(mockUsePlanRoom).toHaveBeenCalled();
+
+        mockPlanRoomLoading = false;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+        expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+      });
+
+      it('ready: the root appears carrying data-arrival-ready', () => {
+        asProjectDocument();
+        armWait();
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+        expect(screen.queryByText('Picking up…')).not.toBeInTheDocument();
+      });
+
+      it('the wait ending before ready shows the root as it stands', () => {
+        mockDeskLoading = true;
+        armWait();
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-arrival]')).toBeNull();
+
+        act(() => setArrivalWaiting(null));
+        expect(shell()).not.toBeNull();
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+      });
+
+      it('a root already shown is never taken back when ready drops', () => {
+        armWait();
+        const { rerender } = render(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).toHaveAttribute('data-arrival-ready', '');
+
+        mockDeskLoading = true;
+        rerender(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).not.toBeNull();
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+      });
+
+      it('another path’s wait holds nothing here', () => {
+        mockDeskLoading = true;
+        armWait('/desk');
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(shell()).not.toBeNull();
+        expect(shell()).not.toHaveAttribute('data-arrival-ready');
+      });
     });
 
     it('is not ready while the Desk composition is in flight, and is once it settles', () => {
@@ -3292,6 +3377,41 @@ describe('DocumentPage landedRef — A8 first-open gate', () => {
       end({ surface: 'document', how: 'declined', cause: 'late' });
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+    });
+
+    // Post-ship patch 1 — a wait that ends before ready ends under the held
+    // loading tree; the jump waits a frame for the paper.
+    it('a declined end under the held loading tree jumps once the paper mounts', () => {
+      mockRecentDocumentsInHand = [{ id: 'lead-1', title: 'Stone Residence' }];
+      mockDocumentQuery = { ...mockDocumentQuery, data: { kind: 'engagement', row: rowFor('lead-1', 'discovery') } };
+      mockDiscoveryQuery = { data: undefined, isLoading: true, isError: false };
+      const frames: FrameRequestCallback[] = [];
+      window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+        frames.push(callback);
+        return frames.length;
+      }) as typeof window.requestAnimationFrame;
+      html.classList.add('arr-pre');
+      act(() => setArrivalWaiting(jest.fn(), '/doc/missing-document'));
+
+      try {
+        render(<DocumentPage params={fulfilledParams} />);
+        expect(document.querySelector('[data-active-section]')).toBeNull();
+
+        html.classList.remove('arr-pre');
+        act(() => {
+          setArrivalWaiting(null);
+          window.dispatchEvent(
+            new CustomEvent(EVENT_ENDED, {
+              detail: { surface: 'document', how: 'declined', cause: 'late' },
+            }),
+          );
+        });
+        expect(document.querySelector('[data-active-section]')).not.toBeNull();
+        act(() => frames.splice(0).forEach((callback) => callback(0)));
+        expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+      } finally {
+        act(() => setArrivalWaiting(null));
+      }
     });
 
     it('never jumps after a played arrival', () => {
