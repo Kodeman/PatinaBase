@@ -5,8 +5,12 @@
 //     bearer and {job_run_id}: claims pending pieces across imports.
 //   • The browser with the designer's JWT and {import_id}: the import must be
 //     readable under RLS (board managers); then that import's pieces resolve.
-// The caller kind comes from the bearer's decoded role claim, never from a
-// string comparison against the service-role key.
+// The caller kind comes from the bearer's decoded role claim (legacy JWT) or a
+// timing-safe match against SUPABASE_SECRET_KEYS (sb_secret_ keys), never from
+// a string comparison against the legacy service-role JWT (auth.ts).
+//
+// Every write a run makes carries the lease owner its claim returned, so a run
+// whose lease expired (and whose pieces another run re-claimed) writes nothing.
 //
 // All matching runs as import.created_by through the 00677 service-role RPCs;
 // core.ts holds the tiers. ANTHROPIC_API_KEY and INFERENCE_URL/TOKEN are
@@ -18,15 +22,13 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { createInferenceClient } from "../_shared/aesthete.ts";
 import { DECK_PAGE_MAX_BYTES } from "../_shared/product-page/page.ts";
 import { fetchHtml, UrlError } from "../_shared/product-page/ssrf.ts";
-import {
-  BOARD_ASSET_BUCKET,
-  bearerRole,
-  normalizeBoardObjectReference,
-} from "../board-asset-cleanup/core.ts";
+import { BOARD_ASSET_BUCKET, normalizeBoardObjectReference } from "../board-asset-cleanup/core.ts";
+import { isServiceCaller } from "./auth.ts";
 import {
   ADJUDICATION_SYSTEM,
   ADJUDICATION_TOOL_NAME,
   type AdjudicationClaim,
+  AdjudicationHttpError,
   adjudicationTool,
   type ClaimedItem,
   FetchBlocked,
@@ -64,7 +66,7 @@ async function rpc<T>(admin: SupabaseClient, name: string, args: Record<string, 
 
 function deps(
   admin: SupabaseClient,
-  claim: (limit: number) => Promise<ClaimedItem[]>,
+  claimRpc: (limit: number) => Promise<unknown>,
 ): ResolveDeps {
   const inferenceUrl = Deno.env.get("INFERENCE_URL");
   const inferenceToken = Deno.env.get("INFERENCE_TOKEN");
@@ -72,9 +74,16 @@ function deps(
   const inference = inferenceUrl && inferenceToken
     ? createInferenceClient({ url: inferenceUrl, token: inferenceToken, timeoutMs: 15_000 })
     : null;
+  // The claim's lease owner; every later write is refused without it.
+  let leaseOwner: string | null = null;
 
   return {
-    claim,
+    claim: async (limit) => {
+      const result = await claimRpc(limit);
+      const owner = (result as { lease_owner?: unknown })?.lease_owner;
+      leaseOwner = typeof owner === "string" ? owner : null;
+      return claimedItems(result);
+    },
     matchLinks: (importId, urls) =>
       rpc(admin, "board_deck_import_match_links", { p_import_id: importId, p_urls: urls }),
     matchSku: (importId, sku, vendor) =>
@@ -90,12 +99,14 @@ function deps(
       const result = await rpc<{ granted?: number }>(admin, "consume_board_deck_import_link_quota", {
         p_import_id: importId,
         p_n: n,
+        p_lease_owner: leaseOwner,
       });
       return Number(result?.granted ?? 0);
     },
     fetchPage: async (url) => {
       try {
-        return await fetchHtml(url, {}, { maxBytes: DECK_PAGE_MAX_BYTES });
+        // A page past the budget is read as its first 5MB, not refused.
+        return await fetchHtml(url, {}, { maxBytes: DECK_PAGE_MAX_BYTES, truncate: true });
       } catch (error) {
         if (error instanceof UrlError) throw new FetchBlocked(error.message, error.status === 400);
         throw new FetchBlocked("fetch_failed", false);
@@ -107,6 +118,7 @@ function deps(
         p_state: state,
         p_found_by: foundBy,
         p_candidates: candidates,
+        p_lease_owner: leaseOwner,
       });
     },
     pairablePictures: async (importId) => {
@@ -142,12 +154,14 @@ function deps(
       rpc<AdjudicationClaim>(admin, "claim_board_deck_import_adjudication", {
         p_import_id: importId,
         p_slide_index: slideIndex,
+        p_lease_owner: leaseOwner,
       }),
     storeAdjudication: async (importId, slideIndex, assignments) => {
       await rpc(admin, "store_board_deck_import_adjudication", {
         p_import_id: importId,
         p_slide_index: slideIndex,
         p_assignments: assignments,
+        p_lease_owner: leaseOwner,
       });
     },
     adjudicate: apiKey
@@ -165,7 +179,10 @@ function deps(
             messages: [{ role: "user", content: [{ type: "text", text: JSON.stringify(context) }] }],
           }),
         });
-        if (!response.ok) throw new Error(`adjudication http ${response.status}`);
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw new AdjudicationHttpError(response.status);
+        }
         const body = await response.json() as {
           content?: Array<{ type?: string; name?: string; input?: unknown }>;
           usage?: { input_tokens?: number; output_tokens?: number };
@@ -225,15 +242,15 @@ Deno.serve(async (req) => {
   }
 
   const authorization = req.headers.get("Authorization");
-  const isService = bearerRole(authorization) === "service_role";
+  const isService = isServiceCaller(authorization, Deno.env.get("SUPABASE_SECRET_KEYS"));
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
   if (isService) {
     const runId = Number(body.job_run_id);
     if (!Number.isSafeInteger(runId) || runId < 1) return json({ error: "job_run_id_required" }, 400);
     try {
-      const summary = await runResolve(deps(admin, async (limit) =>
-        claimedItems(await rpc(admin, "claim_board_deck_import_items", { p_limit: limit }))));
+      const summary = await runResolve(deps(admin, (limit) =>
+        rpc(admin, "claim_board_deck_import_items", { p_limit: limit })));
       await finish(admin, runId, summary.claimed ? "succeeded" : "skipped", { summary }, null, summary.cost_usd);
       log("run_done", { run_id: runId, ...summary });
       return json({ ok: true, summary });
@@ -260,14 +277,15 @@ Deno.serve(async (req) => {
   try {
     await rpc(admin, "materialize_board_deck_import_links", { p_import_id: importId });
     const summary = await runResolve(deps(admin, async (limit) => {
-      const items = claimedItems(
-        await rpc(admin, "claim_board_deck_import_items_for_import", { p_import_id: importId, p_limit: limit }),
-      );
+      const result = await rpc(admin, "claim_board_deck_import_items_for_import", {
+        p_import_id: importId,
+        p_limit: limit,
+      });
       // Billing guard: a job_runs row only when there is work.
-      if (items.length && runId == null) {
+      if (claimedItems(result).length && runId == null) {
         runId = await rpc<number>(admin, "begin_board_deck_import_resolve_run", { p_import_id: importId });
       }
-      return items;
+      return result;
     }));
     if (runId != null) await finish(admin, runId, "succeeded", { summary }, null, summary.cost_usd);
     return json({ ok: true, summary });

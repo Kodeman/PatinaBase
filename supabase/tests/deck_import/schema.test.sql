@@ -368,12 +368,36 @@ WHERE import_id = ((SELECT v FROM deck_ctx WHERE k = 'first')->>'import_id')::uu
   AND state = 'pending';
 SET LOCAL ROLE service_role;
 SELECT pg_temp.act_as_service();
+-- 00678 F1: the sweep that frees an expired lease backs the piece off, so the
+-- same claim does not hand it straight back.
+INSERT INTO deck_ctx SELECT 'claim2b', public.claim_board_deck_import_items(10);
+
+DO $$
+DECLARE
+  c jsonb := (SELECT v FROM deck_ctx WHERE k = 'claim2b');
+  v_import uuid := ((SELECT v FROM deck_ctx WHERE k = 'first')->>'import_id')::uuid;
+BEGIN
+  ASSERT jsonb_array_length(c->'items') = 0, 'an expired lease is backed off, not re-claimed at once';
+  ASSERT (SELECT bool_and(lease_owner IS NULL AND next_attempt_at > now() + interval '1 minute')
+          FROM public.board_deck_import_items
+          WHERE import_id = v_import AND state = 'pending'),
+    'the sweep frees the lease and sets a 2^attempts minute backoff';
+END;
+$$;
+
+RESET ROLE;
+UPDATE public.board_deck_import_items
+SET next_attempt_at = now() - interval '1 second'
+WHERE import_id = ((SELECT v FROM deck_ctx WHERE k = 'first')->>'import_id')::uuid
+  AND state = 'pending';
+SET LOCAL ROLE service_role;
+SELECT pg_temp.act_as_service();
 INSERT INTO deck_ctx SELECT 'claim3', public.claim_board_deck_import_items(10);
 
 DO $$
 DECLARE c3 jsonb := (SELECT v FROM deck_ctx WHERE k = 'claim3');
 BEGIN
-  ASSERT jsonb_array_length(c3->'items') = 2, 'an expired lease is claimable again';
+  ASSERT jsonb_array_length(c3->'items') = 2, 'an expired lease is claimable again after its backoff';
   ASSERT (SELECT bool_and((item->>'attempts')::int = 2) FROM jsonb_array_elements(c3->'items') AS item),
     'each claim counts an attempt';
 END;
@@ -385,6 +409,7 @@ DECLARE
   v_import uuid := ((SELECT v FROM deck_ctx WHERE k = 'first')->>'import_id')::uuid;
   v_item uuid;
   v_six jsonb;
+  v_owner text := (SELECT v->>'lease_owner' FROM deck_ctx WHERE k = 'claim3');
   r jsonb;
 BEGIN
   SELECT id INTO v_item FROM public.board_deck_import_items
@@ -396,7 +421,7 @@ BEGIN
   INTO v_six FROM generate_series(1, 6) AS n;
 
   BEGIN
-    PERFORM public.record_board_deck_import_resolution(v_item, 'found', 'words', v_six);
+    PERFORM public.record_board_deck_import_resolution(v_item, 'found', 'words', v_six, v_owner);
     RAISE EXCEPTION 'six candidates must be rejected';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
@@ -409,7 +434,7 @@ BEGIN
         'source_url', 'https://www.maker.example/arlo')),
     jsonb_build_object('source', 'words', 'band', 'likely', 'rank', 2,
       'product_id', 'd6766000-0000-4000-8000-000000000001', 'evidence', '{}'::jsonb)
-  ));
+  ), v_owner);
   ASSERT (r->>'applied')::boolean AND r->>'state' = 'found', 'a resolution records';
   ASSERT (SELECT lease_owner IS NULL FROM public.board_deck_import_items WHERE id = v_item),
     'recording a resolution releases the lease';
@@ -625,6 +650,16 @@ END;
 $$;
 
 -- ── 9. A link-only piece: keep pairs a picture, or keeps without one ───────
+-- 00678 F7: a resolution is recorded under the lease that claimed the piece.
+RESET ROLE;
+UPDATE public.board_deck_import_items
+SET lease_owner = 't9', lease_until = now() + interval '1 minute'
+WHERE id IN (
+  SELECT (item->>'item_id')::uuid
+  FROM jsonb_array_elements((SELECT v FROM deck_ctx WHERE k = 'proposal')->'items') AS item
+);
+SET LOCAL ROLE service_role;
+SELECT pg_temp.act_as_service();
 DO $$
 DECLARE
   r jsonb := (SELECT v FROM deck_ctx WHERE k = 'proposal');
@@ -635,7 +670,7 @@ BEGIN
   LOOP
     PERFORM public.record_board_deck_import_resolution(v_item, 'found', 'link', jsonb_build_array(
       jsonb_build_object('source', 'link_existing', 'band', 'strong', 'rank', 1,
-        'product_id', 'd6766000-0000-4000-8000-000000000001', 'evidence', '{}'::jsonb)));
+        'product_id', 'd6766000-0000-4000-8000-000000000001', 'evidence', '{}'::jsonb)), 't9');
   END LOOP;
 END;
 $$;

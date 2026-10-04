@@ -18584,18 +18584,6 @@ END $g$;
 
 -- 00676_board_deck_imports.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.record_board_deck_import_resolution(uuid, text, text, jsonb) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00676_board_deck_imports.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.record_board_deck_import_resolution(uuid, text, text, jsonb) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00676_board_deck_imports.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.keep_board_deck_import_item(uuid, integer, uuid, uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -18698,18 +18686,6 @@ END $g$;
 
 -- 00677_board_deck_import_resolve_dispatch.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.consume_board_deck_import_link_quota(uuid, integer) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00677_board_deck_import_resolve_dispatch.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.consume_board_deck_import_link_quota(uuid, integer) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00677_board_deck_import_resolve_dispatch.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.board_deck_import_match_links(uuid, text[]) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -18794,30 +18770,6 @@ END $g$;
 
 -- 00677_board_deck_import_resolve_dispatch.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.claim_board_deck_import_adjudication(uuid, integer) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00677_board_deck_import_resolve_dispatch.sql
-DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.store_board_deck_import_adjudication(uuid, integer, jsonb) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00677_board_deck_import_resolve_dispatch.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.claim_board_deck_import_adjudication(uuid, integer) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00677_board_deck_import_resolve_dispatch.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.store_board_deck_import_adjudication(uuid, integer, jsonb) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00677_board_deck_import_resolve_dispatch.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.begin_board_deck_import_resolve_run(uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -18849,6 +18801,72 @@ END $g$;
 -- 00677_board_deck_import_resolve_dispatch.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.dispatch_board_deck_import_resolve() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_record(uuid, text, text, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_board_deck_import_resolution(uuid, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_board_deck_import_resolution(uuid, text, text, jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_assert_lease(uuid, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.consume_board_deck_import_link_quota(uuid, integer, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.consume_board_deck_import_link_quota(uuid, integer, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_board_deck_import_adjudication(uuid, integer, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.store_board_deck_import_adjudication(uuid, integer, jsonb, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_board_deck_import_adjudication(uuid, integer, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.store_board_deck_import_adjudication(uuid, integer, jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00678_board_deck_import_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_url_host(text) FROM PUBLIC, anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

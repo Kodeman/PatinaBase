@@ -3,16 +3,19 @@ import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.t
 import {
   type AdjudicationAssignment,
   type AdjudicationClaim,
+  AdjudicationHttpError,
   type Candidate,
   type ClaimedItem,
   FetchBlocked,
   finalizeCandidates,
+  isTransientAdjudicationError,
   readCaption,
   readLinks,
   type ResolveDeps,
   runResolve,
 } from './core.ts';
 import { isDeniedLink, nameFromSlug, normalizeProductUrl } from './links.ts';
+import { LIMITS } from './thresholds.ts';
 
 const IMPORT = '11111111-1111-4111-8111-111111111111';
 
@@ -450,6 +453,90 @@ Deno.test('idempotent re-run: same candidates, the slide is adjudicated once', a
   // The same page found twice (picture link + sku) is one candidate each, no duplicates.
   const keys = recordFor(second, 'sku').candidates.map((c) => c.product_id ?? c.extracted?.source_url);
   assertEquals(new Set(keys).size, keys.length);
+});
+
+// ─── SQ-366 F5: adjudication slots are only spent on a real call ─────────────
+
+Deno.test('F5: no API key → no adjudication slot is claimed or stored', async () => {
+  const f = fake([item('pic-a', FLAGGED), item('pic-b', FLAGGED)], { adjudicate: null });
+  await runResolve(f.deps);
+  assertEquals(f.calls.claimAdjudication ?? 0, 0);
+  assertEquals(f.calls.storeAdjudication ?? 0, 0);
+  assertEquals(f.recorded.length, 2);
+});
+
+Deno.test('F5: a transient failure (429, 529, timeout, network) stores nothing; the slot stays reclaimable', async () => {
+  for (const failure of [
+    new AdjudicationHttpError(429),
+    new AdjudicationHttpError(529),
+    new DOMException('timed out', 'TimeoutError'),
+    new TypeError('connection reset'),
+  ]) {
+    const store = new Map<number, AdjudicationAssignment[] | null>();
+    const f = fake([item('pic-a', FLAGGED)], {
+      adjudicationStore: store,
+      adjudicate: async () => {
+        throw failure;
+      },
+    });
+    const summary = await runResolve(f.deps);
+    assertEquals(f.calls.claimAdjudication, 1, String(failure));
+    assertEquals(f.calls.storeAdjudication ?? 0, 0, String(failure));
+    assertEquals(summary.adjudications, 0);
+    // The piece still resolves deterministically.
+    assertEquals(recordFor(f, 'pic-a').state, 'not_found');
+    assert(isTransientAdjudicationError(failure));
+  }
+});
+
+Deno.test('F5: a permanent failure (400) is stored as a failed adjudication', async () => {
+  const f = fake([item('pic-a', FLAGGED)], {
+    adjudicate: async () => {
+      throw new AdjudicationHttpError(400);
+    },
+  });
+  await runResolve(f.deps);
+  assertEquals(f.calls.storeAdjudication, 1);
+  assertEquals(isTransientAdjudicationError(new AdjudicationHttpError(400)), false);
+  assertEquals(isTransientAdjudicationError(new Error('bad tool reply')), false);
+});
+
+// ─── SQ-366 F7: the run stops starting work after its start budget ──────────
+
+Deno.test('F7: past the 40 s start budget no piece or adjudication starts; they are counted deferred', async () => {
+  let clock = 0;
+  const f = fake([
+    item('pic-a', FLAGGED),
+    item('sku', { caption: { sku: 'AB-12', vendor: 'V' } }, { slide_index: 2 }),
+  ], {
+    skus: { 'AB-12': 'prod-ok' },
+    now: () => clock,
+    claim: async () => {
+      // The claim itself took the whole budget.
+      clock = LIMITS.runStartBudgetMs;
+      return [
+        item('pic-a', FLAGGED),
+        item('sku', { caption: { sku: 'AB-12', vendor: 'V' } }, { slide_index: 2 }),
+      ];
+    },
+    adjudicate: async () => ({ input: null, usage: { input_tokens: 0, output_tokens: 0 } }),
+  });
+  const summary = await runResolve(f.deps);
+  assertEquals(summary.claimed, 2);
+  assertEquals(summary.deferred, 2);
+  assertEquals(f.recorded.length, 0);
+  assertEquals(f.calls.claimAdjudication ?? 0, 0);
+  assertEquals(f.calls.matchSku ?? 0, 0);
+});
+
+Deno.test('F7: within the budget every claimed piece is worked', async () => {
+  const f = fake([item('sku', { caption: { sku: 'AB-12', vendor: 'V' } })], {
+    skus: { 'AB-12': 'prod-ok' },
+    now: () => 0,
+  });
+  const summary = await runResolve(f.deps);
+  assertEquals(summary.deferred, 0);
+  assertEquals(recordFor(f, 'sku').state, 'found');
 });
 
 Deno.test('finalizeCandidates dedupes one page across tiers, best band wins', () => {

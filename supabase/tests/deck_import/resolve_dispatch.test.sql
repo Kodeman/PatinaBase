@@ -124,6 +124,16 @@ VALUES
    'd6774000-0000-4000-8000-000000000002', 2, 'product',
    '{"links":[{"url":"https://own.example/p/1"}]}'::jsonb, 'not_found');
 
+-- 00678 F7: quota and adjudication writes need a live lease on some piece of
+-- the import. One leased holder piece per import, owner 'rd'.
+INSERT INTO public.board_deck_import_items (
+  import_id, element_key, slide_index, role, extracted, state, lease_owner, lease_until
+)
+SELECT id, 'holder', 0, 'product', '{}'::jsonb, 'pending', 'rd', now() + interval '1 hour'
+FROM public.board_deck_imports
+WHERE id IN ('d6777000-0000-4000-8000-000000000001', 'd6777000-0000-4000-8000-000000000002',
+             'd6777000-0000-4000-8000-000000000003');
+
 CREATE TEMP TABLE resolve_ctx (k text PRIMARY KEY, v jsonb) ON COMMIT DROP;
 
 -- ── 1. Normalization ────────────────────────────────────────────────────────
@@ -143,12 +153,12 @@ END $$;
 DO $$
 DECLARE r jsonb;
 BEGIN
-  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000002', 250);
+  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000002', 250, 'rd');
   ASSERT (r->>'granted')::int = 250, format('first grant: %s', r);
-  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000002', 100);
+  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000002', 100, 'rd');
   ASSERT (r->>'granted')::int = 50, format('partial grant up to 300 per import: %s', r);
   ASSERT (r->>'import_used')::int = 300, format('import_used: %s', r);
-  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000002', 1);
+  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000002', 1, 'rd');
   ASSERT (r->>'granted')::int = 0, format('import quota spent: %s', r);
 END $$;
 
@@ -162,16 +172,16 @@ WHERE studio_key = 'd6771000-0000-4000-8000-000000000001'
 DO $$
 DECLARE r jsonb;
 BEGIN
-  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000001', 200);
+  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000001', 200, 'rd');
   ASSERT (r->>'granted')::int = 50, format('studio-day cap 1500: %s', r);
   ASSERT (r->>'studio_used')::int = 1500, format('studio_used: %s', r);
-  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000001', 1);
+  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000001', 1, 'rd');
   ASSERT (r->>'granted')::int = 0, format('studio-day quota spent: %s', r);
   -- Another studio is unaffected.
-  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000003', 5);
+  r := public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000003', 5, 'rd');
   ASSERT (r->>'granted')::int = 5, format('foreign studio has its own day: %s', r);
   BEGIN
-    PERFORM public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000001', 0);
+    PERFORM public.consume_board_deck_import_link_quota('d6777000-0000-4000-8000-000000000001', 0, 'rd');
     RAISE EXCEPTION 'n=0 must be refused';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
@@ -246,7 +256,7 @@ BEGIN
   added := public.materialize_board_deck_import_links('d6777000-0000-4000-8000-000000000001');
   ASSERT added = 0, 'materialize runs once per import';
   SELECT count(*) INTO rows_now FROM public.board_deck_import_items
-  WHERE import_id = 'd6777000-0000-4000-8000-000000000001';
+  WHERE import_id = 'd6777000-0000-4000-8000-000000000001' AND element_key <> 'holder';
   ASSERT rows_now = 4, format('no duplicate pieces: %s', rows_now);
 END $$;
 
@@ -268,7 +278,13 @@ BEGIN
   SELECT id INTO link_id FROM public.board_deck_import_items
   WHERE import_id = 'd6777000-0000-4000-8000-000000000001'
     AND element_key = 'link:' || md5('https://shop.example/products/slide-rug');
-  PERFORM public.record_board_deck_import_resolution(link_id, 'found', 'link', candidates);
+  UPDATE public.board_deck_import_items
+  SET lease_owner = 'rd', lease_until = now() + interval '1 hour'
+  WHERE id = link_id;
+  -- A leased link row is never paired from under its run.
+  ASSERT NOT public.pair_board_deck_import_link(link_id, 'd6778000-0000-4000-8000-000000000001', candidates),
+    'a leased link row is not paired';
+  PERFORM public.record_board_deck_import_resolution(link_id, 'found', 'link', candidates, 'rd');
 
   ASSERT public.pair_board_deck_import_link(link_id, 'd6778000-0000-4000-8000-000000000001', candidates),
     'a clear pair is applied';
@@ -285,20 +301,24 @@ END $$;
 DO $$
 DECLARE r jsonb;
 BEGIN
-  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 4);
+  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 4, 'rd');
   ASSERT r->>'status' = 'granted', format('first claim: %s', r);
-  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 4);
+  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 4, 'rd');
   ASSERT r->>'status' = 'denied', format('a slide in flight is not called twice: %s', r);
   PERFORM public.store_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 4,
-    '[{"image_element_key":"s5:pic1","text_element_keys":["t1"],"link_ids":[]}]'::jsonb);
-  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 4);
+    '[{"image_element_key":"s5:pic1","text_element_keys":["t1"],"link_ids":[]}]'::jsonb, 'rd');
+  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 4, 'rd');
   ASSERT r->>'status' = 'cached' AND jsonb_array_length(r->'assignments') = 1,
     format('a re-run reuses the answer: %s', r);
-  PERFORM public.store_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, NULL);
-  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5);
-  ASSERT r->>'status' = 'denied', format('a failed call is not retried: %s', r);
+  -- 00678 F5: a failed call is tried once more, then no more.
+  PERFORM public.store_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, NULL, 'rd');
+  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, 'rd');
+  ASSERT r->>'status' = 'granted', format('a failed call is retried once: %s', r);
+  PERFORM public.store_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, NULL, 'rd');
+  r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', 5, 'rd');
+  ASSERT r->>'status' = 'denied', format('a second failure is final: %s', r);
   FOR i IN 6..30 LOOP
-    r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', i);
+    r := public.claim_board_deck_import_adjudication('d6777000-0000-4000-8000-000000000001', i, 'rd');
   END LOOP;
   ASSERT r->>'status' = 'denied', format('per-import cap of 20 slides: %s', r);
 END $$;
@@ -370,7 +390,10 @@ DO $$
 DECLARE fn text;
 BEGIN
   FOREACH fn IN ARRAY ARRAY[
-    'public.consume_board_deck_import_link_quota(uuid,integer)',
+    'public.consume_board_deck_import_link_quota(uuid,integer,text)',
+    'public.record_board_deck_import_resolution(uuid,text,text,jsonb,text)',
+    'public.claim_board_deck_import_adjudication(uuid,integer,text)',
+    'public.store_board_deck_import_adjudication(uuid,integer,jsonb,text)',
     'public.board_deck_import_match_links(uuid,text[])',
     'public.board_deck_import_search_words(uuid,text,text,integer)',
     'public.materialize_board_deck_import_links(uuid)',

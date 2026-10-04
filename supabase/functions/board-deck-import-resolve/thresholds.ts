@@ -27,6 +27,9 @@ export const LIMITS = {
   runConcurrency: 4,
   /** Words hits asked of the database per item. */
   wordsLimit: 5,
+  /** No new piece or adjudication starts this long after the run began, so
+   *  the run ends well inside the 60 s pg_net window and the 3 min lease. */
+  runStartBudgetMs: 40_000,
 } as const;
 
 /** Adjudication (Anthropic Messages API, forced tool). Sonnet 5 list price,

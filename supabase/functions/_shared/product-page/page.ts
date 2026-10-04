@@ -17,7 +17,13 @@
 
 // deno-lint-ignore-file no-explicit-any
 
-import { decodeEntities, parsePriceToCents } from './extract.ts';
+import {
+  decodeEntities,
+  elementBodies,
+  isLdJsonTag,
+  parsePriceToCents,
+  tagSources,
+} from './extract.ts';
 
 export interface ProductPageRead {
   kind: 'product' | 'not_product';
@@ -38,8 +44,7 @@ export const DECK_PAGE_MAX_BYTES = 5 * 1024 * 1024;
 
 function metaMap(html: string): Map<string, string> {
   const out = new Map<string, string>();
-  for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
-    const tag = m[0];
+  for (const tag of tagSources(html, '<meta\\b')) {
     const key = attr(tag, 'property') ?? attr(tag, 'name');
     const content = attr(tag, 'content');
     if (!key || content === null || !content.trim()) continue;
@@ -51,9 +56,9 @@ function metaMap(html: string): Map<string, string> {
 
 function metaAll(html: string, keys: string[]): string[] {
   const out: string[] = [];
-  for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
-    const key = (attr(m[0], 'property') ?? attr(m[0], 'name'))?.trim().toLowerCase();
-    const content = attr(m[0], 'content');
+  for (const tag of tagSources(html, '<meta\\b')) {
+    const key = (attr(tag, 'property') ?? attr(tag, 'name'))?.trim().toLowerCase();
+    const content = attr(tag, 'content');
     if (key && keys.includes(key) && content && content.trim()) out.push(content.trim());
   }
   return out;
@@ -148,12 +153,10 @@ interface LdProduct {
 }
 
 function readLd(html: string): LdProduct | null {
-  for (const m of html.matchAll(
-    /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
-  )) {
+  for (const body of elementBodies(html, '<script\\b', 'script', isLdJsonTag)) {
     let data: unknown;
     try {
-      data = JSON.parse(m[1].trim());
+      data = JSON.parse(body.trim());
     } catch {
       continue;
     }
@@ -279,7 +282,8 @@ export function readProductPage(
     host = new URL(finalUrl).hostname.replace(/^www\./, '');
   } catch { /* finalUrl came from fetchHtml and parses */ }
   const siteNames = [meta.get('og:site_name') ?? '', host, host.split('.')[0]];
-  const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? null;
+  const firstTitle = elementBodies(html, '<title', 'title').next();
+  const titleTag = firstTitle.done ? null : firstTitle.value;
   const name = cleanProductName(ld?.name ?? null, siteNames) ??
     cleanProductName(meta.get('og:title') ?? null, siteNames) ??
     cleanProductName(titleTag ? decodeEntities(titleTag) : null, siteNames);
