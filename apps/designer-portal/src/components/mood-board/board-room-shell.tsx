@@ -73,7 +73,13 @@ import {
   prepareAndUploadBoardImages,
 } from '@/lib/mood-board-assets/upload-board-assets';
 import { prepareProjectReviewMedia } from '@/lib/mood-board-assets/project-review-media';
-import { buildSendToScheduleArgs, findExistingScheduleLine } from '@/lib/scope/board-schedule';
+import {
+  beginScheduleSend,
+  buildSendToScheduleArgs,
+  endScheduleSend,
+  findExistingScheduleLine,
+  scheduleRoomIdForBoard,
+} from '@/lib/scope/board-schedule';
 import {
   createMoodBoardCoverLifecycle,
   type MoodBoardCoverSnapshot,
@@ -660,8 +666,8 @@ function BoardRoomSurface({
     updateItem(itemId, { data: { ...(current.data ?? {}), proposalItemId } });
   }, [updateItem]);
 
-  // `quiet` is the deck ledger's bulk loop: same path, outcome returned
-  // instead of written to the room's notice line.
+  // `quiet` is the deck ledger's bulk loop: same path and in-flight guard,
+  // outcome returned instead of written to the room's notice line.
   const sendToSchedule = useCallback(async (
     item: EditableMoodBoardItem,
     options: { quiet?: boolean } = {},
@@ -669,6 +675,8 @@ function BoardRoomSurface({
     if (owner.kind !== 'proposal' || (item.type !== 'product' && item.type !== 'capture')) {
       return { ok: false, message: 'Only a product pin goes on the schedule.' };
     }
+    // Already sending this pin — no-op; that send reports itself (SQ-368 F15).
+    if (!beginScheduleSend(item.id)) return { ok: true };
     const quiet = options.quiet === true;
     if (!quiet) {
       setSurfaceNotice(null);
@@ -677,6 +685,7 @@ function BoardRoomSurface({
     const hold = deckPinHoldReason(item);
     if (hold) {
       if (!quiet) setSurfaceNotice(hold);
+      endScheduleSend(item.id);
       return { ok: false, message: hold };
     }
     try {
@@ -684,7 +693,7 @@ function BoardRoomSurface({
       if (refreshed.error) throw refreshed.error;
       const lines = refreshed.data ?? [];
       const snapshot = scheduleSnapshotForBoardItem(item);
-      const scopeRoomId = boardQuery.data?.scope_room_id ?? null;
+      const scopeRoomId = scheduleRoomIdForBoard(boardQuery.data);
       const twin = findExistingScheduleLine(lines, snapshot, scopeRoomId);
       if (twin) {
         if (!quiet) setSurfaceNotice(`Already on the schedule${twin.doc_code ? ` · ${twin.doc_code}` : ''}`);
@@ -704,8 +713,10 @@ function BoardRoomSurface({
       const message = cause instanceof Error ? cause.message : 'Could not add this pin to the schedule.';
       if (!quiet) setSurfaceError(message);
       return { ok: false, message };
+    } finally {
+      endScheduleSend(item.id);
     }
-  }, [addScheduleItem, boardQuery.data?.scope_room_id, owner, scheduleQuery, stampScheduleBacklink]);
+  }, [addScheduleItem, boardQuery.data, owner, scheduleQuery, stampScheduleBacklink]);
 
   // Bring in a Deck (US-15 W3) — review. `onBringInDeck` is set only while
   // the `board-deck-import` flag is on, so off/loading reads nothing.
@@ -1557,6 +1568,7 @@ function BoardRoomSurface({
             api={api}
             owner={owner}
             scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
+            scheduleRoomId={scheduleRoomIdForBoard(boardQuery.data)}
             onOpenProduct={openProduct}
             onReplaceImage={replaceImage}
             onScheduleSent={stampScheduleBacklink}

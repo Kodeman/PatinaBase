@@ -1,8 +1,11 @@
 import {
+  beginScheduleSend,
   buildSendToScheduleArgs,
   computeBoardDrift,
+  endScheduleSend,
   findExistingScheduleLine,
   findScheduleTwin,
+  scheduleRoomIdForBoard,
   type DriftPin,
   type PinScheduleSnapshot,
   type ScheduleLineRef,
@@ -168,6 +171,51 @@ describe('findExistingScheduleLine (dedupe key)', () => {
 
   it('a product-less pin with no backlink is addable', () => {
     expect(findExistingScheduleLine([line()], snap({ productId: null }), 'room-1')).toBeUndefined();
+  });
+});
+
+describe('scheduleRoomIdForBoard (SQ-368 F16)', () => {
+  it('reads scope_room_id — the same field the quick-menu send uses', () => {
+    expect(scheduleRoomIdForBoard({ scope_room_id: 'room-9' })).toBe('room-9');
+  });
+
+  it('null-normalizes a missing board or field', () => {
+    expect(scheduleRoomIdForBoard(null)).toBeNull();
+    expect(scheduleRoomIdForBoard(undefined)).toBeNull();
+    expect(scheduleRoomIdForBoard({ scope_room_id: null })).toBeNull();
+  });
+
+  it('never reads project_room_id, even when present on the row', () => {
+    expect(
+      scheduleRoomIdForBoard({ scope_room_id: null, project_room_id: 'proj-room-1' } as never),
+    ).toBeNull();
+  });
+});
+
+describe('beginScheduleSend / endScheduleSend (SQ-368 F15 in-flight guard)', () => {
+  it('lets the first send for a pin begin', () => {
+    expect(beginScheduleSend('item-a')).toBe(true);
+    endScheduleSend('item-a');
+  });
+
+  it('refuses a second send for the same pin while the first is in flight', () => {
+    expect(beginScheduleSend('item-b')).toBe(true);
+    expect(beginScheduleSend('item-b')).toBe(false);
+    endScheduleSend('item-b');
+  });
+
+  it('allows a new send once the in-flight one has ended', () => {
+    expect(beginScheduleSend('item-c')).toBe(true);
+    endScheduleSend('item-c');
+    expect(beginScheduleSend('item-c')).toBe(true);
+    endScheduleSend('item-c');
+  });
+
+  it('tracks pins independently', () => {
+    expect(beginScheduleSend('item-d')).toBe(true);
+    expect(beginScheduleSend('item-e')).toBe(true);
+    endScheduleSend('item-d');
+    endScheduleSend('item-e');
   });
 });
 

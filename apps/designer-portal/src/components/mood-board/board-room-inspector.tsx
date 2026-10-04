@@ -182,6 +182,7 @@ export function BoardRoomInspector({
   api,
   owner,
   scopeRoomId = null,
+  scheduleRoomId = null,
   onOpenProduct,
   onReplaceImage,
   onScheduleSent,
@@ -192,6 +193,11 @@ export function BoardRoomInspector({
   api: BoardRoomControllerApi;
   owner?: BoardOwnerRef;
   scopeRoomId?: string | null;
+  /** The room id the schedule twin check uses — SAME field the shell's quick-menu
+   * send reads, so the inspector never disagrees with the menu about a twin
+   * (SQ-368 F16). Deliberately separate from scopeRoomId above, which also feeds
+   * project-promotion room assignment and must keep its project_room_id priority. */
+  scheduleRoomId?: string | null;
   onOpenProduct?: (item: EditableMoodBoardItem) => void;
   onReplaceImage?: (item: EditableMoodBoardItem) => void;
   /** Backlinks a pin to the schedule line it was just sent to. */
@@ -474,7 +480,7 @@ export function BoardRoomInspector({
           {owner?.kind === 'proposal' && !holdReason && (lead.type === 'product' || lead.type === 'capture') && (
             <BoardScheduleInspectorAction
               proposalId={owner.id}
-              scopeRoomId={scopeRoomId}
+              scopeRoomId={scheduleRoomId}
               item={lead}
               onSent={onScheduleSent}
             />
