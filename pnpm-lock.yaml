@@ -669,6 +669,9 @@ importers:
       dompurify:
         specifier: ^3.2.7
         version: 3.3.2
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.2
       framer-motion:
         specifier: ^12.23.24
         version: 12.39.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
