@@ -1373,6 +1373,59 @@ export type Database = {
           },
         ]
       }
+      board_deck_import_link_usage: {
+        Row: {
+          adjudications: Json
+          import_id: string
+          links_materialized_at: string | null
+          links_used: number
+          studio_key: string
+          updated_at: string
+        }
+        Insert: {
+          adjudications?: Json
+          import_id: string
+          links_materialized_at?: string | null
+          links_used?: number
+          studio_key: string
+          updated_at?: string
+        }
+        Update: {
+          adjudications?: Json
+          import_id?: string
+          links_materialized_at?: string | null
+          links_used?: number
+          studio_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_deck_import_link_usage_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: true
+            referencedRelation: "board_deck_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_deck_import_studio_link_days: {
+        Row: {
+          day: string
+          links_used: number
+          studio_key: string
+        }
+        Insert: {
+          day: string
+          links_used?: number
+          studio_key: string
+        }
+        Update: {
+          day?: string
+          links_used?: number
+          studio_key?: string
+        }
+        Relationships: []
+      }
       board_deck_imports: {
         Row: {
           board_id: string
@@ -32729,6 +32782,10 @@ export type Database = {
         Args: { p_manifest: Json }
         Returns: Json
       }
+      _board_deck_import_normalize_url: {
+        Args: { p_url: string }
+        Returns: string
+      }
       _board_deck_import_product_visible: {
         Args: { p_product_id: string }
         Returns: boolean
@@ -32744,6 +32801,36 @@ export type Database = {
       _board_deck_import_slide_link: {
         Args: { p_extracted: Json }
         Returns: string
+      }
+      _board_deck_import_studio_key: {
+        Args: { p_import_id: string }
+        Returns: string
+      }
+      _board_deck_import_usage_row: {
+        Args: { p_import_id: string }
+        Returns: {
+          adjudications: Json
+          import_id: string
+          links_materialized_at: string | null
+          links_used: number
+          studio_key: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "board_deck_import_link_usage"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _board_deck_import_visible_for: {
+        Args: {
+          p_layer: string
+          p_owner: string
+          p_studio: string
+          p_user: string
+        }
+        Returns: boolean
       }
       _budget_version_fingerprint: {
         Args: { p_version_id: string }
@@ -34832,6 +34919,10 @@ export type Database = {
         Args: { p_request: Json }
         Returns: Json
       }
+      begin_board_deck_import_resolve_run: {
+        Args: { p_import_id: string }
+        Returns: number
+      }
       begin_direction_from_discovery: {
         Args: { p_designer_client_id: string }
         Returns: string
@@ -34900,6 +34991,27 @@ export type Database = {
       }
       begin_proposal_send_provider_attempt: {
         Args: { p_claim_token: string; p_dispatch_id: string }
+        Returns: Json
+      }
+      board_deck_import_match_links: {
+        Args: { p_import_id: string; p_urls: string[] }
+        Returns: Json
+      }
+      board_deck_import_match_sku: {
+        Args: { p_import_id: string; p_sku: string; p_vendor: string }
+        Returns: Json
+      }
+      board_deck_import_pairable_pictures: {
+        Args: { p_import_id: string }
+        Returns: Json
+      }
+      board_deck_import_search_words: {
+        Args: {
+          p_import_id: string
+          p_limit?: number
+          p_query: string
+          p_vendor?: string
+        }
         Returns: Json
       }
       board_json_has_explicit_media_reference: {
@@ -35150,8 +35262,16 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_board_deck_import_adjudication: {
+        Args: { p_import_id: string; p_slide_index: number }
+        Returns: Json
+      }
       claim_board_deck_import_items: {
         Args: { p_limit?: number }
+        Returns: Json
+      }
+      claim_board_deck_import_items_for_import: {
+        Args: { p_import_id: string; p_limit?: number }
         Returns: Json
       }
       claim_capture_enrichment_run: {
@@ -35366,6 +35486,10 @@ export type Database = {
           p_idempotency_key: string
           p_payload: Json
         }
+        Returns: Json
+      }
+      consume_board_deck_import_link_quota: {
+        Args: { p_import_id: string; p_n: number }
         Returns: Json
       }
       consume_board_unfurl_quota: {
@@ -35959,6 +36083,7 @@ export type Database = {
         Args: { p_dry_run?: boolean }
         Returns: number
       }
+      dispatch_board_deck_import_resolve: { Args: never; Returns: number }
       draft_invoice_from_milestone: {
         Args: { p_milestone_id: string }
         Returns: string
@@ -36516,6 +36641,16 @@ export type Database = {
       }
       finish_board_asset_gc_run: {
         Args: {
+          p_detail?: Json
+          p_error?: string
+          p_run_id: number
+          p_status: string
+        }
+        Returns: undefined
+      }
+      finish_board_deck_import_resolve_run: {
+        Args: {
+          p_cost_usd?: number
           p_detail?: Json
           p_error?: string
           p_run_id: number
@@ -37631,6 +37766,10 @@ export type Database = {
         Args: { p_proposal_id: string; p_template_key: string }
         Returns: number
       }
+      materialize_board_deck_import_links: {
+        Args: { p_import_id: string }
+        Returns: number
+      }
       materialize_board_template: {
         Args: {
           p_name?: string
@@ -37763,6 +37902,14 @@ export type Database = {
       override_budget_checkpoint: {
         Args: { p_checkpoint_id: string; p_reason: string }
         Returns: Json
+      }
+      pair_board_deck_import_link: {
+        Args: {
+          p_candidates: Json
+          p_link_item_id: string
+          p_picture_item_id: string
+        }
+        Returns: boolean
       }
       paperwork_link_rate_limit_hit: {
         Args: { p_ip: string; p_limit?: number; p_token?: string }
@@ -40165,6 +40312,14 @@ export type Database = {
           started: Database["public"]["Tables"]["project_time_entries"]["Row"]
           stopped: Database["public"]["Tables"]["project_time_entries"]["Row"]
         }[]
+      }
+      store_board_deck_import_adjudication: {
+        Args: {
+          p_assignments: Json
+          p_import_id: string
+          p_slide_index: number
+        }
+        Returns: undefined
       }
       stripe_balance_tx_ingest: {
         Args: { p_cursor: string; p_txns: Json }
