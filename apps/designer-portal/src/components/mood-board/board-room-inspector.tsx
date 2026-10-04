@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { resolveMoodBoardGeometry, unionBoardRects } from '@patina/design-system';
-import type { BoardOwnerRef, BoardRect, EditableMoodBoardItem } from '@patina/types';
+import { promoteRequestFromPin, type BoardOwnerRef, type BoardRect, type EditableMoodBoardItem } from '@patina/types';
 import { usePromoteBoardReferenceToSelection, type BoardItemDirection } from '@patina/supabase';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import type { BoardRoomControllerApi } from '@/components/portal/scope-builder/board-room-controller';
@@ -475,6 +475,7 @@ export function BoardRoomInspector({
                 onClick={() => {
                   setPromotionError(null);
                   void promoteReference.mutateAsync({
+                    ...promoteRequestFromPin(lead),
                     projectId: owner.id,
                     boardItemId: lead.id,
                     assignmentScope: scopeRoomId ? 'room' : 'unassigned',

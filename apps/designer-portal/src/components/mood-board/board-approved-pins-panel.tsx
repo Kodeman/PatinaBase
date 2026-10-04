@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { EditableMoodBoardItem } from '@patina/types';
+import { promoteRequestFromPin, type EditableMoodBoardItem } from '@patina/types';
 import {
   useBoardItemFeedbackByBoard,
   usePromoteBoardReferenceToSelection,
@@ -133,6 +133,7 @@ export function BoardApprovedPinsPanel({
   ): Promise<{ ok: true } | { ok: false; message: string }> => {
     try {
       const result = await promote.mutateAsync({
+        ...promoteRequestFromPin(item),
         projectId,
         boardItemId: item.id,
         assignmentScope: scopeRoomId ? 'room' : 'unassigned',

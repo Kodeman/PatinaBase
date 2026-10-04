@@ -160,6 +160,35 @@ describe('project FF&E GA commands', () => {
     });
   });
 
+  it('promotes with name, product and source metadata, defaulting disposition to candidate', async () => {
+    rpc.mockResolvedValue({ data: { outcome: 'created', selectionId: 'selection-4' }, error: null });
+    const config = usePromoteBoardReferenceToSelection() as unknown as MutationConfig;
+
+    await config.mutationFn({
+      projectId: 'project-1',
+      boardItemId: 'reference-2',
+      assignmentScope: 'unassigned',
+      duplicateMode: 'reuse',
+      idempotencyKey: 'request-4',
+      name: 'Rattan chair',
+      productId: 'product-2',
+      sourceMetadata: { sourceUrl: 'https://maker.invalid/rattan', priceCents: 145000, vendorName: 'Loose Maker' },
+    });
+    expect(rpc).toHaveBeenLastCalledWith('promote_board_reference_to_selection', {
+      p_board_item_id: 'reference-2',
+      p_request: {
+        assignmentScope: 'unassigned',
+        roomId: null,
+        disposition: 'candidate',
+        duplicateMode: 'reuse',
+        idempotencyKey: 'request-4',
+        name: 'Rattan chair',
+        productId: 'product-2',
+        sourceMetadata: { sourceUrl: 'https://maker.invalid/rattan', priceCents: 145000, vendorName: 'Loose Maker' },
+      },
+    });
+  });
+
   it('uses the exact triage, archive, and supersession signatures', async () => {
     rpc.mockResolvedValue({ data: {}, error: null });
     const triage = useTriageProjectFfeItems() as unknown as MutationConfig;
