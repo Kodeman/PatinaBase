@@ -115,6 +115,42 @@ export function buildSendToScheduleArgs(input: {
   };
 }
 
+/** The slice of a board pin the deck foot action reads. */
+export interface DeckSchedulePin {
+  id: string;
+  type: string;
+  projectFfeItemId?: string | null;
+  data?: Record<string, unknown> | null;
+}
+
+/**
+ * "Put N pieces on the schedule" (US-15): the kept deck pieces not yet
+ * onward. A project pin is onward once it carries a selection; a proposal pin
+ * once it carries a schedule backlink (data.proposalItemId). One pin per deck
+ * piece (deck_import.item_id), so a duplicated pin is never sent twice.
+ */
+export function deckPinsToSchedule<T extends DeckSchedulePin>(
+  pins: readonly T[],
+  ownerKind: 'project' | 'proposal',
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const pin of pins) {
+    if (pin.type !== 'product' && pin.type !== 'capture') continue;
+    const deck = pin.data?.deck_import as { state?: unknown; item_id?: unknown } | undefined;
+    if (!deck || deck.state !== 'kept') continue;
+    const onward = ownerKind === 'project'
+      ? Boolean(pin.projectFfeItemId)
+      : typeof pin.data?.proposalItemId === 'string' && pin.data.proposalItemId !== '';
+    if (onward) continue;
+    const key = typeof deck.item_id === 'string' && deck.item_id ? deck.item_id : pin.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(pin);
+  }
+  return out;
+}
+
 /** A board pin's linked product for the drift check. */
 export interface DriftPin {
   id: string; // board_item_id

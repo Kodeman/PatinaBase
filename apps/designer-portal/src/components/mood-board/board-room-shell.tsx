@@ -93,6 +93,15 @@ import {
   type PreparedDeck,
 } from '@/hooks/use-board-deck-import-layout';
 import { BoardPromoteAllPanel } from './board-promote-all-panel';
+import { BoardDeckImportLedger, DeckPieceActs } from './board-deck-import-ledger';
+import {
+  canvasCaption,
+  howPhrase,
+  roomHeadLine,
+  useBoardDeckImportReview,
+  useDeckImportDecisions,
+  type DeckReviewRoom,
+} from '@/hooks/use-board-deck-import-review';
 import { BoardRoomInspector } from './board-room-inspector';
 import { BoardRoomSectionsMenu } from './board-room-sections-menu';
 import { BoardShareDialog } from './board-share-dialog';
@@ -651,14 +660,24 @@ function BoardRoomSurface({
     updateItem(itemId, { data: { ...(current.data ?? {}), proposalItemId } });
   }, [updateItem]);
 
-  const sendToSchedule = useCallback(async (item: EditableMoodBoardItem) => {
-    if (owner.kind !== 'proposal' || (item.type !== 'product' && item.type !== 'capture')) return;
-    setSurfaceNotice(null);
-    setSurfaceError(null);
+  // `quiet` is the deck ledger's bulk loop: same path, outcome returned
+  // instead of written to the room's notice line.
+  const sendToSchedule = useCallback(async (
+    item: EditableMoodBoardItem,
+    options: { quiet?: boolean } = {},
+  ): Promise<{ ok: true } | { ok: false; message: string }> => {
+    if (owner.kind !== 'proposal' || (item.type !== 'product' && item.type !== 'capture')) {
+      return { ok: false, message: 'Only a product pin goes on the schedule.' };
+    }
+    const quiet = options.quiet === true;
+    if (!quiet) {
+      setSurfaceNotice(null);
+      setSurfaceError(null);
+    }
     const hold = deckPinHoldReason(item);
     if (hold) {
-      setSurfaceNotice(hold);
-      return;
+      if (!quiet) setSurfaceNotice(hold);
+      return { ok: false, message: hold };
     }
     try {
       const refreshed = await scheduleQuery.refetch();
@@ -668,8 +687,8 @@ function BoardRoomSurface({
       const scopeRoomId = boardQuery.data?.scope_room_id ?? null;
       const twin = findExistingScheduleLine(lines, snapshot, scopeRoomId);
       if (twin) {
-        setSurfaceNotice(`Already on the schedule${twin.doc_code ? ` · ${twin.doc_code}` : ''}`);
-        return;
+        if (!quiet) setSurfaceNotice(`Already on the schedule${twin.doc_code ? ` · ${twin.doc_code}` : ''}`);
+        return { ok: true };
       }
       const args = buildSendToScheduleArgs({
         proposalId: owner.id,
@@ -679,11 +698,32 @@ function BoardRoomSurface({
       });
       const line = await addScheduleItem.mutateAsync(args);
       if (typeof line?.id === 'string') stampScheduleBacklink(item.id, line.id);
-      setSurfaceNotice(`Added to the schedule · ${args.docCode}`);
+      if (!quiet) setSurfaceNotice(`Added to the schedule · ${args.docCode}`);
+      return { ok: true };
     } catch (cause) {
-      setSurfaceError(cause instanceof Error ? cause.message : 'Could not add this pin to the schedule.');
+      const message = cause instanceof Error ? cause.message : 'Could not add this pin to the schedule.';
+      if (!quiet) setSurfaceError(message);
+      return { ok: false, message };
     }
   }, [addScheduleItem, boardQuery.data?.scope_room_id, owner, scheduleQuery, stampScheduleBacklink]);
+
+  // Bring in a Deck (US-15 W3) — review. `onBringInDeck` is set only while
+  // the `board-deck-import` flag is on, so off/loading reads nothing.
+  const deckImportOn = Boolean(onBringInDeck);
+  const [deckLedgerOpen, setDeckLedgerOpen] = useState(false);
+  const deckReview = useBoardDeckImportReview(api.state?.boardId, deckImportOn);
+  const { replaceItem: replaceRoomItem, addItems: addRoomItems, flushPending } = api;
+  const deckRoom = useMemo<DeckReviewRoom>(() => ({
+    pins: () => latestItemsRef.current ?? [],
+    replaceItem: replaceRoomItem,
+    addItems: (items) => { addRoomItems(items, { select: false }); },
+    flush: flushPending,
+  }), [addRoomItems, flushPending, replaceRoomItem]);
+  const deckDecisions = useDeckImportDecisions(deckReview.deckImport?.id, deckRoom);
+  const deckItemByPin = useMemo(() => new Map(
+    deckReview.items.filter((item) => item.boardItemId).map((item) => [item.boardItemId as string, item]),
+  ), [deckReview.items]);
+  const deckHead = deckImportOn ? roomHeadLine(deckReview.deckImport?.status ?? null, deckReview.items) : null;
 
   const openProduct = useCallback((item: EditableMoodBoardItem) => {
     if (!item.productId) return;
@@ -1127,6 +1167,28 @@ function BoardRoomSurface({
     item.id ? <VerdictBadge feedback={feedbackByItem.get(item.id)} /> : null
   );
   const originalRenderItem = api.canvasProps.renderItem;
+  const deckCaption = (item: EditableMoodBoardItem): string | null => {
+    const deckItem = deckItemByPin.get(item.id);
+    return deckItem ? canvasCaption(deckItem, deckReview.products) : null;
+  };
+  const renderDeckActions = (item: EditableMoodBoardItem): ReactNode => {
+    const deckItem = deckItemByPin.get(item.id);
+    if (!deckItem || deckItem.role !== 'product' || deckItem.state === 'pending' || deckItem.state === 'removed') {
+      return null;
+    }
+    return (
+      <div data-deck-inspector-acts className="space-y-1 rounded-[4px] border border-[var(--border-default)] px-2.5 py-2">
+        <p className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">{howPhrase(deckItem)}</p>
+        <DeckPieceActs
+          item={deckItem}
+          products={deckReview.products}
+          decisions={deckDecisions}
+          pins={state.items}
+          compact
+        />
+      </div>
+    );
+  };
   const editRenderItem = (item: EditableMoodBoardItem): ReactNode => (
     <div className="relative h-full w-full">
       {item.type === 'note' && editingNoteId === item.id ? (
@@ -1145,6 +1207,14 @@ function BoardRoomSurface({
       {(unresolvedDirectionCountByItem.get(item.id) ?? 0) > 0 && (
         <span className="pointer-events-none absolute left-1 top-1 z-20">
           <DirectionIndicator count={unresolvedDirectionCountByItem.get(item.id) ?? 0} />
+        </span>
+      )}
+      {deckCaption(item) && (
+        <span
+          data-deck-caption
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 truncate bg-[var(--bg-surface)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--text-muted)]"
+        >
+          {deckCaption(item)}
         </span>
       )}
     </div>
@@ -1305,6 +1375,24 @@ function BoardRoomSurface({
       {dropUploadProgress && (
         <div role="status" className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 font-mono text-[11px] text-[var(--text-muted)]">
           {dropUploadProgress}
+        </div>
+      )}
+
+      {!dropUploadProgress && deckHead && (
+        <div role="status" data-deck-room-head className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 font-mono text-[11px] text-[var(--text-muted)]">
+          {deckHead.text}
+          {deckHead.review && (
+            <>
+              {' — '}
+              <button
+                type="button"
+                onClick={() => setDeckLedgerOpen(true)}
+                className="min-h-8 text-[var(--color-clay-ink)] underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              >
+                Review
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -1473,6 +1561,7 @@ function BoardRoomSurface({
             onReplaceImage={replaceImage}
             onScheduleSent={stampScheduleBacklink}
             directions={directions}
+            renderDeckActions={deckImportOn ? renderDeckActions : undefined}
           />
         </div>
       </div>
@@ -1533,6 +1622,21 @@ function BoardRoomSurface({
         onOpenChange={setTemplateOpen}
         flush={api.flushPending}
       />
+      {deckImportOn && (
+        <BoardDeckImportLedger
+          open={deckLedgerOpen}
+          onClose={() => setDeckLedgerOpen(false)}
+          owner={owner}
+          scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
+          importId={deckReview.deckImport?.id ?? null}
+          items={deckReview.items}
+          products={deckReview.products}
+          decisions={deckDecisions}
+          pins={state.items}
+          onPromoted={(itemId, selectionId) => api.updateItem(itemId, { projectFfeItemId: selectionId })}
+          sendToSchedule={(pin) => sendToSchedule(pin, { quiet: true })}
+        />
+      )}
     </main>
   );
 }

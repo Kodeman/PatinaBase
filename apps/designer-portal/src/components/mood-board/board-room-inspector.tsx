@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { resolveMoodBoardGeometry, unionBoardRects } from '@patina/design-system';
 import { promoteRequestFromPin, type BoardOwnerRef, type BoardRect, type EditableMoodBoardItem } from '@patina/types';
 import { usePromoteBoardReferenceToSelection, type BoardItemDirection } from '@patina/supabase';
@@ -187,6 +187,7 @@ export function BoardRoomInspector({
   onScheduleSent,
   onCommand,
   directions = [],
+  renderDeckActions,
 }: {
   api: BoardRoomControllerApi;
   owner?: BoardOwnerRef;
@@ -201,6 +202,8 @@ export function BoardRoomInspector({
    * already returns null outside `api.mode === 'edit'` (see the early
    * return), which keeps the thread out of Present by construction. */
   directions?: readonly BoardItemDirection[];
+  /** US-15 — the deck ledger's acts for one deck pin (null when it has none). */
+  renderDeckActions?: (item: EditableMoodBoardItem) => ReactNode;
 }) {
   const panelRef = useRef<HTMLElement>(null);
   const promoteReference = usePromoteBoardReferenceToSelection();
@@ -456,6 +459,8 @@ export function BoardRoomInspector({
               onCommand?.('content');
             }}
           />
+
+          {renderDeckActions?.(lead)}
 
           {holdReason && (lead.type === 'product' || lead.type === 'capture') && (
             <p

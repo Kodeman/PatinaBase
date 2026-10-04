@@ -153,9 +153,11 @@ export interface ProductPickerModalProps {
    * board) pass false and keep the one-click grammar.
    */
   configureStep?: boolean;
+  /** Library-tab search text the picker opens with (e.g. a deck caption). */
+  initialSearch?: string;
 }
 
-type Tab = 'catalog' | 'library' | 'captures' | 'draft';
+type Tab ='catalog' | 'library' | 'captures' | 'draft';
 
 interface CatalogProductRow {
   id: string;
@@ -394,8 +396,14 @@ function CatalogTab({
 
 // ─── Library tab (decisions / scope='library') ──────────────────────────────────
 
-function LibraryTab({ onPick }: { onPick: (pick: TabPick) => void }) {
-  const [search, setSearch] = useState('');
+function LibraryTab({
+  onPick,
+  initialSearch = '',
+}: {
+  onPick: (pick: TabPick) => void;
+  initialSearch?: string;
+}) {
+  const [search, setSearch] = useState(initialSearch);
   const [activeLayer, setActiveLayer] = useState<LayerProductLayer>('personal');
   const [limits, setLimits] = useState<Record<LayerProductLayer, number>>({
     personal: LIBRARY_PAGE_SIZE,
@@ -1210,6 +1218,7 @@ export function ProductPickerModal({
   scope = 'catalog',
   initialTab = scope,
   configureStep = true,
+  initialSearch,
 }: ProductPickerModalProps) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [scopeRoomId, setScopeRoomId] = useState<string | null>(defaultScopeRoomId ?? null);
@@ -1349,7 +1358,7 @@ export function ProductPickerModal({
           {tab === 'catalog' && (
             <CatalogTab defaultCategorySlug={defaultCategorySlug} onPick={handlePick} />
           )}
-          {tab === 'library' && <LibraryTab onPick={handlePick} />}
+          {tab === 'library' && <LibraryTab onPick={handlePick} initialSearch={initialSearch} />}
           {tab === 'captures' && <CapturesTab onPick={handlePick} />}
           {tab === 'draft' && allowDraftCreate && <DraftTab onPick={handlePick} />}
         </>
