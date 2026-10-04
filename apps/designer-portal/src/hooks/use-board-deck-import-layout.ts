@@ -372,16 +372,25 @@ export async function runDeckLayout(
       ? sectionIdMap.get(layoutData.section_id) ?? layoutData.section_id
       : null;
     const itemId = itemIdByKey.get(element.element_key)!;
+    // Contract keys (US-15 "Pin data keys"); the layout's other fields ride along.
+    const {
+      element_ref: _elementRef,
+      caption_text: captionText,
+      ...layoutDeckImport
+    } = (layoutData.deck_import ?? {}) as Record<string, unknown>;
     const data: MoodBoardItemData = {
       ...layoutData,
       section_id: sectionId,
       provenance: 'imported_deck',
       deck_import: {
-        ...(layoutData.deck_import as Record<string, unknown>),
+        ...layoutDeckImport,
         import_id: registration.importId,
         item_id: itemId,
-        slide: element.slide_index,
+        element_key: element.element_key,
+        slide_index: element.slide_index,
+        slide_title: manifest.slides[element.slide_index]?.section_name ?? `Slide ${element.slide_index + 1}`,
         state: element.role === 'product' ? 'to_confirm' : 'reference',
+        ...(typeof captionText === 'string' && captionText ? { caption: captionText } : {}),
       },
     };
     return {
@@ -402,9 +411,17 @@ export async function runDeckLayout(
     },
   });
 
-  const pins: EditableMoodBoardItem[] = uploaded.map((item, index) =>
-    placements[index].element.role === 'product' ? { ...item, type: 'capture' } : item,
-  );
+  // The deck crop stays recorded as the original image (a maker photo may
+  // replace image_url later).
+  const pins: EditableMoodBoardItem[] = uploaded.map((item, index) => {
+    const data = {
+      ...item.data,
+      original_image_url: item.imageUrl ?? item.data?.image_url ?? null,
+    };
+    return placements[index].element.role === 'product'
+      ? { ...item, type: 'capture', data }
+      : { ...item, data };
+  });
 
   // Free text becomes a note on the slide's frame (fresh imports only; a
   // resumed deck already carries its notes).
@@ -451,8 +468,9 @@ export async function runDeckLayout(
             provenance: 'imported_deck',
             deck_import: {
               import_id: registration.importId,
-              slide: slide.index,
-              element_ref: text.text_key,
+              element_key: text.text_key,
+              slide_index: slide.index,
+              slide_title: slide.section_name,
             },
           },
         });

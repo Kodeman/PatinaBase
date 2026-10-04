@@ -249,6 +249,20 @@ describe('runDeckLayout', () => {
       expect(pin.data?.provenance).toBe('imported_deck');
       expect(deckImport.import_id).toBe('import-1');
       expect(typeof deckImport.item_id).toBe('string');
+      // US-15 contract "Pin data keys".
+      const element = placed.find((e) => e.element_key === deckImport.element_key);
+      expect(element).toBeDefined();
+      expect(deckImport.slide_index).toBe(element!.slide_index);
+      const section = sections.find((s) => s.id === pin.data?.section_id);
+      expect(deckImport.slide_title).toBe(section?.name);
+      expect(deckImport.slide_title).toBe(deck.manifest.slides[element!.slide_index].section_name);
+      expect(deckImport).not.toHaveProperty('slide');
+      expect(deckImport).not.toHaveProperty('element_ref');
+      expect(Array.isArray(deckImport.links)).toBe(true);
+      for (const link of deckImport.links as Array<Record<string, unknown>>) {
+        expect(Object.keys(link).sort()).toEqual(['origin', 'url']);
+      }
+      expect(pin.data?.original_image_url).toBe(pin.imageUrl);
       // Below the existing item (bottom 300 + gutter), above its z.
       expect(pin.y).toBeGreaterThanOrEqual(300);
       expect(pin.zIndex).toBeGreaterThan(7);
@@ -274,11 +288,19 @@ describe('runDeckLayout', () => {
     for (const note of notes) {
       expect(note.data?.provenance).toBe('imported_deck');
       expect(note.content?.trim()).toBeTruthy();
+      const noteImport = note.data?.deck_import as Record<string, unknown>;
+      expect(typeof noteImport.slide_index).toBe('number');
+      expect(sections.map((s) => s.name)).toContain(noteImport.slide_title);
+      expect(noteImport).not.toHaveProperty('slide');
     }
 
+    // Attached under the same element_key the pin carries.
     expect(deps.attach).toHaveBeenCalledWith({
       importId: 'import-1',
-      pins: pins.map((pin) => ({ elementKey: expect.any(String), boardItemId: pin.id })),
+      pins: pins.map((pin) => ({
+        elementKey: (pin.data?.deck_import as Record<string, unknown>).element_key,
+        boardItemId: pin.id,
+      })),
     });
   });
 

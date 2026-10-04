@@ -91,10 +91,7 @@ JOIN LATERAL jsonb_array_elements(b.sections) s ON s->>'id' = i.data->>'section_
 WHERE i.board_id = '${leg.boardId}'::uuid
   AND i.data->>'provenance' = 'imported_deck'
   AND i.type IN ('capture', 'image')
-  AND s->>'name' IS DISTINCT FROM coalesce(
-    nullif(i.data->'deck_import'->>'slide_title', ''),
-    'Slide ' || ((i.data->'deck_import'->>'slide_index')::int + 1)
-  )`),
+  AND s->>'name' IS DISTINCT FROM i.data->'deck_import'->>'slide_title'`),
   );
 }
 
