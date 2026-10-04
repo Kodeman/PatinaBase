@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { promoteRequestFromPin, type EditableMoodBoardItem } from '@patina/types';
+import { DECK_COPY, deckPinHoldReason } from '@/hooks/use-board-deck-import-layout';
 import {
   useBoardItemFeedbackByBoard,
   usePromoteBoardReferenceToSelection,
@@ -123,7 +124,8 @@ export function BoardApprovedPinsPanel({
 
   if (approvedPins.length === 0) return null;
 
-  const eligible = approvedPins.filter((pin) => !pin.scheduled);
+  // A deck piece still to confirm never goes onward (US-15).
+  const eligible = approvedPins.filter((pin) => !pin.scheduled && !deckPinHoldReason(pin.item));
 
   /** The bare network call + local state update, with no shared-error side
    * effects — both sendOne and sendAll build their own error presentation on
@@ -206,7 +208,9 @@ export function BoardApprovedPinsPanel({
           {approvedPins.length} approved {approvedPins.length === 1 ? 'piece' : 'pieces'}
           {eligible.length > 0
             ? ` · ${eligible.length} not yet on the schedule`
-            : ' · all on the schedule'}
+            : approvedPins.every((pin) => pin.scheduled)
+              ? ' · all on the schedule'
+              : ` · ${DECK_COPY.hold}`}
         </p>
         {eligible.length > 1 && (
           <Button
@@ -244,6 +248,10 @@ export function BoardApprovedPinsPanel({
             {scheduled ? (
               <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-sage)]">
                 On schedule
+              </span>
+            ) : deckPinHoldReason(item) ? (
+              <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                {deckPinHoldReason(item)}
               </span>
             ) : (
               <Button

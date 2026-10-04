@@ -10,6 +10,7 @@ import { BoardImageInspectorActions } from './board-image-inspector-actions';
 import { BoardItemDirectionPanel } from './board-item-direction-panel';
 import { BoardPaletteInspectorActions } from './board-palette-inspector-actions';
 import { BoardScheduleInspectorAction } from './board-schedule-inspector-action';
+import { deckPinHoldReason } from '@/hooks/use-board-deck-import-layout';
 
 const INSPECTOR_WIDTH = 286;
 const INSPECTOR_GAP = 18;
@@ -265,6 +266,7 @@ export function BoardRoomInspector({
 
   if (!api.state || api.mode !== 'edit' || selected.length === 0 || !selectionBounds) return null;
   const lead = selected[0];
+  const holdReason = deckPinHoldReason(lead);
   const multi = selected.length > 1;
   const sourceUrl = safeSourceUrl(lead);
   const sectionIds = selected.map((item) =>
@@ -455,7 +457,16 @@ export function BoardRoomInspector({
             }}
           />
 
-          {owner?.kind === 'proposal' && (lead.type === 'product' || lead.type === 'capture') && (
+          {holdReason && (lead.type === 'product' || lead.type === 'capture') && (
+            <p
+              data-deck-pin-hold
+              className="rounded-[4px] border border-[var(--border-default)] px-2.5 py-2 text-[10px] leading-4 text-[var(--text-muted)]"
+            >
+              {holdReason}
+            </p>
+          )}
+
+          {owner?.kind === 'proposal' && !holdReason && (lead.type === 'product' || lead.type === 'capture') && (
             <BoardScheduleInspectorAction
               proposalId={owner.id}
               scopeRoomId={scopeRoomId}
@@ -475,7 +486,8 @@ export function BoardRoomInspector({
               <Button
                 size="sm"
                 variant="secondary"
-                disabled={promoteReference.isPending}
+                disabled={promoteReference.isPending || Boolean(holdReason)}
+                title={holdReason ?? undefined}
                 onClick={() => {
                   setPromotionError(null);
                   void promoteReference.mutateAsync({

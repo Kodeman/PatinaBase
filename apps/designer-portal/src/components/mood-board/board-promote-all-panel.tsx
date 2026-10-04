@@ -4,6 +4,7 @@ import { useId, useMemo, useState } from 'react';
 import { promoteRequestFromPin, type EditableMoodBoardItem } from '@patina/types';
 import { usePromoteBoardReferenceToSelection } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
+import { DECK_COPY, deckPinHoldReason } from '@/hooks/use-board-deck-import-layout';
 
 function pinName(item: EditableMoodBoardItem): string {
   const name = item.data?.name;
@@ -50,7 +51,7 @@ export function BoardPromoteAllPanel({
     failures: ReadonlyArray<{ id: string; name: string; message: string }>;
   } | null>(null);
 
-  const eligible = useMemo(
+  const unpromoted = useMemo(
     () =>
       items.filter(
         (item) =>
@@ -58,6 +59,9 @@ export function BoardPromoteAllPanel({
       ),
     [items],
   );
+  // A deck piece still to confirm never goes onward (US-15).
+  const eligible = useMemo(() => unpromoted.filter((item) => !deckPinHoldReason(item)), [unpromoted]);
+  const held = unpromoted.length - eligible.length;
 
   // Visible right after materialization for any nonzero count (a first
   // template seed with even one product pin still shouldn't require a
@@ -128,6 +132,7 @@ export function BoardPromoteAllPanel({
           {justMaterialized
             ? `${eligible.length} ${eligible.length === 1 ? 'piece' : 'pieces'} from this template aren't in the project selection yet`
             : `${eligible.length} pieces not yet in the project selection`}
+          {held > 0 && ` · ${held} to confirm — ${DECK_COPY.hold}`}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <fieldset className="flex items-center gap-3" disabled={sendingAll}>

@@ -227,4 +227,26 @@ describe('BoardPromoteAllPanel (DV3)', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(promoteMutateAsync).not.toHaveBeenCalled();
   });
+
+  it('never promotes a deck piece still to confirm (US-15)', async () => {
+    const held = { deck_import: { state: 'to_confirm' } };
+    render(
+      <BoardPromoteAllPanel
+        projectId="project-1"
+        scopeRoomId={null}
+        items={[
+          pin({ id: 'pin-1' }),
+          pin({ id: 'pin-2' }),
+          pin({ id: 'deck-1', type: 'capture', data: { name: 'Deck sofa', ...held } }),
+        ]}
+        justMaterialized={false}
+        onDismissJustMaterialized={jest.fn()}
+        onPromoted={jest.fn()}
+      />,
+    );
+    expect(screen.getByText(/1 to confirm — Confirm the piece first/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Promote all 2 pieces' }));
+    await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(2));
+    expect(promoteMutateAsync.mock.calls.map(([input]) => input.boardItemId)).toEqual(['pin-1', 'pin-2']);
+  });
 });

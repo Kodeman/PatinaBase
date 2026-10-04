@@ -80,6 +80,18 @@ import {
 } from '@/lib/mood-board-assets/board-cover-lifecycle';
 import { BoardAddRail, uploadFilesAsBoardItems, type BoardAddSource } from './board-add-rail';
 import { BoardApprovedPinsPanel } from './board-approved-pins-panel';
+import { BoardDeckImportSheet } from './board-deck-import-sheet';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import {
+  DECK_COPY,
+  DECK_IMPORT_FLAG,
+  DECK_OPEN_EVENT,
+  deckFileKind,
+  deckPinHoldReason,
+  takePendingDeck,
+  useBoardDeckImportLayout,
+  type PreparedDeck,
+} from '@/hooks/use-board-deck-import-layout';
 import { BoardPromoteAllPanel } from './board-promote-all-panel';
 import { BoardRoomInspector } from './board-room-inspector';
 import { BoardRoomSectionsMenu } from './board-room-sections-menu';
@@ -348,6 +360,7 @@ function BoardRoomSurface({
   onConsumeExternalNotice,
   justMaterialized,
   onDismissJustMaterialized,
+  onBringInDeck,
 }: {
   api: BoardRoomControllerApi;
   owner: BoardOwnerRef;
@@ -364,6 +377,8 @@ function BoardRoomSurface({
   /** DV3 — true right after a template materialized onto THIS project board. */
   justMaterialized: boolean;
   onDismissJustMaterialized: () => void;
+  /** Set only while `board-deck-import` is on. */
+  onBringInDeck?: () => void;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -640,6 +655,11 @@ function BoardRoomSurface({
     if (owner.kind !== 'proposal' || (item.type !== 'product' && item.type !== 'capture')) return;
     setSurfaceNotice(null);
     setSurfaceError(null);
+    const hold = deckPinHoldReason(item);
+    if (hold) {
+      setSurfaceNotice(hold);
+      return;
+    }
     try {
       const refreshed = await scheduleQuery.refetch();
       if (refreshed.error) throw refreshed.error;
@@ -1283,8 +1303,8 @@ function BoardRoomSurface({
       )}
 
       {dropUploadProgress && (
-        <div role="status" className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--text-muted)]">
-          Uploading {dropUploadProgress}
+        <div role="status" className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 font-mono text-[11px] text-[var(--text-muted)]">
+          {dropUploadProgress}
         </div>
       )}
 
@@ -1335,6 +1355,7 @@ function BoardRoomSurface({
               nextZ={nextZ}
               onAddItems={addFromRail}
               onSelectItem={focusFeedbackItem}
+              onBringInDeck={onBringInDeck}
             />
           </aside>
         )}
@@ -1532,6 +1553,57 @@ export function MoodBoardRoom({
   const placeProjectProduct = usePlaceProductInProjectV2();
   const [dropUploadProgress, setDropUploadProgress] = useState<string | null>(null);
   const [externalNotice, setExternalNotice] = useState<string | null>(null);
+  // Bring in a Deck (US-15 W2) — fail-closed: off or loading hides every
+  // entry point, and a dropped deck only gets a plain note.
+  const { value: deckImportOn } = useFeatureFlag(DECK_IMPORT_FLAG);
+  const [deckFile, setDeckFile] = useState<File | null>(null);
+  const deckInputRef = useRef<HTMLInputElement>(null);
+  const deckLayout = useBoardDeckImportLayout({ owner, boardId, upload: uploadFilesAsBoardItems });
+  const openDeck = useCallback((file: File) => {
+    if (!deckImportOn) {
+      setExternalNotice(DECK_COPY.notSupported);
+      return;
+    }
+    if (deckFileKind(file) === 'resave') {
+      setExternalNotice(DECK_COPY.resave);
+      return;
+    }
+    setDeckFile(file);
+  }, [deckImportOn]);
+  const chooseDeck = useCallback(() => deckInputRef.current?.click(), []);
+  useEffect(() => {
+    if (!deckImportOn) return;
+    const pending = takePendingDeck(boardId);
+    if (pending) setDeckFile(pending);
+    const onOpen = () => chooseDeck();
+    window.addEventListener(DECK_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(DECK_OPEN_EVENT, onOpen);
+  }, [boardId, chooseDeck, deckImportOn]);
+  const layOutDeck = useCallback((deck: PreparedDeck, pastedLinks: string) => {
+    const api = apiRef.current;
+    if (!api?.state) return;
+    void deckLayout.layOut({
+      deck,
+      pastedLinks,
+      room: {
+        sections: api.state.sections,
+        items: api.state.items,
+        commit: (sections, items) => {
+          apiRef.current?.addItems(items, {
+            id: generatedId('deck'),
+            sections,
+            select: false,
+            source: 'file_drop',
+          });
+        },
+        flush: () => apiRef.current?.flushPending() ?? Promise.resolve(),
+      },
+    }).catch((cause) => {
+      setExternalNotice(cause instanceof Error && cause.message
+        ? `The deck could not be laid out: ${cause.message}`
+        : 'The deck could not be laid out.');
+    });
+  }, [deckLayout]);
   const metricsRef = useRef<SessionMetrics>({
     commands: 0,
     usedUndo: false,
@@ -1644,6 +1716,12 @@ export function MoodBoardRoom({
   const dropped = useCallback(async (commit: BoardItemsDroppedCommit) => {
     const api = apiRef.current;
     if (!api?.state) return;
+    // Always intercepted, flag on or off: a deck never reaches the image pipeline.
+    const deck = commit.files.find((file) => deckFileKind(file));
+    if (deck) {
+      openDeck(deck);
+      return;
+    }
     if (commit.files.length > 0) {
       const startZ = Math.max(-1, ...api.state.items.map((item) => item.zIndex ?? 0)) + 1;
       try {
@@ -1655,7 +1733,7 @@ export function MoodBoardRoom({
           point: { x: commit.point.x - 140, y: commit.point.y - 100 },
           startZ,
           onProgress: ({ file, index, total, stage }) => {
-            setDropUploadProgress(`${index + 1}/${total} · ${file.name} · ${stage}`);
+            setDropUploadProgress(`Uploading ${index + 1}/${total} · ${file.name} · ${stage}`);
           },
         });
       } finally {
@@ -1720,7 +1798,7 @@ export function MoodBoardRoom({
     } catch {
       return;
     }
-  }, [boardId, boardQuery.data?.project_room_id, owner, placeProjectProduct, resolveUrl]);
+  }, [boardId, boardQuery.data?.project_room_id, openDeck, owner, placeProjectProduct, resolveUrl]);
 
   const pasteImages = useCallback(async (files: readonly File[], point: BoardPoint) => {
     const api = apiRef.current;
@@ -1755,22 +1833,49 @@ export function MoodBoardRoom({
       {(api) => {
         apiRef.current = api;
         return (
-          <BoardRoomSurface
-            api={api}
-            owner={owner}
-            source={navigation.source}
-            returnTarget={navigation.returnTarget}
-            exitHandlerRef={exitHandlerRef}
-            deleteGuardRef={deleteGuardRef}
-            metricsRef={metricsRef}
-            lastCommand={lastCommandRef.current}
-            itemActionsRef={itemActionsRef}
-            dropUploadProgress={dropUploadProgress}
-            externalNotice={externalNotice}
-            onConsumeExternalNotice={() => setExternalNotice(null)}
-            justMaterialized={justMaterialized}
-            onDismissJustMaterialized={() => setJustMaterialized(false)}
-          />
+          <>
+            <BoardRoomSurface
+              api={api}
+              owner={owner}
+              source={navigation.source}
+              returnTarget={navigation.returnTarget}
+              exitHandlerRef={exitHandlerRef}
+              deleteGuardRef={deleteGuardRef}
+              metricsRef={metricsRef}
+              lastCommand={lastCommandRef.current}
+              itemActionsRef={itemActionsRef}
+              dropUploadProgress={deckLayout.progress ?? dropUploadProgress}
+              externalNotice={externalNotice}
+              onConsumeExternalNotice={() => setExternalNotice(null)}
+              justMaterialized={justMaterialized}
+              onDismissJustMaterialized={() => setJustMaterialized(false)}
+              onBringInDeck={deckImportOn ? chooseDeck : undefined}
+            />
+            {deckImportOn && (
+              <>
+                <input
+                  ref={deckInputRef}
+                  type="file"
+                  accept=".pptx,.ppsx,.potx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden
+                  data-deck-import-input
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) openDeck(file);
+                  }}
+                />
+                <BoardDeckImportSheet
+                  file={deckFile}
+                  boardId={boardId}
+                  onClose={() => setDeckFile(null)}
+                  onLayOut={layOutDeck}
+                />
+              </>
+            )}
+          </>
         );
       }}
     </BoardRoomController>
