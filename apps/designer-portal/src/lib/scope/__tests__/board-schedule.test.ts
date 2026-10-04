@@ -1,6 +1,7 @@
 import {
   buildSendToScheduleArgs,
   computeBoardDrift,
+  findExistingScheduleLine,
   findScheduleTwin,
   type DriftPin,
   type PinScheduleSnapshot,
@@ -23,6 +24,10 @@ const snap = (overrides: Partial<PinScheduleSnapshot> = {}): PinScheduleSnapshot
   name: 'Walnut chair',
   imageUrl: 'https://cdn.example.com/chair.jpg',
   priceCents: 120000,
+  vendorId: null,
+  vendorName: null,
+  sourceUrl: null,
+  proposalItemId: null,
   ...overrides,
 });
 
@@ -93,6 +98,76 @@ describe('buildSendToScheduleArgs (payload mapping)', () => {
     expect(args.unitPrice).toBe(0);
     expect(args.productId).toBeUndefined();
     expect(args.scopeRoomId).toBeNull();
+  });
+
+  it('sends the board price on a retail basis, never as trade (R-DI4)', () => {
+    const args = buildSendToScheduleArgs({
+      proposalId: 'prop-1',
+      snap: snap({ priceCents: 89900 }),
+      boardScopeRoomId: null,
+      existingCodes: [],
+    });
+    expect(args.priceBasis).toBe('retail');
+    expect(args.unitPrice).toBe(89900);
+    expect(args).not.toHaveProperty('unitTradePrice');
+  });
+
+  it('carries the pin vendor id, vendor name and source_url', () => {
+    const args = buildSendToScheduleArgs({
+      proposalId: 'prop-1',
+      snap: snap({
+        productId: null,
+        type: 'capture',
+        vendorId: 'vendor-9',
+        vendorName: 'Marlow & Co',
+        sourceUrl: 'https://maker.example/chair',
+      }),
+      boardScopeRoomId: null,
+      existingCodes: [],
+    });
+    expect(args).toMatchObject({
+      vendorId: 'vendor-9',
+      vendorName: 'Marlow & Co',
+      customFields: { source_url: 'https://maker.example/chair' },
+    });
+  });
+
+  it('omits vendor and custom fields the pin does not have', () => {
+    const args = buildSendToScheduleArgs({
+      proposalId: 'prop-1',
+      snap: snap(),
+      boardScopeRoomId: null,
+      existingCodes: [],
+    });
+    expect(args).not.toHaveProperty('vendorId');
+    expect(args).not.toHaveProperty('vendorName');
+    expect(args).not.toHaveProperty('customFields');
+  });
+});
+
+describe('findExistingScheduleLine (dedupe key)', () => {
+  it('finds the line a URL pin was already sent to via data.proposalItemId', () => {
+    const sent = line({ id: 'line-7', product_id: null, scope_room_id: null });
+    const existing = findExistingScheduleLine(
+      [line(), sent],
+      snap({ productId: null, proposalItemId: 'line-7' }),
+      'room-1',
+    );
+    expect(existing?.id).toBe('line-7');
+  });
+
+  it('lets a pin whose backlinked line was deleted be sent again', () => {
+    expect(
+      findExistingScheduleLine([line()], snap({ productId: null, proposalItemId: 'gone' }), 'room-1'),
+    ).toBeUndefined();
+  });
+
+  it('keeps the product twin guard for product pins without a backlink', () => {
+    expect(findExistingScheduleLine([line()], snap(), 'room-1')?.id).toBe('line-1');
+  });
+
+  it('a product-less pin with no backlink is addable', () => {
+    expect(findExistingScheduleLine([line()], snap({ productId: null }), 'room-1')).toBeUndefined();
   });
 });
 

@@ -21,6 +21,34 @@ describe('scheduleSnapshotForBoardItem', () => {
       name: 'Marlow chair',
       imageUrl: 'https://assets.example/chair.jpg',
       priceCents: 125000,
+      vendorId: null,
+      vendorName: null,
+      sourceUrl: null,
+      proposalItemId: null,
+    });
+  });
+
+  it('reads the vendor, source_url and schedule backlink a pin carries', () => {
+    expect(scheduleSnapshotForBoardItem({
+      id: 'item-3',
+      type: 'capture',
+      x: 0,
+      y: 0,
+      width: 200,
+      productId: null,
+      data: {
+        name: 'Rattan lounge',
+        price_cents: 89900,
+        vendor_id: 'vendor-9',
+        vendor_name: 'Marlow & Co',
+        source_url: 'https://maker.example/lounge',
+        proposalItemId: 'line-7',
+      },
+    })).toMatchObject({
+      vendorId: 'vendor-9',
+      vendorName: 'Marlow & Co',
+      sourceUrl: 'https://maker.example/lounge',
+      proposalItemId: 'line-7',
     });
   });
 

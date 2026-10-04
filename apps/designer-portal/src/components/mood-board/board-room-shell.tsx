@@ -73,7 +73,7 @@ import {
   prepareAndUploadBoardImages,
 } from '@/lib/mood-board-assets/upload-board-assets';
 import { prepareProjectReviewMedia } from '@/lib/mood-board-assets/project-review-media';
-import { buildSendToScheduleArgs, findScheduleTwin } from '@/lib/scope/board-schedule';
+import { buildSendToScheduleArgs, findExistingScheduleLine } from '@/lib/scope/board-schedule';
 import {
   createMoodBoardCoverLifecycle,
   type MoodBoardCoverSnapshot,
@@ -626,6 +626,16 @@ function BoardRoomSurface({
     });
   };
 
+  // The pin may change while a send is in flight; stamp onto its latest data.
+  const latestItemsRef = useRef(api.state?.items);
+  latestItemsRef.current = api.state?.items;
+  const { updateItem } = api;
+  const stampScheduleBacklink = useCallback((itemId: string, proposalItemId: string) => {
+    const current = latestItemsRef.current?.find((candidate) => candidate.id === itemId);
+    if (!current || current.data?.proposalItemId === proposalItemId) return;
+    updateItem(itemId, { data: { ...(current.data ?? {}), proposalItemId } });
+  }, [updateItem]);
+
   const sendToSchedule = useCallback(async (item: EditableMoodBoardItem) => {
     if (owner.kind !== 'proposal' || (item.type !== 'product' && item.type !== 'capture')) return;
     setSurfaceNotice(null);
@@ -636,7 +646,7 @@ function BoardRoomSurface({
       const lines = refreshed.data ?? [];
       const snapshot = scheduleSnapshotForBoardItem(item);
       const scopeRoomId = boardQuery.data?.scope_room_id ?? null;
-      const twin = findScheduleTwin(lines, snapshot.productId, scopeRoomId);
+      const twin = findExistingScheduleLine(lines, snapshot, scopeRoomId);
       if (twin) {
         setSurfaceNotice(`Already on the schedule${twin.doc_code ? ` · ${twin.doc_code}` : ''}`);
         return;
@@ -647,12 +657,13 @@ function BoardRoomSurface({
         boardScopeRoomId: scopeRoomId,
         existingCodes: lines.map((line) => line.doc_code),
       });
-      await addScheduleItem.mutateAsync(args);
+      const line = await addScheduleItem.mutateAsync(args);
+      if (typeof line?.id === 'string') stampScheduleBacklink(item.id, line.id);
       setSurfaceNotice(`Added to the schedule · ${args.docCode}`);
     } catch (cause) {
       setSurfaceError(cause instanceof Error ? cause.message : 'Could not add this pin to the schedule.');
     }
-  }, [addScheduleItem, boardQuery.data?.scope_room_id, owner, scheduleQuery]);
+  }, [addScheduleItem, boardQuery.data?.scope_room_id, owner, scheduleQuery, stampScheduleBacklink]);
 
   const openProduct = useCallback((item: EditableMoodBoardItem) => {
     if (!item.productId) return;
@@ -1439,6 +1450,7 @@ function BoardRoomSurface({
             scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
             onOpenProduct={openProduct}
             onReplaceImage={replaceImage}
+            onScheduleSent={stampScheduleBacklink}
             directions={directions}
           />
         </div>

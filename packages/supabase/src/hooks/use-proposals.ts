@@ -723,8 +723,11 @@ export function useAddProposalItem() {
       description,
       quantity,
       unitPrice,
+      unitTradePrice,
+      priceBasis,
       notes,
       category,
+      vendorId,
       vendorName,
       imageUrl,
       // Wave 1 — structured FF&E
@@ -743,9 +746,21 @@ export function useAddProposalItem() {
       name: string;
       description?: string;
       quantity: number;
+      /** The client (sell) price; also the trade price unless one is given. */
       unitPrice: number;
+      /** Trade cost (`unit_price`). Defaults per `priceBasis`. */
+      unitTradePrice?: number;
+      /**
+       * `'retail'` — the caller only knows a retail price (a board pin, R-DI4):
+       * `unitPrice` lands on `unit_sell_price` alone and trade stays 0 instead
+       * of copying retail into it; a product line with no `vendorId` takes the
+       * product's vendor. Omitted keeps the historical behaviour
+       * (`unit_price = unit_sell_price = unitPrice`).
+       */
+      priceBasis?: 'retail';
       notes?: string;
       category?: string;
+      vendorId?: string | null;
       vendorName?: string;
       /** Snapshot image (e.g. a board pin's image) carried onto the line. */
       imageUrl?: string | null;
@@ -778,6 +793,18 @@ export function useAddProposalItem() {
 
       const nextPosition = (existingItems?.[0]?.position ?? -1) + 1;
       const sellPrice = unitPrice;
+      const tradePrice = unitTradePrice ?? (priceBasis === 'retail' ? 0 : unitPrice);
+      let lineVendorId = vendorId ?? null;
+      if (!lineVendorId && priceBasis === 'retail' && productId) {
+        // Best effort: a missing vendor is still flagged by the FF&E readiness
+        // gate, so a failed lookup must not block adding the line.
+        const { data: product } = await supabase
+          .from('products')
+          .select('vendor_id')
+          .eq('id', productId)
+          .maybeSingle();
+        lineVendorId = product?.vendor_id ?? null;
+      }
       // Allowances have no unit price; their planned cost is the midpoint of the
       // budget range. Storing it in line_total_cents folds allowances into
       // proposals.total_amount (Σ line_total_cents) and, on activation, the
@@ -798,11 +825,12 @@ export function useAddProposalItem() {
           name,
           description: description || null,
           quantity,
-          unit_price: unitPrice,
+          unit_price: tradePrice,
           unit_sell_price: sellPrice,
           line_total_cents: lineTotal,
           notes: notes || null,
           category: category || null,
+          ...(lineVendorId ? { vendor_id: lineVendorId } : {}),
           vendor_name: vendorName || null,
           image_url: imageUrl || null,
           position: nextPosition,

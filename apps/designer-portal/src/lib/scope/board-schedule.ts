@@ -11,7 +11,16 @@ export interface PinScheduleSnapshot {
   productId: string | null;
   name: string | null;
   imageUrl: string | null;
+  /** data.price_cents — a board price is RETAIL (sell-side), never trade (R-DI4). */
   priceCents: number | null;
+  /** data.vendor_id, when the pin recorded one. */
+  vendorId: string | null;
+  /** data.vendor_name (the brand an unfurl or library pick recorded). */
+  vendorName: string | null;
+  /** data.source_url — the page a URL pin was unfurled from. */
+  sourceUrl: string | null;
+  /** data.proposalItemId — the schedule line this pin was last sent to. */
+  proposalItemId: string | null;
 }
 
 /** A slim schedule line, enough for twin detection + doc_code suggestion. */
@@ -30,7 +39,13 @@ export interface SendToScheduleArgs {
   productId?: string;
   name: string;
   quantity: number;
+  /** The pin's RETAIL price — lands on unit_sell_price only (see priceBasis). */
   unitPrice: number;
+  /** Board prices are retail: trade stays 0 instead of copying retail into it. */
+  priceBasis: 'retail';
+  vendorId?: string;
+  vendorName?: string;
+  customFields?: { source_url: string };
   imageUrl: string | null;
   scopeRoomId: string | null;
   docCode: string;
@@ -54,10 +69,28 @@ export function findScheduleTwin(
 }
 
 /**
+ * The schedule line this pin already sits on, if any. The pin's backlink
+ * (data.proposalItemId) wins when that line still exists; otherwise the
+ * product twin guard applies. A backlink to a deleted line is ignored, so the
+ * pin can be sent again (and re-stamped).
+ */
+export function findExistingScheduleLine(
+  scheduleItems: ScheduleLineRef[],
+  snap: Pick<PinScheduleSnapshot, 'productId' | 'proposalItemId'>,
+  boardScopeRoomId: string | null,
+): ScheduleLineRef | undefined {
+  const sent = snap.proposalItemId
+    ? scheduleItems.find((s) => s.id === snap.proposalItemId)
+    : undefined;
+  return sent ?? findScheduleTwin(scheduleItems, snap.productId, boardScopeRoomId);
+}
+
+/**
  * Map a pin's snapshot → the proposal_item args: name/image/price ride to the
- * SELL side (useAddProposalItem sets unit_sell_price = unitPrice); product_id +
- * room carry; a doc_code is auto-suggested (no ffe_category on a board pin, so
- * the suggester falls back to a consonant prefix of the name).
+ * SELL side only (priceBasis 'retail' — trade stays 0); product_id, vendor,
+ * room and the pin's source_url carry; a doc_code is auto-suggested (no
+ * ffe_category on a board pin, so the suggester falls back to a consonant
+ * prefix of the name).
  */
 export function buildSendToScheduleArgs(input: {
   proposalId: string;
@@ -72,6 +105,10 @@ export function buildSendToScheduleArgs(input: {
     name: snap.name ?? 'Board pick',
     quantity: 1,
     unitPrice: snap.priceCents ?? 0,
+    priceBasis: 'retail',
+    ...(snap.vendorId ? { vendorId: snap.vendorId } : {}),
+    ...(snap.vendorName ? { vendorName: snap.vendorName } : {}),
+    ...(snap.sourceUrl ? { customFields: { source_url: snap.sourceUrl } } : {}),
     imageUrl: snap.imageUrl,
     scopeRoomId: boardScopeRoomId,
     docCode: resolveDocCode(null, null, existingCodes, snap.name ?? undefined),
