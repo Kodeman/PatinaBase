@@ -13,6 +13,8 @@
  * `@patina/types` stays free of UI / help-system dependencies.
  */
 
+import type { MoodBoardItemSnapshot } from './mood-board';
+
 /** The 8 ordered FF&E procurement stage keys. */
 export type FFEStageKey =
   | 'specified'
@@ -153,14 +155,47 @@ export interface TriageProjectFfeItemsRequest {
   disposition?: Exclude<FfeDesignDisposition, 'superseded'>;
 }
 
+/** Stored on the selection's spec as `routing_source` by place_product_in_project_v2. */
+export interface PromoteBoardReferenceSourceMetadata {
+  sourceUrl?: string;
+  priceCents?: number;
+  vendorName?: string;
+}
+
 export interface PromoteBoardReferenceRequest {
   projectId: string;
   boardItemId: string;
   assignmentScope: FfeAssignmentScope;
   roomId?: string | null;
-  disposition?: Exclude<FfeDesignDisposition, 'superseded'>;
+  /** Defaults to 'candidate'. */
+  disposition?: Extract<FfeDesignDisposition, 'selected' | 'candidate'>;
   duplicateMode: FfeDuplicateMode;
   idempotencyKey: string;
+  /** Line name for a pin with no product (the RPC requires one). */
+  name?: string;
+  productId?: string | null;
+  sourceMetadata?: PromoteBoardReferenceSourceMetadata;
+}
+
+/** The pin-derived part of a promote request: name, product and source facts. */
+export function promoteRequestFromPin(
+  item: MoodBoardItemSnapshot,
+): Pick<PromoteBoardReferenceRequest, 'name' | 'productId' | 'sourceMetadata'> {
+  const data = item.data;
+  const name = data?.name?.trim() || item.content?.trim() || undefined;
+  const sourceMetadata: PromoteBoardReferenceSourceMetadata = {};
+  const sourceUrl = data?.source_url?.trim();
+  if (sourceUrl) sourceMetadata.sourceUrl = sourceUrl;
+  if (typeof data?.price_cents === 'number' && Number.isFinite(data.price_cents)) {
+    sourceMetadata.priceCents = data.price_cents;
+  }
+  const vendorName = data?.vendor_name?.trim();
+  if (vendorName) sourceMetadata.vendorName = vendorName;
+  return {
+    ...(name ? { name } : {}),
+    ...(item.productId ? { productId: item.productId } : {}),
+    ...(Object.keys(sourceMetadata).length > 0 ? { sourceMetadata } : {}),
+  };
 }
 
 export interface ArchiveProjectSelectionRequest {

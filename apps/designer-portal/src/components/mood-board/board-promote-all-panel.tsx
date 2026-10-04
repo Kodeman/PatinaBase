@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import type { EditableMoodBoardItem } from '@patina/types';
+import { useId, useMemo, useState } from 'react';
+import { promoteRequestFromPin, type EditableMoodBoardItem } from '@patina/types';
 import { usePromoteBoardReferenceToSelection } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
 
@@ -42,6 +42,8 @@ export function BoardPromoteAllPanel({
   onPromoted: (itemId: string, selectionId: string) => void;
 }) {
   const promote = usePromoteBoardReferenceToSelection();
+  const choiceName = useId();
+  const [disposition, setDisposition] = useState<'selected' | 'candidate'>('selected');
   const [sendingAll, setSendingAll] = useState(false);
   const [batchResult, setBatchResult] = useState<{
     attempted: number;
@@ -70,11 +72,12 @@ export function BoardPromoteAllPanel({
   ): Promise<{ ok: true } | { ok: false; message: string }> => {
     try {
       const result = await promote.mutateAsync({
+        ...promoteRequestFromPin(item),
         projectId,
         boardItemId: item.id,
         assignmentScope: scopeRoomId ? 'room' : 'unassigned',
         roomId: scopeRoomId,
-        disposition: 'candidate',
+        disposition,
         duplicateMode: 'reuse',
         idempotencyKey: `promote:${item.id}`,
       });
@@ -126,7 +129,28 @@ export function BoardPromoteAllPanel({
             ? `${eligible.length} ${eligible.length === 1 ? 'piece' : 'pieces'} from this template aren't in the project selection yet`
             : `${eligible.length} pieces not yet in the project selection`}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <fieldset className="flex items-center gap-3" disabled={sendingAll}>
+            <legend className="sr-only">How these pieces enter the project</legend>
+            <label className="flex min-h-8 items-center gap-1.5 text-[11px] text-[var(--text-primary)]">
+              <input
+                type="radio"
+                name={choiceName}
+                checked={disposition === 'selected'}
+                onChange={() => setDisposition('selected')}
+              />
+              These are her selections
+            </label>
+            <label className="flex min-h-8 items-center gap-1.5 text-[11px] text-[var(--text-primary)]">
+              <input
+                type="radio"
+                name={choiceName}
+                checked={disposition === 'candidate'}
+                onChange={() => setDisposition('candidate')}
+              />
+              These are options
+            </label>
+          </fieldset>
           <Button
             variant="secondary"
             size="sm"

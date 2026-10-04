@@ -106,7 +106,7 @@ describe('BoardApprovedPinsPanel', () => {
         boardId="board-1"
         projectId="project-1"
         scopeRoomId="room-1"
-        items={[pin({ id: 'pin-1' })]}
+        items={[pin({ id: 'pin-1', productId: 'product-1' })]}
         onPromoted={onPromoted}
       />,
     );
@@ -120,6 +120,8 @@ describe('BoardApprovedPinsPanel', () => {
         roomId: 'room-1',
         disposition: 'candidate',
         duplicateMode: 'reuse',
+        name: 'Oak chair',
+        productId: 'product-1',
       }),
     );
     await waitFor(() => expect(onPromoted).toHaveBeenCalledWith('pin-1', 'selection-1'));

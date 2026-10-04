@@ -203,9 +203,14 @@ export function usePromoteBoardReferenceToSelection() {
           p_request: {
             assignmentScope: request.assignmentScope,
             roomId: request.roomId ?? null,
-            disposition: request.disposition,
+            disposition: request.disposition ?? 'candidate',
             duplicateMode: request.duplicateMode,
             idempotencyKey: request.idempotencyKey,
+            // Omitted keys stay absent: the RPC falls back to the pin's
+            // product, and a JSON null sourceMetadata would corrupt routing_source.
+            ...(request.name ? { name: request.name } : {}),
+            ...(request.productId ? { productId: request.productId } : {}),
+            ...(request.sourceMetadata ? { sourceMetadata: request.sourceMetadata } : {}),
           },
         }).then(({ data, error }: { data: unknown; error: unknown }) => {
           if (error) throw error;

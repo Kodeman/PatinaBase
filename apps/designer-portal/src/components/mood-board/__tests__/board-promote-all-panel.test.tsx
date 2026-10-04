@@ -139,8 +139,9 @@ describe('BoardPromoteAllPanel (DV3)', () => {
         boardItemId: 'pin-2',
         assignmentScope: 'room',
         roomId: 'room-1',
-        disposition: 'candidate',
+        disposition: 'selected',
         duplicateMode: 'reuse',
+        name: 'Succeeding lamp',
       }),
     );
     expect(onPromoted).toHaveBeenCalledWith('pin-2', 'selection-2');
@@ -150,6 +151,64 @@ describe('BoardPromoteAllPanel (DV3)', () => {
     expect(alert).toHaveTextContent('1 of 2 could not be promoted: Failing chair');
     // The batch still ran to completion — dismiss fires once the run settles.
     expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('defaults to her selections and sends options as candidates, carrying pin name, product and source', async () => {
+    render(
+      <BoardPromoteAllPanel
+        projectId="project-1"
+        scopeRoomId={null}
+        items={[
+          pin({
+            id: 'pin-1',
+            type: 'capture',
+            content: 'Slide caption',
+            data: {
+              name: ' Rattan chair ',
+              source_url: 'https://maker.invalid/rattan',
+              price_cents: 145000,
+              vendor_name: 'Loose Maker',
+            },
+          }),
+          pin({ id: 'pin-2', productId: 'product-2', data: null, content: 'Sofa' }),
+        ]}
+        justMaterialized
+        onDismissJustMaterialized={jest.fn()}
+        onPromoted={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('radio', { name: 'These are her selections' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'These are options' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Promote all 2 pieces' }));
+    await waitFor(() => expect(promoteMutateAsync).toHaveBeenCalledTimes(2));
+
+    expect(promoteMutateAsync).toHaveBeenNthCalledWith(1, {
+      projectId: 'project-1',
+      boardItemId: 'pin-1',
+      assignmentScope: 'unassigned',
+      roomId: null,
+      disposition: 'candidate',
+      duplicateMode: 'reuse',
+      idempotencyKey: 'promote:pin-1',
+      name: 'Rattan chair',
+      sourceMetadata: {
+        sourceUrl: 'https://maker.invalid/rattan',
+        priceCents: 145000,
+        vendorName: 'Loose Maker',
+      },
+    });
+    expect(promoteMutateAsync).toHaveBeenNthCalledWith(2, {
+      projectId: 'project-1',
+      boardItemId: 'pin-2',
+      assignmentScope: 'unassigned',
+      roomId: null,
+      disposition: 'candidate',
+      duplicateMode: 'reuse',
+      idempotencyKey: 'promote:pin-2',
+      name: 'Sofa',
+      productId: 'product-2',
+    });
   });
 
   it('the caller may explicitly dismiss the one-shot banner without running a promote', () => {
