@@ -709,6 +709,13 @@ verify_jwt = true
 [functions.board-deck-import-resolve]
 verify_jwt = true
 
+# US-15 W4b web tier (SQ-361): designer-pressed "Search the web for this piece".
+# User JWT only; the pieces are re-read under RLS. GOOGLE_VISION_API_KEY is
+# optional — without it POST answers 503 {code:'no_key'} and GET ?probe=1
+# answers {enabled:false}. Each call is metered by 00680's per-studio budget.
+[functions.board-web-match]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
