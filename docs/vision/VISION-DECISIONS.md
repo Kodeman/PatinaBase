@@ -335,3 +335,44 @@ Filed as **V12**, this file's own id scheme — the ship task's working title ca
 unrelated `docs/design/the-document/DECISIONS.md` log's scheme (there at R154, about motion).
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · last id = V12*
+
+## Ruled — 2026-10-03 (deck import plan approved)
+
+### V13 · Bring in a Deck — 2026-10-03
+
+**Decision:** Approve the PowerPoint/Keynote/Google-Slides mood-board import
+(`artifacts/deck-import-2026-10-03/PLAN.md`) as US-15. The feature test passes:
+
+| Test | Answer |
+|---|---|
+| Surface | The Document (#1) |
+| Studio moment | Adding first hands without learning a new system |
+| Stream | Furniture margin (first dollar) |
+| Promise | "Won't notice Patina" |
+
+Framing: present it as **Capture (#4), not the Engine**. Main risk: "launching to an empty
+room" — the catalog is probably small, so links and the studio's own library carry v1 and photo
+match is supporting.
+
+**Rulings R-DI1–R-DI7** (verbatim from `artifacts/deck-import-2026-10-03/PLAN.md` §Rulings).
+R-DI1 and R-DI2 are ruled by Kody, 2026-10-03; the rest are assumed defaults and stay open —
+they must not be resolved in code:
+
+| Ruling | Question | Default |
+|---|---|---|
+| R-DI1 | Web match (paid Vision API, per-studio cap) | **RULED 2026-10-03: in v1** (wave 4b), opt-in per piece, capped per studio |
+| R-DI2 | Disposition when bulk-promoting deck pieces | **RULED 2026-10-03:** her choice on the sheet, defaulting to `selected` |
+| R-DI3 | Deck imagery on client shares (PP-4) | assumed default, open — allowed with an `imported_deck` caption. Once matched, the share shows the maker photo |
+| R-DI4 | Price basis | assumed default, open — a price read from the deck or page is retail / sell side; trade stays empty until confirmed |
+| R-DI5 | V1 margin on off-marketplace products ordered this way | assumed default, open — still open; flagged, not blocking |
+| R-DI6 | Keep the source deck? | assumed default, open — no |
+| R-DI7 | Can look matches be bulk-kept? | assumed default, open — no |
+
+**Deferred** (logged here, not built): splitting collage images (Grounding DINO / OWLv2),
+LibreOffice for EMF and `.ppt`, PDF decks via pdfjs.
+
+**Source:** `artifacts/deck-import-2026-10-03/PLAN.md` §§Context, Rulings, Delivery; team dossier
+`artifacts/deck-import-2026-10-03/team/r-product-vision-designers.md` §1. Execution contract:
+`docs/prds/MoodBoard/08-deck-import-addendum.md`.
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · last id = V13*

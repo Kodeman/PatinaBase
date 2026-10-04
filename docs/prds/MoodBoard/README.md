@@ -27,6 +27,7 @@ background-removal telemetry. See the
 | 6 | [05-implementation-addendum.md](./05-implementation-addendum.md) | Current-repository reconciliation, locked runtime contracts, security decisions, and production order | Implementing or reviewing any phase. |
 | 7 | [06-acceptance-evidence.md](./06-acceptance-evidence.md) | Live owner/status/evidence ledger for all 85 numbered acceptance criteria | Every handoff, merge gate, and release review. |
 | 8 | [07-release-baseline.md](./07-release-baseline.md) | Dated M1–M8 query contracts, observed M3 proxy, unrecoverable legacy gaps, and approved prospective decisions | Release decision and post-GA measurement setup. |
+| 9 | [08-deck-import-addendum.md](./08-deck-import-addendum.md) | US-15 "Bring in a Deck" addendum — the designer flow, resolution tiers, copy lexicon, and rejected alternatives for PowerPoint/Keynote/Google-Slides board import | Building or reviewing the deck-import feature (`docs/vision/VISION-DECISIONS.md` V13). |
 
 Docs 01–03 are self-contained specs. Doc 04 is the shared substrate every phase
 depends on — the undo/autosave contract in particular is a Phase 1 hard
