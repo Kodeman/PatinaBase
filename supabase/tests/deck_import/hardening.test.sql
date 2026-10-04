@@ -10,6 +10,7 @@
 --   F5  a pending adjudication older than the lease is reclaimable
 --   F8  the global claim takes pieces round-robin across imports
 --   F1  the per-import claim backs off an expired lease
+--   Fold a link piece kept onto its import's own picture piece merges into it
 -- Not covered here: the concurrent stub-vendor insert (ON CONFLICT on
 -- idx_vendors_website_lower) needs two sessions; single-session it is the
 -- host lookup that finds the row first.
@@ -224,6 +225,91 @@ BEGIN
     'd6784000-0000-4000-8000-000000000004');
   ASSERT (r->>'board_item_id')::uuid = 'd6784000-0000-4000-8000-000000000004',
     format('F4: a free pin is taken: %s', r);
+END $$;
+
+-- ── Fold: a link piece kept onto its own import's picture piece ─────────────
+INSERT INTO public.proposal_board_items (
+  id, board_id, type, x, y, width, height, z_index, rotation, content, data
+) VALUES
+  ('d6784000-0000-4000-8000-000000000005', 'd6783000-0000-4000-8000-000000000001',
+   'capture', 850, 10, 200, 200, 4, 0, NULL, '{"provenance":"imported_deck"}'::jsonb);
+
+INSERT INTO public.board_deck_import_items (
+  id, import_id, element_key, board_item_id, slide_index, role, extracted, state, found_by, candidates, attempts
+) VALUES
+  -- The picture: the resolver found nothing from its own words.
+  ('d6788000-0000-4000-8000-000000000005', 'd6787000-0000-4000-8000-000000000001', 's3:pic1',
+   'd6784000-0000-4000-8000-000000000005', 2, 'product',
+   '{"caption":"brass lamp","links":[]}'::jsonb, 'not_found', NULL, '[]'::jsonb, 1),
+  -- The link row on the same slide, found from its link.
+  ('d6788000-0000-4000-8000-000000000006', 'd6787000-0000-4000-8000-000000000001', 'link:fold',
+   NULL, 2, 'product',
+   '{"links":[{"url":"https://fold.example/lamp","on_picture":false}],"unpaired":true}'::jsonb,
+   'found', 'link',
+   jsonb_build_array(jsonb_build_object(
+     'source', 'link_existing', 'band', 'strong', 'rank', 1, 'evidence', '{}'::jsonb,
+     'product_id', 'd6786000-0000-4000-8000-000000000001')), 1);
+
+DO $$
+DECLARE
+  v_link uuid := 'd6788000-0000-4000-8000-000000000006';
+  v_picture uuid := 'd6788000-0000-4000-8000-000000000005';
+  v_pin uuid := 'd6784000-0000-4000-8000-000000000005';
+  r jsonb;
+  r2 jsonb;
+  v_row public.board_deck_import_items%ROWTYPE;
+BEGIN
+  PERFORM pg_temp.act_as('d6780000-0000-4000-8000-000000000001');
+  -- Before 00678 this raised unique_violation on uq_board_deck_import_items_pin.
+  r := public.keep_board_deck_import_item(v_link, 1, NULL, v_pin);
+  ASSERT (r->>'item_id')::uuid = v_picture, format('Fold: the patch is the picture''s: %s', r);
+  ASSERT (r->>'board_item_id')::uuid = v_pin, format('Fold: the patch targets the picture''s pin: %s', r);
+  ASSERT (r->>'product_id')::uuid = 'd6786000-0000-4000-8000-000000000001',
+    format('Fold: the link''s product is kept: %s', r);
+  ASSERT r->'data'->'deck_import'->>'found_by' = 'link', format('Fold: found by link: %s', r);
+
+  SELECT * INTO v_row FROM public.board_deck_import_items WHERE id = v_picture;
+  ASSERT v_row.state = 'kept' AND v_row.found_by = 'link'
+     AND v_row.chosen_product_id = 'd6786000-0000-4000-8000-000000000001',
+    'Fold: the picture is kept with the link''s resolution';
+  ASSERT v_row.candidates->0->>'band' = 'strong', 'Fold: the link''s candidate (and band) moved to the picture';
+  ASSERT v_row.extracted->'links' @> '[{"url":"https://fold.example/lamp"}]'::jsonb,
+    'Fold: the link is appended to the picture''s extracted.links';
+  ASSERT v_row.extracted->>'caption' = 'brass lamp', 'Fold: the picture keeps what its slide said';
+
+  SELECT * INTO v_row FROM public.board_deck_import_items WHERE id = v_link;
+  ASSERT v_row.state = 'merged' AND v_row.merged_into_item_id = v_picture AND v_row.board_item_id IS NULL,
+    'Fold: the link row is merged into the picture';
+
+  -- Idempotent: the same pair again gives the same patch.
+  r2 := public.keep_board_deck_import_item(v_link, 1, NULL, v_pin);
+  ASSERT r2 = r, format('Fold: a repeat returns the same patch: %s vs %s', r2, r);
+  ASSERT (SELECT state FROM public.board_deck_import_items WHERE id = v_link) = 'merged',
+    'Fold: a repeat leaves the link merged';
+
+  -- A merged row cannot be kept onto another pin, unkept or made a reference.
+  PERFORM pg_temp.expect_error(
+    format('SELECT public.keep_board_deck_import_item(%L, 1, NULL, %L)', v_link,
+           'd6784000-0000-4000-8000-000000000001'),
+    '23514', 'merged', 'Fold: a merged row onto another pin');
+  PERFORM pg_temp.expect_error(
+    format('SELECT public.unkeep_board_deck_import_item(%L)', v_link),
+    '23514', 'merged', 'Fold: unkeep of a merged row');
+  PERFORM pg_temp.expect_error(
+    format('SELECT public.reference_board_deck_import_item(%L)', v_link),
+    '23514', 'merged', 'Fold: reference of a merged row');
+
+  -- Unkeep of the picture does not resurrect the link row.
+  r := public.unkeep_board_deck_import_item(v_picture);
+  ASSERT (SELECT state FROM public.board_deck_import_items WHERE id = v_picture) = 'found',
+    'Fold: the unkept picture goes back to found, with the link''s candidates';
+  ASSERT (SELECT state FROM public.board_deck_import_items WHERE id = v_link) = 'merged',
+    'Fold: unkeeping the picture leaves the link row merged';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(public.claim_board_deck_import_items_for_import(
+      'd6787000-0000-4000-8000-000000000001', 50)->'items') AS item
+    WHERE item->>'item_id' = v_link::text
+  ), 'Fold: a merged row is never claimed';
 END $$;
 
 -- ── F2: placement of a deck-import Keep product keeps trade empty ───────────

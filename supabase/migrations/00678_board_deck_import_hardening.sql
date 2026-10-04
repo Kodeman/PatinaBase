@@ -37,6 +37,15 @@
 -- F14 Vendors match on exact host (lowercased, www. dropped), not
 --     ILIKE '%domain%' (h.com no longer matches rh.com); the stub vendor
 --     insert is race-safe through ON CONFLICT on idx_vendors_website_lower.
+-- Fold Keep of a link-only piece onto a picture another piece of the same
+--     import already holds no longer trips uq_board_deck_import_items_pin:
+--     both rows are locked, the link's resolution (candidates, found_by
+--     'link', its link appended to extracted.links) is copied onto the
+--     picture, the picture is kept, and the link row becomes terminal
+--     'merged' (merged_into_item_id → the picture; never claimed or counted).
+--     A repeat Keep of the merged row with the same pair returns the
+--     picture's patch; unkeep/reference refuse a merged row, so unkeeping
+--     the picture never brings the link row back.
 -- F2  Placement of a deck-import Keep product with no trade price (the
 --     product's capture_provenance.producer = 'board_deck_import', which is
 --     what Keep writes) leaves trade_price_cents NULL instead of copying
@@ -55,6 +64,8 @@
 --   board_deck_import_match_links              00677 → 00678
 --   _board_deck_import_resolve_vendor          00676 → 00678
 --   _board_deck_import_choose                  00676 → 00678
+--   reference_board_deck_import_item           00676 → 00678
+--   unkeep_board_deck_import_item              00676 → 00678
 --   _place_product_in_project_v2_00438_impl    00435 → (00439 rename) →
 --                                              00666 → 00678
 --
@@ -816,7 +827,20 @@ BEGIN
 END;
 $$;
 
--- ── F3 + F4: Keep ───────────────────────────────────────────────────────────
+-- ── F3 + F4 + fold: Keep ────────────────────────────────────────────────────
+
+-- A link row folded into the picture it was kept onto.
+ALTER TABLE public.board_deck_import_items
+  ADD COLUMN IF NOT EXISTS merged_into_item_id uuid
+    REFERENCES public.board_deck_import_items(id) ON DELETE SET NULL;
+ALTER TABLE public.board_deck_import_items
+  DROP CONSTRAINT IF EXISTS board_deck_import_items_state_check;
+ALTER TABLE public.board_deck_import_items
+  ADD CONSTRAINT board_deck_import_items_state_check
+    CHECK (state IN ('pending', 'found', 'not_found', 'kept', 'reference', 'removed', 'merged'));
+
+COMMENT ON COLUMN public.board_deck_import_items.merged_into_item_id IS
+  'For state merged: the picture piece this link-only piece was kept onto (00678).';
 
 -- Keep and swap share one body. p_mode 'keep' is idempotent for the same
 -- choice and refuses a different one on an already-kept piece; 'swap'
@@ -852,6 +876,8 @@ DECLARE
   v_same boolean;
   v_import_id uuid;
   v_product record;
+  v_picture public.board_deck_import_items%ROWTYPE;
+  v_has_link_result boolean;
 BEGIN
   IF (p_candidate_rank IS NULL) = (p_product_id IS NULL) THEN
     RAISE EXCEPTION 'name exactly one of a candidate rank or a product'
@@ -863,6 +889,20 @@ BEGIN
 
   IF v_item.state = 'removed' THEN
     RAISE EXCEPTION 'this piece was removed from the board' USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Fold, repeated: a merged link row's Keep is its picture's Keep.
+  IF v_item.state = 'merged' THEN
+    SELECT * INTO v_picture
+    FROM public.board_deck_import_items
+    WHERE id = v_item.merged_into_item_id;
+    IF p_mode <> 'keep' OR v_picture.id IS NULL
+       OR (p_board_item_id IS NOT NULL AND p_board_item_id IS DISTINCT FROM v_picture.board_item_id) THEN
+      RAISE EXCEPTION 'this piece was folded into its picture'
+        USING ERRCODE = 'check_violation', HINT = 'merged';
+    END IF;
+    RETURN public._board_deck_import_choose(
+      v_picture.id, p_candidate_rank, p_product_id, 'keep', NULL);
   END IF;
 
   -- A piece found from a link with no picture of its own can take one at
@@ -882,15 +922,56 @@ BEGIN
         USING ERRCODE = 'insufficient_privilege';
     END IF;
     -- F4: a newly attached pin must not have gone onward, nor be another
-    -- piece's picture.
+    -- import's piece's picture.
     IF v_item.board_item_id IS NULL THEN
       PERFORM public._board_deck_import_assert_pin_movable(p_board_item_id);
       IF EXISTS (
         SELECT 1 FROM public.board_deck_import_items AS other
-        WHERE other.board_item_id = p_board_item_id AND other.id <> p_item_id
+        WHERE other.board_item_id = p_board_item_id AND other.import_id <> v_import_id
       ) THEN
         RAISE EXCEPTION 'that picture already belongs to another piece'
           USING ERRCODE = 'check_violation', HINT = 'pin_taken';
+      END IF;
+
+      -- Fold: the pin is this import's own picture piece. The link's
+      -- resolution moves onto the picture, the picture is kept, and the link
+      -- row is retired as 'merged'. Locks: link (above), then picture — the
+      -- order pair_board_deck_import_link uses.
+      SELECT * INTO v_picture
+      FROM public.board_deck_import_items
+      WHERE import_id = v_import_id AND board_item_id = p_board_item_id AND id <> p_item_id
+      FOR UPDATE;
+      IF FOUND THEN
+        IF v_item.element_key NOT LIKE 'link:%'
+           OR v_item.state NOT IN ('pending', 'found', 'not_found')
+           OR v_picture.role <> 'product'
+           OR v_picture.state NOT IN ('pending', 'found', 'not_found') THEN
+          RAISE EXCEPTION 'that picture already belongs to another piece'
+            USING ERRCODE = 'check_violation', HINT = 'pin_taken';
+        END IF;
+        v_has_link_result := jsonb_array_length(v_item.candidates) > 0;
+        UPDATE public.board_deck_import_items
+        SET state = CASE WHEN v_has_link_result THEN 'found' ELSE state END,
+            found_by = CASE WHEN v_has_link_result THEN 'link' ELSE found_by END,
+            candidates = CASE WHEN v_has_link_result THEN v_item.candidates ELSE candidates END,
+            extracted = extracted || jsonb_build_object('links',
+              CASE WHEN jsonb_typeof(extracted->'links') = 'array'
+                THEN extracted->'links' ELSE '[]'::jsonb END
+              || CASE WHEN jsonb_typeof(v_item.extracted->'links') = 'array'
+                THEN v_item.extracted->'links' ELSE '[]'::jsonb END),
+            next_attempt_at = NULL,
+            lease_owner = NULL,
+            lease_until = NULL
+        WHERE id = v_picture.id;
+        UPDATE public.board_deck_import_items
+        SET state = 'merged',
+            merged_into_item_id = v_picture.id,
+            next_attempt_at = NULL,
+            lease_owner = NULL,
+            lease_until = NULL
+        WHERE id = p_item_id;
+        RETURN public._board_deck_import_choose(
+          v_picture.id, p_candidate_rank, p_product_id, p_mode, NULL);
       END IF;
     END IF;
     v_item.board_item_id := p_board_item_id;
@@ -1055,6 +1136,123 @@ BEGIN
       'source_url', v_product.source_url,
       'product_image_url', v_product.image_url,
       'deck_import', jsonb_build_object('state', 'kept', 'found_by', v_found_by)
+    )
+  );
+END;
+$$;
+
+-- "Keep as reference": the pin stays her picture, with no product behind it.
+-- 00678: a merged link row is refused (it has no picture of its own).
+CREATE OR REPLACE FUNCTION public.reference_board_deck_import_item(p_item_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_item public.board_deck_import_items%ROWTYPE;
+BEGIN
+  v_item := public._board_deck_import_lock_item(p_item_id);
+  IF v_item.state = 'removed' THEN
+    RAISE EXCEPTION 'this piece was removed from the board' USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_item.state = 'merged' THEN
+    RAISE EXCEPTION 'this piece was folded into its picture'
+      USING ERRCODE = 'check_violation', HINT = 'merged';
+  END IF;
+  IF v_item.state = 'kept' THEN
+    PERFORM public._board_deck_import_assert_pin_movable(v_item.board_item_id);
+  END IF;
+
+  IF v_item.state <> 'reference' THEN
+    UPDATE public.board_deck_import_items
+    SET state = 'reference',
+        chosen_product_id = NULL,
+        kept_by = auth.uid(),
+        kept_at = now(),
+        lease_owner = NULL,
+        lease_until = NULL
+    WHERE id = p_item_id;
+    PERFORM public._board_deck_import_settle(v_item.import_id);
+  END IF;
+
+  RETURN jsonb_build_object(
+    'item_id', p_item_id,
+    'board_item_id', v_item.board_item_id,
+    'type', 'image',
+    'product_id', NULL,
+    'capture_id', NULL,
+    'data', jsonb_build_object(
+      'provenance', 'imported_deck',
+      'name', NULL,
+      'vendor_name', NULL,
+      'price_cents', NULL,
+      'source_url', public._board_deck_import_slide_link(v_item.extracted),
+      'product_image_url', NULL,
+      'deck_import', jsonb_build_object('state', 'reference', 'found_by', v_item.found_by)
+    )
+  );
+END;
+$$;
+
+-- Undo a keep (or a keep-as-reference): the pin goes back to "to confirm".
+-- Refuses once the pin is promoted or on the schedule (HINT carries why).
+-- 00678: a merged link row is refused; unkeeping its picture leaves it merged.
+CREATE OR REPLACE FUNCTION public.unkeep_board_deck_import_item(p_item_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_item public.board_deck_import_items%ROWTYPE;
+  v_state text;
+BEGIN
+  v_item := public._board_deck_import_lock_item(p_item_id);
+  IF v_item.state = 'removed' THEN
+    RAISE EXCEPTION 'this piece was removed from the board' USING ERRCODE = 'check_violation';
+  END IF;
+  IF v_item.state = 'merged' THEN
+    RAISE EXCEPTION 'this piece was folded into its picture'
+      USING ERRCODE = 'check_violation', HINT = 'merged';
+  END IF;
+
+  IF v_item.state IN ('kept', 'reference') THEN
+    IF v_item.state = 'kept' THEN
+      PERFORM public._board_deck_import_assert_pin_movable(v_item.board_item_id);
+    END IF;
+    v_state := CASE
+      WHEN jsonb_array_length(v_item.candidates) > 0 THEN 'found'
+      WHEN v_item.attempts > 0 THEN 'not_found'
+      ELSE 'pending'
+    END;
+    UPDATE public.board_deck_import_items
+    SET state = v_state,
+        chosen_product_id = NULL,
+        kept_by = NULL,
+        kept_at = NULL
+    WHERE id = p_item_id;
+    IF v_state = 'pending' THEN
+      UPDATE public.board_deck_imports
+      SET status = 'resolving', finished_at = NULL
+      WHERE id = v_item.import_id AND status = 'ready';
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'item_id', p_item_id,
+    'board_item_id', v_item.board_item_id,
+    'type', 'capture',
+    'product_id', NULL,
+    'capture_id', NULL,
+    'data', jsonb_build_object(
+      'provenance', 'imported_deck',
+      'name', NULL,
+      'vendor_name', NULL,
+      'price_cents', NULL,
+      'source_url', public._board_deck_import_slide_link(v_item.extracted),
+      'product_image_url', NULL,
+      'deck_import', jsonb_build_object('state', 'to_confirm', 'found_by', v_item.found_by)
     )
   );
 END;
