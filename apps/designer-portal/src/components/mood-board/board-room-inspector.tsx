@@ -183,6 +183,7 @@ export function BoardRoomInspector({
   scopeRoomId = null,
   onOpenProduct,
   onReplaceImage,
+  onScheduleSent,
   onCommand,
   directions = [],
 }: {
@@ -191,6 +192,8 @@ export function BoardRoomInspector({
   scopeRoomId?: string | null;
   onOpenProduct?: (item: EditableMoodBoardItem) => void;
   onReplaceImage?: (item: EditableMoodBoardItem) => void;
+  /** Backlinks a pin to the schedule line it was just sent to. */
+  onScheduleSent?: (itemId: string, proposalItemId: string) => void;
   onCommand?: (kind: 'arrange' | 'content' | 'delete' | 'handle') => void;
   /** Internal direction notes (board-paths W3c, DV6) for the WHOLE board —
    * filtered to the selected pin below. Edit mode only: this component
@@ -457,6 +460,7 @@ export function BoardRoomInspector({
               proposalId={owner.id}
               scopeRoomId={scopeRoomId}
               item={lead}
+              onSent={onScheduleSent}
             />
           )}
 

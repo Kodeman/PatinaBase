@@ -6,20 +6,26 @@ import { useAddProposalItem, useProposalScheduleItems } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
 import {
   buildSendToScheduleArgs,
-  findScheduleTwin,
+  findExistingScheduleLine,
   type PinScheduleSnapshot,
 } from '@/lib/scope/board-schedule';
 
+const nonBlankString = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value : null;
+
 export function scheduleSnapshotForBoardItem(item: EditableMoodBoardItem): PinScheduleSnapshot {
-  const name = item.data?.name;
   const priceCents = item.data?.price_cents;
   const dataImageUrl = item.data?.image_url;
   return {
     type: item.type,
     productId: item.productId ?? null,
-    name: typeof name === 'string' && name.trim() ? name : null,
+    name: nonBlankString(item.data?.name),
     imageUrl: item.imageUrl ?? (typeof dataImageUrl === 'string' ? dataImageUrl : null),
     priceCents: typeof priceCents === 'number' ? priceCents : null,
+    vendorId: nonBlankString(item.data?.vendor_id),
+    vendorName: nonBlankString(item.data?.vendor_name),
+    sourceUrl: nonBlankString(item.data?.source_url),
+    proposalItemId: nonBlankString(item.data?.proposalItemId),
   };
 }
 
@@ -28,10 +34,13 @@ export function BoardScheduleInspectorAction({
   proposalId,
   scopeRoomId,
   item,
+  onSent,
 }: {
   proposalId: string;
   scopeRoomId: string | null;
   item: EditableMoodBoardItem;
+  /** Stamps the new line's id on the pin (data.proposalItemId) through the room's command path. */
+  onSent?: (itemId: string, proposalItemId: string) => void;
 }) {
   const schedule = useProposalScheduleItems(proposalId);
   const addItem = useAddProposalItem();
@@ -39,7 +48,7 @@ export function BoardScheduleInspectorAction({
   const [error, setError] = useState<string | null>(null);
   const snapshot = scheduleSnapshotForBoardItem(item);
   const lines = schedule.data ?? [];
-  const twin = findScheduleTwin(lines, snapshot.productId, scopeRoomId);
+  const twin = findExistingScheduleLine(lines, snapshot, scopeRoomId);
 
   if (status) {
     return (
@@ -63,7 +72,8 @@ export function BoardScheduleInspectorAction({
         boardScopeRoomId: scopeRoomId,
         existingCodes: lines.map((line) => line.doc_code),
       });
-      await addItem.mutateAsync(args);
+      const line = await addItem.mutateAsync(args);
+      if (typeof line?.id === 'string') onSent?.(item.id, line.id);
       setStatus({ kind: 'added', docCode: args.docCode });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not add this pin to the schedule.');
