@@ -115,6 +115,38 @@ export function buildSendToScheduleArgs(input: {
   };
 }
 
+/**
+ * The room id the "send to schedule" twin check uses for a board — the SAME
+ * field for every entry point (quick menu, inspector), so one caller reading
+ * project_room_id and another reading scope_room_id can never disagree about
+ * whether a pin already has a twin (SQ-368 F16).
+ */
+export function scheduleRoomIdForBoard(
+  board: { scope_room_id?: string | null } | null | undefined,
+): string | null {
+  return board?.scope_room_id ?? null;
+}
+
+/**
+ * board_item_ids currently mid-send to the schedule — shared by every "send to
+ * schedule" entry point (quick menu + inspector) so a second trigger for the
+ * same pin while one send is still in flight is a no-op instead of a
+ * duplicate schedule line (SQ-368 F15).
+ */
+const pendingScheduleSends = new Set<string>();
+
+/** Marks `boardItemId` in flight; false means a send for this pin is already running. */
+export function beginScheduleSend(boardItemId: string): boolean {
+  if (pendingScheduleSends.has(boardItemId)) return false;
+  pendingScheduleSends.add(boardItemId);
+  return true;
+}
+
+/** Clears the in-flight mark once a send settles (added, already-exists, or failed). */
+export function endScheduleSend(boardItemId: string): void {
+  pendingScheduleSends.delete(boardItemId);
+}
+
 /** A board pin's linked product for the drift check. */
 export interface DriftPin {
   id: string; // board_item_id
