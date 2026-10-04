@@ -50,6 +50,7 @@ export * from "./aesthete";
 export * from "./timeline";
 export * from "./permissions";
 export * from "./mood-board";
+export * from "./deck-import";
 
 // Value Objects
 export * from "./value-objects/email.vo";
