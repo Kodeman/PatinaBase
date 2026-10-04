@@ -198,6 +198,92 @@ export interface DeckManifest {
   stats: ManifestStats;
 }
 
+/**
+ * The `board_deck_import_items.extracted` payload the Wave 3 resolver reads
+ * (SQ-358 seam, US-15 log #5). Unpaired links stay on the manifest
+ * (`slides[].unpaired_links`, `deck_links`), except inside `adjudication`.
+ */
+export interface DeckItemExtracted {
+  links: Array<{ url: string; source: LinkSource; on_picture: boolean }>;
+  caption: {
+    name?: string;
+    vendor?: string;
+    sku?: string;
+    price_cents?: number;
+    dims?: Dimensions;
+    text: string;
+  } | null;
+  alt_text: string | null;
+  alt_auto: boolean;
+  needs_adjudication: boolean;
+  adjudication?: {
+    images: Array<{ key: string; alt?: string }>;
+    texts: Array<{ key: string; text: string }>;
+    links: Array<{ id: string; url: string; text_context?: string }>;
+  };
+}
+
+const PIN_ROLES: ElementRole[] = ["product", "reference"];
+/** PowerPoint defaults alt text to the inserted file's name: not evidence. */
+const FILENAME_ALT = /^[^\n/\\]+\.(png|jpe?g|gif|bmp|webp|tiff?|svg|heic)$/i;
+const usefulAlt = (alt: string | null) =>
+  alt && !FILENAME_ALT.test(alt.trim()) ? alt : null;
+
+export function itemExtracted(
+  manifest: Pick<DeckManifest, "slides" | "elements">,
+  element: ManifestElement,
+): DeckItemExtracted {
+  const { name, vendor, sku, price_cents, dims } = element.extracted;
+  const out: DeckItemExtracted = {
+    links: element.links.map((l) => ({
+      url: l.url,
+      source: l.source,
+      on_picture: l.source === "picture" || l.source === "overlay",
+    })),
+    caption:
+      element.caption === null
+        ? null
+        : { name, vendor, sku, price_cents, dims, text: element.caption },
+    alt_text: usefulAlt(element.alt),
+    alt_auto: element.alt_auto,
+    needs_adjudication: false,
+  };
+  const slide = manifest.slides[element.slide_index];
+  // Only pictures the associator abstained on go to adjudication.
+  if (
+    !slide?.needs_adjudication ||
+    element.caption !== null ||
+    !PIN_ROLES.includes(element.role)
+  ) {
+    return out;
+  }
+  const onSlide = manifest.elements.filter(
+    (e) => e.slide_index === slide.index,
+  );
+  const used = new Set(onSlide.flatMap((e) => e.caption_keys));
+  out.needs_adjudication = true;
+  out.adjudication = {
+    images: onSlide
+      .filter((e) => e.caption === null && PIN_ROLES.includes(e.role))
+      .map((e) => {
+        const alt = e.alt_auto ? null : usefulAlt(e.alt);
+        return alt ? { key: e.element_key, alt } : { key: e.element_key };
+      }),
+    texts: slide.texts
+      .filter(
+        (t) =>
+          (t.role === "caption" || t.role === "text") && !used.has(t.text_key),
+      )
+      .map((t) => ({ key: t.text_key, text: t.text })),
+    links: slide.unpaired_links.map((l, i) => ({
+      id: `link:${i}`,
+      url: l.url,
+      text_context: l.text_context,
+    })),
+  };
+  return out;
+}
+
 /** Media parts the crop stage needs, in first-use order. */
 export function manifestMediaParts(
   manifest: Pick<DeckManifest, "elements">,

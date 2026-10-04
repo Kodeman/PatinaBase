@@ -1,5 +1,6 @@
 import { fixtureBytes, truth } from "../__fixtures__/load";
 import type { DeckManifest, ManifestElement, ManifestSlide } from "../manifest";
+import { itemExtracted } from "../manifest";
 import { parseDeck } from "../parse-deck";
 
 const T = truth.tickets;
@@ -201,5 +202,58 @@ describe("tickets.pptx: caption and link pairing", () => {
     expect(manifest.stats.unpaired_links).toBe(3);
     expect(manifest.stats.deck_links).toBe(2);
     expect(manifest.stats.slides_needing_adjudication).toBe(1);
+  });
+});
+
+describe("tickets.pptx: resolver seam (itemExtracted)", () => {
+  it("emits canonical links, caption and alt keys for a paired ticket", () => {
+    const sofa = itemExtracted(manifest, el("sofa"));
+    expect(sofa.links).toEqual([
+      {
+        url: "https://www.rh.com/harbor-sofa",
+        source: "caption",
+        on_picture: false,
+      },
+    ]);
+    expect(sofa.caption).toMatchObject({
+      name: "Harbor Sofa",
+      vendor: "Lawson-Fenning",
+      price_cents: 420000,
+      text: expect.stringContaining("Harbor Sofa"),
+    });
+    // The filename default alt ("image.png") is not evidence.
+    expect(sofa.alt_text).toBeNull();
+    expect(sofa.needs_adjudication).toBe(false);
+    expect(sofa.adjudication).toBeUndefined();
+    expect(itemExtracted(manifest, el("rug")).links[0]).toMatchObject({
+      source: "overlay",
+      on_picture: true,
+    });
+  });
+
+  it("hands abstained pictures to adjudication with the slide's free texts and unpaired links", () => {
+    const left = itemExtracted(manifest, el("amb_left"));
+    expect(left.needs_adjudication).toBe(true);
+    expect(left.caption).toBeNull();
+    expect(left.links).toEqual([]);
+    expect(left.adjudication).toEqual({
+      images: [{ key: T.elements.amb_left }, { key: T.elements.amb_right }],
+      texts: [
+        {
+          key: "ppt/slides/slide5.xml#4",
+          text: "Side Table\nhttps://www.article.com/side-table",
+        },
+      ],
+      links: [
+        {
+          id: "link:0",
+          url: "https://www.article.com/side-table",
+          text_context: expect.any(String),
+        },
+      ],
+    });
+    expect(itemExtracted(manifest, el("amb_right")).adjudication).toEqual(
+      left.adjudication,
+    );
   });
 });
