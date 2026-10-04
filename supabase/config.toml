@@ -701,6 +701,14 @@ verify_jwt = true
 [functions.project-approval-attachments]
 verify_jwt = true
 
+# US-15 deck import resolver (SQ-358). 00677's every-minute pg_cron calls it
+# through invoke_edge_function with a service-role bearer and {job_run_id};
+# the browser calls it with the designer's JWT and {import_id}, re-checked by
+# an RLS read of the import. The function tells them apart by the decoded
+# role claim (bearerRole), never by comparing the bearer to the service key.
+[functions.board-deck-import-resolve]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
