@@ -32,6 +32,12 @@ import {
   type DeckImportDecisions,
   type DeckProductMap,
 } from '@/hooks/use-board-deck-import-review';
+import {
+  WEB_MATCH_COPY,
+  WEB_MATCH_MAX_ITEMS,
+  useBoardWebMatch,
+  type BoardWebMatch,
+} from '@/hooks/use-board-web-match';
 import { deckPinsToSchedule } from '@/lib/scope/board-schedule';
 import {
   pinName,
@@ -240,6 +246,42 @@ export function DeckPieceActs({
   );
 }
 
+/** A piece the web search can still help: unsettled, with her picture, room for more. */
+export function canSearchWeb(item: DeckImportItem): boolean {
+  const state = rowState(item);
+  return (state === 'not_found' || state === 'to_confirm') && item.boardItemId != null && item.candidates.length < 5;
+}
+
+/**
+ * "Search the web…" — designer-pressed only. Renders nothing unless the
+ * `board-web-match` flag is on and the function has a key. Reusable for
+ * "Find this piece" (SQ-360): pass its useBoardWebMatch result and the item id.
+ */
+export function SearchTheWebButton({
+  webMatch,
+  itemIds,
+  label = WEB_MATCH_COPY.searchPiece,
+}: {
+  webMatch: BoardWebMatch;
+  itemIds: readonly string[];
+  label?: string;
+}) {
+  if (!webMatch.available || itemIds.length === 0) return null;
+  const searching = itemIds.some((id) => webMatch.isSearching(id));
+  const nothing = itemIds.length === 1 && webMatch.nothingFound(itemIds[0]);
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={searching || nothing || webMatch.capReached}
+      data-deck-web-search
+      onClick={() => void webMatch.search(itemIds)}
+    >
+      {searching ? WEB_MATCH_COPY.searching : nothing ? WEB_MATCH_COPY.nothingFound : label}
+    </Button>
+  );
+}
+
 function FoundCell({ item, products }: { item: DeckImportItem; products: DeckProductMap }) {
   const view = candidateView(shownCandidate(item), products);
   if (!view) return <span className="text-[11px] text-[var(--text-muted)]">—</span>;
@@ -297,6 +339,10 @@ export function BoardDeckImportLedger({
   const [scheduled, setScheduled] = useState<PromoteAllResult | null>(null);
   const [bulkKeeping, setBulkKeeping] = useState(false);
   const promote = usePromoteBoardReferenceToSelection();
+  const webMatch = useBoardWebMatch(importId);
+  const notFoundForWeb = pieces
+    .filter((item) => rowState(item) === 'not_found' && canSearchWeb(item))
+    .slice(0, WEB_MATCH_MAX_ITEMS);
   const choiceName = useId();
 
   const activeItem = pieces[Math.min(active, pieces.length - 1)] ?? null;
@@ -456,18 +502,25 @@ export function BoardDeckImportLedger({
                       >
                         {howPhrase(item)}
                       </span>
-                      <DeckPieceActs
-                        item={item}
-                        products={products}
-                        decisions={decisions}
-                        pins={pins}
-                        mode={isActive ? mode : 'idle'}
-                        onModeChange={(next) => {
-                          setActive(index);
-                          setMode(next);
-                        }}
-                        pickIndex={pickIndex}
-                      />
+                      <div className="space-y-1">
+                        <DeckPieceActs
+                          item={item}
+                          products={products}
+                          decisions={decisions}
+                          pins={pins}
+                          mode={isActive ? mode : 'idle'}
+                          onModeChange={(next) => {
+                            setActive(index);
+                            setMode(next);
+                          }}
+                          pickIndex={pickIndex}
+                        />
+                        {canSearchWeb(item) && (
+                          <div className="flex justify-end">
+                            <SearchTheWebButton webMatch={webMatch} itemIds={[item.id]} />
+                          </div>
+                        )}
+                      </div>
                     </li>
                   );
                 })}
@@ -475,6 +528,22 @@ export function BoardDeckImportLedger({
             </section>
           );
         })}
+
+        {webMatch.available && (notFoundForWeb.length > 0 || webMatch.capLine || webMatch.error) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-default)] pt-3" data-deck-web-foot>
+            <div className="text-[11px]" role="status">
+              {webMatch.capLine && <p className="text-[var(--text-muted)]">{webMatch.capLine}</p>}
+              {webMatch.error && <p className="text-[var(--color-clay-ink)]">{webMatch.error}</p>}
+            </div>
+            {notFoundForWeb.length > 0 && (
+              <SearchTheWebButton
+                webMatch={webMatch}
+                itemIds={notFoundForWeb.map((item) => item.id)}
+                label={WEB_MATCH_COPY.searchNotFound(notFoundForWeb.length)}
+              />
+            )}
+          </div>
+        )}
 
         {(toSchedule.length > 0 || scheduled) && (
           <footer className="space-y-2 border-t border-[var(--border-default)] pt-3" data-deck-ledger-foot>

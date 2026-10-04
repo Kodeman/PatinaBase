@@ -39,6 +39,21 @@ jest.mock('@patina/supabase', () => ({
   usePromoteBoardReferenceToSelection: () => ({ mutateAsync: mockPromote, isPending: false }),
 }));
 
+// The web tier (SQ-361) is covered in deck-import-web-match.test.tsx; here it is off.
+jest.mock('@/hooks/use-board-web-match', () => ({
+  ...jest.requireActual('@/hooks/use-board-web-match'),
+  useBoardWebMatch: () => ({
+    available: false,
+    search: jest.fn(),
+    isSearching: () => false,
+    anySearching: false,
+    nothingFound: () => false,
+    capReached: false,
+    capLine: null,
+    error: null,
+  }),
+}));
+
 jest.mock('@/components/document/overlays/doc-sheet', () => ({
   DocSheet: ({ open, children }: { open: boolean; children: ReactNode }) => (open ? <div>{children}</div> : null),
 }));
