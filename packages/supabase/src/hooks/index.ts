@@ -2521,3 +2521,19 @@ export {
   timeAutostartKeys,
 } from "./use-time-autostart";
 export type { TimeAutostartPreference } from "./use-time-autostart";
+
+// Bring in a Deck (US-15 W2, 00676) — register/attach a deck import, read its
+// pieces, and turn Keep/Swap/Reference/Unkeep into pin patches.
+export {
+  useBoardDeckImportItems,
+  useRegisterBoardDeckImport,
+  useAttachBoardDeckImportPins,
+  useKeepBoardDeckImportItem,
+  useSwapBoardDeckImportItem,
+  useReferenceBoardDeckImportItem,
+  useUnkeepBoardDeckImportItem,
+  toDeckImportItem,
+  toPinPatch,
+  deckImportRefusalReason,
+  deckImportKeys,
+} from "./use-board-deck-import";

@@ -18462,6 +18462,186 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_manage_board_deck_import(uuid) FROM PUBLIC, anon, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_manage_board_deck_import(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.board_deck_imports FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.board_deck_import_items FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.board_deck_imports TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.board_deck_import_items TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_settle(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_product_visible(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_resolve_vendor(text, text) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_assert_pin_movable(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_lock_item(uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_slide_link(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_choose(uuid, integer, uuid, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_manifest_links(jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.register_board_deck_import(uuid, text, text, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.register_board_deck_import(uuid, text, text, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.attach_board_deck_import_pins(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.attach_board_deck_import_pins(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_board_deck_import_items(integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_board_deck_import_items(integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_board_deck_import_resolution(uuid, text, text, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_board_deck_import_resolution(uuid, text, text, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.keep_board_deck_import_item(uuid, integer, uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.keep_board_deck_import_item(uuid, integer, uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.swap_board_deck_import_item(uuid, integer, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.swap_board_deck_import_item(uuid, integer, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.reference_board_deck_import_item(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.reference_board_deck_import_item(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.unkeep_board_deck_import_item(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00676_board_deck_imports.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.unkeep_board_deck_import_item(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
