@@ -216,6 +216,16 @@ export function productPickToBoardItem(
   };
 }
 
+/** Per-file placement for uploadFilesAsBoardItems; anything left out keeps
+ *  the default row layout. `data` is merged under the upload's asset keys. */
+export interface BoardItemUploadOverride {
+  point?: BoardPoint;
+  size?: { width: number; height: number };
+  rotation?: number;
+  zIndex?: number;
+  data?: EditableMoodBoardItem['data'];
+}
+
 export async function uploadFilesAsBoardItems(options: {
   ownerId: string;
   ownerKind?: BoardOwnerRef['kind'];
@@ -223,6 +233,8 @@ export async function uploadFilesAsBoardItems(options: {
   files: readonly File[];
   point: BoardPoint;
   startZ: number;
+  /** Indexed like `files`. */
+  overrides?: ReadonlyArray<BoardItemUploadOverride | undefined>;
   onProgress?: Parameters<typeof prepareAndUploadBoardImages>[0]['onProgress'];
   prepareReviewMedia?: (input: {
     projectId: string;
@@ -265,17 +277,18 @@ export async function uploadFilesAsBoardItems(options: {
   }
   return uploaded.map((asset, index) => {
     const reviewAsset = reviewAssets[index];
-    const width = 280;
-    const height = Math.max(120, Math.round(width / asset.aspectRatio));
+    const override = options.overrides?.[index];
+    const width = override?.size?.width ?? 280;
+    const height = override?.size?.height ?? Math.max(120, Math.round(width / asset.aspectRatio));
     return {
       id: asset.assetId,
       type: 'image' as const,
-      x: options.point.x + index * (width + 24),
-      y: options.point.y,
+      x: override?.point?.x ?? options.point.x + index * (width + 24),
+      y: override?.point?.y ?? options.point.y,
       width,
       height,
-      zIndex: options.startZ + index,
-      rotation: 0,
+      zIndex: override?.zIndex ?? options.startZ + index,
+      rotation: override?.rotation ?? 0,
       locked: false,
       productId: null,
       captureId: null,
@@ -283,6 +296,7 @@ export async function uploadFilesAsBoardItems(options: {
       imageUrl: asset.image_url,
       content: null,
       data: {
+        ...override?.data,
         image_url: asset.image_url,
         thumbnail_url: asset.data.thumbnail_url,
         ...(options.ownerKind === 'project' ? {
@@ -692,6 +706,7 @@ export function BoardAddRail({
   nextZ,
   onAddItems,
   onSelectItem,
+  onBringInDeck,
 }: {
   owner: BoardOwnerRef;
   boardId: string;
@@ -703,6 +718,8 @@ export function BoardAddRail({
   nextZ: () => number;
   onAddItems: (items: readonly EditableMoodBoardItem[], source: BoardAddSource) => void;
   onSelectItem?: (itemId: string) => void;
+  /** Set only while `board-deck-import` is on: opens the deck chooser. */
+  onBringInDeck?: () => void;
 }) {
   const [tab, setTab] = useState<BoardAddRailTab>('library');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -1033,6 +1050,15 @@ export function BoardAddRail({
             <Button variant="secondary" size="sm" className="min-h-11 min-w-11" disabled={uploading} onClick={() => inputRef.current?.click()}>
               {uploading ? 'Preparing images…' : 'Choose images'}
             </Button>
+            {onBringInDeck && (
+              <button
+                type="button"
+                onClick={onBringInDeck}
+                className="ml-3 min-h-11 text-[12px] text-[var(--color-clay-ink)] underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              >
+                Bring in a deck…
+              </button>
+            )}
             {uploadProgress && <p role="status" className="text-[11px] text-[var(--text-muted)]">{uploadProgress}</p>}
             {uploadedImages.length > 0 && (
               <div className="space-y-2 border-t border-[var(--border-default)] pt-3">

@@ -28,6 +28,13 @@ import {
 import type { BoardOwnerRef } from '@patina/types';
 import { runBoardOwnerAutosaveAction } from '@/lib/proposal-autosave-registry';
 import { moodBoardEvents } from '@/lib/analytics/mood-board-events';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import {
+  DECK_COPY,
+  DECK_IMPORT_FLAG,
+  deckFileKind,
+  stashPendingDeck,
+} from '@/hooks/use-board-deck-import-layout';
 
 export interface BoardCreatePickerDialogProps {
   owner: BoardOwnerRef;
@@ -120,6 +127,8 @@ export function BoardCreatePickerDialog({
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const actionPending = useRef(false);
+  const { value: deckImportOn } = useFeatureFlag(DECK_IMPORT_FLAG);
+  const deckInputRef = useRef<HTMLInputElement>(null);
 
   // IA-6 — every creation surface used to default to `Board ${n+1}` with no
   // naming prompt. `boardName` seeds that sensible default and stays
@@ -182,6 +191,24 @@ export function BoardCreatePickerDialog({
       });
       return board.id;
     });
+
+  // US-15 — "From a deck": a blank board named from the deck, then the deck
+  // sheet opens in its room (the file waits in stashPendingDeck).
+  const handleDeck = (file: File) => {
+    const kind = deckFileKind(file);
+    if (kind !== 'deck') {
+      setError(kind === 'resave' ? DECK_COPY.resave : DECK_COPY.unreadable);
+      return;
+    }
+    void runCreate('deck', async () => {
+      const name = file.name.replace(/\.[A-Za-z0-9]+$/, '').trim() || defaultBoardName;
+      const boardId = owner.kind === 'project'
+        ? await createProjectBoard.mutateAsync({ projectId: owner.id, name })
+        : (await createBoard.mutateAsync({ proposalId: owner.id, name, sortOrder: sortOrderSeed })).id;
+      if (boardId) stashPendingDeck(boardId, file);
+      return boardId;
+    });
+  };
 
   const handleTemplate = (template: BoardTemplate) =>
     void runCreate(
@@ -298,6 +325,44 @@ export function BoardCreatePickerDialog({
                   />
                 ))}
               </div>
+            </section>
+          )}
+
+          {deckImportOn && (
+            <section aria-labelledby="deck-board-option">
+              <h3 id="deck-board-option" className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                From a deck
+              </h3>
+              <input
+                ref={deckInputRef}
+                type="file"
+                accept=".pptx,.ppsx,.potx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden
+                data-testid="board-create-deck-input"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (file) handleDeck(file);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => deckInputRef.current?.click()}
+                disabled={pendingKey !== null}
+                className="mt-2 flex min-h-20 w-full items-center justify-between rounded-[5px] border border-dashed border-[var(--border-default)] px-4 text-left hover:border-[var(--color-clay)] disabled:cursor-wait disabled:opacity-60"
+              >
+                <span>
+                  <span className="block font-heading text-[14px] text-[var(--text-primary)]">From a deck</span>
+                  <span className="mt-1 block text-[11px] text-[var(--text-muted)]">
+                    A PowerPoint laid out as a board, a section per slide.
+                  </span>
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-clay-ink)]">
+                  {pendingKey === 'deck' ? 'Creating…' : 'Choose'}
+                </span>
+              </button>
             </section>
           )}
 

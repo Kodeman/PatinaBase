@@ -28,7 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { FolderPlus, History, Keyboard, LifeBuoy, Type } from 'lucide-react';
+import { FolderPlus, History, Keyboard, LifeBuoy, Presentation, Type } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import {
   usePeopleDirectory,
@@ -82,6 +82,7 @@ import {
   startBoardCommandDescriptor,
 } from '@/lib/mood-board/navigation';
 import { startBoardPending } from '@/lib/document/shelves';
+import { DECK_IMPORT_FLAG, DECK_OPEN_EVENT } from '@/hooks/use-board-deck-import-layout';
 
 /** One selectable line. `match` is the lowercased filter text (label + aliases
  *  or keywords); registry surfaces additionally carry their icon + wayfinding
@@ -278,6 +279,8 @@ export function CommandBar() {
   // Return teaching: "What changed" is gated on the teaching system flag,
   // fail-closed — hidden while the flag loads and while it's off.
   const { value: teachingNotesOn } = useFeatureFlag(TEACHING_SYSTEM_FLAG);
+  // US-15 — "Bring in a deck", fail-closed on its own flag.
+  const { value: deckImportOn } = useFeatureFlag(DECK_IMPORT_FLAG);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -801,6 +804,30 @@ export function CommandBar() {
         })()
       : null;
 
+    // US-15 — in a board room the deck sheet opens on that board; elsewhere it
+    // routes to the project's Boards page, whose picker offers "From a deck".
+    const inBoardRoom = Boolean(pathname?.startsWith('/board/'));
+    const deckRow: PaletteRow | null =
+      deckImportOn && (inBoardRoom || pairedDoc?.project_id)
+        ? {
+            kind: 'verb',
+            key: 'bring-in-deck',
+            label: 'Bring in a deck',
+            sub: inBoardRoom ? 'this board · a section per slide' : `${folderTab(pairedDoc!)} · new board from a deck`,
+            icon: Presentation,
+            run: () => {
+              if (inBoardRoom) {
+                window.dispatchEvent(new CustomEvent(DECK_OPEN_EVENT));
+                return;
+              }
+              const targetProjectId = pairedDoc!.project_id!;
+              startBoardPending.projectId = targetProjectId;
+              router.push(boardsRoutePath(targetProjectId));
+            },
+            match: 'bring in a deck powerpoint pptx import slides deck',
+          }
+        : null;
+
     const q = query.trim().toLowerCase();
     let sections: PaletteSection[];
     let matches = 0;
@@ -858,6 +885,7 @@ export function CommandBar() {
       // surfaces just below (an "open" row and a "start one" row obey the
       // same in-hand rule for what "This surface" may claim).
       if (inHandProjectRow && startBoardRow) thisSurface.push(startBoardRow);
+      if (deckRow && (inBoardRoom || inHandProjectRow)) thisSurface.push(deckRow);
       // F29/F48/F50/F82 — all four document-scoped surfaces, never in the
       // unfiltered Rooms & ledgers group below, and only once a project doc is
       // in hand. The call sheet is additionally gated on its own flag.
@@ -897,6 +925,7 @@ export function CommandBar() {
       // the same fallback the four document-scoped surfaces use below, not
       // the stricter in-hand-only gate "This surface" enforces above.
       if (startBoardRow?.match.includes(q)) list.push(startBoardRow);
+      if (deckRow?.match.includes(q)) list.push(deckRow);
       // Document-scoped registry surfaces (scope: 'document' — registry.tsx's
       // own canon: "only reachable with a document in hand") must pass the
       // same in-hand gate their "This surface" row above is gated on, or a
@@ -1001,6 +1030,7 @@ export function CommandBar() {
     signOut,
     testerNotesOn,
     teachingNotesOn,
+    deckImportOn,
   ]);
 
   // F1 — queried (debounced ~300ms, not per-keystroke) + zeroResult.

@@ -5,7 +5,9 @@ import type { EditableMoodBoardItem } from '@patina/types';
 import { useAddProposalItem, useProposalScheduleItems } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
 import {
+  beginScheduleSend,
   buildSendToScheduleArgs,
+  endScheduleSend,
   findExistingScheduleLine,
   type PinScheduleSnapshot,
 } from '@/lib/scope/board-schedule';
@@ -65,6 +67,7 @@ export function BoardScheduleInspectorAction({
       setStatus({ kind: 'exists', docCode: twin.doc_code });
       return;
     }
+    if (!beginScheduleSend(item.id)) return; // already sending this pin — no-op (SQ-368 F15)
     try {
       const args = buildSendToScheduleArgs({
         proposalId,
@@ -77,6 +80,8 @@ export function BoardScheduleInspectorAction({
       setStatus({ kind: 'added', docCode: args.docCode });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not add this pin to the schedule.');
+    } finally {
+      endScheduleSend(item.id);
     }
   };
 

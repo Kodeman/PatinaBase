@@ -32,8 +32,10 @@ import type {
   BoardOwnerRef,
   BoardPoint,
   EditableMoodBoardItem,
+  MoodBoardSection,
 } from '@patina/types';
 import { useBufferedAutosave, type BufferedAutosaveState } from '@/hooks/use-buffered-autosave';
+import { deckFileKind } from '@/hooks/use-board-deck-import-layout';
 import {
   flushBoardOwnerAutosaves,
   runBoardOwnerAutosaveAction,
@@ -44,6 +46,7 @@ import {
   altDragDuplicateBoardRoomItems,
   changeBoardRoomZOrder,
   cloneBoardRoomState,
+  commitBoardRoomCommand,
   commitItemPatches,
   createBoardRoomHistory,
   deleteBoardRoomItems,
@@ -101,6 +104,9 @@ export interface BoardRoomAddOptions {
   kind?: 'add' | 'paste' | 'duplicate';
   select?: boolean;
   source?: BoardRoomItemAddSource;
+  /** New sections added in the same undo step as the items (a laid-out
+   *  deck); the canvas also grows to fit the items. */
+  sections?: readonly MoodBoardSection[];
 }
 
 export type BoardRoomItemAddSource =
@@ -1150,12 +1156,35 @@ export function useBoardRoomController({
   const addItems = useCallback((items: readonly EditableMoodBoardItem[], options: BoardRoomAddOptions = {}) => {
     const normalized = items.map((item) => ({ ...item, id: item.id || generatedId() }));
     const ids = normalized.map((item) => item.id);
+    const commandOptions = {
+      id: options.id ?? generatedId('add'),
+      kind: options.kind ?? 'add',
+      lane: 'structural',
+    } as const;
+    const sections = options.sections;
     const result = execute(
-      (current) => addBoardRoomItems(current, normalized, {
-        id: options.id ?? generatedId('add'),
-        kind: options.kind ?? 'add',
-        lane: 'structural',
-      }),
+      (current) => sections
+        ? commitBoardRoomCommand(current, { ...commandOptions, touches: ids }, (state) => {
+          const existingItems = new Set(state.items.map((item) => item.id));
+          const existingSections = new Set(state.sections.map((section) => section.id));
+          const added = normalized.filter((item) => !existingItems.has(item.id));
+          const right = Math.max(state.canvasWidth, ...added.map((item) => Math.ceil(item.x + item.width)));
+          const bottom = Math.max(
+            state.canvasHeight,
+            ...added.map((item) => Math.ceil(item.y + (item.height ?? item.width))),
+          );
+          return {
+            ...state,
+            canvasWidth: right,
+            canvasHeight: bottom,
+            sections: [
+              ...state.sections,
+              ...sections.filter((section) => !existingSections.has(section.id)).map((section) => ({ ...section })),
+            ],
+            items: [...state.items, ...added],
+          };
+        })
+        : addBoardRoomItems(current, normalized, commandOptions),
       options.select === false ? undefined : ids,
     );
     if (result?.command && options.source) onItemsAdded?.(normalized, options.source);
@@ -1700,7 +1729,8 @@ export function useBoardRoomController({
     onItemsDropped: onItemsDropped ? (commit) => {
       lastPointerRef.current = commit.point;
       try {
-        validateBoardImageFiles(commit.files);
+        // A deck never reaches the image pipeline: the room intercepts it.
+        if (!commit.files.some((file) => deckFileKind(file))) validateBoardImageFiles(commit.files);
       } catch (error) {
         reportError(error);
         return;

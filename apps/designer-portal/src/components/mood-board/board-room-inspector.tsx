@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { resolveMoodBoardGeometry, unionBoardRects } from '@patina/design-system';
 import { promoteRequestFromPin, type BoardOwnerRef, type BoardRect, type EditableMoodBoardItem } from '@patina/types';
 import { usePromoteBoardReferenceToSelection, type BoardItemDirection } from '@patina/supabase';
@@ -10,6 +10,7 @@ import { BoardImageInspectorActions } from './board-image-inspector-actions';
 import { BoardItemDirectionPanel } from './board-item-direction-panel';
 import { BoardPaletteInspectorActions } from './board-palette-inspector-actions';
 import { BoardScheduleInspectorAction } from './board-schedule-inspector-action';
+import { deckPinHoldReason } from '@/hooks/use-board-deck-import-layout';
 
 const INSPECTOR_WIDTH = 286;
 const INSPECTOR_GAP = 18;
@@ -181,15 +182,22 @@ export function BoardRoomInspector({
   api,
   owner,
   scopeRoomId = null,
+  scheduleRoomId = null,
   onOpenProduct,
   onReplaceImage,
   onScheduleSent,
   onCommand,
   directions = [],
+  renderDeckActions,
 }: {
   api: BoardRoomControllerApi;
   owner?: BoardOwnerRef;
   scopeRoomId?: string | null;
+  /** The room id the schedule twin check uses — SAME field the shell's quick-menu
+   * send reads, so the inspector never disagrees with the menu about a twin
+   * (SQ-368 F16). Deliberately separate from scopeRoomId above, which also feeds
+   * project-promotion room assignment and must keep its project_room_id priority. */
+  scheduleRoomId?: string | null;
   onOpenProduct?: (item: EditableMoodBoardItem) => void;
   onReplaceImage?: (item: EditableMoodBoardItem) => void;
   /** Backlinks a pin to the schedule line it was just sent to. */
@@ -200,6 +208,8 @@ export function BoardRoomInspector({
    * already returns null outside `api.mode === 'edit'` (see the early
    * return), which keeps the thread out of Present by construction. */
   directions?: readonly BoardItemDirection[];
+  /** US-15 — the deck ledger's acts for one deck pin (null when it has none). */
+  renderDeckActions?: (item: EditableMoodBoardItem) => ReactNode;
 }) {
   const panelRef = useRef<HTMLElement>(null);
   const promoteReference = usePromoteBoardReferenceToSelection();
@@ -265,6 +275,7 @@ export function BoardRoomInspector({
 
   if (!api.state || api.mode !== 'edit' || selected.length === 0 || !selectionBounds) return null;
   const lead = selected[0];
+  const holdReason = deckPinHoldReason(lead);
   const multi = selected.length > 1;
   const sourceUrl = safeSourceUrl(lead);
   const sectionIds = selected.map((item) =>
@@ -455,10 +466,21 @@ export function BoardRoomInspector({
             }}
           />
 
-          {owner?.kind === 'proposal' && (lead.type === 'product' || lead.type === 'capture') && (
+          {renderDeckActions?.(lead)}
+
+          {holdReason && (lead.type === 'product' || lead.type === 'capture') && (
+            <p
+              data-deck-pin-hold
+              className="rounded-[4px] border border-[var(--border-default)] px-2.5 py-2 text-[10px] leading-4 text-[var(--text-muted)]"
+            >
+              {holdReason}
+            </p>
+          )}
+
+          {owner?.kind === 'proposal' && !holdReason && (lead.type === 'product' || lead.type === 'capture') && (
             <BoardScheduleInspectorAction
               proposalId={owner.id}
-              scopeRoomId={scopeRoomId}
+              scopeRoomId={scheduleRoomId}
               item={lead}
               onSent={onScheduleSent}
             />
@@ -475,7 +497,8 @@ export function BoardRoomInspector({
               <Button
                 size="sm"
                 variant="secondary"
-                disabled={promoteReference.isPending}
+                disabled={promoteReference.isPending || Boolean(holdReason)}
+                title={holdReason ?? undefined}
                 onClick={() => {
                   setPromotionError(null);
                   void promoteReference.mutateAsync({

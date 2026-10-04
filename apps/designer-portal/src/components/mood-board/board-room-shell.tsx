@@ -73,14 +73,41 @@ import {
   prepareAndUploadBoardImages,
 } from '@/lib/mood-board-assets/upload-board-assets';
 import { prepareProjectReviewMedia } from '@/lib/mood-board-assets/project-review-media';
-import { buildSendToScheduleArgs, findExistingScheduleLine } from '@/lib/scope/board-schedule';
+import {
+  beginScheduleSend,
+  buildSendToScheduleArgs,
+  endScheduleSend,
+  findExistingScheduleLine,
+  scheduleRoomIdForBoard,
+} from '@/lib/scope/board-schedule';
 import {
   createMoodBoardCoverLifecycle,
   type MoodBoardCoverSnapshot,
 } from '@/lib/mood-board-assets/board-cover-lifecycle';
 import { BoardAddRail, uploadFilesAsBoardItems, type BoardAddSource } from './board-add-rail';
 import { BoardApprovedPinsPanel } from './board-approved-pins-panel';
+import { BoardDeckImportSheet } from './board-deck-import-sheet';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import {
+  DECK_COPY,
+  DECK_IMPORT_FLAG,
+  DECK_OPEN_EVENT,
+  deckFileKind,
+  deckPinHoldReason,
+  takePendingDeck,
+  useBoardDeckImportLayout,
+  type PreparedDeck,
+} from '@/hooks/use-board-deck-import-layout';
 import { BoardPromoteAllPanel } from './board-promote-all-panel';
+import { BoardDeckImportLedger, DeckPieceActs } from './board-deck-import-ledger';
+import {
+  canvasCaption,
+  howPhrase,
+  roomHeadLine,
+  useBoardDeckImportReview,
+  useDeckImportDecisions,
+  type DeckReviewRoom,
+} from '@/hooks/use-board-deck-import-review';
 import { BoardRoomInspector } from './board-room-inspector';
 import { BoardRoomSectionsMenu } from './board-room-sections-menu';
 import { BoardShareDialog } from './board-share-dialog';
@@ -348,6 +375,7 @@ function BoardRoomSurface({
   onConsumeExternalNotice,
   justMaterialized,
   onDismissJustMaterialized,
+  onBringInDeck,
 }: {
   api: BoardRoomControllerApi;
   owner: BoardOwnerRef;
@@ -364,6 +392,8 @@ function BoardRoomSurface({
   /** DV3 — true right after a template materialized onto THIS project board. */
   justMaterialized: boolean;
   onDismissJustMaterialized: () => void;
+  /** Set only while `board-deck-import` is on. */
+  onBringInDeck?: () => void;
 }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -636,20 +666,38 @@ function BoardRoomSurface({
     updateItem(itemId, { data: { ...(current.data ?? {}), proposalItemId } });
   }, [updateItem]);
 
-  const sendToSchedule = useCallback(async (item: EditableMoodBoardItem) => {
-    if (owner.kind !== 'proposal' || (item.type !== 'product' && item.type !== 'capture')) return;
-    setSurfaceNotice(null);
-    setSurfaceError(null);
+  // `quiet` is the deck ledger's bulk loop: same path and in-flight guard,
+  // outcome returned instead of written to the room's notice line.
+  const sendToSchedule = useCallback(async (
+    item: EditableMoodBoardItem,
+    options: { quiet?: boolean } = {},
+  ): Promise<{ ok: true } | { ok: false; message: string }> => {
+    if (owner.kind !== 'proposal' || (item.type !== 'product' && item.type !== 'capture')) {
+      return { ok: false, message: 'Only a product pin goes on the schedule.' };
+    }
+    // Already sending this pin — no-op; that send reports itself (SQ-368 F15).
+    if (!beginScheduleSend(item.id)) return { ok: true };
+    const quiet = options.quiet === true;
+    if (!quiet) {
+      setSurfaceNotice(null);
+      setSurfaceError(null);
+    }
+    const hold = deckPinHoldReason(item);
+    if (hold) {
+      if (!quiet) setSurfaceNotice(hold);
+      endScheduleSend(item.id);
+      return { ok: false, message: hold };
+    }
     try {
       const refreshed = await scheduleQuery.refetch();
       if (refreshed.error) throw refreshed.error;
       const lines = refreshed.data ?? [];
       const snapshot = scheduleSnapshotForBoardItem(item);
-      const scopeRoomId = boardQuery.data?.scope_room_id ?? null;
+      const scopeRoomId = scheduleRoomIdForBoard(boardQuery.data);
       const twin = findExistingScheduleLine(lines, snapshot, scopeRoomId);
       if (twin) {
-        setSurfaceNotice(`Already on the schedule${twin.doc_code ? ` · ${twin.doc_code}` : ''}`);
-        return;
+        if (!quiet) setSurfaceNotice(`Already on the schedule${twin.doc_code ? ` · ${twin.doc_code}` : ''}`);
+        return { ok: true };
       }
       const args = buildSendToScheduleArgs({
         proposalId: owner.id,
@@ -659,11 +707,34 @@ function BoardRoomSurface({
       });
       const line = await addScheduleItem.mutateAsync(args);
       if (typeof line?.id === 'string') stampScheduleBacklink(item.id, line.id);
-      setSurfaceNotice(`Added to the schedule · ${args.docCode}`);
+      if (!quiet) setSurfaceNotice(`Added to the schedule · ${args.docCode}`);
+      return { ok: true };
     } catch (cause) {
-      setSurfaceError(cause instanceof Error ? cause.message : 'Could not add this pin to the schedule.');
+      const message = cause instanceof Error ? cause.message : 'Could not add this pin to the schedule.';
+      if (!quiet) setSurfaceError(message);
+      return { ok: false, message };
+    } finally {
+      endScheduleSend(item.id);
     }
-  }, [addScheduleItem, boardQuery.data?.scope_room_id, owner, scheduleQuery, stampScheduleBacklink]);
+  }, [addScheduleItem, boardQuery.data, owner, scheduleQuery, stampScheduleBacklink]);
+
+  // Bring in a Deck (US-15 W3) — review. `onBringInDeck` is set only while
+  // the `board-deck-import` flag is on, so off/loading reads nothing.
+  const deckImportOn = Boolean(onBringInDeck);
+  const [deckLedgerOpen, setDeckLedgerOpen] = useState(false);
+  const deckReview = useBoardDeckImportReview(api.state?.boardId, deckImportOn);
+  const { replaceItem: replaceRoomItem, addItems: addRoomItems, flushPending } = api;
+  const deckRoom = useMemo<DeckReviewRoom>(() => ({
+    pins: () => latestItemsRef.current ?? [],
+    replaceItem: replaceRoomItem,
+    addItems: (items) => { addRoomItems(items, { select: false }); },
+    flush: flushPending,
+  }), [addRoomItems, flushPending, replaceRoomItem]);
+  const deckDecisions = useDeckImportDecisions(deckReview.deckImport?.id, deckRoom);
+  const deckItemByPin = useMemo(() => new Map(
+    deckReview.items.filter((item) => item.boardItemId).map((item) => [item.boardItemId as string, item]),
+  ), [deckReview.items]);
+  const deckHead = deckImportOn ? roomHeadLine(deckReview.deckImport?.status ?? null, deckReview.items) : null;
 
   const openProduct = useCallback((item: EditableMoodBoardItem) => {
     if (!item.productId) return;
@@ -1107,6 +1178,28 @@ function BoardRoomSurface({
     item.id ? <VerdictBadge feedback={feedbackByItem.get(item.id)} /> : null
   );
   const originalRenderItem = api.canvasProps.renderItem;
+  const deckCaption = (item: EditableMoodBoardItem): string | null => {
+    const deckItem = deckItemByPin.get(item.id);
+    return deckItem ? canvasCaption(deckItem, deckReview.products) : null;
+  };
+  const renderDeckActions = (item: EditableMoodBoardItem): ReactNode => {
+    const deckItem = deckItemByPin.get(item.id);
+    if (!deckItem || deckItem.role !== 'product' || deckItem.state === 'pending' || deckItem.state === 'removed') {
+      return null;
+    }
+    return (
+      <div data-deck-inspector-acts className="space-y-1 rounded-[4px] border border-[var(--border-default)] px-2.5 py-2">
+        <p className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">{howPhrase(deckItem)}</p>
+        <DeckPieceActs
+          item={deckItem}
+          products={deckReview.products}
+          decisions={deckDecisions}
+          pins={state.items}
+          compact
+        />
+      </div>
+    );
+  };
   const editRenderItem = (item: EditableMoodBoardItem): ReactNode => (
     <div className="relative h-full w-full">
       {item.type === 'note' && editingNoteId === item.id ? (
@@ -1125,6 +1218,14 @@ function BoardRoomSurface({
       {(unresolvedDirectionCountByItem.get(item.id) ?? 0) > 0 && (
         <span className="pointer-events-none absolute left-1 top-1 z-20">
           <DirectionIndicator count={unresolvedDirectionCountByItem.get(item.id) ?? 0} />
+        </span>
+      )}
+      {deckCaption(item) && (
+        <span
+          data-deck-caption
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 truncate bg-[var(--bg-surface)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--text-muted)]"
+        >
+          {deckCaption(item)}
         </span>
       )}
     </div>
@@ -1283,8 +1384,26 @@ function BoardRoomSurface({
       )}
 
       {dropUploadProgress && (
-        <div role="status" className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 text-[11px] text-[var(--text-muted)]">
-          Uploading {dropUploadProgress}
+        <div role="status" className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 font-mono text-[11px] text-[var(--text-muted)]">
+          {dropUploadProgress}
+        </div>
+      )}
+
+      {!dropUploadProgress && deckHead && (
+        <div role="status" data-deck-room-head className="relative z-40 shrink-0 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2 font-mono text-[11px] text-[var(--text-muted)]">
+          {deckHead.text}
+          {deckHead.review && (
+            <>
+              {' — '}
+              <button
+                type="button"
+                onClick={() => setDeckLedgerOpen(true)}
+                className="min-h-8 text-[var(--color-clay-ink)] underline underline-offset-2 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-clay)]"
+              >
+                Review
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -1335,6 +1454,7 @@ function BoardRoomSurface({
               nextZ={nextZ}
               onAddItems={addFromRail}
               onSelectItem={focusFeedbackItem}
+              onBringInDeck={onBringInDeck}
             />
           </aside>
         )}
@@ -1448,10 +1568,12 @@ function BoardRoomSurface({
             api={api}
             owner={owner}
             scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
+            scheduleRoomId={scheduleRoomIdForBoard(boardQuery.data)}
             onOpenProduct={openProduct}
             onReplaceImage={replaceImage}
             onScheduleSent={stampScheduleBacklink}
             directions={directions}
+            renderDeckActions={deckImportOn ? renderDeckActions : undefined}
           />
         </div>
       </div>
@@ -1512,6 +1634,21 @@ function BoardRoomSurface({
         onOpenChange={setTemplateOpen}
         flush={api.flushPending}
       />
+      {deckImportOn && (
+        <BoardDeckImportLedger
+          open={deckLedgerOpen}
+          onClose={() => setDeckLedgerOpen(false)}
+          owner={owner}
+          scopeRoomId={boardQuery.data?.project_room_id ?? boardQuery.data?.scope_room_id ?? null}
+          importId={deckReview.deckImport?.id ?? null}
+          items={deckReview.items}
+          products={deckReview.products}
+          decisions={deckDecisions}
+          pins={state.items}
+          onPromoted={(itemId, selectionId) => api.updateItem(itemId, { projectFfeItemId: selectionId })}
+          sendToSchedule={(pin) => sendToSchedule(pin, { quiet: true })}
+        />
+      )}
     </main>
   );
 }
@@ -1532,6 +1669,57 @@ export function MoodBoardRoom({
   const placeProjectProduct = usePlaceProductInProjectV2();
   const [dropUploadProgress, setDropUploadProgress] = useState<string | null>(null);
   const [externalNotice, setExternalNotice] = useState<string | null>(null);
+  // Bring in a Deck (US-15 W2) — fail-closed: off or loading hides every
+  // entry point, and a dropped deck only gets a plain note.
+  const { value: deckImportOn } = useFeatureFlag(DECK_IMPORT_FLAG);
+  const [deckFile, setDeckFile] = useState<File | null>(null);
+  const deckInputRef = useRef<HTMLInputElement>(null);
+  const deckLayout = useBoardDeckImportLayout({ owner, boardId, upload: uploadFilesAsBoardItems });
+  const openDeck = useCallback((file: File) => {
+    if (!deckImportOn) {
+      setExternalNotice(DECK_COPY.notSupported);
+      return;
+    }
+    if (deckFileKind(file) === 'resave') {
+      setExternalNotice(DECK_COPY.resave);
+      return;
+    }
+    setDeckFile(file);
+  }, [deckImportOn]);
+  const chooseDeck = useCallback(() => deckInputRef.current?.click(), []);
+  useEffect(() => {
+    if (!deckImportOn) return;
+    const pending = takePendingDeck(boardId);
+    if (pending) setDeckFile(pending);
+    const onOpen = () => chooseDeck();
+    window.addEventListener(DECK_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(DECK_OPEN_EVENT, onOpen);
+  }, [boardId, chooseDeck, deckImportOn]);
+  const layOutDeck = useCallback((deck: PreparedDeck, pastedLinks: string) => {
+    const api = apiRef.current;
+    if (!api?.state) return;
+    void deckLayout.layOut({
+      deck,
+      pastedLinks,
+      room: {
+        sections: api.state.sections,
+        items: api.state.items,
+        commit: (sections, items) => {
+          apiRef.current?.addItems(items, {
+            id: generatedId('deck'),
+            sections,
+            select: false,
+            source: 'file_drop',
+          });
+        },
+        flush: () => apiRef.current?.flushPending() ?? Promise.resolve(),
+      },
+    }).catch((cause) => {
+      setExternalNotice(cause instanceof Error && cause.message
+        ? `The deck could not be laid out: ${cause.message}`
+        : 'The deck could not be laid out.');
+    });
+  }, [deckLayout]);
   const metricsRef = useRef<SessionMetrics>({
     commands: 0,
     usedUndo: false,
@@ -1644,6 +1832,12 @@ export function MoodBoardRoom({
   const dropped = useCallback(async (commit: BoardItemsDroppedCommit) => {
     const api = apiRef.current;
     if (!api?.state) return;
+    // Always intercepted, flag on or off: a deck never reaches the image pipeline.
+    const deck = commit.files.find((file) => deckFileKind(file));
+    if (deck) {
+      openDeck(deck);
+      return;
+    }
     if (commit.files.length > 0) {
       const startZ = Math.max(-1, ...api.state.items.map((item) => item.zIndex ?? 0)) + 1;
       try {
@@ -1655,7 +1849,7 @@ export function MoodBoardRoom({
           point: { x: commit.point.x - 140, y: commit.point.y - 100 },
           startZ,
           onProgress: ({ file, index, total, stage }) => {
-            setDropUploadProgress(`${index + 1}/${total} · ${file.name} · ${stage}`);
+            setDropUploadProgress(`Uploading ${index + 1}/${total} · ${file.name} · ${stage}`);
           },
         });
       } finally {
@@ -1720,7 +1914,7 @@ export function MoodBoardRoom({
     } catch {
       return;
     }
-  }, [boardId, boardQuery.data?.project_room_id, owner, placeProjectProduct, resolveUrl]);
+  }, [boardId, boardQuery.data?.project_room_id, openDeck, owner, placeProjectProduct, resolveUrl]);
 
   const pasteImages = useCallback(async (files: readonly File[], point: BoardPoint) => {
     const api = apiRef.current;
@@ -1755,22 +1949,49 @@ export function MoodBoardRoom({
       {(api) => {
         apiRef.current = api;
         return (
-          <BoardRoomSurface
-            api={api}
-            owner={owner}
-            source={navigation.source}
-            returnTarget={navigation.returnTarget}
-            exitHandlerRef={exitHandlerRef}
-            deleteGuardRef={deleteGuardRef}
-            metricsRef={metricsRef}
-            lastCommand={lastCommandRef.current}
-            itemActionsRef={itemActionsRef}
-            dropUploadProgress={dropUploadProgress}
-            externalNotice={externalNotice}
-            onConsumeExternalNotice={() => setExternalNotice(null)}
-            justMaterialized={justMaterialized}
-            onDismissJustMaterialized={() => setJustMaterialized(false)}
-          />
+          <>
+            <BoardRoomSurface
+              api={api}
+              owner={owner}
+              source={navigation.source}
+              returnTarget={navigation.returnTarget}
+              exitHandlerRef={exitHandlerRef}
+              deleteGuardRef={deleteGuardRef}
+              metricsRef={metricsRef}
+              lastCommand={lastCommandRef.current}
+              itemActionsRef={itemActionsRef}
+              dropUploadProgress={deckLayout.progress ?? dropUploadProgress}
+              externalNotice={externalNotice}
+              onConsumeExternalNotice={() => setExternalNotice(null)}
+              justMaterialized={justMaterialized}
+              onDismissJustMaterialized={() => setJustMaterialized(false)}
+              onBringInDeck={deckImportOn ? chooseDeck : undefined}
+            />
+            {deckImportOn && (
+              <>
+                <input
+                  ref={deckInputRef}
+                  type="file"
+                  accept=".pptx,.ppsx,.potx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden
+                  data-deck-import-input
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) openDeck(file);
+                  }}
+                />
+                <BoardDeckImportSheet
+                  file={deckFile}
+                  boardId={boardId}
+                  onClose={() => setDeckFile(null)}
+                  onLayOut={layOutDeck}
+                />
+              </>
+            )}
+          </>
         );
       }}
     </BoardRoomController>

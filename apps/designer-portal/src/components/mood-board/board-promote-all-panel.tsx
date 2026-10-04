@@ -4,11 +4,59 @@ import { useId, useMemo, useState } from 'react';
 import { promoteRequestFromPin, type EditableMoodBoardItem } from '@patina/types';
 import { usePromoteBoardReferenceToSelection } from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
+import { DECK_COPY, deckPinHoldReason } from '@/hooks/use-board-deck-import-layout';
 
-function pinName(item: EditableMoodBoardItem): string {
+export function pinName(item: EditableMoodBoardItem): string {
   const name = item.data?.name;
   if (typeof name === 'string' && name.trim()) return name;
   return item.content?.trim() || 'Board pick';
+}
+
+export type PromoteDisposition = 'selected' | 'candidate';
+
+export interface PromoteAllResult {
+  attempted: number;
+  failures: ReadonlyArray<{ id: string; name: string; message: string }>;
+}
+
+/**
+ * The promote-all loop, shared by this panel and the deck ledger's "Put N
+ * pieces on the schedule": sequential on purpose (each success updates room
+ * state the next call should see; the idempotency key is per pin), failures
+ * reported together at the end.
+ */
+export async function promotePinsInOrder(input: {
+  pins: readonly EditableMoodBoardItem[];
+  projectId: string;
+  scopeRoomId: string | null;
+  disposition: PromoteDisposition;
+  promote: ReturnType<typeof usePromoteBoardReferenceToSelection>['mutateAsync'];
+  onPromoted: (itemId: string, selectionId: string) => void;
+}): Promise<PromoteAllResult> {
+  const failures: Array<{ id: string; name: string; message: string }> = [];
+  for (const item of input.pins) {
+    try {
+      const result = await input.promote({
+        ...promoteRequestFromPin(item),
+        projectId: input.projectId,
+        boardItemId: item.id,
+        assignmentScope: input.scopeRoomId ? 'room' : 'unassigned',
+        roomId: input.scopeRoomId,
+        disposition: input.disposition,
+        duplicateMode: 'reuse',
+        idempotencyKey: `promote:${item.id}`,
+      });
+      if (!result.selectionId) throw new Error('Promotion did not return a selection.');
+      input.onPromoted(item.id, result.selectionId);
+    } catch (cause) {
+      failures.push({
+        id: item.id,
+        name: pinName(item),
+        message: cause instanceof Error ? cause.message : 'This piece could not be promoted.',
+      });
+    }
+  }
+  return { attempted: input.pins.length, failures };
 }
 
 /**
@@ -43,14 +91,11 @@ export function BoardPromoteAllPanel({
 }) {
   const promote = usePromoteBoardReferenceToSelection();
   const choiceName = useId();
-  const [disposition, setDisposition] = useState<'selected' | 'candidate'>('selected');
+  const [disposition, setDisposition] = useState<PromoteDisposition>('selected');
   const [sendingAll, setSendingAll] = useState(false);
-  const [batchResult, setBatchResult] = useState<{
-    attempted: number;
-    failures: ReadonlyArray<{ id: string; name: string; message: string }>;
-  } | null>(null);
+  const [batchResult, setBatchResult] = useState<PromoteAllResult | null>(null);
 
-  const eligible = useMemo(
+  const unpromoted = useMemo(
     () =>
       items.filter(
         (item) =>
@@ -58,6 +103,9 @@ export function BoardPromoteAllPanel({
       ),
     [items],
   );
+  // A deck piece still to confirm never goes onward (US-15).
+  const eligible = useMemo(() => unpromoted.filter((item) => !deckPinHoldReason(item)), [unpromoted]);
+  const held = unpromoted.length - eligible.length;
 
   // Visible right after materialization for any nonzero count (a first
   // template seed with even one product pin still shouldn't require a
@@ -67,52 +115,24 @@ export function BoardPromoteAllPanel({
   const shouldShow = eligible.length > 0 && (justMaterialized || eligible.length >= 2);
   if (!shouldShow) return null;
 
-  const promoteOne = async (
-    item: EditableMoodBoardItem,
-  ): Promise<{ ok: true } | { ok: false; message: string }> => {
-    try {
-      const result = await promote.mutateAsync({
-        ...promoteRequestFromPin(item),
-        projectId,
-        boardItemId: item.id,
-        assignmentScope: scopeRoomId ? 'room' : 'unassigned',
-        roomId: scopeRoomId,
-        disposition,
-        duplicateMode: 'reuse',
-        idempotencyKey: `promote:${item.id}`,
-      });
-      if (!result.selectionId) throw new Error('Promotion did not return a selection.');
-      onPromoted(item.id, result.selectionId);
-      return { ok: true };
-    } catch (cause) {
-      return {
-        ok: false,
-        message:
-          cause instanceof Error ? cause.message : 'This piece could not be promoted.',
-      };
-    }
-  };
-
   const sendAll = async () => {
     setBatchResult(null);
     setSendingAll(true);
     // Snapshot up front: onPromoted mutates parent item state as each pin
     // succeeds, which would otherwise shrink `eligible` mid-loop.
-    const attempted = eligible;
-    const failures: Array<{ id: string; name: string; message: string }> = [];
+    let result: PromoteAllResult = { attempted: eligible.length, failures: [] };
     try {
-      for (const item of attempted) {
-        // Sequential on purpose — mirrors board-approved-pins-panel.tsx: each
-        // call updates local editor state the next iteration should see, and
-        // the idempotency key is per-pin, not batched server-side.
-        const outcome = await promoteOne(item);
-        if (!outcome.ok) {
-          failures.push({ id: item.id, name: pinName(item), message: outcome.message });
-        }
-      }
+      result = await promotePinsInOrder({
+        pins: eligible,
+        projectId,
+        scopeRoomId,
+        disposition,
+        promote: promote.mutateAsync,
+        onPromoted,
+      });
     } finally {
       setSendingAll(false);
-      setBatchResult({ attempted: attempted.length, failures });
+      setBatchResult(result);
       if (justMaterialized) onDismissJustMaterialized();
     }
   };
@@ -128,6 +148,7 @@ export function BoardPromoteAllPanel({
           {justMaterialized
             ? `${eligible.length} ${eligible.length === 1 ? 'piece' : 'pieces'} from this template aren't in the project selection yet`
             : `${eligible.length} pieces not yet in the project selection`}
+          {held > 0 && ` · ${held} to confirm — ${DECK_COPY.hold}`}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <fieldset className="flex items-center gap-3" disabled={sendingAll}>
