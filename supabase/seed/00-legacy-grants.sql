@@ -18870,6 +18870,66 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.board_web_match_settings FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.board_web_match_settings TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.board_web_match_usage FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.board_web_match_usage TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_web_match_studio_key(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.board_web_match_studio_key(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.consume_board_web_match_budget(uuid, integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.consume_board_web_match_budget(uuid, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_board_web_match_result(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00680_board_web_match_budget.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_board_web_match_result(uuid, jsonb, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

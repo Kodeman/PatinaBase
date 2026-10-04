@@ -1643,6 +1643,51 @@ export type Database = {
         }
         Relationships: []
       }
+      board_web_match_settings: {
+        Row: {
+          cost_micros_per_call: number
+          id: boolean
+          monthly_call_cap: number
+          updated_at: string
+        }
+        Insert: {
+          cost_micros_per_call?: number
+          id?: boolean
+          monthly_call_cap?: number
+          updated_at?: string
+        }
+        Update: {
+          cost_micros_per_call?: number
+          id?: boolean
+          monthly_call_cap?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      board_web_match_usage: {
+        Row: {
+          calls: number
+          cost_micros: number
+          month: string
+          studio_id: string
+          updated_at: string
+        }
+        Insert: {
+          calls?: number
+          cost_micros?: number
+          month: string
+          studio_id: string
+          updated_at?: string
+        }
+        Update: {
+          calls?: number
+          cost_micros?: number
+          month?: string
+          studio_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bridge_state: {
         Row: {
           bridge: string
@@ -35099,6 +35144,10 @@ export type Database = {
         Args: { p_reference: string }
         Returns: string
       }
+      board_web_match_studio_key: {
+        Args: { p_import_id: string }
+        Returns: string
+      }
       build_board_share_payload: {
         Args: {
           p_board_id: string
@@ -35527,6 +35576,10 @@ export type Database = {
       }
       consume_board_unfurl_quota: {
         Args: { p_user_id?: string }
+        Returns: Json
+      }
+      consume_board_web_match_budget: {
+        Args: { p_n: number; p_studio_id: string }
         Returns: Json
       }
       consume_capture: {
@@ -38317,6 +38370,10 @@ export type Database = {
           p_lease_owner: string
           p_state: string
         }
+        Returns: Json
+      }
+      record_board_web_match_result: {
+        Args: { p_base_candidates: Json; p_candidates: Json; p_item_id: string }
         Returns: Json
       }
       record_capture_enrichment_result: {
