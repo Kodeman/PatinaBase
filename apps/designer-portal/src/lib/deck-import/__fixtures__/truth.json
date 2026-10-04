@@ -1,0 +1,153 @@
+{
+  "keynote": {
+    "eames": "ppt/slides/slide1.xml#2",
+    "second": "ppt/slides/slide2.xml#2",
+    "slide_size": [
+      24384000,
+      13716000
+    ]
+  },
+  "structure": {
+    "elements": {
+      "alternate_choice": {
+        "key": "ppt/slides/slide3.xml#2"
+      },
+      "background": {
+        "key": "ppt/slides/slide3.xml#bg"
+      },
+      "flip_v": {
+        "key": "ppt/slides/slide1.xml#7"
+      },
+      "flipped_group": {
+        "key": "ppt/slides/slide1.xml#6"
+      },
+      "layout_placeholder": {
+        "bbox": [
+          1792288,
+          612775,
+          5486400,
+          4114800
+        ],
+        "key": "ppt/slides/slide4.xml#3",
+        "src_rect": [
+          0.16667,
+          0.0,
+          0.16667,
+          0.0
+        ]
+      },
+      "master_placeholder": {
+        "bbox": [
+          457200,
+          1600200,
+          8229600,
+          4525963
+        ],
+        "key": "ppt/slides/slide5.xml#3"
+      },
+      "neg_crop": {
+        "key": "ppt/slides/slide2.xml#2",
+        "src_rect": [
+          -0.1,
+          0,
+          -0.1,
+          0
+        ]
+      },
+      "nested_rot": {
+        "groups": [
+          2,
+          3
+        ],
+        "key": "ppt/slides/slide1.xml#4"
+      },
+      "picture_fill": {
+        "key": "ppt/slides/slide2.xml#4"
+      },
+      "pos_crop": {
+        "key": "ppt/slides/slide2.xml#3",
+        "src_rect": [
+          0.25,
+          0.1,
+          0,
+          0.2
+        ]
+      },
+      "remote_http": {
+        "key": "ppt/slides/slide3.xml#5",
+        "remote_url": "https://cdn.example.com/linked-sofa.jpg"
+      },
+      "svg_fallback": {
+        "key": "ppt/slides/slide3.xml#3"
+      },
+      "table_r0": {
+        "key": "ppt/slides/slide2.xml#5/r0c0"
+      },
+      "table_r1": {
+        "key": "ppt/slides/slide2.xml#5/r1c0"
+      },
+      "wdp_auto_alt": {
+        "key": "ppt/slides/slide3.xml#4"
+      }
+    },
+    "order": [
+      "ppt/slides/slide3.xml",
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide5.xml",
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide4.xml"
+    ],
+    "skipped": {
+      "emf": "ppt/slides/slide3.xml#7",
+      "remote_file": "ppt/slides/slide3.xml#6",
+      "tiff": "ppt/slides/slide3.xml#9",
+      "wmf": "ppt/slides/slide3.xml#8"
+    },
+    "slide4_title": "Placeholder Room",
+    "slide_size": [
+      12192000,
+      6858000
+    ],
+    "texts": {}
+  },
+  "tickets": {
+    "elements": {
+      "amb_left": "ppt/slides/slide5.xml#2",
+      "amb_right": "ppt/slides/slide5.xml#3",
+      "bench": "ppt/slides/slide3.xml#4",
+      "cane_chair": "ppt/slides/slide1.xml#4",
+      "console": "ppt/slides/slide2.xml#2",
+      "grid_0": "ppt/slides/slide4.xml#2",
+      "grid_1": "ppt/slides/slide4.xml#4",
+      "grid_2": "ppt/slides/slide4.xml#6",
+      "grid_3": "ppt/slides/slide4.xml#8",
+      "grid_4": "ppt/slides/slide4.xml#10",
+      "grid_5": "ppt/slides/slide4.xml#12",
+      "h_chair": "ppt/slides/slide9.xml#2",
+      "legend_1": "ppt/slides/slide6.xml#2",
+      "legend_2": "ppt/slides/slide6.xml#4",
+      "legend_3": "ppt/slides/slide6.xml#6",
+      "pouf": "ppt/slides/slide3.xml#9",
+      "rug": "ppt/slides/slide3.xml#2",
+      "sconce": "ppt/slides/slide2.xml#4",
+      "shop_1": "ppt/slides/slide7.xml#2",
+      "shop_2": "ppt/slides/slide7.xml#4",
+      "sofa": "ppt/slides/slide1.xml#2"
+    },
+    "slides": {
+      "ambiguous": "ppt/slides/slide5.xml",
+      "beside_below": "ppt/slides/slide1.xml",
+      "grid": "ppt/slides/slide4.xml",
+      "legend_same": "ppt/slides/slide6.xml",
+      "no_pictures": "ppt/slides/slide10.xml",
+      "notes_denied": "ppt/slides/slide9.xml",
+      "numbered": "ppt/slides/slide7.xml",
+      "overlay_groups": "ppt/slides/slide3.xml",
+      "shopping_list": "ppt/slides/slide8.xml",
+      "table_two_urls": "ppt/slides/slide2.xml"
+    },
+    "texts": {
+      "grouped_ticket_group": 5
+    }
+  }
+}
