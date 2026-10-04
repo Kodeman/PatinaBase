@@ -921,6 +921,30 @@ export type Database = {
         }
         Relationships: []
       }
+      arrival_anchors: {
+        Row: {
+          engagement_id: string | null
+          previous_seen_at: string | null
+          scope: string
+          seen_at: string
+          user_id: string
+        }
+        Insert: {
+          engagement_id?: string | null
+          previous_seen_at?: string | null
+          scope: string
+          seen_at?: string
+          user_id: string
+        }
+        Update: {
+          engagement_id?: string | null
+          previous_seen_at?: string | null
+          scope?: string
+          seen_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ask_embed_cache: {
         Row: {
           cache_key: string
@@ -1219,6 +1243,195 @@ export type Database = {
             columns: ["last_job_run_id"]
             isOneToOne: false
             referencedRelation: "job_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_deck_import_items: {
+        Row: {
+          attempts: number
+          board_item_id: string | null
+          candidates: Json
+          chosen_product_id: string | null
+          created_at: string
+          element_key: string
+          extracted: Json
+          found_by: string | null
+          id: string
+          import_id: string
+          kept_at: string | null
+          kept_by: string | null
+          lease_owner: string | null
+          lease_until: string | null
+          next_attempt_at: string | null
+          role: string
+          slide_index: number
+          slide_title: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          board_item_id?: string | null
+          candidates?: Json
+          chosen_product_id?: string | null
+          created_at?: string
+          element_key: string
+          extracted?: Json
+          found_by?: string | null
+          id?: string
+          import_id: string
+          kept_at?: string | null
+          kept_by?: string | null
+          lease_owner?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string | null
+          role: string
+          slide_index?: number
+          slide_title?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          board_item_id?: string | null
+          candidates?: Json
+          chosen_product_id?: string | null
+          created_at?: string
+          element_key?: string
+          extracted?: Json
+          found_by?: string | null
+          id?: string
+          import_id?: string
+          kept_at?: string | null
+          kept_by?: string | null
+          lease_owner?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string | null
+          role?: string
+          slide_index?: number
+          slide_title?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_deck_import_items_board_item_id_fkey"
+            columns: ["board_item_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_board_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_deck_import_items_chosen_product_id_fkey"
+            columns: ["chosen_product_id"]
+            isOneToOne: false
+            referencedRelation: "edge_catalog_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_deck_import_items_chosen_product_id_fkey"
+            columns: ["chosen_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_deck_import_items_chosen_product_id_fkey"
+            columns: ["chosen_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "board_deck_import_items_chosen_product_id_fkey"
+            columns: ["chosen_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "board_deck_import_items_chosen_product_id_fkey"
+            columns: ["chosen_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "board_deck_import_items_chosen_product_id_fkey"
+            columns: ["chosen_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "board_deck_import_items_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "board_deck_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_deck_imports: {
+        Row: {
+          board_id: string
+          board_item_id: string | null
+          created_at: string
+          created_by: string | null
+          file_name: string | null
+          file_sha256: string | null
+          finished_at: string | null
+          id: string
+          links: Json
+          options: Json
+          slide_count: number
+          source_format: string
+          status: string
+        }
+        Insert: {
+          board_id: string
+          board_item_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          file_sha256?: string | null
+          finished_at?: string | null
+          id?: string
+          links?: Json
+          options?: Json
+          slide_count?: number
+          source_format?: string
+          status?: string
+        }
+        Update: {
+          board_id?: string
+          board_item_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_name?: string | null
+          file_sha256?: string | null
+          finished_at?: string | null
+          id?: string
+          links?: Json
+          options?: Json
+          slide_count?: number
+          source_format?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_deck_imports_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_deck_imports_board_item_id_fkey"
+            columns: ["board_item_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_board_items"
             referencedColumns: ["id"]
           },
         ]
@@ -6822,6 +7035,7 @@ export type Database = {
           client_capture_id: string
           colors: string[] | null
           committed_at: string | null
+          confirmations: Json
           created_at: string
           designer_id: string
           destination: string
@@ -6844,6 +7058,7 @@ export type Database = {
           product_id: string | null
           project_id: string | null
           project_room_id: string | null
+          proposals: Json
           provenance: Json
           raw_payload: Json
           shelf: string | null
@@ -6898,6 +7113,7 @@ export type Database = {
           client_capture_id: string
           colors?: string[] | null
           committed_at?: string | null
+          confirmations?: Json
           created_at?: string
           designer_id: string
           destination?: string
@@ -6920,6 +7136,7 @@ export type Database = {
           product_id?: string | null
           project_id?: string | null
           project_room_id?: string | null
+          proposals?: Json
           provenance?: Json
           raw_payload?: Json
           shelf?: string | null
@@ -6974,6 +7191,7 @@ export type Database = {
           client_capture_id?: string
           colors?: string[] | null
           committed_at?: string | null
+          confirmations?: Json
           created_at?: string
           designer_id?: string
           destination?: string
@@ -6996,6 +7214,7 @@ export type Database = {
           product_id?: string | null
           project_id?: string | null
           project_room_id?: string | null
+          proposals?: Json
           provenance?: Json
           raw_payload?: Json
           shelf?: string | null
@@ -14974,6 +15193,54 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_approval_edition_objects: {
+        Row: {
+          attachment_id: string
+          bucket: string
+          content_type: string
+          decision_id: string
+          object_path: string
+          sha256: string
+          size_bytes: number
+          verified_at: string
+        }
+        Insert: {
+          attachment_id: string
+          bucket?: string
+          content_type: string
+          decision_id: string
+          object_path: string
+          sha256: string
+          size_bytes: number
+          verified_at?: string
+        }
+        Update: {
+          attachment_id?: string
+          bucket?: string
+          content_type?: string
+          decision_id?: string
+          object_path?: string
+          sha256?: string
+          size_bytes?: number
+          verified_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_approval_edition_objects_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_approval_edition_objects_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
           },
         ]
       }
@@ -27988,6 +28255,24 @@ export type Database = {
         }
         Relationships: []
       }
+      teaching_note_state: {
+        Row: {
+          state: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          state?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          state?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       teaching_queue: {
         Row: {
           assigned_at: string | null
@@ -32395,6 +32680,71 @@ export type Database = {
         Args: { p_context: string; p_proposal_id: string }
         Returns: undefined
       }
+      _board_deck_import_assert_pin_movable: {
+        Args: { p_board_item_id: string }
+        Returns: undefined
+      }
+      _board_deck_import_choose: {
+        Args: {
+          p_board_item_id?: string
+          p_candidate_rank: number
+          p_item_id: string
+          p_mode: string
+          p_product_id: string
+        }
+        Returns: Json
+      }
+      _board_deck_import_lock_item: {
+        Args: { p_item_id: string }
+        Returns: {
+          attempts: number
+          board_item_id: string | null
+          candidates: Json
+          chosen_product_id: string | null
+          created_at: string
+          element_key: string
+          extracted: Json
+          found_by: string | null
+          id: string
+          import_id: string
+          kept_at: string | null
+          kept_by: string | null
+          lease_owner: string | null
+          lease_until: string | null
+          next_attempt_at: string | null
+          role: string
+          slide_index: number
+          slide_title: string | null
+          state: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "board_deck_import_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _board_deck_import_manifest_links: {
+        Args: { p_manifest: Json }
+        Returns: Json
+      }
+      _board_deck_import_product_visible: {
+        Args: { p_product_id: string }
+        Returns: boolean
+      }
+      _board_deck_import_resolve_vendor: {
+        Args: { p_name: string; p_url: string }
+        Returns: string
+      }
+      _board_deck_import_settle: {
+        Args: { p_import_id: string }
+        Returns: undefined
+      }
+      _board_deck_import_slide_link: {
+        Args: { p_extracted: Json }
+        Returns: string
+      }
       _budget_version_fingerprint: {
         Args: { p_version_id: string }
         Returns: string
@@ -34459,6 +34809,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      attach_board_deck_import_pins: {
+        Args: { p_import_id: string; p_pins: Json }
+        Returns: Json
+      }
       authorize_project_review_media: {
         Args: { p_actor_id: string; p_edition_id: string }
         Returns: Json
@@ -34637,6 +34991,10 @@ export type Database = {
         Args: { p_owner: string }
         Returns: boolean
       }
+      can_manage_board_deck_import: {
+        Args: { p_board_id: string }
+        Returns: boolean
+      }
       can_manage_board_item_feedback: {
         Args: { p_board_item_id: string }
         Returns: boolean
@@ -34791,6 +35149,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_board_deck_import_items: {
+        Args: { p_limit?: number }
+        Returns: Json
       }
       claim_capture_enrichment_run: {
         Args: { p_content_revision: number; p_run_id: string }
@@ -36568,6 +36930,15 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_project_decision_edition: {
+        Args: {
+          p_decision_id: string
+          p_held_artifact_checksum?: string
+          p_held_authority_revision?: number
+        }
+        Returns: Json
+      }
+      get_project_decision_editions: { Args: { p_held: Json }; Returns: Json }
       get_project_decision_review: {
         Args: { p_decision_id: string }
         Returns: Json
@@ -36721,6 +37092,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: boolean
       }
+      help_state_merge: { Args: { p_patch: Json }; Returns: Json }
       hold_install_window: {
         Args: { p_ends_on: string; p_project_id: string; p_starts_on: string }
         Returns: string
@@ -36910,6 +37282,15 @@ export type Database = {
           proposal_id: string
           status: string
         }[]
+      }
+      keep_board_deck_import_item: {
+        Args: {
+          p_board_item_id?: string
+          p_candidate_rank?: number
+          p_item_id: string
+          p_product_id?: string
+        }
+        Returns: Json
       }
       ledger_post: {
         Args: {
@@ -37119,6 +37500,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      mark_arrival: {
+        Args: { p_engagement_id?: string; p_scope: string }
+        Returns: string
       }
       mark_capture_upload_complete: {
         Args: { p_capture_id: string }
@@ -37512,6 +37897,10 @@ export type Database = {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
       }
+      project_approval_attachment_objects: {
+        Args: { p_decision_id: string }
+        Returns: Json
+      }
       project_author_books_elsewhere: {
         Args: { p_created_by: string; p_studio_id: string }
         Returns: boolean
@@ -37737,6 +38126,15 @@ export type Database = {
           p_storage_path?: string
           p_through_date?: string
           p_waiver_type: string
+        }
+        Returns: Json
+      }
+      record_board_deck_import_resolution: {
+        Args: {
+          p_candidates?: Json
+          p_found_by?: string
+          p_item_id: string
+          p_state: string
         }
         Returns: Json
       }
@@ -37969,6 +38367,17 @@ export type Database = {
         }
         Returns: Json
       }
+      record_project_approval_edition_object: {
+        Args: {
+          p_attachment_id: string
+          p_content_type: string
+          p_decision_id: string
+          p_object_path: string
+          p_sha256: string
+          p_size_bytes: number
+        }
+        Returns: boolean
+      }
       record_project_ffe_receipt: {
         Args: {
           p_ffe_item_id: string
@@ -38023,6 +38432,10 @@ export type Database = {
         }
         Returns: Json
       }
+      reference_board_deck_import_item: {
+        Args: { p_item_id: string }
+        Returns: Json
+      }
       refresh_designer_teaching_stats: { Args: never; Returns: number }
       refresh_marketplace_vitals: { Args: never; Returns: Json }
       refresh_offered_slots: {
@@ -38034,6 +38447,15 @@ export type Database = {
       regenerate_invoice_link: {
         Args: { p_invoice_id: string }
         Returns: string
+      }
+      register_board_deck_import: {
+        Args: {
+          p_board_id: string
+          p_file_name: string
+          p_file_sha256: string
+          p_manifest: Json
+        }
+        Returns: Json
       }
       register_media_entry: {
         Args: {
@@ -39905,6 +40327,14 @@ export type Database = {
         Args: { p_claim_token: string; p_dispatch_id: string; p_reason: string }
         Returns: Json
       }
+      swap_board_deck_import_item: {
+        Args: {
+          p_candidate_rank?: number
+          p_item_id: string
+          p_product_id?: string
+        }
+        Returns: Json
+      }
       swap_line_to_product: {
         Args: {
           p_feedback_id: string
@@ -39964,6 +40394,11 @@ export type Database = {
         Args: { p_dispatch_id: string }
         Returns: undefined
       }
+      teaching_note_state_patch: {
+        Args: { p_path: string[]; p_value: Json }
+        Returns: Json
+      }
+      teaching_signals: { Args: never; Returns: Json }
       toggle_concierge_checklist_item: {
         Args: {
           p_actor: string
@@ -39988,6 +40423,10 @@ export type Database = {
         Returns: Json
       }
       triage_project_ffe_items: { Args: { p_request: Json }; Returns: Json }
+      unkeep_board_deck_import_item: {
+        Args: { p_item_id: string }
+        Returns: Json
+      }
       update_client_decision: {
         Args: {
           p_decision_id: string
