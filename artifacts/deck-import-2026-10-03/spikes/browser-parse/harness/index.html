@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>deck parse spike</title>
+<input type="file" id="deck" accept=".pptx">
+<pre id="out"></pre>
+<script type="module">
+  import { runParse } from './parse.js';
+  window.runParse = (opts) => runParse(document.getElementById('deck').files[0], opts);
+  window.harnessReady = true;
+</script>
