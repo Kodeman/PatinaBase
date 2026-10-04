@@ -94,10 +94,14 @@ export type DeckRowState =
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
+/** Terminal rows off the ledger and its counts. `merged` is a link row folded
+ *  into the picture it was kept onto (SQ-367 / 00678). */
+const OFF_LEDGER_STATES = new Set<string>(['removed', 'merged']);
+
 /** The pieces the ledger lists: product-role, still on the board. */
 export function reviewPieces(items: readonly DeckImportItem[]): DeckImportItem[] {
   return items
-    .filter((item) => item.role === 'product' && item.state !== 'removed')
+    .filter((item) => item.role === 'product' && !OFF_LEDGER_STATES.has(item.state))
     .sort((a, b) => a.slideIndex - b.slideIndex || a.elementKey.localeCompare(b.elementKey));
 }
 

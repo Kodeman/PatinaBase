@@ -199,6 +199,8 @@ describe('deck review row states and lexicon', () => {
       piece({ id: 'e', state: 'not_found', foundBy: null, candidates: [] }),
       piece({ id: 'f', boardItemId: null, elementKey: 'link:x' }),
       piece({ id: 'g', role: 'reference' }),
+      // A link row folded into the picture it was kept onto (00678) drops out.
+      piece({ id: 'h', boardItemId: null, elementKey: 'link:y', state: 'merged' as DeckImportItem['state'] }),
     ]);
     expect(stats).toEqual([
       { value: '6', label: 'pieces' },
