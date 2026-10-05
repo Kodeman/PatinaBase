@@ -41,12 +41,15 @@ import {
   type ResolveDeps,
   runResolve,
 } from "./core.ts";
-import type { KnnHit, LookGate } from "./look.ts";
+import { cropSignature } from "./crop_signature.ts";
+import type { KnnHit, LookGate, PhashHit } from "./look.ts";
 import { ADJUDICATION } from "./thresholds.ts";
 
 const FUNCTION_NAME = "board-deck-import-resolve";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SIGNED_CROP_SECONDS = 600;
+/** Crops are ≤2400 px WebP; anything far larger is not hashed. */
+const CROP_MAX_BYTES = 16 * 1024 * 1024;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,6 +86,8 @@ function deps(
     : null;
   // The claim's lease owner; every later write is refused without it.
   let leaseOwner: string | null = null;
+  // The model behind the crop vectors this run embedded (stored with them).
+  let imageModelVersion: string | null = null;
 
   return {
     claim: async (limit) => {
@@ -165,6 +170,7 @@ function deps(
     embedImages: inference
       ? async (inputs) => {
         const response = await inference.embedImage(inputs);
+        imageModelVersion = response.model_version;
         return new Map(response.vectors.map((vector) => [vector.id, vector.v]));
       }
       : null,
@@ -251,6 +257,71 @@ function deps(
           rank: Number(row.rank),
           layer: row.layer ?? null,
         }));
+      },
+      imageKnn: async (importId, vector, limit, category) => {
+        const rows = await rpc<KnnHit[] | null>(admin, "board_deck_import_match_image_knn", {
+          p_import_id: importId,
+          p_embedding: toPgVector(vector),
+          p_limit: limit,
+          p_category: category,
+        });
+        return (rows ?? []).map((row) => ({
+          product_id: row.product_id,
+          rank: Number(row.rank),
+          layer: row.layer ?? null,
+          source: row.source ?? null,
+        }));
+      },
+      phashMatch: async (importId, phash, maxDistance, limit) => {
+        const rows = await rpc<PhashHit[] | null>(admin, "board_deck_import_match_phash", {
+          p_import_id: importId,
+          p_phash: phash,
+          p_max_distance: maxDistance,
+          p_limit: limit,
+        });
+        return (rows ?? []).map((row) => ({
+          product_id: row.product_id,
+          distance: Number(row.distance),
+          layer: row.layer ?? null,
+          source: row.source ?? null,
+        }));
+      },
+      // The URL is one this function just signed on the board bucket.
+      cropSignature: async (url) => {
+        const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+        if (!response.ok) {
+          await response.body?.cancel();
+          return null;
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        return bytes.length > 0 && bytes.length <= CROP_MAX_BYTES ? await cropSignature(bytes) : null;
+      },
+      storeCrop: async (itemId, crop) => {
+        if (!imageModelVersion) return;
+        await rpc(admin, "store_board_deck_import_crop_signature", {
+          p_item_id: itemId,
+          p_lease_owner: leaseOwner,
+          p_image_hash: crop.image_hash,
+          p_phash: crop.phash,
+          p_vector: toPgVector(crop.vector),
+          p_model_version: imageModelVersion,
+        });
+      },
+      suppressed: async (itemIds) => {
+        const out = new Map<string, Set<string>>();
+        if (itemIds.length === 0) return out;
+        const { data, error } = await admin
+          .from("board_deck_import_items")
+          .select("id, suppressed:evidence->suppressed")
+          .in("id", itemIds);
+        if (error) throw new Error(`suppressed: ${error.message}`);
+        for (const row of (data ?? []) as any[]) {
+          const ids = (Array.isArray(row.suppressed) ? row.suppressed : [])
+            .map((entry: any) => entry?.product_id)
+            .filter((id: unknown): id is string => typeof id === "string");
+          if (ids.length) out.set(row.id, new Set(ids));
+        }
+        return out;
       },
     },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),

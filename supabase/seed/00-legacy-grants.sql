@@ -18966,6 +18966,102 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.product_image_vectors FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.product_image_vectors TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.product_image_vectors TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.replace_product_image_vectors(uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.replace_product_image_vectors(uuid, text, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_row_studio_visible(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_deck_import_match_image_knn(uuid, vector, integer, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_deck_import_match_phash(uuid, bigint, integer, integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.board_deck_import_match_image_knn(uuid, vector, integer, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.board_deck_import_match_phash(uuid, bigint, integer, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.board_deck_import_crop_signatures FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.board_deck_import_crop_signatures TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.store_board_deck_import_crop_signature(uuid, text, text, bigint, vector, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.store_board_deck_import_crop_signature(uuid, text, text, bigint, vector, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_board_studio(uuid, uuid) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00681_product_image_vectors.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._board_deck_import_teach() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00682_board_deck_import_review_fixes.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.release_board_deck_import_items(text, uuid[]) FROM PUBLIC, anon, authenticated;

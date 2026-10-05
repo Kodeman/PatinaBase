@@ -21,15 +21,23 @@ export const THRESHOLDS = {
  *  the labelled crop set; any change bumps `threshold_version`. Cosine on
  *  /embed/image vectors; the designer sees words and order, never numbers. */
 export const LOOK_THRESHOLDS = {
-  threshold_version: 'deck-look-v0-placeholder',
+  threshold_version: 'deck-look-v1-placeholder',
   /** τ_likely: top kNN hit similarity for "likely". */
   likely: 0.85,
   /** τ_margin: top1 − top2 for "likely". */
   margin: 0.03,
   /** τ_look: page photo vs deck crop agree at or above this. */
   pageAgrees: 0.8,
+  /** T1 exact (W5): the crop's image-only cosine to a product picture at or
+   *  above τ_exact is "strong". Kept clear of 1.0: int8 inference drifts the
+   *  same picture to ≈0.9966 across batchings (aesthete-inference README). */
+  exact: 0.95,
+  /** T1 exact (W5): dHash Hamming distance (of 64 bits) at or below this is
+   *  "strong" (phash.ts). */
+  exactHamming: 6,
   /** Hits from the fused 0.65 image / 0.35 caption aesthete_vector are never
-   *  better than this band until image-only vectors land (contract, W5). */
+   *  better than this band; image-only hits (product_image_vectors) are
+   *  preferred whenever a product has them (contract, W5). */
   fusedCap: 'possible' as const,
   /** Look hits shown per piece. */
   shown: 3,

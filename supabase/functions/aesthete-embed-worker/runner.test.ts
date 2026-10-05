@@ -59,6 +59,7 @@ interface FakeDbOptions {
   products: ProductRow[];
   dna?: DnaRow[];
   failUpdateFor?: string[];
+  failImageWriteFor?: string[];
 }
 
 function makeFakeDb(opts: FakeDbOptions) {
@@ -66,6 +67,7 @@ function makeFakeDb(opts: FakeDbOptions) {
   const claims: { kind: string; batch: number }[] = [];
   const completions: { id: number; status: string; reason: string | null }[] = [];
   const updates: { table: string; id: string; patch: Record<string, unknown> }[] = [];
+  const imageWrites: { product: string; model: string; rows: { image_hash: string; vector: string }[] }[] = [];
 
   const db = {
     rpc(fn: string, args?: Record<string, unknown>) {
@@ -83,6 +85,18 @@ function makeFakeDb(opts: FakeDbOptions) {
           reason: (args?.p_error as string | null) ?? null,
         });
         return Promise.resolve({ data: null, error: null });
+      }
+      if (fn === 'replace_product_image_vectors') {
+        const product = String(args?.p_product_id);
+        if (opts.failImageWriteFor?.includes(product)) {
+          return Promise.resolve({ data: null, error: { message: 'image write boom' } });
+        }
+        imageWrites.push({
+          product,
+          model: String(args?.p_model_version),
+          rows: args?.p_rows as { image_hash: string; vector: string }[],
+        });
+        return Promise.resolve({ data: (args?.p_rows as unknown[]).length, error: null });
       }
       return Promise.resolve({ data: null, error: { message: `unknown rpc ${fn}` } });
     },
@@ -113,7 +127,7 @@ function makeFakeDb(opts: FakeDbOptions) {
     },
   };
 
-  return { db, events, claims, completions, updates };
+  return { db, events, claims, completions, updates, imageWrites };
 }
 
 const CAPTION_VEC = [0, 0, 1];
@@ -263,6 +277,59 @@ Deno.test('embed_fused: fuses 0.65·mean(images) + 0.35·caption, writes vector 
   assertAlmostEquals(Math.hypot(...v), 1, 1e-12);
   assertEquals(fake.completions, [{ id: j.id, status: 'done', reason: null }]);
   assertEquals(r.kinds.embed_fused, { claimed: 1, done: 1, failed: 0 });
+});
+
+async function hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+Deno.test('embed_fused keeps each embedded picture vector in product_image_vectors (00681)', async () => {
+  const p = product('p7', {
+    images: ['https://img.test/a.jpg', 'https://img.test/dead.jpg', 'https://img.test/c.jpg'],
+  });
+  const j = job('embed_fused', 'p7');
+  const fake = makeFakeDb({ jobs: { embed_fused: [j] }, products: [p] });
+  const inf = makeFakeInference({
+    imageVec: (input) =>
+      input.url.includes('dead') ? { error: 'fetch 404' } : input.url.endsWith('a.jpg') ? [1, 0, 0] : [0, 1, 0],
+    textVec: () => CAPTION_VEC,
+  });
+  const r = await run(fake, inf).result;
+
+  // Fused math unchanged: the two embedded pictures + caption.
+  assertEquals(fake.updates[0].patch.aesthete_vector, toPgVector(fuseVectors([[1, 0, 0], [0, 1, 0]], CAPTION_VEC)));
+  // One write for the product, one row per embedded picture, keyed by sha256(url).
+  assertEquals(fake.imageWrites, [{
+    product: 'p7',
+    model: MODEL,
+    rows: [
+      { image_hash: await hex('https://img.test/a.jpg'), vector: toPgVector([1, 0, 0]) },
+      { image_hash: await hex('https://img.test/c.jpg'), vector: toPgVector([0, 1, 0]) },
+    ],
+  }]);
+  assertEquals(fake.completions, [{ id: j.id, status: 'done', reason: null }]);
+  assertEquals(r.kinds.embed_fused, { claimed: 1, done: 1, failed: 0 });
+});
+
+Deno.test('embed_fused: a caption-only product clears its picture rows; a failed write retries the job', async () => {
+  const bare = product('p8', { images: [] });
+  const flaky = product('p9');
+  const jBare = job('embed_fused', 'p8');
+  const jFlaky = job('embed_fused', 'p9');
+  const fake = makeFakeDb({
+    jobs: { embed_fused: [jBare, jFlaky] },
+    products: [bare, flaky],
+    failImageWriteFor: ['p9'],
+  });
+  const inf = makeFakeInference({ textVec: () => CAPTION_VEC });
+  await run(fake, inf).result;
+
+  assertEquals(fake.imageWrites, [{ product: 'p8', model: MODEL, rows: [] }]);
+  const byId = new Map(fake.completions.map((c) => [c.id, c]));
+  assertEquals(byId.get(jBare.id)?.status, 'done');
+  assertEquals(byId.get(jFlaky.id)?.status, 'failed');
+  assertStringIncludes(byId.get(jFlaky.id)?.reason ?? '', 'image vectors write failed: image write boom');
 });
 
 Deno.test('embed_fused caps at 3 images per product', async () => {
