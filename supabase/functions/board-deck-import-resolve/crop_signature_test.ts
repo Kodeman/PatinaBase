@@ -51,15 +51,19 @@ Deno.test('dHash flattens transparency onto grey', () => {
   assertEquals(dHash(clear, 9, 8), dHash(grey, 9, 8));
 });
 
-Deno.test('cropSignature: a WebP crop decodes; recompression and half size stay within τ_hamming, a mirror does not', async () => {
+Deno.test('cropSignature: a WebP crop decodes; recompression and half size stay near, a mirror does not', async () => {
   const lossy = await cropSignature(LOSSY);
   const small = await cropSignature(SMALL);
   const mirrored = await cropSignature(MIRRORED);
   assertEquals(lossy.image_hash, await sha256Hex(LOSSY));
   assert(lossy.phash && small.phash && mirrored.phash, 'every WebP fixture hashed');
-  assert(hamming(BigInt(lossy.phash), TRUTH) <= LOOK_THRESHOLDS.exactHamming, 'q60 recompression is exact');
-  assert(hamming(BigInt(small.phash), TRUTH) <= LOOK_THRESHOLDS.exactHamming, 'half size is exact');
-  assert(hamming(BigInt(mirrored.phash), TRUTH) > LOOK_THRESHOLDS.exactHamming * 2, 'a mirrored picture is not');
+  // dHash's own robustness, not τ_hamming: SQ-362 set τ_hamming to 0 because
+  // plain-background product photos collide within a few bits.
+  const near = 6;
+  assert(LOOK_THRESHOLDS.exactHamming <= near, 'τ_hamming never admits more than dHash tolerates');
+  assert(hamming(BigInt(lossy.phash), TRUTH) <= near, 'q60 recompression stays near');
+  assert(hamming(BigInt(small.phash), TRUTH) <= near, 'half size stays near');
+  assert(hamming(BigInt(mirrored.phash), TRUTH) > near * 2, 'a mirrored picture is not');
 });
 
 Deno.test('cropSignature: bytes that are not WebP keep their sha256 and get no phash', async () => {
