@@ -95,6 +95,21 @@ Deno.test("media resolver accepts only exact bounded frozen derivative records",
   );
 });
 
+Deno.test("media resolver accepts any canonical hex uuid like Postgres, not just RFC 4122", () => {
+  const v0EditionId = "b0000000-0000-0000-0000-0000000000d1";
+  assertEquals(parseMediaRequest({ editionId: v0EditionId }), {
+    action: "resolve",
+    editionId: v0EditionId,
+  });
+  assertEquals(parseMediaRequest({ editionId }), {
+    action: "resolve",
+    editionId,
+  });
+  assertEquals(parseMediaRequest({ editionId: "not-a-uuid" }), null);
+  assertEquals(editionId.slice(0, 35).length, 35);
+  assertEquals(parseMediaRequest({ editionId: editionId.slice(0, 35) }), null);
+});
+
 Deno.test("media hashes use the frozen SHA-256 representation", async () => {
   assertEquals(
     await sha256Hex(new TextEncoder().encode("x").buffer),

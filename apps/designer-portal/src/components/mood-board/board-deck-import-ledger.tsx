@@ -48,6 +48,8 @@ import {
 
 type ActsMode = 'idle' | 'swap' | 'link' | 'pick';
 
+export const EVERY_PICTURE_TAKEN = 'Every picture on this slide is already a piece';
+
 const price = (cents: number | null) =>
   cents == null ? null : `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 
@@ -62,16 +64,27 @@ function deckOf(pin: EditableMoodBoardItem): { import_id?: unknown; slide_index?
   return deck && typeof deck === 'object' ? (deck as Record<string, unknown>) : {};
 }
 
-/** Her pictures on one slide that a link could still take. */
+/** A picture piece Keep can still fold a link into (00682): product, undecided. */
+const FOLDABLE_STATES = new Set<string>(['pending', 'found', 'not_found']);
+
+/**
+ * Her pictures on one slide that a link could still take. With the import's
+ * pieces, a picture another piece already owns (kept, reference, or not a
+ * product) is left out: Keep would refuse it (pin_taken).
+ */
 export function slideCrops(
   pins: readonly EditableMoodBoardItem[],
   importId: string,
   slideIndex: number,
+  items: readonly DeckImportItem[] = [],
 ): EditableMoodBoardItem[] {
+  const owners = new Map(items.filter((i) => i.boardItemId).map((i) => [i.boardItemId!, i]));
   return pins.filter((pin) => {
     const deck = deckOf(pin);
+    const owner = owners.get(pin.id);
     return deck.import_id === importId && deck.slide_index === slideIndex &&
-      (pin.type === 'capture' || pin.type === 'image') && deck.state !== 'kept' && Boolean(cropUrl(pin));
+      (pin.type === 'capture' || pin.type === 'image') && deck.state !== 'kept' && Boolean(cropUrl(pin)) &&
+      (!owner || (owner.role === 'product' && FOLDABLE_STATES.has(owner.state)));
   });
 }
 
@@ -85,6 +98,7 @@ export function DeckPieceActs({
   products,
   decisions,
   pins,
+  items,
   mode: controlledMode,
   onModeChange,
   pickIndex = 0,
@@ -94,6 +108,8 @@ export function DeckPieceActs({
   products: DeckProductMap;
   decisions: DeckImportDecisions;
   pins: readonly EditableMoodBoardItem[];
+  /** The import's pieces: "Which picture?" leaves out pictures already taken. */
+  items?: readonly DeckImportItem[];
   mode?: ActsMode;
   onModeChange?: (mode: ActsMode) => void;
   pickIndex?: number;
@@ -109,7 +125,7 @@ export function DeckPieceActs({
   const error = decisions.error?.itemId === item.id ? decisions.error.message : null;
   const shown = shownCandidate(item);
   const alternates = item.candidates.filter((c) => c !== shown).slice(0, 2);
-  const crops = state === 'needs_picture' ? slideCrops(pins, item.importId, item.slideIndex) : [];
+  const crops = state === 'needs_picture' ? slideCrops(pins, item.importId, item.slideIndex, items) : [];
 
   if (state === 'finding') {
     return <p className="font-mono text-[10px] text-[var(--text-muted)]">{DECK_REVIEW_COPY.finding}</p>;
@@ -206,7 +222,13 @@ export function DeckPieceActs({
       {mode === 'pick' && (
         <div className="flex flex-wrap gap-1 border-t border-[var(--border-default)] pt-2" role="listbox" aria-label="Her pictures on this slide">
           {crops.length === 0 && (
-            <p className="text-[11px] text-[var(--text-muted)]">No pictures left on this slide.</p>
+            <div className="space-y-1" data-deck-no-free-picture>
+              <p className="text-[11px] text-[var(--text-muted)]">{EVERY_PICTURE_TAKEN}</p>
+              <div className="flex flex-wrap gap-1">
+                {act(DECK_REVIEW_COPY.pasteLink, () => setMode('link'), { key: 'pick-paste-link' })}
+                {act(DECK_REVIEW_COPY.keepAsReference, () => void decisions.reference(item), { key: 'pick-reference' })}
+              </div>
+            </div>
           )}
           {crops.map((pin, index) => (
             <button
@@ -378,7 +400,7 @@ export function BoardDeckImportLedger({
     const target = event.target as HTMLElement;
     if (target.matches('input, textarea, select') || target.isContentEditable) return;
     if (event.metaKey || event.ctrlKey || event.altKey || !activeItem) return;
-    const crops = mode === 'pick' ? slideCrops(pins, activeItem.importId, activeItem.slideIndex) : [];
+    const crops = mode === 'pick' ? slideCrops(pins, activeItem.importId, activeItem.slideIndex, items) : [];
     const handled = (() => {
       switch (event.key) {
         case 'j':
@@ -521,6 +543,7 @@ export function BoardDeckImportLedger({
                           products={products}
                           decisions={decisions}
                           pins={pins}
+                          items={items}
                           mode={isActive ? mode : 'idle'}
                           onModeChange={(next) => {
                             activate(index);

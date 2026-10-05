@@ -238,7 +238,7 @@ function categoryOf(extracted: Record<string, unknown>): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-const isPageRead = (c: Pick<Candidate, 'source' | 'evidence'>) =>
+export const isPageRead = (c: Pick<Candidate, 'source' | 'evidence'>) =>
   c.source === 'link' && c.evidence?.page_read === true;
 
 async function embedAll(

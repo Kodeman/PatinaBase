@@ -8,6 +8,7 @@ import {
   type ClaimedItem,
   FetchBlocked,
   finalizeCandidates,
+  foundByOf,
   isTransientAdjudicationError,
   readCaption,
   readLinks,
@@ -15,6 +16,7 @@ import {
   runResolve,
 } from './core.ts';
 import { isDeniedLink, nameFromSlug, normalizeProductUrl } from './links.ts';
+import { nameOverlap, PAIR_NAME_MIN_OVERLAP } from './pairing.ts';
 import { LIMITS } from './thresholds.ts';
 
 const IMPORT = '11111111-1111-4111-8111-111111111111';
@@ -711,4 +713,157 @@ Deno.test('pairing: slide links stay on their slide; deck links pair deck-wide',
   // S is a slide-1 link: no slide-1 crop, so it stays unassigned even though
   // the slide-3 crop matches. D is deck-level and pairs anywhere.
   assertEquals(f.paired.map((p) => [p.link, p.picture]), [['item-D', 'pic-slide5']]);
+});
+
+// ─── Unanchored links pair onto their picture (SQ-384) ───────────────────────
+
+const CHAIR = 'https://shop.example/products/reading-chair';
+const notesLink = (key: string, url: string, extra: Record<string, unknown> = {}) =>
+  linkItem(key, url, { links: [{ url, source: 'notes', on_picture: false }], ...extra });
+const readingChair = () => [
+  item('P1', { caption: { name: 'Reading Chair' } }),
+  notesLink('L1', CHAIR),
+];
+const chairPage = { [CHAIR]: productHtml('Reading Chair', '900', 'https://cdn.shop.example/chair.jpg') };
+const chairWords = { 'Reading Chair': [{ product_id: 'prod-words', score: 0.9 }] };
+const solePicture = (extra: Record<string, unknown> = {}) => ({
+  item_id: 'item-P1',
+  slide_index: 1,
+  image_url: 'https://signed/p1',
+  state: 'found',
+  caption: { caption: { name: 'Reading Chair' } },
+  slide_pictures: 1,
+  ...extra,
+});
+
+Deno.test('anchored: a notes link joins the sole picture found by words; one piece, found_by link, paired 1', async () => {
+  const f = fake(readingChair(), {
+    pages: chairPage,
+    words: chairWords,
+    pairablePictures: async () => [solePicture()],
+  });
+  const summary = await runResolve(f.deps);
+  // The picture was settled by its caption first.
+  assertEquals(recordFor(f, 'P1').foundBy, 'words');
+  assertEquals(summary.paired, 1);
+  assertEquals(f.paired.map((p) => [p.link, p.picture]), [['item-L1', 'item-P1']]);
+  const candidates = f.paired[0].candidates;
+  assertEquals(foundByOf(candidates), 'link');
+  assertEquals(candidates[0].source, 'link');
+  assertEquals(candidates[0].extracted?.name, 'Reading Chair');
+  assertEquals(candidates[0].evidence.paired_by, 'sole_picture');
+  // No embedder: the og:image check could not run, so likely, never strong.
+  assertEquals(candidates[0].band, 'likely');
+});
+
+Deno.test('anchored: the og:image check decides strong (agrees) or likely (disagrees)', async () => {
+  for (const [crop, band] of [[[1, 0], 'strong'], [[0, 1], 'likely']] as const) {
+    const f = fake(readingChair(), {
+      pages: chairPage,
+      words: chairWords,
+      pairablePictures: async () => [solePicture()],
+      embedImages: async (inputs) => {
+        const v: Record<string, number[]> = { 'link:item-L1': [1, 0], 'crop:item-P1': [...crop] };
+        return new Map(inputs.map((i) => [i.id, v[i.id]]));
+      },
+    });
+    const summary = await runResolve(f.deps);
+    assertEquals(summary.paired, 1);
+    assertEquals(f.paired[0].candidates[0].band, band);
+    assertEquals(f.paired[0].candidates[0].evidence.look_checked, true);
+  }
+});
+
+Deno.test('anchored: a notes link with two pictures and no name match stays a notes-only piece', async () => {
+  const f = fake(readingChair(), {
+    pages: chairPage,
+    words: chairWords,
+    pairablePictures: async () => [
+      solePicture({ caption: { caption: { name: 'Arc Floor Lamp' } }, slide_pictures: 2 }),
+      { item_id: 'item-P2', slide_index: 1, image_url: 'https://signed/p2', state: 'not_found', caption: {}, slide_pictures: 2 },
+    ],
+  });
+  const summary = await runResolve(f.deps);
+  assertEquals(summary.paired, 0);
+  assertEquals(f.paired, []);
+  assertEquals(recordFor(f, 'L1').state, 'found');
+});
+
+Deno.test('anchored: with two pictures, the one whose caption names the page product takes the link', async () => {
+  const f = fake(readingChair(), {
+    pages: chairPage,
+    words: chairWords,
+    pairablePictures: async () => [
+      solePicture({ slide_pictures: 2 }),
+      { item_id: 'item-P2', slide_index: 1, image_url: 'https://signed/p2', state: 'found', caption: { caption: { name: 'Arc Floor Lamp' } }, slide_pictures: 2 },
+    ],
+  });
+  const summary = await runResolve(f.deps);
+  assertEquals(summary.paired, 1);
+  assertEquals(f.paired.map((p) => [p.picture, p.candidates[0].evidence.paired_by]), [['item-P1', 'name']]);
+});
+
+Deno.test('anchored: a link on another slide, a deck link, a legend link or an unresolved link never anchors', async () => {
+  const items = [
+    item('P1', { caption: { name: 'Reading Chair' } }),
+    { ...notesLink('Other', 'https://shop.example/products/other'), slide_index: 2 },
+    notesLink('Deck', 'https://shop.example/products/deck', { deck_level: true }),
+    linkItem('Legend', 'https://shop.example/products/legend', {
+      links: [{ url: 'https://shop.example/products/legend', source: 'legend', on_picture: false }],
+    }),
+    notesLink('Dead', 'https://shop.example/products/dead'),
+  ];
+  const f = fake(items, {
+    pages: {
+      'https://shop.example/products/other': productHtml('Other', '1'),
+      'https://shop.example/products/deck': productHtml('Deck', '1'),
+      'https://shop.example/products/legend': productHtml('Legend', '1'),
+      'https://shop.example/products/dead': '<html><head><title>About us</title></head></html>',
+    },
+    words: chairWords,
+    pairablePictures: async () => [solePicture()],
+  });
+  const summary = await runResolve(f.deps);
+  assertEquals(summary.paired, 0);
+  assertEquals(f.paired, []);
+});
+
+Deno.test('anchored: a picture the SQL refuses (kept since it was listed) is never paired; the link stays', async () => {
+  const f = fake(readingChair(), {
+    pages: chairPage,
+    words: chairWords,
+    pairablePictures: async () => [solePicture()],
+    // pair_board_deck_import_link returns false for a kept, reference or merged picture.
+    pairLink: async () => false,
+  });
+  const summary = await runResolve(f.deps);
+  assertEquals(summary.paired, 0);
+  assertEquals(recordFor(f, 'L1').state, 'found');
+});
+
+Deno.test('anchored: re-running the same pieces pairs once (the link row is gone, the picture holds its link)', async () => {
+  const db = { linkAlive: true, foundBy: 'words', pairs: 0 };
+  const f = fake(readingChair(), {
+    pages: chairPage,
+    words: chairWords,
+    // 00688: a picture found by a link is no longer pairable.
+    pairablePictures: async () => (db.foundBy === 'link' ? [] : [solePicture()]),
+    pairLink: async () => {
+      if (!db.linkAlive) return false;
+      db.linkAlive = false;
+      db.foundBy = 'link';
+      db.pairs++;
+      return true;
+    },
+  });
+  assertEquals((await runResolve(f.deps)).paired, 1);
+  assertEquals((await runResolve(f.deps)).paired, 0);
+  assertEquals(db.pairs, 1);
+});
+
+Deno.test('nameOverlap: shared words over the shorter name, case-insensitive', () => {
+  assertEquals(nameOverlap('Reading Chair', 'The READING chair, oak'), 1);
+  assertEquals(nameOverlap('Arc Floor Lamp', 'Reading Chair'), 0);
+  assert(nameOverlap('Hay Reading Lounge Chair', 'Reading Lamp') < PAIR_NAME_MIN_OVERLAP);
+  assertEquals(nameOverlap('', 'Chair'), 0);
 });

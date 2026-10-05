@@ -5,7 +5,7 @@ export const MAX_PREPARE_SOURCE_BYTES = 10 * 1024 * 1024;
 const REVIEW_BUCKET = "project-review-media";
 const WORKING_BUCKET = "project-ffe-working";
 const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const DERIVATIVE_KINDS = new Set(["thumbnail", "display", "print"]);
 const MAX_RASTER_DIMENSION = 100_000;
