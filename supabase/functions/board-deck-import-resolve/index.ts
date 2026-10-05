@@ -149,7 +149,14 @@ function deps(
       });
     },
     pairablePictures: async (importId) => {
-      const rows = await rpc<{ item_id: string; slide_index: number; image_url: string }[]>(
+      const rows = await rpc<{
+        item_id: string;
+        slide_index: number;
+        image_url: string;
+        state?: string;
+        caption?: Record<string, unknown>;
+        slide_pictures?: number;
+      }[]>(
         admin,
         "board_deck_import_pairable_pictures",
         { p_import_id: importId },
@@ -161,7 +168,14 @@ function deps(
         if (!path) continue;
         const signed = await admin.storage.from(BOARD_ASSET_BUCKET).createSignedUrl(path, SIGNED_CROP_SECONDS);
         if (signed.error || !signed.data?.signedUrl) continue;
-        out.push({ item_id: row.item_id, slide_index: row.slide_index, image_url: signed.data.signedUrl });
+        out.push({
+          item_id: row.item_id,
+          slide_index: row.slide_index,
+          image_url: signed.data.signedUrl,
+          state: row.state,
+          caption: row.caption,
+          slide_pictures: row.slide_pictures == null ? undefined : Number(row.slide_pictures),
+        });
       }
       return out;
     },
