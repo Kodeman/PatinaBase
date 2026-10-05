@@ -1,6 +1,7 @@
 import path from "path";
 import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
 import { psqlRun, psqlScalar } from "../helpers/psql";
+import { PROJECT_ID, ensureDeckProject } from "./deck-helpers";
 
 /**
  * US-15 W2 — "Lay it out": a fixture deck (SQ-356) brought into an empty
@@ -22,7 +23,6 @@ const DECK_PATH = path.resolve(
   "../../src/lib/deck-import/__fixtures__/structure.pptx",
 );
 const PROPOSAL_ID = "d0c10000-0000-0000-0000-0000000000b2";
-const PROJECT_ID = "b0000000-0000-0000-0000-0000000000d1";
 
 interface Leg {
   label: string;
@@ -47,6 +47,7 @@ const LEGS: Leg[] = [
 ];
 
 function seedEmptyBoard(leg: Leg): void {
+  ensureDeckProject();
   psqlRun(`
 BEGIN;
 DELETE FROM public.proposal_boards WHERE id = '${leg.boardId}'::uuid;
@@ -140,7 +141,7 @@ test.describe("Bring in a deck — Lay it out", () => {
         expect(names.length).toBeGreaterThan(0);
         expect(mismatchedSlideSections(leg)).toBe(0);
         for (const name of names) {
-          await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+          await expect(page.getByRole("textbox", { name: `Rename ${name} section` })).toHaveValue(name);
         }
         await expect(page.getByText(/Laying out · slide/)).toBeHidden({ timeout: 30_000 });
 
@@ -159,7 +160,7 @@ test.describe("Bring in a deck — Lay it out", () => {
         await openBoard(page, leg);
         expect(sectionNames(leg)).toEqual(names);
         for (const name of names) {
-          await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+          await expect(page.getByRole("textbox", { name: `Rename ${name} section` })).toHaveValue(name);
         }
         await expect(page.locator("[data-board-item-id]")).not.toHaveCount(0);
       } finally {

@@ -2,6 +2,7 @@ import path from "path";
 import { test, expect, type AuthenticatedPage } from "../fixtures/auth";
 import { psqlRun } from "../helpers/psql";
 import { adminDb } from "../helpers/supabase-admin";
+import { PROJECT_ID, ensureDeckProject, openDocLine } from "./deck-helpers";
 
 /**
  * US-15 W3 — review → schedule on a project board: lay a fixture deck out,
@@ -23,11 +24,11 @@ const DECK_PATH = path.resolve(
   __dirname,
   "../../src/lib/deck-import/__fixtures__/structure.pptx",
 );
-const PROJECT_ID = "b0000000-0000-0000-0000-0000000000d1";
 const BOARD_ID = "e2e00000-0000-4000-8000-0000000015c1";
 const BOARD_NAME = "Deck review project board";
 
 function seedEmptyBoard(): void {
+  ensureDeckProject();
   psqlRun(`
 BEGIN;
 DELETE FROM public.proposal_boards WHERE id = '${BOARD_ID}'::uuid;
@@ -115,9 +116,15 @@ test.describe("Bring in a deck — review to schedule", () => {
         .toBeGreaterThan(0);
       const pieces = await importPieces();
 
-      // Stand in for the resolver: a strong link candidate per piece.
+      // Stand in for the resolver: a strong link candidate per piece. A
+      // record needs the piece's lease (00678), so take it first — the real
+      // resolver may be serving locally too, and the stand-in records last.
       for (const [index, piece] of pieces.entries()) {
+        psqlRun(`UPDATE public.board_deck_import_items
+  SET lease_owner = 'e2e-review-stand-in', lease_until = now() + interval '5 minutes'
+  WHERE id = '${piece.id}'::uuid`);
         const { error } = await adminDb.rpc("record_board_deck_import_resolution", {
+          p_lease_owner: "e2e-review-stand-in",
           p_item_id: piece.id,
           p_state: "found",
           p_found_by: "link",
@@ -176,9 +183,7 @@ test.describe("Bring in a deck — review to schedule", () => {
       }
 
       // The existing per-vendor OrderAssistant is reachable and enabled.
-      await page.goto(`/doc/${PROJECT_ID}`, { waitUntil: "domcontentloaded" });
-      const name = (lines ?? [])[0]?.name as string;
-      await page.getByText(name, { exact: true }).first().click();
+      await openDocLine(page, (lines ?? [])[0]?.name as string);
       await expect(
         page.getByRole("button", { name: "Order with Assistant" }).first(),
       ).toBeEnabled({ timeout: 15_000 });
