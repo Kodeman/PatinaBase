@@ -32988,6 +32988,7 @@ export type Database = {
           slide_index: number
           slide_title: string | null
           state: string
+          taught_studio_id: string | null
           updated_at: string
         }
         SetofOptions: {
