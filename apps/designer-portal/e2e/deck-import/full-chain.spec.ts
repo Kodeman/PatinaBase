@@ -108,10 +108,8 @@ test.describe("Bring in a deck — full chain", () => {
         .toBeVisible({ timeout: 20_000 });
 
       // The notes-only link pairs onto the slide's one picture: the picture
-      // piece is found by its link, and she keeps it like any link row.
-      // Before SQ-384 the link lands unpaired (needs_picture) and the picker
-      // offers a picture another piece already holds (keep → pin_taken).
-      test.fixme(notesRow!.boardItemId == null, "waits on SQ-384");
+      // piece is found by its link, and she keeps it like any link row (SQ-384).
+      expect(notesRow!.boardItemId, "the notes-only link paired onto the slide's picture").not.toBeNull();
       expect(notesRow!.foundBy).toBe("link");
       const notesRowEl = ledger.locator(`[data-deck-row="${notesRow!.id}"]`);
       await notesRowEl.locator('[data-deck-act="keep"]').click();
