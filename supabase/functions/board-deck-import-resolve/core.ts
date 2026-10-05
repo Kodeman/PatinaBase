@@ -754,7 +754,7 @@ export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
   });
 
   // T2 and the og:image look-check, before record: the lease still holds.
-  await applyLookTier(resolved, deps, summary.look);
+  await applyLookTier(resolved, deps, summary.look, pastDeadline);
 
   await pool(resolved, LIMITS.runConcurrency, async ({ view, outcome }) => {
     const item = view.item;

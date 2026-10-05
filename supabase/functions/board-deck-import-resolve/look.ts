@@ -184,7 +184,12 @@ async function embedAll(
  * The look tier for one run: updates the outcomes in place (candidates,
  * state) before they are recorded.
  */
-export async function applyLookTier(entries: LookEntry[], deps: LookRunDeps, summary: LookSummary): Promise<void> {
+export async function applyLookTier(
+  entries: LookEntry[],
+  deps: LookRunDeps,
+  summary: LookSummary,
+  pastDeadline: () => boolean = () => false,
+): Promise<void> {
   const look = deps.look ?? null;
   if (!look) return;
   const pictures = entries.filter(({ view, outcome }) =>
@@ -217,11 +222,13 @@ export async function applyLookTier(entries: LookEntry[], deps: LookRunDeps, sum
     summary.status = unavailable ? 'unavailable' : 'ran';
   };
 
+  // Past the run's start budget the pieces are recorded as they stand, so
+  // the run still ends inside the pg_net window and the lease.
   const embed = deps.embedImages;
-  if (!embed || !(await look.healthy().catch(() => false))) {
+  if (pastDeadline() || !embed || !(await look.healthy().catch(() => false))) {
     unavailable = true;
     settle();
-    deps.log('look_unavailable', { reason: embed ? 'unhealthy' : 'not_configured' });
+    deps.log('look_unavailable', { reason: pastDeadline() ? 'out_of_time' : embed ? 'unhealthy' : 'not_configured' });
     return;
   }
 
@@ -269,7 +276,7 @@ export async function applyLookTier(entries: LookEntry[], deps: LookRunDeps, sum
     }
 
     // T2: no strong candidate (after the check) and a big enough library.
-    if (gates.get(item.import_id)!.knn && !list.some((c) => c.band === 'strong')) {
+    if (gates.get(item.import_id)!.knn && !list.some((c) => c.band === 'strong') && !pastDeadline()) {
       try {
         const hits = await look.knn(item.import_id, crop, LOOK_THRESHOLDS.knnLimit, categoryOf(item.extracted));
         const matches = bandLook(hits, { fused: true });

@@ -275,6 +275,23 @@ Deno.test('og:image look-check: agreement keeps the band and marks look_checked'
   assertEquals(f.calls.knn ?? 0, 0);
 });
 
+Deno.test('past the start budget: no probe, no embed; pieces recorded as they stand', async () => {
+  let clock = 0;
+  const f = fake([picture('p1', { caption: { name: 'Cove sofa' } })], { knn: hits });
+  const summary = await runResolve({
+    ...f.deps,
+    now: () => clock,
+    searchWords: async () => {
+      clock = 10 * 60_000; // the words tier ran long
+      return [{ product_id: 'words-x', score: 0.4 }];
+    },
+  });
+  assertEquals(f.calls.healthy ?? 0, 0);
+  assertEquals(f.calls.embed ?? 0, 0);
+  assertEquals(f.recorded[0].foundBy, 'words');
+  assertEquals(summary.look.status, 'unavailable');
+});
+
 Deno.test('no look deps: the run is links and words only', async () => {
   const f = fake([picture('p1')], { noLook: true, knn: hits });
   const summary = await runResolve(f.deps);
