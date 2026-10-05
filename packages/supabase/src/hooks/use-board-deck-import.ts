@@ -176,6 +176,9 @@ export function useRegisterBoardDeckImport() {
     },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: deckImportKeys.items(result.importId) });
+      // The board's import query read null before this deck existed and does
+      // not poll a null; refetch it so the room head can follow the import.
+      qc.invalidateQueries({ queryKey: [...deckImportKeys.all, 'board'] });
     },
   });
 }
