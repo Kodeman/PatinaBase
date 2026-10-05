@@ -305,8 +305,9 @@ BEGIN
     ASSERT NOT has_function_privilege('authenticated', v_fn, 'EXECUTE'), v_fn || ': authenticated cannot execute';
     ASSERT has_function_privilege('service_role', v_fn, 'EXECUTE'), v_fn || ': service_role can execute';
     ASSERT (SELECT prosecdef FROM pg_proc WHERE oid = v_fn::regprocedure), v_fn || ': SECURITY DEFINER';
-    ASSERT (SELECT 'search_path=public, extensions, pg_temp' = ANY (proconfig)
-            FROM pg_proc WHERE oid = v_fn::regprocedure), v_fn || ': pinned search_path';
+    ASSERT (SELECT bool_or(setting ~ '^search_path=public, (extensions, )?pg_temp$')
+            FROM pg_proc, unnest(proconfig) AS setting WHERE oid = v_fn::regprocedure),
+      v_fn || ': pinned search_path';
   END LOOP;
   ASSERT has_function_privilege('authenticated',
     'public.register_board_deck_import(uuid, text, text, jsonb)', 'EXECUTE'), 'register stays callable';
