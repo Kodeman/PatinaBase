@@ -356,12 +356,16 @@ export async function applyLookTier(
 
     // The crop's signature: its dHash feeds T1, and it is kept for the piece
     // so a later Keep can teach it (00681). Neither failure stops the tiers.
+    // Past the deadline it is skipped, as the kNN tiers are: a fetch per
+    // piece could outlast the pg_net window.
     let signature: CropSignature | null = null;
-    try {
-      signature = await look.cropSignature(crops.get(item.item_id)!);
-      if (signature) await look.storeCrop(item.item_id, { ...signature, vector: crop });
-    } catch (error) {
-      deps.log('look_signature_failed', { item_id: item.item_id, error: String(error).slice(0, 200) });
+    if (!pastDeadline()) {
+      try {
+        signature = await look.cropSignature(crops.get(item.item_id)!);
+        if (signature) await look.storeCrop(item.item_id, { ...signature, vector: crop });
+      } catch (error) {
+        deps.log('look_signature_failed', { item_id: item.item_id, error: String(error).slice(0, 200) });
+      }
     }
 
     // og:image look-check on the read link candidate.

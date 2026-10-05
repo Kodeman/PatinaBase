@@ -416,6 +416,27 @@ Deno.test('every embedded crop keeps its signature for a later Keep', async () =
   ]);
 });
 
+Deno.test('past the deadline mid-run: no further crop signature fetch or store; every piece still recorded', async () => {
+  let clock = 0;
+  const f = fake([picture('p1'), picture('p2'), picture('p3')]);
+  const signed: string[] = [];
+  await runResolve({
+    ...f.deps,
+    now: () => clock,
+    look: {
+      ...f.deps.look!,
+      cropSignature: async (url) => {
+        signed.push(url);
+        clock = 10 * 60_000; // the first fetch ran long
+        return { image_hash: 'e'.repeat(64), phash: null };
+      },
+    },
+  });
+  assertEquals(signed.length, 1, 'only the piece before the deadline fetched its crop');
+  assertEquals(f.stored.map((s) => s.itemId), ['item-p1']);
+  assertEquals(f.recorded.map((r) => r.itemId).sort(), ['item-p1', 'item-p2', 'item-p3']);
+});
+
 Deno.test('a product the designer swapped away from never returns from T1 or T2', async () => {
   const f = fake([picture('p1')], {
     signature: { image_hash: 'd'.repeat(64), phash: '7' },
