@@ -142,7 +142,9 @@ INSERT INTO public.products (
    'd6811000-0000-4000-8000-000000000002', 'd6815000-0000-4000-8000-000000000001', now(),
    '{}'::jsonb, 4, 'fifty_fifty', 'seating', 'test');
 
--- Picture rows. phash values: 0 is the query; 7 differs by 3 bits; -1 by 64.
+-- Picture rows. phash values: Q = 4294967295 (popcount 32; 00686 never
+-- matches a degenerate dHash) is the query; Q # 7 = 4294967288 differs by 3
+-- bits; ~Q = -4294967296 by 64.
 INSERT INTO public.product_image_vectors (
   product_id, image_hash, vector, phash, model_version, source, studio_id, created_by
 ) VALUES
@@ -150,18 +152,18 @@ INSERT INTO public.product_image_vectors (
   ('d6816000-0000-4000-8000-000000000001', repeat('a1', 32), pg_temp.unit(0.010), NULL, 'm1', 'product_image', NULL, NULL),
   ('d6816000-0000-4000-8000-000000000001', repeat('a2', 32), pg_temp.unit(0.300), NULL, 'm1', 'product_image', NULL, NULL),
   ('d6816000-0000-4000-8000-000000000001', repeat('a3', 32) || ':d6811000-0000-4000-8000-000000000002',
-   pg_temp.unit(0.0001), 7, 'm1', 'designer_confirmed', 'd6811000-0000-4000-8000-000000000002',
+   pg_temp.unit(0.0001), 4294967288, 'm1', 'designer_confirmed', 'd6811000-0000-4000-8000-000000000002',
    'd6810000-0000-4000-8000-000000000003'),
   ('d6816000-0000-4000-8000-000000000002', repeat('b1', 32), pg_temp.unit(0.020), NULL, 'm1', 'product_image', NULL, NULL),
   ('d6816000-0000-4000-8000-000000000003', repeat('c1', 32), pg_temp.unit(0.030), NULL, 'm1', 'product_image', NULL, NULL),
   ('d6816000-0000-4000-8000-000000000004', repeat('d1', 32), pg_temp.unit(0.005), NULL, 'm1', 'product_image', NULL, NULL),
-  ('d6816000-0000-4000-8000-000000000006', repeat('e1', 32), pg_temp.unit(0.001), 0, 'm1', 'product_image', NULL, NULL),
-  ('d6816000-0000-4000-8000-000000000007', repeat('f1', 32), pg_temp.unit(0.002), 0, 'm1', 'product_image', NULL, NULL),
+  ('d6816000-0000-4000-8000-000000000006', repeat('e1', 32), pg_temp.unit(0.001), 4294967295, 'm1', 'product_image', NULL, NULL),
+  ('d6816000-0000-4000-8000-000000000007', repeat('f1', 32), pg_temp.unit(0.002), 4294967295, 'm1', 'product_image', NULL, NULL),
   -- studio A's taught crop on its bench (studio A only)
   ('d6816000-0000-4000-8000-000000000009', repeat('91', 32) || ':d6811000-0000-4000-8000-000000000001',
-   pg_temp.unit(0.040), 7, 'm1', 'designer_confirmed', 'd6811000-0000-4000-8000-000000000001',
+   pg_temp.unit(0.040), 4294967288, 'm1', 'designer_confirmed', 'd6811000-0000-4000-8000-000000000001',
    'd6810000-0000-4000-8000-000000000001'),
-  ('d6816000-0000-4000-8000-00000000000a', repeat('0a', 32), pg_temp.unit(0.003), -1, 'm1', 'product_image', NULL, NULL);
+  ('d6816000-0000-4000-8000-00000000000a', repeat('0a', 32), pg_temp.unit(0.003), -4294967296, 'm1', 'product_image', NULL, NULL);
 
 INSERT INTO public.board_deck_imports (id, board_id, created_by, source_format, file_sha256, file_name, options, status)
 VALUES
@@ -197,7 +199,7 @@ INSERT INTO piv_ctx (k, v)
 SELECT 'twin:' || imp.n || ':phash',
        COALESCE((
          SELECT jsonb_agg(jsonb_build_array(r.product_id, r.distance) ORDER BY r.ord)
-         FROM public.board_deck_import_match_phash(imp.id, 0, 6, 50)
+         FROM public.board_deck_import_match_phash(imp.id, 4294967295, 6, 50)
            WITH ORDINALITY AS r(product_id, distance, layer, source, ord)
        ), '[]'::jsonb)
 FROM (VALUES
@@ -237,13 +239,13 @@ BEGIN
            SELECT jsonb_agg(jsonb_build_array(best.product_id, best.distance)
                             ORDER BY best.distance, best.product_id)
            FROM (
-             SELECT picture.product_id, min(bit_count((picture.phash # 0::bigint)::bit(64)))::integer AS distance
+             SELECT picture.product_id, min(bit_count((picture.phash # 4294967295::bigint)::bit(64)))::integer AS distance
              FROM public.product_image_vectors AS picture
              JOIN public.products AS product ON product.id = picture.product_id
              WHERE picture.phash IS NOT NULL
                AND product.deleted_at IS NULL AND product.merged_into_id IS NULL
              GROUP BY picture.product_id
-             HAVING min(bit_count((picture.phash # 0::bigint)::bit(64))) <= 6
+             HAVING min(bit_count((picture.phash # 4294967295::bigint)::bit(64))) <= 6
            ) AS best
          ), '[]'::jsonb);
 END;
@@ -376,14 +378,14 @@ DO $$
 BEGIN
   BEGIN
     PERFORM public.store_board_deck_import_crop_signature(
-      'd6818000-0000-4000-8000-000000000001', 'someone-else', repeat('cc', 32), 5, pg_temp.unit(0.2), 'm1');
+      'd6818000-0000-4000-8000-000000000001', 'someone-else', repeat('cc', 32), 4294967290, pg_temp.unit(0.2), 'm1');
     RAISE EXCEPTION 'a run without the lease should be refused';
   EXCEPTION WHEN lock_not_available THEN NULL;
   END;
   PERFORM public.store_board_deck_import_crop_signature(
-    'd6818000-0000-4000-8000-000000000001', 'piv-lease', repeat('cc', 32), 5, pg_temp.unit(0.2), 'm1');
+    'd6818000-0000-4000-8000-000000000001', 'piv-lease', repeat('cc', 32), 4294967290, pg_temp.unit(0.2), 'm1');
   PERFORM public.store_board_deck_import_crop_signature(
-    'd6818000-0000-4000-8000-000000000001', 'piv-lease', repeat('cc', 32), 5, pg_temp.unit(0.2), 'm1');
+    'd6818000-0000-4000-8000-000000000001', 'piv-lease', repeat('cc', 32), 4294967290, pg_temp.unit(0.2), 'm1');
   ASSERT (SELECT count(*) FROM public.board_deck_import_crop_signatures
           WHERE item_id = 'd6818000-0000-4000-8000-000000000001') = 1, 'one signature per piece';
   RAISE NOTICE 'ok 4 crop signature is lease-guarded and idempotent';
@@ -415,7 +417,7 @@ BEGIN
   ASSERT v_row.id IS NOT NULL, 'Keep teaches the kept product this crop';
   ASSERT v_row.source = 'designer_confirmed', 'source designer_confirmed';
   ASSERT v_row.studio_id = 'd6811000-0000-4000-8000-000000000001', 'scoped to the board''s studio';
-  ASSERT v_row.phash = 5 AND v_row.model_version = 'm1', 'the crop''s hash and model';
+  ASSERT v_row.phash = 4294967290 AND v_row.model_version = 'm1', 'the crop''s hash and model';
   ASSERT v_row.created_by = 'd6810000-0000-4000-8000-000000000001', 'by the keeper';
   ASSERT v_row.vector = pg_temp.unit(0.2), 'the crop''s vector';
 
@@ -423,7 +425,7 @@ BEGIN
   SELECT evidence INTO v_evidence FROM public.board_deck_import_items WHERE id = v_item;
   ASSERT v_evidence->'suppressed'->0->>'product_id' = 'd6816000-0000-4000-8000-000000000001',
     format('swap away suppresses the old product: %s', v_evidence);
-  ASSERT (v_evidence->'suppressed'->0->>'phash')::bigint = 5, 'the suppression pair carries the crop hash';
+  ASSERT (v_evidence->'suppressed'->0->>'phash')::bigint = 4294967290, 'the suppression pair carries the crop hash';
   ASSERT NOT EXISTS (SELECT 1 FROM public.product_image_vectors
                      WHERE product_id = 'd6816000-0000-4000-8000-000000000001' AND image_hash = v_hash),
     'the swapped-away product is no longer taught this crop';

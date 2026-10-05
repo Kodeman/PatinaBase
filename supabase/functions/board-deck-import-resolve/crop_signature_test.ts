@@ -2,7 +2,7 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { decodeBase64 } from 'jsr:@std/encoding@1/base64';
 import { cropSignature, isWebp, readCappedBytes, sha256Hex, WEBP_MAX_EDGE, webpDimensions } from './crop_signature.ts';
-import { dHash, hamming, toPgBigint } from './phash.ts';
+import { dHash, hamming, isDegenerateHash, toPgBigint } from './phash.ts';
 import { LOOK_THRESHOLDS } from './thresholds.ts';
 
 /** The fixture picture: smooth colour fields, so the hash has structure. */
@@ -88,6 +88,36 @@ Deno.test('webpDimensions: read from the VP8, VP8L and VP8X headers', () => {
   vp8x.set(new TextEncoder().encode('WEBPVP8X'), 8);
   vp8x.set([0xff, 0x0f, 0x00, 0x00, 0x10, 0x00], 24); // 4096 × 4097
   assertEquals(webpDimensions(vp8x), { width: 4096, height: 4097 });
+});
+
+/** A decoder returning a w × h picture of one opaque colour. */
+function solidDecode(rgb: [number, number, number], w = 64, h = 48) {
+  return () => {
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < data.length; i += 4) data.set([...rgb, 255], i);
+    return Promise.resolve({ data, width: w, height: h });
+  };
+}
+
+const SOLID_COLOURS: [string, [number, number, number]][] = [
+  ['black', [0, 0, 0]],
+  ['white', [255, 255, 255]],
+  ['colour', [180, 40, 90]],
+];
+
+Deno.test('cropSignature: a uniform crop (solid black, white, colour) gets no phash (00686 R5)', async () => {
+  const crop = vp8lHeader(64, 48);
+  for (const [name, rgb] of SOLID_COLOURS) {
+    assertEquals(await cropSignature(crop, solidDecode(rgb)), { image_hash: await sha256Hex(crop), phash: null },
+      `solid ${name}: degenerate dHash is not an identity`);
+  }
+  assert(isDegenerateHash(0n) && isDegenerateHash((1n << 64n) - 1n) && isDegenerateHash(-1n), '0 and all ones');
+  assert(isDegenerateHash(0x7fn) && !isDegenerateHash(0xffn), 'popcount 7 is degenerate, 8 is not');
+  assert(!isDegenerateHash(TRUTH), 'a picture with structure keeps its hash');
+});
+
+Deno.test('WEBP_MAX_EDGE matches the portal crop cap (designer-portal DECK_CROP_MAX_EDGE = 2048)', () => {
+  assertEquals(WEBP_MAX_EDGE, 2048);
 });
 
 Deno.test('cropSignature: a WebP declaring more than WEBP_MAX_EDGE is never decoded', async () => {
