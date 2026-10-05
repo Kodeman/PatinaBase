@@ -135,13 +135,22 @@ function usdPrice(offers: Offer[]): number | null {
   return usd.length ? Math.min(...usd) : null;
 }
 
-function imagesOf(image: any): string[] {
-  if (!image) return [];
-  if (typeof image === 'string') return [image];
-  if (Array.isArray(image)) return image.flatMap(imagesOf);
-  if (typeof image === 'object' && typeof image.url === 'string') return [image.url];
-  if (typeof image === 'object' && typeof image.contentUrl === 'string') return [image.contentUrl];
-  return [];
+/** A hostile page can list a million images; cap before any URL parsing. */
+const MAX_LD_IMAGES = 20;
+
+function imagesOf(image: any, out: string[] = []): string[] {
+  if (!image || out.length >= MAX_LD_IMAGES) return out;
+  if (typeof image === 'string') out.push(image);
+  else if (Array.isArray(image)) {
+    for (const i of image) {
+      if (out.length >= MAX_LD_IMAGES) break;
+      imagesOf(i, out);
+    }
+  } else if (typeof image === 'object' && typeof image.url === 'string') out.push(image.url);
+  else if (typeof image === 'object' && typeof image.contentUrl === 'string') {
+    out.push(image.contentUrl);
+  }
+  return out;
 }
 
 interface LdProduct {
@@ -172,10 +181,7 @@ function readLd(html: string): LdProduct | null {
       brand: brandOf(node.brand) ?? variants.map((v) => brandOf(v?.brand)).find(Boolean) ?? null,
       priceCents: usdPrice(offers),
       sku: text(node.sku) ?? text(node.mpn) ?? null,
-      images: [
-        ...imagesOf(node.image),
-        ...variants.flatMap((v) => imagesOf(v?.image)),
-      ],
+      images: variants.reduce((out, v) => imagesOf(v?.image, out), imagesOf(node.image)),
     };
   }
   return null;

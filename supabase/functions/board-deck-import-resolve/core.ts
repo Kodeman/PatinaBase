@@ -146,6 +146,8 @@ export interface ResolveDeps {
   /** SSRF-guarded page read; throws FetchBlocked on any failure. */
   fetchPage(url: string): Promise<{ html: string; finalUrl: string }>;
   record(itemId: string, state: 'found' | 'not_found' | 'pending', foundBy: FoundBy | null, candidates: Candidate[]): Promise<void>;
+  /** Hand back leased pieces this run never tried: lease cleared, the claim's attempt refunded. */
+  release(itemIds: string[]): Promise<void>;
   pairablePictures(importId: string): Promise<PairablePicture[]>;
   pairLink(linkItemId: string, pictureItemId: string, candidates: Candidate[]): Promise<boolean>;
   /** Null when the embedder is not configured. Map id → vector. */
@@ -729,16 +731,29 @@ export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
   summary.claimed = items.length;
   if (items.length === 0) return summary;
 
-  const adjudicated = await adjudicateSlides(items, deps, summary, pastDeadline);
+  // Adjudication runs alongside the pieces, under the same start budget but
+  // on its own: a slow Claude defers only the pieces on its slides.
+  let adjudicationError: unknown = null;
+  const adjudication = adjudicateSlides(items, deps, summary, pastDeadline).catch((error) => {
+    adjudicationError = error;
+    return null;
+  });
+  const claudeSlides = new Set(deps.adjudicate
+    ? items.filter((item) => readAdjudicationContext(item)).map((item) => `${item.import_id}:${item.slide_index}`)
+    : []);
+  const needsClaude = (item: ClaimedItem) => claudeSlides.has(`${item.import_id}:${item.slide_index}`);
   const gate = new HostGate(deps.sleep);
   const resolved: { view: PieceView; outcome: PieceOutcome }[] = [];
   const results: { view: PieceView; outcome: PieceOutcome }[] = [];
+  const deferred: string[] = [];
 
-  await pool(items, LIMITS.runConcurrency, async (item) => {
-    // Past the start budget nothing new begins; the lease runs out and the
-    // claim sweep backs the piece off before it is tried again.
-    if (pastDeadline()) {
+  await pool([...items.filter((i) => !needsClaude(i)), ...items.filter(needsClaude)], LIMITS.runConcurrency, async (item) => {
+    const adjudicated = needsClaude(item) ? await adjudication : new Map();
+    // Past the start budget nothing new begins, and a piece whose slide could
+    // not be adjudicated waits: either way it is handed back untried.
+    if (pastDeadline() || !adjudicated) {
       summary.deferred++;
+      deferred.push(item.item_id);
       return;
     }
     const view = viewOf(item, adjudicated.get(`${item.import_id}:${item.element_key}`));
@@ -770,6 +785,16 @@ export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
       summary.retried++;
     }
   });
+
+  if (deferred.length) {
+    try {
+      await deps.release(deferred);
+    } catch (error) {
+      // The lease runs out and the claim sweep backs the pieces off instead.
+      deps.log('release_failed', { count: deferred.length, error: String(error).slice(0, 200) });
+    }
+  }
+  if (adjudicationError) throw adjudicationError;
 
   await pairLinksByLook(results, deps, summary);
   summary.cost_usd = Math.round(summary.cost_usd * 1_000_000) / 1_000_000;

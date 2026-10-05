@@ -3,6 +3,7 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   type Budget,
+  cropOnBoard,
   FetchBlocked,
   gate,
   mergeCandidates,
@@ -10,6 +11,8 @@ import {
   readItemIds,
   responseFor,
   runWebMatch,
+  shopFor,
+  vendorDomain,
   type WebMatchDeps,
   type WebMatchItem,
 } from './core.ts';
@@ -47,6 +50,7 @@ function item(id: string, extra: Partial<WebMatchItem> = {}): WebMatchItem {
   return {
     item_id: id,
     import_id: 'import-1',
+    board_id: 'b',
     state: 'not_found',
     candidates: [],
     crop_path: `studio/boards/b/${id}.jpg`,
@@ -56,7 +60,13 @@ function item(id: string, extra: Partial<WebMatchItem> = {}): WebMatchItem {
 
 interface Harness {
   deps: WebMatchDeps;
-  calls: { budget: number[]; annotate: number; pages: string[]; records: Array<{ id: string; candidates: any[]; base: any[] }> };
+  calls: {
+    budget: number[];
+    crops: string[];
+    annotate: number;
+    pages: string[];
+    records: Array<{ id: string; candidates: any[]; base: any[] }>;
+  };
 }
 
 function harness(options: {
@@ -64,14 +74,20 @@ function harness(options: {
   response?: unknown;
   pages?: Record<string, string | Error>;
   applied?: boolean;
+  /** Crop path → base64, null (unreadable) or an Error (download threw). */
+  crops?: Record<string, string | null | Error>;
 } = {}): Harness {
-  const calls: Harness['calls'] = { budget: [], annotate: 0, pages: [], records: [] };
+  const calls: Harness['calls'] = { budget: [], crops: [], annotate: 0, pages: [], records: [] };
   const deps: WebMatchDeps = {
     consumeBudget: (n) => {
       calls.budget.push(n);
       return Promise.resolve(options.budget ?? { granted: n, resets_at: '2026-11-01T00:00:00+00:00' });
     },
-    loadCrop: () => Promise.resolve('Y3JvcA=='),
+    loadCrop: (path) => {
+      calls.crops.push(path);
+      const crop = options.crops && path in options.crops ? options.crops[path] : 'Y3JvcA==';
+      return crop instanceof Error ? Promise.reject(crop) : Promise.resolve(crop);
+    },
     annotate: () => {
       calls.annotate++;
       return Promise.resolve(options.response ?? vision([]));
@@ -276,6 +292,83 @@ Deno.test('ineligible pieces consume no budget', async () => {
   assertEquals(calls.budget, []);
   assertEquals(calls.annotate, 0);
   assertEquals(result.results.map((r) => r.reason), ['state_kept', 'state_pending', 'no_picture']);
+});
+
+// ── SQ-371 N8/N9: only a crop on this board that loads is booked ────────────
+
+Deno.test('N8: a crop stored under another board is never downloaded, booked or sent to Google', async () => {
+  const { deps, calls } = harness();
+  const result = await runWebMatch([
+    item('own'),
+    item('foreign', { crop_path: 'other-studio/boards/someone-elses-board/x.jpg' }),
+    item('flat', { crop_path: 'b/x.jpg' }),
+  ], deps);
+  assertEquals(calls.crops, ['studio/boards/b/own.jpg']);
+  assertEquals(calls.budget, [1]);
+  assertEquals(calls.annotate, 1);
+  assertEquals(result.results.map((r) => [r.status, r.reason]), [
+    ['none', undefined],
+    ['failed', 'crop_unreadable'],
+    ['failed', 'crop_unreadable'],
+  ]);
+  assertEquals(cropOnBoard('u/boards/B/x.jpg', 'b'), true);
+  assertEquals(cropOnBoard('u/boards/b2/x.jpg', 'b'), false);
+});
+
+Deno.test('N9: a crop that fails to load is not charged; the budget books only what loaded', async () => {
+  const { deps, calls } = harness({
+    crops: { 'studio/boards/b/gone.jpg': null, 'studio/boards/b/boom.jpg': new Error('storage down') },
+  });
+  const result = await runWebMatch([item('a'), item('gone'), item('boom')], deps);
+  assertEquals(calls.budget, [1]);
+  assertEquals(calls.annotate, 1);
+  assertEquals(result.calls, 1);
+  assertEquals(result.results.map((r) => r.reason), [undefined, 'crop_unreadable', 'crop_unreadable']);
+});
+
+Deno.test('N9: every crop unreadable books nothing and calls nothing', async () => {
+  const { deps, calls } = harness({ crops: { 'studio/boards/b/a.jpg': null } });
+  const result = await runWebMatch([item('a')], deps);
+  assertEquals(calls.budget, []);
+  assertEquals(calls.annotate, 0);
+  assertEquals(result.cap_reached, false);
+});
+
+Deno.test('N9: a huge JSON-LD name or brand is clamped before record', async () => {
+  const name = 'Sofa '.repeat(20_000);
+  const html = `<html><head><script type="application/ld+json">${JSON.stringify({
+    '@type': 'Product', name, brand: { name }, offers: { price: '10', priceCurrency: 'USD' },
+  })}</script></head></html>`;
+  const { deps, calls } = harness({
+    response: vision([{ url: 'https://www.wayfair.com/huge', full: true }]),
+    pages: { 'https://www.wayfair.com/huge': html },
+  });
+  await runWebMatch([item('a')], deps);
+  const [candidate] = calls.records[0].candidates;
+  assert(candidate.extracted.name.length <= 300, `name ${candidate.extracted.name.length}`);
+  assert(candidate.extracted.brand.length <= 300, `brand ${candidate.extracted.brand.length}`);
+  assert(JSON.stringify(calls.records[0].candidates).length < 65_536);
+});
+
+// ── SQ-371 N5: a vendor website cannot make a whole TLD a shop ──────────────
+
+Deno.test('N5: a bare label or public suffix is no vendor domain; a "com" vendor poisons nothing', () => {
+  assertEquals(vendorDomain('com'), null);
+  assertEquals(vendorDomain('https://www.com/'), null);
+  assertEquals(vendorDomain('co.uk'), null);
+  assertEquals(vendorDomain('https://com.au'), null);
+  assertEquals(vendorDomain('https://www.FourHands.com/about'), 'fourhands.com');
+  assertEquals(vendorDomain('maker.co.uk'), 'maker.co.uk');
+
+  const domains = new Map<string, string>();
+  for (const website of ['com', 'co.uk', 'fourhands.com']) {
+    const domain = vendorDomain(website);
+    if (domain) domains.set(domain, website);
+  }
+  assertEquals([...domains.keys()], ['fourhands.com']);
+  assertEquals(shopFor('https://attacker.com/products/sofa', domains), null);
+  assertEquals(shopFor('https://attacker.co.uk/products/sofa', domains), null);
+  assertEquals(shopFor('https://shop.fourhands.com/cove', domains), 'fourhands.com');
 });
 
 // ── HTTP edges ───────────────────────────────────────────────────────────────

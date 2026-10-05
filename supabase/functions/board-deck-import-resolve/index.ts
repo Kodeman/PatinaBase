@@ -122,6 +122,12 @@ function deps(
         p_lease_owner: leaseOwner,
       });
     },
+    release: async (itemIds) => {
+      await rpc(admin, "release_board_deck_import_items", {
+        p_lease_owner: leaseOwner,
+        p_item_ids: itemIds,
+      });
+    },
     pairablePictures: async (importId) => {
       const rows = await rpc<{ item_id: string; slide_index: number; image_url: string }[]>(
         admin,

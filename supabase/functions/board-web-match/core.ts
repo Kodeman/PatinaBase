@@ -57,6 +57,8 @@ export interface WebCandidate {
 export interface WebMatchItem {
   item_id: string;
   import_id: string;
+  /** The import's board: the crop must be stored under it. */
+  board_id: string;
   state: string;
   candidates: Array<Record<string, unknown>>;
   crop_path: string | null;
@@ -124,11 +126,39 @@ export function shopFor(url: string, vendorDomains: ReadonlyMap<string, string>)
   return null;
 }
 
-/** "https://www.Maker.com/about" → "maker.com". */
+/** Suffixes under which anyone registers; a vendor website of just one is no shop. */
+const PUBLIC_SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'me.uk', 'ac.uk', 'gov.uk',
+  'com.au', 'net.au', 'org.au',
+  'co.nz', 'co.jp', 'co.za', 'co.in', 'com.br', 'com.mx', 'com.cn', 'com.hk', 'com.sg',
+]);
+
+/**
+ * "https://www.Maker.com/about" → "maker.com". Null for a bare label ('com')
+ * or a public suffix ('co.uk'): vendors.website is free text anyone can
+ * insert, and such a domain would make every page under it a "shop".
+ */
 export function vendorDomain(website: string | null | undefined): string | null {
   if (!website || !website.trim()) return null;
   const raw = /^https?:\/\//i.test(website.trim()) ? website.trim() : `https://${website.trim()}`;
-  return hostOf(raw);
+  const host = hostOf(raw);
+  if (!host) return null;
+  const labels = host.split('.');
+  if (labels.length < 2 || labels.some((label) => !label) || PUBLIC_SUFFIXES.has(host)) return null;
+  return host;
+}
+
+/** The crop must sit under this import's board: `{owner}/boards/{board_id}/…`. */
+export function cropOnBoard(path: string, boardId: string): boolean {
+  const parts = path.split('/');
+  return parts.length >= 4 && parts[1] === 'boards' && parts[2].toLowerCase() === boardId.toLowerCase();
+}
+
+/** Page text lands in record's 64 KB candidate budget; a paid call must not throw there. */
+const MAX_TEXT = 300;
+
+function clamp(value: string | null | undefined): string | null {
+  return value ? value.slice(0, MAX_TEXT) : null;
 }
 
 function stripTags(value: string): string {
@@ -240,7 +270,7 @@ async function readPage(
   } catch (error) {
     if (error instanceof FetchBlocked && error.unsafe) return null;
     // Bot wall or a failed read: link-only, never a fabricated price.
-    const name = cleanProductName(page.title, [page.shop, host, host.split('.')[0]]) ?? nameFromSlug(page.url);
+    const name = clamp(cleanProductName(page.title, [page.shop, host, host.split('.')[0]]) ?? nameFromSlug(page.url));
     return {
       source: 'web',
       extracted: {
@@ -261,8 +291,8 @@ async function readPage(
   return {
     source: 'web',
     extracted: {
-      ...(read.name ? { name: read.name } : {}),
-      brand: read.brand ?? page.shop,
+      ...(read.name ? { name: clamp(read.name)! } : {}),
+      brand: clamp(read.brand) ?? page.shop,
       ...(read.priceCents != null ? { price_cents: read.priceCents } : {}),
       ...(read.images.length ? { images: read.images.slice(0, 6) } : {}),
       source_url: read.sourceUrl,
@@ -272,10 +302,7 @@ async function readPage(
   };
 }
 
-async function matchItem(item: WebMatchItem, deps: WebMatchDeps, gate: HostGate): Promise<ItemResult> {
-  const crop = await deps.loadCrop(item.crop_path!);
-  if (!crop) return { item_id: item.item_id, status: 'failed', added: 0, reason: 'crop_unreadable' };
-
+async function matchItem(item: WebMatchItem, crop: string, deps: WebMatchDeps, gate: HostGate): Promise<ItemResult> {
   const pages = pagesFromVision(await deps.annotate(crop), deps.vendorDomains);
   const read = await Promise.all(pages.map((page) => readPage(page, deps, gate)));
   const web = read.filter((candidate): candidate is Omit<WebCandidate, 'rank'> => candidate != null);
@@ -340,6 +367,13 @@ export function responseFor(result: WebMatchResult): Response {
 
 // ─── Run ─────────────────────────────────────────────────────────────────────
 
+async function inLanes<T>(list: T[], work: (entry: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(ITEM_CONCURRENCY, list.length) }, async () => {
+    while (next < list.length) await work(list[next++]);
+  }));
+}
+
 export async function runWebMatch(items: WebMatchItem[], deps: WebMatchDeps): Promise<WebMatchResult> {
   const results = new Map<string, ItemResult>();
   const eligible: WebMatchItem[] = [];
@@ -349,32 +383,46 @@ export async function runWebMatch(items: WebMatchItem[], deps: WebMatchDeps): Pr
     else eligible.push(item);
   }
 
+  // Only a crop on this import's board that actually loads is booked: load
+  // first, then consume for that count, then call Google.
+  const crops = new Map<string, string>();
+  await inLanes(eligible, async (item) => {
+    let crop: string | null = null;
+    if (cropOnBoard(item.crop_path!, item.board_id)) {
+      try {
+        crop = await deps.loadCrop(item.crop_path!);
+      } catch {
+        crop = null;
+      }
+    } else {
+      deps.log('crop_off_board', { item_id: item.item_id });
+    }
+    if (crop) crops.set(item.item_id, crop);
+    else results.set(item.item_id, { item_id: item.item_id, status: 'failed', added: 0, reason: 'crop_unreadable' });
+  });
+  const loaded = eligible.filter((item) => crops.has(item.item_id));
+
   let budget: Budget = { granted: 0, resets_at: null };
-  if (eligible.length) budget = await deps.consumeBudget(eligible.length);
-  const granted = eligible.slice(0, Math.max(0, budget.granted));
-  for (const item of eligible.slice(granted.length)) {
+  if (loaded.length) budget = await deps.consumeBudget(loaded.length);
+  const granted = loaded.slice(0, Math.max(0, budget.granted));
+  for (const item of loaded.slice(granted.length)) {
     results.set(item.item_id, { item_id: item.item_id, status: 'cap_reached', added: 0 });
   }
 
   const gate = new HostGate(deps.sleep);
-  let next = 0;
-  const lanes = Array.from({ length: Math.min(ITEM_CONCURRENCY, granted.length) }, async () => {
-    while (next < granted.length) {
-      const item = granted[next++];
-      try {
-        results.set(item.item_id, await matchItem(item, deps, gate));
-      } catch (error) {
-        const message = (error instanceof Error ? error.message : String(error)).slice(0, 200);
-        deps.log('web_match_failed', { item_id: item.item_id, error: message });
-        results.set(item.item_id, { item_id: item.item_id, status: 'failed', added: 0, reason: 'error' });
-      }
+  await inLanes(granted, async (item) => {
+    try {
+      results.set(item.item_id, await matchItem(item, crops.get(item.item_id)!, deps, gate));
+    } catch (error) {
+      const message = (error instanceof Error ? error.message : String(error)).slice(0, 200);
+      deps.log('web_match_failed', { item_id: item.item_id, error: message });
+      results.set(item.item_id, { item_id: item.item_id, status: 'failed', added: 0, reason: 'error' });
     }
   });
-  await Promise.all(lanes);
 
   return {
     results: items.map((item) => results.get(item.item_id)!),
-    cap_reached: eligible.length > granted.length,
+    cap_reached: loaded.length > granted.length,
     resets_at: budget.resets_at,
     calls: granted.length,
   };
