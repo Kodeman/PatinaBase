@@ -68,8 +68,13 @@ test.describe("Bring in a deck — search the web", () => {
       await expect(firstRow).toHaveAttribute("data-deck-row-state", "not_found");
 
       await clearFixtureLog();
+      const webMatch = page.waitForResponse((response) => response.url().includes("/functions/v1/board-web-match"), {
+        timeout: 60_000,
+      });
       await firstRow.getByRole("button", { name: "Search the web for this piece" }).click();
-      await expect(firstRow.locator("[data-deck-how]")).toHaveText("Found on the web", { timeout: 60_000 });
+      const webMatchBody = await (await webMatch).text();
+      await expect(firstRow.locator("[data-deck-how]"), `board-web-match: ${webMatchBody}`)
+        .toHaveText("Found on the web", { timeout: 60_000 });
       // Never preselected: the row waits for her, nothing is kept.
       await expect(firstRow).toHaveAttribute("data-deck-row-state", "to_confirm");
       const after = (await deckPieces(BOARD)).find((piece) => piece.id === first.id);

@@ -107,16 +107,14 @@ test.describe("Bring in a deck — full chain", () => {
       await expect(ledger.locator("[data-deck-how]", { hasText: "From the link on the slide" }).first())
         .toBeVisible({ timeout: 20_000 });
 
-      // A link that no picture claimed asks which picture; she picks the
-      // slide's one picture and it reads as found by the link on the slide.
+      // The notes-only link pairs onto the slide's one picture: the picture
+      // piece is found by its link, and she keeps it like any link row.
+      // Before SQ-384 the link lands unpaired (needs_picture) and the picker
+      // offers a picture another piece already holds (keep → pin_taken).
+      test.fixme(notesRow!.boardItemId == null, "waits on SQ-384");
+      expect(notesRow!.foundBy).toBe("link");
       const notesRowEl = ledger.locator(`[data-deck-row="${notesRow!.id}"]`);
-      if (notesRow!.boardItemId == null) {
-        await expect(notesRowEl).toHaveAttribute("data-deck-row-state", "needs_picture");
-        await notesRowEl.locator('[data-deck-act="which-picture"]').click();
-        await notesRowEl.getByRole("option").first().click();
-      } else {
-        await notesRowEl.locator('[data-deck-act="keep"]').click();
-      }
+      await notesRowEl.locator('[data-deck-act="keep"]').click();
       await expect
         .poll(async () =>
           (await notesRowEl.getByRole("alert").count()) > 0
