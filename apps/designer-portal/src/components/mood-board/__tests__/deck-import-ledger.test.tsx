@@ -444,6 +444,35 @@ describe('BoardDeckImportLedger', () => {
     expect(props.unkeep).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
   });
 
+  it('one click on an inactive row opens its Swap, Paste a link or picture choice; j/k land in idle', () => {
+    renderLedger(
+      [
+        piece({ id: 'a' }),
+        piece({ id: 'b', boardItemId: 'pin-b' }),
+        piece({ id: 'd', boardItemId: null, elementKey: 'link:d' }),
+      ],
+      [pin()],
+    );
+    const row = (id: string) => document.querySelector(`[data-deck-row="${id}"]`) as HTMLElement;
+    const ledger = document.querySelector('[data-deck-import-ledger]') as HTMLElement;
+
+    fireEvent.click(row('b').querySelector('[data-deck-act="swap"]')!);
+    expect(row('b').querySelector('[data-deck-swap]')).not.toBeNull();
+
+    // Moving with the keys lets the open mode go, coming back included.
+    fireEvent.keyDown(ledger, { key: 'k' });
+    expect(row('b').querySelector('[data-deck-swap]')).toBeNull();
+    fireEvent.keyDown(ledger, { key: 'j' });
+    expect(row('b').querySelector('[data-deck-swap]')).toBeNull();
+
+    fireEvent.click(row('a').querySelector('[data-deck-act="paste-link"]')!);
+    expect(row('a').querySelector('form')).not.toBeNull();
+
+    fireEvent.click(row('d').querySelector('[data-deck-act="which-picture"]')!);
+    expect(row('d').querySelector('[role="listbox"]')).not.toBeNull();
+    expect(row('a').querySelector('form')).toBeNull();
+  });
+
   it('puts kept pieces on the schedule as her selections by default (project board)', async () => {
     mockPromote.mockResolvedValue({ selectionId: 'ffe-1' });
     const kept = pin({ data: { ...pin().data, name: 'Cove sofa', deck_import: { import_id: IMPORT, item_id: 'item-1', state: 'kept' } } });
