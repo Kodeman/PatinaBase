@@ -6,15 +6,16 @@
 // to WASM (@jsquash/webp, ~140 KB). The .wasm file is read from the npm
 // package with Deno.readFile(import.meta.resolve(...)), the pattern Supabase
 // documents for WASM image libraries in edge functions. Anything that is not
-// WebP, declares more than WEBP_MAX_EDGE, or does not decode, gets no phash:
-// T1 then matches it by cosine only.
+// WebP, declares more than WEBP_MAX_EDGE, does not decode, or hashes to a
+// degenerate dHash (a uniform crop), gets no phash: T1 then matches it by
+// cosine only.
 
 import decodeWebp, { init as initWebp } from 'npm:@jsquash/webp@1.5.0/decode.js';
-import { type CropSignature, dHash, toPgBigint } from './phash.ts';
+import { type CropSignature, dHash, isDegenerateHash, toPgBigint } from './phash.ts';
 
 /** Deck crops are at most 2048 px on the long edge (designer-portal
  *  DECK_CROP_MAX_EDGE); a crop declaring more than this is never decoded. */
-export const WEBP_MAX_EDGE = 4096;
+export const WEBP_MAX_EDGE = 2048;
 
 type Decode = (buffer: ArrayBuffer) => Promise<{ data: Uint8ClampedArray; width: number; height: number }>;
 
@@ -109,7 +110,8 @@ export async function cropSignature(
   }
   try {
     const image = await decode(bytes.slice().buffer);
-    return { image_hash, phash: toPgBigint(dHash(image.data, image.width, image.height)) };
+    const hash = dHash(image.data, image.width, image.height);
+    return { image_hash, phash: isDegenerateHash(hash) ? null : toPgBigint(hash) };
   } catch {
     return { image_hash, phash: null };
   }

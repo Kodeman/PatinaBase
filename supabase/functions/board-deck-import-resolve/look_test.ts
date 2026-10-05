@@ -11,6 +11,7 @@ import {
   lookCheckCandidate,
   type PhashHit,
 } from './look.ts';
+import { cropSignature } from './crop_signature.ts';
 import type { CropSignature } from './phash.ts';
 import { LOOK_MIN_VISIBLE_VECTORS, LOOK_THRESHOLDS } from './thresholds.ts';
 
@@ -390,6 +391,35 @@ Deno.test('T1 exact by dHash: the crop hash is looked up within τ_hamming', asy
   assertEquals(f.phashAsked, [{ phash: '-4358495415582126305', maxDistance: LOOK_THRESHOLDS.exactHamming }]);
   assertEquals(f.recorded[0].candidates.map((c) => [c.product_id, c.band]), [['studio-c', 'strong']]);
   assertEquals(f.recorded[0].candidates[0].evidence.phash_distance, LOOK_THRESHOLDS.exactHamming);
+});
+
+Deno.test('a uniform crop (solid black, white, colour) is never a strong exact by dHash (00686 R5)', async () => {
+  // A 30-byte lossless WebP header for 64 × 48; the decoder is injected.
+  const crop = new Uint8Array(30);
+  const view = new DataView(crop.buffer);
+  crop.set(new TextEncoder().encode('RIFF'), 0);
+  view.setUint32(4, 22, true);
+  crop.set(new TextEncoder().encode('WEBPVP8L'), 8);
+  view.setUint32(16, 10, true);
+  crop[20] = 0x2f;
+  view.setUint32(21, 63 | (47 << 14), true);
+  for (const rgb of [[0, 0, 0], [255, 255, 255], [180, 40, 90]]) {
+    const signature = await cropSignature(crop, () => {
+      const data = new Uint8ClampedArray(64 * 48 * 4);
+      for (let i = 0; i < data.length; i += 4) data.set([...rgb, 255], i);
+      return Promise.resolve({ data, width: 64, height: 48 });
+    });
+    assertEquals(signature.phash, null, `solid ${rgb}: no phash`);
+    // Even with a taught phash-0 row on offer, nothing is asked or banded strong.
+    const f = fake([picture('p1')], {
+      signature,
+      phash: [{ product_id: 'studio-c', distance: 0, layer: 'studio', source: 'designer_confirmed' }],
+      imageKnn: [{ product_id: 'catalog-a', rank: 0.7, layer: 'catalog', source: 'product_image' }],
+    });
+    await runResolve(f.deps);
+    assertEquals(f.calls.phashMatch ?? 0, 0, `solid ${rgb}: no hash lookup`);
+    assert(!f.recorded[0].candidates.some((c) => c.band === 'strong'), `solid ${rgb}: no strong exact`);
+  }
 });
 
 Deno.test('T2 prefers picture vectors: a product with picture rows is uncapped, others fall back to fused', async () => {

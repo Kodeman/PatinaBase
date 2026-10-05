@@ -87,22 +87,24 @@ INSERT INTO public.products (
    'd6841000-0000-4000-8000-000000000002', 'd6845000-0000-4000-8000-000000000001', now(),
    '{}'::jsonb, 4, 'fifty_fifty', 'seating', 'test');
 
--- Query: unit(0), phash 0. phash 1 is 1 bit away, 3 is 2 bits away.
+-- Query: unit(0), phash Q = 4294967295 (popcount 32; 00686 never matches a
+-- degenerate dHash). Q # 1 = 4294967294 is 1 bit away, Q # 3 = 4294967292 is
+-- 2 bits away.
 INSERT INTO public.product_image_vectors (
   product_id, image_hash, vector, phash, model_version, source, studio_id, created_by
 ) VALUES
   -- studio A's private bench: its own picture, near and 1 bit away
-  ('d6846000-0000-4000-8000-00000000000a', repeat('a1', 32), pg_temp.unit(0.010), 1,
+  ('d6846000-0000-4000-8000-00000000000a', repeat('a1', 32), pg_temp.unit(0.010), 4294967294,
    'm1', 'product_image', NULL, NULL),
   -- the catalog sofa: its own picture is far and has no hash …
   ('d6846000-0000-4000-8000-000000000001', repeat('c1', 32), pg_temp.unit(0.500), NULL,
    'm1', 'product_image', NULL, NULL),
   -- … and studio A taught it a crop: nearest of all, 2 bits away
   ('d6846000-0000-4000-8000-000000000001', repeat('c2', 32) || ':d6841000-0000-4000-8000-000000000001',
-   pg_temp.unit(0.001), 3, 'm1', 'designer_confirmed', 'd6841000-0000-4000-8000-000000000001',
+   pg_temp.unit(0.001), 4294967292, 'm1', 'designer_confirmed', 'd6841000-0000-4000-8000-000000000001',
    'd6840000-0000-4000-8000-000000000001'),
   -- studio B's private bench: exact hash
-  ('d6846000-0000-4000-8000-00000000000b', repeat('b1', 32), pg_temp.unit(0.020), 0,
+  ('d6846000-0000-4000-8000-00000000000b', repeat('b1', 32), pg_temp.unit(0.020), 4294967295,
    'm1', 'product_image', NULL, NULL);
 
 INSERT INTO public.board_deck_imports (id, board_id, created_by, source_format, file_sha256, file_name, options, status)
@@ -134,7 +136,7 @@ INSERT INTO ics_ctx (k, v)
 SELECT 'phash:' || imp.n,
        COALESCE((
          SELECT jsonb_agg(jsonb_build_array(r.product_id, r.distance, r.source) ORDER BY r.ord)
-         FROM public.board_deck_import_match_phash(imp.id, 0, 6, 50)
+         FROM public.board_deck_import_match_phash(imp.id, 4294967295, 6, 50)
            WITH ORDINALITY AS r(product_id, distance, layer, source, ord)
        ), '[]'::jsonb)
 FROM (VALUES

@@ -4,15 +4,17 @@
 --      expected value and is a fixed point on it. The url-vectors block is
 --      the ONE table: links_test.ts parses it and runs normalizeProductUrl
 --      over the same rows. Keep one row per line, plain '…' literals only.
---   2. F12: the expression index exists, is valid, and serves the T0a
---      predicate (seq scans off); no matching RPC calls the per-row DEFINER
---      visibility helper any more
+--   2. F12: the expression index (on the key's md5 since 00686) exists, is
+--      valid, and serves the T0a predicate as an index condition (seq scans
+--      off); no matching RPC calls the per-row DEFINER visibility helper any
+--      more
 --   3. F17: a designer in studios A and B importing onto B's board gets B's
 --      products, never A's, from T0a, T0c, T1 and T2 (and the look gate
 --      counts B only); onto A's board, the reverse
 --   4. grants: candidate_scope is owner-only; the normalizer and its helpers
---      are executable by every role (00685: the URL index runs as the
---      writer); the RPCs stay service_role
+--      are executable by authenticated and service_role (00685: the URL index
+--      runs as the writer) and not by anon (00686: anon writes no products);
+--      the RPCs stay service_role
 -- Run after a fresh reset:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 -f supabase/tests/deck_import/lookup_indexes.test.sql
@@ -110,11 +112,14 @@ BEGIN
     WHERE product.source_url IS NOT NULL
       AND product.deleted_at IS NULL
       AND product.merged_into_id IS NULL
+      AND md5(public._board_deck_import_normalize_url(product.source_url))
+          = ANY (ARRAY[md5('https://scope.example/oak-bench')])
       AND public._board_deck_import_normalize_url(product.source_url)
           = ANY (ARRAY['https://scope.example/oak-bench'])
   $q$ INTO v_plan;
   RESET enable_seqscan;
   ASSERT v_plan LIKE '%idx_products_deck_import_source_url%', format('T0a uses the index: %s', v_plan);
+  ASSERT v_plan ~ '"Index Cond": "\(md5\(', format('the md5 is the index condition: %s', v_plan);
 
   FOREACH v_fn IN ARRAY ARRAY[
     'public.board_deck_import_match_links(uuid, text[])',
@@ -303,13 +308,14 @@ BEGIN
   ASSERT NOT has_function_privilege('service_role', 'public._board_deck_import_candidate_scope(uuid)', 'EXECUTE'),
     '_board_deck_import_candidate_scope: owner only';
   -- idx_products_deck_import_source_url evaluates the normalizer as whoever
-  -- writes products (00685): it and its helpers are executable by every role.
+  -- writes products (00685): authenticated and service_role. anon writes no
+  -- products (no anon write policy; WITH CHECK runs first), so not anon (00686).
   FOREACH v_fn IN ARRAY ARRAY[
     'public._board_deck_import_normalize_url(text)',
     'public._board_deck_import_pct_encode(text, text)',
     'public._board_deck_import_punycode(text)'
   ] LOOP
-    ASSERT has_function_privilege('anon', v_fn, 'EXECUTE'), v_fn || ': anon can execute (00685)';
+    ASSERT NOT has_function_privilege('anon', v_fn, 'EXECUTE'), v_fn || ': anon cannot execute (00686)';
     ASSERT has_function_privilege('authenticated', v_fn, 'EXECUTE'), v_fn || ': authenticated can execute (00685)';
     ASSERT has_function_privilege('service_role', v_fn, 'EXECUTE'), v_fn || ': service_role can execute (00685)';
   END LOOP;

@@ -127,14 +127,15 @@ VALUES
   ('d6858000-0000-4000-8000-000000000005', 'd6857000-0000-4000-8000-0000000000b1', 's1:p5', 0, 'product', 'found'),
   ('d6858000-0000-4000-8000-000000000006', 'd6857000-0000-4000-8000-0000000000b2', 's1:p6', 0, 'product', 'found');
 
+-- phash 4294967295 (popcount 32): 00686 never matches a degenerate dHash.
 INSERT INTO public.board_deck_import_crop_signatures (item_id, image_hash, phash, vector, model_version)
 VALUES
-  ('d6858000-0000-4000-8000-000000000001', repeat('aa', 32), 0, pg_temp.unit(0), 'm1'),
-  ('d6858000-0000-4000-8000-000000000002', repeat('bb', 32), 0, pg_temp.unit(0.1), 'm1'),
-  ('d6858000-0000-4000-8000-000000000003', repeat('cc', 32), 0, pg_temp.unit(0.2), 'm1'),
-  ('d6858000-0000-4000-8000-000000000004', repeat('cc', 32), 0, pg_temp.unit(0.2), 'm1'),
-  ('d6858000-0000-4000-8000-000000000005', repeat('dd', 32), 0, pg_temp.unit(0.3), 'm1'),
-  ('d6858000-0000-4000-8000-000000000006', repeat('dd', 32), 0, pg_temp.unit(0.3), 'm1');
+  ('d6858000-0000-4000-8000-000000000001', repeat('aa', 32), 4294967295, pg_temp.unit(0), 'm1'),
+  ('d6858000-0000-4000-8000-000000000002', repeat('bb', 32), 4294967295, pg_temp.unit(0.1), 'm1'),
+  ('d6858000-0000-4000-8000-000000000003', repeat('cc', 32), 4294967295, pg_temp.unit(0.2), 'm1'),
+  ('d6858000-0000-4000-8000-000000000004', repeat('cc', 32), 4294967295, pg_temp.unit(0.2), 'm1'),
+  ('d6858000-0000-4000-8000-000000000005', repeat('dd', 32), 4294967295, pg_temp.unit(0.3), 'm1'),
+  ('d6858000-0000-4000-8000-000000000006', repeat('dd', 32), 4294967295, pg_temp.unit(0.3), 'm1');
 
 CREATE TEMP TABLE rf2_ctx (k text PRIMARY KEY, v jsonb) ON COMMIT DROP;
 GRANT ALL ON rf2_ctx TO PUBLIC;
@@ -196,7 +197,7 @@ INSERT INTO rf2_ctx (k, v)
 SELECT 'phash:' || imp.n,
        COALESCE((
          SELECT jsonb_agg(jsonb_build_array(r.product_id, r.distance, r.source) ORDER BY r.ord)
-         FROM public.board_deck_import_match_phash(imp.id, 0, 6, 50)
+         FROM public.board_deck_import_match_phash(imp.id, 4294967295, 6, 50)
            WITH ORDINALITY AS r(product_id, distance, layer, source, ord)
        ), '[]'::jsonb)
 FROM (VALUES

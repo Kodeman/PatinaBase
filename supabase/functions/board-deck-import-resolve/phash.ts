@@ -17,7 +17,8 @@
 export interface CropSignature {
   /** sha256 of the crop bytes, hex. */
   image_hash: string;
-  /** 64-bit dHash as Postgres bigint text; null when the bytes did not decode. */
+  /** 64-bit dHash as Postgres bigint text; null when the bytes did not decode
+   *  or the hash is degenerate (isDegenerateHash). */
   phash: string | null;
 }
 
@@ -69,6 +70,15 @@ export function hamming(a: bigint, b: bigint): number {
     count++;
   }
   return count;
+}
+
+/** A uniform or low-entropy picture (a paint chip, a solid swatch) hashes to
+ *  0, all ones or nearly so: such a hash says nothing about which product it
+ *  is, so it is never an identity. Mirrored in SQL (00686): teach stores NULL
+ *  and board_deck_import_match_phash skips popcount outside 8..56. */
+export function isDegenerateHash(hash: bigint): boolean {
+  const bits = hamming(hash, 0n);
+  return bits < 8 || bits > 56;
 }
 
 /** The hash as Postgres bigint text (signed two's complement). */
