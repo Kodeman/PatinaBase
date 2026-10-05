@@ -83,17 +83,8 @@ export function normalizeBoardObjectReference(value: unknown): string | null {
   try {
     const url = new URL(input);
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    const prefixes = [
-      `/storage/v1/object/public/${BOARD_ASSET_BUCKET}/`,
-      `/storage/v1/object/authenticated/${BOARD_ASSET_BUCKET}/`,
-      `/storage/v1/object/sign/${BOARD_ASSET_BUCKET}/`,
-      `/storage/v1/render/image/public/${BOARD_ASSET_BUCKET}/`,
-      `/storage/v1/render/image/authenticated/${BOARD_ASSET_BUCKET}/`,
-      `/storage/v1/render/image/sign/${BOARD_ASSET_BUCKET}/`,
-    ];
-    const prefix = prefixes.find((item) => url.pathname.startsWith(item));
-    if (!prefix) return null;
-    candidate = url.pathname.slice(prefix.length);
+    candidate = storageUrlObjectName(url, BOARD_ASSET_BUCKET);
+    if (candidate === null) return null;
   } catch {
     candidate = input.split(/[?#]/, 1)[0].replace(/^\/+/, "");
     if (candidate.startsWith(`${BOARD_ASSET_BUCKET}/`)) {
@@ -109,6 +100,83 @@ export function normalizeBoardObjectReference(value: unknown): string | null {
   ) return null;
 
   return (parts as string[]).join("/");
+}
+
+/** The object name after a canonical Storage URL prefix for `bucket`, still encoded. */
+function storageUrlObjectName(url: URL, bucket: string): string | null {
+  const prefix = [
+    `/storage/v1/object/public/${bucket}/`,
+    `/storage/v1/object/authenticated/${bucket}/`,
+    `/storage/v1/object/sign/${bucket}/`,
+    `/storage/v1/render/image/public/${bucket}/`,
+    `/storage/v1/render/image/authenticated/${bucket}/`,
+    `/storage/v1/render/image/sign/${bucket}/`,
+  ].find((item) => url.pathname.startsWith(item));
+  return prefix ? url.pathname.slice(prefix.length) : null;
+}
+
+/** Project boards keep their pictures in the FF&E working bucket (`{project_id}/boards/{board_id}/…`). */
+export const PROJECT_BOARD_BUCKET = "project-ffe-working";
+
+/** The import's board as read from the database, never from a request. */
+export interface BoardCropScope {
+  boardId: string;
+  /** proposal_boards.project_id; null for a proposal board. */
+  projectId: string | null;
+}
+
+export interface BoardObject {
+  bucket: string;
+  path: string;
+}
+
+// A dot segment, plain or percent-encoded, between separators. URL parsing
+// would silently resolve one, so the raw text is refused before parsing.
+const DOT_SEGMENT_RE = /(^|[/\\])(\.|%2e){1,2}([/\\]|$)/i;
+// Names the storage client puts into a URL unencoded must not need encoding.
+const SAFE_SEGMENT_RE = /^[A-Za-z0-9._-]+$/;
+
+function projectBoardObjectName(value: unknown, projectId: string, boardId: string): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const input = value.trim();
+  if (DOT_SEGMENT_RE.test(input.split(/[?#]/, 1)[0])) return null;
+
+  let candidate: string | null;
+  try {
+    const url = new URL(input);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    candidate = storageUrlObjectName(url, PROJECT_BOARD_BUCKET);
+  } catch {
+    candidate = input.startsWith("/") ? null : input.split(/[?#]/, 1)[0];
+  }
+  if (candidate === null) return null;
+
+  const parts = candidate.split("/").map(decodePathSegment);
+  if (
+    parts.length < 4 ||
+    parts.some((part) => part === null || part === "." || part === ".." || !SAFE_SEGMENT_RE.test(part)) ||
+    parts[0]!.toLowerCase() !== projectId.toLowerCase() ||
+    parts[1] !== "boards" ||
+    parts[2]!.toLowerCase() !== boardId.toLowerCase()
+  ) return null;
+  return (parts as string[]).join("/");
+}
+
+/**
+ * Where a board pin's picture lives, for a service-role read or signature.
+ * A proposal board (no project) resolves exactly as normalizeBoardObjectReference
+ * always has. On a project board a reference resolves to the working bucket only
+ * under `{that project}/boards/{that board}/…`; a raw key there never falls back
+ * to the proposal bucket, while a proposal-bucket Storage URL still does.
+ */
+export function resolveBoardCropReference(value: unknown, scope: BoardCropScope | null): BoardObject | null {
+  if (scope?.projectId) {
+    const path = projectBoardObjectName(value, scope.projectId, scope.boardId);
+    if (path) return { bucket: PROJECT_BOARD_BUCKET, path };
+    if (typeof value !== "string" || !URL.canParse(value.trim())) return null;
+  }
+  const path = normalizeBoardObjectReference(value);
+  return path ? { bucket: BOARD_ASSET_BUCKET, path } : null;
 }
 
 export type ReferenceCounts = Map<string, number>;

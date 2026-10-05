@@ -3,8 +3,8 @@
 // Designer-pressed only; nothing calls it on a schedule. verify_jwt=true and
 // the bearer must be a user's JWT: {item_ids[≤20]} are read under RLS (board
 // managers), so a piece the caller cannot see is a 404. Everything after that
-// runs with the service role: the crop is read from the board bucket (only
-// under the import's own board), the 00680 budget is consumed for the board's
+// runs with the service role: the crop is read from the board's bucket (only
+// under the import's own board; a project board's under its own project), the 00680 budget is consumed for the board's
 // studio (00682) for the crops that loaded, and results are
 // appended through 00680's record_board_web_match_result (a settled piece has
 // no resolver lease, so the lease-checked 00678 record RPC does not apply).
@@ -25,12 +25,13 @@ import {
   type ResolvedAddress,
   UrlError,
 } from "../_shared/product-page/ssrf.ts";
-import { BOARD_ASSET_BUCKET, bearerRole, normalizeBoardObjectReference } from "../board-asset-cleanup/core.ts";
+import { bearerRole } from "../board-asset-cleanup/core.ts";
 import { testFetchBase, testTransport } from "../board-deck-import-resolve/test_fetch_base.ts";
 import {
   FetchBlocked,
   gate,
   json,
+  pinCrop,
   readItemIds,
   responseFor,
   runWebMatch,
@@ -49,12 +50,6 @@ const VISION_URL = TEST_FETCH_BASE
 
 function log(event: string, fields: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({ ts: new Date().toISOString(), fn: FUNCTION_NAME, event, ...fields }));
-}
-
-function cropReference(pin: { image_url?: string | null; data?: any } | undefined): string | null {
-  if (!pin) return null;
-  const data = pin.data && typeof pin.data === "object" ? pin.data : {};
-  return normalizeBoardObjectReference(data.original_image_url ?? pin.image_url ?? data.image_url);
 }
 
 Deno.serve(async (req) => {
@@ -104,6 +99,10 @@ Deno.serve(async (req) => {
   const deckImport = await asCaller.from("board_deck_imports").select("board_id").eq("id", importIds[0]).maybeSingle();
   if (deckImport.error || !deckImport.data?.board_id) return json({ error: "not_found" }, 404);
   const boardId = deckImport.data.board_id as string;
+  // A project board's pictures sit under its project in the working bucket.
+  const board = await admin.from("proposal_boards").select("project_id").eq("id", boardId).maybeSingle();
+  if (board.error || !board.data) return json({ error: "not_found" }, 404);
+  const scope = { boardId, projectId: (board.data.project_id as string | null) ?? null };
 
   // The board's studio pays (00682), and only its vendors and catalog vendors count as shops.
   const studio = await admin.rpc("board_web_match_studio_key", { p_import_id: importIds[0] });
@@ -123,7 +122,7 @@ Deno.serve(async (req) => {
     board_id: boardId,
     state: row.state,
     candidates: Array.isArray(row.candidates) ? row.candidates : [],
-    crop_path: row.board_item_id ? cropReference(pinById.get(row.board_item_id)) : null,
+    crop: row.board_item_id ? pinCrop(pinById.get(row.board_item_id), scope) : null,
   }));
 
   try {
@@ -136,8 +135,8 @@ Deno.serve(async (req) => {
         if (error) throw new Error(`consume_board_web_match_budget: ${error.message}`);
         return { granted: Number(data?.granted ?? 0), resets_at: data?.resets_at ?? null };
       },
-      loadCrop: async (path) => {
-        const object = await admin.storage.from(BOARD_ASSET_BUCKET).download(path);
+      loadCrop: async ({ bucket, path }) => {
+        const object = await admin.storage.from(bucket).download(path);
         if (object.error || !object.data) return null;
         return encodeBase64(await object.data.arrayBuffer());
       },

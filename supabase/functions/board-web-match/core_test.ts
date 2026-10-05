@@ -8,6 +8,7 @@ import {
   gate,
   mergeCandidates,
   pagesFromVision,
+  pinCrop,
   readItemIds,
   responseFor,
   runWebMatch,
@@ -53,7 +54,7 @@ function item(id: string, extra: Partial<WebMatchItem> = {}): WebMatchItem {
     board_id: 'b',
     state: 'not_found',
     candidates: [],
-    crop_path: `studio/boards/b/${id}.jpg`,
+    crop: { bucket: 'proposal-mood-boards', path: `studio/boards/b/${id}.jpg` },
     ...extra,
   };
 }
@@ -63,6 +64,8 @@ interface Harness {
   calls: {
     budget: number[];
     crops: string[];
+    /** The bucket of each crop read, in order. */
+    buckets: string[];
     annotate: number;
     pages: string[];
     records: Array<{ id: string; candidates: any[]; base: any[] }>;
@@ -86,7 +89,7 @@ function harness(options: {
   crops?: Record<string, string | null | Error>;
 } = {}): Harness {
   const calls: Harness['calls'] = {
-    budget: [], crops: [], annotate: 0, pages: [], records: [],
+    budget: [], crops: [], buckets: [], annotate: 0, pages: [], records: [],
     hops: [], inflight: new Map(), peak: new Map(), sleeps: [],
   };
   const deps: WebMatchDeps = {
@@ -94,8 +97,9 @@ function harness(options: {
       calls.budget.push(n);
       return Promise.resolve(options.budget ?? { granted: n, resets_at: '2026-11-01T00:00:00+00:00' });
     },
-    loadCrop: (path) => {
+    loadCrop: ({ bucket, path }) => {
       calls.crops.push(path);
+      calls.buckets.push(bucket);
       const crop = options.crops && path in options.crops ? options.crops[path] : 'Y3JvcA==';
       return crop instanceof Error ? Promise.reject(crop) : Promise.resolve(crop);
     },
@@ -341,7 +345,7 @@ Deno.test('ineligible pieces consume no budget', async () => {
   const result = await runWebMatch([
     item('kept', { state: 'kept' }),
     item('pending', { state: 'pending' }),
-    item('nopic', { crop_path: null }),
+    item('nopic', { crop: null }),
   ], deps);
   assertEquals(calls.budget, []);
   assertEquals(calls.annotate, 0);
@@ -354,8 +358,8 @@ Deno.test('N8: a crop stored under another board is never downloaded, booked or 
   const { deps, calls } = harness();
   const result = await runWebMatch([
     item('own'),
-    item('foreign', { crop_path: 'other-studio/boards/someone-elses-board/x.jpg' }),
-    item('flat', { crop_path: 'b/x.jpg' }),
+    item('foreign', { crop: { bucket: 'proposal-mood-boards', path: 'other-studio/boards/someone-elses-board/x.jpg' } }),
+    item('flat', { crop: { bucket: 'proposal-mood-boards', path: 'b/x.jpg' } }),
   ], deps);
   assertEquals(calls.crops, ['studio/boards/b/own.jpg']);
   assertEquals(calls.budget, [1]);
@@ -367,6 +371,36 @@ Deno.test('N8: a crop stored under another board is never downloaded, booked or 
   ]);
   assertEquals(cropOnBoard('u/boards/B/x.jpg', 'b'), true);
   assertEquals(cropOnBoard('u/boards/b2/x.jpg', 'b'), false);
+});
+
+// ── SQ-387: a project board's crop is read from the working bucket ──────────
+
+Deno.test('SQ-387: a project-board pin gets past no_picture and is read from project-ffe-working', async () => {
+  const project = '44444444-4444-4444-8444-444444444444';
+  const board = '22222222-2222-4222-8222-222222222222';
+  const key = `${project}/boards/${board}/66666666-6666-4666-8666-666666666666.webp`;
+  const scope = { boardId: board, projectId: project };
+  // The shape SQ-364 found: a raw image_url and a signed original.
+  const pin = {
+    image_url: key,
+    data: { original_image_url: `https://strata.example/storage/v1/object/sign/project-ffe-working/${key}?token=t` },
+  };
+  const crop = pinCrop(pin, scope);
+  assertEquals(crop, { bucket: 'project-ffe-working', path: key });
+  // A pin under another project of the same board id is still no picture.
+  const foreign = `55555555-5555-4555-8555-555555555555/boards/${board}/x.webp`;
+  assertEquals(pinCrop({ image_url: foreign, data: {} }, scope), null);
+
+  const { deps, calls } = harness();
+  const result = await runWebMatch([
+    item('project', { board_id: board, crop }),
+    item('foreign', { board_id: board, crop: pinCrop({ image_url: foreign, data: {} }, scope) }),
+  ], deps);
+  assertEquals(calls.crops, [key]);
+  assertEquals(calls.buckets, ['project-ffe-working']);
+  assertEquals(calls.budget, [1]);
+  assertEquals(calls.annotate, 1);
+  assertEquals(result.results.map((r) => [r.status, r.reason]), [['none', undefined], ['skipped', 'no_picture']]);
 });
 
 Deno.test('N9: a crop that fails to load is not charged; the budget books only what loaded', async () => {

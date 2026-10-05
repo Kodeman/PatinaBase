@@ -28,7 +28,7 @@ import {
   type ResolvedAddress,
   UrlError,
 } from "../_shared/product-page/ssrf.ts";
-import { BOARD_ASSET_BUCKET, normalizeBoardObjectReference } from "../board-asset-cleanup/core.ts";
+import type { BoardCropScope } from "../board-asset-cleanup/core.ts";
 import { isServiceCaller } from "./auth.ts";
 import {
   ADJUDICATION_SYSTEM,
@@ -42,6 +42,7 @@ import {
   runResolve,
 } from "./core.ts";
 import { cropSignature, readCappedBytes } from "./crop_signature.ts";
+import { signCrops } from "./crops.ts";
 import type { KnnHit, LookGate, PhashHit } from "./look.ts";
 import { testFetchBase, testTransport } from "./test_fetch_base.ts";
 import { ADJUDICATION } from "./thresholds.ts";
@@ -92,6 +93,29 @@ function deps(
   let leaseOwner: string | null = null;
   // The model behind the crop vectors this run embedded (stored with them).
   let imageModelVersion: string | null = null;
+  // The import's board and its project, read here, never from the request.
+  const scopes = new Map<string, Promise<BoardCropScope>>();
+  const scopeFor = (importId: string): Promise<BoardCropScope> => {
+    let scope = scopes.get(importId);
+    if (!scope) {
+      scope = (async () => {
+        const deckImport = await admin.from("board_deck_imports").select("board_id").eq("id", importId).single();
+        if (deckImport.error) throw new Error(`crop scope: ${deckImport.error.message}`);
+        const boardId = deckImport.data.board_id as string;
+        const board = await admin.from("proposal_boards").select("project_id").eq("id", boardId).single();
+        if (board.error) throw new Error(`crop scope: ${board.error.message}`);
+        return { boardId, projectId: (board.data.project_id as string | null) ?? null };
+      })();
+      scopes.set(importId, scope);
+    }
+    return scope;
+  };
+  // Only a picture where its board keeps it goes to the embedder, signed after
+  // the claim (cron) or the caller's RLS read (browser) let us here.
+  const sign = async (bucket: string, path: string) => {
+    const signed = await admin.storage.from(bucket).createSignedUrl(path, SIGNED_CROP_SECONDS);
+    return signed.error ? null : signed.data?.signedUrl ?? null;
+  };
 
   return {
     claim: async (limit) => {
@@ -161,17 +185,19 @@ function deps(
         "board_deck_import_pairable_pictures",
         { p_import_id: importId },
       );
+      const signed = await signCrops(
+        (rows ?? []).map((row) => ({ item_id: row.item_id, import_id: importId, image: row.image_url })),
+        scopeFor,
+        sign,
+      );
       const out = [];
       for (const row of rows ?? []) {
-        // Only crops in the board bucket are sent to the embedder, signed.
-        const path = normalizeBoardObjectReference(row.image_url);
-        if (!path) continue;
-        const signed = await admin.storage.from(BOARD_ASSET_BUCKET).createSignedUrl(path, SIGNED_CROP_SECONDS);
-        if (signed.error || !signed.data?.signedUrl) continue;
+        const url = signed.get(row.item_id);
+        if (!url) continue;
         out.push({
           item_id: row.item_id,
           slide_index: row.slide_index,
-          image_url: signed.data.signedUrl,
+          image_url: url,
           state: row.state,
           caption: row.caption,
           slide_pictures: row.slide_pictures == null ? undefined : Number(row.slide_pictures),
@@ -245,23 +271,17 @@ function deps(
       healthy: async () => Boolean(inference && (await inference.healthz())?.warmed),
       gate: (importId) => rpc<LookGate>(admin, "board_deck_import_look_gate", { p_import_id: importId }),
       cropUrls: async (itemIds) => {
-        const out = new Map<string, string>();
-        if (itemIds.length === 0) return out;
+        if (itemIds.length === 0) return new Map<string, string>();
         const { data, error } = await admin
           .from("board_deck_import_items")
-          .select("id, pin:proposal_board_items(image_url, data_image_url:data->>image_url)")
+          .select("id, import_id, pin:proposal_board_items(image_url, data_image_url:data->>image_url)")
           .in("id", itemIds);
         if (error) throw new Error(`crop urls: ${error.message}`);
-        for (const row of (data ?? []) as any[]) {
+        const rows = ((data ?? []) as any[]).map((row) => {
           const pin = Array.isArray(row.pin) ? row.pin[0] : row.pin;
-          // Only crops in the board bucket go to the embedder, signed after
-          // the claim (cron) or the caller's RLS read (browser) let us here.
-          const path = normalizeBoardObjectReference(pin?.image_url ?? pin?.data_image_url);
-          if (!path) continue;
-          const signed = await admin.storage.from(BOARD_ASSET_BUCKET).createSignedUrl(path, SIGNED_CROP_SECONDS);
-          if (!signed.error && signed.data?.signedUrl) out.set(row.id, signed.data.signedUrl);
-        }
-        return out;
+          return { item_id: row.id, import_id: row.import_id, image: pin?.image_url ?? pin?.data_image_url };
+        });
+        return await signCrops(rows, scopeFor, sign);
       },
       knn: async (importId, vector, limit, category) => {
         const rows = await rpc<KnnHit[] | null>(admin, "board_deck_import_match_knn", {
@@ -304,7 +324,7 @@ function deps(
           source: row.source ?? null,
         }));
       },
-      // The URL is one this function just signed on the board bucket.
+      // The URL is one this function just signed in the board's bucket.
       cropSignature: async (url) => {
         const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
         if (!response.ok) {

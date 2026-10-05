@@ -11,6 +11,7 @@ import {
   destructiveCleanupEnabled,
   normalizeBoardObjectReference,
   planCleanup,
+  resolveBoardCropReference,
   resolveCleanupMode,
 } from "./core.ts";
 
@@ -111,6 +112,110 @@ Deno.test("object normalization is confined to the mood-board board namespace", 
   for (const value of rejected) {
     assertEquals(normalizeBoardObjectReference(value), null, value);
   }
+});
+
+// ── SQ-387: crops on project boards (project-ffe-working) ──────────────────
+
+const PROJECT = "44444444-4444-4444-8444-444444444444";
+const OTHER_PROJECT = "55555555-5555-4555-8555-555555555555";
+const PROJECT_SCOPE = { boardId: BOARD, projectId: PROJECT };
+const PROJECT_KEY = `${PROJECT}/boards/${BOARD}/66666666-6666-4666-8666-666666666666.webp`;
+const WORKING = "https://strata.example/storage/v1/object";
+
+Deno.test("SQ-387: a project-board raw key resolves to the working bucket", () => {
+  assertEquals(resolveBoardCropReference(PROJECT_KEY, PROJECT_SCOPE), {
+    bucket: "project-ffe-working",
+    path: PROJECT_KEY,
+  });
+  // The project id is matched however the stored uuid is cased.
+  assertEquals(
+    resolveBoardCropReference(PROJECT_KEY, { boardId: BOARD.toUpperCase(), projectId: PROJECT.toUpperCase() }),
+    { bucket: "project-ffe-working", path: PROJECT_KEY },
+  );
+});
+
+Deno.test("SQ-387: a project-board signed or public URL resolves to the working bucket", () => {
+  for (
+    const url of [
+      `${WORKING}/sign/project-ffe-working/${PROJECT_KEY}?token=eyJhbGciOi.eyJ1cmwiOi.c2ln`,
+      `${WORKING}/public/project-ffe-working/${PROJECT_KEY}`,
+    ]
+  ) {
+    assertEquals(resolveBoardCropReference(url, PROJECT_SCOPE), {
+      bucket: "project-ffe-working",
+      path: PROJECT_KEY,
+    }, url);
+  }
+});
+
+Deno.test("SQ-387: a key under another project is refused", () => {
+  const foreign = `${OTHER_PROJECT}/boards/${BOARD}/x.webp`;
+  assertEquals(resolveBoardCropReference(foreign, PROJECT_SCOPE), null);
+  assertEquals(resolveBoardCropReference(`${WORKING}/sign/project-ffe-working/${foreign}?token=t`, PROJECT_SCOPE), null);
+});
+
+Deno.test("SQ-387: a key under another board of the same project is refused", () => {
+  const sibling = `${PROJECT}/boards/${OTHER_BOARD}/x.webp`;
+  assertEquals(resolveBoardCropReference(sibling, PROJECT_SCOPE), null);
+  assertEquals(resolveBoardCropReference(`${WORKING}/public/project-ffe-working/${sibling}`, PROJECT_SCOPE), null);
+  // A board-less or flat key is no board picture.
+  assertEquals(resolveBoardCropReference(`${PROJECT}/x.webp`, PROJECT_SCOPE), null);
+  assertEquals(resolveBoardCropReference(`${PROJECT}/boards/${BOARD}`, PROJECT_SCOPE), null);
+});
+
+Deno.test("SQ-387: traversal, encoded traversal and unsafe names are refused", () => {
+  const base = `${PROJECT}/boards/${BOARD}`;
+  const rejected = [
+    `${base}/../../${OTHER_PROJECT}/boards/${OTHER_BOARD}/x.webp`,
+    `${base}/%2e%2e/%2E%2E/${OTHER_PROJECT}/x.webp`,
+    `${base}/.%2e/x.webp`,
+    `${base}/./x.webp`,
+    `${base}/nested%2Fescape.webp`,
+    `${base}/%252e%252e/x.webp`,
+    `${base}/x.webp%3Fdownload`,
+    `/${PROJECT_KEY}`,
+    `project-ffe-working/${PROJECT_KEY}`,
+    `${WORKING}/sign/project-ffe-working/${base}/../../${OTHER_PROJECT}/boards/${BOARD}/x.webp?token=t`,
+    `${WORKING}/sign/project-ffe-working/${base}/%2e%2e/x.webp?token=t`,
+    `${WORKING}/sign/project-ffe-working/${PROJECT}/boards/${OTHER_BOARD}/..\\..\\${BOARD}/x.webp`,
+    `https://example.com/x/project-ffe-working/${PROJECT_KEY}`,
+    `${WORKING}/sign/other-bucket/${PROJECT_KEY}?token=t`,
+    `ftp://strata.example/storage/v1/object/public/project-ffe-working/${PROJECT_KEY}`,
+  ];
+  for (const value of rejected) {
+    assertEquals(resolveBoardCropReference(value, PROJECT_SCOPE), null, value);
+  }
+});
+
+Deno.test("SQ-387: proposal-board references resolve exactly as before", () => {
+  const values = [
+    `${BASE}/source image.jpg`,
+    `proposal-mood-boards/${BASE}/source%20image.jpg`,
+    publicUrl(`${BASE}/thumb.webp`),
+    `https://strata.example/storage/v1/object/sign/proposal-mood-boards/${BASE}/x.webp?token=t`,
+    `${BASE}/%2e%2e/secret.jpg`,
+    PROJECT_KEY,
+    `${WORKING}/sign/project-ffe-working/${PROJECT_KEY}?token=t`,
+    null,
+    "",
+  ];
+  for (const scope of [null, { boardId: BOARD, projectId: null }]) {
+    for (const value of values) {
+      const path = normalizeBoardObjectReference(value);
+      assertEquals(
+        resolveBoardCropReference(value, scope),
+        path ? { bucket: "proposal-mood-boards", path } : null,
+        String(value),
+      );
+    }
+  }
+  // On a project board a proposal-bucket Storage URL still names that bucket,
+  // but a raw key is read as a working-bucket key and never falls back.
+  assertEquals(resolveBoardCropReference(publicUrl(`${BASE}/thumb.webp`), PROJECT_SCOPE), {
+    bucket: "proposal-mood-boards",
+    path: `${BASE}/thumb.webp`,
+  });
+  assertEquals(resolveBoardCropReference(`${BASE}/thumb.webp`, PROJECT_SCOPE), null);
 });
 
 Deno.test("reference fixture keeps live, frozen, template, original, thumbnail, and cover assets", () => {
