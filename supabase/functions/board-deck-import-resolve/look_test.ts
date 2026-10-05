@@ -366,7 +366,7 @@ Deno.test('bandImageFirst: picture hits are uncapped; fused hits only for produc
 
 Deno.test('T1 exact by image cosine: strong, found by look, the fused twin is never asked', async () => {
   const f = fake([picture('p1')], {
-    imageKnn: [{ product_id: 'catalog-a', rank: 0.97, layer: 'catalog', source: 'product_image' }],
+    imageKnn: [{ product_id: 'catalog-a', rank: LOOK_THRESHOLDS.exact, layer: 'catalog', source: 'product_image' }],
     knn: hits,
   });
   const summary = await runResolve(f.deps);
@@ -383,13 +383,13 @@ Deno.test('T1 exact by image cosine: strong, found by look, the fused twin is ne
 Deno.test('T1 exact by dHash: the crop hash is looked up within τ_hamming', async () => {
   const f = fake([picture('p1')], {
     signature: { image_hash: 'b'.repeat(64), phash: '-4358495415582126305' },
-    phash: [{ product_id: 'studio-c', distance: 3, layer: 'studio', source: 'designer_confirmed' }],
+    phash: [{ product_id: 'studio-c', distance: LOOK_THRESHOLDS.exactHamming, layer: 'studio', source: 'designer_confirmed' }],
     imageKnn: [{ product_id: 'catalog-a', rank: 0.7, layer: 'catalog', source: 'product_image' }],
   });
   await runResolve(f.deps);
   assertEquals(f.phashAsked, [{ phash: '-4358495415582126305', maxDistance: LOOK_THRESHOLDS.exactHamming }]);
   assertEquals(f.recorded[0].candidates.map((c) => [c.product_id, c.band]), [['studio-c', 'strong']]);
-  assertEquals(f.recorded[0].candidates[0].evidence.phash_distance, 3);
+  assertEquals(f.recorded[0].candidates[0].evidence.phash_distance, LOOK_THRESHOLDS.exactHamming);
 });
 
 Deno.test('T2 prefers picture vectors: a product with picture rows is uncapped, others fall back to fused', async () => {

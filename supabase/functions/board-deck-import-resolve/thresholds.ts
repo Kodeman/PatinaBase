@@ -1,43 +1,57 @@
 // board-deck-import-resolve · thresholds and run limits.
 //
-// Every score threshold here is a PLACEHOLDER until SQ-362 calibrates it
-// against real decks. Bands are shown to the designer as words and order,
-// never as numbers, so moving a threshold changes which word a row gets.
+// The look thresholds and the pairing thresholds were calibrated by SQ-362 on
+// retailer gallery pairs (artifacts/deck-import-2026-10-03/calibration/
+// REPORT.md, scripts/deck-import-calibration/); the SQ-350 pilot re-checks
+// them on real decks. `words` is still a placeholder. Bands are shown to the
+// designer as words and order, never as numbers, so moving a threshold
+// changes which word a row gets.
 
-export const THRESHOLD_VERSION = 'deck-resolve-v0-placeholder';
+export const THRESHOLD_VERSION = 'deck-resolve-v1-sq362';
 
 export const THRESHOLDS = {
   /** Link-to-picture pairing by look (cosine on /embed/image vectors). A
    *  pair is assigned only when its similarity reaches `tau` AND beats the
-   *  next-best alternative for both the link and the picture by `margin`. */
-  pair: { tau: 0.8, margin: 0.05 },
+   *  next-best alternative for both the link and the picture by `margin`.
+   *  SQ-362: precision 0.988 (95% low 0.980), recall 79% on 400 simulated
+   *  slides; the old 0.8 / 0.05 held 0.996 but recalled 69%. */
+  pair: { tau: 0.71, margin: 0.02 },
   /** T1 words: the top hit is "likely" only with this score and this margin
    *  over the second; everything else that the search returned is "possible". */
   words: { likelyScore: 0.6, likelyMargin: 0.15 },
 } as const;
 
-/** T2 "by look" and the og:image look-check (look.ts). PLACEHOLDERS from
- *  PLAN (team/p-pipeline-quality.md T0b/T2) until SQ-362 calibrates them on
- *  the labelled crop set; any change bumps `threshold_version`. Cosine on
- *  /embed/image vectors; the designer sees words and order, never numbers. */
+/** T2 "by look", T1 exact and the og:image look-check (look.ts), calibrated
+ *  by SQ-362 on 1,123 deck-like crops of 476 retailer products (REPORT.md);
+ *  any change bumps `threshold_version`. Cosine on /embed/image vectors; the
+ *  designer sees words and order, never numbers. */
 export const LOOK_THRESHOLDS = {
-  threshold_version: 'deck-look-v1-placeholder',
-  /** τ_likely: top kNN hit similarity for "likely". */
-  likely: 0.85,
-  /** τ_margin: top1 − top2 for "likely". */
-  margin: 0.03,
-  /** τ_look: page photo vs deck crop agree at or above this. */
+  threshold_version: 'deck-look-v2-sq362',
+  /** τ_likely: top kNN hit similarity for "likely". Score alone barely
+   *  separates right from wrong (wrong top hits sit at 0.84–0.96); the
+   *  margin does the work. */
+  likely: 0.9,
+  /** τ_margin: top1 − top2 for "likely". With τ_likely: precision 0.896
+   *  (95% low 0.857) on the queries T1 left, vs 0.869 / 0.827 before. */
+  margin: 0.025,
+  /** τ_look: page photo vs deck crop agree at or above this. Not
+   *  recalibrated (SQ-362 measured only true pairs: 24% of room-scene
+   *  crops fall below it). */
   pageAgrees: 0.8,
   /** T1 exact (W5): the crop's image-only cosine to a product picture at or
-   *  above τ_exact is "strong". Kept clear of 1.0: int8 inference drifts the
-   *  same picture to ≈0.9966 across batchings (aesthete-inference README). */
-  exact: 0.95,
+   *  above τ_exact is "strong". SQ-362: 80 of 80 strong rows right at 0.985;
+   *  0.95 was right on 71% of them. Kept clear of 1.0: int8 inference drifts
+   *  the same picture to ≈0.9966 across batchings (aesthete-inference README). */
+  exact: 0.985,
   /** T1 exact (W5): dHash Hamming distance (of 64 bits) at or below this is
-   *  "strong" (phash.ts). */
-  exactHamming: 6,
+   *  "strong" (phash.ts). SQ-362: only an identical hash is safe; at ≤6 just
+   *  32% of hash hits were right (plain-background product photos collide,
+   *  and a re-cropped copy of the same photo moves ~9 bits). */
+  exactHamming: 0,
   /** Hits from the fused 0.65 image / 0.35 caption aesthete_vector are never
    *  better than this band; image-only hits (product_image_vectors) are
-   *  preferred whenever a product has them (contract, W5). */
+   *  preferred whenever a product has them (contract, W5). SQ-362 keeps the
+   *  cap: fused scores sit ~0.1 below image-only and never reach τ_likely. */
   fusedCap: 'possible' as const,
   /** Look hits shown per piece. */
   shown: 3,
