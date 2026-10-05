@@ -114,6 +114,23 @@ export class FetchBlocked extends Error {
   }
 }
 
+/** A non-2xx reply from the Messages API. */
+export class AdjudicationHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`adjudication http ${status}`);
+  }
+}
+
+const TRANSIENT_ADJUDICATION_STATUS = new Set([408, 429, 500, 502, 503, 504, 529]);
+
+/** Rate limits, overload, timeouts and dropped connections pass; retry later. */
+export function isTransientAdjudicationError(error: unknown): boolean {
+  if (error instanceof AdjudicationHttpError) return TRANSIENT_ADJUDICATION_STATUS.has(error.status);
+  if (error instanceof TypeError) return true; // fetch: network failure
+  const name = (error as { name?: unknown })?.name;
+  return name === 'TimeoutError' || name === 'AbortError';
+}
+
 export interface ResolveDeps {
   /** Lease pending pieces: one import (client path) or across imports (cron). */
   claim(limit: number): Promise<ClaimedItem[]>;
@@ -141,6 +158,8 @@ export interface ResolveDeps {
   look?: LookDeps | null;
   sleep(ms: number): Promise<void>;
   log(event: string, fields?: Record<string, unknown>): void;
+  /** Clock for the run's start budget; Date.now when omitted. */
+  now?: () => number;
 }
 
 export interface RunSummary {
@@ -152,6 +171,8 @@ export interface RunSummary {
   pages_read: number;
   link_only: number;
   quota_denied: number;
+  /** Claimed pieces not started before the run's start budget ran out. */
+  deferred: number;
   adjudications: number;
   adjudication_input_tokens: number;
   adjudication_output_tokens: number;
@@ -539,6 +560,7 @@ function emptySummary(): RunSummary {
     pages_read: 0,
     link_only: 0,
     quota_denied: 0,
+    deferred: 0,
     adjudications: 0,
     adjudication_input_tokens: 0,
     adjudication_output_tokens: 0,
@@ -552,8 +574,11 @@ async function adjudicateSlides(
   items: ClaimedItem[],
   deps: ResolveDeps,
   summary: RunSummary,
+  pastDeadline: () => boolean,
 ): Promise<Map<string, { texts: string[]; links: DeckLink[] }>> {
   const byItemKey = new Map<string, { texts: string[]; links: DeckLink[] }>();
+  // No API key: no slot is claimed, so none is spent or left pending.
+  if (!deps.adjudicate) return byItemKey;
   const slides = new Map<string, AdjudicationContext & { import_id: string }>();
   for (const item of items) {
     const context = readAdjudicationContext(item);
@@ -561,25 +586,30 @@ async function adjudicateSlides(
     if (context && !slides.has(key)) slides.set(key, { ...context, import_id: item.import_id });
   }
   for (const [, slide] of slides) {
+    if (pastDeadline()) break;
     let assignments: AdjudicationAssignment[] | null = null;
     const claim = await deps.claimAdjudication(slide.import_id, slide.slide_index);
     if (claim.status === 'cached') {
       assignments = claim.assignments;
     } else if (claim.status === 'granted') {
-      if (!deps.adjudicate) {
-        deps.log('adjudication_unavailable', { import_id: slide.import_id, slide_index: slide.slide_index });
-      } else {
-        try {
-          const { import_id: _ignored, ...context } = slide;
-          const reply = await deps.adjudicate(context);
-          summary.adjudications++;
-          summary.adjudication_input_tokens += reply.usage.input_tokens;
-          summary.adjudication_output_tokens += reply.usage.output_tokens;
-          summary.cost_usd += adjudicationCostUsd(reply.usage);
-          assignments = validateAssignments(reply.input, context);
-        } catch (error) {
-          deps.log('adjudication_failed', { import_id: slide.import_id, error: String(error).slice(0, 200) });
-        }
+      try {
+        const { import_id: _ignored, ...context } = slide;
+        const reply = await deps.adjudicate(context);
+        summary.adjudications++;
+        summary.adjudication_input_tokens += reply.usage.input_tokens;
+        summary.adjudication_output_tokens += reply.usage.output_tokens;
+        summary.cost_usd += adjudicationCostUsd(reply.usage);
+        assignments = validateAssignments(reply.input, context);
+      } catch (error) {
+        const transient = isTransientAdjudicationError(error);
+        deps.log('adjudication_failed', {
+          import_id: slide.import_id,
+          transient,
+          error: String(error).slice(0, 200),
+        });
+        // A transient failure stores nothing: the pending slot is reclaimed
+        // once its lease ages out. Anything else is recorded as failed.
+        if (transient) continue;
       }
       await deps.storeAdjudication(slide.import_id, slide.slide_index, assignments);
     }
@@ -691,17 +721,26 @@ async function pairLinksByLook(
  * fetch, Claude, embedder) happens unless pending pieces were leased.
  */
 export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
+  const now = deps.now ?? Date.now;
+  const deadline = now() + LIMITS.runStartBudgetMs;
+  const pastDeadline = () => now() >= deadline;
   const summary = emptySummary();
   const items = await deps.claim(LIMITS.itemsPerRun);
   summary.claimed = items.length;
   if (items.length === 0) return summary;
 
-  const adjudicated = await adjudicateSlides(items, deps, summary);
+  const adjudicated = await adjudicateSlides(items, deps, summary, pastDeadline);
   const gate = new HostGate(deps.sleep);
   const resolved: { view: PieceView; outcome: PieceOutcome }[] = [];
   const results: { view: PieceView; outcome: PieceOutcome }[] = [];
 
   await pool(items, LIMITS.runConcurrency, async (item) => {
+    // Past the start budget nothing new begins; the lease runs out and the
+    // claim sweep backs the piece off before it is tried again.
+    if (pastDeadline()) {
+      summary.deferred++;
+      return;
+    }
     const view = viewOf(item, adjudicated.get(`${item.import_id}:${item.element_key}`));
     let outcome: PieceOutcome;
     try {

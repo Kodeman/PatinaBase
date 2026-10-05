@@ -53,6 +53,52 @@ export function decodeEntities(s: string): string {
     .replace(/&amp;/gi, '&');
 }
 
+// ─── Linear tag scanning ──────────────────────────────────────────────────────
+// A regex such as /<script…>([\s\S]*?)<\/script>/g restarts its scan at every
+// unclosed open tag, so hostile HTML costs O(n²) (SQ-366 F1: 400KB of unclosed
+// <title> took 4.6 s). These loops yield what those regexes matched, in one
+// forward pass. An open tag with no `>` after it, or a body with no close tag
+// after it, ends the scan: no later start could find one either.
+
+/** Each `<tag …>` source, as html.matchAll(/<open[^>]*>/gi) yields it. */
+export function* tagSources(html: string, openPattern: string): Generator<string> {
+  const open = new RegExp(openPattern, 'gi');
+  for (let m = open.exec(html); m; m = open.exec(html)) {
+    const end = html.indexOf('>', open.lastIndex);
+    if (end === -1) return;
+    yield html.slice(m.index, end + 1);
+    open.lastIndex = end + 1;
+  }
+}
+
+/** Each `<open …>body</close>` whose open tag passes `accept`, as
+ *  html.matchAll(/<open[^>]*>([\s\S]*?)<\/close>/gi) yields the body. */
+export function* elementBodies(
+  html: string,
+  openPattern: string,
+  closeTag: string,
+  accept: (tag: string) => boolean = () => true,
+): Generator<string> {
+  const open = new RegExp(openPattern, 'gi');
+  const close = new RegExp(`</${closeTag}>`, 'gi');
+  for (let m = open.exec(html); m; m = open.exec(html)) {
+    const end = html.indexOf('>', open.lastIndex);
+    if (end === -1) return;
+    open.lastIndex = end + 1;
+    if (!accept(html.slice(m.index, end + 1))) continue;
+    close.lastIndex = end + 1;
+    const shut = close.exec(html);
+    if (!shut) return;
+    yield html.slice(end + 1, shut.index);
+    open.lastIndex = close.lastIndex;
+  }
+}
+
+/** The open-tag test of the JSON-LD script regex. */
+export function isLdJsonTag(tag: string): boolean {
+  return /type=["']application\/ld\+json["']/i.test(tag);
+}
+
 /** Read a single attribute from one tag's source; whitespace-anchored so
  *  `content=` never matches `data-content=`. Returns the decoded value. */
 function getAttr(tag: string, name: string): string | null {
@@ -73,8 +119,7 @@ interface MetaTag {
 
 function collectMetaTags(html: string): MetaTag[] {
   const tags: MetaTag[] = [];
-  for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
-    const tag = m[0];
+  for (const tag of tagSources(html, '<meta\\b')) {
     const key = getAttr(tag, 'property') ?? getAttr(tag, 'name');
     const content = getAttr(tag, 'content');
     if (key && content !== null) {
@@ -197,10 +242,8 @@ interface LdResult {
 }
 
 function extractJsonLd(html: string): LdResult {
-  for (const m of html.matchAll(
-    /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
-  )) {
-    const text = m[1].trim();
+  for (const body of elementBodies(html, '<script\\b', 'script', isLdJsonTag)) {
+    const text = body.trim();
     if (!text) continue;
     let data: unknown;
     try {
@@ -244,9 +287,9 @@ function extractOpenGraph(tags: MetaTag[]): OgResult {
 /** `<title>` name heuristic: strip a trailing "| Retailer"-style segment.
  *  Only strong separators (never a bare hyphen — product names use those). */
 function titleName(html: string): string | null {
-  const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  if (!m) return null;
-  let t = decodeEntities(m[1]).replace(/\s+/g, ' ').trim();
+  const first = elementBodies(html, '<title', 'title').next();
+  if (first.done) return null;
+  let t = decodeEntities(first.value).replace(/\s+/g, ' ').trim();
   if (!t) return null;
   for (const sep of [' | ', ' — ', ' – ', ' · ', ' :: ']) {
     const idx = t.indexOf(sep);

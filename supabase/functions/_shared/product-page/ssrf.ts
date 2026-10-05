@@ -54,6 +54,8 @@ export interface PinnedRequestOptions {
   timeoutMs: number;
   maxBytes: number;
   allowedContentTypes?: readonly string[];
+  /** Return the first maxBytes of a larger body instead of failing too_large. */
+  truncate?: boolean;
 }
 
 export interface PinnedHttpTransport {
@@ -68,6 +70,9 @@ export interface PinnedHttpTransport {
  *  so that function's behaviour is unchanged by the lift. */
 export interface FetchHtmlOptions {
   maxBytes?: number;
+  /** Read at most maxBytes and parse that prefix instead of failing with 413
+   *  (the deck path, SQ-366 F10). Omitted, an oversized page still fails. */
+  truncate?: boolean;
 }
 
 export interface SafeFetchDependencies {
@@ -360,6 +365,9 @@ const MAX_RESPONSE_HEADER_BYTES = 64 * 1024;
 const MAX_RESPONSE_LINE_BYTES = 8 * 1024;
 const MAX_INFORMATIONAL_RESPONSES = 5;
 const MAX_RESPONSE_CHUNKS = 4_096;
+// The chunk cap scales with the body cap: 4096 chunks at 2MB is a 512-byte
+// average chunk, so capture-from-url's 2MB keeps exactly 4096 (SQ-366 F10).
+const MIN_AVERAGE_CHUNK_BYTES = 512;
 const READ_BUFFER_BYTES = 16 * 1024;
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const latin1Decoder = new TextDecoder('latin1');
@@ -481,11 +489,15 @@ class BufferedByteReader {
     return joinChunks(chunks, total);
   }
 
-  async readToEnd(maxBytes: number): Promise<Uint8Array> {
+  async readToEnd(maxBytes: number, truncate = false): Promise<Uint8Array> {
     const chunks: Uint8Array[] = [];
     let total = 0;
     for (;;) {
       if (this.buffered.length > 0) {
+        if (truncate && total + this.buffered.length > maxBytes) {
+          chunks.push(this.consume(maxBytes - total));
+          return joinChunks(chunks, maxBytes);
+        }
         total += this.buffered.length;
         if (total > maxBytes) throw new PinnedTransportError('too_large');
         chunks.push(this.consume(this.buffered.length));
@@ -623,9 +635,11 @@ function assertTrailerLine(line: Uint8Array): void {
 async function readChunkedBody(
   reader: BufferedByteReader,
   maxBytes: number,
+  truncate = false,
 ): Promise<Uint8Array> {
   const crlf = new Uint8Array([13, 10]);
   const chunks: Uint8Array[] = [];
+  const maxChunks = Math.max(MAX_RESPONSE_CHUNKS, Math.ceil(maxBytes / MIN_AVERAGE_CHUNK_BYTES));
   let total = 0;
   let chunkCount = 0;
   for (;;) {
@@ -646,7 +660,9 @@ async function readChunkedBody(
       throw new PinnedTransportError('failed');
     }
     if (size > BigInt(maxBytes - total)) {
-      throw new PinnedTransportError('too_large');
+      if (!truncate) throw new PinnedTransportError('too_large');
+      chunks.push(await reader.readExactly(maxBytes - total));
+      return joinChunks(chunks, maxBytes);
     }
     if (size === 0n) {
       let trailerBytes = 0;
@@ -660,7 +676,7 @@ async function readChunkedBody(
         assertTrailerLine(trailer);
       }
     }
-    if (++chunkCount > MAX_RESPONSE_CHUNKS) {
+    if (++chunkCount > maxChunks) {
       throw new PinnedTransportError('failed');
     }
     const chunkLength = Number(size);
@@ -681,7 +697,7 @@ async function readChunkedBody(
  */
 export async function readPinnedHttpResponse(
   source: ByteReader,
-  options: Pick<PinnedRequestOptions, 'maxBytes' | 'allowedContentTypes'>,
+  options: Pick<PinnedRequestOptions, 'maxBytes' | 'allowedContentTypes' | 'truncate'>,
 ): Promise<Response> {
   const reader = new BufferedByteReader(source);
   const headerDelimiter = new Uint8Array([13, 10, 13, 10]);
@@ -728,17 +744,18 @@ export async function readPinnedHttpResponse(
 
   assertIdentityContentEncoding(head.rawHeaders);
   assertAllowedContentType(head.headers, options.allowedContentTypes);
-  if (contentLength !== null && contentLength > options.maxBytes) {
+  const truncate = options.truncate === true;
+  if (!truncate && contentLength !== null && contentLength > options.maxBytes) {
     throw new PinnedTransportError('too_large');
   }
 
   let body: Uint8Array;
   if (transferEncoding === 'chunked') {
-    body = await readChunkedBody(reader, options.maxBytes);
+    body = await readChunkedBody(reader, options.maxBytes, truncate);
   } else if (contentLength !== null) {
-    body = await reader.readExactly(contentLength);
+    body = await reader.readExactly(Math.min(contentLength, options.maxBytes));
   } else {
-    body = await reader.readToEnd(options.maxBytes);
+    body = await reader.readToEnd(options.maxBytes, truncate);
   }
   return new Response(new Uint8Array(body), {
     status: head.status,
@@ -881,8 +898,9 @@ function isRedirectStatus(status: number): boolean {
     status === 308;
 }
 
-/** Read a response body, aborting past `MAX_BYTES`, decoded as UTF-8. */
-async function readCapped(res: Response, maxBytes = MAX_BYTES): Promise<string> {
+/** Read a response body, aborting past `MAX_BYTES` (or, with `truncate`,
+ *  keeping the first maxBytes), decoded as UTF-8. */
+async function readCapped(res: Response, maxBytes = MAX_BYTES, truncate = false): Promise<string> {
   if (!res.body) return '';
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -891,6 +909,12 @@ async function readCapped(res: Response, maxBytes = MAX_BYTES): Promise<string> 
     const { done, value } = await reader.read();
     if (done) break;
     if (value) {
+      if (truncate && total + value.byteLength > maxBytes) {
+        chunks.push(value.subarray(0, maxBytes - total));
+        total = maxBytes;
+        await reader.cancel();
+        break;
+      }
       total += value.byteLength;
       if (total > maxBytes) {
         await reader.cancel();
@@ -921,6 +945,7 @@ export async function fetchHtml(
 ): Promise<{ html: string; finalUrl: string }> {
   let currentUrl = startUrl;
   const maxBytes = options.maxBytes ?? MAX_BYTES;
+  const truncate = options.truncate === true;
   const resolver = dependencies.resolver ?? denoHostResolver;
   const transport = dependencies.transport ?? denoPinnedHttpTransport;
 
@@ -943,6 +968,7 @@ export async function fetchHtml(
           timeoutMs: TIMEOUT_MS,
           maxBytes,
           allowedContentTypes: ['text/html'],
+          ...(truncate ? { truncate } : {}),
         },
       );
     } catch (e) {
@@ -984,12 +1010,12 @@ export async function fetchHtml(
     }
 
     const declaredLength = Number(res.headers.get('content-length') ?? '');
-    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    if (!truncate && Number.isFinite(declaredLength) && declaredLength > maxBytes) {
       await res.body?.cancel();
       throw new UrlError('response_too_large', 413);
     }
 
-    const html = await readCapped(res, maxBytes);
+    const html = await readCapped(res, maxBytes, truncate);
     return { html, finalUrl: currentUrl };
   }
 

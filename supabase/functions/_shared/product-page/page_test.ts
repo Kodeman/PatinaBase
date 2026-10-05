@@ -2,7 +2,8 @@
 //
 // Fixtures are hand-built in the shape public retailer pages use (no client
 // data): the must-handle list from the SQ-349 hit-rate spike.
-import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { elementBodies, extractProduct, isLdJsonTag, tagSources } from './extract.ts';
 import { cleanImageUrl, cleanProductName, readProductPage } from './page.ts';
 
 function page(head: string): string {
@@ -104,4 +105,82 @@ Deno.test('(f) a non-USD priceCurrency is no price, in JSON-LD and OG alike', ()
   const ogRead = readProductPage(ogHtml, 'https://uk.example/p/chair', 'https://uk.example/p/chair');
   assertEquals(ogRead.kind, 'product');
   assertEquals(ogRead.priceCents, null);
+});
+
+// ─── SQ-366 F1: hostile HTML is read in linear time ─────────────────────────
+
+const MB = 1024 * 1024;
+
+function timed(run: () => void): number {
+  const start = performance.now();
+  run();
+  return performance.now() - start;
+}
+
+Deno.test('F1: 1MB of unclosed ld+json script tags reads in under 200 ms', () => {
+  const html = '<script type="application/ld+json">{'.repeat(MB / 36);
+  assert(html.length >= MB - 64);
+  let read: ReturnType<typeof readProductPage> | null = null;
+  const ms = timed(() => {
+    read = readProductPage(html, 'https://shop.example/p/x', 'https://shop.example/p/x');
+  });
+  assert(ms < 200, `readProductPage took ${ms.toFixed(0)} ms`);
+  assertEquals(read!.kind, 'not_product');
+  const capture = timed(() => extractProduct(html, 'https://shop.example/p/x'));
+  assert(capture < 200, `extractProduct took ${capture.toFixed(0)} ms`);
+});
+
+Deno.test('F1: 1MB of unclosed <title> tags reads in under 200 ms', () => {
+  // An OG price makes the page a product, so the title fallback is read.
+  const html = '<meta property="product:price:amount" content="10">' + '<title>a'.repeat(MB / 8);
+  assert(html.length >= MB);
+  let read: ReturnType<typeof readProductPage> | null = null;
+  const ms = timed(() => {
+    read = readProductPage(html, 'https://shop.example/p/x', 'https://shop.example/p/x');
+  });
+  assert(ms < 200, `readProductPage took ${ms.toFixed(0)} ms`);
+  assertEquals(read!.kind, 'product');
+  assertEquals(read!.name, null);
+  const capture = timed(() => extractProduct(html, 'https://shop.example/p/x'));
+  assert(capture < 200, `extractProduct took ${capture.toFixed(0)} ms`);
+});
+
+Deno.test('F1: 1MB of unclosed <meta tags reads in under 200 ms', () => {
+  const html = '<meta property="og:title" content="x" '.repeat(MB / 38);
+  const ms = timed(() => readProductPage(html, 'https://shop.example/p/x', 'https://shop.example/p/x'));
+  assert(ms < 200, `readProductPage took ${ms.toFixed(0)} ms`);
+});
+
+Deno.test('F1: the linear scanners match what the old regexes matched', () => {
+  const samples = [
+    '<script type="application/ld+json">{"a":1}</script><script type="application/ld+json">{"b":2}</SCRIPT>',
+    '<script src="x.js"></script><script type=\'application/ld+json\'> {"c":3} </script>',
+    '<script <script type="application/ld+json">{"d":4}</script>',
+    '<script type="application/ld+json">{"open":true}',
+    '<SCRIPT TYPE="application/ld+json" id=x>{"e":5}</script>tail<script type="text/json">{}</script>',
+    '<title>One</title><title>Two</title>',
+    '<title x <title>Nested</title>',
+    '<titlefoo>Odd</title>',
+    '<title>Unclosed',
+    '<meta property="og:title" content="A"><META name="description" content="B"><meta',
+    '<meta property="og:title" content="A" <meta name="x" content="y">',
+  ];
+  for (const html of samples) {
+    assertEquals(
+      [...elementBodies(html, '<script\\b', 'script', isLdJsonTag)],
+      [...html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)]
+        .map((m) => m[1]),
+      `ld+json: ${html}`,
+    );
+    assertEquals(
+      elementBodies(html, '<title', 'title').next().value ?? null,
+      html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? null,
+      `title: ${html}`,
+    );
+    assertEquals(
+      [...tagSources(html, '<meta\\b')],
+      [...html.matchAll(/<meta\b[^>]*>/gi)].map((m) => m[0]),
+      `meta: ${html}`,
+    );
+  }
 });

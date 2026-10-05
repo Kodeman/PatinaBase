@@ -1263,6 +1263,7 @@ export type Database = {
           kept_by: string | null
           lease_owner: string | null
           lease_until: string | null
+          merged_into_item_id: string | null
           next_attempt_at: string | null
           role: string
           slide_index: number
@@ -1285,6 +1286,7 @@ export type Database = {
           kept_by?: string | null
           lease_owner?: string | null
           lease_until?: string | null
+          merged_into_item_id?: string | null
           next_attempt_at?: string | null
           role: string
           slide_index?: number
@@ -1307,6 +1309,7 @@ export type Database = {
           kept_by?: string | null
           lease_owner?: string | null
           lease_until?: string | null
+          merged_into_item_id?: string | null
           next_attempt_at?: string | null
           role?: string
           slide_index?: number
@@ -1371,6 +1374,13 @@ export type Database = {
             referencedRelation: "board_deck_imports"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "board_deck_import_items_merged_into_item_id_fkey"
+            columns: ["merged_into_item_id"]
+            isOneToOne: false
+            referencedRelation: "board_deck_import_items"
+            referencedColumns: ["id"]
+          },
         ]
       }
       board_deck_import_link_usage: {
@@ -1410,16 +1420,19 @@ export type Database = {
       }
       board_deck_import_studio_link_days: {
         Row: {
+          adjudications_used: number
           day: string
           links_used: number
           studio_key: string
         }
         Insert: {
+          adjudications_used?: number
           day: string
           links_used?: number
           studio_key: string
         }
         Update: {
+          adjudications_used?: number
           day?: string
           links_used?: number
           studio_key?: string
@@ -1627,6 +1640,51 @@ export type Database = {
           consumed_at?: string
           id?: never
           user_id?: string
+        }
+        Relationships: []
+      }
+      board_web_match_settings: {
+        Row: {
+          cost_micros_per_call: number
+          id: boolean
+          monthly_call_cap: number
+          updated_at: string
+        }
+        Insert: {
+          cost_micros_per_call?: number
+          id?: boolean
+          monthly_call_cap?: number
+          updated_at?: string
+        }
+        Update: {
+          cost_micros_per_call?: number
+          id?: boolean
+          monthly_call_cap?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      board_web_match_usage: {
+        Row: {
+          calls: number
+          cost_micros: number
+          month: string
+          studio_id: string
+          updated_at: string
+        }
+        Insert: {
+          calls?: number
+          cost_micros?: number
+          month: string
+          studio_id: string
+          updated_at?: string
+        }
+        Update: {
+          calls?: number
+          cost_micros?: number
+          month?: string
+          studio_id?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -32733,6 +32791,10 @@ export type Database = {
         Args: { p_context: string; p_proposal_id: string }
         Returns: undefined
       }
+      _board_deck_import_assert_lease: {
+        Args: { p_import_id: string; p_lease_owner: string }
+        Returns: undefined
+      }
       _board_deck_import_assert_pin_movable: {
         Args: { p_board_item_id: string }
         Returns: undefined
@@ -32764,6 +32826,7 @@ export type Database = {
           kept_by: string | null
           lease_owner: string | null
           lease_until: string | null
+          merged_into_item_id: string | null
           next_attempt_at: string | null
           role: string
           slide_index: number
@@ -32790,6 +32853,16 @@ export type Database = {
         Args: { p_product_id: string }
         Returns: boolean
       }
+      _board_deck_import_record: {
+        Args: {
+          p_candidates: Json
+          p_found_by: string
+          p_item_id: string
+          p_lease_owner: string
+          p_state: string
+        }
+        Returns: Json
+      }
       _board_deck_import_resolve_vendor: {
         Args: { p_name: string; p_url: string }
         Returns: string
@@ -32806,6 +32879,7 @@ export type Database = {
         Args: { p_import_id: string }
         Returns: string
       }
+      _board_deck_import_url_host: { Args: { p_url: string }; Returns: string }
       _board_deck_import_usage_row: {
         Args: { p_import_id: string }
         Returns: {
@@ -35070,6 +35144,10 @@ export type Database = {
         Args: { p_reference: string }
         Returns: string
       }
+      board_web_match_studio_key: {
+        Args: { p_import_id: string }
+        Returns: string
+      }
       build_board_share_payload: {
         Args: {
           p_board_id: string
@@ -35263,7 +35341,11 @@ export type Database = {
         }
       }
       claim_board_deck_import_adjudication: {
-        Args: { p_import_id: string; p_slide_index: number }
+        Args: {
+          p_import_id: string
+          p_lease_owner: string
+          p_slide_index: number
+        }
         Returns: Json
       }
       claim_board_deck_import_items: {
@@ -35489,11 +35571,15 @@ export type Database = {
         Returns: Json
       }
       consume_board_deck_import_link_quota: {
-        Args: { p_import_id: string; p_n: number }
+        Args: { p_import_id: string; p_lease_owner: string; p_n: number }
         Returns: Json
       }
       consume_board_unfurl_quota: {
         Args: { p_user_id?: string }
+        Returns: Json
+      }
+      consume_board_web_match_budget: {
+        Args: { p_n: number; p_studio_id: string }
         Returns: Json
       }
       consume_capture: {
@@ -38278,11 +38364,16 @@ export type Database = {
       }
       record_board_deck_import_resolution: {
         Args: {
-          p_candidates?: Json
-          p_found_by?: string
+          p_candidates: Json
+          p_found_by: string
           p_item_id: string
+          p_lease_owner: string
           p_state: string
         }
+        Returns: Json
+      }
+      record_board_web_match_result: {
+        Args: { p_base_candidates: Json; p_candidates: Json; p_item_id: string }
         Returns: Json
       }
       record_capture_enrichment_result: {
@@ -40317,6 +40408,7 @@ export type Database = {
         Args: {
           p_assignments: Json
           p_import_id: string
+          p_lease_owner: string
           p_slide_index: number
         }
         Returns: undefined
