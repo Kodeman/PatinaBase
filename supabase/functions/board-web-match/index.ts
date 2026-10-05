@@ -26,6 +26,7 @@ import {
   UrlError,
 } from "../_shared/product-page/ssrf.ts";
 import { BOARD_ASSET_BUCKET, bearerRole, normalizeBoardObjectReference } from "../board-asset-cleanup/core.ts";
+import { testFetchBase, testTransport } from "../board-deck-import-resolve/test_fetch_base.ts";
 import {
   FetchBlocked,
   gate,
@@ -39,7 +40,12 @@ import {
 } from "./core.ts";
 
 const FUNCTION_NAME = "board-web-match";
-const VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
+// Local e2e only (test_fetch_base.ts): pages and Vision go to the fixture server.
+const TEST_FETCH_BASE = testFetchBase(Deno.env);
+const pageTransport = TEST_FETCH_BASE ? testTransport(TEST_FETCH_BASE) : denoPinnedHttpTransport;
+const VISION_URL = TEST_FETCH_BASE
+  ? `${TEST_FETCH_BASE}/vision/v1/images:annotate`
+  : "https://vision.googleapis.com/v1/images:annotate";
 
 function log(event: string, fields: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({ ts: new Date().toISOString(), fn: FUNCTION_NAME, event, ...fields }));
@@ -155,7 +161,7 @@ Deno.serve(async (req) => {
           // Each hop's request waits on its own host's gate (redirects included).
           const transport = {
             request: (target: URL, address: ResolvedAddress, options: PinnedRequestOptions) =>
-              hop(target.toString(), () => denoPinnedHttpTransport.request(target, address, options)),
+              hop(target.toString(), () => pageTransport.request(target, address, options)),
           };
           return await fetchHtml(url, { transport }, { maxBytes: DECK_PAGE_MAX_BYTES });
         } catch (error) {
