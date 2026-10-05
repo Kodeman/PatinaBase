@@ -10,7 +10,7 @@
  * is ever sent to a vendor from here.
  */
 
-import { useEffect, useId, useMemo, useState, type KeyboardEvent } from 'react';
+import { useId, useMemo, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { Presentation } from 'lucide-react';
 import type { BoardOwnerRef, DeckImportItem, EditableMoodBoardItem } from '@patina/types';
@@ -332,7 +332,9 @@ export function BoardDeckImportLedger({
 }) {
   const pieces = useMemo(() => reviewPieces(items), [items]);
   const [active, setActive] = useState(0);
-  const [mode, setMode] = useState<ActsMode>('idle');
+  // The mode belongs to one row: moving to another row lands in idle, and a
+  // row's own act can open its mode in the same click that makes it active.
+  const [heldMode, setHeldMode] = useState<{ itemId: string | null; mode: ActsMode }>({ itemId: null, mode: 'idle' });
   const [pickIndex, setPickIndex] = useState(0);
   const [disposition, setDisposition] = useState<PromoteDisposition>('selected');
   const [scheduling, setScheduling] = useState(false);
@@ -350,10 +352,21 @@ export function BoardDeckImportLedger({
   const toSchedule = deckPinsToSchedule(pins, owner.kind);
   const pinById = useMemo(() => new Map(pins.map((pin) => [pin.id, pin])), [pins]);
 
-  useEffect(() => {
-    setMode('idle');
-    setPickIndex(0);
-  }, [activeItem?.id]);
+  const mode: ActsMode = heldMode.itemId === activeItem?.id ? heldMode.mode : 'idle';
+  const setModeFor = (itemId: string | undefined, next: ActsMode | ((current: ActsMode) => ActsMode)) =>
+    setHeldMode((held) => {
+      const current = held.itemId === itemId ? held.mode : 'idle';
+      return { itemId: itemId ?? null, mode: typeof next === 'function' ? next(current) : next };
+    });
+  const setMode = (next: ActsMode | ((current: ActsMode) => ActsMode)) => setModeFor(activeItem?.id, next);
+  /** Make a row active; another row's mode and picture choice are let go. */
+  const activate = (index: number) => {
+    const itemId = pieces[index]?.id ?? null;
+    setActive(index);
+    setHeldMode((held) => (held.itemId === itemId ? held : { itemId: null, mode: 'idle' }));
+    if (itemId !== (activeItem?.id ?? null)) setPickIndex(0);
+  };
+  const activeIndex = Math.min(active, pieces.length - 1);
 
   const slides = useMemo(() => {
     const groups = new Map<number, DeckImportItem[]>();
@@ -370,11 +383,11 @@ export function BoardDeckImportLedger({
       switch (event.key) {
         case 'j':
           if (mode === 'pick') setPickIndex((i) => Math.min(i + 1, Math.max(0, crops.length - 1)));
-          else setActive((i) => Math.min(i + 1, pieces.length - 1));
+          else activate(Math.min(activeIndex + 1, pieces.length - 1));
           return true;
         case 'k':
           if (mode === 'pick') setPickIndex((i) => Math.max(i - 1, 0));
-          else setActive((i) => Math.max(i - 1, 0));
+          else activate(Math.max(activeIndex - 1, 0));
           return true;
         case 'Enter': {
           if (mode === 'pick') {
@@ -486,7 +499,7 @@ export function BoardDeckImportLedger({
                       data-deck-row={item.id}
                       data-deck-row-state={rowState(item)}
                       aria-current={isActive ? 'true' : undefined}
-                      onClick={() => setActive(index)}
+                      onClick={() => activate(index)}
                       className={`grid grid-cols-[64px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.6fr)] items-start gap-3 border-l-2 py-2 pl-2 ${isActive ? 'border-[var(--color-clay)]' : 'border-transparent'}`}
                     >
                       {crop ? (
@@ -510,8 +523,8 @@ export function BoardDeckImportLedger({
                           pins={pins}
                           mode={isActive ? mode : 'idle'}
                           onModeChange={(next) => {
-                            setActive(index);
-                            setMode(next);
+                            activate(index);
+                            setModeFor(item.id, next);
                           }}
                           pickIndex={pickIndex}
                         />

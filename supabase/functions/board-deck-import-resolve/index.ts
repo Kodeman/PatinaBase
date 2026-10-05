@@ -43,9 +43,13 @@ import {
 } from "./core.ts";
 import { cropSignature, readCappedBytes } from "./crop_signature.ts";
 import type { KnnHit, LookGate, PhashHit } from "./look.ts";
+import { testFetchBase, testTransport } from "./test_fetch_base.ts";
 import { ADJUDICATION } from "./thresholds.ts";
 
 const FUNCTION_NAME = "board-deck-import-resolve";
+// Local e2e only (test_fetch_base.ts); null everywhere else.
+const TEST_FETCH_BASE = testFetchBase(Deno.env);
+const pageTransport = TEST_FETCH_BASE ? testTransport(TEST_FETCH_BASE) : denoPinnedHttpTransport;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SIGNED_CROP_SECONDS = 600;
 /** Crops are ≤2400 px WebP; anything far larger is not hashed. */
@@ -120,7 +124,7 @@ function deps(
         // Each hop's request waits on its own host's gate (redirects included).
         const transport = {
           request: (target: URL, address: ResolvedAddress, options: PinnedRequestOptions) =>
-            hop(target.toString(), () => denoPinnedHttpTransport.request(target, address, options)),
+            hop(target.toString(), () => pageTransport.request(target, address, options)),
         };
         // A page past the budget is read as its first 5MB, not refused.
         return await fetchHtml(url, { transport }, { maxBytes: DECK_PAGE_MAX_BYTES, truncate: true });
