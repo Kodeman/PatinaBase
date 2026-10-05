@@ -26,6 +26,7 @@ import { cleanProductName, readProductPage } from '../_shared/product-page/page.
 import { FetchBlocked, type HopGate, HostGate } from '../board-deck-import-resolve/core.ts';
 import { hostOf, isDeniedLink, nameFromSlug, normalizeProductUrl } from '../board-deck-import-resolve/links.ts';
 import { retailerName } from '../board-deck-import-resolve/retailers.ts';
+import { type BoardCropScope, type BoardObject, resolveBoardCropReference } from '../board-asset-cleanup/core.ts';
 
 export { FetchBlocked };
 
@@ -53,7 +54,7 @@ export interface WebCandidate {
   evidence: Record<string, unknown>;
 }
 
-/** A piece as the caller can see it, plus its crop's board-bucket path. */
+/** A piece as the caller can see it, plus where its crop is stored. */
 export interface WebMatchItem {
   item_id: string;
   import_id: string;
@@ -61,7 +62,7 @@ export interface WebMatchItem {
   board_id: string;
   state: string;
   candidates: Array<Record<string, unknown>>;
-  crop_path: string | null;
+  crop: BoardObject | null;
 }
 
 export interface WebPage {
@@ -79,7 +80,7 @@ export interface Budget {
 export interface WebMatchDeps {
   consumeBudget: (n: number) => Promise<Budget>;
   /** The crop as base64, or null when it cannot be read. */
-  loadCrop: (path: string) => Promise<string | null>;
+  loadCrop: (crop: BoardObject) => Promise<string | null>;
   /** POST images:annotate with WEB_DETECTION; the raw JSON response. */
   annotate: (contentBase64: string) => Promise<unknown>;
   /** SSRF-guarded page read. Every request, the first and each redirect hop,
@@ -154,6 +155,19 @@ export function vendorDomain(website: string | null | undefined): string | null 
 export function cropOnBoard(path: string, boardId: string): boolean {
   const parts = path.split('/');
   return parts.length >= 4 && parts[1] === 'boards' && parts[2].toLowerCase() === boardId.toLowerCase();
+}
+
+/**
+ * The pin's picture, resolved against the import's board as read from the
+ * database: the original if there is one, else the shown image.
+ */
+export function pinCrop(
+  pin: { image_url?: string | null; data?: any } | undefined,
+  scope: BoardCropScope,
+): BoardObject | null {
+  if (!pin) return null;
+  const data = pin.data && typeof pin.data === 'object' ? pin.data : {};
+  return resolveBoardCropReference(data.original_image_url ?? pin.image_url ?? data.image_url, scope);
 }
 
 /** Page text lands in record's 64 KB candidate budget; a paid call must not throw there. */
@@ -251,7 +265,7 @@ export function mergeCandidates(
 
 function eligibility(item: WebMatchItem): string | null {
   if (item.state !== 'found' && item.state !== 'not_found') return `state_${item.state}`;
-  if (!item.crop_path) return 'no_picture';
+  if (!item.crop) return 'no_picture';
   if (item.candidates.length >= MAX_CANDIDATES) return 'full';
   return null;
 }
@@ -390,9 +404,9 @@ export async function runWebMatch(items: WebMatchItem[], deps: WebMatchDeps): Pr
   const crops = new Map<string, string>();
   await inLanes(eligible, async (item) => {
     let crop: string | null = null;
-    if (cropOnBoard(item.crop_path!, item.board_id)) {
+    if (cropOnBoard(item.crop!.path, item.board_id)) {
       try {
-        crop = await deps.loadCrop(item.crop_path!);
+        crop = await deps.loadCrop(item.crop!);
       } catch {
         crop = null;
       }
