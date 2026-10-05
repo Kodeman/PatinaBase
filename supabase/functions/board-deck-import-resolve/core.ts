@@ -11,7 +11,9 @@
 //                      Page blocked or failed → link-only (page_read=false), likely.
 //   T0c sku            caption SKU + vendor = products.vendor_sku       strong
 //   T1  words          caption name/vendor → visible text search        likely/possible
-//   T2  look           crop → /embed/image → 00679 kNN twin (look.ts)    likely/possible
+//   T1  exact          crop dHash / image cosine → 00681 picture rows    strong
+//   T2  look           crop → /embed/image → 00681 picture kNN, else the likely/possible
+//                      00679 fused twin (look.ts)
 //                      (+ the og:image look-check on read T0b links)
 //
 // Visibility is always the importing user's (import.created_by), applied in

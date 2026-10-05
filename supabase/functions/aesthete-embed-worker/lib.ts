@@ -20,7 +20,9 @@
 //      up to 3 image URLs → /embed/image (chunked ≤ 16/request), caption →
 //      /embed/text, fuse 0.65/0.35 with L2 normalize IN THIS FN (plain array
 //      math) → UPDATE products.aesthete_vector + style_caption +
-//      aesthete_vector_at + aesthete_model_version.
+//      aesthete_vector_at + aesthete_model_version. The per-picture vectors
+//      are then kept: replace_product_image_vectors (00681) writes one
+//      product_image_vectors row per embedded picture.
 //   3. Claim up to batch_size portfolio_embed jobs (Wave 4B, 00249). Per
 //      item: resolve the image URL — a storage_path that is already
 //      http(s):// is used verbatim (the dev/demo affordance documented in
@@ -364,6 +366,8 @@ interface FusedWork {
   caption: string;
   imageUrls: string[];
   imageVectors: number[][];
+  /** The same vectors with their picture URL, kept in product_image_vectors. */
+  imageRows: { url: string; v: number[] }[];
   imageErrors: string[];
   captionVector?: number[];
   failed?: string; // reason, once decided
@@ -412,6 +416,7 @@ async function drainEmbedFused(deps: EmbedBatchDeps, tally: KindTally): Promise<
       caption,
       imageUrls: (product.images ?? []).slice(0, MAX_FUSED_IMAGES),
       imageVectors: [],
+      imageRows: [],
       imageErrors: [],
     });
   }
@@ -423,13 +428,20 @@ async function drainEmbedFused(deps: EmbedBatchDeps, tally: KindTally): Promise<
   );
   const workByJobId = new Map(work.map((w) => [String(w.job.id), w]));
   let modelVersion: string | null = null;
+  let imageModelVersion: string | null = null;
 
   for (const batch of chunk(imageInputs, INFERENCE_MAX_BATCH)) {
     try {
       const res = await deps.inference.embedImage(batch);
       modelVersion = res.model_version;
+      imageModelVersion = res.model_version;
       for (const v of res.vectors) {
-        workByJobId.get(v.id.split(':')[0])?.imageVectors.push(v.v);
+        const [jobId, index] = v.id.split(':');
+        const w = workByJobId.get(jobId);
+        if (!w) continue;
+        w.imageVectors.push(v.v);
+        const url = w.imageUrls[Number(index)];
+        if (url) w.imageRows.push({ url, v: v.v });
       }
       for (const e of res.errors) {
         workByJobId.get(e.id.split(':')[0])?.imageErrors.push(e.reason);
@@ -528,7 +540,46 @@ async function drainEmbedFused(deps: EmbedBatchDeps, tally: KindTally): Promise<
       await finish(deps, tally, w.job, 'failed', `aesthete_vector update failed: ${error.message}`);
       continue;
     }
+
+    // 00681: keep the per-picture vectors (image-only, for the deck import's
+    // exact and look tiers). One call per product replaces its picture rows,
+    // so removed pictures and older models drop out. A failure retries the
+    // whole job through the 00241 ladder; the fused write above is idempotent.
+    const keep = await keepImageVectors(deps, w, imageModelVersion ?? modelVersion);
+    if (keep) {
+      await finish(deps, tally, w.job, 'failed', keep);
+      continue;
+    }
     await finish(deps, tally, w.job, 'done');
+  }
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** replace_product_image_vectors for one fused product; returns a failure reason or null. */
+async function keepImageVectors(
+  deps: EmbedBatchDeps,
+  w: FusedWork,
+  modelVersion: string | null,
+): Promise<string | null> {
+  if (!modelVersion) return null; // no inference reply carried a model: nothing to key rows by
+  try {
+    const rows = await Promise.all(w.imageRows.map(async (row) => ({
+      // The worker never holds the bytes; the picture URL is the identity.
+      image_hash: await sha256Hex(row.url),
+      vector: toPgVector(row.v),
+    })));
+    const { error } = await deps.db.rpc('replace_product_image_vectors', {
+      p_product_id: w.product.id,
+      p_model_version: modelVersion,
+      p_rows: rows,
+    });
+    return error ? `image vectors write failed: ${error.message}` : null;
+  } catch (err) {
+    return `image vectors write failed: ${errMessage(err)}`;
   }
 }
 

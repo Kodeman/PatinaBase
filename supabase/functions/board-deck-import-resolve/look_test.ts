@@ -1,7 +1,17 @@
 // deno test --allow-all --config supabase/functions/deno.json supabase/functions/board-deck-import-resolve/
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { type Candidate, type ClaimedItem, type ResolveDeps, runResolve } from './core.ts';
-import { bandLook, type KnnHit, LOOK_EMBED_BATCH, type LookDeps, lookCheckCandidate } from './look.ts';
+import {
+  bandExact,
+  bandImageFirst,
+  bandLook,
+  type KnnHit,
+  LOOK_EMBED_BATCH,
+  type LookDeps,
+  lookCheckCandidate,
+  type PhashHit,
+} from './look.ts';
+import type { CropSignature } from './phash.ts';
 import { LOOK_MIN_VISIBLE_VECTORS, LOOK_THRESHOLDS } from './thresholds.ts';
 
 const IMPORT = '22222222-2222-4222-8222-222222222222';
@@ -36,6 +46,10 @@ function fake(items: ClaimedItem[], options: {
   healthy?: boolean;
   embed?: (inputs: { id: string; url: string }[]) => Promise<Map<string, number[]>>;
   knn?: KnnHit[];
+  imageKnn?: KnnHit[];
+  phash?: PhashHit[];
+  signature?: CropSignature | null;
+  suppressed?: Record<string, string[]>;
   words?: { product_id: string; score: number }[];
   pages?: Record<string, string>;
   noLook?: boolean;
@@ -44,6 +58,8 @@ function fake(items: ClaimedItem[], options: {
   const calls: Record<string, number> = {};
   const embedBatches: number[] = [];
   const knnCategories: (string | null)[] = [];
+  const stored: { itemId: string; crop: CropSignature & { vector: number[] } }[] = [];
+  const phashAsked: { phash: string; maxDistance: number }[] = [];
   const count = (name: string) => (calls[name] = (calls[name] ?? 0) + 1);
   const look: LookDeps = {
     healthy: async () => {
@@ -63,6 +79,24 @@ function fake(items: ClaimedItem[], options: {
       knnCategories.push(category);
       return options.knn ?? [];
     },
+    imageKnn: async () => {
+      count('imageKnn');
+      return options.imageKnn ?? [];
+    },
+    phashMatch: async (_importId, phash, maxDistance) => {
+      count('phashMatch');
+      phashAsked.push({ phash, maxDistance });
+      return options.phash ?? [];
+    },
+    cropSignature: async () => {
+      count('cropSignature');
+      return options.signature === undefined ? { image_hash: 'a'.repeat(64), phash: null } : options.signature;
+    },
+    storeCrop: async (itemId, crop) => {
+      stored.push({ itemId, crop });
+    },
+    suppressed: async (ids) =>
+      new Map(ids.filter((id) => options.suppressed?.[id]).map((id) => [id, new Set(options.suppressed![id])])),
   };
   const deps: ResolveDeps = {
     claim: async () => items,
@@ -95,7 +129,7 @@ function fake(items: ClaimedItem[], options: {
     sleep: async () => {},
     log: () => {},
   };
-  return { deps, recorded, calls, embedBatches, knnCategories };
+  return { deps, recorded, calls, embedBatches, knnCategories, stored, phashAsked };
 }
 
 const hits: KnnHit[] = [
@@ -299,4 +333,99 @@ Deno.test('no look deps: the run is links and words only', async () => {
   assertEquals(f.calls.embed ?? 0, 0);
   assertEquals(f.recorded[0].state, 'not_found');
   assertEquals(summary.look.status, 'not_asked');
+});
+
+// ── W5: T1 exact, image-first T2, taught signal, suppression ─────────────────
+
+Deno.test('bandExact: dHash within τ_hamming or cosine at τ_exact is strong; nothing else is', () => {
+  const out = bandExact(
+    [
+      { product_id: 'cos', rank: LOOK_THRESHOLDS.exact, layer: 'catalog', source: 'product_image' },
+      { product_id: 'near', rank: LOOK_THRESHOLDS.exact - 0.01, layer: 'catalog', source: 'product_image' },
+    ],
+    [
+      { product_id: 'hash', distance: LOOK_THRESHOLDS.exactHamming, layer: 'studio', source: 'designer_confirmed' },
+      { product_id: 'far', distance: LOOK_THRESHOLDS.exactHamming + 1, layer: 'catalog', source: 'designer_confirmed' },
+    ],
+  );
+  assertEquals(out.map((c) => [c.product_id, c.band, c.source]), [['hash', 'strong', 'look'], ['cos', 'strong', 'look']]);
+  assertEquals(out[0].evidence.tier, 'exact');
+  assertEquals(out[0].evidence.phash_distance, LOOK_THRESHOLDS.exactHamming);
+  assertEquals(out[0].evidence.image_source, 'designer_confirmed');
+  assertEquals(out[1].evidence.similarity, LOOK_THRESHOLDS.exact);
+  assert(LOOK_THRESHOLDS.exact < 0.99, 'τ_exact stays clear of int8 drift near 1.0');
+});
+
+Deno.test('bandImageFirst: picture hits are uncapped; fused hits only for products with no picture hit, capped', () => {
+  const out = bandImageFirst(
+    [{ product_id: 'a', rank: 0.9, layer: 'catalog', source: 'product_image' }],
+    [{ product_id: 'a', rank: 0.97, layer: 'catalog' }, { product_id: 'b', rank: 0.96, layer: 'catalog' }],
+  );
+  assertEquals(out.map((c) => [c.product_id, c.band, c.evidence.fused]), [['a', 'likely', false], ['b', 'possible', true]]);
+});
+
+Deno.test('T1 exact by image cosine: strong, found by look, the fused twin is never asked', async () => {
+  const f = fake([picture('p1')], {
+    imageKnn: [{ product_id: 'catalog-a', rank: 0.97, layer: 'catalog', source: 'product_image' }],
+    knn: hits,
+  });
+  const summary = await runResolve(f.deps);
+  const [row] = f.recorded;
+  assertEquals(row.foundBy, 'look');
+  assertEquals(row.candidates.map((c) => [c.product_id, c.band, c.rank]), [['catalog-a', 'strong', 1]]);
+  assertEquals(row.candidates[0].evidence.tier, 'exact');
+  assertEquals(f.calls.knn ?? 0, 0);
+  assertEquals(f.calls.phashMatch ?? 0, 0, 'no phash (not WebP) → no hash lookup');
+  assertEquals(summary.look.exact, 1);
+  assertEquals(summary.look.matched, 0);
+});
+
+Deno.test('T1 exact by dHash: the crop hash is looked up within τ_hamming', async () => {
+  const f = fake([picture('p1')], {
+    signature: { image_hash: 'b'.repeat(64), phash: '-4358495415582126305' },
+    phash: [{ product_id: 'studio-c', distance: 3, layer: 'studio', source: 'designer_confirmed' }],
+    imageKnn: [{ product_id: 'catalog-a', rank: 0.7, layer: 'catalog', source: 'product_image' }],
+  });
+  await runResolve(f.deps);
+  assertEquals(f.phashAsked, [{ phash: '-4358495415582126305', maxDistance: LOOK_THRESHOLDS.exactHamming }]);
+  assertEquals(f.recorded[0].candidates.map((c) => [c.product_id, c.band]), [['studio-c', 'strong']]);
+  assertEquals(f.recorded[0].candidates[0].evidence.phash_distance, 3);
+});
+
+Deno.test('T2 prefers picture vectors: a product with picture rows is uncapped, others fall back to fused', async () => {
+  const f = fake([picture('p1')], {
+    imageKnn: [{ product_id: 'catalog-a', rank: 0.9, layer: 'catalog', source: 'product_image' }],
+    knn: [{ product_id: 'catalog-a', rank: 0.6, layer: 'catalog' }, { product_id: 'catalog-d', rank: 0.55, layer: 'catalog' }],
+  });
+  const summary = await runResolve(f.deps);
+  assertEquals(f.recorded[0].candidates.map((c) => [c.product_id, c.band, c.evidence.fused]), [
+    ['catalog-a', 'likely', false],
+    ['catalog-d', 'possible', true],
+  ]);
+  assertEquals(summary.look.matched, 1);
+});
+
+Deno.test('every embedded crop keeps its signature for a later Keep', async () => {
+  const f = fake([picture('p1'), picture('p2')], {
+    signature: { image_hash: 'c'.repeat(64), phash: '42' },
+  });
+  await runResolve(f.deps);
+  assertEquals(f.stored.map((s) => [s.itemId, s.crop.image_hash, s.crop.phash, s.crop.vector]), [
+    ['item-p1', 'c'.repeat(64), '42', vec(0)],
+    ['item-p2', 'c'.repeat(64), '42', vec(0)],
+  ]);
+});
+
+Deno.test('a product the designer swapped away from never returns from T1 or T2', async () => {
+  const f = fake([picture('p1')], {
+    signature: { image_hash: 'd'.repeat(64), phash: '7' },
+    suppressed: { 'item-p1': ['catalog-a', 'studio-c'] },
+    phash: [{ product_id: 'studio-c', distance: 0, layer: 'studio', source: 'designer_confirmed' }],
+    imageKnn: [{ product_id: 'catalog-a', rank: 0.99, layer: 'catalog', source: 'product_image' }],
+    knn: hits,
+  });
+  await runResolve(f.deps);
+  const ids = f.recorded[0].candidates.map((c) => c.product_id);
+  assert(!ids.includes('catalog-a') && !ids.includes('studio-c'), `suppressed products skipped: ${ids}`);
+  assertEquals(f.recorded[0].candidates.every((c) => c.band === 'possible'), true, 'no exact hit is left');
 });

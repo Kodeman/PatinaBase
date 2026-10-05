@@ -5,12 +5,22 @@
 //                        and the deck crop are embedded and compared. When
 //                        they disagree (cosine < τ_look) the link candidate
 //                        drops one band; either way evidence.look_checked.
-//   T2 look              a picture with no strong candidate: its crop is
-//                        embedded and matched against the importer's visible
-//                        library with the 00679 kNN twin. "likely" needs
-//                        top1 ≥ τ_likely and top1 − top2 ≥ τ_margin, else
-//                        "possible"; hits on the fused aesthete_vector are
-//                        capped at "possible" (contract).
+//   T1 exact             a picture with no strong candidate: its crop's dHash
+//                        (crop_signature.ts) within τ_hamming of a visible
+//                        product_image_vectors row, or its image-only cosine
+//                        ≥ τ_exact (00681 twins) → "strong".
+//   T2 look              still nothing strong: the crop is matched against
+//                        the importer's visible library. Image-only hits
+//                        (00681 product_image_vectors) are preferred; products
+//                        without picture rows fall back to the 00679 fused
+//                        twin. "likely" needs top1 ≥ τ_likely and
+//                        top1 − top2 ≥ τ_margin, else "possible"; fused hits
+//                        are capped at "possible" (contract).
+//
+// Every embedded crop's signature (vector, sha256, dHash) is stored for its
+// piece under the lease; a Keep turns it into a designer_confirmed picture
+// row (00681 trigger). Products the designer swapped away from
+// (items.evidence.suppressed) never come back from T1 or T2.
 //
 // Runs only for imports that asked for photo match (options.photo_match, set
 // while the board-photo-match flag is on), after a /healthz probe, and before
@@ -21,6 +31,7 @@
 // never turns a piece back to pending, so no claim attempt is spent on it.
 
 import { type Band, type Candidate, type ClaimedItem, finalizeCandidates } from './core.ts';
+import type { CropSignature } from './phash.ts';
 import { cosine } from './pairing.ts';
 import { LOOK_MIN_VISIBLE_VECTORS, LOOK_THRESHOLDS } from './thresholds.ts';
 
@@ -32,6 +43,16 @@ export interface KnnHit {
   /** Cosine similarity, as aesthete_ask_knn ranks it. */
   rank: number;
   layer: string | null;
+  /** Picture hits only: 'product_image' or 'designer_confirmed'. */
+  source?: string | null;
+}
+
+export interface PhashHit {
+  product_id: string;
+  /** Hamming distance between the crop's dHash and the picture's. */
+  distance: number;
+  layer: string | null;
+  source: string | null;
 }
 
 export interface LookGate {
@@ -46,13 +67,26 @@ export interface LookDeps {
   /** Signed URLs (10 min) for the pieces' own pins, board bucket only.
    *  A piece with no usable picture is simply absent. */
   cropUrls(itemIds: string[]): Promise<Map<string, string>>;
+  /** 00679 twin over the fused products.aesthete_vector. */
   knn(importId: string, vector: number[], limit: number, category: string | null): Promise<KnnHit[]>;
+  /** 00681 twin over product_image_vectors: best picture per product. */
+  imageKnn(importId: string, vector: number[], limit: number, category: string | null): Promise<KnnHit[]>;
+  /** 00681 twin: pictures whose dHash is within maxDistance of the crop's. */
+  phashMatch(importId: string, phash: string, maxDistance: number, limit: number): Promise<PhashHit[]>;
+  /** Fetch a signed crop URL and hash it; null when it cannot be read. */
+  cropSignature(url: string): Promise<CropSignature | null>;
+  /** Keep the crop's signature for its piece (lease-guarded), for a later Keep. */
+  storeCrop(itemId: string, crop: CropSignature & { vector: number[] }): Promise<void>;
+  /** items.evidence.suppressed product ids, per piece. */
+  suppressed(itemIds: string[]): Promise<Map<string, Set<string>>>;
 }
 
 export interface LookSummary {
   /** not_asked: no import in this run asked for photo match.
    *  unavailable: asked, but inference or the visible library could not serve it. */
   status: 'not_asked' | 'unavailable' | 'ran';
+  /** Pieces given a T1 exact (strong) hit. */
+  exact: number;
   matched: number;
   checked: number;
   downgraded: number;
@@ -63,6 +97,7 @@ export interface LookSummary {
 export function emptyLookSummary(): LookSummary {
   return {
     status: 'not_asked',
+    exact: 0,
     matched: 0,
     checked: 0,
     downgraded: 0,
@@ -118,6 +153,7 @@ export function bandLook(hits: KnnHit[], options: { fused: boolean }): Omit<Cand
             ...(index === 0 ? { margin: round(margin) } : {}),
             layer: hit.layer,
             fused: options.fused,
+            ...(hit.source ? { image_source: hit.source } : {}),
             band_uncapped: uncapped,
             threshold_version: LOOK_THRESHOLDS.threshold_version,
           },
@@ -127,6 +163,55 @@ export function bandLook(hits: KnnHit[], options: { fused: boolean }): Omit<Cand
     })
     .sort((a, b) => b.order - a.order)
     .map(({ candidate }) => candidate);
+}
+
+/**
+ * T1 exact: a picture within τ_hamming by dHash, or at/above τ_exact by
+ * image-only cosine, is "strong". Closest hash first, then similarity.
+ */
+export function bandExact(imageHits: KnnHit[], phashHits: PhashHit[]): Omit<Candidate, 'rank'>[] {
+  const exact = new Map<string, { distance?: number; similarity?: number; layer: string | null; source: string | null }>();
+  for (const hit of phashHits) {
+    if (hit.distance > LOOK_THRESHOLDS.exactHamming) continue;
+    exact.set(hit.product_id, { distance: hit.distance, layer: hit.layer, source: hit.source });
+  }
+  for (const hit of imageHits) {
+    if (hit.rank < LOOK_THRESHOLDS.exact) continue;
+    const held = exact.get(hit.product_id);
+    exact.set(hit.product_id, held
+      ? { ...held, similarity: hit.rank }
+      : { similarity: hit.rank, layer: hit.layer, source: hit.source ?? null });
+  }
+  return [...exact.entries()]
+    .sort(([aId, a], [bId, b]) =>
+      (a.distance ?? 65) - (b.distance ?? 65) || (b.similarity ?? 0) - (a.similarity ?? 0) || aId.localeCompare(bId))
+    .slice(0, LOOK_THRESHOLDS.shown)
+    .map(([productId, hit]) => ({
+      source: 'look' as const,
+      product_id: productId,
+      band: 'strong' as const,
+      evidence: {
+        tier: 'exact',
+        ...(hit.distance != null ? { phash_distance: hit.distance } : {}),
+        ...(hit.similarity != null ? { similarity: round(hit.similarity) } : {}),
+        layer: hit.layer,
+        image_source: hit.source,
+        fused: false,
+        threshold_version: LOOK_THRESHOLDS.threshold_version,
+      },
+    }));
+}
+
+/**
+ * T2: image-only hits first and uncapped; a fused hit is kept only for a
+ * product with no picture hit, capped at "possible".
+ */
+export function bandImageFirst(imageHits: KnnHit[], fusedHits: KnnHit[]): Omit<Candidate, 'rank'>[] {
+  const pictured = new Set(imageHits.map((hit) => hit.product_id));
+  return [
+    ...bandLook(imageHits, { fused: false }),
+    ...bandLook(fusedHits.filter((hit) => !pictured.has(hit.product_id)), { fused: true }),
+  ].slice(0, LOOK_THRESHOLDS.shown);
 }
 
 /** The og:image check on a read link candidate; returns the updated candidate. */
@@ -256,11 +341,28 @@ export async function applyLookTier(
   if (inputs.length && vectors.size === 0) unavailable = true;
   settle();
 
+  let suppressed = new Map<string, Set<string>>();
+  try {
+    suppressed = await look.suppressed(work.map(({ view }) => view.item.item_id));
+  } catch (error) {
+    deps.log('look_suppressed_failed', { error: String(error).slice(0, 200) });
+  }
+
   for (const { view, outcome } of work) {
     const item = view.item;
     const crop = vectors.get(`crop:${item.item_id}`);
     if (!crop) continue;
     let list: Omit<Candidate, 'rank'>[] = outcome.candidates.map(({ rank: _rank, ...c }) => c);
+
+    // The crop's signature: its dHash feeds T1, and it is kept for the piece
+    // so a later Keep can teach it (00681). Neither failure stops the tiers.
+    let signature: CropSignature | null = null;
+    try {
+      signature = await look.cropSignature(crops.get(item.item_id)!);
+      if (signature) await look.storeCrop(item.item_id, { ...signature, vector: crop });
+    } catch (error) {
+      deps.log('look_signature_failed', { item_id: item.item_id, error: String(error).slice(0, 200) });
+    }
 
     // og:image look-check on the read link candidate.
     const page = vectors.get(`page:${item.item_id}`);
@@ -275,13 +377,28 @@ export async function applyLookTier(
       });
     }
 
-    // T2: no strong candidate (after the check) and a big enough library.
+    // T1 then T2: no strong candidate (after the check) and a big enough
+    // library. Swapped-away products are skipped in both.
     if (gates.get(item.import_id)!.knn && !list.some((c) => c.band === 'strong') && !pastDeadline()) {
+      const skip = suppressed.get(item.item_id) ?? new Set<string>();
+      const allowed = <T extends { product_id: string }>(hits: T[]) => hits.filter((hit) => !skip.has(hit.product_id));
       try {
-        const hits = await look.knn(item.import_id, crop, LOOK_THRESHOLDS.knnLimit, categoryOf(item.extracted));
-        const matches = bandLook(hits, { fused: true });
-        if (matches.length) summary.matched++;
-        list = [...list, ...matches];
+        const category = categoryOf(item.extracted);
+        const imageHits = allowed(await look.imageKnn(item.import_id, crop, LOOK_THRESHOLDS.knnLimit, category));
+        const phashHits = signature?.phash
+          ? allowed(await look.phashMatch(
+            item.import_id, signature.phash, LOOK_THRESHOLDS.exactHamming, LOOK_THRESHOLDS.shown))
+          : [];
+        const exact = bandExact(imageHits, phashHits);
+        if (exact.length) {
+          summary.exact++;
+          list = [...list, ...exact];
+        } else {
+          const fusedHits = allowed(await look.knn(item.import_id, crop, LOOK_THRESHOLDS.knnLimit, category));
+          const matches = bandImageFirst(imageHits, fusedHits);
+          if (matches.length) summary.matched++;
+          list = [...list, ...matches];
+        }
       } catch (error) {
         deps.log('look_knn_failed', { item_id: item.item_id, error: String(error).slice(0, 200) });
       }
