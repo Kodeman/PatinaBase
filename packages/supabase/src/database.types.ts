@@ -35166,6 +35166,10 @@ export type Database = {
         Args: { p_import_id: string }
         Returns: string
       }
+      board_web_match_vendor_websites: {
+        Args: { p_studio_id: string }
+        Returns: Json
+      }
       build_board_share_payload: {
         Args: {
           p_board_id: string
@@ -38769,6 +38773,10 @@ export type Database = {
       reject_inbound_document: {
         Args: { p_document_id: string; p_reason: string }
         Returns: string
+      }
+      release_board_deck_import_items: {
+        Args: { p_item_ids: string[]; p_lease_owner: string }
+        Returns: number
       }
       release_due_client_pushes: { Args: { p_limit?: number }; Returns: number }
       release_install_window: {

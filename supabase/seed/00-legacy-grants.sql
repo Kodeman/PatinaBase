@@ -18966,6 +18966,42 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00682_board_deck_import_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_board_deck_import_items(text, uuid[]) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00682_board_deck_import_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_board_deck_import_items(text, uuid[]) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00682_board_deck_import_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_web_match_studio_key(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00682_board_deck_import_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.board_web_match_studio_key(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00682_board_deck_import_review_fixes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_web_match_vendor_websites(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00682_board_deck_import_review_fixes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.board_web_match_vendor_websites(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

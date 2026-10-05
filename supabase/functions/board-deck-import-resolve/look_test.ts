@@ -78,6 +78,7 @@ function fake(items: ClaimedItem[], options: {
     record: async (itemId, state, foundBy, candidates) => {
       recorded.push({ itemId, state, foundBy, candidates });
     },
+    release: async () => {},
     pairablePictures: async () => [],
     pairLink: async () => false,
     embedImages: async (inputs) => {
