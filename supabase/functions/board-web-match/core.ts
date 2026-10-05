@@ -23,7 +23,7 @@
 
 import { decodeEntities } from '../_shared/product-page/extract.ts';
 import { cleanProductName, readProductPage } from '../_shared/product-page/page.ts';
-import { FetchBlocked, HostGate } from '../board-deck-import-resolve/core.ts';
+import { FetchBlocked, type HopGate, HostGate } from '../board-deck-import-resolve/core.ts';
 import { hostOf, isDeniedLink, nameFromSlug, normalizeProductUrl } from '../board-deck-import-resolve/links.ts';
 import { retailerName } from '../board-deck-import-resolve/retailers.ts';
 
@@ -82,7 +82,9 @@ export interface WebMatchDeps {
   loadCrop: (path: string) => Promise<string | null>;
   /** POST images:annotate with WEB_DETECTION; the raw JSON response. */
   annotate: (contentBase64: string) => Promise<unknown>;
-  fetchPage: (url: string) => Promise<{ html: string; finalUrl: string }>;
+  /** SSRF-guarded page read. Every request, the first and each redirect hop,
+   *  runs through `hop`, so the per-host limit holds for the host contacted. */
+  fetchPage: (url: string, hop: HopGate) => Promise<{ html: string; finalUrl: string }>;
   /** record_board_web_match_result (00680): false when the piece moved on. */
   record: (
     itemId: string,
@@ -266,7 +268,7 @@ async function readPage(
   const host = hostOf(page.url) ?? '';
   let fetched: { html: string; finalUrl: string };
   try {
-    fetched = await gate.run(host, () => deps.fetchPage(page.url));
+    fetched = await deps.fetchPage(page.url, (url, task) => gate.run(hostOf(url) ?? url, task));
   } catch (error) {
     if (error instanceof FetchBlocked && error.unsafe) return null;
     // Bot wall or a failed read: link-only, never a fabricated price.

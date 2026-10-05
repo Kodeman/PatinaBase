@@ -3,7 +3,8 @@
 --      and the row's studio (if any) is the reader's
 --   2. parity: board_deck_import_match_image_knn and
 --      board_deck_import_match_phash return EXACTLY what the RLS read returns
---      under each importer's own JWT (3 importers; with and without category)
+--      under each importer's own JWT (3 importers, each onto a board of
+--      their only studio; with and without category)
 --   3. replace_product_image_vectors: replaces a product's picture rows for a
 --      model, drops older models, never touches designer_confirmed rows
 --   4. store_board_deck_import_crop_signature: lease-guarded
@@ -78,17 +79,26 @@ VALUES
   ('d6810000-0000-4000-8000-000000000002', 'd6811000-0000-4000-8000-000000000001', 'member', 'active', now()),
   ('d6810000-0000-4000-8000-000000000003', 'd6811000-0000-4000-8000-000000000002', 'owner', 'active', now());
 
+-- Since 00684 the twins offer studio products and studio rows of the BOARD's
+-- studio only, so each importer imports onto a board of their own studio (the
+-- foreign designer onto studio B's board); a two-studio importer is covered by
+-- image_candidate_scope.test.sql.
 INSERT INTO public.projects (id, designer_id, client_id, created_by, name, status, studio_id)
 VALUES ('d6812000-0000-4000-8000-000000000001', 'd6810000-0000-4000-8000-000000000001', NULL,
         'd6810000-0000-4000-8000-000000000001', 'Piv project', 'active',
-        'd6811000-0000-4000-8000-000000000001');
+        'd6811000-0000-4000-8000-000000000001'),
+       ('d6812000-0000-4000-8000-000000000002', 'd6810000-0000-4000-8000-000000000003', NULL,
+        'd6810000-0000-4000-8000-000000000003', 'Piv foreign project', 'active',
+        'd6811000-0000-4000-8000-000000000002');
 
 INSERT INTO public.proposal_boards (
   id, proposal_id, project_id, name, canvas_width, canvas_height,
   background_color, sections, status, sort_order
 ) VALUES
   ('d6813000-0000-4000-8000-000000000001', NULL, 'd6812000-0000-4000-8000-000000000001',
-   'Piv board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 0);
+   'Piv board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 0),
+  ('d6813000-0000-4000-8000-000000000002', NULL, 'd6812000-0000-4000-8000-000000000002',
+   'Piv foreign board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 0);
 
 SET LOCAL session_replication_role = replica;
 INSERT INTO public.proposal_board_items (
@@ -161,7 +171,7 @@ VALUES
   ('d6817000-0000-4000-8000-000000000002', 'd6813000-0000-4000-8000-000000000001',
    'd6810000-0000-4000-8000-000000000002', 'deck', repeat('e2', 32), 'Other.pptx',
    '{}'::jsonb, 'resolving'),
-  ('d6817000-0000-4000-8000-000000000003', 'd6813000-0000-4000-8000-000000000001',
+  ('d6817000-0000-4000-8000-000000000003', 'd6813000-0000-4000-8000-000000000002',
    'd6810000-0000-4000-8000-000000000003', 'deck', repeat('e3', 32), 'Foreign.pptx',
    '{}'::jsonb, 'resolving');
 

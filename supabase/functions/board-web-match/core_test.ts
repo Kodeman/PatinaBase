@@ -66,6 +66,12 @@ interface Harness {
     annotate: number;
     pages: string[];
     records: Array<{ id: string; candidates: any[]; base: any[] }>;
+    /** Host of every request hop, in order; in-flight and peak per host. */
+    hops: string[];
+    inflight: Map<string, number>;
+    peak: Map<string, number>;
+    /** Every gate wait (per-host spacing), in ms. */
+    sleeps: number[];
   };
 }
 
@@ -73,11 +79,16 @@ function harness(options: {
   budget?: Budget;
   response?: unknown;
   pages?: Record<string, string | Error>;
+  /** url → the Location it redirects to. */
+  redirects?: Record<string, string>;
   applied?: boolean;
   /** Crop path → base64, null (unreadable) or an Error (download threw). */
   crops?: Record<string, string | null | Error>;
 } = {}): Harness {
-  const calls: Harness['calls'] = { budget: [], crops: [], annotate: 0, pages: [], records: [] };
+  const calls: Harness['calls'] = {
+    budget: [], crops: [], annotate: 0, pages: [], records: [],
+    hops: [], inflight: new Map(), peak: new Map(), sleeps: [],
+  };
   const deps: WebMatchDeps = {
     consumeBudget: (n) => {
       calls.budget.push(n);
@@ -92,19 +103,37 @@ function harness(options: {
       calls.annotate++;
       return Promise.resolve(options.response ?? vision([]));
     },
-    fetchPage: (url) => {
+    fetchPage: async (url, hop) => {
       calls.pages.push(url);
-      const page = options.pages?.[url];
-      if (page instanceof Error) return Promise.reject(page);
-      if (page == null) return Promise.reject(new FetchBlocked('fetch_failed', false));
-      return Promise.resolve({ html: page, finalUrl: url });
+      // One request per hop, each under the gate, following options.redirects.
+      let current = url;
+      for (;;) {
+        const next: string | null = await hop(current, async () => {
+          const host = new URL(current).hostname;
+          calls.hops.push(host);
+          calls.inflight.set(host, (calls.inflight.get(host) ?? 0) + 1);
+          calls.peak.set(host, Math.max(calls.peak.get(host) ?? 0, calls.inflight.get(host)!));
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          calls.inflight.set(host, calls.inflight.get(host)! - 1);
+          return options.redirects?.[current] ?? null;
+        });
+        if (!next) break;
+        current = next;
+      }
+      const page = options.pages?.[current];
+      if (page instanceof Error) throw page;
+      if (page == null) throw new FetchBlocked('fetch_failed', false);
+      return { html: page, finalUrl: current };
     },
     record: (id, candidates, base) => {
       calls.records.push({ id, candidates, base });
       return Promise.resolve(options.applied ?? true);
     },
     vendorDomains: VENDORS,
-    sleep: () => Promise.resolve(),
+    sleep: (ms) => {
+      calls.sleeps.push(ms);
+      return Promise.resolve();
+    },
     log: () => {},
   };
   return { deps, calls };
@@ -216,6 +245,31 @@ Deno.test('an unsafe page address is no candidate', async () => {
 });
 
 // ── Appending ────────────────────────────────────────────────────────────────
+
+Deno.test('the host gate holds on a redirect to a second host, not only the first host', async () => {
+  // Four retailer pages on four hosts, each redirecting to one busy host.
+  const first = ['www.wayfair.com', 'www.westelm.com', 'www.article.com', 'www.cb2.com'];
+  const redirects: Record<string, string> = {};
+  const pages: Record<string, string> = {};
+  first.forEach((host, i) => {
+    redirects[`https://${host}/p/${i}`] = `https://busy.example/products/${i}`;
+    pages[`https://busy.example/products/${i}`] = LD_PAGE(`Piece ${i}`, '100');
+  });
+  const { deps, calls } = harness({
+    response: vision(first.map((host, i) => ({ url: `https://${host}/p/${i}`, full: true }))),
+    pages,
+    redirects,
+  });
+  const result = await runWebMatch([item('a')], deps);
+  assertEquals(result.results[0].status, 'found');
+  assertEquals(calls.records[0].candidates.length, 4);
+  // Every hop went through the gate under its own host.
+  assertEquals(calls.hops.filter((host) => host === 'busy.example').length, 4);
+  // The second host is rate-limited: at most 2 in flight, and each later
+  // request waits out the per-host spacing (the first hosts never wait).
+  assert((calls.peak.get('busy.example') ?? 0) <= 2, `peak ${calls.peak.get('busy.example')}`);
+  assertEquals(calls.sleeps.filter((ms) => ms > 0).length, 3, `sleeps ${calls.sleeps}`);
+});
 
 Deno.test('web rows append after existing candidates, send the base for the append check, cap at five', async () => {
   const existing = [

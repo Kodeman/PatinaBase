@@ -18,7 +18,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { DECK_PAGE_MAX_BYTES } from "../_shared/product-page/page.ts";
-import { fetchHtml, UrlError } from "../_shared/product-page/ssrf.ts";
+import {
+  denoPinnedHttpTransport,
+  fetchHtml,
+  type PinnedRequestOptions,
+  type ResolvedAddress,
+  UrlError,
+} from "../_shared/product-page/ssrf.ts";
 import { BOARD_ASSET_BUCKET, bearerRole, normalizeBoardObjectReference } from "../board-asset-cleanup/core.ts";
 import {
   FetchBlocked,
@@ -144,9 +150,14 @@ Deno.serve(async (req) => {
         if (!response.ok) throw new Error(`vision http ${response.status}`);
         return await response.json();
       },
-      fetchPage: async (url) => {
+      fetchPage: async (url, hop) => {
         try {
-          return await fetchHtml(url, {}, { maxBytes: DECK_PAGE_MAX_BYTES });
+          // Each hop's request waits on its own host's gate (redirects included).
+          const transport = {
+            request: (target: URL, address: ResolvedAddress, options: PinnedRequestOptions) =>
+              hop(target.toString(), () => denoPinnedHttpTransport.request(target, address, options)),
+          };
+          return await fetchHtml(url, { transport }, { maxBytes: DECK_PAGE_MAX_BYTES });
         } catch (error) {
           if (error instanceof UrlError) throw new FetchBlocked(error.message, error.status === 400);
           throw new FetchBlocked("fetch_failed", false);
