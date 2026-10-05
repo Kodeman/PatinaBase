@@ -30,6 +30,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
@@ -723,7 +724,12 @@ export function OrderAssistant(props: OrderAssistantProps) {
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
-  return (
+  // Portal to document.body (as DocSheet does): rendered inline, an ancestor
+  // stacking context on /doc capped the panel's z-50 beneath the fixed z-40
+  // Studio drawer, which then swallowed clicks on the footer.
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -935,7 +941,8 @@ export function OrderAssistant(props: OrderAssistantProps) {
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 

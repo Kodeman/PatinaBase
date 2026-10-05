@@ -395,3 +395,19 @@ describe('OrderAssistant — catalog order (Phase 4 pay-at-order)', () => {
     expect(hrefSet).toBeNull();
   });
 });
+
+describe('OrderAssistant — layering (SQ-389)', () => {
+  // On /doc an ancestor stacking context capped the inline panel beneath the
+  // fixed z-40 Studio drawer. Portaled to document.body, the dialog escapes it.
+  it('renders the open dialog in document.body, outside the render container', () => {
+    const { container } = renderAssistant();
+
+    const dialog = screen.getByRole('dialog', { name: /order assistant for acme/i });
+    expect(document.body.contains(dialog)).toBe(true);
+    expect(container.contains(dialog)).toBe(false);
+    // The backdrop travels with it, so it stacks against the same root.
+    expect(container.querySelector('.fixed')).toBeNull();
+    // Focus still lands inside the portaled dialog (autoFocus on Close).
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+});
