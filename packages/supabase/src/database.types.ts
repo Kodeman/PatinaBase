@@ -1247,6 +1247,41 @@ export type Database = {
           },
         ]
       }
+      board_deck_import_crop_signatures: {
+        Row: {
+          created_at: string
+          image_hash: string
+          item_id: string
+          model_version: string
+          phash: number | null
+          vector: string
+        }
+        Insert: {
+          created_at?: string
+          image_hash: string
+          item_id: string
+          model_version: string
+          phash?: number | null
+          vector: string
+        }
+        Update: {
+          created_at?: string
+          image_hash?: string
+          item_id?: string
+          model_version?: string
+          phash?: number | null
+          vector?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_deck_import_crop_signatures_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "board_deck_import_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       board_deck_import_items: {
         Row: {
           attempts: number
@@ -1255,6 +1290,7 @@ export type Database = {
           chosen_product_id: string | null
           created_at: string
           element_key: string
+          evidence: Json
           extracted: Json
           found_by: string | null
           id: string
@@ -1278,6 +1314,7 @@ export type Database = {
           chosen_product_id?: string | null
           created_at?: string
           element_key: string
+          evidence?: Json
           extracted?: Json
           found_by?: string | null
           id?: string
@@ -1301,6 +1338,7 @@ export type Database = {
           chosen_product_id?: string | null
           created_at?: string
           element_key?: string
+          evidence?: Json
           extracted?: Json
           found_by?: string | null
           id?: string
@@ -13724,6 +13762,109 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      product_image_vectors: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          image_hash: string
+          model_version: string
+          phash: number | null
+          product_id: string
+          source: string
+          studio_id: string | null
+          vector: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_hash: string
+          model_version: string
+          phash?: number | null
+          product_id: string
+          source: string
+          studio_id?: string | null
+          vector: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_hash?: string
+          model_version?: string
+          phash?: number | null
+          product_id?: string
+          source?: string
+          studio_id?: string | null
+          vector?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_image_vectors_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "edge_catalog_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_image_vectors_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_image_vectors_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_image_vectors_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_image_vectors_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_image_vectors_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_image_vectors_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_image_vectors_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_image_vectors_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -32799,6 +32940,17 @@ export type Database = {
         Args: { p_board_item_id: string }
         Returns: undefined
       }
+      _board_deck_import_board_studio: {
+        Args: { p_import_id: string; p_user: string }
+        Returns: string
+      }
+      _board_deck_import_candidate_scope: {
+        Args: { p_import_id: string }
+        Returns: {
+          studio_id: string
+          user_id: string
+        }[]
+      }
       _board_deck_import_choose: {
         Args: {
           p_board_item_id?: string
@@ -32818,6 +32970,7 @@ export type Database = {
           chosen_product_id: string | null
           created_at: string
           element_key: string
+          evidence: Json
           extracted: Json
           found_by: string | null
           id: string
@@ -32849,9 +33002,17 @@ export type Database = {
         Args: { p_url: string }
         Returns: string
       }
+      _board_deck_import_pct_encode: {
+        Args: { p_also: string; p_text: string }
+        Returns: string
+      }
       _board_deck_import_product_visible: {
         Args: { p_product_id: string }
         Returns: boolean
+      }
+      _board_deck_import_punycode: {
+        Args: { p_label: string }
+        Returns: string
       }
       _board_deck_import_record: {
         Args: {
@@ -32866,6 +33027,10 @@ export type Database = {
       _board_deck_import_resolve_vendor: {
         Args: { p_name: string; p_url: string }
         Returns: string
+      }
+      _board_deck_import_row_studio_visible: {
+        Args: { p_studio: string; p_user: string }
+        Returns: boolean
       }
       _board_deck_import_settle: {
         Args: { p_import_id: string }
@@ -35071,6 +35236,20 @@ export type Database = {
         Args: { p_import_id: string }
         Returns: Json
       }
+      board_deck_import_match_image_knn: {
+        Args: {
+          p_category?: string
+          p_embedding: string
+          p_import_id: string
+          p_limit?: number
+        }
+        Returns: {
+          layer: string
+          product_id: string
+          rank: number
+          source: string
+        }[]
+      }
       board_deck_import_match_knn: {
         Args: {
           p_category?: string
@@ -35088,6 +35267,20 @@ export type Database = {
       board_deck_import_match_links: {
         Args: { p_import_id: string; p_urls: string[] }
         Returns: Json
+      }
+      board_deck_import_match_phash: {
+        Args: {
+          p_import_id: string
+          p_limit?: number
+          p_max_distance?: number
+          p_phash: number
+        }
+        Returns: {
+          distance: number
+          layer: string
+          product_id: string
+          source: string
+        }[]
       }
       board_deck_import_match_sku: {
         Args: { p_import_id: string; p_sku: string; p_vendor: string }
@@ -38935,6 +39128,10 @@ export type Database = {
         Args: { p_ordered_ids: string[]; p_proposal_id: string }
         Returns: undefined
       }
+      replace_product_image_vectors: {
+        Args: { p_model_version: string; p_product_id: string; p_rows: Json }
+        Returns: number
+      }
       replace_room_scan_geometry: {
         Args: { p_elements: Json; p_header: Json; p_scan_id: string }
         Returns: undefined
@@ -40436,6 +40633,17 @@ export type Database = {
           p_import_id: string
           p_lease_owner: string
           p_slide_index: number
+        }
+        Returns: undefined
+      }
+      store_board_deck_import_crop_signature: {
+        Args: {
+          p_image_hash: string
+          p_item_id: string
+          p_lease_owner: string
+          p_model_version: string
+          p_phash: number
+          p_vector: string
         }
         Returns: undefined
       }
