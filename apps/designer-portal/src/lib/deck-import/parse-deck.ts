@@ -28,16 +28,26 @@ const UNANCHORED: ReadonlySet<UnpairedLink["source"]> = new Set(["notes", "text"
 /**
  * A slide with exactly one product picture: its notes and bare-text links
  * describe that picture, so they join it rather than standing as pieces of
- * their own. Returns the slide's links still unpaired.
+ * their own. A slide with no product picture and exactly one reference
+ * picture makes that picture the product: decks often carry the product link
+ * only in the notes or slide text. Returns the slide's links still unpaired.
  */
 export function joinSoleProduct(
   onSlide: ManifestElement[],
   unpaired: UnpairedLink[],
 ): UnpairedLink[] {
-  const products = onSlide.filter((e) => e.role === "product");
   const joining = unpaired.filter((l) => UNANCHORED.has(l.source));
-  if (products.length !== 1 || joining.length === 0) return unpaired;
-  const sole = products[0];
+  if (joining.length === 0) return unpaired;
+  const products = onSlide.filter((e) => e.role === "product");
+  const references = onSlide.filter((e) => e.role === "reference");
+  const sole =
+    products.length === 1
+      ? products[0]
+      : products.length === 0 && references.length === 1
+        ? references[0]
+        : null;
+  if (!sole) return unpaired;
+  sole.role = "product";
   const links = [...sole.links];
   for (const l of joining)
     if (!links.some((x) => x.url === l.url))

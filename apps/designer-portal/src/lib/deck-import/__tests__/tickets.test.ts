@@ -141,13 +141,16 @@ describe("tickets.pptx: caption and link pairing", () => {
     ).toBe(false);
   });
 
-  it("keeps notes URLs unpaired, and denies attribution, mailto, licence hosts, actions and hover links", () => {
-    expect(el("h_chair").links).toEqual([]);
-    const s = slide("notes_denied");
-    expect(s.unpaired_links.map((l) => [l.url, l.source])).toEqual([
-      ["https://www.burkedecor.com/h-chair", "notes"],
-      ["https://www.chairish.com/item/99", "notes"],
+  it("joins notes URLs onto the slide's sole picture, and denies attribution, mailto, licence hosts, actions and hover links", () => {
+    // The notes are the only product signal, so the sole picture becomes the
+    // product and carries them; the denied links never reach it.
+    expect(el("h_chair").role).toBe("product");
+    expect(el("h_chair").links).toEqual([
+      { url: "https://www.burkedecor.com/h-chair", source: "notes" },
+      { url: "https://www.chairish.com/item/99", source: "notes" },
     ]);
+    const s = slide("notes_denied");
+    expect(s.unpaired_links).toEqual([]);
     const skipped = manifest.skipped
       .filter((k) => k.slide_index === s.index)
       .map((k) => k.reason);
@@ -199,7 +202,7 @@ describe("tickets.pptx: caption and link pairing", () => {
     for (const s of manifest.slides)
       for (const t of s.texts)
         for (const url of t.links) expect(placed).toContain(url);
-    expect(manifest.stats.unpaired_links).toBe(3);
+    expect(manifest.stats.unpaired_links).toBe(1);
     expect(manifest.stats.deck_links).toBe(2);
     expect(manifest.stats.slides_needing_adjudication).toBe(1);
   });
