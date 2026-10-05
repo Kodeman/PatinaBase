@@ -1,7 +1,7 @@
 // deno test --allow-all --config supabase/functions/deno.json supabase/functions/board-deck-import-resolve/
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { decodeBase64 } from 'jsr:@std/encoding@1/base64';
-import { cropSignature, isWebp, sha256Hex } from './crop_signature.ts';
+import { cropSignature, isWebp, readCappedBytes, sha256Hex, WEBP_MAX_EDGE, webpDimensions } from './crop_signature.ts';
 import { dHash, hamming, toPgBigint } from './phash.ts';
 import { LOOK_THRESHOLDS } from './thresholds.ts';
 
@@ -64,6 +64,62 @@ Deno.test('cropSignature: a WebP crop decodes; recompression and half size stay 
   assert(hamming(BigInt(lossy.phash), TRUTH) <= near, 'q60 recompression stays near');
   assert(hamming(BigInt(small.phash), TRUTH) <= near, 'half size stays near');
   assert(hamming(BigInt(mirrored.phash), TRUTH) > near * 2, 'a mirrored picture is not');
+});
+
+/** A 30-byte lossless WebP header declaring a w × h canvas, with no image data. */
+function vp8lHeader(w: number, h: number): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(30);
+  const view = new DataView(bytes.buffer);
+  bytes.set(new TextEncoder().encode('RIFF'), 0);
+  view.setUint32(4, 22, true);
+  bytes.set(new TextEncoder().encode('WEBPVP8L'), 8);
+  view.setUint32(16, 10, true);
+  bytes[20] = 0x2f;
+  view.setUint32(21, ((w - 1) & 0x3fff) | (((h - 1) & 0x3fff) << 14), true);
+  return bytes;
+}
+
+Deno.test('webpDimensions: read from the VP8, VP8L and VP8X headers', () => {
+  assertEquals(webpDimensions(LOSSY), { width: 72, height: 48 });
+  assertEquals(webpDimensions(SMALL), { width: 36, height: 24 });
+  assertEquals(webpDimensions(vp8lHeader(16383, 16383)), { width: 16383, height: 16383 });
+  const vp8x = new Uint8Array(30);
+  vp8x.set(new TextEncoder().encode('RIFF'), 0);
+  vp8x.set(new TextEncoder().encode('WEBPVP8X'), 8);
+  vp8x.set([0xff, 0x0f, 0x00, 0x00, 0x10, 0x00], 24); // 4096 × 4097
+  assertEquals(webpDimensions(vp8x), { width: 4096, height: 4097 });
+});
+
+Deno.test('cropSignature: a WebP declaring more than WEBP_MAX_EDGE is never decoded', async () => {
+  const bomb = vp8lHeader(16383, 16383);
+  let decoded = 0;
+  const decode = () => {
+    decoded++;
+    return Promise.reject(new Error('must not decode'));
+  };
+  assertEquals(await cropSignature(bomb, decode), { image_hash: await sha256Hex(bomb), phash: null });
+  assertEquals(await cropSignature(vp8lHeader(WEBP_MAX_EDGE + 1, 16), decode), {
+    image_hash: await sha256Hex(vp8lHeader(WEBP_MAX_EDGE + 1, 16)),
+    phash: null,
+  });
+  assertEquals(decoded, 0, 'the decoder was never called');
+  await cropSignature(vp8lHeader(WEBP_MAX_EDGE, WEBP_MAX_EDGE), decode);
+  assertEquals(decoded, 1, 'WEBP_MAX_EDGE itself is decoded');
+});
+
+Deno.test('readCappedBytes: stops reading past the cap', async () => {
+  let pulled = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulled++;
+      controller.enqueue(new Uint8Array(1024));
+      if (pulled === 100) controller.close();
+    },
+  });
+  assertEquals(await readCappedBytes(new Response(body), 4096), null);
+  assert(pulled < 10, `abandoned early (pulled ${pulled} chunks)`);
+  const ok = await readCappedBytes(new Response(new Uint8Array([1, 2, 3])), 4096);
+  assertEquals(ok, new Uint8Array([1, 2, 3]));
 });
 
 Deno.test('cropSignature: bytes that are not WebP keep their sha256 and get no phash', async () => {

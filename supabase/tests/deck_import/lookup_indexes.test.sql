@@ -10,7 +10,9 @@
 --   3. F17: a designer in studios A and B importing onto B's board gets B's
 --      products, never A's, from T0a, T0c, T1 and T2 (and the look gate
 --      counts B only); onto A's board, the reverse
---   4. grants: the new helpers are owner-only; the RPCs stay service_role
+--   4. grants: candidate_scope is owner-only; the normalizer and its helpers
+--      are executable by every role (00685: the URL index runs as the
+--      writer); the RPCs stay service_role
 -- Run after a fresh reset:
 --   psql 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' \
 --     -v ON_ERROR_STOP=1 -f supabase/tests/deck_import/lookup_indexes.test.sql
@@ -294,14 +296,22 @@ DO $$
 DECLARE
   v_fn text;
 BEGIN
+  ASSERT NOT has_function_privilege('anon', 'public._board_deck_import_candidate_scope(uuid)', 'EXECUTE'),
+    '_board_deck_import_candidate_scope: anon cannot execute';
+  ASSERT NOT has_function_privilege('authenticated', 'public._board_deck_import_candidate_scope(uuid)', 'EXECUTE'),
+    '_board_deck_import_candidate_scope: authenticated cannot execute';
+  ASSERT NOT has_function_privilege('service_role', 'public._board_deck_import_candidate_scope(uuid)', 'EXECUTE'),
+    '_board_deck_import_candidate_scope: owner only';
+  -- idx_products_deck_import_source_url evaluates the normalizer as whoever
+  -- writes products (00685): it and its helpers are executable by every role.
   FOREACH v_fn IN ARRAY ARRAY[
-    'public._board_deck_import_candidate_scope(uuid)',
+    'public._board_deck_import_normalize_url(text)',
     'public._board_deck_import_pct_encode(text, text)',
     'public._board_deck_import_punycode(text)'
   ] LOOP
-    ASSERT NOT has_function_privilege('anon', v_fn, 'EXECUTE'), v_fn || ': anon cannot execute';
-    ASSERT NOT has_function_privilege('authenticated', v_fn, 'EXECUTE'), v_fn || ': authenticated cannot execute';
-    ASSERT NOT has_function_privilege('service_role', v_fn, 'EXECUTE'), v_fn || ': owner only';
+    ASSERT has_function_privilege('anon', v_fn, 'EXECUTE'), v_fn || ': anon can execute (00685)';
+    ASSERT has_function_privilege('authenticated', v_fn, 'EXECUTE'), v_fn || ': authenticated can execute (00685)';
+    ASSERT has_function_privilege('service_role', v_fn, 'EXECUTE'), v_fn || ': service_role can execute (00685)';
   END LOOP;
   FOREACH v_fn IN ARRAY ARRAY[
     'public.board_deck_import_match_links(uuid, text[])',
@@ -318,8 +328,6 @@ BEGIN
             FROM pg_proc, unnest(proconfig) AS setting WHERE oid = v_fn::regprocedure),
       v_fn || ': pinned search_path';
   END LOOP;
-  ASSERT has_function_privilege('service_role',
-    'public._board_deck_import_normalize_url(text)', 'EXECUTE'), 'normalizer keeps its 00677 grant';
   RAISE NOTICE 'ok 4 grants';
 END $$;
 

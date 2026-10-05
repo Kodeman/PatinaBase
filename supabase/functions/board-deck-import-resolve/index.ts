@@ -41,7 +41,7 @@ import {
   type ResolveDeps,
   runResolve,
 } from "./core.ts";
-import { cropSignature } from "./crop_signature.ts";
+import { cropSignature, readCappedBytes } from "./crop_signature.ts";
 import type { KnnHit, LookGate, PhashHit } from "./look.ts";
 import { ADJUDICATION } from "./thresholds.ts";
 
@@ -293,8 +293,8 @@ function deps(
           await response.body?.cancel();
           return null;
         }
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        return bytes.length > 0 && bytes.length <= CROP_MAX_BYTES ? await cropSignature(bytes) : null;
+        const bytes = await readCappedBytes(response, CROP_MAX_BYTES);
+        return bytes && bytes.length > 0 ? await cropSignature(bytes) : null;
       },
       storeCrop: async (itemId, crop) => {
         if (!imageModelVersion) return;
