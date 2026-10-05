@@ -2,7 +2,9 @@
 --   1. parity: board_deck_import_match_knn(import) returns EXACTLY the rows
 --      aesthete_ask_knn returns under the importer's own JWT (products RLS),
 --      for an importer with a studio, a co-member of that studio, and a
---      designer in another studio; with and without a category filter
+--      designer in another studio, each importing onto a board of their only
+--      studio (00683 scopes studio products to the board's studio); with and
+--      without a category filter
 --   2. negative: another studio's products, someone else's personal products,
 --      deleted and merged products never appear
 --   3. the look gate: photo_match comes from options; visible vectors counted
@@ -77,16 +79,24 @@ VALUES
   ('d6790000-0000-4000-8000-000000000002', 'd6791000-0000-4000-8000-000000000001', 'member', 'active', now()),
   ('d6790000-0000-4000-8000-000000000003', 'd6791000-0000-4000-8000-000000000002', 'owner', 'active', now());
 
+-- Since 00683 the twin offers studio products of the BOARD's studio only, so
+-- each importer imports onto a board of their own studio (the foreign
+-- designer onto studio B's board); a two-studio importer is covered by
+-- lookup_indexes.test.sql.
 INSERT INTO public.projects (id, designer_id, client_id, created_by, name, status)
 VALUES ('d6792000-0000-4000-8000-000000000001', 'd6790000-0000-4000-8000-000000000001', NULL,
-        'd6790000-0000-4000-8000-000000000001', 'Knn project', 'active');
+        'd6790000-0000-4000-8000-000000000001', 'Knn project', 'active'),
+       ('d6792000-0000-4000-8000-000000000002', 'd6790000-0000-4000-8000-000000000003', NULL,
+        'd6790000-0000-4000-8000-000000000003', 'Knn foreign project', 'active');
 
 INSERT INTO public.proposal_boards (
   id, proposal_id, project_id, name, canvas_width, canvas_height,
   background_color, sections, status, sort_order
 ) VALUES
   ('d6793000-0000-4000-8000-000000000001', NULL, 'd6792000-0000-4000-8000-000000000001',
-   'Knn board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 0);
+   'Knn board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 0),
+  ('d6793000-0000-4000-8000-000000000002', NULL, 'd6792000-0000-4000-8000-000000000002',
+   'Knn foreign board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 0);
 
 -- The pins point at a storage path no live board owns; the media-reference
 -- guard (not under test here) is bypassed for these fixture rows only.
@@ -159,7 +169,7 @@ VALUES
   ('d6797000-0000-4000-8000-000000000002', 'd6793000-0000-4000-8000-000000000001',
    'd6790000-0000-4000-8000-000000000002', 'deck', repeat('d2', 32), 'Other.pptx',
    '{}'::jsonb, 'resolving'),
-  ('d6797000-0000-4000-8000-000000000003', 'd6793000-0000-4000-8000-000000000001',
+  ('d6797000-0000-4000-8000-000000000003', 'd6793000-0000-4000-8000-000000000002',
    'd6790000-0000-4000-8000-000000000003', 'deck', repeat('d3', 32), 'Foreign.pptx',
    '{"photo_match": "yes"}'::jsonb, 'resolving');
 

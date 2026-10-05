@@ -131,6 +131,9 @@ export function isTransientAdjudicationError(error: unknown): boolean {
   return name === 'TimeoutError' || name === 'AbortError';
 }
 
+/** Runs one request to `url` under the run's limit for that URL's host. */
+export type HopGate = <T>(url: string, task: () => Promise<T>) => Promise<T>;
+
 export interface ResolveDeps {
   /** Lease pending pieces: one import (client path) or across imports (cron). */
   claim(limit: number): Promise<ClaimedItem[]>;
@@ -143,8 +146,10 @@ export interface ResolveDeps {
   searchWords(importId: string, query: string, vendor: string | null, limit: number): Promise<ProductHit[]>;
   /** Links granted out of `n` (0 = quota spent). */
   consumeLinkQuota(importId: string, n: number): Promise<number>;
-  /** SSRF-guarded page read; throws FetchBlocked on any failure. */
-  fetchPage(url: string): Promise<{ html: string; finalUrl: string }>;
+  /** SSRF-guarded page read; throws FetchBlocked on any failure. Every
+   *  request, the first and each redirect hop, runs through `hop`, so the
+   *  per-host limit holds for the host actually contacted. */
+  fetchPage(url: string, hop: HopGate): Promise<{ html: string; finalUrl: string }>;
   record(itemId: string, state: 'found' | 'not_found' | 'pending', foundBy: FoundBy | null, candidates: Candidate[]): Promise<void>;
   /** Hand back leased pieces this run never tried: lease cleared, the claim's attempt refunded. */
   release(itemIds: string[]): Promise<void>;
@@ -469,7 +474,6 @@ async function resolvePiece(
   // T0b: read the best link's page unless the library already had it.
   const primary = links[0];
   if (primary && !list.some((c) => c.source === 'link_existing')) {
-    const host = hostOf(primary.url) ?? '';
     const slideEvidence = { ...common, link_on_picture: primary.onPicture, link_source: primary.source };
     const granted = await deps.consumeLinkQuota(item.import_id, 1);
     let read: ReturnType<typeof readProductPage> | null = null;
@@ -479,7 +483,7 @@ async function resolvePiece(
       blockedReason = 'quota';
     } else {
       try {
-        const page = await gate.run(host, () => deps.fetchPage(primary.url));
+        const page = await deps.fetchPage(primary.url, (url, task) => gate.run(hostOf(url) ?? url, task));
         read = readProductPage(page.html, primary.url, page.finalUrl);
         summary.pages_read++;
       } catch (error) {

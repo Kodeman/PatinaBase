@@ -47,7 +47,9 @@ VALUES
 
 INSERT INTO public.projects (id, designer_id, client_id, created_by, name, status)
 VALUES ('d6772000-0000-4000-8000-000000000001', 'd6770000-0000-4000-8000-000000000001', NULL,
-        'd6770000-0000-4000-8000-000000000001', 'Resolve project', 'active');
+        'd6770000-0000-4000-8000-000000000001', 'Resolve project', 'active'),
+       ('d6772000-0000-4000-8000-000000000002', 'd6770000-0000-4000-8000-000000000002', NULL,
+        'd6770000-0000-4000-8000-000000000002', 'Resolve foreign project', 'active');
 
 INSERT INTO public.proposal_boards (
   id, proposal_id, project_id, name, canvas_width, canvas_height,
@@ -56,7 +58,11 @@ INSERT INTO public.proposal_boards (
   ('d6773000-0000-4000-8000-000000000001', NULL, 'd6772000-0000-4000-8000-000000000001',
    'Resolve board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 0),
   ('d6773000-0000-4000-8000-000000000002', NULL, 'd6772000-0000-4000-8000-000000000001',
-   'Resolve board two', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 1);
+   'Resolve board two', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 1),
+  -- The foreign designer imports onto their own studio's board: since 00683
+  -- studio candidates come from the board's studio.
+  ('d6773000-0000-4000-8000-000000000003', NULL, 'd6772000-0000-4000-8000-000000000002',
+   'Resolve foreign board', 1200, 800, '#FAF8F5', '[]'::jsonb, 'active', 0);
 
 -- The crops point at a storage path no live board owns; the media-reference
 -- guard (not under test here) is bypassed for these two fixture rows only.
@@ -113,7 +119,7 @@ VALUES
    'ready'),
   ('d6777000-0000-4000-8000-000000000002', 'd6773000-0000-4000-8000-000000000002',
    'd6770000-0000-4000-8000-000000000001', 'deck', repeat('c2', 32), 'Second.pptx', '{}'::jsonb, 'resolving'),
-  ('d6777000-0000-4000-8000-000000000003', 'd6773000-0000-4000-8000-000000000001',
+  ('d6777000-0000-4000-8000-000000000003', 'd6773000-0000-4000-8000-000000000003',
    'd6770000-0000-4000-8000-000000000002', 'deck', repeat('c3', 32), 'Foreign.pptx', '{}'::jsonb, 'resolving');
 
 INSERT INTO public.board_deck_import_items (id, import_id, element_key, board_item_id, slide_index, role, extracted, state)

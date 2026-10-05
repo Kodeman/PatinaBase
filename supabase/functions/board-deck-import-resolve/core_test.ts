@@ -60,6 +60,8 @@ interface Fake {
 
 function fake(items: ClaimedItem[], overrides: Partial<ResolveDeps> & {
   pages?: Record<string, string | FetchBlocked>;
+  /** url → the Location it redirects to. */
+  redirects?: Record<string, string>;
   library?: Record<string, string>;
   skus?: Record<string, string>;
   words?: Record<string, { product_id: string; score: number }[]>;
@@ -104,18 +106,27 @@ function fake(items: ClaimedItem[], overrides: Partial<ResolveDeps> & {
       quota -= granted;
       return granted;
     },
-    fetchPage: async (url) => {
+    fetchPage: async (url, hop) => {
       count('fetchPage');
       fetched.push(url);
-      const host = new URL(url).hostname;
-      inflight.set(host, (inflight.get(host) ?? 0) + 1);
-      peakPerHost.set(host, Math.max(peakPerHost.get(host) ?? 0, inflight.get(host)!));
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      inflight.set(host, inflight.get(host)! - 1);
-      const page = overrides.pages?.[url];
+      // One request per hop, each under the gate, following overrides.redirects.
+      let current = url;
+      for (;;) {
+        const next: string | null = await hop(current, async () => {
+          const host = new URL(current).hostname;
+          inflight.set(host, (inflight.get(host) ?? 0) + 1);
+          peakPerHost.set(host, Math.max(peakPerHost.get(host) ?? 0, inflight.get(host)!));
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          inflight.set(host, inflight.get(host)! - 1);
+          return overrides.redirects?.[current] ?? null;
+        });
+        if (!next) break;
+        current = next;
+      }
+      const page = overrides.pages?.[current];
       if (page instanceof FetchBlocked) throw page;
       if (page == null) throw new FetchBlocked('fetch_failed', false);
-      return { html: page, finalUrl: url };
+      return { html: page, finalUrl: current };
     },
     record: async (itemId, state, foundBy, candidates) => {
       count('record');
@@ -346,6 +357,22 @@ Deno.test('per-host politeness: never more than 2 requests in flight to one host
   const f = fake(items, { pages });
   await runResolve(f.deps);
   assertEquals(f.calls.fetchPage, 8);
+  assert((f.peakPerHost.get('busy.example') ?? 0) <= 2, `peak ${f.peakPerHost.get('busy.example')}`);
+});
+
+Deno.test('per-host politeness holds on redirect targets, not only the first host', async () => {
+  const pages: Record<string, string> = {};
+  const redirects: Record<string, string> = {};
+  const items = Array.from({ length: 8 }, (_, i) => {
+    const url = `https://short${i}.example/go`;
+    const target = `https://busy.example/products/item-${i}`;
+    redirects[url] = target;
+    pages[target] = productHtml(`Item ${i}`, '10');
+    return item(`r${i}`, { links: [{ url, on_picture: true }] });
+  });
+  const f = fake(items, { pages, redirects });
+  const summary = await runResolve(f.deps);
+  assertEquals(summary.pages_read, 8);
   assert((f.peakPerHost.get('busy.example') ?? 0) <= 2, `peak ${f.peakPerHost.get('busy.example')}`);
 });
 
