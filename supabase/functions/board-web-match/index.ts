@@ -3,8 +3,9 @@
 // Designer-pressed only; nothing calls it on a schedule. verify_jwt=true and
 // the bearer must be a user's JWT: {item_ids[≤20]} are read under RLS (board
 // managers), so a piece the caller cannot see is a 404. Everything after that
-// runs with the service role: the crop is read from the board bucket, the
-// 00680 budget is consumed for the studio the import bills to, and results are
+// runs with the service role: the crop is read from the board bucket (only
+// under the import's own board), the 00680 budget is consumed for the board's
+// studio (00682) for the crops that loaded, and results are
 // appended through 00680's record_board_web_match_result (a settled piece has
 // no resolver lease, so the lease-checked 00678 record RPC does not apply).
 // core.ts holds the matching.
@@ -88,19 +89,26 @@ Deno.serve(async (req) => {
   if (pins.error) return json({ error: "pins_unavailable" }, 500);
   const pinById = new Map((pins.data ?? []).map((pin: any) => [pin.id as string, pin]));
 
-  const vendors = await asCaller.from("vendors").select("name, website").not("website", "is", null).limit(2000);
+  const deckImport = await asCaller.from("board_deck_imports").select("board_id").eq("id", importIds[0]).maybeSingle();
+  if (deckImport.error || !deckImport.data?.board_id) return json({ error: "not_found" }, 404);
+  const boardId = deckImport.data.board_id as string;
+
+  // The board's studio pays (00682), and only its vendors and catalog vendors count as shops.
+  const studio = await admin.rpc("board_web_match_studio_key", { p_import_id: importIds[0] });
+  if (studio.error || !studio.data) return json({ error: "studio_unavailable" }, 500);
+
+  const vendors = await admin.rpc("board_web_match_vendor_websites", { p_studio_id: studio.data });
+  if (vendors.error) return json({ error: "vendors_unavailable" }, 500);
   const vendorDomains = new Map<string, string>();
-  for (const vendor of (vendors.data ?? []) as Array<{ name: string; website: string | null }>) {
+  for (const vendor of (Array.isArray(vendors.data) ? vendors.data : []) as Array<{ name: string; website: string }>) {
     const domain = vendorDomain(vendor.website);
     if (domain && !vendorDomains.has(domain)) vendorDomains.set(domain, vendor.name);
   }
 
-  const studio = await admin.rpc("board_web_match_studio_key", { p_import_id: importIds[0] });
-  if (studio.error || !studio.data) return json({ error: "studio_unavailable" }, 500);
-
   const items: WebMatchItem[] = rows.map((row) => ({
     item_id: row.id,
     import_id: row.import_id,
+    board_id: boardId,
     state: row.state,
     candidates: Array.isArray(row.candidates) ? row.candidates : [],
     crop_path: row.board_item_id ? cropReference(pinById.get(row.board_item_id)) : null,

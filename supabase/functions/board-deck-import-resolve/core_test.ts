@@ -51,6 +51,7 @@ interface Recorded {
 interface Fake {
   deps: ResolveDeps;
   recorded: Recorded[];
+  released: string[];
   fetched: string[];
   calls: Record<string, number>;
   paired: { link: string; picture: string; candidates: Candidate[] }[];
@@ -66,6 +67,7 @@ function fake(items: ClaimedItem[], overrides: Partial<ResolveDeps> & {
   adjudicationStore?: Map<number, AdjudicationAssignment[] | null>;
 } = {}): Fake {
   const recorded: Recorded[] = [];
+  const released: string[] = [];
   const fetched: string[] = [];
   const calls: Record<string, number> = {};
   const paired: Fake['paired'] = [];
@@ -119,6 +121,10 @@ function fake(items: ClaimedItem[], overrides: Partial<ResolveDeps> & {
       count('record');
       recorded.push({ itemId, state, foundBy, candidates });
     },
+    release: async (itemIds) => {
+      count('release');
+      released.push(...itemIds);
+    },
     pairablePictures: async () => [],
     pairLink: async (link, picture, candidates) => {
       paired.push({ link, picture, candidates });
@@ -142,7 +148,7 @@ function fake(items: ClaimedItem[], overrides: Partial<ResolveDeps> & {
     log: () => {},
     ...overrides,
   };
-  return { deps, recorded, fetched, calls, paired, peakPerHost };
+  return { deps, recorded, released, fetched, calls, paired, peakPerHost };
 }
 
 function recordFor(f: Fake, key: string): Recorded {
@@ -527,6 +533,50 @@ Deno.test('F7: past the 40 s start budget no piece or adjudication starts; they 
   assertEquals(f.recorded.length, 0);
   assertEquals(f.calls.claimAdjudication ?? 0, 0);
   assertEquals(f.calls.matchSku ?? 0, 0);
+  // N2: both untried pieces are handed back in one release.
+  assertEquals(f.calls.release, 1);
+  assertEquals(f.released.sort(), ['item-pic-a', 'item-sku']);
+});
+
+Deno.test('N2: slow Claude defers only the pieces on its slides; the rest resolve; deferred attempts are refunded', async () => {
+  let clock = 0;
+  const pieces = [
+    item('pic-a', FLAGGED),
+    item('pic-c', { ...FLAGGED, adjudication: { ...FLAGGED.adjudication, images: [{ key: 'pic-c' }] } }, { slide_index: 3 }),
+    item('sku', { caption: { sku: 'AB-12', vendor: 'V' } }, { slide_index: 2 }),
+    item('link', { links: [{ url: 'https://shop.example/products/harmony-sofa', on_picture: true }] }, { slide_index: 4 }),
+  ];
+  // The claim RPC's bookkeeping: claim adds an attempt, release gives it back.
+  const attempts = new Map(pieces.map((p) => [p.item_id, 2]));
+  const f = fake(pieces, {
+    skus: { 'AB-12': 'prod-ok' },
+    pages: { 'https://shop.example/products/harmony-sofa': productHtml('Harmony Sofa', '1999') },
+    now: () => clock,
+    claim: async () => {
+      for (const p of pieces) attempts.set(p.item_id, attempts.get(p.item_id)! + 1);
+      return pieces;
+    },
+    adjudicate: async () => {
+      // The first slide's call runs until the start budget is gone.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      clock = LIMITS.runStartBudgetMs;
+      return { input: null, usage: { input_tokens: 0, output_tokens: 0 } };
+    },
+  });
+  f.deps.release = async (itemIds) => {
+    for (const id of itemIds) attempts.set(id, Math.max(attempts.get(id)! - 1, 0));
+    f.released.push(...itemIds);
+  };
+  const summary = await runResolve(f.deps);
+  assertEquals(recordFor(f, 'sku').state, 'found');
+  assertEquals(recordFor(f, 'link').state, 'found');
+  assertEquals(summary.deferred, 2);
+  assertEquals(f.released.sort(), ['item-pic-a', 'item-pic-c']);
+  assertEquals(f.recorded.map((r) => r.itemId).sort(), ['item-link', 'item-sku']);
+  // Only slide 1 was adjudicated; slide 3 never started.
+  assertEquals(f.calls.claimAdjudication, 1);
+  for (const id of ['item-pic-a', 'item-pic-c']) assertEquals(attempts.get(id), 2, id);
+  for (const id of ['item-sku', 'item-link']) assertEquals(attempts.get(id), 3, id);
 });
 
 Deno.test('F7: within the budget every claimed piece is worked', async () => {

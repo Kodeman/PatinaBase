@@ -184,3 +184,33 @@ Deno.test('F1: the linear scanners match what the old regexes matched', () => {
     );
   }
 });
+
+Deno.test('(N1) a 5 MB JSON-LD image list is capped at 20 before URL cleaning, in both paths', () => {
+  const repeated = `{"@type":"Product","name":"Lamp","offers":{"price":1},"image":[${
+    Array(1_300_000).fill('"a"').join(',')
+  }]}`;
+  const distinct = `{"@type":"Product","name":"Lamp","offers":{"price":1},"image":[${
+    Array.from({ length: 500_000 }, (_, i) => `"/i/${i}.jpg"`).join(',')
+  }]}`;
+  const url = 'https://shop.example/product/lamp';
+  for (const body of [repeated, distinct]) {
+    assert(body.length >= 5_000_000, `fixture is ${body.length} bytes`);
+    const html = page(`<script type="application/ld+json">${body}</script>`);
+    // JSON.parse of 5 MB is a floor no cap can remove; time the work above it.
+    let start = performance.now();
+    JSON.parse(body);
+    const parseMs = performance.now() - start;
+    start = performance.now();
+    const read = readProductPage(html, url, url);
+    const readMs = performance.now() - start - parseMs;
+    start = performance.now();
+    const extracted = extractProduct(html, url).images ?? [];
+    const extractMs = performance.now() - start - parseMs;
+
+    assertEquals(read.kind, 'product');
+    assert(read.images.length >= 1 && read.images.length <= 20, `page: ${read.images.length} images`);
+    assert(extracted.length >= 1 && extracted.length <= 20, `extract: ${extracted.length} images`);
+    assert(readMs < 100, `page spent ${readMs.toFixed(0)} ms beyond the parse`);
+    assert(extractMs < 100, `extract spent ${extractMs.toFixed(0)} ms beyond the parse`);
+  }
+});

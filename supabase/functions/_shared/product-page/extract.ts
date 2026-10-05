@@ -218,12 +218,16 @@ function extractLdOfferPrice(offers: any): string | number | null {
   return null;
 }
 
+/** A hostile page can list a million images; cap before any URL parsing. */
+const MAX_LD_IMAGES = 20;
+
 function extractLdImages(image: any): string[] {
   if (!image) return [];
   if (typeof image === 'string') return [image];
   if (Array.isArray(image)) {
     const out: string[] = [];
     for (const i of image) {
+      if (out.length >= MAX_LD_IMAGES) break;
       if (typeof i === 'string') out.push(i);
       else if (i && typeof i === 'object' && typeof i.url === 'string') out.push(i.url);
     }
