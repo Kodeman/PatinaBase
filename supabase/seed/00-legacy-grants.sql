@@ -18870,6 +18870,42 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00679_board_deck_import_match_knn.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_deck_import_match_knn(uuid, vector, integer, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00679_board_deck_import_match_knn.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.board_deck_import_look_gate(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00679_board_deck_import_match_knn.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.board_deck_import_match_knn(uuid, vector, integer, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00679_board_deck_import_match_knn.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.board_deck_import_look_gate(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00679_board_deck_import_match_knn.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.register_board_deck_import(uuid, text, text, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00679_board_deck_import_match_knn.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.register_board_deck_import(uuid, text, text, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00680_board_web_match_budget.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.board_web_match_settings FROM PUBLIC, anon, authenticated;

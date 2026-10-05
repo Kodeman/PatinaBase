@@ -35067,6 +35067,24 @@ export type Database = {
         Args: { p_claim_token: string; p_dispatch_id: string }
         Returns: Json
       }
+      board_deck_import_look_gate: {
+        Args: { p_import_id: string }
+        Returns: Json
+      }
+      board_deck_import_match_knn: {
+        Args: {
+          p_category?: string
+          p_embedding: string
+          p_import_id: string
+          p_limit?: number
+        }
+        Returns: {
+          layer: string
+          match_source: string
+          product_id: string
+          rank: number
+        }[]
+      }
       board_deck_import_match_links: {
         Args: { p_import_id: string; p_urls: string[] }
         Returns: Json
