@@ -11,6 +11,8 @@
 //                      Page blocked or failed → link-only (page_read=false), likely.
 //   T0c sku            caption SKU + vendor = products.vendor_sku       strong
 //   T1  words          caption name/vendor → visible text search        likely/possible
+//   T2  look           crop → /embed/image → 00679 kNN twin (look.ts)    likely/possible
+//                      (+ the og:image look-check on read T0b links)
 //
 // Visibility is always the importing user's (import.created_by), applied in
 // SQL by the 00677 service-role helpers. Every result stays unconfirmed until
@@ -20,6 +22,7 @@
 
 import { readProductPage } from '../_shared/product-page/page.ts';
 import { hostOf, isDeniedLink, nameFromSlug, normalizeProductUrl } from './links.ts';
+import { applyLookTier, emptyLookSummary, type LookDeps, type LookSummary } from './look.ts';
 import { pairByLook, cosine } from './pairing.ts';
 import { retailerName } from './retailers.ts';
 import { ADJUDICATION, LIMITS, THRESHOLD_VERSION, THRESHOLDS } from './thresholds.ts';
@@ -27,8 +30,8 @@ import { ADJUDICATION, LIMITS, THRESHOLD_VERSION, THRESHOLDS } from './threshold
 // ─── Shapes ──────────────────────────────────────────────────────────────────
 
 export type Band = 'strong' | 'likely' | 'possible';
-export type CandidateSource = 'link_existing' | 'link' | 'sku' | 'words';
-export type FoundBy = 'link' | 'words';
+export type CandidateSource = 'link_existing' | 'link' | 'sku' | 'words' | 'look';
+export type FoundBy = 'link' | 'words' | 'look';
 
 /** The record_board_deck_import_resolution candidate contract (snake_case). */
 export interface Candidate {
@@ -134,6 +137,8 @@ export interface ResolveDeps {
   storeAdjudication(importId: string, slideIndex: number, assignments: AdjudicationAssignment[] | null): Promise<void>;
   /** Null when ANTHROPIC_API_KEY is absent: deterministic results only. */
   adjudicate: ((context: AdjudicationContext) => Promise<AdjudicationReply>) | null;
+  /** The look tier (look.ts). Absent: links and words only. */
+  look?: LookDeps | null;
   sleep(ms: number): Promise<void>;
   log(event: string, fields?: Record<string, unknown>): void;
 }
@@ -152,6 +157,7 @@ export interface RunSummary {
   adjudication_output_tokens: number;
   cost_usd: number;
   threshold_version: string;
+  look: LookSummary;
 }
 
 // ─── Reading what the slide said ─────────────────────────────────────────────
@@ -210,7 +216,7 @@ export function readCaption(extracted: Record<string, unknown>): Caption {
 // ─── Candidate assembly ──────────────────────────────────────────────────────
 
 const BAND_ORDER: Record<Band, number> = { strong: 0, likely: 1, possible: 2 };
-const SOURCE_ORDER: Record<CandidateSource, number> = { link_existing: 0, sku: 1, link: 2, words: 3 };
+const SOURCE_ORDER: Record<CandidateSource, number> = { link_existing: 0, sku: 1, link: 2, words: 3, look: 4 };
 
 /** Dedupe by product or page, best band first, at most five, ranked 1..n. */
 export function finalizeCandidates(list: Omit<Candidate, 'rank'>[]): Candidate[] {
@@ -232,6 +238,7 @@ export function finalizeCandidates(list: Omit<Candidate, 'rank'>[]): Candidate[]
 export function foundByOf(candidates: Candidate[]): FoundBy | null {
   const top = candidates[0];
   if (!top) return null;
+  if (top.source === 'look') return 'look';
   return top.source === 'link_existing' || top.source === 'link' ? 'link' : 'words';
 }
 
@@ -537,6 +544,7 @@ function emptySummary(): RunSummary {
     adjudication_output_tokens: 0,
     cost_usd: 0,
     threshold_version: THRESHOLD_VERSION,
+    look: emptyLookSummary(),
   };
 }
 
@@ -690,6 +698,7 @@ export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
 
   const adjudicated = await adjudicateSlides(items, deps, summary);
   const gate = new HostGate(deps.sleep);
+  const resolved: { view: PieceView; outcome: PieceOutcome }[] = [];
   const results: { view: PieceView; outcome: PieceOutcome }[] = [];
 
   await pool(items, LIMITS.runConcurrency, async (item) => {
@@ -702,6 +711,14 @@ export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
       deps.log('piece_failed', { item_id: item.item_id, error: String(error).slice(0, 200) });
       outcome = { state: 'pending', candidates: [], pageImage: null };
     }
+    resolved.push({ view, outcome });
+  });
+
+  // T2 and the og:image look-check, before record: the lease still holds.
+  await applyLookTier(resolved, deps, summary.look);
+
+  await pool(resolved, LIMITS.runConcurrency, async ({ view, outcome }) => {
+    const item = view.item;
     try {
       await deps.record(item.item_id, outcome.state, foundByOf(outcome.candidates), outcome.candidates);
       if (outcome.state === 'found') summary.found++;

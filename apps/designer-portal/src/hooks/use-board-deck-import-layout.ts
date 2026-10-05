@@ -42,6 +42,8 @@ import {
   type ManifestElement,
 } from '@/lib/deck-import/manifest';
 import { readManifest } from '@/lib/deck-import/parse-deck';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { PHOTO_MATCH_FLAG } from '@/hooks/use-board-find-this-piece';
 import { DeckImportError, openPackage, type PackageReader } from '@/lib/deck-import/read-package';
 
 export const DECK_IMPORT_FLAG = 'board-deck-import';
@@ -503,6 +505,8 @@ export function useBoardDeckImportLayout(options: {
   const attach = useAttachBoardDeckImportPins();
   const [progress, setProgress] = useState<string | null>(null);
   const { owner, boardId, upload } = options;
+  // The resolver's look tier runs only for imports that asked for it.
+  const { value: photoMatch } = useFeatureFlag(PHOTO_MATCH_FLAG);
 
   const layOut = useCallback(async (input: {
     deck: PreparedDeck;
@@ -521,7 +525,9 @@ export function useBoardDeckImportLayout(options: {
           onProgress: (slide, of) => setProgress(`Laying out · slide ${slide} of ${of}`),
         },
         {
-          register: (args) => register.mutateAsync(args),
+          register: (args) => register.mutateAsync(photoMatch
+            ? { ...args, manifest: { ...args.manifest, options: { ...args.manifest.options, photo_match: true } } }
+            : args),
           upload: ({ files, overrides, onProgress }) => upload({
             ownerId: owner.id,
             ownerKind: owner.kind,
@@ -539,7 +545,7 @@ export function useBoardDeckImportLayout(options: {
     } finally {
       setProgress(null);
     }
-  }, [attach, boardId, owner.id, owner.kind, register, upload]);
+  }, [attach, boardId, owner.id, owner.kind, photoMatch, register, upload]);
 
   return { layOut, progress };
 }

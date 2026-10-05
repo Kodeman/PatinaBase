@@ -16,6 +16,34 @@ export const THRESHOLDS = {
   words: { likelyScore: 0.6, likelyMargin: 0.15 },
 } as const;
 
+/** T2 "by look" and the og:image look-check (look.ts). PLACEHOLDERS from
+ *  PLAN (team/p-pipeline-quality.md T0b/T2) until SQ-362 calibrates them on
+ *  the labelled crop set; any change bumps `threshold_version`. Cosine on
+ *  /embed/image vectors; the designer sees words and order, never numbers. */
+export const LOOK_THRESHOLDS = {
+  threshold_version: 'deck-look-v0-placeholder',
+  /** τ_likely: top kNN hit similarity for "likely". */
+  likely: 0.85,
+  /** τ_margin: top1 − top2 for "likely". */
+  margin: 0.03,
+  /** τ_look: page photo vs deck crop agree at or above this. */
+  pageAgrees: 0.8,
+  /** Hits from the fused 0.65 image / 0.35 caption aesthete_vector are never
+   *  better than this band until image-only vectors land (contract, W5). */
+  fusedCap: 'possible' as const,
+  /** Look hits shown per piece. */
+  shown: 3,
+  /** Hits asked of the kNN twin per piece. */
+  knnLimit: 10,
+  /** Order-only boost: the designer's own library first. Never moves a band. */
+  libraryBoost: { personal: 0.15, studio: 0.1 } as Record<string, number>,
+} as const;
+
+/** The look tier runs only when the importer can see at least this many
+ *  products with a vector (00679 board_deck_import_look_gate). Below it, only
+ *  the look tier is skipped: links and words still run. */
+export const LOOK_MIN_VISIBLE_VECTORS = 20;
+
 export const LIMITS = {
   /** Items claimed per run. Each item reads at most one page, so this is
    *  also the run's URL budget (≤8), sized for the 60 s pg_net window. */

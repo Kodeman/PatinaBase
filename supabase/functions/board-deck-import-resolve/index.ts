@@ -15,7 +15,7 @@
 // deno-lint-ignore-file no-explicit-any no-import-prefix
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createInferenceClient } from "../_shared/aesthete.ts";
+import { createInferenceClient, toPgVector } from "../_shared/aesthete.ts";
 import { DECK_PAGE_MAX_BYTES } from "../_shared/product-page/page.ts";
 import { fetchHtml, UrlError } from "../_shared/product-page/ssrf.ts";
 import {
@@ -33,6 +33,7 @@ import {
   type ResolveDeps,
   runResolve,
 } from "./core.ts";
+import type { KnnHit, LookGate } from "./look.ts";
 import { ADJUDICATION } from "./thresholds.ts";
 
 const FUNCTION_NAME = "board-deck-import-resolve";
@@ -180,6 +181,44 @@ function deps(
         };
       }
       : null,
+    // The look tier (look.ts, 00679). Without inference it reports itself
+    // unavailable for imports that asked for photo match.
+    look: {
+      healthy: async () => Boolean(inference && (await inference.healthz())?.warmed),
+      gate: (importId) => rpc<LookGate>(admin, "board_deck_import_look_gate", { p_import_id: importId }),
+      cropUrls: async (itemIds) => {
+        const out = new Map<string, string>();
+        if (itemIds.length === 0) return out;
+        const { data, error } = await admin
+          .from("board_deck_import_items")
+          .select("id, pin:proposal_board_items(image_url, data_image_url:data->>image_url)")
+          .in("id", itemIds);
+        if (error) throw new Error(`crop urls: ${error.message}`);
+        for (const row of (data ?? []) as any[]) {
+          const pin = Array.isArray(row.pin) ? row.pin[0] : row.pin;
+          // Only crops in the board bucket go to the embedder, signed after
+          // the claim (cron) or the caller's RLS read (browser) let us here.
+          const path = normalizeBoardObjectReference(pin?.image_url ?? pin?.data_image_url);
+          if (!path) continue;
+          const signed = await admin.storage.from(BOARD_ASSET_BUCKET).createSignedUrl(path, SIGNED_CROP_SECONDS);
+          if (!signed.error && signed.data?.signedUrl) out.set(row.id, signed.data.signedUrl);
+        }
+        return out;
+      },
+      knn: async (importId, vector, limit, category) => {
+        const rows = await rpc<KnnHit[] | null>(admin, "board_deck_import_match_knn", {
+          p_import_id: importId,
+          p_embedding: toPgVector(vector),
+          p_limit: limit,
+          p_category: category,
+        });
+        return (rows ?? []).map((row) => ({
+          product_id: row.product_id,
+          rank: Number(row.rank),
+          layer: row.layer ?? null,
+        }));
+      },
+    },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     log,
   };

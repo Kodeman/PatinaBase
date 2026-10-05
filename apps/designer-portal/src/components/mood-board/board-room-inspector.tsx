@@ -6,6 +6,7 @@ import { promoteRequestFromPin, type BoardOwnerRef, type BoardRect, type Editabl
 import { usePromoteBoardReferenceToSelection, type BoardItemDirection } from '@patina/supabase';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import type { BoardRoomControllerApi } from '@/components/portal/scope-builder/board-room-controller';
+import { BoardFindThisPiece } from './board-find-this-piece';
 import { BoardImageInspectorActions } from './board-image-inspector-actions';
 import { BoardItemDirectionPanel } from './board-item-direction-panel';
 import { BoardPaletteInspectorActions } from './board-palette-inspector-actions';
@@ -457,6 +458,8 @@ export function BoardRoomInspector({
               onCommand?.('content');
             }}
           />
+
+          {lead.type === 'image' && <BoardFindThisPiece api={api} pin={lead} />}
 
           <BoardPaletteInspectorActions
             item={lead}
