@@ -21,7 +21,13 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createInferenceClient, toPgVector } from "../_shared/aesthete.ts";
 import { DECK_PAGE_MAX_BYTES } from "../_shared/product-page/page.ts";
-import { fetchHtml, UrlError } from "../_shared/product-page/ssrf.ts";
+import {
+  denoPinnedHttpTransport,
+  fetchHtml,
+  type PinnedRequestOptions,
+  type ResolvedAddress,
+  UrlError,
+} from "../_shared/product-page/ssrf.ts";
 import { BOARD_ASSET_BUCKET, normalizeBoardObjectReference } from "../board-asset-cleanup/core.ts";
 import { isServiceCaller } from "./auth.ts";
 import {
@@ -104,10 +110,15 @@ function deps(
       });
       return Number(result?.granted ?? 0);
     },
-    fetchPage: async (url) => {
+    fetchPage: async (url, hop) => {
       try {
+        // Each hop's request waits on its own host's gate (redirects included).
+        const transport = {
+          request: (target: URL, address: ResolvedAddress, options: PinnedRequestOptions) =>
+            hop(target.toString(), () => denoPinnedHttpTransport.request(target, address, options)),
+        };
         // A page past the budget is read as its first 5MB, not refused.
-        return await fetchHtml(url, {}, { maxBytes: DECK_PAGE_MAX_BYTES, truncate: true });
+        return await fetchHtml(url, { transport }, { maxBytes: DECK_PAGE_MAX_BYTES, truncate: true });
       } catch (error) {
         if (error instanceof UrlError) throw new FetchBlocked(error.message, error.status === 400);
         throw new FetchBlocked("fetch_failed", false);

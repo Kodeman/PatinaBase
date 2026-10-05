@@ -1,7 +1,9 @@
 // board-deck-import-resolve · link helpers (PURE).
 //
 // normalizeProductUrl must stay byte-compatible with the SQL
-// public._board_deck_import_normalize_url (00677): T0a compares the two.
+// public._board_deck_import_normalize_url (00683): T0a compares the two.
+// Shared vectors: supabase/tests/deck_import/lookup_indexes.test.sql
+// (links_test.ts runs them here).
 
 /** Licence, attribution, stock-photo and search hosts are never products. */
 const DENY_HOSTS = [
@@ -38,7 +40,9 @@ export function normalizeProductUrl(raw: string): string | null {
   }
   const host = url.hostname.toLowerCase().replace(/^www\./, '');
   if (!host) return null;
-  const port = url.port ? `:${url.port}` : '';
+  // URL drops the scheme's default port; :443 is also dropped from http,
+  // because the key is written as https (so the key is a fixed point).
+  const port = url.port && url.port !== '443' ? `:${url.port}` : '';
   const path = url.pathname === '/' || url.pathname === ''
     ? '/'
     : url.pathname.replace(/\/+$/, '') || '/';
