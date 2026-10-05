@@ -2,8 +2,10 @@
 // embedder are injected through ResolveDeps).
 //
 // One run claims ≤8 pending pieces (SKIP LOCKED lease, 00676), resolves each
-// through the tiers below, records the candidates, and then tries to pair any
-// link that came back with a page photo to an unclaimed product crop by look.
+// through the tiers below, records the candidates, and then pairs link rows
+// onto pictures: an unanchored link (speaker notes, bare slide text) joins the
+// slide's sole product picture, or the one picture its page's name matches;
+// any other link with a page photo pairs to an unclaimed crop by look.
 //
 //   T0a link_existing  normalized URL = a visible products.source_url  strong
 //   T0b link           page read: JSON-LD Product / OG price            strong if the
@@ -24,8 +26,15 @@
 
 import { readProductPage } from '../_shared/product-page/page.ts';
 import { hostOf, isDeniedLink, nameFromSlug, normalizeProductUrl } from './links.ts';
-import { applyLookTier, emptyLookSummary, type LookDeps, type LookSummary } from './look.ts';
-import { pairByLook, cosine } from './pairing.ts';
+import {
+  applyLookTier,
+  emptyLookSummary,
+  isPageRead,
+  lookCheckCandidate,
+  type LookDeps,
+  type LookSummary,
+} from './look.ts';
+import { cosine, nameOverlap, pairByLook, PAIR_NAME_MIN_OVERLAP } from './pairing.ts';
 import { retailerName } from './retailers.ts';
 import { ADJUDICATION, LIMITS, THRESHOLD_VERSION, THRESHOLDS } from './thresholds.ts';
 
@@ -85,6 +94,12 @@ export interface PairablePicture {
   item_id: string;
   slide_index: number;
   image_url: string;
+  /** 00688: 'pending', 'not_found', or an unkept 'found' (words, look, web). */
+  state?: string;
+  /** 00688: the picture's caption fields, in the readCaption shape. */
+  caption?: Record<string, unknown>;
+  /** 00688: product pictures on its slide, decided or not. */
+  slide_pictures?: number;
 }
 
 export interface AdjudicationContext {
@@ -658,39 +673,126 @@ function viewOf(item: ClaimedItem, adjudicated?: { texts: string[]; links: DeckL
   };
 }
 
-async function pairLinksByLook(
-  outcomes: { view: PieceView; outcome: PieceOutcome }[],
+type LinkRow = { view: PieceView; outcome: PieceOutcome };
+type AnchorBy = 'sole_picture' | 'name';
+
+/** Speaker notes or bare slide text: a link no picture on the slide carries. */
+const UNANCHORED_SOURCES = new Set(['notes', 'text']);
+
+function isUnanchored(row: LinkRow): boolean {
+  const source = row.view.links[0]?.source;
+  return row.view.item.extracted.deck_level !== true && source != null && UNANCHORED_SOURCES.has(source);
+}
+
+/** The product name the link's page gave, when the page was read. */
+function linkPageName(row: LinkRow): string | null {
+  const read = row.outcome.candidates.find((c) => isPageRead(c) && str(c.extracted?.name));
+  return read ? str(read.extracted?.name) : null;
+}
+
+function nameMatches(row: LinkRow, picture: PairablePicture): boolean {
+  const name = linkPageName(row);
+  const caption = readCaption(picture.caption ?? {});
+  const label = caption.name ?? caption.text;
+  return name != null && label != null && nameOverlap(name, label) >= PAIR_NAME_MIN_OVERLAP;
+}
+
+/**
+ * Unanchored links → the picture each belongs to: the slide's only product
+ * picture, else the one picture whose caption names the link's product. A
+ * picture two links anchor to keeps the one whose name matches, or neither.
+ */
+function anchorLinks(rows: LinkRow[], pictures: PairablePicture[]): { row: LinkRow; picture: PairablePicture; by: AnchorBy }[] {
+  const byPicture = new Map<string, { picture: PairablePicture; rows: { row: LinkRow; by: AnchorBy }[] }>();
+  for (const row of rows) {
+    if (!isUnanchored(row)) continue;
+    const onSlide = pictures.filter((p) => p.slide_index === row.view.item.slide_index);
+    let anchor: { picture: PairablePicture; by: AnchorBy } | null = null;
+    if (onSlide.length === 1 && onSlide[0].slide_pictures === 1) {
+      anchor = { picture: onSlide[0], by: 'sole_picture' };
+    } else {
+      const named = onSlide.filter((p) => nameMatches(row, p));
+      if (named.length === 1) anchor = { picture: named[0], by: 'name' };
+    }
+    if (!anchor) continue;
+    const held = byPicture.get(anchor.picture.item_id) ?? { picture: anchor.picture, rows: [] };
+    held.rows.push({ row, by: anchor.by });
+    byPicture.set(anchor.picture.item_id, held);
+  }
+  const out: { row: LinkRow; picture: PairablePicture; by: AnchorBy }[] = [];
+  for (const { picture, rows: held } of byPicture.values()) {
+    const chosen = held.length === 1 ? held : held.filter(({ row }) => nameMatches(row, picture));
+    if (chosen.length === 1) out.push({ row: chosen[0].row, picture, by: chosen[0].by });
+  }
+  return out;
+}
+
+/** The link row's candidates for its anchored picture. A read page's product
+ *  is strong when its photo agrees with the crop (the og:image check), likely
+ *  when it disagrees or could not be checked. */
+function anchoredCandidates(row: LinkRow, by: AnchorBy, similarity: number | null): Candidate[] {
+  return finalizeCandidates(row.outcome.candidates.map(({ rank: _r, ...c }) => {
+    const candidate = { ...c, evidence: { ...c.evidence, paired_by: by } };
+    if (!isPageRead(c)) return candidate;
+    return similarity == null
+      ? { ...candidate, band: 'likely' as const }
+      : lookCheckCandidate({ ...candidate, band: 'strong' }, similarity);
+  }));
+}
+
+async function pairLinks(
+  outcomes: LinkRow[],
   deps: ResolveDeps,
   summary: RunSummary,
 ): Promise<void> {
-  if (!deps.embedImages) return;
-  const byImport = new Map<string, { view: PieceView; outcome: PieceOutcome }[]>();
+  const byImport = new Map<string, LinkRow[]>();
   for (const entry of outcomes) {
-    if (!entry.view.isLinkItem || entry.outcome.state !== 'found' || !entry.outcome.pageImage) continue;
+    if (!entry.view.isLinkItem || entry.outcome.state !== 'found') continue;
+    // Without the embedder only unanchored links can pair.
+    if (!deps.embedImages && !isUnanchored(entry)) continue;
     const list = byImport.get(entry.view.item.import_id) ?? [];
     list.push(entry);
     byImport.set(entry.view.item.import_id, list);
   }
-  for (const [importId, linkRows] of byImport) {
+  for (const [importId, rows] of byImport) {
     const pictures = await deps.pairablePictures(importId);
     if (pictures.length === 0) continue;
-    let vectors: Map<string, number[]>;
-    try {
-      vectors = await deps.embedImages([
-        ...linkRows.map((r) => ({ id: `link:${r.view.item.item_id}`, url: r.outcome.pageImage! })),
-        ...pictures.map((p) => ({ id: `crop:${p.item_id}`, url: p.image_url })),
-      ]);
-    } catch (error) {
-      deps.log('embed_failed', { import_id: importId, error: String(error).slice(0, 200) });
-      continue;
+    const withPhoto = rows.filter((r) => r.outcome.pageImage);
+    let vectors: Map<string, number[]> | null = null;
+    if (deps.embedImages && withPhoto.length) {
+      try {
+        vectors = await deps.embedImages([
+          ...withPhoto.map((r) => ({ id: `link:${r.view.item.item_id}`, url: r.outcome.pageImage! })),
+          ...pictures.map((p) => ({ id: `crop:${p.item_id}`, url: p.image_url })),
+        ]);
+      } catch (error) {
+        deps.log('embed_failed', { import_id: importId, error: String(error).slice(0, 200) });
+      }
     }
+    const taken = new Set<string>();
+    const pairedRows = new Set<string>();
+
+    // A link outranks words: an anchored link joins its picture even when
+    // that picture already stands found by words or look (00688).
+    for (const { row, picture, by } of anchorLinks(rows, pictures)) {
+      const linkVector = vectors?.get(`link:${row.view.item.item_id}`);
+      const cropVector = vectors?.get(`crop:${picture.item_id}`);
+      const similarity = linkVector && cropVector ? cosine(linkVector, cropVector) : null;
+      if (await deps.pairLink(row.view.item.item_id, picture.item_id, anchoredCandidates(row, by, similarity))) {
+        taken.add(picture.item_id);
+        pairedRows.add(row.view.item.item_id);
+        summary.paired++;
+      }
+    }
+
+    if (!vectors) continue;
+    const linkRows = withPhoto.filter((r) => !pairedRows.has(r.view.item.item_id));
     // Slide links pair on their own slide first; deck-level links deck-wide.
     const groups = new Map<string, typeof linkRows>();
     for (const row of linkRows) {
       const scope = row.view.item.extracted.deck_level === true ? 'deck' : `slide:${row.view.item.slide_index}`;
       groups.set(scope, [...(groups.get(scope) ?? []), row]);
     }
-    const taken = new Set<string>();
     const scopes = [...groups.keys()].filter((s) => s !== 'deck');
     if (groups.has('deck')) scopes.push('deck');
     for (const scope of scopes) {
@@ -802,7 +904,7 @@ export async function runResolve(deps: ResolveDeps): Promise<RunSummary> {
   }
   if (adjudicationError) throw adjudicationError;
 
-  await pairLinksByLook(results, deps, summary);
+  await pairLinks(results, deps, summary);
   summary.cost_usd = Math.round(summary.cost_usd * 1_000_000) / 1_000_000;
   return summary;
 }

@@ -473,6 +473,40 @@ describe('BoardDeckImportLedger', () => {
     expect(row('a').querySelector('form')).toBeNull();
   });
 
+  describe('"Which picture?" never offers a picture Keep would refuse (SQ-384)', () => {
+    const link = piece({ id: 'd', boardItemId: null, elementKey: 'link:d' });
+    // pin-1 belongs to a reference piece: Keep refuses it (pin_taken).
+    const takenOwner = piece({ id: 'ref', boardItemId: 'pin-1', role: 'reference' });
+    const pin2 = pin({ id: 'pin-2', data: { ...pin().data, deck_import: { import_id: IMPORT, slide_index: 0, state: 'to_confirm' } } });
+    const openPicker = () => {
+      const row = document.querySelector('[data-deck-row="d"]') as HTMLElement;
+      fireEvent.click(row.querySelector('[data-deck-act="which-picture"]')!);
+      return row;
+    };
+
+    it('leaves out a taken picture and offers a free one', () => {
+      // pin-2's piece is a product still undecided: Keep folds the link into it.
+      renderLedger([link, takenOwner, piece({ id: 'free', boardItemId: 'pin-2' })], [pin(), pin2]);
+      const row = openPicker();
+      const offered = [...row.querySelectorAll('[data-deck-crop]')].map((el) => el.getAttribute('data-deck-crop'));
+      expect(offered).toEqual(['pin-2']);
+      expect(row.querySelector('[data-deck-no-free-picture]')).toBeNull();
+    });
+
+    it('says every picture is already a piece when none is free, and offers Paste a link and Keep as reference', () => {
+      const props = renderLedger([link, takenOwner], [pin()]);
+      const row = openPicker();
+      expect(row.querySelectorAll('[data-deck-crop]')).toHaveLength(0);
+      expect(row.querySelector('[data-deck-no-free-picture]')!.textContent).toContain(
+        'Every picture on this slide is already a piece',
+      );
+      fireEvent.click(row.querySelector('[data-deck-act="pick-reference"]')!);
+      expect(props.reference).toHaveBeenCalledWith(expect.objectContaining({ id: 'd' }));
+      fireEvent.click(row.querySelector('[data-deck-act="pick-paste-link"]')!);
+      expect(row.querySelector('form')).not.toBeNull();
+    });
+  });
+
   it('puts kept pieces on the schedule as her selections by default (project board)', async () => {
     mockPromote.mockResolvedValue({ selectionId: 'ffe-1' });
     const kept = pin({ data: { ...pin().data, name: 'Cove sofa', deck_import: { import_id: IMPORT, item_id: 'item-1', state: 'kept' } } });

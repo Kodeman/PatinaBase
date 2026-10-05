@@ -41,7 +41,10 @@ export type LinkSource =
   | "group"
   | "table_row"
   | "legend"
-  | "caption";
+  | "caption"
+  /** Speaker notes or bare slide text, joined to the slide's only product picture. */
+  | "notes"
+  | "text";
 
 /** How the caption/link was tied to the picture. */
 export type AssociationBasis =

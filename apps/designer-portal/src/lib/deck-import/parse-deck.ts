@@ -12,6 +12,7 @@ import {
   type ManifestElement,
   type ManifestSlide,
   type SkippedItem,
+  type UnpairedLink,
 } from "./manifest";
 import { openPackage, pass1Names, type PackageReader } from "./read-package";
 import { readSlideOrder } from "./slide-order";
@@ -20,6 +21,31 @@ import type { PackageFiles } from "./xml";
 
 const AUTO_ALT =
   /description automatically generated|generated with (?:very high|high|medium|low) confidence/i;
+
+/** Links that sit on no picture: the speaker notes and bare slide text. */
+const UNANCHORED: ReadonlySet<UnpairedLink["source"]> = new Set(["notes", "text"]);
+
+/**
+ * A slide with exactly one product picture: its notes and bare-text links
+ * describe that picture, so they join it rather than standing as pieces of
+ * their own. Returns the slide's links still unpaired.
+ */
+export function joinSoleProduct(
+  onSlide: ManifestElement[],
+  unpaired: UnpairedLink[],
+): UnpairedLink[] {
+  const products = onSlide.filter((e) => e.role === "product");
+  const joining = unpaired.filter((l) => UNANCHORED.has(l.source));
+  if (products.length !== 1 || joining.length === 0) return unpaired;
+  const sole = products[0];
+  const links = [...sole.links];
+  for (const l of joining)
+    if (!links.some((x) => x.url === l.url))
+      links.push({ url: l.url, source: l.source as "notes" | "text" });
+  sole.links = links;
+  sole.extracted = extractFields(sole.caption, links.map((l) => l.url));
+  return unpaired.filter((l) => !UNANCHORED.has(l.source));
+}
 
 export interface ManifestSource {
   entries: PackageReader["entries"];
@@ -52,6 +78,7 @@ export function buildManifest(
   raw.forEach((slide, i) => {
     const assoc = associations[i];
     const keys: string[] = [];
+    const onSlide: ManifestElement[] = [];
     for (const pic of slide.pictures) {
       const pairing = assoc.pictures.get(pic.key)!;
       const extracted = extractFields(
@@ -66,7 +93,7 @@ export function buildManifest(
         hasCaption: pairing.caption != null,
       });
       keys.push(pic.key);
-      elements.push({
+      onSlide.push({
         element_key: pic.key,
         slide_index: slide.index,
         kind: pic.kind,
@@ -92,9 +119,11 @@ export function buildManifest(
         extracted,
       });
     }
+    const unpaired = joinSoleProduct(onSlide, assoc.unpaired);
+    elements.push(...onSlide);
     const hasPictures = slide.pictures.some((p) => p.kind !== "background");
     if (!hasPictures)
-      for (const link of assoc.unpaired)
+      for (const link of unpaired)
         deckLinks.push({ ...link, slide_index: slide.index });
     skipped.push(...slide.skipped, ...assoc.denied);
     const notes = paragraphsText(slide.notes);
@@ -113,7 +142,7 @@ export function buildManifest(
         role: assoc.textRoles.get(t.key) ?? "text",
         links: assoc.textLinks.get(t.key) ?? [],
       })),
-      unpaired_links: hasPictures ? assoc.unpaired : [],
+      unpaired_links: hasPictures ? unpaired : [],
       association_margin: assoc.margin,
       needs_adjudication: assoc.needs_adjudication,
     });

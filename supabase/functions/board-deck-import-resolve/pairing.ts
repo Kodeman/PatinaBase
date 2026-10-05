@@ -1,4 +1,5 @@
-// board-deck-import-resolve · link-to-picture pairing by look (PURE).
+// board-deck-import-resolve · link-to-picture pairing by look, and the name
+// overlap the resolver's unanchored-link pairing uses (PURE).
 //
 // A link no picture claimed resolves to a page with a photo. That photo and
 // the unclaimed product crops are embedded with /embed/image; this module
@@ -27,6 +28,25 @@ export function cosine(a: number[], b: number[]): number {
     nb += b[i] * b[i];
   }
   return na === 0 || nb === 0 ? 0 : dot / Math.sqrt(na * nb);
+}
+
+/** A link page's product name names a picture when at least this share of
+ *  the shorter name's words appear in the other (case-insensitive). */
+export const PAIR_NAME_MIN_OVERLAP = 0.6;
+
+function nameTokens(text: string): Set<string> {
+  return new Set(text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 1));
+}
+
+/** Shared words over the shorter name's word count, 0..1. */
+export function nameOverlap(a: string, b: string): number {
+  const ta = nameTokens(a);
+  const tb = nameTokens(b);
+  const shorter = Math.min(ta.size, tb.size);
+  if (shorter === 0) return 0;
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  return shared / shorter;
 }
 
 /** Minimum-cost assignment on a square matrix (Kuhn–Munkres, O(n³)).
