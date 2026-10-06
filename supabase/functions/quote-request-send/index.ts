@@ -61,6 +61,10 @@ interface QuoteRequestRow {
   scope: string | null;
   timeline: string | null;
   message: string | null;
+  /** C-29 (00707): the job, the lines asked about, when the answer is due. */
+  project_id: string | null;
+  ffe_item_ids: string[] | null;
+  due_on: string | null;
   status: string;
   sent_at: string | null;
   created_at: string;
@@ -122,8 +126,8 @@ Deno.serve(async (req: Request) => {
     .from('vendor_quote_requests')
     .select(
       `
-      id, designer_id, vendor_id, scope, timeline, message, status, sent_at,
-      created_at,
+      id, designer_id, vendor_id, scope, timeline, message, project_id,
+      ffe_item_ids, due_on, status, sent_at, created_at,
       vendor:vendors!vendor_id(id, name, orders_email, contact_info)
     `,
     )
@@ -155,11 +159,43 @@ Deno.serve(async (req: Request) => {
     .eq('id', request.designer_id)
     .maybeSingle();
 
-  // Studio identity via the canonical resolver (Designer Studios). An RFQ has no
-  // project (vendor + designer only), so the designerId path resolves the
-  // designer's primary studio; the profile fields stay the name fallback.
-  // logoUrl is non-null only for a real studio org.
-  const identity = await resolveStudioIdentity(admin, { designerId: request.designer_id });
+  // Studio identity via the canonical resolver (Designer Studios). A request
+  // linked to a job (C-29) resolves through the project; one without falls
+  // back to the designer's primary studio; the profile fields stay the name
+  // fallback. logoUrl is non-null only for a real studio org.
+  const identity = await resolveStudioIdentity(admin, {
+    projectId: request.project_id,
+    designerId: request.designer_id,
+  });
+
+  // C-29: the lines the request names (00707 keeps them live lines of its
+  // job) ride in the scope, and the due date in the timeline — names and
+  // quantities only, never the studio's prices.
+  let scope = request.scope;
+  const lineIds = request.ffe_item_ids ?? [];
+  if (request.project_id && lineIds.length > 0) {
+    const { data: lines } = await admin
+      .from('project_ffe_items')
+      .select('name, quantity')
+      .in('id', lineIds)
+      .eq('project_id', request.project_id)
+      .is('removed_at', null);
+    const named = ((lines ?? []) as { name: string | null; quantity: number | null }[])
+      .filter((line) => line.name?.trim())
+      .map((line) => `${line.name!.trim()}${(line.quantity ?? 1) > 1 ? ` ×${line.quantity}` : ''}`);
+    if (named.length > 0) {
+      scope = [scope?.trim(), `Lines: ${named.join('; ')}`].filter(Boolean).join(' — ');
+    }
+  }
+  const dueWords = request.due_on
+    ? `Quote needed by ${new Date(`${request.due_on}T00:00:00Z`).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })}`
+    : null;
+  const timeline = [request.timeline?.trim(), dueWords].filter(Boolean).join(' · ') || null;
   const studioName = studioDisplayName(
     identity,
     (designerProfile as any)?.business_name?.trim() ||
@@ -178,8 +214,8 @@ Deno.serve(async (req: Request) => {
     studioLogoUrl,
     designerName,
     designerEmail,
-    scope: request.scope,
-    timeline: request.timeline,
+    scope,
+    timeline,
     message: request.message ?? '',
   });
 

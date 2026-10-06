@@ -54,6 +54,7 @@ import {
   fetchProjectBillingAuthority,
 } from '@/hooks/use-commercial-documents';
 import { mapProjectInstruments } from '@/lib/document/project-commerce';
+import { VendorRecordQuoteAct } from './line-unfold/record-quote';
 import {
   buildInstrumentIndex,
   deriveLineAuthorization,
@@ -1085,6 +1086,12 @@ export function VendorsBookPage({
           {/* PRC-24: the whole approved-unordered queue, one act. Keyed so a
             vendor switch never carries another vendor's queue along. */}
           <VendorOrderAll key={vendor.id} vendor={vendor} />
+          {/* C-29: what the maker sent back, studio-entered (R-PB8). */}
+          {!vendor.is_patina_catalog && (
+            <div className="mb-2">
+              <VendorRecordQuoteAct key={vendor.id} vendor={{ id: vendor.id, name: vendor.name }} />
+            </div>
+          )}
           <ul>
             {openPos.map((po) => {
               const stamp = PO_STAMP[po.status] ?? PO_STAMP.draft;

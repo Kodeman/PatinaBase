@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@patina/supabase/server';
+import { parseQuoteRequestBody } from '@/components/document/line-unfold/quote-request';
 
 // POST /api/vendors/[id]/quote-request
 //
@@ -20,8 +21,10 @@ import { createServerClient } from '@patina/supabase/server';
 // bearer so the gateway verify_jwt and the function's auth.uid() owner check
 // both hold.
 //
-// Body { scope?: string, timeline?: string, message: string }. On a send
-// failure (e.g. no vendor email on file) the row stays a 'draft' and the
+// Body { scope?, timeline?, message, projectId?, ffeItemIds?, dueOn? } (C-29:
+// a request may name its job, the job's lines and when the answer is due;
+// 00707's trigger keeps the lines inside a job the caller can buy for). On a
+// send failure (e.g. no vendor email on file) the row stays a 'draft' and the
 // caller gets a 4xx — never a silent success.
 export async function POST(
   request: NextRequest,
@@ -40,14 +43,11 @@ export async function POST(
     }
 
     const { id: vendorId } = await context.params;
-    const body = await request.json().catch(() => ({}));
-    const message: string = (body.message ?? '').toString().trim();
-    const scope: string | null = body.scope ? String(body.scope).trim() : null;
-    const timeline: string | null = body.timeline ? String(body.timeline).trim() : null;
-
-    if (!message) {
-      return NextResponse.json({ error: 'message is required' }, { status: 400 });
+    const parsed = parseQuoteRequestBody(await request.json().catch(() => ({})));
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
+    const { message, scope, timeline, projectId, ffeItemIds, dueOn } = parsed.value;
 
     // 1. Insert the draft. status defaults to 'draft' (00162) — the edge
     //    function flips it to 'sent' only after the email actually goes out,
@@ -60,6 +60,9 @@ export async function POST(
         scope,
         timeline,
         message,
+        project_id: projectId,
+        ffe_item_ids: ffeItemIds,
+        due_on: dueOn,
       })
       .select('id, status, created_at')
       .single();

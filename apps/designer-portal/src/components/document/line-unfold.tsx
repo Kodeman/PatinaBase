@@ -261,7 +261,13 @@ export function LineUnfold({
           projectId={projectId}
           canEdit={canEditSelection}
         />
-        <QuoteCell />
+        <QuoteCell
+          item={item}
+          projectId={projectId}
+          projectName={projectName}
+          vendor={vendor ? { id: vendor.id, name: vendor.name } : null}
+          canEdit={canEditSelection && !isTradeLine}
+        />
         {/* C-11a: not ready reads as what would change it, in place of Order.
             A line already on a PO says so in its cell; trade work never orders. */}
         <OrderCell

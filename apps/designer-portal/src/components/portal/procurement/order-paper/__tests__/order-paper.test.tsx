@@ -16,8 +16,10 @@ const mockSetShipTo = jest.fn();
 const mockSetShipToLocation = jest.fn();
 const mockPush = jest.fn();
 const mockCoverage: { data: Record<string, unknown> } = { data: {} };
+const mockQuotes: { data: unknown[] } = { data: [] };
 
 jest.mock('@patina/supabase', () => ({
+  useVendorQuotes: () => ({ data: mockQuotes.data }),
   useCreatePurchaseOrder: () => ({ mutateAsync: mockCreate, isPending: false }),
   useSetPurchaseOrderHeader: () => ({ mutateAsync: mockSetHeader, isPending: false }),
   useSendPurchaseOrder: () => ({ mutateAsync: mockSend, isPending: false }),
@@ -138,6 +140,7 @@ const shipToGroup = () => screen.getByRole('group', { name: 'Ship to' });
 beforeEach(() => {
   jest.clearAllMocks();
   mockCoverage.data = { 'line-sofa': { coverage: 'paid' } };
+  mockQuotes.data = [];
   mockCreate.mockResolvedValue({ id: 'po-1', total_cents: 1_248_000 });
   mockSetHeader.mockResolvedValue({ id: 'po-1', project_id: 'project-1' });
   mockSetShipTo.mockResolvedValue({ id: 'po-1' });
@@ -361,5 +364,49 @@ describe('Order all — the queue', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Skip this paper' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the QUOTED column (C-29)', () => {
+  it('stays off a paper with no quote', () => {
+    renderPaper();
+    expect(document.querySelector('[data-order-paper-quoted]')).toBeNull();
+  });
+
+  it('reads the maker’s live quote beside the trade, line by line', () => {
+    mockQuotes.data = [
+      {
+        id: 'q-2',
+        vendor_id: 'vendor-hewn',
+        quote_ref: 'Q-2291',
+        valid_until: '2026-10-30',
+        superseded_by: null,
+        vendor_quote_lines: [
+          { ffe_item_id: 'line-sofa', unit_trade_cents: 1_184_000, lead_time_weeks: 12, applied_at: null },
+        ],
+      },
+      {
+        // Another maker's quote for a line never reads on Hewn's paper.
+        id: 'q-other',
+        vendor_id: 'vendor-other',
+        quote_ref: null,
+        valid_until: null,
+        superseded_by: null,
+        vendor_quote_lines: [
+          { ffe_item_id: 'line-chair', unit_trade_cents: 1, lead_time_weeks: null, applied_at: null },
+        ],
+      },
+    ];
+    renderPaper({
+      ffeItems: [
+        SOFA,
+        { id: 'line-chair', name: 'Chair', line_total_cents: 90_000, trade_price_cents: 60_000, quantity: 2 },
+      ],
+    });
+    const quoted = Array.from(document.querySelectorAll('[data-order-paper-quoted]')).map(
+      (el) => el.textContent,
+    );
+    expect(quoted).toEqual(['$11,840', '—']);
+    expect(screen.getByText('Quoted')).toBeInTheDocument();
   });
 });

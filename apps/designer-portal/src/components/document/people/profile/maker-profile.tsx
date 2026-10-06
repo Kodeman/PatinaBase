@@ -20,12 +20,19 @@
 import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
+  useProjectFFEItems,
+  useProjects,
   useToggleVendorSave,
   useVendor,
   useVendorProducts,
   useVendorReviews,
 } from '@patina/supabase';
 import { openLedger } from '../../command-bar';
+import { DateTextInput } from '../../date-text-input';
+import {
+  quoteRequestBody,
+  type QuoteRequestBody,
+} from '../../line-unfold/quote-request';
 import { RoomSheet } from '../../rooms/room-sheet';
 import { Card, TrustCard } from './profile-cards';
 import { ActionButton, BackLink, ProfileHead } from './profile-shell';
@@ -87,11 +94,7 @@ function useRequestQuote(vendorId: string) {
   return useMutation({
     // R83: the sheet renders its own inline failure band.
     meta: { errorSurface: 'inline' as const },
-    mutationFn: async (input: {
-      scope?: string;
-      timeline?: string;
-      message: string;
-    }) => {
+    mutationFn: async (input: QuoteRequestBody) => {
       const res = await fetch(`/api/vendors/${vendorId}/quote-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -113,6 +116,82 @@ const FIELD_LABEL =
 const FIELD_INPUT =
   'w-full rounded-[7px] border border-[var(--color-pearl)] bg-white px-3.5 py-2.5 text-[0.82rem] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none';
 
+/**
+ * C-29: the job a request is about and the lines it asks after — optional.
+ * Unordered lines only, this maker's first.
+ */
+function QuoteRequestJob({
+  vendorId,
+  projectId,
+  onProject,
+  ffeItemIds,
+  onLines,
+}: {
+  vendorId: string;
+  projectId: string | null;
+  onProject: (id: string | null) => void;
+  ffeItemIds: readonly string[];
+  onLines: (ids: string[]) => void;
+}) {
+  const { data: projects } = useProjects();
+  const { data: items } = useProjectFFEItems(projectId ?? '') as { data: Any[] | undefined };
+  const lines = useMemo(
+    () =>
+      (projectId ? (items ?? []) : [])
+        .filter((it) => !it.purchase_order_id)
+        .sort((a, b) => Number(b.vendor_id === vendorId) - Number(a.vendor_id === vendorId)),
+    [items, projectId, vendorId],
+  );
+  const toggle = (id: string, on: boolean) =>
+    onLines(on ? [...ffeItemIds, id] : ffeItemIds.filter((x) => x !== id));
+
+  return (
+    <>
+      <label className={FIELD_LABEL}>
+        Job <span className="opacity-60">(optional)</span>
+      </label>
+      <select
+        value={projectId ?? ''}
+        onChange={(e) => {
+          onProject(e.target.value || null);
+          onLines([]);
+        }}
+        className={`${FIELD_INPUT} mb-4`}
+      >
+        <option value="">No job</option>
+        {((projects ?? []) as Any[]).map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name ?? 'Project'}
+          </option>
+        ))}
+      </select>
+
+      {projectId && lines.length > 0 && (
+        <fieldset className="mb-4">
+          <legend className={FIELD_LABEL}>
+            Lines <span className="opacity-60">(optional)</span>
+          </legend>
+          <ul className="max-h-48 space-y-1 overflow-y-auto">
+            {lines.map((it) => (
+              <li key={it.id}>
+                <label className="flex items-baseline gap-2 text-[0.78rem] text-[var(--color-charcoal)]">
+                  <input
+                    type="checkbox"
+                    checked={ffeItemIds.includes(it.id)}
+                    onChange={(e) => toggle(it.id, e.target.checked)}
+                  />
+                  {it.name}
+                  {it.quantity > 1 ? ` ×${it.quantity}` : ''}
+                </label>
+              </li>
+            ))}
+          </ul>
+        </fieldset>
+      )}
+    </>
+  );
+}
+
 function QuoteSheet({
   vendorId,
   vendorName,
@@ -128,6 +207,9 @@ function QuoteSheet({
   const [scope, setScope] = useState('');
   const [timeline, setTimeline] = useState('');
   const [message, setMessage] = useState('');
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [ffeItemIds, setFfeItemIds] = useState<string[]>([]);
+  const [dueOn, setDueOn] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
@@ -137,6 +219,9 @@ function QuoteSheet({
     setScope('');
     setTimeline('');
     setMessage('');
+    setProjectId(null);
+    setFfeItemIds([]);
+    setDueOn(null);
     setError(null);
     setSent(false);
     onClose();
@@ -146,11 +231,9 @@ function QuoteSheet({
     if (!canSend) return;
     setError(null);
     try {
-      await request.mutateAsync({
-        scope: scope.trim() || undefined,
-        timeline: timeline.trim() || undefined,
-        message: message.trim(),
-      });
+      await request.mutateAsync(
+        quoteRequestBody({ scope, timeline, message, projectId, ffeItemIds, dueOn: dueOn ?? '' }),
+      );
       setSent(true);
     } catch (e) {
       setError(
@@ -224,6 +307,21 @@ function QuoteSheet({
             placeholder="e.g. delivery by mid-August"
             className={`${FIELD_INPUT} mb-4`}
           />
+
+          <QuoteRequestJob
+            vendorId={vendorId}
+            projectId={projectId}
+            onProject={setProjectId}
+            ffeItemIds={ffeItemIds}
+            onLines={setFfeItemIds}
+          />
+
+          <label className={FIELD_LABEL}>
+            Quote needed by <span className="opacity-60">(optional)</span>
+          </label>
+          <div className="mb-4">
+            <DateTextInput value={dueOn} ariaLabel="Quote needed by" onChange={setDueOn} />
+          </div>
 
           <label className={FIELD_LABEL}>Message</label>
           <textarea

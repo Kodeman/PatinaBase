@@ -36,6 +36,7 @@ import {
   useStartPoCheckout,
   useStudioIdentity,
   useStudioVendorAccount,
+  useVendorQuotes,
   type CreatePurchaseOrderInput,
   type FreightTerms,
   type PaymentPattern,
@@ -91,6 +92,7 @@ import {
   type OrderPaperVendor,
   type PendingOrder,
 } from './model';
+import { latestQuoteForLine } from '@/components/document/line-unfold/quote-model';
 import { PoRiders } from './riders';
 import { ComLineNote, useComPaper } from './com-slot';
 
@@ -307,6 +309,17 @@ function PaperSheet({
     itemIds: ffeItems.map((i) => i.id),
     vendorName: vendor.name,
   });
+  // C-29: what this maker quoted for each line (unit × qty, beside the trade
+  // total), when a live quote prices it. The column shows only where one does.
+  const { data: quotes } = useVendorQuotes(project.id);
+  const quotedCents = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of ffeItems) {
+      const quote = latestQuoteForLine(quotes, item.id, vendor.id);
+      if (quote) map.set(item.id, quote.unitTradeCents * (item.quantity ?? 1));
+    }
+    return map;
+  }, [quotes, ffeItems, vendor.id]);
 
   // ─── Terms (a new paper; a PO on file keeps its schedule) ──────────────
   const accountPattern: PaymentPattern | null = account?.payment_pattern ?? null;
@@ -838,6 +851,12 @@ function PaperSheet({
         {/* The lines. Trade cost is read-only here: edit it on the line. */}
         <section aria-label="Lines" className={`pt-4 ${RULE}`}>
           <ol className="flex flex-col gap-2">
+            {quotedCents.size > 0 && (
+              <li aria-hidden className="flex items-baseline justify-end gap-3">
+                <span className={`${LABEL} w-20 shrink-0 text-right`}>Quoted</span>
+                <span className={`${LABEL} w-20 shrink-0 text-right`}>Trade</span>
+              </li>
+            )}
             {ffeItems.map((item, idx) => (
               <li key={item.id} data-order-paper-line className="flex items-baseline gap-3">
                 <span className={`${LABEL} w-5 shrink-0`}>{idx + 1}</span>
@@ -852,7 +871,22 @@ function PaperSheet({
                 <span className="doc-type-meta shrink-0 text-[var(--color-quiet-ink)]">
                   ×{item.quantity ?? 1}
                 </span>
-                <span className="doc-type-body shrink-0 tabular-nums text-[var(--color-charcoal)]">
+                {quotedCents.size > 0 && (
+                  <span
+                    data-order-paper-quoted
+                    aria-label="Quoted"
+                    className="doc-type-meta w-20 shrink-0 text-right tabular-nums text-[var(--color-quiet-ink)]"
+                  >
+                    {quotedCents.has(item.id)
+                      ? formatTradeMoney(quotedCents.get(item.id)!, rowCurrency(item))
+                      : '—'}
+                  </span>
+                )}
+                <span
+                  className={`doc-type-body shrink-0 tabular-nums text-[var(--color-charcoal)] ${
+                    quotedCents.size > 0 ? 'w-20 text-right' : ''
+                  }`}
+                >
                   {formatTradeMoney(itemTradeCents(item), rowCurrency(item))}
                 </span>
               </li>

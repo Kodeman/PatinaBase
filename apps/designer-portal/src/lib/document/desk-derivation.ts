@@ -146,6 +146,7 @@ export type NeedKind =
   // C-22 Phase 2 kinds — registered now, no emitters yet; their tickets
   // add the rule and the notice → need mapping together.
   | 'ack_discrepancy'
+  // C-29: a live quote's valid-until is tomorrow or today (needQuoteExpiring).
   | 'quote_expiring'
   | 'cfa_pending'
   | 'memo_return'
@@ -319,6 +320,30 @@ export function returnWindowOpen(signal: DeskReturnSignal, now: Date): boolean {
   if (signal.itemStatus === 'delivered' || signal.itemStatus === 'installed') return false;
   const days = calendarDaysTo(signal.returnBy, now);
   return days >= 0 && days <= RETURN_BY_LEAD_DAYS;
+}
+
+/** C-29 quote input, structural (the desk-conflicts precedent). One live
+ *  vendor_quotes row (not superseded) with a valid-until date, built by
+ *  use-desk-engagements and keyed by project_id. */
+export interface DeskQuoteSignal {
+  quoteId: string;
+  vendorName: string | null;
+  quoteRef: string | null;
+  /** `vendor_quotes.valid_until`, a bare date. */
+  validUntil: string;
+  /** Lines the quote prices that are live and not yet on a purchase order. */
+  openLines: number;
+}
+
+/**
+ * C-29: a quote asks to be reconfirmed the day before its valid-until and on
+ * it — 00708's quote_expiring rule — while it still prices a line not yet
+ * ordered. R6 is open, so the date is all it reads: no age, no threshold.
+ */
+export function quoteExpiring(signal: DeskQuoteSignal, now: Date): boolean {
+  if (signal.openLines === 0) return false;
+  const days = calendarDaysTo(signal.validUntil, now);
+  return days >= 0 && days <= 1;
 }
 
 export interface NeedLine {
@@ -694,6 +719,7 @@ interface NeedContext {
   claimWindows?: readonly DeskClaimWindowSignal[] | null;
   payments?: readonly DeskPaymentSignal[] | null;
   returns?: readonly DeskReturnSignal[] | null;
+  quotes?: readonly DeskQuoteSignal[] | null;
 }
 
 /** A rule that owns its engagement kind outright. The original deriveNeed
@@ -1112,6 +1138,31 @@ const needReturnBy: NeedRule = ({ returns, now }) => {
   };
 };
 
+// C-29 (d2 §M2): a quote's good-through date is tomorrow or today and it still
+// prices an unordered line. Clears with the date, the order, or a newer quote
+// superseding it.
+const needQuoteExpiring: NeedRule = ({ quotes, now }) => {
+  const open = (quotes ?? [])
+    .filter((q) => quoteExpiring(q, now))
+    .sort((a, b) => (a.validUntil < b.validUntil ? -1 : a.validUntil > b.validUntil ? 1 : 0));
+  const first = open[0];
+  if (!first) return null;
+  const whose = first.vendorName ? `${first.vendorName}’s quote` : 'A quote';
+  const ref = first.quoteRef?.trim() ? ` ${first.quoteRef.trim()}` : '';
+  return {
+    kind: 'quote_expiring',
+    text:
+      open.length > 1
+        ? `${open.length} quotes to reconfirm — first good through ${fmtDay(first.validUntil)}`
+        : `${whose}${ref} is good through ${fmtDay(first.validUntil)}`,
+    actionLabel: NEED_ACTION_LABELS.quote_expiring,
+    stamp: { label: 'QUOTE', ...STAMP.clay },
+    urgent: false,
+    dueOn: first.validUntil,
+    owner: 'designer',
+  };
+};
+
 const needAwaitingInspection: NeedRule = ({ row }) => {
   if (row.awaiting_inspection_count > 0) {
     const n = row.awaiting_inspection_count;
@@ -1331,6 +1382,7 @@ const NEED_RULES: readonly NeedRule[] = [
   needScheduleProposal,
   needTaskDue,
   needScheduleUnconfigured,
+  needQuoteExpiring,
   needPoUnsent,
   needPoUnacknowledged,
   needPulseDue,
@@ -1350,6 +1402,7 @@ export function deriveNeeds(
   claimWindows?: readonly DeskClaimWindowSignal[] | null,
   payments?: readonly DeskPaymentSignal[] | null,
   returns?: readonly DeskReturnSignal[] | null,
+  quotes?: readonly DeskQuoteSignal[] | null,
 ): NeedLine[] {
   if (row.is_archived || row.is_paused) return [];
   const ctx: NeedContext = {
@@ -1363,6 +1416,7 @@ export function deriveNeeds(
     claimWindows,
     payments,
     returns,
+    quotes,
   };
   const needs: NeedLine[] = [];
   for (const rule of NEED_RULES) {
@@ -1389,6 +1443,7 @@ export function deriveNeed(
   claimWindows?: readonly DeskClaimWindowSignal[] | null,
   payments?: readonly DeskPaymentSignal[] | null,
   returns?: readonly DeskReturnSignal[] | null,
+  quotes?: readonly DeskQuoteSignal[] | null,
 ): NeedLine | null {
   return (
     deriveNeeds(
@@ -1402,6 +1457,7 @@ export function deriveNeed(
       claimWindows,
       payments,
       returns,
+      quotes,
     )[0] ?? null
   );
 }
@@ -1614,6 +1670,8 @@ export function partitionDesk(
   payments?: ReadonlyMap<string, readonly DeskPaymentSignal[]>,
   /** C-25 — project_id → live purchases with a return-by date. */
   returns?: ReadonlyMap<string, readonly DeskReturnSignal[]>,
+  /** C-29 — project_id → live quotes with a valid-until date. */
+  quotes?: ReadonlyMap<string, readonly DeskQuoteSignal[]>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -1674,6 +1732,9 @@ export function partitionDesk(
     const returnSignals = row.project_id
       ? (returns?.get(row.project_id) ?? null)
       : null;
+    const quoteSignals = row.project_id
+      ? (quotes?.get(row.project_id) ?? null)
+      : null;
     const needs = deriveNeeds(
       row,
       now,
@@ -1685,6 +1746,7 @@ export function partitionDesk(
       claimWindowSignals,
       paymentSignals,
       returnSignals,
+      quoteSignals,
     );
     const need = needs[0] ?? null;
     if (need) {
