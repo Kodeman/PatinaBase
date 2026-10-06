@@ -18,6 +18,7 @@ let mockVendors: { id: string; name: string }[] = [];
 let mockProductPrices: Map<string, { price_retail: number | null; price_trade: number | null }> | undefined;
 
 jest.mock('@patina/supabase', () => ({
+  useVendorQuotes: () => ({ data: [] }),
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUpdatePurchaseOrderETA: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUpdatePurchaseOrderStatus: () => ({ mutateAsync: jest.fn(), isPending: false }),

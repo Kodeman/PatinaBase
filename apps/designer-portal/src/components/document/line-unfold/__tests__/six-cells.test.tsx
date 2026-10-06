@@ -39,6 +39,8 @@ jest.mock('@patina/supabase', () => ({
   useProcurementDrafts: () => ({ data: [] }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  // C-29: the Quote cell; its own suite is quote.test.tsx.
+  useVendorQuotes: () => ({ data: [] }),
 }));
 
 // C-20: the clock's sentence is receiving-claim-clock.test.tsx's; here it

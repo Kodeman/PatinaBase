@@ -32,6 +32,7 @@ import {
   RETURN_BY_LEAD_DAYS,
   type DeskClaimWindowSignal,
   type DeskPaymentSignal,
+  type DeskQuoteSignal,
   type DeskReturnSignal,
   type DeskDraftSignal,
   type DeskFolder,
@@ -244,6 +245,42 @@ export function buildDeskDrafts(rows: any): Map<string, DeskDraftSignal[]> | und
   return map;
 }
 
+/** C-29: live quotes whose valid-until is near. The read takes a day of slack
+ *  each side (UTC vs local dates); quoteExpiring decides exactly. */
+const DESK_QUOTE_LIMIT = 200;
+
+/**
+ * C-29: live (not superseded) vendor quotes with a valid-until date, one signal
+ * per quote keyed by project_id, counting the lines it prices that are live and
+ * not yet on a purchase order.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskQuotes(rows: any): Map<string, DeskQuoteSignal[]> | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  const map = new Map<string, DeskQuoteSignal[]>();
+  for (const row of rows) {
+    if (!row?.id || !row.project_id || !row.valid_until) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const openLines = ((row.lines ?? []) as any[]).filter((line) => {
+      const item = one(line?.ffe_item);
+      return item && !item.purchase_order_id && !item.removed_at;
+    }).length;
+    map.set(row.project_id, [
+      ...(map.get(row.project_id) ?? []),
+      {
+        quoteId: row.id,
+        vendorName: one(row.vendor)?.name ?? null,
+        quoteRef: row.quote_ref ?? null,
+        validUntil: row.valid_until,
+        openLines,
+      },
+    ]);
+  }
+  return map;
+}
+
 /**
  * C-20: the claim_window_closing notices (00700's procurement-clocks-daily
  * writes one the day before the vendor deadline) folded to one signal per PO,
@@ -384,6 +421,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: paymentNotices, error: paymentNoticesError },
         { data: returnRows, error: returnRowsError },
         { data: draftRows, error: draftRowsError },
+        { data: quoteRows, error: quoteRowsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -511,6 +549,18 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           .eq('status', 'awaiting_review')
           .order('created_at')
           .limit(DESK_DRAFT_LIMIT),
+        // C-29: live quotes whose valid-until is near (R6: the date is all
+        // the need reads). A superseded quote drops out of the read itself.
+        supabase
+          .from('vendor_quotes')
+          .select(
+            'id, project_id, quote_ref, valid_until, vendor:vendors!vendor_quotes_vendor_id_fkey(name), lines:vendor_quote_lines(ffe_item:project_ffe_items!vendor_quote_lines_ffe_item_id_fkey(purchase_order_id, removed_at))',
+          )
+          .is('superseded_by', null)
+          .gte('valid_until', new Date(Date.now() - 86_400_000).toISOString().slice(0, 10))
+          .lte('valid_until', new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10))
+          .order('valid_until')
+          .limit(DESK_QUOTE_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -618,6 +668,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const payments = paymentNoticesError ? undefined : buildDeskPayments(paymentNotices);
       const returns = returnRowsError ? undefined : buildDeskReturns(returnRows);
       const drafts = draftRowsError ? undefined : buildDeskDrafts(draftRows);
+      const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
 
       const result = partitionDesk(
         rows,
@@ -632,6 +683,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         payments,
         returns,
         drafts,
+        quotes,
       );
       previousResultRef.current = result;
       return result;

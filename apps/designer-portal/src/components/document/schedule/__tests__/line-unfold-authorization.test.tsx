@@ -17,6 +17,7 @@ const mockAdvancePo = jest.fn();
 const mockRecordInstalled = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
+  useVendorQuotes: () => ({ data: [] }),
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUpdatePurchaseOrderETA: () => ({
     mutateAsync: jest.fn(),

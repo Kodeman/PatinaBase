@@ -13,6 +13,7 @@ import {
   NEED_ACTION_LABELS,
   type DeskClaimWindowSignal,
   type DeskPaymentSignal,
+  type DeskQuoteSignal,
   type DeskReturnSignal,
   type DocumentStateRow,
   type NurtureLike,
@@ -64,7 +65,6 @@ const OWNER_BY_KIND: Record<NeedKind, 'designer' | 'client' | 'maker'> = {
  *  tickets add the rule and a DERIVE_BY_KIND thunk together. */
 const UNEMITTED_KINDS: readonly NeedKind[] = [
   'ack_discrepancy',
-  'quote_expiring',
   'cfa_pending',
   'memo_return',
   'exception_open',
@@ -363,7 +363,8 @@ const DERIVE_BY_KIND: Record<NeedKind, (() => NeedLine | null) | null> = {
       paymentSignal({ notice: 'failed', isPatinaCatalog: true, paymentKind: 'full_upfront' }),
     ]),
   ack_discrepancy: null,
-  quote_expiring: null,
+  quote_expiring: () =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, null, null, [quoteSignal()]),
   cfa_pending: null,
   memo_return: null,
   exception_open: null,
@@ -1928,5 +1929,72 @@ describe('C-25 — the return-by need (d2 §M9)', () => {
     expect(folders).toHaveLength(1);
     expect(folders[0].row.project_id).toBe('p2');
     expect(folders[0].need.kind).toBe('return_by');
+  });
+});
+
+function quoteSignal(partial: Partial<DeskQuoteSignal> = {}): DeskQuoteSignal {
+  return {
+    quoteId: 'q1',
+    vendorName: 'Hewn',
+    quoteRef: 'Q-2291',
+    validUntil: '2026-06-12',
+    openLines: 1,
+    ...partial,
+  };
+}
+
+describe('C-29 — the quote_expiring need reads valid_until only (R6)', () => {
+  const derive = (...quotes: DeskQuoteSignal[]) =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, null, null, quotes);
+
+  it('rises the day before the good-through date, dated and owned', () => {
+    const need = derive(quoteSignal());
+    expect(need).not.toBeNull();
+    expect(need!.kind).toBe('quote_expiring');
+    expect(need!.text).toBe(`Hewn’s quote Q-2291 is good through ${dayMonth('2026-06-12')}`);
+    expect(need!.actionLabel).toBe('Reconfirm the price');
+    expect(need!.dueOn).toBe('2026-06-12');
+    expect(need!.owner).toBe('designer');
+    expect(need!.urgent).toBe(false);
+  });
+
+  it('stands on the good-through day itself', () => {
+    expect(derive(quoteSignal({ validUntil: '2026-06-11' }))!.kind).toBe('quote_expiring');
+  });
+
+  it('stays quiet two days out and once the date has passed — no age threshold', () => {
+    expect(derive(quoteSignal({ validUntil: '2026-06-13' }))).toBeNull();
+    expect(derive(quoteSignal({ validUntil: '2026-06-10' }))).toBeNull();
+  });
+
+  it('clears once every line it prices is ordered', () => {
+    expect(derive(quoteSignal({ openLines: 0 }))).toBeNull();
+  });
+
+  it('counts several, naming the first date', () => {
+    const need = derive(quoteSignal(), quoteSignal({ quoteId: 'q2', validUntil: '2026-06-11' }));
+    expect(need!.text).toBe(`2 quotes to reconfirm — first good through ${dayMonth('2026-06-11')}`);
+    expect(need!.dueOn).toBe('2026-06-11');
+  });
+
+  it('partitionDesk routes the signal by project_id', () => {
+    const { folders } = partitionDesk(
+      [mkRow({}), mkRow({ engagement_id: 'e2', project_id: 'p2' })],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map([['p2', [quoteSignal()]]]),
+    );
+    expect(folders).toHaveLength(1);
+    expect(folders[0].row.project_id).toBe('p2');
+    expect(folders[0].need.kind).toBe('quote_expiring');
   });
 });

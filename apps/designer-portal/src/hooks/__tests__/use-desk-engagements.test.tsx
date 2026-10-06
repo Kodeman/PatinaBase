@@ -53,6 +53,7 @@ jest.mock('@tanstack/react-query', () => {
 
 import { replaceEqualDeep } from '@tanstack/react-query';
 import {
+  buildDeskQuotes,
   DESK_PHASE_LIMIT,
   selectOperationalNeedForDocument,
   useDeskEngagements,
@@ -439,5 +440,35 @@ describe('selectOperationalNeedForDocument', () => {
 
     expect(data.composed['project-1']).toBe(true);
     expect(selectOperationalNeedForDocument(data, 'project-1')).toBeNull();
+  });
+});
+
+describe('buildDeskQuotes (C-29)', () => {
+  it('folds quote rows by job, counting only lines still to order', () => {
+    const map = buildDeskQuotes([
+      {
+        id: 'q-1',
+        project_id: 'project-1',
+        quote_ref: 'Q-2291',
+        valid_until: '2026-10-30',
+        vendor: { name: 'Hewn' },
+        lines: [
+          { ffe_item: { purchase_order_id: null, removed_at: null } },
+          { ffe_item: { purchase_order_id: 'po-1', removed_at: null } },
+          { ffe_item: { purchase_order_id: null, removed_at: '2026-10-01T00:00:00Z' } },
+        ],
+      },
+      { id: 'q-2', project_id: 'project-1', quote_ref: null, valid_until: '2026-10-31', vendor: null, lines: [] },
+      { id: 'q-3', project_id: 'project-2', quote_ref: null, valid_until: null, lines: [] },
+    ]);
+    expect(map?.get('project-1')).toEqual([
+      { quoteId: 'q-1', vendorName: 'Hewn', quoteRef: 'Q-2291', validUntil: '2026-10-30', openLines: 1 },
+      { quoteId: 'q-2', vendorName: null, quoteRef: null, validUntil: '2026-10-31', openLines: 0 },
+    ]);
+    expect(map?.has('project-2')).toBe(false);
+  });
+
+  it('is undefined (unknown, not empty) when the read failed', () => {
+    expect(buildDeskQuotes(null)).toBeUndefined();
   });
 });
