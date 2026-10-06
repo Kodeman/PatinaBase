@@ -4,8 +4,8 @@
  * FF&E line unfold. C-14 (D1-03): six cells — The buy · Quote · Order ·
  * Movement · Money out · Receiving — with the one next act lifted above them,
  * chosen by the order readiness rule (§3.4) and the PO's lifecycle. Each cell
- * lives in `./line-unfold/`; this file composes them and mounts the existing
- * Order Assistant, PO preview and LogInspectionDrawer in place (all
+ * lives in `./line-unfold/`; this file composes them and mounts the order
+ * paper, PO preview and LogInspectionDrawer in place (all
  * portal-local shadow-free panels — R3-clean). Clay left border, as before.
  *
  * The Authorized Schedule (Act III, slide 9): on a commercial job the unfold

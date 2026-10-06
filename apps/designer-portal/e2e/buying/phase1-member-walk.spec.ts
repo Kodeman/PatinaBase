@@ -13,9 +13,10 @@ import { hideDevOverlays } from "../helpers/hide-dev-overlays";
 /**
  * US-16 Phase 1 (SQ-417) — the buying walk as a NON-OWNER studio member:
  * read by maker (margin shown: the studio default is `everyone`) → the six-cell
- * unfold → Order with Assistant (the studio account's terms and 50% deposit
- * prefilled; the default receiver listed first, nothing preselected) → Send
- * (po-send served locally, to the account's orders inbox) → ack → in
+ * unfold → Order → the order paper (the studio account's terms and 50% deposit
+ * prefilled; the default receiver listed first, nothing preselected) → "Send
+ * to <vendor> · $X" (po-send served locally, to the account's orders inbox) →
+ * ack → in
  * production → carrier + tracking → shipped → the studio vendor account card
  * → receive one line damaged, noted on the BOL, with a photo → the claim
  * clock sentence → record a partial deposit (stays due), then the remainder
@@ -147,7 +148,7 @@ ON CONFLICT (id) DO UPDATE SET archived_at = NULL, is_default_receiver = true,
 INSERT INTO public.projects (id, name, designer_id, created_by, studio_id, status, site_address)
 VALUES (${q(PROJECT_ID)}, ${q(PROJECT_NAME)}, ${q(ownerId)}, ${q(ownerId)}, ${q(STUDIO_ID)}, 'active', ${q(SITE_ADDRESS)});
 
--- Vendor A's shared default is 30/70: the Assistant opening on 50/50 at 50%
+-- Vendor A's shared default is 30/70: the order paper opening on 50/50 at 50%
 -- proves the studio account, not the vendor row, set the terms.
 INSERT INTO public.vendors (id, name, orders_email, contact_info, default_payment_terms)
 VALUES (${q(VENDOR_A_ID)}, ${q(VENDOR_A)}, ${q(VENDOR_A_EMAIL)}, jsonb_build_object('email', ${q(VENDOR_A_EMAIL)}), 'thirty_seventy'),
@@ -162,8 +163,8 @@ VALUES (${q(STUDIO_ID)}, ${q(VENDOR_A_ID)}, 'active', ${q(ACCOUNT_NUMBER)}, 'fif
 -- Distinct sort_order: the line query orders by sort_order alone, so tied
 -- rows come back in heap order and an ordered line (rewritten tuple) jumps
 -- position. Under next dev's StrictMode that keyed move double-invokes the
--- unfold's effects and the Order Assistant's reset effect sends it back to
--- Review. Production has no double-invoke; the seed just keeps lines still.
+-- unfold's effects mid-order. Production has no double-invoke; the seed just
+-- keeps lines still.
 INSERT INTO public.project_ffe_items
   (id, project_id, name, item_type, status, quantity, design_disposition, assignment_scope,
    vendor_id, vendor_name, unit_price_cents, line_total_cents, trade_price_cents, sort_order)
@@ -469,35 +470,29 @@ ON CONFLICT (id) DO NOTHING;`);
     }
     await shot(page, testInfo, "02-unfold-six-cells");
 
-    // 3. Order with Assistant: the account's terms and deposit; the receiver
-    // first in the ship-to list, nothing preselected. From the room reading;
-    // the maker-reading order path has its own test below (SQ-444).
+    // 3. Order → the order paper: the account's terms and deposit; the
+    // receiver first in the ship-to list, nothing preselected. From the room
+    // reading; the maker-reading order path has its own test below (SQ-444).
     await openLine(page);
-    const order = page
-      .getByRole("button", { name: "Order with Assistant" })
-      .first();
+    const order = page.getByRole("button", { name: "Order", exact: true }).first();
     await expect(order).toBeEnabled({ timeout: 30_000 });
     await order.click();
-    const assistant = page.getByRole("dialog", { name: /Order Assistant for/ });
-    await expect(assistant).toBeVisible();
-    const shipTo = assistant.getByRole("group", { name: "Ship to" });
-    for (let step = 0; step < 4 && !(await shipTo.isVisible()); step++) {
-      const next = assistant.getByRole("button", {
-        name: /^(Continue|Proceed anyway)$/,
-      });
-      await next.click();
-      await expect(next.or(shipTo).first()).toBeVisible({ timeout: 20_000 });
-    }
+    const paper = page.getByRole("dialog", { name: "The order paper" });
+    await expect(paper).toBeVisible();
+    const shipTo = paper.getByRole("group", { name: "Ship to" });
     await expect(shipTo).toBeVisible();
-    const terms = assistant.getByLabel("Terms");
+    const terms = paper.getByRole("combobox", { name: "Terms" });
     await expect(terms).toHaveValue("fifty_fifty", { timeout: 20_000 });
     await expect(terms.locator("option:checked")).toHaveText(
       "50% deposit / 50% before ship (Studio account)",
     );
-    const depositAmount = assistant.getByLabel("Deposit amount");
-    await expect(depositAmount).toHaveValue(DEPOSIT, { timeout: 20_000 });
+    await expect(paper).toContainText(`Deposit ${usd(DEPOSIT)} due`, {
+      timeout: 20_000,
+    });
     // Dated today, so the day's po-payments-due-daily run makes it due.
-    await assistant.getByLabel("Deposit due").fill(isoDaysFromToday(0));
+    await paper.getByLabel("Deposit due").fill(isoDaysFromToday(0));
+    // The account's orders inbox, on the paper's letterhead.
+    await expect(paper).toContainText(VENDOR_A_INBOX, { timeout: 20_000 });
 
     const radios = shipTo.getByRole("radio");
     await expect(radios.first()).toBeVisible();
@@ -515,52 +510,39 @@ ON CONFLICT (id) DO NOTHING;`);
         `ship-to option ${i} unchecked`,
       ).not.toBeChecked();
     }
-    const confirm = assistant.getByRole("button", {
-      name: /^Confirm 1 ordered$/,
+    // The one terminal act carries the amount; held until a ship-to is
+    // chosen, and its refusal shows inline. A held act stays focusable;
+    // Playwright's click refuses aria-disabled, so press it.
+    const terminal = paper.getByRole("button", {
+      name: `Send to ${VENDOR_A} · $1,200`,
+      exact: true,
     });
-    await confirm.click();
-    await expect(assistant.getByRole("alert")).toContainText(
+    await expect(terminal).toHaveAttribute("aria-disabled", "true");
+    await terminal.press("Enter");
+    await expect(paper.getByRole("alert")).toContainText(
       "Choose where this ships.",
     );
     expect(poState().id, "no PO without a ship-to").toBe("");
     await radios.first().check();
-    await shot(page, testInfo, "03-details-account-terms-receiver");
+    await shot(page, testInfo, "03-paper-account-terms-receiver");
 
-    // 4. Create, then Send through PoPreview to the account's orders inbox.
-    await confirm.click();
-    await expect(assistant.getByText("Purchase order created")).toBeVisible({
-      timeout: 30_000,
+    // 4. The terminal act creates the PO with its receiver, then sends it to
+    // the account's orders inbox. Read the PO as po-send is called.
+    const atSend: { po?: PoRow; deposit?: string; balance?: string } = {};
+    await page.route("**/functions/v1/po-send", async (route) => {
+      if (!atSend.po && (route.request().postData() ?? "").includes('"send"')) {
+        atSend.po = poState();
+        atSend.deposit = paymentRow(atSend.po.id, "deposit");
+        atSend.balance = paymentRow(atSend.po.id, "balance");
+      }
+      await route.continue();
     });
-    const created = poState();
-    expect(created.status).toBe("draft");
-    expect(created.pattern).toBe("fifty_fifty");
-    // The location is saved right after the create (set_..._ship_to_location).
-    await expect
-      .poll(() => poState().shipToLocation, { timeout: 20_000 })
-      .toBe(RECEIVER_ID);
-    expect(poState().shipTo).toBe(
-      `${RECEIVER_LABEL} / 900 Dock Ln / Madison, WI 53716`,
-    );
-    expect(paymentRow(created.id, "deposit")).toBe("pending|60000");
-    expect(paymentRow(created.id, "balance")).toBe("pending|60000");
-    await assistant.getByRole("button", { name: "Review and send" }).click();
-    const preview = page.getByRole("dialog", {
-      name: "Purchase order preview",
-    });
-    await expect(preview).toBeVisible();
-    await expect(preview.getByTitle("Purchase order PDF")).toBeVisible({
-      timeout: 60_000,
-    });
-    await expect(preview).toContainText(`Sends to ${VENDOR_A_INBOX}`, {
-      timeout: 20_000,
-    });
-    await shot(page, testInfo, "04-po-preview-account-inbox");
     const sendResponse = page.waitForResponse(
       (r) =>
         r.url().includes("/functions/v1/po-send") &&
         (r.request().postData() ?? "").includes('"send"'),
     );
-    await preview.getByRole("button", { name: "Send to vendor" }).click();
+    await terminal.click();
     const sent = await sendResponse;
     const sentBody = await sent.json().catch(() => ({}));
     expect(sent.status(), `po-send send: ${JSON.stringify(sentBody)}`).toBe(
@@ -571,10 +553,25 @@ ON CONFLICT (id) DO NOTHING;`);
       recipient: VENDOR_A_INBOX,
       emailSent: true,
     });
-    await expect(preview).toBeHidden({ timeout: 20_000 });
+    await page.unroute("**/functions/v1/po-send");
+    const created = atSend.po;
+    expect(created, "po-send was called with the PO created").toBeDefined();
+    expect(created?.status).toBe("draft");
+    expect(created?.pattern).toBe("fifty_fifty");
+    // The location is saved right after the create (set_..._ship_to_location).
+    expect(created?.shipToLocation).toBe(RECEIVER_ID);
+    expect(poState().shipTo).toBe(
+      `${RECEIVER_LABEL} / 900 Dock Ln / Madison, WI 53716`,
+    );
+    expect(atSend.deposit).toBe("pending|60000");
+    expect(atSend.balance).toBe("pending|60000");
+    await expect(paper.getByText(`Sent to ${VENDOR_A_INBOX} · `)).toBeVisible({
+      timeout: 20_000,
+    });
+    await shot(page, testInfo, "04-paper-sent-account-inbox");
     expect(poState().sentAt).not.toBe("");
-    await assistant.getByRole("button", { name: "Done" }).click();
-    await expect(assistant).toBeHidden();
+    await paper.getByRole("button", { name: "Done" }).click();
+    await expect(paper).toBeHidden();
 
     // Ack, ETA, in production (the road to the tracking edit).
     let poCell = page.getByTestId("line-po-cell");
@@ -831,9 +828,9 @@ WHERE i.purchase_order_id = ${q(poId)} AND c.state = 'drafted'`),
   });
 
   // SQ-444 regression: in the maker reading a line moves onto its new PO when
-  // the PO is created; the unfold (and the Order Assistant in it) must stay
-  // mounted through "Review and send". Vendor B's line, which the walk above
-  // never orders.
+  // the PO is created; the unfold (and the order paper in it) must stay
+  // mounted through the send. Vendor B's line, which the walk above never
+  // orders.
   test("orders from the by-maker reading through Send", async ({ page }) => {
     test.setTimeout(300_000);
     await hideDevOverlays(page);
@@ -841,47 +838,28 @@ WHERE i.purchase_order_id = ${q(poId)} AND c.state = 'drafted'`),
     await openDocument(page);
     const maker = await readByMaker(page);
     await maker.getByRole("button", { name: LINE_B, exact: true }).click();
-    const order = page
-      .getByRole("button", { name: "Order with Assistant" })
-      .first();
+    const order = page.getByRole("button", { name: "Order", exact: true }).first();
     await expect(order).toBeEnabled({ timeout: 30_000 });
     await order.click();
-    const assistant = page.getByRole("dialog", { name: /Order Assistant for/ });
-    await expect(assistant).toBeVisible();
-    const shipTo = assistant.getByRole("group", { name: "Ship to" });
-    for (let step = 0; step < 4 && !(await shipTo.isVisible()); step++) {
-      const next = assistant.getByRole("button", {
-        name: /^(Continue|Proceed anyway)$/,
-      });
-      await next.click();
-      await expect(next.or(shipTo).first()).toBeVisible({ timeout: 20_000 });
-    }
+    const paper = page.getByRole("dialog", { name: "The order paper" });
+    await expect(paper).toBeVisible();
+    await expect(paper).toContainText(VENDOR_B_EMAIL);
+    const shipTo = paper.getByRole("group", { name: "Ship to" });
     await shipTo.getByRole("radio").first().check();
-    await assistant
-      .getByRole("button", { name: /^Confirm 1 ordered$/ })
-      .click();
-    await expect(assistant.getByText("Purchase order created")).toBeVisible({
-      timeout: 30_000,
-    });
-    // The Assistant must survive the line moving into its PO's group.
-    await expect(assistant).toBeVisible();
-    await assistant.getByRole("button", { name: "Review and send" }).click();
-    const preview = page.getByRole("dialog", {
-      name: "Purchase order preview",
-    });
-    await expect(preview.getByTitle("Purchase order PDF")).toBeVisible({
-      timeout: 60_000,
-    });
-    await expect(preview).toContainText(`Sends to ${VENDOR_B_EMAIL}`);
     const sendResponse = page.waitForResponse(
       (r) =>
         r.url().includes("/functions/v1/po-send") &&
         (r.request().postData() ?? "").includes('"send"'),
     );
-    await preview.getByRole("button", { name: "Send to vendor" }).click();
+    await paper
+      .getByRole("button", { name: `Send to ${VENDOR_B} · $600`, exact: true })
+      .click();
     const sent = await sendResponse;
     expect(sent.status()).toBe(200);
-    await expect(preview).toBeHidden({ timeout: 20_000 });
+    // The paper must survive the line moving into its PO's group.
+    await expect(paper.getByText(`Sent to ${VENDOR_B_EMAIL} · `)).toBeVisible({
+      timeout: 20_000,
+    });
     expect(
       psqlScalar(`
 SELECT po.sent_at IS NOT NULL

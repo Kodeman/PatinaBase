@@ -8,7 +8,7 @@
  *   - procurement_qbo_exported          (row_count?, date_start, date_end, include_paid, include_outstanding)
  *   - procurement_damage_claim_created  (outcome)
  *
- * Wired into portal-side consumers (Order Assistant, Log Inspection Drawer,
+ * Wired into portal-side consumers (order paper, Log Inspection Drawer,
  * QBO Export Modal, etc.) so the @patina/supabase hooks stay framework-free.
  * Each helper is a no-op when PostHog is not initialized.
  */
@@ -72,23 +72,6 @@ export const procurementEvents = {
     vendor_id?: string;
     project_id?: string;
   }) => track('procurement_coverage_overridden', properties),
-
-  /**
-   * Fired when a launching surface opens the Order Assistant queue (W3-T3b).
-   * `item_count` is the total orderable items queued across sessions;
-   * `vendor_id`/`project_id` only when the queue is single-vendor /
-   * single-project respectively.
-   */
-  orderAssistantOpened: (properties: {
-    source: 'ffe_board' | 'by_vendor';
-    item_count: number;
-    vendor_id?: string;
-    project_id?: string;
-  }) => track('procurement_order_assistant_opened', properties),
-
-  /** Fired on every Order Assistant step transition (W3-T3b step machine). */
-  orderAssistantStep: (properties: { step: string }) =>
-    track('procurement_order_assistant_step', properties),
 
   /**
    * Fired when a designer attempts to order FF&E items that are blocked by a

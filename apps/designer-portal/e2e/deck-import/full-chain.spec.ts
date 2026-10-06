@@ -31,7 +31,8 @@ import {
  * from the fixture server (DECK_IMPORT_TEST_FETCH_BASE, the only seam) →
  * the ledger's link rows → keep them all → "Put N pieces on the schedule" as
  * her selections → FF&E lines `selected` with a vendor and a price → the
- * line's OrderAssistant is enabled → a PO draft is created and never sent.
+ * line's Order act opens the order paper → "Save, don't send" creates a PO
+ * draft, never sent.
  */
 
 const BOARD: Board = {
@@ -49,7 +50,7 @@ test.describe("Bring in a deck — full chain", () => {
     "The deterministic fixtures own shared board rows.",
   );
 
-  test("deck → board → keep → schedule (selected) → OrderAssistant → PO draft, not sent", async ({
+  test("deck → board → keep → schedule (selected) → order paper → PO draft, not sent", async ({
     authenticatedPage: page,
   }) => {
     test.setTimeout(300_000);
@@ -172,21 +173,19 @@ test.describe("Bring in a deck — full chain", () => {
       const priced = (lines ?? []).filter((line) => line.unit_price_cents != null);
       expect(priced.length).toBeGreaterThan(0);
 
-      // The line's OrderAssistant is enabled; a PO draft is created, never sent.
+      // The line's Order act opens the order paper; "Save, don't send"
+      // creates a PO draft, never sent.
       const line = priced[0];
       await openDocLine(page, line.name as string);
-      const order = page.getByRole("button", { name: "Order with Assistant" }).first();
+      const order = page.getByRole("button", { name: "Order", exact: true }).first();
       await expect(order).toBeEnabled({ timeout: 20_000 });
       await order.click();
-      const assistant = page.getByRole("dialog", { name: /Order Assistant for/ });
-      await expect(assistant).toBeVisible();
-      const done = assistant.getByRole("button", { name: "Done" });
-      for (let step = 0; step < 6 && !(await done.isVisible()); step++) {
-        const primary = assistant.getByRole("button", { name: /^(Continue|Proceed anyway|Confirm \d+ ordered)$/ });
-        await primary.click();
-        await expect(primary.or(done).first()).toBeVisible({ timeout: 20_000 });
-      }
-      await expect(done).toBeVisible({ timeout: 20_000 });
+      const paper = page.getByRole("dialog", { name: "The order paper" });
+      await expect(paper).toBeVisible();
+      await expect(paper.getByRole("button", { name: /^Send to .+ · \$/ })).toBeVisible();
+      await paper.getByRole("button", { name: /^Save, don.t send$/ }).click();
+      await expect(paper.getByText(/^Saved as a draft · /)).toBeVisible({ timeout: 30_000 });
+      await expect(paper.getByRole("button", { name: "Done" })).toBeVisible();
 
       const poIds = await purchaseOrderIds([line.id as string]);
       expect(poIds).toHaveLength(1);
