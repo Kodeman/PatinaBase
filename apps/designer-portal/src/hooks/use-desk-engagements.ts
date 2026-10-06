@@ -37,6 +37,7 @@ import {
   RETURN_BY_LEAD_DAYS,
   type DeskClaimWindowSignal,
   type DeskHeldReleaseSignal,
+  type DeskSampleSignal,
   type DeskPaymentSignal,
   type DeskQuoteSignal,
   type DeskExceptionSignal,
@@ -321,6 +322,35 @@ export function buildDeskExceptions(rows: any): Map<string, DeskExceptionSignal[
   return map;
 }
 
+/** C-35: live samples in the member's read. */
+const DESK_SAMPLE_LIMIT = 200;
+
+/**
+ * C-35: samples requested or received (not yet returned or cancelled) with a
+ * return-by date, one signal per row keyed by project_id; memoReturnDue decides
+ * which are due.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskSamples(rows: any): Map<string, DeskSampleSignal[]> | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  const map = new Map<string, DeskSampleSignal[]>();
+  for (const row of rows) {
+    if (!row?.id || !row.project_id) continue;
+    map.set(row.project_id, [
+      ...(map.get(row.project_id) ?? []),
+      {
+        id: row.id,
+        kind: row.kind,
+        vendorName: one(row.vendor)?.name ?? null,
+        returnBy: row.return_by ?? null,
+      },
+    ]);
+  }
+  return map;
+}
+
 /**
  * C-32: POs held for release, one signal per PO keyed by project_id, each with
  * whether the viewer's seat may release it; the derivation shows only those.
@@ -489,6 +519,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: quoteRows, error: quoteRowsError },
         { data: exceptionRows, error: exceptionRowsError },
         { data: heldRows, error: heldRowsError },
+        { data: sampleRows, error: sampleRowsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -648,6 +679,15 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
             return { data: null, error: heldError };
           }
         })(),
+        // C-35: samples still out with a return-by date; the need decides the
+        // window (memoReturnDue), so a returned or cancelled one drops out here.
+        supabase
+          .from('sample_requests')
+          .select('id, project_id, kind, return_by, vendor:vendors!sample_requests_vendor_id_fkey(name)')
+          .in('status', ['requested', 'received'])
+          .not('return_by', 'is', null)
+          .order('return_by')
+          .limit(DESK_SAMPLE_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -758,6 +798,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
       const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
       const heldReleases = heldRowsError ? undefined : buildDeskHeldReleases(heldRows);
+      const samples = sampleRowsError ? undefined : buildDeskSamples(sampleRows);
 
       const result = partitionDesk(
         rows,
@@ -775,6 +816,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         quotes,
         exceptions,
         heldReleases,
+        samples,
       );
       previousResultRef.current = result;
       return result;

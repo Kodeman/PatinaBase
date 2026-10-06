@@ -15,6 +15,7 @@ import { fmtUsd } from '@/lib/document/format';
 import { DocumentAction } from '../document-action';
 import { ComPiece } from '../buying/com-piece';
 import { CellSub, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
+import { LineSamples } from './sample-request';
 
 type FFERow = any;
 
@@ -444,6 +445,14 @@ export function TheBuyCell({
       </div>
       {/* C-24: the frame-and-fabric pair, the COM facts, the submittals. */}
       <ComPiece item={item} projectId={projectId} canEdit={canEdit} />
+      {/* C-35: memo/sample requests against this line, with a return-by. */}
+      <LineSamples
+        projectId={projectId}
+        itemId={item.id}
+        vendorId={item.vendor_id ?? null}
+        vendorName={item.vendor_name ?? null}
+        canEdit={canEdit}
+      />
     </UnfoldCell>
   );
 }

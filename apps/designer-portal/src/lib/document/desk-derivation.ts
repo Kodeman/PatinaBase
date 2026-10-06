@@ -422,6 +422,36 @@ export interface DeskHeldReleaseSignal {
   viewerCanRelease: boolean;
 }
 
+/** C-35 (d2 §M10) sample input, structural. One live sample_requests row
+ *  (requested or received, not returned or cancelled) with a return-by date,
+ *  built by use-desk-engagements and keyed by project_id. */
+export interface DeskSampleSignal {
+  id: string;
+  /** memo | finish_chip | loaner | other. */
+  kind: string;
+  vendorName: string | null;
+  /** `sample_requests.return_by`, a bare date; null while no return is due. */
+  returnBy: string | null;
+}
+
+const SAMPLE_NEED_KIND_LABEL: Readonly<Record<string, string>> = {
+  memo: 'Memo',
+  finish_chip: 'Finish chip',
+  loaner: 'Loaner',
+  other: 'Sample',
+};
+
+/** C-35: `sweep_procurement_clocks`' own window — return_by within three days,
+ *  or past, on a sample not yet returned. Mirrored here (00712) so the Desk's
+ *  need and the sent notice agree on the same day. */
+export const MEMO_RETURN_LEAD_DAYS = 3;
+
+export function memoReturnDue(signal: DeskSampleSignal, now: Date): boolean {
+  if (!signal.returnBy) return false;
+  const days = calendarDaysTo(signal.returnBy, now);
+  return days <= MEMO_RETURN_LEAD_DAYS;
+}
+
 export interface NeedLine {
   kind: NeedKind;
   text: string;
@@ -803,6 +833,7 @@ interface NeedContext {
   quotes?: readonly DeskQuoteSignal[] | null;
   exceptions?: readonly DeskExceptionSignal[] | null;
   heldReleases?: readonly DeskHeldReleaseSignal[] | null;
+  samples?: readonly DeskSampleSignal[] | null;
 }
 
 /** A rule that owns its engagement kind outright. The original deriveNeed
@@ -1329,6 +1360,32 @@ const needQuoteExpiring: NeedRule = ({ quotes, now }) => {
   };
 };
 
+// C-35 (d2 §M10): a memo or sample's return-by date is within three days, or
+// past, on a sample not yet returned — the vendor bills for it otherwise.
+// Mirrors 00712's memo_return_due sweep. Clears with the return, or the
+// sample leaving the live set (cancelled).
+const needMemoReturn: NeedRule = ({ samples, now }) => {
+  const open = (samples ?? [])
+    .filter((s) => memoReturnDue(s, now))
+    .sort((a, b) => (a.returnBy! < b.returnBy! ? -1 : a.returnBy! > b.returnBy! ? 1 : 0));
+  const first = open[0];
+  if (!first) return null;
+  const kind = SAMPLE_NEED_KIND_LABEL[first.kind] ?? 'Sample';
+  const whose = first.vendorName ? `${kind} from ${first.vendorName}` : kind;
+  return {
+    kind: 'memo_return',
+    text:
+      open.length > 1
+        ? `${open.length} samples due back — first ${whose.toLowerCase()}, return by ${fmtDay(first.returnBy!)}`
+        : `${whose} — return by ${fmtDay(first.returnBy!)}`,
+    actionLabel: NEED_ACTION_LABELS.memo_return,
+    stamp: { label: 'RETURN BY', ...STAMP.clay },
+    urgent: false,
+    dueOn: first.returnBy!,
+    owner: 'designer',
+  };
+};
+
 const needAwaitingInspection: NeedRule = ({ row }) => {
   if (row.awaiting_inspection_count > 0) {
     const n = row.awaiting_inspection_count;
@@ -1552,6 +1609,7 @@ const NEED_RULES: readonly NeedRule[] = [
   needTaskDue,
   needScheduleUnconfigured,
   needQuoteExpiring,
+  needMemoReturn,
   needPoUnsent,
   needPoUnacknowledged,
   needPulseDue,
@@ -1575,6 +1633,7 @@ export function deriveNeeds(
   quotes?: readonly DeskQuoteSignal[] | null,
   exceptions?: readonly DeskExceptionSignal[] | null,
   heldReleases?: readonly DeskHeldReleaseSignal[] | null,
+  samples?: readonly DeskSampleSignal[] | null,
 ): NeedLine[] {
   if (row.is_archived || row.is_paused) return [];
   const ctx: NeedContext = {
@@ -1592,6 +1651,7 @@ export function deriveNeeds(
     quotes,
     exceptions,
     heldReleases,
+    samples,
   };
   const needs: NeedLine[] = [];
   for (const rule of NEED_RULES) {
@@ -1622,6 +1682,7 @@ export function deriveNeed(
   quotes?: readonly DeskQuoteSignal[] | null,
   exceptions?: readonly DeskExceptionSignal[] | null,
   heldReleases?: readonly DeskHeldReleaseSignal[] | null,
+  samples?: readonly DeskSampleSignal[] | null,
 ): NeedLine | null {
   return (
     deriveNeeds(
@@ -1639,6 +1700,7 @@ export function deriveNeed(
       quotes,
       exceptions,
       heldReleases,
+      samples,
     )[0] ?? null
   );
 }
@@ -1859,6 +1921,8 @@ export function partitionDesk(
   exceptions?: ReadonlyMap<string, readonly DeskExceptionSignal[]>,
   /** C-32 — project_id → POs held for an owner/admin release. */
   heldReleases?: ReadonlyMap<string, readonly DeskHeldReleaseSignal[]>,
+  /** C-35 — project_id → live samples with a return-by date. */
+  samples?: ReadonlyMap<string, readonly DeskSampleSignal[]>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -1931,6 +1995,9 @@ export function partitionDesk(
     const heldReleaseSignals = row.project_id
       ? (heldReleases?.get(row.project_id) ?? null)
       : null;
+    const sampleSignals = row.project_id
+      ? (samples?.get(row.project_id) ?? null)
+      : null;
     const needs = deriveNeeds(
       row,
       now,
@@ -1946,6 +2013,7 @@ export function partitionDesk(
       quoteSignals,
       exceptionSignals,
       heldReleaseSignals,
+      sampleSignals,
     );
     const need = needs[0] ?? null;
     if (need) {

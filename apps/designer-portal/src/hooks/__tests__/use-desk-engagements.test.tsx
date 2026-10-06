@@ -55,6 +55,7 @@ import { replaceEqualDeep } from '@tanstack/react-query';
 import {
   buildDeskExceptions,
   buildDeskQuotes,
+  buildDeskSamples,
   DESK_PHASE_LIMIT,
   selectOperationalNeedForDocument,
   useDeskEngagements,
@@ -65,7 +66,7 @@ import { partitionDesk, type DocumentStateRow } from '@/lib/document/desk-deriva
  *  itself, and `.then` resolves it as the Promise.all in the hook expects. */
 function chainResult(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
-  for (const m of ['select', 'order', 'gte', 'lte', 'in', 'eq', 'neq', 'is', 'limit']) {
+  for (const m of ['select', 'order', 'gte', 'lte', 'in', 'eq', 'neq', 'is', 'not', 'limit']) {
     builder[m] = jest.fn(() => builder);
   }
   builder.then = (
@@ -522,5 +523,28 @@ describe('buildDeskExceptions (C-30)', () => {
 
   it('is undefined (unknown, not empty) when the read failed', () => {
     expect(buildDeskExceptions(null)).toBeUndefined();
+  });
+});
+
+describe('buildDeskSamples (C-35)', () => {
+  it('folds live samples by job with kind, maker and return-by', () => {
+    const map = buildDeskSamples([
+      { id: 's1', project_id: 'p1', kind: 'memo', return_by: '2026-06-11', vendor: { name: 'Hewn' } },
+      { id: 's2', project_id: 'p1', kind: 'loaner', return_by: '2026-06-12', vendor: [{ name: 'Oak & Ash' }] },
+      { id: 's3', project_id: 'p2', kind: 'finish_chip', return_by: '2026-06-20', vendor: null },
+      { id: 's4', project_id: null, kind: 'memo', return_by: '2026-06-11', vendor: null },
+    ]);
+    expect(map!.get('p1')).toEqual([
+      { id: 's1', kind: 'memo', vendorName: 'Hewn', returnBy: '2026-06-11' },
+      { id: 's2', kind: 'loaner', vendorName: 'Oak & Ash', returnBy: '2026-06-12' },
+    ]);
+    expect(map!.get('p2')).toEqual([
+      { id: 's3', kind: 'finish_chip', vendorName: null, returnBy: '2026-06-20' },
+    ]);
+    expect(map!.size).toBe(2);
+  });
+
+  it('is undefined (unknown, not empty) when the read failed', () => {
+    expect(buildDeskSamples(null)).toBeUndefined();
   });
 });
