@@ -199,6 +199,9 @@ function contractFieldValue<T>(
 /**
  * The sole value-resolution rule shared by cards, editor, preview, and
  * preflight: project override → FF&E line → product master → studio custom.
+ * A spec value whose field_provenance is 'product_master' was seeded from the
+ * product at placement (00694), so it resolves in the product tier, not as an
+ * override. A designer edit drops that key (00714) and makes it an override.
  */
 export function resolveSpecValue(
   item: SpecBookWorkItem,
@@ -221,7 +224,9 @@ export function resolveSpecValue(
     field,
   ) ?? null;
   const override = item.spec?.[field];
-  if (present(override)) {
+  const seededFromProduct =
+    contractFieldValue(item.spec?.field_provenance, field) === "product_master";
+  if (present(override) && !seededFromProduct) {
     return {
       value: override,
       source: "project_override",
@@ -244,7 +249,9 @@ export function resolveSpecValue(
     };
   }
 
-  const masterValue = productValue(item.product, field);
+  const masterValue = present(override)
+    ? override
+    : productValue(item.product, field);
   if (present(masterValue)) {
     return {
       value: masterValue,
