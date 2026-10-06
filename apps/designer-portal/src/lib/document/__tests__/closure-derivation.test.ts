@@ -309,6 +309,39 @@ describe('closure checklist', () => {
 
     expect(operational).toEqual({ ready: true, blockers: [] });
   });
+
+  // C-34: open punch items show as one line and never block close-out.
+  it('lists open punch items as one non-blocking note', () => {
+    const operational = deriveCloseoutReadiness({
+      ffeItems: [{ id: 'sofa-1', status: 'installed' }],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+      punchItems: [
+        { id: 'punch-1', resolved_at: null },
+        { id: 'punch-2', resolved_at: null },
+        { id: 'punch-3', resolved_at: '2026-11-10T12:00:00Z' },
+      ],
+    });
+
+    expect(operational).toEqual({
+      ready: true,
+      blockers: [],
+      notes: [{ code: 'punch_open', count: 2, label: '2 punch items still open' }],
+    });
+  });
+
+  it('prints no punch note once every punch item is resolved', () => {
+    const operational = deriveCloseoutReadiness({
+      ffeItems: [],
+      ffeCoverage: {},
+      paymentMilestones: [],
+      invoices: [],
+      punchItems: [{ id: 'punch-1', resolved_at: '2026-11-10T12:00:00Z' }],
+    });
+
+    expect(operational.notes).toBeUndefined();
+  });
 });
 
 describe('money parsing (shared by the open sheet, vitals, snapshot)', () => {

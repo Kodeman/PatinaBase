@@ -24,6 +24,9 @@
 //      owner and co-members alike. Idempotent + race-safe server-side.
 //   5. Defaults: persist sidemark (Order Assistant generator convention,
 //      ported in ./lib.ts) when null.
+//   5b. Spec snapshot (C-34, ./revision.ts): 'send' and 'mark_sent' call
+//      snapshot_purchase_order_spec AS THE CALLER; the PDF prints
+//      "PO-… · Revision N" when N > 1. Preview takes no snapshot.
 //   6. Render the PDF (_shared/po-pdf.ts, spike W4-T1 approach) and upload
 //      to project-documents/{project_id}/po-{po_number}.pdf (upsert);
 //      persist po_document_path; sign a short-lived (600 s) URL.
@@ -80,6 +83,7 @@ import {
   type VendorProductMaster,
   vendorSafeSpecNotes,
 } from './lib.ts';
+import { revisionedPoNumber, snapshotPurchaseOrderSpec, snapshotsSpecOnSend } from './revision.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -438,6 +442,18 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // ── Spec snapshot + revision (C-34) — send and mark_sent, after every
+  //    refusal guard, before the render so the PDF prints the revision ────
+  let revision: number | null = null;
+  if (snapshotsSpecOnSend(mode)) {
+    const snapshot = await snapshotPurchaseOrderSpec(userClient, po.id);
+    if (!snapshot.ok) {
+      console.error('po-send: spec snapshot failed', snapshot.detail);
+      return json({ error: 'snapshot_failed', detail: snapshot.detail }, 500);
+    }
+    revision = snapshot.revision;
+  }
+
   // ── Render the PDF ──────────────────────────────────────────────────────
   const lines = items.map((item) => {
     const quantity = item.quantity ?? 1;
@@ -472,7 +488,7 @@ Deno.serve(async (req: Request) => {
   }));
 
   const pdfData: PoPdfData = {
-    poNumber,
+    poNumber: revisionedPoNumber(poNumber, revision),
     issuedAt: po.sent_at ?? new Date().toISOString(),
     studioName,
     studioLogoUrl,
