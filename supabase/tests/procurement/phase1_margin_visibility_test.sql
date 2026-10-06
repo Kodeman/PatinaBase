@@ -11,9 +11,11 @@
 --   C. trade_discount_pct follows it: under owners_admins M reads NULL through
 --      get_studio_vendor_accounts and cannot set it, but can still edit other
 --      keys without wiping it; O reads and sets it.
---   D. user_roles.studio_owner follows the owner seat, at commit (deferred
+--   D. user_roles.studio_owner follows owner-seat moves, at commit (deferred
 --      constraint trigger; the test fires it with SET CONSTRAINTS): a new
---      owner seat grants it; transfer_studio_ownership moves it to the new owner and removes it
+--      owner seat is not a sync event, so a provisioned owner whose designer
+--      role is removed holds no designer-domain role; nothing moves before
+--      commit; transfer_studio_ownership moves it to the new owner and removes it
 --      from the old one (who keeps a designer role); an owner who transfers
 --      away and whose only designer-domain role is studio_owner keeps it (no
 --      portal lockout); promotion grants it; deleting an owner seat removes
@@ -240,30 +242,56 @@ BEGIN
   RAISE NOTICE 'Case C5 (stored discount kept): ok';
 END $$;
 
--- ─── D. studio_owner follows the owner seat ─────────────────────────────────
+-- ─── D. studio_owner follows owner-seat moves ───────────────────────────────
 -- The sync is a deferred constraint trigger: it runs at commit. This
--- transaction never commits, so it asks for the queued events now.
-
-DO $$
-BEGIN
-  ASSERT NOT pg_temp.has_role('69300000-0000-4000-8000-0000000000a1', 'studio_owner'),
-    'FAIL D0: the studio_owner grant should wait for commit';
-  RAISE NOTICE 'Case D0 (sync deferred to commit): ok';
-END $$;
+-- transaction never commits, so it asks for the queued events with
+-- SET CONSTRAINTS ... IMMEDIATE.
 
 SET CONSTRAINTS sync_studio_owner_role_from_seat IMMEDIATE;
 
 DO $$
+DECLARE v_seats int; v_n int;
 BEGIN
-  ASSERT pg_temp.has_role('69300000-0000-4000-8000-0000000000a1', 'studio_owner'), 'FAIL D1: a new owner seat should grant studio_owner';
-  ASSERT NOT pg_temp.has_role('69300000-0000-4000-8000-0000000000a2', 'studio_owner'), 'FAIL D1: an admin seat should not grant studio_owner';
-  RAISE NOTICE 'Case D1 (owner seat grants studio_owner): ok';
+  -- O was seated as owner by a plain INSERT, which is not a sync event.
+  ASSERT NOT pg_temp.has_role('69300000-0000-4000-8000-0000000000a1', 'studio_owner'), 'FAIL D1: a new owner seat should not put O on studio_owner';
+  ASSERT NOT pg_temp.has_role('69300000-0000-4000-8000-0000000000a2', 'studio_owner'), 'FAIL D1: an admin seat should not put AD on studio_owner';
+
+  -- A provisioned owner (provision_studio_on_designer) whose designer role is
+  -- then removed holds no designer-domain role (public_sd_hardening race).
+  UPDATE profiles SET is_designer = true WHERE id = '69300000-0000-4000-8000-0000000000a5';
+  SELECT count(*) INTO v_seats FROM organization_members
+  WHERE user_id = '69300000-0000-4000-8000-0000000000a5' AND role = 'owner' AND status = 'active';
+  ASSERT v_seats = 1, 'FAIL D1: fixture expects X to be provisioned an owner seat, got ' || v_seats;
+  INSERT INTO user_roles (user_id, role_id)
+  SELECT '69300000-0000-4000-8000-0000000000a5', id FROM roles WHERE name = 'studio_designer'
+  ON CONFLICT (user_id, role_id) DO NOTHING;
+  DELETE FROM user_roles ur USING roles r
+  WHERE r.id = ur.role_id AND ur.user_id = '69300000-0000-4000-8000-0000000000a5' AND r.name = 'studio_designer';
+  SELECT count(*) INTO v_n FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+  WHERE ur.user_id = '69300000-0000-4000-8000-0000000000a5' AND r.domain = 'designer';
+  ASSERT v_n = 0, 'FAIL D1: a provisioned owner whose designer role was removed should hold no designer-domain role, got ' || v_n;
+  RAISE NOTICE 'Case D1 (a new owner seat is not a sync event): ok';
 END $$;
 
+-- O holds studio_owner the way the 00713 backfill leaves a current owner.
+INSERT INTO user_roles (user_id, role_id)
+SELECT '69300000-0000-4000-8000-0000000000a1', id FROM roles WHERE name = 'studio_owner'
+ON CONFLICT (user_id, role_id) DO NOTHING;
+
+SET CONSTRAINTS sync_studio_owner_role_from_seat DEFERRED;
 SET LOCAL "request.jwt.claims" TO '{"sub": "69300000-0000-4000-8000-0000000000a1", "role": "authenticated"}';
 SET LOCAL ROLE authenticated;
 SELECT public.transfer_studio_ownership('69300000-0000-4000-8000-0000000000f1', '69300000-0000-4000-8000-0000000000a2');
 RESET ROLE;
+
+DO $$
+BEGIN
+  ASSERT NOT pg_temp.has_role('69300000-0000-4000-8000-0000000000a2', 'studio_owner'), 'FAIL D0: the sync should wait for commit';
+  ASSERT pg_temp.has_role('69300000-0000-4000-8000-0000000000a1', 'studio_owner'), 'FAIL D0: the old owner keeps studio_owner until commit';
+  RAISE NOTICE 'Case D0 (sync deferred to commit): ok';
+END $$;
+
+SET CONSTRAINTS sync_studio_owner_role_from_seat IMMEDIATE;
 
 DO $$
 BEGIN
@@ -273,17 +301,20 @@ BEGIN
   RAISE NOTICE 'Case D2–D3 (transfer moves studio_owner): ok';
 END $$;
 
--- Studio Z: owner Z, whose only designer-domain role is the studio_owner the
--- seat grants, and member Z2.
+-- Studio Z: owner Z, whose only designer-domain role is studio_owner (as the
+-- backfill leaves a current owner), and member Z2.
 INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
   ('69300000-0000-4000-8000-0000000000e6', '69300000-0000-4000-8000-0000000000a6', '69300000-0000-4000-8000-0000000000f2', 'owner',  'active', NOW()),
   ('69300000-0000-4000-8000-0000000000e7', '69300000-0000-4000-8000-0000000000a7', '69300000-0000-4000-8000-0000000000f2', 'member', 'active', NOW());
+INSERT INTO user_roles (user_id, role_id)
+SELECT '69300000-0000-4000-8000-0000000000a6', id FROM roles WHERE name = 'studio_owner'
+ON CONFLICT (user_id, role_id) DO NOTHING;
 
 DO $$
 DECLARE v_n int;
 BEGIN
-  ASSERT pg_temp.has_role('69300000-0000-4000-8000-0000000000a6', 'studio_owner'), 'FAIL D4: Z''s owner seat should grant studio_owner';
+  ASSERT pg_temp.has_role('69300000-0000-4000-8000-0000000000a6', 'studio_owner'), 'FAIL D4: fixture expects Z on studio_owner';
   SELECT count(*) INTO v_n FROM user_roles ur JOIN roles r ON r.id = ur.role_id
   WHERE ur.user_id = '69300000-0000-4000-8000-0000000000a6' AND r.domain IN ('designer', 'admin') AND r.name <> 'studio_owner';
   ASSERT v_n = 0, 'FAIL D4: fixture expects Z to hold no other designer- or admin-domain role, got ' || v_n;

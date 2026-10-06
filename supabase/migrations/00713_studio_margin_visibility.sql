@@ -29,13 +29,19 @@
 --
 -- ── studio_owner FOLLOWS THE OWNER SEAT (R-PB6) ─────────────────────────────
 -- A deferred constraint trigger on organization_members re-derives System A,
--- at commit, whenever a row entered or left an active owner seat. That covers
--- every path into
--- ownership — transfer_studio_ownership, admin_transfer_studio_ownership,
--- _provision_studio — without redefining any of them. It also means an owner
--- seated by admin_create_studio(p_grant_designer_role => false) (00556) gains
--- studio_owner at commit: under R-PB6 the seat, not that flag, is the
--- authority.
+-- at commit, whenever an existing row moves into or out of an owner seat:
+-- transfer_studio_ownership, admin_transfer_studio_ownership, a promotion or
+-- demotion by role change, a status change on an owner seat, or a deleted
+-- owner seat. It redefines none of them.
+-- A freshly INSERTed owner seat is deliberately not a sync event.
+-- provision_studio_on_designer seats every newly granted designer as owner
+-- of a studio of their own. Putting those users on studio_owner would leave
+-- them a designer-domain role after their designer role is removed, and the
+-- reassignment/role-removal race in public_sd_hardening_contract_test pins
+-- that a removed lead holds none. A studio created through
+-- admin_create_studio already carries its own designer-role choice
+-- (p_grant_designer_role).
+-- On a sync event the user:
 --   holds an active owner seat in a design studio → studio_owner granted.
 --   holds none any more → studio_owner revoked, but only while the user keeps
 --     another designer- or admin-domain role. The designer portal admits a
@@ -189,9 +195,10 @@ END;
 $$;
 
 COMMENT ON FUNCTION public._sync_studio_owner_role(uuid) IS
-  'Internal (00713, R-PB6): the user holds user_roles.studio_owner while they hold an active '
-  'owner seat in a design studio; it is removed once they hold none, unless it is their only designer- or '
-  'admin-domain role (the designer portal admits on that domain).';
+  'Internal (00713, R-PB6): when an owner seat moves (transfer, promotion, demotion, status change, '
+  'delete), the user is put on user_roles.studio_owner if they hold an active owner seat in a design '
+  'studio; it is removed once they hold none, unless it is their only designer- or admin-domain role '
+  '(the designer portal admits on that domain). A new owner seat is not a sync event.';
 
 REVOKE ALL ON FUNCTION public._sync_studio_owner_role(uuid) FROM PUBLIC, anon, authenticated;
 
@@ -202,12 +209,13 @@ SECURITY DEFINER
 SET search_path TO 'public', 'pg_temp'
 AS $$
 BEGIN
+  -- UPDATE and DELETE only: a new owner seat is not a sync event (banner).
   -- The helper re-derives from current state, so one call per affected user.
-  IF TG_OP <> 'INSERT' AND OLD.role = 'owner' THEN
+  IF OLD.role = 'owner' THEN
     PERFORM public._sync_studio_owner_role(OLD.user_id);
   END IF;
-  IF TG_OP <> 'DELETE' AND NEW.role = 'owner'
-     AND (TG_OP = 'INSERT' OR OLD.role <> 'owner' OR NEW.user_id IS DISTINCT FROM OLD.user_id) THEN
+  IF TG_OP = 'UPDATE' AND NEW.role = 'owner'
+     AND (OLD.role <> 'owner' OR NEW.user_id IS DISTINCT FROM OLD.user_id) THEN
     PERFORM public._sync_studio_owner_role(NEW.user_id);
   END IF;
   RETURN NULL;
@@ -216,18 +224,19 @@ $$;
 
 COMMENT ON FUNCTION public.sync_studio_owner_role_from_seat() IS
   'Deferred constraint trigger on organization_members (00713): at commit, re-derives '
-  'user_roles.studio_owner for the users on a row that entered or left an owner seat.';
+  'user_roles.studio_owner for the users on an existing row that moved into or out of an owner seat '
+  '(update or delete; a new owner seat is not a sync event).';
 
 REVOKE ALL ON FUNCTION public.sync_studio_owner_role_from_seat() FROM PUBLIC, anon, authenticated;
 
--- Deferred to commit: a transaction that seats an owner and then grants
--- studio_owner itself with a plain INSERT (admin flows, every SQL test
--- fixture that does so) would otherwise hit user_roles' unique key, and
+-- Deferred to commit: a transaction that moves an owner seat and then grants
+-- studio_owner itself with a plain INSERT (admin flows, SQL test fixtures)
+-- would otherwise hit user_roles' unique key, and
 -- mid-transaction role changes would move project studio derivation
 -- (set_project_studio_id reads has_designer_domain_role) under the caller.
 DROP TRIGGER IF EXISTS sync_studio_owner_role_from_seat ON public.organization_members;
 CREATE CONSTRAINT TRIGGER sync_studio_owner_role_from_seat
-  AFTER INSERT OR DELETE OR UPDATE OF role, status, user_id, organization_id
+  AFTER DELETE OR UPDATE OF role, status, user_id, organization_id
   ON public.organization_members
   DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION public.sync_studio_owner_role_from_seat();
