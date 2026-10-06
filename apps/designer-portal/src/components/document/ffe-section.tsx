@@ -31,11 +31,13 @@
  */
 
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useFfeInvoiceCoverage,
   useProjectFFEItems,
   useProjectFfeReadiness,
   useProjectOwnedBoards,
+  useRecordFfeInstalled,
   type FfeItemCoverage,
 } from '@patina/supabase';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
@@ -71,7 +73,7 @@ import {
   type RoomTriState,
   type TradeLineHold,
 } from '@/lib/document/authorization-derivation';
-import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 import {
   DEFAULT_CURRENCY,
   formatCurrencyTotal,
@@ -383,6 +385,7 @@ function FFELine({
   selecting,
   selected,
   onSelectToggle,
+  selectLabel,
   onIncludeInRelease,
   canEditSelection,
   showArtifactPlate,
@@ -400,6 +403,8 @@ function FFELine({
   selecting: boolean;
   selected: boolean;
   onSelectToggle: () => void;
+  /** The tick's accessible name — what ticking this line will do. */
+  selectLabel: string;
   onIncludeInRelease: () => void;
   canEditSelection: boolean;
   showArtifactPlate: boolean;
@@ -517,7 +522,7 @@ function FFELine({
             checked={selected}
             disabled={!eligible.eligible}
             onChange={onSelectToggle}
-            aria-label={`Include ${item.name} in this release`}
+            aria-label={selectLabel}
             className="h-3.5 w-3.5 shrink-0 accent-[var(--color-clay)]"
           />
           {body}
@@ -782,6 +787,78 @@ function AddRoomInline({ projectId }: { projectId: string }) {
   );
 }
 
+/**
+ * C-04 (D1-09): install day, several pieces at once. The bar mounts only
+ * while choosing, so the mutation lives with the act that needs it. The day
+ * is today; a different day is the line unfold's act.
+ */
+function InstallSelectionBar({
+  projectId,
+  itemIds,
+  onDone,
+  onPutBack,
+}: {
+  projectId: string;
+  itemIds: string[];
+  onDone: () => void;
+  onPutBack: () => void;
+}) {
+  const qc = useQueryClient();
+  const record = useRecordFfeInstalled({ errorSurface: 'inline' });
+  const [failed, setFailed] = useState(false);
+  const count = itemIds.length;
+
+  const run = () => {
+    if (record.isPending || count === 0) return;
+    setFailed(false);
+    record
+      .mutateAsync({ projectId, itemIds, installedOn: todayYmd() })
+      .then(() => {
+        void qc.invalidateQueries({ queryKey: ['document-state'] });
+        onDone();
+      })
+      .catch(() => setFailed(true));
+  };
+
+  return (
+    <div className="mt-2 flex flex-wrap items-baseline gap-3 border-t border-[var(--color-pearl)] pt-2">
+      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        {count === 0
+          ? 'None ticked'
+          : `${count} ${count === 1 ? 'piece' : 'pieces'} ticked`}
+      </span>
+      {count > 0 && (
+        <DocumentAction
+          actionKey="mark-ffe-lines-installed"
+          surfaceKey="project"
+          regionKey="ffe-install-bar"
+          variant="secondary"
+          loading={record.isPending}
+          loadingLabel="Saving…"
+          onClick={run}
+        >
+          Mark {count} installed
+        </DocumentAction>
+      )}
+      <DocumentAction
+        actionKey="put-back-ffe-install-selection"
+        surfaceKey="project"
+        regionKey="ffe-install-bar"
+        variant="tertiary"
+        disabled={record.isPending}
+        onClick={onPutBack}
+      >
+        Put back
+      </DocumentAction>
+      {failed && (
+        <p role="alert" className="w-full text-[11px] text-[var(--color-terracotta-ink)]">
+          Couldn&rsquo;t save
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface FFESectionProps {
   projectId: string;
   projectName?: string;
@@ -940,6 +1017,17 @@ function FFESectionBody({
     Boolean(authority.data) &&
     RELEASING_AUTHORITY.has(String(authority.data?.state ?? ''));
   const selecting = ceremony?.phase === 'selecting';
+  // C-04: choosing what is installed — its own ticks, never mixed with a
+  // release's. A release begun from the head takes the table back.
+  const [installing, setInstalling] = useState(false);
+  const [installPicks, setInstallPicks] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const installSelecting = installing && !selecting;
+  const endInstalling = () => {
+    setInstalling(false);
+    setInstallPicks(new Set());
+  };
 
   const rows: LineRow[] = (items ?? []).map((wireItem) => {
     const item = {
@@ -966,6 +1054,29 @@ function FFESectionBody({
   const total = rows.length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
+  // record_project_ffe_installed moves delivered lines only (00691).
+  const deliveredCount = rows.filter(
+    (r) => r.item.status === 'delivered',
+  ).length;
+  const installPickIds = rows
+    .filter(
+      (r) => r.item.status === 'delivered' && installPicks.has(r.item.id),
+    )
+    .map((r) => String(r.item.id));
+  const installEligibility = (item: FFERow): LineEligibility =>
+    item.status === 'delivered'
+      ? { eligible: true }
+      : {
+          eligible: false,
+          reason: item.status === 'installed' ? 'installed' : 'not yet delivered',
+        };
+  const toggleInstallPick = (id: string) =>
+    setInstallPicks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   // The head act's own gate: canRelease is section-level (an executed
   // agreement stands behind the project), but that says nothing about
   // whether any INDIVIDUAL line can currently join a release. Aggregating
@@ -1060,9 +1171,20 @@ function FFESectionBody({
     coverage: coverage?.[row.item.id],
     showAuthorization,
     isCommercialOrigin,
-    selecting: Boolean(selecting),
-    selected: Boolean(ceremony?.isSelected(row.item.id)),
-    onSelectToggle: () => ceremony?.toggleLine(row.item.id),
+    ...(installSelecting
+      ? {
+          selecting: true,
+          eligible: installEligibility(row.item),
+          selected: installPicks.has(row.item.id),
+          onSelectToggle: () => toggleInstallPick(row.item.id),
+          selectLabel: `Mark ${row.item.name} installed`,
+        }
+      : {
+          selecting: Boolean(selecting),
+          selected: Boolean(ceremony?.isSelected(row.item.id)),
+          onSelectToggle: () => ceremony?.toggleLine(row.item.id),
+          selectLabel: `Include ${row.item.name} in this release`,
+        }),
     onIncludeInRelease: () => {
       setOpenLineId(null);
       ceremony?.begin([row.item.id]);
@@ -1582,6 +1704,32 @@ function FFESectionBody({
         )
       )}
 
+      {/* C-04: install day — offered only once a delivered line exists. */}
+      {!selecting && !installing && deliveredCount > 0 && (
+        <div className="mb-2 flex flex-wrap items-baseline gap-2">
+          <span className="text-[11.5px] text-[var(--text-muted)]">
+            {deliveredCount} delivered, not yet installed
+          </span>
+          <DocumentAction
+            actionKey="choose-ffe-lines-installed"
+            surfaceKey="project"
+            regionKey="ffe-install-select"
+            variant="tertiary"
+            onClick={() => {
+              setOpenLineId(null);
+              setInstalling(true);
+            }}
+          >
+            Choose what&rsquo;s installed
+          </DocumentAction>
+        </div>
+      )}
+      {installSelecting && (
+        <p className="mb-2 text-[11.5px] text-[var(--text-muted)]">
+          Tick the pieces that are in place.
+        </p>
+      )}
+
       {groupByRoom ? (
         <>
           {roomGroups.map(({ room, rows: roomRows }) => (
@@ -1661,6 +1809,14 @@ function FFESectionBody({
             ))}
           </ul>
         </>
+      )}
+      {installSelecting && (
+        <InstallSelectionBar
+          projectId={projectId}
+          itemIds={installPickIds}
+          onDone={endInstalling}
+          onPutBack={endInstalling}
+        />
       )}
       </div>
       )}

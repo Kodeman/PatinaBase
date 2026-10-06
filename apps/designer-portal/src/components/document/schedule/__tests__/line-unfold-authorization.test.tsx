@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { LineAuthorization } from '@/lib/document/authorization-derivation';
+import { todayYmd } from '@/lib/document/format';
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
@@ -9,10 +10,21 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
+const mockAdvancePo = jest.fn();
+const mockRecordInstalled = jest.fn();
+
 jest.mock('@patina/supabase', () => ({
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUpdatePurchaseOrderETA: () => ({
     mutateAsync: jest.fn(),
+    isPending: false,
+  }),
+  useUpdatePurchaseOrderStatus: () => ({
+    mutateAsync: mockAdvancePo,
+    isPending: false,
+  }),
+  useRecordFfeInstalled: () => ({
+    mutateAsync: mockRecordInstalled,
     isPending: false,
   }),
   useVendor: () => ({ data: { id: 'vendor-1', name: 'Hollowell Woodshop' } }),
@@ -444,5 +456,153 @@ describe('LineUnfold · log acknowledgment in the PO cell', () => {
   it('withholds it on a line with no purchase order', () => {
     renderUnfold();
     expect(screen.queryByTestId('log-ack-inline')).not.toBeInTheDocument();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// C-03 — the Movement cell's status acts (confirmed → in production → shipped)
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('LineUnfold · Movement status acts', () => {
+  beforeEach(() => {
+    mockAdvancePo.mockReset();
+  });
+
+  const withPoStatus = (status: string, itemStatus = 'ordered') =>
+    renderUnfold({
+      item: {
+        ...item,
+        status: itemStatus,
+        purchase_order: {
+          id: 'po-9',
+          status,
+          vendor_id: 'vendor-1',
+          sent_at: '2026-10-01T12:00:00Z',
+          acknowledged_at: '2026-10-02T12:00:00Z',
+          confirmed_eta: null,
+        },
+      },
+    });
+
+  const inProduction = () =>
+    screen.queryByRole('button', { name: 'In production' });
+  const shipped = () => screen.queryByRole('button', { name: 'Shipped' });
+
+  it('offers "In production" only on a confirmed PO', () => {
+    withPoStatus('confirmed');
+    expect(inProduction()).toBeInTheDocument();
+    expect(shipped()).not.toBeInTheDocument();
+  });
+
+  it('offers "Shipped" only on a PO in production', () => {
+    withPoStatus('in_production', 'production');
+    expect(shipped()).toBeInTheDocument();
+    expect(inProduction()).not.toBeInTheDocument();
+  });
+
+  it.each(['draft', 'sent', 'shipped', 'delivered', 'cancelled'])(
+    'offers neither act on a %s PO (delivered stays receipt-driven)',
+    (status) => {
+      withPoStatus(status);
+      expect(inProduction()).not.toBeInTheDocument();
+      expect(shipped()).not.toBeInTheDocument();
+    },
+  );
+
+  it('offers neither act on a line with no purchase order', () => {
+    renderUnfold();
+    expect(inProduction()).not.toBeInTheDocument();
+    expect(shipped()).not.toBeInTheDocument();
+  });
+
+  it('"In production" advances the PO, then offers "Shipped" at once', async () => {
+    mockAdvancePo.mockResolvedValue({ id: 'po-9', status: 'in_production' });
+    withPoStatus('confirmed');
+    fireEvent.click(inProduction() as HTMLElement);
+    expect(mockAdvancePo).toHaveBeenCalledWith({
+      purchaseOrderId: 'po-9',
+      status: 'in_production',
+      projectId: 'project-1',
+    });
+    expect(await screen.findByRole('button', { name: 'Shipped' })).toBeInTheDocument();
+    expect(inProduction()).not.toBeInTheDocument();
+  });
+
+  it('"Shipped" advances the PO to shipped', () => {
+    mockAdvancePo.mockResolvedValue({ id: 'po-9', status: 'shipped' });
+    withPoStatus('in_production', 'production');
+    fireEvent.click(shipped() as HTMLElement);
+    expect(mockAdvancePo).toHaveBeenCalledWith({
+      purchaseOrderId: 'po-9',
+      status: 'shipped',
+      projectId: 'project-1',
+    });
+  });
+
+  it('says "Couldn’t save" inline when the move is refused', async () => {
+    mockAdvancePo.mockRejectedValue(new Error('refused'));
+    withPoStatus('confirmed');
+    fireEvent.click(inProduction() as HTMLElement);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t save/i);
+    // The act stays put for another try.
+    expect(inProduction()).toBeInTheDocument();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// C-04 — Mark installed, only from delivered
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('LineUnfold · Mark installed', () => {
+  beforeEach(() => {
+    mockRecordInstalled.mockReset();
+  });
+
+  const markInstalled = () =>
+    screen.queryByRole('button', { name: 'Mark installed' });
+
+  it('offers the act on a delivered line, with today as the day', () => {
+    renderUnfold({ item: { ...item, status: 'delivered' } });
+    expect(markInstalled()).toBeInTheDocument();
+    expect(screen.getByLabelText('Install date')).toBeInTheDocument();
+  });
+
+  it.each(['specified', 'ordered', 'production', 'shipped', 'installed'])(
+    'withholds it on a %s line',
+    (status) => {
+      renderUnfold({ item: { ...item, status } });
+      expect(markInstalled()).not.toBeInTheDocument();
+    },
+  );
+
+  it('records this line installed today by default', async () => {
+    mockRecordInstalled.mockResolvedValue([]);
+    renderUnfold({ item: { ...item, status: 'delivered' } });
+    fireEvent.click(markInstalled() as HTMLElement);
+    expect(mockRecordInstalled).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      itemIds: ['line-1'],
+      installedOn: todayYmd(),
+    });
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
+  it('lets the server pick today when the day is cleared', () => {
+    mockRecordInstalled.mockResolvedValue([]);
+    renderUnfold({ item: { ...item, status: 'delivered' } });
+    fireEvent.click(screen.getByLabelText('Clear date'));
+    fireEvent.click(markInstalled() as HTMLElement);
+    expect(mockRecordInstalled).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      itemIds: ['line-1'],
+      installedOn: undefined,
+    });
+  });
+
+  it('says "Couldn’t save" inline when the call is refused', async () => {
+    mockRecordInstalled.mockRejectedValue(new Error('refused'));
+    renderUnfold({ item: { ...item, status: 'delivered' } });
+    fireEvent.click(markInstalled() as HTMLElement);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t save/i);
   });
 });

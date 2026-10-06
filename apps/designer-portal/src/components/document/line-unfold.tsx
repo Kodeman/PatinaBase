@@ -16,8 +16,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  useRecordFfeInstalled,
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
+  useUpdatePurchaseOrderStatus,
   useVendor,
 } from '@patina/supabase';
 import { OrderAssistant } from '@/components/portal/procurement/order-assistant';
@@ -38,7 +40,7 @@ import {
   poGate,
   type LineAuthorization,
 } from '@/lib/document/authorization-derivation';
-import { fmtDay, fmtUsd } from '@/lib/document/format';
+import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 import { DateTextInput } from './date-text-input';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { PieceArtifactPlate } from './piece-artifact-plate';
@@ -74,14 +76,165 @@ function Cell({
 }
 
 /**
+ * C-03 (D1-07): the one forward move a PO can record from the line. Delivered
+ * is not here — it comes from receiving check-in.
+ */
+const NEXT_PO_STATUS: Record<
+  string,
+  { to: 'in_production' | 'shipped'; label: string }
+> = {
+  confirmed: { to: 'in_production', label: 'In production' },
+  in_production: { to: 'shipped', label: 'Shipped' },
+};
+
+/**
+ * The status act's own component, so the mutation mounts only where a move
+ * is on offer. The 00184 cascade carries the line (and the balance flip on
+ * ship) server-side.
+ */
+function PoStatusAct({
+  poId,
+  projectId,
+  to,
+  label,
+  onAdvanced,
+}: {
+  poId: string;
+  projectId: string;
+  to: 'in_production' | 'shipped';
+  label: string;
+  onAdvanced: (to: 'in_production' | 'shipped') => void;
+}) {
+  const qc = useQueryClient();
+  const advance = useUpdatePurchaseOrderStatus();
+  const [failed, setFailed] = useState(false);
+
+  const run = () => {
+    if (advance.isPending) return;
+    setFailed(false);
+    advance
+      .mutateAsync({ purchaseOrderId: poId, status: to, projectId })
+      .then(() => {
+        onAdvanced(to);
+        void qc.invalidateQueries({ queryKey: ['document-state'] });
+      })
+      .catch(() => setFailed(true));
+  };
+
+  return (
+    <div className="mt-1">
+      <DocumentAction
+        actionKey={`advance-po-${to.replace('_', '-')}`}
+        surfaceKey="project"
+        regionKey="ffe-movement"
+        variant="tertiary"
+        loading={advance.isPending}
+        loadingLabel="Saving…"
+        onClick={run}
+      >
+        {label}
+      </DocumentAction>
+      {failed && (
+        <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
+          Couldn&rsquo;t save
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * C-04 (D1-09): a delivered line is marked installed from its unfold. The
+ * day defaults to today; the field is there for the install that happened
+ * yesterday. Cleared, the server records today.
+ */
+function InstallAct({
+  itemId,
+  projectId,
+}: {
+  itemId: string;
+  projectId: string;
+}) {
+  const qc = useQueryClient();
+  const record = useRecordFfeInstalled({ errorSurface: 'inline' });
+  const [installedOn, setInstalledOn] = useState<string | null>(() =>
+    todayYmd(),
+  );
+  const [failed, setFailed] = useState(false);
+
+  const run = () => {
+    if (record.isPending) return;
+    setFailed(false);
+    record
+      .mutateAsync({
+        projectId,
+        itemIds: [itemId],
+        installedOn: installedOn ?? undefined,
+      })
+      .then(() => {
+        void qc.invalidateQueries({ queryKey: ['document-state'] });
+      })
+      .catch(() => setFailed(true));
+  };
+
+  return (
+    <div className="mb-2.5">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          Installed on
+        </span>
+        <DateTextInput
+          value={installedOn}
+          ariaLabel="Install date"
+          disabled={record.isPending}
+          onChange={setInstalledOn}
+          className="bg-transparent text-[11px] text-[var(--color-charcoal)] outline-none"
+        />
+        <DocumentAction
+          actionKey="mark-ffe-line-installed"
+          surfaceKey="project"
+          regionKey="ffe-install"
+          variant="tertiary"
+          loading={record.isPending}
+          loadingLabel="Saving…"
+          onClick={run}
+        >
+          Mark installed
+        </DocumentAction>
+      </div>
+      {failed && (
+        <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
+          Couldn&rsquo;t save
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
  * PRC-12 (R84): the Movement cell with the single-PO confirmed-ETA edit —
  * EtaQuickEditDrawer's mutation ported into a quiet inline date field (the
  * PRD W2.4 vision: vendor emails a delay, type the date, done). Saves on a
  * complete date, confirms in a line of text (R51), fails inline (R83).
  */
-function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
+function MovementCell({
+  item,
+  po,
+  projectId,
+}: {
+  item: FFERow;
+  po: FFERow | null;
+  projectId: string;
+}) {
   const qc = useQueryClient();
   const updateEta = useUpdatePurchaseOrderETA({ errorSurface: 'inline' });
+  // C-03: once a move lands, the next act stands in at once rather than
+  // waiting on the refetch; the PO's own status takes over when it arrives.
+  const [advancedTo, setAdvancedTo] = useState<string | null>(null);
+  useEffect(() => {
+    setAdvancedTo(null);
+  }, [po?.status]);
+  const nextStatus = po ? NEXT_PO_STATUS[advancedTo ?? po.status] : undefined;
   const [eta, setEta] = useState<string>(
     po?.confirmed_eta ? po.confirmed_eta.slice(0, 10) : '',
   );
@@ -121,6 +274,16 @@ function MovementCell({ item, po }: { item: FFERow; po: FFERow | null }) {
       <p className="text-[11.5px] font-medium text-[var(--color-charcoal)]">
         {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
       </p>
+      {po && nextStatus && (
+        <PoStatusAct
+          key={nextStatus.to}
+          poId={po.id}
+          projectId={projectId}
+          to={nextStatus.to}
+          label={nextStatus.label}
+          onAdvanced={setAdvancedTo}
+        />
+      )}
       {po ? (
         <>
           <label className="flex items-baseline gap-1.5">
@@ -442,13 +605,18 @@ export function LineUnfold({
             )}
         </div>
         {/* PRC-12: the Movement cell carries the confirmed-ETA quick-edit. */}
-        <MovementCell item={item} po={po} />
+        <MovementCell item={item} po={po} projectId={projectId} />
         <Cell label="Receiving" value={receivingValue} />
       </div>
 
       {/* R7 (M7): the fifteen-step trail — the position, where the cells above
           give the facts. Retires "Ordered" as the line's whole story. */}
       {showTrail && <ProcurementTrail reading={lifecycle} />}
+
+      {/* C-04: the only door to installed — and only from delivered. */}
+      {item.status === 'delivered' && (
+        <InstallAct itemId={item.id} projectId={projectId} />
+      )}
 
       {/* The authorization strip — what was signed, and what that permits. */}
       {isCommercialOrigin && (
