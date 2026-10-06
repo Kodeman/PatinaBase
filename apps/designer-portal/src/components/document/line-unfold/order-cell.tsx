@@ -2,6 +2,7 @@ import { fmtDay } from '@/lib/document/format';
 import type { LineAuthorization } from '@/lib/document/authorization-derivation';
 import { CellSub, CellValue, UnfoldCell } from './cell';
 import { ChangeOrderAct } from './change-order';
+import { PoRiders } from '@/components/portal/procurement/order-paper/riders';
 
 type FFERow = any;
 
@@ -10,7 +11,7 @@ type FFERow = any;
  * ship-to. With no PO yet, it says what would make the line orderable (C-11a)
  * in place of Order. Logging the ack (C-10) is the line's lifted next act
  * whenever it applies, so it never renders here. A live PO carries the
- * tertiary "Change this order…" act (C-21).
+ * tertiary "Change this order…" act (C-21), and the PO's riders (C-26).
  */
 export function OrderCell({
   item,
@@ -63,6 +64,20 @@ export function OrderCell({
             <li key={reason}>{reason}</li>
           ))}
         </ul>
+      )}
+      {/* C-26: the PO's riders, estimate then actual. Patina carries a maker-lane PO's freight. */}
+      {po && projectId && !po.is_patina_catalog && po.status !== 'cancelled' && (
+        <PoRiders
+          purchaseOrderId={po.id}
+          projectId={projectId}
+          vendor={{
+            id: po.vendor_id ?? item.vendor_id,
+            name: item.vendor_name ?? 'the vendor',
+          }}
+          disabled={!canChange}
+          variant="cell"
+          receiptAnchor={{ kind: 'line', anchorId: item.id }}
+        />
       )}
       {po && projectId && canChange && po.status !== 'cancelled' && (
         <ChangeOrderAct

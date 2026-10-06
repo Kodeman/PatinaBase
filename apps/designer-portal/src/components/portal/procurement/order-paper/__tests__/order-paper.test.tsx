@@ -59,6 +59,12 @@ jest.mock('@patina/supabase', () => ({
   }),
 }));
 
+// C-26: the riders slot has its own suite (riders.test.tsx).
+jest.mock('../riders', () => ({
+  PoRiders: ({ purchaseOrderId }: { purchaseOrderId: string | null }) => (
+    <div data-testid="paper-riders" data-po={purchaseOrderId ?? ''} />
+  ),
+}));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),

@@ -25,6 +25,10 @@ jest.mock('@patina/supabase', () => ({
   }),
   useUpdatePurchaseOrderETA: () => ({ mutateAsync: mockUpdateEta, isPending: false }),
   useUpdatePurchaseOrderStatus: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  // C-26 shipments ride in the cell; their own suite is shipments.test.tsx.
+  usePoShipments: () => ({ data: [] }),
+  useProcurementItems: () => ({ data: [], isLoading: false }),
+  useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 const mockUpload = jest.fn();

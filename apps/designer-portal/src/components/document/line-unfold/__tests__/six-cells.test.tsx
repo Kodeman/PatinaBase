@@ -28,6 +28,15 @@ jest.mock('@patina/supabase', () => ({
   useStartPoCheckout: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUser: () => ({ user: null }),
   usePurchaseOrders: () => ({ data: undefined }),
+  // C-26: riders (Order cell) and shipments (Movement cell); their own suites
+  // are riders.test.tsx and shipments.test.tsx.
+  usePoCostLines: () => ({ data: [] }),
+  useUpsertPoCostLine: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useStudioIdentity: () => ({ data: undefined }),
+  useStudioContacts: () => ({ data: [] }),
+  usePoShipments: () => ({ data: [] }),
+  useProcurementItems: () => ({ data: [], isLoading: false }),
+  useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 // C-20: the clock's sentence is receiving-claim-clock.test.tsx's; here it

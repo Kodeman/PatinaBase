@@ -1428,6 +1428,10 @@ export interface DeliveryEvent {
   inspection_id: string | null;
   inspection_outcome: ReceivingInspectionOutcome | null;
   phase_key: string | null;
+  /** 00704: the next undelivered shipment's ETA; event_date reads it first. */
+  current_eta?: string | null;
+  /** The vendor's confirmed ETA, event_date's fallback. */
+  confirmed_eta?: string | null;
 }
 
 export interface ReceivingInspectionFilters {
