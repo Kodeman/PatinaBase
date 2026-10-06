@@ -1402,6 +1402,8 @@ export {
   useUpdateFFEItemStatus,
   useUpdateFFEItemPricing,
   useBulkReassignFfeVendor,
+  useSetFfeLineCommercials,
+  useRecordFfeInstalled,
   useProjectPhases,
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
@@ -1435,6 +1437,8 @@ export type {
   UpdateFFEItemPricingInput,
   BulkReassignFfeVendorInput,
   BulkReassignFfeVendorResult,
+  SetFfeLineCommercialsInput,
+  RecordFfeInstalledInput,
 } from "./use-project-v2";
 export {
   specBookKeys,
@@ -1739,6 +1743,7 @@ export {
   useUpdatePurchaseOrderETA,
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
   useUpdatePurchaseOrderStatus,
+  useSetPurchaseOrderShipTo,
   invalidateFfeCaches,
   // Phase 4 — Stripe Checkout, designer pays at order time (Order via Patina)
   useStartPoCheckout,
@@ -1777,6 +1782,7 @@ export type {
   CreatePurchaseOrderInput,
   LogPOAcknowledgmentInput,
   UpdatePurchaseOrderStatusInput,
+  SetPurchaseOrderShipToInput,
   // Sprint 2 — Receiving, damage claims, calendar
   ReceivingInspectionOutcome,
   DamageClaimState,

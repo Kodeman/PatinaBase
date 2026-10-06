@@ -640,17 +640,15 @@ export function useLogPaymentPaid() {
 }
 
 /**
- * Mutation: updates purchase_orders.confirmed_eta for a single PO. When a
- * `notes` string is supplied, appends a timestamped audit line to
- * `purchase_orders.notes` so the designer has a record of what the vendor
- * told them and when. The notes column is a free-form text field and the
- * line format is:
+ * Mutation: sets purchase_orders.confirmed_eta for a single PO through the
+ * `set_purchase_order_eta` RPC (00690 — purchase_orders is RPC-only since
+ * 00447). Owner or non-guest studio co-member. When a `notes` string is
+ * supplied, the RPC appends a dated audit line to `purchase_orders.notes`:
  *
  *     [YYYY-MM-DD ETA update]: <notes>
  *
- * (preserving any existing notes content). The update is a single-row
- * mutation, so no compensating delete is needed — the PRD W2.4 vision is
- * "vendor emails, designer types new date, hits save, 3 seconds done."
+ * Never stamps acknowledged_at or moves status: a batch ETA is not a vendor
+ * act (R16); log_po_acknowledgment stays the only ack writer.
  *
  * Invalidates: ['purchase-orders'], ['purchase-order', poId],
  *              ['delivery-calendar'] (so the unified calendar view picks
@@ -675,38 +673,11 @@ export function useUpdatePurchaseOrderETA(options?: { errorSurface?: 'inline' })
     }): Promise<PurchaseOrder> => {
       const supabase = getSupabase() as any;
 
-      const updates: Record<string, unknown> = { confirmed_eta: newEta };
-
-      // When the designer provided notes, append a timestamped line to
-      // the existing notes column. Read once to preserve prior content.
-      const trimmedNotes = notes?.trim();
-      if (trimmedNotes) {
-        const { data: current, error: readError } = await supabase
-          .from('purchase_orders')
-          .select('notes')
-          .eq('id', purchaseOrderId)
-          .single();
-        if (readError) {
-          throw new Error(
-            `Failed to read purchase_order ${purchaseOrderId} for ETA notes append: ${
-              readError.message ?? String(readError)
-            }`,
-          );
-        }
-        const existingNotes = (current as { notes: string | null })?.notes ?? '';
-        const today = new Date().toISOString().slice(0, 10);
-        const appended = `[${today} ETA update]: ${trimmedNotes}`;
-        updates.notes = existingNotes
-          ? `${existingNotes}\n${appended}`
-          : appended;
-      }
-
-      const { data, error } = await supabase
-        .from('purchase_orders')
-        .update(updates)
-        .eq('id', purchaseOrderId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('set_purchase_order_eta', {
+        p_po_id: purchaseOrderId,
+        p_eta: newEta,
+        p_note: notes?.trim() || null,
+      });
 
       if (error) {
         throw new Error(
@@ -733,39 +704,35 @@ export function useUpdatePurchaseOrderETA(options?: { errorSurface?: 'inline' })
 
 export interface UpdatePurchaseOrderStatusInput {
   purchaseOrderId: string;
-  /** Target lifecycle status. 'draft' is creation-only and not reachable here. */
-  status: Exclude<POStatus, 'draft'>;
+  /**
+   * Target lifecycle status. Only the forward moves confirmed → in_production
+   * → shipped are recordable here (00690 advance_purchase_order_status);
+   * delivered is receipt-driven and cancel belongs to the PO change workflow.
+   */
+  status: Extract<POStatus, 'in_production' | 'shipped'>;
+  /** Optional note, appended server-side as a dated audit line. */
+  note?: string;
   /**
    * When supplied, FF&E caches for the project are invalidated too — the
-   * 00184 cascade trigger advances (or, on cancel, detaches) linked
-   * project_ffe_items rows server-side, so stale FF&E caches are a real
-   * concern after any status change.
+   * 00184 cascade trigger advances linked project_ffe_items rows server-side,
+   * so stale FF&E caches are a real concern after any status change.
    */
   projectId?: string;
 }
 
 /**
- * Mutation: updates purchase_orders.status. Plain single-row UPDATE — every
- * downstream side effect is owned by the DB (migration 00184):
+ * Mutation: advances purchase_orders.status through the
+ * `advance_purchase_order_status` RPC (00690; owner or non-guest studio
+ * co-member). Every downstream side effect is owned by the DB (00184):
  *   * Trigger B (`trg_po_status_cascade_to_items`) ratchets linked FF&E items
- *     forward (or detaches them on 'cancelled'), and flips the pending
- *     balance payment to 'due' when the PO reaches shipped/delivered with
- *     the deposit already paid.
- *
- * RLS scopes the UPDATE to the owning designer.
+ *     forward, and flips the pending balance payment to 'due' when the PO
+ *     ships with the deposit already paid.
  *
  * Invalidates: ['purchase-orders'], ['purchase-order', id],
  *              ['po-payments', id] (the trigger may flip the balance row),
  *              ['delivery-calendar'], ['today-procurement-counts'],
  *              and — when projectId is provided — both FF&E namespaces via
  *              invalidateFfeCaches().
- *
- * Side effect (Item 2): cancelling a Patina-catalog PO (`status: 'cancelled'`
- * on a row with `is_patina_catalog: true`) fires a fire-and-forget invoke of
- * the `expire-po-session` edge function so any open Stripe Checkout session
- * for the PO's po_payment can't still be completed after the order is dead.
- * Never awaited by the caller, never blocks or fails the cancel — a failure
- * only reaches `console.warn`.
  */
 export function useUpdatePurchaseOrderStatus() {
   const queryClient = useQueryClient();
@@ -773,15 +740,15 @@ export function useUpdatePurchaseOrderStatus() {
     mutationFn: async ({
       purchaseOrderId,
       status,
+      note,
     }: UpdatePurchaseOrderStatusInput): Promise<PurchaseOrder> => {
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase
-        .from('purchase_orders')
-        .update({ status })
-        .eq('id', purchaseOrderId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('advance_purchase_order_status', {
+        p_po_id: purchaseOrderId,
+        p_to: status,
+        p_note: note?.trim() || null,
+      });
 
       if (error) {
         throw new Error(
@@ -792,7 +759,7 @@ export function useUpdatePurchaseOrderStatus() {
       }
       return data as PurchaseOrder;
     },
-    onSuccess: (result, { purchaseOrderId, projectId, status }) => {
+    onSuccess: (_result, { purchaseOrderId, projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-order', purchaseOrderId] });
       queryClient.invalidateQueries({ queryKey: ['po-payments', purchaseOrderId] });
@@ -801,40 +768,53 @@ export function useUpdatePurchaseOrderStatus() {
       if (projectId) {
         invalidateFfeCaches(queryClient, projectId);
       }
+    },
+  });
+}
 
-      // Item 2 (Phase 4 follow-through) — cancelling a Patina-catalog PO can
-      // leave an open Stripe Checkout session for its po_payment alive; the
-      // designer could still complete a payment for an order that no longer
-      // exists. Expire it server-side. Every cancel surface (present and
-      // future) routes through this one status mutation, so this onSuccess
-      // is the single place that needs the hook.
-      //
-      // Fire-and-forget by design: awaited so a failure can be logged, but
-      // NEVER surfaced to the caller and never allowed to fail or delay the
-      // cancel itself — the promise below is intentionally not returned
-      // from onSuccess (returning it would make react-query await it before
-      // resolving mutateAsync()).
-      if (status === 'cancelled' && (result as PurchaseOrder | undefined)?.is_patina_catalog) {
-        const supabase = getSupabase() as any;
-        void (async () => {
-          try {
-            const { error } = await supabase.functions.invoke('expire-po-session', {
-              body: { purchase_order_id: purchaseOrderId },
-            });
-            if (error) {
-              console.warn(
-                `expire-po-session failed for purchase order ${purchaseOrderId}:`,
-                error,
-              );
-            }
-          } catch (err) {
-            console.warn(
-              `expire-po-session invoke threw for purchase order ${purchaseOrderId}:`,
-              err,
-            );
-          }
-        })();
+export interface SetPurchaseOrderShipToInput {
+  purchaseOrderId: string;
+  /** Printed ship-to block. Blank clears it (po-send refuses to send with none). */
+  shipTo: string;
+}
+
+/**
+ * Mutation: sets purchase_orders.ship_to through the
+ * `set_purchase_order_ship_to` RPC (00690; owner or non-guest studio
+ * co-member). Refused server-side once the PO has been sent.
+ *
+ * Invalidates: ['purchase-orders'], ['purchase-order', id] and both FF&E
+ * namespaces for the PO's project via invalidateFfeCaches() (the line unfold
+ * reads the joined PO).
+ */
+export function useSetPurchaseOrderShipTo(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({
+      purchaseOrderId,
+      shipTo,
+    }: SetPurchaseOrderShipToInput): Promise<PurchaseOrder> => {
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase.rpc('set_purchase_order_ship_to', {
+        p_po_id: purchaseOrderId,
+        p_ship_to: shipTo,
+      });
+
+      if (error) {
+        throw new Error(
+          `Failed to set purchase_order ship-to for ${purchaseOrderId}: ${
+            error.message ?? String(error)
+          }`,
+        );
       }
+      return data as PurchaseOrder;
+    },
+    onSuccess: (po) => {
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', po.id] });
+      invalidateFfeCaches(queryClient, po.project_id);
     },
   });
 }

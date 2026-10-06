@@ -19170,6 +19170,90 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_send_purchase_order(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_send_purchase_order(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_purchase_order_eta(uuid, date, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_purchase_order_eta(uuid, date, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_purchase_order_ship_to(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_purchase_order_ship_to(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.advance_purchase_order_status(uuid, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.advance_purchase_order_status(uuid, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assign_po_number(UUID) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00690_purchase_order_header_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.assign_po_number(UUID) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00691_ffe_mark_installed.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_project_ffe_installed(uuid[], date) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00691_ffe_mark_installed.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_project_ffe_installed(uuid[], date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00692_ffe_line_commercials.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_ffe_line_commercials(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00692_ffe_line_commercials.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_project_ffe_line_commercials(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

@@ -16794,6 +16794,7 @@ export type Database = {
           eta: string | null
           ffe_category: string | null
           id: string
+          installed_on: string | null
           item_type: string
           last_status_change_at: string | null
           line_total_cents: number | null
@@ -16842,6 +16843,7 @@ export type Database = {
           eta?: string | null
           ffe_category?: string | null
           id?: string
+          installed_on?: string | null
           item_type?: string
           last_status_change_at?: string | null
           line_total_cents?: number | null
@@ -16890,6 +16892,7 @@ export type Database = {
           eta?: string | null
           ffe_category?: string | null
           id?: string
+          installed_on?: string | null
           item_type?: string
           last_status_change_at?: string | null
           line_total_cents?: number | null
@@ -34748,6 +34751,39 @@ export type Database = {
         }
         Returns: Json
       }
+      advance_purchase_order_status: {
+        Args: { p_note?: string; p_po_id: string; p_to: string }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       aesthete_ask_knn: {
         Args: { p_embedding: string; p_filters?: Json }
         Returns: {
@@ -35417,6 +35453,7 @@ export type Database = {
         Args: { p_object_name: string }
         Returns: boolean
       }
+      can_send_purchase_order: { Args: { p_po_id: string }; Returns: boolean }
       can_submit_item_feedback_anchor: {
         Args: {
           p_board_item_id: string
@@ -38835,6 +38872,64 @@ export type Database = {
         }
         Returns: boolean
       }
+      record_project_ffe_installed: {
+        Args: { p_installed_on?: string; p_item_ids: string[] }
+        Returns: {
+          added_via: string | null
+          assignment_scope: string
+          blocked: boolean | null
+          blocked_by_decision_id: string | null
+          blocked_reason: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          currency: string
+          custom_fields: Json
+          design_disposition: string
+          doc_code: string | null
+          eta: string | null
+          ffe_category: string | null
+          id: string
+          installed_on: string | null
+          item_type: string
+          last_status_change_at: string | null
+          line_total_cents: number | null
+          markup_percent: number | null
+          name: string
+          notes: string | null
+          po_number: string | null
+          product_id: string | null
+          project_id: string
+          project_room_id: string | null
+          purchase_order_id: string | null
+          quantity: number
+          received_quantity: number | null
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
+          role_identity: string
+          selection_thread_id: string
+          sort_order: number
+          source_authorization_item_id: string | null
+          source_commercial_document_id: string | null
+          source_decision_id: string | null
+          source_proposal_item_id: string | null
+          status: string
+          supersedes_ffe_item_id: string | null
+          trade_price_cents: number | null
+          trade_scope_document_id: string | null
+          unit_price_cents: number | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       record_project_ffe_receipt: {
         Args: {
           p_ffe_item_id: string
@@ -40013,6 +40108,64 @@ export type Database = {
         }
         Returns: Json
       }
+      set_project_ffe_line_commercials: {
+        Args: { p_item_id: string; p_request: Json }
+        Returns: {
+          added_via: string | null
+          assignment_scope: string
+          blocked: boolean | null
+          blocked_by_decision_id: string | null
+          blocked_reason: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          currency: string
+          custom_fields: Json
+          design_disposition: string
+          doc_code: string | null
+          eta: string | null
+          ffe_category: string | null
+          id: string
+          installed_on: string | null
+          item_type: string
+          last_status_change_at: string | null
+          line_total_cents: number | null
+          markup_percent: number | null
+          name: string
+          notes: string | null
+          po_number: string | null
+          product_id: string | null
+          project_id: string
+          project_room_id: string | null
+          purchase_order_id: string | null
+          quantity: number
+          received_quantity: number | null
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
+          role_identity: string
+          selection_thread_id: string
+          sort_order: number
+          source_authorization_item_id: string | null
+          source_commercial_document_id: string | null
+          source_decision_id: string | null
+          source_proposal_item_id: string | null
+          status: string
+          supersedes_ffe_item_id: string | null
+          trade_price_cents: number | null
+          trade_scope_document_id: string | null
+          unit_price_cents: number | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_project_operational_status: {
         Args: {
           p_expected_status: Database["public"]["Enums"]["project_status"]
@@ -40062,6 +40215,72 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_purchase_order_eta: {
+        Args: { p_eta: string; p_note?: string; p_po_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_purchase_order_ship_to: {
+        Args: { p_po_id: string; p_ship_to: string }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
           isOneToOne: true
           isSetofReturn: false
         }
