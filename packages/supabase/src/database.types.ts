@@ -12615,6 +12615,113 @@ export type Database = {
           },
         ]
       }
+      po_cost_lines: {
+        Row: {
+          actual_cents: number | null
+          billable_to_client: boolean
+          billing_rule: string
+          created_at: string
+          created_by: string | null
+          estimate_cents: number | null
+          id: string
+          invoice_line_id: string | null
+          kind: string
+          note: string | null
+          organization_id: string | null
+          payee_contact_id: string | null
+          payee_vendor_id: string | null
+          purchase_order_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          actual_cents?: number | null
+          billable_to_client?: boolean
+          billing_rule?: string
+          created_at?: string
+          created_by?: string | null
+          estimate_cents?: number | null
+          id?: string
+          invoice_line_id?: string | null
+          kind: string
+          note?: string | null
+          organization_id?: string | null
+          payee_contact_id?: string | null
+          payee_vendor_id?: string | null
+          purchase_order_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          actual_cents?: number | null
+          billable_to_client?: boolean
+          billing_rule?: string
+          created_at?: string
+          created_by?: string | null
+          estimate_cents?: number | null
+          id?: string
+          invoice_line_id?: string | null
+          kind?: string
+          note?: string | null
+          organization_id?: string | null
+          payee_contact_id?: string | null
+          payee_vendor_id?: string | null
+          purchase_order_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_cost_lines_invoice_line_id_fkey"
+            columns: ["invoice_line_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_line_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_cost_lines_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_cost_lines_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_cost_lines_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_cost_lines_payee_contact_id_fkey"
+            columns: ["payee_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_cost_lines_payee_vendor_id_fkey"
+            columns: ["payee_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_cost_lines_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       po_counters: {
         Row: {
           designer_id: string
@@ -12697,6 +12804,258 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "po_payments_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_shipment_lines: {
+        Row: {
+          ffe_item_id: string
+          qty: number
+          shipment_id: string
+        }
+        Insert: {
+          ffe_item_id: string
+          qty: number
+          shipment_id: string
+        }
+        Update: {
+          ffe_item_id?: string
+          qty?: number
+          shipment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_shipment_lines_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_shipment_lines_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "po_shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_shipments: {
+        Row: {
+          bol_document_path: string | null
+          carrier: string | null
+          created_at: string
+          created_by: string | null
+          current_eta: string | null
+          delivered_on: string | null
+          eta_history: Json
+          id: string
+          inspection_closes_at: string | null
+          mode: string | null
+          organization_id: string | null
+          purchase_order_id: string
+          shipped_on: string
+          tracking: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          bol_document_path?: string | null
+          carrier?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_eta?: string | null
+          delivered_on?: string | null
+          eta_history?: Json
+          id?: string
+          inspection_closes_at?: string | null
+          mode?: string | null
+          organization_id?: string | null
+          purchase_order_id: string
+          shipped_on: string
+          tracking?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          bol_document_path?: string | null
+          carrier?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_eta?: string | null
+          delivered_on?: string | null
+          eta_history?: Json
+          id?: string
+          inspection_closes_at?: string | null
+          mode?: string | null
+          organization_id?: string | null
+          purchase_order_id?: string
+          shipped_on?: string
+          tracking?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_shipments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_shipments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_shipments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_shipments_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_submittals: {
+        Row: {
+          client_decision_id: string | null
+          created_at: string
+          created_by: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          dye_lot: string | null
+          ffe_item_id: string
+          id: string
+          kind: string
+          media_ids: string[]
+          note: string | null
+          organization_id: string | null
+          project_id: string
+          purchase_order_id: string | null
+          received_on: string | null
+          requested_on: string | null
+          reserve_expires_on: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_decision_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          dye_lot?: string | null
+          ffe_item_id: string
+          id?: string
+          kind: string
+          media_ids?: string[]
+          note?: string | null
+          organization_id?: string | null
+          project_id: string
+          purchase_order_id?: string | null
+          received_on?: string | null
+          requested_on?: string | null
+          reserve_expires_on?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_decision_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string
+          dye_lot?: string | null
+          ffe_item_id?: string
+          id?: string
+          kind?: string
+          media_ids?: string[]
+          note?: string | null
+          organization_id?: string | null
+          project_id?: string
+          purchase_order_id?: string | null
+          received_on?: string | null
+          requested_on?: string | null
+          reserve_expires_on?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_submittals_client_decision_id_fkey"
+            columns: ["client_decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_submittals_client_decision_id_fkey"
+            columns: ["client_decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "po_submittals_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_submittals_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_submittals_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_submittals_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_submittals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "po_submittals_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_submittals_purchase_order_id_fkey"
             columns: ["purchase_order_id"]
             isOneToOne: false
             referencedRelation: "purchase_orders"
@@ -16837,6 +17196,7 @@ export type Database = {
           markup_percent: number | null
           name: string
           notes: string | null
+          parent_ffe_item_id: string | null
           po_number: string | null
           product_id: string | null
           project_id: string
@@ -16886,6 +17246,7 @@ export type Database = {
           markup_percent?: number | null
           name: string
           notes?: string | null
+          parent_ffe_item_id?: string | null
           po_number?: string | null
           product_id?: string | null
           project_id: string
@@ -16935,6 +17296,7 @@ export type Database = {
           markup_percent?: number | null
           name?: string
           notes?: string | null
+          parent_ffe_item_id?: string | null
           po_number?: string | null
           product_id?: string | null
           project_id?: string
@@ -16982,6 +17344,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "task_blocked_state"
             referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_parent_ffe_item_id_fkey"
+            columns: ["parent_ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "project_ffe_items_product_id_fkey"
@@ -17373,6 +17742,7 @@ export type Database = {
           care_notes: string | null
           client_notes: string | null
           color_fabric: string | null
+          com_spec: Json | null
           configuration_id: string | null
           configuration_locked_at: string | null
           configuration_snapshot: Json
@@ -17402,6 +17772,7 @@ export type Database = {
           care_notes?: string | null
           client_notes?: string | null
           color_fabric?: string | null
+          com_spec?: Json | null
           configuration_id?: string | null
           configuration_locked_at?: string | null
           configuration_snapshot?: Json
@@ -17431,6 +17802,7 @@ export type Database = {
           care_notes?: string | null
           client_notes?: string | null
           color_fabric?: string | null
+          com_spec?: Json | null
           configuration_id?: string | null
           configuration_locked_at?: string | null
           configuration_snapshot?: Json
@@ -21892,6 +22264,7 @@ export type Database = {
       purchase_orders: {
         Row: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -21900,6 +22273,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -21908,20 +22282,24 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         Insert: {
           acknowledged_at?: string | null
+          bill_to?: Json | null
           bol_document_path?: string | null
           carrier?: string | null
           confirmed_eta?: string | null
@@ -21930,6 +22308,7 @@ export type Database = {
           delivered_date?: string | null
           designer_id: string
           eta_history?: Json
+          freight_terms?: string | null
           id?: string
           is_patina_catalog?: boolean
           needs_repricing?: boolean
@@ -21938,20 +22317,24 @@ export type Database = {
           po_document_path?: string | null
           po_number?: string | null
           project_id: string
+          requested_ship_on?: string | null
           sent_at?: string | null
           ship_to?: string | null
           ship_to_location_id?: string | null
           shipped_on?: string | null
           sidemark?: string | null
           status?: string
+          supplies_purchase_order_id?: string | null
           total_cents?: number
           tracking_number?: string | null
           updated_at?: string
           vendor_id: string
+          vendor_note?: string | null
           vendor_po_number?: string | null
         }
         Update: {
           acknowledged_at?: string | null
+          bill_to?: Json | null
           bol_document_path?: string | null
           carrier?: string | null
           confirmed_eta?: string | null
@@ -21960,6 +22343,7 @@ export type Database = {
           delivered_date?: string | null
           designer_id?: string
           eta_history?: Json
+          freight_terms?: string | null
           id?: string
           is_patina_catalog?: boolean
           needs_repricing?: boolean
@@ -21968,16 +22352,19 @@ export type Database = {
           po_document_path?: string | null
           po_number?: string | null
           project_id?: string
+          requested_ship_on?: string | null
           sent_at?: string | null
           ship_to?: string | null
           ship_to_location_id?: string | null
           shipped_on?: string | null
           sidemark?: string | null
           status?: string
+          supplies_purchase_order_id?: string | null
           total_cents?: number
           tracking_number?: string | null
           updated_at?: string
           vendor_id?: string
+          vendor_note?: string | null
           vendor_po_number?: string | null
         }
         Relationships: [
@@ -22014,6 +22401,13 @@ export type Database = {
             columns: ["ship_to_location_id"]
             isOneToOne: false
             referencedRelation: "studio_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_supplies_purchase_order_id_fkey"
+            columns: ["supplies_purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
             referencedColumns: ["id"]
           },
           {
@@ -27769,6 +28163,189 @@ export type Database = {
           },
         ]
       }
+      studio_purchases: {
+        Row: {
+          amount_cents: number
+          billable_to_client: boolean
+          billing_rule: string
+          buyer_premium_cents: number
+          created_at: string
+          currency_code: string
+          description: string | null
+          ffe_item_id: string | null
+          id: string
+          invoice_line_id: string | null
+          kind: string
+          organization_id: string | null
+          paid_by_member_id: string | null
+          payee_name: string
+          payment_method_id: string | null
+          project_id: string | null
+          purchased_on: string
+          receipt_document_path: string | null
+          recorded_by: string | null
+          reimburse_member: boolean
+          return_by: string | null
+          returnable: boolean
+          returned_on: string | null
+          shipping_cents: number
+          status: string
+          studio_contact_id: string | null
+          tax_cents: number
+          updated_at: string
+          vendor_id: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount_cents: number
+          billable_to_client?: boolean
+          billing_rule?: string
+          buyer_premium_cents?: number
+          created_at?: string
+          currency_code?: string
+          description?: string | null
+          ffe_item_id?: string | null
+          id?: string
+          invoice_line_id?: string | null
+          kind: string
+          organization_id?: string | null
+          paid_by_member_id?: string | null
+          payee_name: string
+          payment_method_id?: string | null
+          project_id?: string | null
+          purchased_on: string
+          receipt_document_path?: string | null
+          recorded_by?: string | null
+          reimburse_member?: boolean
+          return_by?: string | null
+          returnable?: boolean
+          returned_on?: string | null
+          shipping_cents?: number
+          status?: string
+          studio_contact_id?: string | null
+          tax_cents?: number
+          updated_at?: string
+          vendor_id?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          billable_to_client?: boolean
+          billing_rule?: string
+          buyer_premium_cents?: number
+          created_at?: string
+          currency_code?: string
+          description?: string | null
+          ffe_item_id?: string | null
+          id?: string
+          invoice_line_id?: string | null
+          kind?: string
+          organization_id?: string | null
+          paid_by_member_id?: string | null
+          payee_name?: string
+          payment_method_id?: string | null
+          project_id?: string | null
+          purchased_on?: string
+          receipt_document_path?: string | null
+          recorded_by?: string | null
+          reimburse_member?: boolean
+          return_by?: string | null
+          returnable?: boolean
+          returned_on?: string | null
+          shipping_cents?: number
+          status?: string
+          studio_contact_id?: string | null
+          tax_cents?: number
+          updated_at?: string
+          vendor_id?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_purchases_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_invoice_line_id_fkey"
+            columns: ["invoice_line_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_line_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_paid_by_member_id_fkey"
+            columns: ["paid_by_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_payment_method_id_fkey"
+            columns: ["payment_method_id"]
+            isOneToOne: false
+            referencedRelation: "studio_payment_methods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_studio_contact_id_fkey"
+            columns: ["studio_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_purchases_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_touches: {
         Row: {
           actor_ref: string | null
@@ -31351,6 +31928,8 @@ export type Database = {
       }
       delivery_events: {
         Row: {
+          confirmed_eta: string | null
+          current_eta: string | null
           delivered_date: string | null
           event_date: string | null
           event_id: string | null
@@ -31513,6 +32092,27 @@ export type Database = {
             referencedColumns: ["scan_id"]
           },
         ]
+      }
+      ffe_line_submittals: {
+        Row: {
+          created_at: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision: string | null
+          dye_lot: string | null
+          ffe_item_id: string | null
+          id: string | null
+          kind: string | null
+          media_ids: string[] | null
+          note: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          received_on: string | null
+          requested_on: string | null
+          reserve_expires_on: string | null
+          source: string | null
+        }
+        Relationships: []
       }
       field_activity_summary: {
         Row: {
@@ -33817,6 +34417,7 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -33825,6 +34426,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -33833,16 +34435,19 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -33869,6 +34474,7 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -33877,6 +34483,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -33885,16 +34492,19 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -33921,6 +34531,7 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -33929,6 +34540,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -33937,16 +34549,19 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -35346,6 +35961,7 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -35354,6 +35970,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -35362,16 +35979,19 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -35773,6 +36393,7 @@ export type Database = {
         Args: { p_po_id: string }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -35781,6 +36402,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -35789,16 +36411,19 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -36061,6 +36686,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      can_buy_for_project: { Args: { p_project_id: string }; Returns: boolean }
       can_client_read_issued_board_media: {
         Args: { p_object_name: string }
         Returns: boolean
@@ -36915,6 +37541,7 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -36923,6 +37550,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -36931,16 +37559,19 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -37003,6 +37634,37 @@ export type Database = {
       cut_schedule_revision: {
         Args: { p_project_id: string; p_reason?: string }
         Returns: number
+      }
+      decide_submittal: {
+        Args: { p_decision: string; p_note?: string; p_submittal_id: string }
+        Returns: {
+          client_decision_id: string | null
+          created_at: string
+          created_by: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          dye_lot: string | null
+          ffe_item_id: string
+          id: string
+          kind: string
+          media_ids: string[]
+          note: string | null
+          organization_id: string | null
+          project_id: string
+          purchase_order_id: string | null
+          received_on: string | null
+          requested_on: string | null
+          reserve_expires_on: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "po_submittals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       decline_proposal: {
         Args: { p_proposal_id: string; p_reason?: string }
@@ -38535,6 +39197,65 @@ export type Database = {
         }
         Returns: string
       }
+      link_ffe_pair: {
+        Args: { p_child: string; p_parent: string }
+        Returns: {
+          added_via: string | null
+          assignment_scope: string
+          blocked: boolean | null
+          blocked_by_decision_id: string | null
+          blocked_reason: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          currency: string
+          custom_fields: Json
+          design_disposition: string
+          doc_code: string | null
+          eta: string | null
+          ffe_category: string | null
+          id: string
+          installed_on: string | null
+          item_type: string
+          last_status_change_at: string | null
+          line_total_cents: number | null
+          markup_percent: number | null
+          name: string
+          notes: string | null
+          parent_ffe_item_id: string | null
+          po_number: string | null
+          product_id: string | null
+          project_id: string
+          project_room_id: string | null
+          purchase_order_id: string | null
+          quantity: number
+          received_quantity: number | null
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by: string | null
+          role_identity: string
+          selection_thread_id: string
+          sort_order: number
+          source_authorization_item_id: string | null
+          source_commercial_document_id: string | null
+          source_decision_id: string | null
+          source_proposal_item_id: string | null
+          status: string
+          supersedes_ffe_item_id: string | null
+          trade_price_cents: number | null
+          trade_scope_document_id: string | null
+          unit_price_cents: number | null
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "project_ffe_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       link_studio_to_catalog_for_vendor: {
         Args: { p_vendor_id: string }
         Returns: number
@@ -38592,6 +39313,7 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -38600,6 +39322,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -38608,16 +39331,19 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -39574,6 +40300,33 @@ export type Database = {
         }
         Returns: Json
       }
+      record_po_shipment: {
+        Args: { p_local_date?: string; p_po_id: string; p_request: Json }
+        Returns: {
+          bol_document_path: string | null
+          carrier: string | null
+          created_at: string
+          created_by: string | null
+          current_eta: string | null
+          delivered_on: string | null
+          eta_history: Json
+          id: string
+          inspection_closes_at: string | null
+          mode: string | null
+          organization_id: string | null
+          purchase_order_id: string
+          shipped_on: string
+          tracking: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "po_shipments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_project_approval_edition_object: {
         Args: {
           p_attachment_id: string
@@ -39620,6 +40373,7 @@ export type Database = {
           markup_percent: number | null
           name: string
           notes: string | null
+          parent_ffe_item_id: string | null
           po_number: string | null
           product_id: string | null
           project_id: string
@@ -39676,6 +40430,80 @@ export type Database = {
       record_project_review_feedback: {
         Args: { p_body?: string; p_review_item_id: string; p_verdict: string }
         Returns: Json
+      }
+      record_studio_purchase: {
+        Args: { p_request: Json }
+        Returns: {
+          amount_cents: number
+          billable_to_client: boolean
+          billing_rule: string
+          buyer_premium_cents: number
+          created_at: string
+          currency_code: string
+          description: string | null
+          ffe_item_id: string | null
+          id: string
+          invoice_line_id: string | null
+          kind: string
+          organization_id: string | null
+          paid_by_member_id: string | null
+          payee_name: string
+          payment_method_id: string | null
+          project_id: string | null
+          purchased_on: string
+          receipt_document_path: string | null
+          recorded_by: string | null
+          reimburse_member: boolean
+          return_by: string | null
+          returnable: boolean
+          returned_on: string | null
+          shipping_cents: number
+          status: string
+          studio_contact_id: string | null
+          tax_cents: number
+          updated_at: string
+          vendor_id: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_purchases"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_submittal: {
+        Args: { p_request: Json }
+        Returns: {
+          client_decision_id: string | null
+          created_at: string
+          created_by: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision: string
+          dye_lot: string | null
+          ffe_item_id: string
+          id: string
+          kind: string
+          media_ids: string[]
+          note: string | null
+          organization_id: string | null
+          project_id: string
+          purchase_order_id: string | null
+          received_on: string | null
+          requested_on: string | null
+          reserve_expires_on: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "po_submittals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       record_touch: {
         Args: {
@@ -40887,6 +41715,7 @@ export type Database = {
           markup_percent: number | null
           name: string
           notes: string | null
+          parent_ffe_item_id: string | null
           po_number: string | null
           product_id: string | null
           project_id: string
@@ -40982,6 +41811,7 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -40990,6 +41820,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -40998,16 +41829,63 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_purchase_order_header: {
+        Args: { p_po_id: string; p_request: Json }
+        Returns: {
+          acknowledged_at: string | null
+          bill_to: Json | null
+          bol_document_path: string | null
+          carrier: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          eta_history: Json
+          freight_terms: string | null
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          requested_ship_on: string | null
+          sent_at: string | null
+          ship_to: string | null
+          ship_to_location_id: string | null
+          shipped_on: string | null
+          sidemark: string | null
+          status: string
+          supplies_purchase_order_id: string | null
+          total_cents: number
+          tracking_number: string | null
+          updated_at: string
+          vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -41021,6 +41899,7 @@ export type Database = {
         Args: { p_po_id: string; p_ship_to: string }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -41029,6 +41908,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -41037,16 +41917,19 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -41060,6 +41943,7 @@ export type Database = {
         Args: { p_location_id: string; p_po_id: string }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -41068,6 +41952,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -41076,16 +41961,63 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_purchase_order_supplies: {
+        Args: { p_po_id: string; p_supplies_po_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          bill_to: Json | null
+          bol_document_path: string | null
+          carrier: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          eta_history: Json
+          freight_terms: string | null
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          requested_ship_on: string | null
+          sent_at: string | null
+          ship_to: string | null
+          ship_to_location_id: string | null
+          shipped_on: string | null
+          sidemark: string | null
+          status: string
+          supplies_purchase_order_id: string | null
+          total_cents: number
+          tracking_number: string | null
+          updated_at: string
+          vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -41099,6 +42031,7 @@ export type Database = {
         Args: { p_po_id: string; p_request: Json }
         Returns: {
           acknowledged_at: string | null
+          bill_to: Json | null
           bol_document_path: string | null
           carrier: string | null
           confirmed_eta: string | null
@@ -41107,6 +42040,7 @@ export type Database = {
           delivered_date: string | null
           designer_id: string
           eta_history: Json
+          freight_terms: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -41115,16 +42049,19 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          requested_ship_on: string | null
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
           sidemark: string | null
           status: string
+          supplies_purchase_order_id: string | null
           total_cents: number
           tracking_number: string | null
           updated_at: string
           vendor_id: string
+          vendor_note: string | null
           vendor_po_number: string | null
         }
         SetofOptions: {
@@ -42216,6 +43153,33 @@ export type Database = {
         Args: { p_proposal_id: string; p_rates: Json; p_terms: Json }
         Returns: Json
       }
+      upsert_po_cost_line: {
+        Args: { p_po_id: string; p_request: Json }
+        Returns: {
+          actual_cents: number | null
+          billable_to_client: boolean
+          billing_rule: string
+          created_at: string
+          created_by: string | null
+          estimate_cents: number | null
+          id: string
+          invoice_line_id: string | null
+          kind: string
+          note: string | null
+          organization_id: string | null
+          payee_contact_id: string | null
+          payee_vendor_id: string | null
+          purchase_order_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "po_cost_lines"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_product_configuration_schema: {
         Args: {
           p_expected_revision?: number
@@ -42382,6 +43346,49 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "invoices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      void_studio_purchase: {
+        Args: { p_purchase_id: string; p_reason: string }
+        Returns: {
+          amount_cents: number
+          billable_to_client: boolean
+          billing_rule: string
+          buyer_premium_cents: number
+          created_at: string
+          currency_code: string
+          description: string | null
+          ffe_item_id: string | null
+          id: string
+          invoice_line_id: string | null
+          kind: string
+          organization_id: string | null
+          paid_by_member_id: string | null
+          payee_name: string
+          payment_method_id: string | null
+          project_id: string | null
+          purchased_on: string
+          receipt_document_path: string | null
+          recorded_by: string | null
+          reimburse_member: boolean
+          return_by: string | null
+          returnable: boolean
+          returned_on: string | null
+          shipping_cents: number
+          status: string
+          studio_contact_id: string | null
+          tax_cents: number
+          updated_at: string
+          vendor_id: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_purchases"
           isOneToOne: true
           isSetofReturn: false
         }

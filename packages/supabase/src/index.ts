@@ -9,6 +9,7 @@ export {
 export type { Database, Json } from "./database.types";
 export * from "./hooks";
 export * from "./hooks/use-studio-buying";
+export * from "./hooks/use-buying-phase2";
 export {
   isOAuthProviderEnabled,
   getOAuthProviderLabel,

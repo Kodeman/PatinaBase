@@ -19596,6 +19596,246 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00701_order_paper_header.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_purchase_order_header(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00701_order_paper_header.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_purchase_order_header(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_buy_for_project(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_buy_for_project(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.link_ffe_pair(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.link_ffe_pair(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  GRANT UPDATE (com_spec) ON public.project_ffe_specs TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_purchase_order_supplies(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_purchase_order_supplies(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.po_submittals FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.po_submittals TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.po_submittals TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_submittal(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_submittal(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.decide_submittal(uuid, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.decide_submittal(uuid, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.ffe_line_submittals FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00702_com_pair_submittals.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.ffe_line_submittals TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00703_studio_purchases.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_purchases FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00703_studio_purchases.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.studio_purchases TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00703_studio_purchases.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_purchases TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00703_studio_purchases.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_studio_purchase(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00703_studio_purchases.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_studio_purchase(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00703_studio_purchases.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.void_studio_purchase(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00703_studio_purchases.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.void_studio_purchase(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.po_cost_lines FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.po_cost_lines TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.po_cost_lines TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.po_shipments FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.po_shipment_lines FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.po_shipments TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.po_shipment_lines TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.po_shipments TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.po_shipment_lines TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_po_cost_line(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_po_cost_line(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_po_shipment(uuid, jsonb, date) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_po_shipment(uuid, jsonb, date) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.delivery_events FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00704_po_cost_lines_shipments.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.delivery_events TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00713_studio_margin_visibility.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.can_see_studio_margin(uuid) FROM PUBLIC, anon;
