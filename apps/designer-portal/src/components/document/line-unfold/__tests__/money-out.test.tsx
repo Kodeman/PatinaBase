@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   useFfeInvoiceCoverage,
+  useFfeInvoiceStageCoverage,
+  useProjectInvoices,
   usePOPayments,
   useRecordVendorPayment,
   useStartPoCheckout,
@@ -21,6 +23,8 @@ jest.mock('@patina/supabase', () => ({
   useVendorPayments: jest.fn(),
   useStudioPaymentMethods: jest.fn(),
   useFfeInvoiceCoverage: jest.fn(),
+  useFfeInvoiceStageCoverage: jest.fn(),
+  useProjectInvoices: jest.fn(),
   useRecordVendorPayment: jest.fn(),
   useVoidVendorPayment: jest.fn(),
   useStartPoCheckout: jest.fn(),
@@ -120,11 +124,15 @@ function setup({
   records = [] as unknown[],
   methods = [AMEX] as unknown[],
   coverage = undefined as unknown,
+  stages = undefined as unknown,
+  invoices = undefined as unknown,
 } = {}) {
   (usePOPayments as jest.Mock).mockReturnValue({ data: schedule });
   (useVendorPayments as jest.Mock).mockReturnValue({ data: records });
   (useStudioPaymentMethods as jest.Mock).mockReturnValue({ data: methods });
   (useFfeInvoiceCoverage as jest.Mock).mockReturnValue({ data: coverage });
+  (useFfeInvoiceStageCoverage as jest.Mock).mockReturnValue({ data: stages });
+  (useProjectInvoices as jest.Mock).mockReturnValue({ data: invoices });
 }
 
 const renderBand = (props: Partial<Parameters<typeof PoMoneyOut>[0]> = {}) =>
@@ -432,6 +440,45 @@ describe('MoneyOutCell · fronting fact (R9: a fact, never a block)', () => {
     expect(
       frontingFact({ ...base, coverage: 'invoiced', invoiceStatus: 'partially_paid' }),
     ).toBe('Client has paid part of this line');
+  });
+
+  it('reads a staged client bill with its dates instead (C-31)', () => {
+    const slot = {
+      ffe_item_id: 'line-1',
+      billing_stage: 'deposit',
+      billing_stage_pct: 50,
+      invoice_line_id: 'il-1',
+      invoice_id: 'inv-1',
+      invoice_number: '0217',
+      invoice_status: 'paid',
+      billed_cents: 324_000,
+      coverage: 'paid',
+    };
+    setup({
+      coverage: {
+        'line-1': {
+          coverage: 'invoiced',
+          invoiceId: 'inv-1',
+          invoiceNumber: '0217',
+          invoiceStatus: 'paid',
+          billedCents: 324_000,
+        },
+      },
+      stages: [slot, { ...slot, ffe_item_id: 'line-2', invoice_id: 'inv-2' }],
+      invoices: [
+        { id: 'inv-1', status: 'paid', issue_date: '2026-10-03', paid_at: '2026-10-06' },
+      ],
+    });
+    render(
+      <MoneyOutCell
+        po={{ id: 'po-1', is_patina_catalog: false, payments: [] }}
+        projectId="project-1"
+        itemId="line-1"
+      />,
+    );
+    expect(screen.getByTestId('money-out-fronting')).toHaveTextContent(
+      'Client deposit billed 3 October · paid 6 October · balance unbilled',
+    );
   });
 
   it('owes nothing before the line is ordered', () => {

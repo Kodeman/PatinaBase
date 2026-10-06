@@ -14,10 +14,17 @@
  *                        ticked; covered/unpriced ones fall out with a notice.
  *   initialTimeEntryIds — R75 Bill week / bill-it: arrive ticked, per
  *                        project (the intersection when the composer asks).
- *   initialPurchaseIds — C-25 "Bill N unbilled purchases": the still-unbilled
- *                        ones are shown at cost, read only. Nothing stamps a
- *                        purchase's invoice_line_id from here, so no line is
- *                        drafted for one.
+ *   initialPurchaseIds — C-25 "Bill N unbilled purchases": arrive ticked.
+ *   initialCostLineIds — C-31 "Bill N unbilled riders": arrive ticked.
+ *
+ * C-31 (00709): a line or a ticked group bills in full or as a deposit (X%),
+ * and a line with a live deposit is offered its balance; every line shows
+ * what it has had billed and at which stage. Each unbilled purchase and PO
+ * rider bills at cost on its own line, overridable (R-PB7). Those lines go
+ * through add_invoice_billing_lines once the draft exists — it stamps each
+ * purchase and rider in the same transaction, so a second press cannot bill
+ * one twice. If it refuses, the draft is deleted, exactly as a failed time
+ * claim is compensated below.
  *
  * Time claim: after the draft lands, the selected entries are stamped with
  * invoice_id by claim_time_entries (00595; the 00177 guard then locks them).
@@ -42,10 +49,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  useAddInvoiceBillingLines,
   useCreateDraftInvoice,
   useCreateDraftStudioInvoice,
   useDeleteDraftInvoice,
   useFfeInvoiceCoverage,
+  useFfeInvoiceStageCoverage,
+  useProjectPoCostLines,
   useOrganizations,
   useProjectFFEItems,
   useProjectRoster,
@@ -66,15 +76,31 @@ import {
   EMPTY_ADHOC,
   STUDIO_TARGET,
   activeDesignStudios,
+  balanceCents,
+  balanceOwedItems,
+  buildBillingLines,
+  depositCents,
+  lineClientPriceCents,
   buildComposerLines,
   canDraftStudioInvoice,
+  centsToDollarText,
+  isValidDepositPct,
+  lineBillingByItem,
+  parseOverrideCents,
   partitionFfeBillable,
   purchaseAtCostCents,
+  riderAtCostCents,
+  riderLabel,
+  stageSlotWords,
   unbilledMilestones,
   unbilledPurchases,
+  unbilledRiders,
   type ComposerAdhocRow,
   type ComposerFfeItem,
   type ComposerMilestone,
+  type ComposerPurchase,
+  type ComposerRider,
+  type ComposerStageSlot,
   type ComposerStudio,
 } from "@/lib/document/invoice-composer";
 import { fmtDay } from "@/lib/document/format";
@@ -140,16 +166,21 @@ export function InvoiceComposer({
   // deliberately carries no author name (00596's dropped profiles join), so
   // the roster (already-read, project-scoped, RLS-clean) supplies it.
   const { data: roster } = useProjectRoster(projectId || null);
-  // C-25 — "Bill N unbilled purchases" names its purchases; the composer
-  // shows the ones still unbilled, at cost, and drafts no line for them.
-  const wantsPurchases = (context.initialPurchaseIds ?? []).length > 0;
-  const { data: purchases } = useStudioPurchases(
-    wantsPurchases && projectId ? { projectId } : null,
+  // C-25 / C-31 — the project's purchases and PO riders still owed a client
+  // line; each bills at cost on its own line (R-PB7).
+  const { data: purchases, isLoading: purchasesLoading } = useStudioPurchases(
+    projectId ? { projectId } : null,
   );
-  const askedPurchases = useMemo(() => {
-    const asked = new Set(context.initialPurchaseIds ?? []);
-    return unbilledPurchases(purchases).filter((p) => asked.has(p.id));
-  }, [context.initialPurchaseIds, purchases]);
+  const { data: riders, isLoading: ridersLoading } =
+    useProjectPoCostLines(projectId || null);
+  const offerablePurchases = useMemo(
+    () => unbilledPurchases(purchases as ComposerPurchase[] | undefined),
+    [purchases],
+  );
+  const offerableRiders = useMemo(
+    () => unbilledRiders(riders as ComposerRider[] | undefined),
+    [riders],
+  );
   const { data: ffeItems, isLoading: ffeLoading } =
     useProjectFFEItems(projectId);
   const { data: coverage, isLoading: coverageLoading } = useFfeInvoiceCoverage(
@@ -158,6 +189,13 @@ export function InvoiceComposer({
       enabled: !!projectId,
     },
   );
+  // C-31 — every live billing slot (full · deposit · balance) per line.
+  const { data: stageRows, isLoading: stagesLoading } =
+    useFfeInvoiceStageCoverage(projectId || null);
+  const billing = useMemo(
+    () => lineBillingByItem(stageRows as ComposerStageSlot[] | undefined),
+    [stageRows],
+  );
 
   const createDraft = useCreateDraftInvoice({ errorSurface: "inline" });
   const createStudioDraft = useCreateDraftStudioInvoice({
@@ -165,6 +203,7 @@ export function InvoiceComposer({
   });
   const deleteDraft = useDeleteDraftInvoice({ errorSurface: "inline" });
   const claimTime = useClaimTimeEntries({ errorSurface: "inline" });
+  const addBilling = useAddInvoiceBillingLines({ errorSurface: "inline" });
 
   // ── Selections ────────────────────────────────────────────────────────────
   const [tickedMilestoneIds, setTickedMilestoneIds] = useState<Set<string>>(
@@ -175,6 +214,22 @@ export function InvoiceComposer({
   );
   const [tickedFfeIds, setTickedFfeIds] = useState<Set<string>>(
     () => new Set(),
+  );
+  // C-31 — the ticked FF&E group bills in full, or as a deposit of X%.
+  const [ffeStage, setFfeStage] = useState<"full" | "deposit">("full");
+  const [depositPctText, setDepositPctText] = useState("50");
+  const [tickedBalanceIds, setTickedBalanceIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [tickedPurchaseIds, setTickedPurchaseIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [tickedRiderIds, setTickedRiderIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  // R-PB7 overrides, by purchase / rider id; absent = bill at cost.
+  const [overrides, setOverrides] = useState<Map<string, string>>(
+    () => new Map(),
   );
   const [adhoc, setAdhoc] = useState<ComposerAdhocRow[]>([{ ...EMPTY_ADHOC }]);
   // Studio mode's own three fields (S4 · S12 · S8).
@@ -220,7 +275,8 @@ export function InvoiceComposer({
   );
 
   // ── FF&E: every billable line of the project, coverage-partitioned ────────
-  const ffeSettled = !!projectId && !ffeLoading && !coverageLoading;
+  const ffeSettled =
+    !!projectId && !ffeLoading && !coverageLoading && !stagesLoading;
   const ffePartition = useMemo(
     () =>
       partitionFfeBillable(
@@ -229,6 +285,18 @@ export function InvoiceComposer({
       ),
     [ffeItems, coverage, ffeSettled],
   );
+  // C-31 — a line with a live deposit and no balance yet: offered its balance.
+  const balanceOwed = useMemo(
+    () => (ffeSettled ? balanceOwedItems(ffePartition.covered, billing) : []),
+    [ffeSettled, ffePartition, billing],
+  );
+  // Every other covered line, with what it has had billed and at which stage.
+  const alreadyBilled = useMemo(() => {
+    const owed = new Set(balanceOwed.map((i) => i.id));
+    return ffePartition.covered.filter((i) => !owed.has(i.id));
+  }, [ffePartition, balanceOwed]);
+  const depositPct = Number(depositPctText.trim() || NaN);
+  const depositPctValid = isValidDepositPct(depositPct);
 
   // HT-21 — the roster's `profile_id` is the entry's `user_id`; a member the
   // roster doesn't carry (e.g. the project's own designer, who logs time but
@@ -275,15 +343,38 @@ export function InvoiceComposer({
     if (!projectId || seededFor === projectId) return;
     const wantsFfe = (context.initialFfeItemIds ?? []).length > 0;
     const wantsTime = (context.initialTimeEntryIds ?? []).length > 0;
+    const wantsPurchases = (context.initialPurchaseIds ?? []).length > 0;
+    const wantsRiders = (context.initialCostLineIds ?? []).length > 0;
     if (wantsFfe && !ffeSettled) return;
     if (wantsTime && (timeLoading || !unbilledTime)) return;
+    if (wantsPurchases && (purchasesLoading || !purchases)) return;
+    if (wantsRiders && (ridersLoading || !riders)) return;
 
     if (wantsFfe) {
       const billableIds = new Set(ffePartition.billable.map((i) => i.id));
+      const owedIds = new Set(balanceOwed.map((i) => i.id));
       setTickedFfeIds(
         new Set(
           (context.initialFfeItemIds ?? []).filter((id) => billableIds.has(id)),
         ),
+      );
+      // A line whose deposit is billed arrives with its balance ticked.
+      setTickedBalanceIds(
+        new Set(
+          (context.initialFfeItemIds ?? []).filter((id) => owedIds.has(id)),
+        ),
+      );
+    }
+    if (wantsPurchases) {
+      const ids = new Set(offerablePurchases.map((p) => p.id));
+      setTickedPurchaseIds(
+        new Set((context.initialPurchaseIds ?? []).filter((id) => ids.has(id))),
+      );
+    }
+    if (wantsRiders) {
+      const ids = new Set(offerableRiders.map((r) => r.id));
+      setTickedRiderIds(
+        new Set((context.initialCostLineIds ?? []).filter((id) => ids.has(id))),
       );
     }
     if (wantsTime) {
@@ -300,11 +391,20 @@ export function InvoiceComposer({
     seededFor,
     context.initialFfeItemIds,
     context.initialTimeEntryIds,
+    context.initialPurchaseIds,
+    context.initialCostLineIds,
     ffeSettled,
     ffePartition,
+    balanceOwed,
     timeLoading,
     unbilledTime,
     unbilledEntries,
+    purchasesLoading,
+    purchases,
+    offerablePurchases,
+    ridersLoading,
+    riders,
+    offerableRiders,
   ]);
 
   // Switching targets drops every selection — a line must bill an item that
@@ -321,6 +421,10 @@ export function InvoiceComposer({
     setTickedMilestoneIds(new Set());
     setTickedTimeIds(new Set());
     setTickedFfeIds(new Set());
+    setTickedBalanceIds(new Set());
+    setTickedPurchaseIds(new Set());
+    setTickedRiderIds(new Set());
+    setOverrides(new Map());
     setSeededFor(null);
     setError(null);
   };
@@ -353,9 +457,10 @@ export function InvoiceComposer({
             milestones: offerableMilestones.filter((m) =>
               tickedMilestoneIds.has(m.id),
             ),
-            ffeItems: ffePartition.billable.filter((i) =>
-              tickedFfeIds.has(i.id),
-            ),
+            ffeItems:
+              ffeStage === "full"
+                ? ffePartition.billable.filter((i) => tickedFfeIds.has(i.id))
+                : [],
             timeEntries: unbilledEntries.filter((e) => tickedTimeIds.has(e.id)),
             adhoc,
           },
@@ -365,35 +470,96 @@ export function InvoiceComposer({
       tickedMilestoneIds,
       ffePartition,
       tickedFfeIds,
+      ffeStage,
       unbilledEntries,
       tickedTimeIds,
       adhoc,
     ],
   );
   const lines = useMemo(() => buildComposerLines(selection), [selection]);
+  // C-31 — the lines add_invoice_billing_lines adds once the draft exists.
+  const billingLines = useMemo(
+    () =>
+      studioMode
+        ? []
+        : buildBillingLines({
+            depositItems:
+              ffeStage === "deposit"
+                ? ffePartition.billable.filter((i) => tickedFfeIds.has(i.id))
+                : [],
+            depositPct,
+            balanceItems: balanceOwed.filter((i) => tickedBalanceIds.has(i.id)),
+            billing,
+            purchases: offerablePurchases
+              .filter((p) => tickedPurchaseIds.has(p.id))
+              .map((p) => ({ subject: p, overrideText: overrides.get(p.id) })),
+            riders: offerableRiders
+              .filter((r) => tickedRiderIds.has(r.id))
+              .map((r) => ({ subject: r, overrideText: overrides.get(r.id) })),
+          }),
+    [
+      studioMode,
+      ffeStage,
+      ffePartition,
+      tickedFfeIds,
+      depositPct,
+      balanceOwed,
+      tickedBalanceIds,
+      billing,
+      offerablePurchases,
+      tickedPurchaseIds,
+      offerableRiders,
+      tickedRiderIds,
+      overrides,
+    ],
+  );
+  const billingFiguresMissing = billingLines.some((l) => l.amountCents === null);
+  const depositBlocked =
+    ffeStage === "deposit" && tickedFfeIds.size > 0 && !depositPctValid;
+  // R8/R9 — warned, never blocked: a purchase bought for a line that this
+  // invoice also bills at its client price bills that piece twice.
+  const doubleBilledPurchases = useMemo(() => {
+    const billedLines = new Set([...tickedFfeIds, ...tickedBalanceIds]);
+    return offerablePurchases.filter(
+      (p) =>
+        tickedPurchaseIds.has(p.id) &&
+        !!p.ffe_item_id &&
+        billedLines.has(p.ffe_item_id),
+    ).length;
+  }, [offerablePurchases, tickedPurchaseIds, tickedFfeIds, tickedBalanceIds]);
   const totals = useMemo(
     () =>
       computeInvoiceTotals(
-        lines.map((l) => ({
-          quantity: l.quantity,
-          unit_amount_cents: l.unitAmountCents,
-        })),
+        [
+          ...lines.map((l) => ({
+            quantity: l.quantity,
+            unit_amount_cents: l.unitAmountCents,
+          })),
+          ...billingLines.map((l) => ({
+            quantity: 1,
+            unit_amount_cents: l.amountCents ?? 0,
+          })),
+        ],
         taxRate,
       ),
-    [lines, taxRate],
+    [lines, billingLines, taxRate],
   );
+  const lineCount = lines.length + billingLines.length;
 
   const creating =
     createDraft.isPending ||
     createStudioDraft.isPending ||
     claimTime.isPending ||
+    addBilling.isPending ||
     deleteDraft.isPending;
   // Block drafting while a prefilled section is still resolving — otherwise a
   // draft could land moments before its prefill arrives, silently dropping it.
   const prefillPending =
     seededFor !== projectId &&
     ((context.initialFfeItemIds ?? []).length > 0 ||
-      (context.initialTimeEntryIds ?? []).length > 0);
+      (context.initialTimeEntryIds ?? []).length > 0 ||
+      (context.initialPurchaseIds ?? []).length > 0 ||
+      (context.initialCostLineIds ?? []).length > 0);
   const canDraft = studioMode
     ? canDraftStudioInvoice({
         clientId: studioClientId,
@@ -401,7 +567,12 @@ export function InvoiceComposer({
         studioId,
         lines,
       }) && !creating
-    : !!projectId && lines.length > 0 && !creating && !prefillPending;
+    : !!projectId &&
+      lineCount > 0 &&
+      !billingFiguresMissing &&
+      !depositBlocked &&
+      !creating &&
+      !prefillPending;
 
   const draft = async () => {
     setError(null);
@@ -473,6 +644,39 @@ export function InvoiceComposer({
         setError(
           stranded
             ? `${reason} The draft ${invoice.id} still holds those hours — void it to release them.`
+            : reason,
+        );
+        return;
+      }
+    }
+
+    // C-31 — deposits, balances, purchases and riders, through the writer
+    // that stamps each subject in the same transaction. One refusal adds
+    // nothing; the draft is then deleted (which also releases any claimed
+    // hours), so a half-composed invoice never lingers.
+    if (billingLines.length > 0) {
+      try {
+        await addBilling.mutateAsync({
+          invoiceId: invoice.id,
+          projectId,
+          lines: billingLines.map((l) => l.request),
+        });
+      } catch (e) {
+        let stranded = false;
+        try {
+          await deleteDraft.mutateAsync({ invoiceId: invoice.id, projectId });
+        } catch {
+          stranded = true;
+        }
+        // The writer's refusal arrives as a PostgrestError, not an Error.
+        const message = (e as { message?: unknown } | null)?.message;
+        const reason =
+          typeof message === "string" && message
+            ? message
+            : "Could not add the billing lines";
+        setError(
+          stranded
+            ? `${reason} The draft ${invoice.id} was kept — delete or void it.`
             : reason,
         );
         return;
@@ -767,6 +971,54 @@ export function InvoiceComposer({
               {/* ── FF&E (00187 coverage bridge, R76) ──────────────────────── */}
               <div className="mt-4">
                 <p className={`${LABEL} mb-0.5`}>ff&amp;e · uninvoiced</p>
+                {ffeSettled && ffePartition.billable.length > 0 && (
+                  <div
+                    role="radiogroup"
+                    aria-label="Bill the ticked lines"
+                    className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--color-charcoal)]"
+                  >
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="radio"
+                        name="ffe-stage"
+                        className={CHECK}
+                        checked={ffeStage === "full"}
+                        onChange={() => setFfeStage("full")}
+                      />
+                      in full
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="radio"
+                        name="ffe-stage"
+                        className={CHECK}
+                        checked={ffeStage === "deposit"}
+                        onChange={() => setFfeStage("deposit")}
+                      />
+                      as a deposit of
+                    </label>
+                    <span className="flex items-center gap-1">
+                      <input
+                        aria-label="Deposit percent"
+                        inputMode="decimal"
+                        value={depositPctText}
+                        disabled={ffeStage !== "deposit"}
+                        onChange={(e) => setDepositPctText(e.target.value)}
+                        className={`${INPUT} w-[56px] text-right disabled:opacity-50`}
+                      />
+                      %
+                    </span>
+                    {ffeStage === "deposit" && !depositPctValid && (
+                      <span
+                        role="alert"
+                        className="font-mono uppercase tracking-[0.05em]"
+                        style={{ color: TERRACOTTA_INK }}
+                      >
+                        a percent above 0, at most 100
+                      </span>
+                    )}
+                  </div>
+                )}
                 {!ffeSettled ? (
                   <p className="py-1 text-[11px] italic text-[var(--text-muted)]">
                     Reading the schedule…
@@ -799,6 +1051,18 @@ export function InvoiceComposer({
                         ×{it.quantity ?? 1}
                       </span>
                       <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
+                        {ffeStage === "deposit" && depositPctValid && (
+                          <span className="mr-1.5 text-[var(--text-muted)]">
+                            deposit{" "}
+                            {formatCurrency(
+                              depositCents(
+                                (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
+                                depositPct,
+                              ),
+                            )}{" "}
+                            of
+                          </span>
+                        )}
                         {formatCurrency(
                           (it.quantity ?? 1) * (it.unit_price_cents ?? 0),
                         )}
@@ -809,6 +1073,66 @@ export function InvoiceComposer({
                   <p className="py-1 text-[11px] italic text-[var(--text-muted)]">
                     Nothing uninvoiced — every priced line is billed.
                   </p>
+                )}
+                {/* C-31 — balances owed: a live deposit, no balance yet. */}
+                {balanceOwed.length > 0 && (
+                  <div className="mt-2" data-testid="composer-balances">
+                    <p className={`${LABEL} mb-0.5`}>balances owed</p>
+                    {balanceOwed.map((it) => {
+                      const b = billing.get(it.id);
+                      const price = lineClientPriceCents(it) ?? 0;
+                      return (
+                        <label key={it.id} className={ROW}>
+                          <input
+                            type="checkbox"
+                            className={CHECK}
+                            checked={tickedBalanceIds.has(it.id)}
+                            onChange={(e) =>
+                              setTickedBalanceIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(it.id);
+                                else next.delete(it.id);
+                                return next;
+                              })
+                            }
+                          />
+                          <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                            {it.name}
+                            <span className="ml-1.5 text-[var(--text-muted)]">
+                              {(b?.slots ?? []).map(stageSlotWords).join(" · ")}
+                            </span>
+                          </span>
+                          <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
+                            {formatCurrency(
+                              balanceCents(price, b?.depositedCents ?? 0),
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* What every other line has had billed, and at which stage. */}
+                {alreadyBilled.length > 0 && (
+                  <details className="mt-1.5" data-testid="composer-billed">
+                    <summary className="cursor-pointer font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {alreadyBilled.length} line
+                      {alreadyBilled.length === 1 ? "" : "s"} already billed
+                    </summary>
+                    {alreadyBilled.map((it) => (
+                      <p
+                        key={it.id}
+                        className="flex gap-2 py-0.5 text-[11px] text-[var(--text-muted)]"
+                      >
+                        <span className="min-w-0 flex-1 truncate">{it.name}</span>
+                        <span className="font-mono">
+                          {(billing.get(it.id)?.slots ?? [])
+                            .map(stageSlotWords)
+                            .join(" · ") || "invoiced"}
+                        </span>
+                      </p>
+                    ))}
+                  </details>
                 )}
                 {(skippedFfe.covered > 0 ||
                   skippedFfe.unpriced > 0 ||
@@ -828,27 +1152,58 @@ export function InvoiceComposer({
                 )}
               </div>
 
-              {/* ── Purchases (C-25, 00703) — read, never drafted here ─────── */}
-              {askedPurchases.length > 0 && (
+              {/* ── Purchases (C-25, 00703) — each its own line at cost ────── */}
+              {offerablePurchases.length > 0 && (
                 <div className="mt-4" data-testid="composer-purchases">
                   <p className={`${LABEL} mb-0.5`}>purchases · unbilled · at cost</p>
-                  {askedPurchases.map((p) => (
-                    <div key={p.id} className={`${ROW} cursor-default`}>
-                      <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
-                        {p.description ?? p.payee_name}
-                        <span className="ml-1.5 text-[var(--text-muted)]">
-                          {p.description ? `${p.payee_name} · ` : ""}
-                          {fmtDay(p.purchased_on)}
-                        </span>
-                      </span>
-                      <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
-                        {formatCurrency(purchaseAtCostCents(p))}
-                      </span>
-                    </div>
+                  {offerablePurchases.map((p) => (
+                    <AtCostRow
+                      key={p.id}
+                      id={p.id}
+                      ticked={tickedPurchaseIds.has(p.id)}
+                      onTick={(on) => setTickedPurchaseIds((prev) => toggled(prev, p.id, on))}
+                      costCents={purchaseAtCostCents(p)}
+                      override={overrides.get(p.id)}
+                      onOverride={(text) => setOverrides((prev) => new Map(prev).set(p.id, text))}
+                      label={p.description?.trim() || p.payee_name}
+                      detail={`${p.description?.trim() ? `${p.payee_name} · ` : ""}${fmtDay(p.purchased_on)}`}
+                    />
                   ))}
-                  <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                    This draft does not carry purchases · each stays unbilled
-                  </p>
+                  {doubleBilledPurchases > 0 && (
+                    <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak,#8B7355)]">
+                      {doubleBilledPurchases === 1
+                        ? "a ticked purchase was bought for a line this invoice also bills"
+                        : `${doubleBilledPurchases} ticked purchases were bought for lines this invoice also bills`}{" "}
+                      · billing both bills the piece twice
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* ── Riders (C-26, 00704) — each its own line at cost ────────── */}
+              {offerableRiders.length > 0 && (
+                <div className="mt-4" data-testid="composer-riders">
+                  <p className={`${LABEL} mb-0.5`}>riders · unbilled · at cost</p>
+                  {offerableRiders.map((r) => (
+                    <AtCostRow
+                      key={r.id}
+                      id={r.id}
+                      ticked={tickedRiderIds.has(r.id)}
+                      onTick={(on) => setTickedRiderIds((prev) => toggled(prev, r.id, on))}
+                      costCents={riderAtCostCents(r)}
+                      override={overrides.get(r.id)}
+                      onOverride={(text) => setOverrides((prev) => new Map(prev).set(r.id, text))}
+                      label={riderLabel(r)}
+                      detail={
+                        [
+                          r.purchase_order?.po_number ? `PO ${r.purchase_order.po_number}` : null,
+                          r.actual_cents === null && r.estimate_cents !== null ? "estimate" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      }
+                    />
+                  ))}
                 </div>
               )}
             </>
@@ -981,7 +1336,7 @@ export function InvoiceComposer({
                 </span>
               </span>
               <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                {lines.length} line{lines.length === 1 ? "" : "s"}
+                {lineCount} line{lineCount === 1 ? "" : "s"}
               </span>
             </div>
             <DocumentAction
@@ -1028,6 +1383,72 @@ export function InvoiceComposer({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function toggled(prev: Set<string>, id: string, on: boolean): Set<string> {
+  const next = new Set(prev);
+  if (on) next.add(id);
+  else next.delete(id);
+  return next;
+}
+
+/**
+ * One purchase or rider: tick to bill it on its own line. The billed figure
+ * starts at cost and can be overwritten (R-PB7); cost stays beside it, so
+ * the studio sees both. No figure (a rider with neither estimate nor actual)
+ * holds the Draft act until one is typed.
+ */
+function AtCostRow({
+  id,
+  ticked,
+  onTick,
+  costCents,
+  override,
+  onOverride,
+  label,
+  detail,
+}: {
+  id: string;
+  ticked: boolean;
+  onTick: (on: boolean) => void;
+  costCents: number | null;
+  override: string | undefined;
+  onOverride: (text: string) => void;
+  label: string;
+  detail: string;
+}) {
+  const text = override ?? centsToDollarText(costCents);
+  const invalid = ticked && parseOverrideCents(text) === null;
+  return (
+    <div className={`${ROW} cursor-default`} data-at-cost-row={id}>
+      <input
+        type="checkbox"
+        className={CHECK}
+        checked={ticked}
+        aria-label={`Bill ${label}`}
+        onChange={(e) => onTick(e.target.checked)}
+      />
+      <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+        {label}
+        {detail && (
+          <span className="ml-1.5 text-[var(--text-muted)]">{detail}</span>
+        )}
+      </span>
+      <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        cost {costCents === null ? "—" : formatCurrency(costCents)}
+      </span>
+      <input
+        aria-label={`Billed amount · ${label}`}
+        aria-invalid={invalid || undefined}
+        inputMode="decimal"
+        placeholder="Billed $"
+        value={text}
+        onChange={(e) => onOverride(e.target.value)}
+        className={`${INPUT} w-[96px] text-right`}
+        style={invalid ? { borderColor: TERRACOTTA_INK } : undefined}
+      />
     </div>
   );
 }

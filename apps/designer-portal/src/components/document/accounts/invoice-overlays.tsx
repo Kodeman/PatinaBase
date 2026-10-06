@@ -32,8 +32,10 @@ export interface InvoiceComposerContext {
   /** R75 — Bill week / bill-it: these unbilled entries arrive ticked
    *  (intersected per project when the composer has to ask which project). */
   initialTimeEntryIds?: string[];
-  /** C-25 — "Bill N unbilled purchases": these purchase records are shown. */
+  /** C-25 — "Bill N unbilled purchases": these purchases arrive ticked. */
   initialPurchaseIds?: string[];
+  /** C-31 — "Bill N unbilled riders": these PO riders arrive ticked. */
+  initialCostLineIds?: string[];
 }
 
 /** Open the Invoice folio from anywhere in the document model. */

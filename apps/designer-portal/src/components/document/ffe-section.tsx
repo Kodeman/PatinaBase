@@ -37,6 +37,7 @@ import {
   useProjectFFEItems,
   useProjectFfeReadiness,
   useProjectOwnedBoards,
+  useProjectPoCostLines,
   useRecordFfeInstalled,
   useStudioPurchases,
   type FfeItemCoverage,
@@ -44,7 +45,12 @@ import {
 } from '@patina/supabase';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { purchaseForLine } from './purchases/purchase-record';
-import { purchasesBillArgs, unbilledPurchases } from '@/lib/document/invoice-composer';
+import {
+  purchasesBillArgs,
+  ridersBillArgs,
+  unbilledPurchases,
+  unbilledRiders,
+} from '@/lib/document/invoice-composer';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
 import {
@@ -982,6 +988,8 @@ function FFESectionBody({
   // C-25: the project's purchase records — each bought line's unfold fact and
   // the "Bill N unbilled purchases" door.
   const { data: purchases } = useStudioPurchases(projectId ? { projectId } : null);
+  // C-31: the project's PO riders, for the "Bill N unbilled riders" door.
+  const { data: riders } = useProjectPoCostLines(projectId || null);
   const authority = useProjectBillingAuthority(projectId);
   const { data: tradeScopes, isPending: tradeScopesPending } = useTradeScopes(
     projectId,
@@ -1455,6 +1463,23 @@ function FFESectionBody({
           onClick: openPurchasesBill,
         }
       : null;
+  // C-31: PO riders owed a client line, beside the purchases door.
+  const unbilledRiderRows = unbilledRiders(riders);
+  const openRidersBill = () =>
+    openInvoiceComposer(ridersBillArgs(projectId, unbilledRiderRows));
+  const ridersBillLabel = `Bill ${unbilledRiderRows.length} unbilled ${
+    unbilledRiderRows.length === 1 ? 'rider' : 'riders'
+  }`;
+  const ffeBillRidersEntry: RegionLedgerEntry | null =
+    unbilledRiderRows.length > 0
+      ? {
+          key: 'bill-project-riders',
+          label: ridersBillLabel,
+          variant: 'secondary',
+          trailing: '→',
+          onClick: openRidersBill,
+        }
+      : null;
   const ffeSpecBookEntry: RegionLedgerEntry = {
     key: 'open-spec-book',
     // F48's sibling: one spec-book door, naming its scope when it has one.
@@ -1492,18 +1517,22 @@ function FFESectionBody({
       .map((kind) => ffeEntryByKind[kind])
       .filter((entry): entry is RegionLedgerEntry => entry !== null),
   ];
-  // The purchases door never leads; it stands beside "Bill N uninvoiced", or
-  // last when there is no uninvoiced line.
+  // The purchases and riders doors never lead; they stand beside "Bill N
+  // uninvoiced", or last when there is no uninvoiced line.
   const billAt = ffeLedgerByKind.findIndex((entry) => entry.key === 'bill-project-ffe');
-  const ffeLedger: RegionLedgerEntry[] = ffeBillPurchasesEntry
-    ? billAt >= 0
-      ? [
-          ...ffeLedgerByKind.slice(0, billAt + 1),
-          ffeBillPurchasesEntry,
-          ...ffeLedgerByKind.slice(billAt + 1),
-        ]
-      : [...ffeLedgerByKind, ffeBillPurchasesEntry]
-    : ffeLedgerByKind;
+  const atCostDoors = [ffeBillPurchasesEntry, ffeBillRidersEntry].filter(
+    (entry): entry is RegionLedgerEntry => entry !== null,
+  );
+  const ffeLedger: RegionLedgerEntry[] =
+    atCostDoors.length > 0
+      ? billAt >= 0
+        ? [
+            ...ffeLedgerByKind.slice(0, billAt + 1),
+            ...atCostDoors,
+            ...ffeLedgerByKind.slice(billAt + 1),
+          ]
+        : [...ffeLedgerByKind, ...atCostDoors]
+      : ffeLedgerByKind;
   const ffeExceptions = [
     ...ffeLeader.exceptions.map((exception) => exception.text),
     ...(ffeAwaiting ? [ffeAwaiting] : []),
@@ -1619,6 +1648,17 @@ function FFESectionBody({
                     onClick={openPurchasesBill}
                   >
                     {purchasesBillLabel}
+                  </DocumentAction>
+                )}
+                {unbilledRiderRows.length > 0 && (
+                  <DocumentAction
+                    actionKey="bill-project-riders"
+                    surfaceKey="project"
+                    regionKey="ffe-head"
+                    variant="secondary"
+                    onClick={openRidersBill}
+                  >
+                    {ridersBillLabel}
                   </DocumentAction>
                 )}
                 {/* Release for authorization is a project-mode act (canRelease
