@@ -4,41 +4,66 @@
  * LogInspectionDrawer — small right-slide sheet for the Procurement → Receiving
  * "Pending Inspection" tab.
  *
- * The full photo-rich receiving flow lives in the iOS app (PRD §9 says
- * "Log on phone"). On desktop the designer only needs a quick way to record
- * an outcome + notes against a delivered PO when the box is already at the
- * studio. Photos remain mobile-first; this surface explicitly defers photo
- * upload with a placeholder.
+ * The phone-first receiving flow lives in the iOS app (PRD §9 "Log on
+ * phone"); this drawer is the desktop door for a box already at the studio.
+ * C-19: each line takes its count, a condition (good / damaged / short /
+ * wrong) and whether it was noted on the bill of lading, and photos upload
+ * through the media proxy (`/api/media/assets`).
  *
- * Submits via `useCreateReceivingInspection`, which:
- *   - inserts the inspection (DB triggers from migration 00184 then stamp
- *     `delivered_date`, advance the PO on clean outcomes, shift the NET-30
- *     balance due_date, and mark linked FF&E items received),
- *   - auto-drafts a `damage_claims` row when the outcome is not 'clean',
- *   - (W5-T2) writes per-item received_quantity for the counts entered in
- *     the "Items received" section below — the 00184 trigger only stamps
- *     full quantities on clean outcomes, so short/partial counts are owned
- *     by this client path.
+ * Submits via `useCreateReceivingInspection`, which records the receipt and
+ * the per-line check-in in record_project_ffe_inspection (00700), then
+ * auto-drafts one `damage_claims` row per line not in good condition when
+ * the outcome is not 'clean'.
  *
- * W5-T2 also auto-suggests the 'partial' outcome while the designer hasn't
- * explicitly picked one: any received count below the ordered quantity
- * preselects Partial; restoring full counts reverts to Clean.
+ * While the designer hasn't explicitly picked an outcome it is suggested
+ * from the lines: a damaged or wrong line suggests Damaged, a short count or
+ * short line suggests Partial, otherwise Clean.
  *
  * Mirrors the slide-from-right pattern used by the Sprint 1 OrderAssistant.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
   useCreateReceivingInspection,
   useProcurementItems,
+  type ReceivingInspectionItemInput,
   type ReceivingInspectionOutcome,
 } from '@patina/supabase';
 import { useToast } from '@/components/portal/toast-provider';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
-import { Button, IconButton, Input, Textarea } from '@/components/ui/controls';
+import { Button, IconButton, Input, Select, Textarea } from '@/components/ui/controls';
+
+type LineCondition = NonNullable<ReceivingInspectionItemInput['condition']>;
+
+const CONDITION_OPTIONS: Array<{ value: LineCondition; label: string }> = [
+  { value: 'good', label: 'Good' },
+  { value: 'damaged', label: 'Damaged' },
+  { value: 'short', label: 'Short' },
+  { value: 'wrong', label: 'Wrong item' },
+];
+
+interface InspectionPhoto {
+  assetId: string;
+  name: string;
+  previewUrl: string;
+}
+
+/** Upload one photo through the media proxy route; resolves its asset id. */
+export async function uploadInspectionPhoto(file: File, projectId?: string): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  if (projectId) form.append('projectId', projectId);
+  const res = await fetch('/api/media/assets', { method: 'POST', body: form });
+  const body = await res.json().catch(() => null);
+  const assetId = body?.data?.assetId;
+  if (!res.ok || typeof assetId !== 'string') {
+    throw new Error(body?.error?.message ?? `${file.name} could not be uploaded.`);
+  }
+  return assetId;
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -109,7 +134,15 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
   // untouched rows fall back to the full ordered quantity.
   const [received, setReceived] = useState<Record<string, number>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [damagedItemIds, setDamagedItemIds] = useState<string[]>([]);
+  // C-19 — per-line condition and "noted on the BOL", keyed like `received`.
+  // Sparse: untouched lines are good and not noted.
+  const [conditions, setConditions] = useState<Record<string, LineCondition>>({});
+  const [notedOnBol, setNotedOnBol] = useState<Record<string, boolean>>({});
+  const [photos, setPhotos] = useState<InspectionPhoto[]>([]);
+  const photosRef = useRef<InspectionPhoto[]>([]);
+  photosRef.current = photos;
+  const [uploading, setUploading] = useState(0);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const createInspection = useCreateReceivingInspection();
   const { toast } = useToast();
@@ -126,50 +159,107 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     setNotes('');
     setReceived({});
     setSubmitError(null);
-    setDamagedItemIds([]);
+    setConditions({});
+    setNotedOnBol({});
+    photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    setPhotos([]);
+    setPhotoError(null);
   }, [open, purchaseOrderId]);
+
+  // Previews are object URLs: released on removal, reset and unmount.
+  useEffect(
+    () => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl)),
+    [],
+  );
+  const removePhoto = (assetId: string) =>
+    setPhotos((prev) =>
+      prev.filter((p) => {
+        if (p.assetId === assetId) URL.revokeObjectURL(p.previewUrl);
+        return p.assetId !== assetId;
+      }),
+    );
 
   const receivedFor = (itemId: string, ordered: number): number =>
     received[itemId] ?? ordered;
+  const conditionFor = (itemId: string): LineCondition => conditions[itemId] ?? 'good';
 
-  const anyShort = useMemo(
-    () => items.some((it) => receivedFor(it.id, it.quantity) < it.quantity),
+  const suggestedOutcome = useMemo<ReceivingInspectionOutcome>(() => {
+    if (items.some((it) => ['damaged', 'wrong'].includes(conditionFor(it.id)))) {
+      return 'damaged';
+    }
+    if (
+      items.some(
+        (it) =>
+          conditionFor(it.id) === 'short' || receivedFor(it.id, it.quantity) < it.quantity,
+      )
+    ) {
+      return 'partial';
+    }
+    return 'clean';
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items, received],
-  );
+  }, [items, received, conditions]);
 
-  // Auto-suggest 'partial' while the designer hasn't explicitly chosen an
-  // outcome: any short count preselects Partial, restoring full counts
-  // reverts to Clean. An explicit click (outcomeTouched) always wins.
+  // Suggest the outcome from the lines while the designer hasn't explicitly
+  // chosen one. An explicit click (outcomeTouched) always wins.
   useEffect(() => {
     if (!open || outcomeTouched) return;
-    setOutcome(anyShort ? 'partial' : 'clean');
-  }, [open, outcomeTouched, anyShort]);
+    setOutcome(suggestedOutcome);
+  }, [open, outcomeTouched, suggestedOutcome]);
+
+  const addPhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setPhotoError(null);
+    for (const file of Array.from(files)) {
+      setUploading((n) => n + 1);
+      try {
+        const assetId = await uploadInspectionPhoto(file, projectId);
+        setPhotos((prev) => [
+          ...prev,
+          { assetId, name: file.name, previewUrl: URL.createObjectURL(file) },
+        ]);
+      } catch (e) {
+        setPhotoError((e as Error).message);
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+  };
+
+  const busy = createInspection.isPending || uploading > 0;
 
   const handleSubmit = async () => {
     setSubmitError(null);
+    const flaggedItemIds = items
+      .filter((it) => conditionFor(it.id) !== 'good')
+      .map((it) => it.id);
+    if (outcome === 'clean' && flaggedItemIds.length > 0) {
+      setSubmitError('A clean receipt needs every line in good condition.');
+      return;
+    }
     try {
-      const photoAssetIds: string[] = [];
+      const photoAssetIds = photos.map((p) => p.assetId);
       const result = await createInspection.mutateAsync({
         purchaseOrderId,
         projectId,
         outcome,
         notes: notes.trim() ? notes.trim() : undefined,
         photoAssetIds,
-        // W5-T2 — per-item received counts. The hook skips clean-outcome
-        // rows at full quantity (the 00184 trigger already stamped those).
+        // C-19 — every line carries its count, condition and BOL note, so
+        // the hook records the check-in through record_project_ffe_inspection.
         items:
           items.length > 0
             ? items.map((it) => ({
                 ffeItemId: it.id,
                 receivedQuantity: receivedFor(it.id, it.quantity),
                 orderedQuantity: it.quantity,
+                condition: conditionFor(it.id),
+                notedOnBol: notedOnBol[it.id] ?? false,
               }))
             : undefined,
         // R7 (The Document) — item-grain claim attribution: one drafted
-        // claim per picked piece; those lines carry the DAMAGED stamp.
+        // claim per line not in good condition; those lines carry the stamp.
         damagedFfeItemIds:
-          outcome !== 'clean' && damagedItemIds.length > 0 ? damagedItemIds : undefined,
+          outcome !== 'clean' && flaggedItemIds.length > 0 ? flaggedItemIds : undefined,
       });
 
       procurementEvents.inspectionLogged({
@@ -332,103 +422,105 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                     {items.map((it) => {
                       const value = receivedFor(it.id, it.quantity);
                       const missing = it.quantity - value;
+                      const condition = conditionFor(it.id);
                       return (
                         <div
                           key={it.id}
-                          className="flex items-center gap-3 rounded-md border px-3 py-2"
+                          className="rounded-md border px-3 py-2"
                           style={{
                             borderColor:
-                              missing > 0
-                                ? 'var(--color-golden-hour)'
-                                : 'var(--border-default)',
+                              condition === 'damaged' || condition === 'wrong'
+                                ? 'var(--color-terracotta)'
+                                : missing > 0 || condition === 'short'
+                                  ? 'var(--color-golden-hour)'
+                                  : 'var(--border-default)',
                           }}
                         >
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[0.8rem] text-[var(--text-primary)]">
-                              {it.name}
+                          <div className="flex items-center gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[0.8rem] text-[var(--text-primary)]">
+                                {it.name}
+                              </div>
+                              <div className="text-[0.65rem] text-[var(--text-muted)]">
+                                {it.quantity} ordered
+                                {missing > 0 && (
+                                  <span style={{ color: 'var(--color-golden-hour)' }}>
+                                    {' '}
+                                    · {missing} missing
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-[0.65rem] text-[var(--text-muted)]">
-                              {it.quantity} ordered
-                              {missing > 0 && (
-                                <span style={{ color: 'var(--color-golden-hour)' }}>
-                                  {' '}
-                                  · {missing} missing
-                                </span>
-                              )}
-                            </div>
+                            <Input
+                              id={`received-qty-${it.id}`}
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              max={it.quantity}
+                              value={value}
+                              disabled={createInspection.isPending}
+                              aria-label={`Received quantity for ${it.name}`}
+                              title={`Received quantity (0–${it.quantity})`}
+                              onChange={(e) => {
+                                const raw = Number.parseInt(e.target.value, 10);
+                                const next = Number.isNaN(raw)
+                                  ? 0
+                                  : Math.max(0, Math.min(it.quantity, raw));
+                                setReceived((prev) => ({ ...prev, [it.id]: next }));
+                              }}
+                              className="w-[76px] text-right"
+                            />
                           </div>
-                          <Input
-                            id={`received-qty-${it.id}`}
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            max={it.quantity}
-                            value={value}
-                            disabled={createInspection.isPending}
-                            aria-label={`Received quantity for ${it.name}`}
-                            title={`Received quantity (0–${it.quantity})`}
-                            onChange={(e) => {
-                              const raw = Number.parseInt(e.target.value, 10);
-                              const next = Number.isNaN(raw)
-                                ? 0
-                                : Math.max(0, Math.min(it.quantity, raw));
-                              setReceived((prev) => ({ ...prev, [it.id]: next }));
-                            }}
-                            className="w-[76px] text-right"
-                          />
+                          {/* C-19 — the line's condition, and the BOL note once
+                              it is anything but good. */}
+                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <Select
+                              aria-label={`Condition of ${it.name}`}
+                              value={condition}
+                              disabled={createInspection.isPending}
+                              onChange={(e) => {
+                                const next = e.target.value as LineCondition;
+                                setConditions((prev) => ({ ...prev, [it.id]: next }));
+                                if (next === 'good') {
+                                  setNotedOnBol((prev) => ({ ...prev, [it.id]: false }));
+                                }
+                              }}
+                              wrapperClassName="w-[140px]"
+                            >
+                              {CONDITION_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </Select>
+                            {condition !== 'good' && (
+                              <label className="flex min-h-11 items-center gap-2 text-[0.74rem] text-[var(--text-primary)]">
+                                <input
+                                  type="checkbox"
+                                  checked={notedOnBol[it.id] ?? false}
+                                  disabled={createInspection.isPending}
+                                  onChange={(e) =>
+                                    setNotedOnBol((prev) => ({
+                                      ...prev,
+                                      [it.id]: e.target.checked,
+                                    }))
+                                  }
+                                />
+                                Noted on the BOL
+                              </label>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                   <p className="mt-2 text-[0.68rem] text-[var(--text-muted)]">
-                    Counts below the ordered quantity suggest a partial
-                    delivery.
+                    Short counts suggest a partial delivery. With a non-clean
+                    outcome, each line not in good condition gets its own
+                    drafted claim.
                   </p>
                 </div>
               ) : null}
-
-              {/* R7 (The Document) — item-grain claim attribution: with a
-                  non-clean outcome the designer picks WHICH pieces; one
-                  drafted claim per pick, and exactly those lines carry the
-                  DAMAGED stamp in the document. */}
-              {outcome !== 'clean' && items.length > 0 && (
-                <div className="mb-5">
-                  <p
-                    className="mb-2"
-                    style={{
-                      fontFamily: 'var(--font-meta)',
-                      fontSize: '0.6rem',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    Which pieces? (claims attach per item)
-                  </p>
-                  <div className="space-y-1.5">
-                    {items.map((it) => (
-                      <label
-                        key={it.id}
-                        className="flex items-center gap-2 text-[0.74rem]"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={damagedItemIds.includes(it.id)}
-                          onChange={(e) =>
-                            setDamagedItemIds((prev) =>
-                              e.target.checked
-                                ? [...prev, it.id]
-                                : prev.filter((x) => x !== it.id),
-                            )
-                          }
-                        />
-                        {it.name}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               <div className="mb-5">
                 <label
@@ -459,18 +551,59 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 />
               </div>
 
-              {/* Photo placeholder — desktop defers to mobile */}
-              <div
-                className="rounded-md border border-dashed px-4 py-3 text-[0.75rem] text-[var(--text-muted)]"
-                style={{ borderColor: 'var(--border-default)' }}
-              >
-                <span className="font-medium text-[var(--text-primary)]">
-                  Photos: upload via mobile.
-                </span>{' '}
-                Open the iOS app and tap{' '}
-                <span className="italic">Log on phone</span> from the Arriving tab to
-                attach photo evidence. Desktop logs the inspection without
-                photos.
+              {/* C-19 — desktop photos, uploaded through the media proxy as
+                  they are chosen; the inspection carries their asset ids. */}
+              <div>
+                <label
+                  className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-dashed px-4 py-2 text-[0.75rem] font-medium text-[var(--text-primary)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--accent-primary)]"
+                  style={{ borderColor: 'var(--border-default)' }}
+                >
+                  {uploading > 0 ? 'Uploading photos…' : 'Add photos'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic"
+                    multiple
+                    className="sr-only"
+                    disabled={busy}
+                    onChange={(e) => {
+                      void addPhotos(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {photos.length > 0 && (
+                  <ul aria-label="Photos to attach" className="mt-2 flex flex-wrap gap-2">
+                    {photos.map((p) => (
+                      <li key={p.assetId} className="relative">
+                        <img
+                          src={p.previewUrl}
+                          alt={p.name}
+                          className="h-14 w-14 rounded-[3px] border object-cover"
+                          style={{ borderColor: 'var(--border-default)' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(p.assetId)}
+                          disabled={createInspection.isPending}
+                          aria-label={`Remove ${p.name}`}
+                          className="absolute -right-4 -top-4 flex h-11 w-11 items-center justify-center"
+                        >
+                          <span
+                            className="flex h-6 w-6 items-center justify-center rounded-full border bg-[var(--bg-surface)] text-[var(--text-muted)]"
+                            style={{ borderColor: 'var(--border-default)' }}
+                          >
+                            <X size={12} />
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {photoError && (
+                  <p role="alert" className="mt-2 text-[0.72rem] text-[var(--color-terracotta-ink)]">
+                    {photoError}
+                  </p>
+                )}
               </div>
 
               {submitError && (
@@ -502,7 +635,7 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
                 variant="primary"
                 size="sm"
                 onClick={handleSubmit}
-                disabled={createInspection.isPending}
+                disabled={busy}
                 loading={createInspection.isPending}
               >
                 Log inspection

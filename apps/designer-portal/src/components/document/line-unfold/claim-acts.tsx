@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUpdateDamageClaim } from '@patina/supabase';
 import { DocumentAction } from '../document-action';
+import { InspectionPhotoStrip } from './inspection-photo-strip';
 
 /**
  * PRC-11 (R84): the claim lifecycle acts on the line's open item-grain
@@ -12,7 +13,15 @@ import { DocumentAction } from '../document-action';
  * quiet grammar. Creation stays with the inspection drawer's auto-draft;
  * this is the walk forward.
  */
-export function ClaimActs({ claims }: { claims: { id: string; state: string }[] }) {
+export function ClaimActs({
+  claims,
+}: {
+  claims: {
+    id: string;
+    state: string;
+    inspection?: { photo_asset_ids?: unknown } | null;
+  }[];
+}) {
   const qc = useQueryClient();
   const updateClaim = useUpdateDamageClaim({ errorSurface: 'inline' });
   const [resolvingId, setResolvingId] = useState<string | null>(null);
@@ -84,6 +93,7 @@ export function ClaimActs({ claims }: { claims: { id: string; state: string }[] 
               </DocumentAction>
             )}
           </div>
+          <InspectionPhotoStrip photoAssetIds={c.inspection?.photo_asset_ids} />
           {resolvingId === c.id && (
             <div className="mt-1 flex items-end gap-2">
               <textarea
