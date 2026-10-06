@@ -173,6 +173,18 @@ function today(): string {
 }
 
 /**
+ * The caller's own calendar day (YYYY-MM-DD), sent as `p_local_date` so the
+ * 00690 RPCs date audit lines and a flipped balance on the studio's day, not
+ * the UTC day (the 00665/D9 rule).
+ */
+function localDay(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate(),
+  ).padStart(2, '0')}`;
+}
+
+/**
  * Invalidates both FF&E cache namespaces for a project.
  *
  * Both this package and the portal now key FF&E items under
@@ -677,6 +689,7 @@ export function useUpdatePurchaseOrderETA(options?: { errorSurface?: 'inline' })
         p_po_id: purchaseOrderId,
         p_eta: newEta,
         p_note: notes?.trim() || null,
+        p_local_date: localDay(),
       });
 
       if (error) {
@@ -748,6 +761,7 @@ export function useUpdatePurchaseOrderStatus() {
         p_po_id: purchaseOrderId,
         p_to: status,
         p_note: note?.trim() || null,
+        p_local_date: localDay(),
       });
 
       if (error) {
@@ -781,7 +795,8 @@ export interface SetPurchaseOrderShipToInput {
 /**
  * Mutation: sets purchase_orders.ship_to through the
  * `set_purchase_order_ship_to` RPC (00690; owner or non-guest studio
- * co-member). Refused server-side once the PO has been sent.
+ * co-member). Once the PO has been sent the server still fills a missing
+ * ship-to (so it can be re-sent) but refuses to change one already set.
  *
  * Invalidates: ['purchase-orders'], ['purchase-order', id] and both FF&E
  * namespaces for the PO's project via invalidateFfeCaches() (the line unfold

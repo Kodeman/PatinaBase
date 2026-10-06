@@ -13,10 +13,10 @@
 // Flow:
 //   1. Auth: resolve the caller from the Authorization header (verify_jwt is
 //      on at the gateway; gateway verification alone doesn't prove ownership).
-//   2. Load the request (service role) + vendor and project joins. Reject
-//      unless the caller is the studio owner of the work (the linked
-//      project's owner, else the drafting designer) or a non-guest co-member
-//      of that studio — is_studio_comember (00556) AS THE CALLER (C-07).
+//   2. Load the request (service role) + vendor join. Reject unless the
+//      caller is the drafting designer or a non-guest co-member of the
+//      drafter's studio — is_studio_comember (00556) AS THE CALLER (C-07),
+//      the same anchor as the vendor_quote_requests RLS.
 //      Missing, not-allowed, or a failed check all collapse to 404 so foreign
 //      ids aren't confirmed.
 //   3. Recipient = vendors.orders_email → contact_info->>'email' (or an
@@ -70,7 +70,6 @@ interface QuoteRequestRow {
     orders_email: string | null;
     contact_info: Record<string, unknown> | null;
   } | null;
-  project: { designer_id: string | null } | null;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -125,8 +124,7 @@ Deno.serve(async (req: Request) => {
       `
       id, designer_id, vendor_id, scope, timeline, message, status, sent_at,
       created_at,
-      vendor:vendors!vendor_id(id, name, orders_email, contact_info),
-      project:projects!project_id(designer_id)
+      vendor:vendors!vendor_id(id, name, orders_email, contact_info)
     `,
     )
     .eq('id', quoteRequestId)

@@ -34752,7 +34752,12 @@ export type Database = {
         Returns: Json
       }
       advance_purchase_order_status: {
-        Args: { p_note?: string; p_po_id: string; p_to: string }
+        Args: {
+          p_local_date?: string
+          p_note?: string
+          p_po_id: string
+          p_to: string
+        }
         Returns: {
           acknowledged_at: string | null
           confirmed_eta: string | null
@@ -40220,7 +40225,12 @@ export type Database = {
         }
       }
       set_purchase_order_eta: {
-        Args: { p_eta: string; p_note?: string; p_po_id: string }
+        Args: {
+          p_eta: string
+          p_local_date?: string
+          p_note?: string
+          p_po_id: string
+        }
         Returns: {
           acknowledged_at: string | null
           confirmed_eta: string | null

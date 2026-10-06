@@ -512,9 +512,9 @@ Deno.test("vendorConfigurationLines falls back to the product master when the pl
     color_fabric: null,
     selected_dimensions: {},
   };
+  // materials holds two options, so no Material line; colors holds one.
   assertEquals(vendorConfigurationLines(emptySpec, PRODUCT_MASTER), [
     "SKU: LIB-SOFA-88",
-    "Material: White Oak, Linen",
     "Finish: Cerused Oak",
     "Color/Fabric: Natural",
     "Dims: 88 × 38 × 32 in",
@@ -536,11 +536,78 @@ Deno.test("vendorConfigurationLines resolves each field spec first, product seco
     ),
     [
       "SKU: LIB-SOFA-88",
-      "Material: White Oak, Linen",
       "Finish: Ebonized",
       "Color/Fabric: Natural",
       "Dims: 90 × 40 × 30 in",
     ],
+  );
+});
+
+Deno.test("vendorConfigurationLines prints a product list value only when it holds exactly one", () => {
+  // Single value: printed as the choice.
+  assertEquals(
+    vendorConfigurationLines(
+      { configuration_snapshot: {} },
+      { materials: ["Jute"], colors: [" Natural "] },
+    ),
+    ["Material: Jute", "Color/Fabric: Natural"],
+  );
+  // Several options: nothing, never "Ivory, Sand, Sage".
+  assertEquals(
+    vendorConfigurationLines(
+      { configuration_snapshot: {} },
+      { materials: ["Wool", "Cotton"], colors: ["Ivory", "Sand", "Sage"] },
+    ),
+    [],
+  );
+  // A blank entry does not count as a second option.
+  assertEquals(
+    vendorConfigurationLines({ configuration_snapshot: {} }, { colors: ["Sand", "  "] }),
+    ["Color/Fabric: Sand"],
+  );
+  // A specified value still wins over a multi-value product list.
+  assertEquals(
+    vendorConfigurationLines(
+      { configuration_snapshot: {}, color_fabric: "Sage" },
+      { colors: ["Ivory", "Sand", "Sage"] },
+    ),
+    ["Color/Fabric: Sage"],
+  );
+});
+
+Deno.test("vendorConfigurationLines honours N/A declarations before spec and product", () => {
+  const declared = (reason: string) => ({ na: true, reason, declared_at: "2026-10-01T00:00:00Z" });
+  // Contract keys (colorFabric, dimensions): a declared field never falls back.
+  assertEquals(
+    vendorConfigurationLines(
+      {
+        configuration_snapshot: {},
+        sku: "SPEC-SKU",
+        finish: "Ebonized",
+        na_declarations: {
+          sku: declared("Custom piece"),
+          finish: declared("Unfinished"),
+          colorFabric: declared("COM"),
+          dimensions: declared("Made to measure"),
+        },
+      },
+      { ...PRODUCT_MASTER, materials: ["White Oak"] },
+    ),
+    ["Material: White Oak"],
+  );
+  // Column-name keys work too; a declaration without a reason is not N/A.
+  assertEquals(
+    vendorConfigurationLines(
+      {
+        configuration_snapshot: {},
+        na_declarations: {
+          color_fabric: declared("COM"),
+          material: { na: true, reason: "  " },
+        },
+      },
+      { materials: ["White Oak"], colors: ["Natural"] },
+    ),
+    ["Material: White Oak"],
   );
 });
 
