@@ -33,6 +33,7 @@ import {
   type DeskClaimWindowSignal,
   type DeskPaymentSignal,
   type DeskQuoteSignal,
+  type DeskExceptionSignal,
   type DeskReturnSignal,
   type DeskDraftSignal,
   type DeskFolder,
@@ -281,6 +282,39 @@ export function buildDeskQuotes(rows: any): Map<string, DeskQuoteSignal[]> | und
   return map;
 }
 
+/** C-30: open exceptions in the member's read. */
+const DESK_EXCEPTION_LIMIT = 200;
+
+/**
+ * C-30: procurement exceptions still `open`, one signal per row keyed by
+ * project_id, with the line or PO it names; exceptionNeedsPath decides which
+ * ask for a path.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskExceptions(rows: any): Map<string, DeskExceptionSignal[]> | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  const map = new Map<string, DeskExceptionSignal[]>();
+  for (const row of rows) {
+    if (!row?.id || !row.project_id) continue;
+    const po = one(row.purchase_order);
+    map.set(row.project_id, [
+      ...(map.get(row.project_id) ?? []),
+      {
+        id: row.id,
+        type: row.type,
+        status: row.status,
+        itemName: one(row.ffe_item)?.name ?? null,
+        poLabel: po ? (po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'A purchase order') : null,
+        clockDueOn: row.clock_due_on ?? null,
+        isPatinaCatalog: Boolean(po?.is_patina_catalog),
+      },
+    ]);
+  }
+  return map;
+}
+
 /**
  * C-20: the claim_window_closing notices (00700's procurement-clocks-daily
  * writes one the day before the vendor deadline) folded to one signal per PO,
@@ -422,6 +456,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: returnRows, error: returnRowsError },
         { data: draftRows, error: draftRowsError },
         { data: quoteRows, error: quoteRowsError },
+        { data: exceptionRows, error: exceptionRowsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -561,6 +596,17 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           .lte('valid_until', new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10))
           .order('valid_until')
           .limit(DESK_QUOTE_LIMIT),
+        // C-30: exceptions waiting for a path. An ack discrepancy is the
+        // acknowledgment check's (SQ-426), not this need's.
+        supabase
+          .from('procurement_exceptions')
+          .select(
+            'id, project_id, type, status, clock_due_on, purchase_order:purchase_orders!procurement_exceptions_purchase_order_id_fkey(po_number, vendor_po_number, sidemark, is_patina_catalog), ffe_item:project_ffe_items!procurement_exceptions_ffe_item_id_fkey(name)',
+          )
+          .eq('status', 'open')
+          .neq('type', 'ack_discrepancy')
+          .order('opened_at')
+          .limit(DESK_EXCEPTION_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -669,6 +715,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const returns = returnRowsError ? undefined : buildDeskReturns(returnRows);
       const drafts = draftRowsError ? undefined : buildDeskDrafts(draftRows);
       const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
+      const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
 
       const result = partitionDesk(
         rows,
@@ -684,6 +731,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         returns,
         drafts,
         quotes,
+        exceptions,
       );
       previousResultRef.current = result;
       return result;

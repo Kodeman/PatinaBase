@@ -53,6 +53,7 @@ jest.mock('@tanstack/react-query', () => {
 
 import { replaceEqualDeep } from '@tanstack/react-query';
 import {
+  buildDeskExceptions,
   buildDeskQuotes,
   DESK_PHASE_LIMIT,
   selectOperationalNeedForDocument,
@@ -64,7 +65,7 @@ import { partitionDesk, type DocumentStateRow } from '@/lib/document/desk-deriva
  *  itself, and `.then` resolves it as the Promise.all in the hook expects. */
 function chainResult(result: { data: unknown; error: unknown }) {
   const builder: Record<string, unknown> = {};
-  for (const m of ['select', 'order', 'gte', 'lte', 'in', 'eq', 'is', 'limit']) {
+  for (const m of ['select', 'order', 'gte', 'lte', 'in', 'eq', 'neq', 'is', 'limit']) {
     builder[m] = jest.fn(() => builder);
   }
   builder.then = (
@@ -470,5 +471,56 @@ describe('buildDeskQuotes (C-29)', () => {
 
   it('is undefined (unknown, not empty) when the read failed', () => {
     expect(buildDeskQuotes(null)).toBeUndefined();
+  });
+});
+
+describe('buildDeskExceptions (C-30)', () => {
+  it('folds open exceptions by job with the line, PO label, clock and lane', () => {
+    const map = buildDeskExceptions([
+      {
+        id: 'x-1',
+        project_id: 'project-1',
+        type: 'damage',
+        status: 'open',
+        clock_due_on: '2026-10-09',
+        purchase_order: { po_number: 'PO-101', is_patina_catalog: false },
+        ffe_item: { name: 'Walnut console' },
+      },
+      {
+        id: 'x-2',
+        project_id: 'project-1',
+        type: 'backorder',
+        status: 'open',
+        clock_due_on: null,
+        purchase_order: [{ po_number: null, vendor_po_number: null, sidemark: null, is_patina_catalog: true }],
+        ffe_item: null,
+      },
+      { id: 'x-3', project_id: null, type: 'delay', status: 'open' },
+    ]);
+    expect(map?.get('project-1')).toEqual([
+      {
+        id: 'x-1',
+        type: 'damage',
+        status: 'open',
+        itemName: 'Walnut console',
+        poLabel: 'PO-101',
+        clockDueOn: '2026-10-09',
+        isPatinaCatalog: false,
+      },
+      {
+        id: 'x-2',
+        type: 'backorder',
+        status: 'open',
+        itemName: null,
+        poLabel: 'A purchase order',
+        clockDueOn: null,
+        isPatinaCatalog: true,
+      },
+    ]);
+    expect(map?.size).toBe(1);
+  });
+
+  it('is undefined (unknown, not empty) when the read failed', () => {
+    expect(buildDeskExceptions(null)).toBeUndefined();
   });
 });

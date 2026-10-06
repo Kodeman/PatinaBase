@@ -39,6 +39,8 @@ jest.mock('@patina/supabase', () => ({
   useProcurementDrafts: () => ({ data: [] }),
   // C-27: no acknowledgment yet; the check's own suite is ack-check.test.tsx.
   usePoAcknowledgments: () => ({ data: [] }),
+  useUnresolvedProcurementExceptions: () => ({ data: [] }),
+  useOpenProcurementException: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
   // C-29: the Quote cell; its own suite is quote.test.tsx.

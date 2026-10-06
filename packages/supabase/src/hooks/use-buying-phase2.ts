@@ -1739,3 +1739,47 @@ export function useMarkSampleReturned(options?: ErrorSurfaceOptions) {
     },
   });
 }
+
+// --- C-30 exceptions (SQ-428) ---
+
+/** An unresolved exception with the PO, maker and line it is about. */
+export type ProcurementExceptionWithSubjects = ProcurementExceptionRow & {
+  purchase_order: {
+    id: string;
+    po_number: string | null;
+    vendor_po_number: string | null;
+    sidemark: string | null;
+    is_patina_catalog: boolean | null;
+    vendor_id: string | null;
+    vendor: { name: string | null } | null;
+  } | null;
+  ffe_item: { id: string; name: string | null } | null;
+};
+
+/**
+ * Unresolved exceptions with their subjects, newest first: one project's, or
+ * (projectId null) every project the member can buy for, which RLS
+ * (can_buy_for_project) decides. The Receiving book reads all of them at once.
+ */
+export function useUnresolvedProcurementExceptions(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: [...buyingPhase2Keys.exceptions(projectId ?? '*'), 'with-subjects'],
+    queryFn: async (): Promise<ProcurementExceptionWithSubjects[]> => {
+      let query = getSupabase()
+        .from('procurement_exceptions')
+        .select(
+          '*, purchase_order:purchase_orders!procurement_exceptions_purchase_order_id_fkey(id, po_number, vendor_po_number, sidemark, is_patina_catalog, vendor_id, vendor:vendors!purchase_orders_vendor_id_fkey(name)), ffe_item:project_ffe_items!procurement_exceptions_ffe_item_id_fkey(id, name)',
+        )
+        .neq('status', 'resolved');
+      if (projectId) query = query.eq('project_id', projectId);
+      const { data, error } = await query.order('opened_at', { ascending: false }).limit(500);
+      if (error) throw error;
+      return (data ?? []) as unknown as ProcurementExceptionWithSubjects[];
+    },
+  });
+}
+
+/** After any exception act: every exceptions read, project-scoped or not. */
+export function invalidateProcurementExceptions(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: [...buyingPhase2Keys.all, 'exceptions'] });
+}

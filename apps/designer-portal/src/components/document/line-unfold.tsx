@@ -51,6 +51,7 @@ import { MoneyOutCell } from './line-unfold/money-out-cell';
 import { ReceivingCell } from './line-unfold/receiving-cell';
 import { InstallAct } from './line-unfold/install-act';
 import { ClaimActs } from './line-unfold/claim-acts';
+import { LineExceptions } from './buying/exception-overlay';
 import {
   canInspect,
   canSend,
@@ -336,6 +337,10 @@ export function LineUnfold({
       {openClaims.length > 0 && (
         <ClaimActs claims={openClaims as { id: string; state: string }[]} />
       )}
+
+      {/* C-30: the line's exceptions — clock, path, substitution — and
+          "Something's wrong". Goods only; trade work runs its own journey. */}
+      {!isTradeLine && <LineExceptions item={item} projectId={projectId} auth={auth} />}
 
       {/* R25: room assignment, in the unfold's quiet grammar. */}
       {canEditSelection && (
