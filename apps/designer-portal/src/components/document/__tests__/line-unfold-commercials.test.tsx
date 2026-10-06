@@ -50,6 +50,10 @@ jest.mock('@patina/supabase', () => ({
   useOpenProcurementException: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  // C-35: samples/memos — their own suite is sample-request.test.tsx.
+  useSampleRequests: () => ({ data: [] }),
+  useRecordSampleRequest: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useMarkSampleReturned: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 // C-24: the pair, COM facts and submittals are com-piece.test.tsx's.
