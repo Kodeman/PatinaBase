@@ -13,15 +13,20 @@
  * and changing it means voiding the instrument and superseding it.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  useFindOrCreateVendor,
+  useProductPrices,
   useRecordFfeInstalled,
+  useSetFfeLineCommercials,
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
   useUpdatePurchaseOrderStatus,
   useVendor,
+  useVendors,
 } from '@patina/supabase';
+import { centsToInput, parseDollarsToCents } from '@/lib/currency-ui';
 import { OrderAssistant } from '@/components/portal/procurement/order-assistant';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
@@ -341,6 +346,319 @@ function MovementCell({
   );
 }
 
+const LABEL_CLS =
+  'font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]';
+const FIELD_CLS =
+  'bg-transparent text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] disabled:opacity-60';
+
+type MakerOption = { kind: 'vendor'; id: string; name: string } | { kind: 'add'; name: string };
+
+/**
+ * C-05: the maker search, mounted only while choosing so the vendors read
+ * runs only then. Offers "Add" when no maker of that name exists yet; the add
+ * goes through the People maker path's find-or-create (R78 / PRC-03).
+ */
+function MakerSearch({
+  disabled,
+  autoFocus,
+  onChoose,
+  onCancel,
+}: {
+  disabled: boolean;
+  autoFocus: boolean;
+  onChoose: (option: MakerOption) => void;
+  onCancel?: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [active, setActive] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
+  const listId = `line-maker-${useId()}`;
+  const term = search.trim();
+  const { data } = useVendors(term ? { search: term } : undefined, {
+    page: 1,
+    pageSize: 8,
+  });
+  const vendors = ((data as { data?: { id: string; name: string }[] } | undefined)
+    ?.data ?? []) as { id: string; name: string }[];
+  const options: MakerOption[] = term
+    ? [
+        ...vendors.map((v) => ({ kind: 'vendor' as const, id: v.id, name: v.name })),
+        ...(vendors.some((v) => v.name.trim().toLowerCase() === term.toLowerCase())
+          ? []
+          : [{ kind: 'add' as const, name: term }]),
+      ]
+    : [];
+
+  const choose = (option: MakerOption | undefined) => {
+    if (!option) return;
+    setSearch('');
+    setActive(0);
+    onChoose(option);
+  };
+
+  return (
+    <div className="relative min-w-[12rem] flex-1">
+      <input
+        role="combobox"
+        aria-label="Maker"
+        aria-expanded={options.length > 0}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        aria-activedescendant={options[active] ? `${listId}-${active}` : undefined}
+        ref={inputRef}
+        value={search}
+        placeholder="Search makers…"
+        disabled={disabled}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setActive(0);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            setSearch('');
+            onCancel?.();
+          } else if (e.key === 'ArrowDown' && options.length) {
+            e.preventDefault();
+            setActive((i) => Math.min(options.length - 1, i + 1));
+          } else if (e.key === 'ArrowUp' && options.length) {
+            e.preventDefault();
+            setActive((i) => Math.max(0, i - 1));
+          } else if (e.key === 'Enter' && options.length) {
+            e.preventDefault();
+            choose(options[active]);
+          }
+        }}
+        className={`w-full ${FIELD_CLS}`}
+      />
+      {options.length > 0 && (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label="Makers"
+          className="absolute z-10 mt-1 max-h-[220px] w-full overflow-y-auto rounded-[6px] border border-[var(--color-pearl)] bg-white py-1"
+        >
+          {options.map((option, i) => (
+            <li
+              key={option.kind === 'vendor' ? option.id : 'add'}
+              id={`${listId}-${i}`}
+              role="option"
+              aria-selected={i === active}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => choose(option)}
+              className={`cursor-pointer px-3 py-1.5 text-[11.5px] text-[var(--color-charcoal)] hover:bg-[var(--doc-sheet-2)] ${
+                i === active ? 'bg-[var(--doc-sheet-2)]' : ''
+              }`}
+            >
+              {option.kind === 'vendor' ? option.name : `Add a maker: “${option.name}”`}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * C-05 (S5): the buy's commercials — who makes it and what it costs the
+ * studio. Editable only while the line is on no purchase order; after that it
+ * changes through the PO. The client price and markup are never shown or
+ * edited here (R1, R5, R8) — `set_project_ffe_line_commercials` refuses them.
+ */
+function LineCommercials({
+  item,
+  po,
+  projectId,
+  canEdit,
+}: {
+  item: FFERow;
+  po: FFERow | null;
+  projectId: string;
+  canEdit: boolean;
+}) {
+  const qc = useQueryClient();
+  const commercials = useSetFfeLineCommercials({ errorSurface: 'inline' });
+  const findOrCreate = useFindOrCreateVendor({ errorSurface: 'inline' });
+  const editable = canEdit && !po;
+  const pending = commercials.isPending || findOrCreate.isPending;
+
+  const storedTrade: number | null = item.trade_price_cents ?? null;
+  const [trade, setTrade] = useState(() => centsToInput(storedTrade));
+  useEffect(() => {
+    setTrade(centsToInput(storedTrade));
+  }, [storedTrade]);
+  // The joined vendor name lands with the refetch; hold the pick meanwhile.
+  const [picked, setPicked] = useState<{ id: string; name: string } | null>(null);
+  const [changing, setChanging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // §2.4: a line off the catalog (or a product with no trade price) was
+  // placed with retail written as trade. Warn, never block (R-DI4 pending).
+  const { data: productPrices } = useProductPrices(
+    editable ? [item.product_id] : [],
+  );
+  const offCatalog = !item.product_id
+    ? true
+    : productPrices
+      ? productPrices.get(item.product_id)?.price_trade == null
+      : false;
+  const retail: number | null = item.unit_price_cents ?? null;
+  const tradeMatchesRetail =
+    editable &&
+    offCatalog &&
+    storedTrade != null &&
+    retail != null &&
+    retail > 0 &&
+    storedTrade === retail;
+
+  const save = (request: { vendorId?: string; tradePriceCents?: number }) =>
+    commercials
+      .mutateAsync({ itemId: item.id, projectId, ...request })
+      .then(() => {
+        void qc.invalidateQueries({ queryKey: ['document-state'] });
+      });
+
+  const chooseMaker = (option: MakerOption) => {
+    if (pending) return;
+    setError(null);
+    const resolve =
+      option.kind === 'vendor'
+        ? Promise.resolve({ id: option.id, name: option.name })
+        : findOrCreate
+            .mutateAsync({ name: option.name })
+            .then((r) => ({ id: r.vendorId, name: r.vendor.name }));
+    resolve
+      .then((vendor) => {
+        if (vendor.id === item.vendor_id) {
+          setChanging(false);
+          return;
+        }
+        return save({ vendorId: vendor.id }).then(() => {
+          setPicked(vendor);
+          setChanging(false);
+        });
+      })
+      .catch((e: Error) => setError(e.message || 'The maker could not be saved.'));
+  };
+
+  const commitTrade = () => {
+    if (pending) return;
+    const raw = trade.replace(/[$,\s]/g, '');
+    if (!raw) {
+      // The RPC records a cost; it does not clear one.
+      setTrade(centsToInput(storedTrade));
+      return;
+    }
+    const cents = parseDollarsToCents(raw);
+    if (cents === null) {
+      setError('Enter the trade cost in dollars, e.g. 1200 or 1200.50.');
+      return;
+    }
+    if (cents === storedTrade) return;
+    setError(null);
+    save({ tradePriceCents: cents }).catch((e: Error) =>
+      setError(e.message || 'The trade cost could not be saved.'),
+    );
+  };
+
+  const makerName =
+    picked && picked.id === item.vendor_id ? picked.name : item.vendor_name;
+  const poLabel = po
+    ? (po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'a purchase order')
+    : null;
+
+  if (!editable) {
+    return (
+      <div data-testid="line-commercials" className="mb-2.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <p className="text-[11px] text-[var(--color-charcoal)]">
+          <span className={LABEL_CLS}>Maker</span> {makerName || 'Not recorded'}
+        </p>
+        <p className="text-[11px] text-[var(--color-charcoal)]">
+          <span className={LABEL_CLS}>Trade cost</span>{' '}
+          {storedTrade != null ? fmtUsd(storedTrade) : 'Not recorded'}
+        </p>
+        {poLabel && (
+          <p className={LABEL_CLS}>On {poLabel}</p>
+        )}
+      </div>
+    );
+  }
+
+  const searching = changing || !item.vendor_id;
+
+  return (
+    <div data-testid="line-commercials" className="mb-2.5">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
+        <div className="flex min-w-[14rem] flex-1 items-baseline gap-2">
+          <span className={LABEL_CLS}>Maker</span>
+          {searching ? (
+            <MakerSearch
+              disabled={pending}
+              autoFocus={changing}
+              onChoose={chooseMaker}
+              onCancel={item.vendor_id ? () => setChanging(false) : undefined}
+            />
+          ) : (
+            <>
+              <span className="text-[11.5px] text-[var(--color-charcoal)]">
+                {makerName || 'Selected'}
+              </span>
+              <DocumentAction
+                actionKey="change-ffe-line-maker"
+                surfaceKey="project"
+                regionKey="ffe-commercials"
+                variant="tertiary"
+                disabled={pending}
+                onClick={() => setChanging(true)}
+              >
+                Change
+              </DocumentAction>
+            </>
+          )}
+        </div>
+        <label className="flex items-baseline gap-2">
+          <span className={LABEL_CLS}>Trade cost</span>
+          <span className="text-[11px] text-[var(--text-muted)]">$</span>
+          <input
+            aria-label="Trade cost"
+            inputMode="decimal"
+            value={trade}
+            placeholder="0"
+            disabled={pending}
+            onChange={(e) => setTrade(e.target.value)}
+            onBlur={commitTrade}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commitTrade();
+              }
+            }}
+            className={`w-24 ${FIELD_CLS}`}
+          />
+        </label>
+      </div>
+      {pending && (
+        <p aria-live="polite" className="text-[11px] text-[var(--text-muted)]">
+          Saving…
+        </p>
+      )}
+      {tradeMatchesRetail && (
+        <p className="text-[11px] text-[var(--color-charcoal)]">
+          Trade cost matches retail. Confirm the studio&rsquo;s cost with the maker.
+        </p>
+      )}
+      {error && !pending && (
+        <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /**
  * PRC-11 (R84): the claim lifecycle acts on the line's open item-grain
  * claims — DamageClaimDrawer's state machine (drafted → vendor_notified →
@@ -608,6 +926,14 @@ export function LineUnfold({
         <MovementCell item={item} po={po} projectId={projectId} />
         <Cell label="Receiving" value={receivingValue} />
       </div>
+
+      {/* C-05: the buy — maker and trade cost; never the client price. */}
+      <LineCommercials
+        item={item}
+        po={po}
+        projectId={projectId}
+        canEdit={canEditSelection}
+      />
 
       {/* R7 (M7): the fifteen-step trail — the position, where the cells above
           give the facts. Retires "Ordered" as the line's whole story. */}
