@@ -522,29 +522,35 @@ export function useVendorPaymentTerms(vendorId: string) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Mutation: updates vendors.default_payment_terms.
+ * Mutation: sets the studio's payment pattern with a vendor, on its
+ * studio_vendor_accounts row (upsert_studio_vendor_account, 00696). Payment
+ * terms are a per-studio relationship; vendors.default_payment_terms stays the
+ * catalog-wide default and is no longer written here.
  */
 export function useUpdateVendorPaymentTerms() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
+      organizationId,
       vendorId,
       terms,
     }: {
+      organizationId: string;
       vendorId: string;
       terms: PaymentPattern;
     }): Promise<void> => {
       const supabase = getSupabase() as any;
-      const { error } = await supabase
-        .from('vendors')
-        .update({ default_payment_terms: terms })
-        .eq('id', vendorId);
+      const { error } = await supabase.rpc('upsert_studio_vendor_account', {
+        p_org: organizationId,
+        p_vendor_id: vendorId,
+        p_request: { paymentPattern: terms },
+      });
       if (error) throw error;
     },
-    onSuccess: (_, { vendorId }) => {
-      queryClient.invalidateQueries({ queryKey: ['vendor-payment-terms', vendorId] });
-      queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] });
-      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+    onSuccess: (_, { organizationId }) => {
+      // studioBuyingKeys.vendorAccounts (use-studio-buying.ts), spelled out to
+      // keep the two hook modules free of an import cycle.
+      queryClient.invalidateQueries({ queryKey: ['studio-vendor-accounts', organizationId] });
     },
   });
 }

@@ -19380,6 +19380,162 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_vendor_accounts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  GRANT SELECT ( id, organization_id, vendor_id, studio_contact_id, account_status, account_number, account_opened_on, tier_label, rep_contact_id, credit_limit_cents, payment_pattern, deposit_pct, net_days, payment_method_id, transmission, orders_email_override, portal_url, lead_time_days, quote_validity_days, change_window_days, claims_window_days, inspection_window_days, restocking_pct, freight_policy, blind_ship, resale_cert_on_file_on, resale_cert_state, notes, archived_at, created_by, updated_by, created_at, updated_at ) ON public.studio_vendor_accounts TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_vendor_accounts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.studio_vendor_claim_windows(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.studio_vendor_claim_windows(uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_studio_vendor_accounts(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_studio_vendor_accounts(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_studio_vendor_account(uuid, uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_studio_vendor_account(uuid, uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_or_create_vendor(text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00696_studio_vendor_accounts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_or_create_vendor(text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00697_studio_locations.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_locations FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00697_studio_locations.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.studio_locations TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00697_studio_locations.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_locations TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00697_studio_locations.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_studio_location(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00697_studio_locations.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_studio_location(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00697_studio_locations.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.archive_studio_location(uuid, boolean) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00697_studio_locations.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.archive_studio_location(uuid, boolean) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00697_studio_locations.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_purchase_order_ship_to_location(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00697_studio_locations.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_purchase_order_ship_to_location(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00713_studio_margin_visibility.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.can_see_studio_margin(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00713_studio_margin_visibility.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.can_see_studio_margin(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00713_studio_margin_visibility.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_studio_margin_visibility(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00713_studio_margin_visibility.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_studio_margin_visibility(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00713_studio_margin_visibility.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._sync_studio_owner_role(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00713_studio_margin_visibility.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sync_studio_owner_role_from_seat() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;

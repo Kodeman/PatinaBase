@@ -11493,6 +11493,7 @@ export type Database = {
           email: string | null
           id: string
           logo_url: string | null
+          margin_visibility: string
           name: string
           phone: string | null
           rolodex_seed_skipped_at: string | null
@@ -11515,6 +11516,7 @@ export type Database = {
           email?: string | null
           id?: string
           logo_url?: string | null
+          margin_visibility?: string
           name: string
           phone?: string | null
           rolodex_seed_skipped_at?: string | null
@@ -11537,6 +11539,7 @@ export type Database = {
           email?: string | null
           id?: string
           logo_url?: string | null
+          margin_visibility?: string
           name?: string
           phone?: string | null
           rolodex_seed_skipped_at?: string | null
@@ -21871,6 +21874,7 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -21895,6 +21899,7 @@ export type Database = {
           project_id: string
           sent_at?: string | null
           ship_to?: string | null
+          ship_to_location_id?: string | null
           sidemark?: string | null
           status?: string
           total_cents?: number
@@ -21919,6 +21924,7 @@ export type Database = {
           project_id?: string
           sent_at?: string | null
           ship_to?: string | null
+          ship_to_location_id?: string | null
           sidemark?: string | null
           status?: string
           total_cents?: number
@@ -21953,6 +21959,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_ship_to_location_id_fkey"
+            columns: ["ship_to_location_id"]
+            isOneToOne: false
+            referencedRelation: "studio_locations"
             referencedColumns: ["id"]
           },
           {
@@ -27326,6 +27339,101 @@ export type Database = {
           },
         ]
       }
+      studio_locations: {
+        Row: {
+          address: Json | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          has_dock: boolean | null
+          id: string
+          instructions: string | null
+          is_default_receiver: boolean
+          kind: string
+          label: string
+          needs_liftgate: boolean | null
+          organization_id: string
+          receiving_fee_cents_piece: number | null
+          receiving_hours: string | null
+          storage_free_days: number | null
+          storage_rate_cents_month: number | null
+          studio_contact_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          address?: Json | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          has_dock?: boolean | null
+          id?: string
+          instructions?: string | null
+          is_default_receiver?: boolean
+          kind: string
+          label: string
+          needs_liftgate?: boolean | null
+          organization_id: string
+          receiving_fee_cents_piece?: number | null
+          receiving_hours?: string | null
+          storage_free_days?: number | null
+          storage_rate_cents_month?: number | null
+          studio_contact_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          address?: Json | null
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          has_dock?: boolean | null
+          id?: string
+          instructions?: string | null
+          is_default_receiver?: boolean
+          kind?: string
+          label?: string
+          needs_liftgate?: boolean | null
+          organization_id?: string
+          receiving_fee_cents_piece?: number | null
+          receiving_hours?: string | null
+          storage_free_days?: number | null
+          storage_rate_cents_month?: number | null
+          studio_contact_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_locations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_locations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_locations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_locations_studio_contact_id_fkey"
+            columns: ["studio_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_member_rates: {
         Row: {
           created_at: string
@@ -27926,6 +28034,173 @@ export type Database = {
             columns: ["studio_id"]
             isOneToOne: false
             referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      studio_vendor_accounts: {
+        Row: {
+          account_number: string | null
+          account_opened_on: string | null
+          account_status: Database["public"]["Enums"]["account_status"]
+          archived_at: string | null
+          blind_ship: boolean
+          change_window_days: number | null
+          claims_window_days: number | null
+          created_at: string
+          created_by: string | null
+          credit_limit_cents: number | null
+          deposit_pct: number | null
+          freight_policy: string | null
+          id: string
+          inspection_window_days: Json | null
+          lead_time_days: number | null
+          net_days: number | null
+          notes: string | null
+          orders_email_override: string | null
+          organization_id: string
+          payment_method_id: string | null
+          payment_pattern:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
+          portal_url: string | null
+          quote_validity_days: number | null
+          rep_contact_id: string | null
+          resale_cert_on_file_on: string | null
+          resale_cert_state: string | null
+          restocking_pct: number | null
+          studio_contact_id: string | null
+          tier_label: string | null
+          trade_discount_pct: number | null
+          transmission: string | null
+          updated_at: string
+          updated_by: string | null
+          vendor_id: string
+        }
+        Insert: {
+          account_number?: string | null
+          account_opened_on?: string | null
+          account_status?: Database["public"]["Enums"]["account_status"]
+          archived_at?: string | null
+          blind_ship?: boolean
+          change_window_days?: number | null
+          claims_window_days?: number | null
+          created_at?: string
+          created_by?: string | null
+          credit_limit_cents?: number | null
+          deposit_pct?: number | null
+          freight_policy?: string | null
+          id?: string
+          inspection_window_days?: Json | null
+          lead_time_days?: number | null
+          net_days?: number | null
+          notes?: string | null
+          orders_email_override?: string | null
+          organization_id: string
+          payment_method_id?: string | null
+          payment_pattern?:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
+          portal_url?: string | null
+          quote_validity_days?: number | null
+          rep_contact_id?: string | null
+          resale_cert_on_file_on?: string | null
+          resale_cert_state?: string | null
+          restocking_pct?: number | null
+          studio_contact_id?: string | null
+          tier_label?: string | null
+          trade_discount_pct?: number | null
+          transmission?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vendor_id: string
+        }
+        Update: {
+          account_number?: string | null
+          account_opened_on?: string | null
+          account_status?: Database["public"]["Enums"]["account_status"]
+          archived_at?: string | null
+          blind_ship?: boolean
+          change_window_days?: number | null
+          claims_window_days?: number | null
+          created_at?: string
+          created_by?: string | null
+          credit_limit_cents?: number | null
+          deposit_pct?: number | null
+          freight_policy?: string | null
+          id?: string
+          inspection_window_days?: Json | null
+          lead_time_days?: number | null
+          net_days?: number | null
+          notes?: string | null
+          orders_email_override?: string | null
+          organization_id?: string
+          payment_method_id?: string | null
+          payment_pattern?:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
+          portal_url?: string | null
+          quote_validity_days?: number | null
+          rep_contact_id?: string | null
+          resale_cert_on_file_on?: string | null
+          resale_cert_state?: string | null
+          restocking_pct?: number | null
+          studio_contact_id?: string | null
+          tier_label?: string | null
+          trade_discount_pct?: number | null
+          transmission?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_vendor_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_vendor_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_vendor_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_vendor_accounts_payment_method_id_fkey"
+            columns: ["payment_method_id"]
+            isOneToOne: false
+            referencedRelation: "studio_payment_methods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_vendor_accounts_rep_contact_id_fkey"
+            columns: ["rep_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_vendor_accounts_studio_contact_id_fkey"
+            columns: ["studio_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_vendor_accounts_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -33467,6 +33742,7 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -33513,6 +33789,7 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -33559,6 +33836,7 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -33931,6 +34209,7 @@ export type Database = {
           email: string | null
           id: string
           logo_url: string | null
+          margin_visibility: string
           name: string
           phone: string | null
           rolodex_seed_skipped_at: string | null
@@ -34154,6 +34433,7 @@ export type Database = {
           email: string | null
           id: string
           logo_url: string | null
+          margin_visibility: string
           name: string
           phone: string | null
           rolodex_seed_skipped_at: string | null
@@ -34582,6 +34862,10 @@ export type Database = {
         Args: { p_dispatch_id: string }
         Returns: undefined
       }
+      _sync_studio_owner_role: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       _trade_agreement_fingerprint: {
         Args: { p_agreement_id: string }
         Returns: string
@@ -34807,6 +35091,7 @@ export type Database = {
           email: string | null
           id: string
           logo_url: string | null
+          margin_visibility: string
           name: string
           phone: string | null
           rolodex_seed_skipped_at: string | null
@@ -34883,6 +35168,7 @@ export type Database = {
           email: string | null
           id: string
           logo_url: string | null
+          margin_visibility: string
           name: string
           phone: string | null
           rolodex_seed_skipped_at: string | null
@@ -34954,6 +35240,7 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -35310,6 +35597,36 @@ export type Database = {
         Args: { p_contact_id: string }
         Returns: string
       }
+      archive_studio_location: {
+        Args: { p_archived?: boolean; p_location_id: string }
+        Returns: {
+          address: Json | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          has_dock: boolean | null
+          id: string
+          instructions: string | null
+          is_default_receiver: boolean
+          kind: string
+          label: string
+          needs_liftgate: boolean | null
+          organization_id: string
+          receiving_fee_cents_piece: number | null
+          receiving_hours: string | null
+          storage_free_days: number | null
+          storage_rate_cents_month: number | null
+          studio_contact_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_locations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       assert_client_decision_reference_integrity: {
         Args: {
           p_blocks_milestone_id: string
@@ -35345,6 +35662,7 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -35637,6 +35955,7 @@ export type Database = {
         Args: { p_object_name: string }
         Returns: boolean
       }
+      can_see_studio_margin: { Args: { p_org: string }; Returns: boolean }
       can_send_purchase_order: { Args: { p_po_id: string }; Returns: boolean }
       can_submit_item_feedback_anchor: {
         Args: {
@@ -36480,6 +36799,7 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -36513,6 +36833,7 @@ export type Database = {
           email: string | null
           id: string
           logo_url: string | null
+          margin_visibility: string
           name: string
           phone: string | null
           rolodex_seed_skipped_at: string | null
@@ -37723,6 +38044,53 @@ export type Database = {
         Args: { p_project_id: string; p_request_id: string }
         Returns: Json
       }
+      get_studio_vendor_accounts: {
+        Args: { p_org: string; p_vendor_id?: string }
+        Returns: {
+          account_number: string | null
+          account_opened_on: string | null
+          account_status: Database["public"]["Enums"]["account_status"]
+          archived_at: string | null
+          blind_ship: boolean
+          change_window_days: number | null
+          claims_window_days: number | null
+          created_at: string
+          created_by: string | null
+          credit_limit_cents: number | null
+          deposit_pct: number | null
+          freight_policy: string | null
+          id: string
+          inspection_window_days: Json | null
+          lead_time_days: number | null
+          net_days: number | null
+          notes: string | null
+          orders_email_override: string | null
+          organization_id: string
+          payment_method_id: string | null
+          payment_pattern:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
+          portal_url: string | null
+          quote_validity_days: number | null
+          rep_contact_id: string | null
+          resale_cert_on_file_on: string | null
+          resale_cert_state: string | null
+          restocking_pct: number | null
+          studio_contact_id: string | null
+          tier_label: string | null
+          trade_discount_pct: number | null
+          transmission: string | null
+          updated_at: string
+          updated_by: string | null
+          vendor_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "studio_vendor_accounts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_taste_refit_designers: {
         Args: never
         Returns: {
@@ -38099,6 +38467,7 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -39671,6 +40040,10 @@ export type Database = {
         Args: { p_contact_id: string }
         Returns: string
       }
+      resolve_or_create_vendor: {
+        Args: { p_name: string; p_website: string }
+        Returns: string
+      }
       resolve_paperwork_link: {
         Args: { p_record_use?: boolean; p_token: string }
         Returns: Json
@@ -40454,6 +40827,7 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -40487,6 +40861,41 @@ export type Database = {
           project_id: string
           sent_at: string | null
           ship_to: string | null
+          ship_to_location_id: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_purchase_order_ship_to_location: {
+        Args: { p_location_id: string; p_po_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          ship_to_location_id: string | null
           sidemark: string | null
           status: string
           total_cents: number
@@ -40508,6 +40917,10 @@ export type Database = {
           p_room_id: string
         }
         Returns: undefined
+      }
+      set_studio_margin_visibility: {
+        Args: { p_org: string; p_visibility: string }
+        Returns: string
       }
       set_trade_scope_party: {
         Args: { p_party_id: string; p_proposal_id: string }
@@ -41138,6 +41551,13 @@ export type Database = {
           total_minutes: number
         }[]
       }
+      studio_vendor_claim_windows: {
+        Args: { p_org: string; p_vendor_id: string }
+        Returns: {
+          claims_window_days: number
+          inspection_window_days: Json
+        }[]
+      }
       submit_board_share_reaction: {
         Args: {
           p_board_item_id: string
@@ -41579,6 +41999,36 @@ export type Database = {
         }
         Returns: Json
       }
+      upsert_studio_location: {
+        Args: { p_org: string; p_request: Json }
+        Returns: {
+          address: Json | null
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          has_dock: boolean | null
+          id: string
+          instructions: string | null
+          is_default_receiver: boolean
+          kind: string
+          label: string
+          needs_liftgate: boolean | null
+          organization_id: string
+          receiving_fee_cents_piece: number | null
+          receiving_hours: string | null
+          storage_free_days: number | null
+          storage_rate_cents_month: number | null
+          studio_contact_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_locations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_studio_payment_method: {
         Args: { p_request: Json }
         Returns: {
@@ -41596,6 +42046,53 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "studio_payment_methods"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_studio_vendor_account: {
+        Args: { p_org: string; p_request: Json; p_vendor_id: string }
+        Returns: {
+          account_number: string | null
+          account_opened_on: string | null
+          account_status: Database["public"]["Enums"]["account_status"]
+          archived_at: string | null
+          blind_ship: boolean
+          change_window_days: number | null
+          claims_window_days: number | null
+          created_at: string
+          created_by: string | null
+          credit_limit_cents: number | null
+          deposit_pct: number | null
+          freight_policy: string | null
+          id: string
+          inspection_window_days: Json | null
+          lead_time_days: number | null
+          net_days: number | null
+          notes: string | null
+          orders_email_override: string | null
+          organization_id: string
+          payment_method_id: string | null
+          payment_pattern:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
+          portal_url: string | null
+          quote_validity_days: number | null
+          rep_contact_id: string | null
+          resale_cert_on_file_on: string | null
+          resale_cert_state: string | null
+          restocking_pct: number | null
+          studio_contact_id: string | null
+          tier_label: string | null
+          trade_discount_pct: number | null
+          transmission: string | null
+          updated_at: string
+          updated_by: string | null
+          vendor_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_vendor_accounts"
           isOneToOne: true
           isSetofReturn: false
         }
