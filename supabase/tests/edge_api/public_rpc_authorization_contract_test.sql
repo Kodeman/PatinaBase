@@ -1080,7 +1080,12 @@ BEGIN
         'guard_org_membership_changes',
         -- 00021 has stamped organization_members.updated_at since the
         -- user-management foundation; it is not an authorization path.
-        'update_org_members_updated_at'
+        'update_org_members_updated_at',
+        -- 00713 (R-PB6): a deferred constraint trigger that re-derives
+        -- user_roles.studio_owner from the owner seat at commit. It reads
+        -- the seat; it never writes organization_members, and owner seats
+        -- still change only through the guarded paths above.
+        'sync_studio_owner_role_from_seat'
       )
   ), 'an unexpected organization membership trigger exists';
 

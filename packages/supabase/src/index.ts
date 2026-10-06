@@ -8,6 +8,7 @@ export {
 } from "./client";
 export type { Database, Json } from "./database.types";
 export * from "./hooks";
+export * from "./hooks/use-studio-buying";
 export {
   isOAuthProviderEnabled,
   getOAuthProviderLabel,
