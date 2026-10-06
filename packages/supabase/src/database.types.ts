@@ -34919,20 +34919,36 @@ export type Database = {
         Args: { p_forbidden: string[]; p_value: Json }
         Returns: boolean
       }
-      _spec_book_resolve_field: {
-        Args: {
-          p_line: Json
-          p_line_at: string
-          p_master: Json
-          p_master_at: string
-          p_na: Json
-          p_override: Json
-          p_override_at: string
-          p_studio: Json
-          p_verified_at: string
-        }
-        Returns: Json
-      }
+      _spec_book_resolve_field:
+        | {
+            Args: {
+              p_line: Json
+              p_line_at: string
+              p_master: Json
+              p_master_at: string
+              p_na: Json
+              p_override: Json
+              p_override_at: string
+              p_studio: Json
+              p_verified_at: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_line: Json
+              p_line_at: string
+              p_master: Json
+              p_master_at: string
+              p_na: Json
+              p_override: Json
+              p_override_at: string
+              p_override_provenance: string
+              p_studio: Json
+              p_verified_at: string
+            }
+            Returns: Json
+          }
       _stage_project_ffe_document_extraction_00661_impl: {
         Args: {
           p_actor_id: string
