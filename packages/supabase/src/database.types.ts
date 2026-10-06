@@ -4967,6 +4967,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          exception_id: string | null
           ffe_item_id: string | null
           id: string
           receiving_inspection_id: string
@@ -4979,6 +4980,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          exception_id?: string | null
           ffe_item_id?: string | null
           id?: string
           receiving_inspection_id: string
@@ -4991,6 +4993,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          exception_id?: string | null
           ffe_item_id?: string | null
           id?: string
           receiving_inspection_id?: string
@@ -5001,6 +5004,13 @@ export type Database = {
           vendor_notified_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "damage_claims_exception_id_fkey"
+            columns: ["exception_id"]
+            isOneToOne: false
+            referencedRelation: "procurement_exceptions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "damage_claims_ffe_item_id_fkey"
             columns: ["ffe_item_id"]
@@ -12615,6 +12625,147 @@ export type Database = {
           },
         ]
       }
+      po_ack_lines: {
+        Row: {
+          ack_id: string
+          ack_value: string | null
+          created_at: string
+          ffe_item_id: string | null
+          field: string
+          id: string
+          note: string | null
+          po_value: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          verdict: string
+        }
+        Insert: {
+          ack_id: string
+          ack_value?: string | null
+          created_at?: string
+          ffe_item_id?: string | null
+          field: string
+          id?: string
+          note?: string | null
+          po_value?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          verdict: string
+        }
+        Update: {
+          ack_id?: string
+          ack_value?: string | null
+          created_at?: string
+          ffe_item_id?: string | null
+          field?: string
+          id?: string
+          note?: string | null
+          po_value?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_ack_lines_ack_id_fkey"
+            columns: ["ack_id"]
+            isOneToOne: false
+            referencedRelation: "po_acknowledgments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_ack_lines_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_acknowledgments: {
+        Row: {
+          ack_deposit_requested_cents: number | null
+          ack_freight_cents: number | null
+          ack_ship_date: string | null
+          created_at: string
+          document_path: string | null
+          id: string
+          organization_id: string | null
+          purchase_order_id: string
+          received_on: string
+          received_via: string
+          recorded_by: string | null
+          supersedes_ack_id: string | null
+          vendor_order_ref: string | null
+        }
+        Insert: {
+          ack_deposit_requested_cents?: number | null
+          ack_freight_cents?: number | null
+          ack_ship_date?: string | null
+          created_at?: string
+          document_path?: string | null
+          id?: string
+          organization_id?: string | null
+          purchase_order_id: string
+          received_on: string
+          received_via?: string
+          recorded_by?: string | null
+          supersedes_ack_id?: string | null
+          vendor_order_ref?: string | null
+        }
+        Update: {
+          ack_deposit_requested_cents?: number | null
+          ack_freight_cents?: number | null
+          ack_ship_date?: string | null
+          created_at?: string
+          document_path?: string | null
+          id?: string
+          organization_id?: string | null
+          purchase_order_id?: string
+          received_on?: string
+          received_via?: string
+          recorded_by?: string | null
+          supersedes_ack_id?: string | null
+          vendor_order_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_acknowledgments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_acknowledgments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_acknowledgments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_acknowledgments_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_acknowledgments_supersedes_ack_id_fkey"
+            columns: ["supersedes_ack_id"]
+            isOneToOne: false
+            referencedRelation: "po_acknowledgments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       po_cost_lines: {
         Row: {
           actual_cents: number | null
@@ -13063,6 +13214,348 @@ export type Database = {
           },
         ]
       }
+      procurement_drafts: {
+        Row: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        Insert: {
+          ack_id?: string | null
+          body: string
+          composed_by?: string
+          created_at?: string
+          discarded_at?: string | null
+          discarded_by?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
+          exception_id?: string | null
+          id?: string
+          kind: string
+          message_id?: string | null
+          organization_id?: string | null
+          project_id?: string | null
+          purchase_order_id?: string | null
+          sample_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          shipment_id?: string | null
+          status?: string
+          subject: string
+          to_contact_id?: string | null
+          to_email?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ack_id?: string | null
+          body?: string
+          composed_by?: string
+          created_at?: string
+          discarded_at?: string | null
+          discarded_by?: string | null
+          edited_at?: string | null
+          edited_by?: string | null
+          exception_id?: string | null
+          id?: string
+          kind?: string
+          message_id?: string | null
+          organization_id?: string | null
+          project_id?: string | null
+          purchase_order_id?: string | null
+          sample_id?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          shipment_id?: string | null
+          status?: string
+          subject?: string
+          to_contact_id?: string | null
+          to_email?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_drafts_ack_id_fkey"
+            columns: ["ack_id"]
+            isOneToOne: false
+            referencedRelation: "po_acknowledgments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_exception_id_fkey"
+            columns: ["exception_id"]
+            isOneToOne: false
+            referencedRelation: "procurement_exceptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "po_shipments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_to_contact_id_fkey"
+            columns: ["to_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      procurement_exceptions: {
+        Row: {
+          acknowledgment_id: string | null
+          client_decision_id: string | null
+          clock_basis: string | null
+          clock_due_on: string | null
+          created_at: string
+          damage_claim_id: string | null
+          evidence_media_ids: string[]
+          ffe_item_id: string | null
+          id: string
+          inspection_id: string | null
+          note: string | null
+          opened_at: string
+          opened_by: string | null
+          organization_id: string | null
+          po_change_id: string | null
+          project_id: string
+          purchase_order_id: string | null
+          replacement_purchase_order_id: string | null
+          resolution_path: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          shipment_id: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledgment_id?: string | null
+          client_decision_id?: string | null
+          clock_basis?: string | null
+          clock_due_on?: string | null
+          created_at?: string
+          damage_claim_id?: string | null
+          evidence_media_ids?: string[]
+          ffe_item_id?: string | null
+          id?: string
+          inspection_id?: string | null
+          note?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          organization_id?: string | null
+          po_change_id?: string | null
+          project_id: string
+          purchase_order_id?: string | null
+          replacement_purchase_order_id?: string | null
+          resolution_path?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          shipment_id?: string | null
+          status?: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledgment_id?: string | null
+          client_decision_id?: string | null
+          clock_basis?: string | null
+          clock_due_on?: string | null
+          created_at?: string
+          damage_claim_id?: string | null
+          evidence_media_ids?: string[]
+          ffe_item_id?: string | null
+          id?: string
+          inspection_id?: string | null
+          note?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          organization_id?: string | null
+          po_change_id?: string | null
+          project_id?: string
+          purchase_order_id?: string | null
+          replacement_purchase_order_id?: string | null
+          resolution_path?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          shipment_id?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "procurement_exceptions_acknowledgment_id_fkey"
+            columns: ["acknowledgment_id"]
+            isOneToOne: false
+            referencedRelation: "po_acknowledgments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_client_decision_id_fkey"
+            columns: ["client_decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_client_decision_id_fkey"
+            columns: ["client_decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_damage_claim_id_fkey"
+            columns: ["damage_claim_id"]
+            isOneToOne: false
+            referencedRelation: "damage_claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "receiving_inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_po_change_id_fkey"
+            columns: ["po_change_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_changes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_replacement_purchase_order_id_fkey"
+            columns: ["replacement_purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_exceptions_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "po_shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       procurement_notifications: {
         Row: {
           created_at: string
@@ -13074,6 +13567,7 @@ export type Database = {
           subject_inspection_id: string | null
           subject_payment_id: string | null
           subject_purchase_order_id: string | null
+          subject_quote_id: string | null
           subject_sample_id: string | null
           subject_submittal_id: string | null
           updated_at: string
@@ -13089,6 +13583,7 @@ export type Database = {
           subject_inspection_id?: string | null
           subject_payment_id?: string | null
           subject_purchase_order_id?: string | null
+          subject_quote_id?: string | null
           subject_sample_id?: string | null
           subject_submittal_id?: string | null
           updated_at?: string
@@ -13104,6 +13599,7 @@ export type Database = {
           subject_inspection_id?: string | null
           subject_payment_id?: string | null
           subject_purchase_order_id?: string | null
+          subject_quote_id?: string | null
           subject_sample_id?: string | null
           subject_submittal_id?: string | null
           updated_at?: string
@@ -13132,6 +13628,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "procurement_notifications_subject_exception_id_fkey"
+            columns: ["subject_exception_id"]
+            isOneToOne: false
+            referencedRelation: "procurement_exceptions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "procurement_notifications_subject_inspection_id_fkey"
             columns: ["subject_inspection_id"]
             isOneToOne: false
@@ -13150,6 +13653,13 @@ export type Database = {
             columns: ["subject_purchase_order_id"]
             isOneToOne: false
             referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_notifications_subject_quote_id_fkey"
+            columns: ["subject_quote_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_quotes"
             referencedColumns: ["id"]
           },
         ]
@@ -22263,6 +22773,7 @@ export type Database = {
       }
       purchase_orders: {
         Row: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -22298,6 +22809,7 @@ export type Database = {
           vendor_po_number: string | null
         }
         Insert: {
+          ack_state?: string
           acknowledged_at?: string | null
           bill_to?: Json | null
           bol_document_path?: string | null
@@ -22333,6 +22845,7 @@ export type Database = {
           vendor_po_number?: string | null
         }
         Update: {
+          ack_state?: string
           acknowledged_at?: string | null
           bill_to?: Json | null
           bol_document_path?: string | null
@@ -30833,6 +31346,7 @@ export type Database = {
           created_at: string
           currency_code: string
           id: string
+          kind: string
           method: string
           organization_id: string | null
           paid_on: string
@@ -30851,6 +31365,7 @@ export type Database = {
           created_at?: string
           currency_code?: string
           id?: string
+          kind?: string
           method: string
           organization_id?: string | null
           paid_on: string
@@ -30869,6 +31384,7 @@ export type Database = {
           created_at?: string
           currency_code?: string
           id?: string
+          kind?: string
           method?: string
           organization_id?: string | null
           paid_on?: string
@@ -30998,6 +31514,60 @@ export type Database = {
           },
         ]
       }
+      vendor_quote_lines: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          created_at: string
+          ffe_item_id: string
+          id: string
+          lead_time_weeks: number | null
+          note: string | null
+          qty: number | null
+          quote_id: string
+          unit_trade_cents: number
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          created_at?: string
+          ffe_item_id: string
+          id?: string
+          lead_time_weeks?: number | null
+          note?: string | null
+          qty?: number | null
+          quote_id: string
+          unit_trade_cents: number
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          created_at?: string
+          ffe_item_id?: string
+          id?: string
+          lead_time_weeks?: number | null
+          note?: string | null
+          qty?: number | null
+          quote_id?: string
+          unit_trade_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_quote_lines_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_quote_lines_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_quote_requests: {
         Row: {
           configuration_id: string | null
@@ -31005,6 +31575,8 @@ export type Database = {
           configuration_snapshot_hash: string | null
           created_at: string
           designer_id: string
+          due_on: string | null
+          ffe_item_ids: string[]
           id: string
           message: string | null
           project_id: string | null
@@ -31021,6 +31593,8 @@ export type Database = {
           configuration_snapshot_hash?: string | null
           created_at?: string
           designer_id: string
+          due_on?: string | null
+          ffe_item_ids?: string[]
           id?: string
           message?: string | null
           project_id?: string | null
@@ -31037,6 +31611,8 @@ export type Database = {
           configuration_snapshot_hash?: string | null
           created_at?: string
           designer_id?: string
+          due_on?: string | null
+          ffe_item_ids?: string[]
           id?: string
           message?: string | null
           project_id?: string | null
@@ -31071,6 +31647,129 @@ export type Database = {
           },
           {
             foreignKeyName: "vendor_quote_requests_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_quotes: {
+        Row: {
+          crating_cents: number | null
+          created_at: string
+          deposit_pct: number | null
+          document_path: string | null
+          freight_estimate_cents: number | null
+          id: string
+          organization_id: string | null
+          payment_pattern:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
+          project_id: string
+          quote_ref: string | null
+          received_on: string
+          recorded_by: string | null
+          request_id: string | null
+          superseded_by: string | null
+          updated_at: string
+          valid_until: string | null
+          vendor_id: string
+        }
+        Insert: {
+          crating_cents?: number | null
+          created_at?: string
+          deposit_pct?: number | null
+          document_path?: string | null
+          freight_estimate_cents?: number | null
+          id?: string
+          organization_id?: string | null
+          payment_pattern?:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
+          project_id: string
+          quote_ref?: string | null
+          received_on: string
+          recorded_by?: string | null
+          request_id?: string | null
+          superseded_by?: string | null
+          updated_at?: string
+          valid_until?: string | null
+          vendor_id: string
+        }
+        Update: {
+          crating_cents?: number | null
+          created_at?: string
+          deposit_pct?: number | null
+          document_path?: string | null
+          freight_estimate_cents?: number | null
+          id?: string
+          organization_id?: string | null
+          payment_pattern?:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
+          project_id?: string
+          quote_ref?: string | null
+          received_on?: string
+          recorded_by?: string | null
+          request_id?: string | null
+          superseded_by?: string | null
+          updated_at?: string
+          valid_until?: string | null
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_quotes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_quotes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_quotes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_quotes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "vendor_quotes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_quotes_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_quote_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_quotes_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "vendor_quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_quotes_vendor_id_fkey"
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
@@ -34229,6 +34928,12 @@ export type Database = {
         Args: { p_product_id: string }
         Returns: boolean
       }
+      _can_read_procurement_draft: {
+        Args: {
+          p_draft: Database["public"]["Tables"]["procurement_drafts"]["Row"]
+        }
+        Returns: boolean
+      }
       _can_record_proposal_engagement: {
         Args: {
           p_event_type: string
@@ -34416,6 +35121,7 @@ export type Database = {
           p_vendor_po_number?: string
         }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -34473,6 +35179,7 @@ export type Database = {
           p_vendor_po_number?: string
         }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -34530,6 +35237,7 @@ export type Database = {
           p_vendor_po_number?: string
         }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -35076,6 +35784,7 @@ export type Database = {
         Args: { p_doc_id: string; p_visible: boolean }
         Returns: undefined
       }
+      _po_ack_norm: { Args: { p_value: string }; Returns: string }
       _prepare_legacy_proposal_phase_insert: {
         Args: { p_proposal_id: string; p_requested_follows_phase_id: string }
         Returns: {
@@ -35104,6 +35813,18 @@ export type Database = {
         Returns: Json
       }
       _primary_studio_for: { Args: { p_user: string }; Returns: string }
+      _procurement_po_label: {
+        Args: { p_po: Database["public"]["Tables"]["purchase_orders"]["Row"] }
+        Returns: string
+      }
+      _procurement_signoff: {
+        Args: { p_org: string; p_project: string }
+        Returns: string
+      }
+      _procurement_vendor_email: {
+        Args: { p_org: string; p_vendor: string }
+        Returns: string
+      }
       _product_configuration_condition_matches: {
         Args: { p_components: Json; p_condition: Json; p_selections: Json }
         Returns: boolean
@@ -35960,6 +36681,7 @@ export type Database = {
           p_to: string
         }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -36218,6 +36940,27 @@ export type Database = {
         }
         Returns: Json
       }
+      apply_vendor_quote_to_lines: {
+        Args: { p_ffe_item_ids?: string[]; p_quote_id: string }
+        Returns: {
+          applied_at: string | null
+          applied_by: string | null
+          created_at: string
+          ffe_item_id: string
+          id: string
+          lead_time_weeks: number | null
+          note: string | null
+          qty: number | null
+          quote_id: string
+          unit_trade_cents: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "vendor_quote_lines"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       approve_client_signoff: {
         Args: {
           p_client_consent_method?: string
@@ -36392,6 +37135,7 @@ export type Database = {
       assign_po_number: {
         Args: { p_po_id: string }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -37043,9 +37787,149 @@ export type Database = {
         Returns: string
       }
       compliance_state: { Args: { p_holder_id: string }; Returns: string }
+      compose_ack_chase_draft: {
+        Args: { p_po_id: string }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      compose_ack_discrepancy_draft: {
+        Args: { p_ack_id: string }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       compose_agreement_consent: {
         Args: { p_proposal_id: string }
         Returns: string
+      }
+      compose_receiver_inbound_draft: {
+        Args: { p_shipment_id: string }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      compose_vendor_claim_draft: {
+        Args: { p_exception_id: string }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       compute_house_taste_draft: { Args: never; Returns: string }
       concierge_checklist_template: { Args: { p_stage: string }; Returns: Json }
@@ -37540,6 +38424,7 @@ export type Database = {
           p_vendor_po_number?: string
         }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -37722,6 +38607,41 @@ export type Database = {
       discard_agreement_parts: {
         Args: { p_proposal_id: string }
         Returns: Json
+      }
+      discard_procurement_draft: {
+        Args: { p_draft_id: string }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       dismiss_field_capture: { Args: { p_capture_id: string }; Returns: Json }
       dispatch_board_asset_gc: {
@@ -38163,6 +39083,10 @@ export type Database = {
           p_stripe_checkout_session_id: string
         }
         Returns: boolean
+      }
+      ffe_line_authorization_state: {
+        Args: { p_item_id: string }
+        Returns: string
       }
       ffe_status_rank: { Args: { p_status: string }; Returns: number }
       field_capture_jsonb_text_array: {
@@ -39312,6 +40236,7 @@ export type Database = {
           p_vendor_po_number?: string
         }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -39349,6 +40274,30 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      log_po_acknowledgment_v2: {
+        Args: { p_ack?: Json; p_lines?: Json; p_po_id: string }
+        Returns: {
+          ack_deposit_requested_cents: number | null
+          ack_freight_cents: number | null
+          ack_ship_date: string | null
+          created_at: string
+          document_path: string | null
+          id: string
+          organization_id: string | null
+          purchase_order_id: string
+          received_on: string
+          received_via: string
+          recorded_by: string | null
+          supersedes_ack_id: string | null
+          vendor_order_ref: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "po_acknowledgments"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -39487,6 +40436,41 @@ export type Database = {
           p_state: string
         }
         Returns: undefined
+      }
+      mark_procurement_draft_sent: {
+        Args: { p_draft_id: string; p_message_id?: string; p_sent_by: string }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       mark_project_read: { Args: { p_project_id: string }; Returns: string }
       mark_project_review_delivery_sent:
@@ -39654,6 +40638,42 @@ export type Database = {
       }
       notify_item_feedback: { Args: { p_feedback_id: string }; Returns: string }
       nudge_proposal: { Args: { p_proposal_id: string }; Returns: string }
+      open_procurement_exception: {
+        Args: { p_request: Json }
+        Returns: {
+          acknowledgment_id: string | null
+          client_decision_id: string | null
+          clock_basis: string | null
+          clock_due_on: string | null
+          created_at: string
+          damage_claim_id: string | null
+          evidence_media_ids: string[]
+          ffe_item_id: string | null
+          id: string
+          inspection_id: string | null
+          note: string | null
+          opened_at: string
+          opened_by: string | null
+          organization_id: string | null
+          po_change_id: string | null
+          project_id: string
+          purchase_order_id: string | null
+          replacement_purchase_order_id: string | null
+          resolution_path: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          shipment_id: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_exceptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       open_project_direct: {
         Args: {
           p_budget_max_cents?: number
@@ -39742,6 +40762,7 @@ export type Database = {
         Returns: Json
       }
       place_product_in_project_v2: { Args: { p_request: Json }; Returns: Json }
+      po_ack_state_for: { Args: { p_po_id: string }; Returns: string }
       po_status_to_ffe_stage: { Args: { p_po_status: string }; Returns: string }
       prepare_configuration_quote_request: {
         Args: {
@@ -40532,6 +41553,65 @@ export type Database = {
           created_at: string
           currency_code: string
           id: string
+          kind: string
+          method: string
+          organization_id: string | null
+          paid_on: string
+          payment_method_id: string | null
+          po_payment_id: string | null
+          purchase_order_id: string
+          receipt_document_path: string | null
+          recorded_by: string | null
+          reference: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vendor_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_vendor_quote: {
+        Args: { p_request: Json }
+        Returns: {
+          crating_cents: number | null
+          created_at: string
+          deposit_pct: number | null
+          document_path: string | null
+          freight_estimate_cents: number | null
+          id: string
+          organization_id: string | null
+          payment_pattern:
+            | Database["public"]["Enums"]["purchase_order_payment_pattern"]
+            | null
+          project_id: string
+          quote_ref: string | null
+          received_on: string
+          recorded_by: string | null
+          request_id: string | null
+          superseded_by: string | null
+          updated_at: string
+          valid_until: string | null
+          vendor_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vendor_quotes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_vendor_refund: {
+        Args: { p_po_id: string; p_request: Json }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          currency_code: string
+          id: string
+          kind: string
           method: string
           organization_id: string | null
           paid_on: string
@@ -40859,6 +41939,54 @@ export type Database = {
         Args: { p_feedback: string; p_proposal_id: string }
         Returns: undefined
       }
+      request_substitution_approval: {
+        Args: { p_alternate_ids: string[]; p_item_id: string }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          approval_contract: string | null
+          blocking_status: string
+          blocks_kind: string
+          blocks_milestone_id: string | null
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          predecessor_decision_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       requeue_agent_task: {
         Args: { p_actor: string; p_feedback?: string; p_id: string }
         Returns: {
@@ -40900,6 +42028,28 @@ export type Database = {
       resend_party_invite: {
         Args: { p_evidence: Json; p_party_id: string }
         Returns: Json
+      }
+      resolve_ack_line: {
+        Args: { p_line_id: string; p_note?: string; p_verdict: string }
+        Returns: {
+          ack_id: string
+          ack_value: string | null
+          created_at: string
+          ffe_item_id: string | null
+          field: string
+          id: string
+          note: string | null
+          po_value: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          verdict: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "po_ack_lines"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       resolve_board_item_direction: {
         Args: { p_direction_id: string }
@@ -41047,6 +42197,42 @@ export type Database = {
         Returns: Json
       }
       resolve_plan_transmittal: { Args: { p_token: string }; Returns: Json }
+      resolve_procurement_exception: {
+        Args: { p_exception_id: string; p_request: Json }
+        Returns: {
+          acknowledgment_id: string | null
+          client_decision_id: string | null
+          clock_basis: string | null
+          clock_due_on: string | null
+          created_at: string
+          damage_claim_id: string | null
+          evidence_media_ids: string[]
+          ffe_item_id: string | null
+          id: string
+          inspection_id: string | null
+          note: string | null
+          opened_at: string
+          opened_by: string | null
+          organization_id: string | null
+          po_change_id: string | null
+          project_id: string
+          purchase_order_id: string | null
+          replacement_purchase_order_id: string | null
+          resolution_path: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          shipment_id: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_exceptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       resolve_spec_book_share: { Args: { p_token: string }; Returns: Json }
       resolve_studio_identity: {
         Args: {
@@ -41810,6 +42996,7 @@ export type Database = {
           p_po_id: string
         }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -41854,6 +43041,7 @@ export type Database = {
       set_purchase_order_header: {
         Args: { p_po_id: string; p_request: Json }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -41898,6 +43086,7 @@ export type Database = {
       set_purchase_order_ship_to: {
         Args: { p_po_id: string; p_ship_to: string }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -41942,6 +43131,7 @@ export type Database = {
       set_purchase_order_ship_to_location: {
         Args: { p_location_id: string; p_po_id: string }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -41986,6 +43176,7 @@ export type Database = {
       set_purchase_order_supplies: {
         Args: { p_po_id: string; p_supplies_po_id: string }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -42030,6 +43221,7 @@ export type Database = {
       set_purchase_order_tracking: {
         Args: { p_po_id: string; p_request: Json }
         Returns: {
+          ack_state: string
           acknowledged_at: string | null
           bill_to: Json | null
           bol_document_path: string | null
@@ -43063,6 +44255,41 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      update_procurement_draft: {
+        Args: { p_draft_id: string; p_request: Json }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_project_phase: {
         Args: {
           p_expected_updated_at: string
@@ -43408,6 +44635,7 @@ export type Database = {
           created_at: string
           currency_code: string
           id: string
+          kind: string
           method: string
           organization_id: string | null
           paid_on: string

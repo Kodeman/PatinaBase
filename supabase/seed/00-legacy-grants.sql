@@ -19836,6 +19836,402 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ffe_line_authorization_state(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.ffe_line_authorization_state(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.po_ack_state_for(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.po_ack_state_for(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.po_ack_state_sync() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.po_acknowledgments FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.po_acknowledgments TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.po_acknowledgments TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.po_ack_lines FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.po_ack_lines TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.po_ack_lines TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._po_ack_norm(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._po_ack_norm(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.log_po_acknowledgment_v2(uuid, jsonb, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.log_po_acknowledgment_v2(uuid, jsonb, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_ack_line(uuid, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00705_po_acknowledgments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_ack_line(uuid, text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.procurement_drafts FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.procurement_drafts TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.procurement_drafts TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._can_read_procurement_draft(public.procurement_drafts) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._can_read_procurement_draft(public.procurement_drafts) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.update_procurement_draft(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.update_procurement_draft(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.discard_procurement_draft(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.discard_procurement_draft(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_procurement_draft_sent(uuid, uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_procurement_draft_sent(uuid, uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._procurement_vendor_email(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._procurement_vendor_email(uuid, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._procurement_signoff(uuid, uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._procurement_signoff(uuid, uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._procurement_po_label(public.purchase_orders) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._procurement_po_label(public.purchase_orders) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.compose_ack_discrepancy_draft(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.compose_ack_discrepancy_draft(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.compose_ack_chase_draft(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.compose_ack_chase_draft(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.compose_receiver_inbound_draft(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00706_procurement_drafts.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.compose_receiver_inbound_draft(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_vendor_quote_request_lines() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.vendor_quotes FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.vendor_quotes TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.vendor_quotes TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.vendor_quote_lines FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.vendor_quote_lines TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.vendor_quote_lines TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_vendor_quote(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_vendor_quote(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_vendor_quote_to_lines(uuid, uuid[]) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00707_vendor_quotes.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_vendor_quote_to_lines(uuid, uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.procurement_exceptions FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.procurement_exceptions TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.procurement_exceptions TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.open_procurement_exception(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.open_procurement_exception(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_procurement_exception(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_procurement_exception(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.compose_vendor_claim_draft(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.compose_vendor_claim_draft(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.request_substitution_approval(uuid, uuid[]) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.request_substitution_approval(uuid, uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_vendor_refund(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_vendor_refund(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sweep_procurement_clocks() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00708_procurement_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sweep_procurement_clocks() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00713_studio_margin_visibility.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.can_see_studio_margin(uuid) FROM PUBLIC, anon;

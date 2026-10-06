@@ -26,6 +26,22 @@ const getSupabase = () => createBrowserClient();
 //                        delivery starts the inspection clock.
 // Every write goes through a SECURITY DEFINER RPC except com_spec, which is a
 // spec column under the spec grant.
+//
+// SQ-419 (migrations 00705–00708):
+//   acknowledgments      log_po_acknowledgment_v2 checks the vendor's ack
+//                        against the PO; a difference opens the PO's
+//                        ack_discrepancy exception and drafts a reply.
+//   drafts               deterministic vendor letters, awaiting review; the
+//                        studio edits or discards, the send edge function
+//                        marks sent.
+//   quotes               record a vendor quote; applying it writes trade only.
+//   exceptions           damage, short ship, backorder...; a clock with a
+//                        plain-words basis; substitution goes to the client
+//                        through the decision rail.
+//   refunds              negative vendor_payments rows (refund | credit).
+// A price change on a line that sits on a sent authorization, or a quantity
+// change on a PO, is refused with an error whose message starts
+// `change_order_required` (R8); see isChangeOrderRequired.
 // ═══════════════════════════════════════════════════════════════════════════
 
 type PublicSchema = Database['public'];
@@ -88,6 +104,10 @@ export const buyingPhase2Keys = {
   purchases: (scope: string) => ['buying-phase2', 'purchases', scope] as const,
   costLines: (purchaseOrderId: string) => ['buying-phase2', 'cost-lines', purchaseOrderId] as const,
   shipments: (purchaseOrderId: string) => ['buying-phase2', 'shipments', purchaseOrderId] as const,
+  acknowledgments: (purchaseOrderId: string) => ['buying-phase2', 'acknowledgments', purchaseOrderId] as const,
+  drafts: (projectId: string) => ['buying-phase2', 'drafts', projectId] as const,
+  quotes: (projectId: string) => ['buying-phase2', 'quotes', projectId] as const,
+  exceptions: (projectId: string) => ['buying-phase2', 'exceptions', projectId] as const,
 };
 
 function invalidatePurchaseOrder(queryClient: QueryClient, po: Pick<PurchaseOrder, 'id' | 'project_id'>) {
@@ -535,6 +555,532 @@ export function useRecordPoShipment(options?: ErrorSurfaceOptions) {
       queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.shipments(row.purchase_order_id) });
       queryClient.invalidateQueries({ queryKey: ['orders-book', 'week-events'] });
       invalidatePurchaseOrder(queryClient, { id: row.purchase_order_id, project_id: projectId });
+    },
+  });
+}
+
+// ─── change_order_required (R8) ─────────────────────────────────────────────
+
+/**
+ * True when an RPC refused because the change must go through a change order:
+ * a quantity change on a PO, a price change on a line that sits on a sent,
+ * signed or executed authorization, or a price change after a vendor payment.
+ * The message after the prefix says which, in plain words.
+ */
+export function isChangeOrderRequired(error: unknown): boolean {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && message.startsWith('change_order_required');
+}
+
+const invalidateProcurementWork = (queryClient: QueryClient, projectId: string) => {
+  queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.drafts(projectId) });
+  queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.exceptions(projectId) });
+};
+
+/** A draft may carry no project (studio-level), so refresh every drafts list. */
+const invalidateDrafts = (queryClient: QueryClient) =>
+  queryClient.invalidateQueries({ queryKey: [...buyingPhase2Keys.all, 'drafts'] });
+
+// ─── Acknowledgments (00705) ────────────────────────────────────────────────
+
+export type PoAcknowledgmentRow = PublicSchema['Tables']['po_acknowledgments']['Row'];
+export type PoAckLineRow = PublicSchema['Tables']['po_ack_lines']['Row'];
+export type PoAcknowledgmentWithLines = PoAcknowledgmentRow & { po_ack_lines: PoAckLineRow[] };
+/** purchase_orders.ack_state, derived from the latest acknowledgment. */
+export type AckState = 'none' | 'clean' | 'discrepancy' | 'resolved';
+export type AckLineField = 'unit_price' | 'qty' | 'sku' | 'finish' | 'fabric' | 'dimensions' | 'other';
+export type AckVerdict = 'match' | 'mismatch' | 'accepted' | 'disputed' | 'vendor_corrected';
+
+/** A PO's acknowledgments with their lines, newest first (the head first). */
+export function usePoAcknowledgments(purchaseOrderId: string | null | undefined) {
+  return useQuery({
+    queryKey: buyingPhase2Keys.acknowledgments(purchaseOrderId ?? ''),
+    queryFn: async (): Promise<PoAcknowledgmentWithLines[]> => {
+      const { data, error } = await getSupabase()
+        .from('po_acknowledgments')
+        .select('*, po_ack_lines(*)')
+        .eq('purchase_order_id', purchaseOrderId as string)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as PoAcknowledgmentWithLines[];
+    },
+    enabled: !!purchaseOrderId,
+  });
+}
+
+/**
+ * The vendor's acknowledgment. PO values and verdicts are computed server-side;
+ * ship date and freight are header keys. Any difference opens the PO's
+ * ack_discrepancy exception and drafts a reply awaiting review.
+ */
+export interface PoAcknowledgmentRequest {
+  /** YYYY-MM-DD; defaults to today. */
+  receivedOn?: string | null;
+  receivedVia?: 'email' | 'portal' | 'phone' | 'pdf' | null;
+  vendorOrderRef?: string | null;
+  documentPath?: string | null;
+  shipDate?: string | null;
+  freightCents?: number | null;
+  depositRequestedCents?: number | null;
+  /** v1 parity: moves the PO's confirmed ETA. */
+  confirmedEta?: string | null;
+}
+
+export interface PoAcknowledgmentLineInput {
+  /** Required except for field 'other'. */
+  ffeItemId?: string | null;
+  field: AckLineField;
+  /** Cents for unit_price, a count for qty, text otherwise. */
+  ackValue: string | number;
+  note?: string | null;
+}
+
+export function useLogPoAcknowledgment(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      purchaseOrderId,
+      ack,
+      lines,
+    }: {
+      purchaseOrderId: string;
+      /** For cache invalidation. */
+      projectId: string;
+      ack?: PoAcknowledgmentRequest;
+      lines?: PoAcknowledgmentLineInput[];
+    }): Promise<PoAcknowledgmentRow> => {
+      const { data, error } = await getSupabase().rpc('log_po_acknowledgment_v2', {
+        p_po_id: purchaseOrderId,
+        p_ack: (ack ?? {}) as Json,
+        p_lines: (lines ?? []) as unknown as Json,
+      });
+      if (error) throw error;
+      return data as PoAcknowledgmentRow;
+    },
+    onSuccess: (row, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.acknowledgments(row.purchase_order_id) });
+      invalidateProcurementWork(queryClient, projectId);
+      invalidatePurchaseOrder(queryClient, { id: row.purchase_order_id, project_id: projectId });
+    },
+  });
+}
+
+/**
+ * Resolve one difference. 'accepted' writes the vendor's value through the
+ * usual paths (unit price → trade and the PO total; sku / finish / fabric →
+ * the spec; freight → the freight cost line); qty and an authorized price
+ * are refused with change_order_required.
+ */
+export function useResolveAckLine(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      lineId,
+      verdict,
+      note,
+    }: {
+      lineId: string;
+      verdict: 'accepted' | 'disputed' | 'vendor_corrected';
+      note?: string;
+      /** For cache invalidation. */
+      purchaseOrderId: string;
+      projectId: string;
+    }): Promise<PoAckLineRow> => {
+      const { data, error } = await getSupabase().rpc('resolve_ack_line', {
+        p_line_id: lineId,
+        p_verdict: verdict,
+        p_note: note,
+      });
+      if (error) throw error;
+      return data as PoAckLineRow;
+    },
+    onSuccess: (_, { purchaseOrderId, projectId }) => {
+      queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.acknowledgments(purchaseOrderId) });
+      queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.costLines(purchaseOrderId) });
+      invalidateProcurementWork(queryClient, projectId);
+      invalidatePurchaseOrder(queryClient, { id: purchaseOrderId, project_id: projectId });
+    },
+  });
+}
+
+// ─── Procurement drafts (00706) ─────────────────────────────────────────────
+
+export type ProcurementDraftRow = PublicSchema['Tables']['procurement_drafts']['Row'];
+export type ProcurementDraftKind =
+  | 'ack_discrepancy_reply'
+  | 'ack_chase'
+  | 'receiver_inbound_notice'
+  | 'vendor_claim_notice'
+  | 'client_delay_note'
+  | 'client_substitution_note'
+  | 'memo_return_note';
+export type ProcurementDraftStatus = 'awaiting_review' | 'sent' | 'discarded';
+
+/** A project's procurement drafts, newest first; pass status to narrow. */
+export function useProcurementDrafts(
+  projectId: string | null | undefined,
+  status?: ProcurementDraftStatus,
+) {
+  return useQuery({
+    queryKey: [...buyingPhase2Keys.drafts(projectId ?? ''), status ?? 'all'],
+    queryFn: async (): Promise<ProcurementDraftRow[]> => {
+      let query = getSupabase()
+        .from('procurement_drafts')
+        .select('*')
+        .eq('project_id', projectId as string);
+      if (status) query = query.eq('status', status);
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as ProcurementDraftRow[];
+    },
+    enabled: !!projectId,
+  });
+}
+
+/** Edit a draft's subject or body while it awaits review. */
+export function useUpdateProcurementDraft(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      draftId,
+      request,
+    }: {
+      draftId: string;
+      request: { subject?: string; body?: string };
+    }): Promise<ProcurementDraftRow> => {
+      const { data, error } = await getSupabase().rpc('update_procurement_draft', {
+        p_draft_id: draftId,
+        p_request: request as Json,
+      });
+      if (error) throw error;
+      return data as ProcurementDraftRow;
+    },
+    onSuccess: () => invalidateDrafts(queryClient),
+  });
+}
+
+export function useDiscardProcurementDraft(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async (draftId: string): Promise<ProcurementDraftRow> => {
+      const { data, error } = await getSupabase().rpc('discard_procurement_draft', { p_draft_id: draftId });
+      if (error) throw error;
+      return data as ProcurementDraftRow;
+    },
+    onSuccess: () => invalidateDrafts(queryClient),
+  });
+}
+
+/**
+ * Compose a vendor letter on demand: the acknowledgment chase (a PO), the
+ * receiver's inbound notice (a shipment) or the claim notice (a damage,
+ * short-ship or wrong-item exception). Each lands awaiting review.
+ */
+export function useComposeProcurementDraft(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async (
+      subject:
+        | { kind: 'ack_chase'; purchaseOrderId: string }
+        | { kind: 'receiver_inbound_notice'; shipmentId: string }
+        | { kind: 'vendor_claim_notice'; exceptionId: string },
+    ): Promise<ProcurementDraftRow> => {
+      const supabase = getSupabase();
+      const { data, error } =
+        subject.kind === 'ack_chase'
+          ? await supabase.rpc('compose_ack_chase_draft', { p_po_id: subject.purchaseOrderId })
+          : subject.kind === 'receiver_inbound_notice'
+            ? await supabase.rpc('compose_receiver_inbound_draft', { p_shipment_id: subject.shipmentId })
+            : await supabase.rpc('compose_vendor_claim_draft', { p_exception_id: subject.exceptionId });
+      if (error) throw error;
+      return data as ProcurementDraftRow;
+    },
+    onSuccess: () => invalidateDrafts(queryClient),
+  });
+}
+
+// ─── Vendor quotes (00707) ──────────────────────────────────────────────────
+
+export type VendorQuoteRow = PublicSchema['Tables']['vendor_quotes']['Row'];
+export type VendorQuoteLineRow = PublicSchema['Tables']['vendor_quote_lines']['Row'];
+export type VendorQuoteWithLines = VendorQuoteRow & { vendor_quote_lines: VendorQuoteLineRow[] };
+
+/** A project's vendor quotes with their lines, newest first. */
+export function useVendorQuotes(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: buyingPhase2Keys.quotes(projectId ?? ''),
+    queryFn: async (): Promise<VendorQuoteWithLines[]> => {
+      const { data, error } = await getSupabase()
+        .from('vendor_quotes')
+        .select('*, vendor_quote_lines(*)')
+        .eq('project_id', projectId as string)
+        .order('received_on', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as VendorQuoteWithLines[];
+    },
+    enabled: !!projectId,
+  });
+}
+
+/** A vendor quote. A linked request supplies the vendor and project. */
+export interface VendorQuoteRequest {
+  requestId?: string | null;
+  vendorId?: string | null;
+  projectId?: string | null;
+  /** YYYY-MM-DD; defaults to today. */
+  receivedOn?: string | null;
+  quoteRef?: string | null;
+  validUntil?: string | null;
+  cratingCents?: number | null;
+  freightEstimateCents?: number | null;
+  paymentPattern?: 'fifty_fifty' | 'thirty_seventy' | 'full_upfront' | 'net_30' | 'custom_milestones' | null;
+  depositPct?: number | null;
+  documentPath?: string | null;
+  supersedesQuoteId?: string | null;
+  lines?: {
+    ffeItemId: string;
+    unitTradeCents: number;
+    qty?: number | null;
+    leadTimeWeeks?: number | null;
+    note?: string | null;
+  }[];
+}
+
+export function useRecordVendorQuote(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async (request: VendorQuoteRequest): Promise<VendorQuoteRow> => {
+      const { data, error } = await getSupabase().rpc('record_vendor_quote', { p_request: request as Json });
+      if (error) throw error;
+      return data as VendorQuoteRow;
+    },
+    onSuccess: (row) => queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.quotes(row.project_id) }),
+  });
+}
+
+/**
+ * Write a quote's trade prices onto its lines (all, or the chosen ones). Trade
+ * only; a line on a PO is refused, a line on a sent authorization is
+ * change_order_required.
+ */
+export function useApplyVendorQuoteToLines(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      quoteId,
+      ffeItemIds,
+    }: {
+      quoteId: string;
+      ffeItemIds?: string[];
+      /** For cache invalidation. */
+      projectId: string;
+    }): Promise<VendorQuoteLineRow[]> => {
+      const { data, error } = await getSupabase().rpc('apply_vendor_quote_to_lines', {
+        p_quote_id: quoteId,
+        p_ffe_item_ids: ffeItemIds,
+      });
+      if (error) throw error;
+      return (data ?? []) as VendorQuoteLineRow[];
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.quotes(projectId) });
+      invalidateFfeCaches(queryClient, projectId);
+    },
+  });
+}
+
+// ─── Exceptions, substitution, refunds (00708) ──────────────────────────────
+
+export type ProcurementExceptionRow = PublicSchema['Tables']['procurement_exceptions']['Row'];
+export type ProcurementExceptionType =
+  | 'concealed_damage'
+  | 'damage'
+  | 'short_ship'
+  | 'wrong_item'
+  | 'ack_discrepancy'
+  | 'delay'
+  | 'backorder'
+  | 'discontinued'
+  | 'price_change';
+export type ProcurementExceptionStatus = 'open' | 'awaiting_vendor' | 'awaiting_client' | 'resolved';
+export type ProcurementResolutionPath =
+  | 'accept'
+  | 'dispute'
+  | 'vendor_corrected'
+  | 'reconciled'
+  | 'repair'
+  | 'replace'
+  | 'credit'
+  | 'reship'
+  | 'wait'
+  | 'substitute'
+  | 'cancel'
+  | 'refund';
+type ClientDecisionRow = PublicSchema['Tables']['client_decisions']['Row'];
+type VendorPaymentRow = PublicSchema['Tables']['vendor_payments']['Row'];
+
+/** A project's exceptions, newest first; open only unless includeResolved. */
+export function useProcurementExceptions(projectId: string | null | undefined, includeResolved = false) {
+  return useQuery({
+    queryKey: [...buyingPhase2Keys.exceptions(projectId ?? ''), includeResolved ? 'all' : 'open'],
+    queryFn: async (): Promise<ProcurementExceptionRow[]> => {
+      let query = getSupabase()
+        .from('procurement_exceptions')
+        .select('*')
+        .eq('project_id', projectId as string);
+      if (!includeResolved) query = query.neq('status', 'resolved');
+      const { data, error } = await query.order('opened_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as ProcurementExceptionRow[];
+    },
+    enabled: !!projectId,
+  });
+}
+
+/**
+ * Open an exception on a subject. Damage-type clocks come from the vendor
+ * account's claims window (concealed damage: the carrier's); other types take
+ * an optional clock with its basis in plain words. ack_discrepancy is opened
+ * by an acknowledgment, never here.
+ */
+export interface OpenProcurementExceptionRequest {
+  type: Exclude<ProcurementExceptionType, 'ack_discrepancy'>;
+  ffeItemId?: string | null;
+  purchaseOrderId?: string | null;
+  shipmentId?: string | null;
+  inspectionId?: string | null;
+  damageClaimId?: string | null;
+  note?: string | null;
+  evidenceMediaIds?: string[] | null;
+  /** YYYY-MM-DD, with clockBasis; ignored for damage types. */
+  clockDueOn?: string | null;
+  clockBasis?: string | null;
+}
+
+export function useOpenProcurementException(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async (request: OpenProcurementExceptionRequest): Promise<ProcurementExceptionRow> => {
+      const { data, error } = await getSupabase().rpc('open_procurement_exception', {
+        p_request: request as unknown as Json,
+      });
+      if (error) throw error;
+      return data as ProcurementExceptionRow;
+    },
+    onSuccess: (row) => invalidateProcurementWork(queryClient, row.project_id),
+  });
+}
+
+/** Move an exception to waiting, or resolve it with a path. Not for ack_discrepancy. */
+export interface ResolveProcurementExceptionRequest {
+  /** Defaults to resolved. */
+  status?: 'awaiting_vendor' | 'awaiting_client' | 'resolved';
+  /** Required to resolve. */
+  resolutionPath?: ProcurementResolutionPath;
+  note?: string | null;
+  poChangeId?: string | null;
+  replacementPurchaseOrderId?: string | null;
+}
+
+export function useResolveProcurementException(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      exceptionId,
+      request,
+    }: {
+      exceptionId: string;
+      request: ResolveProcurementExceptionRequest;
+    }): Promise<ProcurementExceptionRow> => {
+      const { data, error } = await getSupabase().rpc('resolve_procurement_exception', {
+        p_exception_id: exceptionId,
+        p_request: request as Json,
+      });
+      if (error) throw error;
+      return data as ProcurementExceptionRow;
+    },
+    onSuccess: (row) => invalidateProcurementWork(queryClient, row.project_id),
+  });
+}
+
+/**
+ * Ask the client to choose a substitute: composes a client decision DRAFT
+ * (the original and each alternate line at its client price) that the studio
+ * releases with the decision rail. The line waits on the decision.
+ */
+export function useRequestSubstitutionApproval(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      ffeItemId,
+      alternateIds,
+    }: {
+      ffeItemId: string;
+      alternateIds: string[];
+    }): Promise<ClientDecisionRow> => {
+      const { data, error } = await getSupabase().rpc('request_substitution_approval', {
+        p_item_id: ffeItemId,
+        p_alternate_ids: alternateIds,
+      });
+      if (error) throw error;
+      return data as ClientDecisionRow;
+    },
+    onSuccess: (decision) => {
+      queryClient.invalidateQueries({ queryKey: ['client-decisions', decision.designer_client_id] });
+      if (decision.project_id) {
+        invalidateProcurementWork(queryClient, decision.project_id);
+        invalidateFfeCaches(queryClient, decision.project_id);
+      }
+    },
+  });
+}
+
+/** A refund or credit from the vendor; amountCents is positive and stored negative. */
+export interface VendorRefundRequest {
+  kind: 'refund' | 'credit';
+  amountCents: number;
+  /** YYYY-MM-DD; defaults to today. */
+  paidOn?: string | null;
+  method?: 'card' | 'ach' | 'check' | 'wire' | 'cash' | 'other' | null;
+  paymentMethodId?: string | null;
+  reference?: string | null;
+  receiptDocumentPath?: string | null;
+  currencyCode?: string | null;
+}
+
+export function useRecordVendorRefund(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      purchaseOrderId,
+      request,
+    }: {
+      purchaseOrderId: string;
+      request: VendorRefundRequest;
+    }): Promise<VendorPaymentRow> => {
+      const { data, error } = await getSupabase().rpc('record_vendor_refund', {
+        p_po_id: purchaseOrderId,
+        p_request: request as unknown as Json,
+      });
+      if (error) throw error;
+      return data as VendorPaymentRow;
+    },
+    onSuccess: (row) => {
+      queryClient.invalidateQueries({ queryKey: ['vendor-payments', row.purchase_order_id] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', row.purchase_order_id] });
     },
   });
 }
