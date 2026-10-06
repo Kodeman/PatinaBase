@@ -13,11 +13,16 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient, type DeliveryEvent } from '@patina/supabase';
+import {
+  createBrowserClient,
+  type DeliveryEvent,
+  type PurchaseOrder,
+} from '@patina/supabase';
 import {
   detectDeliveryConflicts,
   detectInstallCollisions,
 } from '@/lib/procurement/delivery-conflicts';
+import { etaMoves, trackingUrl } from './line-unfold/movement-tracking';
 
 type AnyRecord = any;
 
@@ -71,6 +76,72 @@ function useWeekEvents() {
   });
 }
 
+type WeekMovement = Pick<
+  PurchaseOrder,
+  'id' | 'carrier' | 'tracking_number' | 'eta_history'
+>;
+
+/**
+ * C-18: carrier, tracking and ETA history for the window's POs. The
+ * delivery_events view carries none of them. Keyed under 'purchase-orders' so
+ * the tracking, ETA and status writes refresh it.
+ */
+function useWeekMovement(poIds: string[]) {
+  return useQuery({
+    queryKey: ['purchase-orders', 'week-movement', poIds],
+    enabled: poIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await getSupabase()
+        .from('purchase_orders')
+        .select('id, carrier, tracking_number, eta_history')
+        .in('id', poIds);
+      if (error) throw error;
+      return new Map(
+        ((data ?? []) as WeekMovement[]).map((po) => [po.id, po]),
+      );
+    },
+  });
+}
+
+/** The quiet line under a delivery: "UPS 1Z…" on a shipped row, and "moved from 2 Nov". */
+function MovementNote({
+  event,
+  po,
+}: {
+  event: DeliveryEvent;
+  po: WeekMovement | undefined;
+}) {
+  if (!po) return null;
+  const shipped = event.po_status === 'shipped';
+  const carrier = shipped ? po.carrier?.trim() || null : null;
+  const number = shipped ? po.tracking_number?.trim() || null : null;
+  const href = trackingUrl(carrier, number);
+  const last = etaMoves(po.eta_history)[0];
+  const moved = last?.was ? `moved from ${fmtShort(last.was)}` : null;
+  if (!carrier && !number && !moved) return null;
+  return (
+    <span className="block text-[var(--color-quiet-ink)]">
+      {carrier}
+      {carrier && number ? ' ' : null}
+      {number &&
+        (href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-[var(--color-pearl)] underline-offset-2"
+          >
+            {number}
+          </a>
+        ) : (
+          number
+        ))}
+      {(carrier || number) && moved ? ' · ' : null}
+      {moved}
+    </span>
+  );
+}
+
 export function WeekBookPage({
   projectId,
   onClearProject,
@@ -89,6 +160,20 @@ export function WeekBookPage({
         : allEvents,
     [allEvents, projectId],
   );
+
+  const poIds = useMemo(
+    () =>
+      [
+        ...new Set(
+          (events ?? [])
+            .filter((e) => e.event_type === 'delivery_expected')
+            .map((e) => e.purchase_order_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ].sort(),
+    [events],
+  );
+  const { data: movement } = useWeekMovement(poIds);
 
   const {
     weeks,
@@ -290,6 +375,12 @@ export function WeekBookPage({
                             className={`${WK_EV_BASE} ${WK_EV_TONE[tone]}`}
                           >
                             {label}
+                            {!isInstall && e.purchase_order_id && (
+                              <MovementNote
+                                event={e}
+                                po={movement?.get(e.purchase_order_id)}
+                              />
+                            )}
                           </span>
                         );
                       })}

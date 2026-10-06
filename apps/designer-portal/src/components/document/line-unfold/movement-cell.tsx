@@ -9,7 +9,8 @@ import {
 import { fmtDay } from '@/lib/document/format';
 import { DateTextInput } from '../date-text-input';
 import { DocumentAction } from '../document-action';
-import { CellValue, LABEL_CLS, UnfoldCell } from './cell';
+import { CellValue, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
+import { ShipmentTracking, etaMoveText, etaMoves } from './movement-tracking';
 import { NEXT_PO_STATUS } from './next-act';
 
 type FFERow = any;
@@ -80,6 +81,9 @@ export function PoStatusAct({
  *
  * The status act (C-03) renders here only when it is not the line's lifted
  * next act — e.g. while the ack is still the step ahead of it.
+ *
+ * C-18 (D1-07): carrier, tracking, BOL and ship date, and the ETA's history
+ * with "why it moved", read off the line's PO embed (withLifecycle).
  */
 export function MovementCell({
   item,
@@ -99,6 +103,9 @@ export function MovementCell({
 }) {
   const qc = useQueryClient();
   const updateEta = useUpdatePurchaseOrderETA({ errorSurface: 'inline' });
+  const moves = etaMoves(po?.eta_history);
+  const showMoves = moves.some((m) => m.was || m.note);
+  const [reason, setReason] = useState('');
   const nextStatus = po && poStatus ? NEXT_PO_STATUS[poStatus] : undefined;
   const [eta, setEta] = useState<string>(
     po?.confirmed_eta ? po.confirmed_eta.slice(0, 10) : '',
@@ -119,9 +126,10 @@ export function MovementCell({
     setError(null);
     setSaved(null);
     updateEta
-      .mutateAsync({ purchaseOrderId: po.id, newEta: value })
+      .mutateAsync({ purchaseOrderId: po.id, newEta: value, notes: reason })
       .then(() => {
         setSaved(value);
+        setReason('');
         // One act, many surfaces (§5): line cell, Orders row, Week, Desk.
         void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
         void qc.invalidateQueries({ queryKey: ['document-state'] });
@@ -148,6 +156,18 @@ export function MovementCell({
       )}
       {po ? (
         <>
+          {eta && (
+            // D1-07: an ETA edit takes an optional reason, saved with the date.
+            <input
+              value={reason}
+              maxLength={200}
+              aria-label="Why the ETA moved"
+              placeholder="why it moved (optional)"
+              disabled={updateEta.isPending}
+              onChange={(e) => setReason(e.target.value)}
+              className={`${FIELD_CLS} block w-full`}
+            />
+          )}
           <label className="flex items-baseline gap-1.5">
             <span className={LABEL_CLS}>arrives</span>
             <DateTextInput
@@ -173,6 +193,13 @@ export function MovementCell({
               eta updated — arrives ~{fmtDay(saved)}
             </p>
           )}
+          {showMoves && (
+            <ul aria-label="ETA history" className="text-[11px] text-[var(--text-muted)]">
+              {moves.map((m, i) => (
+                <li key={`${m.eta}-${i}`}>{etaMoveText(m)}</li>
+              ))}
+            </ul>
+          )}
           {error && (
             // R83: inline at the act — the reason and a retry.
             <div role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
@@ -189,6 +216,17 @@ export function MovementCell({
               </DocumentAction>
             </div>
           )}
+          <ShipmentTracking
+            poId={po.id}
+            itemId={item.id}
+            projectId={projectId}
+            record={po}
+            open={
+              poStatus === 'in_production' ||
+              poStatus === 'shipped' ||
+              poStatus === 'delivered'
+            }
+          />
         </>
       ) : (
         item.eta && (
