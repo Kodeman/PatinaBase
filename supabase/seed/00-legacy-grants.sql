@@ -20232,6 +20232,318 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00709_client_deposit_slots.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_invoice_line_ffe_stage() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00709_client_deposit_slots.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_ffe_invoice_coverage(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00709_client_deposit_slots.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_ffe_invoice_coverage(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00709_client_deposit_slots.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_ffe_invoice_stage_coverage(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00709_client_deposit_slots.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_ffe_invoice_stage_coverage(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00709_client_deposit_slots.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.add_invoice_billing_lines(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00709_client_deposit_slots.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.add_invoice_billing_lines(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00709_client_deposit_slots.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_studio_purchase_billing() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00709_client_deposit_slots.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_billing_stamps_on_invoice_void() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_studio_release_gate(uuid, integer, boolean) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_studio_release_gate(uuid, integer, boolean) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._release_gate_applies(uuid, integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._release_gate_applies(uuid, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._po_release_cleared(text, timestamptz, uuid, integer, timestamptz, integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._po_release_cleared(text, timestamptz, uuid, integer, timestamptz, integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.purchase_order_release_required(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.purchase_order_release_required(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.po_is_sendable(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.po_is_sendable(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_purchase_order_release() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.hold_purchase_order_for_release(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.hold_purchase_order_for_release(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.release_purchase_order(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.release_purchase_order(uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.send_back_purchase_order(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00710_release_threshold.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.send_back_purchase_order(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.install_manifest_items FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.install_manifest_items TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.install_manifest_items TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_install_manifest_item(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_install_manifest_item(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.install_punch_items FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.install_punch_items TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.install_punch_items TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_install_punch_item(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_install_punch_item(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_install_punch_item(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_install_punch_item(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.po_spec_snapshots FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.po_spec_snapshots TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.po_spec_snapshots TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.snapshot_purchase_order_spec(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00711_install_manifest.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.snapshot_purchase_order_spec(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00712_sample_requests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.sample_requests FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00712_sample_requests.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.sample_requests TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00712_sample_requests.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.sample_requests TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00712_sample_requests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_sample_request(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00712_sample_requests.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_sample_request(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00712_sample_requests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_sample_returned(uuid, date, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00712_sample_requests.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_sample_returned(uuid, date, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00712_sample_requests.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sweep_procurement_clocks() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00712_sample_requests.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sweep_procurement_clocks() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00713_studio_margin_visibility.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.can_see_studio_margin(uuid) FROM PUBLIC, anon;

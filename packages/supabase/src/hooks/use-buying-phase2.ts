@@ -42,6 +42,24 @@ const getSupabase = () => createBrowserClient();
 // A price change on a line that sits on a sent authorization, or a quantity
 // change on a PO, is refused with an error whose message starts
 // `change_order_required` (R8); see isChangeOrderRequired.
+//
+// SQ-420 (migrations 00709–00712):
+//   deposit / balance    a line bills in full, or as a deposit then its
+//                        balance (two slots, never both kinds);
+//                        add_invoice_billing_lines also bills purchases and
+//                        PO riders at cost on their own lines, stamping them
+//                        so nothing bills twice (R-PB7). Tax stays entered.
+//   release gate         a studio threshold (off by default) or every-order
+//                        mode; a PO over it is held until an owner/admin
+//                        releases or sends it back. po-send refuses while
+//                        po_is_sendable is false, and the DB refuses the
+//                        sent stamp (error message starts `held_for_release`).
+//   install              manifest row per line, punch items, and the spec
+//                        snapshot po-send takes on every send (a new revision
+//                        only when the spec changed).
+//   samples              memo / finish chip / loaner requests; the clock
+//                        sweep raises memo_return_due and cfa_reserve_expiring,
+//                        and a return clears the memo's need.
 // ═══════════════════════════════════════════════════════════════════════════
 
 type PublicSchema = Database['public'];
@@ -108,6 +126,14 @@ export const buyingPhase2Keys = {
   drafts: (projectId: string) => ['buying-phase2', 'drafts', projectId] as const,
   quotes: (projectId: string) => ['buying-phase2', 'quotes', projectId] as const,
   exceptions: (projectId: string) => ['buying-phase2', 'exceptions', projectId] as const,
+  releaseGate: (organizationId: string) => ['buying-phase2', 'release-gate', organizationId] as const,
+  releaseState: (purchaseOrderId: string) => ['buying-phase2', 'release', purchaseOrderId] as const,
+  installManifest: (projectId: string) => ['buying-phase2', 'install-manifest', projectId] as const,
+  punchItems: (projectId: string) => ['buying-phase2', 'punch-items', projectId] as const,
+  specSnapshots: (purchaseOrderId: string) => ['buying-phase2', 'spec-snapshots', purchaseOrderId] as const,
+  samples: (scope: string) => ['buying-phase2', 'samples', scope] as const,
+  /** Under the ffe-invoice-coverage prefix, which every invoice write invalidates. */
+  invoiceStageCoverage: (projectId: string) => ['ffe-invoice-coverage', projectId, 'stages'] as const,
 };
 
 function invalidatePurchaseOrder(queryClient: QueryClient, po: Pick<PurchaseOrder, 'id' | 'project_id'>) {
@@ -1269,5 +1295,447 @@ export function usePoAckBasis(purchaseOrderId: string | null | undefined) {
       };
     },
     enabled: !!purchaseOrderId,
+  });
+}
+
+// ─── Deposit / balance slots and the billing writer (00709) ─────────────────
+
+export type InvoiceLineItemRow = PublicSchema['Tables']['invoice_line_items']['Row'];
+export type FfeInvoiceStageCoverageRow = PublicSchema['Functions']['get_ffe_invoice_stage_coverage']['Returns'][number];
+export type BillingStage = 'full' | 'deposit' | 'balance';
+
+interface BillingLineOverrides {
+  /** Whole cents; replaces the computed amount. */
+  amountCents?: number;
+  description?: string;
+  sortOrder?: number;
+}
+
+/**
+ * One element of add_invoice_billing_lines: a purchase or a PO rider at cost,
+ * or a line's deposit (percent of its client price) or balance (price less the
+ * live deposit). A full bill of a line goes through create_draft_invoice.
+ */
+export type InvoiceBillingLineRequest =
+  | ({ purchaseId: string } & BillingLineOverrides)
+  | ({ costLineId: string } & BillingLineOverrides)
+  | ({ ffeItemId: string; stage: 'deposit'; depositPct: number } & BillingLineOverrides)
+  | ({ ffeItemId: string; stage: 'balance' } & BillingLineOverrides);
+
+/** Add billing lines to a draft invoice; the invoice's totals are recomputed. */
+export function useAddInvoiceBillingLines(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      invoiceId,
+      lines,
+    }: {
+      invoiceId: string;
+      projectId: string;
+      lines: InvoiceBillingLineRequest[];
+    }): Promise<InvoiceLineItemRow[]> => {
+      const { data, error } = await getSupabase().rpc('add_invoice_billing_lines', {
+        p_invoice_id: invoiceId,
+        p_lines: lines as unknown as Json,
+      });
+      if (error) throw error;
+      return (data ?? []) as InvoiceLineItemRow[];
+    },
+    onSuccess: (_rows, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['ffe-invoice-coverage', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
+      queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.purchases(`project:${projectId}`) });
+      queryClient.invalidateQueries({ queryKey: ['buying-phase2', 'cost-lines'] });
+    },
+  });
+}
+
+/** One row per live billing slot (full, deposit, balance) on the project's lines. */
+export function useFfeInvoiceStageCoverage(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: buyingPhase2Keys.invoiceStageCoverage(projectId ?? ''),
+    queryFn: async (): Promise<FfeInvoiceStageCoverageRow[]> => {
+      const { data, error } = await getSupabase().rpc('get_ffe_invoice_stage_coverage', {
+        p_project_id: projectId as string,
+      });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!projectId,
+  });
+}
+
+// ─── The release gate (00710) ───────────────────────────────────────────────
+
+export interface StudioReleaseGate {
+  /** Null: the gate is off (the default). */
+  release_threshold_cents: number | null;
+  /** Every order waits for an owner/admin release. */
+  require_release_per_order: boolean;
+}
+
+export function useStudioReleaseGate(organizationId: string | null | undefined) {
+  return useQuery({
+    queryKey: buyingPhase2Keys.releaseGate(organizationId ?? ''),
+    queryFn: async (): Promise<StudioReleaseGate | null> => {
+      const { data, error } = await getSupabase()
+        .from('organizations')
+        .select('release_threshold_cents, require_release_per_order')
+        .eq('id', organizationId as string)
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? null;
+    },
+    enabled: !!organizationId,
+  });
+}
+
+/** Owner/admin only. A null threshold turns the amount gate off. */
+export function useSetStudioReleaseGate(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      organizationId,
+      thresholdCents,
+      requireReleasePerOrder = false,
+    }: {
+      organizationId: string;
+      thresholdCents: number | null;
+      requireReleasePerOrder?: boolean;
+    }) => {
+      const { data, error } = await getSupabase().rpc('set_studio_release_gate', {
+        p_org: organizationId,
+        // Null is meaningful (gate off); the generated type omits it.
+        p_threshold_cents: thresholdCents as number,
+        p_require_per_order: requireReleasePerOrder,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_org, { organizationId }) => {
+      queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.releaseGate(organizationId) });
+      queryClient.invalidateQueries({ queryKey: ['buying-phase2', 'release'] });
+    },
+  });
+}
+
+export interface PurchaseOrderReleaseState {
+  /** The studio's gate applies to this PO. */
+  releaseRequired: boolean;
+  /** po-send would accept it now (released, under the gate, or already sent). */
+  sendable: boolean;
+}
+
+export function usePurchaseOrderReleaseState(purchaseOrderId: string | null | undefined) {
+  return useQuery({
+    queryKey: buyingPhase2Keys.releaseState(purchaseOrderId ?? ''),
+    queryFn: async (): Promise<PurchaseOrderReleaseState> => {
+      const supabase = getSupabase();
+      const [required, sendable] = await Promise.all([
+        supabase.rpc('purchase_order_release_required', { p_po_id: purchaseOrderId as string }),
+        supabase.rpc('po_is_sendable', { p_po_id: purchaseOrderId as string }),
+      ]);
+      if (required.error) throw required.error;
+      if (sendable.error) throw sendable.error;
+      return { releaseRequired: required.data === true, sendable: sendable.data === true };
+    },
+    enabled: !!purchaseOrderId,
+  });
+}
+
+function invalidateReleasedPurchaseOrder(queryClient: QueryClient, po: PurchaseOrder) {
+  invalidatePurchaseOrder(queryClient, po);
+  queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.releaseState(po.id) });
+}
+
+/** Hold an unsent draft for release (only when the studio's gate applies). */
+export function useHoldPurchaseOrderForRelease(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({ purchaseOrderId, note }: { purchaseOrderId: string; note?: string }): Promise<PurchaseOrder> => {
+      const { data, error } = await getSupabase().rpc('hold_purchase_order_for_release', {
+        p_po_id: purchaseOrderId,
+        p_note: note,
+      });
+      if (error) throw error;
+      return data as unknown as PurchaseOrder;
+    },
+    onSuccess: (po) => invalidateReleasedPurchaseOrder(queryClient, po),
+  });
+}
+
+/** Owner/admin only: release a held PO (or an owner's own draft) at its total. */
+export function useReleasePurchaseOrder(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async (purchaseOrderId: string): Promise<PurchaseOrder> => {
+      const { data, error } = await getSupabase().rpc('release_purchase_order', { p_po_id: purchaseOrderId });
+      if (error) throw error;
+      return data as unknown as PurchaseOrder;
+    },
+    onSuccess: (po) => invalidateReleasedPurchaseOrder(queryClient, po),
+  });
+}
+
+/** Owner/admin only: send a held PO back to draft with a note. */
+export function useSendBackPurchaseOrder(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({ purchaseOrderId, note }: { purchaseOrderId: string; note: string }): Promise<PurchaseOrder> => {
+      const { data, error } = await getSupabase().rpc('send_back_purchase_order', {
+        p_po_id: purchaseOrderId,
+        p_note: note,
+      });
+      if (error) throw error;
+      return data as unknown as PurchaseOrder;
+    },
+    onSuccess: (po) => invalidateReleasedPurchaseOrder(queryClient, po),
+  });
+}
+
+/** True when a write was refused because the PO waits for a release. */
+export function isHeldForRelease(error: unknown): boolean {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === 'string' && message.startsWith('held_for_release');
+}
+
+// ─── Install manifest, punch items, spec snapshots (00711) ──────────────────
+
+export type InstallManifestItemRow = PublicSchema['Tables']['install_manifest_items']['Row'];
+export type InstallPunchItemRow = PublicSchema['Tables']['install_punch_items']['Row'];
+export type PoSpecSnapshotRow = PublicSchema['Tables']['po_spec_snapshots']['Row'];
+export type InstallState = 'planned' | 'at_receiver' | 'on_site' | 'deferred';
+
+/** Patch for a line's manifest row: a present key sets (null clears), an omitted key leaves. */
+export interface InstallManifestRequest {
+  roomLocation?: string | null;
+  /** YYYY-MM-DD */
+  installOn?: string | null;
+  installerContactId?: string | null;
+  installerName?: string | null;
+  state?: InstallState | null;
+  note?: string | null;
+}
+
+export function useInstallManifest(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: buyingPhase2Keys.installManifest(projectId ?? ''),
+    queryFn: async (): Promise<InstallManifestItemRow[]> => {
+      const { data, error } = await getSupabase()
+        .from('install_manifest_items')
+        .select('*')
+        .eq('project_id', projectId as string)
+        .order('install_on', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!projectId,
+  });
+}
+
+export function useUpsertInstallManifestItem(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      ffeItemId,
+      request,
+    }: {
+      ffeItemId: string;
+      request: InstallManifestRequest;
+    }): Promise<InstallManifestItemRow> => {
+      const { data, error } = await getSupabase().rpc('upsert_install_manifest_item', {
+        p_ffe_item_id: ffeItemId,
+        p_request: request as unknown as Json,
+      });
+      if (error) throw error;
+      return data as InstallManifestItemRow;
+    },
+    onSuccess: (row) =>
+      queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.installManifest(row.project_id) }),
+  });
+}
+
+export function useInstallPunchItems(projectId: string | null | undefined, includeResolved = false) {
+  return useQuery({
+    queryKey: [...buyingPhase2Keys.punchItems(projectId ?? ''), includeResolved] as const,
+    queryFn: async (): Promise<InstallPunchItemRow[]> => {
+      let query = getSupabase()
+        .from('install_punch_items')
+        .select('*')
+        .eq('project_id', projectId as string);
+      if (!includeResolved) query = query.is('resolved_at', null);
+      const { data, error } = await query.order('created_at', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!projectId,
+  });
+}
+
+/** Create (ffeItemId + note) or patch (id) an open punch item. */
+export interface InstallPunchRequest {
+  id?: string;
+  ffeItemId?: string;
+  note?: string;
+  mediaIds?: string[];
+  /** YYYY-MM-DD */
+  dueOn?: string | null;
+}
+
+export function useUpsertInstallPunchItem(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async (request: InstallPunchRequest): Promise<InstallPunchItemRow> => {
+      const { data, error } = await getSupabase().rpc('upsert_install_punch_item', {
+        p_request: request as unknown as Json,
+      });
+      if (error) throw error;
+      return data as InstallPunchItemRow;
+    },
+    onSuccess: (row) => queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.punchItems(row.project_id) }),
+  });
+}
+
+export function useResolveInstallPunchItem(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({ punchId, note }: { punchId: string; note?: string }): Promise<InstallPunchItemRow> => {
+      const { data, error } = await getSupabase().rpc('resolve_install_punch_item', {
+        p_punch_id: punchId,
+        p_note: note,
+      });
+      if (error) throw error;
+      return data as InstallPunchItemRow;
+    },
+    onSuccess: (row) => queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.punchItems(row.project_id) }),
+  });
+}
+
+/** What went out on each send: one row per line per revision, newest revision first. */
+export function usePoSpecSnapshots(purchaseOrderId: string | null | undefined) {
+  return useQuery({
+    queryKey: buyingPhase2Keys.specSnapshots(purchaseOrderId ?? ''),
+    queryFn: async (): Promise<PoSpecSnapshotRow[]> => {
+      const { data, error } = await getSupabase()
+        .from('po_spec_snapshots')
+        .select('*')
+        .eq('purchase_order_id', purchaseOrderId as string)
+        .order('revision', { ascending: false })
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!purchaseOrderId,
+  });
+}
+
+// ─── Sample requests (00712) ────────────────────────────────────────────────
+
+export type SampleRequestRow = PublicSchema['Tables']['sample_requests']['Row'];
+export type SampleKind = 'memo' | 'finish_chip' | 'loaner' | 'other';
+
+/**
+ * Create (kind required; a line implies its project; no project means the
+ * caller's studio) or patch (id). Returns go through useMarkSampleReturned.
+ */
+export interface SampleRequestInput {
+  id?: string;
+  organizationId?: string | null;
+  projectId?: string | null;
+  ffeItemId?: string | null;
+  vendorId?: string | null;
+  studioContactId?: string | null;
+  kind?: SampleKind;
+  description?: string | null;
+  /** YYYY-MM-DD */
+  requestedOn?: string | null;
+  /** YYYY-MM-DD; moves a requested sample to received. */
+  receivedOn?: string | null;
+  /** YYYY-MM-DD; drives memo_return_due. */
+  returnBy?: string | null;
+  returnTracking?: string | null;
+  feeCents?: number | null;
+  billableToClient?: boolean | null;
+  status?: 'requested' | 'received' | 'cancelled';
+}
+
+/** A project's samples, or a studio's samples with no project. */
+export function useSampleRequests(scope: { projectId: string } | { organizationId: string } | null | undefined) {
+  const key = scope ? ('projectId' in scope ? `project:${scope.projectId}` : `org:${scope.organizationId}`) : '';
+  return useQuery({
+    queryKey: buyingPhase2Keys.samples(key),
+    queryFn: async (): Promise<SampleRequestRow[]> => {
+      let query = getSupabase().from('sample_requests').select('*');
+      query =
+        scope && 'projectId' in scope
+          ? query.eq('project_id', scope.projectId)
+          : query.eq('organization_id', (scope as { organizationId: string }).organizationId).is('project_id', null);
+      const { data, error } = await query.order('requested_on', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!scope,
+  });
+}
+
+function invalidateSamples(queryClient: QueryClient, row: SampleRequestRow) {
+  queryClient.invalidateQueries({
+    queryKey: buyingPhase2Keys.samples(row.project_id ? `project:${row.project_id}` : `org:${row.organization_id}`),
+  });
+}
+
+export function useRecordSampleRequest(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async (request: SampleRequestInput): Promise<SampleRequestRow> => {
+      const { data, error } = await getSupabase().rpc('record_sample_request', {
+        p_request: request as unknown as Json,
+      });
+      if (error) throw error;
+      return data as SampleRequestRow;
+    },
+    onSuccess: (row) => invalidateSamples(queryClient, row),
+  });
+}
+
+/** Mark a sample returned; clears its memo_return_due need. */
+export function useMarkSampleReturned(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async ({
+      sampleId,
+      returnedOn,
+      returnTracking,
+    }: {
+      sampleId: string;
+      /** YYYY-MM-DD; defaults to today. */
+      returnedOn?: string;
+      returnTracking?: string;
+    }): Promise<SampleRequestRow> => {
+      const { data, error } = await getSupabase().rpc('mark_sample_returned', {
+        p_sample_id: sampleId,
+        p_returned_on: returnedOn,
+        p_return_tracking: returnTracking,
+      });
+      if (error) throw error;
+      return data as SampleRequestRow;
+    },
+    onSuccess: (row) => {
+      invalidateSamples(queryClient, row);
+      queryClient.invalidateQueries({ queryKey: ['procurement-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-unread-count'] });
+    },
   });
 }
