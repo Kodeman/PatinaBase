@@ -8,7 +8,8 @@
  * into the Settled group (the margin's Settled-fold pattern).
  *
  * The 30-day inspection window powers both the pass rate and the Cleared
- * fold; the warehouse queue is delivered POs with no inspection yet.
+ * fold; the warehouse queue is delivered POs with no inspection yet, with
+ * shipped POs listed apart as receivable on arrival (C-19).
  */
 
 import { useMemo, useState } from 'react';
@@ -24,6 +25,10 @@ import { Stamp } from './stamp';
 import { receivingFrontMatter } from '@/lib/document/ledger-summary';
 import { fmtDay } from '@/lib/document/format';
 import { DocumentAction, DocumentActionGroup } from './document-action';
+import {
+  InspectionPhotoStrip,
+  inspectionPhotoIds,
+} from './line-unfold/inspection-photo-strip';
 
 type AnyRecord = any;
 
@@ -32,20 +37,14 @@ const isoOffsetDays = (days: number) =>
 
 /**
  * `receiving_inspections.photo_asset_ids` (created 00150:43; 00445/00447 add
- * the RPCs that write it) — media-service
- * MediaAsset UUIDs written by iOS (`SupabaseReceivingService.swift:115`), into
- * rows no web surface has ever acknowledged. Wave 1P makes their EXISTENCE
- * visible; the bytes stay unreachable until the media service exposes a route
- * that returns a readable URL (today `GET /v1/media/:id/download` returns the
- * raw storage key, `media.service.ts:197`). See the Wave 1P plan, Ruling 6-B.
+ * the RPCs that write it) — media-service MediaAsset UUIDs written by iOS
+ * (`SupabaseReceivingService.swift:115`) or the desktop inspection drawer
+ * (C-19). The count rides the meta line; claims also show the photo strip.
  */
 export function inspectionPhotoLine(photoAssetIds: unknown): string | null {
-  if (!Array.isArray(photoAssetIds)) return null;
-  const n = photoAssetIds.filter(
-    (id) => typeof id === 'string' && id.trim().length > 0,
-  ).length;
+  const n = inspectionPhotoIds(photoAssetIds).length;
   if (n === 0) return null;
-  return `${n} photo${n === 1 ? '' : 's'} logged on the phone`;
+  return `${n} photo${n === 1 ? '' : 's'}`;
 }
 
 /**
@@ -85,7 +84,7 @@ function Figure({
  * notify the vendor (drafted → vendor_notified), or close it with an
  * optional resolution note (vendor_notified → resolved). Forward-only, the
  * same useUpdateDamageClaim validation. Quiet confirms (R51), inline
- * failures (R83). Photos stay iOS-only, as in the drawer.
+ * failures (R83). C-19: the inspection's photos ride beneath as a strip.
  */
 function OpenClaimRow({
   claim,
@@ -189,6 +188,8 @@ function OpenClaimRow({
         </div>
       </div>
 
+      <InspectionPhotoStrip photoAssetIds={claim.inspection?.photo_asset_ids} />
+
       {act === 'notify' && (
         <div className="mt-2 flex min-w-0 flex-col items-stretch gap-2 pl-1 sm:flex-row sm:items-end">
           <textarea
@@ -271,6 +272,51 @@ function OpenClaimRow({
   );
 }
 
+/** One receivable PO in the warehouse queue — Inspect mounts the I17 drawer. */
+function QueueRow({
+  po,
+  when,
+  onInspect,
+  onOpenDocument,
+}: {
+  po: AnyRecord;
+  when: string | null;
+  onInspect: () => void;
+  onOpenDocument: (projectId: string | null) => void;
+}) {
+  return (
+    <li className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-pearl)] px-1 py-3">
+      <div className="min-w-[12rem] flex-1">
+        <p className="doc-type-body font-medium text-[var(--color-charcoal)]">
+          {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO'} ·{' '}
+          {po.vendor?.name ?? 'Vendor'}
+        </p>
+        <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
+          {[po.project?.name ?? 'Project', when].filter(Boolean).join(' · ')}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3">
+        <DocumentAction
+          actionKey="inspect-delivery"
+          surfaceKey="orders"
+          regionKey="receiving-row"
+          variant="primary"
+          onClick={onInspect}
+        >
+          Inspect
+        </DocumentAction>
+        <button
+          type="button"
+          onClick={() => onOpenDocument(po.project_id ?? po.project?.id ?? null)}
+          className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center whitespace-nowrap text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+        >
+          open document →
+        </button>
+      </div>
+    </li>
+  );
+}
+
 export function ReceivingBookPage({
   projectId,
   onClearProject,
@@ -342,18 +388,22 @@ export function ReceivingBookPage({
   );
 
   // Warehouse-day queue: delivered POs with no inspection logged, oldest ETA
-  // first (the day's work, in arrival order).
-  const queue = useMemo(() => {
+  // first (the day's work, in arrival order). C-19: shipped POs are receivable
+  // too (the receipt RPC accepts shipped → received when the box beats the
+  // carrier's delivered scan); they list apart so the counts stay honest.
+  const [queue, inTransit] = useMemo(() => {
     const inspectedPoIds = new Set(
       filteredInspections.map((i) => i.purchase_order_id),
     );
-    return filteredOrders
-      .filter((po) => po.status === 'delivered' && !inspectedPoIds.has(po.id))
-      .sort((a, b) => {
-        const ax = a.confirmed_eta ?? a.delivered_date ?? '';
-        const bx = b.confirmed_eta ?? b.delivered_date ?? '';
-        return ax < bx ? -1 : ax > bx ? 1 : 0;
-      });
+    const byArrival = (status: string) =>
+      filteredOrders
+        .filter((po) => po.status === status && !inspectedPoIds.has(po.id))
+        .sort((a, b) => {
+          const ax = a.confirmed_eta ?? a.delivered_date ?? '';
+          const bx = b.confirmed_eta ?? b.delivered_date ?? '';
+          return ax < bx ? -1 : ax > bx ? 1 : 0;
+        });
+    return [byArrival('delivered'), byArrival('shipped')];
   }, [filteredOrders, filteredInspections]);
 
   // Cleared inspections (clean, 30-day window) — the Settled fold.
@@ -432,49 +482,19 @@ export function ReceivingBookPage({
           </p>
           <ul className="mb-5">
             {queue.map((po) => (
-              <li
+              <QueueRow
                 key={po.id}
-                className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--color-pearl)] px-1 py-3"
-              >
-                <div className="min-w-[12rem] flex-1">
-                  <p className="doc-type-body font-medium text-[var(--color-charcoal)]">
-                    {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO'}{' '}
-                    · {po.vendor?.name ?? 'Vendor'}
-                  </p>
-                  <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
-                    {[
-                      po.project?.name ?? 'Project',
-                      po.delivered_date
-                        ? `delivered ${fmtDay(po.delivered_date)}`
-                        : po.confirmed_eta
-                          ? `arrived ~${fmtDay(po.confirmed_eta)}`
-                          : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3">
-                  <DocumentAction
-                    actionKey="inspect-delivery"
-                    surfaceKey="orders"
-                    regionKey="receiving-row"
-                    variant="primary"
-                    onClick={() => setTarget(po)}
-                  >
-                    Inspect
-                  </DocumentAction>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onOpenDocument(po.project_id ?? po.project?.id ?? null)
-                    }
-                    className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center whitespace-nowrap text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
-                  >
-                    open document →
-                  </button>
-                </div>
-              </li>
+                po={po}
+                when={
+                  po.delivered_date
+                    ? `delivered ${fmtDay(po.delivered_date)}`
+                    : po.confirmed_eta
+                      ? `arrived ~${fmtDay(po.confirmed_eta)}`
+                      : null
+                }
+                onInspect={() => setTarget(po)}
+                onOpenDocument={onOpenDocument}
+              />
             ))}
             {queue.length === 0 && (
               <li className="doc-type-body py-2 italic text-[var(--color-quiet-ink)]">
@@ -482,6 +502,30 @@ export function ReceivingBookPage({
               </li>
             )}
           </ul>
+
+          {/* C-19: shipped, not yet scanned delivered — receivable on arrival. */}
+          {inTransit.length > 0 && (
+            <>
+              <p className="doc-type-meta mb-1 font-semibold uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
+                Shipped · receive on arrival · {inTransit.length}
+              </p>
+              <ul className="mb-5">
+                {inTransit.map((po) => (
+                  <QueueRow
+                    key={po.id}
+                    po={po}
+                    when={
+                      po.confirmed_eta
+                        ? `shipped · due ~${fmtDay(po.confirmed_eta)}`
+                        : 'shipped'
+                    }
+                    onInspect={() => setTarget(po)}
+                    onOpenDocument={onOpenDocument}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
 
           {/* PRC-11: open claims — the lifecycle acts live where the book
               already counts them. */}

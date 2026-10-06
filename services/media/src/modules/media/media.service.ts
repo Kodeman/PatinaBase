@@ -34,6 +34,7 @@ export class MediaService {
   private readonly MAX_IMAGE_SIZE = 50 * 1024 * 1024;
   private readonly MAX_VIDEO_SIZE = 500 * 1024 * 1024;
   private readonly MAX_3D_SIZE = 500 * 1024 * 1024;
+  private readonly DOWNLOAD_URL_TTL_MS = 15 * 60 * 1000;
 
   private readonly ALLOWED_IMAGE_TYPES = [
     'image/jpeg',
@@ -188,15 +189,20 @@ export class MediaService {
   async getDownloadUrl(subject: string, assetId: string) {
     return this.authorization.withAssetScope(subject, 'read', async (transaction, scope) => {
       const asset = await this.authorization.requireAsset(transaction, scope, assetId);
+      const rawBucket = this.config.get<string>('OCI_BUCKET_RAW');
+      if (!rawBucket) throw new BadRequestException('Media download is unavailable');
+      // The bucket is private: hand back a short-lived signed GET, never the bare key.
+      const { parUrl, expiresAt } = await this.ociStorage.createPAR({
+        bucketName: rawBucket,
+        objectName: asset.rawKey,
+        accessType: 'ObjectRead',
+        timeExpires: new Date(Date.now() + this.DOWNLOAD_URL_TTL_MS),
+      });
       await transaction.mediaAsset.update({
         where: { id: asset.id },
         data: { downloadCount: { increment: 1 } },
       });
-      return {
-        assetId: asset.id,
-        downloadUrl: asset.rawKey,
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-      };
+      return { assetId: asset.id, downloadUrl: parUrl, expiresAt };
     });
   }
 

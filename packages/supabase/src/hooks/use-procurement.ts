@@ -1453,7 +1453,17 @@ export interface ReceivingInspectionItemInput {
   ffeItemId: string;
   receivedQuantity: number;
   orderedQuantity?: number;
+  /**
+   * C-19 per-line check-in (00700). When every line carries a condition the
+   * receipt goes through record_project_ffe_inspection, which also records
+   * receiving_inspection_lines; a clean outcome requires every line 'good'.
+   */
+  condition?: ReceivingInspectionLineCondition;
+  /** Whether the damage or shortage was noted on the bill of lading. */
+  notedOnBol?: boolean;
 }
+
+export type ReceivingInspectionLineCondition = 'good' | 'damaged' | 'short' | 'wrong';
 
 export interface CreateReceivingInspectionInput {
   purchaseOrderId: string;
@@ -1822,13 +1832,19 @@ export function useCreateReceivingInspection() {
       if (!input.items?.length) {
         throw new Error('Every purchase-order line needs a received quantity.');
       }
+      // C-19: lines that all carry a condition are checked in through the
+      // 00700 inspection RPC (same receipt, plus receiving_inspection_lines).
+      const perLine = input.items.every((item) => item.condition !== undefined);
       const { data: receipt, error: receiptError } = await supabase.rpc(
-        'record_project_ffe_receipt_batch',
+        perLine ? 'record_project_ffe_inspection' : 'record_project_ffe_receipt_batch',
         {
           p_purchase_order_id: input.purchaseOrderId,
           p_lines: input.items.map((item) => ({
             selectionId: item.ffeItemId,
             receivedQuantity: item.receivedQuantity,
+            ...(perLine
+              ? { condition: item.condition, notedOnBol: item.notedOnBol ?? false }
+              : {}),
           })),
           p_outcome: input.outcome,
           p_notes: input.notes ?? null,

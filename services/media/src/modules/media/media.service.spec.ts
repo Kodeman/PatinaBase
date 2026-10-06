@@ -61,6 +61,7 @@ describe('MediaService', () => {
     } as unknown as jest.Mocked<JobQueueService>;
     storage = {
       deleteObject: jest.fn(),
+      createPAR: jest.fn(),
     } as unknown as jest.Mocked<OCIStorageService>;
     eventEmitter = {
       emit: jest.fn(),
@@ -191,6 +192,47 @@ describe('MediaService', () => {
         where: { id: 'asset-123' },
         data: { viewCount: { increment: 1 } },
       });
+    });
+  });
+
+  describe('getDownloadUrl', () => {
+    it('returns a short-lived signed GET for the raw object, not the bare storage key', async () => {
+      const signedExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      storage.createPAR.mockResolvedValue({
+        parUrl: 'https://r2.test/raw-bucket/raw/images/asset-123/hero.jpg?X-Amz-Signature=sig',
+        fullUrl: 'https://r2.test/raw-bucket/raw/images/asset-123/hero.jpg?X-Amz-Signature=sig',
+        expiresAt: signedExpiry,
+      });
+      const before = Date.now();
+
+      const result = await service.getDownloadUrl(subject, 'asset-123');
+
+      expect(storage.createPAR).toHaveBeenCalledWith({
+        bucketName: 'raw-bucket',
+        objectName: baseAsset.rawKey,
+        accessType: 'ObjectRead',
+        timeExpires: expect.any(Date),
+      });
+      const ttlMs = storage.createPAR.mock.calls[0][0].timeExpires.getTime() - before;
+      expect(ttlMs).toBeGreaterThan(0);
+      expect(ttlMs).toBeLessThanOrEqual(15 * 60 * 1000);
+      expect(result).toEqual({
+        assetId: 'asset-123',
+        downloadUrl: 'https://r2.test/raw-bucket/raw/images/asset-123/hero.jpg?X-Amz-Signature=sig',
+        expiresAt: signedExpiry,
+      });
+      expect(result.downloadUrl).not.toBe(baseAsset.rawKey);
+      expect(transaction.mediaAsset.update).toHaveBeenCalledWith({
+        where: { id: 'asset-123' },
+        data: { downloadCount: { increment: 1 } },
+      });
+    });
+
+    it('does not count a download when signing fails', async () => {
+      storage.createPAR.mockRejectedValue(new Error('storage down'));
+
+      await expect(service.getDownloadUrl(subject, 'asset-123')).rejects.toThrow('storage down');
+      expect(transaction.mediaAsset.update).not.toHaveBeenCalled();
     });
   });
 

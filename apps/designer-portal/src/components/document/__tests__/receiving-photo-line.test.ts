@@ -1,12 +1,12 @@
 import { inspectionPhotoLine } from '../orders-book-receiving';
 
 describe('inspectionPhotoLine', () => {
-  it('counts the photos iOS logged against the inspection', () => {
-    expect(inspectionPhotoLine(['a', 'b', 'c'])).toBe('3 photos logged on the phone');
+  it('counts the photos logged against the inspection', () => {
+    expect(inspectionPhotoLine(['a', 'b', 'c'])).toBe('3 photos');
   });
 
   it('reads singular for one', () => {
-    expect(inspectionPhotoLine(['a'])).toBe('1 photo logged on the phone');
+    expect(inspectionPhotoLine(['a'])).toBe('1 photo');
   });
 
   it('says nothing for an inspection logged without photos', () => {
@@ -20,6 +20,6 @@ describe('inspectionPhotoLine', () => {
   });
 
   it('ignores blank ids rather than counting them', () => {
-    expect(inspectionPhotoLine(['a', '', '   ', null])).toBe('1 photo logged on the phone');
+    expect(inspectionPhotoLine(['a', '', '   ', null])).toBe('1 photo');
   });
 });

@@ -86,16 +86,44 @@ beforeEach(() => {
 });
 
 describe('the receiving photo line, rendered', () => {
+  const realFetch = global.fetch;
+  beforeEach(() => {
+    global.fetch = jest.fn(async (url: string) => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { downloadUrl: `https://r2.test/signed/${String(url).split('/')[4]}` },
+      }),
+    })) as unknown as typeof fetch;
+  });
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
   it('shows the count on an open claim whose inspection carries photos', () => {
     draftedClaims = [claim()];
     renderPage();
-    expect(screen.getByText(/3 photos logged on the phone/)).toBeInTheDocument();
+    expect(screen.getByText(/3 photos/)).toBeInTheDocument();
+  });
+
+  it('shows the inspection photo strip on an open claim (C-19)', async () => {
+    draftedClaims = [claim()];
+    renderPage();
+    expect(await screen.findByAltText('Inspection photo 1 of 3')).toHaveAttribute(
+      'src',
+      'https://r2.test/signed/a',
+    );
+    expect(screen.getByAltText('Inspection photo 3 of 3')).toHaveAttribute(
+      'src',
+      'https://r2.test/signed/c',
+    );
   });
 
   it('says nothing on an open claim whose inspection carries none', () => {
     draftedClaims = [claim({ inspection: { ...claim().inspection, photo_asset_ids: [] } })];
     renderPage();
-    expect(screen.queryByText(/logged on the phone/)).toBeNull();
+    expect(screen.queryByText(/\d photos?/)).toBeNull();
+    expect(screen.queryByTestId('inspection-photo-strip')).toBeNull();
   });
 
   it('shows the count in the Settled fold once it is opened', () => {
@@ -103,15 +131,40 @@ describe('the receiving photo line, rendered', () => {
     renderPage();
 
     // The fold is collapsed by default — nothing is asserted until it is opened.
-    expect(screen.queryByText(/logged on the phone/)).toBeNull();
+    expect(screen.queryByText(/2 photos/)).toBeNull();
     fireEvent.click(screen.getByText(/Settled ·/));
-    expect(screen.getByText(/2 photos logged on the phone/)).toBeInTheDocument();
+    expect(screen.getByText(/2 photos/)).toBeInTheDocument();
   });
 
   it('leaves a cleared inspection with no photos unannotated in the fold', () => {
     inspections = [inspection({ photo_asset_ids: [] })];
     renderPage();
     fireEvent.click(screen.getByText(/Settled ·/));
-    expect(screen.queryByText(/logged on the phone/)).toBeNull();
+    expect(screen.queryByText(/\d photos?/)).toBeNull();
+  });
+
+  it('lists shipped POs as receivable apart from the delivered queue (C-19 carry-in)', () => {
+    orders = [
+      {
+        id: 'po-d',
+        status: 'delivered',
+        po_number: 'PO-D',
+        vendor: { name: 'Ellsworth Mill' },
+        project: { id: 'proj-1', name: 'Maple St' },
+      },
+      {
+        id: 'po-s',
+        status: 'shipped',
+        po_number: 'PO-S',
+        confirmed_eta: '2026-10-08',
+        vendor: { name: 'Ellsworth Mill' },
+        project: { id: 'proj-1', name: 'Maple St' },
+      },
+    ];
+    renderPage();
+    expect(screen.getByText(/Awaiting inspection · 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Shipped · receive on arrival · 1/)).toBeInTheDocument();
+    expect(screen.getByText(/PO-S/)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Inspect' })).toHaveLength(2);
   });
 });

@@ -1060,6 +1060,60 @@ describe('useUpsertStudioPaymentMethod', () => {
 // useCreateReceivingInspection
 // ─────────────────────────────────────────────────────────────────────────────
 
+describe('useCreateReceivingInspection — C-19 per-line check-in (00700)', () => {
+  const run = (input: unknown) =>
+    (
+      useCreateReceivingInspection() as unknown as {
+        mutationFn: (input: unknown) => Promise<{ inspection: { id: string } }>;
+      }
+    ).mutationFn(input);
+
+  it('lines that all carry a condition go through record_project_ffe_inspection with condition and notedOnBol', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { inspectionId: 'insp-c19' }, error: null });
+
+    const result = await run({
+      purchaseOrderId: 'po-1',
+      outcome: 'clean',
+      photoAssetIds: ['asset-1'],
+      items: [
+        { ffeItemId: 'ffe-1', receivedQuantity: 2, orderedQuantity: 2, condition: 'good' },
+        { ffeItemId: 'ffe-2', receivedQuantity: 1, orderedQuantity: 1, condition: 'good', notedOnBol: true },
+      ],
+    });
+
+    expect(result.inspection.id).toBe('insp-c19');
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('record_project_ffe_inspection', {
+      p_purchase_order_id: 'po-1',
+      p_lines: [
+        { selectionId: 'ffe-1', receivedQuantity: 2, condition: 'good', notedOnBol: false },
+        { selectionId: 'ffe-2', receivedQuantity: 1, condition: 'good', notedOnBol: true },
+      ],
+      p_outcome: 'clean',
+      p_notes: null,
+      p_photo_asset_ids: ['asset-1'],
+    });
+  });
+
+  it('lines without conditions keep the batch receipt RPC and its line shape', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { inspectionId: 'insp-batch' }, error: null });
+
+    await run({
+      purchaseOrderId: 'po-1',
+      outcome: 'clean',
+      items: [{ ffeItemId: 'ffe-1', receivedQuantity: 2, orderedQuantity: 2 }],
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('record_project_ffe_receipt_batch', {
+      p_purchase_order_id: 'po-1',
+      p_lines: [{ selectionId: 'ffe-1', receivedQuantity: 2 }],
+      p_outcome: 'clean',
+      p_notes: null,
+      p_photo_asset_ids: [],
+    });
+  });
+});
+
 describe.skip('legacy direct useCreateReceivingInspection contract', () => {
   it('clean outcome: INSERTs the inspection and NOTHING else — PO/payment/item side effects are owned by DB trigger 00184', async () => {
     supabaseClient.auth.getUser.mockResolvedValue({
