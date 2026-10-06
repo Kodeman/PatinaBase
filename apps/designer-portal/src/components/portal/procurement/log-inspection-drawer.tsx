@@ -28,6 +28,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import {
@@ -199,7 +200,12 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     }
   };
 
-  return (
+  // Portal to document.body (as OrderAssistant does): rendered inline from the
+  // line unfold, /doc's stacking context capped the panel's z-50 beneath the
+  // fixed z-40 Studio drawer, which swallowed clicks on the footer.
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -505,7 +511,8 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
