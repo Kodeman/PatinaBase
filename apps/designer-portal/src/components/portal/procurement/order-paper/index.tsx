@@ -243,12 +243,13 @@ function PaperSheet({
   const router = useRouter();
   const qc = useQueryClient();
   const alive = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set on every mount: StrictMode's dev remount runs the cleanup first.
+    alive.current = true;
+    return () => {
       alive.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const isPatinaMaker =
     Boolean(vendor.is_patina_catalog) ||
