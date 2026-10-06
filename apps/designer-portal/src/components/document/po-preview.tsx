@@ -17,7 +17,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useLogPOAcknowledgment,
   usePurchaseOrderChanges,
   usePurchaseOrders,
   useSendPurchaseOrder,
@@ -39,7 +38,7 @@ import {
 } from '@/components/portal/procurement/order-assistant/ship-to-choice';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
 import { fmtDay } from '@/lib/document/format';
-import { DateTextInput } from './date-text-input';
+import { AckCheckForm, AckRecord, usePoAckSummary } from './buying/ack-check';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
 export interface PoPreviewProps {
@@ -65,14 +64,11 @@ export interface PoPreviewProps {
 }
 
 /**
- * PRC-07 (R84) — the manual vendor-acknowledgment act, in Document grammar.
- * Ports the LogAcknowledgmentPopover's logic (log_po_acknowledgment RPC,
- * 00186/00190: ack date stamped server-side NOW() idempotently; PO # and ETA
- * coalesce — blank keeps what's on file) with quiet inline confirm (R51) and
- * the R83 inline error band. One form, two homes: the resend preview's paper
- * and the Orders book's rows — both converged onto the same laid-paper ink
- * (R96), so `tone` is retained for caller compatibility but no longer changes
- * anything (the DocSheet `variant` precedent).
+ * PRC-07 (R84) → C-27 (D1-06): the vendor-acknowledgment act is the
+ * acknowledgment check — WE ORDERED beside THEY CONFIRMED, pre-filled with
+ * every PO value, logged through log_po_acknowledgment_v2 (buying/ack-check).
+ * One form, three homes: the unfold's next act, the Orders book's rows and
+ * the resend paper. `tone` is retained for caller compatibility only (R96).
  */
 export function LogAckInline({
   purchaseOrderId,
@@ -91,118 +87,14 @@ export function LogAckInline({
   tone?: 'paper' | 'book';
   onLogged?: () => void;
 }) {
-  const qc = useQueryClient();
-  const logAck = useLogPOAcknowledgment({ errorSurface: 'inline' });
-  const [poNo, setPoNo] = useState(vendorPoNumber ?? '');
-  const [eta, setEta] = useState(confirmedEta ? confirmedEta.slice(0, 10) : '');
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const label =
-    'font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--text-muted)]';
-  const input =
-    'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 font-mono text-[11px] text-[var(--color-charcoal)] outline-none';
-
-  const confirm = async () => {
-    if (logAck.isPending) return;
-    setError(null);
-    try {
-      await logAck.mutateAsync({
-        purchaseOrderId,
-        // undefined preserves the stored value (the RPC coalesces NULL inputs).
-        vendorPoNumber: poNo.trim() || undefined,
-        confirmedEta: eta || undefined,
-      });
-      procurementEvents.poAcknowledgmentLogged({
-        days_since_sent: sentAt
-          ? Math.max(
-              0,
-              Math.floor(
-                (Date.now() - new Date(sentAt).getTime()) / 86_400_000,
-              ),
-            )
-          : null,
-      });
-      // One act, many surfaces (§5): unfold PO cell, ledger row, Desk need.
-      void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
-      void qc.invalidateQueries({ queryKey: ['document-state'] });
-      setDone(true);
-      onLogged?.();
-    } catch (e) {
-      setError(
-        (e as Error).message || 'The acknowledgment could not be logged.',
-      );
-    }
-  };
-
-  if (done) {
-    // R51: the quiet confirmation — a line of text at the act site.
-    return (
-      <p className="text-[11px] text-[var(--color-charcoal)]">
-        Acknowledged — logged {fmtDay(new Date().toISOString())}.
-      </p>
-    );
-  }
-
   return (
-    <div>
-      <p className="mb-1.5 text-[11px] text-[var(--text-muted)]">
-        Stamped as of today — PO # and ETA are optional, blank keeps
-        what&rsquo;s on file.
-      </p>
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-0.5">
-          <span className={label}>Vendor PO #</span>
-          <input
-            type="text"
-            value={poNo}
-            onChange={(e) => setPoNo(e.target.value)}
-            placeholder="NA-2026-…"
-            className={`w-[130px] ${input}`}
-          />
-        </label>
-        <label className="flex flex-col gap-0.5">
-          <span className={label}>Confirmed ETA</span>
-          <DateTextInput
-            value={eta || null}
-            onChange={(value) => setEta(value ?? '')}
-            ariaLabel="Confirmed ETA"
-            className={input}
-          />
-        </label>
-        <DocumentAction
-          actionKey="log-po-acknowledgment"
-          surfaceKey="orders"
-          regionKey="po-acknowledgment"
-          variant="primary"
-          disabled={logAck.isPending}
-          loading={logAck.isPending}
-          loadingLabel="Logging…"
-          onClick={() => void confirm()}
-        >
-          Log acknowledgment
-        </DocumentAction>
-      </div>
-      {error && (
-        // R83: the failure renders as a quiet inline band at the act site.
-        <div role="alert" className="mt-1.5 text-[11px] text-[var(--color-terracotta-ink)]">
-          <p>{error}</p>
-          <DocumentActionGroup
-            surfaceKey="orders"
-            regionKey="po-acknowledgment-error"
-            className="mt-2"
-          >
-            <DocumentAction
-              actionKey="retry-po-acknowledgment"
-              variant="primary"
-              onClick={() => void confirm()}
-            >
-              Try again
-            </DocumentAction>
-          </DocumentActionGroup>
-        </div>
-      )}
-    </div>
+    <AckCheckForm
+      purchaseOrderId={purchaseOrderId}
+      vendorPoNumber={vendorPoNumber}
+      confirmedEta={confirmedEta}
+      sentAt={sentAt}
+      onLogged={onLogged}
+    />
   );
 }
 
@@ -271,6 +163,27 @@ function ShipToNotSetBand({
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+/** C-27: the PO stamp ("Acknowledged · 1 difference") over the ack record. */
+function PoAckDifferences({ po }: { po: PurchaseOrder }) {
+  const { copy } = usePoAckSummary(po.id);
+  return (
+    <div
+      data-testid="po-ack-differences"
+      className="max-h-[30vh] overflow-y-auto border-t border-[var(--color-pearl)] px-5 py-2.5"
+    >
+      <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+        {copy?.label ?? 'Acknowledged · differences'}
+      </p>
+      <AckRecord
+        purchaseOrderId={po.id}
+        projectId={po.project_id}
+        vendorPoNumber={po.vendor_po_number}
+        confirmedEta={po.confirmed_eta}
+      />
     </div>
   );
 }
@@ -505,6 +418,12 @@ export function PoPreview({
               tone="paper"
             />
           </div>
+        )}
+
+        {/* C-27: an open difference on the vendor's acknowledgment rides the
+            paper, stamped in terracotta until it is answered. */}
+        {po && (po as { ack_state?: string }).ack_state === 'discrepancy' && (
+          <PoAckDifferences po={po} />
         )}
 
         <PoChangeHistory purchaseOrderId={purchaseOrderId} />
