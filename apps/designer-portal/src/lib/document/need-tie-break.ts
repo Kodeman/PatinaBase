@@ -90,6 +90,7 @@ function datedRank(need: NeedLine, now: Date): NeedTieBreakRank | null {
  * undated text — so the kind carries no outside clock to rank on.
  */
 const TIE_BREAK_RANK: Record<NeedKind, NeedTieBreakRank> = {
+  claim_window: 1,
   damage_claim: 1,
   awaiting_inspection: 1,
   schedule_conflict: 1,

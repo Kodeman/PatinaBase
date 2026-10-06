@@ -29,6 +29,7 @@ import {
   InspectionPhotoStrip,
   inspectionPhotoIds,
 } from './line-unfold/inspection-photo-strip';
+import { ClaimClockLine } from './line-unfold/claim-clock';
 
 type AnyRecord = any;
 
@@ -155,6 +156,15 @@ function OpenClaimRow({
               .filter(Boolean)
               .join(' · ')}
           </p>
+          {/* C-20: the clock matters until the vendor is told. */}
+          {drafted && (
+            <ClaimClockLine
+              purchaseOrderId={po?.id}
+              vendorId={po?.vendor?.id}
+              vendorName={vendorName}
+              className="doc-type-meta mt-0.5"
+            />
+          )}
         </div>
         <Stamp
           label={drafted ? 'claim drafted' : 'vendor notified'}
@@ -294,6 +304,15 @@ function QueueRow({
         <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
           {[po.project?.name ?? 'Project', when].filter(Boolean).join(' · ')}
         </p>
+        {/* C-20 (D1-08): one dated sentence on a delivered row. */}
+        {po.status === 'delivered' && (
+          <ClaimClockLine
+            purchaseOrderId={po.id}
+            vendorId={po.vendor_id ?? po.vendor?.id}
+            vendorName={po.vendor?.name ?? 'Vendor'}
+            className="doc-type-meta mt-0.5"
+          />
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-x-3">
         <DocumentAction

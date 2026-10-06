@@ -63,6 +63,7 @@ const STAGE_LABEL: Record<SectionKey, string> = {
 const URGENT_NEED_KINDS: ReadonlySet<NeedKind> = new Set([
   'overdue_decision',
   'overdue_invoice',
+  'claim_window',
   'damage_claim',
   'proposal_declined',
   'proposal_expired',

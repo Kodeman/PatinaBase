@@ -6,6 +6,7 @@ describe('Desk need action labels', () => {
       overdue_decision: 'Review decisions',
       overdue_invoice: 'Send reminder',
       proposal_signed: 'Open the project',
+      claim_window: 'Notify the vendor',
       damage_claim: 'Review the claim',
       proposal_declined: 'Follow up',
       proposal_expired: 'Revise proposal',

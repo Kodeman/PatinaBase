@@ -27,6 +27,14 @@ jest.mock('@patina/supabase', () => ({
   useFfeInvoiceCoverage: () => ({ data: undefined }),
 }));
 
+// C-20: the clock's sentence is receiving-claim-clock.test.tsx's; here it
+// only marks where it rides.
+jest.mock('../claim-clock', () => ({
+  ClaimClockLine: ({ purchaseOrderId }: { purchaseOrderId: string }) => (
+    <p data-testid="claim-clock">{purchaseOrderId}</p>
+  ),
+}));
+
 jest.mock('@/components/portal/procurement/order-assistant', () => ({
   OrderAssistant: () => null,
 }));
@@ -211,6 +219,24 @@ describe('LineUnfold · six cells (C-14)', () => {
     expect(screen.getByRole('group', { name: 'Receiving' })).toHaveTextContent(
       'Awaiting inspection',
     );
+  });
+
+  it('carries the claim clock in Receiving once the PO is delivered (C-20)', () => {
+    renderUnfold({
+      status: 'delivered',
+      purchase_order: { ...po, status: 'delivered', delivered_date: '2026-10-13' },
+    });
+    const receiving = within(screen.getByRole('group', { name: 'Receiving' }));
+    expect(receiving.getByTestId('claim-clock')).toHaveTextContent('po-1042');
+  });
+
+  it('leaves the claim clock off a line inspected good (C-20)', () => {
+    renderUnfold({
+      status: 'received',
+      received_quantity: 1,
+      purchase_order: { ...po, status: 'received', delivered_date: '2026-10-13' },
+    });
+    expect(screen.queryByTestId('claim-clock')).not.toBeInTheDocument();
   });
 });
 

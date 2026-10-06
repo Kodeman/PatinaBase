@@ -597,7 +597,7 @@ function gateGuide(
  * `NeedKind`, so a new kind is a type error rather than a silent shrug.
  *
  * It is authoritative here, not a fallback: `NEED_ACTION_LABELS` (the folio
- * footer's own copy, non-null for seventeen of the nineteen kinds) leads six of
+ * footer's own copy, non-null for eighteen of the twenty kinds) leads six of
  * them with `Review`, which is the word F18 retired from the top of the paper.
  * The Desk's folio keeps that copy; the document states the verb and its object.
  */
@@ -606,6 +606,7 @@ function needVerb(kind: NeedKind): string {
     case 'overdue_decision': return 'Chase the approval';
     case 'overdue_invoice': return 'Send reminder';
     case 'proposal_signed': return 'Open the project';
+    case 'claim_window': return 'Notify the vendor';
     case 'damage_claim': return 'File the claim';
     case 'proposal_declined': return 'Follow up';
     case 'proposal_expired': return 'Revise proposal';
@@ -659,7 +660,9 @@ export function needGuideAction(
       ? ffeAnchor
     : (need.kind === 'damage_claim' || need.kind === 'awaiting_inspection') && lineAnchor
       ? lineAnchor
-    : need.kind === 'damage_claim' || need.kind === 'awaiting_inspection'
+    : need.kind === 'damage_claim' ||
+        need.kind === 'awaiting_inspection' ||
+        need.kind === 'claim_window'
       ? { kind: 'ledger', name: 'orders', context: { page: 'receiving', projectId: projectId ?? undefined } }
     : need.kind === 'po_unsent' || need.kind === 'po_unacknowledged'
       ? { kind: 'ledger', name: 'orders', context: { page: 'ledger', projectId: projectId ?? undefined } }

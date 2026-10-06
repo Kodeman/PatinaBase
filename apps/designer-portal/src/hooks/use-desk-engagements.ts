@@ -29,6 +29,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { createBrowserClient, type Invoice } from '@patina/supabase';
 import {
   partitionDesk,
+  type DeskClaimWindowSignal,
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
@@ -123,6 +124,72 @@ const CONFLICT_WINDOW_DAYS = 120;
 export const DESK_PHASE_LIMIT = 2000;
 const DESK_MILESTONE_LIMIT = 500;
 const DESK_PROPOSAL_LIMIT = 500;
+/** C-20: claim_window_closing notices are written once per (PO, recipient)
+ *  and never deleted, so the read looks back a bounded stretch. */
+const DESK_CLAIM_NOTICE_LIMIT = 200;
+const DESK_CLAIM_NOTICE_DAYS = 60;
+
+/**
+ * C-20: the claim_window_closing notices (00700's procurement-clocks-daily
+ * writes one the day before the vendor deadline) folded to one signal per PO,
+ * keyed by project_id, each carrying its deadline from
+ * procurement_claim_deadline. Only POs whose drafted claim has not reached the
+ * vendor ask for a deadline; the derivation decides the rest. Any failure
+ * degrades to no answer, never takes the Desk down.
+ */
+async function loadDeskClaimWindows(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  notices: any,
+): Promise<Map<string, DeskClaimWindowSignal[]> | undefined> {
+  if (!Array.isArray(notices)) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  const byPo = new Map<string, Omit<DeskClaimWindowSignal, 'deadline'> & { projectId: string }>();
+  for (const notice of notices) {
+    const po = one(notice?.purchase_order);
+    if (!po?.id || !po.project_id || byPo.has(po.id)) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inspections = ((po.inspections ?? []) as any[])
+      .slice()
+      .sort((a, b) => String(b?.inspected_at ?? '').localeCompare(String(a?.inspected_at ?? '')));
+    byPo.set(po.id, {
+      projectId: po.project_id,
+      purchaseOrderId: po.id,
+      poLabel: po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'A delivery',
+      vendorName: one(po.vendor)?.name ?? null,
+      claimStates: inspections.flatMap((i) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ((i?.claims ?? []) as any[]).map((c) => String(c?.state)),
+      ),
+      latestOutcome: inspections[0]?.outcome ?? null,
+    });
+  }
+  const live = [...byPo.values()].filter(
+    (w) => w.claimStates.includes('drafted') && w.latestOutcome !== 'clean',
+  );
+  try {
+    const deadlines = await Promise.all(
+      live.map(async (w) => {
+        const { data, error } = await supabase.rpc('procurement_claim_deadline', {
+          p_po_id: w.purchaseOrderId,
+        });
+        if (error) throw error;
+        return (Array.isArray(data) ? data[0] : data)?.vendor_deadline ?? null;
+      }),
+    );
+    const map = new Map<string, DeskClaimWindowSignal[]>();
+    live.forEach(({ projectId, ...w }, i) => {
+      const deadline = deadlines[i] as string | null;
+      if (!deadline) return;
+      map.set(projectId, [...(map.get(projectId) ?? []), { ...w, deadline }]);
+    });
+    return map;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Flatten the item_feedback→proposal_items→proposals embed into the flagged-row
  *  shape buildDeskFlaggedLines reads. Tolerant of PostgREST returning a to-one
@@ -198,6 +265,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: deskMilestones, error: deskMilestonesError },
         { data: deskProjectStarts, error: deskProjectStartsError },
         { data: deskProposals, error: deskProposalsError },
+        { data: claimNotices, error: claimNoticesError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -272,6 +340,21 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           .eq('state', 'proposed')
           .order('created_at', { ascending: false })
           .limit(DESK_PROPOSAL_LIMIT),
+        // C-20: claim_window_closing notices. 00700's studio read policy lets
+        // a co-member see a colleague's notice, so this is not filtered to
+        // the viewer; the loader dedupes per PO.
+        supabase
+          .from('procurement_notifications')
+          .select(
+            'purchase_order:purchase_orders!procurement_notifications_subject_purchase_order_id_fkey(id, project_id, po_number, vendor_po_number, sidemark, vendor:vendors!purchase_orders_vendor_id_fkey(name), inspections:receiving_inspections!receiving_inspections_purchase_order_id_fkey(outcome, inspected_at, claims:damage_claims!damage_claims_receiving_inspection_id_fkey(state)))',
+          )
+          .eq('kind', 'claim_window_closing')
+          .gte(
+            'created_at',
+            new Date(Date.now() - DESK_CLAIM_NOTICE_DAYS * 86_400_000).toISOString(),
+          )
+          .order('created_at', { ascending: false })
+          .limit(DESK_CLAIM_NOTICE_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -373,6 +456,9 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
                   ),
               answeredProposals,
             );
+      const claimWindows = claimNoticesError
+        ? undefined
+        : await loadDeskClaimWindows(supabase, claimNotices);
 
       const result = partitionDesk(
         rows,
@@ -383,6 +469,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         ceremoniesByLeadId,
         ceremoniesByDesignerClientId,
         schedules,
+        claimWindows,
       );
       previousResultRef.current = result;
       return result;
