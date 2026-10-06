@@ -204,8 +204,8 @@ export function MakerReadingTable<T extends MakerReadingRow>({
     );
   };
 
-  const foot = (text: string) => (
-    <tr>
+  const foot = (key: string, text: string) => (
+    <tr key={key}>
       <td colSpan={columns} className="pb-3 pl-2 pt-1.5 text-[11.5px] text-[var(--text-muted)]">
         {text}
       </td>
@@ -244,14 +244,19 @@ export function MakerReadingTable<T extends MakerReadingRow>({
                 {group.maker ?? `No maker yet · ${group.lineCount}`}
               </th>
             </tr>
-            {group.orders.map((order) => (
-              <Fragment key={order.key}>
-                {order.lines.map(lineRow)}
-                {foot(order.foot)}
-              </Fragment>
-            ))}
-            {group.notOnOrder.map(lineRow)}
-            {group.maker !== null && group.notOnOrder.length > 0 && foot('Not yet ordered')}
+            {/* One flat keyed list, so ordering a line (it moves from "not
+                yet ordered" onto its new PO) keeps its row and open unfold
+                mounted — the Order Assistant lives in LineUnfold's state. */}
+            {[
+              ...group.orders.flatMap((order) => [
+                ...order.lines.map(lineRow),
+                foot(`foot:${order.key}`, order.foot),
+              ]),
+              ...group.notOnOrder.map(lineRow),
+              ...(group.maker !== null && group.notOnOrder.length > 0
+                ? [foot('foot:not-on-order', 'Not yet ordered')]
+                : []),
+            ]}
           </tbody>
         ))}
       </table>
