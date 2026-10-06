@@ -417,3 +417,23 @@ LibreOffice for EMF and `.ppt`, PDF decks via pdfjs.
 **Source:** `artifacts/procurement-buying-review-2026-10-05/` (deck https://claude.ai/artifact/TveKxXXLgafVR9ZvqnV1XP; `synthesis/direction.md` §9; `rulings.md`).
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 (V1 ruled) · last id = V14*
+
+---
+
+## Parked — 2026-10-06 (studio buying side journeys)
+
+These are side journeys from the studio buying review (`artifacts/procurement-buying-review-2026-10-05/synthesis/direction.md` §10). They were logged, not built, when US-16 shipped. Each one failed the feature test (surface, studio moment, stream, promise) or is gated elsewhere. None is a ruling, so they take no V-id.
+
+| Side journey | Why it is parked | What shipped instead |
+|---|---|---|
+| Memo and sample library | No studio moment yet; it would be a catalog of its own | C-35: a sample's return-by date and one Desk need |
+| Sample-box ordering | A marketplace motion, not a Document one; no stream for the studio | — |
+| Shelf inventory (pieces the studio holds) | Storage is a place, not a stock ledger; a tally screen drifts toward V11's dashboard refusal | C-13: storage as a receiver location |
+| Resale-certificate vault, with state rules | Legal-gated; tax and nexus rules are a CPA matter | C-12: the certificate's on-file date on the vendor account |
+| Job P&L screen | A dashboard unless it is front matter over rows; blocked on R1 and V1 | — |
+| Vendor reliability scores, on-time %, per-member counts, spend tile | Refused by V11 | — |
+| Client-facing order tracking beyond the client page's mirror | V8 governs the client page | — |
+
+**Reopen when:** a studio asks for one of these at a named moment, in its own words, and it passes the feature test.
+
+*Entries add: Parked 2026-10-06 (no id) · last id = V14*

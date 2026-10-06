@@ -89,3 +89,58 @@ These are all open. The review flags them and never resolves them. Where a mocku
 
 - No live portal walk. Three findings are code-certain but unverified at runtime: the ETA write, the member send, and whether the mock fallback hides either. Change C-00 is a one-day signed-in probe that settles them.
 - No Leah interview. Claim windows, quote validity, yardage overage and lines per job are practitioner norms. Fixture names and prices are invented.
+
+## As built (US-16, 2026-10-06)
+
+The whole change list shipped as story US-16 with **no feature flags**, in three phases. Phase 0 and Phase 1 are in production; Phase 2 ships after its review fixes and member walk. Each phase got a separate-context review and an end-to-end member walk, and the review findings were fixed before deploy.
+
+| C | What | Tickets | Migrations |
+|---|---|---|---|
+| C-00 | Member probe (ETA write, co-member send) | SQ-391, settled by SQ-400's walk | 00690 |
+| C-01 · C-03 · C-04 | ETA RPC, status advance, mark installed | SQ-391, SQ-395 | 00690–00691 |
+| C-02 · C-06 · C-07 | Explicit ship-to; po-send refuses no ship-to, spec→product, co-member send | SQ-396, SQ-398, SQ-437, SQ-438 | 00690 |
+| C-05 | Line commercials (maker and trade cost) | SQ-391, SQ-397 | 00692 |
+| C-08 | Orders book keeps the project lens | SQ-392 | — |
+| C-09 · C-10 | One send UI; log the ack in the unfold | SQ-393 | — |
+| C-11a | One readiness derivation (R-PB1 warn only) | SQ-394 | — |
+| C-11 | Record what we paid | SQ-401, SQ-405, SQ-443 | 00695, 00716 |
+| C-12 | Studio vendor accounts | SQ-402, SQ-406 | 00696 |
+| C-13 | Studio receivers and locations | SQ-402, SQ-407 | 00697 |
+| C-14 | The line unfold's six cells | SQ-404 | — |
+| C-15 | Read by maker | SQ-408, SQ-444 | — |
+| C-16 | Add to the job, the line card | SQ-409 | 00714, 00715 |
+| C-17 | Carry fields at intake, spec seed | SQ-401, SQ-439 | 00693, 00694 |
+| C-18 | Tracking on POs | SQ-403, SQ-410 | 00698 |
+| C-19 | Receiving that sees | SQ-411 | 00700 |
+| C-20 | Claim clock | SQ-412 | 00700 |
+| C-21 | Change orders UI | SQ-415 | — |
+| C-22 | Notices become acts | SQ-403, SQ-413 | 00699, 00700 |
+| C-23 | The order paper | SQ-418, SQ-421, SQ-446 | 00701 |
+| C-24 | The custom piece (COM pair, submittals) | SQ-418, SQ-424 | 00702 |
+| C-25 | Purchase records | SQ-418, SQ-425 | 00703 |
+| C-26 | Riders and shipments | SQ-418, SQ-422 | 00704 |
+| C-27 | The acknowledgment check | SQ-419, SQ-426 | 00705 |
+| C-28 | Outbound drafts | SQ-419, SQ-423 | 00706 |
+| C-29 | Quotes | SQ-419, SQ-427 | 00707 |
+| C-30 | Exceptions and substitutions | SQ-419, SQ-428 | 00708 |
+| C-31 | Client deposit, then balance; riders and purchases at cost | SQ-420, SQ-429 | 00709 |
+| C-32 | Held for release | SQ-420, SQ-430 | 00710 |
+| C-33 | Read by next act | SQ-431 | — |
+| C-34 | Install manifest and punch; spec snapshot and revision at send | SQ-420, SQ-432 | 00711 |
+| C-35 | Samples: return-by and one Desk need (memo library parked) | SQ-420, SQ-433 | 00712 |
+| C-36 | Who sees margin (R1) | SQ-402, SQ-414 | 00713 |
+
+**Reviews and hardening:**
+- Phase 0: SQ-399, fixes in SQ-437 and SQ-438.
+- Phase 1: SQ-416, fixes in SQ-440, SQ-443 (00716) and SQ-442 (00717, studio-scoped reads).
+- Phase 2: SQ-434, fixes in SQ-447 (00718) and SQ-448.
+
+**Walks:** SQ-400, SQ-417 and SQ-435. **Follow-ups:** SQ-445 (stable line order). **Docs:** SQ-436, this section, plus `help/` (help drafts, unpublished) and `studio-notice-r1.md` (a draft for Kody to send).
+
+**Carried, not built:**
+- **R1 / F4:** margin visibility is a display preference, not a security boundary. The studio notice says so.
+- **R3:** a release covers an order's total and is not tied to later edits.
+- **R4:** the release threshold applies per order; splitting an order can stay under it.
+- **R6:** previewing a held order still assigns its number.
+- **Payee history:** rider payments recorded before 00718 stay attributed to the vendor; no reliable link existed to backfill them.
+- **Side journeys** are parked in `docs/vision/VISION-DECISIONS.md`.
