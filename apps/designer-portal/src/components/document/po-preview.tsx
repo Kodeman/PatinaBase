@@ -16,8 +16,21 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useLogPOAcknowledgment, useSendPurchaseOrder } from '@patina/supabase';
+import {
+  useLogPOAcknowledgment,
+  usePurchaseOrders,
+  useSendPurchaseOrder,
+  useSetPurchaseOrderShipTo,
+  type PurchaseOrder,
+} from '@patina/supabase';
 import { poSendErrorMessage } from '@/components/portal/procurement/po-send-actions';
+import {
+  EMPTY_SHIP_TO,
+  ShipToChoice,
+  resolveShipTo,
+  useShipToAddresses,
+  type ShipToSelection,
+} from '@/components/portal/procurement/order-assistant/ship-to-choice';
 import { procurementEvents } from '@/lib/analytics/procurement-events';
 import { fmtDay } from '@/lib/document/format';
 import { DateTextInput } from './date-text-input';
@@ -187,6 +200,76 @@ export function LogAckInline({
   );
 }
 
+/**
+ * C-02 / R-PB3: an unsent PO with no ship-to gets the same three-way choice
+ * as the Order Assistant, on the paper, before Send. Reads the PO from the
+ * studio's purchase-orders list (the Orders ledger shares the cache) and
+ * renders nothing while it loads or once a ship-to is on file.
+ */
+function ShipToNotSetBand({
+  purchaseOrderId,
+  onSaved,
+}: {
+  purchaseOrderId: string;
+  onSaved: () => void;
+}) {
+  const { data: orders } = usePurchaseOrders() as { data?: PurchaseOrder[] };
+  const po = orders?.find((o) => o.id === purchaseOrderId);
+  const addresses = useShipToAddresses(po?.project_id);
+  const setShipTo = useSetPurchaseOrderShipTo({ errorSurface: 'inline' });
+  const [selection, setSelection] = useState<ShipToSelection>(EMPTY_SHIP_TO);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!po || po.sent_at || po.ship_to?.trim()) return null;
+  const shipTo = resolveShipTo(selection, addresses);
+
+  const save = async () => {
+    if (!shipTo || setShipTo.isPending) return;
+    setError(null);
+    try {
+      await setShipTo.mutateAsync({ purchaseOrderId, shipTo });
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message || 'The ship-to could not be saved.');
+    }
+  };
+
+  return (
+    <div className="border-t border-[var(--color-pearl)] px-5 py-2.5">
+      <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-terracotta-ink)]">
+        Ship-to not set
+      </p>
+      <ShipToChoice
+        {...addresses}
+        value={selection}
+        onChange={setSelection}
+        disabled={setShipTo.isPending}
+      />
+      <DocumentActionGroup
+        surfaceKey="orders"
+        regionKey="po-ship-to"
+        className="mt-2"
+      >
+        <DocumentAction
+          actionKey="set-po-ship-to"
+          variant="secondary"
+          disabled={!shipTo || setShipTo.isPending}
+          loading={setShipTo.isPending}
+          loadingLabel="Saving…"
+          onClick={() => void save()}
+        >
+          Set ship-to
+        </DocumentAction>
+      </DocumentActionGroup>
+      {error && (
+        <p role="alert" className="mt-1.5 text-[11px] text-[var(--color-terracotta-ink)]">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function PoPreview({
   open,
   onOpenChange,
@@ -220,10 +303,9 @@ export function PoPreview({
   }, [purchaseOrderId]);
 
   // Render + store the PDF the moment the paper lifts (mode 'preview'
-  // stamps nothing — the server always allows it).
-  useEffect(() => {
-    if (!open || previewedFor.current === purchaseOrderId) return;
-    previewedFor.current = purchaseOrderId;
+  // stamps nothing — the server always allows it). Re-run once a ship-to is
+  // set on the paper so the PDF shows it.
+  const renderPreview = () => {
     setSignedUrl(null);
     setError(null);
     setWarning(null);
@@ -239,6 +321,12 @@ export function PoPreview({
           );
       })
       .catch((e: Error) => setError(poSendErrorMessage(e.message)));
+  };
+
+  useEffect(() => {
+    if (!open || previewedFor.current === purchaseOrderId) return;
+    previewedFor.current = purchaseOrderId;
+    renderPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, purchaseOrderId]);
 
@@ -348,6 +436,13 @@ export function PoPreview({
               tone="paper"
             />
           </div>
+        )}
+
+        {mode === 'send' && (
+          <ShipToNotSetBand
+            purchaseOrderId={purchaseOrderId}
+            onSaved={renderPreview}
+          />
         )}
 
         {/* C-09: the note travels with the emailed PO; marking sent sends nothing. */}

@@ -24,14 +24,25 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 const createMutateAsync = jest.fn();
 const startCheckoutMutateAsync = jest.fn();
 const fetchPOPaymentsMock = jest.fn();
+const setShipToMutateAsync = jest.fn();
+// Ship-to option sources (C-02): the studio's organizations.address and the
+// project's site_address. Null hides the matching radio.
+const mockShipToSources: { orgAddress: unknown; siteAddress: string | null } = {
+  orgAddress: null,
+  siteAddress: null,
+};
 
 jest.mock('@patina/supabase', () => ({
   useCreatePurchaseOrder: () => ({ mutateAsync: createMutateAsync, isPending: false }),
   useStartPoCheckout: () => ({ mutateAsync: startCheckoutMutateAsync, isPending: false }),
+  useSetPurchaseOrderShipTo: () => ({ mutateAsync: setShipToMutateAsync, isPending: false }),
   fetchPOPayments: (...args: unknown[]) => fetchPOPaymentsMock(...args),
   // Coverage query in isError → uncovered=[] → the soft gate never blocks.
   useFfeInvoiceCoverage: () => ({ data: undefined, isLoading: false, isError: true }),
-  useOrganizations: () => ({ data: [{ name: 'Studio' }] }),
+  useOrganizations: () => ({
+    data: [{ name: 'Studio', address: mockShipToSources.orgAddress }],
+  }),
+  useProject: () => ({ data: { site_address: mockShipToSources.siteAddress } }),
 }));
 
 jest.mock('@/components/portal/toast-provider', () => ({
@@ -142,7 +153,23 @@ beforeEach(() => {
   createMutateAsync.mockReset();
   startCheckoutMutateAsync.mockReset();
   fetchPOPaymentsMock.mockReset();
+  setShipToMutateAsync.mockReset();
+  // set_purchase_order_ship_to returns the updated header row.
+  setShipToMutateAsync.mockImplementation(
+    async ({ shipTo }: { purchaseOrderId: string; shipTo: string }) => ({
+      ...(await createMutateAsync.mock.results.at(-1)?.value),
+      ship_to: shipTo,
+    }),
+  );
+  mockShipToSources.orgAddress = null;
+  mockShipToSources.siteAddress = null;
 });
+
+/** On the Details step: choose "Somewhere else" and type the address. */
+function chooseSomewhereElse(text = 'Acme Receiving, 9 Dock Rd, Racine, WI 53403') {
+  fireEvent.click(screen.getByRole('radio', { name: 'Somewhere else' }));
+  fireEvent.change(screen.getByLabelText('Ship-to address'), { target: { value: text } });
+}
 
 // ─── Fixtures / render helper ────────────────────────────────────────────────
 const baseVendor = {
@@ -394,6 +421,7 @@ describe('OrderAssistant — catalog order (Phase 4 pay-at-order)', () => {
     // external flow has an extra details step: review → coverage → details → submit
     fireEvent.click(screen.getByRole('button', { name: 'Continue' })); // review → coverage
     fireEvent.click(screen.getByRole('button', { name: 'Continue' })); // coverage → details
+    chooseSomewhereElse();
     fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
 
     await waitFor(() => expect(createMutateAsync).toHaveBeenCalledTimes(1));
@@ -426,6 +454,7 @@ describe('OrderAssistant — Created step sends through PoPreview (C-09)', () =>
     } as Partial<OrderAssistantProps>);
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    chooseSomewhereElse();
     fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
     await screen.findByText(/Purchase order created/i);
   }
@@ -479,6 +508,82 @@ describe('OrderAssistant — Created step sends through PoPreview (C-09)', () =>
     fireEvent.click(screen.getByRole('button', { name: /one-click order via patina/i }));
     await screen.findByText(/Purchase order created/i);
     expect(poPreviewProps).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrderAssistant — ship-to choice in Details (C-02)', () => {
+  const external = { vendor: { ...baseVendor, is_patina_catalog: false } };
+
+  function toDetails() {
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' })); // review → coverage
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' })); // coverage → details
+  }
+
+  it('offers the studio, the job site and somewhere else, with nothing preselected', () => {
+    mockShipToSources.orgAddress = { street: '1 Main St', city: 'Madison', state: 'WI', zip: '53703' };
+    mockShipToSources.siteAddress = '42 Lake Rd, Middleton, WI 53562';
+    renderAssistant(external);
+    toDetails();
+
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map((r) => r.getAttribute('value'))).toEqual(['studio', 'site', 'other']);
+    radios.forEach((r) => expect(r).not.toBeChecked());
+    expect(screen.getByText('1 Main St, Madison, WI 53703')).toBeInTheDocument();
+    expect(screen.getByText('42 Lake Rd, Middleton, WI 53562')).toBeInTheDocument();
+  });
+
+  it('hides the studio and job-site options when neither address is on file', () => {
+    renderAssistant(external);
+    toDetails();
+
+    expect(screen.queryByRole('radio', { name: /the studio/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /the job site/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('radio')).toHaveLength(1);
+    expect(screen.getByRole('radio', { name: 'Somewhere else' })).not.toBeChecked();
+  });
+
+  it('blocks the submit with "Choose where this ships." until a choice is made', async () => {
+    mockShipToSources.orgAddress = { street: '1 Main St', city: 'Madison', state: 'WI', zip: '53703' };
+    createMutateAsync.mockResolvedValue({ id: 'po-5', total_cents: 5000 });
+    renderAssistant(external);
+    toDetails();
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose where this ships.');
+    expect(createMutateAsync).not.toHaveBeenCalled();
+
+    // "Somewhere else" with nothing typed is still no choice.
+    fireEvent.click(screen.getByRole('radio', { name: 'Somewhere else' }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose where this ships.');
+    expect(createMutateAsync).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('radio', { name: /the studio/i }));
+    expect(screen.queryByText('Choose where this ships.')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
+
+    await screen.findByText(/Purchase order created/i);
+    expect(createMutateAsync).toHaveBeenCalledTimes(1);
+    expect(setShipToMutateAsync).toHaveBeenCalledWith({
+      purchaseOrderId: 'po-5',
+      shipTo: '1 Main St, Madison, WI 53703',
+    });
+  });
+
+  it('persists the job site or typed text exactly as shown', async () => {
+    mockShipToSources.siteAddress = '  42 Lake Rd, Middleton, WI 53562 ';
+    createMutateAsync.mockResolvedValue({ id: 'po-6', total_cents: 5000 });
+    renderAssistant(external);
+    toDetails();
+
+    fireEvent.click(screen.getByRole('radio', { name: /the job site/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
+
+    await screen.findByText(/Purchase order created/i);
+    expect(setShipToMutateAsync).toHaveBeenCalledWith({
+      purchaseOrderId: 'po-6',
+      shipTo: '42 Lake Rd, Middleton, WI 53562',
+    });
   });
 });
 
