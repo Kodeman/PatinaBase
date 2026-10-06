@@ -42,6 +42,11 @@
 
 BEGIN;
 
+-- The raw PO-link UPDATEs below must satisfy lock_configuration_snapshot_on_po_link
+-- (00403/00422), which refuses a link when auth.uid() is null unless the role
+-- is service_role. Transaction-local; the session still runs as superuser.
+SET LOCAL "request.jwt.claims" TO '{"role":"service_role"}';
+
 -- ─── fixtures ──────────────────────────────────────────────────────────────
 
 -- Designer auth user + profile (profiles may be auto-created by an
@@ -75,7 +80,8 @@ VALUES ('eeee0000-0000-4000-8000-000000000002', 'State Chain Test Vendor');
 --   PO10 confirmed   full_upfront  — case 12 (manual unlink)
 INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status)
 VALUES
-  ('f0000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 100000, 'draft'),
+  -- PO1 total is 0: the 00403 link guard requires it to equal its (unpriced) linked lines.
+  ('f0000000-0000-4000-8000-000000000001', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 0, 'draft'),
   ('f0000000-0000-4000-8000-000000000002', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 100000, 'confirmed'),
   ('f0000000-0000-4000-8000-000000000003', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'full_upfront', 100000, 'confirmed'),
   ('f0000000-0000-4000-8000-000000000004', '99999999-9999-4999-8999-999999999999', 'eeee0000-0000-4000-8000-000000000001', 'eeee0000-0000-4000-8000-000000000002', 'net_30',       100000, 'shipped'),
