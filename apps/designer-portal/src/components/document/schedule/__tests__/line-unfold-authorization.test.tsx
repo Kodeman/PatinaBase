@@ -411,10 +411,10 @@ describe('LineUnfold · the trail mount guard', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// C-10 — the acknowledgment act lives in the purchase-order cell
+// C-10 — the acknowledgment act, lifted as the line's next act (C-14)
 // ══════════════════════════════════════════════════════════════════════════
 
-describe('LineUnfold · log acknowledgment in the PO cell', () => {
+describe('LineUnfold · log acknowledgment as the next act', () => {
   const withPo = (po: Record<string, unknown>) =>
     renderUnfold({
       item: {
@@ -431,10 +431,14 @@ describe('LineUnfold · log acknowledgment in the PO cell', () => {
       },
     });
 
-  it('offers it inside the PO cell when the PO is sent and not yet acknowledged', () => {
+  it('lifts it above the cells when the PO is sent and not yet acknowledged', () => {
     withPo({ sent_at: '2026-10-01T12:00:00Z', acknowledged_at: null });
     const ack = screen.getByTestId('log-ack-inline');
-    expect(screen.getByTestId('line-po-cell')).toContainElement(ack);
+    expect(screen.getByTestId('line-next-act')).toContainElement(ack);
+    expect(screen.getByTestId('line-po-cell')).not.toContainElement(ack);
+    expect(screen.getByTestId('line-po-cell')).toHaveTextContent(
+      'awaiting acknowledgment',
+    );
     expect(ack).toHaveTextContent('Log ack po-7 2026-10-01T12:00:00Z');
   });
 
@@ -492,16 +496,16 @@ describe('LineUnfold · Movement status acts', () => {
     });
 
   const inProduction = () =>
-    screen.queryByRole('button', { name: 'In production' });
-  const shipped = () => screen.queryByRole('button', { name: 'Shipped' });
+    screen.queryByRole('button', { name: 'Mark in production' });
+  const shipped = () => screen.queryByRole('button', { name: 'Mark shipped' });
 
-  it('offers "In production" only on a confirmed PO', () => {
+  it('offers "Mark in production" only on a confirmed PO', () => {
     withPoStatus('confirmed');
     expect(inProduction()).toBeInTheDocument();
     expect(shipped()).not.toBeInTheDocument();
   });
 
-  it('offers "Shipped" only on a PO in production', () => {
+  it('offers "Mark shipped" only on a PO in production', () => {
     withPoStatus('in_production', 'production');
     expect(shipped()).toBeInTheDocument();
     expect(inProduction()).not.toBeInTheDocument();
@@ -522,7 +526,7 @@ describe('LineUnfold · Movement status acts', () => {
     expect(shipped()).not.toBeInTheDocument();
   });
 
-  it('"In production" advances the PO, then offers "Shipped" at once', async () => {
+  it('"Mark in production" advances the PO, then offers "Mark shipped" at once', async () => {
     mockAdvancePo.mockResolvedValue({ id: 'po-9', status: 'in_production' });
     withPoStatus('confirmed');
     fireEvent.click(inProduction() as HTMLElement);
@@ -531,11 +535,11 @@ describe('LineUnfold · Movement status acts', () => {
       status: 'in_production',
       projectId: 'project-1',
     });
-    expect(await screen.findByRole('button', { name: 'Shipped' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Mark shipped' })).toBeInTheDocument();
     expect(inProduction()).not.toBeInTheDocument();
   });
 
-  it('"Shipped" advances the PO to shipped', () => {
+  it('"Mark shipped" advances the PO to shipped', () => {
     mockAdvancePo.mockResolvedValue({ id: 'po-9', status: 'shipped' });
     withPoStatus('in_production', 'production');
     fireEvent.click(shipped() as HTMLElement);

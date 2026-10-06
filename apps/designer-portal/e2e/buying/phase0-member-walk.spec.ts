@@ -339,13 +339,14 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
     await assistant.getByRole("button", { name: "Done" }).click();
     await expect(assistant).toBeHidden();
 
-    // 5. Log the ack inline, then set the ETA.
+    // 5. Log the ack (the line's lifted next act), then set the ETA.
     poCell = page.getByTestId("line-po-cell");
+    const nextAct = page.getByTestId("line-next-act");
     await expect(poCell).toContainText("awaiting acknowledgment", {
       timeout: 30_000,
     });
-    await poCell.getByPlaceholder("NA-2026-…").fill(VENDOR_PO);
-    await poCell.getByRole("button", { name: "Log acknowledgment" }).click();
+    await nextAct.getByPlaceholder("NA-2026-…").fill(VENDOR_PO);
+    await nextAct.getByRole("button", { name: "Log acknowledgment" }).click();
     await expect(poCell).toContainText(/Acknowledged|acknowledged/, {
       timeout: 30_000,
     });
@@ -354,7 +355,7 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
       .toBe("confirmed");
     expect(poState().ackAt).not.toBe("");
     await expect(
-      poCell.getByRole("button", { name: "Confirmed ETA" }),
+      nextAct.getByRole("button", { name: "Confirmed ETA" }),
     ).toHaveCount(0, { timeout: 30_000 });
     const eta = isoDaysFromToday(3);
     const etaTrigger = page.getByRole("button", { name: "Confirmed ETA" });
@@ -366,18 +367,18 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
     await expect.poll(() => poState().eta, { timeout: 20_000 }).toBe(eta);
     await shot(page, testInfo, "04-acked-eta");
 
-    // 6. In production, then Shipped; the line follows the PO.
+    // 6. Mark in production, then Mark shipped; the line follows the PO.
     await page
-      .getByRole("button", { name: "In production", exact: true })
+      .getByRole("button", { name: "Mark in production", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: "Shipped", exact: true }),
+      page.getByRole("button", { name: "Mark shipped", exact: true }),
     ).toBeVisible({ timeout: 20_000 });
     await expect
       .poll(() => poState().status, { timeout: 20_000 })
       .toBe("in_production");
     await expect.poll(lineStatus, { timeout: 20_000 }).toBe("production");
-    await page.getByRole("button", { name: "Shipped", exact: true }).click();
+    await page.getByRole("button", { name: "Mark shipped", exact: true }).click();
     await expect
       .poll(() => poState().status, { timeout: 20_000 })
       .toBe("shipped");
