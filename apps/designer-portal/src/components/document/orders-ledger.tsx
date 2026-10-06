@@ -29,6 +29,7 @@ import {
   PROCUREMENT_LIFECYCLE_GATES,
 } from '@patina/types';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
+import { ExistingOrderPaper } from '@/components/portal/procurement/order-paper';
 import {
   derivePurchaseOrderLifecycle,
   procurementExpected,
@@ -148,6 +149,7 @@ export function OrdersLedger({
   );
   // R18: send / resend through the shared preview-confirm.
   const [previewPo, setPreviewPo] = useState<AnyRecord | null>(null);
+  const [paperPo, setPaperPo] = useState<AnyRecord | null>(null);
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [truckEta, setTruckEta] = useState(todayYmd());
@@ -640,7 +642,15 @@ export function OrdersLedger({
                               surfaceKey="orders"
                               regionKey={`purchase-order-row-${index + 1}`}
                               variant="secondary"
-                              onClick={() => setPreviewPo(po)}
+                              onClick={() =>
+                                // C-23: an unsent draft opens on its order
+                                // paper; a sent PO keeps its PDF paper.
+                                !po.sent_at &&
+                                po.status === 'draft' &&
+                                !po.is_patina_catalog
+                                  ? setPaperPo(po)
+                                  : setPreviewPo(po)
+                              }
                             >
                               {po.sent_at
                                 ? 'resend'
@@ -725,6 +735,23 @@ export function OrdersLedger({
               acknowledgedAt={previewPo.acknowledged_at}
               vendorPoNumber={previewPo.vendor_po_number}
               confirmedEta={previewPo.confirmed_eta}
+            />
+          )}
+
+          {paperPo && (
+            <ExistingOrderPaper
+              open
+              onClose={() => setPaperPo(null)}
+              purchaseOrder={paperPo}
+              vendor={
+                vendorById.get(paperPo.vendor_id) ??
+                paperPo.vendor ?? {
+                  id: paperPo.vendor_id,
+                  name: 'the vendor',
+                  default_payment_terms: null,
+                }
+              }
+              projectName={paperPo.project?.name ?? 'Project'}
             />
           )}
 

@@ -17,7 +17,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useVendor } from '@patina/supabase';
-import { OrderAssistant } from '@/components/portal/procurement/order-assistant';
+import { OrderPaper } from '@/components/portal/procurement/order-paper';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
 import { LogAckInline, PoPreview } from './po-preview';
@@ -109,7 +109,7 @@ export function LineUnfold({
   const vendorId: string = item.vendor_id ?? po?.vendor_id ?? '';
   const { data: vendor } = useVendor(vendorId) as { data: FFERow | undefined };
 
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [paperOpen, setPaperOpen] = useState(false);
   const [inspectionOpen, setInspectionOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -171,9 +171,9 @@ export function LineUnfold({
       variant={variant}
       disabled={!vendor}
       title={vendor ? undefined : 'Loading the maker'}
-      onClick={() => setAssistantOpen(true)}
+      onClick={() => setPaperOpen(true)}
     >
-      Order with Assistant
+      Order
     </DocumentAction>
   );
   const sendAct = (variant: DocumentActionVariant) => (
@@ -416,9 +416,9 @@ export function LineUnfold({
           in the old zones — strip it here without touching them (R3). */}
       <div className="contents [&_.shadow-xl]:shadow-none">
         {vendor && (
-          <OrderAssistant
-            open={assistantOpen}
-            onOpenChange={setAssistantOpen}
+          <OrderPaper
+            open={paperOpen}
+            onClose={() => setPaperOpen(false)}
             vendor={vendor}
             project={{ id: projectId, name: projectName }}
             ffeItems={[item]}
