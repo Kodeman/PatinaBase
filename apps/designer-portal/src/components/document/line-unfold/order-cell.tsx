@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { StudioPurchaseRow } from '@patina/supabase';
+import { AckRecord, usePoAckSummary } from '../buying/ack-check';
 import { fmtDay } from '@/lib/document/format';
 import { PurchaseFact } from '../purchases/purchase-fact';
 import type { LineAuthorization } from '@/lib/document/authorization-derivation';
@@ -39,12 +41,17 @@ export function OrderCell({
   /** The viewer may edit this line (C-21 change orders). */
   canChange?: boolean;
 }) {
+  const [changeOpen, setChangeOpen] = useState(false);
+  // C-27: the acknowledgment's own stamp once a v2 ack is on file.
+  const ack = usePoAckSummary(po?.acknowledged_at ? po.id : null);
   const sub = po
     ? [
         po.sent_at ? `sent to vendor ${fmtDay(po.sent_at)}` : 'not yet sent',
         po.sent_at
           ? po.acknowledged_at
-            ? 'acknowledged'
+            ? ack.copy
+              ? null
+              : 'acknowledged'
             : 'awaiting acknowledgment'
           : null,
         po.payment_pattern ? po.payment_pattern.replace(/_/g, ' ') : null,
@@ -70,6 +77,18 @@ export function OrderCell({
     <UnfoldCell head="Order" testId="line-po-cell">
       <CellValue>{poLabel ?? 'Not yet ordered'}</CellValue>
       {sub && <CellSub>{sub}</CellSub>}
+      {ack.copy && (
+        <p
+          data-testid="po-ack-stamp"
+          className={`text-[11px] ${
+            ack.copy.differs
+              ? 'font-medium text-[var(--color-terracotta-ink)]'
+              : 'text-[var(--text-muted)]'
+          }`}
+        >
+          {ack.copy.label}
+        </p>
+      )}
       {po?.ship_to && <CellSub>ship to {po.ship_to}</CellSub>}
       {reasons.length > 0 && (
         <ul
@@ -104,6 +123,24 @@ export function OrderCell({
           auth={auth}
           vendorName={item.vendor_name ?? 'the maker'}
           poLabel={po.po_number ?? 'this order'}
+          open={changeOpen}
+          onOpenChange={setChangeOpen}
+        />
+      )}
+      {/* C-27: each open difference answered here; an R8 refusal routes to
+          the change order above. The reply draft is listed just below. */}
+      {po && ack.state === 'discrepancy' && (
+        <AckRecord
+          purchaseOrderId={po.id}
+          projectId={projectId}
+          vendorPoNumber={po.vendor_po_number}
+          confirmedEta={po.confirmed_eta}
+          drafts={false}
+          onStartChange={
+            projectId && canChange && po.status !== 'cancelled'
+              ? () => setChangeOpen(true)
+              : undefined
+          }
         />
       )}
       {/* C-28: the acknowledgment's letters, drafted and awaiting review. */}

@@ -66,6 +66,14 @@ jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 
+// C-27: the acknowledgment check rides the resend paper; its own suite is
+// buying/__tests__/ack-check.test.tsx.
+jest.mock('./buying/ack-check', () => ({
+  AckCheckForm: () => <div data-testid="ack-check" />,
+  AckRecord: () => null,
+  usePoAckSummary: () => ({ copy: null }),
+}));
+
 import { PoPreview } from './po-preview';
 
 beforeEach(() => {

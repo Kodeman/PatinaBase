@@ -345,6 +345,8 @@ export function ChangeOrderAct({
   auth,
   vendorName,
   poLabel,
+  open: openProp,
+  onOpenChange,
 }: {
   item: FFERow;
   po: FFERow;
@@ -352,8 +354,13 @@ export function ChangeOrderAct({
   auth: LineAuthorization;
   vendorName: string;
   poLabel: string;
+  /** Controlled open, for a host that routes here (C-27's R8 refusal). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = onOpenChange ?? setOpenState;
   return (
     <>
       <DocumentAction

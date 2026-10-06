@@ -37,6 +37,7 @@ import {
 import { Stamp } from './stamp';
 import { DateTextInput } from './date-text-input';
 import { LogAckInline, PoPreview } from './po-preview';
+import { AckDifferenceStamp, AckRecord } from './buying/ack-check';
 import { dueToMakers, LedgerFrontMatter } from './ledger-front-matter';
 import { PoMoneyOut } from './line-unfold/record-payment';
 import { ordersThroughput } from '@/lib/document/ledger-summary';
@@ -505,6 +506,9 @@ export function OrdersLedger({
                     !po.acknowledged_at &&
                     !po.is_patina_catalog &&
                     po.status !== 'cancelled';
+                  // C-27: an acknowledgment with an open difference stamps
+                  // the row in terracotta and unfolds its record to answer.
+                  const ackDiffers = po.ack_state === 'discrepancy';
                   // C-11: the payment band — schedule, records, Record act.
                   const hasMoney = (po.payments ?? []).length > 0;
                   return (
@@ -541,16 +545,20 @@ export function OrdersLedger({
                               'PO drafted'}
                           </p>
                           <div className="ml-auto flex min-h-11 shrink-0 items-center gap-3">
-                            <Stamp
-                              label={
-                                position
-                                  ? procurementStepLabel(position.key)
-                                  : po.status.replace(/_/g, ' ')
-                              }
-                              color={stamp.color}
-                              ink={stamp.ink}
-                              size="sm"
-                            />
+                            {ackDiffers ? (
+                              <AckDifferenceStamp purchaseOrderId={po.id} />
+                            ) : (
+                              <Stamp
+                                label={
+                                  position
+                                    ? procurementStepLabel(position.key)
+                                    : po.status.replace(/_/g, ' ')
+                                }
+                                color={stamp.color}
+                                ink={stamp.ink}
+                                size="sm"
+                              />
+                            )}
                             {/* Next gate — name, and the term that holds it. */}
                             <span
                               data-orders-next-gate
@@ -622,6 +630,21 @@ export function OrdersLedger({
                                 log ack {ackPoId === po.id ? '↑' : '↓'}
                               </button>
                             )}
+                            {ackDiffers && (
+                              <button
+                                type="button"
+                                data-orders-ack-differences-toggle
+                                onClick={() =>
+                                  setAckPoId((cur) =>
+                                    cur === po.id ? null : po.id,
+                                  )
+                                }
+                                aria-expanded={ackPoId === po.id}
+                                className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.05em] text-[var(--color-terracotta-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+                              >
+                                differences {ackPoId === po.id ? '↑' : '↓'}
+                              </button>
+                            )}
                             {hasMoney && (
                               <button
                                 type="button"
@@ -685,6 +708,23 @@ export function OrdersLedger({
                             confirmedEta={po.confirmed_eta}
                             sentAt={po.sent_at}
                             tone="book"
+                          />
+                        </li>
+                      )}
+                      {ackDiffers && ackPoId === po.id && (
+                        <li
+                          data-orders-ack-record
+                          className="border-b border-[var(--color-pearl)] px-1 py-3 sm:pl-12"
+                        >
+                          <AckRecord
+                            purchaseOrderId={po.id}
+                            projectId={po.project_id ?? po.project?.id ?? null}
+                            vendorPoNumber={po.vendor_po_number}
+                            confirmedEta={po.confirmed_eta}
+                            // R8: the change order lives on the line, in the Document.
+                            onStartChange={() =>
+                              openDocument(po.project_id ?? po.project?.id ?? null)
+                            }
                           />
                         </li>
                       )}

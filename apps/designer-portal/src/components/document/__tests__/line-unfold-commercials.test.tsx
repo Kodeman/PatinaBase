@@ -44,6 +44,8 @@ jest.mock('@patina/supabase', () => ({
   useStudioContacts: () => ({ data: [] }),
   usePoShipments: () => ({ data: [] }),
   useProcurementDrafts: () => ({ data: [] }),
+  // C-27: no acknowledgment yet; the check's own suite is ack-check.test.tsx.
+  usePoAcknowledgments: () => ({ data: [] }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));

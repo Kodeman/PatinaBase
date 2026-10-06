@@ -1201,3 +1201,73 @@ export function useFfeComSpec(projectId: string | null | undefined, ffeItemId: s
     enabled: !!projectId && !!ffeItemId,
   });
 }
+
+// --- C-27 ack check (SQ-426) ---
+
+/** One PO line, with the fields po-send prints (spec first, product as fallback). */
+export interface PoAckBasisLine {
+  id: string;
+  name: string | null;
+  quantity: number | null;
+  trade_price_cents: number | null;
+  unit_price_cents: number | null;
+  spec: { sku: string | null; finish: string | null; color_fabric: string | null } | null;
+  product: { sku: string | null; finish: string | null } | null;
+}
+
+/** What the PO told the vendor: the acknowledgment check's WE ORDERED column. */
+export interface PoAckBasis {
+  vendorId: string | null;
+  projectId: string | null;
+  /** YYYY-MM-DD the PO asked the vendor to ship. */
+  requestedShipOn: string | null;
+  lines: PoAckBasisLine[];
+}
+
+export const poAckBasisKey = (purchaseOrderId: string) =>
+  [...buyingPhase2Keys.all, 'ack-basis', purchaseOrderId] as const;
+
+/**
+ * The PO's lines as po-send prints them, and its requested ship date — the
+ * values log_po_acknowledgment_v2 compares an acknowledgment against. Freight
+ * comes from usePoCostLines.
+ */
+export function usePoAckBasis(purchaseOrderId: string | null | undefined) {
+  return useQuery({
+    queryKey: poAckBasisKey(purchaseOrderId ?? ''),
+    queryFn: async (): Promise<PoAckBasis> => {
+      const supabase = getSupabase();
+      const [po, items] = await Promise.all([
+        supabase
+          .from('purchase_orders')
+          .select('id, project_id, vendor_id, requested_ship_on')
+          .eq('id', purchaseOrderId as string)
+          .maybeSingle(),
+        supabase
+          .from('project_ffe_items')
+          .select(
+            `id, name, quantity, trade_price_cents, unit_price_cents,
+             spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(sku, finish, color_fabric),
+             product:products!product_id(sku, finish)`,
+          )
+          .eq('purchase_order_id', purchaseOrderId as string)
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true }),
+      ]);
+      if (po.error) throw po.error;
+      if (items.error) throw items.error;
+      const one = <T>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
+      return {
+        vendorId: po.data?.vendor_id ?? null,
+        projectId: po.data?.project_id ?? null,
+        requestedShipOn: po.data?.requested_ship_on ?? null,
+        lines: ((items.data ?? []) as unknown as PoAckBasisLine[]).map((line) => ({
+          ...line,
+          spec: one(line.spec),
+          product: one(line.product),
+        })),
+      };
+    },
+    enabled: !!purchaseOrderId,
+  });
+}
