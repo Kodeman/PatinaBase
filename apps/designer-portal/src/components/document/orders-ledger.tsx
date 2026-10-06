@@ -155,7 +155,10 @@ export function OrdersLedger({
   // PRC-07 (R84): the row whose log-acknowledgment band is unfolded.
   const [ackPoId, setAckPoId] = useState<string | null>(null);
   // C-11 (D1-11): the row whose money-out band is unfolded.
-  const [moneyPoId, setMoneyPoId] = useState<string | null>(null);
+  // C-22: the Desk's payment needs open the book onto that PO's band.
+  const [moneyPoId, setMoneyPoId] = useState<string | null>(
+    initialContext?.purchaseOrderId ?? null,
+  );
   // PRC-06 (R84): the quiet lenses — project + payment state, DM-mono text
   // (the portal's FacetedFilterPopover facets, without the pills).
   // US-16 (C-08): seeded from the opening context so the project the

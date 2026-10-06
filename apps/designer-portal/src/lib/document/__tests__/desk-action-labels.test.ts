@@ -23,6 +23,13 @@ describe('Desk need action labels', () => {
       po_unsent: 'Review the purchase order',
       po_unacknowledged: 'Follow up with the maker',
       pulse_due: 'Review and send',
+      payment_due: 'Record payment',
+      payment_failed: 'Pay again',
+      ack_discrepancy: 'Answer the vendor',
+      quote_expiring: 'Reconfirm the price',
+      cfa_pending: 'Approve the CFA',
+      memo_return: 'Mark returned',
+      exception_open: 'Choose a path',
     } satisfies Record<NeedKind, string | null>;
 
     expect(NEED_ACTION_LABELS).toEqual(expected);

@@ -9,14 +9,16 @@
  *
  * Recording is secondary, not terminal: the money moved outside Patina and
  * this act only writes the record. A Patina-catalog PO, or any row on the
- * Stripe rail, settles through checkout and reads here without an act — the
- * RPC refuses those rows anyway (00695 lane guard).
+ * Stripe rail, settles through checkout and never offers "Record payment" —
+ * the RPC refuses those rows anyway (00695 lane guard). A catalog row still
+ * owed offers "Pay now" instead, which opens that same checkout (C-22).
  */
 
 import { useState } from 'react';
 import {
   usePOPayments,
   useRecordVendorPayment,
+  useStartPoCheckout,
   useStudioPaymentMethods,
   useVendorPayments,
   useVoidVendorPayment,
@@ -410,6 +412,22 @@ export function PoMoneyOut({
   const { data: methods } = useStudioPaymentMethods();
   const [recordingRowId, setRecordingRowId] = useState<string | null>(null);
   const [voidingId, setVoidingId] = useState<string | null>(null);
+  // C-22: a catalog row still owed (a failed or never-finished checkout) pays
+  // through the same Patina checkout — the Desk's "Pay again" lands here.
+  const startCheckout = useStartPoCheckout({ errorSurface: 'inline' });
+  const [payingRowId, setPayingRowId] = useState<string | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const payNow = async (rowId: string) => {
+    setPayError(null);
+    setPayingRowId(rowId);
+    try {
+      const { url } = await startCheckout.mutateAsync({ poPaymentId: rowId });
+      window.location.href = url;
+    } catch (err) {
+      setPayingRowId(null);
+      setPayError(err instanceof Error ? err.message : "Payment couldn't be started.");
+    }
+  };
 
   const rows: readonly MoneyOutPayment[] =
     (schedule as MoneyOutPayment[] | undefined) ?? fallback ?? [];
@@ -471,6 +489,8 @@ export function PoMoneyOut({
           const remainder = Math.max((p.amount_cents ?? 0) - paid, 0);
           const canRecord =
             !readOnly && Boolean(p.id) && p.state !== 'paid' && p.state !== 'refunded';
+          const canPay =
+            isPatinaCatalog && Boolean(p.id) && p.state !== 'paid' && p.state !== 'refunded';
           const rowRecords = (records ?? []).filter((r) => r.po_payment_id === p.id);
           return (
             <li
@@ -489,6 +509,21 @@ export function PoMoneyOut({
                     aria-label={`Record payment · ${scheduleName(p)}`}
                   >
                     Record payment →
+                  </DocumentAction>
+                )}
+                {canPay && (
+                  <DocumentAction
+                    actionKey="start-po-checkout"
+                    surfaceKey={surfaceKey}
+                    regionKey="money-out"
+                    variant="tertiary"
+                    disabled={payingRowId !== null}
+                    loading={payingRowId === p.id}
+                    loadingLabel="Opening checkout…"
+                    onClick={() => void payNow(p.id!)}
+                    aria-label={`Pay now · ${scheduleName(p)}`}
+                  >
+                    Pay now →
                   </DocumentAction>
                 )}
               </span>
@@ -516,6 +551,11 @@ export function PoMoneyOut({
         })}
       </ul>
       {unscheduled.length > 0 && <ul>{unscheduled.map(recordItem)}</ul>}
+      {payError && (
+        <p role="alert" className="text-[11px] text-[var(--color-terracotta-ink)]">
+          {payError}
+        </p>
+      )}
       {isPatinaCatalog && (
         <p className="text-[11px] text-[var(--text-muted)]">{SETTLES_THROUGH_CHECKOUT}</p>
       )}

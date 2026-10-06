@@ -91,6 +91,10 @@ function datedRank(need: NeedLine, now: Date): NeedTieBreakRank | null {
  */
 const TIE_BREAK_RANK: Record<NeedKind, NeedTieBreakRank> = {
   claim_window: 1,
+  // Phase 2 (C-22): each rises as a date set outside the studio closes.
+  quote_expiring: 1,
+  cfa_pending: 1,
+  memo_return: 1,
   damage_claim: 1,
   awaiting_inspection: 1,
   schedule_conflict: 1,
@@ -101,6 +105,10 @@ const TIE_BREAK_RANK: Record<NeedKind, NeedTieBreakRank> = {
   reconnect_due: 2,
   task_due: 2,
   po_unacknowledged: 2,
+  // C-22: a due notice is written on the payment's due date; a failed
+  // checkout has already missed it.
+  payment_due: 2,
+  payment_failed: 2,
 
   new_lead: 3,
   proposal_signed: 3,
@@ -111,6 +119,8 @@ const TIE_BREAK_RANK: Record<NeedKind, NeedTieBreakRank> = {
   schedule_proposal: 3,
   pulse_due: 3,
   po_unsent: 3,
+  ack_discrepancy: 3,
+  exception_open: 3,
 
   schedule_unconfigured: 4,
 };

@@ -30,6 +30,7 @@ import { createBrowserClient, type Invoice } from '@patina/supabase';
 import {
   partitionDesk,
   type DeskClaimWindowSignal,
+  type DeskPaymentSignal,
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
@@ -128,6 +129,55 @@ const DESK_PROPOSAL_LIMIT = 500;
  *  and never deleted, so the read looks back a bounded stretch. */
 const DESK_CLAIM_NOTICE_LIMIT = 200;
 const DESK_CLAIM_NOTICE_DAYS = 60;
+/** C-22: due and failed payment notices, read only while their payment row is
+ *  still open (pending or due) — a covered row drops out of the read itself,
+ *  so no lookback window is needed. */
+const DESK_PAYMENT_NOTICE_LIMIT = 200;
+const PAYMENT_NOTICE_KINDS = ['deposit_due', 'balance_due', 'milestone_due', 'payment_failed'];
+
+/**
+ * C-22: the due / failed payment notices folded to one signal per
+ * (notice, payment row), keyed by project_id. Each notice is addressed to the
+ * PO's creator and the project lead, and co-members can read a colleague's
+ * (00700), so the fold dedupes. The derivation decides which lane each row
+ * belongs to and whether it still stands.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskPayments(notices: any): Map<string, DeskPaymentSignal[]> | undefined {
+  if (!Array.isArray(notices)) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  const seen = new Set<string>();
+  const map = new Map<string, DeskPaymentSignal[]>();
+  for (const notice of notices) {
+    const po = one(notice?.purchase_order);
+    const payment = one(notice?.payment);
+    if (!po?.id || !po.project_id || !payment?.id) continue;
+    const kind: DeskPaymentSignal['notice'] = notice.kind === 'payment_failed' ? 'failed' : 'due';
+    const key = `${kind}:${payment.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    map.set(po.project_id, [
+      ...(map.get(po.project_id) ?? []),
+      {
+        notice: kind,
+        purchaseOrderId: po.id,
+        poPaymentId: payment.id,
+        poLabel: po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'A purchase order',
+        vendorName: one(po.vendor)?.name ?? null,
+        paymentKind: String(payment.kind ?? ''),
+        state: String(payment.state ?? ''),
+        dueDate: payment.due_date ?? null,
+        amountCents: typeof payment.amount_cents === 'number' ? payment.amount_cents : null,
+        isPatinaCatalog: Boolean(po.is_patina_catalog),
+        onStripeRail: Boolean(
+          payment.stripe_checkout_session_id || payment.stripe_payment_intent_id,
+        ),
+      },
+    ]);
+  }
+  return map;
+}
 
 /**
  * C-20: the claim_window_closing notices (00700's procurement-clocks-daily
@@ -266,6 +316,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: deskProjectStarts, error: deskProjectStartsError },
         { data: deskProposals, error: deskProposalsError },
         { data: claimNotices, error: claimNoticesError },
+        { data: paymentNotices, error: paymentNoticesError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -355,6 +406,18 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           )
           .order('created_at', { ascending: false })
           .limit(DESK_CLAIM_NOTICE_LIMIT),
+        // C-22: due and failed payment notices whose payment row is still
+        // open. The inner join drops a covered (paid) or refunded row from
+        // the read, so the need clears with the act.
+        supabase
+          .from('procurement_notifications')
+          .select(
+            'kind, payment:po_payments!procurement_notifications_subject_payment_id_fkey!inner(id, kind, state, due_date, amount_cents, stripe_checkout_session_id, stripe_payment_intent_id), purchase_order:purchase_orders!procurement_notifications_subject_purchase_order_id_fkey(id, project_id, po_number, vendor_po_number, sidemark, is_patina_catalog, vendor:vendors!purchase_orders_vendor_id_fkey(name))',
+          )
+          .in('kind', PAYMENT_NOTICE_KINDS)
+          .in('payment.state', ['pending', 'due'])
+          .order('created_at', { ascending: false })
+          .limit(DESK_PAYMENT_NOTICE_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -459,6 +522,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const claimWindows = claimNoticesError
         ? undefined
         : await loadDeskClaimWindows(supabase, claimNotices);
+      const payments = paymentNoticesError ? undefined : buildDeskPayments(paymentNotices);
 
       const result = partitionDesk(
         rows,
@@ -470,6 +534,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         ceremoniesByDesignerClientId,
         schedules,
         claimWindows,
+        payments,
       );
       previousResultRef.current = result;
       return result;

@@ -414,6 +414,13 @@ const NEED_TIER: Record<NeedKind, LensStandingTier> = {
   task_due: 'decision-due',
   schedule_unconfigured: 'decision-due',
   pulse_due: 'decision-due',
+  payment_due: 'overdue',
+  payment_failed: 'overdue',
+  ack_discrepancy: 'decision-due',
+  quote_expiring: 'decision-due',
+  cfa_pending: 'decision-due',
+  memo_return: 'decision-due',
+  exception_open: 'damage',
 };
 
 /** The sheet's kind line — the need's own stamp word, `desk-derivation.ts`. */
@@ -438,6 +445,13 @@ const NEED_EYEBROW: Record<NeedKind, string> = {
   task_due: 'TASK DUE',
   schedule_unconfigured: 'SET UP',
   pulse_due: 'PULSE DUE',
+  payment_due: 'PAYMENT DUE',
+  payment_failed: 'NOT PAID',
+  ack_discrepancy: 'ACK MISMATCH',
+  quote_expiring: 'PRICE AGING',
+  cfa_pending: 'CFA PENDING',
+  memo_return: 'MEMO RETURN',
+  exception_open: 'EXCEPTION',
 };
 
 /** After rank 4, the desk's last. */
