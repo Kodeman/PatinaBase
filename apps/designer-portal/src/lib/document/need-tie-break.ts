@@ -95,6 +95,8 @@ const TIE_BREAK_RANK: Record<NeedKind, NeedTieBreakRank> = {
   quote_expiring: 1,
   cfa_pending: 1,
   memo_return: 1,
+  // C-25: a store's return window is a date set outside the studio.
+  return_by: 1,
   damage_claim: 1,
   awaiting_inspection: 1,
   schedule_conflict: 1,

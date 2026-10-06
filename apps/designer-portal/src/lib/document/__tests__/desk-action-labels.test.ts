@@ -29,6 +29,7 @@ describe('Desk need action labels', () => {
       quote_expiring: 'Reconfirm the price',
       cfa_pending: 'Approve the CFA',
       memo_return: 'Mark returned',
+      return_by: 'Return it or keep it',
       exception_open: 'Choose a path',
     } satisfies Record<NeedKind, string | null>;
 

@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useVendor } from '@patina/supabase';
+import { useVendor, type StudioPurchaseRow } from '@patina/supabase';
 import { OrderAssistant } from '@/components/portal/procurement/order-assistant';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
@@ -76,8 +76,11 @@ export function LineUnfold({
   onIncludeInRelease,
   canEditSelection = true,
   showArtifactPlate = false,
+  purchase = null,
 }: {
   item: FFERow;
+  /** C-25: the purchase record this line was bought on, when it has one. */
+  purchase?: StudioPurchaseRow | null;
   projectId: string;
   projectName: string;
   onAddNote: (lineId: string) => void;
@@ -264,7 +267,8 @@ export function LineUnfold({
         <OrderCell
           item={item}
           po={po}
-          reasons={!readiness.ready && !po && !isTradeLine ? readiness.reasons : []}
+          purchase={purchase}
+          reasons={!readiness.ready && !po && !purchase && !isTradeLine ? readiness.reasons : []}
           projectId={projectId}
           auth={auth}
           canChange={canEditSelection}

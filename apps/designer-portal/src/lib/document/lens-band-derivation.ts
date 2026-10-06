@@ -421,6 +421,7 @@ const NEED_TIER: Record<NeedKind, LensStandingTier> = {
   cfa_pending: 'decision-due',
   memo_return: 'decision-due',
   exception_open: 'damage',
+  return_by: 'decision-due',
 };
 
 /** The sheet's kind line — the need's own stamp word, `desk-derivation.ts`. */
@@ -452,6 +453,7 @@ const NEED_EYEBROW: Record<NeedKind, string> = {
   cfa_pending: 'CFA PENDING',
   memo_return: 'MEMO RETURN',
   exception_open: 'EXCEPTION',
+  return_by: 'RETURN BY',
 };
 
 /** After rank 4, the desk's last. */

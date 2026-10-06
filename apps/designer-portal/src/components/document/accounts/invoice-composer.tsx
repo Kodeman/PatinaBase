@@ -14,6 +14,10 @@
  *                        ticked; covered/unpriced ones fall out with a notice.
  *   initialTimeEntryIds — R75 Bill week / bill-it: arrive ticked, per
  *                        project (the intersection when the composer asks).
+ *   initialPurchaseIds — C-25 "Bill N unbilled purchases": the still-unbilled
+ *                        ones are shown at cost, read only. Nothing stamps a
+ *                        purchase's invoice_line_id from here, so no line is
+ *                        drafted for one.
  *
  * Time claim: after the draft lands, the selected entries are stamped with
  * invoice_id by claim_time_entries (00595; the 00177 guard then locks them).
@@ -49,6 +53,7 @@ import {
   useProjectPaymentMilestones,
   useProjects,
   useClaimTimeEntries,
+  useStudioPurchases,
   useUnbilledTime,
 } from "@patina/supabase";
 import { computeInvoiceTotals, formatCurrency } from "@patina/shared";
@@ -64,7 +69,9 @@ import {
   buildComposerLines,
   canDraftStudioInvoice,
   partitionFfeBillable,
+  purchaseAtCostCents,
   unbilledMilestones,
+  unbilledPurchases,
   type ComposerAdhocRow,
   type ComposerFfeItem,
   type ComposerMilestone,
@@ -133,6 +140,16 @@ export function InvoiceComposer({
   // deliberately carries no author name (00596's dropped profiles join), so
   // the roster (already-read, project-scoped, RLS-clean) supplies it.
   const { data: roster } = useProjectRoster(projectId || null);
+  // C-25 — "Bill N unbilled purchases" names its purchases; the composer
+  // shows the ones still unbilled, at cost, and drafts no line for them.
+  const wantsPurchases = (context.initialPurchaseIds ?? []).length > 0;
+  const { data: purchases } = useStudioPurchases(
+    wantsPurchases && projectId ? { projectId } : null,
+  );
+  const askedPurchases = useMemo(() => {
+    const asked = new Set(context.initialPurchaseIds ?? []);
+    return unbilledPurchases(purchases).filter((p) => asked.has(p.id));
+  }, [context.initialPurchaseIds, purchases]);
   const { data: ffeItems, isLoading: ffeLoading } =
     useProjectFFEItems(projectId);
   const { data: coverage, isLoading: coverageLoading } = useFfeInvoiceCoverage(
@@ -810,6 +827,30 @@ export function InvoiceComposer({
                   </p>
                 )}
               </div>
+
+              {/* ── Purchases (C-25, 00703) — read, never drafted here ─────── */}
+              {askedPurchases.length > 0 && (
+                <div className="mt-4" data-testid="composer-purchases">
+                  <p className={`${LABEL} mb-0.5`}>purchases · unbilled · at cost</p>
+                  {askedPurchases.map((p) => (
+                    <div key={p.id} className={`${ROW} cursor-default`}>
+                      <span className="min-w-0 flex-1 truncate text-[11.5px] text-[var(--color-charcoal)]">
+                        {p.description ?? p.payee_name}
+                        <span className="ml-1.5 text-[var(--text-muted)]">
+                          {p.description ? `${p.payee_name} · ` : ""}
+                          {fmtDay(p.purchased_on)}
+                        </span>
+                      </span>
+                      <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
+                        {formatCurrency(purchaseAtCostCents(p))}
+                      </span>
+                    </div>
+                  ))}
+                  <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    This draft does not carry purchases · each stays unbilled
+                  </p>
+                </div>
+              )}
             </>
           )}
 

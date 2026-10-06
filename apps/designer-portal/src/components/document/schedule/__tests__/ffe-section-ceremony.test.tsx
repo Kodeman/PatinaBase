@@ -43,6 +43,7 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useStudioPurchases: () => ({ data: [] }),
   useProjectFFEItems: () => ({
     data: mockItems,
     isLoading: mockItemsLoading,
