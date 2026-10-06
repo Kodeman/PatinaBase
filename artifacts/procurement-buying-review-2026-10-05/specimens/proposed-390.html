@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buying on the phone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Source: artifacts/agreement-room-2026-09-10/deck/src/index.html (lines 14-91) */
+:root {
+  color-scheme: light dark;
+
+  /* paper, three stocks */
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+
+  /* ink */
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+
+  /* hairlines */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* the rest rule pigment */
+  --oak:              #8B7355;
+
+  /* state pigments: material value / paper ink */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* rhythm */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* motion */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+  .crm-band { max-width: 1200px; margin: 0 auto; padding: 24px; background: var(--paper); font-family: var(--font-body); color: var(--ink); }
+  .crm-h    { font-family: var(--font-display); font-size: 20px; font-weight: 500; margin: 48px 0 12px; }
+  .crm-h:first-child { margin-top: 0; }
+
+  /* ── Row (person + company share this grammar) ─────────────────────── */
+  .crm-list { border-top: 1px solid var(--hairline); }
+  .crm-row  { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
+
+  .avatar { flex: none; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-meta); font-weight: 500; font-size: 12px; color: var(--ink-paper); background: var(--oak); }
+  .avatar--circle { width: 34px; height: 34px; border-radius: 50%; }
+  .avatar--square { width: 42px; height: 42px; border-radius: 8px; }
+
+  .row-id   { flex: 1 1 320px; min-width: 0; }
+  .row-name { font-size: 14px; font-weight: 600; line-height: 1.4; }
+  .row-sub  { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-subtle); margin-top: 2px; }
+  .row-rule { font-size: 14px; line-height: 1.5; color: var(--ink); margin-top: 4px; }
+  .row-rule--blocked { border-left: 2px solid var(--terracotta-ink); padding-left: 10px; }
+
+  .row-words { flex: none; display: flex; gap: 12px; }
+  .row-chevron { flex: none; width: 16px; color: var(--ink-faint); text-align: center; }
+
+  /* ── The word: bordered box, word + border always agree, never a fill ── */
+  .word { flex: none; width: 108px; text-align: center; padding: 4px 6px;
+    border: 1px solid var(--hairline-strong); border-radius: var(--radius-box);
+    font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+    letter-spacing: .06em; text-transform: uppercase; background: transparent; }
+  .word--current  { border-color: var(--sage);       color: var(--sage-ink); }
+  .word--pending  { border-color: var(--golden);     color: var(--golden-ink); }
+  .word--blocked  { border-color: var(--terracotta); color: var(--terracotta-ink); }
+  .word--dormant  { border-color: var(--hairline-strong); color: var(--ink-faint); }
+  /* Authority: a fact, not a state — no border pigment, no fill. */
+  .word--plain { border-color: transparent; color: var(--ink-subtle); text-transform: none;
+    letter-spacing: 0; font-weight: 400; text-align: left; width: auto; padding: 4px 0; }
+
+  /* ── Card ────────────────────────────────────────────────────────────── */
+  .crm-card { max-width: 720px; margin: 0 auto 48px; }
+  .card-header { display: flex; align-items: center; gap: 16px; padding-bottom: 24px; }
+  .card-name { font-family: var(--font-display); font-size: 20px; font-weight: 500; }
+  .card-meta { font-family: var(--font-meta); font-size: 12px; color: var(--ink-subtle); margin-top: 4px; }
+  .card-region { padding: 24px 0; border-top: 1px solid var(--hairline-strong); }
+  .card-region h3 { font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); margin: 0 0 12px; }
+
+  .crm-table { width: 100%; border-collapse: collapse; }
+  .crm-table th { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-subtle); text-align: left; padding: 0 12px 8px 0; }
+  .crm-table td { font-size: 14px; padding: 12px 12px 12px 0; border-top: 1px solid var(--hairline); }
+
+/* ── Phone additions, built only from the tokens above ──────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--paper); color: var(--ink); margin: 0; font-family: var(--font-body); }
+
+.t-d1 { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; }
+.t-d2 { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; }
+.t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; }
+.t-body { font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; }
+.t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; letter-spacing: .08em; color: var(--ink-subtle); }
+.t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); }
+
+p, h1, h2, h3, ol, ul, dl, dd, figure { margin: 0; padding: 0; }
+p { max-width: 65ch; }
+.money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* State bar */
+.bar { background: var(--rail); color: var(--ink-muted); font-family: var(--font-meta); font-size: 11px; letter-spacing: .04em;
+  border-bottom: 1px solid var(--hairline-strong); padding: 10px 16px; }
+.bar-caption { margin: 0 0 4px; max-width: none; }
+.bar-acts { display: flex; flex-wrap: wrap; gap: 0 12px; }
+.bar .act--tertiary { color: var(--ink-muted); }
+.bar .act--tertiary[aria-pressed="true"] { color: var(--ink); }
+.bar .act--tertiary[aria-pressed="true"] .lbl { border-bottom-color: var(--clay-ink); border-bottom-width: 2px; }
+
+/* Band */
+.band { width: 100%; padding: 24px 16px; background: var(--paper); }
+.col { max-width: 440px; margin: 0 auto; }
+
+/* Head of a screen */
+.eyebrow { margin-bottom: 12px; }
+h1.screen-h { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; margin: 0; }
+.h1-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.h1-row .h1-slot { flex: 0 1 auto; min-width: 0; }
+.sub { margin-top: 12px; color: var(--ink-subtle); }
+.block { margin-top: 24px; }
+.block-sm { margin-top: 12px; }
+.seam { border-top: 1px solid var(--hairline-strong); padding-top: 24px; margin-top: 24px; }
+
+/* The sidemark leads */
+.sidemark { margin-top: 24px; padding: 12px 0; border-top: 1px solid var(--hairline-strong); border-bottom: 1px solid var(--hairline); }
+.sidemark-code { font-family: var(--font-meta); font-size: 16px; font-weight: 500; letter-spacing: .08em; line-height: 1.4; color: var(--ink); }
+.sidemark-job { margin-top: 4px; color: var(--ink-subtle); }
+.carrier { margin-top: 12px; }
+
+/* Line slip */
+.slip { margin-top: 24px; padding: 16px; background: var(--paper-doc); border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); }
+.slip-h { font-family: var(--font-body); font-size: 14px; line-height: 1.5; font-weight: 400; color: var(--ink-subtle); }
+.slip-h .nm { font-size: 16px; font-weight: 600; color: var(--ink); }
+.slip-h .code { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; }
+.field { margin-top: 24px; }
+.field-label { display: block; margin-bottom: 12px; }
+.field .t-head { display: block; }
+.field-note { margin-top: 12px; color: var(--ink); }
+
+/* Acts */
+.act { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0; margin: 0;
+  background: none; border: 0; color: var(--ink); cursor: pointer; text-align: left;
+  font-family: var(--font-meta); font-size: 13px; font-weight: 500; line-height: 1.35; text-transform: uppercase; letter-spacing: .06em;
+  transition: transform var(--press-out) var(--ease); -webkit-tap-highlight-color: transparent; }
+.act:active { transform: translateY(1px); transition-duration: var(--press-in); }
+.act .lbl { border-bottom: 1px solid var(--oak); padding-bottom: 2px; }
+.act--secondary .lbl { padding-bottom: 5px; background: linear-gradient(var(--clay), var(--clay)) 0 calc(100% - 2px) / 100% 1px no-repeat; }
+.act--tertiary { font-size: 12px; }
+.act--tertiary .lbl { border-bottom-color: var(--hairline-strong); }
+.act--terminal { background: var(--ink); color: var(--ink-paper); border-radius: var(--radius-box); padding: 12px 20px;
+  font-family: var(--font-body); font-size: 16px; font-weight: 500; text-transform: none; letter-spacing: 0; line-height: 1.4;
+  width: 100%; justify-content: center; text-align: center; }
+.act--terminal .lbl { border-bottom: 0; padding: 0; }
+.act:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+[aria-disabled="true"] { cursor: not-allowed; color: var(--ink-faint); }
+.act--terminal[aria-disabled="true"] { background: var(--rail); color: var(--ink-faint); }
+.act-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.act-row { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.consequence { font-family: var(--font-body); font-size: 14px; line-height: 1.50; color: var(--ink); max-width: 56ch; margin: 0 0 12px; }
+.close { margin-top: 48px; }
+
+/* Choices */
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice { flex: 1 1 0; min-width: 88px; min-height: 44px; padding: 8px 12px; border-radius: var(--radius-box);
+  background: var(--paper); border: 1px solid var(--hairline-strong); color: var(--ink);
+  font-family: var(--font-body); font-size: 14px; line-height: 1.4; cursor: pointer; }
+.choice[aria-pressed="true"] { background: var(--rail); border-color: var(--ink-faint); font-weight: 500; }
+.choice:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+
+/* Count */
+.count { display: flex; align-items: center; gap: 8px; }
+.count output { flex: 1 1 auto; text-align: center; font-family: var(--font-body); font-size: 16px; line-height: 1.55; font-variant-numeric: tabular-nums;
+  padding: 9px 12px; background: var(--paper-doc); border: 1px solid var(--hairline-strong); border-bottom-color: var(--ink-faint); border-radius: var(--radius-hair); }
+.step { width: 44px; height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  background: var(--paper); border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); color: var(--ink); padding: 0; }
+.step:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.step svg { width: 14px; height: 14px; }
+
+/* Fields */
+.control { display: block; width: 100%; margin: 0; background: var(--paper-doc); color: var(--ink);
+  border: 1px solid var(--hairline-strong); border-bottom-color: var(--ink-faint); border-radius: var(--radius-hair);
+  padding: 12px; font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.control:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.control p + p { margin-top: 12px; }
+.control p { max-width: none; }
+
+/* Checkbox, drawn without a tick */
+.check { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; font-size: 14px; line-height: 1.5; }
+.check input { appearance: none; -webkit-appearance: none; flex: none; width: 24px; height: 24px; margin: 10px;
+  border: 1px solid var(--ink-faint); border-radius: var(--radius-hair); background: var(--paper-doc); cursor: pointer; }
+.check input:checked { background: linear-gradient(var(--ink), var(--ink)) center / 12px 12px no-repeat, var(--paper-doc); }
+.check input:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.check-wrap { margin-top: 24px; margin-left: -10px; }
+
+/* Photos */
+.photos { display: flex; gap: 12px; margin-top: 12px; }
+.photo { flex: none; width: 72px; height: 72px; border: 1px solid var(--hairline-strong); border-radius: var(--radius-hair); background: var(--paper-doc); color: var(--ink-faint); }
+.photo svg { display: block; width: 70px; height: 70px; }
+
+/* Treatments */
+.held { background: var(--rail); border-left: 2px solid var(--terracotta-ink); padding: 12px 12px 12px 11px; }
+.held p { font-family: var(--font-body); font-size: 14px; line-height: 1.5; color: var(--ink); }
+.waiting { background: var(--paper-doc); border-left: 2px solid var(--golden-ink); padding: 12px 12px 12px 11px; }
+.waiting-line { font-size: 16px; line-height: 1.55; }
+
+/* Message head */
+.msg-head { margin-top: 24px; border-top: 1px solid var(--hairline-strong); }
+.msg-head p { padding: 12px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; line-height: 1.5; max-width: none; overflow-wrap: anywhere; }
+.msg-head .lead { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-subtle); }
+
+/* The clock */
+.clock { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; color: var(--ink); }
+
+/* Label-over-value stacks */
+.stack { border-top: 1px solid var(--hairline-strong); }
+.stack > div { padding: 12px 0; border-bottom: 1px solid var(--hairline); }
+.stack dt { margin-bottom: 4px; }
+.stack dd { font-size: 16px; line-height: 1.5; }
+
+/* Record */
+.record { list-style: none; border-top: 1px solid var(--hairline-strong); }
+.record li { padding: 12px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.record .when { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-subtle); white-space: nowrap; }
+
+/* Front matter */
+.front { display: grid; grid-template-columns: auto auto 1fr; gap: 4px 12px; align-items: baseline; padding-bottom: 12px; }
+.front .k { font-size: 14px; line-height: 1.5; color: var(--ink-subtle); }
+.front .v { font-size: 18px; line-height: 1.4; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+.front .n { font-size: 14px; line-height: 1.5; color: var(--ink-subtle); }
+
+/* Ledger rows: each row is one open control */
+.region-h { margin-top: 48px; padding-bottom: 12px; border-bottom: 1px solid var(--hairline-strong); }
+.rows { list-style: none; }
+.rowbtn { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 12px 0; margin: 0;
+  background: none; border: 0; border-bottom: 1px solid var(--hairline); color: var(--ink); cursor: pointer; text-align: left;
+  font-family: var(--font-body); font-size: 14px; line-height: 1.5; }
+.rowbtn:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+.rowbtn .txt { flex: 1 1 auto; min-width: 0; }
+.rowbtn .chev { flex: none; width: 12px; height: 12px; color: var(--ink-faint); }
+.word--96 { width: 96px; padding: 4px 2px; letter-spacing: .02em; }
+
+/* Notes */
+.notes { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--hairline-strong); }
+.notes ol { list-style: none; counter-reset: note; margin-top: 12px; }
+.notes li { counter-increment: note; display: grid; grid-template-columns: 24px 1fr; column-gap: 12px; padding: 12px 0; border-top: 1px solid var(--hairline); }
+.notes li::before { content: counter(note); grid-row: 1 / span 2; font-family: var(--font-meta); font-size: 11px; line-height: 1.8; color: var(--clay-ink); }
+.notes .say { font-size: 14px; line-height: 1.5; }
+.notes .ev { margin-top: 4px; overflow-wrap: anywhere; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition-duration: 0s !important; transition-delay: 0s !important; }
+}
+@media (forced-colors: active) {
+  .word, .pin, .act--terminal { border: 1px solid ButtonText; }
+  .act:focus-visible, .choice:focus-visible, .step:focus-visible, .control:focus-visible, .rowbtn:focus-visible, .check input:focus-visible { outline-color: Highlight; }
+  .check input:checked { background: Highlight; }
+}
+</style>
+</head>
+<body>
+
+<nav class="bar" id="bar" aria-label="Screens">
+  <p class="bar-caption">Proposed, phone · Ashby Lakehouse · invented data · open rulings in the notes</p>
+  <div class="bar-acts">
+    <button type="button" class="act act--tertiary" data-go="state-checkin" aria-pressed="true"><span class="lbl">Check-in</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-claim" aria-pressed="false"><span class="lbl">Notice</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-release" aria-pressed="false"><span class="lbl">Release</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-released" aria-pressed="false"><span class="lbl">Record</span></button>
+    <button type="button" class="act act--tertiary" data-go="state-glance" aria-pressed="false"><span class="lbl">Glance</span></button>
+  </div>
+</nav>
+
+<p role="status" aria-live="polite" class="sr-only" id="announce"></p>
+
+<main class="band">
+<div class="col">
+
+<!-- ═══ Site check-in at Cedar Lake ═══ -->
+<section data-state="state-checkin" aria-label="Site check-in at Cedar Lake">
+  <p class="t-head eyebrow">ARRIVING · CEDAR LAKE RECEIVING &amp; STORAGE</p>
+  <div class="h1-slot" data-h1="PO-1047 · Larkspur Lighting"><h1 class="screen-h" id="screen-h">PO-1047 · Larkspur Lighting</h1></div>
+
+  <div class="sidemark">
+    <p class="sidemark-code">HART-ASHBY</p>
+    <p class="t-body-sm sidemark-job">Ashby Lakehouse</p>
+  </div>
+  <p class="t-meta carrier">Lakeland Freight · PRO 88120457 · Mon 26 Oct 10:40</p>
+
+  <article class="slip" aria-labelledby="slip-sconce-h">
+    <h2 class="slip-h" id="slip-sconce-h"><span class="nm">Sconce pair</span> · Living room · <span class="code">HART-ASHBY-LR</span></h2>
+    <div class="field">
+      <span class="t-head field-label" id="rcv-sconce-l">RECEIVED</span>
+      <div class="count" role="group" aria-labelledby="rcv-sconce-l" data-total="2" data-n="2">
+        <button type="button" class="step" data-step="-1" aria-label="One fewer sconce"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+        <output aria-live="off">2 of 2</output>
+        <button type="button" class="step" data-step="1" aria-label="One more sconce"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10M7 2v10" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+      </div>
+    </div>
+    <div class="field">
+      <span class="t-head field-label" id="cond-sconce-l">CONDITION</span>
+      <div class="choices" role="group" aria-label="Condition, sconce pair" data-choices>
+        <button type="button" class="choice" aria-pressed="true">Clean</button>
+        <button type="button" class="choice" aria-pressed="false">Damaged</button>
+        <button type="button" class="choice" aria-pressed="false">Short</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="slip" aria-labelledby="slip-pend-h">
+    <h2 class="slip-h" id="slip-pend-h"><span class="nm">Kitchen pendants</span> · Kitchen · <span class="code">HART-ASHBY-KIT</span></h2>
+    <div class="field">
+      <span class="t-head field-label" id="rcv-pend-l">RECEIVED</span>
+      <div class="count" role="group" aria-labelledby="rcv-pend-l" data-total="3" data-n="3">
+        <button type="button" class="step" data-step="-1" aria-label="One fewer pendant"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+        <output aria-live="off">3 of 3</output>
+        <button type="button" class="step" data-step="1" aria-label="One more pendant"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10M7 2v10" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+      </div>
+    </div>
+    <div class="field">
+      <span class="t-head field-label">CONDITION</span>
+      <div class="choices" role="group" aria-label="Condition, kitchen pendants" data-choices>
+        <button type="button" class="choice" aria-pressed="false">Clean</button>
+        <button type="button" class="choice" aria-pressed="true">Damaged</button>
+        <button type="button" class="choice" aria-pressed="false">Short</button>
+      </div>
+      <p class="t-body-sm field-note">2 clean, 1 damaged</p>
+    </div>
+    <div class="field">
+      <label class="t-head field-label" for="pend-note">WHAT IS DAMAGED</label>
+      <textarea class="control" id="pend-note" rows="3">Shade on one of three pendants cracked at the rim. Carton corner crushed.</textarea>
+      <div class="photos">
+        <figure class="photo"><svg viewBox="0 0 70 70" role="img" aria-labelledby="ph1a"><title id="ph1a">Cracked rim, pendant shade</title><g fill="none" stroke="currentColor" stroke-width="1"><path d="M35 8v12"/><path d="M15 46c0-15 9-26 20-26s20 11 20 26z"/><path d="M41 46l2-6-3-4 3-5-2-4"/><path d="M31 46h0"/></g></svg></figure>
+        <figure class="photo"><svg viewBox="0 0 70 70" role="img" aria-labelledby="ph1b"><title id="ph1b">Shade, second view</title><g fill="none" stroke="currentColor" stroke-width="1"><ellipse cx="35" cy="38" rx="22" ry="10"/><ellipse cx="35" cy="38" rx="6" ry="3"/><path d="M50 46l2-5-3-3 2-4"/></g></svg></figure>
+        <figure class="photo"><svg viewBox="0 0 70 70" role="img" aria-labelledby="ph1c"><title id="ph1c">Carton corner</title><g fill="none" stroke="currentColor" stroke-width="1"><path d="M35 34l22-11v28L35 62 13 51V31l6-3 3 4 5-6 8 8z"/><path d="M35 34v28"/><path d="M57 23L35 12l-9 4"/><path d="M19 28l-6 3"/></g></svg></figure>
+      </div>
+      <div class="block-sm"><button type="button" class="act act--secondary"><span class="lbl">Add a photo</span></button></div>
+    </div>
+  </article>
+
+  <div class="check-wrap">
+    <label class="check"><input type="checkbox" checked> <span>Damage noted on the carrier's delivery receipt</span></label>
+  </div>
+
+  <div class="close">
+    <p class="consequence">Saving records 5 pieces in, 1 damaged. Larkspur's window closes Thu 29 Oct, 5 pm.</p>
+    <div class="act-stack">
+      <button type="button" class="act act--terminal"><span class="lbl">Save the check-in</span></button>
+      <button type="button" class="act act--secondary"><span class="lbl">Draft the notice to Larkspur →</span></button>
+    </div>
+  </div>
+
+  <section class="notes" aria-labelledby="notes-checkin">
+    <h2 class="t-head" id="notes-checkin">Notes</h2>
+    <ol>
+      <li><p class="say">Check-in works the same from Patina Field or the portal at phone width. The receiver at the dock needs no login.</p><p class="t-meta ev">00281:48-53 · C-19</p></li>
+      <li><p class="say">Per-line count and condition, and the carrier-receipt note, are new. Today one outcome covers the delivery.</p><p class="t-meta ev">C-19 · 00150</p></li>
+      <li><p class="say">Default windows when a vendor account has none are a ruling for Leah.</p><p class="t-meta ev">R-PB9</p></li>
+    </ol>
+  </section>
+</section>
+
+<!-- ═══ The drafted notice to Larkspur ═══ -->
+<section data-state="state-claim" aria-label="The drafted notice to Larkspur" hidden>
+  <p class="t-head eyebrow">DRAFT · WAITING FOR YOUR REVIEW</p>
+  <div class="h1-slot" data-h1="Notice to Larkspur"></div>
+
+  <div class="msg-head">
+    <p><span class="lead">To</span> claims@larkspurlighting.com</p>
+    <p><span class="lead">From</span> Maya Reyes, Hartwell Studio</p>
+    <p><span class="lead">Subject:</span> Damage on PO-1047, Ashby Lakehouse (HART-ASHBY)</p>
+  </div>
+
+  <div class="field">
+    <span class="t-head field-label" id="msg-l">MESSAGE</span>
+    <div class="control" role="textbox" aria-multiline="true" aria-labelledby="msg-l" contenteditable="true" spellcheck="false">
+      <p>PO-1047 arrived at Cedar Lake Receiving &amp; Storage on Mon 26 Oct by Lakeland Freight, PRO 88120457.</p>
+      <p>One of three kitchen pendants, LL-P09-OP, arrived with the shade cracked at the rim. The damage is noted on the carrier's receipt. Three photos are attached.</p>
+      <p>Please send a replacement shade to Cedar Lake. Our sidemark is HART-ASHBY-KIT.</p>
+    </div>
+  </div>
+
+  <div class="field">
+    <p class="t-body-sm">3 photos attached</p>
+    <div class="photos">
+      <figure class="photo"><svg viewBox="0 0 70 70" role="img" aria-labelledby="ph2a"><title id="ph2a">Cracked rim, pendant shade</title><g fill="none" stroke="currentColor" stroke-width="1"><path d="M35 8v12"/><path d="M15 46c0-15 9-26 20-26s20 11 20 26z"/><path d="M41 46l2-6-3-4 3-5-2-4"/></g></svg></figure>
+      <figure class="photo"><svg viewBox="0 0 70 70" role="img" aria-labelledby="ph2b"><title id="ph2b">Shade, second view</title><g fill="none" stroke="currentColor" stroke-width="1"><ellipse cx="35" cy="38" rx="22" ry="10"/><ellipse cx="35" cy="38" rx="6" ry="3"/><path d="M50 46l2-5-3-3 2-4"/></g></svg></figure>
+      <figure class="photo"><svg viewBox="0 0 70 70" role="img" aria-labelledby="ph2c"><title id="ph2c">Carton corner</title><g fill="none" stroke="currentColor" stroke-width="1"><path d="M35 34l22-11v28L35 62 13 51V31l6-3 3 4 5-6 8 8z"/><path d="M35 34v28"/><path d="M57 23L35 12l-9 4"/><path d="M19 28l-6 3"/></g></svg></figure>
+    </div>
+  </div>
+
+  <p class="clock seam">Tell Larkspur by Thu 29 Oct, 5 pm.</p>
+
+  <div class="close">
+    <p class="consequence">Sending emails Larkspur from the studio's address and starts the claim. Nothing is sent until you send it.</p>
+    <div class="act-stack">
+      <button type="button" class="act act--terminal"><span class="lbl">Send the notice to Larkspur</span></button>
+      <button type="button" class="act act--tertiary"><span class="lbl">Keep as a draft</span></button>
+    </div>
+  </div>
+
+  <section class="notes" aria-labelledby="notes-claim">
+    <h2 class="t-head" id="notes-claim">Notes</h2>
+    <ol>
+      <li><p class="say">Every outbound message is a draft a person sends. There are no automated external sends.</p><p class="t-meta ev">Agent OS rule · C-28</p></li>
+      <li><p class="say">Sent notices go through the studio's compliant email path.</p><p class="t-meta ev">sendCompliantEmail</p></li>
+    </ol>
+  </section>
+</section>
+
+<!-- ═══ Leah releases Maya's order ═══ -->
+<section data-state="state-release" aria-label="Leah releases Maya's order" hidden>
+  <p class="t-head">DESK</p>
+  <p class="t-meta">Leah Hartwell · Wed 28 Oct, 14:00</p>
+
+  <div class="waiting block">
+    <p class="waiting-line">Maya Reyes is holding 1 order for your release · <span class="money">$3,860.00</span></p>
+    <div class="block-sm"><button type="button" class="act" aria-expanded="true" aria-controls="release-paper"><span class="lbl">Release →</span></button></div>
+  </div>
+
+  <div id="release-paper" class="block">
+    <div class="h1-slot" data-h1="Purchase order 1048"></div>
+    <p class="t-body-sm sub">Stillwater Drapery Co. · Ashby Lakehouse</p>
+
+    <dl class="stack block">
+      <div><dt class="t-head">SIDEMARK</dt><dd>HART-ASHBY-LR-DRAPERY</dd></div>
+      <div><dt class="t-head">SHIP TO</dt><dd>Cedar Lake Receiving &amp; Storage</dd></div>
+      <div><dt class="t-head">REQUESTED SHIP</dt><dd>Fri 20 Nov</dd></div>
+      <div><dt class="t-head">LINE</dt><dd>Living room drapery · 4 panels · <span class="money">$3,860.00</span></dd></div>
+      <div><dt class="t-head">TERMS</dt><dd><span class="money">$1,930.00</span> at release · <span class="money">$1,930.00</span> before ship</dd></div>
+    </dl>
+
+    <p class="t-meta block-sm">Held by Maya Reyes, 28 Oct 09:15</p>
+
+    <div class="held block">
+      <p>Not invoiced to the Ashbys yet. Releasing fronts the <span class="money">$1,930.00</span> deposit from studio funds.</p>
+    </div>
+
+    <div class="close">
+      <p class="consequence">Releasing sends PO-1048 to Stillwater at work@stillwaterdrapery.com and makes the <span class="money">$1,930.00</span> deposit due.</p>
+      <div class="act-stack">
+        <button type="button" class="act act--terminal"><span class="lbl">Release to Stillwater · <span class="money">$3,860.00</span></span></button>
+        <button type="button" class="act act--secondary"><span class="lbl">Send back to Maya with a note</span></button>
+      </div>
+    </div>
+  </div>
+
+  <section class="notes" aria-labelledby="notes-release">
+    <h2 class="t-head" id="notes-release">Notes</h2>
+    <ol>
+      <li><p class="say">This is the studio moment: the day Leah is no longer the only person who can commit the studio's money.</p><p class="t-meta ev">R5</p></li>
+      <li><p class="say">Off by default. Owner and admin seats release. Whether Patina offers this at all is a ruling.</p><p class="t-meta ev">R-PB2, R-PB6 · C-32</p></li>
+      <li><p class="say">Today a member who did not create the project gets 'not found' when sending. That is fixed in Phase 0.</p><p class="t-meta ev">po-send/index.ts:236 · C-07</p></li>
+    </ol>
+  </section>
+</section>
+
+<!-- ═══ The release record ═══ -->
+<section data-state="state-released" aria-label="The release record" hidden>
+  <p class="t-head eyebrow">STILLWATER DRAPERY CO. · ASHBY LAKEHOUSE</p>
+  <div class="h1-row">
+    <div class="h1-slot" data-h1="Purchase order 1048"></div>
+    <span class="word word--current">Sent</span>
+  </div>
+
+  <ol class="record block" aria-label="Record, newest first">
+    <li>Sent to Stillwater Drapery Co., work@stillwaterdrapery.com · <span class="when">28 Oct 14:02</span></li>
+    <li>Released by Leah Hartwell · <span class="when">28 Oct 14:02</span></li>
+    <li>Held for release by Maya Reyes · <span class="when">28 Oct 09:15</span></li>
+    <li>Written by Maya Reyes · <span class="when">28 Oct 09:12</span></li>
+  </ol>
+
+  <p class="t-body block">Deposit <span class="money">$1,930.00</span> due now · balance <span class="money">$1,930.00</span> before ship</p>
+  <p class="t-body-sm block-sm">Waiting on Stillwater's acknowledgment.</p>
+
+  <div class="act-row block">
+    <button type="button" class="act act--tertiary"><span class="lbl">Open the paper</span></button>
+    <button type="button" class="act act--tertiary"><span class="lbl">Back to the Desk</span></button>
+  </div>
+
+  <section class="notes" aria-labelledby="notes-released">
+    <h2 class="t-head" id="notes-released">Notes</h2>
+    <ol>
+      <li><p class="say">A quiet audit line: who released, and when. It is a record, not a feed.</p><p class="t-meta ev">R4 take · V11</p></li>
+      <li><p class="say">The release adds nothing to the screen but its own line in the record and the word Sent.</p><p class="t-meta ev">V11</p></li>
+    </ol>
+  </section>
+</section>
+
+<!-- ═══ One ledger glance ═══ -->
+<section data-state="state-glance" aria-label="One ledger glance" hidden>
+  <p class="t-head eyebrow">BUYING · WED 28 OCT</p>
+  <div class="h1-slot" data-h1="Ashby Lakehouse"></div>
+
+  <div class="front seam" role="group" aria-label="Totals">
+    <span class="k">On orders</span> <span class="v">$24,306.00</span> <span class="n"></span>
+    <span class="k">Paid out</span> <span class="v">$9,571.00</span> <span class="n"></span>
+    <span class="k">Due this week</span> <span class="v">$3,520.00</span> <span class="n">across 2</span>
+  </div>
+
+  <h2 class="t-head region-h">NEXT</h2>
+  <ul class="rows">
+    <li><button type="button" class="rowbtn"><span class="txt">Tell Larkspur by Thu 29 Oct, 5 pm · Kitchen pendants</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1"/></svg></button></li>
+    <li><button type="button" class="rowbtn"><span class="txt">Hale balance <span class="money">$3,240.00</span> · due Fri 30 Oct</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1"/></svg></button></li>
+    <li><button type="button" class="rowbtn"><span class="txt">Cedar Lake receiving <span class="money">$280.00</span> · due Fri 30 Oct</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1"/></svg></button></li>
+    <li><button type="button" class="rowbtn"><span class="txt">Fenwick confirmed 2 differences · reply drafted</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1"/></svg></button></li>
+    <li><button type="button" class="rowbtn"><span class="txt">Bar stools ready to order · Oro Seating</span><svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1"/></svg></button></li>
+  </ul>
+
+  <h2 class="t-head region-h">ORDERS</h2>
+  <ul class="rows">
+    <li><button type="button" class="rowbtn"><span class="txt">1042 · Hale Upholstery Works</span> <span class="word word--96 word--pending">In production</span></button></li>
+    <li><button type="button" class="rowbtn"><span class="txt">1043 · Kessler Textile Co.</span> <span class="word word--96 word--current">Delivered</span></button></li>
+    <li><button type="button" class="rowbtn"><span class="txt">1045 · Fenwick &amp; Rowe</span> <span class="word word--96 word--blocked">Differs</span></button></li>
+    <li><button type="button" class="rowbtn"><span class="txt">1046 · Ardent Rug Atelier</span> <span class="word word--96 word--blocked">Backorder</span></button></li>
+    <li><button type="button" class="rowbtn"><span class="txt">1047 · Larkspur Lighting</span> <span class="word word--96 word--blocked">Claim open</span></button></li>
+    <li><button type="button" class="rowbtn"><span class="txt">1048 · Stillwater Drapery Co.</span> <span class="word word--96 word--current">Sent</span></button></li>
+  </ul>
+
+  <section class="notes" aria-labelledby="notes-glance">
+    <h2 class="t-head" id="notes-glance">Notes</h2>
+    <ol>
+      <li><p class="say">A ledger is not a dashboard: totals sit over their rows, and no tile, score or chart appears.</p><p class="t-meta ev">V11 · VISION-DECISIONS.md:226-241</p></li>
+      <li><p class="say">Order 1048 reads Sent here because this glance follows the release.</p><p class="t-meta ev">fixture</p></li>
+    </ol>
+  </section>
+</section>
+
+</div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var STATES = {
+    'state-checkin': 'Site check-in at Cedar Lake',
+    'state-claim': 'The drafted notice to Larkspur',
+    'state-release': "Leah releases Maya's order",
+    'state-released': 'The release record',
+    'state-glance': 'One ledger glance'
+  };
+  var DEFAULT_STATE = 'state-checkin';
+  var flags = { nobar: false, nopins: false };
+  var current = null;
+
+  function parse(hash) {
+    var toks = String(hash || '').replace(/^#/, '').split(/[&,]/);
+    var out = { state: null, nobar: false, nopins: false };
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i].trim();
+      if (!out.state && t.indexOf('state-') === 0) out.state = t;
+      if (t === 'nobar') out.nobar = true;
+      if (t === 'nopins') out.nopins = true;
+    }
+    if (!out.state || !Object.prototype.hasOwnProperty.call(STATES, out.state)) out.state = DEFAULT_STATE;
+    return out;
+  }
+
+  function autosize(el) {
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight + 2) + 'px';
+  }
+
+  function render(state) {
+    if (!Object.prototype.hasOwnProperty.call(STATES, state)) state = DEFAULT_STATE;
+    var sections = document.querySelectorAll('[data-state]');
+    var h1 = document.getElementById('screen-h');
+    for (var i = 0; i < sections.length; i++) {
+      var on = sections[i].getAttribute('data-state') === state;
+      sections[i].hidden = !on;
+      if (on) {
+        var slot = sections[i].querySelector('.h1-slot');
+        if (slot && h1) { slot.appendChild(h1); h1.textContent = slot.getAttribute('data-h1'); }
+      }
+    }
+    document.getElementById('bar').hidden = flags.nobar;
+    var notes = document.querySelectorAll('.notes');
+    for (var n = 0; n < notes.length; n++) notes[n].hidden = flags.nopins;
+    var btns = document.querySelectorAll('[data-go]');
+    for (var b = 0; b < btns.length; b++) btns[b].setAttribute('aria-pressed', btns[b].getAttribute('data-go') === state ? 'true' : 'false');
+    var tas = document.querySelectorAll('[data-state]:not([hidden]) textarea');
+    for (var t = 0; t < tas.length; t++) autosize(tas[t]);
+    current = state;
+    document.getElementById('announce').textContent = STATES[state];
+  }
+
+  function fromHash() {
+    var p = parse(location.hash);
+    flags.nobar = p.nobar;
+    flags.nopins = p.nopins;
+    render(p.state);
+  }
+
+  document.addEventListener('DOMContentLoaded', fromHash);
+  window.addEventListener('hashchange', fromHash);
+  window.addEventListener('message', function (e) {
+    var d = e && e.data;
+    if (!d || typeof d !== 'object' || typeof d.state !== 'string') return;
+    var s = d.state.indexOf('state-') === 0 ? d.state : 'state-' + d.state;
+    if (!Object.prototype.hasOwnProperty.call(STATES, s)) return;
+    render(s);
+  });
+
+  document.addEventListener('click', function (e) {
+    var go = e.target.closest('[data-go]');
+    if (go) {
+      var toks = [go.getAttribute('data-go')];
+      if (flags.nopins) toks.push('nopins');
+      var next = '#' + toks.join('&');
+      if (location.hash === next) render(go.getAttribute('data-go'));
+      else location.hash = next;
+      return;
+    }
+    var choice = e.target.closest('[data-choices] .choice');
+    if (choice) {
+      var sibs = choice.parentNode.querySelectorAll('.choice');
+      for (var i = 0; i < sibs.length; i++) sibs[i].setAttribute('aria-pressed', sibs[i] === choice ? 'true' : 'false');
+      return;
+    }
+    var step = e.target.closest('.step');
+    if (step) {
+      var box = step.closest('.count');
+      var total = parseInt(box.getAttribute('data-total'), 10);
+      var n = parseInt(box.getAttribute('data-n'), 10) + parseInt(step.getAttribute('data-step'), 10);
+      n = Math.max(0, Math.min(total, n));
+      box.setAttribute('data-n', String(n));
+      box.querySelector('output').textContent = n + ' of ' + total;
+      return;
+    }
+    var disc = e.target.closest('[aria-expanded][aria-controls]');
+    if (disc) {
+      var panel = document.getElementById(disc.getAttribute('aria-controls'));
+      var open = disc.getAttribute('aria-expanded') !== 'true';
+      disc.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (panel) panel.hidden = !open;
+    }
+  });
+
+  document.addEventListener('input', function (e) {
+    if (e.target.tagName === 'TEXTAREA') autosize(e.target);
+  });
+})();
+</script>
+</body>
+</html>
+<!-- specimen-complete -->

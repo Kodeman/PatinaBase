@@ -1,0 +1,1028 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buying, today</title>
+<meta name="description" content="Five of today's buying screens for Ashby Lakehouse, replicated from code, with numbered friction pins.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Source: artifacts/agreement-room-2026-09-10/deck/src/index.html (lines 14-91) */
+:root {
+  color-scheme: light dark;
+
+  /* paper, three stocks */
+  --paper:            #FAF7F2;
+  --paper-doc:        #FCFAF6;
+  --rail:             #E8E3DB;
+
+  /* ink */
+  --ink:              #2C2926;
+  --ink-muted:        #4E4339;
+  --ink-subtle:       #5A4E43;
+  --ink-faint:        #65594E;
+  --ink-paper:        #FAF7F2;
+
+  /* hairlines */
+  --hairline:         #E8E3DB;
+  --hairline-strong:  rgba(44, 41, 38, .14);
+
+  /* the rest rule pigment */
+  --oak:              #8B7355;
+
+  /* state pigments: material value / paper ink */
+  --clay:             #C4A57B;   --clay-ink:      #7C5E30;
+  --golden:           #E8C547;   --golden-ink:    #79651E;
+  --terracotta:       #D4A090;   --terracotta-ink:#9C5340;
+  --sage:             #A8B5A0;   --sage-ink:      #5F6B57;
+
+  /* rhythm */
+  --module: 24px;
+  --radius-hair: 2px;
+  --radius-box:  3px;
+
+  /* motion */
+  --press-in:  70ms;
+  --press-out: 240ms;
+  --ease: cubic-bezier(.22, 1, .36, 1);
+
+  --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-meta:    'DM Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:           #2A2622;
+    --paper-doc:       #26221E;
+    --rail:            #3A3530;
+    --ink:             #F2EDE6;
+    --ink-muted:       #D6CEC4;
+    --ink-subtle:      #C7BEB3;
+    --ink-faint:       #B8AEA2;
+    --ink-paper:       #2A2622;
+    --hairline:        rgba(242, 237, 230, .14);
+    --hairline-strong: rgba(242, 237, 230, .22);
+    --oak:             #B39572;
+    --clay-ink:        #D8B98A;
+    --golden-ink:      #E0C963;
+    --terracotta-ink:  #E2A895;
+    --sage-ink:        #AFC0A6;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:           #2A2622;
+  --paper-doc:       #26221E;
+  --rail:            #3A3530;
+  --ink:             #F2EDE6;
+  --ink-muted:       #D6CEC4;
+  --ink-subtle:      #C7BEB3;
+  --ink-faint:       #B8AEA2;
+  --ink-paper:       #2A2622;
+  --hairline:        rgba(242, 237, 230, .14);
+  --hairline-strong: rgba(242, 237, 230, .22);
+  --oak:             #B39572;
+  --clay-ink:        #D8B98A;
+  --golden-ink:      #E0C963;
+  --terracotta-ink:  #E2A895;
+  --sage-ink:        #AFC0A6;
+}
+  .crm-band { max-width: 1200px; margin: 0 auto; padding: 24px; background: var(--paper); font-family: var(--font-body); color: var(--ink); }
+  .crm-h    { font-family: var(--font-display); font-size: 20px; font-weight: 500; margin: 48px 0 12px; }
+  .crm-h:first-child { margin-top: 0; }
+
+  /* ── Row (person + company share this grammar) ─────────────────────── */
+  .crm-list { border-top: 1px solid var(--hairline); }
+  .crm-row  { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
+
+  .avatar { flex: none; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-meta); font-weight: 500; font-size: 12px; color: var(--ink-paper); background: var(--oak); }
+  .avatar--circle { width: 34px; height: 34px; border-radius: 50%; }
+  .avatar--square { width: 42px; height: 42px; border-radius: 8px; }
+
+  .row-id   { flex: 1 1 320px; min-width: 0; }
+  .row-name { font-size: 14px; font-weight: 600; line-height: 1.4; }
+  .row-sub  { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-subtle); margin-top: 2px; }
+  .row-rule { font-size: 14px; line-height: 1.5; color: var(--ink); margin-top: 4px; }
+  .row-rule--blocked { border-left: 2px solid var(--terracotta-ink); padding-left: 10px; }
+
+  .row-words { flex: none; display: flex; gap: 12px; }
+  .row-chevron { flex: none; width: 16px; color: var(--ink-faint); text-align: center; }
+
+  /* ── The word: bordered box, word + border always agree, never a fill ── */
+  .word { flex: none; width: 108px; text-align: center; padding: 4px 6px;
+    border: 1px solid var(--hairline-strong); border-radius: var(--radius-box);
+    font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+    letter-spacing: .06em; text-transform: uppercase; background: transparent; }
+  .word--current  { border-color: var(--sage);       color: var(--sage-ink); }
+  .word--pending  { border-color: var(--golden);     color: var(--golden-ink); }
+  .word--blocked  { border-color: var(--terracotta); color: var(--terracotta-ink); }
+  .word--dormant  { border-color: var(--hairline-strong); color: var(--ink-faint); }
+  /* Authority: a fact, not a state — no border pigment, no fill. */
+  .word--plain { border-color: transparent; color: var(--ink-subtle); text-transform: none;
+    letter-spacing: 0; font-weight: 400; text-align: left; width: auto; padding: 4px 0; }
+
+  /* ── Card ────────────────────────────────────────────────────────────── */
+  .crm-card { max-width: 720px; margin: 0 auto 48px; }
+  .card-header { display: flex; align-items: center; gap: 16px; padding-bottom: 24px; }
+  .card-name { font-family: var(--font-display); font-size: 20px; font-weight: 500; }
+  .card-meta { font-family: var(--font-meta); font-size: 12px; color: var(--ink-subtle); margin-top: 4px; }
+  .card-region { padding: 24px 0; border-top: 1px solid var(--hairline-strong); }
+  .card-region h3 { font-family: var(--font-meta); font-size: 11px; font-weight: 500;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); margin: 0 0 12px; }
+
+  .crm-table { width: 100%; border-collapse: collapse; }
+  .crm-table th { font-family: var(--font-meta); font-size: 11px; font-weight: 500; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-subtle); text-align: left; padding: 0 12px 8px 0; }
+  .crm-table td { font-size: 14px; padding: 12px 12px 12px 0; border-top: 1px solid var(--hairline); }
+
+/* ── Page ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--paper); color: var(--ink); margin: 0; font-family: var(--font-body); }
+h1, h2, h3, p, ol, ul { margin: 0; padding: 0; }
+ol, ul { list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+code { font: inherit; }
+
+.t-d1 { font-family: var(--font-display); font-size: 34px; line-height: 1.15; font-weight: 500; }
+.t-d2 { font-family: var(--font-display); font-size: 26px; line-height: 1.20; font-weight: 500; }
+.t-d3 { font-family: var(--font-display); font-size: 20px; line-height: 1.30; font-weight: 500; }
+.t-body { font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.t-body-sm { font-family: var(--font-body); font-size: 14px; line-height: 1.50; }
+.t-meta { font-family: var(--font-meta); font-size: 12px; line-height: 1.50; letter-spacing: .08em; }
+.t-head { font-family: var(--font-meta); font-size: 11px; line-height: 1.50; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-subtle); }
+.money { font-variant-numeric: tabular-nums; }
+.num { font-variant-numeric: tabular-nums; text-align: right; }
+p { max-width: 65ch; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* ── State bar ────────────────────────────────────────────────────────── */
+.statebar { background: var(--rail); color: var(--ink-muted); font-family: var(--font-meta); font-size: 11px; letter-spacing: .04em;
+  border-bottom: 1px solid var(--hairline-strong); padding: 10px 24px; display: flex; flex-wrap: wrap; align-items: center; column-gap: 24px; row-gap: 0; }
+.statebar__caption { margin: 0; max-width: none; }
+.statebar__acts { display: flex; flex-wrap: wrap; column-gap: 12px; }
+.statebar .act--tertiary { font-size: 12px; color: var(--ink-muted); }
+.statebar .act--tertiary[aria-pressed="true"] { color: var(--ink); background-image: linear-gradient(var(--clay-ink), var(--clay-ink)); background-size: 100% 2px; }
+
+/* ── Band and columns ─────────────────────────────────────────────────── */
+.band { box-sizing: content-box; max-width: 1200px; margin: 0 auto; padding: 48px 24px; }
+.layout { display: grid; grid-template-columns: 840px 312px; column-gap: 48px; align-items: start; }
+.face-head { grid-column: 1; grid-row: 1; padding-bottom: 24px; }
+.face { grid-column: 1; grid-row: 2; min-width: 0; }
+.rail { grid-column: 2; grid-row: 1 / span 2; background: var(--paper); border-left: 1px solid var(--hairline-strong); padding-left: 24px; }
+.nopins .pin, .nopins .rail { display: none !important; }
+.nopins .layout { grid-template-columns: minmax(0, 840px); justify-content: center; }
+
+.eyebrow { margin-bottom: 12px; }
+
+/* ── Acts ─────────────────────────────────────────────────────────────── */
+.act { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  font-family: var(--font-meta); font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; line-height: 1.2;
+  color: var(--ink); border: 0; border-radius: var(--radius-hair); cursor: pointer; text-decoration: none;
+  background-color: transparent;
+  background-image: linear-gradient(var(--oak), var(--oak));
+  background-repeat: no-repeat; background-size: 100% 1px; background-position: 0 calc(50% + 11px);
+  transition: color var(--press-out) var(--ease); }
+.act:active { transition-duration: var(--press-in); color: var(--ink-muted); }
+.act--secondary { background-image: linear-gradient(var(--oak), var(--oak)), linear-gradient(var(--clay), var(--clay));
+  background-size: 100% 1px, 100% 1px; background-position: 0 calc(50% + 11px), 0 calc(50% + 14px); }
+.act--tertiary { font-size: 12px; background-image: linear-gradient(var(--hairline-strong), var(--hairline-strong)); }
+.act--terminal { background: var(--ink); color: var(--ink-paper); border-radius: var(--radius-box); padding: 12px 20px;
+  font-family: var(--font-body); font-size: 16px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.act--terminal:active { color: var(--ink-paper); }
+.act:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--clay-ink); outline-offset: 2px; }
+[aria-disabled="true"], .act[aria-disabled="true"] { cursor: not-allowed; color: var(--ink-faint); }
+.acts { display: flex; flex-wrap: wrap; align-items: center; column-gap: 24px; row-gap: 0; }
+
+.reason { color: var(--ink); }
+
+/* ── Choices ──────────────────────────────────────────────────────────── */
+.choice { min-height: 32px; padding: 4px 12px; border-radius: var(--radius-box); cursor: pointer;
+  background: var(--paper); border: 1px solid var(--hairline-strong); color: var(--ink);
+  font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; }
+.choice[aria-pressed="true"] { background: var(--rail); border-color: var(--ink-faint); color: var(--ink); }
+.choices { display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* ── Fields ───────────────────────────────────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field > .t-head { display: flex; align-items: center; }
+.control { background: var(--paper-doc); border: 1px solid var(--hairline-strong); border-bottom-color: var(--ink-faint);
+  border-radius: var(--radius-hair); padding: 12px; font-family: var(--font-body); font-size: 16px; line-height: 1.55; color: var(--ink); width: 100%; }
+textarea.control { resize: vertical; min-height: 96px; display: block; }
+select.control { appearance: auto; }
+
+/* ── Pins and rail ────────────────────────────────────────────────────── */
+.pin { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border: 1px solid var(--terracotta-ink); border-radius: var(--radius-hair); background: var(--paper);
+  font-family: var(--font-meta); font-size: 11px; font-weight: 500; line-height: 1; letter-spacing: 0; text-transform: none;
+  color: var(--terracotta-ink); vertical-align: middle; margin-left: 8px; }
+.rail h2 { margin-bottom: 24px; }
+.rail ol { display: flex; flex-direction: column; gap: 24px; }
+.rail li { display: grid; grid-template-columns: 22px 1fr; column-gap: 12px; row-gap: 4px; }
+.rail li .pin { margin-left: 0; grid-row: 1 / span 2; }
+.rail li p { max-width: none; }
+.rail .t-meta { color: var(--ink-subtle); letter-spacing: .02em; overflow-wrap: anywhere; }
+
+/* ── Words added for today's stamps ───────────────────────────────────── */
+.word--ack { color: var(--ink-muted); }
+.word--draft { border-color: var(--oak); color: var(--ink-muted); }
+.word--ordered { border-color: var(--clay); color: var(--clay-ink); }
+
+/* ── FF&E section ─────────────────────────────────────────────────────── */
+.section-head { padding-bottom: 12px; border-bottom: 1px solid var(--hairline-strong); }
+.ff-list > li { border-bottom: 1px solid var(--hairline); }
+.ff-list .crm-row { border-bottom: 0; align-items: flex-start; }
+.ff-list > li.is-open { border-left: 3px solid var(--clay); background: var(--paper-doc); }
+.ff-list > li.is-open .crm-row { padding-left: 13px; }
+.row-open { display: block; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: var(--ink); }
+.row-open:hover { text-decoration: underline; text-decoration-color: var(--oak); text-underline-offset: 4px; }
+.row-words { align-self: center; }
+.row-chevron { align-self: center; }
+.row-chevron svg { display: block; }
+.inline-act { flex: none; display: flex; flex-direction: column; align-items: flex-end; align-self: center; }
+.inline-act__line { display: flex; align-items: center; }
+.inline-act .reason { font-size: 12px; line-height: 1.5; }
+
+.unfold { padding: 0 16px 24px 13px; display: flex; flex-direction: column; gap: 24px; }
+.cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 48px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+.cell { padding: 12px 12px 12px 0; display: flex; flex-direction: column; gap: 4px; }
+.cell + .cell { border-left: 1px solid var(--hairline); padding-left: 12px; }
+.cell__value { font-size: 14px; line-height: 1.5; }
+.cell__sub { font-family: var(--font-meta); font-size: 12px; color: var(--ink-subtle); letter-spacing: .02em; }
+.cell--gap { align-items: center; justify-content: center; }
+.arrives { font-family: var(--font-meta); font-size: 12px; color: var(--ink-subtle); border-bottom: 1px dashed var(--hairline-strong); }
+
+.trail { display: flex; flex-wrap: wrap; column-gap: 16px; row-gap: 12px; }
+.trail li { font-family: var(--font-meta); font-size: 11px; line-height: 1.5; color: var(--ink-faint); padding-bottom: 2px; display: inline-flex; align-items: center; }
+.trail li.done, .trail li.current { color: var(--ink); }
+.trail li.done .s { text-decoration: underline; text-decoration-color: var(--sage); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.trail li.current .s { text-decoration: underline; text-decoration-color: var(--clay-ink); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.trail li.norecord .nr { color: var(--ink-faint); }
+
+.authority { border-left: 2px solid var(--sage); padding-left: 11px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .02em; color: var(--ink); }
+.room-field { max-width: 280px; }
+
+/* ── Sheets, stacked over what they open on ───────────────────────────── */
+.stack { display: grid; }
+.stack > * { grid-area: 1 / 1; min-width: 0; }
+.behind { pointer-events: none; }
+.sheet { position: relative; z-index: 1; background: var(--paper-doc); border: 1px solid var(--hairline-strong); border-radius: var(--radius-box);
+  padding: 24px; align-self: start; }
+.sheet--760 { width: 760px; margin-top: 72px; justify-self: start; }
+.sheet--640 { width: 640px; margin-top: 72px; justify-self: start; }
+.sheet-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--hairline-strong); }
+.sheet-head .t-meta { color: var(--ink-subtle); letter-spacing: .02em; }
+.sheet-body { display: flex; flex-direction: column; gap: 24px; padding-top: 24px; }
+
+.step-head { display: flex; align-items: center; color: var(--ink-subtle); letter-spacing: .04em; }
+.panel { border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.panel__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.panel__title { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; color: var(--ink); }
+.panel__quiet { font-family: var(--font-meta); font-size: 12px; color: var(--ink-subtle); }
+.copyblock { border-left: 2px solid var(--hairline-strong); padding-left: 11px; font-family: var(--font-meta); font-size: 12px; line-height: 1.7; }
+.copyblock div { display: flex; align-items: center; flex-wrap: wrap; }
+.copyblock .ship { color: var(--ink-subtle); }
+.itemlist { border-top: 1px solid var(--hairline); }
+.itemlist li { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hairline); font-size: 14px; line-height: 1.5; }
+.itemlist .money-cols { text-align: right; font-variant-numeric: tabular-nums; }
+.sheet-foot { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-top: 24px; border-top: 1px solid var(--hairline-strong); }
+.sheet-foot__end { display: flex; align-items: center; }
+
+/* ── Orders book ──────────────────────────────────────────────────────── */
+.book-head { display: flex; align-items: center; gap: 12px; }
+.book-head svg { display: block; flex: none; color: var(--ink-faint); }
+.book-intro { margin-top: 12px; color: var(--ink-muted); }
+.pagelinks { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; margin-top: 12px; font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; }
+.pagelinks a { color: var(--ink-subtle); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center;
+  background-image: linear-gradient(var(--hairline-strong), var(--hairline-strong)); background-repeat: no-repeat; background-size: 100% 1px; background-position: 0 calc(50% + 10px); }
+.pagelinks a[aria-current="page"] { color: var(--ink); background-image: linear-gradient(var(--clay-ink), var(--clay-ink)); background-size: 100% 2px; }
+.pagelinks .sep { color: var(--ink-faint); }
+.book-region { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--hairline-strong); }
+.frontmatter { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink); font-variant-numeric: tabular-nums; max-width: none; }
+.lenses { display: grid; grid-template-columns: 1fr auto; column-gap: 24px; row-gap: 12px; align-items: start; margin-top: 24px; }
+.lens { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 8px; font-family: var(--font-meta); font-size: 12px; color: var(--ink-subtle); }
+.lens .sep { color: var(--ink-faint); }
+.lens-col { display: flex; flex-direction: column; gap: 12px; }
+.vendor-group { margin-top: 48px; }
+.vendor-group:first-of-type { margin-top: 24px; }
+.vendor-group h3 { padding-bottom: 12px; border-bottom: 1px solid var(--hairline-strong); }
+.po-list > li { border-bottom: 1px solid var(--hairline); padding: 12px 0; }
+.po-line1 { display: grid; grid-template-columns: 96px auto 1fr auto; column-gap: 16px; align-items: center; }
+.po-no { font-family: var(--font-meta); font-size: 14px; font-weight: 500; }
+.eta { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink); text-align: right; display: inline-flex; align-items: center; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.eta--none { color: var(--golden-ink); text-transform: uppercase; letter-spacing: .08em; font-weight: 500; }
+.po-line2 { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: 24px; margin-top: 4px; }
+.po-meta { font-size: 14px; line-height: 1.5; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.po-acts { display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; }
+.ackband { margin-top: 12px; background: var(--paper-doc); border-left: 3px solid var(--clay); padding: 12px 16px 12px 13px; display: flex; flex-direction: column; gap: 12px; }
+.ackband__lead { font-size: 14px; line-height: 1.5; display: flex; align-items: center; flex-wrap: wrap; }
+.ackband__fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ackband__acts { display: flex; }
+
+/* ── Receiving ────────────────────────────────────────────────────────── */
+.strip { font-family: var(--font-meta); font-size: 12px; letter-spacing: .04em; color: var(--ink-subtle); display: flex; align-items: center; flex-wrap: wrap; max-width: none; }
+.strip b { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.recv-group { margin-top: 24px; }
+.recv-group h3 { font-family: var(--font-meta); font-size: 12px; font-weight: 500; letter-spacing: .04em; color: var(--ink); padding-bottom: 12px; border-bottom: 1px solid var(--hairline-strong); }
+.recv-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--hairline); }
+.empty-line { font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: 16px; color: var(--ink-subtle); padding: 12px 0; }
+.drawer { width: 640px; margin-left: auto; margin-top: 24px; background: var(--paper-doc); border: 1px solid var(--hairline-strong); border-radius: var(--radius-box); padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+.drawer__head { padding-bottom: 12px; border-bottom: 1px solid var(--hairline-strong); display: flex; flex-direction: column; gap: 4px; }
+.photo-note { border: 1px dashed var(--hairline-strong); border-radius: var(--radius-box); padding: 12px; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+.photo-note strong { color: var(--ink); font-weight: 600; }
+.photo-note em { font-style: italic; }
+.photo-note__line { display: block; }
+.drawer__foot { display: flex; justify-content: flex-end; }
+
+/* ── Add a line ───────────────────────────────────────────────────────── */
+.sources-wrap { position: relative; }
+.sources { border-top: 1px solid var(--hairline); }
+.sources li { border-bottom: 1px solid var(--hairline); }
+.source { width: 100%; display: grid; grid-template-columns: 1fr 24px; column-gap: 12px; align-items: center; text-align: left; background: none; border: 0; padding: 12px 0; min-height: 44px; cursor: pointer; color: var(--ink); }
+.source__label { font-family: var(--font-display); font-size: 14px; font-weight: 500; line-height: 1.4; display: flex; align-items: center; }
+.source__desc { display: block; font-size: 11px; line-height: 1.5; color: var(--ink-subtle); margin-top: 2px; }
+.source__arrow { color: var(--clay); text-align: right; font-size: 14px; }
+.pin--edge { position: absolute; top: -11px; right: 48px; margin: 0; }
+.failure { border-left: 2px solid var(--terracotta-ink); padding-left: 11px; color: var(--terracotta-ink); font-size: 14px; line-height: 1.5; display: flex; align-items: center; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
+}
+@media (forced-colors: active) {
+  .word, .pin, .act--terminal { border: 1px solid ButtonText; }
+  .act:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline-color: Highlight; }
+}
+</style>
+</head>
+<body>
+
+<div class="statebar" id="statebar">
+  <p class="statebar__caption">Today, replicated from code · Ashby Lakehouse · Wed 28 Oct 2026 · invented data · not screenshots</p>
+  <div class="statebar__acts" role="group" aria-label="Screens">
+    <button type="button" class="act act--tertiary" data-go="state-unfold" aria-pressed="true">The FF&amp;E line, unfolded</button>
+    <button type="button" class="act act--tertiary" data-go="state-review" aria-pressed="false">Order Assistant, Review items</button>
+    <button type="button" class="act act--tertiary" data-go="state-ledger" aria-pressed="false">Orders book, Ledger</button>
+    <button type="button" class="act act--tertiary" data-go="state-receiving" aria-pressed="false">Receiving, with the Log inspection drawer open</button>
+    <button type="button" class="act act--tertiary" data-go="state-addline" aria-pressed="false">Add a line, after trying Import a schedule</button>
+  </div>
+</div>
+
+<p role="status" aria-live="polite" class="sr-only" id="announce"></p>
+
+<main class="band">
+  <div class="layout">
+
+    <header class="face-head">
+      <p class="t-head eyebrow">ASHBY LAKEHOUSE</p>
+      <h1 class="t-d1">Ashby Lakehouse</h1>
+    </header>
+
+    <!-- ═══════════════ STATE: unfold ═══════════════ -->
+    <section class="face" data-state="state-unfold" aria-labelledby="h-project">
+      <div class="section-head">
+        <h2 class="t-d3" id="h-project">Project</h2>
+      </div>
+      <ul class="ff-list">
+        <li class="is-open" id="row-sofa">
+          <div class="crm-row">
+            <div class="row-id">
+              <button type="button" class="row-open row-name" aria-expanded="true" aria-controls="unfold-sofa">Sofa</button>
+              <div class="row-sub">Living room · Hale Upholstery Works</div>
+            </div>
+            <div class="row-words"><span class="word word--ordered">Ordered</span></div>
+            <span class="row-chevron" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1"/></svg></span>
+          </div>
+          <div class="unfold" id="unfold-sofa">
+            <div class="cells">
+              <div class="cell">
+                <span class="t-head">Purchase order</span>
+                <span class="cell__value">PO-1042</span>
+                <span class="cell__sub">sent to vendor Oct 7 · acknowledged</span>
+              </div>
+              <div class="cell">
+                <span class="t-head">Movement</span>
+                <span class="cell__value">Acknowledged <span class="arrives">arrives ~Nov 4</span></span>
+              </div>
+              <div class="cell">
+                <span class="t-head">Receiving</span>
+                <span class="cell__value">—</span>
+              </div>
+              <div class="cell cell--gap"><span class="pin" aria-hidden="true">4</span></div>
+            </div>
+            <ol class="trail" aria-label="Where the order stands">
+              <li class="done"><span class="s">Cleared to produce</span></li>
+              <li class="done"><span class="s">Released to maker</span></li>
+              <li class="current" aria-current="step"><span class="s">Acknowledged</span><span class="pin" aria-hidden="true">1</span></li>
+              <li class="norecord">Awaiting inputs<span class="nr">&nbsp;· no record</span></li>
+              <li>In production</li>
+              <li class="norecord">Ready to ship<span class="nr">&nbsp;· no record</span></li>
+              <li>In transit</li>
+              <li>Received</li>
+              <li>Accepted or issue</li>
+              <li class="norecord">Stored<span class="nr">&nbsp;· no record</span></li>
+              <li class="norecord">Install released<span class="nr">&nbsp;· no record</span></li>
+              <li>Installed</li>
+              <li class="norecord">Closed<span class="nr">&nbsp;· no record</span></li>
+            </ol>
+            <p class="authority money">signed price $9,720.00 · deposit clear</p>
+            <div class="field room-field">
+              <label class="t-head" for="room-sofa">Room</label>
+              <select class="control" id="room-sofa">
+                <option>Unsorted</option>
+                <option>Throughout</option>
+                <option selected>Living room</option>
+                <option>Dining room</option>
+                <option>Kitchen</option>
+                <option>Primary bedroom</option>
+                <option>Entry</option>
+              </select>
+            </div>
+            <div class="acts">
+              <button type="button" class="act">Send to vendor</button>
+              <button type="button" class="act act--tertiary">Log inspection</button>
+              <button type="button" class="act act--tertiary">Bill</button>
+              <button type="button" class="act act--tertiary">Add note</button>
+              <button type="button" class="act act--tertiary" data-fold="row-sofa" aria-expanded="true" aria-controls="unfold-sofa">Fold</button>
+              <span class="pin" aria-hidden="true">5</span>
+            </div>
+          </div>
+        </li>
+
+        <li id="row-stools">
+          <div class="crm-row">
+            <div class="row-id">
+              <button type="button" class="row-open row-name" aria-expanded="false" aria-controls="unfold-stools">Bar stools</button>
+              <div class="row-sub">Kitchen · Oro Seating</div>
+            </div>
+            <div class="inline-act">
+              <div class="inline-act__line">
+                <button type="button" class="act act--tertiary">Order with Assistant</button>
+                <span class="pin" aria-hidden="true">2</span>
+              </div>
+            </div>
+            <div class="row-words"><span class="word word--dormant">Specified</span></div>
+            <span class="row-chevron" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1"/></svg></span>
+          </div>
+          <div class="unfold" id="unfold-stools" hidden>
+            <div class="cells">
+              <div class="cell"><span class="t-head">Purchase order</span><span class="cell__value">Not yet ordered</span></div>
+              <div class="cell"><span class="t-head">Movement</span><span class="cell__value">—</span></div>
+              <div class="cell"><span class="t-head">Receiving</span><span class="cell__value">—</span></div>
+              <div class="cell cell--gap"></div>
+            </div>
+          </div>
+        </li>
+
+        <li id="row-nightstands">
+          <div class="crm-row">
+            <div class="row-id">
+              <button type="button" class="row-open row-name" aria-expanded="false" aria-controls="unfold-nightstands">Pair of nightstands</button>
+              <div class="row-sub">Primary bedroom</div>
+            </div>
+            <div class="inline-act">
+              <div class="inline-act__line">
+                <button type="button" class="act act--tertiary" aria-disabled="true" aria-describedby="ns-reason">Order with Assistant</button>
+                <span class="pin" aria-hidden="true">3</span>
+              </div>
+              <span class="reason" id="ns-reason">No vendor on this line yet</span>
+            </div>
+            <div class="row-words"><span class="word word--dormant">Specified</span></div>
+            <span class="row-chevron" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1"/></svg></span>
+          </div>
+          <div class="unfold" id="unfold-nightstands" hidden>
+            <div class="cells">
+              <div class="cell"><span class="t-head">Purchase order</span><span class="cell__value">Not yet ordered</span></div>
+              <div class="cell"><span class="t-head">Movement</span><span class="cell__value">—</span></div>
+              <div class="cell"><span class="t-head">Receiving</span><span class="cell__value">—</span></div>
+              <div class="cell cell--gap"></div>
+            </div>
+          </div>
+        </li>
+
+        <li id="row-pendants">
+          <div class="crm-row">
+            <div class="row-id">
+              <button type="button" class="row-open row-name" aria-expanded="false" aria-controls="unfold-pendants">Kitchen pendants</button>
+              <div class="row-sub">Kitchen · Larkspur Lighting</div>
+            </div>
+            <div class="row-words"><span class="word word--current">Delivered</span></div>
+            <span class="row-chevron" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1"/></svg></span>
+          </div>
+          <div class="unfold" id="unfold-pendants" hidden>
+            <div class="cells">
+              <div class="cell"><span class="t-head">Purchase order</span><span class="cell__value">PO-1047</span><span class="cell__sub">sent to vendor Oct 6 · acknowledged</span></div>
+              <div class="cell"><span class="t-head">Movement</span><span class="cell__value">Delivered</span></div>
+              <div class="cell"><span class="t-head">Receiving</span><span class="cell__value">Awaiting inspection</span></div>
+              <div class="cell cell--gap"></div>
+            </div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <aside class="rail" data-state="state-unfold" aria-labelledby="rail-unfold">
+      <h2 class="t-head" id="rail-unfold">FRICTION</h2>
+      <ol>
+        <li><span class="pin">1</span><p class="t-body-sm">Hale is building the sofa, but the line can never say so. Nothing in the portal moves an order to in production or shipped.</p><p class="t-meta"><code>use-procurement.ts:770</code> has zero callers; <code>purchase_orders</code> is RPC-only, <code>00447:15-36</code></p></li>
+        <li><span class="pin">2</span><p class="t-body-sm">Ordering is offered on a line the client has not approved. On a job with no agreement behind it nothing writes approved, so the line stays specified for good.</p><p class="t-meta"><code>line-unfold.tsx:75</code>; <code>00331:665,703</code></p></li>
+        <li><span class="pin">3</span><p class="t-body-sm">A pasted link has no maker and no trade cost, and the studio has no way to add either.</p><p class="t-meta"><code>use-project-v2.ts:287-298,329-336</code> throw "RPC-only"</p></li>
+        <li><span class="pin">4</span><p class="t-body-sm">The unfold shows neither the SKU, the finish nor the COM fabric. The fabric lives only in the product configuration.</p><p class="t-meta"><code>00413:45-71</code>; spec row inserted empty, <code>00380:565-570</code></p></li>
+        <li><span class="pin">5</span><p class="t-body-sm">Acknowledgments can be logged only from the Ledger. There is no act here to mark a piece installed, so close-out can never clear.</p><p class="t-meta"><code>closure-derivation.ts:191-199</code></p></li>
+      </ol>
+    </aside>
+
+    <!-- ═══════════════ STATE: review ═══════════════ -->
+    <section class="face" data-state="state-review" hidden aria-labelledby="h-review">
+      <div class="stack">
+        <div class="behind" inert aria-hidden="true">
+          <div class="section-head"><h2 class="t-d3">Project</h2></div>
+          <ul class="ff-list">
+            <li><div class="crm-row"><div class="row-id"><div class="row-name">Sofa</div><div class="row-sub">Living room · Hale Upholstery Works</div></div><div class="row-words"><span class="word word--ordered">Ordered</span></div></div></li>
+            <li><div class="crm-row"><div class="row-id"><div class="row-name">Bar stools</div><div class="row-sub">Kitchen · Oro Seating</div></div><div class="row-words"><span class="word word--dormant">Specified</span></div></div></li>
+            <li><div class="crm-row"><div class="row-id"><div class="row-name">Pair of nightstands</div><div class="row-sub">Primary bedroom</div></div><div class="row-words"><span class="word word--dormant">Specified</span></div></div></li>
+            <li><div class="crm-row"><div class="row-id"><div class="row-name">Kitchen pendants</div><div class="row-sub">Kitchen · Larkspur Lighting</div></div><div class="row-words"><span class="word word--current">Delivered</span></div></div></li>
+          </ul>
+        </div>
+
+        <div class="sheet sheet--760" role="dialog" aria-labelledby="h-review">
+          <div class="sheet-head">
+            <span class="t-meta">Order Assistant · Oro Seating</span>
+            <h2 class="t-d3" id="h-review">1 item · $1,620.00 total</h2>
+            <span class="t-meta">Ashby Lakehouse</span>
+          </div>
+          <div class="sheet-body">
+            <p class="t-meta step-head">Step 1 of 4 · Review items<span class="pin" aria-hidden="true">9</span></p>
+
+            <section class="panel" aria-labelledby="h-portal">
+              <div class="panel__head">
+                <h3 class="panel__title" id="h-portal">Open vendor portal</h3>
+                <span class="panel__quiet">No trade portal on file</span>
+              </div>
+              <p class="t-body-sm" style="color: var(--ink-subtle)">—</p>
+            </section>
+
+            <section class="panel" aria-labelledby="h-copy">
+              <div class="panel__head">
+                <h3 class="panel__title" id="h-copy">Copy item details</h3>
+                <button type="button" class="act act--secondary">Copy details</button>
+              </div>
+              <div class="copyblock">
+                <div>1. Bar stools · Kitchen<span class="pin" aria-hidden="true">8</span></div>
+                <div class="ship">Ship to: Middlewest Studio · Madison WI<span class="pin" aria-hidden="true">6</span></div>
+              </div>
+            </section>
+
+            <div class="sheet-foot">
+              <button type="button" class="act act--tertiary">Back</button>
+              <span class="sheet-foot__end">
+                <button type="button" class="act act--terminal">Continue</button>
+                <span class="pin" aria-hidden="true">7</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="rail" data-state="state-review" hidden aria-labelledby="rail-review">
+      <h2 class="t-head" id="rail-review">FRICTION</h2>
+      <ol>
+        <li><span class="pin">6</span><p class="t-body-sm">Every studio's order screen prints the same hardcoded address, &ldquo;Middlewest Studio · Madison WI&rdquo; (Leah&rsquo;s own studio).</p><p class="t-meta"><code>order-assistant/step-review.tsx:31</code></p></li>
+        <li><span class="pin">7</span><p class="t-body-sm">When the PO goes out with no ship-to, the send fills in the client's house and saves it. LTL freight then arrives at 2216 North Shore Drive, where there is no dock and no inspection.</p><p class="t-meta"><code>po-send/index.ts:382-393</code></p></li>
+        <li><span class="pin">8</span><p class="t-body-sm">The copied text carries the name, room, ship-to, trade amount and any configuration lines. SKU, finish and quantity are not in it, so they are retyped by hand into the vendor's portal.</p><p class="t-meta"><code>step-review.tsx:33-55</code></p></li>
+        <li><span class="pin">9</span><p class="t-body-sm">Four steps lead to a second send screen, whose note-to-vendor field is still a TODO.</p><p class="t-meta"><code>po-send-actions.tsx:26</code>; <code>order-assistant/index.tsx:1057</code></p></li>
+      </ol>
+    </aside>
+
+    <!-- ═══════════════ STATE: ledger ═══════════════ -->
+    <section class="face" data-state="state-ledger" hidden aria-labelledby="h-ledger">
+      <div class="book-head">
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5L10 3l7 3.5v7L10 17l-7-3.5z M3 6.5L10 10l7-3.5 M10 10v7" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>
+        <h2 class="t-head" id="h-ledger">ORDERS · LEDGER</h2>
+      </div>
+      <p class="t-body-sm book-intro">Every project's purchase orders, gathered in one studio register.</p>
+      <nav class="pagelinks" aria-label="Orders book pages">
+        <a href="#state-ledger" data-go="state-ledger" aria-current="page">Ledger</a><span class="sep" aria-hidden="true">·</span>
+        <a href="#state-ledger" data-go="state-ledger" data-stay>The Week</a><span class="sep" aria-hidden="true">·</span>
+        <a href="#state-receiving" data-go="state-receiving">Receiving</a><span class="sep" aria-hidden="true">·</span>
+        <a href="#state-ledger" data-go="state-ledger" data-stay>Vendors</a>
+      </nav>
+
+      <div class="book-region">
+        <p class="frontmatter">Open: 6 · Arriving this week: 0 · Unsent: 1 · No ack: 0</p>
+
+        <div class="lenses">
+          <div class="lens-col">
+            <div class="lens" role="group" aria-label="Project lens">
+              <span>project</span><span class="sep" aria-hidden="true">·</span>
+              <button type="button" class="choice" aria-pressed="true">all</button><span class="sep" aria-hidden="true">·</span>
+              <button type="button" class="choice" aria-pressed="false">Ashby Lakehouse</button>
+              <span class="pin" aria-hidden="true">15</span>
+            </div>
+            <div class="lens" role="group" aria-label="Payment lens">
+              <span>payment</span><span class="sep" aria-hidden="true">·</span>
+              <button type="button" class="choice" aria-pressed="true">all</button><span class="sep" aria-hidden="true">·</span>
+              <button type="button" class="choice" aria-pressed="false">due</button><span class="sep" aria-hidden="true">·</span>
+              <button type="button" class="choice" aria-pressed="false">pending</button><span class="sep" aria-hidden="true">·</span>
+              <button type="button" class="choice" aria-pressed="false">paid</button>
+              <span class="pin" aria-hidden="true">10</span>
+            </div>
+          </div>
+          <button type="button" class="act act--tertiary">Select multiple</button>
+        </div>
+
+        <section class="vendor-group" aria-labelledby="g-ard">
+          <h3 class="t-head" id="g-ard">ARDENT RUG ATELIER</h3>
+          <ul class="po-list">
+            <li>
+              <div class="po-line1"><span class="po-no">PO-1046</span><span class="word word--ack">Acknowledged</span><span></span><span class="eta">~Nov 20<span class="pin" aria-hidden="true">14</span></span></div>
+              <div class="po-line2">
+                <span class="po-meta">Ashby Lakehouse · $4,350.00 · sent Oct 1 · acknowledged</span>
+                <span class="po-acts">
+                  <button type="button" class="act act--tertiary" aria-expanded="false" aria-controls="ack-1046">log ack ↓</button>
+                  <button type="button" class="act act--tertiary">resend</button>
+                  <button type="button" class="act act--tertiary">pdf</button>
+                  <button type="button" class="act act--tertiary">open document →</button>
+                </span>
+              </div>
+              <div class="ackband" id="ack-1046" hidden>
+                <p class="ackband__lead">Stamped as of today — PO # and ETA are optional, blank keeps what's on file.</p>
+                <div class="ackband__fields">
+                  <div class="field"><label class="t-head" for="po-1046">VENDOR PO #</label><input class="control" id="po-1046" type="text" value=""></div>
+                  <div class="field"><label class="t-head" for="eta-1046">CONFIRMED ETA</label><input class="control" id="eta-1046" type="text" value="Nov 20"></div>
+                </div>
+                <div class="ackband__acts"><button type="button" class="act act--secondary">Log acknowledgment</button></div>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="vendor-group" aria-labelledby="g-fen">
+          <h3 class="t-head" id="g-fen">FENWICK &amp; ROWE</h3>
+          <ul class="po-list">
+            <li>
+              <div class="po-line1"><span class="po-no">PO-1045</span><span class="word word--ack">Acknowledged</span><span></span><span class="eta">~Dec 11</span></div>
+              <div class="po-line2">
+                <span class="po-meta">Ashby Lakehouse · $9,800.00 · sent Oct 13 · acknowledged</span>
+                <span class="po-acts">
+                  <button type="button" class="act act--tertiary" aria-expanded="true" aria-controls="ack-1045">log ack ↓</button>
+                  <button type="button" class="act act--tertiary">resend</button>
+                  <button type="button" class="act act--tertiary">pdf</button>
+                  <button type="button" class="act act--tertiary">open document →</button>
+                </span>
+              </div>
+              <div class="ackband" id="ack-1045">
+                <p class="ackband__lead">Stamped as of today — PO # and ETA are optional, blank keeps what's on file.<span class="pin" aria-hidden="true">11</span></p>
+                <div class="ackband__fields">
+                  <div class="field"><label class="t-head" for="po-1045">VENDOR PO #</label><input class="control" id="po-1045" type="text" value=""></div>
+                  <div class="field"><label class="t-head" for="eta-1045">CONFIRMED ETA<span class="pin" aria-hidden="true">12</span></label><input class="control" id="eta-1045" type="text" value="Dec 11"></div>
+                </div>
+                <div class="ackband__acts"><button type="button" class="act act--secondary">Log acknowledgment</button></div>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="vendor-group" aria-labelledby="g-hale">
+          <h3 class="t-head" id="g-hale">HALE UPHOLSTERY WORKS</h3>
+          <ul class="po-list">
+            <li>
+              <div class="po-line1"><span class="po-no">PO-1042</span><span class="word word--ack">Acknowledged</span><span></span><span class="eta">~Nov 4</span></div>
+              <div class="po-line2">
+                <span class="po-meta">Ashby Lakehouse · $6,480.00 · sent Oct 7 · acknowledged</span>
+                <span class="po-acts">
+                  <button type="button" class="act act--tertiary" aria-expanded="false" aria-controls="ack-1042">log ack ↓</button>
+                  <button type="button" class="act act--tertiary">resend</button>
+                  <button type="button" class="act act--tertiary">pdf</button>
+                  <button type="button" class="act act--tertiary">open document →</button>
+                </span>
+              </div>
+              <div class="ackband" id="ack-1042" hidden>
+                <p class="ackband__lead">Stamped as of today — PO # and ETA are optional, blank keeps what's on file.</p>
+                <div class="ackband__fields">
+                  <div class="field"><label class="t-head" for="po-1042">VENDOR PO #</label><input class="control" id="po-1042" type="text" value=""></div>
+                  <div class="field"><label class="t-head" for="eta-1042">CONFIRMED ETA</label><input class="control" id="eta-1042" type="text" value="Nov 4"></div>
+                </div>
+                <div class="ackband__acts"><button type="button" class="act act--secondary">Log acknowledgment</button></div>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="vendor-group" aria-labelledby="g-kess">
+          <h3 class="t-head" id="g-kess">KESSLER TEXTILE CO.</h3>
+          <ul class="po-list">
+            <li>
+              <div class="po-line1"><span class="po-no">PO-1043</span><span class="word word--ack">Acknowledged</span><span></span><span class="eta eta--none">NO DATE</span></div>
+              <div class="po-line2">
+                <span class="po-meta">Ashby Lakehouse · $1,216.00 · sent Oct 7 · acknowledged</span>
+                <span class="po-acts">
+                  <button type="button" class="act act--tertiary" aria-expanded="false" aria-controls="ack-1043">log ack ↓</button>
+                  <button type="button" class="act act--tertiary">resend</button>
+                  <button type="button" class="act act--tertiary">pdf</button>
+                  <button type="button" class="act act--tertiary">open document →</button>
+                </span>
+              </div>
+              <div class="ackband" id="ack-1043" hidden>
+                <p class="ackband__lead">Stamped as of today — PO # and ETA are optional, blank keeps what's on file.</p>
+                <div class="ackband__fields">
+                  <div class="field"><label class="t-head" for="po-1043">VENDOR PO #</label><input class="control" id="po-1043" type="text" value=""></div>
+                  <div class="field"><label class="t-head" for="eta-1043">CONFIRMED ETA</label><input class="control" id="eta-1043" type="text" value=""></div>
+                </div>
+                <div class="ackband__acts"><button type="button" class="act act--secondary">Log acknowledgment</button></div>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="vendor-group" aria-labelledby="g-lark">
+          <h3 class="t-head" id="g-lark">LARKSPUR LIGHTING</h3>
+          <ul class="po-list">
+            <li>
+              <div class="po-line1"><span class="po-no">PO-1047</span><span class="word word--current">Delivered</span><span></span><span class="eta">Oct 26</span></div>
+              <div class="po-line2">
+                <span class="po-meta">Ashby Lakehouse · $2,460.00 · sent Oct 6 · acknowledged</span>
+                <span class="po-acts">
+                  <button type="button" class="act act--tertiary" aria-expanded="false" aria-controls="ack-1047">log ack ↓</button>
+                  <button type="button" class="act act--tertiary">resend</button>
+                  <button type="button" class="act act--tertiary">pdf</button>
+                  <button type="button" class="act act--tertiary">open document →</button>
+                </span>
+              </div>
+              <div class="ackband" id="ack-1047" hidden>
+                <p class="ackband__lead">Stamped as of today — PO # and ETA are optional, blank keeps what's on file.</p>
+                <div class="ackband__fields">
+                  <div class="field"><label class="t-head" for="po-1047">VENDOR PO #</label><input class="control" id="po-1047" type="text" value=""></div>
+                  <div class="field"><label class="t-head" for="eta-1047">CONFIRMED ETA</label><input class="control" id="eta-1047" type="text" value="Oct 26"></div>
+                </div>
+                <div class="ackband__acts"><button type="button" class="act act--secondary">Log acknowledgment</button></div>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="vendor-group" aria-labelledby="g-still">
+          <h3 class="t-head" id="g-still">STILLWATER DRAPERY CO.</h3>
+          <ul class="po-list">
+            <li>
+              <div class="po-line1"><span class="po-no">PO-1048</span><span class="word word--draft">Draft</span><span></span><span class="eta eta--none">NO DATE</span></div>
+              <div class="po-line2">
+                <span class="po-meta">Ashby Lakehouse · $3,860.00 · not sent</span>
+                <span class="po-acts">
+                  <button type="button" class="act act--tertiary">send →</button><span class="pin" aria-hidden="true">13</span>
+                  <button type="button" class="act act--tertiary">pdf</button>
+                  <button type="button" class="act act--tertiary">open document →</button>
+                </span>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </section>
+
+    <aside class="rail" data-state="state-ledger" hidden aria-labelledby="rail-ledger">
+      <h2 class="t-head" id="rail-ledger">FRICTION</h2>
+      <ol>
+        <li><span class="pin">10</span><p class="t-body-sm">The studio can filter by paid, but nothing lets it record a payment. Hale's balance, due Friday, can never clear.</p><p class="t-meta"><code>use-procurement.ts:602</code> has zero callers; <code>00189:7-19</code></p></li>
+        <li><span class="pin">11</span><p class="t-body-sm">An acknowledgment records only a vendor number and a date. Fenwick confirmed the lounge chairs in Natural oak against an order for Smoked walnut, and this band cannot show it.</p><p class="t-meta"><code>00190:29-32</code></p></li>
+        <li><span class="pin">12</span><p class="t-body-sm">Changing the date writes straight to a table that refuses direct writes, so the change probably fails. Runtime not verified.</p><p class="t-meta"><code>use-procurement.ts:663-708</code>; <code>00447:15-36</code></p></li>
+        <li><span class="pin">13</span><p class="t-body-sm">Priya owns the project. When Maya sends the order she built, the send replies "not found".</p><p class="t-meta"><code>po-send/index.ts:236</code>; <code>00449:131-136</code></p></li>
+        <li><span class="pin">14</span><p class="t-body-sm">Ardent moved the rug to mid-January. A line can only be marked blocked, so the old date stands.</p><p class="t-meta"><code>is_blocked</code> only, R3 J1</p></li>
+        <li><span class="pin">15</span><p class="t-body-sm">When the studio opens the Ledger from Ashby Lakehouse to chase an order, the lens resets to all projects.</p><p class="t-meta"><code>orders-ledger.tsx:158</code></p></li>
+      </ol>
+    </aside>
+
+    <!-- ═══════════════ STATE: receiving ═══════════════ -->
+    <section class="face" data-state="state-receiving" hidden aria-labelledby="h-receiving">
+      <div class="book-head">
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5L10 3l7 3.5v7L10 17l-7-3.5z M3 6.5L10 10l7-3.5 M10 10v7" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>
+        <h2 class="t-head" id="h-receiving">ORDERS · RECEIVING</h2>
+      </div>
+      <nav class="pagelinks" aria-label="Orders book pages">
+        <a href="#state-ledger" data-go="state-ledger">Ledger</a><span class="sep" aria-hidden="true">·</span>
+        <a href="#state-receiving" data-go="state-receiving" data-stay>The Week</a><span class="sep" aria-hidden="true">·</span>
+        <a href="#state-receiving" data-go="state-receiving" aria-current="page">Receiving</a><span class="sep" aria-hidden="true">·</span>
+        <a href="#state-receiving" data-go="state-receiving" data-stay>Vendors</a>
+      </nav>
+
+      <div class="book-region">
+        <p class="strip">Arriving · next 7 days&nbsp;<b>0</b>&nbsp;· Awaiting log&nbsp;<b>1</b>&nbsp;· Open claims&nbsp;<b>0</b>&nbsp;· Received · 30d&nbsp;<b>0</b><span class="pin" aria-hidden="true">17</span></p>
+
+        <section class="recv-group" aria-labelledby="g-await">
+          <h3 id="g-await">Awaiting inspection · 1</h3>
+          <div class="recv-row">
+            <div>
+              <div class="row-name">PO-1047 · Larkspur Lighting</div>
+              <div class="row-sub">Ashby Lakehouse · delivered Oct 26</div>
+            </div>
+            <div class="po-acts">
+              <button type="button" class="act act--secondary" aria-expanded="true" aria-controls="drawer-1047">Inspect</button>
+              <button type="button" class="act act--tertiary">open document →</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="recv-group" aria-labelledby="g-claims">
+          <h3 id="g-claims">Open claims · 0</h3>
+          <p class="empty-line">Nothing waiting on the warehouse floor.</p>
+        </section>
+      </div>
+
+      <section class="drawer" id="drawer-1047" role="dialog" aria-labelledby="h-drawer">
+        <div class="drawer__head">
+          <h3 class="t-d3" id="h-drawer">Log inspection</h3>
+          <p class="t-body-sm" style="color: var(--ink-muted)">PO-1047 · Larkspur Lighting</p>
+        </div>
+        <div class="field">
+          <span class="t-head" id="lbl-outcome">OUTCOME<span class="pin" aria-hidden="true">18</span></span>
+          <div class="choices" role="group" aria-labelledby="lbl-outcome">
+            <button type="button" class="choice" aria-pressed="false">Clean</button>
+            <button type="button" class="choice" aria-pressed="true">Damaged</button>
+            <button type="button" class="choice" aria-pressed="false">Partial</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="t-head" for="notes-1047">NOTES</label>
+          <textarea class="control" id="notes-1047" rows="3">Shade on one of three pendants cracked at the rim. Carton corner crushed.</textarea>
+        </div>
+        <div class="photo-note">
+          <span class="photo-note__line"><strong>Photos: upload via mobile.</strong><span class="pin" aria-hidden="true">16</span></span>
+          Open the iOS app and tap <em>Log on phone</em> from the Arriving tab to attach photo evidence. Desktop logs the inspection without photos.
+        </div>
+        <div class="drawer__foot">
+          <button type="button" class="act act--terminal">Log inspection</button>
+        </div>
+      </section>
+    </section>
+
+    <aside class="rail" data-state="state-receiving" hidden aria-labelledby="rail-receiving">
+      <h2 class="t-head" id="rail-receiving">FRICTION</h2>
+      <ol>
+        <li><span class="pin">16</span><p class="t-body-sm">The desk cannot attach a photo. Photos taken on the phone cannot be opened on the desk either, because the media service hands back a storage key instead of a link.</p><p class="t-meta"><code>log-inspection-drawer.tsx:456-467</code>; <code>media.service.ts:197</code></p></li>
+        <li><span class="pin">17</span><p class="t-body-sm">The only clock on this page counts the last 30 days. Larkspur's claim window, three business days that close Thu Oct 29 at 5 pm, appears nowhere.</p><p class="t-meta"><code>orders-book-receiving.tsx:10</code></p></li>
+        <li><span class="pin">18</span><p class="t-body-sm">One outcome covers the whole delivery. Nothing records which piece cracked, or that the damage was noted on the carrier's receipt.</p><p class="t-meta">R3 I1/I3; <code>00150</code></p></li>
+      </ol>
+    </aside>
+
+    <!-- ═══════════════ STATE: addline ═══════════════ -->
+    <section class="face" data-state="state-addline" hidden aria-labelledby="h-addline">
+      <div class="stack">
+        <div class="behind" inert aria-hidden="true">
+          <div class="section-head"><h2 class="t-d3">Project</h2></div>
+          <ul class="ff-list">
+            <li><div class="crm-row"><div class="row-id"><div class="row-name">Sofa</div><div class="row-sub">Living room · Hale Upholstery Works</div></div><div class="row-words"><span class="word word--ordered">Ordered</span></div></div></li>
+            <li><div class="crm-row"><div class="row-id"><div class="row-name">Bar stools</div><div class="row-sub">Kitchen · Oro Seating</div></div><div class="row-words"><span class="word word--dormant">Specified</span></div></div></li>
+            <li><div class="crm-row"><div class="row-id"><div class="row-name">Pair of nightstands</div><div class="row-sub">Primary bedroom</div></div><div class="row-words"><span class="word word--dormant">Specified</span></div></div></li>
+            <li><div class="crm-row"><div class="row-id"><div class="row-name">Kitchen pendants</div><div class="row-sub">Kitchen · Larkspur Lighting</div></div><div class="row-words"><span class="word word--current">Delivered</span></div></div></li>
+          </ul>
+        </div>
+
+        <div class="sheet sheet--640" role="dialog" aria-labelledby="h-addline">
+          <div class="sheet-head">
+            <h2 class="t-d3" id="h-addline">Add a line</h2>
+            <span class="t-meta">Ashby Lakehouse</span>
+          </div>
+          <div class="sheet-body">
+            <div class="sources-wrap">
+            <span class="pin pin--edge" aria-hidden="true">20</span>
+            <ul class="sources">
+              <li><button type="button" class="source"><span><span class="source__label">Start a board</span><span class="source__desc">Concept, selections, materials, or blank.</span></span><span class="source__arrow" aria-hidden="true">→</span></button></li>
+              <li><button type="button" class="source"><span><span class="source__label">Browse the Library</span><span class="source__desc">Choose one known product, then route it here.</span></span><span class="source__arrow" aria-hidden="true">→</span></button></li>
+              <li><button type="button" class="source"><span><span class="source__label">Paste a product link<span class="pin" aria-hidden="true">21</span></span><span class="source__desc">Capture through the guarded URL intake, then route it here.</span></span><span class="source__arrow" aria-hidden="true">→</span></button></li>
+              <li><button type="button" class="source"><span><span class="source__label">Name a need<span class="pin" aria-hidden="true">22</span></span><span class="source__desc">Add a named selection to resolve later.</span></span><span class="source__arrow" aria-hidden="true">→</span></button></li>
+              <li><button type="button" class="source"><span><span class="source__label">Import a schedule</span><span class="source__desc">Project schedule staging is not available in this build.</span></span><span class="source__arrow" aria-hidden="true">→</span></button></li>
+            </ul>
+            </div>
+            <p class="failure">Project schedule staging is not available yet. No selections were created.<span class="pin" aria-hidden="true">19</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="rail" data-state="state-addline" hidden aria-labelledby="rail-addline">
+      <h2 class="t-head" id="rail-addline">FRICTION</h2>
+      <ol>
+        <li><span class="pin">19</span><p class="t-body-sm">Import a schedule is a labelled dead end, though the staging and review pipeline it needs already exists.</p><p class="t-meta"><code>add-to-project-sheet.tsx:272-274</code>; staging through <code>00666</code></p></li>
+        <li><span class="pin">20</span><p class="t-body-sm">There is no road for a custom piece with its fabric, a store buy, an estate find, a sample or a reimbursable. None of them has a model.</p><p class="t-meta">R2; R3 lanes 3 to 8</p></li>
+        <li><span class="pin">21</span><p class="t-body-sm">A pasted piece arrives with no maker, and its retail price is written into the trade cost.</p><p class="t-meta"><code>00435:203,234</code></p></li>
+        <li><span class="pin">22</span><p class="t-body-sm">A named need can never become an order. An order needs a vendor, and the studio has no way to put one on the line.</p><p class="t-meta"><code>00148:54</code>; <code>00435:894</code></p></li>
+      </ol>
+    </aside>
+
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var STATES = {
+    'state-unfold': 'The FF&E line, unfolded',
+    'state-review': 'Order Assistant, Review items',
+    'state-ledger': 'Orders book, Ledger',
+    'state-receiving': 'Receiving, with the Log inspection drawer open',
+    'state-addline': 'Add a line, after trying Import a schedule'
+  };
+  var DEFAULT_STATE = 'state-unfold';
+  var root = document.documentElement;
+
+  function parseHash() {
+    var raw = '';
+    try { raw = decodeURIComponent(location.hash.replace(/^#/, '')); } catch (e) { raw = location.hash.replace(/^#/, ''); }
+    var tokens = raw.split(/[&,]/).map(function (t) { return t.trim(); }).filter(Boolean);
+    var state = null;
+    for (var i = 0; i < tokens.length; i++) {
+      if (/^state-/.test(tokens[i])) { state = tokens[i]; break; }
+    }
+    if (!state || !Object.prototype.hasOwnProperty.call(STATES, state)) state = DEFAULT_STATE;
+    return { state: state, nobar: tokens.indexOf('nobar') !== -1, nopins: tokens.indexOf('nopins') !== -1 };
+  }
+
+  function buildHash(state, flags) {
+    var parts = [state];
+    if (flags.nobar) parts.push('nobar');
+    if (flags.nopins) parts.push('nopins');
+    return '#' + parts.join('&');
+  }
+
+  function render() {
+    var h = parseHash();
+    var regions = document.querySelectorAll('[data-state]');
+    for (var i = 0; i < regions.length; i++) {
+      regions[i].hidden = regions[i].getAttribute('data-state') !== h.state;
+    }
+    var barButtons = document.querySelectorAll('#statebar [data-go]');
+    for (var j = 0; j < barButtons.length; j++) {
+      barButtons[j].setAttribute('aria-pressed', barButtons[j].getAttribute('data-go') === h.state ? 'true' : 'false');
+    }
+    document.getElementById('statebar').hidden = h.nobar;
+    root.classList.toggle('nopins', h.nopins);
+    var rails = document.querySelectorAll('.rail');
+    for (var k = 0; k < rails.length; k++) {
+      if (h.nopins) rails[k].hidden = true;
+    }
+    document.getElementById('announce').textContent = STATES[h.state];
+  }
+
+  function go(state) {
+    if (!Object.prototype.hasOwnProperty.call(STATES, state)) return;
+    var h = parseHash();
+    var next = buildHash(state, h);
+    if (location.hash === next) { render(); } else { location.hash = next; }
+  }
+
+  function wire() {
+    document.addEventListener('click', function (e) {
+      var target = e.target.closest ? e.target.closest('[data-go]') : null;
+      if (target) {
+        e.preventDefault();
+        if (target.hasAttribute('data-stay')) return;
+        go(target.getAttribute('data-go'));
+        return;
+      }
+      var fold = e.target.closest ? e.target.closest('[aria-controls][aria-expanded]') : null;
+      if (fold) {
+        var panel = document.getElementById(fold.getAttribute('aria-controls'));
+        if (!panel) return;
+        var open = fold.getAttribute('aria-expanded') !== 'true';
+        panel.hidden = !open;
+        var triggers = document.querySelectorAll('[aria-controls="' + panel.id + '"]');
+        for (var i = 0; i < triggers.length; i++) triggers[i].setAttribute('aria-expanded', open ? 'true' : 'false');
+        var row = panel.closest('.ff-list > li');
+        if (row) row.classList.toggle('is-open', open);
+        return;
+      }
+      var choice = e.target.closest ? e.target.closest('.choice') : null;
+      if (choice) {
+        var group = choice.closest('[role="group"]');
+        if (!group) return;
+        var all = group.querySelectorAll('.choice');
+        for (var c = 0; c < all.length; c++) all[c].setAttribute('aria-pressed', all[c] === choice ? 'true' : 'false');
+      }
+    });
+    render();
+  }
+
+  window.addEventListener('hashchange', render);
+  window.addEventListener('message', function (e) {
+    var data = e && e.data;
+    if (!data || typeof data !== 'object' || typeof data.state !== 'string') return;
+    var s = data.state.trim();
+    if (s.indexOf('state-') !== 0) s = 'state-' + s;
+    if (!Object.prototype.hasOwnProperty.call(STATES, s)) return;
+    go(s);
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    wire();
+  }
+})();
+</script>
+</body>
+</html>
+<!-- specimen-complete -->
