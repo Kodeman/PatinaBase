@@ -1749,6 +1749,9 @@ export {
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
   useUpdatePurchaseOrderStatus,
   useSetPurchaseOrderShipTo,
+  // US-16 C-18 / C-20 — PO tracking (00698) and the claim clock (00700)
+  useSetPurchaseOrderTracking,
+  useProcurementClaimDeadline,
   // C-21 — PO change orders over start_purchase_order_change (00435/00453)
   useStartPurchaseOrderChange,
   usePurchaseOrderChanges,
@@ -1797,6 +1800,10 @@ export type {
   LogPOAcknowledgmentInput,
   UpdatePurchaseOrderStatusInput,
   SetPurchaseOrderShipToInput,
+  // US-16 C-18 / C-20 — PO tracking (00698) and the claim clock (00700)
+  PurchaseOrderEtaHistoryEntry,
+  SetPurchaseOrderTrackingInput,
+  ProcurementClaimDeadline,
   PurchaseOrderChangeKind,
   StartPurchaseOrderChangeInput,
   StartPurchaseOrderChangeResult,

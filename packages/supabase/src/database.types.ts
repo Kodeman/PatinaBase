@@ -12709,10 +12709,14 @@ export type Database = {
           created_at: string
           id: string
           kind: Database["public"]["Enums"]["procurement_notification_kind"]
+          organization_id: string | null
           read_at: string | null
+          subject_exception_id: string | null
           subject_inspection_id: string | null
           subject_payment_id: string | null
           subject_purchase_order_id: string | null
+          subject_sample_id: string | null
+          subject_submittal_id: string | null
           updated_at: string
           user_id: string
         }
@@ -12720,10 +12724,14 @@ export type Database = {
           created_at?: string
           id?: string
           kind: Database["public"]["Enums"]["procurement_notification_kind"]
+          organization_id?: string | null
           read_at?: string | null
+          subject_exception_id?: string | null
           subject_inspection_id?: string | null
           subject_payment_id?: string | null
           subject_purchase_order_id?: string | null
+          subject_sample_id?: string | null
+          subject_submittal_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -12731,14 +12739,39 @@ export type Database = {
           created_at?: string
           id?: string
           kind?: Database["public"]["Enums"]["procurement_notification_kind"]
+          organization_id?: string | null
           read_at?: string | null
+          subject_exception_id?: string | null
           subject_inspection_id?: string | null
           subject_payment_id?: string | null
           subject_purchase_order_id?: string | null
+          subject_sample_id?: string | null
+          subject_submittal_id?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "procurement_notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "procurement_notifications_subject_inspection_id_fkey"
             columns: ["subject_inspection_id"]
@@ -21859,11 +21892,14 @@ export type Database = {
       purchase_orders: {
         Row: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -21875,20 +21911,25 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
         }
         Insert: {
           acknowledged_at?: string | null
+          bol_document_path?: string | null
+          carrier?: string | null
           confirmed_eta?: string | null
           created_at?: string
           created_by?: string | null
           delivered_date?: string | null
           designer_id: string
+          eta_history?: Json
           id?: string
           is_patina_catalog?: boolean
           needs_repricing?: boolean
@@ -21900,20 +21941,25 @@ export type Database = {
           sent_at?: string | null
           ship_to?: string | null
           ship_to_location_id?: string | null
+          shipped_on?: string | null
           sidemark?: string | null
           status?: string
           total_cents?: number
+          tracking_number?: string | null
           updated_at?: string
           vendor_id: string
           vendor_po_number?: string | null
         }
         Update: {
           acknowledged_at?: string | null
+          bol_document_path?: string | null
+          carrier?: string | null
           confirmed_eta?: string | null
           created_at?: string
           created_by?: string | null
           delivered_date?: string | null
           designer_id?: string
+          eta_history?: Json
           id?: string
           is_patina_catalog?: boolean
           needs_repricing?: boolean
@@ -21925,9 +21971,11 @@ export type Database = {
           sent_at?: string | null
           ship_to?: string | null
           ship_to_location_id?: string | null
+          shipped_on?: string | null
           sidemark?: string | null
           status?: string
           total_cents?: number
+          tracking_number?: string | null
           updated_at?: string
           vendor_id?: string
           vendor_po_number?: string | null
@@ -22132,6 +22180,48 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      receiving_inspection_lines: {
+        Row: {
+          condition: string
+          created_at: string
+          ffe_item_id: string
+          inspection_id: string
+          noted_on_bol: boolean
+          received_quantity: number
+        }
+        Insert: {
+          condition: string
+          created_at?: string
+          ffe_item_id: string
+          inspection_id: string
+          noted_on_bol?: boolean
+          received_quantity: number
+        }
+        Update: {
+          condition?: string
+          created_at?: string
+          ffe_item_id?: string
+          inspection_id?: string
+          noted_on_bol?: boolean
+          received_quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receiving_inspection_lines_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receiving_inspection_lines_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "receiving_inspections"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       receiving_inspections: {
         Row: {
@@ -33727,11 +33817,14 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -33743,9 +33836,11 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -33774,11 +33869,14 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -33790,9 +33888,11 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -33821,11 +33921,14 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -33837,9 +33940,11 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -35225,11 +35330,14 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -35241,9 +35349,11 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -35647,11 +35757,14 @@ export type Database = {
         Args: { p_po_id: string }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -35663,9 +35776,11 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -36784,11 +36899,14 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -36800,9 +36918,11 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -38452,11 +38572,14 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -38468,9 +38591,11 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -38939,6 +39064,20 @@ export type Database = {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
       }
+      procurement_claim_deadline: {
+        Args: { p_po_id: string }
+        Returns: {
+          carrier_deadline: string
+          claims_window_days: number
+          concealed_carrier_days: number
+          delivered_on: string
+          vendor_deadline: string
+        }[]
+      }
+      procurement_notice_recipients: {
+        Args: { p_po_id: string }
+        Returns: string[]
+      }
       project_approval_attachment_objects: {
         Args: { p_decision_id: string }
         Returns: Json
@@ -39059,6 +39198,7 @@ export type Database = {
         }
       }
       publish_project_review: { Args: { p_request: Json }; Returns: Json }
+      purchase_order_studio_id: { Args: { p_po_id: string }; Returns: string }
       purge_client_account: { Args: { p_user_id: string }; Returns: string }
       push_deliver_after: {
         Args: { p_now?: string; p_user_id: string }
@@ -39424,6 +39564,16 @@ export type Database = {
           p_size_bytes: number
         }
         Returns: boolean
+      }
+      record_project_ffe_inspection: {
+        Args: {
+          p_lines: Json
+          p_notes?: string
+          p_outcome: Database["public"]["Enums"]["receiving_inspection_outcome"]
+          p_photo_asset_ids?: string[]
+          p_purchase_order_id: string
+        }
+        Returns: Json
       }
       record_project_ffe_installed: {
         Args: { p_installed_on?: string; p_item_ids: string[] }
@@ -40812,11 +40962,14 @@ export type Database = {
         }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -40828,9 +40981,11 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -40846,11 +41001,14 @@ export type Database = {
         Args: { p_po_id: string; p_ship_to: string }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -40862,9 +41020,11 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -40880,11 +41040,14 @@ export type Database = {
         Args: { p_location_id: string; p_po_id: string }
         Returns: {
           acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
           confirmed_eta: string | null
           created_at: string
           created_by: string | null
           delivered_date: string | null
           designer_id: string
+          eta_history: Json
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -40896,9 +41059,50 @@ export type Database = {
           sent_at: string | null
           ship_to: string | null
           ship_to_location_id: string | null
+          shipped_on: string | null
           sidemark: string | null
           status: string
           total_cents: number
+          tracking_number: string | null
+          updated_at: string
+          vendor_id: string
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_purchase_order_tracking: {
+        Args: { p_po_id: string; p_request: Json }
+        Returns: {
+          acknowledged_at: string | null
+          bol_document_path: string | null
+          carrier: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          eta_history: Json
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          sent_at: string | null
+          ship_to: string | null
+          ship_to_location_id: string | null
+          shipped_on: string | null
+          sidemark: string | null
+          status: string
+          total_cents: number
+          tracking_number: string | null
           updated_at: string
           vendor_id: string
           vendor_po_number: string | null
@@ -41725,6 +41929,7 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: number
       }
+      sweep_procurement_clocks: { Args: never; Returns: Json }
       sweep_scan_pipeline_ingest: { Args: never; Returns: Json }
       sync_proposal_send_email_log: {
         Args: { p_dispatch_id: string }
@@ -42298,6 +42503,12 @@ export type Database = {
         | "payment_received"
         | "payment_failed"
         | "payment_refunded"
+        | "claim_window_closing"
+        | "ack_discrepancy"
+        | "quote_expiring"
+        | "cfa_reserve_expiring"
+        | "memo_return_due"
+        | "backorder_reported"
       production_model: "stock" | "mto" | "custom" | "mixed"
       project_status: "active" | "completed" | "archived" | "on_hold" | "draft"
       purchase_order_payment_pattern:
@@ -42551,6 +42762,12 @@ export const Constants = {
         "payment_received",
         "payment_failed",
         "payment_refunded",
+        "claim_window_closing",
+        "ack_discrepancy",
+        "quote_expiring",
+        "cfa_reserve_expiring",
+        "memo_return_due",
+        "backorder_reported",
       ],
       production_model: ["stock", "mto", "custom", "mixed"],
       project_status: ["active", "completed", "archived", "on_hold", "draft"],

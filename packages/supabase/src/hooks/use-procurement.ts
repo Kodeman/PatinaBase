@@ -45,6 +45,14 @@ export type POStatus =
   | 'delivered'
   | 'cancelled';
 
+/** purchase_orders.eta_history entry (00698): why the ETA moved. */
+export interface PurchaseOrderEtaHistoryEntry {
+  eta: string;
+  note: string | null;
+  at: string;
+  by: string | null;
+}
+
 export interface PurchaseOrder {
   id: string;
   designer_id: string;
@@ -79,6 +87,15 @@ export interface PurchaseOrder {
   sidemark: string | null;
   /** When the vendor confirmed receipt of the order (00186). */
   acknowledged_at: string | null;
+  /** Shipment tracking (00698), written by set_purchase_order_tracking. */
+  carrier?: string | null;
+  tracking_number?: string | null;
+  /** Storage path of the bill of lading (00698). */
+  bol_document_path?: string | null;
+  /** Ship day: entered, or stamped when the PO advances to shipped (00698). */
+  shipped_on?: string | null;
+  /** One entry per ETA change, appended by set_purchase_order_eta (00698). */
+  eta_history?: PurchaseOrderEtaHistoryEntry[];
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -1033,6 +1050,100 @@ export function useSetPurchaseOrderShipTo(options?: { errorSurface?: 'inline' })
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-order', po.id] });
       invalidateFfeCaches(queryClient, po.project_id);
+    },
+  });
+}
+
+export interface SetPurchaseOrderTrackingInput {
+  purchaseOrderId: string;
+  /**
+   * Patch semantics: an absent field stays as it is; null or blank clears it.
+   * `shippedOn` is a YYYY-MM-DD day, no later than tomorrow (UTC).
+   */
+  tracking: {
+    carrier?: string | null;
+    trackingNumber?: string | null;
+    bolDocumentPath?: string | null;
+    shippedOn?: string | null;
+  };
+}
+
+/**
+ * Mutation: records how a PO ships (carrier, tracking number, bill of lading
+ * path, ship day) through the `set_purchase_order_tracking` RPC (00698; owner
+ * or non-guest studio co-member). Never moves status; refuses cancelled POs.
+ *
+ * Invalidates: ['purchase-orders'], ['purchase-order', id],
+ *              ['delivery-calendar'] and both FF&E namespaces for the PO's
+ *              project via invalidateFfeCaches().
+ */
+export function useSetPurchaseOrderTracking(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({
+      purchaseOrderId,
+      tracking,
+    }: SetPurchaseOrderTrackingInput): Promise<PurchaseOrder> => {
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase.rpc('set_purchase_order_tracking', {
+        p_po_id: purchaseOrderId,
+        p_request: tracking,
+      });
+
+      if (error) {
+        throw new Error(
+          `Failed to set purchase_order tracking for ${purchaseOrderId}: ${
+            error.message ?? String(error)
+          }`,
+        );
+      }
+      return data as PurchaseOrder;
+    },
+    onSuccess: (po) => {
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', po.id] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-calendar'] });
+      invalidateFfeCaches(queryClient, po.project_id);
+    },
+  });
+}
+
+/** procurement_claim_deadline row (00700). Deadlines are null until delivery. */
+export interface ProcurementClaimDeadline {
+  delivered_on: string | null;
+  claims_window_days: number;
+  vendor_deadline: string | null;
+  concealed_carrier_days: number;
+  carrier_deadline: string | null;
+}
+
+/**
+ * Query: the claim clock for a PO through `procurement_claim_deadline`
+ * (00700): delivered day plus the studio vendor account's claims and
+ * concealed-carrier windows (R-PB9 defaults 3 and 5 days). Null when the
+ * caller cannot read the PO.
+ */
+export function useProcurementClaimDeadline(purchaseOrderId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['procurement-claim-deadline', purchaseOrderId],
+    enabled: Boolean(purchaseOrderId),
+    queryFn: async (): Promise<ProcurementClaimDeadline | null> => {
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase.rpc('procurement_claim_deadline', {
+        p_po_id: purchaseOrderId,
+      });
+
+      if (error) {
+        throw new Error(
+          `Failed to read the claim deadline for ${purchaseOrderId}: ${
+            error.message ?? String(error)
+          }`,
+        );
+      }
+      return ((data as ProcurementClaimDeadline[] | null) ?? [])[0] ?? null;
     },
   });
 }
@@ -2295,12 +2406,22 @@ export function useSendPurchaseOrder(options?: { errorSurface?: 'inline' }) {
 // due_date, which fires the same 00151 notify trigger per row.
 // ═══════════════════════════════════════════════════════════════════════════
 
+/** procurement_notification_kind: every value of the DB enum (00151, 00275, 00277, 00699). */
 export type ProcurementNotificationKind =
   | 'deposit_due'
   | 'balance_due'
   | 'milestone_due'
   | 'delivery_this_week'
-  | 'damage_claim_drafted';
+  | 'damage_claim_drafted'
+  | 'payment_received'
+  | 'payment_failed'
+  | 'payment_refunded'
+  | 'claim_window_closing'
+  | 'ack_discrepancy'
+  | 'quote_expiring'
+  | 'cfa_reserve_expiring'
+  | 'memo_return_due'
+  | 'backorder_reported';
 
 export interface ProcurementNotification {
   id: string;

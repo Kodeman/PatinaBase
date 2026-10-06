@@ -1,9 +1,12 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Procurement scheduled-job tests (migration 00189)
+-- Procurement scheduled-job tests (migrations 00189, 00700)
 --
 -- pg_cron can't tick inside a test transaction, so this suite executes the
 -- two job SQL BODIES directly — copied VERBATIM from
--- supabase/migrations/00189_procurement_crons.sql.
+-- supabase/migrations/00189_procurement_crons.sql (po-payments-due-daily) and
+-- supabase/migrations/00700_procurement_notices_and_clocks.sql
+-- (delivery-this-week-weekly, now addressed to the PO creator and the project
+-- lead, deduped per recipient).
 -- ⚠ If a job body changes in the migration, update the copies here.
 --
 -- Cases:
@@ -168,12 +171,13 @@ $$;
 
 -- ─── case 2: delivery-this-week-weekly body ──────────────────────────────────
 --
--- ▼▼ VERBATIM job body from 00189 (job 'delivery-this-week-weekly') ▼▼
+-- ▼▼ VERBATIM job body from 00700 (job 'delivery-this-week-weekly') ▼▼
 INSERT INTO public.procurement_notifications (user_id, kind, subject_purchase_order_id)
-SELECT po.designer_id,
+SELECT recipient,
        'delivery_this_week'::public.procurement_notification_kind,
        po.id
   FROM public.purchase_orders po
+ CROSS JOIN LATERAL public.procurement_notice_recipients(po.id) AS recipient
  WHERE po.confirmed_eta BETWEEN CURRENT_DATE AND CURRENT_DATE + 6
    AND po.status NOT IN ('delivered', 'cancelled')
    AND NOT EXISTS (
@@ -181,6 +185,7 @@ SELECT po.designer_id,
        FROM public.procurement_notifications n
       WHERE n.subject_purchase_order_id = po.id
         AND n.kind = 'delivery_this_week'
+        AND n.user_id = recipient
         AND n.created_at > NOW() - INTERVAL '7 days'
    );
 -- ▲▲ VERBATIM job body ▲▲
@@ -191,7 +196,7 @@ DECLARE
   v_user_id UUID;
 BEGIN
   -- 2a: in-flight PO with eta in 3 days → exactly one notification, addressed
-  --     to the owning designer.
+  --     to the project lead (here also the PO owner; created_by is NULL).
   SELECT COUNT(*) INTO v_count FROM procurement_notifications
    WHERE subject_purchase_order_id = 'c0000000-0000-4000-8000-000000000011'
      AND kind = 'delivery_this_week';
@@ -208,12 +213,13 @@ END
 $$;
 
 -- 2b: re-run the same body → the 7-day dedupe suppresses a duplicate.
--- ▼▼ VERBATIM job body from 00189 (job 'delivery-this-week-weekly') ▼▼
+-- ▼▼ VERBATIM job body from 00700 (job 'delivery-this-week-weekly') ▼▼
 INSERT INTO public.procurement_notifications (user_id, kind, subject_purchase_order_id)
-SELECT po.designer_id,
+SELECT recipient,
        'delivery_this_week'::public.procurement_notification_kind,
        po.id
   FROM public.purchase_orders po
+ CROSS JOIN LATERAL public.procurement_notice_recipients(po.id) AS recipient
  WHERE po.confirmed_eta BETWEEN CURRENT_DATE AND CURRENT_DATE + 6
    AND po.status NOT IN ('delivered', 'cancelled')
    AND NOT EXISTS (
@@ -221,6 +227,7 @@ SELECT po.designer_id,
        FROM public.procurement_notifications n
       WHERE n.subject_purchase_order_id = po.id
         AND n.kind = 'delivery_this_week'
+        AND n.user_id = recipient
         AND n.created_at > NOW() - INTERVAL '7 days'
    );
 -- ▲▲ VERBATIM job body ▲▲

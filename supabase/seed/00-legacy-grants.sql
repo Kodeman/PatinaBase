@@ -19500,6 +19500,102 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00698_po_tracking.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_purchase_order_tracking(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00698_po_tracking.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_purchase_order_tracking(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.purchase_order_studio_id(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.purchase_order_studio_id(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.procurement_notification_fill_org() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.procurement_notice_recipients(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.procurement_notice_recipients(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.receiving_inspection_lines FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.receiving_inspection_lines TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.receiving_inspection_lines TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_project_ffe_inspection(uuid, jsonb, public.receiving_inspection_outcome, text, uuid[]) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_project_ffe_inspection(uuid, jsonb, public.receiving_inspection_outcome, text, uuid[]) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.procurement_claim_deadline(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.procurement_claim_deadline(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sweep_procurement_clocks() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00700_procurement_notices_and_clocks.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sweep_procurement_clocks() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00713_studio_margin_visibility.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.can_see_studio_margin(uuid) FROM PUBLIC, anon;

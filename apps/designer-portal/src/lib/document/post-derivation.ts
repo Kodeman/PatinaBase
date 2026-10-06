@@ -260,7 +260,7 @@ export const PROCUREMENT_NEED_KIND: Partial<
   damage_claim_drafted: 'damage_claim',
 };
 
-const PROCUREMENT_KIND_TITLE: Record<ProcurementNotificationKind, string> = {
+const PROCUREMENT_KIND_TITLE: Partial<Record<ProcurementNotificationKind, string>> = {
   deposit_due: 'Deposit due',
   balance_due: 'Balance due',
   milestone_due: 'Milestone payment due',
