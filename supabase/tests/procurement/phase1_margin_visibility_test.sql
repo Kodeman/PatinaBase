@@ -69,8 +69,15 @@ VALUES
 -- O also holds a plain designer role, so losing studio_owner keeps portal
 -- access. Granted after the seats: a designer role on a seatless user makes
 -- provision_studio_on_designer mint them a studio of their own.
+-- AD and M are designers too: since 00716 the sync grants studio_owner only to
+-- a user who already holds a designer-domain role, and both become owners in D.
 INSERT INTO user_roles (user_id, role_id)
-SELECT '69300000-0000-4000-8000-0000000000a1', id FROM roles WHERE name = 'studio_designer'
+SELECT u.id, r.id
+FROM roles r
+CROSS JOIN (VALUES ('69300000-0000-4000-8000-0000000000a1'::uuid),
+                   ('69300000-0000-4000-8000-0000000000a2'::uuid),
+                   ('69300000-0000-4000-8000-0000000000a3'::uuid)) AS u(id)
+WHERE r.name = 'studio_designer'
 ON CONFLICT (user_id, role_id) DO NOTHING;
 
 INSERT INTO vendors (id, name)
@@ -309,6 +316,10 @@ VALUES
   ('69300000-0000-4000-8000-0000000000e7', '69300000-0000-4000-8000-0000000000a7', '69300000-0000-4000-8000-0000000000f2', 'member', 'active', NOW());
 INSERT INTO user_roles (user_id, role_id)
 SELECT '69300000-0000-4000-8000-0000000000a6', id FROM roles WHERE name = 'studio_owner'
+ON CONFLICT (user_id, role_id) DO NOTHING;
+-- Z2 is a designer (00716: the heir needs a designer-domain role to gain studio_owner).
+INSERT INTO user_roles (user_id, role_id)
+SELECT '69300000-0000-4000-8000-0000000000a7', id FROM roles WHERE name = 'studio_designer'
 ON CONFLICT (user_id, role_id) DO NOTHING;
 
 DO $$
