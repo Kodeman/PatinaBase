@@ -97,7 +97,8 @@ jest.mock('@/lib/analytics/procurement-events', () => ({
   },
 }));
 
-import { OrderPaper, type OrderPaperPurchaseOrder } from '..';
+import { OrderPaper, SENT_NOT_RECORDED_MESSAGE, type OrderPaperPurchaseOrder } from '..';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
 import { releaseConsequence, releaseErrorMessage, releaseModeFor } from '../release-slot';
 
 const HEWN = { id: 'vendor-hewn', name: 'Hewn', default_payment_terms: null, orders_email: 'orders@hewn.example' };
@@ -264,6 +265,17 @@ describe('an owner or admin seat', () => {
     );
     expect(mockRelease).toHaveBeenCalledWith('po-9');
     expect(mockRelease.mock.invocationCallOrder[0]).toBeLessThan(mockSend.mock.invocationCallOrder[0]);
+  });
+
+  it('SQ-448: says the email went but the order is not marked sent when po-send refuses the stamp', async () => {
+    mockSend.mockRejectedValue(new Error('sent_not_recorded'));
+    renderPaper();
+    chooseSite();
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Hewn · $12,480' }));
+    expect(await screen.findByText(SENT_NOT_RECORDED_MESSAGE)).toBeInTheDocument();
+    expect(procurementEvents.poSent).not.toHaveBeenCalled();
+    expect(screen.queryByText(/^Sent ·/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/waits for an owner or admin to release it before it goes/)).not.toBeInTheDocument();
   });
 
   it('sends a held paper back only with a note', async () => {

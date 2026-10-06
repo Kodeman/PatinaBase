@@ -48,3 +48,32 @@ export async function checkPoReleaseGate(
   }
   return { ok: true };
 }
+
+// SQ-448 (R2): the gate is read again right before the email, but a hold can
+// still land between that read and the sent_at stamp, and the guard then
+// refuses the stamp. The vendor has the order; the paper must not read sent.
+// The code avoids 'held_for_release' so the portal never says it did not go.
+export const SENT_NOT_RECORDED_EMAILED_DETAIL =
+  'The email reached the vendor, but this order could not be marked sent ' +
+  '(for example, it is now held for release). Check the order before sending it again.';
+export const SENT_NOT_RECORDED_DETAIL =
+  'This order could not be marked sent (for example, it is now held for release).';
+
+export function sentStampFailure(
+  stampError: unknown,
+  emailSent: boolean,
+): {
+  status: 409 | 500;
+  body: { error: 'sent_not_recorded'; detail: string; emailSent: boolean };
+} {
+  const message = (stampError as { message?: unknown } | null)?.message;
+  const held = typeof message === 'string' && message.includes('held_for_release');
+  return {
+    status: held ? 409 : 500,
+    body: {
+      error: 'sent_not_recorded',
+      detail: emailSent ? SENT_NOT_RECORDED_EMAILED_DETAIL : SENT_NOT_RECORDED_DETAIL,
+      emailSent,
+    },
+  };
+}

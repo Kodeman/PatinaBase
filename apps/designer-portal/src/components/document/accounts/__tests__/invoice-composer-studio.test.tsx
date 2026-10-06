@@ -198,6 +198,60 @@ describe("InvoiceComposer · purchases at cost, through the billing writer (C-25
     });
   });
 
+  it("SQ-448: warns when a ticked purchase's line is already billed on another invoice", () => {
+    mockPurchases = [
+      purchase("p1", { ffe_item_id: "line-sofa" }),
+      purchase("p2", { description: "Brass hooks" }),
+    ];
+    mockStages = [
+      {
+        ffe_item_id: "line-sofa",
+        billing_stage: "full",
+        billing_stage_pct: null,
+        invoice_id: "inv-a",
+        invoice_number: "INV-0042",
+        invoice_status: "sent",
+        billed_cents: 450000,
+      },
+    ];
+    try {
+      render(
+        <InvoiceComposer
+          context={{ projectId: "project-1", initialPurchaseIds: ["p1"] }}
+          onDrafted={jest.fn()}
+        />,
+      );
+      const block = screen.getByTestId("composer-purchases");
+      expect(block).toHaveTextContent(
+        "a ticked purchase was bought for a line this or another invoice bills · billing both bills the piece twice",
+      );
+      // Warn-only (00709 R8/R9): the draft act stays open.
+      expect(screen.getByRole("button", { name: "Draft the invoice" })).toBeEnabled();
+      // Unticked, the warning folds away.
+      fireEvent.click(screen.getByLabelText("Bill Pair of table lamps"));
+      expect(block).not.toHaveTextContent("bills the piece twice");
+    } finally {
+      mockStages = undefined;
+    }
+  });
+
+  it("SQ-448: stays quiet when the purchase's line has no live billing slot", () => {
+    mockPurchases = [purchase("p1", { ffe_item_id: "line-sofa" })];
+    mockStages = [];
+    try {
+      render(
+        <InvoiceComposer
+          context={{ projectId: "project-1", initialPurchaseIds: ["p1"] }}
+          onDrafted={jest.fn()}
+        />,
+      );
+      expect(screen.getByLabelText("Bill Pair of table lamps")).toBeChecked();
+      expect(screen.getByTestId("composer-purchases")).not.toHaveTextContent("bills the piece twice");
+    } finally {
+      mockStages = undefined;
+    }
+  });
+
   it("sends an overridden figure as amountCents (R-PB7)", async () => {
     render(
       <InvoiceComposer

@@ -770,10 +770,13 @@ export function LineExceptions({
   );
   // The maker lane is the PO's: any exception on it carries the flag.
   const makerLane = exceptions.some((e) => e.purchase_order?.is_patina_catalog);
+  // SQ-448: a claim on a catalog line is Patina's to carry, so "Track it" never
+  // shows there — the line's PO carries the lane before any exception does.
+  const trackable = !makerLane && !item.purchase_order?.is_patina_catalog ? untracked : [];
 
   return (
     <div data-testid="line-exceptions" className="mb-2.5">
-      {(exceptions.length > 0 || (!makerLane && untracked.length > 0)) && (
+      {(exceptions.length > 0 || trackable.length > 0) && (
         <div className="mb-1 border-l-[2px] border-[var(--color-terracotta)] pl-2.5">
           {exceptions.map((e) => (
             <ExceptionRow
@@ -783,10 +786,9 @@ export function LineExceptions({
               onChoose={() => setChoosing(e)}
             />
           ))}
-          {!makerLane &&
-            untracked.map((c: { id: string }) => (
-              <TrackClaimAct key={c.id} claimId={c.id} ffeItemId={item.id} />
-            ))}
+          {trackable.map((c: { id: string }) => (
+            <TrackClaimAct key={c.id} claimId={c.id} ffeItemId={item.id} />
+          ))}
         </div>
       )}
       {!makerLane && (

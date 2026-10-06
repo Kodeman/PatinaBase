@@ -40,6 +40,27 @@ Deno.test("preview never asks and never refuses, so a held paper can be read", a
   assertEquals(client.calls.length, 0);
 });
 
+Deno.test("SQ-448: a hold that lands during the render refuses the pre-email recheck with the same 409", async () => {
+  // First read (before render): sendable. A co-member holds the draft. The
+  // second read (right before the email) answers false.
+  const answers = [true, false];
+  const calls: string[] = [];
+  const client = {
+    rpc(fn: string) {
+      calls.push(fn);
+      return Promise.resolve({ data: answers.shift(), error: null });
+    },
+  };
+  assertEquals(await checkPoReleaseGate(client, "po-1", "send"), { ok: true });
+  assertEquals(await checkPoReleaseGate(client, "po-1", "send"), {
+    ok: false,
+    status: 409,
+    error: "held_for_release",
+    detail: HELD_FOR_RELEASE_DETAIL,
+  });
+  assertEquals(calls, ["po_is_sendable", "po_is_sendable"]);
+});
+
 Deno.test("a failed check refuses 500 rather than guessing the PO may go out", async () => {
   const client = rpcClient({ data: null, error: { message: "boom" } });
   const gate = await checkPoReleaseGate(client, "po-1", "send");
