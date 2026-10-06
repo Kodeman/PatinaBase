@@ -10,8 +10,8 @@ import { PROJECT_ID, ensureDeckProject, openDocLine } from "./deck-helpers";
  * candidate for every product piece (record_board_deck_import_resolution
  * under the service-role client), then in the ledger keep every link row and
  * put the kept pieces on the schedule as her selections. The FF&E lines must
- * carry a vendor and the `selected` disposition, and the line's
- * OrderAssistant must be enabled. Nothing is sent to a vendor.
+ * carry a vendor and the `selected` disposition, and the line's Order act
+ * (the order paper) must be enabled. Nothing is sent to a vendor.
  *
  * Fail-closed flag: runs only against a server started with
  * NEXT_PUBLIC_FLAG_OVERRIDES containing `board-deck-import:true`.
@@ -182,10 +182,10 @@ test.describe("Bring in a deck — review to schedule", () => {
         expect(line.vendor_id).not.toBeNull();
       }
 
-      // The existing per-vendor OrderAssistant is reachable and enabled.
+      // The line's Order act, which opens the order paper, is reachable and enabled.
       await openDocLine(page, (lines ?? [])[0]?.name as string);
       await expect(
-        page.getByRole("button", { name: "Order with Assistant" }).first(),
+        page.getByRole("button", { name: "Order", exact: true }).first(),
       ).toBeEnabled({ timeout: 15_000 });
     } finally {
       await cleanup();

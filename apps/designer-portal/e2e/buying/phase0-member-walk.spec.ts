@@ -12,8 +12,9 @@ import { hideDevOverlays } from "../helpers/hide-dev-overlays";
 
 /**
  * US-16 Phase 0 (SQ-400) — the buying walk as a NON-OWNER studio member:
- * readiness → Order with Assistant (ship-to required) → PO created →
- * PoPreview note + Send (po-send, served locally) → log the ack inline → ETA →
+ * readiness → Order → the order paper (ship-to required; note to the vendor)
+ * → "Send to <vendor> · $X" creates the PO and sends it (po-send, served
+ * locally) → log the ack inline → ETA →
  * In production → Shipped → receive → Mark installed. Plus: the Orders book
  * opened from the project wears the project lens.
  *
@@ -265,62 +266,51 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
     // 1–2. The Document; the line unfold reads ready.
     let poCell = await openLine(page);
     await expect(page.getByTestId("line-order-readiness")).toHaveCount(0);
-    const order = page
-      .getByRole("button", { name: "Order with Assistant" })
-      .first();
+    const order = page.getByRole("button", { name: "Order", exact: true }).first();
     await expect(order).toBeEnabled({ timeout: 30_000 });
     await expect(poCell).toContainText("Not yet ordered");
     await shot(page, testInfo, "01-line-ready");
 
-    // 3. Order with Assistant; Details requires a ship-to.
+    // 3. The order paper: nothing is preselected for ship-to, so the one
+    // terminal act is held and its refusal shows inline.
     await order.click();
-    const assistant = page.getByRole("dialog", { name: /Order Assistant for/ });
-    await expect(assistant).toBeVisible();
-    const shipTo = assistant.getByRole("group", { name: "Ship to" });
-    for (let step = 0; step < 4 && !(await shipTo.isVisible()); step++) {
-      const next = assistant.getByRole("button", {
-        name: /^(Continue|Proceed anyway)$/,
-      });
-      await next.click();
-      await expect(next.or(shipTo).first()).toBeVisible({ timeout: 20_000 });
-    }
+    const paper = page.getByRole("dialog", { name: "The order paper" });
+    await expect(paper).toBeVisible();
+    await expect(paper).toContainText(VENDOR_EMAIL);
+    const shipTo = paper.getByRole("group", { name: "Ship to" });
     await expect(shipTo).toBeVisible();
-    const confirm = assistant.getByRole("button", {
-      name: /^Confirm 1 ordered$/,
+    for (const radio of await shipTo.getByRole("radio").all()) {
+      await expect(radio).not.toBeChecked();
+    }
+    const terminal = paper.getByRole("button", {
+      name: `Send to ${VENDOR_NAME} · $1,200`,
+      exact: true,
     });
-    await confirm.click();
-    await expect(assistant.getByRole("alert")).toContainText(
+    await expect(terminal).toHaveAttribute("aria-disabled", "true");
+    // A held act stays focusable; Playwright's click refuses aria-disabled.
+    await terminal.press("Enter");
+    await expect(paper.getByRole("alert")).toContainText(
       "Choose where this ships.",
     );
     expect(poState().id, "no PO without a ship-to").toBe("");
     await shipTo.getByRole("radio", { name: /The job site/ }).check();
-    await shot(page, testInfo, "02-details-ship-to");
+    await paper.getByLabel(`Note to ${VENDOR_NAME}`).fill(NOTE);
+    await shot(page, testInfo, "02-paper-ship-to");
 
-    // 4. Create the PO; the Created step sends through PoPreview.
-    await confirm.click();
-    await expect(assistant.getByText("Purchase order created")).toBeVisible({
-      timeout: 30_000,
+    // 4. The terminal act creates the PO with its ship-to, then sends it
+    // through po-send. Read the PO as po-send is called: created, a draft.
+    const atSend: { po?: ReturnType<typeof poState> } = {};
+    await page.route("**/functions/v1/po-send", async (route) => {
+      if ((route.request().postData() ?? "").includes('"send"'))
+        atSend.po ??= poState();
+      await route.continue();
     });
-    const created = poState();
-    expect(created.status).toBe("draft");
-    expect(created.shipTo).toBe(SITE_ADDRESS);
-    await assistant.getByRole("button", { name: "Review and send" }).click();
-    const preview = page.getByRole("dialog", {
-      name: "Purchase order preview",
-    });
-    await expect(preview).toBeVisible();
-    await expect(preview.getByTitle("Purchase order PDF")).toBeVisible({
-      timeout: 60_000,
-    });
-    await expect(preview).toContainText(`to ${VENDOR_EMAIL}`);
-    await preview.getByLabel("Note to the vendor").fill(NOTE);
-    await shot(page, testInfo, "03-po-preview");
     const sendResponse = page.waitForResponse(
       (r) =>
         r.url().includes("/functions/v1/po-send") &&
         (r.request().postData() ?? "").includes('"send"'),
     );
-    await preview.getByRole("button", { name: "Send to vendor" }).click();
+    await terminal.click();
     const sent = await sendResponse;
     const sentBody = await sent.json().catch(() => ({}));
     expect(sent.status(), `po-send send: ${JSON.stringify(sentBody)}`).toBe(
@@ -331,13 +321,17 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
       recipient: VENDOR_EMAIL,
       emailSent: true,
     });
-    await expect(preview).toBeHidden({ timeout: 20_000 });
-    await expect(
-      assistant.getByRole("button", { name: "Resend to vendor" }),
-    ).toBeVisible();
+    await page.unroute("**/functions/v1/po-send");
+    expect(atSend.po, "po-send was called with the PO created").toBeDefined();
+    expect(atSend.po?.status).toBe("draft");
+    expect(atSend.po?.shipTo).toBe(SITE_ADDRESS);
+    await expect(paper.getByText(`Sent to ${VENDOR_EMAIL} · `)).toBeVisible({
+      timeout: 20_000,
+    });
+    await shot(page, testInfo, "03-paper-sent");
     expect(poState().sentAt).not.toBe("");
-    await assistant.getByRole("button", { name: "Done" }).click();
-    await expect(assistant).toBeHidden();
+    await paper.getByRole("button", { name: "Done" }).click();
+    await expect(paper).toBeHidden();
 
     // 5. Log the ack (the line's lifted next act), then set the ETA.
     poCell = page.getByTestId("line-po-cell");
