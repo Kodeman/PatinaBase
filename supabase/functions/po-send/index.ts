@@ -9,23 +9,29 @@
 //   1. Auth: resolve the caller from the Authorization header (verify_jwt is
 //      on at the gateway, but gateway verification alone doesn't prove
 //      ownership).
-//   2. Load the PO (service role) + vendor / project joins, the linked
-//      project_ffe_items (+ room names), the po_payments schedule, and the
-//      designer/client profiles. Reject unless caller === designer_id
-//      (404-collapse so foreign ids aren't confirmed), status not
-//      'cancelled', and at least one item is linked.
-//   3. Numbering: call assign_po_number (00188) AS THE CALLER — a client
-//      carrying the caller's Authorization header — so the SECURITY DEFINER
-//      RPC's auth.uid() owner check holds. Idempotent + race-safe server-side.
-//   4. Defaults: persist sidemark (Order Assistant generator convention,
-//      ported in ./lib.ts) and ship_to (projects.site_address) when null.
-//   5. Render the PDF (_shared/po-pdf.ts, spike W4-T1 approach) and upload
+//   2. Access: can_send_purchase_order (00690) AS THE CALLER — true for the
+//      project owner or a non-guest co-member of the owner's studio (C-07).
+//      False, an RPC error, or a missing PO all collapse to 404 so foreign
+//      ids aren't confirmed.
+//   3. Load the PO (service role) + vendor / project joins, the linked
+//      project_ffe_items (+ room names, spec row, product master), the
+//      po_payments schedule, and the designer/client profiles. Reject a
+//      'cancelled' PO, one with no linked items, and (mode 'send') one with
+//      no ship_to — 422 ship_to_required (C-02, R-PB3). There is no site
+//      address default; preview and mark_sent print "Ship-to not set".
+//   4. Numbering: call assign_po_number (00188, widened in 00690) AS THE
+//      CALLER so the SECURITY DEFINER RPC's auth.uid() check holds for the
+//      owner and co-members alike. Idempotent + race-safe server-side.
+//   5. Defaults: persist sidemark (Order Assistant generator convention,
+//      ported in ./lib.ts) when null.
+//   6. Render the PDF (_shared/po-pdf.ts, spike W4-T1 approach) and upload
 //      to project-documents/{project_id}/po-{po_number}.pdf (upsert);
 //      persist po_document_path; sign a short-lived (600 s) URL.
-//   6. Mode:
+//   7. Mode:
 //        'preview'   → return without emailing or stamping sent_at; an
-//                      out-of-sync PO previews fine but the response carries
-//                      warnings: ['po_out_of_sync'].
+//                      out-of-sync PO or one with no ship-to previews fine
+//                      but the response carries warnings ('po_out_of_sync',
+//                      'ship_to_not_set').
 //        'send'      → guarded (W4-T4): line-derived trade total and
 //                      Σ po_payments must BOTH equal total_cents, else 422
 //                      po_out_of_sync (pre-00186 client-price POs / item
@@ -55,15 +61,18 @@ import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-iden
 import {
   buildFallbackSidemark,
   buildSchedulePoProposal,
+  callerMaySendPurchaseOrder,
   checkPoRepricingGate,
   checkPoTotalsCoherence,
   PO_OUT_OF_SYNC_DETAIL,
   parsePoSendBody,
   paymentPatternLabel,
   paymentRowLabel,
+  resolvePoShipTo,
   resolveVendorRecipient,
   vendorConfigurationLines,
   type VendorConfigurationSpec,
+  type VendorProductMaster,
   vendorSafeSpecNotes,
 } from './lib.ts';
 
@@ -112,7 +121,6 @@ interface PoRow {
   project: {
     id: string;
     name: string;
-    site_address: string | null;
     client_id: string | null;
   } | null;
 }
@@ -128,6 +136,8 @@ interface FfeItemRow {
   room: { id: string; name: string } | null;
   /** project_ffe_specs embed (UNIQUE ffe_item_id → object, not array). */
   spec: VendorConfigurationSpec | null;
+  /** products embed via product_id: the spec fields' fallback (C-06). */
+  product: VendorProductMaster | null;
 }
 
 interface PoPaymentRow {
@@ -159,8 +169,8 @@ async function getCallerUser(req: Request) {
 /**
  * A PostgREST client that acts AS THE CALLER: the service-role key rides as
  * the gateway apikey, but the caller's JWT is the Authorization header, so
- * RLS / auth.uid() inside RPCs (assign_po_number's owner check) see the
- * designer — not service_role. Same client shape getCallerUser builds.
+ * RLS / auth.uid() inside RPCs (can_send_purchase_order, assign_po_number)
+ * see the sender — not service_role. Same client shape getCallerUser builds.
  */
 function callerScopedClient(req: Request) {
   const auth = req.headers.get('Authorization')!;
@@ -209,6 +219,14 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'unauthorized' }, 401);
   }
 
+  // ── Access — as the caller: the owner or a studio co-member (C-07) ──────
+  // Not-found, not-allowed, and a failed check all collapse to 404 so the
+  // endpoint doesn't confirm foreign PO ids exist (invoice-send idiom).
+  const userClient = callerScopedClient(req);
+  if (!(await callerMaySendPurchaseOrder(userClient, purchaseOrderId))) {
+    return json({ error: 'po_not_found' }, 404);
+  }
+
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   // ── Load the PO + joins ─────────────────────────────────────────────────
@@ -220,7 +238,7 @@ Deno.serve(async (req: Request) => {
       total_cents, po_number, sidemark, ship_to, po_document_path, sent_at,
       notes, created_at, needs_repricing,
       vendor:vendors!purchase_orders_vendor_id_fkey(id, name, orders_email, contact_info, website),
-      project:projects!purchase_orders_project_id_fkey(id, name, site_address, client_id)
+      project:projects!purchase_orders_project_id_fkey(id, name, client_id)
     `,
     )
     .eq('id', purchaseOrderId)
@@ -231,9 +249,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'lookup_failed', detail: poError.message }, 500);
   }
   const po = poData as unknown as PoRow | null;
-  // Not-found and not-owned collapse to 404 so the endpoint doesn't confirm
-  // foreign PO ids exist (invoice-send idiom).
-  if (!po || po.designer_id !== caller.id) {
+  if (!po) {
     return json({ error: 'po_not_found' }, 404);
   }
   if (po.status === 'cancelled') {
@@ -259,7 +275,8 @@ Deno.serve(async (req: Request) => {
         configuration_id, configuration_snapshot,
         configuration_snapshot_hash, configuration_locked_at,
         sku, material, finish, color_fabric, selected_dimensions
-      )
+      ),
+      product:products!product_id(sku, finish, materials, colors, dimensions)
     `,
     )
     .eq('purchase_order_id', po.id)
@@ -314,6 +331,12 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // ── Ship-to guard (C-02, R-PB3) — also before any side effect ───────────
+  const shipToResolution = resolvePoShipTo(po.ship_to, mode);
+  if (!shipToResolution.ok) {
+    return json({ error: shipToResolution.error, detail: shipToResolution.detail }, 422);
+  }
+
   // ── Designer + client profiles ──────────────────────────────────────────
   // purchase_orders.designer_id references auth.users (00148), so there is
   // no PostgREST FK join to profiles — load it directly.
@@ -348,8 +371,7 @@ Deno.serve(async (req: Request) => {
   const designerName = (designerProfile as any)?.full_name?.trim() || studioName;
   const designerEmail: string | null = (designerProfile as any)?.email ?? null;
 
-  // ── Numbering — as the caller, so the RPC's owner check holds ───────────
-  const userClient = callerScopedClient(req);
+  // ── Numbering — as the caller, so the RPC's studio check holds ──────────
   const { data: numbered, error: numberError } = await userClient.rpc(
     'assign_po_number',
     { p_po_id: po.id },
@@ -364,10 +386,9 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'numbering_failed' }, 500);
   }
 
-  // ── Sidemark / ship_to fallbacks (persisted when defaulted) ─────────────
+  // ── Sidemark fallback (persisted when defaulted) ────────────────────────
+  // ship_to has no fallback: it is set explicitly or printed as not set.
   let sidemark = po.sidemark?.trim() || null;
-  let shipTo = po.ship_to?.trim() || null;
-  const defaults: Record<string, unknown> = {};
   if (!sidemark) {
     const generated = buildFallbackSidemark({
       studioName,
@@ -376,21 +397,14 @@ Deno.serve(async (req: Request) => {
     });
     if (generated) {
       sidemark = generated;
-      defaults.sidemark = generated;
-    }
-  }
-  if (!shipTo && po.project?.site_address?.trim()) {
-    shipTo = po.project.site_address.trim();
-    defaults.ship_to = shipTo;
-  }
-  if (Object.keys(defaults).length > 0) {
-    const { error: defaultsError } = await admin
-      .from('purchase_orders')
-      .update(defaults)
-      .eq('id', po.id);
-    if (defaultsError) {
-      // Non-fatal: the rendered document already uses the local values.
-      console.warn('po-send: failed to persist sidemark/ship_to defaults', defaultsError);
+      const { error: defaultsError } = await admin
+        .from('purchase_orders')
+        .update({ sidemark: generated })
+        .eq('id', po.id);
+      if (defaultsError) {
+        // Non-fatal: the rendered document already uses the local value.
+        console.warn('po-send: failed to persist sidemark default', defaultsError);
+      }
     }
   }
 
@@ -403,7 +417,8 @@ Deno.serve(async (req: Request) => {
     // vendor-safe (selections / components / dimensions / COM / config hash —
     // never retail or markup). Empty array for an unconfigured line with no
     // flat spec fields, which renders exactly as before.
-    const configurationLines = vendorConfigurationLines(item.spec);
+    // Unconfigured lines resolve each flat field spec → product master (C-06).
+    const configurationLines = vendorConfigurationLines(item.spec, item.product);
     return {
       name: item.name,
       room: item.room?.name ?? null,
@@ -434,7 +449,7 @@ Deno.serve(async (req: Request) => {
     vendorContactLines: vendorContactLines(po.vendor),
     projectName: po.project?.name ?? 'Project',
     sidemark,
-    shipTo,
+    shipTo: shipToResolution.printed,
     paymentPatternLabel: patternLabel,
     payments: paymentRows,
     lines,
@@ -492,6 +507,10 @@ Deno.serve(async (req: Request) => {
   // always look), but an incoherent PO is flagged so the UI can warn before
   // a send is even attempted.
   if (mode === 'preview') {
+    const warnings = [
+      ...(totals.coherent ? [] : ['po_out_of_sync']),
+      ...(shipToResolution.shipTo ? [] : ['ship_to_not_set']),
+    ];
     return json({
       ok: true,
       poId: po.id,
@@ -499,7 +518,7 @@ Deno.serve(async (req: Request) => {
       documentPath,
       emailSent: false,
       signedUrl,
-      ...(totals.coherent ? {} : { warnings: ['po_out_of_sync'] }),
+      ...(warnings.length > 0 ? { warnings } : {}),
     });
   }
 

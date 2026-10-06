@@ -129,6 +129,63 @@ export function resolveVendorRecipient(
   return null;
 }
 
+// ─── Send access (C-07) ──────────────────────────────────────────────────────
+
+/** The slice of a supabase-js client the access check needs. */
+export interface CallerRpcClient {
+  rpc(
+    fn: string,
+    args: Record<string, unknown>,
+  ): PromiseLike<{ data: unknown; error: unknown }>;
+}
+
+/**
+ * Ask Postgres, as the caller, whether they may send this purchase order.
+ * can_send_purchase_order (00690) is true for the project owner or a
+ * non-guest active co-member of the owner's studio, and false for a missing
+ * PO. `client` must carry the caller's JWT so auth.uid() is the caller; no
+ * user id from the request body is ever consulted. Fails closed: an RPC error
+ * or any answer other than `true` is a refusal, which index.ts collapses to
+ * the 404 idiom.
+ */
+export async function callerMaySendPurchaseOrder(
+  client: CallerRpcClient,
+  purchaseOrderId: string,
+): Promise<boolean> {
+  const { data, error } = await client.rpc('can_send_purchase_order', {
+    p_po_id: purchaseOrderId,
+  });
+  return !error && data === true;
+}
+
+// ─── Ship-to (C-02, R-PB3) ───────────────────────────────────────────────────
+//
+// No silent default: the site address is the client's house, and defaulting to
+// it put furniture on a doorstep nobody chose. 'send' refuses an empty ship-to;
+// 'preview' and 'mark_sent' still render, printing SHIP_TO_NOT_SET_LABEL where
+// the address goes.
+
+export const SHIP_TO_NOT_SET_LABEL = 'Ship-to not set';
+
+export const SHIP_TO_REQUIRED_DETAIL =
+  'This purchase order has no ship-to address. Add one before sending it to the vendor.';
+
+export type PoShipToResolution =
+  | { ok: true; shipTo: string | null; printed: string }
+  | { ok: false; error: 'ship_to_required'; detail: string };
+
+export function resolvePoShipTo(
+  shipTo: string | null | undefined,
+  mode: PoSendMode,
+): PoShipToResolution {
+  const value = shipTo?.trim() || null;
+  if (value) return { ok: true, shipTo: value, printed: value };
+  if (mode === 'send') {
+    return { ok: false, error: 'ship_to_required', detail: SHIP_TO_REQUIRED_DETAIL };
+  }
+  return { ok: true, shipTo: null, printed: SHIP_TO_NOT_SET_LABEL };
+}
+
 // ─── Sidemark fallback ───────────────────────────────────────────────────────
 //
 // Server-side port of the Order Assistant's client-side sidemark generator
@@ -393,6 +450,15 @@ export interface VendorConfigurationSpec {
   selectedDimensions?: unknown;
 }
 
+/** The `product:products!product_id(…)` embed: the line's product master. */
+export interface VendorProductMaster {
+  sku?: string | null;
+  finish?: string | null;
+  materials?: string[] | string | null;
+  colors?: string[] | string | null;
+  dimensions?: unknown;
+}
+
 function readRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
@@ -411,6 +477,15 @@ function readScalar(value: unknown): string | null {
   if (typeof value === 'string') return value.trim() || null;
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return null;
+}
+
+/** A text[] product column (or a lone string) as one comma-joined value. */
+function readList(value: unknown): string | null {
+  if (!Array.isArray(value)) return readScalar(value);
+  const parts = value
+    .map((entry) => readScalar(entry))
+    .filter((entry): entry is string => entry !== null);
+  return parts.length > 0 ? parts.join(', ') : null;
 }
 
 function readCount(value: unknown): number | null {
@@ -544,12 +619,17 @@ function comLines(value: unknown): string[] {
  *   Config ref: 9f2c1a77b0de
  *
  * Unconfigured line (`configuration_snapshot` is `{}` — the column default):
- *   falls back to the flat spec fields (SKU / Material / Finish / Color-Fabric
- *   / Dims from selected_dimensions).
+ *   falls back to the flat fields (SKU / Material / Finish / Color-Fabric /
+ *   Dims), each resolved spec value → product master value, mirroring the
+ *   Spec Book's resolveSpecValue (apps/designer-portal/src/lib/spec-books/
+ *   model.ts). Placement inserts the spec row empty, so without the product
+ *   leg a library product's SKU and finish never reached the vendor (C-06).
+ *   The product master is not consulted for a configured line: the snapshot
+ *   is what the designer specified, and it still wins outright.
  *
- * Returns [] when neither source has anything to say.
+ * Returns [] when no source has anything to say.
  */
-export function vendorConfigurationLines(spec: unknown): string[] {
+export function vendorConfigurationLines(spec: unknown, product?: unknown): string[] {
   // A PostgREST embed of a UNIQUE FK returns an object, but tolerate the
   // array form so a query shape change cannot silently blank the block.
   const source = readRecord(Array.isArray(spec) ? spec[0] : spec) as VendorConfigurationSpec &
@@ -603,18 +683,22 @@ export function vendorConfigurationLines(spec: unknown): string[] {
     return lines;
   }
 
-  // ── Fallback: flat spec fields (the pre-configuration world) ─────────────
-  const sku = readScalar(source.sku);
+  // ── Fallback: flat fields, spec → product master ─────────────────────────
+  const master = readRecord(Array.isArray(product) ? product[0] : product) as
+    & VendorProductMaster
+    & Record<string, unknown>;
+  const sku = readScalar(source.sku) ?? readScalar(master.sku);
   if (sku) lines.push(`SKU: ${sku}`);
-  const material = readScalar(source.material);
+  const material = readScalar(source.material) ?? readList(master.materials);
   if (material) lines.push(`Material: ${material}`);
-  const finish = readScalar(source.finish);
+  const finish = readScalar(source.finish) ?? readScalar(master.finish);
   if (finish) lines.push(`Finish: ${finish}`);
-  const colorFabric = readScalar(source.color_fabric ?? source.colorFabric);
+  const colorFabric = readScalar(source.color_fabric ?? source.colorFabric) ??
+    readList(master.colors);
   if (colorFabric) lines.push(`Color/Fabric: ${colorFabric}`);
   const flatDims = formatDimensions(
     source.selected_dimensions ?? source.selectedDimensions,
-  );
+  ) ?? formatDimensions(master.dimensions);
   if (flatDims) lines.push(`Dims: ${flatDims}`);
   return lines;
 }

@@ -93,3 +93,41 @@ export function resolveVendorRecipient(
 
   return null;
 }
+
+// ─── Send access (C-07) ──────────────────────────────────────────────────────
+//
+// po-send's rule applied to an RFQ: the studio that owns the work may send it.
+// An RFQ has no purchase order, so the owner is the linked project's owner
+// when there is one, else the designer who drafted the request.
+
+export interface QuoteRequestOwnerSource {
+  designer_id: string;
+  project?: { designer_id?: string | null } | null;
+}
+
+export function quoteRequestStudioOwner(request: QuoteRequestOwnerSource): string {
+  return request.project?.designer_id || request.designer_id;
+}
+
+/** The slice of a supabase-js client the access check needs. */
+export interface CallerRpcClient {
+  rpc(
+    fn: string,
+    args: Record<string, unknown>,
+  ): PromiseLike<{ data: unknown; error: unknown }>;
+}
+
+/**
+ * Ask Postgres, as the caller, whether they are `ownerId` or a non-guest
+ * active co-member of that owner's studio (is_studio_comember, 00556).
+ * `client` must carry the caller's JWT so auth.uid() is the caller; no user
+ * id from the request body is ever consulted. Fails closed: an RPC error or
+ * any answer other than `true` is a refusal (index.ts answers 404).
+ */
+export async function callerIsStudioComember(
+  client: CallerRpcClient,
+  ownerId: string,
+): Promise<boolean> {
+  const { data, error } = await client.rpc('is_studio_comember', { p_owner: ownerId });
+  return !error && data === true;
+}

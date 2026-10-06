@@ -13,8 +13,12 @@
 // Flow:
 //   1. Auth: resolve the caller from the Authorization header (verify_jwt is
 //      on at the gateway; gateway verification alone doesn't prove ownership).
-//   2. Load the request (service role) + vendor join. Reject unless
-//      caller === designer_id (404-collapse so foreign ids aren't confirmed).
+//   2. Load the request (service role) + vendor and project joins. Reject
+//      unless the caller is the studio owner of the work (the linked
+//      project's owner, else the drafting designer) or a non-guest co-member
+//      of that studio — is_studio_comember (00556) AS THE CALLER (C-07).
+//      Missing, not-allowed, or a failed check all collapse to 404 so foreign
+//      ids aren't confirmed.
 //   3. Recipient = vendors.orders_email → contact_info->>'email' (or an
 //      explicit override). No usable email → 422 no_recipient (never a silent
 //      success).
@@ -35,7 +39,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { buildQuoteRequestEmail } from '../_shared/quote-request-emails.ts';
 import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
-import { parseQuoteRequestSendBody, resolveVendorRecipient } from './lib.ts';
+import {
+  callerIsStudioComember,
+  parseQuoteRequestSendBody,
+  quoteRequestStudioOwner,
+  resolveVendorRecipient,
+} from './lib.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -61,6 +70,7 @@ interface QuoteRequestRow {
     orders_email: string | null;
     contact_info: Record<string, unknown> | null;
   } | null;
+  project: { designer_id: string | null } | null;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -115,7 +125,8 @@ Deno.serve(async (req: Request) => {
       `
       id, designer_id, vendor_id, scope, timeline, message, status, sent_at,
       created_at,
-      vendor:vendors!vendor_id(id, name, orders_email, contact_info)
+      vendor:vendors!vendor_id(id, name, orders_email, contact_info),
+      project:projects!project_id(designer_id)
     `,
     )
     .eq('id', quoteRequestId)
@@ -126,9 +137,16 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'lookup_failed', detail: reqError.message }, 500);
   }
   const request = reqData as unknown as QuoteRequestRow | null;
-  // Not-found and not-owned collapse to 404 (po-send idiom) so the endpoint
-  // doesn't confirm foreign request ids exist.
-  if (!request || request.designer_id !== caller.id) {
+  // Not-found and not-allowed collapse to 404 (po-send idiom) so the endpoint
+  // doesn't confirm foreign request ids exist. The check runs as the caller
+  // (their JWT on the client) so auth.uid() is the sender.
+  if (!request) {
+    return json({ error: 'quote_request_not_found' }, 404);
+  }
+  const userClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    global: { headers: { Authorization: req.headers.get('Authorization')! } },
+  });
+  if (!(await callerIsStudioComember(userClient, quoteRequestStudioOwner(request)))) {
     return json({ error: 'quote_request_not_found' }, 404);
   }
 

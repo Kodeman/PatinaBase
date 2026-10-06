@@ -12,6 +12,8 @@ import {
 import {
   buildFallbackSidemark,
   buildSchedulePoProposal,
+  type CallerRpcClient,
+  callerMaySendPurchaseOrder,
   checkPoRepricingGate,
   checkPoTotalsCoherence,
   PO_NEEDS_REPRICING_DETAIL,
@@ -20,7 +22,10 @@ import {
   parsePoSendBody,
   paymentPatternLabel,
   paymentRowLabel,
+  resolvePoShipTo,
   resolveVendorRecipient,
+  SHIP_TO_NOT_SET_LABEL,
+  SHIP_TO_REQUIRED_DETAIL,
   vendorConfigurationLines,
   vendorSafeSpecNotes,
 } from "./lib.ts";
@@ -483,6 +488,169 @@ Deno.test("vendorConfigurationLines falls back to flat spec fields when the snap
       "Dims: 72 × 36 × 30 in",
     ],
   );
+});
+
+// ─── C-06: spec → product master fallback ───────────────────────────────────
+
+const PRODUCT_MASTER = {
+  sku: "LIB-SOFA-88",
+  finish: "Cerused Oak",
+  materials: ["White Oak", "Linen"],
+  colors: ["Natural"],
+  dimensions: { width: 88, depth: 38, height: 32, unit: "in" },
+};
+
+Deno.test("vendorConfigurationLines falls back to the product master when the placed spec row is empty", () => {
+  // Placement inserts the spec row with only (ffe_item_id, routing_source).
+  const emptySpec = {
+    configuration_id: null,
+    configuration_snapshot: {},
+    configuration_snapshot_hash: null,
+    sku: null,
+    material: null,
+    finish: null,
+    color_fabric: null,
+    selected_dimensions: {},
+  };
+  assertEquals(vendorConfigurationLines(emptySpec, PRODUCT_MASTER), [
+    "SKU: LIB-SOFA-88",
+    "Material: White Oak, Linen",
+    "Finish: Cerused Oak",
+    "Color/Fabric: Natural",
+    "Dims: 88 × 38 × 32 in",
+  ]);
+  // No spec row at all still resolves from the product.
+  assertEquals(vendorConfigurationLines(null, PRODUCT_MASTER)[0], "SKU: LIB-SOFA-88");
+});
+
+Deno.test("vendorConfigurationLines resolves each field spec first, product second", () => {
+  assertEquals(
+    vendorConfigurationLines(
+      {
+        configuration_snapshot: {},
+        sku: "  ",
+        finish: "Ebonized",
+        selected_dimensions: { width: 90, depth: 40, height: 30, unit: "in" },
+      },
+      PRODUCT_MASTER,
+    ),
+    [
+      "SKU: LIB-SOFA-88",
+      "Material: White Oak, Linen",
+      "Finish: Ebonized",
+      "Color/Fabric: Natural",
+      "Dims: 90 × 40 × 30 in",
+    ],
+  );
+});
+
+Deno.test("vendorConfigurationLines keeps the configuration snapshot ahead of the product master", () => {
+  const configured = vendorConfigurationLines(configurationSpecFixture, PRODUCT_MASTER);
+  assertEquals(configured, vendorConfigurationLines(configurationSpecFixture));
+  assert(configured.every((line) => !line.includes("LIB-SOFA-88")));
+  assert(configured.every((line) => !line.includes("Cerused Oak")));
+});
+
+Deno.test("vendorConfigurationLines keeps the product dimension allowlist (PRIV-4)", () => {
+  assertEquals(
+    vendorConfigurationLines(
+      { configuration_snapshot: {} },
+      { dimensions: { diameter: 40, tradePrice: 900, unit: "in" } },
+    ),
+    ["Dims: diameter 40 in"],
+  );
+});
+
+// ─── C-02: ship-to (R-PB3) ───────────────────────────────────────────────────
+
+Deno.test("resolvePoShipTo refuses send with no ship-to", () => {
+  for (const empty of [null, undefined, "", "   "]) {
+    assertEquals(resolvePoShipTo(empty, "send"), {
+      ok: false,
+      error: "ship_to_required",
+      detail: SHIP_TO_REQUIRED_DETAIL,
+    });
+  }
+});
+
+Deno.test("resolvePoShipTo still renders preview and mark_sent, marked not set", () => {
+  for (const mode of ["preview", "mark_sent"] as const) {
+    assertEquals(resolvePoShipTo(null, mode), {
+      ok: true,
+      shipTo: null,
+      printed: SHIP_TO_NOT_SET_LABEL,
+    });
+  }
+  assertEquals(SHIP_TO_NOT_SET_LABEL, "Ship-to not set");
+});
+
+Deno.test("resolvePoShipTo prints an explicit ship-to in every mode", () => {
+  for (const mode of ["preview", "send", "mark_sent"] as const) {
+    assertEquals(resolvePoShipTo("  Receiving, 22 Mill Rd  ", mode), {
+      ok: true,
+      shipTo: "Receiving, 22 Mill Rd",
+      printed: "Receiving, 22 Mill Rd",
+    });
+  }
+});
+
+// ─── C-07: send access, as the caller ────────────────────────────────────────
+
+/**
+ * Stands in for the caller-scoped client: answers can_send_purchase_order the
+ * way 00690 does for the given caller (owner / co-member true, outsider false).
+ */
+function fakeCallerClient(
+  answer: { data: unknown; error: unknown },
+  calls: Array<{ fn: string; args: Record<string, unknown> }> = [],
+): CallerRpcClient {
+  return {
+    rpc(fn, args) {
+      calls.push({ fn, args });
+      return Promise.resolve(answer);
+    },
+  };
+}
+
+Deno.test("callerMaySendPurchaseOrder allows the owner and a co-member", async () => {
+  for (const who of ["owner", "co-member"]) {
+    const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+    const allowed = await callerMaySendPurchaseOrder(
+      fakeCallerClient({ data: true, error: null }, calls),
+      "po-1",
+    );
+    assertEquals(allowed, true, who);
+    assertEquals(calls, [{ fn: "can_send_purchase_order", args: { p_po_id: "po-1" } }]);
+  }
+});
+
+Deno.test("callerMaySendPurchaseOrder refuses an outsider, a missing PO, and a failed check", async () => {
+  for (const answer of [
+    { data: false, error: null }, // outsider, or no such PO
+    { data: null, error: { message: "permission denied" } },
+    { data: true, error: { message: "half-broken response" } },
+    { data: "true", error: null },
+  ]) {
+    assertEquals(await callerMaySendPurchaseOrder(fakeCallerClient(answer), "po-1"), false);
+  }
+});
+
+Deno.test("parsePoSendBody never carries a body-supplied user id", () => {
+  const result = parsePoSendBody({
+    purchaseOrderId: "po-1",
+    designerId: "someone-else",
+    userId: "someone-else",
+  });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(Object.keys(result.payload).sort(), [
+      "ccDesigner",
+      "message",
+      "mode",
+      "purchaseOrderId",
+      "recipientEmail",
+    ]);
+  }
 });
 
 Deno.test("vendorConfigurationLines tolerates unknown dimension keys", () => {
