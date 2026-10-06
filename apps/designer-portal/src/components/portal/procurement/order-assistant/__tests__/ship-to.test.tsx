@@ -12,8 +12,12 @@ const mockSources: {
   orgs: Array<{ id: string; address: unknown }>;
   project: Record<string, unknown> | undefined;
   ownerStudioId: string | null;
-} = { orgs: [], project: undefined, ownerStudioId: null };
+  locations: Array<Record<string, unknown>>;
+} = { orgs: [], project: undefined, ownerStudioId: null, locations: [] };
 const mockStudioIdentityCalls: Array<Record<string, unknown>> = [];
+const mockLocationCalls: Array<string | null | undefined> = [];
+const mockSetShipTo = jest.fn();
+const mockSetShipToLocation = jest.fn();
 
 jest.mock('@patina/supabase', () => ({
   useOrganizations: () => ({ data: mockSources.orgs }),
@@ -24,14 +28,27 @@ jest.mock('@patina/supabase', () => ({
       data: params.designerId ? { studioId: mockSources.ownerStudioId } : undefined,
     };
   },
+  useStudioLocations: (orgId: string | null | undefined) => {
+    mockLocationCalls.push(orgId);
+    return { data: orgId ? mockSources.locations : undefined };
+  },
+  useSetPurchaseOrderShipTo: () => ({ mutateAsync: mockSetShipTo, isPending: false }),
+  useSetPurchaseOrderShipToLocation: () => ({
+    mutateAsync: mockSetShipToLocation,
+    isPending: false,
+  }),
 }));
 
 import {
   EMPTY_SHIP_TO,
   ShipToChoice,
+  formatLocation,
   formatStudioAddress,
+  orderShipToLocations,
   resolveShipTo,
+  useSaveShipTo,
   useShipToAddresses,
+  type ShipToLocation,
   type ShipToSelection,
 } from '../ship-to-choice';
 import { StepReview } from '../step-review';
@@ -57,12 +74,37 @@ describe('formatStudioAddress', () => {
   });
 });
 
+const BADGER: ShipToLocation = {
+  id: 'loc-badger',
+  kind: 'receiver',
+  label: 'Badger Receiving',
+  address: { street: '7 Dock Rd', city: 'Madison', state: 'WI', zip: '53704' },
+  is_default_receiver: true,
+};
+const ACME_RCV: ShipToLocation = {
+  id: 'loc-acme',
+  kind: 'receiver',
+  label: 'Acme Freight',
+  address: null,
+  is_default_receiver: false,
+};
+const WORKROOM: ShipToLocation = {
+  id: 'loc-workroom',
+  kind: 'workroom',
+  label: 'Able Workroom',
+  address: { city: 'Verona', state: 'WI' },
+  is_default_receiver: false,
+};
+
 describe('resolveShipTo', () => {
-  const addresses = { studioAddress: STUDIO, siteAddress: SITE };
+  const addresses = { locations: [BADGER], studioAddress: STUDIO, siteAddress: SITE };
 
   it('is null until a usable choice is made', () => {
     expect(resolveShipTo(EMPTY_SHIP_TO, addresses)).toBeNull();
     expect(resolveShipTo({ kind: 'other', otherText: '   ' }, addresses)).toBeNull();
+    expect(
+      resolveShipTo({ kind: 'location', otherText: '', locationId: 'gone' }, addresses),
+    ).toBeNull();
   });
 
   it('returns the text the chosen option shows', () => {
@@ -71,6 +113,51 @@ describe('resolveShipTo', () => {
     expect(resolveShipTo({ kind: 'other', otherText: ' Dock 4, Racine ' }, addresses)).toBe(
       'Dock 4, Racine',
     );
+    expect(
+      resolveShipTo({ kind: 'location', otherText: '', locationId: 'loc-badger' }, addresses),
+    ).toBe('Badger Receiving, 7 Dock Rd, Madison, WI 53704');
+  });
+
+  it('formats a location with no address as its label', () => {
+    expect(formatLocation(ACME_RCV)).toBe('Acme Freight');
+  });
+});
+
+describe('orderShipToLocations', () => {
+  it('puts receivers first and keeps the hook order within each group', () => {
+    expect(orderShipToLocations([WORKROOM, BADGER, ACME_RCV]).map((l) => l.id)).toEqual([
+      'loc-badger',
+      'loc-acme',
+      'loc-workroom',
+    ]);
+  });
+});
+
+describe('useSaveShipTo', () => {
+  beforeEach(() => {
+    mockSetShipTo.mockReset().mockResolvedValue({ id: 'po-1' });
+    mockSetShipToLocation.mockReset().mockResolvedValue({ id: 'po-1' });
+  });
+
+  it('saves a location through set_purchase_order_ship_to_location with its id', async () => {
+    const { result } = renderHook(() => useSaveShipTo());
+    await result.current.save(
+      'po-1',
+      { kind: 'location', otherText: '', locationId: 'loc-badger' },
+      'Badger Receiving, 7 Dock Rd',
+    );
+    expect(mockSetShipToLocation).toHaveBeenCalledWith({
+      purchaseOrderId: 'po-1',
+      locationId: 'loc-badger',
+    });
+    expect(mockSetShipTo).not.toHaveBeenCalled();
+  });
+
+  it('saves any other choice as text', async () => {
+    const { result } = renderHook(() => useSaveShipTo());
+    await result.current.save('po-1', { kind: 'site', otherText: '' }, SITE);
+    expect(mockSetShipTo).toHaveBeenCalledWith({ purchaseOrderId: 'po-1', shipTo: SITE });
+    expect(mockSetShipToLocation).not.toHaveBeenCalled();
   });
 });
 
@@ -86,13 +173,15 @@ describe('useShipToAddresses · "The studio" is the project studio (F11)', () =>
     ];
     mockSources.project = undefined;
     mockSources.ownerStudioId = null;
+    mockSources.locations = [];
     mockStudioIdentityCalls.length = 0;
+    mockLocationCalls.length = 0;
   });
 
   it('uses the address of projects.studio_id, not the first org', () => {
     mockSources.project = { studio_id: 'org-project', designer_id: 'owner-1', site_address: SITE };
     const { result } = renderHook(() => useShipToAddresses('project-1'));
-    expect(result.current).toEqual({ studioAddress: STUDIO, siteAddress: SITE });
+    expect(result.current).toEqual({ locations: [], studioAddress: STUDIO, siteAddress: SITE });
     // studio_id is on file, so the owner fallback is never asked.
     expect(mockStudioIdentityCalls.every((p) => !p.designerId)).toBe(true);
   });
@@ -115,6 +204,15 @@ describe('useShipToAddresses · "The studio" is the project studio (F11)', () =>
     expect(result.current.studioAddress).toBeNull();
   });
 
+  it("reads the project studio's locations, receivers first", () => {
+    mockSources.project = { studio_id: 'org-project', designer_id: 'owner-1', site_address: null };
+    mockSources.locations = [WORKROOM, BADGER];
+    const { result } = renderHook(() => useShipToAddresses('project-1'));
+    expect(mockLocationCalls).toContain('org-project');
+    expect(mockLocationCalls).not.toContain('org-other');
+    expect(result.current.locations.map((l) => l.id)).toEqual(['loc-badger', 'loc-workroom']);
+  });
+
   it('hides the studio when no studio resolves, and while the project loads', () => {
     mockSources.project = { studio_id: null, designer_id: 'owner-1', site_address: null };
     expect(renderHook(() => useShipToAddresses('project-1')).result.current.studioAddress).toBeNull();
@@ -124,16 +222,52 @@ describe('useShipToAddresses · "The studio" is the project studio (F11)', () =>
 });
 
 describe('ShipToChoice', () => {
-  function renderChoice(addresses: { studioAddress: string | null; siteAddress: string | null }) {
+  function renderChoice(
+    addresses: { studioAddress: string | null; siteAddress: string | null },
+    locations: ShipToLocation[] = [],
+  ) {
     const onChange = jest.fn();
     let value: ShipToSelection = EMPTY_SHIP_TO;
-    const view = render(<ShipToChoice {...addresses} value={value} onChange={onChange} />);
+    const props = { ...addresses, locations };
+    const view = render(<ShipToChoice {...props} value={value} onChange={onChange} />);
     onChange.mockImplementation((next: ShipToSelection) => {
       value = next;
-      view.rerender(<ShipToChoice {...addresses} value={value} onChange={onChange} />);
+      view.rerender(<ShipToChoice {...props} value={value} onChange={onChange} />);
     });
     return { onChange };
   }
+
+  it('lists studio locations first, the default receiver marked, nothing preselected', () => {
+    renderChoice({ studioAddress: STUDIO, siteAddress: SITE }, [BADGER, ACME_RCV, WORKROOM]);
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(6);
+    radios.forEach((r) => expect(r).not.toBeChecked());
+    const names = radios.map((r) => r.closest('label')?.textContent ?? '');
+    expect(names[0]).toMatch(/^Badger Receiving · Default receiver7 Dock Rd/);
+    expect(names[1]).toBe('Acme Freight');
+    expect(names[2]).toMatch(/^Able Workroom/);
+    expect(names[3]).toMatch(/^The studio/);
+    expect(names[4]).toMatch(/^The job site/);
+    expect(names[5]).toBe('Somewhere else');
+    expect(screen.getAllByText(/Default receiver/)).toHaveLength(1);
+  });
+
+  it('chooses a location by id, and only that one reads checked', () => {
+    const { onChange } = renderChoice({ studioAddress: STUDIO, siteAddress: null }, [
+      BADGER,
+      ACME_RCV,
+    ]);
+    fireEvent.click(screen.getByRole('radio', { name: /Acme Freight/ }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      kind: 'location',
+      otherText: '',
+      locationId: 'loc-acme',
+    });
+    expect(screen.getByRole('radio', { name: /Acme Freight/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Badger Receiving/ })).not.toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: /The studio/ }));
+    expect(screen.getByRole('radio', { name: /Acme Freight/ })).not.toBeChecked();
+  });
 
   it('renders the three choices with none selected', () => {
     renderChoice({ studioAddress: STUDIO, siteAddress: SITE });

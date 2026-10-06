@@ -38,7 +38,6 @@ import {
   useFfeInvoiceCoverage,
   useOrganizations,
   useProject,
-  useSetPurchaseOrderShipTo,
   useStartPoCheckout,
   useStudioVendorAccount,
   fetchPOPayments,
@@ -85,6 +84,7 @@ import {
   SHIP_TO_REQUIRED_MESSAGE,
   ShipToChoice,
   resolveShipTo,
+  useSaveShipTo,
   useShipToAddresses,
   type ShipToSelection,
 } from './ship-to-choice';
@@ -248,7 +248,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const shipToAddresses = useShipToAddresses(open ? project.id : null);
   const [shipToSelection, setShipToSelection] = useState<ShipToSelection>(EMPTY_SHIP_TO);
   const shipTo = resolveShipTo(shipToSelection, shipToAddresses);
-  const setShipTo = useSetPurchaseOrderShipTo({ errorSurface: 'inline' });
+  const setShipTo = useSaveShipTo();
 
   // Details fields ----------------------------------------------------------
   const [vendorPoNumber, setVendorPoNumber] = useState('');
@@ -687,7 +687,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
       // Created step's PoPreview then shows "Ship-to not set" with the same
       // choice, and po-send refuses to send until it is set (R-PB3).
       try {
-        po = await setShipTo.mutateAsync({ purchaseOrderId: po.id, shipTo });
+        po = await setShipTo.save(po.id, shipToSelection, shipTo);
       } catch {
         toast('PO created, but the ship-to was not saved. Set it before sending.', 'error');
       }

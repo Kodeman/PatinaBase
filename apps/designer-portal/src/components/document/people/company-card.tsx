@@ -74,6 +74,7 @@ import { RecordDocumentSheet } from "./record-document-sheet";
 import { InboundQueueBand } from "./inbound-queue-band";
 import { PaperworkLinkAct } from "./paperwork-link-act";
 import { LastTouchLine } from "./touch-line";
+import { StudioLocationsEditor } from "./studio-locations-editor";
 import {
   useChaseTheRenewal,
   chaseConsequenceSentence,
@@ -1057,6 +1058,17 @@ export function CompanyCard({
             Save the payee
           </DocumentAction>
         </div>
+      </section>
+
+      {/* C-13 — the places goods go that this firm keeps: a receiver, a
+          workroom, storage. The Order Assistant's ship-to lists them. */}
+      <section className={REGION}>
+        <h3 className={REGION_HEAD}>Locations</h3>
+        <StudioLocationsEditor
+          organizationId={card.organization_id}
+          studioContactId={card.id}
+          onAnnounce={announce}
+        />
       </section>
 
       {/* R5 — Jobs, with the money book read-only beside them */}

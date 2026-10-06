@@ -21,7 +21,6 @@ import {
   usePurchaseOrderChanges,
   usePurchaseOrders,
   useSendPurchaseOrder,
-  useSetPurchaseOrderShipTo,
   type PurchaseOrder,
   type PurchaseOrderChange,
   type PurchaseOrderChangeKind,
@@ -32,6 +31,7 @@ import {
   SHIP_TO_REQUIRED_MESSAGE,
   ShipToChoice,
   resolveShipTo,
+  useSaveShipTo,
   useShipToAddresses,
   type ShipToSelection,
 } from '@/components/portal/procurement/order-assistant/ship-to-choice';
@@ -205,8 +205,8 @@ export function LogAckInline({
 }
 
 /**
- * C-02 / R-PB3: a PO with no ship-to gets the same three-way choice as the
- * Order Assistant, on the paper, before Send, Resend or Mark as sent. A sent
+ * C-02 / R-PB3: a PO with no ship-to gets the same choice as the Order
+ * Assistant (studio locations first, C-13), on the paper, before Send, Resend or Mark as sent. A sent
  * PO with none (marked sent, or sent before the guard) gets it too:
  * set_purchase_order_ship_to fills an empty ship-to after send. Renders
  * nothing while the PO loads or once a ship-to is on file.
@@ -219,7 +219,7 @@ function ShipToNotSetBand({
   onSaved: () => void;
 }) {
   const addresses = useShipToAddresses(po?.project_id);
-  const setShipTo = useSetPurchaseOrderShipTo({ errorSurface: 'inline' });
+  const setShipTo = useSaveShipTo();
   const [selection, setSelection] = useState<ShipToSelection>(EMPTY_SHIP_TO);
   const [error, setError] = useState<string | null>(null);
 
@@ -230,7 +230,7 @@ function ShipToNotSetBand({
     if (!shipTo || setShipTo.isPending) return;
     setError(null);
     try {
-      await setShipTo.mutateAsync({ purchaseOrderId: po.id, shipTo });
+      await setShipTo.save(po.id, selection, shipTo);
       onSaved();
     } catch (e) {
       setError((e as Error).message || 'The ship-to could not be saved.');

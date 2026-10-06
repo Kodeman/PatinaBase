@@ -8,6 +8,9 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 
 const sendMutateAsync = jest.fn();
 const setShipToMutateAsync = jest.fn();
+const setShipToLocationMutateAsync = jest.fn();
+// The project studio's live locations (C-13).
+const mockLocations: { list: Array<Record<string, unknown>> } = { list: [] };
 const poSent = jest.fn();
 // The studio's purchase-orders list the ship-to band reads (C-02).
 const mockOrders: { list: Array<Record<string, unknown>> } = { list: [] };
@@ -22,6 +25,13 @@ jest.mock('@patina/supabase', () => ({
   useSendPurchaseOrder: () => ({ mutateAsync: sendMutateAsync, isPending: false }),
   useLogPOAcknowledgment: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetPurchaseOrderShipTo: () => ({ mutateAsync: setShipToMutateAsync, isPending: false }),
+  useSetPurchaseOrderShipToLocation: () => ({
+    mutateAsync: setShipToLocationMutateAsync,
+    isPending: false,
+  }),
+  useStudioLocations: (studioId: string | null) => ({
+    data: studioId === 'org-project' ? mockLocations.list : undefined,
+  }),
   usePurchaseOrders: () => ({ data: mockOrders.list }),
   usePurchaseOrderChanges: () => ({ data: mockChanges.list }),
   // The caller belongs to two studios; the project belongs to the second (F11).
@@ -54,6 +64,9 @@ beforeEach(() => {
   sendMutateAsync.mockReset();
   setShipToMutateAsync.mockReset();
   setShipToMutateAsync.mockResolvedValue({ id: 'po-1' });
+  setShipToLocationMutateAsync.mockReset();
+  setShipToLocationMutateAsync.mockResolvedValue({ id: 'po-1' });
+  mockLocations.list = [];
   // A ready PO by default: a ship-to on file.
   mockOrders.list = [
     { id: 'po-1', project_id: 'project-1', sent_at: null, ship_to: '1 Main St, Madison, WI 53703' },
@@ -171,6 +184,39 @@ describe('PoPreview · ship-to not set (C-02)', () => {
         sendMutateAsync.mock.calls.filter(([a]) => a.mode === 'preview'),
       ).toHaveLength(2),
     );
+  });
+
+  it('offers the studio receivers first, none chosen, and sets a location by id (C-13)', async () => {
+    mockOrders.list = [unsent];
+    mockLocations.list = [
+      { id: 'loc-store', kind: 'storage', label: 'Cold Store', address: null, is_default_receiver: false },
+      { id: 'loc-badger', kind: 'receiver', label: 'Badger Receiving', address: null, is_default_receiver: true },
+    ];
+    renderPreview();
+    await waitForPdf();
+
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map((r) => r.getAttribute('value'))).toEqual([
+      'location:loc-badger',
+      'location:loc-store',
+      'studio',
+      'other',
+    ]);
+    radios.forEach((r) => expect(r).not.toBeChecked());
+    expect(screen.getByRole('radio', { name: /Default receiver/ })).toHaveAccessibleName(
+      expect.stringContaining('Badger Receiving'),
+    );
+    expect(screen.getByRole('button', { name: 'Set ship-to' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('radio', { name: /Cold Store/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Set ship-to' }));
+    });
+    expect(setShipToLocationMutateAsync).toHaveBeenCalledWith({
+      purchaseOrderId: 'po-1',
+      locationId: 'loc-store',
+    });
+    expect(setShipToMutateAsync).not.toHaveBeenCalled();
   });
 
   it('stays quiet when the PO already has a ship-to', async () => {
