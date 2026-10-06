@@ -21,6 +21,8 @@ import {
   usePurchaseOrderChanges,
   usePurchaseOrders,
   useSendPurchaseOrder,
+  useStudioIdentity,
+  useStudioVendorAccount,
   type PurchaseOrder,
   type PurchaseOrderChange,
   type PurchaseOrderChangeKind,
@@ -355,6 +357,15 @@ export function PoPreview({
   const shipToMissing = po ? !po.ship_to?.trim() : orders === undefined;
   const shipToHeld = !!po && shipToMissing;
   const shipToReasonId = `po-ship-to-held-${purchaseOrderId}`;
+  // C-12: po-send mails the studio's own orders inbox for this vendor first
+  // (the project's studio, resolved as po-send resolves it), then the
+  // vendor's shared address. Name the address that actually receives it.
+  const { data: identity } = useStudioIdentity({ projectId: po?.project_id ?? null });
+  const { data: studioAccount } = useStudioVendorAccount(identity?.studioId, po?.vendor_id);
+  const studioInbox = studioAccount?.archived_at
+    ? null
+    : studioAccount?.orders_email_override?.trim() || null;
+  const recipient = studioInbox ?? (vendorEmailHint?.trim() || null);
 
   useEffect(() => {
     setNote('');
@@ -550,9 +561,9 @@ export function PoPreview({
             </DocumentAction>
           )}
           <span className="ml-auto text-[11px] text-[var(--text-muted)]">
-            {vendorEmailHint
-              ? `to ${vendorEmailHint}`
-              : 'no vendor email on file'}
+            {recipient
+              ? `Sends to ${recipient}`
+              : 'No email on file for this vendor'}
           </span>
           <DocumentAction
             actionKey={
@@ -560,7 +571,7 @@ export function PoPreview({
             }
             variant="primary"
             disabled={
-              !signedUrl || !vendorEmailHint || sending || marking || shipToMissing
+              !signedUrl || !recipient || sending || marking || shipToMissing
             }
             held={shipToHeld}
             aria-describedby={shipToHeld ? shipToReasonId : undefined}

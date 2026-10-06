@@ -24,7 +24,12 @@ jest.mock('@patina/supabase', () => ({
   useRecordVendorPayment: jest.fn(),
   useVoidVendorPayment: jest.fn(),
   useStartPoCheckout: jest.fn(),
+  // Pay now is the PO designer's act alone (create-checkout-session).
+  useUser: () => ({ user: mockUser.value }),
+  usePurchaseOrders: () => ({ data: [{ id: 'po-1', designer_id: 'designer-1' }] }),
 }));
+
+const mockUser: { value: { id: string } | null } = { value: { id: 'designer-1' } };
 
 const mockCheckout = jest.fn();
 
@@ -146,6 +151,7 @@ beforeEach(() => {
     isPending: false,
   });
   mockCheckout.mockReset();
+  mockUser.value = { id: 'designer-1' };
   (useStartPoCheckout as jest.Mock).mockReturnValue({
     mutateAsync: mockCheckout,
     isPending: false,
@@ -364,6 +370,23 @@ describe('PoMoneyOut · a catalog row still owed pays through checkout (C-22)', 
     unmount();
     setup();
     renderBand();
+    expect(screen.queryByRole('button', { name: /Pay now/ })).not.toBeInTheDocument();
+  });
+
+  it('offers nothing to a teammate who is not the PO designer, or before the user resolves', () => {
+    setup({ schedule: [{ ...BALANCE, kind: 'full_upfront', state: 'due' }] });
+    mockUser.value = { id: 'teammate-2' };
+    const { unmount } = renderBand({ isPatinaCatalog: true });
+    expect(screen.queryByRole('button', { name: /Pay now/ })).not.toBeInTheDocument();
+    unmount();
+    mockUser.value = null;
+    renderBand({ isPatinaCatalog: true });
+    expect(screen.queryByRole('button', { name: /Pay now/ })).not.toBeInTheDocument();
+  });
+
+  it('offers nothing on a PO the studio list does not hold', () => {
+    setup({ schedule: [{ ...BALANCE, kind: 'full_upfront', state: 'due' }] });
+    renderBand({ isPatinaCatalog: true, purchaseOrderId: 'po-elsewhere' });
     expect(screen.queryByRole('button', { name: /Pay now/ })).not.toBeInTheDocument();
   });
 });

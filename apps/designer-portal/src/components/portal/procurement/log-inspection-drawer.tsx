@@ -51,11 +51,15 @@ interface InspectionPhoto {
   previewUrl: string;
 }
 
-/** Upload one photo through the media proxy route; resolves its asset id. */
-export async function uploadInspectionPhoto(file: File, projectId?: string): Promise<string> {
+/**
+ * Upload one photo through the media proxy route; resolves its asset id. The
+ * PO's project rides every upload so the media ACL scopes the photo to that
+ * project, not to the uploader alone.
+ */
+export async function uploadInspectionPhoto(file: File, projectId: string): Promise<string> {
   const form = new FormData();
   form.append('file', file);
-  if (projectId) form.append('projectId', projectId);
+  form.append('projectId', projectId);
   const res = await fetch('/api/media/assets', { method: 'POST', body: form });
   const body = await res.json().catch(() => null);
   const assetId = body?.data?.assetId;
@@ -206,13 +210,20 @@ export function LogInspectionDrawer(props: LogInspectionDrawerProps) {
     setOutcome(suggestedOutcome);
   }, [open, outcomeTouched, suggestedOutcome]);
 
+  // The PO's project: its lines name it; the caller's stands in while they load.
+  const poProjectId = items[0]?.project_id ?? projectId;
+
   const addPhotos = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    if (!poProjectId) {
+      setPhotoError('The order is still loading. Add the photos again in a moment.');
+      return;
+    }
     setPhotoError(null);
     for (const file of Array.from(files)) {
       setUploading((n) => n + 1);
       try {
-        const assetId = await uploadInspectionPhoto(file, projectId);
+        const assetId = await uploadInspectionPhoto(file, poProjectId);
         setPhotos((prev) => [
           ...prev,
           { assetId, name: file.name, previewUrl: URL.createObjectURL(file) },

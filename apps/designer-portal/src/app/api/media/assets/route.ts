@@ -15,9 +15,11 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
 // The media service's own image ceiling (MediaService.MAX_IMAGE_SIZE).
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
+// Room for the multipart boundaries, part headers and the projectId field.
+const MAX_BODY_BYTES = MAX_IMAGE_BYTES + 64 * 1024;
 
-function failure(message: string, status: 400 | 502): Response {
-  const code = status === 400 ? ApiErrorCode.BAD_REQUEST : ApiErrorCode.SERVICE_UNAVAILABLE;
+function failure(message: string, status: 400 | 413 | 502): Response {
+  const code = status === 502 ? ApiErrorCode.SERVICE_UNAVAILABLE : ApiErrorCode.BAD_REQUEST;
   return apiError(createApiError(code, message), status);
 }
 
@@ -55,6 +57,11 @@ async function mediaCall(
  */
 export const POST = createRouteHandler(
   async (request: NextRequest, context: RouteContext) => {
+    // Refuse an oversized body before buffering it; the size check after the
+    // parse still covers a request that declares no length.
+    if (Number(request.headers.get('content-length')) > MAX_BODY_BYTES) {
+      return failure('Photos must be 50 MB or smaller.', 413);
+    }
     let form: FormData;
     try {
       form = await request.formData();
