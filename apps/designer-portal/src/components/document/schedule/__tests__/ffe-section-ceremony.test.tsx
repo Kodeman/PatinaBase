@@ -60,6 +60,8 @@ jest.mock('@patina/supabase', () => ({
   }),
   useProjectOwnedBoards: () => ({ data: [], isLoading: false }),
   useCreateNamedProjectNeed: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  // C-24: the add sheet's "This piece takes COM" links the fabric line.
+  useLinkFfePair: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useFfeInvoiceCoverage: () => ({ data: {} }),
 }));
 

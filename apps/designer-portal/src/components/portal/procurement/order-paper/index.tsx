@@ -92,6 +92,7 @@ import {
   type PendingOrder,
 } from './model';
 import { PoRiders } from './riders';
+import { ComLineNote, useComPaper } from './com-slot';
 
 export * from './model';
 
@@ -300,6 +301,12 @@ function PaperSheet({
   const chosenShipTo = resolveShipTo(shipToSelection, shipToAddresses);
   const shipToOnFile = existing?.ship_to?.trim() || null;
   const hasShipTo = Boolean(chosenShipTo || shipToOnFile);
+  // C-24: a COM pair on this paper (the fabric PO, or the piece it feeds).
+  const com = useComPaper({
+    projectId: project.id,
+    itemIds: ffeItems.map((i) => i.id),
+    vendorName: vendor.name,
+  });
 
   // ─── Terms (a new paper; a PO on file keeps its schedule) ──────────────
   const accountPattern: PaymentPattern | null = account?.payment_pattern ?? null;
@@ -434,6 +441,7 @@ function PaperSheet({
   const ensurePurchaseOrder = async (): Promise<string> => {
     if (poId) {
       if (chosenShipTo) await saveShipTo.save(poId, shipToSelection, chosenShipTo);
+      await com.linkSupplies(poId);
       return poId;
     }
     const invalid = validatePaper({
@@ -491,6 +499,7 @@ function PaperSheet({
       vendorNote: vendorNote.trim(),
     };
     if (chosenShipTo) await saveShipTo.save(po.id, shipToSelection, chosenShipTo);
+    await com.linkSupplies(po.id);
     return po.id;
   };
 
@@ -761,6 +770,7 @@ function PaperSheet({
             <div className="sm:col-span-2">
               <ShipToChoice
                 {...shipToAddresses}
+                locations={com.orderLocations(shipToAddresses.locations)}
                 value={shipToSelection}
                 onChange={(next) => {
                   setShipToSelection(next);
@@ -772,6 +782,11 @@ function PaperSheet({
                 disabled={locked}
                 invalid={shipToInvalid}
               />
+              {com.isFabricPaper && (
+                <p data-order-paper-com-ship-to className="doc-type-meta mt-1 text-[var(--color-quiet-ink)]">
+                  COM fabric ships to the workroom{com.workroomName ? `: ${com.workroomName}` : ''}.
+                </p>
+              )}
               {shipToOnFile && (
                 <p className="doc-type-meta mt-1 text-[var(--color-quiet-ink)]">
                   On the PO now: {shipToOnFile}
@@ -831,7 +846,8 @@ function PaperSheet({
                   {item.room && (
                     <span className="text-[var(--color-quiet-ink)]"> · {item.room}</span>
                   )}
-                  {/* COM (C-24, SQ-424): the supplying line's fact renders under its piece here. */}
+                  {/* COM (C-24, SQ-424): the pair's fact, and a fabric line's CFA warning. */}
+                  <ComLineNote com={com} itemId={item.id} />
                 </span>
                 <span className="doc-type-meta shrink-0 text-[var(--color-quiet-ink)]">
                   ×{item.quantity ?? 1}

@@ -47,6 +47,8 @@ jest.mock('@patina/supabase', () => ({
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
+// C-24: the pair, COM facts and submittals are com-piece.test.tsx's.
+jest.mock('@/components/document/buying/com-piece', () => ({ ComPiece: () => null }));
 jest.mock('@/components/portal/procurement/order-paper', () => ({
   OrderPaper: () => null,
 }));

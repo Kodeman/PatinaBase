@@ -494,6 +494,9 @@ export interface VendorConfigurationSpec {
   selectedDimensions?: unknown;
   na_declarations?: unknown;
   naDeclarations?: unknown;
+  /** C-24: COM facts on any line, in `com_details`' shape (00702). */
+  com_spec?: unknown;
+  comSpec?: unknown;
 }
 
 /** The `product:products!product_id(…)` embed: the line's product master. */
@@ -724,7 +727,9 @@ export function vendorConfigurationLines(spec: unknown, product?: unknown): stri
     const dims = formatDimensions(snapshot.dimensions);
     if (dims) lines.push(`Dims: ${dims}`);
 
-    lines.push(...comLines(snapshot.comDetails ?? snapshot.com_details));
+    lines.push(
+      ...comLines(snapshot.comDetails ?? snapshot.com_details ?? source.com_spec ?? source.comSpec),
+    );
 
     const hash = readScalar(
       source.configuration_snapshot_hash ??
@@ -768,5 +773,75 @@ export function vendorConfigurationLines(spec: unknown, product?: unknown): stri
     : formatDimensions(source.selected_dimensions ?? source.selectedDimensions) ??
       formatDimensions(master.dimensions);
   if (flatDims) lines.push(`Dims: ${flatDims}`);
+  // C-24: an unconfigured line's COM facts print as a configuration's do.
+  lines.push(...comLines(source.com_spec ?? source.comSpec));
   return lines;
+}
+
+// ─── COM arriving separately (C-24) ──────────────────────────────────────────
+//
+// A fabric PO points at the PO it supplies (purchase_orders.
+// supplies_purchase_order_id, 00702). When this PO is the one supplied, each
+// piece whose fabric comes on another order says so under its line, the way
+// the workroom needs to read it: "COM arriving separately — Kessler PO-1043,
+// 19 yd Brae linen, tagged HART-ASHBY-LR-SOFA".
+
+/** A PO that supplies this one: its number and maker. */
+export interface SupplyingPurchaseOrder {
+  id: string;
+  po_number: string | null;
+  vendor: { name: string | null } | null;
+}
+
+/** A line on a supplying PO, with the piece it supplies. */
+export interface SupplyingLine {
+  purchase_order_id: string | null;
+  parent_ffe_item_id: string | null;
+}
+
+/**
+ * The "COM arriving separately" line for each of this PO's items, keyed by
+ * item id. A supplying PO whose lines name no item here attaches to the
+ * first item, so the vendor still reads it once.
+ */
+export function comArrivingSeparately(
+  items: readonly { id: string; spec?: unknown }[],
+  supplyingOrders: readonly SupplyingPurchaseOrder[],
+  supplyingLines: readonly SupplyingLine[],
+): Map<string, string[]> {
+  const notes = new Map<string, string[]>();
+  if (items.length === 0) return notes;
+  const itemIds = new Set(items.map((item) => item.id));
+  const specOf = new Map(items.map((item) => [item.id, item.spec]));
+
+  for (const order of supplyingOrders) {
+    const pieces = Array.from(
+      new Set(
+        supplyingLines
+          .filter((line) => line.purchase_order_id === order.id && line.parent_ffe_item_id)
+          .map((line) => line.parent_ffe_item_id as string)
+          .filter((id) => itemIds.has(id)),
+      ),
+    );
+    const targets = pieces.length > 0 ? pieces : [items[0].id];
+    for (const itemId of targets) {
+      const rawSpec = specOf.get(itemId);
+      const spec = readRecord(Array.isArray(rawSpec) ? rawSpec[0] : rawSpec);
+      const com = readRecord(spec.com_spec ?? spec.comSpec);
+      const yardage = readScalar(com.yardage);
+      const fabric = [readScalar(com.fabricName ?? com.fabric_name), readScalar(com.pattern)]
+        .filter(Boolean)
+        .join(', ');
+      const sidemark = readScalar(com.sidemark);
+      const maker = readScalar(order.vendor?.name) ?? 'the mill';
+      const parts = [
+        `${maker} ${readScalar(order.po_number) ?? 'PO to follow'}`,
+        [yardage ? `${yardage} yd` : null, fabric || null].filter(Boolean).join(' ') || null,
+        sidemark ? `tagged ${sidemark}` : null,
+      ].filter(Boolean);
+      const note = `COM arriving separately — ${parts.join(', ')}`;
+      notes.set(itemId, [...(notes.get(itemId) ?? []), note]);
+    }
+  }
+  return notes;
 }

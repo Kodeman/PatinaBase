@@ -13,6 +13,7 @@ import {
 import { centsToInput, parseDollarsToCents } from '@/lib/currency-ui';
 import { fmtUsd } from '@/lib/document/format';
 import { DocumentAction } from '../document-action';
+import { ComPiece } from '../buying/com-piece';
 import { CellSub, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
 
 type FFERow = any;
@@ -441,6 +442,8 @@ export function TheBuyCell({
       <div className="mt-1">
         <CellSub>{specFacts(item)}</CellSub>
       </div>
+      {/* C-24: the frame-and-fabric pair, the COM facts, the submittals. */}
+      <ComPiece item={item} projectId={projectId} canEdit={canEdit} />
     </UnfoldCell>
   );
 }

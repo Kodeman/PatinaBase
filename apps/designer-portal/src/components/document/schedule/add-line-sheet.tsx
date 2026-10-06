@@ -5,6 +5,7 @@ import { PlusCircle } from 'lucide-react';
 import { useCreateNamedProjectNeed } from '@patina/supabase';
 import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
+import { useAddComFabricLine } from '../buying/com-piece';
 
 const FIELD_CLASS =
   'min-h-11 w-full rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2.5 text-[13px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)]';
@@ -26,19 +27,23 @@ export function AddLineSheet({
   onClose: () => void;
 }) {
   const addLine = useCreateNamedProjectNeed();
+  const addFabric = useAddComFabricLine();
 
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('1');
+  const [takesCom, setTakesCom] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestKey = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const trimmedName = name.trim();
   const parsedQuantity = Math.max(1, Math.round(Number(quantity) || 1));
-  const canSave = trimmedName.length > 0 && !addLine.isPending;
+  const pending = addLine.isPending || addFabric.isPending;
+  const canSave = trimmedName.length > 0 && !pending;
 
   const reset = () => {
     setName('');
     setQuantity('1');
+    setTakesCom(false);
     setError(null);
     requestKey.current = null;
   };
@@ -68,7 +73,19 @@ export function AddLineSheet({
           key: globalThis.crypto?.randomUUID?.() ?? `need-${projectId}-${Date.now()}`,
         };
       }
-      await addLine.mutateAsync({ ...request, idempotencyKey: requestKey.current.key });
+      const created = await addLine.mutateAsync({
+        ...request,
+        idempotencyKey: requestKey.current.key,
+      });
+      // C-24: the piece's COM fabric is its own line, linked to the piece.
+      if (takesCom && created.selectionId) {
+        await addFabric.add(projectId, {
+          id: created.selectionId,
+          name: trimmedName,
+          project_room_id: roomId,
+          assignment_scope: request.assignmentScope,
+        });
+      }
       reset();
       onClose();
     } catch (cause) {
@@ -111,10 +128,20 @@ export function AddLineSheet({
             className={FIELD_CLASS}
           />
         </label>
+        <label className="flex items-center gap-2 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={takesCom}
+            onChange={(event) => setTakesCom(event.target.checked)}
+          />
+          <span className="text-[13px] text-[var(--color-charcoal)]">This piece takes COM</span>
+        </label>
       </div>
 
       <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-        It lands in {roomName} as a candidate — nothing is released until you say so.
+        {takesCom
+          ? `This adds two lines to ${roomName} as candidates: the piece, and its COM fabric linked to it. Nothing is released until you say so.`
+          : `It lands in ${roomName} as a candidate — nothing is released until you say so.`}
       </p>
 
       {error && (
@@ -133,11 +160,11 @@ export function AddLineSheet({
           actionKey="add-schedule-line"
           variant="primary"
           disabled={!canSave}
-          loading={addLine.isPending}
+          loading={pending}
           loadingLabel="Adding…"
           onClick={save}
         >
-          Add the line
+          {takesCom ? 'Add the pair' : 'Add the line'}
         </DocumentAction>
       </DocumentActionGroup>
     </DocSheet>
