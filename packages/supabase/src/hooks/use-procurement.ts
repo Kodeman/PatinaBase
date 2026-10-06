@@ -115,6 +115,79 @@ export interface POPayment {
   updated_at: string;
 }
 
+/** How a studio paid a vendor (00695 CHECK on both payment tables). */
+export type VendorPaymentMethodKind = 'card' | 'ach' | 'check' | 'wire' | 'cash' | 'other';
+
+/**
+ * One row of the append-only vendor payment ledger (00695). A void stamps
+ * voided_at / void_reason / voided_by; nothing else ever changes. The
+ * scheduled po_payments row's state and paid_date derive from the non-void
+ * sum of its ledger rows.
+ */
+export interface VendorPayment {
+  id: string;
+  organization_id: string | null;
+  purchase_order_id: string;
+  po_payment_id: string | null;
+  paid_on: string;
+  amount_cents: number;
+  currency_code: string;
+  method: VendorPaymentMethodKind;
+  payment_method_id: string | null;
+  reference: string | null;
+  receipt_document_path: string | null;
+  recorded_by: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
+  voided_by: string | null;
+  created_at: string;
+}
+
+/** A studio's saved way to pay vendors (00695). Stores the last four digits only. */
+export interface StudioPaymentMethod {
+  id: string;
+  organization_id: string;
+  label: string;
+  kind: VendorPaymentMethodKind;
+  last4: string | null;
+  holder_member_id: string | null;
+  archived_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecordVendorPaymentInput {
+  purchaseOrderId: string;
+  /** The scheduled po_payments row this pays toward; omit for an unscheduled payment. */
+  poPaymentId?: string;
+  /** Whole cents. Required without poPaymentId; defaults to the row's unpaid remainder with it. */
+  amountCents?: number;
+  /** YYYY-MM-DD. Defaults to the caller's calendar day. */
+  paidOn?: string;
+  /** Defaults to the payment method's kind, else 'other'. */
+  method?: VendorPaymentMethodKind;
+  paymentMethodId?: string;
+  reference?: string;
+  receiptDocumentPath?: string;
+}
+
+/**
+ * Create (no id) or update (id) a studio payment method. Keys left out keep
+ * their stored value; null clears last4 / holderMemberId.
+ */
+export interface UpsertStudioPaymentMethodInput {
+  id?: string;
+  /** Required on create only when the caller belongs to more than one studio. */
+  organizationId?: string;
+  label?: string;
+  kind?: VendorPaymentMethodKind;
+  /** Exactly four digits. Never send a full card or account number. */
+  last4?: string | null;
+  holderMemberId?: string | null;
+  archived?: boolean;
+}
+
 export interface POFilters {
   projectId?: string;
   vendorId?: string;
@@ -164,13 +237,6 @@ export interface LogPOAcknowledgmentInput {
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Today's ISO date (YYYY-MM-DD), used as default paid_date.
- */
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /**
  * The caller's own calendar day (YYYY-MM-DD), sent as `p_local_date` so the
@@ -596,57 +662,188 @@ export function useLogPOAcknowledgment(options?: { errorSurface?: 'inline' }) {
   });
 }
 
+// ─── Vendor payment ledger (00695, US-16 C-11) ──────────────────────────────
+// po_payments is read-only to the studio since 00695: a payment is a
+// vendor_payments row written by record_vendor_payment, and the scheduled
+// row's state / paid_date derive from the non-void ledger sum. The 00184
+// deposit-paid → balance-due flip still fires server-side on that derived
+// transition, so a flipped sibling is visible only through the invalidated
+// caches, never the mutation's return value.
+
+async function recordVendorPayment(input: RecordVendorPaymentInput): Promise<VendorPayment> {
+  const supabase = getSupabase() as any;
+  const request: Record<string, unknown> = { paidOn: input.paidOn ?? localDay() };
+  if (input.poPaymentId !== undefined) request.poPaymentId = input.poPaymentId;
+  if (input.amountCents !== undefined) request.amountCents = input.amountCents;
+  if (input.method !== undefined) request.method = input.method;
+  if (input.paymentMethodId !== undefined) request.paymentMethodId = input.paymentMethodId;
+  if (input.reference !== undefined) request.reference = input.reference;
+  if (input.receiptDocumentPath !== undefined) request.receiptDocumentPath = input.receiptDocumentPath;
+
+  const { data, error } = await supabase.rpc('record_vendor_payment', {
+    p_po_id: input.purchaseOrderId,
+    p_request: request,
+  });
+  if (error) throw error;
+  return data as VendorPayment;
+}
+
+function invalidateVendorPaymentCaches(queryClient: QueryClient, purchaseOrderId: string): void {
+  queryClient.invalidateQueries({ queryKey: ['vendor-payments', purchaseOrderId] });
+  queryClient.invalidateQueries({ queryKey: ['po-payments', purchaseOrderId] });
+  queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+  queryClient.invalidateQueries({ queryKey: ['purchase-order', purchaseOrderId] });
+}
+
 /**
- * Mutation: logs a payment as paid. Sets paid_date = today (or supplied date),
- * state = 'paid'. Single UPDATE on the paid row — the deposit-paid →
- * sibling-balance-due flip is owned by the DB (migration 00184, Trigger D
- * `trg_deposit_paid_flips_balance`), which fires server-side on the
- * pending→paid transition when the parent split-pattern PO has already
- * shipped or delivered.
- *
- * Note for callers: the mutation's resolved value is only the updated payment
- * row. When the trigger flips the sibling balance row to 'due', that change
- * is visible exclusively via the invalidated `po-payments` /
- * `purchase-orders` caches — UI code that needs the flipped balance state
- * must read it from a query subscription, not from the mutation's return
- * value.
+ * Mutation: records a vendor payment through `record_vendor_payment` (00695).
+ * Partial and unscheduled payments are allowed. The RPC refuses Patina-catalog
+ * POs and Stripe-rail rows (those settle through Stripe only), and callers
+ * who are neither the project owner nor a non-guest studio co-member.
+ */
+export function useRecordVendorPayment(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: recordVendorPayment,
+    onSuccess: (_, { purchaseOrderId }) => {
+      invalidateVendorPaymentCaches(queryClient, purchaseOrderId);
+    },
+  });
+}
+
+/**
+ * Mutation: marks one scheduled payment row paid in full by recording its
+ * unpaid remainder through `record_vendor_payment` (00695). Resolves to the
+ * new ledger row; the row's derived 'paid' state arrives through the
+ * invalidated `po-payments` cache.
  */
 export function useLogPaymentPaid() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       paymentId,
-      purchaseOrderId: _purchaseOrderId,
+      purchaseOrderId,
       paidDate,
-      notes,
+      method,
+      paymentMethodId,
+      reference,
     }: {
       paymentId: string;
       purchaseOrderId: string;
       paidDate?: string;
-      notes?: string;
-    }): Promise<POPayment> => {
+      method?: VendorPaymentMethodKind;
+      paymentMethodId?: string;
+      reference?: string;
+    }): Promise<VendorPayment> =>
+      recordVendorPayment({
+        purchaseOrderId,
+        poPaymentId: paymentId,
+        paidOn: paidDate,
+        method,
+        paymentMethodId,
+        reference,
+      }),
+    onSuccess: (_, { purchaseOrderId }) => {
+      invalidateVendorPaymentCaches(queryClient, purchaseOrderId);
+    },
+  });
+}
+
+/**
+ * Mutation: voids a ledger row through `void_vendor_payment` (00695). The
+ * reason is required; the scheduled row's state re-derives without it.
+ */
+export function useVoidVendorPayment(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({
+      paymentId,
+      reason,
+    }: {
+      paymentId: string;
+      purchaseOrderId: string;
+      reason: string;
+    }): Promise<VendorPayment> => {
       const supabase = getSupabase() as any;
-
-      const updates: Record<string, unknown> = {
-        state: 'paid',
-        paid_date: paidDate ?? today(),
-      };
-      if (notes !== undefined) updates.notes = notes;
-
-      const { data: updated, error: updateError } = await supabase
-        .from('po_payments')
-        .update(updates)
-        .eq('id', paymentId)
-        .select()
-        .single();
-      if (updateError) throw updateError;
-
-      return updated as POPayment;
+      const { data, error } = await supabase.rpc('void_vendor_payment', {
+        p_payment_id: paymentId,
+        p_reason: reason,
+      });
+      if (error) throw error;
+      return data as VendorPayment;
     },
     onSuccess: (_, { purchaseOrderId }) => {
-      queryClient.invalidateQueries({ queryKey: ['po-payments', purchaseOrderId] });
-      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['purchase-order', purchaseOrderId] });
+      invalidateVendorPaymentCaches(queryClient, purchaseOrderId);
+    },
+  });
+}
+
+/**
+ * Query: the vendor payment ledger for one PO, voided rows included (a void
+ * is history, not deletion), oldest first.
+ */
+export function useVendorPayments(purchaseOrderId: string) {
+  return useQuery({
+    queryKey: ['vendor-payments', purchaseOrderId],
+    queryFn: async (): Promise<VendorPayment[]> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('vendor_payments')
+        .select('*')
+        .eq('purchase_order_id', purchaseOrderId)
+        .order('paid_on', { ascending: true })
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as VendorPayment[];
+    },
+    enabled: !!purchaseOrderId,
+  });
+}
+
+/**
+ * Query: the studio's live (unarchived) payment methods, ordered by label.
+ * RLS returns only methods of studios the caller is an active non-guest
+ * member of; pass organizationId to narrow to one studio.
+ */
+export function useStudioPaymentMethods(organizationId?: string) {
+  return useQuery({
+    queryKey: ['studio-payment-methods', organizationId ?? 'all'],
+    queryFn: async (): Promise<StudioPaymentMethod[]> => {
+      const supabase = getSupabase() as any;
+      let query = supabase.from('studio_payment_methods').select('*').is('archived_at', null);
+      if (organizationId) query = query.eq('organization_id', organizationId);
+      const { data, error } = await query.order('label', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as StudioPaymentMethod[];
+    },
+  });
+}
+
+/**
+ * Mutation: creates or updates a studio payment method through
+ * `upsert_studio_payment_method` (00695). The RPC refuses anything but four
+ * digits in last4 and a long digit run in the label.
+ */
+export function useUpsertStudioPaymentMethod(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async (input: UpsertStudioPaymentMethodInput): Promise<StudioPaymentMethod> => {
+      const supabase = getSupabase() as any;
+      const request: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(input)) {
+        if (value !== undefined) request[key] = value;
+      }
+      const { data, error } = await supabase.rpc('upsert_studio_payment_method', {
+        p_request: request,
+      });
+      if (error) throw error;
+      return data as StudioPaymentMethod;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['studio-payment-methods'] });
     },
   });
 }
@@ -830,47 +1027,6 @@ export function useSetPurchaseOrderShipTo(options?: { errorSurface?: 'inline' })
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-order', po.id] });
       invalidateFfeCaches(queryClient, po.project_id);
-    },
-  });
-}
-
-/**
- * Mutation: manually advances a po_payment row to 'due' state (with an
- * optional due_date). The automatic flips — deposit-paid and PO-shipped /
- * delivered on split patterns — are owned by the 00184 DB triggers; this
- * hook remains for explicit, designer-initiated advances outside those
- * paths (e.g. a milestone the vendor invoiced early).
- */
-export function useAdvancePaymentToDue() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      paymentId,
-      purchaseOrderId: _purchaseOrderId,
-      dueDate,
-    }: {
-      paymentId: string;
-      purchaseOrderId: string;
-      dueDate?: string;
-    }): Promise<POPayment> => {
-      const supabase = getSupabase() as any;
-
-      const updates: Record<string, unknown> = { state: 'due' };
-      if (dueDate !== undefined) updates.due_date = dueDate;
-
-      const { data, error } = await supabase
-        .from('po_payments')
-        .update(updates)
-        .eq('id', paymentId)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as POPayment;
-    },
-    onSuccess: (_, { purchaseOrderId }) => {
-      queryClient.invalidateQueries({ queryKey: ['po-payments', purchaseOrderId] });
-      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['purchase-order', purchaseOrderId] });
     },
   });
 }

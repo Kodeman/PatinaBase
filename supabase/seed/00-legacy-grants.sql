@@ -19254,6 +19254,132 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00693_field_capture_mint_carry.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.products_carry_field_capture_fields() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00694_ffe_spec_seed_from_product.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._ffe_spec_seed_from_product(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.studio_payment_methods FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.studio_payment_methods TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.studio_payment_methods TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.vendor_payments_guard_append_only() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.vendor_payments_derive_po_payment_state() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.vendor_payments FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.vendor_payments TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE ON TABLE public.vendor_payments TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.po_payments FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT SELECT ON TABLE public.po_payments TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.po_payments TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.upsert_studio_payment_method(jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.upsert_studio_payment_method(jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_vendor_payment(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_vendor_payment(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.void_vendor_payment(uuid, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.void_vendor_payment(uuid, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.update_po_payment_schedule(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00695_vendor_payments.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.update_po_payment_schedule(uuid, jsonb) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 20260910152111_create_contact_messages.sql
 DO $g$ BEGIN
   REVOKE ALL PRIVILEGES ON TABLE public.contact_messages FROM PUBLIC, anon, authenticated, service_role;
