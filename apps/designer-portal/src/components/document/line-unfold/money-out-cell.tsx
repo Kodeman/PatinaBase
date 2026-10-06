@@ -1,76 +1,73 @@
-import { fmtDay, fmtUsd } from '@/lib/document/format';
-import { CellSub, CellValue, UnfoldCell } from './cell';
+import {
+  useFfeInvoiceCoverage,
+  type FfeItemCoverage,
+} from '@patina/supabase';
+import { CellSub, UnfoldCell } from './cell';
+import { PoMoneyOut, type MoneyOutPayment } from './record-payment';
 
-/** One `po_payments` row, as far as the line's PO embed carries it. */
-export interface MoneyOutPayment {
-  /** 'deposit' | 'balance' | 'milestone'. */
-  kind: string;
-  /** 'pending' | 'due' | 'paid' | 'refunded'. */
-  state: string;
-  due_date?: string | null;
-  paid_date?: string | null;
-  amount_cents?: number | null;
-  label?: string | null;
-}
+export type { MoneyOutPayment } from './record-payment';
 
-const KIND_WORD: Record<string, string> = {
-  deposit: 'Deposit',
-  balance: 'Balance',
-  milestone: 'Payment',
-};
-
-function paymentLine(p: MoneyOutPayment): string {
-  const name = p.label?.trim() || KIND_WORD[p.kind] || 'Payment';
-  const amount = p.amount_cents != null ? ` ${fmtUsd(p.amount_cents)}` : '';
-  const when =
-    p.state === 'paid'
-      ? p.paid_date
-        ? `paid ${fmtDay(p.paid_date)}`
-        : 'paid'
-      : p.state === 'refunded'
-        ? 'refunded'
-        : p.due_date
-          ? `due ${fmtDay(p.due_date)}`
-          : 'not yet due';
-  return `${name}${amount} · ${when}`;
+/**
+ * Fronting (D2 §M5.7): whether the client has paid for this line yet, read
+ * from `get_ffe_invoice_coverage`. A fact beside the money out, never a block
+ * (R9). No entry in a loaded map means the line is not visible to the caller,
+ * so it says nothing rather than guess.
+ */
+export function frontingFact(coverage: FfeItemCoverage | undefined): string | null {
+  if (!coverage) return null;
+  if (coverage.coverage === 'paid') return 'Client has paid for this line';
+  if (coverage.coverage === 'uninvoiced') return 'Client not yet invoiced for this line';
+  if (coverage.invoiceStatus === 'draft') return 'Client invoice still in draft';
+  if (coverage.invoiceStatus === 'partially_paid') return 'Client has paid part of this line';
+  return 'Client deposit not yet received';
 }
 
 /**
- * C-14 cell 5 — money out: the PO's payment schedule, one row per payment.
- * The slot P1-5 fills (amounts and the record-payment act). A maker-lane
- * order was paid at checkout and reads only that (V1). With nothing recorded
- * it says so, rather than implying nothing is owed.
+ * C-14 cell 5 — money out (C-11, D1-11): the PO's payment schedule with each
+ * row's state, the payments recorded against it, and the record / void acts.
+ * A Patina-catalog order settles through checkout and reads its rows without
+ * amounts or acts (V1). With no PO, nothing is owed yet.
  */
 export function MoneyOutCell({
-  hasPo,
-  payments,
-  paidAtCheckout = false,
+  po,
+  projectId,
+  itemId,
 }: {
-  hasPo: boolean;
-  payments: readonly MoneyOutPayment[] | null | undefined;
-  paidAtCheckout?: boolean;
+  po: {
+    id: string;
+    is_patina_catalog?: boolean | null;
+    payments?: readonly MoneyOutPayment[] | null;
+  } | null;
+  projectId: string;
+  itemId: string;
 }) {
-  const rows = payments ?? [];
   return (
     <UnfoldCell head="Money out" testId="line-money-out-cell">
-      {paidAtCheckout ? (
-        <CellValue>Paid at checkout</CellValue>
-      ) : !hasPo ? (
+      {!po ? (
         <CellSub>Nothing owed until it is ordered</CellSub>
-      ) : rows.length === 0 ? (
-        <CellSub>No payments recorded</CellSub>
       ) : (
-        <ul>
-          {rows.map((p, i) => (
-            <li
-              key={`${p.kind}-${i}`}
-              className="text-[11px] text-[var(--color-charcoal)]"
-            >
-              {paymentLine(p)}
-            </li>
-          ))}
-        </ul>
+        <>
+          <PoMoneyOut
+            purchaseOrderId={po.id}
+            projectId={projectId}
+            isPatinaCatalog={Boolean(po.is_patina_catalog)}
+            fallback={po.payments}
+            receiptAnchor={{ kind: 'line', anchorId: itemId }}
+          />
+          <FrontingFact projectId={projectId} itemId={itemId} />
+        </>
       )}
     </UnfoldCell>
+  );
+}
+
+function FrontingFact({ projectId, itemId }: { projectId: string; itemId: string }) {
+  const { data: coverage } = useFfeInvoiceCoverage(projectId);
+  const fact = frontingFact(coverage?.[itemId]);
+  if (!fact) return null;
+  return (
+    <p data-testid="money-out-fronting" className="mt-1 text-[11px] text-[var(--text-muted)]">
+      {fact}
+    </p>
   );
 }

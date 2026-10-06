@@ -278,11 +278,7 @@ export function LineUnfold({
           showAdvance={next?.kind !== 'advance'}
           onAdvanced={setAdvancedTo}
         />
-        <MoneyOutCell
-          hasPo={Boolean(po)}
-          payments={po?.payments}
-          paidAtCheckout={Boolean(po?.is_patina_catalog)}
-        />
+        <MoneyOutCell po={po} projectId={projectId} itemId={item.id} />
         <ReceivingCell
           item={item}
           stampKind={stamp.kind}
