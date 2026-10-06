@@ -19632,6 +19632,24 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00714_spec_resolve_product_provenance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._spec_book_resolve_field(jsonb,jsonb,jsonb,jsonb,jsonb,timestamptz,timestamptz,timestamptz,timestamptz,text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00714_spec_resolve_product_provenance.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._spec_book_resolve_field(jsonb,jsonb,jsonb,jsonb,jsonb,timestamptz,timestamptz,timestamptz,timestamptz,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00714_spec_resolve_product_provenance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.spec_ffe_drop_edited_product_provenance() FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00715_find_vendor_match.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.find_vendor_match(text, text) FROM PUBLIC, anon;
@@ -19641,6 +19659,30 @@ END $g$;
 -- 00715_find_vendor_match.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.find_vendor_match(text, text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00716_phase1_review_hardening.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.flip_pending_balance_to_due(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00716_phase1_review_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.flip_pending_balance_to_due(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00716_phase1_review_hardening.sql
+DO $g$ BEGIN
+  REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.procurement_notifications FROM anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00716_phase1_review_hardening.sql
+DO $g$ BEGIN
+  GRANT UPDATE (read_at) ON public.procurement_notifications TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
