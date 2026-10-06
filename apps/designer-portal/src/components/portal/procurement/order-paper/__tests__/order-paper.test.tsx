@@ -59,6 +59,17 @@ jest.mock('@patina/supabase', () => ({
   }),
 }));
 
+// C-24: a paper with no COM pair; the slot's own suite is order-paper-com.test.tsx.
+jest.mock('../com-slot', () => ({
+  useComPaper: () => ({
+    isFabricPaper: false,
+    workroomName: null,
+    facts: new Map(),
+    orderLocations: <T,>(locations: T[]) => locations,
+    linkSupplies: async () => undefined,
+  }),
+  ComLineNote: () => null,
+}));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),

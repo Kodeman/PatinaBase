@@ -538,3 +538,76 @@ export function useRecordPoShipment(options?: ErrorSurfaceOptions) {
     },
   });
 }
+
+// --- C-24 custom piece (SQ-424) ---
+
+/** One live line's pair facts: what it supplies, and the PO it is on. */
+export interface FfePairLine {
+  id: string;
+  name: string;
+  project_room_id: string | null;
+  assignment_scope: string | null;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  purchase_order_id: string | null;
+  parent_ffe_item_id: string | null;
+  purchase_order: {
+    id: string;
+    po_number: string | null;
+    status: string;
+    vendor_id: string;
+    supplies_purchase_order_id: string | null;
+  } | null;
+}
+
+/**
+ * The project's live lines with their pair facts (parent_ffe_item_id, the PO
+ * and the PO it supplies). Under the project-ffe-items prefix, so every FF&E
+ * write that invalidates the project's lines refreshes it.
+ */
+export function useFfePairLines(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['project-ffe-items', projectId ?? '', 'pair-lines'] as const,
+    queryFn: async (): Promise<FfePairLine[]> => {
+      const { data, error } = await getSupabase()
+        .from('project_ffe_items')
+        .select(
+          'id, name, project_room_id, assignment_scope, vendor_id, vendor_name, purchase_order_id, parent_ffe_item_id, purchase_order:purchase_orders!purchase_order_id(id, po_number, status, vendor_id, supplies_purchase_order_id)',
+        )
+        .eq('project_id', projectId as string)
+        .is('removed_at', null)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as FfePairLine[];
+    },
+    enabled: !!projectId,
+  });
+}
+
+export interface FfeComSpecRow {
+  id: string;
+  row_version: number;
+  com_spec: Json | null;
+}
+
+/**
+ * A line's COM facts with the row_version useUpdateFfeComSpec needs. Under
+ * the project-ffe-items prefix, which that mutation invalidates.
+ */
+export function useFfeComSpec(projectId: string | null | undefined, ffeItemId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['project-ffe-items', projectId ?? '', 'com-spec', ffeItemId ?? ''] as const,
+    queryFn: async (): Promise<FfeComSpecRow | null> => {
+      const { data, error } = await getSupabase()
+        .from('project_ffe_specs')
+        .select('id, row_version, com_spec')
+        .eq('ffe_item_id', ffeItemId as string)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as FfeComSpecRow | null) ?? null;
+    },
+    enabled: !!projectId && !!ffeItemId,
+  });
+}

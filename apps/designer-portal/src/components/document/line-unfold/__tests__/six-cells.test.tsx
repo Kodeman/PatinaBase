@@ -41,6 +41,10 @@ jest.mock('../claim-clock', () => ({
 jest.mock('@/components/portal/procurement/order-paper', () => ({
   OrderPaper: () => null,
 }));
+// C-24: the pair, COM facts and submittals are com-piece.test.tsx's.
+jest.mock('@/components/document/buying/com-piece', () => ({
+  ComPiece: () => <div data-testid="com-piece" />,
+}));
 jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
   LogInspectionDrawer: () => null,
 }));

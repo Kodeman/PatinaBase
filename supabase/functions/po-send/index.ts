@@ -65,7 +65,10 @@ import {
   callerMaySendPurchaseOrder,
   checkPoRepricingGate,
   checkPoTotalsCoherence,
+  comArrivingSeparately,
   PO_OUT_OF_SYNC_DETAIL,
+  type SupplyingLine,
+  type SupplyingPurchaseOrder,
   parsePoSendBody,
   paymentPatternLabel,
   paymentRowLabel,
@@ -277,7 +280,7 @@ Deno.serve(async (req: Request) => {
         configuration_id, configuration_snapshot,
         configuration_snapshot_hash, configuration_locked_at,
         sku, material, finish, color_fabric, selected_dimensions,
-        na_declarations
+        na_declarations, com_spec
       ),
       product:products!product_id(sku, finish, materials, colors, dimensions)
     `,
@@ -310,6 +313,30 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'lookup_failed', detail: paymentsError.message }, 500);
   }
   const payments = (paymentsData ?? []) as PoPaymentRow[];
+
+  // ── COM arriving separately (C-24) ──────────────────────────────────────
+  // Fabric POs that supply this one, and the pieces their lines feed. A
+  // lookup failure only loses the note, never the send.
+  let supplyingOrders: SupplyingPurchaseOrder[] = [];
+  let supplyingLines: SupplyingLine[] = [];
+  const { data: supplyingData, error: supplyingError } = await admin
+    .from('purchase_orders')
+    .select('id, po_number, vendor:vendors!purchase_orders_vendor_id_fkey(name)')
+    .eq('supplies_purchase_order_id', po.id)
+    .neq('status', 'cancelled');
+  if (supplyingError) {
+    console.warn('po-send: supplying orders lookup failed', supplyingError);
+  } else if (supplyingData && supplyingData.length > 0) {
+    supplyingOrders = supplyingData as unknown as SupplyingPurchaseOrder[];
+    const { data: linesData, error: linesError } = await admin
+      .from('project_ffe_items')
+      .select('purchase_order_id, parent_ffe_item_id')
+      .in('purchase_order_id', supplyingOrders.map((order) => order.id))
+      .is('removed_at', null);
+    if (linesError) console.warn('po-send: supplying lines lookup failed', linesError);
+    else supplyingLines = (linesData ?? []) as SupplyingLine[];
+  }
+  const comArriving = comArrivingSeparately(items, supplyingOrders, supplyingLines);
 
   // ── Send-time consistency guard (W4-T4) ─────────────────────────────────
   // The document is only coherent when the line-derived trade total (the sum
@@ -421,7 +448,10 @@ Deno.serve(async (req: Request) => {
     // never retail or markup). Empty array for an unconfigured line with no
     // flat spec fields, which renders exactly as before.
     // Unconfigured lines resolve each flat field spec → product master (C-06).
-    const configurationLines = vendorConfigurationLines(item.spec, item.product);
+    const configurationLines = [
+      ...vendorConfigurationLines(item.spec, item.product),
+      ...(comArriving.get(item.id) ?? []),
+    ];
     return {
       name: item.name,
       room: item.room?.name ?? null,
