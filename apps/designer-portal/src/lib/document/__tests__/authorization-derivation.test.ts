@@ -4,6 +4,7 @@ import {
   currentLineCents,
   depositCents,
   deriveLineAuthorization,
+  deriveOrderReadiness,
   eligibility,
   furnishingsDepositPercent,
   nextInstrumentNumber,
@@ -14,6 +15,8 @@ import {
   scheduledContributionCents,
   signableCents,
   type InstrumentLike,
+  type LineAuthorization,
+  type OrderLineInput,
   type ScheduleLineInput,
 } from '../authorization-derivation';
 
@@ -487,5 +490,160 @@ describe('scheduleDrift', () => {
     expect(
       scheduleDrift({ stampedCents: null, currentCents: 10800000 }),
     ).toEqual({ drifted: false, deltaCents: 0, percent: 0 });
+  });
+});
+
+describe('deriveOrderReadiness — the one readiness rule (C-11a)', () => {
+  const ready = (over: Partial<OrderLineInput> = {}): OrderLineInput => ({
+    ...line(),
+    design_disposition: 'selected',
+    vendor_id: 'vendor-1',
+    purchase_order_id: null,
+    ...over,
+  });
+  const residential = { isCommercialOrigin: false };
+  const authorizedClear: LineAuthorization = {
+    track: 'authorized',
+    number: 3,
+    signedLineTotalCents: 420000,
+    depositClear: true,
+    deltaCents: null,
+  };
+  const UNSIGNED = 'No signed agreement behind this yet. You can still order.';
+
+  it('is ready on a residential line the database would accept, with the R-PB1 warning only', () => {
+    expect(deriveOrderReadiness(ready(), residential)).toEqual({
+      ready: true,
+      reasons: [],
+      warnings: [UNSIGNED],
+    });
+  });
+
+  it('never blocks a residential line on the missing agreement, whatever its stage', () => {
+    // `approved` is never written on residential jobs (D3 §2.5): a specified
+    // line must order.
+    const result = deriveOrderReadiness(
+      ready({ status: 'specified' }),
+      residential,
+    );
+    expect(result.ready).toBe(true);
+    expect(result.warnings).toEqual([UNSIGNED]);
+  });
+
+  it('drops the warning once the line carries a client approval', () => {
+    expect(
+      deriveOrderReadiness(ready({ status: 'approved' }), residential).warnings,
+    ).toEqual([]);
+    expect(
+      deriveOrderReadiness(ready(), {
+        isCommercialOrigin: false,
+        lineAuth: authorizedClear,
+      }).warnings,
+    ).toEqual([]);
+  });
+
+  it.each<[string, Partial<OrderLineInput>, string]>([
+    ['no maker', { vendor_id: null }, 'Needs a maker'],
+    ['no client price', { unit_price_cents: null }, 'Needs a client price'],
+    ['a zero client price', { unit_price_cents: 0 }, 'Needs a client price'],
+    ['a candidate', { design_disposition: 'candidate' }, 'Not selected yet'],
+    ['no disposition', { design_disposition: null }, 'Not selected yet'],
+    [
+      'a removed line',
+      { removed_at: '2026-10-01T00:00:00Z' },
+      'Removed from the job',
+    ],
+    ['an open decision', { blocked: true }, 'Waiting on a decision'],
+    [
+      'a line on a numbered PO',
+      { purchase_order_id: 'po-1', purchase_order: { po_number: 'PO-1042' } },
+      'Already on PO-1042',
+    ],
+    [
+      'a line on an unnumbered PO',
+      { purchase_order_id: 'po-1', purchase_order: null },
+      'Already on a purchase order',
+    ],
+    [
+      'a trade presence line',
+      { trade_scope_document_id: 'doc-1' },
+      'Trade work is engaged on its scope, not ordered',
+    ],
+  ])('refuses %s, in words', (_label, over, reason) => {
+    const result = deriveOrderReadiness(ready(over), residential);
+    expect(result.ready).toBe(false);
+    expect(result.reasons).toEqual([reason]);
+  });
+
+  it('reads an allowance at its ceiling, not its unit price', () => {
+    const allowance = ready({
+      item_type: 'allowance',
+      unit_price_cents: null,
+      budget_max_cents: 200000,
+    });
+    expect(deriveOrderReadiness(allowance, residential).ready).toBe(true);
+    expect(
+      deriveOrderReadiness({ ...allowance, budget_max_cents: 0 }, residential)
+        .reasons,
+    ).toEqual(['Needs a client price']);
+  });
+
+  it('lists every reason at once', () => {
+    expect(
+      deriveOrderReadiness(
+        ready({
+          vendor_id: null,
+          unit_price_cents: null,
+          design_disposition: 'candidate',
+        }),
+        residential,
+      ).reasons,
+    ).toEqual(['Not selected yet', 'Needs a maker', 'Needs a client price']);
+  });
+
+  describe('the commercial gate', () => {
+    it('waits on the authorization when the line is not authorized', () => {
+      const unauthorized: (LineAuthorization | undefined)[] = [
+        undefined,
+        { track: 'none' },
+        { track: 'awaiting', number: 2 },
+      ];
+      for (const lineAuth of unauthorized) {
+        expect(
+          deriveOrderReadiness(ready(), { isCommercialOrigin: true, lineAuth }),
+        ).toEqual({
+          ready: false,
+          reasons: ['Waiting on the authorization'],
+          warnings: [],
+        });
+      }
+    });
+
+    it('waits on the deposit once authorized', () => {
+      expect(
+        deriveOrderReadiness(ready(), {
+          isCommercialOrigin: true,
+          lineAuth: { ...authorizedClear, depositClear: false },
+        }).reasons,
+      ).toEqual(['Waiting on the deposit (A3)']);
+    });
+
+    it('is ready, without a warning, once authorized and the deposit is clear', () => {
+      expect(
+        deriveOrderReadiness(ready(), {
+          isCommercialOrigin: true,
+          lineAuth: authorizedClear,
+        }),
+      ).toEqual({ ready: true, reasons: [], warnings: [] });
+    });
+
+    it('still mirrors the database on an authorized line', () => {
+      expect(
+        deriveOrderReadiness(ready({ vendor_id: null }), {
+          isCommercialOrigin: true,
+          lineAuth: authorizedClear,
+        }).reasons,
+      ).toEqual(['Needs a maker']);
+    });
   });
 });
