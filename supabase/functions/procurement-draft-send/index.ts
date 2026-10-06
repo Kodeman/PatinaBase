@@ -10,12 +10,16 @@
 //      caller's Authorization header, so RLS (can_buy_for_project, else
 //      is_active_org_member) is the co-membership re-check. Not readable → 404,
 //      the same answer as a draft that does not exist;
-//   3. requires status awaiting_review (sent and discarded drafts never go);
-//   4. sends the stored subject and body through the sendCompliantEmail
+//   3. requires status awaiting_review (sent and discarded drafts never go),
+//      then claims it AS THE CALLER with claim_procurement_draft_for_send
+//      (awaiting_review → sending, 00718), so two requests cannot both send;
+//   4. sends the claimed subject and body through the sendCompliantEmail
 //      chokepoint, operational, reply-to the sending member, keyed for
-//      idempotency on the draft id;
+//      idempotency on the draft id; a send that does not go releases the
+//      claim (release_procurement_draft_claim);
 //   5. marks the draft sent with a service-role call to
-//      mark_procurement_draft_sent(draft, caller, provider message id).
+//      mark_procurement_draft_sent(draft, caller, provider message id), which
+//      accepts only the caller's claim.
 // No service-role bearer is compared to anything here: the caller is whoever
 // GoTrue says the JWT belongs to.
 //
@@ -26,10 +30,35 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "../_shared/send-email.ts";
 import {
   type CallerUser,
+  type ClaimResult,
   handleProcurementDraftSend,
   type ProcurementDraft,
   type ProcurementDraftSendDeps,
 } from "./lib.ts";
+
+interface DraftRow {
+  id: string;
+  organization_id: string | null;
+  project_id: string | null;
+  kind: string;
+  to_email: string | null;
+  subject: string;
+  body: string;
+  status: string;
+}
+
+function toDraft(data: DraftRow): ProcurementDraft {
+  return {
+    id: data.id,
+    organizationId: data.organization_id ?? null,
+    projectId: data.project_id ?? null,
+    kind: data.kind,
+    toEmail: data.to_email ?? null,
+    subject: data.subject,
+    body: data.body,
+    status: data.status,
+  };
+}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -73,16 +102,30 @@ const deps: ProcurementDraftSendDeps = {
       return null;
     }
     if (!data) return null;
-    return {
-      id: data.id,
-      organizationId: data.organization_id ?? null,
-      projectId: data.project_id ?? null,
-      kind: data.kind,
-      toEmail: data.to_email ?? null,
-      subject: data.subject,
-      body: data.body,
-      status: data.status,
-    };
+    return toDraft(data);
+  },
+
+  claimForSend: async (req, draftId): Promise<ClaimResult> => {
+    const caller = asCaller(req);
+    if (!caller) return { ok: false, reason: "not_found" };
+    const { data, error } = await caller.rpc("claim_procurement_draft_for_send", { p_draft_id: draftId });
+    if (error) {
+      // draft_not_awaiting_review: draft <id> is <status>
+      if (error.message.includes("draft_not_awaiting_review")) {
+        return { ok: false, reason: "conflict", status: /is (\w+)$/.exec(error.message)?.[1] ?? "unknown" };
+      }
+      if (error.code === "42501") return { ok: false, reason: "not_found" };
+      return { ok: false, reason: "error", detail: error.message };
+    }
+    if (!data) return { ok: false, reason: "error", detail: "claim returned no draft" };
+    return { ok: true, draft: toDraft(data as DraftRow) };
+  },
+
+  releaseClaim: async (req, draftId) => {
+    const caller = asCaller(req);
+    if (!caller) return { error: "no caller" };
+    const { error } = await caller.rpc("release_procurement_draft_claim", { p_draft_id: draftId });
+    return error ? { error: error.message } : {};
   },
 
   sendEmail: async (input) => {

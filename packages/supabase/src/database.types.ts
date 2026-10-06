@@ -31845,6 +31845,7 @@ export type Database = {
           method: string
           organization_id: string | null
           paid_on: string
+          payee: string
           payment_method_id: string | null
           po_payment_id: string | null
           purchase_order_id: string
@@ -31864,6 +31865,7 @@ export type Database = {
           method: string
           organization_id?: string | null
           paid_on: string
+          payee?: string
           payment_method_id?: string | null
           po_payment_id?: string | null
           purchase_order_id: string
@@ -31883,6 +31885,7 @@ export type Database = {
           method?: string
           organization_id?: string | null
           paid_on?: string
+          payee?: string
           payment_method_id?: string | null
           po_payment_id?: string | null
           purchase_order_id?: string
@@ -35546,6 +35549,48 @@ export type Database = {
         }
         Returns: number
       }
+      _compose_receiver_inbound_draft: {
+        Args: {
+          p_carrier: string
+          p_eta: string
+          p_po_id: string
+          p_shipment_id: string
+          p_shipped_on: string
+          p_tracking: string
+        }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
       _configuration_com_color_fabric: {
         Args: { p_com_details: Json }
@@ -38227,6 +38272,41 @@ export type Database = {
           p_stripe_customer_id: string
         }
         Returns: Json
+      }
+      claim_procurement_draft_for_send: {
+        Args: { p_draft_id: string }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       claim_proposal_send_dispatch: {
         Args: {
@@ -42483,6 +42563,41 @@ export type Database = {
           p_window_id: string
         }
         Returns: string
+      }
+      release_procurement_draft_claim: {
+        Args: { p_draft_id: string }
+        Returns: {
+          ack_id: string | null
+          body: string
+          composed_by: string
+          created_at: string
+          discarded_at: string | null
+          discarded_by: string | null
+          edited_at: string | null
+          edited_by: string | null
+          exception_id: string | null
+          id: string
+          kind: string
+          message_id: string | null
+          organization_id: string | null
+          project_id: string | null
+          purchase_order_id: string | null
+          sample_id: string | null
+          sent_at: string | null
+          sent_by: string | null
+          shipment_id: string | null
+          status: string
+          subject: string
+          to_contact_id: string | null
+          to_email: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "procurement_drafts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       release_proposal_send_dispatch: {
         Args: { p_claim_token: string; p_dispatch_id: string; p_error: string }

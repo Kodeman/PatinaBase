@@ -41,12 +41,29 @@ function harness(opts: {
 }) {
   const sends: SendEmailInput[] = [];
   const marks: Array<{ draftId: string; sentBy: string; messageId: string | null }> = [];
+  const claims: string[] = [];
+  const releases: string[] = [];
   const caller = opts.caller === undefined ? MEMBER : opts.caller;
   const readers = opts.readers ?? [MEMBER.id];
+  const rows = opts.rows ?? {};
   const deps: ProcurementDraftSendDeps = {
     getCallerUser: () => Promise.resolve(caller),
     loadDraftAsCaller: (_req, id) =>
-      Promise.resolve(caller && readers.includes(caller.id) ? (opts.rows?.[id] ?? null) : null),
+      Promise.resolve(caller && readers.includes(caller.id) && rows[id] ? { ...rows[id] } : null),
+    // claim_procurement_draft_for_send: one row lock, so one claim wins.
+    claimForSend: (_req, id) => {
+      const row = rows[id];
+      if (!caller || !readers.includes(caller.id) || !row) return Promise.resolve({ ok: false, reason: "not_found" });
+      if (row.status !== "awaiting_review") return Promise.resolve({ ok: false, reason: "conflict", status: row.status });
+      row.status = "sending";
+      claims.push(id);
+      return Promise.resolve({ ok: true, draft: { ...row } });
+    },
+    releaseClaim: (_req, id) => {
+      releases.push(id);
+      if (rows[id]) rows[id].status = "awaiting_review";
+      return Promise.resolve({});
+    },
     sendEmail: (input) => {
       sends.push(input);
       return opts.send ? opts.send(input) : Promise.resolve({ success: true, id: "msg-123" });
@@ -56,7 +73,7 @@ function harness(opts: {
       return Promise.resolve(opts.markError ? { error: opts.markError } : {});
     },
   };
-  return { deps, sends, marks };
+  return { deps, sends, marks, claims, releases, rows };
 }
 
 function post(body: unknown): Request {
@@ -82,6 +99,51 @@ Deno.test("a co-member sends the stored draft and it is marked sent with the pro
   assertStringIncludes(sends[0].html, "Your ack lists Walnut 04.<br>Our PO says Walnut 07 Smoke.");
 
   assertEquals(marks, [{ draftId: "draft-1", sentBy: MEMBER.id, messageId: "msg-123" }]);
+});
+
+Deno.test("the send claims the draft first and sends only what it claimed", async () => {
+  const h = harness({ rows: { "draft-1": draft() } });
+  const res = await handleProcurementDraftSend(post({ draftId: "draft-1" }), h.deps);
+  assertEquals(res.status, 200);
+  assertEquals(h.claims, ["draft-1"]);
+  assertEquals(h.releases, []);
+  assertEquals(h.rows["draft-1"].status, "sending");
+});
+
+Deno.test("two concurrent sends of one draft: one claim wins, the other is 409 and sends nothing", async () => {
+  const h = harness({ rows: { "draft-1": draft() } });
+  const [a, b] = await Promise.all([
+    handleProcurementDraftSend(post({ draftId: "draft-1" }), h.deps),
+    handleProcurementDraftSend(post({ draftId: "draft-1" }), h.deps),
+  ]);
+  assertEquals([a.status, b.status].sort(), [200, 409]);
+  const loser = a.status === 409 ? a : b;
+  assertEquals((await loser.json()).error, "draft_not_awaiting_review");
+  assertEquals(h.sends.length, 1);
+  assertEquals(h.marks.length, 1);
+  assertEquals(h.claims, ["draft-1"]);
+});
+
+Deno.test("a claim lost after the read is 409 with the claimed status, and nothing sends", async () => {
+  // The read saw awaiting_review; another request claimed it before this one.
+  const h = harness({ rows: { "draft-1": draft({ status: "sending" }) } });
+  const deps = { ...h.deps, loadDraftAsCaller: () => Promise.resolve(draft()) };
+  const res = await handleProcurementDraftSend(post({ draftId: "draft-1" }), deps);
+  assertEquals(res.status, 409);
+  assertEquals(await res.json(), { error: "draft_not_awaiting_review", status: "sending" });
+  assertEquals(h.sends.length + h.marks.length + h.releases.length, 0);
+});
+
+Deno.test("a claim that fails for another reason is 500 claim_failed and nothing sends", async () => {
+  const h = harness({ rows: { "draft-1": draft() } });
+  const deps = {
+    ...h.deps,
+    claimForSend: () => Promise.resolve({ ok: false as const, reason: "error" as const, detail: "db down" }),
+  };
+  const res = await handleProcurementDraftSend(post({ draftId: "draft-1" }), deps);
+  assertEquals(res.status, 500);
+  assertEquals((await res.json()).error, "claim_failed");
+  assertEquals(h.sends.length + h.marks.length, 0);
 });
 
 Deno.test("an outsider gets the same 404 as a missing draft, and nothing sends", async () => {
@@ -129,7 +191,7 @@ Deno.test("a draft with no recipient is 422 and never sends", async () => {
   assertEquals(sends.length + marks.length, 0);
 });
 
-Deno.test("a failed or suppressed send leaves the draft awaiting review", async () => {
+Deno.test("a failed, thrown or suppressed send releases the claim back to awaiting review", async () => {
   const failed = harness({
     rows: { "draft-1": draft() },
     send: () => Promise.resolve({ success: false, error: "provider down" }),
@@ -137,6 +199,17 @@ Deno.test("a failed or suppressed send leaves the draft awaiting review", async 
   const res = await handleProcurementDraftSend(post({ draftId: "draft-1" }), failed.deps);
   assertEquals(res.status, 502);
   assertEquals(failed.marks.length, 0);
+  assertEquals(failed.releases, ["draft-1"]);
+  assertEquals(failed.rows["draft-1"].status, "awaiting_review");
+
+  const thrown = harness({
+    rows: { "draft-1": draft() },
+    send: () => Promise.reject(new Error("socket hang up")),
+  });
+  const res1 = await handleProcurementDraftSend(post({ draftId: "draft-1" }), thrown.deps);
+  assertEquals(res1.status, 502);
+  assertEquals(thrown.releases, ["draft-1"]);
+  assertEquals(thrown.rows["draft-1"].status, "awaiting_review");
 
   const suppressed = harness({
     rows: { "draft-1": draft() },
@@ -146,15 +219,20 @@ Deno.test("a failed or suppressed send leaves the draft awaiting review", async 
   assertEquals(res2.status, 422);
   assertEquals((await res2.json()).error, "recipient_suppressed");
   assertEquals(suppressed.marks.length, 0);
+  assertEquals(suppressed.releases, ["draft-1"]);
+  assertEquals(suppressed.rows["draft-1"].status, "awaiting_review");
 });
 
-Deno.test("a stamp failure after the provider accepted says the email went", async () => {
-  const { deps } = harness({ rows: { "draft-1": draft() }, markError: "already sent" });
-  const res = await handleProcurementDraftSend(post({ draftId: "draft-1" }), deps);
+Deno.test("a stamp failure after the provider accepted says the email went and keeps the claim", async () => {
+  const h = harness({ rows: { "draft-1": draft() }, markError: "already sent" });
+  const res = await handleProcurementDraftSend(post({ draftId: "draft-1" }), h.deps);
   assertEquals(res.status, 500);
   const body = await res.json();
   assertEquals(body.error, "mark_sent_failed");
   assertEquals(body.emailSent, true);
+  // It went: putting it back would let it be sent twice.
+  assertEquals(h.releases, []);
+  assertEquals(h.rows["draft-1"].status, "sending");
 });
 
 Deno.test("method and body guards", async () => {

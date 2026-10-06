@@ -165,12 +165,15 @@ export function RecordPaymentForm({
   receiptAnchor,
   onDone,
   surfaceKey = 'project',
+  payee,
 }: {
   purchaseOrderId: string;
   row?: MoneyOutPayment & { id: string };
   /** The payment's name in the act's label when there is no scheduled row. */
   name?: string;
   initialReference?: string;
+  /** Who an unscheduled payment went to (00718); vendor when omitted. */
+  payee?: RecordVendorPaymentInput['payee'];
   remainderCents: number;
   projectId: string | null;
   receiptAnchor: FolioAnchor;
@@ -205,6 +208,7 @@ export function RecordPaymentForm({
       amountCents,
     };
     if (row) input.poPaymentId = row.id;
+    else if (payee && payee !== 'vendor') input.payee = payee;
     if (howValue.startsWith('pm:')) input.paymentMethodId = howValue.slice(3);
     else input.method = howValue.slice(5) as VendorPaymentMethodKind;
     if (reference.trim()) input.reference = reference.trim();

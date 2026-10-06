@@ -74,6 +74,26 @@ const ALERT = 'text-[11px] text-[var(--color-terracotta-ink)]';
 const centsInput = (cents: number | null | undefined) =>
   cents == null ? '' : (cents / 100).toFixed(2);
 
+/**
+ * Who a rider paid elsewhere went to, for vendor_payments.payee (00718), so
+ * the vendor's refund cap and price-change block never count it.
+ */
+function riderPaymentPayee(kind: string): 'carrier' | 'receiver' | 'other' {
+  switch (kind) {
+    case 'receiving':
+    case 'storage':
+    case 'handling':
+      return 'receiver';
+    case 'freight':
+    case 'liftgate':
+    case 'residential':
+    case 'white_glove':
+      return 'carrier';
+    default:
+      return 'other';
+  }
+}
+
 interface Payee {
   value: RiderPayee;
   label: string;
@@ -521,6 +541,7 @@ function RiderLine({
             purchaseOrderId={purchaseOrderId}
             name={riderKindLabel(line.kind)}
             initialReference={riderPaymentReference(line.kind, payeeName(payee))}
+            payee={riderPaymentPayee(line.kind)}
             remainderCents={amount ?? 0}
             projectId={projectId}
             receiptAnchor={receiptAnchor}
