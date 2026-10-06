@@ -2561,3 +2561,6 @@ export {
   deckImportRefusalReason,
   deckImportKeys,
 } from "./use-board-deck-import";
+
+// US-16 C-16: Add to the job — line card prefill, spec fields, document import.
+export * from "./use-add-to-the-job";
