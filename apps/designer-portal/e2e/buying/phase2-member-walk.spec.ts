@@ -3,7 +3,6 @@ import {
   test,
   expect,
   type Browser,
-  type Locator,
   type Page,
   type TestInfo,
 } from "@playwright/test";
@@ -297,11 +296,14 @@ function watchFailures(page: Page, failures: string[]): void {
     void response
       .text()
       .catch(() => "")
-      .then((body) =>
+      .then((body) => {
+        // useRecordPoShipment always tries the receiver's inbound notice and
+        // drops the refusal by design; this walk's PO ships to the job site.
+        if (body.includes("does not ship to a receiver")) return;
         failures.push(
           `${response.status()} ${new URL(url).pathname} ${body.slice(0, 300)}`,
-        ),
-      );
+        );
+      });
   });
 }
 
@@ -684,7 +686,7 @@ WHERE e.ffe_item_id = ${q(LINE_A_ID)} AND e.type = 'backorder'`),
     await purchase.getByPlaceholder("Pair of table lamps").fill(FIND);
     await purchase.getByPlaceholder("CB2 · Chicago").fill(FIND_PAYEE);
     await purchase.getByLabel("Amount paid").fill(FIND_PAID);
-    await purchase.getByLabel("Line").selectOption(FIND_ID);
+    await purchase.getByLabel("Line", { exact: true }).selectOption(FIND_ID);
     const billPurchase = purchase.getByRole("checkbox", {
       name: "Bill the client, at cost, on its own line",
     });
@@ -711,7 +713,7 @@ FROM public.studio_purchases WHERE ffe_item_id = ${q(FIND_ID)}`),
       .click({ timeout: 30_000 });
     let composer = page.getByTestId("composer-purchases");
     await expect(composer).toBeVisible({ timeout: 30_000 });
-    await expect(composer.getByLabel(`Bill ${FIND}`)).toBeChecked();
+    await expect(composer.getByLabel(`Bill ${FIND}`, { exact: true })).toBeChecked();
     await expect(composer).toContainText("cost $340.00");
     await shot(page, testInfo, "14-composer-purchase-at-cost");
     await page.getByRole("button", { name: "Draft the invoice" }).click();
@@ -760,10 +762,28 @@ WHERE c.purchase_order_id = ${q(poId)}`),
       description: heads.join(" / "),
     });
     await shot(page, testInfo, "16-read-by-next-act");
-    const groupOf = (name: string): Locator =>
-      reading.locator("tr", { hasText: name });
-    await expect(groupOf(FIND)).toHaveCount(1);
-    expect(heads.length).toBeGreaterThan(1);
+    // Each line's cell names its group head (td[headers] → th#id).
+    const groupOf = async (lineId: string): Promise<string> => {
+      const headId = await reading
+        .locator(`#ffe-selection-${lineId} td`)
+        .first()
+        .getAttribute("headers");
+      return (await reading.locator(`th#${headId}`).textContent()) ?? "";
+    };
+    expect(heads).toEqual([
+      "Not selected yet · 1",
+      "Ready to order · 2",
+      "Ordered · 1",
+      "Shipped · 1",
+    ]);
+    // The alternate is not selected; the COM pair waits to be ordered; the
+    // find, bought outright, is ordered; line A shipped (1 of 2). Its damage
+    // reads "Claim open" only once the line is delivered.
+    expect(await groupOf(ALT_ID)).toBe("Not selected yet · 1");
+    expect(await groupOf(FRAME_ID)).toBe("Ready to order · 2");
+    expect(await groupOf(FABRIC_ID)).toBe("Ready to order · 2");
+    expect(await groupOf(FIND_ID)).toBe("Ordered · 1");
+    expect(await groupOf(LINE_A_ID)).toBe("Shipped · 1");
 
     expect(failures, "edge-function / RPC failures seen by the pages").toEqual(
       [],
