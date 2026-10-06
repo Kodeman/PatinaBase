@@ -143,7 +143,8 @@ export type PoGate =
 export type RoomTriState = 'none' | 'some' | 'all';
 
 /** The logistics stages at which a line can still take a purchase order —
- *  the predicate the line unfold has always used, kept in one place. */
+ *  poGate's sentence reads them; whether the act is offered is
+ *  {@link deriveOrderReadiness}. */
 const ORDERABLE_STAGES = new Set(['specified', 'quoted', 'approved']);
 
 /** Absence is absence: null, undefined and '' are NOT zero. */
@@ -400,6 +401,80 @@ export function poGate(
     return { orderable: false, sentence: 'Already on a purchase order' };
   }
   return { orderable: true, sentence: `PO available — deposit clear (${mark})` };
+}
+
+/** A schedule line, as the readiness rule needs to read it. */
+export interface OrderLineInput extends ScheduleLineInput {
+  vendor_id?: string | null;
+  purchase_order_id?: string | null;
+  purchase_order?: {
+    po_number?: string | null;
+    vendor_po_number?: string | null;
+  } | null;
+}
+
+export interface OrderReadinessContext {
+  /** A project with an executed agreement behind it. */
+  isCommercialOrigin: boolean;
+  /** This line's authorization ({@link deriveLineAuthorization}). */
+  lineAuth?: LineAuthorization;
+}
+
+export interface OrderReadiness {
+  ready: boolean;
+  /** Why the order is refused, in plain words. Empty when ready. */
+  reasons: string[];
+  /** What the studio should know before ordering. Never blocks. */
+  warnings: string[];
+}
+
+/**
+ * The one readiness rule (D1 §3.4, C-11a): can this line go on a purchase
+ * order? It mirrors what `create_purchase_order` refuses (00449: selected,
+ * vendor set, not removed; 00186: not blocked, not already on a PO; 00445's
+ * client price) so the schedule never offers an act the database turns down,
+ * and adds the commercial gate (authorized, deposit clear) on a job with an
+ * agreement behind it. A job with no agreement warns, never blocks (R-PB1).
+ */
+export function deriveOrderReadiness(
+  item: OrderLineInput,
+  ctx: OrderReadinessContext,
+): OrderReadiness {
+  const lineAuth = ctx.lineAuth ?? { track: 'none' };
+  const reasons: string[] = [];
+  const warnings: string[] = [];
+
+  if (item.trade_scope_document_id) {
+    reasons.push('Trade work is engaged on its scope, not ordered');
+  }
+  if (item.removed_at) reasons.push('Removed from the job');
+  if (item.design_disposition !== 'selected') reasons.push('Not selected yet');
+  if (!item.vendor_id) reasons.push('Needs a maker');
+  const clientPrice =
+    item.item_type === 'allowance'
+      ? num(item.budget_max_cents)
+      : num(item.unit_price_cents);
+  if (clientPrice === null || clientPrice <= 0) {
+    reasons.push('Needs a client price');
+  }
+  if (item.blocked) reasons.push('Waiting on a decision');
+  if (item.purchase_order_id) {
+    const po = item.purchase_order;
+    const label = po?.po_number ?? po?.vendor_po_number;
+    reasons.push(label ? `Already on ${label}` : 'Already on a purchase order');
+  }
+
+  if (ctx.isCommercialOrigin) {
+    if (lineAuth.track !== 'authorized') {
+      reasons.push('Waiting on the authorization');
+    } else if (!lineAuth.depositClear) {
+      reasons.push(`Waiting on the deposit (A${lineAuth.number})`);
+    }
+  } else if (lineAuth.track !== 'authorized' && item.status !== 'approved') {
+    warnings.push('No signed agreement behind this yet. You can still order.');
+  }
+
+  return { ready: reasons.length === 0, reasons, warnings };
 }
 
 /**

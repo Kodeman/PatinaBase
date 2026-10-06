@@ -34,6 +34,7 @@ import { deriveLineStamp } from '@/lib/document/stamp-derivation';
 import { deriveProcurementLifecycle } from '@/lib/document/procurement-lifecycle';
 import { ProcurementTrail } from './procurement-trail';
 import {
+  deriveOrderReadiness,
   poGate,
   type LineAuthorization,
 } from '@/lib/document/authorization-derivation';
@@ -71,8 +72,6 @@ function Cell({
     </div>
   );
 }
-
-const ORDERABLE = new Set(['specified', 'quoted', 'approved']);
 
 /**
  * PRC-12 (R84): the Movement cell with the single-PO confirmed-ETA edit —
@@ -350,12 +349,14 @@ export function LineUnfold({
   const { data: rooms } = useDocumentRooms(projectId);
   const assignRoom = useAssignLineRoom(projectId);
 
-  // On a commercial job the purchase order waits on the instrument, not just
-  // the stage. Elsewhere the schedule keeps its old predicate and says nothing.
+  // On a commercial job the purchase order waits on the instrument; the
+  // strip's sentence says so. Whether Order is offered is the one readiness
+  // rule, which mirrors what the database will accept.
   const gate = poGate(item, auth, isCommercialOrigin);
-  const orderable = isCommercialOrigin
-    ? gate.orderable
-    : ORDERABLE.has(item.status) && !item.blocked;
+  const readiness = deriveOrderReadiness(item, {
+    isCommercialOrigin,
+    lineAuth: auth,
+  });
   const softLock = softLockSentence(
     auth.track === 'awaiting' || auth.track === 'authorized'
       ? auth
@@ -514,13 +515,37 @@ export function LineUnfold({
         anchor={{ kind: 'line', anchorId: item.id }}
       />
 
+      {/* C-11a: not ready reads as what would change it, in place of Order.
+          A line already on a PO says so in its cell; trade work never orders. */}
+      {!readiness.ready && !po && !isTradeLine && (
+        <ul
+          data-testid="line-order-readiness"
+          aria-label="Before this can be ordered"
+          className="mb-2 text-[11px] text-[var(--text-muted)]"
+        >
+          {readiness.reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      )}
+      {/* R-PB1: a consequence sentence above the act, never a block. */}
+      {readiness.ready &&
+        readiness.warnings.map((warning) => (
+          <p
+            key={warning}
+            className="mb-2 text-[11px] text-[var(--color-charcoal)]"
+          >
+            {warning}
+          </p>
+        ))}
+
       <DocumentActionGroup surfaceKey="project" regionKey="ffe-line-actions">
-        {orderable && (
+        {readiness.ready && (
           <DocumentAction
             actionKey="order-ffe-line"
             variant={sendable || inspectable ? 'secondary' : 'primary'}
             disabled={!vendor}
-            title={vendor ? undefined : 'No vendor on this line yet'}
+            title={vendor ? undefined : 'Loading the maker'}
             onClick={() => setAssistantOpen(true)}
           >
             Order with Assistant

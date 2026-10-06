@@ -14,7 +14,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
   useProcurementItems,
@@ -37,6 +37,18 @@ import {
   DocumentActionRow,
 } from './document-action';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
+import {
+  commercialDocumentKeys,
+  fetchProjectBillingAuthority,
+} from '@/hooks/use-commercial-documents';
+import { mapProjectInstruments } from '@/lib/document/project-commerce';
+import {
+  buildInstrumentIndex,
+  deriveLineAuthorization,
+  deriveOrderReadiness,
+  type InstrumentIndex,
+  type OrderReadiness,
+} from '@/lib/document/authorization-derivation';
 
 type AnyRecord = any;
 
@@ -71,17 +83,77 @@ const termsLabel = (vendor: AnyRecord): string =>
 
 // ─── PRC-24 (R84): "Order all —" — the multi-line Order Assistant ──────────
 
+/** What a project says about the commercial gate: null until it is known. */
+type ProjectOrderContext = {
+  isCommercialOrigin: boolean;
+  index: InstrumentIndex;
+} | null;
+
 /**
- * An item is orderable when approved and not yet on a PO; decision-blocked
- * items are excluded up front so the assistant never opens on a batch it
- * would refuse. Ported from the by-vendor page's W3-T3a gate
- * (app/(portal)/portal/procurement/by-vendor/page.tsx — isOrderable).
+ * The commercial gate per project: an agreement behind the job (authority),
+ * and on such a job its instruments, read under the same query keys the
+ * schedule uses so the cache is shared. A project still loading (or failing)
+ * stays null and its lines wait — the gate fails closed.
  */
-const isOrderable = (it: AnyRecord): boolean => {
-  if (it.status !== 'approved' || it.purchase_order_id) return false;
-  if (it.blocked && it.blocked_by_decision_id) return false;
-  return !!it.vendor_id;
-};
+function useProjectOrderContexts(
+  projectIds: readonly string[],
+): Map<string, ProjectOrderContext> {
+  const authorities = useQueries({
+    queries: projectIds.map((projectId) => ({
+      queryKey: commercialDocumentKeys.authority(projectId),
+      queryFn: () => fetchProjectBillingAuthority(projectId),
+    })),
+  });
+  const instruments = useQueries({
+    queries: projectIds.map((projectId, i) => ({
+      queryKey: commercialDocumentKeys.instruments(projectId),
+      enabled: Boolean(authorities[i]?.data),
+      queryFn: async () => {
+        const { data, error } = await getSupabase().rpc(
+          'list_furnishings_authorizations',
+          { p_project_id: projectId },
+        );
+        if (error) throw error;
+        return mapProjectInstruments(data);
+      },
+    })),
+  });
+
+  const contexts = new Map<string, ProjectOrderContext>();
+  projectIds.forEach((projectId, i) => {
+    const authority = authorities[i];
+    if (!authority?.isSuccess) return contexts.set(projectId, null);
+    if (!authority.data) {
+      return contexts.set(projectId, {
+        isCommercialOrigin: false,
+        index: new Map(),
+      });
+    }
+    const held = instruments[i];
+    contexts.set(
+      projectId,
+      held?.isSuccess
+        ? { isCommercialOrigin: true, index: buildInstrumentIndex(held.data) }
+        : null,
+    );
+  });
+  return contexts;
+}
+
+/**
+ * The one readiness rule (C-11a) — the same test the line unfold uses, so
+ * the assistant never opens on a batch the database would refuse.
+ */
+const readinessOf = (
+  it: AnyRecord,
+  context: ProjectOrderContext | undefined,
+): OrderReadiness | null =>
+  context
+    ? deriveOrderReadiness(it, {
+        isCommercialOrigin: context.isCommercialOrigin,
+        lineAuth: deriveLineAuthorization(it, context.index),
+      })
+    : null;
 
 /** One assistant session — one (vendor, project) pair → one PO (W3-T3a). */
 interface PendingOrder {
@@ -91,7 +163,7 @@ interface PendingOrder {
 }
 
 /**
- * The vendor page's whole-queue ordering act: every approved-unordered FF&E
+ * The vendor page's whole-queue ordering act: every ready, unordered FF&E
  * line the studio holds with this vendor, fed to the existing OrderAssistant
  * (all steps, same atomic create-PO RPC + sidemark + coverage vote). One PO
  * covers one project, so a multi-project vendor enqueues one session per
@@ -103,7 +175,28 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
   const { data: items } = useProcurementItems({ vendorId: vendor.id }) as {
     data: AnyRecord[] | undefined;
   };
-  const orderable = useMemo(() => (items ?? []).filter(isOrderable), [items]);
+  const projectIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (items ?? [])
+            .filter((it) => !it.purchase_order_id && it.project_id)
+            .map((it) => String(it.project_id)),
+        ),
+      ),
+    [items],
+  );
+  const contexts = useProjectOrderContexts(projectIds);
+  const readinessById = new Map<string, OrderReadiness>();
+  for (const it of items ?? []) {
+    const readiness = readinessOf(it, contexts.get(String(it.project_id)));
+    if (readiness?.ready) readinessById.set(it.id, readiness);
+  }
+  const orderable = (items ?? []).filter((it) => readinessById.has(it.id));
+  // R-PB1: no-agreement lines order, with the consequence said once.
+  const unsigned = orderable.filter(
+    (it) => (readinessById.get(it.id)?.warnings.length ?? 0) > 0,
+  ).length;
   const [queue, setQueue] = useState<PendingOrder[]>([]);
   const active = queue[0] ?? null;
 
@@ -181,8 +274,15 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
             Order all — {orderable.length} item
             {orderable.length === 1 ? '' : 's'}
           </DocumentAction>
-          <span className={MONO_LABEL}>approved · unordered</span>
+          <span className={MONO_LABEL}>ready · unordered</span>
         </DocumentActionGroup>
+      )}
+      {unsigned > 0 && (
+        <p className="doc-type-meta mb-2 text-[var(--color-charcoal)]">
+          {unsigned === orderable.length
+            ? 'No signed agreement behind these yet. You can still order.'
+            : `${unsigned} of ${orderable.length} have no signed agreement behind them yet. You can still order.`}
+        </p>
       )}
       {/* D4 inside the book: the shared assistant carries shadow-xl in the
           old zones — strip it here without touching it (the R3/line-unfold

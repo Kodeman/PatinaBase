@@ -52,7 +52,10 @@ const item = {
   line_total_cents: 390000,
   project_room_id: 'room-1',
   received_quantity: null,
+  vendor_id: 'vendor-1',
   vendor_name: 'Winfield Workroom',
+  design_disposition: 'selected',
+  purchase_order_id: null,
 };
 
 const authorized: LineAuthorization = {
@@ -141,6 +144,44 @@ describe('LineUnfold · the authorization gate', () => {
       screen.getAllByText('on authorization № 3 — void & supersede to change')
         .length,
     ).toBeGreaterThan(0);
+  });
+
+  it('offers Order on a no-agreement job with the R-PB1 warning above it', () => {
+    renderUnfold();
+    expect(
+      screen.getByText(
+        'No signed agreement behind this yet. You can still order.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /order with assistant/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('line-order-readiness'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides Order on a line the database would refuse, and says why in words', () => {
+    renderUnfold({
+      item: {
+        ...item,
+        vendor_id: null,
+        unit_price_cents: null,
+        design_disposition: 'candidate',
+      },
+    });
+    expect(
+      screen.queryByRole('button', { name: /order with assistant/i }),
+    ).not.toBeInTheDocument();
+    const reasons = screen.getByTestId('line-order-readiness');
+    expect(reasons).toHaveTextContent('Not selected yet');
+    expect(reasons).toHaveTextContent('Needs a maker');
+    expect(reasons).toHaveTextContent('Needs a client price');
+    expect(
+      screen.queryByText(
+        'No signed agreement behind this yet. You can still order.',
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it('leaves the room re-assign alone while the line is unreleased', () => {
