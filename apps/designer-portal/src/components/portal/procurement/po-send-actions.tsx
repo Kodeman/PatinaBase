@@ -39,12 +39,20 @@ export const PO_OUT_OF_SYNC_MESSAGE =
   'may have changed since creation, or the PO predates trade-cost totals. ' +
   'Recreate the PO or mark it sent manually.';
 
+/** po-send's sent_not_recorded (SQ-448): the email went, the sent stamp did not. */
+export const SENT_NOT_RECORDED_MESSAGE =
+  'The email reached the vendor, but this order could not be marked sent — it may now be ' +
+  'held for release. Check the order before sending it again.';
+
 /**
  * Map a po-send failure (the hook rejects with the response's `error` code)
  * to designer-readable copy. Unknown codes fall through with the raw text so
  * infra failures stay debuggable.
  */
 export function poSendErrorMessage(raw: string): string {
+  if (raw.includes('sent_not_recorded')) {
+    return SENT_NOT_RECORDED_MESSAGE;
+  }
   if (raw.includes('po_out_of_sync')) {
     return PO_OUT_OF_SYNC_MESSAGE;
   }

@@ -1408,6 +1408,8 @@ export interface DamageClaim {
     photo_asset_ids?: string[];
     purchase_order?: {
       id: string;
+      /** C-30: Patina carries a catalog order's claim — the studio does not track it. */
+      is_patina_catalog?: boolean | null;
       vendor?: { id: string; name: string };
       project?: { id: string; name: string };
     };
@@ -1611,7 +1613,7 @@ export function useDamageClaims(filters?: DamageClaimFilters) {
           inspection:receiving_inspections!damage_claims_receiving_inspection_id_fkey(
             id, purchase_order_id, outcome, photo_asset_ids,
             purchase_order:purchase_orders!receiving_inspections_purchase_order_id_fkey(
-              id,
+              id, is_patina_catalog,
               vendor:vendors!purchase_orders_vendor_id_fkey(id, name),
               project:projects!purchase_orders_project_id_fkey(id, name)
             )

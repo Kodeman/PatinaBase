@@ -52,6 +52,7 @@ import {
 import {
   clientVendorEmailHint,
   poSendErrorMessage,
+  SENT_NOT_RECORDED_MESSAGE,
 } from '@/components/portal/procurement/po-send-actions';
 import {
   EMPTY_SHIP_TO,
@@ -104,10 +105,7 @@ import {
 
 export * from './model';
 
-/** po-send's sent_not_recorded (SQ-448): the email went, the sent stamp did not. */
-export const SENT_NOT_RECORDED_MESSAGE =
-  'The email reached the vendor, but this order could not be marked sent — it may now be ' +
-  'held for release. Check the order before sending it again.';
+export { SENT_NOT_RECORDED_MESSAGE } from '@/components/portal/procurement/po-send-actions';
 
 export interface OrderPaperQueuePosition {
   /** Zero-based place of this paper in the queue. */

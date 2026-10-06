@@ -11,6 +11,7 @@ import * as poSendModule from '../po-send-actions';
 import {
   clientVendorEmailHint,
   poSendErrorMessage,
+  SENT_NOT_RECORDED_MESSAGE,
   PO_OUT_OF_SYNC_MESSAGE,
 } from '../po-send-actions';
 
@@ -18,6 +19,7 @@ describe('one send UI (C-09)', () => {
   it('no longer exports the retired PoSendActions / PoSendPopover components', () => {
     expect(Object.keys(poSendModule).sort()).toEqual([
       'PO_OUT_OF_SYNC_MESSAGE',
+      'SENT_NOT_RECORDED_MESSAGE',
       'clientVendorEmailHint',
       'poSendErrorMessage',
     ]);
@@ -85,6 +87,10 @@ describe('poSendErrorMessage', () => {
   it('maps po_cancelled and no_items', () => {
     expect(poSendErrorMessage('po_cancelled')).toMatch(/cancelled purchase order/);
     expect(poSendErrorMessage('no_items')).toMatch(/no linked FF&E items/);
+  });
+
+  it('maps sent_not_recorded (SQ-448) to the email-went-but-not-marked-sent copy', () => {
+    expect(poSendErrorMessage('sent_not_recorded')).toBe(SENT_NOT_RECORDED_MESSAGE);
   });
 
   it('passes unknown codes through for debuggability', () => {

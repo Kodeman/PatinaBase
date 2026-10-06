@@ -167,8 +167,11 @@ function OpenClaimRow({
             />
           )}
           {/* C-30: an inspection's claim opens an exception — the overlay
-              row above then carries its clock and paths. */}
-          {!claim.exception_id && <TrackClaimAct claimId={claim.id} />}
+              row above then carries its clock and paths. Patina carries a
+              catalog order's claim, so the studio is not offered Track it. */}
+          {!claim.exception_id && !po?.is_patina_catalog && (
+            <TrackClaimAct claimId={claim.id} />
+          )}
         </div>
         <Stamp
           label={drafted ? 'claim drafted' : 'vendor notified'}
