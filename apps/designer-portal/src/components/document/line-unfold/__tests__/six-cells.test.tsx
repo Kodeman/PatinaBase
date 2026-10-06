@@ -26,6 +26,8 @@ jest.mock('@patina/supabase', () => ({
   useStudioPaymentMethods: () => ({ data: [] }),
   useFfeInvoiceCoverage: () => ({ data: undefined }),
   useStartPoCheckout: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useUser: () => ({ user: null }),
+  usePurchaseOrders: () => ({ data: undefined }),
 }));
 
 // C-20: the clock's sentence is receiving-claim-clock.test.tsx's; here it

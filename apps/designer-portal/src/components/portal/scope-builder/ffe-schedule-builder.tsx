@@ -159,9 +159,13 @@ export function ItemEditForm({
 
   const [name, setName] = useState(item.name ?? '');
   const [qty, setQty] = useState(String(item.quantity ?? 1));
-  const [priceDollars, setPriceDollars] = useState(
-    item.unit_price ? String(item.unit_price / 100) : ''
-  );
+  // R1: the trade price beside the client price is the margin, so a member
+  // who may not see margin gets an empty input. Anyone may still set it;
+  // unit_price is sent only once typed into (null = untouched).
+  const canSeeMargin = useCanSeeMargin();
+  const [priceInput, setPriceInput] = useState<string | null>(null);
+  const priceDollars =
+    priceInput ?? (canSeeMargin && item.unit_price ? String(item.unit_price / 100) : '');
   const [ffeCategory, setFfeCategory] = useState(item.ffe_category ?? '');
   const [scopeRoomId, setScopeRoomId] = useState(item.scope_room_id ?? '');
   const [minDollars, setMinDollars] = useState(
@@ -197,7 +201,9 @@ export function ItemEditForm({
       updates = {
         name: name.trim(),
         quantity: Math.max(1, Math.floor(Number(qty) || 1)),
-        unit_price: Math.round(parseFloat(priceDollars || '0') * 100),
+        ...(priceInput !== null
+          ? { unit_price: Math.round(parseFloat(priceInput || '0') * 100) }
+          : {}),
         scope_room_id: scopeRoomId || null,
         ffe_category: ffeCategory || null,
         notes: notes || null,
@@ -273,8 +279,8 @@ export function ItemEditForm({
                   type="number"
                   min="0"
                   value={priceDollars}
-                  onChange={(e) => setPriceDollars(e.target.value)}
-                  placeholder="0"
+                  onChange={(e) => setPriceInput(e.target.value)}
+                  placeholder={canSeeMargin ? '0' : 'Unchanged'}
                   className="pl-7"
                 />
               </div>

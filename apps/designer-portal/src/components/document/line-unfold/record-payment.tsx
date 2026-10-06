@@ -17,11 +17,14 @@
 import { useState } from 'react';
 import {
   usePOPayments,
+  usePurchaseOrders,
   useRecordVendorPayment,
   useStartPoCheckout,
   useStudioPaymentMethods,
+  useUser,
   useVendorPayments,
   useVoidVendorPayment,
+  type PurchaseOrder,
   type RecordVendorPaymentInput,
   type StudioPaymentMethod,
   type VendorPayment,
@@ -415,6 +418,13 @@ export function PoMoneyOut({
   // C-22: a catalog row still owed (a failed or never-finished checkout) pays
   // through the same Patina checkout — the Desk's "Pay again" lands here.
   const startCheckout = useStartPoCheckout({ errorSurface: 'inline' });
+  // create-checkout-session pays only as the PO's designer, so only she sees
+  // Pay now. The PO comes from the studio's purchase-orders list (the Orders
+  // ledger shares the cache); nothing shows until it and the user resolve.
+  const { user } = useUser();
+  const { data: orders } = usePurchaseOrders() as { data?: PurchaseOrder[] };
+  const isPayer =
+    !!user?.id && orders?.find((o) => o.id === purchaseOrderId)?.designer_id === user.id;
   const [payingRowId, setPayingRowId] = useState<string | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const payNow = async (rowId: string) => {
@@ -490,7 +500,11 @@ export function PoMoneyOut({
           const canRecord =
             !readOnly && Boolean(p.id) && p.state !== 'paid' && p.state !== 'refunded';
           const canPay =
-            isPatinaCatalog && Boolean(p.id) && p.state !== 'paid' && p.state !== 'refunded';
+            isPayer &&
+            isPatinaCatalog &&
+            Boolean(p.id) &&
+            p.state !== 'paid' &&
+            p.state !== 'refunded';
           const rowRecords = (records ?? []).filter((r) => r.po_payment_id === p.id);
           return (
             <li

@@ -100,6 +100,31 @@ describe('POST /api/media/assets — server-side relay', () => {
     expect(proxy).not.toHaveBeenCalled();
   });
 
+  it('refuses a declared oversized body with 413 before buffering it', async () => {
+    const formData = jest.fn();
+    const oversized = {
+      url: 'https://portal.test/api/media/assets',
+      headers: new Headers({ 'content-length': String(50 * 1024 * 1024 + 64 * 1024 + 1) }),
+      formData,
+    };
+    const res = await (POST as any)(oversized, context);
+    expect(res.status).toBe(413);
+    expect(formData).not.toHaveBeenCalled();
+    expect(proxy).not.toHaveBeenCalled();
+  });
+
+  it('lets a 50 MB photo with its multipart framing through the pre-check', async () => {
+    const formData = jest.fn().mockRejectedValue(new Error('not multipart'));
+    const atCap = {
+      url: 'https://portal.test/api/media/assets',
+      headers: new Headers({ 'content-length': String(50 * 1024 * 1024 + 1024) }),
+      formData,
+    };
+    const res = await (POST as any)(atCap, context);
+    expect(formData).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(400);
+  });
+
   it('refuses a malformed projectId', async () => {
     const res = await (POST as any)(
       uploadRequest(new Blob(['jpeg'], { type: 'image/jpeg' }), 'not-a-uuid'),

@@ -7,7 +7,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { LogInspectionDrawer } from '../log-inspection-drawer';
 
 const mutateAsync = jest.fn();
-let items: Array<{ id: string; name: string; quantity: number }> = [];
+let items: Array<{ id: string; name: string; quantity: number; project_id?: string }> = [];
 
 jest.mock('@patina/supabase', () => ({
   useCreateReceivingInspection: () => ({ mutateAsync, isPending: false }),
@@ -52,13 +52,14 @@ jest.mock('framer-motion', () => {
 const realFetch = global.fetch;
 const fetchMock = jest.fn();
 
-function renderDrawer() {
+// null: the caller names no project.
+function renderDrawer(projectId: string | null = '11111111-1111-4111-8111-111111111111') {
   return render(
     <LogInspectionDrawer
       open
       onOpenChange={jest.fn()}
       purchaseOrderId="po-1"
-      projectId="11111111-1111-4111-8111-111111111111"
+      projectId={projectId ?? undefined}
       poLabel="PO-1"
       vendorName="Ellsworth Mill"
       projectName="Maple St"
@@ -183,5 +184,39 @@ describe('LogInspectionDrawer — C-19 per-line check-in', () => {
     submit();
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
     expect(mutateAsync.mock.calls[0][0].photoAssetIds).toEqual([]);
+  });
+
+  it("sends the PO's own project with the upload when the caller names none", async () => {
+    items = items.map((it) => ({ ...it, project_id: '33333333-3333-4333-8333-333333333333' }));
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, data: { assetId: 'asset-78' } }),
+    });
+    const { container } = renderDrawer(null);
+    const input = container.ownerDocument.querySelector('input[type="file"]') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, {
+        target: { files: [new File(['jpeg'], 'crate.jpg', { type: 'image/jpeg' })] },
+      });
+    });
+    expect(await screen.findByAltText('crate.jpg')).toBeInTheDocument();
+    const form = fetchMock.mock.calls[0][1].body as FormData;
+    expect(form.get('projectId')).toBe('33333333-3333-4333-8333-333333333333');
+  });
+
+  it('uploads nothing until the PO project is known, and says so', async () => {
+    const { container } = renderDrawer(null);
+    const input = container.ownerDocument.querySelector('input[type="file"]') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, {
+        target: { files: [new File(['jpeg'], 'crate.jpg', { type: 'image/jpeg' })] },
+      });
+    });
+    expect(
+      screen.getByText('The order is still loading. Add the photos again in a moment.'),
+    ).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -16,6 +16,8 @@ const poSent = jest.fn();
 const mockOrders: { list: Array<Record<string, unknown>> } = { list: [] };
 // The PO's change history (C-21).
 const mockChanges: { list: Array<Record<string, unknown>> } = { list: [] };
+// The studio's account with the PO's vendor (C-12): its orders_email_override.
+const mockAccount: { row: Record<string, unknown> | null } = { row: null };
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
@@ -44,7 +46,13 @@ jest.mock('@patina/supabase', () => ({
   useProject: () => ({
     data: { studio_id: 'org-project', designer_id: 'owner-1', site_address: null },
   }),
-  useStudioIdentity: () => ({ data: undefined }),
+  // The project resolves to its studio, as po-send resolves it.
+  useStudioIdentity: (p: { projectId?: string | null }) => ({
+    data: p?.projectId ? { studioId: 'org-project' } : undefined,
+  }),
+  useStudioVendorAccount: (studioId: string | null, vendorId: string | null) => ({
+    data: studioId === 'org-project' && vendorId === 'vendor-1' ? mockAccount.row : undefined,
+  }),
 }));
 
 jest.mock('@/lib/analytics/procurement-events', () => ({
@@ -73,6 +81,7 @@ beforeEach(() => {
   ];
   poSent.mockReset();
   mockChanges.list = [];
+  mockAccount.row = null;
   sendMutateAsync.mockImplementation(async ({ mode }: { mode: string }) =>
     mode === 'preview'
       ? { ok: true, signedUrl: 'https://files.test/po.pdf', poNumber: 'PO-0042' }
@@ -352,5 +361,53 @@ describe('PoPreview · change history (C-21)', () => {
       /maker change · to Hollowell Woodshop · replaced by PO-0043 — Hale discontinued the frame/,
     );
     expect(items[1]).toHaveTextContent(/claim · resolved — Arm scuffed in transit/);
+  });
+});
+
+describe('PoPreview · who the PO goes to (C-12, F7)', () => {
+  const withVendor = [
+    {
+      id: 'po-1',
+      project_id: 'project-1',
+      vendor_id: 'vendor-1',
+      sent_at: null,
+      ship_to: '1 Main St, Madison, WI 53703',
+    },
+  ];
+
+  it("names the studio's own orders inbox, the address po-send mails first", async () => {
+    mockOrders.list = withVendor;
+    mockAccount.row = { orders_email_override: ' studio-orders@acme.test ', archived_at: null };
+    renderPreview();
+    await waitForPdf();
+    expect(screen.getByText('Sends to studio-orders@acme.test')).toBeInTheDocument();
+    expect(screen.queryByText('Sends to orders@acme.test')).not.toBeInTheDocument();
+  });
+
+  it("falls back to the vendor's address when the studio account is archived", async () => {
+    mockOrders.list = withVendor;
+    mockAccount.row = { orders_email_override: 'old@acme.test', archived_at: '2026-09-01T00:00:00Z' };
+    renderPreview();
+    await waitForPdf();
+    expect(screen.getByText('Sends to orders@acme.test')).toBeInTheDocument();
+  });
+
+  it('enables Send on the studio inbox alone when the vendor has no email', async () => {
+    mockOrders.list = withVendor;
+    mockAccount.row = { orders_email_override: 'studio-orders@acme.test', archived_at: null };
+    renderPreview({ vendorEmailHint: null });
+    await waitForPdf();
+    expect(screen.getByText('Sends to studio-orders@acme.test')).toBeInTheDocument();
+    const send = screen.getByRole('button', { name: 'Send to vendor' });
+    expect(send).toBeEnabled();
+    expect(send).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('says plainly when there is nowhere to send, and holds Send', async () => {
+    mockOrders.list = withVendor;
+    renderPreview({ vendorEmailHint: null });
+    await waitForPdf();
+    expect(screen.getByText('No email on file for this vendor')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send to vendor' })).toBeDisabled();
   });
 });
