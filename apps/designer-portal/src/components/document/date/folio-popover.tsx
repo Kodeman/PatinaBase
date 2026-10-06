@@ -106,7 +106,11 @@ export function FolioPopover({
       const roomAbove = rect.top - GAP;
       const above = height > roomBelow && roomAbove > roomBelow;
 
-      const top = above ? Math.max(EDGE, rect.top - GAP - height) : rect.bottom + GAP;
+      // When neither side fits, keep the whole panel on screen (overlapping the
+      // anchor) rather than hanging SET past the viewport edge: a fixed panel
+      // cannot be scrolled into reach.
+      const hung = above ? rect.top - GAP - height : rect.bottom + GAP;
+      const top = Math.max(EDGE, Math.min(hung, window.innerHeight - height - EDGE));
       const wanted = align === 'end' ? rect.right - width : rect.left;
       const left = Math.max(EDGE, Math.min(wanted, window.innerWidth - width - EDGE));
 
