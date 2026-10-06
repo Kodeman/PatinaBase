@@ -119,16 +119,31 @@ Deno.test("resolveVendorRecipient returns null when nothing is usable", () => {
 
 // ─── C-07: send access, as the caller ────────────────────────────────────────
 
-Deno.test("quoteRequestStudioOwner is the project owner when linked, else the drafter", () => {
-  assertEquals(
-    quoteRequestStudioOwner({ designer_id: "drafter", project: { designer_id: "owner" } }),
-    "owner",
-  );
-  assertEquals(quoteRequestStudioOwner({ designer_id: "drafter", project: null }), "drafter");
-  assertEquals(
-    quoteRequestStudioOwner({ designer_id: "drafter", project: { designer_id: null } }),
-    "drafter",
-  );
+Deno.test("quoteRequestStudioOwner is always the drafter, never the linked project's owner", () => {
+  // A row as loaded may still carry a project embed; the anchor ignores it.
+  const linked = { designer_id: "drafter", project: { designer_id: "owner" } };
+  assertEquals(quoteRequestStudioOwner(linked), "drafter");
+  assertEquals(quoteRequestStudioOwner({ designer_id: "drafter" }), "drafter");
+});
+
+/**
+ * Models is_studio_comember for one caller: true only for an owner id the
+ * caller shares a studio with (or is).
+ */
+function comemberOf(...owners: string[]): CallerRpcClient {
+  return {
+    rpc(_fn, args) {
+      return Promise.resolve({ data: owners.includes(String(args.p_owner)), error: null });
+    },
+  };
+}
+
+Deno.test("RFQ send: a co-member of the drafter is allowed; a co-member of only the project owner is refused", async () => {
+  // Drafted by D on a project owned by O; D and O share no studio.
+  const request = { designer_id: "D", project: { designer_id: "O" } };
+  const anchor = quoteRequestStudioOwner(request);
+  assertEquals(await callerIsStudioComember(comemberOf("D"), anchor), true, "drafter / drafter co-member");
+  assertEquals(await callerIsStudioComember(comemberOf("O"), anchor), false, "project-owner-only co-member");
 });
 
 /**

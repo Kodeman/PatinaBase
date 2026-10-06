@@ -448,6 +448,8 @@ export interface VendorConfigurationSpec {
   colorFabric?: string | null;
   selected_dimensions?: unknown;
   selectedDimensions?: unknown;
+  na_declarations?: unknown;
+  naDeclarations?: unknown;
 }
 
 /** The `product:products!product_id(…)` embed: the line's product master. */
@@ -479,13 +481,16 @@ function readScalar(value: unknown): string | null {
   return null;
 }
 
-/** A text[] product column (or a lone string) as one comma-joined value. */
-function readList(value: unknown): string | null {
+/**
+ * A text[] product column (or a lone string) only when it names exactly one
+ * value. A list of options is not a choice, so a PO never prints one.
+ */
+function readSingle(value: unknown): string | null {
   if (!Array.isArray(value)) return readScalar(value);
   const parts = value
     .map((entry) => readScalar(entry))
     .filter((entry): entry is string => entry !== null);
-  return parts.length > 0 ? parts.join(', ') : null;
+  return parts.length === 1 ? parts[0] : null;
 }
 
 function readCount(value: unknown): number | null {
@@ -624,6 +629,9 @@ function comLines(value: unknown): string[] {
  *   Spec Book's resolveSpecValue (apps/designer-portal/src/lib/spec-books/
  *   model.ts). Placement inserts the spec row empty, so without the product
  *   leg a library product's SKU and finish never reached the vendor (C-06).
+ *   A field declared N/A (`na_declarations`) prints nothing. A product list
+ *   (materials, colors) prints only when it holds exactly one value: a list of
+ *   options is not what was ordered.
  *   The product master is not consulted for a configured line: the snapshot
  *   is what the designer specified, and it still wins outright.
  *
@@ -687,18 +695,34 @@ export function vendorConfigurationLines(spec: unknown, product?: unknown): stri
   const master = readRecord(Array.isArray(product) ? product[0] : product) as
     & VendorProductMaster
     & Record<string, unknown>;
-  const sku = readScalar(source.sku) ?? readScalar(master.sku);
+  // N/A wins first, as in resolveSpecValue: a declared field prints nothing
+  // and never falls back. Declarations are keyed by the contract key
+  // (colorFabric, dimensions), else by the column name.
+  const na = readRecord(source.na_declarations ?? source.naDeclarations);
+  const declaredNa = (contractKey: string, column: string): boolean => {
+    const declaration = readRecord(contractKey in na ? na[contractKey] : na[column]);
+    return declaration.na === true && readScalar(declaration.reason) !== null;
+  };
+  const sku = declaredNa('sku', 'sku')
+    ? null
+    : readScalar(source.sku) ?? readScalar(master.sku);
   if (sku) lines.push(`SKU: ${sku}`);
-  const material = readScalar(source.material) ?? readList(master.materials);
+  const material = declaredNa('material', 'material')
+    ? null
+    : readScalar(source.material) ?? readSingle(master.materials);
   if (material) lines.push(`Material: ${material}`);
-  const finish = readScalar(source.finish) ?? readScalar(master.finish);
+  const finish = declaredNa('finish', 'finish')
+    ? null
+    : readScalar(source.finish) ?? readScalar(master.finish);
   if (finish) lines.push(`Finish: ${finish}`);
-  const colorFabric = readScalar(source.color_fabric ?? source.colorFabric) ??
-    readList(master.colors);
+  const colorFabric = declaredNa('colorFabric', 'color_fabric')
+    ? null
+    : readScalar(source.color_fabric ?? source.colorFabric) ?? readSingle(master.colors);
   if (colorFabric) lines.push(`Color/Fabric: ${colorFabric}`);
-  const flatDims = formatDimensions(
-    source.selected_dimensions ?? source.selectedDimensions,
-  ) ?? formatDimensions(master.dimensions);
+  const flatDims = declaredNa('dimensions', 'selected_dimensions')
+    ? null
+    : formatDimensions(source.selected_dimensions ?? source.selectedDimensions) ??
+      formatDimensions(master.dimensions);
   if (flatDims) lines.push(`Dims: ${flatDims}`);
   return lines;
 }

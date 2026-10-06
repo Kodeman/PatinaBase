@@ -274,7 +274,8 @@ Deno.serve(async (req: Request) => {
       spec:project_ffe_specs!project_ffe_specs_ffe_item_id_fkey(
         configuration_id, configuration_snapshot,
         configuration_snapshot_hash, configuration_locked_at,
-        sku, material, finish, color_fabric, selected_dimensions
+        sku, material, finish, color_fabric, selected_dimensions,
+        na_declarations
       ),
       product:products!product_id(sku, finish, materials, colors, dimensions)
     `,

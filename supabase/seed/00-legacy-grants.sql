@@ -19184,13 +19184,13 @@ END $g$;
 
 -- 00690_purchase_order_header_rpcs.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.set_purchase_order_eta(uuid, date, text) FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public.set_purchase_order_eta(uuid, date, text, date) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00690_purchase_order_header_rpcs.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.set_purchase_order_eta(uuid, date, text) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.set_purchase_order_eta(uuid, date, text, date) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
@@ -19208,13 +19208,13 @@ END $g$;
 
 -- 00690_purchase_order_header_rpcs.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public.advance_purchase_order_status(uuid, text, text) FROM PUBLIC, anon;
+  REVOKE ALL ON FUNCTION public.advance_purchase_order_status(uuid, text, text, date) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00690_purchase_order_header_rpcs.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.advance_purchase_order_status(uuid, text, text) TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.advance_purchase_order_status(uuid, text, text, date) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 

@@ -10,12 +10,14 @@
 --   1. set_purchase_order_eta: member sets ETA + note via the authenticated
 --      role; acknowledged_at stays NULL and status does not move (R16); owner
 --      allowed on a draft (stays draft); outsider, guest and a cancelled PO
---      refused.
---   2. set_purchase_order_ship_to: member sets ship-to on an unsent PO; refused
---      once sent_at is set; outsider refused.
+--      refused. 1g: p_local_date stamps the audit line; > 1 day off refused.
+--   2. set_purchase_order_ship_to: member sets ship-to on an unsent PO; a sent
+--      PO with no ship-to can be given one, which is then fixed (change and
+--      clear refused); outsider refused.
 --   3. advance_purchase_order_status: outsider refused; confirmed →
 --      in_production → shipped moves linked lines through the 00184 cascade
---      and flips the pending balance to due on ship; illegal transitions
+--      and flips the pending balance to due on ship, dated on p_local_date;
+--      illegal transitions
 --      (backwards, → delivered, → cancelled, from draft, from cancelled)
 --      refused; re-recording the current status is a no-op.
 --   4. record_project_ffe_installed: only delivered lines move (with
@@ -29,6 +31,9 @@
 --      outsider refused.
 --   7. Grants: anon and PUBLIC cannot execute any new function; authenticated
 --      can.
+--   8. projects.studio_id: on a studio project, a member of the owner's OTHER
+--      studio is refused every act, a member of the project's studio is
+--      allowed; without a studio_id the owner-anchored rule still holds.
 --
 -- How to run (after `supabase db reset`):
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
@@ -48,27 +53,39 @@ VALUES
   ('69000000-0000-4000-8000-0000000000a1', 'p0-owner@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'), -- O
   ('69000000-0000-4000-8000-0000000000a2', 'p0-member@test.invalid',   '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'), -- M
   ('69000000-0000-4000-8000-0000000000a3', 'p0-guest@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'), -- G
-  ('69000000-0000-4000-8000-0000000000a4', 'p0-outsider@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'); -- X
+  ('69000000-0000-4000-8000-0000000000a4', 'p0-outsider@test.invalid', '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'), -- X
+  ('69000000-0000-4000-8000-0000000000a5', 'p0-other@test.invalid',    '', NOW(), NOW(), NOW(), '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'); -- Y
 
 INSERT INTO profiles (id, email, full_name, created_at, updated_at)
 VALUES
   ('69000000-0000-4000-8000-0000000000a1', 'p0-owner@test.invalid',    'P0 Owner',    NOW(), NOW()),
   ('69000000-0000-4000-8000-0000000000a2', 'p0-member@test.invalid',   'P0 Member',   NOW(), NOW()),
   ('69000000-0000-4000-8000-0000000000a3', 'p0-guest@test.invalid',    'P0 Guest',    NOW(), NOW()),
-  ('69000000-0000-4000-8000-0000000000a4', 'p0-outsider@test.invalid', 'P0 Outsider', NOW(), NOW())
+  ('69000000-0000-4000-8000-0000000000a4', 'p0-outsider@test.invalid', 'P0 Outsider', NOW(), NOW()),
+  ('69000000-0000-4000-8000-0000000000a5', 'p0-other@test.invalid',    'P0 Other',    NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
+-- f1 is the studio; f2 is the owner's OTHER studio, where Y is a member (case 8).
 INSERT INTO organizations (id, type, name, slug)
-VALUES ('69000000-0000-4000-8000-0000000000f1', 'design_studio', 'P0 Studio', 'p0-studio-test');
+VALUES
+  ('69000000-0000-4000-8000-0000000000f1', 'design_studio', 'P0 Studio',       'p0-studio-test'),
+  ('69000000-0000-4000-8000-0000000000f2', 'design_studio', 'P0 Other Studio', 'p0-other-studio-test');
 
 INSERT INTO organization_members (id, user_id, organization_id, role, status, joined_at)
 VALUES
   ('69000000-0000-4000-8000-0000000000e1', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-0000000000f1', 'owner',  'active', NOW()),
   ('69000000-0000-4000-8000-0000000000e2', '69000000-0000-4000-8000-0000000000a2', '69000000-0000-4000-8000-0000000000f1', 'member', 'active', NOW()),
-  ('69000000-0000-4000-8000-0000000000e3', '69000000-0000-4000-8000-0000000000a3', '69000000-0000-4000-8000-0000000000f1', 'guest',  'active', NOW());
+  ('69000000-0000-4000-8000-0000000000e3', '69000000-0000-4000-8000-0000000000a3', '69000000-0000-4000-8000-0000000000f1', 'guest',  'active', NOW()),
+  ('69000000-0000-4000-8000-0000000000e4', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-0000000000f2', 'member', 'active', NOW()),
+  ('69000000-0000-4000-8000-0000000000e5', '69000000-0000-4000-8000-0000000000a5', '69000000-0000-4000-8000-0000000000f2', 'member', 'active', NOW());
 
+-- P0 Project carries no studio_id (the owner sits in two studios, so none is
+-- derived): access follows the owner (is_studio_comember). P0 Studio Project
+-- names f1: access follows f1 (case 8).
 INSERT INTO projects (id, name, designer_id, created_by)
 VALUES ('69000000-0000-4000-8000-000000000001', 'P0 Project', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-0000000000a1');
+INSERT INTO projects (id, name, designer_id, created_by, studio_id)
+VALUES ('69000000-0000-4000-8000-000000000002', 'P0 Studio Project', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-0000000000f1');
 
 INSERT INTO vendors (id, name)
 VALUES
@@ -85,7 +102,8 @@ VALUES
   ('69000000-0000-4000-8000-000000000101', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-000000000001', '69000000-0000-4000-8000-000000000011', 'fifty_fifty', 100000, 'confirmed', NULL),  -- po_conf
   ('69000000-0000-4000-8000-000000000102', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-000000000001', '69000000-0000-4000-8000-000000000011', 'net_30',       50000, 'draft',     NULL),  -- po_draft
   ('69000000-0000-4000-8000-000000000103', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-000000000001', '69000000-0000-4000-8000-000000000011', 'net_30',       30000, 'confirmed', NOW()), -- po_sent
-  ('69000000-0000-4000-8000-000000000104', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-000000000001', '69000000-0000-4000-8000-000000000011', 'net_30',       20000, 'cancelled', NULL);  -- po_cxl
+  ('69000000-0000-4000-8000-000000000104', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-000000000001', '69000000-0000-4000-8000-000000000011', 'net_30',       20000, 'cancelled', NULL),  -- po_cxl
+  ('69000000-0000-4000-8000-000000000105', '69000000-0000-4000-8000-0000000000a1', '69000000-0000-4000-8000-000000000002', '69000000-0000-4000-8000-000000000011', 'net_30',       10000, 'confirmed', NULL);  -- po_studio (case 8)
 
 INSERT INTO po_payments (id, purchase_order_id, kind, amount_cents, state, paid_date)
 VALUES
@@ -223,6 +241,28 @@ BEGIN
   RAISE NOTICE 'Case 1 passed: owner allowed; outsider, guest, cancelled refused.';
 END $$;
 
+-- 1g: the studio-local day stamps the audit line (00665/D9); a day more than
+-- one off the UTC day is refused.
+DO $$
+DECLARE
+  v_po purchase_orders;
+  v_err text;
+  v_utc date := (now() AT TIME ZONE 'UTC')::date;
+BEGIN
+  PERFORM pg_temp.assume_user('69000000-0000-4000-8000-0000000000a2');
+  v_po := set_purchase_order_eta('69000000-0000-4000-8000-000000000102', DATE '2026-12-05', 'Local evening', v_utc - 1);
+  ASSERT v_po.notes = format('[%s ETA update]: Local evening', v_utc - 1),
+    'FAIL 1g: audit line should carry the local day, got ' || COALESCE(v_po.notes, 'NULL');
+
+  v_err := pg_temp.raised(format(
+    $q$SELECT set_purchase_order_eta('69000000-0000-4000-8000-000000000102', DATE '2026-12-06', 'x', DATE %L)$q$,
+    v_utc + 5));
+  ASSERT v_err LIKE '%more than a day from today%', 'FAIL 1g: a far local date should be refused, got ' || COALESCE(v_err, 'no error');
+  PERFORM 1 FROM purchase_orders WHERE id = '69000000-0000-4000-8000-000000000102' AND confirmed_eta = DATE '2026-12-05';
+  ASSERT FOUND, 'FAIL 1g: refused call must leave the ETA untouched';
+  RAISE NOTICE 'Case 1g passed: local day stamps the ETA audit line; out-of-range day refused.';
+END $$;
+
 -- ─── case 2: set_purchase_order_ship_to ─────────────────────────────────────
 
 DO $$
@@ -234,15 +274,24 @@ BEGIN
   v_po := set_purchase_order_ship_to('69000000-0000-4000-8000-000000000102', '  Studio receiver, 12 Elm St  ');
   ASSERT v_po.ship_to = 'Studio receiver, 12 Elm St', 'FAIL 2a: ship-to not stored trimmed';
 
+  -- 2b: a PO marked sent with no ship-to can still get one (so it can be
+  -- re-sent) ...
+  v_po := set_purchase_order_ship_to('69000000-0000-4000-8000-000000000103', '  Studio receiver, 12 Elm St  ');
+  ASSERT v_po.ship_to = 'Studio receiver, 12 Elm St' AND v_po.sent_at IS NOT NULL,
+    'FAIL 2b: a missing ship-to on a sent PO should be fillable';
+
+  -- 2c: ... but once set on sent paper it cannot be changed (R8).
   v_err := pg_temp.raised($q$SELECT set_purchase_order_ship_to('69000000-0000-4000-8000-000000000103', 'Somewhere else')$q$);
-  ASSERT v_err LIKE '%already sent%', 'FAIL 2b: ship-to after send should be refused, got ' || COALESCE(v_err, 'no error');
-  PERFORM 1 FROM purchase_orders WHERE id = '69000000-0000-4000-8000-000000000103' AND ship_to IS NULL;
-  ASSERT FOUND, 'FAIL 2b: refused ship-to must leave the sent PO untouched';
+  ASSERT v_err LIKE '%already sent%', 'FAIL 2c: changing ship-to after send should be refused, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT set_purchase_order_ship_to('69000000-0000-4000-8000-000000000103', '')$q$);
+  ASSERT v_err LIKE '%already sent%', 'FAIL 2c: clearing ship-to after send should be refused, got ' || COALESCE(v_err, 'no error');
+  PERFORM 1 FROM purchase_orders WHERE id = '69000000-0000-4000-8000-000000000103' AND ship_to = 'Studio receiver, 12 Elm St';
+  ASSERT FOUND, 'FAIL 2c: refused ship-to must leave the sent PO untouched';
 
   PERFORM pg_temp.assume_user('69000000-0000-4000-8000-0000000000a4');
   v_err := pg_temp.raised($q$SELECT set_purchase_order_ship_to('69000000-0000-4000-8000-000000000102', 'Hijack')$q$);
-  ASSERT v_err LIKE '%not found or access denied%', 'FAIL 2c: outsider should be refused, got ' || COALESCE(v_err, 'no error');
-  RAISE NOTICE 'Case 2 passed: ship-to set by member; refused after send and for outsider.';
+  ASSERT v_err LIKE '%not found or access denied%', 'FAIL 2d: outsider should be refused, got ' || COALESCE(v_err, 'no error');
+  RAISE NOTICE 'Case 2 passed: ship-to set by member; filled once after send, then fixed; outsider refused.';
 END $$;
 
 -- ─── case 3: advance_purchase_order_status ─────────────────────────────────
@@ -269,18 +318,27 @@ BEGIN
   PERFORM 1 FROM po_payments WHERE id = '69000000-0000-4000-8000-000000000301' AND state = 'pending';
   ASSERT FOUND, 'FAIL 3b: balance must stay pending before ship';
 
-  -- 3c: in_production → shipped; lines ship and the balance flips to due.
-  v_po := advance_purchase_order_status('69000000-0000-4000-8000-000000000101', 'shipped', NULL);
+  -- 3c: in_production → shipped on the studio's day (one before the UTC day,
+  -- an evening in the Americas); lines ship and the balance flips to due,
+  -- dated on that local day (00665/D9), and so is the audit line.
+  v_po := advance_purchase_order_status('69000000-0000-4000-8000-000000000101', 'shipped', 'On the truck',
+    (now() AT TIME ZONE 'UTC')::date - 1);
   ASSERT v_po.status = 'shipped', 'FAIL 3c: status should be shipped';
+  ASSERT v_po.notes LIKE '%' || format('[%s shipped]: On the truck', (now() AT TIME ZONE 'UTC')::date - 1),
+    'FAIL 3c: shipped audit line should carry the local day, got ' || COALESCE(v_po.notes, 'NULL');
   SELECT count(*) INTO v_n FROM project_ffe_items
   WHERE purchase_order_id = '69000000-0000-4000-8000-000000000101' AND status = 'shipped';
   ASSERT v_n = 2, 'FAIL 3c: cascade should move 2 lines to shipped, moved ' || v_n;
-  PERFORM 1 FROM po_payments WHERE id = '69000000-0000-4000-8000-000000000301' AND state = 'due';
-  ASSERT FOUND, 'FAIL 3c: shipping with the deposit paid must flip the balance to due';
+  PERFORM 1 FROM po_payments WHERE id = '69000000-0000-4000-8000-000000000301' AND state = 'due'
+    AND due_date = (now() AT TIME ZONE 'UTC')::date - 1;
+  ASSERT FOUND, 'FAIL 3c: shipping with the deposit paid must flip the balance to due on the local day';
 
   -- 3d: re-recording shipped is a no-op.
   v_po := advance_purchase_order_status('69000000-0000-4000-8000-000000000101', 'shipped', 'dup');
   ASSERT v_po.status = 'shipped' AND v_po.notes NOT LIKE '%dup%', 'FAIL 3d: same-status call must be a no-op';
+  PERFORM 1 FROM po_payments WHERE id = '69000000-0000-4000-8000-000000000301'
+    AND due_date = (now() AT TIME ZONE 'UTC')::date - 1;
+  ASSERT FOUND, 'FAIL 3d: a no-op call must not re-date the balance';
 
   -- 3e: illegal transitions.
   v_err := pg_temp.raised($q$SELECT advance_purchase_order_status('69000000-0000-4000-8000-000000000101', 'in_production', NULL)$q$);
@@ -442,9 +500,9 @@ DECLARE
 BEGIN
   FOREACH v_fn IN ARRAY ARRAY[
     'public.can_send_purchase_order(uuid)',
-    'public.set_purchase_order_eta(uuid, date, text)',
+    'public.set_purchase_order_eta(uuid, date, text, date)',
     'public.set_purchase_order_ship_to(uuid, text)',
-    'public.advance_purchase_order_status(uuid, text, text)',
+    'public.advance_purchase_order_status(uuid, text, text, date)',
     'public.assign_po_number(uuid)',
     'public.record_project_ffe_installed(uuid[], date)',
     'public.set_project_ffe_line_commercials(uuid, jsonb)'
@@ -458,6 +516,55 @@ BEGIN
     ASSERT (SELECT prosecdef FROM pg_proc WHERE oid = v_fn::regprocedure), 'FAIL 7: not SECURITY DEFINER ' || v_fn;
   END LOOP;
   RAISE NOTICE 'Case 7 passed: anon/PUBLIC revoked, authenticated granted, all SECURITY DEFINER.';
+END $$;
+
+-- ─── case 8: a studio project belongs to its studio (projects.studio_id) ───
+-- Y shares the owner's OTHER studio (f2) but not the project's studio (f1).
+
+DO $$
+DECLARE
+  v_po purchase_orders;
+  v_err text;
+BEGIN
+  PERFORM 1 FROM projects WHERE id = '69000000-0000-4000-8000-000000000001' AND studio_id IS NULL;
+  ASSERT FOUND, 'FAIL 8: precondition — P0 Project must carry no studio_id';
+  PERFORM 1 FROM projects WHERE id = '69000000-0000-4000-8000-000000000002'
+    AND studio_id = '69000000-0000-4000-8000-0000000000f1';
+  ASSERT FOUND, 'FAIL 8: precondition — P0 Studio Project must name f1';
+
+  -- 8a: a member of the owner's other studio is refused every act on f1's PO.
+  PERFORM pg_temp.assume_user('69000000-0000-4000-8000-0000000000a5');
+  ASSERT NOT can_send_purchase_order('69000000-0000-4000-8000-000000000105'),
+    'FAIL 8a: a member of the owner''s other studio must not send f1''s PO';
+  v_err := pg_temp.raised($q$SELECT set_purchase_order_eta('69000000-0000-4000-8000-000000000105', DATE '2027-01-01', NULL)$q$);
+  ASSERT v_err LIKE '%not found or access denied%', 'FAIL 8a: ETA should be refused, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT set_purchase_order_ship_to('69000000-0000-4000-8000-000000000105', 'Hijack')$q$);
+  ASSERT v_err LIKE '%not found or access denied%', 'FAIL 8a: ship-to should be refused, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT advance_purchase_order_status('69000000-0000-4000-8000-000000000105', 'in_production', NULL)$q$);
+  ASSERT v_err LIKE '%not found or access denied%', 'FAIL 8a: advance should be refused, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT assign_po_number('69000000-0000-4000-8000-000000000105')$q$);
+  ASSERT v_err LIKE '%not found or access denied%', 'FAIL 8a: numbering should be refused, got ' || COALESCE(v_err, 'no error');
+  PERFORM 1 FROM purchase_orders WHERE id = '69000000-0000-4000-8000-000000000105'
+    AND status = 'confirmed' AND confirmed_eta IS NULL AND ship_to IS NULL AND po_number IS NULL;
+  ASSERT FOUND, 'FAIL 8a: refused calls must leave f1''s PO untouched';
+
+  -- 8b: on a project without a studio_id, the owner-anchored rule is kept, so
+  -- the same user still reaches it through the shared studio.
+  ASSERT can_send_purchase_order('69000000-0000-4000-8000-000000000102'),
+    'FAIL 8b: a co-member of the owner keeps access on a project with no studio_id';
+
+  -- 8c: a member of the project's own studio is allowed.
+  PERFORM pg_temp.assume_user('69000000-0000-4000-8000-0000000000a2');
+  ASSERT can_send_purchase_order('69000000-0000-4000-8000-000000000105'), 'FAIL 8c: f1 member can send';
+  v_po := set_purchase_order_ship_to('69000000-0000-4000-8000-000000000105', 'Studio receiver');
+  ASSERT v_po.ship_to = 'Studio receiver', 'FAIL 8c: f1 member should set ship-to';
+
+  -- 8d: the owner is allowed; the guest of f1 is not.
+  PERFORM pg_temp.assume_user('69000000-0000-4000-8000-0000000000a1');
+  ASSERT can_send_purchase_order('69000000-0000-4000-8000-000000000105'), 'FAIL 8d: owner can send';
+  PERFORM pg_temp.assume_user('69000000-0000-4000-8000-0000000000a3');
+  ASSERT NOT can_send_purchase_order('69000000-0000-4000-8000-000000000105'), 'FAIL 8d: f1 guest cannot send';
+  RAISE NOTICE 'Case 8 passed: studio project gated on its studio; other-studio member refused; owner-anchored rule kept without studio_id.';
 END $$;
 
 ROLLBACK;

@@ -1472,17 +1472,26 @@ describe('useUpdatePurchaseOrderStatus', () => {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
-    const result = await config.mutationFn({
-      purchaseOrderId: 'po-status-1',
-      status: 'shipped',
-      note: '  Left the dock  ',
-    });
+    // 10:30 pm on 5 Oct on the caller's clock: the local day, not the UTC day.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 5, 22, 30));
+    let result: unknown;
+    try {
+      result = await config.mutationFn({
+        purchaseOrderId: 'po-status-1',
+        status: 'shipped',
+        note: '  Left the dock  ',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
 
     // Every side effect (item ratchet, balance flip) is owned by trigger 00184.
     expect(supabaseClient.rpc).toHaveBeenCalledWith('advance_purchase_order_status', {
       p_po_id: 'po-status-1',
       p_to: 'shipped',
       p_note: 'Left the dock',
+      p_local_date: '2026-10-05',
     });
     // purchase_orders is RPC-only (00447) — no direct table write.
     expect(builders.purchase_orders).toBeUndefined();
@@ -1501,6 +1510,7 @@ describe('useUpdatePurchaseOrderStatus', () => {
       p_po_id: 'po-2',
       p_to: 'in_production',
       p_note: null,
+      p_local_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
   });
 
@@ -2054,15 +2064,24 @@ describe('useUpdatePurchaseOrderETA', () => {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
-    const result = await config.mutationFn({
-      purchaseOrderId: 'po-eta-1',
-      newEta: '2026-07-15',
-    });
+    // 12:15 am on 1 Jul on the caller's clock: the local day is sent.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 6, 1, 0, 15));
+    let result: unknown;
+    try {
+      result = await config.mutationFn({
+        purchaseOrderId: 'po-eta-1',
+        newEta: '2026-07-15',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(supabaseClient.rpc).toHaveBeenCalledWith('set_purchase_order_eta', {
       p_po_id: 'po-eta-1',
       p_eta: '2026-07-15',
       p_note: null,
+      p_local_date: '2026-07-01',
     });
     // purchase_orders is RPC-only (00447) — no read or write against the table.
     expect(builders.purchase_orders).toBeUndefined();
@@ -2093,6 +2112,7 @@ describe('useUpdatePurchaseOrderETA', () => {
       p_po_id: 'po-eta-2',
       p_eta: '2026-08-01',
       p_note: 'Vendor pushed by 2 weeks',
+      p_local_date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
   });
 

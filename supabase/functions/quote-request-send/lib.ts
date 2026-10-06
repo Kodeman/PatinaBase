@@ -96,17 +96,17 @@ export function resolveVendorRecipient(
 
 // ─── Send access (C-07) ──────────────────────────────────────────────────────
 //
-// po-send's rule applied to an RFQ: the studio that owns the work may send it.
-// An RFQ has no purchase order, so the owner is the linked project's owner
-// when there is one, else the designer who drafted the request.
+// po-send's rule applied to an RFQ: the drafter's studio may send it. The
+// anchor is the drafter (vendor_quote_requests.designer_id), never the linked
+// project's owner, so send access matches the vendor_quote_requests RLS: the
+// drafter or a co-member of the drafter, exactly who can read and edit it.
 
 export interface QuoteRequestOwnerSource {
   designer_id: string;
-  project?: { designer_id?: string | null } | null;
 }
 
 export function quoteRequestStudioOwner(request: QuoteRequestOwnerSource): string {
-  return request.project?.designer_id || request.designer_id;
+  return request.designer_id;
 }
 
 /** The slice of a supabase-js client the access check needs. */
