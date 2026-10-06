@@ -490,11 +490,8 @@ ON CONFLICT (id) DO NOTHING;`);
     await ackCheck
       .getByRole("button", { name: "Log it with 1 difference" })
       .click();
-    await expect(
-      page.getByText(
-        "Acknowledged — 1 difference. A reply to the maker is drafted for your review; nothing is sent until you send it.",
-      ),
-    ).toBeVisible({ timeout: 30_000 });
+    // The status sentence is transient: once the ack lands the next act moves
+    // on. The durable proof is the PO's stamp and the drafted reply below.
     const poCell = page.getByTestId("line-po-cell");
     await expect(poCell.getByTestId("po-ack-stamp")).toHaveText(
       "Acknowledged · 1 difference",
@@ -523,11 +520,16 @@ ON CONFLICT (id) DO NOTHING;`);
       `Sent to ${VENDOR_A_EMAIL}.`,
       { timeout: 20_000 },
     );
-    expect(
-      psqlScalar(
-        `SELECT status || '|' || to_email FROM public.procurement_drafts WHERE id = ${q(draftBody.draftId)}`,
-      ),
-    ).toBe(`sent|${VENDOR_A_EMAIL}`);
+    // Drafts go awaiting_review → sending → sent (00718); poll past "sending".
+    await expect
+      .poll(
+        () =>
+          psqlScalar(
+            `SELECT status || '|' || to_email FROM public.procurement_drafts WHERE id = ${q(draftBody.draftId)}`,
+          ),
+        { timeout: 20_000 },
+      )
+      .toBe(`sent|${VENDOR_A_EMAIL}`);
     await shot(page, testInfo, "08-reply-sent");
 
     // ── 4. A partial shipment (1 of 2), and a freight rider at cost. ───────
