@@ -65,6 +65,51 @@ jest.mock('../command-bar', () => ({
   openLedger: jest.fn(),
 }));
 
+// R1 — the server's can_see_studio_margin answer for the viewer's seat.
+let mockCanSeeMargin = true;
+jest.mock('@/hooks/use-can-see-margin', () => ({
+  useCanSeeMargin: () => mockCanSeeMargin,
+}));
+
+describe('AccountBand margin gate (C-36, R1)', () => {
+  beforeEach(() => {
+    mockInvoiceId = null;
+    mockQueryState = 'ready';
+    mockAccountOverride = {
+      margin: { currency: 'USD', cents: 4_000 },
+      clientValueCents: 14_000,
+      tradeCostCents: 10_000,
+      tradeCoverage: { withTrade: 1, total: 1 },
+      marginPct: 29,
+      estCommissionCents: 4_000,
+    };
+  });
+
+  afterEach(() => {
+    mockCanSeeMargin = true;
+    mockAccountOverride = {};
+  });
+
+  it('shows margin, the trade → client line and est. commissions to a viewer who may see margin', () => {
+    render(<AccountBand projectId="project-1" />);
+    expect(screen.getByText(/29% margin/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /The accounts · this project/ }));
+    expect(screen.getByText(/est\. commissions/)).toBeInTheDocument();
+    expect(screen.getByText(/trade cost on 1 of 1 committed/)).toBeInTheDocument();
+  });
+
+  it('hides every margin figure from a viewer the studio restricts', () => {
+    mockCanSeeMargin = false;
+    render(<AccountBand projectId="project-1" />);
+    expect(screen.queryByText(/% margin/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /The accounts · this project/ }));
+    expect(screen.queryByText(/% margin/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/est\. commissions/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/trade cost on/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Design fee/)).toBeInTheDocument();
+  });
+});
+
 describe('AccountBand root spacing', () => {
   beforeEach(() => {
     mockInvoiceId = null;

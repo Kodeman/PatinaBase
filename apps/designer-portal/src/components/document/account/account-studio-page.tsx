@@ -55,6 +55,7 @@ import { StudioSetupChecklist } from './studio-setup-checklist';
 import { MemberTitleLine } from './member-title-line';
 import { StudioRateRows } from './studio-rate-rows';
 import { StudioPaymentMethodsCard } from './studio-payment-methods';
+import { StudioMarginVisibilityCard } from './studio-margin-visibility';
 import { AgreementLibraryCard } from './agreement-library-card';
 import { LicensingAttestationCard } from './licensing-attestation-card';
 import { studioEvents } from '@/lib/analytics/studio-events';
@@ -1196,6 +1197,10 @@ export function AccountStudioPage() {
         studioId={studio.id}
         canEdit={myRole !== null && myRole !== 'guest'}
       />
+
+      {/* Who sees margin (US-16 C-36, R1) — owners and admins restrict it;
+          every other seat reads it. */}
+      <StudioMarginVisibilityCard studioId={studio.id} canManage={canManage} />
 
       {/* Agreement defaults (00575) — placed after Billing, which is
           untouched. What a new agreement starts from; every member composes

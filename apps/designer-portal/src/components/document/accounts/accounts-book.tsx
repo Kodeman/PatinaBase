@@ -24,6 +24,7 @@ import {
 } from '@patina/supabase';
 import { LedgerFrontMatter } from '../ledger-front-matter';
 import { useStudioMargin } from '@/hooks/use-studio-accounts';
+import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
 import { mixedCurrenciesText } from '@/lib/currency-totals';
 import { collectedCents } from '@/lib/document/account-summary';
 import { fmtUsd } from '@/lib/document/format';
@@ -62,6 +63,7 @@ export function AccountsBook({
   const { aging } = useArAging();
   const { data: earnings } = useEarningsStats();
   const margin = useStudioMargin();
+  const canSeeMargin = useCanSeeMargin();
   // R37 — teaching stats feed the front-matter lens.
   const { data: teaching } = useDesignerTeachingStats();
 
@@ -84,14 +86,19 @@ export function AccountsBook({
     ? [
         { label: 'revenue', value: fmtUsd(collectedCents(invoices ?? [])) },
         { label: 'A/R', value: fmtUsd(aging.totalBalanceCents) },
-        {
-          label: 'margin',
-          value: margin.data?.mixedCurrencies
-            ? mixedCurrenciesText(margin.data.mixedCurrencies)
-            : margin.data?.marginPct != null
-              ? `${margin.data.marginPct}%`
-              : '—',
-        },
+        // R1 — the studio margin shows only to a viewer who may see margin.
+        ...(canSeeMargin
+          ? [
+              {
+                label: 'margin',
+                value: margin.data?.mixedCurrencies
+                  ? mixedCurrenciesText(margin.data.mixedCurrencies)
+                  : margin.data?.marginPct != null
+                    ? `${margin.data.marginPct}%`
+                    : '—',
+              },
+            ]
+          : []),
       ]
     : [];
 

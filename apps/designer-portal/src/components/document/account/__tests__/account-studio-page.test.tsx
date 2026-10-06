@@ -24,6 +24,13 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 
 // Paying makers has its own suite (studio-payment-methods.test.tsx).
 jest.mock('../studio-payment-methods', () => ({ StudioPaymentMethodsCard: () => null }));
+// Who sees margin has its own suite (studio-margin-visibility.test.tsx); here
+// only that the page hands it the seat's manage right.
+const mockMarginCard = jest.fn((_props: { studioId: string; canManage: boolean }) => null);
+jest.mock('../studio-margin-visibility', () => ({
+  StudioMarginVisibilityCard: (props: { studioId: string; canManage: boolean }) =>
+    mockMarginCard(props),
+}));
 
 jest.mock('@patina/supabase', () => ({
   useCreateOrganization: jest.fn(),
@@ -650,5 +657,24 @@ describe('AccountStudioPage — the studio rate card (HT-3)', () => {
     expect(
       within(memberRow).getByLabelText('Hourly rate for Team Member'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('AccountStudioPage — who sees margin (C-36, R1)', () => {
+  it.each([
+    ['owner', true],
+    ['admin', true],
+    ['member', false],
+  ] as const)('hands a %s seat canManage=%s', (role, canManage) => {
+    mockMarginCard.mockClear();
+    mockUseOrganizations.mockReturnValue({
+      data: [organization(role)],
+      isLoading: false,
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: organizationMembers(role),
+    });
+    render(<AccountStudioPage />);
+    expect(mockMarginCard).toHaveBeenLastCalledWith({ studioId: 'studio-1', canManage });
   });
 });

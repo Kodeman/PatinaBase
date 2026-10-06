@@ -34,7 +34,6 @@ import {
   useConsumeCapture,
   useReorderProposalItems,
   useReorderProposalScopeRooms,
-  useIsStudioOwner,
   createBrowserClient,
   type ProposalItemType,
 } from '@patina/supabase';
@@ -64,6 +63,7 @@ import { findScheduleTwins, type TwinRef } from '@/lib/scope/duplicates';
 // S² Wave 2 — custom fields (S6), spec PDFs (S8), financial lens (S9)
 import { SpecFieldsManager } from '@/components/portal/scope-builder/spec-fields-manager';
 import { FinancialLensPanel, type LensRow } from '@/components/portal/scope-builder/financial-lens';
+import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
 import { useSpecFieldDefs } from '@/hooks/use-spec-fields';
 import { withFieldValue, formatFieldValue } from '@/lib/scope/spec-fields';
 import { buildProposalItemFromPick } from '@/components/portal/scope-builder/build-proposal-item-from-pick';
@@ -907,8 +907,8 @@ export function FFEScheduleBuilder({
   // ── S4 — schedule search + facet filters (client-side; items are loaded) ──
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<FacetSelections>({});
-  // ── S9 — financial lens (studio-owner money view) + bulk markup ──
-  const { isStudioOwner } = useIsStudioOwner();
+  // ── S9 — financial lens (margin view, R1) + bulk markup ──
+  const canSeeMargin = useCanSeeMargin();
   const [moneyView, setMoneyView] = useState(false);
   const [bulkMarkup, setBulkMarkup] = useState('');
   // ── S8 — spec PDF export (client-side fetch → blob) ──
@@ -1363,8 +1363,8 @@ export function FFEScheduleBuilder({
         <div className="flex flex-wrap items-center gap-2">
           {/* S6 — the schedule's custom-field columns (both hosts). */}
           <SpecFieldsManager owner={{ proposalId }} />
-          {/* S9 — studio-owner money view toggle. */}
-          {isStudioOwner && (
+          {/* S9 — money view toggle, for a viewer who may see margin. */}
+          {canSeeMargin && (
             <Button
               variant={moneyView ? 'primary' : 'ghost'}
               size="sm"
@@ -1408,8 +1408,8 @@ export function FFEScheduleBuilder({
         </p>
       )}
 
-      {/* S9 — the financial lens (studio owners only; designer-eyes analysis). */}
-      {moneyView && isStudioOwner && <FinancialLensPanel rows={lensRows} />}
+      {/* S9 — the financial lens (margin viewers only; designer-eyes analysis). */}
+      {moneyView && canSeeMargin && <FinancialLensPanel rows={lensRows} />}
 
       {/* R83 — bulk-action failures land inline at the schedule, never a toast. */}
       {bulkError && (

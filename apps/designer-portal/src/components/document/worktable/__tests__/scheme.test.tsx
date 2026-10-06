@@ -31,13 +31,20 @@ jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 
+const mockCanSeeStudioMargin = jest.fn((_studioId: string | undefined) => ({ data: false }));
+
 jest.mock('@patina/supabase', () => ({
   useProposalScopeRooms: () => ({ data: mockRooms }),
   useFFECategories: () => ({ data: [] }),
   useConsumeCapture: () => ({ mutate: jest.fn(), isPending: false }),
   useReorderProposalItems: () => ({ mutate: jest.fn() }),
   useReorderProposalScopeRooms: () => ({ mutate: jest.fn() }),
-  useIsStudioOwner: () => ({ isStudioOwner: false }),
+  // The Financial lens gate (R1): the viewer's studio, then the server's
+  // can_see_studio_margin answer for her seat.
+  useOrganizations: () => ({
+    data: [{ id: 'studio-1', name: 'Studio', type: 'design_studio', membership: { role: 'member' } }],
+  }),
+  useCanSeeStudioMargin: (studioId: string | undefined) => mockCanSeeStudioMargin(studioId),
   createBrowserClient: () => ({
     from: () => ({
       select: () => ({
@@ -126,7 +133,7 @@ jest.mock('@/components/portal/scope-builder/spec-fields-manager', () => ({
 }));
 
 jest.mock('@/components/portal/scope-builder/financial-lens', () => ({
-  FinancialLensPanel: () => null,
+  FinancialLensPanel: () => <div>Financial lens panel</div>,
 }));
 
 jest.mock(
@@ -265,5 +272,34 @@ describe('The Scheme', () => {
       // No ≥1440 (or any 1440-keyed) gating on a table tool.
       expect(cls).not.toMatch(/1440/);
     }
+  });
+});
+
+describe('The Financial lens gate (C-36, R1)', () => {
+  afterEach(() => {
+    mockCanSeeStudioMargin.mockImplementation(() => ({ data: false }));
+  });
+
+  it("opens to a member when the studio shows margin to everyone", async () => {
+    // can_see_studio_margin answers true for a member seat under 'everyone'.
+    mockCanSeeStudioMargin.mockImplementation(() => ({ data: true }));
+    mockItems = THREE_LINES;
+    renderScheme();
+    await screen.findByText('A mohair sofa');
+
+    expect(mockCanSeeStudioMargin).toHaveBeenCalledWith('studio-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Money' }));
+    expect(await screen.findByText('Financial lens panel')).toBeInTheDocument();
+  });
+
+  it("is hidden from a member when the studio restricts margin to owners and admins", async () => {
+    // can_see_studio_margin answers false for a member seat under 'owners_admins'.
+    mockCanSeeStudioMargin.mockImplementation(() => ({ data: false }));
+    mockItems = THREE_LINES;
+    renderScheme();
+    await screen.findByText('A mohair sofa');
+
+    expect(screen.queryByRole('button', { name: /^Money/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Financial lens panel')).not.toBeInTheDocument();
   });
 });

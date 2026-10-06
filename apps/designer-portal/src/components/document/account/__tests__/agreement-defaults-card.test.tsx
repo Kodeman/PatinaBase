@@ -28,6 +28,8 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 
 // Paying makers has its own suite (studio-payment-methods.test.tsx).
 jest.mock('../studio-payment-methods', () => ({ StudioPaymentMethodsCard: () => null }));
+// Who sees margin has its own suite (studio-margin-visibility.test.tsx).
+jest.mock('../studio-margin-visibility', () => ({ StudioMarginVisibilityCard: () => null }));
 
 jest.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ user: { id: "designer-1" } }),
