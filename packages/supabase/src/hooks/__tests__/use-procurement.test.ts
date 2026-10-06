@@ -5,10 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 //
 // Mirror the use-phase-deliverables / use-phase-templates rigs but extend the
 // builder so a single table-builder can return different results for each
-// successive terminal call (.single() / await). useUpdateDamageClaim and
-// useUpdatePurchaseOrderETA both perform a read-then-update against the same
-// underlying table and need distinct responses per call. RPC-backed hooks
-// (useCreatePurchaseOrder / useLogPOAcknowledgment, 00186) go through
+// successive terminal call (.single() / await). useUpdateDamageClaim performs
+// a read-then-update against the same underlying table and needs distinct
+// responses per call. RPC-backed hooks (useCreatePurchaseOrder /
+// useLogPOAcknowledgment, 00186; the PO header hooks, 00690) go through
 // supabaseClient.rpc instead.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -150,6 +150,7 @@ import {
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
   useAdvancePaymentToDue,
   useUpdatePurchaseOrderStatus,
+  useSetPurchaseOrderShipTo,
   invalidateFfeCaches,
   // Sprint 3 — QBO export
   useQboExport,
@@ -1461,8 +1462,8 @@ describe('useCreateReceivingInspection batch command', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useUpdatePurchaseOrderStatus', () => {
-  it('issues a plain status UPDATE on purchase_orders scoped to id and returns the row', async () => {
-    queueTableResults('purchase_orders', {
+  it('calls advance_purchase_order_status with the target status and note, and never writes the table', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
       data: { id: 'po-status-1', status: 'shipped', project_id: 'proj-1' },
       error: null,
     });
@@ -1474,29 +1475,39 @@ describe('useUpdatePurchaseOrderStatus', () => {
     const result = await config.mutationFn({
       purchaseOrderId: 'po-status-1',
       status: 'shipped',
+      note: '  Left the dock  ',
     });
 
-    const builder = builders.purchase_orders;
-    const updates = builder.__chain.filter((c) => c.method === 'update');
-    expect(updates).toHaveLength(1);
-    // Exactly the status column — every side effect (item ratchet, balance
-    // flip, cancellation detach) is owned by trigger 00184.
-    expect(updates[0].args[0]).toEqual({ status: 'shipped' });
-
-    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
-    expect(eqArgs).toEqual([['id', 'po-status-1']]);
-
-    // No other table is touched.
-    expect(builders.project_ffe_items).toBeUndefined();
-    expect(builders.po_payments).toBeUndefined();
-
+    // Every side effect (item ratchet, balance flip) is owned by trigger 00184.
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('advance_purchase_order_status', {
+      p_po_id: 'po-status-1',
+      p_to: 'shipped',
+      p_note: 'Left the dock',
+    });
+    // purchase_orders is RPC-only (00447) — no direct table write.
+    expect(builders.purchase_orders).toBeUndefined();
     expect((result as { id: string }).id).toBe('po-status-1');
   });
 
-  it('throws when supabase returns an error', async () => {
-    queueTableResults('purchase_orders', {
+  it('sends a null note when none is given', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({ data: { id: 'po-2' }, error: null });
+    const config = useUpdatePurchaseOrderStatus() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await config.mutationFn({ purchaseOrderId: 'po-2', status: 'in_production' });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('advance_purchase_order_status', {
+      p_po_id: 'po-2',
+      p_to: 'in_production',
+      p_note: null,
+    });
+  });
+
+  it('throws when the RPC refuses the transition', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
       data: null,
-      error: { message: 'rls denied' },
+      error: { message: 'advance_purchase_order_status: shipped → in_production is not allowed' },
     });
 
     const config = useUpdatePurchaseOrderStatus() as unknown as {
@@ -1504,8 +1515,8 @@ describe('useUpdatePurchaseOrderStatus', () => {
     };
 
     await expect(
-      config.mutationFn({ purchaseOrderId: 'po-x', status: 'cancelled' }),
-    ).rejects.toThrow(/rls denied/);
+      config.mutationFn({ purchaseOrderId: 'po-x', status: 'in_production' }),
+    ).rejects.toThrow(/not allowed/);
   });
 
   it('onSuccess invalidates PO/payment/calendar/count keys, plus FF&E namespaces when projectId is supplied', () => {
@@ -1538,7 +1549,7 @@ describe('useUpdatePurchaseOrderStatus', () => {
       ) => void;
     };
 
-    config.onSuccess({}, { purchaseOrderId: 'po-1', status: 'confirmed' });
+    config.onSuccess({}, { purchaseOrderId: 'po-1', status: 'in_production' });
 
     const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
     expect(invalidatedKeys).toContainEqual(['purchase-orders']);
@@ -1548,123 +1559,57 @@ describe('useUpdatePurchaseOrderStatus', () => {
       ),
     ).toEqual([]);
   });
+});
 
-  // ───────────────────────────────────────────────────────────────────────
-  // Item 2 — expire open Checkout sessions when a Patina-catalog PO is
-  // cancelled. Fire-and-forget: onSuccess is synchronous, so the invoke
-  // runs as an un-awaited microtask — flush it with a real setTimeout(0)
-  // (vi.useFakeTimers isn't active in this file) before asserting.
-  // ───────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// useSetPurchaseOrderShipTo  (00690 set_purchase_order_ship_to)
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-  describe('onSuccess — expire-po-session side effect', () => {
-    it('invokes expire-po-session with the purchase_order_id when a Patina-catalog PO is cancelled', async () => {
-      supabaseClient.functions.invoke.mockResolvedValue({ data: { expired: 1 }, error: null });
-
-      const config = useUpdatePurchaseOrderStatus() as unknown as {
-        onSuccess: (
-          result: unknown,
-          variables: { purchaseOrderId: string; status: string; projectId?: string },
-        ) => void;
-      };
-
-      config.onSuccess(
-        { id: 'po-1', is_patina_catalog: true },
-        { purchaseOrderId: 'po-1', status: 'cancelled' },
-      );
-
-      await flushMicrotasks();
-
-      expect(supabaseClient.functions.invoke).toHaveBeenCalledWith('expire-po-session', {
-        body: { purchase_order_id: 'po-1' },
-      });
+describe('useSetPurchaseOrderShipTo', () => {
+  it('calls set_purchase_order_ship_to and returns the row', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: { id: 'po-1', project_id: 'proj-1', ship_to: '12 Elm St' },
+      error: null,
     });
 
-    it('does NOT invoke expire-po-session for a non-catalog PO cancel', async () => {
-      const config = useUpdatePurchaseOrderStatus() as unknown as {
-        onSuccess: (
-          result: unknown,
-          variables: { purchaseOrderId: string; status: string; projectId?: string },
-        ) => void;
-      };
+    const config = useSetPurchaseOrderShipTo() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    const result = await config.mutationFn({ purchaseOrderId: 'po-1', shipTo: '12 Elm St' });
 
-      config.onSuccess(
-        { id: 'po-2', is_patina_catalog: false },
-        { purchaseOrderId: 'po-2', status: 'cancelled' },
-      );
-
-      await flushMicrotasks();
-
-      expect(supabaseClient.functions.invoke).not.toHaveBeenCalled();
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('set_purchase_order_ship_to', {
+      p_po_id: 'po-1',
+      p_ship_to: '12 Elm St',
     });
+    expect(builders.purchase_orders).toBeUndefined();
+    expect((result as { ship_to: string }).ship_to).toBe('12 Elm St');
+  });
 
-    it('does NOT invoke expire-po-session for a Patina-catalog PO transitioning to a non-cancelled status', async () => {
-      const config = useUpdatePurchaseOrderStatus() as unknown as {
-        onSuccess: (
-          result: unknown,
-          variables: { purchaseOrderId: string; status: string; projectId?: string },
-        ) => void;
-      };
-
-      config.onSuccess(
-        { id: 'po-3', is_patina_catalog: true },
-        { purchaseOrderId: 'po-3', status: 'shipped' },
-      );
-
-      await flushMicrotasks();
-
-      expect(supabaseClient.functions.invoke).not.toHaveBeenCalled();
+  it('throws when the PO was already sent', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'purchase order po-1 was already sent' },
     });
+    const config = useSetPurchaseOrderShipTo() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
 
-    it('never throws and only logs when the invoke rejects — the cancel UX must never fail on this', async () => {
-      supabaseClient.functions.invoke.mockRejectedValue(new Error('network down'));
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await expect(
+      config.mutationFn({ purchaseOrderId: 'po-1', shipTo: 'x' }),
+    ).rejects.toThrow(/already sent/);
+  });
 
-      const config = useUpdatePurchaseOrderStatus() as unknown as {
-        onSuccess: (
-          result: unknown,
-          variables: { purchaseOrderId: string; status: string; projectId?: string },
-        ) => void;
-      };
+  it('onSuccess invalidates the PO keys and the FF&E caches of the PO project', () => {
+    const config = useSetPurchaseOrderShipTo() as unknown as {
+      onSuccess: (po: { id: string; project_id: string }) => void;
+    };
 
-      expect(() =>
-        config.onSuccess(
-          { id: 'po-4', is_patina_catalog: true },
-          { purchaseOrderId: 'po-4', status: 'cancelled' },
-        ),
-      ).not.toThrow();
+    config.onSuccess({ id: 'po-1', project_id: 'proj-1' });
 
-      await flushMicrotasks();
-
-      expect(warnSpy).toHaveBeenCalled();
-      warnSpy.mockRestore();
-    });
-
-    it('logs (does not throw) when the edge function resolves with a 409 po_not_cancelled error body', async () => {
-      supabaseClient.functions.invoke.mockResolvedValue({
-        data: null,
-        error: { error: 'po_not_cancelled', status: 'shipped' },
-      });
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-      const config = useUpdatePurchaseOrderStatus() as unknown as {
-        onSuccess: (
-          result: unknown,
-          variables: { purchaseOrderId: string; status: string; projectId?: string },
-        ) => void;
-      };
-
-      config.onSuccess(
-        { id: 'po-5', is_patina_catalog: true },
-        { purchaseOrderId: 'po-5', status: 'cancelled' },
-      );
-
-      await flushMicrotasks();
-
-      expect(warnSpy).toHaveBeenCalled();
-      warnSpy.mockRestore();
-    });
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-1']);
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
   });
 });
 
@@ -2099,14 +2044,9 @@ describe('useAdvancePaymentToDue', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useUpdatePurchaseOrderETA', () => {
-  it('issues an UPDATE on purchase_orders with confirmed_eta scoped to id and returns the row', async () => {
-    // Only one round-trip: the UPDATE + .select().single().
-    queueTableResults('purchase_orders', {
-      data: {
-        id: 'po-eta-1',
-        confirmed_eta: '2026-07-15',
-        notes: null,
-      },
+  it('calls set_purchase_order_eta with a null note and never writes the table', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: { id: 'po-eta-1', confirmed_eta: '2026-07-15', notes: null },
       error: null,
     });
 
@@ -2119,38 +2059,25 @@ describe('useUpdatePurchaseOrderETA', () => {
       newEta: '2026-07-15',
     });
 
-    const builder = builders.purchase_orders;
-    const update = builder.__chain.find((c) => c.method === 'update');
-    expect(update).toBeDefined();
-    const payload = update?.args[0] as { confirmed_eta: string; notes?: string };
-    expect(payload.confirmed_eta).toBe('2026-07-15');
-    // No notes supplied → must NOT touch the notes column.
-    expect(payload.notes).toBeUndefined();
-
-    // Scope: filter by id.
-    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
-    expect(eqArgs).toContainEqual(['id', 'po-eta-1']);
-
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('set_purchase_order_eta', {
+      p_po_id: 'po-eta-1',
+      p_eta: '2026-07-15',
+      p_note: null,
+    });
+    // purchase_orders is RPC-only (00447) — no read or write against the table.
+    expect(builders.purchase_orders).toBeUndefined();
     expect((result as { id: string }).id).toBe('po-eta-1');
   });
 
-  it('appends a timestamped notes line when notes are supplied', async () => {
-    // 1. SELECT current notes for the append.
-    // 2. UPDATE returning the new row.
-    queueTableResults(
-      'purchase_orders',
-      // Existing notes
-      { data: { notes: 'Vendor said L8W ETA' }, error: null },
-      // Update result
-      {
-        data: {
-          id: 'po-eta-2',
-          confirmed_eta: '2026-08-01',
-          notes: 'Vendor said L8W ETA\n[2026-05-27 ETA update]: Vendor pushed by 2 weeks',
-        },
-        error: null,
+  it('passes the trimmed note for the server-side dated audit line', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: {
+        id: 'po-eta-2',
+        confirmed_eta: '2026-08-01',
+        notes: 'Vendor said L8W ETA\n[2026-05-27 ETA update]: Vendor pushed by 2 weeks',
       },
-    );
+      error: null,
+    });
 
     const config = useUpdatePurchaseOrderETA() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
@@ -2159,18 +2086,29 @@ describe('useUpdatePurchaseOrderETA', () => {
     await config.mutationFn({
       purchaseOrderId: 'po-eta-2',
       newEta: '2026-08-01',
-      notes: 'Vendor pushed by 2 weeks',
+      notes: '  Vendor pushed by 2 weeks  ',
     });
 
-    const builder = builders.purchase_orders;
-    const update = builder.__chain.find((c) => c.method === 'update');
-    expect(update).toBeDefined();
-    const payload = update?.args[0] as { confirmed_eta: string; notes: string };
-    expect(payload.confirmed_eta).toBe('2026-08-01');
-    // The appended line must contain the supplied notes and the [YYYY-MM-DD ETA update] tag.
-    expect(payload.notes).toMatch(/\[\d{4}-\d{2}-\d{2} ETA update\]: Vendor pushed by 2 weeks/);
-    // The existing notes must be preserved (no destructive overwrite).
-    expect(payload.notes).toContain('Vendor said L8W ETA');
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('set_purchase_order_eta', {
+      p_po_id: 'po-eta-2',
+      p_eta: '2026-08-01',
+      p_note: 'Vendor pushed by 2 weeks',
+    });
+  });
+
+  it('throws when the RPC refuses', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'set_purchase_order_eta: purchase order po-x not found or access denied' },
+    });
+
+    const config = useUpdatePurchaseOrderETA() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+
+    await expect(
+      config.mutationFn({ purchaseOrderId: 'po-x', newEta: '2026-08-01' }),
+    ).rejects.toThrow(/access denied/);
   });
 });
 

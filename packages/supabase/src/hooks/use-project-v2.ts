@@ -253,51 +253,125 @@ export function useUpdateFFEItemStatus() {
   });
 }
 
+export interface SetFfeLineCommercialsInput {
+  itemId: string;
+  projectId: string;
+  /** An existing vendors row; the server copies vendors.name into vendor_name. */
+  vendorId?: string;
+  /** Vendor (trade) unit cost in cents, 0 or more. */
+  tradePriceCents?: number;
+}
+
+type ProjectFfeItemRow = Database['public']['Tables']['project_ffe_items']['Row'];
+
+/**
+ * One call to `set_project_ffe_line_commercials` (00692): vendor and/or trade
+ * cost on a line that is not yet on a PO. The client price is never sent —
+ * it is out of scope for this RPC (R1/R5/R8) and the server refuses any
+ * other key. markup_percent is recomputed server-side.
+ */
+async function setFfeLineCommercials({
+  itemId,
+  vendorId,
+  tradePriceCents,
+}: SetFfeLineCommercialsInput): Promise<ProjectFfeItemRow> {
+  const request: { vendorId?: string; tradePriceCents?: number } = {};
+  if (vendorId !== undefined) request.vendorId = vendorId;
+  if (tradePriceCents !== undefined) request.tradePriceCents = tradePriceCents;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getSupabase() as any;
+  const { data, error } = await supabase.rpc('set_project_ffe_line_commercials', {
+    p_item_id: itemId,
+    p_request: request,
+  });
+  if (error) {
+    throw new Error(
+      `Failed to set vendor or trade cost on FF&E line ${itemId}: ${
+        error.message ?? String(error)
+      }`,
+    );
+  }
+  return data as ProjectFfeItemRow;
+}
+
+function invalidateFfeCommercials(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+): void {
+  // ['project-ffe-items', projectId] + ['projects', projectId] +
+  // ['procurement-items']. invalidateFfeCaches' ['projects', projectId] sweep
+  // also prefix-invalidates the portal's ['projects', id, 'financials'] key —
+  // do not add exact:true there.
+  invalidateFfeCaches(queryClient, projectId);
+  // The package financials hook keys under its own namespace and its margin
+  // rollup reads trade_price_cents/line_total_cents.
+  queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
+}
+
+/**
+ * Mutation: vendor and/or trade cost on one project FF&E line
+ * (`set_project_ffe_line_commercials`, 00692). Owner or non-guest studio
+ * co-member; refused server-side once the line is on a PO.
+ */
+export function useSetFfeLineCommercials(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: setFfeLineCommercials,
+    onSuccess: (_, { projectId }) => {
+      invalidateFfeCommercials(queryClient, projectId);
+    },
+  });
+}
+
 export interface BulkReassignFfeVendorInput {
   projectId: string;
   /** Selected FF&E item ids — the caller pre-filters PO-linked lines out. */
   itemIds: string[];
   vendorId: string;
-  /** Denormalized display name, kept in lockstep with vendor_id (00148). */
-  vendorName: string;
 }
 
 export interface BulkReassignFfeVendorResult {
-  /** Ids the UPDATE actually reached (RLS + PO guard applied server-side). */
+  /** Ids the server updated. */
   updatedIds: string[];
-  /** Requested ids the write did NOT reach — PO-linked or not visible. */
+  /** Requested ids the server refused — PO-linked, removed or not visible. */
   skippedIds: string[];
 }
 
 /**
- * Bulk vendor reassignment for the FF&E board (Schedule & Boards Wave 0B —
- * replaces the "Reassign Vendor" Coming-soon stub, B-07).
+ * Bulk vendor reassignment for the FF&E board (Schedule & Boards Wave 0B,
+ * B-07). One `set_project_ffe_line_commercials` call per selected line
+ * (00692). A line already on a PO is refused server-side — reassigning it is
+ * a procurement act, never a bulk edit — and lands in `skippedIds`. When no
+ * line could be updated the first refusal is thrown.
  *
- * One UPDATE over the selected ids, guarded by `.is('purchase_order_id',
- * null)`: a line already linked to a PO is ordered — reassigning it is a
- * procurement act (cancel/re-issue the PO), never a bulk edit. The confirm
- * dialog pre-filters those out; the server-side guard re-enforces it against
- * a stale client. `.eq('project_id', …)` is defense-in-depth on top of RLS
- * (the useAssignProductToFfeSlot ownership-scoping pattern).
- *
- * Invalidates the FF&E trio (invalidateFfeCaches: ['project-ffe-items', id],
- * ['projects', id], ['procurement-items']) — the By Vendor groupings on both
- * the project board and the cross-project views re-derive from vendor_id.
+ * Invalidates the FF&E trio (invalidateFfeCaches) plus the package
+ * financials key — the By Vendor groupings re-derive from vendor_id.
  */
 export function useBulkReassignFfeVendor() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
       itemIds,
-      projectId: _projectId,
-      vendorId: _vendorId,
-      vendorName: _vendorName,
+      projectId,
+      vendorId,
     }: BulkReassignFfeVendorInput): Promise<BulkReassignFfeVendorResult> => {
       if (itemIds.length === 0) throw new Error('no items selected');
-      throw new Error('FF&E vendor changes are RPC-only; use the selection or PO change workflow.');
+      const results = await Promise.allSettled(
+        itemIds.map((itemId) => setFfeLineCommercials({ itemId, projectId, vendorId })),
+      );
+      const updatedIds: string[] = [];
+      const skippedIds: string[] = [];
+      results.forEach((result, index) => {
+        (result.status === 'fulfilled' ? updatedIds : skippedIds).push(itemIds[index]);
+      });
+      if (updatedIds.length === 0) {
+        throw (results[0] as PromiseRejectedResult).reason;
+      }
+      return { updatedIds, skippedIds };
     },
     onSuccess: (_, { projectId }) => {
-      invalidateFfeCaches(queryClient, projectId);
+      invalidateFfeCommercials(queryClient, projectId);
     },
   });
 }
@@ -305,43 +379,69 @@ export function useBulkReassignFfeVendor() {
 export interface UpdateFFEItemPricingInput {
   itemId: string;
   projectId: string;
-  /** Vendor (trade) unit cost in cents (00185). `null` clears the value back to unknown. */
-  tradePriceCents?: number | null;
-  /** Advisory designer markup percent (00185). `null` clears the value. */
-  markupPercent?: number | null;
-  /**
-   * CLIENT unit price in cents. When provided, `line_total_cents` is
-   * recomputed as `unitPriceCents × <current row quantity>`.
-   */
-  unitPriceCents?: number;
-  /**
-   * Quantity is intentionally NOT accepted: the hook reads the row's current
-   * quantity itself (select-then-update), matching useUpdateFFEItemStatus.
-   * Quantity edits belong to the portal's useUpdateProjectFFEItem.
-   */
-  quantity?: never;
+  /** Vendor (trade) unit cost in cents, 0 or more. */
+  tradePriceCents: number;
 }
 
 /**
- * Legacy API retained for source compatibility. FF&E price writes are now
- * command-only so this hook deliberately fails closed before touching data.
+ * Trade cost on one project FF&E line, through
+ * `set_project_ffe_line_commercials` (00692). The client price and markup
+ * are not editable here (R1/R5/R8); markup_percent is recomputed
+ * server-side from the stored client price.
  */
 export function useUpdateFFEItemPricing() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (_input: UpdateFFEItemPricingInput) => {
-      throw new Error(
-        'FF&E pricing changes are RPC-only; use the project selection pricing workflow.',
-      );
+    mutationFn: ({ itemId, projectId, tradePriceCents }: UpdateFFEItemPricingInput) =>
+      setFfeLineCommercials({ itemId, projectId, tradePriceCents }),
+    onSuccess: (_, { projectId }) => {
+      invalidateFfeCommercials(queryClient, projectId);
+    },
+  });
+}
+
+export interface RecordFfeInstalledInput {
+  projectId: string;
+  /** Lines to mark installed. Every line must be delivered (or already installed). */
+  itemIds: string[];
+  /** Install day (YYYY-MM-DD). Defaults to today server-side. */
+  installedOn?: string;
+}
+
+/**
+ * Mutation: marks delivered project FF&E lines installed through
+ * `record_project_ffe_installed` (00691). Only delivered lines move; an
+ * already-installed line is left untouched; any other status refuses the
+ * whole call. Owner or non-guest studio co-member.
+ *
+ * Invalidates the FF&E trio (invalidateFfeCaches) and the project workflow
+ * (close-out counts every non-installed line).
+ */
+export function useRecordFfeInstalled(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({
+      itemIds,
+      installedOn,
+    }: RecordFfeInstalledInput): Promise<ProjectFfeItemRow[]> => {
+      if (itemIds.length === 0) throw new Error('no items selected');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('record_project_ffe_installed', {
+        p_item_ids: itemIds,
+        p_installed_on: installedOn ?? null,
+      });
+      if (error) {
+        throw new Error(
+          `Failed to mark FF&E lines installed: ${error.message ?? String(error)}`,
+        );
+      }
+      return (data ?? []) as ProjectFfeItemRow[];
     },
     onSuccess: (_, { projectId }) => {
-      // ['project-ffe-items', projectId] + ['projects', projectId] +
-      // ['procurement-items'] — the same trio useUpdateFFEItemStatus sweeps.
-      // invalidateFfeCaches' ['projects', projectId] sweep also prefix-invalidates the portal's ['projects', id, 'financials'] key — do not add exact:true there.
       invalidateFfeCaches(queryClient, projectId);
-      // The package financials hook keys under its own namespace and its
-      // margin rollup reads trade_price_cents/line_total_cents.
-      queryClient.invalidateQueries({ queryKey: ['project-financials', projectId] });
+      void invalidateProjectWorkflow(queryClient, projectId);
     },
   });
 }

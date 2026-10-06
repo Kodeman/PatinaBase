@@ -5,9 +5,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 //
 // Mirror the use-procurement.test.ts rig: a per-table chainable builder whose
 // terminal calls (.single() / await) drain a result queue, so a single hook
-// performing multiple operations against the same table (e.g.
-// useUpdateFFEItemPricing's quantity read followed by its UPDATE) can receive
-// distinct responses per call.
+// performing multiple operations against the same table can receive distinct
+// responses per call.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type BuilderResult = { data: unknown; error: unknown };
@@ -119,6 +118,8 @@ import {
   useUpdateFFEItemStatus,
   useProjectFFEItems,
   useBulkReassignFfeVendor,
+  useSetFfeLineCommercials,
+  useRecordFfeInstalled,
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
 } from '../use-project-v2';
@@ -130,6 +131,8 @@ import type {
   UpdateFFEItemPricingInput,
   BulkReassignFfeVendorInput,
   BulkReassignFfeVendorResult,
+  SetFfeLineCommercialsInput,
+  RecordFfeInstalledInput,
   CreateProjectPhaseInput,
   ProjectPhaseTransitionInput,
   ProjectPhaseTransitionReceipt,
@@ -507,13 +510,33 @@ type PricingMutationConfig = {
 };
 
 describe('useUpdateFFEItemPricing', () => {
-  it('fails closed without direct project_ffe_items DML', async () => {
+  it('sends only the trade cost to set_project_ffe_line_commercials, never a direct write', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: { id: 'ffe-1', trade_price_cents: 4200 },
+      error: null,
+    });
     const config = useUpdateFFEItemPricing() as unknown as PricingMutationConfig;
-    await expect(
-      config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1', unitPriceCents: 1000 }),
-    ).rejects.toThrow(/pricing changes are RPC-only/);
 
+    const result = await config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1', tradePriceCents: 4200 });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('set_project_ffe_line_commercials', {
+      p_item_id: 'ffe-1',
+      p_request: { tradePriceCents: 4200 },
+    });
     expect(builders.project_ffe_items).toBeUndefined();
+    expect((result as { trade_price_cents: number }).trade_price_cents).toBe(4200);
+  });
+
+  it('throws the server refusal (e.g. a line already on a PO)', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'line is on a purchase order' },
+    });
+    const config = useUpdateFFEItemPricing() as unknown as PricingMutationConfig;
+
+    await expect(
+      config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1', tradePriceCents: 1 }),
+    ).rejects.toThrow(/on a purchase order/);
   });
 
   it('onSuccess invalidates the FF&E trio (via invalidateFfeCaches) plus the package financials key', () => {
@@ -583,46 +606,182 @@ type ReassignMutationConfig = {
 };
 
 describe('useBulkReassignFfeVendor', () => {
-  it('fails closed without direct project_ffe_items DML', async () => {
+  it('calls set_project_ffe_line_commercials once per line and splits updated from refused ids', async () => {
+    supabaseClient.rpc
+      .mockResolvedValueOnce({ data: { id: 'ffe-1' }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'line is on a purchase order' } });
     const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
-    await expect(
-      config.mutationFn({
-        projectId: 'proj-1',
-        itemIds: ['ffe-1', 'ffe-2'],
-        vendorId: 'v-9',
-        vendorName: 'Hewn Woodworks',
-      }),
-    ).rejects.toThrow(/vendor changes are RPC-only/);
 
+    const result = await config.mutationFn({
+      projectId: 'proj-1',
+      itemIds: ['ffe-1', 'ffe-2'],
+      vendorId: 'v-9',
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('set_project_ffe_line_commercials', {
+      p_item_id: 'ffe-1',
+      p_request: { vendorId: 'v-9' },
+    });
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('set_project_ffe_line_commercials', {
+      p_item_id: 'ffe-2',
+      p_request: { vendorId: 'v-9' },
+    });
+    expect(result).toEqual({ updatedIds: ['ffe-1'], skippedIds: ['ffe-2'] });
     expect(builders.project_ffe_items).toBeUndefined();
   });
 
-  it('throws (and never writes) on an empty selection', async () => {
+  it('throws the first refusal when no line could be updated', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: null,
+      error: { message: 'project not found or access denied' },
+    });
+    const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
+
+    await expect(
+      config.mutationFn({ projectId: 'proj-1', itemIds: ['ffe-1'], vendorId: 'v-9' }),
+    ).rejects.toThrow(/access denied/);
+  });
+
+  it('throws (and never calls the server) on an empty selection', async () => {
     const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
     await expect(
-      config.mutationFn({
-        projectId: 'proj-1',
-        itemIds: [],
-        vendorId: 'v-9',
-        vendorName: 'Hewn Woodworks',
-      }),
+      config.mutationFn({ projectId: 'proj-1', itemIds: [], vendorId: 'v-9' }),
     ).rejects.toThrow(/no items selected/);
-    expect(builders.project_ffe_items).toBeUndefined();
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
   });
 
   it('onSuccess invalidates the FF&E trio (invalidateFfeCaches)', () => {
     const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
 
-    config.onSuccess({}, {
-      projectId: 'proj-7',
-      itemIds: ['ffe-1'],
-      vendorId: 'v-9',
-      vendorName: 'Hewn Woodworks',
-    });
+    config.onSuccess({}, { projectId: 'proj-7', itemIds: ['ffe-1'], vendorId: 'v-9' });
 
     const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
     expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-7']);
     expect(invalidatedKeys).toContainEqual(['projects', 'proj-7']);
     expect(invalidatedKeys).toContainEqual(['procurement-items']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useSetFfeLineCommercials  (00692 set_project_ffe_line_commercials)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type CommercialsMutationConfig = {
+  mutationFn: (input: SetFfeLineCommercialsInput) => Promise<unknown>;
+  onSuccess: (result: unknown, variables: SetFfeLineCommercialsInput) => void;
+};
+
+describe('useSetFfeLineCommercials', () => {
+  it('sends vendorId and tradePriceCents only — never a client price', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({ data: { id: 'ffe-1' }, error: null });
+    const config = useSetFfeLineCommercials() as unknown as CommercialsMutationConfig;
+
+    await config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1', vendorId: 'v-2', tradePriceCents: 0 });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('set_project_ffe_line_commercials', {
+      p_item_id: 'ffe-1',
+      p_request: { vendorId: 'v-2', tradePriceCents: 0 },
+    });
+    expect(builders.project_ffe_items).toBeUndefined();
+  });
+
+  it('omits keys the caller did not supply', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({ data: { id: 'ffe-1' }, error: null });
+    const config = useSetFfeLineCommercials() as unknown as CommercialsMutationConfig;
+
+    await config.mutationFn({ itemId: 'ffe-1', projectId: 'proj-1', vendorId: 'v-2' });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('set_project_ffe_line_commercials', {
+      p_item_id: 'ffe-1',
+      p_request: { vendorId: 'v-2' },
+    });
+  });
+
+  it('onSuccess invalidates the FF&E trio plus the package financials key', () => {
+    const config = useSetFfeLineCommercials() as unknown as CommercialsMutationConfig;
+
+    config.onSuccess({}, { itemId: 'ffe-1', projectId: 'proj-3', tradePriceCents: 5 });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-3']);
+    expect(invalidatedKeys).toContainEqual(['projects', 'proj-3']);
+    expect(invalidatedKeys).toContainEqual(['procurement-items']);
+    expect(invalidatedKeys).toContainEqual(['project-financials', 'proj-3']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useRecordFfeInstalled  (00691 record_project_ffe_installed)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type InstalledMutationConfig = {
+  mutationFn: (input: RecordFfeInstalledInput) => Promise<unknown>;
+  onSuccess: (result: unknown, variables: RecordFfeInstalledInput) => void;
+};
+
+describe('useRecordFfeInstalled', () => {
+  it('calls record_project_ffe_installed with the ids and install day', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: [{ id: 'ffe-1', status: 'installed' }],
+      error: null,
+    });
+    const config = useRecordFfeInstalled() as unknown as InstalledMutationConfig;
+
+    const rows = await config.mutationFn({
+      projectId: 'proj-1',
+      itemIds: ['ffe-1'],
+      installedOn: '2026-10-01',
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('record_project_ffe_installed', {
+      p_item_ids: ['ffe-1'],
+      p_installed_on: '2026-10-01',
+    });
+    expect(rows).toEqual([{ id: 'ffe-1', status: 'installed' }]);
+    expect(builders.project_ffe_items).toBeUndefined();
+  });
+
+  it('sends a null install day so the server defaults to today', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({ data: [], error: null });
+    const config = useRecordFfeInstalled() as unknown as InstalledMutationConfig;
+
+    await config.mutationFn({ projectId: 'proj-1', itemIds: ['ffe-1'] });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('record_project_ffe_installed', {
+      p_item_ids: ['ffe-1'],
+      p_installed_on: null,
+    });
+  });
+
+  it('throws the server refusal for a line that is not delivered', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'only delivered lines can be marked installed: Sofa (ordered)' },
+    });
+    const config = useRecordFfeInstalled() as unknown as InstalledMutationConfig;
+
+    await expect(
+      config.mutationFn({ projectId: 'proj-1', itemIds: ['ffe-1'] }),
+    ).rejects.toThrow(/only delivered lines/);
+  });
+
+  it('throws (and never calls the server) on an empty selection', async () => {
+    const config = useRecordFfeInstalled() as unknown as InstalledMutationConfig;
+    await expect(config.mutationFn({ projectId: 'proj-1', itemIds: [] })).rejects.toThrow(
+      /no items selected/,
+    );
+    expect(supabaseClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it('onSuccess invalidates the FF&E trio and the project workflow', () => {
+    const config = useRecordFfeInstalled() as unknown as InstalledMutationConfig;
+
+    config.onSuccess([], { projectId: 'proj-4', itemIds: ['ffe-1'] });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-4']);
+    expect(invalidatedKeys).toContainEqual(['projects', 'proj-4']);
+    expect(invalidatedKeys).toContainEqual(['procurement-items']);
+    expect(invalidatedKeys).toContainEqual(['project-workflow', 'proj-4']);
   });
 });
