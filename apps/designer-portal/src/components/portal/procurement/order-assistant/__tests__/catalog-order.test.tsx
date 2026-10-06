@@ -27,16 +27,30 @@ const fetchPOPaymentsMock = jest.fn();
 const setShipToMutateAsync = jest.fn();
 // Ship-to option sources (C-02): the studio's organizations.address and the
 // project's site_address. Null hides the matching radio.
-const mockShipToSources: { orgAddress: unknown; siteAddress: string | null } = {
+const mockShipToSources: {
+  orgAddress: unknown;
+  siteAddress: string | null;
+  locations: Array<Record<string, unknown>>;
+} = {
   orgAddress: null,
   siteAddress: null,
+  locations: [],
 };
+const setShipToLocationMutateAsync = jest.fn();
 const mockStudioAccount: { row: Record<string, unknown> | null } = { row: null };
 
 jest.mock('@patina/supabase', () => ({
   useCreatePurchaseOrder: () => ({ mutateAsync: createMutateAsync, isPending: false }),
   useStartPoCheckout: () => ({ mutateAsync: startCheckoutMutateAsync, isPending: false }),
   useSetPurchaseOrderShipTo: () => ({ mutateAsync: setShipToMutateAsync, isPending: false }),
+  useSetPurchaseOrderShipToLocation: () => ({
+    mutateAsync: setShipToLocationMutateAsync,
+    isPending: false,
+  }),
+  // C-13: the project studio's live locations, default receiver first.
+  useStudioLocations: (studioId: string | null) => ({
+    data: studioId === 'org-studio' ? mockShipToSources.locations : undefined,
+  }),
   fetchPOPayments: (...args: unknown[]) => fetchPOPaymentsMock(...args),
   // Coverage query in isError → uncovered=[] → the soft gate never blocks.
   useFfeInvoiceCoverage: () => ({ data: undefined, isLoading: false, isError: true }),
@@ -173,6 +187,12 @@ beforeEach(() => {
   );
   mockShipToSources.orgAddress = null;
   mockShipToSources.siteAddress = null;
+  mockShipToSources.locations = [];
+  setShipToLocationMutateAsync.mockReset();
+  setShipToLocationMutateAsync.mockImplementation(async () => ({
+    ...(await createMutateAsync.mock.results.at(-1)?.value),
+    ship_to: 'Badger Receiving',
+  }));
 });
 
 /** On the Details step: choose "Somewhere else" and type the address. */
@@ -631,6 +651,50 @@ describe('OrderAssistant — ship-to choice in Details (C-02)', () => {
       purchaseOrderId: 'po-6',
       shipTo: '42 Lake Rd, Middleton, WI 53562',
     });
+  });
+
+  it('lists studio receivers first, default marked but not chosen, and saves a location by id (C-13)', async () => {
+    mockShipToSources.orgAddress = { street: '1 Main St', city: 'Madison', state: 'WI', zip: '53703' };
+    mockShipToSources.siteAddress = '42 Lake Rd, Middleton, WI 53562';
+    mockShipToSources.locations = [
+      { id: 'loc-workroom', kind: 'workroom', label: 'Able Workroom', address: null, is_default_receiver: false },
+      {
+        id: 'loc-badger',
+        kind: 'receiver',
+        label: 'Badger Receiving',
+        address: { street: '7 Dock Rd', city: 'Madison', state: 'WI', zip: '53704' },
+        is_default_receiver: true,
+      },
+    ];
+    createMutateAsync.mockResolvedValue({ id: 'po-7', total_cents: 5000 });
+    renderAssistant(external);
+    toDetails();
+
+    const radios = screen.getAllByRole('radio');
+    expect(radios.map((r) => r.getAttribute('value'))).toEqual([
+      'location:loc-badger',
+      'location:loc-workroom',
+      'studio',
+      'site',
+      'other',
+    ]);
+    radios.forEach((r) => expect(r).not.toBeChecked());
+    expect(screen.getByRole('radio', { name: /Badger Receiving · Default receiver/ })).not.toBeChecked();
+
+    // Still an explicit choice: the default receiver is not a selection.
+    fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose where this ships.');
+    expect(createMutateAsync).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('radio', { name: /Badger Receiving/ }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
+
+    await screen.findByText(/Purchase order created/i);
+    expect(setShipToLocationMutateAsync).toHaveBeenCalledWith({
+      purchaseOrderId: 'po-7',
+      locationId: 'loc-badger',
+    });
+    expect(setShipToMutateAsync).not.toHaveBeenCalled();
   });
 });
 

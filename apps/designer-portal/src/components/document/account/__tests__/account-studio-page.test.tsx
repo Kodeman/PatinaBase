@@ -31,6 +31,12 @@ jest.mock('../studio-margin-visibility', () => ({
   StudioMarginVisibilityCard: (props: { studioId: string; canManage: boolean }) =>
     mockMarginCard(props),
 }));
+// The locations editor has its own suite (people/studio-locations-editor.test.tsx);
+// here only that the page mounts it for the studio's seated members.
+const mockLocationsEditor = jest.fn((_props: { organizationId: string }) => null);
+jest.mock('../../people/studio-locations-editor', () => ({
+  StudioLocationsEditor: (props: { organizationId: string }) => mockLocationsEditor(props),
+}));
 
 jest.mock('@patina/supabase', () => ({
   useCreateOrganization: jest.fn(),
@@ -677,4 +683,18 @@ describe('AccountStudioPage — who sees margin (C-36, R1)', () => {
     render(<AccountStudioPage />);
     expect(mockMarginCard).toHaveBeenLastCalledWith({ studioId: 'studio-1', canManage });
   });
+});
+
+describe('AccountStudioPage — locations (C-13)', () => {
+  it.each(['owner', 'admin', 'member'] as const)(
+    'mounts the studio locations editor for a %s seat',
+    (role) => {
+      mockLocationsEditor.mockClear();
+      mockUseOrganizations.mockReturnValue({ data: [organization(role)], isLoading: false });
+      mockUseOrganizationMembers.mockReturnValue({ data: organizationMembers(role) });
+      render(<AccountStudioPage />);
+      expect(screen.getByRole('heading', { name: 'Locations' })).toBeInTheDocument();
+      expect(mockLocationsEditor).toHaveBeenLastCalledWith({ organizationId: 'studio-1' });
+    },
+  );
 });

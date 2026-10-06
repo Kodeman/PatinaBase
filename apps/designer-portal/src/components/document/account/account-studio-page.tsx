@@ -56,6 +56,7 @@ import { MemberTitleLine } from './member-title-line';
 import { StudioRateRows } from './studio-rate-rows';
 import { StudioPaymentMethodsCard } from './studio-payment-methods';
 import { StudioMarginVisibilityCard } from './studio-margin-visibility';
+import { StudioLocationsEditor } from '../people/studio-locations-editor';
 import { AgreementLibraryCard } from './agreement-library-card';
 import { LicensingAttestationCard } from './licensing-attestation-card';
 import { studioEvents } from '@/lib/analytics/studio-events';
@@ -1201,6 +1202,16 @@ export function AccountStudioPage() {
       {/* Who sees margin (US-16 C-36, R1) — owners and admins restrict it;
           every other seat reads it. */}
       <StudioMarginVisibilityCard studioId={studio.id} canManage={canManage} />
+
+      {/* Locations (US-16 C-13) — every place the studio's goods go, the
+          default receiver among them. The same editor hangs off each company
+          card in People; the Order Assistant's ship-to lists these first. */}
+      {myRole !== null && myRole !== 'guest' && (
+        <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
+          <h3 className={`${LABEL} mb-3`}>Locations</h3>
+          <StudioLocationsEditor organizationId={studio.id} />
+        </div>
+      )}
 
       {/* Agreement defaults (00575) — placed after Billing, which is
           untouched. What a new agreement starts from; every member composes

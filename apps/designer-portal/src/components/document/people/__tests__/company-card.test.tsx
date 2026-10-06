@@ -168,6 +168,18 @@ jest.mock("@/lib/analytics/people-events", () => ({
   peopleEvents: { companyCardOpened: jest.fn() },
 }));
 
+// C-13 — the locations editor has its own suite; here only that the card
+// hands it the firm's studio and the card id.
+const mockLocationsEditor = jest.fn(
+  (_props: { organizationId: string | null; studioContactId?: string | null }) => null,
+);
+jest.mock("../studio-locations-editor", () => ({
+  StudioLocationsEditor: (props: {
+    organizationId: string | null;
+    studioContactId?: string | null;
+  }) => mockLocationsEditor(props),
+}));
+
 const TODAY = new Date("2026-10-20T00:00:00Z");
 
 function renderCard(over: Record<string, unknown> = {}) {
@@ -231,11 +243,20 @@ describe("the six regions", () => {
       "Crew & designations",
       "Paper",
       "Payee",
+      "Locations",
       "Jobs",
       "History",
     ]) {
       expect(screen.getByRole("heading", { name: head })).toBeInTheDocument();
     }
+  });
+
+  it("hangs the firm's locations off the card (C-13)", () => {
+    mockLocationsEditor.mockClear();
+    renderCard();
+    expect(mockLocationsEditor).toHaveBeenLastCalledWith(
+      expect.objectContaining({ organizationId: "org-1", studioContactId: "firm-northgate" }),
+    );
   });
 
   it("the identity line counts the crew, the jobs and the warranty", () => {
