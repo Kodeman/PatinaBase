@@ -161,7 +161,9 @@ export function deriveProcurementLifecycle(
   // an unwritten order into a released one.
   const deposits = (po?.payments ?? []).filter((p) => p.kind === 'deposit');
   const outstandingDeposits = unpaidDeposits(po);
-  const liveOrder = po !== null && po.status !== 'draft';
+  // C-32: an order held for release is still unwritten to the maker.
+  const liveOrder =
+    po !== null && po.status !== 'draft' && po.status !== 'held_for_release';
   const depositsClear = liveOrder && outstandingDeposits.length === 0;
   if (depositsClear) {
     evidence.cleared_to_produce = {

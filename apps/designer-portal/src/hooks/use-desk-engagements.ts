@@ -26,11 +26,17 @@
 
 import { useRef } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { createBrowserClient, type Invoice } from '@patina/supabase';
+import {
+  createBrowserClient,
+  fetchHeldPurchaseOrders,
+  type HeldPurchaseOrder,
+  type Invoice,
+} from '@patina/supabase';
 import {
   partitionDesk,
   RETURN_BY_LEAD_DAYS,
   type DeskClaimWindowSignal,
+  type DeskHeldReleaseSignal,
   type DeskPaymentSignal,
   type DeskQuoteSignal,
   type DeskExceptionSignal,
@@ -316,6 +322,31 @@ export function buildDeskExceptions(rows: any): Map<string, DeskExceptionSignal[
 }
 
 /**
+ * C-32: POs held for release, one signal per PO keyed by project_id, each with
+ * whether the viewer's seat may release it; the derivation shows only those.
+ */
+export function buildDeskHeldReleases(
+  rows: readonly HeldPurchaseOrder[] | null | undefined,
+): Map<string, DeskHeldReleaseSignal[]> | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  const map = new Map<string, DeskHeldReleaseSignal[]>();
+  for (const row of rows) {
+    map.set(row.projectId, [
+      ...(map.get(row.projectId) ?? []),
+      {
+        purchaseOrderId: row.id,
+        vendorName: row.vendorName,
+        totalCents: row.totalCents,
+        heldAt: row.heldAt,
+        heldByName: row.heldByName,
+        viewerCanRelease: row.viewerCanRelease,
+      },
+    ]);
+  }
+  return map;
+}
+
+/**
  * C-20: the claim_window_closing notices (00700's procurement-clocks-daily
  * writes one the day before the vendor deadline) folded to one signal per PO,
  * keyed by project_id, each carrying its deadline from
@@ -457,6 +488,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: draftRows, error: draftRowsError },
         { data: quoteRows, error: quoteRowsError },
         { data: exceptionRows, error: exceptionRowsError },
+        { data: heldRows, error: heldRowsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -607,6 +639,15 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           .neq('type', 'ack_discrepancy')
           .order('opened_at')
           .limit(DESK_EXCEPTION_LIMIT),
+        // C-32: orders held for an owner/admin release, with the viewer's seat.
+        // A failed read (or seat check) degrades to no answer.
+        (async () => {
+          try {
+            return { data: await fetchHeldPurchaseOrders(supabase), error: null };
+          } catch (heldError) {
+            return { data: null, error: heldError };
+          }
+        })(),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -716,6 +757,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
       const drafts = draftRowsError ? undefined : buildDeskDrafts(draftRows);
       const quotes = quoteRowsError ? undefined : buildDeskQuotes(quoteRows);
       const exceptions = exceptionRowsError ? undefined : buildDeskExceptions(exceptionRows);
+      const heldReleases = heldRowsError ? undefined : buildDeskHeldReleases(heldRows);
 
       const result = partitionDesk(
         rows,
@@ -732,6 +774,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         drafts,
         quotes,
         exceptions,
+        heldReleases,
       );
       previousResultRef.current = result;
       return result;

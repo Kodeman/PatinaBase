@@ -82,6 +82,7 @@ type VendorPage = 'terms' | 'thread' | 'orders';
 
 const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   draft: { color: 'var(--color-aged-oak)', ink: 'var(--color-aged-oak)' },
+  held_for_release: { color: 'var(--color-clay)', ink: 'var(--color-clay-ink)' },
   confirmed: { color: 'var(--color-dusty-blue)' },
   in_production: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
   shipped: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },

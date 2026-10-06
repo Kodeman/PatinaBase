@@ -67,6 +67,12 @@ jest.mock('../riders', () => ({
     <div data-testid="paper-riders" data-po={purchaseOrderId ?? ''} />
   ),
 }));
+// C-32: no release gate on these papers; the slot's own suite is order-paper-release.test.tsx.
+jest.mock('../release-slot', () => ({
+  ...jest.requireActual('../release-slot'),
+  useReleasePaper: () => ({ mode: 'none', held: false, ownerFirstName: null }),
+  SendBackAct: () => null,
+}));
 // C-24: a paper with no COM pair; the slot's own suite is order-paper-com.test.tsx.
 jest.mock('../com-slot', () => ({
   useComPaper: () => ({

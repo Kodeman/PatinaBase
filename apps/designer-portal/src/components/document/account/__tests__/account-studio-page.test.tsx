@@ -31,6 +31,12 @@ jest.mock('../studio-margin-visibility', () => ({
   StudioMarginVisibilityCard: (props: { studioId: string; canManage: boolean }) =>
     mockMarginCard(props),
 }));
+// Held for release has its own suite (studio-release-gate.test.tsx).
+const mockReleaseGateCard = jest.fn((_props: { studioId: string; canManage: boolean }) => null);
+jest.mock('../studio-release-gate', () => ({
+  StudioReleaseGateCard: (props: { studioId: string; canManage: boolean }) =>
+    mockReleaseGateCard(props),
+}));
 // The locations editor has its own suite (people/studio-locations-editor.test.tsx);
 // here only that the page mounts it for the studio's seated members.
 const mockLocationsEditor = jest.fn((_props: { organizationId: string }) => null);
@@ -682,6 +688,25 @@ describe('AccountStudioPage — who sees margin (C-36, R1)', () => {
     });
     render(<AccountStudioPage />);
     expect(mockMarginCard).toHaveBeenLastCalledWith({ studioId: 'studio-1', canManage });
+  });
+});
+
+describe('AccountStudioPage — held for release (C-32, R-PB2)', () => {
+  it.each([
+    ['owner', true],
+    ['admin', true],
+    ['member', false],
+  ] as const)('hands a %s seat canManage=%s', (role, canManage) => {
+    mockReleaseGateCard.mockClear();
+    mockUseOrganizations.mockReturnValue({
+      data: [organization(role)],
+      isLoading: false,
+    });
+    mockUseOrganizationMembers.mockReturnValue({
+      data: organizationMembers(role),
+    });
+    render(<AccountStudioPage />);
+    expect(mockReleaseGateCard).toHaveBeenLastCalledWith({ studioId: 'studio-1', canManage });
   });
 });
 
