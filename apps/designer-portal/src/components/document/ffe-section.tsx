@@ -131,6 +131,8 @@ import {
   roomStateRowFromStamp,
 } from '@/lib/document/room-state';
 import { useRoomLens } from './room-lens-context';
+import { MakerReading, ReadingLens } from './buying/maker-reading';
+import type { BuyingReading } from '@/lib/document/buying-readings';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
 import {
@@ -1024,6 +1026,16 @@ function FFESectionBody({
     () => new Set(),
   );
   const installSelecting = installing && !selecting;
+  // C-15: the project's lines read by room (R25) or by maker. Ticks belong to
+  // the room reading, so a selection in hand holds it there.
+  const [reading, setReading] = useState<BuyingReading>('room');
+  const readingLockedReason = selecting
+    ? 'finish the release first'
+    : installSelecting
+      ? 'finish choosing what’s installed first'
+      : null;
+  const byMaker =
+    mode === 'project' && reading === 'maker' && readingLockedReason === null;
   const endInstalling = () => {
     setInstalling(false);
     setInstallPicks(new Set());
@@ -1306,7 +1318,9 @@ function FFESectionBody({
       : null;
   // C20 — the head's identity line carries the trade word the studio word
   // leaves out, then the counts. Line one never elides (RegionHead).
-  const ffeStatus = `the FF&E schedule, by room · ${ffeCounts}`;
+  const ffeStatus = byMaker
+    ? `the FF&E schedule, by maker · ${total} lines`
+    : `the FF&E schedule, by room · ${ffeCounts}`;
   const ffeSeamSummary =
     total === 0
       ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet`
@@ -1730,7 +1744,45 @@ function FFESectionBody({
         </p>
       )}
 
-      {groupByRoom ? (
+      {groupByRoom && total > 0 && (
+        <ReadingLens
+          reading={byMaker ? 'maker' : 'room'}
+          onChange={(next) => {
+            setOpenLineId(null);
+            setReading(next);
+          }}
+          lockedReason={readingLockedReason}
+        />
+      )}
+
+      {byMaker ? (
+        <MakerReading
+          projectId={projectId}
+          rows={rows}
+          wordFor={(row) => stampProps(row.stamp).label}
+          openLineId={openLineId}
+          onToggleLine={(lineId) =>
+            setOpenLineId(openLineId === lineId ? null : lineId)
+          }
+          renderUnfold={(row) => {
+            const props = lineProps(row);
+            return (
+              <LineUnfold
+                item={row.item}
+                projectId={projectId}
+                projectName={projectName}
+                onAddNote={onAddNote}
+                onFold={props.onToggle}
+                auth={row.auth}
+                isCommercialOrigin={isCommercialOrigin}
+                onIncludeInRelease={props.onIncludeInRelease}
+                canEditSelection={props.canEditSelection}
+                showArtifactPlate={props.showArtifactPlate}
+              />
+            );
+          }}
+        />
+      ) : groupByRoom ? (
         <>
           {roomGroups.map(({ room, rows: roomRows }) => (
             <div
