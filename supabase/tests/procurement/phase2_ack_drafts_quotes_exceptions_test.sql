@@ -876,7 +876,9 @@ BEGIN
 
   -- Idempotent: a second run writes nothing.
   v_second := public.sweep_procurement_clocks();
-  ASSERT v_second = jsonb_build_object('claim_window_closing', 0, 'ack_discrepancy', 0, 'backorder_reported', 0, 'quote_expiring', 0),
+  -- 00712 added cfa_reserve_expiring and memo_return_due to the detail.
+  ASSERT v_second = jsonb_build_object('claim_window_closing', 0, 'ack_discrepancy', 0, 'backorder_reported', 0, 'quote_expiring', 0,
+                                       'cfa_reserve_expiring', 0, 'memo_return_due', 0),
     'FAIL J5: a second run should write nothing, got ' || v_second::text;
   ASSERT (SELECT status FROM public.job_runs WHERE job_name = 'procurement-clocks-daily' ORDER BY id DESC LIMIT 1) = 'succeeded',
     'FAIL J5: the run is recorded';

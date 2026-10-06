@@ -9091,6 +9091,201 @@ export type Database = {
         }
         Relationships: []
       }
+      install_manifest_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          ffe_item_id: string
+          id: string
+          install_on: string | null
+          installer_contact_id: string | null
+          installer_name: string | null
+          note: string | null
+          organization_id: string | null
+          project_id: string
+          room_location: string | null
+          state: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          ffe_item_id: string
+          id?: string
+          install_on?: string | null
+          installer_contact_id?: string | null
+          installer_name?: string | null
+          note?: string | null
+          organization_id?: string | null
+          project_id: string
+          room_location?: string | null
+          state?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          ffe_item_id?: string
+          id?: string
+          install_on?: string | null
+          installer_contact_id?: string | null
+          installer_name?: string | null
+          note?: string | null
+          organization_id?: string | null
+          project_id?: string
+          room_location?: string | null
+          state?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "install_manifest_items_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: true
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_manifest_items_installer_contact_id_fkey"
+            columns: ["installer_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_manifest_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_manifest_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_manifest_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_manifest_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "install_manifest_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      install_punch_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          due_on: string | null
+          ffe_item_id: string
+          id: string
+          media_ids: string[]
+          note: string
+          organization_id: string | null
+          project_id: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          due_on?: string | null
+          ffe_item_id: string
+          id?: string
+          media_ids?: string[]
+          note: string
+          organization_id?: string | null
+          project_id: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          due_on?: string | null
+          ffe_item_id?: string
+          id?: string
+          media_ids?: string[]
+          note?: string
+          organization_id?: string | null
+          project_id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "install_punch_items_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_punch_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_punch_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_punch_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "install_punch_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "install_punch_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       install_windows: {
         Row: {
           anchored: boolean
@@ -9405,6 +9600,8 @@ export type Database = {
       invoice_line_items: {
         Row: {
           amount_cents: number
+          billing_stage: string
+          billing_stage_pct: number | null
           created_at: string
           description: string
           ffe_item_id: string | null
@@ -9419,6 +9616,8 @@ export type Database = {
         }
         Insert: {
           amount_cents?: number
+          billing_stage?: string
+          billing_stage_pct?: number | null
           created_at?: string
           description: string
           ffe_item_id?: string | null
@@ -9433,6 +9632,8 @@ export type Database = {
         }
         Update: {
           amount_cents?: number
+          billing_stage?: string
+          billing_stage_pct?: number | null
           created_at?: string
           description?: string
           ffe_item_id?: string | null
@@ -11506,6 +11707,8 @@ export type Database = {
           margin_visibility: string
           name: string
           phone: string | null
+          release_threshold_cents: number | null
+          require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
           slug: string
@@ -11529,6 +11732,8 @@ export type Database = {
           margin_visibility?: string
           name: string
           phone?: string | null
+          release_threshold_cents?: number | null
+          require_release_per_order?: boolean
           rolodex_seed_skipped_at?: string | null
           settings?: Json
           slug: string
@@ -11552,6 +11757,8 @@ export type Database = {
           margin_visibility?: string
           name?: string
           phone?: string | null
+          release_threshold_cents?: number | null
+          require_release_per_order?: boolean
           rolodex_seed_skipped_at?: string | null
           settings?: Json
           slug?: string
@@ -13081,6 +13288,78 @@ export type Database = {
           },
         ]
       }
+      po_spec_snapshots: {
+        Row: {
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          ffe_item_id: string | null
+          id: string
+          organization_id: string | null
+          purchase_order_id: string
+          revision: number
+          spec: Json
+        }
+        Insert: {
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          ffe_item_id?: string | null
+          id?: string
+          organization_id?: string | null
+          purchase_order_id: string
+          revision: number
+          spec: Json
+        }
+        Update: {
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          ffe_item_id?: string | null
+          id?: string
+          organization_id?: string | null
+          purchase_order_id?: string
+          revision?: number
+          spec?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_spec_snapshots_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_spec_snapshots_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_spec_snapshots_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_spec_snapshots_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_spec_snapshots_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       po_submittals: {
         Row: {
           client_decision_id: string | null
@@ -13348,6 +13627,13 @@ export type Database = {
             columns: ["purchase_order_id"]
             isOneToOne: false
             referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_drafts_sample_id_fkey"
+            columns: ["sample_id"]
+            isOneToOne: false
+            referencedRelation: "sample_requests"
             referencedColumns: ["id"]
           },
           {
@@ -13660,6 +13946,20 @@ export type Database = {
             columns: ["subject_quote_id"]
             isOneToOne: false
             referencedRelation: "vendor_quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_notifications_subject_sample_id_fkey"
+            columns: ["subject_sample_id"]
+            isOneToOne: false
+            referencedRelation: "sample_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procurement_notifications_subject_submittal_id_fkey"
+            columns: ["subject_submittal_id"]
+            isOneToOne: false
+            referencedRelation: "po_submittals"
             referencedColumns: ["id"]
           },
         ]
@@ -22785,6 +23085,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -22793,8 +23096,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -22821,6 +23130,9 @@ export type Database = {
           designer_id: string
           eta_history?: Json
           freight_terms?: string | null
+          held_at?: string | null
+          held_by?: string | null
+          hold_note?: string | null
           id?: string
           is_patina_catalog?: boolean
           needs_repricing?: boolean
@@ -22829,8 +23141,14 @@ export type Database = {
           po_document_path?: string | null
           po_number?: string | null
           project_id: string
+          released_at?: string | null
+          released_by?: string | null
+          released_total_cents?: number | null
           requested_ship_on?: string | null
+          send_back_note?: string | null
           sent_at?: string | null
+          sent_back_at?: string | null
+          sent_back_by?: string | null
           ship_to?: string | null
           ship_to_location_id?: string | null
           shipped_on?: string | null
@@ -22857,6 +23175,9 @@ export type Database = {
           designer_id?: string
           eta_history?: Json
           freight_terms?: string | null
+          held_at?: string | null
+          held_by?: string | null
+          hold_note?: string | null
           id?: string
           is_patina_catalog?: boolean
           needs_repricing?: boolean
@@ -22865,8 +23186,14 @@ export type Database = {
           po_document_path?: string | null
           po_number?: string | null
           project_id?: string
+          released_at?: string | null
+          released_by?: string | null
+          released_total_cents?: number | null
           requested_ship_on?: string | null
+          send_back_note?: string | null
           sent_at?: string | null
+          sent_back_at?: string | null
+          sent_back_by?: string | null
           ship_to?: string | null
           ship_to_location_id?: string | null
           shipped_on?: string | null
@@ -22896,6 +23223,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "purchase_orders_held_by_fkey"
+            columns: ["held_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_held_by_fkey"
+            columns: ["held_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "purchase_orders_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -22907,6 +23248,34 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_released_by_fkey"
+            columns: ["released_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_released_by_fkey"
+            columns: ["released_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_sent_back_by_fkey"
+            columns: ["sent_back_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_sent_back_by_fkey"
+            columns: ["sent_back_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
           {
@@ -24421,6 +24790,132 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sample_requests: {
+        Row: {
+          billable_to_client: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          fee_cents: number | null
+          ffe_item_id: string | null
+          id: string
+          kind: string
+          organization_id: string
+          project_id: string | null
+          received_on: string | null
+          requested_on: string
+          return_by: string | null
+          return_tracking: string | null
+          returned_on: string | null
+          status: string
+          studio_contact_id: string | null
+          updated_at: string
+          updated_by: string | null
+          vendor_id: string | null
+        }
+        Insert: {
+          billable_to_client?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          fee_cents?: number | null
+          ffe_item_id?: string | null
+          id?: string
+          kind: string
+          organization_id: string
+          project_id?: string | null
+          received_on?: string | null
+          requested_on?: string
+          return_by?: string | null
+          return_tracking?: string | null
+          returned_on?: string | null
+          status?: string
+          studio_contact_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vendor_id?: string | null
+        }
+        Update: {
+          billable_to_client?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          fee_cents?: number | null
+          ffe_item_id?: string | null
+          id?: string
+          kind?: string
+          organization_id?: string
+          project_id?: string | null
+          received_on?: string | null
+          requested_on?: string
+          return_by?: string | null
+          return_tracking?: string | null
+          returned_on?: string | null
+          status?: string
+          studio_contact_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sample_requests_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sample_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sample_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sample_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sample_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "sample_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sample_requests_studio_contact_id_fkey"
+            columns: ["studio_contact_id"]
+            isOneToOne: false
+            referencedRelation: "studio_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sample_requests_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -35133,6 +35628,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -35141,8 +35639,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -35191,6 +35695,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -35199,8 +35706,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -35249,6 +35762,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -35257,8 +35773,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -35640,6 +36162,8 @@ export type Database = {
           margin_visibility: string
           name: string
           phone: string | null
+          release_threshold_cents: number | null
+          require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
           slug: string
@@ -35785,6 +36309,17 @@ export type Database = {
         Returns: undefined
       }
       _po_ack_norm: { Args: { p_value: string }; Returns: string }
+      _po_release_cleared: {
+        Args: {
+          p_released_at: string
+          p_released_total_cents: number
+          p_sent_at: string
+          p_status: string
+          p_studio_id: string
+          p_total_cents: number
+        }
+        Returns: boolean
+      }
       _prepare_legacy_proposal_phase_insert: {
         Args: { p_proposal_id: string; p_requested_follows_phase_id: string }
         Returns: {
@@ -35877,6 +36412,8 @@ export type Database = {
           margin_visibility: string
           name: string
           phone: string | null
+          release_threshold_cents: number | null
+          require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
           slug: string
@@ -35968,6 +36505,10 @@ export type Database = {
           p_purchase_order_id: string
         }
         Returns: Json
+      }
+      _release_gate_applies: {
+        Args: { p_studio_id: string; p_total_cents: number }
+        Returns: boolean
       }
       _render_agreement_snapshot_html: {
         Args: { p_proposal_id: string }
@@ -36496,6 +37037,31 @@ export type Database = {
         }
         Returns: string
       }
+      add_invoice_billing_lines: {
+        Args: { p_invoice_id: string; p_lines: Json }
+        Returns: {
+          amount_cents: number
+          billing_stage: string
+          billing_stage_pct: number | null
+          created_at: string
+          description: string
+          ffe_item_id: string | null
+          id: string
+          invoice_id: string
+          kind: string
+          metadata: Json
+          milestone_id: string | null
+          quantity: number
+          sort_order: number
+          unit_amount_cents: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "invoice_line_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       admin_add_studio_member: {
         Args: {
           p_actor: string
@@ -36551,6 +37117,8 @@ export type Database = {
           margin_visibility: string
           name: string
           phone: string | null
+          release_threshold_cents: number | null
+          require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
           slug: string
@@ -36628,6 +37196,8 @@ export type Database = {
           margin_visibility: string
           name: string
           phone: string | null
+          release_threshold_cents: number | null
+          require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
           slug: string
@@ -36693,6 +37263,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -36701,8 +37274,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -37147,6 +37726,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -37155,8 +37737,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -38436,6 +39024,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -38444,8 +39035,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -38488,6 +39085,8 @@ export type Database = {
           margin_visibility: string
           name: string
           phone: string | null
+          release_threshold_cents: number | null
+          require_release_per_order: boolean
           rolodex_seed_skipped_at: string | null
           settings: Json
           slug: string
@@ -39572,6 +40171,20 @@ export type Database = {
           invoice_status: string
         }[]
       }
+      get_ffe_invoice_stage_coverage: {
+        Args: { p_project_id: string }
+        Returns: {
+          billed_cents: number
+          billing_stage: string
+          billing_stage_pct: number
+          coverage: string
+          ffe_item_id: string
+          invoice_id: string
+          invoice_line_id: string
+          invoice_number: string
+          invoice_status: string
+        }[]
+      }
       get_invoice_link: { Args: { p_invoice_id: string }; Returns: Json }
       get_invoice_payment_options: {
         Args: { p_invoice_id: string }
@@ -39851,6 +40464,60 @@ export type Database = {
       hold_install_window: {
         Args: { p_ends_on: string; p_project_id: string; p_starts_on: string }
         Returns: string
+      }
+      hold_purchase_order_for_release: {
+        Args: { p_note?: string; p_po_id: string }
+        Returns: {
+          ack_state: string
+          acknowledged_at: string | null
+          bill_to: Json | null
+          bol_document_path: string | null
+          carrier: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          eta_history: Json
+          freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
+          requested_ship_on: string | null
+          send_back_note: string | null
+          sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
+          ship_to: string | null
+          ship_to_location_id: string | null
+          shipped_on: string | null
+          sidemark: string | null
+          status: string
+          supplies_purchase_order_id: string | null
+          total_cents: number
+          tracking_number: string | null
+          updated_at: string
+          vendor_id: string
+          vendor_note: string | null
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       identity_consent_evidence: {
         Args: {
@@ -40248,6 +40915,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -40256,8 +40926,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -40495,6 +41171,41 @@ export type Database = {
       mark_room_scan_geometry_error: {
         Args: { p_error: string; p_scan_id: string }
         Returns: undefined
+      }
+      mark_sample_returned: {
+        Args: {
+          p_return_tracking?: string
+          p_returned_on?: string
+          p_sample_id: string
+        }
+        Returns: {
+          billable_to_client: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          fee_cents: number | null
+          ffe_item_id: string | null
+          id: string
+          kind: string
+          organization_id: string
+          project_id: string | null
+          received_on: string | null
+          requested_on: string
+          return_by: string | null
+          return_tracking: string | null
+          returned_on: string | null
+          status: string
+          studio_contact_id: string | null
+          updated_at: string
+          updated_by: string | null
+          vendor_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sample_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       mark_scan_upload_complete: {
         Args: { p_scan_id: string }
@@ -40763,6 +41474,7 @@ export type Database = {
       }
       place_product_in_project_v2: { Args: { p_request: Json }; Returns: Json }
       po_ack_state_for: { Args: { p_po_id: string }; Returns: string }
+      po_is_sendable: { Args: { p_po_id: string }; Returns: boolean }
       po_status_to_ffe_stage: { Args: { p_po_status: string }; Returns: string }
       prepare_configuration_quote_request: {
         Args: {
@@ -40965,6 +41677,10 @@ export type Database = {
         }
       }
       publish_project_review: { Args: { p_request: Json }; Returns: Json }
+      purchase_order_release_required: {
+        Args: { p_po_id: string }
+        Returns: boolean
+      }
       purchase_order_studio_id: { Args: { p_po_id: string }; Returns: string }
       purge_client_account: { Args: { p_user_id: string }; Returns: string }
       push_deliver_after: {
@@ -41452,6 +42168,37 @@ export type Database = {
         Args: { p_body?: string; p_review_item_id: string; p_verdict: string }
         Returns: Json
       }
+      record_sample_request: {
+        Args: { p_request: Json }
+        Returns: {
+          billable_to_client: boolean
+          created_at: string
+          created_by: string | null
+          description: string | null
+          fee_cents: number | null
+          ffe_item_id: string | null
+          id: string
+          kind: string
+          organization_id: string
+          project_id: string | null
+          received_on: string | null
+          requested_on: string
+          return_by: string | null
+          return_tracking: string | null
+          returned_on: string | null
+          status: string
+          studio_contact_id: string | null
+          updated_at: string
+          updated_by: string | null
+          vendor_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sample_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_studio_purchase: {
         Args: { p_request: Json }
         Returns: {
@@ -41740,6 +42487,60 @@ export type Database = {
       release_proposal_send_dispatch: {
         Args: { p_claim_token: string; p_dispatch_id: string; p_error: string }
         Returns: Json
+      }
+      release_purchase_order: {
+        Args: { p_po_id: string }
+        Returns: {
+          ack_state: string
+          acknowledged_at: string | null
+          bill_to: Json | null
+          bol_document_path: string | null
+          carrier: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          eta_history: Json
+          freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
+          requested_ship_on: string | null
+          send_back_note: string | null
+          sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
+          ship_to: string | null
+          ship_to_location_id: string | null
+          shipped_on: string | null
+          sidemark: string | null
+          status: string
+          supplies_purchase_order_id: string | null
+          total_cents: number
+          tracking_number: string | null
+          updated_at: string
+          vendor_id: string
+          vendor_note: string | null
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       remove_proposal_phase: {
         Args: {
@@ -42141,6 +42942,31 @@ export type Database = {
         }[]
       }
       resolve_field_link: { Args: { p_token: string }; Returns: Json }
+      resolve_install_punch_item: {
+        Args: { p_note?: string; p_punch_id: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          due_on: string | null
+          ffe_item_id: string
+          id: string
+          media_ids: string[]
+          note: string
+          organization_id: string | null
+          project_id: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "install_punch_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       resolve_invoice_link: {
         Args: { p_record_view?: boolean; p_token: string }
         Returns: Json
@@ -42603,6 +43429,60 @@ export type Database = {
         Returns: string[]
       }
       select_trade_bid: { Args: { p_bid_id: string }; Returns: Json }
+      send_back_purchase_order: {
+        Args: { p_note: string; p_po_id: string }
+        Returns: {
+          ack_state: string
+          acknowledged_at: string | null
+          bill_to: Json | null
+          bol_document_path: string | null
+          carrier: string | null
+          confirmed_eta: string | null
+          created_at: string
+          created_by: string | null
+          delivered_date: string | null
+          designer_id: string
+          eta_history: Json
+          freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
+          id: string
+          is_patina_catalog: boolean
+          needs_repricing: boolean
+          notes: string | null
+          payment_pattern: Database["public"]["Enums"]["purchase_order_payment_pattern"]
+          po_document_path: string | null
+          po_number: string | null
+          project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
+          requested_ship_on: string | null
+          send_back_note: string | null
+          sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
+          ship_to: string | null
+          ship_to_location_id: string | null
+          shipped_on: string | null
+          sidemark: string | null
+          status: string
+          supplies_purchase_order_id: string | null
+          total_cents: number
+          tracking_number: string | null
+          updated_at: string
+          vendor_id: string
+          vendor_note: string | null
+          vendor_po_number: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "purchase_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       send_commercial_document: {
         Args: {
           p_expected_fingerprint: string
@@ -43008,6 +43888,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -43016,8 +43899,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -43053,6 +43942,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -43061,8 +43953,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -43098,6 +43996,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -43106,8 +44007,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -43143,6 +44050,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -43151,8 +44061,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -43188,6 +44104,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -43196,8 +44115,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -43233,6 +44158,9 @@ export type Database = {
           designer_id: string
           eta_history: Json
           freight_terms: string | null
+          held_at: string | null
+          held_by: string | null
+          hold_note: string | null
           id: string
           is_patina_catalog: boolean
           needs_repricing: boolean
@@ -43241,8 +44169,14 @@ export type Database = {
           po_document_path: string | null
           po_number: string | null
           project_id: string
+          released_at: string | null
+          released_by: string | null
+          released_total_cents: number | null
           requested_ship_on: string | null
+          send_back_note: string | null
           sent_at: string | null
+          sent_back_at: string | null
+          sent_back_by: string | null
           ship_to: string | null
           ship_to_location_id: string | null
           shipped_on: string | null
@@ -43274,6 +44208,44 @@ export type Database = {
       set_studio_margin_visibility: {
         Args: { p_org: string; p_visibility: string }
         Returns: string
+      }
+      set_studio_release_gate: {
+        Args: {
+          p_org: string
+          p_require_per_order?: boolean
+          p_threshold_cents: number
+        }
+        Returns: {
+          address: Json | null
+          business_verified: boolean
+          business_verified_at: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          margin_visibility: string
+          name: string
+          phone: string | null
+          release_threshold_cents: number | null
+          require_release_per_order: boolean
+          rolodex_seed_skipped_at: string | null
+          settings: Json
+          slug: string
+          status: Database["public"]["Enums"]["organization_status"]
+          subscription_expires_at: string | null
+          subscription_tier: Database["public"]["Enums"]["subscription_tier"]
+          tax_id: string | null
+          type: Database["public"]["Enums"]["organization_type"]
+          updated_at: string
+          website: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_trade_scope_party: {
         Args: { p_party_id: string; p_proposal_id: string }
@@ -43702,6 +44674,10 @@ export type Database = {
           p_subject_id: string
         }
         Returns: undefined
+      }
+      snapshot_purchase_order_spec: {
+        Args: { p_po_id: string }
+        Returns: number
       }
       stage_project_ffe_document_extraction: {
         Args: {
@@ -44379,6 +45355,56 @@ export type Database = {
       upsert_design_services_draft: {
         Args: { p_proposal_id: string; p_rates: Json; p_terms: Json }
         Returns: Json
+      }
+      upsert_install_manifest_item: {
+        Args: { p_ffe_item_id: string; p_request: Json }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          ffe_item_id: string
+          id: string
+          install_on: string | null
+          installer_contact_id: string | null
+          installer_name: string | null
+          note: string | null
+          organization_id: string | null
+          project_id: string
+          room_location: string | null
+          state: string
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "install_manifest_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_install_punch_item: {
+        Args: { p_request: Json }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          due_on: string | null
+          ffe_item_id: string
+          id: string
+          media_ids: string[]
+          note: string
+          organization_id: string | null
+          project_id: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "install_punch_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       upsert_po_cost_line: {
         Args: { p_po_id: string; p_request: Json }
