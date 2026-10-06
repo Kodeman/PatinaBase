@@ -244,6 +244,7 @@ describe('SP-20 — the stamp map stays inside desk-derivation.ts STAMP palette'
     overdue_decision: true,
     overdue_invoice: true,
     proposal_signed: true,
+    claim_window: true,
     damage_claim: true,
     proposal_declined: true,
     proposal_expired: true,

@@ -110,6 +110,9 @@ export type NeedKind =
   | 'overdue_decision'
   | 'overdue_invoice'
   | 'proposal_signed'
+  // C-20 (D1-08): a delivery's vendor claim window closes tomorrow (or today)
+  // and its drafted claim has not reached the vendor.
+  | 'claim_window'
   | 'damage_claim'
   | 'proposal_declined'
   | 'proposal_expired'
@@ -142,6 +145,7 @@ export const NEED_ACTION_LABELS: Record<NeedKind, string | null> = {
   overdue_decision: 'Review decisions',
   overdue_invoice: 'Send reminder',
   proposal_signed: 'Open the project',
+  claim_window: 'Notify the vendor',
   damage_claim: 'Review the claim',
   proposal_declined: 'Follow up',
   proposal_expired: 'Revise proposal',
@@ -220,6 +224,22 @@ export interface DeskCeremonySignal {
   pickedSlotStartsAt: string | null;
   timezone: string | null;
   threadId: string | null;
+}
+
+/** C-20 claim-window input, structural (the desk-conflicts precedent). One PO
+ *  with a `claim_window_closing` notice (00700's procurement-clocks-daily
+ *  writes it the day before the vendor deadline), built by
+ *  use-desk-engagements and keyed by project_id. */
+export interface DeskClaimWindowSignal {
+  purchaseOrderId: string;
+  poLabel: string;
+  vendorName: string | null;
+  /** `procurement_claim_deadline.vendor_deadline`, a bare date. */
+  deadline: string;
+  /** The states of the damage claims on the PO's inspections. */
+  claimStates: readonly string[];
+  /** The PO's latest inspection outcome; `clean` once the line is marked good. */
+  latestOutcome: string | null;
 }
 
 export interface NeedLine {
@@ -429,6 +449,8 @@ const NEED_RANK: Record<NeedKind, number> = {
   // just under a blocking client decision, above the proposal/lead moments.
   overdue_invoice: 1,
   proposal_signed: 2,
+  // C-20: the outside clock on a claim sorts just above the claim itself.
+  claim_window: 2.5,
   damage_claim: 3,
   proposal_declined: 4,
   proposal_expired: 5,
@@ -569,6 +591,7 @@ interface NeedContext {
   flagged?: DeskFlaggedSignal | null;
   ceremony?: DeskCeremonySignal | null;
   schedule?: DeskScheduleInput | null;
+  claimWindows?: readonly DeskClaimWindowSignal[] | null;
 }
 
 /** A rule that owns its engagement kind outright. The original deriveNeed
@@ -825,6 +848,47 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
   return null;
 };
 
+/** Whole local calendar days from `now` to a bare `YYYY-MM-DD` date. */
+const calendarDaysTo = (ymd: string, now: Date) => {
+  const due = new Date(`${ymd.slice(0, 10)}T00:00:00`);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((due.getTime() - today.getTime()) / DAY_MS);
+};
+
+// C-20 (D1-08): the vendor's claim window, one need the day before it closes.
+// It reads the claim_window_closing notice (the cron decides the day) and
+// clears with the act: the claim reaches the vendor (no drafted claim left)
+// or the line is marked good (the latest inspection is clean). A window that
+// has already closed stays until then — the studio can still file.
+const needClaimWindow: NeedRule = ({ claimWindows, now }) => {
+  const open = (claimWindows ?? [])
+    .filter(
+      (w) =>
+        w.claimStates.includes('drafted') &&
+        w.latestOutcome !== 'clean' &&
+        calendarDaysTo(w.deadline, now) <= 1,
+    )
+    .sort((a, b) => (a.deadline < b.deadline ? -1 : a.deadline > b.deadline ? 1 : 0));
+  const first = open[0];
+  if (!first) return null;
+  const vendor = first.vendorName ?? 'the vendor';
+  const closed = calendarDaysTo(first.deadline, now) < 0;
+  return {
+    kind: 'claim_window',
+    text:
+      open.length > 1
+        ? `${open.length} claim windows closing — first ${fmtDay(first.deadline)}`
+        : closed
+          ? `${first.poLabel} — ${vendor}'s claim window closed ${fmtDay(first.deadline)}; you can still file`
+          : `${first.poLabel} — tell ${vendor} about the damage by ${fmtDay(first.deadline)}`,
+    actionLabel: NEED_ACTION_LABELS.claim_window,
+    stamp: { label: 'CLAIM WINDOW', ...STAMP.terracotta, tone: 'damaged' },
+    urgent: false,
+    dueOn: first.deadline,
+    owner: 'designer',
+  };
+};
+
 // R7: claims surface at the grain where they are true — the PO. The line
 // stamp stays suppressed until per-item attribution exists (Slice 4).
 const needDamageClaim: NeedRule = ({ row }) => {
@@ -1052,6 +1116,7 @@ const NEED_RULES: readonly NeedRule[] = [
   needOverdueInvoice,
   needProposal,
   needLead,
+  needClaimWindow,
   needDamageClaim,
   needAwaitingInspection,
   needScheduleCollision,
@@ -1076,6 +1141,7 @@ export function deriveNeeds(
   flagged?: DeskFlaggedSignal | null,
   ceremony?: DeskCeremonySignal | null,
   schedule?: DeskScheduleInput | null,
+  claimWindows?: readonly DeskClaimWindowSignal[] | null,
 ): NeedLine[] {
   if (row.is_archived || row.is_paused) return [];
   const ctx: NeedContext = {
@@ -1086,6 +1152,7 @@ export function deriveNeeds(
     flagged,
     ceremony,
     schedule,
+    claimWindows,
   };
   const needs: NeedLine[] = [];
   for (const rule of NEED_RULES) {
@@ -1109,9 +1176,10 @@ export function deriveNeed(
   flagged?: DeskFlaggedSignal | null,
   ceremony?: DeskCeremonySignal | null,
   schedule?: DeskScheduleInput | null,
+  claimWindows?: readonly DeskClaimWindowSignal[] | null,
 ): NeedLine | null {
   return (
-    deriveNeeds(row, now, conflict, receivable, flagged, ceremony, schedule)[0] ??
+    deriveNeeds(row, now, conflict, receivable, flagged, ceremony, schedule, claimWindows)[0] ??
     null
   );
 }
@@ -1286,7 +1354,9 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
               ? new Date(row.oldest_unacked_sent_at).getTime()
               : need.kind === 'task_due' && row.earliest_task_due
                 ? new Date(row.earliest_task_due).getTime()
-                : new Date(row.updated_at).getTime();
+                : need.kind === 'claim_window' && need.dueOn
+                  ? new Date(`${need.dueOn}T00:00:00`).getTime()
+                  : new Date(row.updated_at).getTime();
   // Ruling IV's third rendering needs no new tier: `overdue_decision` is the
   // only urgent need AND rank 0, so an overdue folio already sorts above every
   // other folio, and ties already break on `earliest_overdue_due` above. A
@@ -1313,6 +1383,8 @@ export function partitionDesk(
   /** R108/R113 — per-project resolver output. `undefined` = the feed degraded;
    *  a project absent from a PRESENT map genuinely has no phases at all. */
   schedules?: ReadonlyMap<string, DeskScheduleInput>,
+  /** C-20 — project_id → the POs with a claim_window_closing notice. */
+  claimWindows?: ReadonlyMap<string, readonly DeskClaimWindowSignal[]>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -1364,7 +1436,19 @@ export function partitionDesk(
       schedules && row.project_id
         ? (schedules.get(row.project_id) ?? DESK_SCHEDULE_UNCONFIGURED)
         : null;
-    const needs = deriveNeeds(row, now, conflict, receivable, flagged, ceremony, schedule);
+    const claimWindowSignals = row.project_id
+      ? (claimWindows?.get(row.project_id) ?? null)
+      : null;
+    const needs = deriveNeeds(
+      row,
+      now,
+      conflict,
+      receivable,
+      flagged,
+      ceremony,
+      schedule,
+      claimWindowSignals,
+    );
     const need = needs[0] ?? null;
     if (need) {
       // Ruling IV: the overdue condition rides the folder so the sort, the

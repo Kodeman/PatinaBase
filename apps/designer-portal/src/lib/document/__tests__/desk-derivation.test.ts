@@ -11,6 +11,7 @@ import {
   partitionDesk,
   deriveReconnectNeeds,
   NEED_ACTION_LABELS,
+  type DeskClaimWindowSignal,
   type DocumentStateRow,
   type NurtureLike,
   type DeskCeremonySignal,
@@ -30,6 +31,7 @@ const OWNER_BY_KIND: Record<NeedKind, 'designer' | 'client' | 'maker'> = {
   overdue_decision: 'client',
   overdue_invoice: 'client',
   proposal_signed: 'designer',
+  claim_window: 'designer',
   damage_claim: 'designer',
   proposal_declined: 'designer',
   proposal_expired: 'designer',
@@ -97,6 +99,20 @@ function mkRow(partial: Partial<DocumentStateRow>): DocumentStateRow {
   };
 }
 
+/** C-20: one PO with a claim_window_closing notice — by default its vendor
+ *  deadline is tomorrow (NOW is 11 June) and its claim is still drafted. */
+function claimWindow(partial: Partial<DeskClaimWindowSignal> = {}): DeskClaimWindowSignal {
+  return {
+    purchaseOrderId: 'po-1',
+    poLabel: 'PO 1042',
+    vendorName: 'Hewn',
+    deadline: '2026-06-12',
+    claimStates: ['drafted'],
+    latestOutcome: 'damaged',
+    ...partial,
+  };
+}
+
 // D6 — the coverage guard reads REAL owner values off the real rules,
 // through a minimal fixture per kind, rather than comparing two typed
 // tables to each other (TypeScript already forces `OWNER_BY_KIND` and
@@ -129,6 +145,8 @@ const DERIVE_BY_KIND: Record<NeedKind, () => NeedLine | null> = {
       }),
       NOW,
     ),
+  claim_window: () =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, [claimWindow()]),
   damage_claim: () =>
     deriveNeed(mkRow({ open_claim_count: 1, open_claim_po: 'AP-1' }), NOW),
   proposal_declined: () =>
@@ -1611,5 +1629,75 @@ describe('schedule tiers in the desk stacks (R108 / R113)', () => {
     expect(deriveNeed(mkRow({ is_paused: true }), NOW, null, null, null, null, schedule({
       unconfigured: 'no-phases',
     }))).toBeNull();
+  });
+});
+
+describe('C-20 — the claim window need (D1-08)', () => {
+  const derive = (...windows: DeskClaimWindowSignal[]) =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, windows);
+
+  it('emits "Notify the vendor" the day before the vendor deadline, dated', () => {
+    const need = derive(claimWindow());
+    expect(need).not.toBeNull();
+    expect(need!.kind).toBe('claim_window');
+    expect(need!.text).toBe(
+      `PO 1042 — tell Hewn about the damage by ${dayMonth('2026-06-12')}`,
+    );
+    expect(need!.actionLabel).toBe('Notify the vendor');
+    expect(need!.stamp.label).toBe('CLAIM WINDOW');
+    expect(need!.dueOn).toBe('2026-06-12');
+    expect(need!.urgent).toBe(false);
+  });
+
+  it('stays quiet two days out — one need, the day before', () => {
+    expect(derive(claimWindow({ deadline: '2026-06-13' }))).toBeNull();
+  });
+
+  it('clears once the claim reaches the vendor', () => {
+    expect(derive(claimWindow({ claimStates: ['vendor_notified'] }))).toBeNull();
+    expect(derive(claimWindow({ claimStates: ['resolved'] }))).toBeNull();
+  });
+
+  it('clears once the line is marked good', () => {
+    expect(derive(claimWindow({ latestOutcome: 'clean' }))).toBeNull();
+  });
+
+  it('keeps a closed window until the act, and says the studio can still file', () => {
+    const need = derive(claimWindow({ deadline: '2026-06-10' }));
+    expect(need!.kind).toBe('claim_window');
+    expect(need!.text).toBe(
+      `PO 1042 — Hewn's claim window closed ${dayMonth('2026-06-10')}; you can still file`,
+    );
+  });
+
+  it('outranks the open damage claim it times', () => {
+    const need = deriveNeed(
+      mkRow({ open_claim_count: 1, open_claim_po: 'PO 1042' }),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      null,
+      [claimWindow()],
+    );
+    expect(need!.kind).toBe('claim_window');
+  });
+
+  it('partitionDesk routes the signal by project_id', () => {
+    const { folders } = partitionDesk(
+      [mkRow({}), mkRow({ engagement_id: 'e2', project_id: 'p2' })],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map([['p2', [claimWindow()]]]),
+    );
+    expect(folders).toHaveLength(1);
+    expect(folders[0].row.project_id).toBe('p2');
+    expect(folders[0].need.kind).toBe('claim_window');
   });
 });

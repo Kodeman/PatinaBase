@@ -24,6 +24,13 @@ jest.mock('@patina/supabase', () => ({
   useUpdateDamageClaim: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
+// C-20: the claim clock reads its own hooks (receiving-claim-clock.test.tsx
+// covers the sentence); here it only marks which rows carry it.
+jest.mock('../line-unfold/claim-clock', () => ({
+  ClaimClockLine: ({ purchaseOrderId }: { purchaseOrderId: string }) => (
+    <p data-testid="claim-clock">{purchaseOrderId}</p>
+  ),
+}));
 jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
   LogInspectionDrawer: () => null,
 }));
@@ -166,5 +173,23 @@ describe('the receiving photo line, rendered', () => {
     expect(screen.getByText(/Shipped · receive on arrival · 1/)).toBeInTheDocument();
     expect(screen.getByText(/PO-S/)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Inspect' })).toHaveLength(2);
+    // C-20: the claim clock rides the delivered row only.
+    expect(screen.getAllByTestId('claim-clock').map((n) => n.textContent)).toEqual(['po-d']);
+  });
+
+  it('carries the claim clock on a drafted claim, not a notified one (C-20)', () => {
+    draftedClaims = [claim()];
+    notifiedClaims = [
+      claim({
+        id: 'claim-2',
+        state: 'vendor_notified',
+        inspection: {
+          ...claim().inspection,
+          purchase_order: { ...claim().inspection.purchase_order, id: 'po-3' },
+        },
+      }),
+    ];
+    renderPage();
+    expect(screen.getAllByTestId('claim-clock').map((n) => n.textContent)).toEqual(['po-2']);
   });
 });
