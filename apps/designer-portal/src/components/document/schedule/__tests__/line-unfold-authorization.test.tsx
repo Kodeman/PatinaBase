@@ -37,6 +37,14 @@ jest.mock('@patina/supabase', () => ({
   useResolveOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useVendors: () => ({ data: { data: [] } }),
   useProductPrices: () => ({ data: undefined }),
+  // C-26 riders and shipments (riders.test.tsx, shipments.test.tsx).
+  usePoCostLines: () => ({ data: [] }),
+  useUpsertPoCostLine: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useStudioIdentity: () => ({ data: undefined }),
+  useStudioContacts: () => ({ data: [] }),
+  usePoShipments: () => ({ data: [] }),
+  useProcurementItems: () => ({ data: [], isLoading: false }),
+  useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));
 
 jest.mock('@/components/portal/procurement/order-paper', () => ({

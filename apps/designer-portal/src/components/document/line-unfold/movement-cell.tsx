@@ -12,6 +12,7 @@ import { DocumentAction } from '../document-action';
 import { CellValue, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
 import { ShipmentTracking, etaMoveText, etaMoves } from './movement-tracking';
 import { NEXT_PO_STATUS } from './next-act';
+import { PoShipments } from './shipments';
 
 type FFERow = any;
 
@@ -226,6 +227,13 @@ export function MovementCell({
               poStatus === 'shipped' ||
               poStatus === 'delivered'
             }
+          />
+          {/* C-26: shipments — partials, each with its own arrival and delivery. */}
+          <PoShipments
+            poId={po.id}
+            itemId={item.id}
+            projectId={projectId}
+            poStatus={poStatus}
           />
         </>
       ) : (

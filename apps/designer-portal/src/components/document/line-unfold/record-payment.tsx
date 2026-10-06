@@ -150,10 +150,16 @@ const errText = (e: unknown, fallback: string) =>
  * The inline record act for one scheduled row. Amount pre-fills with the
  * unpaid remainder; editing it records a partial payment. The method is a
  * studio payment method (last-4 label) or a plain kind.
+ *
+ * Without a row it records an unscheduled payment on the PO (C-26: a rider
+ * owed to the carrier or the receiver), named by `name` and referenced by
+ * `initialReference`.
  */
 export function RecordPaymentForm({
   purchaseOrderId,
   row,
+  name: nameOverride,
+  initialReference = '',
   remainderCents,
   projectId,
   receiptAnchor,
@@ -161,7 +167,10 @@ export function RecordPaymentForm({
   surfaceKey = 'project',
 }: {
   purchaseOrderId: string;
-  row: MoneyOutPayment & { id: string };
+  row?: MoneyOutPayment & { id: string };
+  /** The payment's name in the act's label when there is no scheduled row. */
+  name?: string;
+  initialReference?: string;
   remainderCents: number;
   projectId: string | null;
   receiptAnchor: FolioAnchor;
@@ -177,7 +186,7 @@ export function RecordPaymentForm({
   );
   // '' = not yet chosen → the first saved method, else 'kind:other'.
   const [how, setHow] = useState('');
-  const [reference, setReference] = useState('');
+  const [reference, setReference] = useState(initialReference);
   const [receipt, setReceipt] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -185,17 +194,17 @@ export function RecordPaymentForm({
   const howValue =
     how || (methods && methods.length > 0 ? `pm:${methods[0].id}` : 'kind:other');
   const busy = record.isPending || upload.isPending;
-  const name = scheduleName(row).toLowerCase();
+  const name = (row ? scheduleName(row) : nameOverride || 'Payment').toLowerCase();
 
   const submit = async () => {
     if (busy || amountCents == null || !paidOn) return;
     setError(null);
     const input: RecordVendorPaymentInput = {
       purchaseOrderId,
-      poPaymentId: row.id,
       paidOn,
       amountCents,
     };
+    if (row) input.poPaymentId = row.id;
     if (howValue.startsWith('pm:')) input.paymentMethodId = howValue.slice(3);
     else input.method = howValue.slice(5) as VendorPaymentMethodKind;
     if (reference.trim()) input.reference = reference.trim();

@@ -49,6 +49,16 @@ const fmtShort = (isoDate: string) =>
   });
 const dayOfMonth = (isoDate: string) => String(Number(isoDate.slice(8, 10)));
 
+/**
+ * C-26 (d2 §M6): the day a delivery sits on — the next undelivered
+ * shipment's current ETA, else the vendor's confirmed ETA, else the view's
+ * event_date (an install milestone's target).
+ */
+export function weekEta(e: DeliveryEvent): string | null {
+  const date = e.current_eta || e.confirmed_eta || e.event_date;
+  return date ? date.slice(0, 10) : null;
+}
+
 // The .wk-ev pill recipe (HTML §7): 2.5px left border + tinted bg + radius.
 // Three tones — clay (expected), sage (received), terracotta (conflict).
 const WK_EV_BASE =
@@ -207,10 +217,9 @@ export function WeekBookPage({
     // cell key `${projectId}|${weekIso}` → events, week-bucketed.
     const cells = new Map<string, DeliveryEvent[]>();
     for (const e of events ?? []) {
-      if (!e.event_date) continue;
-      const week = iso(
-        mondayOf(new Date(`${e.event_date.slice(0, 10)}T00:00:00Z`)),
-      );
+      const date = weekEta(e);
+      if (!date) continue;
+      const week = iso(mondayOf(new Date(`${date}T00:00:00Z`)));
       const key = `${e.project_id}|${week}`;
       const list = cells.get(key) ?? [];
       list.push(e);
@@ -366,9 +375,10 @@ export function WeekBookPage({
                           : received(e)
                             ? 'sage'
                             : 'clay';
+                        const day = dayOfMonth(weekEta(e)!);
                         const label = isInstall
-                          ? `Install ·${dayOfMonth(e.event_date!)}${collides ? ' ⚠ collides' : ''}`
-                          : `${e.vendor_name ?? 'Delivery'} ·${dayOfMonth(e.event_date!)}${received(e) ? ' ✓ recvd' : ''}`;
+                          ? `Install ·${day}${collides ? ' ⚠ collides' : ''}`
+                          : `${e.vendor_name ?? 'Delivery'} ·${day}${received(e) ? ' ✓ recvd' : ''}`;
                         return (
                           <span
                             key={e.event_id}

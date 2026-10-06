@@ -91,6 +91,7 @@ import {
   type OrderPaperVendor,
   type PendingOrder,
 } from './model';
+import { PoRiders } from './riders';
 
 export * from './model';
 
@@ -841,7 +842,16 @@ function PaperSheet({
               </li>
             ))}
           </ol>
-          {/* Riders (C-26, P2-5): the PO's cost lines (usePoCostLines) render here, above the total. */}
+          {/* Riders (C-26, P2-5): the PO's cost lines, above the total. Patina carries a maker-lane PO's freight. */}
+          {!isPatinaMaker && (
+            <PoRiders
+              purchaseOrderId={poId}
+              projectId={project.id}
+              vendor={vendor}
+              disabled={busy !== null}
+              receiptAnchor={{ kind: 'section', sectionKey: 'project' }}
+            />
+          )}
           <p className="mt-3 flex justify-between border-t border-[var(--color-pearl)] pt-2 doc-type-body text-[var(--color-charcoal)]">
             <span className={LABEL}>Total</span>
             <span data-order-paper-total className="tabular-nums">
