@@ -27,10 +27,11 @@ const HEAD = 'font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--text
 const READINGS: { key: BuyingReading; label: string }[] = [
   { key: 'room', label: 'room' },
   { key: 'maker', label: 'maker' },
+  { key: 'next', label: 'next act' },
 ];
 
 /**
- * "read by · room · maker" — the Ledger's quiet lens grammar (orders-ledger
+ * "read by · room · maker · next act" — the Ledger's quiet lens grammar (orders-ledger
  * LensLink): DM-mono words, the worn one scored and pressed.
  */
 export function ReadingLens({
