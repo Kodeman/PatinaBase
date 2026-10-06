@@ -201,7 +201,9 @@ export function useProjectFFEItems(
         `)
         .eq('project_id', projectId)
         .is('removed_at', null)
-        .order('sort_order', { ascending: true });
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
 
       if (filters?.roomId) query = query.eq('project_room_id', filters.roomId);
       if (filters?.status) query = query.eq('status', filters.status);

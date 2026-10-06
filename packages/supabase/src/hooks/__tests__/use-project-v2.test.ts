@@ -220,6 +220,27 @@ describe('useProjectFFEItems configuration handoff', () => {
     expect(selection).toContain('delivered_date');
     expect(selection).toContain('payments:po_payments(');
   });
+
+  // P2-follow: sort_order alone is not a stable key — two lines sharing a
+  // sort_order (e.g. right after a line moves onto a PO) would otherwise jump
+  // order between renders. created_at then id break the tie deterministically.
+  it('orders by sort_order, then created_at, then id so ties are stable', async () => {
+    const builder = setTableDefault('project_ffe_items', {
+      data: [],
+      error: null,
+    });
+    const config = useProjectFFEItems('project-1') as unknown as {
+      queryFn: () => Promise<unknown[]>;
+    };
+    await config.queryFn();
+
+    const orderCalls = builder.__chain.filter((call) => call.method === 'order');
+    expect(orderCalls.map((call) => call.args)).toEqual([
+      ['sort_order', { ascending: true }],
+      ['created_at', { ascending: true }],
+      ['id', { ascending: true }],
+    ]);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
