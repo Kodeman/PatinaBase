@@ -272,8 +272,12 @@ function OpenClaimRow({
 }
 
 export function ReceivingBookPage({
+  projectId,
+  onClearProject,
   onOpenDocument,
 }: {
+  projectId?: string | null;
+  onClearProject?: () => void;
   onOpenDocument: (projectId: string | null) => void;
 }) {
   const since30 = useMemo(() => isoOffsetDays(-30), []);
@@ -298,51 +302,96 @@ export function ReceivingBookPage({
   const [target, setTarget] = useState<AnyRecord | null>(null);
   const [showCleared, setShowCleared] = useState(false);
 
+  // US-16 (C-08): none of these hooks take a project id, so the lens narrows
+  // every already-fetched list client-side — same project the Ledger holds.
+  const matchesProject = (poLike: AnyRecord | null | undefined) =>
+    !projectId || (poLike?.project_id ?? poLike?.project?.id) === projectId;
+
+  const filteredOrders = useMemo(
+    () => (orders ?? []).filter((po) => matchesProject(po)),
+    [orders, projectId],
+  );
+  const filteredInspections = useMemo(
+    () =>
+      (inspections ?? []).filter((i) => matchesProject(i.purchase_order)),
+    [inspections, projectId],
+  );
+  const filteredDraftedClaims = useMemo(
+    () =>
+      (draftedClaims ?? []).filter((c) =>
+        matchesProject(c.inspection?.purchase_order),
+      ),
+    [draftedClaims, projectId],
+  );
+  const filteredNotifiedClaims = useMemo(
+    () =>
+      (notifiedClaims ?? []).filter((c) =>
+        matchesProject(c.inspection?.purchase_order),
+      ),
+    [notifiedClaims, projectId],
+  );
+
   const openClaimCount =
-    (draftedClaims?.length ?? 0) + (notifiedClaims?.length ?? 0);
+    filteredDraftedClaims.length + filteredNotifiedClaims.length;
 
   // PRC-11: the open-claims group — drafted first (they need the notify act),
   // then vendor-notified, newest first within each (the hooks' order).
   const openClaims = useMemo(
-    () => [...(draftedClaims ?? []), ...(notifiedClaims ?? [])],
-    [draftedClaims, notifiedClaims],
+    () => [...filteredDraftedClaims, ...filteredNotifiedClaims],
+    [filteredDraftedClaims, filteredNotifiedClaims],
   );
 
   // Warehouse-day queue: delivered POs with no inspection logged, oldest ETA
   // first (the day's work, in arrival order).
   const queue = useMemo(() => {
     const inspectedPoIds = new Set(
-      (inspections ?? []).map((i) => i.purchase_order_id),
+      filteredInspections.map((i) => i.purchase_order_id),
     );
-    return (orders ?? [])
+    return filteredOrders
       .filter((po) => po.status === 'delivered' && !inspectedPoIds.has(po.id))
       .sort((a, b) => {
         const ax = a.confirmed_eta ?? a.delivered_date ?? '';
         const bx = b.confirmed_eta ?? b.delivered_date ?? '';
         return ax < bx ? -1 : ax > bx ? 1 : 0;
       });
-  }, [orders, inspections]);
+  }, [filteredOrders, filteredInspections]);
 
   // Cleared inspections (clean, 30-day window) — the Settled fold.
   const cleared = useMemo(
-    () => (inspections ?? []).filter((i) => i.outcome === 'clean'),
-    [inspections],
+    () => filteredInspections.filter((i) => i.outcome === 'clean'),
+    [filteredInspections],
   );
 
   const stats = useMemo(
     () =>
       receivingFrontMatter(
-        (orders ?? []) as AnyRecord[],
-        (inspections ?? []) as AnyRecord[],
+        filteredOrders as AnyRecord[],
+        filteredInspections as AnyRecord[],
         openClaimCount,
       ),
-    [orders, inspections, openClaimCount],
+    [filteredOrders, filteredInspections, openClaimCount],
   );
 
   const isLoading = ordersLoading || inspLoading;
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-3xl">
+      {/* US-16 (C-08): the lens followed the designer in from the Document —
+          quiet, same LensLink grammar as the Ledger (:365-376), not a pill. */}
+      {projectId && (
+        <div className="mb-3 flex items-center gap-x-2.5 border-b border-[var(--color-pearl)] pb-1">
+          <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
+            project ·
+          </span>
+          <button
+            type="button"
+            onClick={onClearProject}
+            className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.06em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+          >
+            all projects
+          </button>
+        </div>
+      )}
       {/* PRC-10 (R84): the four-figure KPI strip — arriving · awaiting log ·
           open claims · received (30d) — in the proposal-watch figures-strip
           grammar. Counts derive from the queries the page already holds

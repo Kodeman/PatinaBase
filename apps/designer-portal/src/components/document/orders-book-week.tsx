@@ -71,8 +71,24 @@ function useWeekEvents() {
   });
 }
 
-export function WeekBookPage() {
-  const { data: events, isLoading } = useWeekEvents();
+export function WeekBookPage({
+  projectId,
+  onClearProject,
+}: {
+  projectId?: string | null;
+  onClearProject?: () => void;
+} = {}) {
+  const { data: allEvents, isLoading } = useWeekEvents();
+
+  // US-16 (C-08): the hook has no project filter, so the lens narrows the
+  // already-fetched window client-side — same shape as the Ledger's lens.
+  const events = useMemo(
+    () =>
+      projectId
+        ? (allEvents ?? []).filter((e) => e.project_id === projectId)
+        : allEvents,
+    [allEvents, projectId],
+  );
 
   const {
     weeks,
@@ -160,10 +176,26 @@ export function WeekBookPage() {
 
   if (projects.length === 0) {
     return (
-      <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
-        Nothing on the calendar — no dated deliveries or installs in the next{' '}
-        {WEEKS_ACROSS} weeks.
-      </p>
+      <div>
+        {projectId && (
+          <div className="mb-3 flex items-center gap-x-2.5 border-b border-[var(--color-pearl)] pb-1">
+            <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
+              project ·
+            </span>
+            <button
+              type="button"
+              onClick={onClearProject}
+              className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.06em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+            >
+              all projects
+            </button>
+          </div>
+        )}
+        <p className="doc-type-body py-3 italic text-[var(--color-quiet-ink)]">
+          Nothing on the calendar — no dated deliveries or installs in the next{' '}
+          {WEEKS_ACROSS} weeks.
+        </p>
+      </div>
     );
   }
 
@@ -174,6 +206,22 @@ export function WeekBookPage() {
 
   return (
     <div className="min-w-0">
+      {/* US-16 (C-08): the lens followed the designer in from the Document —
+          quiet, same LensLink grammar as the Ledger (:365-376), not a pill. */}
+      {projectId && (
+        <div className="mb-3 flex items-center gap-x-2.5 border-b border-[var(--color-pearl)] pb-1">
+          <span className="doc-type-meta uppercase tracking-[0.08em] text-[var(--color-quiet-ink)]">
+            project ·
+          </span>
+          <button
+            type="button"
+            onClick={onClearProject}
+            className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.06em] text-[var(--color-quiet-ink)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+          >
+            all projects
+          </button>
+        </div>
+      )}
       <div
         role="region"
         aria-label="Eight-week delivery calendar"

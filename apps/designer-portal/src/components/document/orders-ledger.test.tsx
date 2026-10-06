@@ -77,11 +77,37 @@ jest.mock('./orders-book-vendors', () => ({
 }));
 
 jest.mock('./orders-book-week', () => ({
-  WeekBookPage: () => <div>Week page</div>,
+  WeekBookPage: ({
+    projectId,
+    onClearProject,
+  }: {
+    projectId?: string | null;
+    onClearProject?: () => void;
+  }) => (
+    <div>
+      Week page · {projectId ?? 'none'}
+      <button type="button" onClick={onClearProject}>
+        clear week lens
+      </button>
+    </div>
+  ),
 }));
 
 jest.mock('./orders-book-receiving', () => ({
-  ReceivingBookPage: () => <div>Receiving page</div>,
+  ReceivingBookPage: ({
+    projectId,
+    onClearProject,
+  }: {
+    projectId?: string | null;
+    onClearProject?: () => void;
+  }) => (
+    <div>
+      Receiving page · {projectId ?? 'none'}
+      <button type="button" onClick={onClearProject}>
+        clear receiving lens
+      </button>
+    </div>
+  ),
 }));
 
 jest.mock('./overlays/doc-sheet', () => ({
@@ -338,6 +364,89 @@ describe('OrdersLedger quiet register', () => {
     expect(
       screen.queryByRole('button', { name: 'Align ETA' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// US-16 (C-08) — the project lens follows the designer onto Week and
+// Receiving, not just Ledger.
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('OrdersLedger · project lens carries across pages (US-16)', () => {
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockInvalidateQueries.mockReset();
+    mockUsePurchaseOrders.mockReturnValue({ data: ORDERS, isLoading: false });
+    mockUseVendors.mockReturnValue({ data: { data: VENDORS } });
+    mockUseUpdatePurchaseOrderETA.mockReturnValue({
+      mutateAsync: mockMutateEta,
+    });
+  });
+
+  it('seeds the Ledger lens from initialContext.projectId', () => {
+    render(
+      <OrdersLedger
+        onClose={jest.fn()}
+        initialContext={{ projectId: 'project-2' }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Lake House' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      screen.getByRole('button', { name: 'Oak House' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    // Lensed to project-2: po-2 and po-3, not po-1 (Oak House).
+    expect(
+      document.querySelectorAll('[data-orders-po-row]'),
+    ).toHaveLength(2);
+  });
+
+  it('passes the seeded lens to the Week page', () => {
+    render(
+      <OrdersLedger
+        onClose={jest.fn()}
+        initialContext={{ projectId: 'project-2', page: 'week' }}
+      />,
+    );
+
+    expect(screen.getByText('Week page · project-2')).toBeInTheDocument();
+  });
+
+  it('passes the seeded lens to the Receiving page, and "all projects" clears it', () => {
+    render(
+      <OrdersLedger
+        onClose={jest.fn()}
+        initialContext={{ projectId: 'project-2', page: 'receiving' }}
+      />,
+    );
+
+    expect(
+      screen.getByText('Receiving page · project-2'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'clear receiving lens' }),
+    );
+
+    expect(screen.getByText('Receiving page · none')).toBeInTheDocument();
+  });
+
+  it('with no project context, the lens stays unset on Week and Receiving (behavior unchanged)', () => {
+    const { unmount } = render(
+      <OrdersLedger onClose={jest.fn()} initialContext={{ page: 'week' }} />,
+    );
+    expect(screen.getByText('Week page · none')).toBeInTheDocument();
+    unmount();
+
+    render(
+      <OrdersLedger
+        onClose={jest.fn()}
+        initialContext={{ page: 'receiving' }}
+      />,
+    );
+    expect(screen.getByText('Receiving page · none')).toBeInTheDocument();
   });
 });
 

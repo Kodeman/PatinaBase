@@ -155,7 +155,12 @@ export function OrdersLedger({
   const [ackPoId, setAckPoId] = useState<string | null>(null);
   // PRC-06 (R84): the quiet lenses — project + payment state, DM-mono text
   // (the portal's FacetedFilterPopover facets, without the pills).
-  const [projectLens, setProjectLens] = useState<string | null>(null);
+  // US-16 (C-08): seeded from the opening context so the project the
+  // designer was holding stays the lens across Ledger, Week and Receiving —
+  // not just the page the book happened to open onto.
+  const [projectLens, setProjectLens] = useState<string | null>(
+    initialContext?.projectId ?? null,
+  );
   const [paymentLens, setPaymentLens] = useState<
     'due' | 'pending' | 'paid' | null
   >(null);
@@ -328,10 +333,19 @@ export function OrdersLedger({
         />
       )}
 
-      {page === 'week' && <WeekBookPage />}
+      {page === 'week' && (
+        <WeekBookPage
+          projectId={projectLens}
+          onClearProject={() => setProjectLens(null)}
+        />
+      )}
 
       {page === 'receiving' && (
-        <ReceivingBookPage onOpenDocument={openDocument} />
+        <ReceivingBookPage
+          projectId={projectLens}
+          onClearProject={() => setProjectLens(null)}
+          onOpenDocument={openDocument}
+        />
       )}
 
       {page === 'ledger' && (
