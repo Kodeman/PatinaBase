@@ -17,6 +17,8 @@ let notifiedClaims: any[] = [];
 
 jest.mock('@patina/supabase', () => ({
   usePurchaseOrders: () => ({ data: orders, isLoading: false }),
+  useUnresolvedProcurementExceptions: () => ({ data: [] }),
+  useOpenProcurementException: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useReceivingInspections: () => ({ data: inspections, isLoading: false }),
   useDamageClaims: ({ state }: { state: string }) => ({
     data: state === 'drafted' ? draftedClaims : notifiedClaims,

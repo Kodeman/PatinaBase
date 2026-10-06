@@ -369,6 +369,46 @@ export function quoteExpiring(signal: DeskQuoteSignal, now: Date): boolean {
   return days >= 0 && days <= 1;
 }
 
+/** C-30 exception input, structural. One procurement_exceptions row still
+ *  `open`, built by use-desk-engagements and keyed by project_id. */
+export interface DeskExceptionSignal {
+  id: string;
+  /** procurement_exceptions.type, e.g. damage, backorder, price_change. */
+  type: string;
+  status: string;
+  itemName: string | null;
+  poLabel: string | null;
+  /** `clock_due_on`, a bare date, when the type keeps a clock. */
+  clockDueOn: string | null;
+  /** Patina catalog lane: Patina handles it with the maker (V1). */
+  isPatinaCatalog: boolean;
+}
+
+const EXCEPTION_NEED_LABEL: Readonly<Record<string, string>> = {
+  concealed_damage: 'Concealed damage',
+  damage: 'Damage',
+  short_ship: 'Short shipment',
+  wrong_item: 'Wrong item',
+  delay: 'Delay',
+  backorder: 'Backorder',
+  discontinued: 'Discontinued',
+  price_change: 'Price change',
+};
+
+/**
+ * C-30: an exception asks for a path while it is still `open` — once a path
+ * is chosen it waits on the maker or the client, not the studio. An ack
+ * discrepancy is SQ-426's acknowledgment check, and the maker lane is
+ * Patina's to handle.
+ */
+export function exceptionNeedsPath(signal: DeskExceptionSignal): boolean {
+  return (
+    signal.status === 'open' &&
+    !signal.isPatinaCatalog &&
+    Object.prototype.hasOwnProperty.call(EXCEPTION_NEED_LABEL, signal.type)
+  );
+}
+
 export interface NeedLine {
   kind: NeedKind;
   text: string;
@@ -748,6 +788,7 @@ interface NeedContext {
   returns?: readonly DeskReturnSignal[] | null;
   drafts?: readonly DeskDraftSignal[] | null;
   quotes?: readonly DeskQuoteSignal[] | null;
+  exceptions?: readonly DeskExceptionSignal[] | null;
 }
 
 /** A rule that owns its engagement kind outright. The original deriveNeed
@@ -1143,6 +1184,34 @@ const needDamageClaim: NeedRule = ({ row }) => {
   return null;
 };
 
+// C-30 (d2 §M7): an open exception — damage, short, delay, backorder,
+// discontinued, price change — waits for the studio to choose a path. The
+// earliest clock leads; it clears when a path is recorded.
+const needExceptionOpen: NeedRule = ({ exceptions }) => {
+  const open = (exceptions ?? []).filter(exceptionNeedsPath).sort((a, b) => {
+    if (a.clockDueOn === b.clockDueOn) return 0;
+    if (a.clockDueOn == null) return 1;
+    if (b.clockDueOn == null) return -1;
+    return a.clockDueOn < b.clockDueOn ? -1 : 1;
+  });
+  const first = open[0];
+  if (!first) return null;
+  const subject = first.itemName ?? first.poLabel ?? 'a line';
+  const label = EXCEPTION_NEED_LABEL[first.type]!;
+  return {
+    kind: 'exception_open',
+    text:
+      open.length > 1
+        ? `${open.length} exceptions open — first, ${label.toLowerCase()} on ${subject}`
+        : `${label} on ${subject} — choose a path`,
+    actionLabel: NEED_ACTION_LABELS.exception_open,
+    stamp: { label: 'EXCEPTION', ...STAMP.terracotta },
+    urgent: false,
+    ...(first.clockDueOn ? { dueOn: first.clockDueOn } : {}),
+    owner: 'designer',
+  };
+};
+
 // C-28 (d2 §M11): a composed letter awaiting review is the studio's own pen.
 // The need carries the oldest draft, and the folder face mounts its review;
 // it clears when the draft is sent or discarded (the read is awaiting_review
@@ -1424,6 +1493,7 @@ const NEED_RULES: readonly NeedRule[] = [
   needPaymentDue,
   needClaimWindow,
   needDamageClaim,
+  needExceptionOpen,
   needDraftReview,
   needReturnBy,
   needAwaitingInspection,
@@ -1455,6 +1525,7 @@ export function deriveNeeds(
   returns?: readonly DeskReturnSignal[] | null,
   drafts?: readonly DeskDraftSignal[] | null,
   quotes?: readonly DeskQuoteSignal[] | null,
+  exceptions?: readonly DeskExceptionSignal[] | null,
 ): NeedLine[] {
   if (row.is_archived || row.is_paused) return [];
   const ctx: NeedContext = {
@@ -1470,6 +1541,7 @@ export function deriveNeeds(
     returns,
     drafts,
     quotes,
+    exceptions,
   };
   const needs: NeedLine[] = [];
   for (const rule of NEED_RULES) {
@@ -1498,6 +1570,7 @@ export function deriveNeed(
   returns?: readonly DeskReturnSignal[] | null,
   drafts?: readonly DeskDraftSignal[] | null,
   quotes?: readonly DeskQuoteSignal[] | null,
+  exceptions?: readonly DeskExceptionSignal[] | null,
 ): NeedLine | null {
   return (
     deriveNeeds(
@@ -1513,6 +1586,7 @@ export function deriveNeed(
       returns,
       drafts,
       quotes,
+      exceptions,
     )[0] ?? null
   );
 }
@@ -1729,6 +1803,8 @@ export function partitionDesk(
   drafts?: ReadonlyMap<string, readonly DeskDraftSignal[]>,
   /** C-29 — project_id → live quotes with a valid-until date. */
   quotes?: ReadonlyMap<string, readonly DeskQuoteSignal[]>,
+  /** C-30 — project_id → procurement exceptions still open. */
+  exceptions?: ReadonlyMap<string, readonly DeskExceptionSignal[]>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -1795,6 +1871,9 @@ export function partitionDesk(
     const quoteSignals = row.project_id
       ? (quotes?.get(row.project_id) ?? null)
       : null;
+    const exceptionSignals = row.project_id
+      ? (exceptions?.get(row.project_id) ?? null)
+      : null;
     const needs = deriveNeeds(
       row,
       now,
@@ -1808,6 +1887,7 @@ export function partitionDesk(
       returnSignals,
       draftSignals,
       quoteSignals,
+      exceptionSignals,
     );
     const need = needs[0] ?? null;
     if (need) {

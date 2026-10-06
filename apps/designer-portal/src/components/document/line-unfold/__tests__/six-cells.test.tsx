@@ -37,6 +37,8 @@ jest.mock('@patina/supabase', () => ({
   usePoShipments: () => ({ data: [] }),
   // C-28 drafts ride in the cells; their own suite is draft-review.test.tsx.
   useProcurementDrafts: () => ({ data: [] }),
+  useUnresolvedProcurementExceptions: () => ({ data: [] }),
+  useOpenProcurementException: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
   // C-29: the Quote cell; its own suite is quote.test.tsx.

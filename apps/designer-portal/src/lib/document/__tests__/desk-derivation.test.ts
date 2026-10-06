@@ -12,6 +12,7 @@ import {
   deriveReconnectNeeds,
   NEED_ACTION_LABELS,
   type DeskClaimWindowSignal,
+  type DeskExceptionSignal,
   type DeskPaymentSignal,
   type DeskQuoteSignal,
   type DeskReturnSignal,
@@ -67,7 +68,6 @@ const UNEMITTED_KINDS: readonly NeedKind[] = [
   'ack_discrepancy',
   'cfa_pending',
   'memo_return',
-  'exception_open',
 ];
 
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
@@ -367,7 +367,10 @@ const DERIVE_BY_KIND: Record<NeedKind, (() => NeedLine | null) | null> = {
     deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, null, null, [quoteSignal()]),
   cfa_pending: null,
   memo_return: null,
-  exception_open: null,
+  exception_open: () =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, null, null, null, [
+      exceptionSignal(),
+    ]),
   return_by: () =>
     deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, [returnSignal()]),
 };
@@ -1996,5 +1999,77 @@ describe('C-29 — the quote_expiring need reads valid_until only (R6)', () => {
     expect(folders).toHaveLength(1);
     expect(folders[0].row.project_id).toBe('p2');
     expect(folders[0].need.kind).toBe('quote_expiring');
+  });
+});
+
+function exceptionSignal(partial: Partial<DeskExceptionSignal> = {}): DeskExceptionSignal {
+  return {
+    id: 'x1',
+    type: 'damage',
+    status: 'open',
+    itemName: 'Walnut console',
+    poLabel: 'PO-101',
+    clockDueOn: '2026-06-14',
+    isPatinaCatalog: false,
+    ...partial,
+  };
+}
+
+describe('C-30 — the exception_open need asks for a path', () => {
+  const derive = (...exceptions: DeskExceptionSignal[]) =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, null, null, null, exceptions);
+
+  it('names the type and the line, dated by its clock, with "Choose a path"', () => {
+    const need = derive(exceptionSignal());
+    expect(need!.kind).toBe('exception_open');
+    expect(need!.text).toBe('Damage on Walnut console — choose a path');
+    expect(need!.actionLabel).toBe('Choose a path');
+    expect(need!.dueOn).toBe('2026-06-14');
+    expect(need!.owner).toBe('designer');
+  });
+
+  it('falls back to the PO and carries no date when the type keeps no clock', () => {
+    const need = derive(exceptionSignal({ type: 'backorder', itemName: null, clockDueOn: null }));
+    expect(need!.text).toBe('Backorder on PO-101 — choose a path');
+    expect(need!.dueOn).toBeUndefined();
+  });
+
+  it('stays quiet once a path is chosen, for an ack discrepancy, and on the maker lane', () => {
+    expect(derive(exceptionSignal({ status: 'awaiting_vendor' }))).toBeNull();
+    expect(derive(exceptionSignal({ status: 'awaiting_client' }))).toBeNull();
+    expect(derive(exceptionSignal({ type: 'ack_discrepancy' }))).toBeNull();
+    expect(derive(exceptionSignal({ isPatinaCatalog: true }))).toBeNull();
+  });
+
+  it('counts several, leading with the earliest clock', () => {
+    const need = derive(
+      exceptionSignal({ id: 'x2', type: 'delay', clockDueOn: null }),
+      exceptionSignal({ id: 'x3', type: 'short_ship', itemName: 'Linen drapery', clockDueOn: '2026-06-12' }),
+      exceptionSignal(),
+    );
+    expect(need!.text).toBe('3 exceptions open — first, short shipment on Linen drapery');
+    expect(need!.dueOn).toBe('2026-06-12');
+  });
+
+  it('partitionDesk routes the signal by project_id, after quotes', () => {
+    const { folders } = partitionDesk(
+      [mkRow({}), mkRow({ engagement_id: 'e2', project_id: 'p2' })],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map([['p2', [exceptionSignal()]]]),
+    );
+    expect(folders).toHaveLength(1);
+    expect(folders[0].row.project_id).toBe('p2');
+    expect(folders[0].need.kind).toBe('exception_open');
   });
 });

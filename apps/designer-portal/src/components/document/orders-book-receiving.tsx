@@ -30,6 +30,7 @@ import {
   inspectionPhotoIds,
 } from './line-unfold/inspection-photo-strip';
 import { ClaimClockLine } from './line-unfold/claim-clock';
+import { ReceivingExceptions, TrackClaimAct } from './buying/exception-overlay';
 
 type AnyRecord = any;
 
@@ -165,6 +166,9 @@ function OpenClaimRow({
               className="doc-type-meta mt-0.5"
             />
           )}
+          {/* C-30: an inspection's claim opens an exception — the overlay
+              row above then carries its clock and paths. */}
+          {!claim.exception_id && <TrackClaimAct claimId={claim.id} />}
         </div>
         <Stamp
           label={drafted ? 'claim drafted' : 'vendor notified'}
@@ -545,6 +549,9 @@ export function ReceivingBookPage({
               </ul>
             </>
           )}
+
+          {/* C-30: every unresolved exception, with its clock and paths. */}
+          <ReceivingExceptions projectId={projectId ?? null} />
 
           {/* PRC-11: open claims — the lifecycle acts live where the book
               already counts them. */}
