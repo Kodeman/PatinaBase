@@ -160,7 +160,16 @@ export interface VendorPayment {
   void_reason: string | null;
   voided_by: string | null;
   created_at: string;
+  /** Who the money went to (00718); vendor for every scheduled row, refund and credit. */
+  payee: VendorPaymentPayee;
 }
+
+/**
+ * Who a vendor_payments row paid (00718): the PO's vendor, or, for a rider owed
+ * elsewhere (C-26), the carrier, the receiver or someone else. Vendor money
+ * checks (refund cap, void floor, the price-change block) count vendor only.
+ */
+export type VendorPaymentPayee = 'vendor' | 'carrier' | 'receiver' | 'other';
 
 /** A studio's saved way to pay vendors (00695). Stores the last four digits only. */
 export interface StudioPaymentMethod {
@@ -189,6 +198,8 @@ export interface RecordVendorPaymentInput {
   paymentMethodId?: string;
   reference?: string;
   receiptDocumentPath?: string;
+  /** Defaults to vendor. A non-vendor payee is refused with poPaymentId (a scheduled row is the vendor's). */
+  payee?: VendorPaymentPayee;
 }
 
 /**
@@ -704,6 +715,7 @@ async function recordVendorPayment(input: RecordVendorPaymentInput): Promise<Ven
   if (input.paymentMethodId !== undefined) request.paymentMethodId = input.paymentMethodId;
   if (input.reference !== undefined) request.reference = input.reference;
   if (input.receiptDocumentPath !== undefined) request.receiptDocumentPath = input.receiptDocumentPath;
+  if (input.payee !== undefined) request.payee = input.payee;
 
   const { data, error } = await supabase.rpc('record_vendor_payment', {
     p_po_id: input.purchaseOrderId,

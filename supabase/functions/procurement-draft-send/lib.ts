@@ -55,10 +55,23 @@ export interface ProcurementDraftSendDeps {
   getCallerUser: (req: Request) => Promise<CallerUser | null>;
   /** A user-scoped select: RLS answers co-membership, so an outsider reads null. */
   loadDraftAsCaller: (req: Request, draftId: string) => Promise<ProcurementDraft | null>;
+  /**
+   * As the caller: public.claim_procurement_draft_for_send, awaiting_review →
+   * sending (00718). One claim wins; a second request reads conflict.
+   */
+  claimForSend: (req: Request, draftId: string) => Promise<ClaimResult>;
+  /** As the caller (the claimer): public.release_procurement_draft_claim, sending → awaiting_review. */
+  releaseClaim: (req: Request, draftId: string) => Promise<{ error?: string }>;
   sendEmail: (input: SendEmailInput) => Promise<SendEmailResult>;
-  /** Service role: public.mark_procurement_draft_sent. */
+  /** Service role: public.mark_procurement_draft_sent (only the claimer's claimed draft). */
   markSent: (draftId: string, sentBy: string, messageId: string | null) => Promise<{ error?: string }>;
 }
+
+export type ClaimResult =
+  | { ok: true; draft: ProcurementDraft }
+  | { ok: false; reason: "conflict"; status: string }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "error"; detail: string };
 
 export type ParseResult =
   | { ok: true; draftId: string }
@@ -84,19 +97,22 @@ export function draftBodyHtml(body: string): string {
 }
 
 /**
- * POST { draftId } → sends the draft exactly as stored (the review UI saves an
- * edit through update_procurement_draft first), then marks it sent.
+ * POST { draftId } → claims the draft (awaiting_review → sending, so a second
+ * request cannot send it too), sends it exactly as stored (the review UI saves
+ * an edit through update_procurement_draft first), then marks it sent. A send
+ * that does not go puts the claim back.
  *
  *   OPTIONS                       → 200 CORS preflight
  *   non-POST                      → 405 method_not_allowed
  *   bad body                      → 400
  *   no caller                     → 401 unauthorized
  *   not readable by the caller    → 404 draft_not_found (never confirms a foreign id)
- *   not awaiting_review           → 409 draft_not_awaiting_review
+ *   not awaiting_review           → 409 draft_not_awaiting_review (also when another send claimed it)
  *   no recipient                  → 422 no_recipient
- *   recipient suppressed          → 422 recipient_suppressed (not marked sent)
- *   provider failure              → 502 send_failed (not marked sent)
- *   sent, stamp failed            → 500 mark_sent_failed { emailSent: true }
+ *   claim failed otherwise        → 500 claim_failed (nothing sent)
+ *   recipient suppressed          → 422 recipient_suppressed (claim released, not marked sent)
+ *   provider failure              → 502 send_failed (claim released, not marked sent)
+ *   sent, stamp failed            → 500 mark_sent_failed { emailSent: true } (the claim stays: it went)
  *   sent                          → 200 { ok, draftId, messageId }
  */
 export async function handleProcurementDraftSend(
@@ -124,44 +140,65 @@ export async function handleProcurementDraftSend(
   if (draft.status !== "awaiting_review") {
     return json({ error: "draft_not_awaiting_review", status: draft.status }, 409);
   }
-  const to = draft.toEmail?.trim();
-  if (!to) {
-    return json(
+  const noRecipient = () =>
+    json(
       { error: "no_recipient", detail: "This draft has no recipient address. Add an email to the contact card and compose it again." },
       422,
     );
+  if (!draft.toEmail?.trim()) return noRecipient();
+
+  const claim = await deps.claimForSend(req, draft.id);
+  if (!claim.ok) {
+    if (claim.reason === "conflict") return json({ error: "draft_not_awaiting_review", status: claim.status }, 409);
+    if (claim.reason === "not_found") return json({ error: "draft_not_found" }, 404);
+    console.error("procurement-draft-send: claim failed", claim.detail);
+    return json({ error: "claim_failed", detail: claim.detail }, 500);
+  }
+  // Send what was claimed: the row as it stood when this request took it.
+  const claimed = claim.draft;
+  const release = async () => {
+    const released = await deps.releaseClaim(req, claimed.id);
+    if (released.error) console.error("procurement-draft-send: claim release failed", released.error);
+  };
+  const to = claimed.toEmail?.trim();
+  if (!to) {
+    await release();
+    return noRecipient();
   }
 
   let sent: SendEmailResult;
   try {
     sent = await deps.sendEmail({
       to,
-      subject: draft.subject,
-      html: draftBodyHtml(draft.body),
-      text: draft.body,
+      subject: claimed.subject,
+      html: draftBodyHtml(claimed.body),
+      text: claimed.body,
       replyTo: caller.email ?? undefined,
-      organizationId: draft.organizationId,
-      draftId: draft.id,
-      kind: draft.kind,
+      organizationId: claimed.organizationId,
+      draftId: claimed.id,
+      kind: claimed.kind,
     });
   } catch (err) {
     const detail = err instanceof Error ? err.message : "unknown send error";
     console.error("procurement-draft-send: send threw", detail);
+    await release();
     return json({ error: "send_failed", detail }, 502);
   }
   if (sent.suppressed) {
+    await release();
     return json({ error: "recipient_suppressed", detail: sent.error }, 422);
   }
   if (!sent.success) {
     console.error("procurement-draft-send: send failed", sent.error);
+    await release();
     return json({ error: "send_failed", detail: sent.error }, 502);
   }
 
   const messageId = sent.id ?? null;
-  const marked = await deps.markSent(draft.id, caller.id, messageId);
+  const marked = await deps.markSent(claimed.id, caller.id, messageId);
   if (marked.error) {
     console.error("procurement-draft-send: mark_procurement_draft_sent failed", marked.error);
     return json({ error: "mark_sent_failed", detail: marked.error, emailSent: true }, 500);
   }
-  return json({ ok: true, draftId: draft.id, messageId });
+  return json({ ok: true, draftId: claimed.id, messageId });
 }

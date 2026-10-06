@@ -499,6 +499,11 @@ DECLARE
   v_draft public.procurement_drafts%ROWTYPE;
   v_err   text;
 BEGIN
+  -- 00718 (D1): procurement-draft-send claims as the caller before it sends.
+  PERFORM pg_temp.act('70419000-0000-4000-8000-0000000000a2');
+  v_draft := public.claim_procurement_draft_for_send(current_setting('sq419.draft1')::uuid);
+  ASSERT v_draft.status = 'sending' AND v_draft.sent_by = '70419000-0000-4000-8000-0000000000a2',
+    'FAIL E4: claimed by M';
   v_err := pg_temp.raised(format('SELECT public.mark_procurement_draft_sent(%L, %L)',
     current_setting('sq419.draft1'), '70419000-0000-4000-8000-0000000000a4'));
   ASSERT v_err LIKE '42501 %cannot send%', 'FAIL E4: an outsider cannot be the sender, got ' || COALESCE(v_err, 'no error');
@@ -761,7 +766,8 @@ BEGIN
   SELECT string_agg(sort_order || ':' || name || ':' || COALESCE(price::text, '-') || ':' || COALESCE(designer_note, '-'), ' | ' ORDER BY sort_order)
     INTO v_options
   FROM public.client_decision_options WHERE decision_id = current_setting('sq419.decision')::uuid;
-  ASSERT v_options = '0:SQ419 sofa:-:No longer available as specified | 1:SQ419 sofa, linen:82000:- | 2:SQ419 sofa, velvet:79000:-',
+  -- 00718 (C1): the sofa's open backorder names the reason.
+  ASSERT v_options = '0:SQ419 sofa:-:On backorder with the maker | 1:SQ419 sofa, linen:82000:- | 2:SQ419 sofa, velvet:79000:-',
     'FAIL H4: the original then the alternates at their client price, got ' || COALESCE(v_options, 'NULL');
   RAISE NOTICE 'case H passed (options): original first, alternates at client price';
 END;

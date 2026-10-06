@@ -150,7 +150,11 @@ export function DraftReview({
         </>
       ) : (
         <p role="status" className="text-[12px] text-[var(--text-muted)]">
-          {status === 'sent' ? `Sent${recipient ? ` to ${recipient}` : ''}.` : 'Discarded.'}
+          {status === 'sent'
+            ? `Sent${recipient ? ` to ${recipient}` : ''}.`
+            : status === 'sending'
+              ? 'Sending.'
+              : 'Discarded.'}
         </p>
       )}
       {error && (

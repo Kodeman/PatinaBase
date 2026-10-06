@@ -98,6 +98,13 @@ describe('DraftReview', () => {
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('Sent to orders@hale.test.');
   });
+
+  it('offers no send while another send has claimed it', () => {
+    render(<DraftReview draft={{ ...DRAFT, status: 'sending' }} />);
+    expect(screen.queryByLabelText('Subject')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Sending.');
+  });
 });
 
 describe('PurchaseOrderDrafts', () => {

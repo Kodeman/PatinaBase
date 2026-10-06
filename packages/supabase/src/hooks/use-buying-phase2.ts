@@ -757,7 +757,8 @@ export type ProcurementDraftKind =
   | 'client_delay_note'
   | 'client_substitution_note'
   | 'memo_return_note';
-export type ProcurementDraftStatus = 'awaiting_review' | 'sent' | 'discarded';
+/** sending: claimed by a send in flight (00718); not editable, not sendable. */
+export type ProcurementDraftStatus = 'awaiting_review' | 'sending' | 'sent' | 'discarded';
 
 /** A project's procurement drafts, newest first; pass status to narrow. */
 export function useProcurementDrafts(
@@ -818,8 +819,9 @@ export function useDiscardProcurementDraft(options?: ErrorSurfaceOptions) {
 
 /**
  * Send a draft as it is stored, through procurement-draft-send, which re-checks
- * the caller can read it, requires awaiting_review, sends through the
- * compliant-email chokepoint and marks it sent. Save an edit first.
+ * the caller can read it, claims it (awaiting_review → sending), sends through
+ * the compliant-email chokepoint and marks it sent; a send that does not go
+ * releases the claim. Save an edit first.
  */
 export function useSendProcurementDraft(options?: ErrorSurfaceOptions) {
   const queryClient = useQueryClient();
