@@ -1,8 +1,12 @@
 import {
   formatMarkup,
+  nextActOf,
   purchaseOrderFoot,
   readByMaker,
+  readByNextAct,
   type BuyingLine,
+  type BuyingPurchaseOrder,
+  type NextActLine,
 } from '@/lib/document/buying-readings';
 
 const line = (over: Partial<BuyingLine> & { id: string }): BuyingLine => ({
@@ -172,5 +176,106 @@ describe('purchaseOrderFoot', () => {
     expect(purchaseOrderFoot({ ...po1042, status: 'cancelled' })).toBe(
       'PO-1042 · cancelled',
     );
+  });
+});
+
+describe('readByNextAct (C-33)', () => {
+  type Row = { line: NextActLine; reasons: string[] };
+  const row = (over: Partial<NextActLine> & { id: string }, reasons: string[] = []): Row => ({
+    line: { ...line({ id: over.id }), status: 'approved', received_quantity: null, item_claims: null, ...over },
+    reasons,
+  });
+  const readNext = (rows: Row[]) => readByNextAct(rows, (r) => r.line, (r) => r.reasons);
+  const heads = (rows: Row[]) =>
+    readNext(rows).groups.map((g) => `${g.label}: ${g.rows.map((r) => r.line.id).join(',')}`);
+  const onPo = (po: BuyingPurchaseOrder) => ({ purchase_order_id: po.id, purchase_order: po });
+
+  it('groups unordered lines by first readiness reason, then Ready to order, then ordered lines by lifecycle step', () => {
+    expect(
+      heads([
+        row({ id: 'installed', status: 'installed', ...hale, ...onPo(po1042) }),
+        row({ id: 'ready', ...visual }),
+        row({ id: 'price', ...visual }, ['Needs a client price']),
+        row({ id: 'maker' }, ['Needs a maker', 'Needs a client price']),
+        row({ id: 'draft', ...ardent, ...onPo({ id: 'po-9', status: 'draft', sent_at: null }) }),
+        row({ id: 'ack', status: 'ordered', ...ardent, ...onPo(po1046) }),
+        row({
+          id: 'acked',
+          status: 'ordered',
+          ...hale,
+          ...onPo({ id: 'po-7', status: 'confirmed', sent_at: '2026-10-01', acknowledged_at: '2026-10-02' }),
+        }),
+        row({ id: 'making', status: 'production', ...hale, ...onPo(po1042) }),
+        row({ id: 'moving', status: 'shipped', ...hale, ...onPo({ ...po1042, status: 'shipped' }) }),
+        row({ id: 'arrived', status: 'delivered', ...hale, ...onPo(po1042) }),
+        row({
+          id: 'damaged',
+          status: 'delivered',
+          received_quantity: 1,
+          item_claims: [{ state: 'drafted' }],
+          ...hale,
+          ...onPo(po1042),
+        }),
+        row({ id: 'inspected', status: 'delivered', received_quantity: 1, ...hale, ...onPo(po1042) }),
+        row({ id: 'maker-2' }, ['Needs a maker']),
+      ]),
+    ).toEqual([
+      'Needs a maker: maker,maker-2',
+      'Needs a client price: price',
+      'Ready to order: ready',
+      'To send: draft',
+      'Waiting on the ack: ack',
+      'Ordered: acked',
+      'In production: making',
+      'Shipped: moving',
+      'To receive: arrived',
+      'Claim open: damaged',
+      'To install: inspected',
+      'Installed: installed',
+    ]);
+  });
+
+  it('reads a line on a PO by its lifecycle, never by the "Already on" reason', () => {
+    expect(
+      heads([row({ id: 'ack', status: 'ordered', ...ardent, ...onPo(po1046) }, ['Already on PO-1046'])]),
+    ).toEqual(['Waiting on the ack: ack']);
+  });
+
+  it('reads delivered or installed goods with no PO (a cancelled order leaves their status) by lifecycle', () => {
+    expect(
+      heads([
+        row({ id: 'kept', status: 'delivered', received_quantity: 2 }, ['Needs a maker']),
+        row({ id: 'placed', status: 'installed' }, ['Needs a maker']),
+      ]),
+    ).toEqual(['To install: kept', 'Installed: placed']);
+  });
+
+  it('keeps a reason that carries its mark as its own group, in readiness order', () => {
+    expect(
+      heads([
+        row({ id: 'a4', ...visual }, ['Waiting on the deposit (A4)']),
+        row({ id: 'sel', ...visual }, ['Not selected yet', 'Waiting on the authorization']),
+        row({ id: 'auth', ...visual }, ['Waiting on the authorization']),
+      ]),
+    ).toEqual([
+      'Not selected yet: sel',
+      'Waiting on the authorization: auth',
+      'Waiting on the deposit (A4): a4',
+    ]);
+  });
+
+  it('prints no group that holds no line — absence is silence', () => {
+    const reading = readNext([row({ id: 'ready', ...visual })]);
+    expect(reading.groups).toHaveLength(1);
+    expect(reading.groups[0]).toMatchObject({ key: 'ready', label: 'Ready to order' });
+    expect(reading.lineCount).toBe(1);
+    expect(readNext([]).groups).toEqual([]);
+  });
+
+  it('names the group a single line reads under', () => {
+    expect(nextActOf(line({ id: 'x' }), ['Needs a maker'])).toMatchObject({
+      key: 'reason:Needs a maker',
+      label: 'Needs a maker',
+    });
   });
 });

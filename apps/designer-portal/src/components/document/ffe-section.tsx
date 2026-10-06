@@ -61,6 +61,7 @@ import {
   buildInstrumentIndex,
   buildTradeScopeIndex,
   deriveLineAuthorization,
+  deriveOrderReadiness,
   deriveTradeLineHold,
   eligibility,
   releaseSummary,
@@ -132,6 +133,7 @@ import {
 } from '@/lib/document/room-state';
 import { useRoomLens } from './room-lens-context';
 import { MakerReading, ReadingLens } from './buying/maker-reading';
+import { NextActReading } from './buying/next-act-reading';
 import type { BuyingReading } from '@/lib/document/buying-readings';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
@@ -1026,16 +1028,18 @@ function FFESectionBody({
     () => new Set(),
   );
   const installSelecting = installing && !selecting;
-  // C-15: the project's lines read by room (R25) or by maker. Ticks belong to
-  // the room reading, so a selection in hand holds it there.
+  // C-15 / C-33: the project's lines read by room (R25), by maker or by next
+  // act. Ticks belong to the room reading, so a selection in hand holds it there.
   const [reading, setReading] = useState<BuyingReading>('room');
   const readingLockedReason = selecting
     ? 'finish the release first'
     : installSelecting
       ? 'finish choosing what’s installed first'
       : null;
-  const byMaker =
-    mode === 'project' && reading === 'maker' && readingLockedReason === null;
+  const shownReading: BuyingReading =
+    mode === 'project' && readingLockedReason === null ? reading : 'room';
+  const byMaker = shownReading === 'maker';
+  const byNextAct = shownReading === 'next';
   const endInstalling = () => {
     setInstalling(false);
     setInstallPicks(new Set());
@@ -1205,6 +1209,27 @@ function FFESectionBody({
     showArtifactPlate: mode === 'project',
   });
 
+  // The maker and next-act readings open the same unfold the room reading does.
+  const toggleReadingLine = (lineId: string) =>
+    setOpenLineId(openLineId === lineId ? null : lineId);
+  const renderReadingUnfold = (row: LineRow) => {
+    const props = lineProps(row);
+    return (
+      <LineUnfold
+        item={row.item}
+        projectId={projectId}
+        projectName={projectName}
+        onAddNote={onAddNote}
+        onFold={props.onToggle}
+        auth={row.auth}
+        isCommercialOrigin={isCommercialOrigin}
+        onIncludeInRelease={props.onIncludeInRelease}
+        canEditSelection={props.canEditSelection}
+        showArtifactPlate={props.showArtifactPlate}
+      />
+    );
+  };
+
   const roomHeadingProps = (group: LineRow[]) => {
     const ids = eligibleIds(group);
     return {
@@ -1320,7 +1345,9 @@ function FFESectionBody({
   // leaves out, then the counts. Line one never elides (RegionHead).
   const ffeStatus = byMaker
     ? `the FF&E schedule, by maker · ${total} lines`
-    : `the FF&E schedule, by room · ${ffeCounts}`;
+    : byNextAct
+      ? `the FF&E schedule, by next act · ${total} lines`
+      : `the FF&E schedule, by room · ${ffeCounts}`;
   const ffeSeamSummary =
     total === 0
       ? `${ffeGroupCount} ${ffeGroupWord} · no lines yet`
@@ -1746,7 +1773,7 @@ function FFESectionBody({
 
       {groupByRoom && total > 0 && (
         <ReadingLens
-          reading={byMaker ? 'maker' : 'room'}
+          reading={shownReading}
           onChange={(next) => {
             setOpenLineId(null);
             setReading(next);
@@ -1761,26 +1788,22 @@ function FFESectionBody({
           rows={rows}
           wordFor={(row) => stampProps(row.stamp).label}
           openLineId={openLineId}
-          onToggleLine={(lineId) =>
-            setOpenLineId(openLineId === lineId ? null : lineId)
+          onToggleLine={toggleReadingLine}
+          renderUnfold={renderReadingUnfold}
+        />
+      ) : byNextAct ? (
+        <NextActReading
+          rows={rows}
+          reasonsFor={(row) =>
+            deriveOrderReadiness(row.item, {
+              isCommercialOrigin,
+              lineAuth: row.auth,
+            }).reasons
           }
-          renderUnfold={(row) => {
-            const props = lineProps(row);
-            return (
-              <LineUnfold
-                item={row.item}
-                projectId={projectId}
-                projectName={projectName}
-                onAddNote={onAddNote}
-                onFold={props.onToggle}
-                auth={row.auth}
-                isCommercialOrigin={isCommercialOrigin}
-                onIncludeInRelease={props.onIncludeInRelease}
-                canEditSelection={props.canEditSelection}
-                showArtifactPlate={props.showArtifactPlate}
-              />
-            );
-          }}
+          wordFor={(row) => stampProps(row.stamp).label}
+          openLineId={openLineId}
+          onToggleLine={toggleReadingLine}
+          renderUnfold={renderReadingUnfold}
         />
       ) : groupByRoom ? (
         <>

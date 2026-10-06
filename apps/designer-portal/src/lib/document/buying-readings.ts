@@ -8,10 +8,13 @@
  * price and markup ride along only when the studio lets this viewer see its
  * margin (C-36, `can_see_studio_margin`); otherwise they are never computed.
  *
- * P2's "read by next act" extends this module.
+ * "Read by next act" (C-33) groups the same rows by what each line is waiting
+ * on; see `readByNextAct` below.
  */
 
 import { fmtDay } from './format';
+import { OPEN_DAMAGE_CLAIM_STATES } from './stamp-derivation';
+import { canLogAck, canSend } from '@/components/document/line-unfold/next-act';
 import {
   formatCurrencyTotal,
   rowCurrency,
@@ -19,7 +22,7 @@ import {
   type CurrencyTotal,
 } from '@/lib/currency-totals';
 
-export type BuyingReading = 'room' | 'maker';
+export type BuyingReading = 'room' | 'maker' | 'next';
 
 /** The PO columns `useProjectFFEItems` embeds on a line. */
 export interface BuyingPurchaseOrder {
@@ -302,4 +305,137 @@ export function readByMaker<T>(
 export function formatMarkup(pct: number): string {
   if (pct < 0) return `−${Math.abs(pct)}%`;
   return `${pct}%`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Read by next act (US-16 C-33, D1-01 S2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The line columns the next-act reading reads on top of {@link BuyingLine}. */
+export interface NextActLine extends BuyingLine {
+  /** `project_ffe_items.status` — kept in step with its PO's (00184). */
+  status?: string | null;
+  /** Set once the receipt has been inspected. */
+  received_quantity?: number | null;
+  item_claims?: { state: string }[] | null;
+}
+
+export interface NextActGroup<T> {
+  key: string;
+  /** The running head: a readiness reason or a lifecycle step. */
+  label: string;
+  rows: T[];
+}
+
+export interface NextActReading<T> {
+  /** Only the groups holding a line — an empty group is silent. */
+  groups: NextActGroup<T>[];
+  lineCount: number;
+}
+
+export const READY_TO_ORDER = 'Ready to order';
+
+/** Lifecycle steps for a line on its way, in the order the work moves. */
+const LIFECYCLE_STEPS = [
+  'To send',
+  'Waiting on the ack',
+  'Ordered',
+  'In production',
+  'Shipped',
+  'To receive',
+  'Claim open',
+  'To install',
+  'Installed',
+] as const;
+type LifecycleStep = (typeof LIFECYCLE_STEPS)[number];
+
+/**
+ * `deriveOrderReadiness` reasons in the order it states them, matched by
+ * prefix (the deposit reason carries its authorization mark).
+ */
+const REASON_ORDER = [
+  'Trade work',
+  'Removed',
+  'Not selected',
+  'Needs a maker',
+  'Needs a client price',
+  'Waiting on a decision',
+  'Waiting on the authorization',
+  'Waiting on the deposit',
+];
+
+/**
+ * Where an ordered line stands, or null while it has not been ordered. Item
+ * status leads once the goods exist (delivered, installed — a cancelled PO
+ * leaves those lines their status); before that the PO says whether it is
+ * still to send or waiting on the maker's acknowledgment.
+ */
+function lifecycleStep(line: NextActLine): LifecycleStep | null {
+  const status = line.status ?? '';
+  const po = line.purchase_order ?? null;
+  const onOrder = Boolean(line.purchase_order_id ?? po?.id);
+  if (status === 'installed') return 'Installed';
+  if (status === 'delivered') {
+    if ((line.item_claims ?? []).some((c) => OPEN_DAMAGE_CLAIM_STATES.has(c.state))) {
+      return 'Claim open';
+    }
+    return line.received_quantity == null ? 'To receive' : 'To install';
+  }
+  if (onOrder && canSend(po)) return 'To send';
+  if (onOrder && canLogAck(po)) return 'Waiting on the ack';
+  if (status === 'shipped') return 'Shipped';
+  if (status === 'production') return 'In production';
+  if (status === 'ordered' || onOrder) return 'Ordered';
+  return null;
+}
+
+/** The group a line reads under: its lifecycle step, else its first reason. */
+export function nextActOf(
+  line: NextActLine,
+  reasons: readonly string[],
+): { key: string; label: string; rank: number } {
+  const step = lifecycleStep(line);
+  if (step) {
+    return {
+      key: `step:${step}`,
+      label: step,
+      rank: REASON_ORDER.length + 2 + LIFECYCLE_STEPS.indexOf(step),
+    };
+  }
+  const reason = reasons[0];
+  if (!reason) {
+    return { key: 'ready', label: READY_TO_ORDER, rank: REASON_ORDER.length + 1 };
+  }
+  const known = REASON_ORDER.findIndex((prefix) => reason.startsWith(prefix));
+  return {
+    key: `reason:${reason}`,
+    label: reason,
+    rank: known === -1 ? REASON_ORDER.length : known,
+  };
+}
+
+/**
+ * The section's rows grouped by what each is waiting on: unordered lines by
+ * the first reason the order is refused (`deriveOrderReadiness`), or "Ready to
+ * order"; ordered lines by their lifecycle step. Groups run in the order the
+ * work moves; lines keep the section's order within a group.
+ */
+export function readByNextAct<T>(
+  rows: readonly T[],
+  lineOf: (row: T) => NextActLine,
+  reasonsOf: (row: T) => readonly string[],
+): NextActReading<T> {
+  const groups = new Map<string, NextActGroup<T> & { rank: number }>();
+  for (const row of rows) {
+    const { key, label, rank } = nextActOf(lineOf(row), reasonsOf(row));
+    const group = groups.get(key) ?? { key, label, rank, rows: [] };
+    group.rows.push(row);
+    groups.set(key, group);
+  }
+  return {
+    groups: [...groups.values()]
+      .sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label))
+      .map(({ key, label, rows: groupRows }) => ({ key, label, rows: groupRows })),
+    lineCount: rows.length,
+  };
 }
