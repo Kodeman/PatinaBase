@@ -81,7 +81,7 @@ Logged in `VISION-DECISIONS.md` as V-numbers. Until ruled, the docs stay as they
 
 | ID | Question | Why it matters |
 |----|----------|----------------|
-| V1 | **Margin pocket.** Does Patina's furniture margin come from the maker's trade discount (v4: 18%, carved not stacked) or from the studio's own procurement markup (25%)? | Different people pay. Must be pinned before the next maker conversation. |
+| V1 | **Margin pocket.** Does Patina's furniture margin come from the maker's trade discount (v4: 18%, carved not stacked) or from the studio's own procurement markup (25%)? | **RULED 2026-10-05: carved from the maker's trade discount** (VISION-DECISIONS V14). |
 | V2 | **Studio price.** Keep Pro $49 / Studio $149? Any solo tier at all, given the "first hires" trigger? | Sets the floor stream and the recruiting pitch. |
 | V3 | **Consumer cohort.** Pause the consumer Founding Circle (0/200) until at least one studio beyond Leah's is live? | The marketing engine has been pointed at the wrong door for ten weeks. |
 | V4 | **Entity.** Stay a venture of Middle West, or separate LLC before Design Chicago? | Equity, IP chain-of-title, trademarks, Pledge contract counterparty. |

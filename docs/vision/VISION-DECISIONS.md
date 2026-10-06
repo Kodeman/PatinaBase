@@ -31,6 +31,7 @@ Last Updated: 2026-09-01
 **Question:** Patina's furniture margin — carved from the maker's trade discount (v4: 18% blended, "carved not stacked") or a slice of the studio's own 25% procurement markup?
 **Why it matters:** Different parties pay. v4's whole maker argument ("defensible because it's carved") depends on the first answer; `my-company.md`'s $10K procurement line assumes the second.
 **Blocks:** Any maker pricing conversation; the recruiting sheet's money line; Design Chicago maker pack.
+**RULED 2026-10-05 (Kody): carved from the maker's trade discount.** See the 2026-10-05 entry below.
 
 ### V2 · Studio price — 2026-09-01
 
@@ -376,3 +377,43 @@ LibreOffice for EMF and `.ppt`, PDF decks via pdfjs.
 `docs/prds/MoodBoard/08-deck-import-addendum.md`.
 
 *Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · last id = V13*
+
+## Ruled — 2026-10-05 (studio buying review)
+
+### V14 · Studio buying review rulings — V1 ruled; R1, R5, R8 and R-PB1–9 — 2026-10-05
+
+**Decision (Kody, 2026-10-05, interviewed after the deck was published):**
+
+- **V1 · margin pocket — carved from the maker's trade discount** ("carved, not stacked"; v4 ~18%). On a Patina-grade maker order the maker pays Patina's margin out of its trade discount, and the studio's own markup is untouched. This rules the maker lane only; R-DI5 (margin on off-marketplace pieces) stays open. No Pledge or public money copy follows from this without counsel (V6 unchanged).
+- **Pricing mechanics** (`artifacts/pricing-mechanics-2026-09-05`):
+  - **R1:** everyone in the studio sees margin by default; owners can restrict it.
+  - **R5:** a client price below trade is allowed, shown plainly as a negative markup, with a warning at the floor.
+  - **R8:** a line is editable until it is on a sent authorization; after that, void the authorization to edit; once signed, any change is a change order.
+- **Studio buying** (`artifacts/procurement-buying-review-2026-10-05/rulings.md`):
+
+| Ruling | Answer |
+|---|---|
+| R-PB1 | Warn only on a job with no agreement behind it |
+| R-PB2 | Owner/admin release gate, offered, off by default, per order |
+| R-PB3 | `po-send` refuses to send with no ship-to; the preview still renders |
+| R-PB4 | Studio card over a shared `vendors` row (resolve by website, then name) |
+| R-PB5 | "Read by next act" allowed as a reading inside the Document, not a page |
+| R-PB6 | The studio seat (System B) gates margin and release; fix `studio_owner` provisioning |
+| R-PB7 | Store buys, finds, riders and reimbursables bill at cost on their own line; overridable |
+| R-PB8 | No vendor write-in through a tokened link in v1 |
+| R-PB9 | Claim-window defaults: 72 h vendor, 5 days concealed carrier; set per vendor |
+
+**Feature test:** the review passes as a whole.
+
+| Test | Answer |
+|---|---|
+| Surface | The Document (#1) |
+| Studio moment | The first hire takes over buying while the workload doubles |
+| Stream | Furniture margin |
+| Promise | The studio won't notice Patina; every outbound message is a draft a person sends |
+
+**Still open:** R2–R4, R6, R7, R9–R11, R-DI4/5, the V10 extension, and the Agent OS studio review of agent drafts.
+
+**Source:** `artifacts/procurement-buying-review-2026-10-05/` (deck https://claude.ai/artifact/TveKxXXLgafVR9ZvqnV1XP; `synthesis/direction.md` §9; `rulings.md`).
+
+*Entries add: C1 · S1–S6 · V1–V7 · V8 · V9 · V10 · V11 · V12 · V13 · V14 (V1 ruled) · last id = V14*
