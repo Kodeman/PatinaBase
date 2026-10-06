@@ -42,6 +42,7 @@ jest.mock('@patina/supabase', () => ({
   useStudioIdentity: () => ({ data: undefined }),
   useStudioContacts: () => ({ data: [] }),
   usePoShipments: () => ({ data: [] }),
+  useProcurementDrafts: () => ({ data: [] }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));

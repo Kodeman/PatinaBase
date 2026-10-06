@@ -5,8 +5,11 @@ import type { LineAuthorization } from '@/lib/document/authorization-derivation'
 import { CellSub, CellValue, UnfoldCell } from './cell';
 import { ChangeOrderAct } from './change-order';
 import { PoRiders } from '@/components/portal/procurement/order-paper/riders';
+import { PurchaseOrderDrafts } from '../buying/draft-review';
 
 type FFERow = any;
+
+const ORDER_DRAFT_KINDS = ['ack_discrepancy_reply', 'ack_chase'] as const;
 
 /**
  * C-14 cell 3 — the order: PO number, the send/ack lifecycle (R18), and the
@@ -102,6 +105,10 @@ export function OrderCell({
           vendorName={item.vendor_name ?? 'the maker'}
           poLabel={po.po_number ?? 'this order'}
         />
+      )}
+      {/* C-28: the acknowledgment's letters, drafted and awaiting review. */}
+      {po && projectId && (
+        <PurchaseOrderDrafts projectId={projectId} purchaseOrderId={po.id} kinds={ORDER_DRAFT_KINDS} />
       )}
     </UnfoldCell>
   );

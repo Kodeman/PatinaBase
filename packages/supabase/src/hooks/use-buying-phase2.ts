@@ -543,15 +543,25 @@ export function useRecordPoShipment(options?: ErrorSurfaceOptions) {
       /** The studio's day (YYYY-MM-DD), as advance_purchase_order_status takes it. */
       localDate?: string;
     }): Promise<PoShipmentRow> => {
-      const { data, error } = await getSupabase().rpc('record_po_shipment', {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc('record_po_shipment', {
         p_po_id: purchaseOrderId,
         p_request: request as Json,
         p_local_date: localDate,
       });
       if (error) throw error;
-      return data as PoShipmentRow;
+      const shipment = data as PoShipmentRow;
+      // C-26/C-28: a new shipment drafts the inbound notice to the PO's
+      // receiver. It lands awaiting_review and never sends on its own. The
+      // composer refuses a PO with no receiver; any refusal leaves the
+      // shipment recorded, and the notice can still be composed on demand.
+      if (!request.id) {
+        await supabase.rpc('compose_receiver_inbound_draft', { p_shipment_id: shipment.id });
+      }
+      return shipment;
     },
-    onSuccess: (row, { projectId }) => {
+    onSuccess: (row, { projectId, request }) => {
+      if (!request.id) invalidateDrafts(queryClient);
       queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.shipments(row.purchase_order_id) });
       queryClient.invalidateQueries({ queryKey: ['orders-book', 'week-events'] });
       invalidatePurchaseOrder(queryClient, { id: row.purchase_order_id, project_id: projectId });
@@ -577,9 +587,12 @@ const invalidateProcurementWork = (queryClient: QueryClient, projectId: string) 
   queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.exceptions(projectId) });
 };
 
-/** A draft may carry no project (studio-level), so refresh every drafts list. */
-const invalidateDrafts = (queryClient: QueryClient) =>
+/** A draft may carry no project (studio-level), so refresh every drafts list,
+ *  and the Desk, whose draft needs clear when a draft is sent or discarded. */
+const invalidateDrafts = (queryClient: QueryClient) => {
   queryClient.invalidateQueries({ queryKey: [...buyingPhase2Keys.all, 'drafts'] });
+  queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
+};
 
 // ─── Acknowledgments (00705) ────────────────────────────────────────────────
 
@@ -772,6 +785,37 @@ export function useDiscardProcurementDraft(options?: ErrorSurfaceOptions) {
       return data as ProcurementDraftRow;
     },
     onSuccess: () => invalidateDrafts(queryClient),
+  });
+}
+
+/**
+ * Send a draft as it is stored, through procurement-draft-send, which re-checks
+ * the caller can read it, requires awaiting_review, sends through the
+ * compliant-email chokepoint and marks it sent. Save an edit first.
+ */
+export function useSendProcurementDraft(options?: ErrorSurfaceOptions) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: errorMeta(options),
+    mutationFn: async (draftId: string): Promise<{ draftId: string; messageId: string | null }> => {
+      const { data, error } = await getSupabase().functions.invoke('procurement-draft-send', {
+        body: { draftId },
+      });
+      if (error) {
+        // A non-2xx arrives as FunctionsHttpError with the raw Response as context.
+        let message = error.message || 'The draft could not be sent.';
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const body = await (error as any).context?.json?.();
+          if (body?.detail || body?.error) message = body.detail ?? body.error;
+        } catch {
+          /* keep the default message */
+        }
+        throw new Error(message);
+      }
+      return data as { draftId: string; messageId: string | null };
+    },
+    onSettled: () => invalidateDrafts(queryClient),
   });
 }
 

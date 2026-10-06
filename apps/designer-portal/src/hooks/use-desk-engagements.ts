@@ -33,6 +33,7 @@ import {
   type DeskClaimWindowSignal,
   type DeskPaymentSignal,
   type DeskReturnSignal,
+  type DeskDraftSignal,
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
@@ -214,6 +215,35 @@ export function buildDeskReturns(rows: any): Map<string, DeskReturnSignal[]> | u
   return map;
 }
 
+/** C-28: the drafts read's cap — letters awaiting review are few. */
+const DESK_DRAFT_LIMIT = 200;
+
+/**
+ * C-28: procurement drafts awaiting review, keyed by project_id. A studio-level
+ * draft (no project) has no engagement to rise on, so it is dropped here.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskDrafts(rows: any): Map<string, DeskDraftSignal[]> | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  const map = new Map<string, DeskDraftSignal[]>();
+  for (const row of rows) {
+    if (!row?.id || !row.project_id) continue;
+    map.set(row.project_id, [
+      ...(map.get(row.project_id) ?? []),
+      {
+        id: row.id,
+        kind: row.kind,
+        status: row.status,
+        to_email: row.to_email ?? null,
+        subject: row.subject,
+        body: row.body,
+        created_at: row.created_at,
+      },
+    ]);
+  }
+  return map;
+}
+
 /**
  * C-20: the claim_window_closing notices (00700's procurement-clocks-daily
  * writes one the day before the vendor deadline) folded to one signal per PO,
@@ -353,6 +383,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: claimNotices, error: claimNoticesError },
         { data: paymentNotices, error: paymentNoticesError },
         { data: returnRows, error: returnRowsError },
+        { data: draftRows, error: draftRowsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -471,6 +502,15 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           )
           .order('return_by')
           .limit(DESK_RETURN_LIMIT),
+        // C-28: composed letters awaiting a member's review. A sent or
+        // discarded draft drops out of the read, so the need clears with the act.
+        // buildDeskDrafts drops a studio-level draft (no project).
+        supabase
+          .from('procurement_drafts')
+          .select('id, project_id, kind, status, to_email, subject, body, created_at')
+          .eq('status', 'awaiting_review')
+          .order('created_at')
+          .limit(DESK_DRAFT_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -577,6 +617,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         : await loadDeskClaimWindows(supabase, claimNotices);
       const payments = paymentNoticesError ? undefined : buildDeskPayments(paymentNotices);
       const returns = returnRowsError ? undefined : buildDeskReturns(returnRows);
+      const drafts = draftRowsError ? undefined : buildDeskDrafts(draftRows);
 
       const result = partitionDesk(
         rows,
@@ -590,6 +631,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         claimWindows,
         payments,
         returns,
+        drafts,
       );
       previousResultRef.current = result;
       return result;
