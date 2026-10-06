@@ -579,8 +579,16 @@ ON CONFLICT (id) DO NOTHING;`);
     await expect(poCell).toContainText("awaiting acknowledgment", {
       timeout: 30_000,
     });
-    await nextAct.getByPlaceholder("NA-2026-…").fill(VENDOR_PO);
-    await nextAct.getByRole("button", { name: "Log acknowledgment" }).click();
+    // The ack check (C-27): every value starts as the PO's; nothing differs.
+    const ackCheck = nextAct.getByTestId("ack-check");
+    await ackCheck.getByPlaceholder("NA-2026-…").fill(VENDOR_PO);
+    await expect(ackCheck.getByTestId("ack-check-summary")).toHaveText(
+      "Everything agrees.",
+      { timeout: 20_000 },
+    );
+    await ackCheck
+      .getByRole("button", { name: "Everything agrees — log it" })
+      .click();
     await expect
       .poll(() => poState().status, { timeout: 20_000 })
       .toBe("confirmed");
@@ -845,6 +853,12 @@ WHERE i.purchase_order_id = ${q(poId)} AND c.state = 'drafted'`),
     await expect(paper).toBeVisible();
     await expect(paper).toContainText(VENDOR_B_EMAIL);
     const shipTo = paper.getByRole("group", { name: "Ship to" });
+    // The studio's locations load after the paper opens; until then the
+    // only option is "Somewhere else", which the send refuses blank.
+    await expect(shipTo.locator("label").first()).toContainText(
+      RECEIVER_LABEL,
+      { timeout: 20_000 },
+    );
     await shipTo.getByRole("radio").first().check();
     const sendResponse = page.waitForResponse(
       (r) =>
