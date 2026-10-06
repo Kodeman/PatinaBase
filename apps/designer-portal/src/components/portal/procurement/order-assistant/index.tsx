@@ -49,10 +49,8 @@ import {
   BlockedByDecisionInline,
   getBlockedItems,
 } from '@/components/portal/procurement/blocked-by-decision-notice';
-import {
-  PoSendActions,
-  clientVendorEmailHint,
-} from '@/components/portal/procurement/po-send-actions';
+import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
+import { PoPreview } from '@/components/document/po-preview';
 import { Button, IconButton } from '@/components/ui/controls';
 import { isMixed } from '@/lib/currency-totals';
 import {
@@ -949,9 +947,9 @@ export function OrderAssistant(props: OrderAssistantProps) {
 // ─── Created confirmation + send step (W4-T4) ──────────────────────────────
 
 /**
- * Post-create confirmation panel. External-vendor orders gain the Wave 4
- * send actions (Preview PDF / Email to vendor / Mark as sent manually —
- * shared PoSendActions, also used by the By Vendor row popover); Patina
+ * Post-create confirmation panel. External-vendor orders gain the send
+ * step (PoPreview — the same paper the line unfold and Orders ledger use:
+ * review, then email or mark sent, with an optional note); Patina
  * Catalog orders skip them — Patina is the merchant, there is no outbound
  * vendor document to send. Done closes the panel, which advances the
  * caller's queue when more vendor/project orders are pending.
@@ -1046,23 +1044,62 @@ function CreatedConfirmation({
         )}
       </section>
 
-      {!isCatalog && (
-        <section className="mt-4">
-          <div className="type-label mb-1">Send to vendor</div>
-          <p className="mb-3 text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
-            Preview assigns the PO number and renders the document; emailing
-            or marking sent stamps the sent date. You can also do this later
-            from Procurement → By Vendor.
-          </p>
-          <PoSendActions
-            purchaseOrderId={po.id}
-            vendorId={vendor.id}
-            vendorEmailHint={clientVendorEmailHint(vendor)}
-            sentAt={po.sent_at}
-          />
-        </section>
-      )}
+      {!isCatalog && <CreatedSend po={po} vendor={vendor} />}
     </>
+  );
+}
+
+/**
+ * C-09: the Created step sends through PoPreview, the one PO send UI. The
+ * paper is portaled to document.body so its fixed overlay is not trapped by
+ * the sliding panel's transform and stacks above the panel's z-50.
+ */
+function CreatedSend({
+  po,
+  vendor,
+}: {
+  po: PurchaseOrder;
+  vendor: OrderAssistantVendor;
+}) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // Stamped locally on a successful send so the step flips to "Sent" while
+  // the assistant still holds the pre-send createdPo row.
+  const [localSentAt, setLocalSentAt] = useState<string | null>(null);
+  const sentAt = po.sent_at ?? localSentAt;
+
+  return (
+    <section className="mt-4">
+      <div className="type-label mb-1">Send to vendor</div>
+      <p className="mb-3 text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
+        {sentAt
+          ? `Sent ${new Date(sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`
+          : 'Review the purchase order as the vendor will see it, then send it or mark it sent. You can also do this later from Procurement → By Vendor.'}
+      </p>
+      <Button
+        variant={sentAt ? 'secondary' : 'primary'}
+        size="sm"
+        onClick={() => setPreviewOpen(true)}
+      >
+        {sentAt ? 'Resend to vendor' : 'Review and send'}
+      </Button>
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <PoPreview
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+            purchaseOrderId={po.id}
+            vendorName={vendor.name}
+            vendorEmailHint={clientVendorEmailHint(vendor)}
+            mode={sentAt ? 'resend' : 'send'}
+            sentAt={sentAt}
+            acknowledgedAt={po.acknowledged_at}
+            vendorPoNumber={po.vendor_po_number}
+            confirmedEta={po.confirmed_eta}
+            onSent={(stamped) => setLocalSentAt((prev) => prev ?? stamped)}
+          />,
+          document.body,
+        )}
+    </section>
   );
 }
 

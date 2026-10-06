@@ -27,7 +27,20 @@ jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
 jest.mock('@/components/portal/procurement/po-send-actions', () => ({
   clientVendorEmailHint: () => null,
 }));
-jest.mock('../../po-preview', () => ({ PoPreview: () => null }));
+jest.mock('../../po-preview', () => ({
+  PoPreview: () => null,
+  LogAckInline: ({
+    purchaseOrderId,
+    sentAt,
+  }: {
+    purchaseOrderId: string;
+    sentAt?: string | null;
+  }) => (
+    <div data-testid="log-ack-inline">
+      Log ack {purchaseOrderId} {sentAt}
+    </div>
+  ),
+}));
 jest.mock('../../accounts/invoice-overlays', () => ({
   openInvoiceComposer: jest.fn(),
 }));
@@ -334,5 +347,61 @@ describe('LineUnfold · the trail mount guard', () => {
       item: { ...item, status: 'installed' },
     });
     expect(trail(container)).toBeInTheDocument();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// C-10 — the acknowledgment act lives in the purchase-order cell
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('LineUnfold · log acknowledgment in the PO cell', () => {
+  const withPo = (po: Record<string, unknown>) =>
+    renderUnfold({
+      item: {
+        ...item,
+        status: 'ordered',
+        purchase_order: {
+          id: 'po-7',
+          status: 'sent',
+          vendor_id: 'vendor-1',
+          vendor_po_number: null,
+          confirmed_eta: null,
+          ...po,
+        },
+      },
+    });
+
+  it('offers it inside the PO cell when the PO is sent and not yet acknowledged', () => {
+    withPo({ sent_at: '2026-10-01T12:00:00Z', acknowledged_at: null });
+    const ack = screen.getByTestId('log-ack-inline');
+    expect(screen.getByTestId('line-po-cell')).toContainElement(ack);
+    expect(ack).toHaveTextContent('Log ack po-7 2026-10-01T12:00:00Z');
+  });
+
+  it('withholds it once the vendor has acknowledged', () => {
+    withPo({
+      sent_at: '2026-10-01T12:00:00Z',
+      acknowledged_at: '2026-10-02T12:00:00Z',
+    });
+    expect(screen.queryByTestId('log-ack-inline')).not.toBeInTheDocument();
+  });
+
+  it('withholds it while the PO is unsent', () => {
+    withPo({ status: 'draft', sent_at: null, acknowledged_at: null });
+    expect(screen.queryByTestId('log-ack-inline')).not.toBeInTheDocument();
+  });
+
+  it('withholds it on a cancelled PO', () => {
+    withPo({
+      status: 'cancelled',
+      sent_at: '2026-10-01T12:00:00Z',
+      acknowledged_at: null,
+    });
+    expect(screen.queryByTestId('log-ack-inline')).not.toBeInTheDocument();
+  });
+
+  it('withholds it on a line with no purchase order', () => {
+    renderUnfold();
+    expect(screen.queryByTestId('log-ack-inline')).not.toBeInTheDocument();
   });
 });

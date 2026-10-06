@@ -23,7 +23,7 @@ import {
 import { OrderAssistant } from '@/components/portal/procurement/order-assistant';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
-import { PoPreview } from './po-preview';
+import { LogAckInline, PoPreview } from './po-preview';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { FolioStrip } from './folio-strip';
 import {
@@ -391,37 +391,55 @@ export function LineUnfold({
       {showArtifactPlate && !isTradeLine && <PieceArtifactPlate item={item} />}
 
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Cell
-          label="Purchase order"
-          value={
-            po
-              ? (po.po_number ??
-                po.vendor_po_number ??
-                po.sidemark ??
-                'PO drafted')
-              : 'Not yet ordered'
-          }
-          sub={
-            po
-              ? [
-                  // R18: the cell narrates the send lifecycle.
-                  po.sent_at
-                    ? `sent to vendor ${fmtDay(po.sent_at)}`
-                    : 'not yet sent',
-                  po.sent_at
-                    ? po.acknowledged_at
-                      ? 'acknowledged'
-                      : 'awaiting acknowledgment'
-                    : null,
-                  po.payment_pattern
-                    ? po.payment_pattern.replace(/_/g, ' ')
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')
-              : (item.vendor_name ?? undefined)
-          }
-        />
+        <div data-testid="line-po-cell">
+          <Cell
+            label="Purchase order"
+            value={
+              po
+                ? (po.po_number ??
+                  po.vendor_po_number ??
+                  po.sidemark ??
+                  'PO drafted')
+                : 'Not yet ordered'
+            }
+            sub={
+              po
+                ? [
+                    // R18: the cell narrates the send lifecycle.
+                    po.sent_at
+                      ? `sent to vendor ${fmtDay(po.sent_at)}`
+                      : 'not yet sent',
+                    po.sent_at
+                      ? po.acknowledged_at
+                        ? 'acknowledged'
+                        : 'awaiting acknowledgment'
+                      : null,
+                    po.payment_pattern
+                      ? po.payment_pattern.replace(/_/g, ' ')
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                : (item.vendor_name ?? undefined)
+            }
+          />
+          {/* C-10: the vendor phoned or emailed — log the acknowledgment on
+              the line itself (the Orders ledger's canAck predicate). */}
+          {po &&
+            po.sent_at &&
+            !po.acknowledged_at &&
+            !po.is_patina_catalog &&
+            po.status !== 'cancelled' && (
+              <div className="mt-2">
+                <LogAckInline
+                  purchaseOrderId={po.id}
+                  vendorPoNumber={po.vendor_po_number}
+                  confirmedEta={po.confirmed_eta}
+                  sentAt={po.sent_at}
+                />
+              </div>
+            )}
+        </div>
         {/* PRC-12: the Movement cell carries the confirmed-ETA quick-edit. */}
         <MovementCell item={item} po={po} />
         <Cell label="Receiving" value={receivingValue} />

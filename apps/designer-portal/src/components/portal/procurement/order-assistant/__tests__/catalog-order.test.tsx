@@ -53,9 +53,18 @@ jest.mock('@/components/portal/procurement/blocked-by-decision-notice', () => ({
   getBlockedItems: () => [],
 }));
 
-jest.mock('@/components/portal/procurement/po-send-actions', () => ({
-  PoSendActions: () => null,
-  clientVendorEmailHint: () => undefined,
+// po-send-actions is pure helpers now (C-09) — used unmocked. PoPreview is
+// stubbed to a marker that records its props.
+const poPreviewProps = jest.fn();
+jest.mock('@/components/document/po-preview', () => ({
+  PoPreview: (props: { open: boolean; purchaseOrderId: string; mode?: string }) => {
+    poPreviewProps(props);
+    return props.open ? (
+      <div data-testid="po-preview">
+        Preview {props.purchaseOrderId} {props.mode}
+      </div>
+    ) : null;
+  },
 }));
 
 jest.mock('../step-review', () => ({
@@ -393,6 +402,83 @@ describe('OrderAssistant — catalog order (Phase 4 pay-at-order)', () => {
     expect(startCheckoutMutateAsync).not.toHaveBeenCalled();
     expect(fetchPOPaymentsMock).not.toHaveBeenCalled();
     expect(hrefSet).toBeNull();
+  });
+});
+
+describe('OrderAssistant — Created step sends through PoPreview (C-09)', () => {
+  beforeEach(() => poPreviewProps.mockReset());
+
+  async function createExternalPo() {
+    createMutateAsync.mockResolvedValue({
+      id: 'po-3',
+      total_cents: 5000,
+      sent_at: null,
+      acknowledged_at: null,
+      vendor_po_number: null,
+      confirmed_eta: null,
+    });
+    renderAssistant({
+      vendor: {
+        ...baseVendor,
+        is_patina_catalog: false,
+        orders_email: 'orders@acme.test',
+      },
+    } as Partial<OrderAssistantProps>);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
+    await screen.findByText(/Purchase order created/i);
+  }
+
+  it('mounts PoPreview for the new PO and opens it in send mode', async () => {
+    await createExternalPo();
+
+    expect(poPreviewProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        open: false,
+        purchaseOrderId: 'po-3',
+        vendorName: 'Acme',
+        vendorEmailHint: 'orders@acme.test',
+        mode: 'send',
+      }),
+    );
+    expect(screen.queryByTestId('po-preview')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review and send' }));
+    const preview = screen.getByTestId('po-preview');
+    expect(preview).toHaveTextContent('Preview po-3 send');
+    // Portaled to document.body, clear of the sliding panel's transform.
+    expect(
+      screen.getByRole('dialog', { name: /order assistant for acme/i }),
+    ).not.toContainElement(preview);
+  });
+
+  it('no longer renders the retired PoSendActions buttons', async () => {
+    await createExternalPo();
+
+    expect(
+      screen.queryByRole('button', { name: /preview pdf/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /email to/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /mark as sent manually/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      jest.requireActual('@/components/portal/procurement/po-send-actions')
+        .PoSendActions,
+    ).toBeUndefined();
+  });
+
+  it('skips the send step on a Patina Catalog order', async () => {
+    createMutateAsync.mockResolvedValue({ id: 'po-4', total_cents: 5000 });
+    fetchPOPaymentsMock.mockResolvedValue([]);
+    renderAssistant();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: /one-click order via patina/i }));
+    await screen.findByText(/Purchase order created/i);
+    expect(poPreviewProps).not.toHaveBeenCalled();
   });
 });
 

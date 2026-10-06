@@ -6,10 +6,12 @@
  * — and the one action is Send to vendor. No confirm dialogs anywhere in
  * the weave: the confirm step is the document showing you the document.
  *
- * One component, both homes (unfold action row + Orders ledger rows).
+ * One component, every home (Order Assistant Created step, unfold action
+ * row, Orders ledger rows) — the only PO send UI (C-09).
  * Mount with mode 'send' for drafted/unsent POs, 'resend' for sent ones.
  * On open it calls po-send mode 'preview' (numbers + renders + stores the
- * PDF, stamps nothing) and shows the signed PDF; Send posts mode 'send'.
+ * PDF, stamps nothing) and shows the signed PDF; Send posts mode 'send',
+ * carrying the optional note to the vendor into the email body.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -208,7 +210,14 @@ export function PoPreview({
   const [sending, setSending] = useState(false);
   // PRC-27 (R84): the manual sent-stamp for phone / fax / trade-portal orders.
   const [marking, setMarking] = useState(false);
+  // C-09: the optional note rendered into the vendor email (mode 'send').
+  // Survives putting the paper down; a different PO starts blank.
+  const [note, setNote] = useState('');
   const previewedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    setNote('');
+  }, [purchaseOrderId]);
 
   // Render + store the PDF the moment the paper lifts (mode 'preview'
   // stamps nothing — the server always allows it).
@@ -253,7 +262,12 @@ export function PoPreview({
         mode: sendMode,
         recipientEmail:
           sendMode === 'send' ? (vendorEmailHint ?? undefined) : undefined,
+        message: sendMode === 'send' ? note.trim() || undefined : undefined,
       });
+      procurementEvents.poSent({
+        method: sendMode === 'send' ? 'email' : 'manual',
+      });
+      setNote('');
       const stamped = new Date().toISOString();
       // One act, many surfaces (§5): PO cell, Orders row, Desk, margin.
       void qc.invalidateQueries({ queryKey: ['purchase-orders'] });
@@ -335,6 +349,21 @@ export function PoPreview({
             />
           </div>
         )}
+
+        {/* C-09: the note travels with the emailed PO; marking sent sends nothing. */}
+        <label className="block border-t border-[var(--color-pearl)] px-5 py-2.5">
+          <span className="mb-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
+            Note to the vendor
+          </span>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            disabled={sending || marking}
+            placeholder="Optional. It sits above the purchase order in the email."
+            className="block w-full resize-y rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 text-[12px] text-[var(--color-charcoal)] outline-none disabled:opacity-60"
+          />
+        </label>
 
         <DocumentActionGroup
           surfaceKey="orders"

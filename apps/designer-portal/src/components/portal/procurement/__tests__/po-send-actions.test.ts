@@ -1,32 +1,28 @@
 /**
  * Unit tests for the W4-T4 po-send pure helpers:
  *   - clientVendorEmailHint: the client-side recipient heuristic that drives
- *     the "Email to {vendor}" disabled state + label (mirrors the edge
+ *     PoPreview's "to {vendor}" line + Send disabled state (mirrors the edge
  *     function's orders_email → contact_info->>'email' chain, sans override)
  *   - poSendErrorMessage: po-send error-code → designer-readable copy,
  *     including the 422 po_out_of_sync send-time consistency guard
- *
- * The hooks/JSX in the module are not rendered — the runtime deps are mocked
- * so the import stays cheap and jsdom-free.
  */
 
-jest.mock('@patina/supabase', () => ({
-  useSendPurchaseOrder: jest.fn(),
-}));
-jest.mock('@/components/portal/toast-provider', () => ({
-  useToast: () => ({ toast: jest.fn() }),
-}));
-jest.mock('@/lib/analytics/procurement-events', () => ({
-  procurementEvents: { poSent: jest.fn() },
-}));
-
+import * as poSendModule from '../po-send-actions';
 import {
   clientVendorEmailHint,
   poSendErrorMessage,
   PO_OUT_OF_SYNC_MESSAGE,
-  type PoSendActionsProps,
-  type PoSendPopoverProps,
 } from '../po-send-actions';
+
+describe('one send UI (C-09)', () => {
+  it('no longer exports the retired PoSendActions / PoSendPopover components', () => {
+    expect(Object.keys(poSendModule).sort()).toEqual([
+      'PO_OUT_OF_SYNC_MESSAGE',
+      'clientVendorEmailHint',
+      'poSendErrorMessage',
+    ]);
+  });
+});
 
 describe('clientVendorEmailHint', () => {
   it('prefers orders_email over contact_info', () => {
@@ -67,39 +63,6 @@ describe('clientVendorEmailHint', () => {
     expect(
       clientVendorEmailHint({ contact_info: { email: '  ' } }),
     ).toBeNull();
-  });
-});
-
-describe('PoSendActions / PoSendPopover callback shape', () => {
-  it('PoSendActionsProps.onSent receives an ISO sentAtIso string', () => {
-    // Type-level contract: the callback is (sentAtIso: string) => void.
-    // This test exercises the type by constructing a valid prop bag; runtime
-    // behaviour is covered by the integration / e2e suite (no jsdom here).
-    const received: string[] = [];
-    const props: PoSendActionsProps = {
-      purchaseOrderId: 'po-1',
-      vendorEmailHint: 'vendor@example.test',
-      onSent: (sentAtIso) => {
-        // TypeScript enforces sentAtIso is a string, not void.
-        received.push(sentAtIso);
-      },
-    };
-    // Call onSent directly to confirm it accepts a string arg.
-    props.onSent?.('2026-06-12T10:00:00.000Z');
-    expect(received).toEqual(['2026-06-12T10:00:00.000Z']);
-  });
-
-  it('PoSendPopoverProps.onSent receives an ISO sentAtIso string', () => {
-    const received: string[] = [];
-    const props: PoSendPopoverProps = {
-      purchaseOrderId: 'po-2',
-      vendorEmailHint: null,
-      onSent: (sentAtIso) => {
-        received.push(sentAtIso);
-      },
-    };
-    props.onSent?.('2026-06-12T11:00:00.000Z');
-    expect(received).toEqual(['2026-06-12T11:00:00.000Z']);
   });
 });
 
