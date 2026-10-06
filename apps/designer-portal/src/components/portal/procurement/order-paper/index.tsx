@@ -104,6 +104,11 @@ import {
 
 export * from './model';
 
+/** po-send's sent_not_recorded (SQ-448): the email went, the sent stamp did not. */
+export const SENT_NOT_RECORDED_MESSAGE =
+  'The email reached the vendor, but this order could not be marked sent — it may now be ' +
+  'held for release. Check the order before sending it again.';
+
 export interface OrderPaperQueuePosition {
   /** Zero-based place of this paper in the queue. */
   index: number;
@@ -397,6 +402,9 @@ function PaperSheet({
     if (message.includes('ship_to_required')) {
       setShipToInvalid(true);
       setError(SHIP_TO_REQUIRED_MESSAGE);
+    } else if (message.includes('sent_not_recorded')) {
+      // SQ-448: po-send emailed the vendor but the sent stamp was refused.
+      setError(SENT_NOT_RECORDED_MESSAGE);
     } else if (releaseErrorMessage(message)) {
       setError(releaseErrorMessage(message));
     } else {

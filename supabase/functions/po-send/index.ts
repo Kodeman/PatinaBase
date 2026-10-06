@@ -62,7 +62,7 @@ import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { buildPoPdf, type PoPdfData } from '../_shared/po-pdf.ts';
 import { buildPoSentEmail } from '../_shared/po-emails.ts';
 import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
-import { checkPoReleaseGate } from './release-gate.ts';
+import { checkPoReleaseGate, sentStampFailure } from './release-gate.ts';
 import {
   buildFallbackSidemark,
   buildSchedulePoProposal,
@@ -618,6 +618,14 @@ Deno.serve(async (req: Request) => {
       tradeTotalCents,
     });
 
+    // SQ-448 (R2): read the gate again after the render, right before the
+    // email — a co-member's hold or a lowered threshold mid-send refuses here,
+    // before anything goes to the vendor.
+    const releaseRecheck = await checkPoReleaseGate(userClient, purchaseOrderId, mode);
+    if (!releaseRecheck.ok) {
+      return json({ error: releaseRecheck.error, detail: releaseRecheck.detail }, releaseRecheck.status);
+    }
+
     let sendResult;
     try {
       const attachmentBytes = new ArrayBuffer(pdfBytes.byteLength);
@@ -669,6 +677,8 @@ Deno.serve(async (req: Request) => {
       .is('sent_at', null);
     if (stampError) {
       console.error('po-send: failed to stamp sent_at', stampError);
+      const failure = sentStampFailure(stampError, emailSent);
+      return json(failure.body, failure.status);
     } else {
       // R109 — a fact proposes. This function runs as service_role, which has
       // zero EXECUTE on _commit_schedule_edit_authorized, so the proposal row

@@ -151,4 +151,20 @@ describe('LineExceptions — the unfold band', () => {
     expect(screen.getByText('A damage claim with no clock yet.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Track it' })).toBeInTheDocument();
   });
+
+  it('SQ-448: never offers "Track it" on a catalog-lane claim, even before any exception exists', () => {
+    render(
+      <LineExceptions
+        item={{
+          ...item,
+          purchase_order: { id: 'po-1', is_patina_catalog: true },
+          item_claims: [{ id: 'claim-1', state: 'drafted' }],
+        }}
+        projectId="p1"
+      />,
+      { wrapper: wrap },
+    );
+    expect(screen.queryByRole('button', { name: 'Track it' })).toBeNull();
+    expect(screen.queryByText('A damage claim with no clock yet.')).toBeNull();
+  });
 });

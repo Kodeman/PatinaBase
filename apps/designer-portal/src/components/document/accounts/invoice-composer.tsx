@@ -516,17 +516,18 @@ export function InvoiceComposer({
   const billingFiguresMissing = billingLines.some((l) => l.amountCents === null);
   const depositBlocked =
     ffeStage === "deposit" && tickedFfeIds.size > 0 && !depositPctValid;
-  // R8/R9 — warned, never blocked: a purchase bought for a line that this
-  // invoice also bills at its client price bills that piece twice.
+  // R8/R9 — warned, never blocked: a purchase bought for a line whose client
+  // price this invoice also bills, or a non-void invoice already bills
+  // (SQ-448: any live slot), bills that piece twice.
   const doubleBilledPurchases = useMemo(() => {
-    const billedLines = new Set([...tickedFfeIds, ...tickedBalanceIds]);
+    const billedLines = new Set([...tickedFfeIds, ...tickedBalanceIds, ...billing.keys()]);
     return offerablePurchases.filter(
       (p) =>
         tickedPurchaseIds.has(p.id) &&
         !!p.ffe_item_id &&
         billedLines.has(p.ffe_item_id),
     ).length;
-  }, [offerablePurchases, tickedPurchaseIds, tickedFfeIds, tickedBalanceIds]);
+  }, [offerablePurchases, tickedPurchaseIds, tickedFfeIds, tickedBalanceIds, billing]);
   const totals = useMemo(
     () =>
       computeInvoiceTotals(
@@ -1172,8 +1173,8 @@ export function InvoiceComposer({
                   {doubleBilledPurchases > 0 && (
                     <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-aged-oak,#8B7355)]">
                       {doubleBilledPurchases === 1
-                        ? "a ticked purchase was bought for a line this invoice also bills"
-                        : `${doubleBilledPurchases} ticked purchases were bought for lines this invoice also bills`}{" "}
+                        ? "a ticked purchase was bought for a line this or another invoice bills"
+                        : `${doubleBilledPurchases} ticked purchases were bought for lines this or another invoice bills`}{" "}
                       · billing both bills the piece twice
                     </p>
                   )}
