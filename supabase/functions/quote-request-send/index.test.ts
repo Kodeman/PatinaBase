@@ -7,7 +7,10 @@
 
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
+  type CallerRpcClient,
+  callerIsStudioComember,
   parseQuoteRequestSendBody,
+  quoteRequestStudioOwner,
   resolveVendorRecipient,
 } from "./lib.ts";
 
@@ -112,4 +115,57 @@ Deno.test("resolveVendorRecipient returns null when nothing is usable", () => {
   assertEquals(resolveVendorRecipient({ orders_email: null, contact_info: null }), null);
   assertEquals(resolveVendorRecipient({ contact_info: { email: 42 } }), null);
   assertEquals(resolveVendorRecipient({ contact_info: { email: "  " } }), null);
+});
+
+// ─── C-07: send access, as the caller ────────────────────────────────────────
+
+Deno.test("quoteRequestStudioOwner is the project owner when linked, else the drafter", () => {
+  assertEquals(
+    quoteRequestStudioOwner({ designer_id: "drafter", project: { designer_id: "owner" } }),
+    "owner",
+  );
+  assertEquals(quoteRequestStudioOwner({ designer_id: "drafter", project: null }), "drafter");
+  assertEquals(
+    quoteRequestStudioOwner({ designer_id: "drafter", project: { designer_id: null } }),
+    "drafter",
+  );
+});
+
+/**
+ * Stands in for the caller-scoped client: answers is_studio_comember the way
+ * 00556 does for the given caller (owner / co-member true, outsider false).
+ */
+function fakeCallerClient(
+  answer: { data: unknown; error: unknown },
+  calls: Array<{ fn: string; args: Record<string, unknown> }> = [],
+): CallerRpcClient {
+  return {
+    rpc(fn, args) {
+      calls.push({ fn, args });
+      return Promise.resolve(answer);
+    },
+  };
+}
+
+Deno.test("callerIsStudioComember allows the owner and a co-member", async () => {
+  for (const who of ["owner", "co-member"]) {
+    const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+    const allowed = await callerIsStudioComember(
+      fakeCallerClient({ data: true, error: null }, calls),
+      "owner-id",
+    );
+    assertEquals(allowed, true, who);
+    assertEquals(calls, [{ fn: "is_studio_comember", args: { p_owner: "owner-id" } }]);
+  }
+});
+
+Deno.test("callerIsStudioComember refuses an outsider and a failed check", async () => {
+  for (const answer of [
+    { data: false, error: null },
+    { data: null, error: { message: "permission denied" } },
+    { data: true, error: { message: "half-broken response" } },
+    { data: "true", error: null },
+  ]) {
+    assertEquals(await callerIsStudioComember(fakeCallerClient(answer), "owner-id"), false);
+  }
 });
