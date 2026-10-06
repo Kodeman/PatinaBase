@@ -32,7 +32,7 @@
  * name (LEAH-15, REP-15: the homeowner gets no staffing detail).
  */
 
-import type { DraftLineInput } from "@patina/supabase";
+import type { DraftLineInput, InvoiceBillingLineRequest } from "@patina/supabase";
 import {
   buildTimeLineDraft,
   type TimeLineDateRow,
@@ -173,6 +173,8 @@ export interface ComposerPurchase {
   status: string;
   billable_to_client: boolean;
   invoice_line_id: string | null;
+  /** The schedule line it was bought for, if any (00703). */
+  ffe_item_id?: string | null;
   payee_name: string;
   description?: string | null;
   purchased_on: string;
@@ -216,6 +218,328 @@ export function purchasesBillArgs(
   unbilled: readonly Pick<ComposerPurchase, "id">[],
 ): { projectId: string; initialPurchaseIds: string[] } {
   return { projectId, initialPurchaseIds: unbilled.map((p) => p.id) };
+}
+
+// ── Riders: the unbilled set (C-26, 00704) ──────────────────────────────────
+
+/** The slice of a po_cost_lines row (with its PO) the composer reads. */
+export interface ComposerRider {
+  id: string;
+  kind: string;
+  note?: string | null;
+  billable_to_client: boolean;
+  invoice_line_id: string | null;
+  estimate_cents: number | null;
+  actual_cents: number | null;
+  purchase_order?: { po_number: string | null } | null;
+}
+
+/** Riders still owed a client line: billable and never stamped (00709). */
+export function unbilledRiders<R extends ComposerRider>(
+  riders: readonly R[] | null | undefined,
+): R[] {
+  return (riders ?? []).filter((r) => r.billable_to_client && !r.invoice_line_id);
+}
+
+/** R-PB7: a rider bills at cost — the actual, else the estimate; null = none. */
+export function riderAtCostCents(
+  r: Pick<ComposerRider, "actual_cents" | "estimate_cents">,
+): number | null {
+  return r.actual_cents ?? r.estimate_cents ?? null;
+}
+
+/** The writer's default description: "Liftgate · second floor" (00709). */
+export function riderLabel(r: Pick<ComposerRider, "kind" | "note">): string {
+  const kind = r.kind
+    .split("_")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+  const note = r.note?.trim();
+  return note ? `${kind} · ${note}` : kind;
+}
+
+/** What "Bill N unbilled riders" opens the composer with. */
+export function ridersBillArgs(
+  projectId: string,
+  unbilled: readonly Pick<ComposerRider, "id">[],
+): { projectId: string; initialCostLineIds: string[] } {
+  return { projectId, initialCostLineIds: unbilled.map((r) => r.id) };
+}
+
+// ── At-cost overrides (R-PB7 "overridable") ─────────────────────────────────
+
+/**
+ * A typed dollar figure to whole cents: "1,234.5" → 123450, "0" → 0.
+ * Blank, negative, more than two decimals or anything else → null, so a typo
+ * never bills as $0 (unlike dollarsToCents, which reads garbage as 0).
+ */
+export function parseOverrideCents(value: string): number | null {
+  const text = value.trim().replace(/^\$/, "").replace(/,/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(text)) return null;
+  const [whole, frac = ""] = text.split(".");
+  const cents = Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+  return cents <= 1_000_000_000 ? cents : null;
+}
+
+/** Cents → the plain dollar text an override input starts from ("1296.50"). */
+export function centsToDollarText(cents: number | null): string {
+  return cents === null ? "" : (cents / 100).toFixed(2);
+}
+
+// ── Deposit, then balance (C-31, 00709) ─────────────────────────────────────
+
+/** One live billing slot of a line, as get_ffe_invoice_stage_coverage reads it. */
+export interface ComposerStageSlot {
+  ffe_item_id: string;
+  billing_stage: string;
+  billing_stage_pct: number | null;
+  invoice_id: string;
+  invoice_number: string | null;
+  invoice_status: string;
+  billed_cents: number;
+}
+
+/** What a line has had billed: its live slots, deposit first. */
+export interface LineBilling {
+  slots: ComposerStageSlot[];
+  /** Σ of the live deposit slots — what a balance subtracts. */
+  depositedCents: number;
+  /** A full or balance slot is live: nothing is left to bill. */
+  closed: boolean;
+}
+
+const STAGE_ORDER: Record<string, number> = { deposit: 0, balance: 1, full: 2 };
+
+/** Group the stage-coverage rows by line. A line with no entry is unbilled. */
+export function lineBillingByItem(
+  rows: readonly ComposerStageSlot[] | null | undefined,
+): Map<string, LineBilling> {
+  const byItem = new Map<string, LineBilling>();
+  for (const row of rows ?? []) {
+    const entry = byItem.get(row.ffe_item_id) ?? {
+      slots: [],
+      depositedCents: 0,
+      closed: false,
+    };
+    entry.slots.push(row);
+    if (row.billing_stage === "deposit") entry.depositedCents += row.billed_cents;
+    else entry.closed = true;
+    byItem.set(row.ffe_item_id, entry);
+  }
+  for (const entry of byItem.values()) {
+    entry.slots.sort(
+      (a, b) => (STAGE_ORDER[a.billing_stage] ?? 3) - (STAGE_ORDER[b.billing_stage] ?? 3),
+    );
+  }
+  return byItem;
+}
+
+/** A line's client price: quantity × client unit price; null when unpriced. */
+export function lineClientPriceCents(
+  item: Pick<ComposerFfeItem, "quantity" | "unit_price_cents">,
+): number | null {
+  if (item.unit_price_cents === null || item.unit_price_cents === undefined) return null;
+  return (item.quantity ?? 1) * item.unit_price_cents;
+}
+
+/** A deposit percent the writer accepts: above 0, at most 100, two places. */
+export function isValidDepositPct(pct: number): boolean {
+  return (
+    Number.isFinite(pct) &&
+    pct > 0 &&
+    pct <= 100 &&
+    Math.abs(Math.round(pct * 100) - pct * 100) < 1e-6
+  );
+}
+
+/**
+ * The deposit on a price — round(price × pct / 100), half away from zero, as
+ * add_invoice_billing_lines computes it. Integer arithmetic on hundredths of
+ * a percent, so no float drift moves a cent.
+ */
+export function depositCents(priceCents: number, pct: number): number {
+  const scaled = priceCents * Math.round(pct * 100);
+  return Math.floor((scaled + 5_000) / 10_000);
+}
+
+/** The balance: the price less every live deposit. Deposit + balance = price. */
+export function balanceCents(priceCents: number, depositedCents: number): number {
+  return priceCents - depositedCents;
+}
+
+/**
+ * Lines owed a balance: a live deposit, no full or balance slot, a client
+ * price, and something left after the deposit.
+ */
+export function balanceOwedItems<T extends ComposerFfeItem>(
+  items: readonly T[],
+  billing: Map<string, LineBilling>,
+): T[] {
+  return items.filter((item) => {
+    const b = billing.get(item.id);
+    const price = lineClientPriceCents(item);
+    return (
+      !!b &&
+      !b.closed &&
+      b.depositedCents > 0 &&
+      price !== null &&
+      balanceCents(price, b.depositedCents) > 0
+    );
+  });
+}
+
+const STAGE_WORD: Record<string, string> = {
+  deposit: "deposit",
+  balance: "balance",
+  full: "in full",
+};
+
+/** "deposit 50% · №0217 · paid" — one slot, as the composer row reads it. */
+export function stageSlotWords(slot: ComposerStageSlot): string {
+  const stage =
+    slot.billing_stage === "deposit" && slot.billing_stage_pct !== null
+      ? `deposit ${Number(slot.billing_stage_pct)}%`
+      : (STAGE_WORD[slot.billing_stage] ?? slot.billing_stage);
+  const number = slot.invoice_number ? `№${slot.invoice_number}` : null;
+  const state =
+    slot.invoice_status === "paid"
+      ? "paid"
+      : slot.invoice_status === "draft"
+        ? "in draft"
+        : slot.invoice_status === "partially_paid"
+          ? "part paid"
+          : "billed";
+  return [stage, number, state].filter(Boolean).join(" · ");
+}
+
+// ── The billing writer's lines (00709 add_invoice_billing_lines) ────────────
+
+/** A billing line with the figure the composer previews for it. */
+export interface BillingLineDraft {
+  request: InvoiceBillingLineRequest;
+  description: string;
+  /** The amount the writer will bill; null = no figure yet (blocks drafting). */
+  amountCents: number | null;
+}
+
+/** An at-cost subject with the override text typed against it, if any. */
+export interface AtCostPick<S> {
+  subject: S;
+  /** Undefined = untouched: bill at cost. */
+  overrideText?: string;
+}
+
+export interface BillingSelection {
+  depositItems: ComposerFfeItem[];
+  depositPct: number;
+  balanceItems: ComposerFfeItem[];
+  billing: Map<string, LineBilling>;
+  purchases: AtCostPick<ComposerPurchase>[];
+  riders: AtCostPick<ComposerRider>[];
+}
+
+/** cost when untouched; the parsed override (or null) when typed. */
+function atCostAmount(cost: number | null, overrideText: string | undefined) {
+  if (overrideText === undefined) return { amountCents: cost, override: undefined };
+  const parsed = parseOverrideCents(overrideText);
+  return {
+    amountCents: parsed,
+    // Sent only when it differs: an untouched-but-retyped cost stays at cost.
+    override: parsed !== null && parsed !== cost ? parsed : undefined,
+  };
+}
+
+/**
+ * The lines the composer hands add_invoice_billing_lines after the draft
+ * lands: deposits (pct of the client price), balances (price less the live
+ * deposits), then each purchase and each rider on its own line at cost, with
+ * amountCents only when the studio overrode it. The writer computes and
+ * re-checks every figure; the amounts here are the composer's preview.
+ */
+export function buildBillingLines(sel: BillingSelection): BillingLineDraft[] {
+  const deposits: BillingLineDraft[] = sel.depositItems.map((it) => {
+    const price = lineClientPriceCents(it);
+    return {
+      request: { ffeItemId: it.id, stage: "deposit", depositPct: sel.depositPct },
+      description: `Deposit (${sel.depositPct}%) · ${it.name}`,
+      amountCents:
+        price === null || !isValidDepositPct(sel.depositPct)
+          ? null
+          : depositCents(price, sel.depositPct),
+    };
+  });
+  const balances: BillingLineDraft[] = sel.balanceItems.map((it) => {
+    const price = lineClientPriceCents(it);
+    const deposited = sel.billing.get(it.id)?.depositedCents ?? 0;
+    return {
+      request: { ffeItemId: it.id, stage: "balance" },
+      description: `Balance · ${it.name}`,
+      amountCents: price === null ? null : balanceCents(price, deposited),
+    };
+  });
+  const purchases: BillingLineDraft[] = sel.purchases.map(({ subject, overrideText }) => {
+    const { amountCents, override } = atCostAmount(purchaseAtCostCents(subject), overrideText);
+    return {
+      request:
+        override === undefined
+          ? { purchaseId: subject.id }
+          : { purchaseId: subject.id, amountCents: override },
+      description: subject.description?.trim() || subject.payee_name,
+      amountCents,
+    };
+  });
+  const riders: BillingLineDraft[] = sel.riders.map(({ subject, overrideText }) => {
+    const cost = riderAtCostCents(subject);
+    const { amountCents, override } = atCostAmount(cost, overrideText);
+    return {
+      request:
+        override === undefined
+          ? { costLineId: subject.id }
+          : { costLineId: subject.id, amountCents: override },
+      description: riderLabel(subject),
+      amountCents,
+    };
+  });
+  return [...deposits, ...balances, ...purchases, ...riders];
+}
+
+// ── The unfold Money cell's quiet fact (C-31) ───────────────────────────────
+
+/** The invoice fields the fact line dates itself from. */
+export interface FactInvoice {
+  id: string;
+  status: string;
+  issue_date?: string | null;
+  sent_at?: string | null;
+  paid_at?: string | null;
+}
+
+/**
+ * "Client deposit billed 3 October · paid 6 October · balance unbilled" — the
+ * staged client billing of one line, for the unfold's Money cell. Null when
+ * the line has no deposit or balance slot (a full bill keeps the 00187
+ * fronting fact). Dates only for what happened; never a promise (R7).
+ */
+export function clientStageFact(
+  billing: LineBilling | undefined,
+  invoices: ReadonlyMap<string, FactInvoice>,
+  fmt: (iso: string) => string,
+): string | null {
+  if (!billing || !billing.slots.some((s) => s.billing_stage !== "full")) return null;
+  const parts = billing.slots.map((slot, i) => {
+    const word = slot.billing_stage === "balance" ? "balance" : "deposit";
+    const lead = i === 0 ? `Client ${word}` : word;
+    const inv = invoices.get(slot.invoice_id);
+    const status = inv?.status ?? slot.invoice_status;
+    if (status === "draft") return `${lead} in draft`;
+    const billedOn = inv?.issue_date ?? inv?.sent_at ?? null;
+    const billed = billedOn ? `${lead} billed ${fmt(billedOn)}` : `${lead} billed`;
+    if (status === "paid") return inv?.paid_at ? `${billed} · paid ${fmt(inv.paid_at)}` : `${billed} · paid`;
+    if (status === "partially_paid") return `${billed} · part paid`;
+    return billed;
+  });
+  if (!billing.closed) parts.push("balance unbilled");
+  return parts.join(" · ");
 }
 
 // ── Line assembly ───────────────────────────────────────────────────────────

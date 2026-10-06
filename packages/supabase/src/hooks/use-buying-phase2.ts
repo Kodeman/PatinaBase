@@ -514,6 +514,8 @@ export function useUpsertPoCostLine(options?: ErrorSurfaceOptions) {
     },
     onSuccess: (row) => {
       queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.costLines(row.purchase_order_id) });
+      // The project-wide rider read behind "Bill N unbilled riders" (C-31).
+      queryClient.invalidateQueries({ queryKey: buyingPhase2Keys.costLines('project') });
     },
   });
 }
@@ -1782,4 +1784,33 @@ export function useUnresolvedProcurementExceptions(projectId: string | null | un
 /** After any exception act: every exceptions read, project-scoped or not. */
 export function invalidateProcurementExceptions(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: [...buyingPhase2Keys.all, 'exceptions'] });
+}
+
+// --- C-31 billing (SQ-429) ---
+
+/** A PO rider with the order it rides, for the project-wide billing reads. */
+export type ProjectPoCostLine = PoCostLineRow & {
+  purchase_order: { id: string; po_number: string | null; project_id: string };
+};
+
+/**
+ * Every rider on a project's purchase orders, oldest first: the composer's
+ * riders group and the "Bill N unbilled riders" door. RLS on po_cost_lines
+ * decides which the member may read. Keyed under cost-lines, so the billing
+ * writer's invalidation (and a rider upsert's) refreshes it.
+ */
+export function useProjectPoCostLines(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: [...buyingPhase2Keys.costLines('project'), projectId ?? ''],
+    queryFn: async (): Promise<ProjectPoCostLine[]> => {
+      const { data, error } = await getSupabase()
+        .from('po_cost_lines')
+        .select('*, purchase_order:purchase_orders!po_cost_lines_purchase_order_id_fkey!inner(id, po_number, project_id)')
+        .eq('purchase_order.project_id', projectId as string)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as ProjectPoCostLine[];
+    },
+    enabled: !!projectId,
+  });
 }

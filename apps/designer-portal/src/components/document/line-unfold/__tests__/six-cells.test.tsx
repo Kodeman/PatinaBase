@@ -25,6 +25,9 @@ jest.mock('@patina/supabase', () => ({
   useVendorPayments: () => ({ data: [] }),
   useStudioPaymentMethods: () => ({ data: [] }),
   useFfeInvoiceCoverage: () => ({ data: undefined }),
+  // C-31: the Money cell's staged fact; its own suite is money-out.test.tsx.
+  useFfeInvoiceStageCoverage: () => ({ data: undefined }),
+  useProjectInvoices: () => ({ data: undefined }),
   useStartPoCheckout: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useUser: () => ({ user: null }),
   usePurchaseOrders: () => ({ data: undefined }),

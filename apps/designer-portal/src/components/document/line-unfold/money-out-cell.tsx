@@ -1,7 +1,17 @@
+import { useMemo } from 'react';
 import {
   useFfeInvoiceCoverage,
+  useFfeInvoiceStageCoverage,
+  useProjectInvoices,
   type FfeItemCoverage,
 } from '@patina/supabase';
+import { fmtDay } from '@/lib/document/format';
+import {
+  clientStageFact,
+  lineBillingByItem,
+  type ComposerStageSlot,
+  type FactInvoice,
+} from '@/lib/document/invoice-composer';
 import { CellSub, UnfoldCell } from './cell';
 import { PoMoneyOut, type MoneyOutPayment } from './record-payment';
 
@@ -61,9 +71,23 @@ export function MoneyOutCell({
   );
 }
 
+/**
+ * The quiet client-billing fact. A line billed as a deposit then a balance
+ * (C-31) reads its stages with dates — "Client deposit billed 3 October · paid
+ * 6 October · balance unbilled"; otherwise the 00187 fronting fact.
+ */
 function FrontingFact({ projectId, itemId }: { projectId: string; itemId: string }) {
   const { data: coverage } = useFfeInvoiceCoverage(projectId);
-  const fact = frontingFact(coverage?.[itemId]);
+  const { data: stageRows } = useFfeInvoiceStageCoverage(projectId);
+  const { data: invoices } = useProjectInvoices(projectId);
+  const staged = useMemo(() => {
+    const billing = lineBillingByItem(stageRows as ComposerStageSlot[] | undefined).get(itemId);
+    const byId = new Map(
+      ((invoices ?? []) as unknown as FactInvoice[]).map((inv) => [inv.id, inv] as const),
+    );
+    return clientStageFact(billing, byId, fmtDay);
+  }, [stageRows, invoices, itemId]);
+  const fact = staged ?? frontingFact(coverage?.[itemId]);
   if (!fact) return null;
   return (
     <p data-testid="money-out-fronting" className="mt-1 text-[11px] text-[var(--text-muted)]">

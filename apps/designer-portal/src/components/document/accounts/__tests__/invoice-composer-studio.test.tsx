@@ -6,7 +6,7 @@
  * household, the regarding line and the resolved studio (S4 · S12 · S8).
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { InvoiceComposer } from "../invoice-composer";
 
 const mockCreateStudioDraft = jest.fn();
@@ -31,13 +31,20 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: mockCreateStudioDraft,
     isPending: false,
   }),
-  useDeleteDraftInvoice: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useFfeInvoiceCoverage: () => ({ data: undefined, isLoading: false }),
+  useDeleteDraftInvoice: () => ({ mutateAsync: mockDeleteDraft, isPending: false }),
+  useFfeInvoiceCoverage: () => ({ data: mockCoverage, isLoading: false }),
+  // C-31 — the stage slots, the billing writer and the project's riders.
+  useFfeInvoiceStageCoverage: () => ({ data: mockStages, isLoading: false }),
+  useAddInvoiceBillingLines: () => ({ mutateAsync: mockAddBilling, isPending: false }),
+  useProjectPoCostLines: (projectId: unknown) => ({
+    data: projectId ? mockRiders : undefined,
+    isLoading: false,
+  }),
   useOrganizations: () => ({
     data: mockOrganizations,
     isLoading: mockOrganizationsLoading,
   }),
-  useProjectFFEItems: () => ({ data: [], isLoading: false }),
+  useProjectFFEItems: () => ({ data: mockFfeItems, isLoading: false }),
   useProjectInvoices: () => ({ data: [] }),
   useProjectPaymentMilestones: () => ({ data: [] }),
   useProjects: () => ({
@@ -56,9 +63,26 @@ jest.mock("@patina/supabase", () => ({
   // studio-mode/empty-selection scenarios but called unconditionally.
   useProjectRoster: () => ({ data: [] }),
   // C-25 — the purchases the "Bill N unbilled purchases" door asked for.
-  useStudioPurchases: (filter: unknown) => ({ data: filter ? mockPurchases : undefined }),
+  useStudioPurchases: (filter: unknown) => ({
+    data: filter ? mockPurchases : undefined,
+    isLoading: false,
+  }),
 }));
 let mockPurchases: Array<Record<string, unknown>> = [];
+let mockRiders: Array<Record<string, unknown>> = [];
+let mockFfeItems: Array<Record<string, unknown>> = [];
+let mockCoverage: Record<string, unknown> | undefined = undefined;
+let mockStages: Array<Record<string, unknown>> | undefined = undefined;
+const mockAddBilling = jest.fn();
+const mockDeleteDraft = jest.fn();
+
+beforeEach(() => {
+  mockCreateDraft.mockReset().mockResolvedValue({ id: "inv-1" });
+  mockAddBilling.mockReset().mockResolvedValue([]);
+  mockDeleteDraft.mockReset().mockResolvedValue(undefined);
+  mockPurchases = [];
+  mockRiders = [];
+});
 
 jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: () => mockFlag,
@@ -119,7 +143,7 @@ describe("InvoiceComposer · the houseless choice is fail-closed", () => {
   });
 });
 
-describe("InvoiceComposer · unbilled purchases (C-25)", () => {
+describe("InvoiceComposer · purchases at cost, through the billing writer (C-25, C-31)", () => {
   const purchase = (id: string, extra: Record<string, unknown> = {}) => ({
     id,
     status: "recorded",
@@ -145,24 +169,230 @@ describe("InvoiceComposer · unbilled purchases (C-25)", () => {
     ];
   });
 
-  it("shows the asked-for unbilled purchases at cost, read-only, with a plain fact line", () => {
+  it("ticks the asked-for purchases and bills each on its own line at cost", async () => {
+    const onDrafted = jest.fn();
     render(
       <InvoiceComposer
         context={{ projectId: "project-1", initialPurchaseIds: ["p1", "billed"] }}
-        onDrafted={jest.fn()}
+        onDrafted={onDrafted}
       />,
     );
     const block = screen.getByTestId("composer-purchases");
     expect(block).toHaveTextContent("Pair of table lamps");
-    expect(block).toHaveTextContent("$1,296.50");
-    expect(block).not.toHaveTextContent("Estate sale");
-    expect(block).toHaveTextContent("This draft does not carry purchases · each stays unbilled");
-    expect(block.querySelector("input, button")).toBeNull();
+    expect(block).toHaveTextContent("cost $1,296.50");
+    // Every unbilled purchase is offered; only the asked-for one arrives ticked.
+    expect(block).toHaveTextContent("Estate sale");
+    expect(screen.getByLabelText("Bill Pair of table lamps")).toBeChecked();
+    expect(screen.getByLabelText("Bill Estate sale")).not.toBeChecked();
+    // A stamped purchase is never offered.
+    expect(block.querySelectorAll("[data-at-cost-row]")).toHaveLength(2);
+    expect(screen.getByLabelText("Billed amount · Pair of table lamps")).toHaveValue("1296.50");
+
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    await waitFor(() => expect(onDrafted).toHaveBeenCalledWith("inv-1", "project-1"));
+    expect(mockCreateDraft.mock.calls[0][0].lines).toEqual([]);
+    expect(mockAddBilling).toHaveBeenCalledWith({
+      invoiceId: "inv-1",
+      projectId: "project-1",
+      lines: [{ purchaseId: "p1" }],
+    });
   });
 
-  it("shows nothing about purchases when the opener asked for none", () => {
-    render(<InvoiceComposer context={{ projectId: "project-1" }} onDrafted={jest.fn()} />);
-    expect(screen.queryByTestId("composer-purchases")).not.toBeInTheDocument();
+  it("sends an overridden figure as amountCents (R-PB7)", async () => {
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialPurchaseIds: ["p1"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Billed amount · Pair of table lamps"), {
+      target: { value: "1,500" },
+    });
+    // The running total follows the billed figure, not the cost.
+    expect(screen.getAllByText("$1,500.00").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
+    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([
+      { purchaseId: "p1", amountCents: 150_000 },
+    ]);
+  });
+
+  it("deletes the draft when the writer refuses, and says why", async () => {
+    mockAddBilling.mockRejectedValue({
+      message: "add_invoice_billing_lines: purchase p1 is already billed",
+    });
+    const onDrafted = jest.fn();
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialPurchaseIds: ["p1"] }}
+        onDrafted={onDrafted}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    expect(await screen.findByText(/purchase p1 is already billed/)).toBeInTheDocument();
+    expect(mockDeleteDraft).toHaveBeenCalledWith({ invoiceId: "inv-1", projectId: "project-1" });
+    expect(onDrafted).not.toHaveBeenCalled();
+  });
+});
+
+describe("InvoiceComposer · riders at cost (C-31)", () => {
+  const rider = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    kind: "white_glove",
+    note: null,
+    billable_to_client: true,
+    invoice_line_id: null,
+    estimate_cents: 45_000,
+    actual_cents: null,
+    purchase_order: { id: "po-1", po_number: "1042", project_id: "project-1" },
+    ...extra,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFlag = { value: false, isLoading: false };
+    mockRiders = [
+      rider("r1", { actual_cents: 52_000 }),
+      rider("r2", { kind: "liftgate", estimate_cents: null }),
+      rider("billed", { invoice_line_id: "il-9" }),
+      rider("overhead", { billable_to_client: false }),
+    ];
+  });
+
+  it("bills each asked-for rider on its own line, at actual cost", async () => {
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialCostLineIds: ["r1"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    const block = screen.getByTestId("composer-riders");
+    expect(block.querySelectorAll("[data-at-cost-row]")).toHaveLength(2);
+    expect(block).toHaveTextContent("White Glove");
+    expect(block).toHaveTextContent("PO 1042");
+    expect(block).toHaveTextContent("cost $520.00");
+    expect(screen.getByLabelText("Bill White Glove")).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
+    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([{ costLineId: "r1" }]);
+  });
+
+  it("holds the draft until a rider with no figure is given one", async () => {
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialCostLineIds: ["r2"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    const act = screen.getByRole("button", { name: "Draft the invoice" });
+    expect(act).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Billed amount · Liftgate"), {
+      target: { value: "175" },
+    });
+    expect(act).toBeEnabled();
+    fireEvent.click(act);
+    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
+    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([
+      { costLineId: "r2", amountCents: 17_500 },
+    ]);
+  });
+});
+
+describe("InvoiceComposer · deposit, then balance (C-31)", () => {
+  const SOFA = {
+    id: "f1",
+    name: "Bespoke sofa",
+    quantity: 2,
+    unit_price_cents: 100_000,
+    room: null,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFlag = { value: false, isLoading: false };
+    mockFfeItems = [SOFA];
+  });
+
+  it("bills a ticked line as a deposit of the entered percent", async () => {
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialFfeItemIds: ["f1"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("as a deposit of"));
+    fireEvent.change(screen.getByLabelText("Deposit percent"), {
+      target: { value: "40" },
+    });
+    expect(screen.getByText(/deposit \$800\.00\s+of/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
+    expect(mockCreateDraft.mock.calls[0][0].lines).toEqual([]);
+    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([
+      { ffeItemId: "f1", stage: "deposit", depositPct: 40 },
+    ]);
+  });
+
+  it("refuses a deposit percent the writer would refuse", () => {
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialFfeItemIds: ["f1"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("as a deposit of"));
+    fireEvent.change(screen.getByLabelText("Deposit percent"), {
+      target: { value: "120" },
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("a percent above 0, at most 100");
+    expect(screen.getByRole("button", { name: "Draft the invoice" })).toBeDisabled();
+  });
+
+  it("offers the balance of a deposited line, showing what it has had billed", async () => {
+    mockCoverage = {
+      f1: {
+        coverage: "invoiced",
+        invoiceId: "inv-0",
+        invoiceNumber: "0217",
+        invoiceStatus: "paid",
+        billedCents: 100_000,
+      },
+    };
+    mockStages = [
+      {
+        ffe_item_id: "f1",
+        billing_stage: "deposit",
+        billing_stage_pct: 50,
+        invoice_line_id: "il-0",
+        invoice_id: "inv-0",
+        invoice_number: "0217",
+        invoice_status: "paid",
+        billed_cents: 100_000,
+        coverage: "paid",
+      },
+    ];
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialFfeItemIds: ["f1"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    const block = screen.getByTestId("composer-balances");
+    expect(block).toHaveTextContent("deposit 50% · №0217 · paid");
+    expect(block).toHaveTextContent("$1,000.00");
+    expect(within(block).getByRole("checkbox")).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Draft the invoice" }));
+    await waitFor(() => expect(mockAddBilling).toHaveBeenCalledTimes(1));
+    expect(mockAddBilling.mock.calls[0][0].lines).toEqual([
+      { ffeItemId: "f1", stage: "balance" },
+    ]);
+  });
+
+  afterEach(() => {
+    mockFfeItems = [];
+    mockCoverage = undefined;
+    mockStages = undefined;
   });
 });
 
