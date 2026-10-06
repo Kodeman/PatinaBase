@@ -7,7 +7,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const sendMutateAsync = jest.fn();
+const setShipToMutateAsync = jest.fn();
 const poSent = jest.fn();
+// The studio's purchase-orders list the ship-to band reads (C-02).
+const mockOrders: { list: Array<Record<string, unknown>> } = { list: [] };
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
@@ -16,6 +19,12 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('@patina/supabase', () => ({
   useSendPurchaseOrder: () => ({ mutateAsync: sendMutateAsync, isPending: false }),
   useLogPOAcknowledgment: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useSetPurchaseOrderShipTo: () => ({ mutateAsync: setShipToMutateAsync, isPending: false }),
+  usePurchaseOrders: () => ({ data: mockOrders.list }),
+  useOrganizations: () => ({
+    data: [{ address: { street: '1 Main St', city: 'Madison', state: 'WI', zip: '53703' } }],
+  }),
+  useProject: () => ({ data: { site_address: null } }),
 }));
 
 jest.mock('@/lib/analytics/procurement-events', () => ({
@@ -33,6 +42,9 @@ import { PoPreview } from './po-preview';
 
 beforeEach(() => {
   sendMutateAsync.mockReset();
+  setShipToMutateAsync.mockReset();
+  setShipToMutateAsync.mockResolvedValue({ id: 'po-1' });
+  mockOrders.list = [];
   poSent.mockReset();
   sendMutateAsync.mockImplementation(async ({ mode }: { mode: string }) =>
     mode === 'preview'
@@ -112,5 +124,52 @@ describe('PoPreview · note to the vendor', () => {
       expect.objectContaining({ mode: 'mark_sent', message: undefined }),
     );
     expect(poSent).toHaveBeenCalledWith({ method: 'manual' });
+  });
+});
+
+describe('PoPreview · ship-to not set (C-02)', () => {
+  const unsent = { id: 'po-1', project_id: 'project-1', sent_at: null, ship_to: null };
+
+  it('offers the ship-to choice on an unsent PO with none, and sets it with the shown text', async () => {
+    mockOrders.list = [unsent];
+    renderPreview();
+    await waitForPdf();
+
+    expect(screen.getByText('Ship-to not set')).toBeInTheDocument();
+    const studio = screen.getByRole('radio', { name: /the studio/i });
+    expect(studio).not.toBeChecked();
+    // No site address on the project → no job-site option.
+    expect(screen.queryByRole('radio', { name: /the job site/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set ship-to' })).toBeDisabled();
+
+    fireEvent.click(studio);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Set ship-to' }));
+    });
+
+    expect(setShipToMutateAsync).toHaveBeenCalledWith({
+      purchaseOrderId: 'po-1',
+      shipTo: '1 Main St, Madison, WI 53703',
+    });
+    // The paper re-renders so the PDF carries the new ship-to.
+    await waitFor(() =>
+      expect(
+        sendMutateAsync.mock.calls.filter(([a]) => a.mode === 'preview'),
+      ).toHaveLength(2),
+    );
+  });
+
+  it('stays quiet when the PO already has a ship-to', async () => {
+    mockOrders.list = [{ ...unsent, ship_to: '1 Main St, Madison, WI 53703' }];
+    renderPreview();
+    await waitForPdf();
+    expect(screen.queryByText('Ship-to not set')).not.toBeInTheDocument();
+  });
+
+  it('is not offered on a resend', async () => {
+    mockOrders.list = [unsent];
+    renderPreview({ mode: 'resend', sentAt: '2026-10-01T00:00:00Z' });
+    await waitForPdf();
+    expect(screen.queryByText('Ship-to not set')).not.toBeInTheDocument();
   });
 });

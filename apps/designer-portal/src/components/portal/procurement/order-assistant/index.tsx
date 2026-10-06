@@ -37,6 +37,7 @@ import {
   useCreatePurchaseOrder,
   useFfeInvoiceCoverage,
   useOrganizations,
+  useSetPurchaseOrderShipTo,
   useStartPoCheckout,
   fetchPOPayments,
   type CreatePurchaseOrderInput,
@@ -76,6 +77,14 @@ import {
   type MilestoneRow,
 } from './step-details';
 import { generateSidemark } from './sidemark';
+import {
+  EMPTY_SHIP_TO,
+  SHIP_TO_REQUIRED_MESSAGE,
+  ShipToChoice,
+  resolveShipTo,
+  useShipToAddresses,
+  type ShipToSelection,
+} from './ship-to-choice';
 
 // Barrel: both call sites + OrderViaPatina import from
 // '@/components/portal/procurement/order-assistant' — keep the public
@@ -230,6 +239,14 @@ export function OrderAssistant(props: OrderAssistantProps) {
     setSidemark(value);
   };
 
+  // Ship-to (C-02) — an explicit choice, nothing preselected. Required before
+  // the external-vendor submit; persisted after create through
+  // set_purchase_order_ship_to (00690). Catalog orders skip the Details step.
+  const shipToAddresses = useShipToAddresses(open ? project.id : null);
+  const [shipToSelection, setShipToSelection] = useState<ShipToSelection>(EMPTY_SHIP_TO);
+  const shipTo = resolveShipTo(shipToSelection, shipToAddresses);
+  const setShipTo = useSetPurchaseOrderShipTo({ errorSurface: 'inline' });
+
   // Details fields ----------------------------------------------------------
   const [vendorPoNumber, setVendorPoNumber] = useState('');
   const [confirmedEta, setConfirmedEta] = useState('');
@@ -299,7 +316,9 @@ export function OrderAssistant(props: OrderAssistantProps) {
   // manual "Pay now" click (payNowPending) is NOT busy in this sense — the
   // PO already exists and the queue must stay closeable while that request
   // is in flight (its continuation is stale-guarded instead).
-  const isBusy = createPO.isPending || isRedirecting || isResolving;
+  // The post-create ship-to write counts too: the PO already exists then, so
+  // a re-click would create a duplicate.
+  const isBusy = createPO.isPending || setShipTo.isPending || isRedirecting || isResolving;
 
   // Single close path for Done / ✕ / overlay / Skip / coverage's
   // create-invoice link: invalidate in-flight continuations FIRST, then
@@ -490,6 +509,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
     if (!open) return;
     setStep('review');
     setCreatedPo(null);
+    setShipToSelection(EMPTY_SHIP_TO);
     setVendorPoNumber('');
     setConfirmedEta('');
     setPaymentPattern(vendor.default_payment_terms ?? 'fifty_fifty');
@@ -527,7 +547,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
   // ─── Review-step clipboard action ───────────────────────────────────────
 
   const handleCopyDetails = async () => {
-    const text = formatItemDetailsForClipboard(vendor, project, ffeItems);
+    const text = formatItemDetailsForClipboard(vendor, project, ffeItems, shipTo);
     try {
       await navigator.clipboard.writeText(text);
       setCopyState('copied');
@@ -573,6 +593,11 @@ export function OrderAssistant(props: OrderAssistantProps) {
       return;
     }
 
+    if (!shipTo) {
+      setSubmitError(SHIP_TO_REQUIRED_MESSAGE);
+      return;
+    }
+
     const validationError = validateDetails({
       paymentPattern,
       depositAmountInput,
@@ -614,7 +639,16 @@ export function OrderAssistant(props: OrderAssistantProps) {
     // net_30: no extra fields; hook builds a single balance row at totalCents.
 
     try {
-      const po = await createPO.mutateAsync(input);
+      let po = await createPO.mutateAsync(input);
+
+      // The PO exists from here; a failed ship-to write never undoes it. The
+      // Created step's PoPreview then shows "Ship-to not set" with the same
+      // choice, and po-send refuses to send until it is set (R-PB3).
+      try {
+        po = await setShipTo.mutateAsync({ purchaseOrderId: po.id, shipTo });
+      } catch {
+        toast('PO created, but the ship-to was not saved. Set it before sending.', 'error');
+      }
 
       procurementEvents.poCreated({
         payment_pattern: paymentPattern,
@@ -803,6 +837,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                 <StepReview
                   vendor={vendor}
                   ffeItems={ffeItems}
+                  shipTo={shipTo}
                   copyState={copyState}
                   onCopyDetails={handleCopyDetails}
                 />
@@ -818,6 +853,21 @@ export function OrderAssistant(props: OrderAssistantProps) {
                   uncovered={uncovered}
                   onCreateInvoice={closePanel}
                 />
+              )}
+
+              {step === 'details' && (
+                <section className="mb-3 rounded-[5px] border border-[var(--border-default)] px-3 py-3">
+                  <ShipToChoice
+                    {...shipToAddresses}
+                    value={shipToSelection}
+                    onChange={(next) => {
+                      setShipToSelection(next);
+                      if (submitError === SHIP_TO_REQUIRED_MESSAGE) setSubmitError(null);
+                    }}
+                    disabled={isBusy}
+                    invalid={submitError === SHIP_TO_REQUIRED_MESSAGE}
+                  />
+                </section>
               )}
 
               {step === 'details' && (

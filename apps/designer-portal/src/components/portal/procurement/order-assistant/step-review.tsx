@@ -27,13 +27,16 @@ import {
 } from "./types";
 import { rowCurrency } from "@/lib/currency-totals";
 
-/** Studio ship-to surface is out of scope for Wave 1.4; PRD shows a static placeholder. */
-export const SHIP_TO_PLACEHOLDER = "Middlewest Studio · Madison WI";
-
+/**
+ * `shipTo` is the designer's explicit choice (C-02), made in the Details
+ * step. Until it is made the manifest carries no ship-to line rather than a
+ * guess.
+ */
 export function formatItemDetailsForClipboard(
   vendor: OrderAssistantVendor,
   project: OrderAssistantProject,
   items: OrderAssistantFFEItem[],
+  shipTo: string | null = null,
 ): string {
   const lines: string[] = [];
   lines.push(`${vendor.name} — ${project.name}`);
@@ -41,7 +44,7 @@ export function formatItemDetailsForClipboard(
   items.forEach((item, idx) => {
     lines.push(`${idx + 1}. ${item.name}`);
     if (item.room) lines.push(`   Room: ${item.room}`);
-    lines.push(`   Ship to: ${SHIP_TO_PLACEHOLDER}`);
+    if (shipTo) lines.push(`   Ship to: ${shipTo}`);
     // Vendor-facing amounts are TRADE cost (00186) — never client prices.
     lines.push(`   ${formatTradeMoney(itemTradeCents(item), rowCurrency(item))}`);
     formatConfigurationSnapshotForClipboard(item, "vendor").forEach((line) =>
@@ -56,6 +59,8 @@ export function formatItemDetailsForClipboard(
 export interface StepReviewProps {
   vendor: OrderAssistantVendor;
   ffeItems: OrderAssistantFFEItem[];
+  /** The chosen ship-to, or null before the Details step asks for it. */
+  shipTo: string | null;
   copyState: "idle" | "copied" | "error";
   onCopyDetails: () => void;
 }
@@ -63,6 +68,7 @@ export interface StepReviewProps {
 export function StepReview({
   vendor,
   ffeItems,
+  shipTo,
   copyState,
   onCopyDetails,
 }: StepReviewProps) {
@@ -130,7 +136,9 @@ export function StepReview({
                   {item.room ? ` · ${item.room}` : ""}
                 </div>
                 <div className="text-[var(--text-muted)]">
-                  Ship to: {SHIP_TO_PLACEHOLDER}
+                  {shipTo
+                    ? `Ship to: ${shipTo}`
+                    : "Ship to: chosen in Order details"}
                 </div>
                 {configuration && (
                   <div className="mt-2">

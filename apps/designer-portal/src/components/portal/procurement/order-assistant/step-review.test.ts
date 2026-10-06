@@ -21,6 +21,20 @@ const VENDOR = {
 };
 const PROJECT = { id: "project-1", name: "Hawthorn House" };
 
+describe("formatItemDetailsForClipboard · ship-to (C-02)", () => {
+  const item = { id: "ffe-1", name: "Field Sectional", line_total_cents: 100 };
+
+  it("prints the chosen ship-to on every item", () => {
+    const result = formatItemDetailsForClipboard(VENDOR, PROJECT, [item], "1 Main St, Madison, WI 53703");
+    expect(result).toContain("   Ship to: 1 Main St, Madison, WI 53703");
+  });
+
+  it("prints no ship-to line before one is chosen", () => {
+    const result = formatItemDetailsForClipboard(VENDOR, PROJECT, [item]);
+    expect(result).not.toContain("Ship to");
+  });
+});
+
 describe("formatItemDetailsForClipboard", () => {
   it("keeps client retail out of the vendor manifest", () => {
     const result = formatItemDetailsForClipboard(VENDOR, PROJECT, [
