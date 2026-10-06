@@ -880,11 +880,10 @@ describe('useLogPaymentPaid', () => {
 
     await config.mutationFn({ paymentId: 'pay-1', purchaseOrderId: 'po-1' });
 
-    const [, payload] = supabaseClient.rpc.mock.calls[0] as [
-      string,
-      { p_request: { paidOn: string } },
-    ];
-    expect(payload.p_request.paidOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('record_vendor_payment', {
+      p_po_id: 'po-1',
+      p_request: { poPaymentId: 'pay-1', paidOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+    });
   });
 
   it('throws the RPC error (e.g. the Stripe-lane refusal)', async () => {
