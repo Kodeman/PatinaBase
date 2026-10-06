@@ -35,6 +35,7 @@ import { AmendmentSheet } from './overlays/amendment-sheet';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 import { AccountsQueryFailure } from './accounts/accounts-query-failure';
 import { SectionLoadingLine } from './section-loading-line';
+import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
 
 const SAGE_INK = 'var(--color-sage-ink)';
 const TERRACOTTA_INK = 'var(--color-terracotta-ink)';
@@ -195,6 +196,9 @@ export function AccountBand({
   headless?: boolean;
 }) {
   const { data, isLoading, isError, refetch } = useAccountPage(projectId);
+  // R1 — margin % · the trade → client line · est. commissions (client −
+  // trade) show only to a viewer who may see margin.
+  const canSeeMargin = useCanSeeMargin();
   // Standalone, the band is an organ standing BETWEEN two stops on the paper
   // (care → record), so its top edge is the one region gap. Headless it is a
   // sub-seam inside the money region and keeps that region's own rhythm.
@@ -266,7 +270,7 @@ export function AccountBand({
   const collapsedLine = [
     `${fmtUsd(data.budgetCents)} budget`,
     `${formatCurrencyTotal(data.committed)} committed`,
-    data.marginPct != null ? `${data.marginPct}% margin` : null,
+    canSeeMargin && data.marginPct != null ? `${data.marginPct}% margin` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -351,30 +355,37 @@ export function AccountBand({
           ))}
 
           {/* The margin line — trade vs client, with the coverage note. */}
-          <p className="mt-2 text-[11px] text-[var(--color-charcoal)]">
-            {isMixed(data.margin) ? (
-              `Margin: ${mixedCurrenciesText(data.margin.mixed)}.`
-            ) : data.marginPct != null ? (
-              <>
-                Trade {formatMoney(data.tradeCostCents, data.margin.currency)} → client{' '}
-                {formatMoney(data.clientValueCents, data.margin.currency)} ·{' '}
-                <span style={{ color: SAGE_INK }}>{data.marginPct}% margin</span>
-              </>
-            ) : (
-              'No trade pricing on committed lines yet.'
-            )}
-            <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-              trade cost on {data.tradeCoverage.withTrade} of {data.tradeCoverage.total} committed
-              lines
-            </span>
-          </p>
+          {canSeeMargin && (
+            <p className="mt-2 text-[11px] text-[var(--color-charcoal)]">
+              {isMixed(data.margin) ? (
+                `Margin: ${mixedCurrenciesText(data.margin.mixed)}.`
+              ) : data.marginPct != null ? (
+                <>
+                  Trade {formatMoney(data.tradeCostCents, data.margin.currency)} → client{' '}
+                  {formatMoney(data.clientValueCents, data.margin.currency)} ·{' '}
+                  <span style={{ color: SAGE_INK }}>{data.marginPct}% margin</span>
+                </>
+              ) : (
+                'No trade pricing on committed lines yet.'
+              )}
+              <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                trade cost on {data.tradeCoverage.withTrade} of {data.tradeCoverage.total} committed
+                lines
+              </span>
+            </p>
+          )}
 
           {/* The designer-earnings block → Accounts (stub target OK, R26). */}
           <p className="mt-1.5 text-[11px] text-[var(--color-charcoal)]">
-            Design fee {fmtUsd(data.designFeeCents)} · est. commissions{' '}
-            {isMixed(data.margin)
-              ? mixedCurrenciesText(data.margin.mixed)
-              : formatMoney(data.estCommissionCents, data.margin.currency)}
+            Design fee {fmtUsd(data.designFeeCents)}
+            {canSeeMargin && (
+              <>
+                {' '}· est. commissions{' '}
+                {isMixed(data.margin)
+                  ? mixedCurrenciesText(data.margin.mixed)
+                  : formatMoney(data.estCommissionCents, data.margin.currency)}
+              </>
+            )}
             {/* I107 — the clay underline is retired: a tertiary word takes its
                 rule on hover, and the ↗ rides outside the score as a glyph, so
                 the rule marks the word and not the doorway. */}

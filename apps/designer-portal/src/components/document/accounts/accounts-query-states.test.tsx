@@ -47,6 +47,11 @@ jest.mock('@/hooks/use-studio-accounts', () => ({
   useStudioMargin: () => ({ data: null }),
 }));
 
+// R1 — the margin stat's gate; its query states are not under test here.
+jest.mock('@/hooks/use-can-see-margin', () => ({
+  useCanSeeMargin: () => true,
+}));
+
 // InvoiceFolio reconciles a returning Stripe checkout through a real
 // useMutation, which needs a QueryClientProvider this suite does not mount.
 // The folio's query states are what is under test, not the reconciliation.

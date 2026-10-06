@@ -38,6 +38,7 @@ import {
 } from '@patina/utils';
 import type { ComposeDecisionRequest } from '@/lib/document/compose-decision';
 import { useUpdateProposalItem } from '@/hooks/use-proposals';
+import { useCanSeeMargin } from '@/hooks/use-can-see-margin';
 import { StatusChip } from '@/components/document/status-chip';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import {
@@ -132,6 +133,7 @@ export function ScheduleLineUnfold({
   const { data: fieldDefs = [] } = useSpecFieldDefs({ proposalId });
 
   const updateItem = useUpdateProposalItem();
+  const canSeeMargin = useCanSeeMargin();
   const [editing, setEditing] = useState(false);
   const [docCode, setDocCode] = useState(item.doc_code ?? '');
   const [clientNotes, setClientNotes] = useState(item.notes ?? '');
@@ -292,12 +294,19 @@ export function ScheduleLineUnfold({
                 {fmtCents(item.unit_sell_price)} client
                 {item.quantity > 1 ? ` × ${item.quantity}` : ''}
               </p>
+              {/* R1 — trade beside client is the margin, so trade and markup
+                  show only to a viewer who may see margin. */}
               <p className="text-[11px] text-[var(--text-muted)]">
-                trade {fmtCents(item.unit_price)}
-                {item.markup_percent != null && Number(item.markup_percent) > 0
-                  ? ` · markup ${Number(item.markup_percent)}%`
-                  : ''}
-                {' · line '}
+                {canSeeMargin && (
+                  <>
+                    trade {fmtCents(item.unit_price)}
+                    {item.markup_percent != null && Number(item.markup_percent) > 0
+                      ? ` · markup ${Number(item.markup_percent)}%`
+                      : ''}
+                    {' · '}
+                  </>
+                )}
+                {'line '}
                 {fmtCents(item.line_total_cents)}
               </p>
             </>

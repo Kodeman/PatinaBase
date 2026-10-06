@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { useOrganizations, type OrganizationWithMembership } from './use-organizations';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PERMISSION HOOKS
@@ -429,26 +430,47 @@ export function isStudioOwnerFromRoles(
   return roles.some(r => r.role?.name === 'studio_owner');
 }
 
+/** An active owner seat (System B) in a design studio. */
+function holdsStudioOwnerSeat(
+  organizations: OrganizationWithMembership[] | undefined,
+): boolean {
+  return (organizations ?? []).some(
+    (org) =>
+      org.type === 'design_studio' &&
+      org.membership?.role === 'owner' &&
+      org.membership.status === 'active',
+  );
+}
+
 /**
- * Check if user has the `studio_owner` role.
+ * Check if user owns a studio: the `studio_owner` role (System A) OR an
+ * active owner seat in a design studio (System B, R-PB6). A transferred or
+ * promoted owner holds the seat before System A catches up, so the seat
+ * counts on its own.
  *
  * Used by the Procurement workspace (PRD §11 "Bookkeeper Export") and the
  * Wave 3.1 architect dossier (§4 "Studio-Owner Permission Gating") to gate
- * the Export to QuickBooks CTA and any future studio-owner-only surfaces
- * (cross-designer payment data visibility, multi-designer studio admin).
+ * the Export to QuickBooks CTA and any future studio-owner-only surfaces.
+ * Margin is NOT gated here — that is `useCanSeeStudioMargin` (R1).
  *
- * Returns `{ isStudioOwner: false, isLoading: true }` while roles are
- * loading; this matches the pattern of `useIsAdmin` / `useIsSuperAdmin`.
+ * Returns `{ isStudioOwner: false, isLoading: true }` while either read is
+ * loading and neither has answered yes; this matches the pattern of
+ * `useIsAdmin` / `useIsSuperAdmin`.
  *
- * Backed by `useUserRoles()` so it does not make an extra network call —
- * the role list is fetched once per session and reused across surfaces.
+ * Backed by `useUserRoles()` and `useOrganizations()`, both shared caches,
+ * so it makes no network call of its own.
  */
 export function useIsStudioOwner() {
   const { data: roles, isLoading } = useUserRoles();
+  const { data: organizations, isLoading: organizationsLoading } = useOrganizations();
 
-  if (isLoading || !roles) {
+  if (isStudioOwnerFromRoles(roles) || holdsStudioOwnerSeat(organizations)) {
+    return { isStudioOwner: true, isLoading: false };
+  }
+
+  if (isLoading || !roles || organizationsLoading) {
     return { isStudioOwner: false, isLoading: true };
   }
 
-  return { isStudioOwner: isStudioOwnerFromRoles(roles), isLoading: false };
+  return { isStudioOwner: false, isLoading: false };
 }

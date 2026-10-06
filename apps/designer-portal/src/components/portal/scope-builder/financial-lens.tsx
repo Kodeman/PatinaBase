@@ -1,14 +1,17 @@
 'use client';
 
 /**
- * Financial lens (Track S² · S9) — the studio-owner money view over a schedule.
+ * Financial lens (Track S² · S9) — the studio's money view over a schedule.
  * Per-row trade · markup% · client · line margin, grouped by room with room
  * subtotals and a document total (client total + total margin).
  *
  * DESIGNER-EYES ONLY. This analysis lives in the app, never in a file that
  * travels (the spec PDF renders client price at most). The parent gates
- * rendering to studio owners (useIsStudioOwner) — the panel itself assumes it is
- * only mounted for an owner. Shadow-free so it is safe in the Drafting Room too.
+ * rendering on `useCanSeeMargin` (`@/hooks/use-can-see-margin`; R1, R-PB6),
+ * which `can_see_studio_margin` answers from the viewer's seat: everyone in the studio by
+ * default, owners and admins only when the studio restricts it. The panel
+ * itself assumes it is only mounted for a viewer who may see margin.
+ * Shadow-free so it is safe in the Drafting Room too.
  */
 
 import { useMemo } from 'react';

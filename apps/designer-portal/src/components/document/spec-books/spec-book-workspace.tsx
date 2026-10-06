@@ -37,6 +37,7 @@ import {
   Textarea,
 } from "@/components/ui/controls";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useCanSeeMargin } from "@/hooks/use-can-see-margin";
 import { specBookEvents } from "@/lib/analytics/spec-book-events";
 import { resolveClientPortalOrigin } from "@/lib/client-portal-url";
 import { ConfigurationSnapshotCard } from "@/components/document/configuration-snapshot-card";
@@ -630,6 +631,8 @@ function AudiencePreview({
   item: SpecBookWorkItem | null;
   audience: SpecBookAudience;
 }) {
+  // R1 — trade price and markup show only to a viewer who may see margin.
+  const canSeeMargin = useCanSeeMargin();
   if (!item) {
     return (
       <p className="py-16 text-center font-heading italic text-[var(--text-muted)]">
@@ -715,7 +718,7 @@ function AudiencePreview({
             </dd>
           </div>
         )}
-        {audienceAllows(audience, "trade_price") && (
+        {canSeeMargin && audienceAllows(audience, "trade_price") && (
           <>
             <div className="border-t border-[#ddd8ce] py-3">
               <dt className="text-[11px] uppercase tracking-[0.08em] text-[#857f74]">

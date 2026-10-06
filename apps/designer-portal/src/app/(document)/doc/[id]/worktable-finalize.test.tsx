@@ -100,7 +100,7 @@ jest.mock('@patina/supabase', () => ({
   useConsumeCapture: () => ({ mutate: jest.fn(), isPending: false }),
   useReorderProposalItems: () => ({ mutate: jest.fn() }),
   useReorderProposalScopeRooms: () => ({ mutate: jest.fn() }),
-  useIsStudioOwner: () => ({ isStudioOwner: false }),
+  useCanSeeStudioMargin: () => ({ data: false }),
   createBrowserClient: () => ({
     from: () => ({
       select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
