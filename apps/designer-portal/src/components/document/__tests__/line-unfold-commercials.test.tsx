@@ -121,6 +121,15 @@ describe('LineUnfold · C-05 line commercials', () => {
     expect(screen.getByTestId('line-commercials')).toHaveTextContent('Trade cost $410');
   });
 
+  it('is read-only when purchase_order_id is set and the PO embed is absent', () => {
+    renderUnfold({ status: 'ordered', purchase_order_id: 'po-1', purchase_order: undefined });
+    expect(block().queryByLabelText('Trade cost')).not.toBeInTheDocument();
+    expect(block().queryByRole('combobox')).not.toBeInTheDocument();
+    expect(block().queryByRole('button', { name: 'Change' })).not.toBeInTheDocument();
+    expect(block().getByText('On a purchase order')).toBeInTheDocument();
+    expect(screen.getByTestId('line-commercials')).toHaveTextContent('Trade cost $410');
+  });
+
   it('is read-only for a viewer who cannot edit the selection', () => {
     renderUnfold({}, { canEditSelection: false });
     expect(block().queryByLabelText('Trade cost')).not.toBeInTheDocument();

@@ -26,6 +26,7 @@ import {
 import { poSendErrorMessage } from '@/components/portal/procurement/po-send-actions';
 import {
   EMPTY_SHIP_TO,
+  SHIP_TO_REQUIRED_MESSAGE,
   ShipToChoice,
   resolveShipTo,
   useShipToAddresses,
@@ -201,33 +202,32 @@ export function LogAckInline({
 }
 
 /**
- * C-02 / R-PB3: an unsent PO with no ship-to gets the same three-way choice
- * as the Order Assistant, on the paper, before Send. Reads the PO from the
- * studio's purchase-orders list (the Orders ledger shares the cache) and
- * renders nothing while it loads or once a ship-to is on file.
+ * C-02 / R-PB3: a PO with no ship-to gets the same three-way choice as the
+ * Order Assistant, on the paper, before Send, Resend or Mark as sent. A sent
+ * PO with none (marked sent, or sent before the guard) gets it too:
+ * set_purchase_order_ship_to fills an empty ship-to after send. Renders
+ * nothing while the PO loads or once a ship-to is on file.
  */
 function ShipToNotSetBand({
-  purchaseOrderId,
+  po,
   onSaved,
 }: {
-  purchaseOrderId: string;
+  po: PurchaseOrder | undefined;
   onSaved: () => void;
 }) {
-  const { data: orders } = usePurchaseOrders() as { data?: PurchaseOrder[] };
-  const po = orders?.find((o) => o.id === purchaseOrderId);
   const addresses = useShipToAddresses(po?.project_id);
   const setShipTo = useSetPurchaseOrderShipTo({ errorSurface: 'inline' });
   const [selection, setSelection] = useState<ShipToSelection>(EMPTY_SHIP_TO);
   const [error, setError] = useState<string | null>(null);
 
-  if (!po || po.sent_at || po.ship_to?.trim()) return null;
+  if (!po || po.ship_to?.trim()) return null;
   const shipTo = resolveShipTo(selection, addresses);
 
   const save = async () => {
     if (!shipTo || setShipTo.isPending) return;
     setError(null);
     try {
-      await setShipTo.mutateAsync({ purchaseOrderId, shipTo });
+      await setShipTo.mutateAsync({ purchaseOrderId: po.id, shipTo });
       onSaved();
     } catch (e) {
       setError((e as Error).message || 'The ship-to could not be saved.');
@@ -297,6 +297,14 @@ export function PoPreview({
   // Survives putting the paper down; a different PO starts blank.
   const [note, setNote] = useState('');
   const previewedFor = useRef<string | null>(null);
+  // The PO from the studio's purchase-orders list (the Orders ledger shares
+  // the cache). R-PB3: no ship-to, no Send and no Mark as sent. Held while the
+  // list loads too; a PO the list cannot find falls to the server backstop.
+  const { data: orders } = usePurchaseOrders() as { data?: PurchaseOrder[] };
+  const po = orders?.find((o) => o.id === purchaseOrderId);
+  const shipToMissing = po ? !po.ship_to?.trim() : orders === undefined;
+  const shipToHeld = !!po && shipToMissing;
+  const shipToReasonId = `po-ship-to-held-${purchaseOrderId}`;
 
   useEffect(() => {
     setNote('');
@@ -438,12 +446,7 @@ export function PoPreview({
           </div>
         )}
 
-        {mode === 'send' && (
-          <ShipToNotSetBand
-            purchaseOrderId={purchaseOrderId}
-            onSaved={renderPreview}
-          />
-        )}
+        <ShipToNotSetBand po={po} onSaved={renderPreview} />
 
         {/* C-09: the note travels with the emailed PO; marking sent sends nothing. */}
         <label className="block border-t border-[var(--color-pearl)] px-5 py-2.5">
@@ -471,14 +474,21 @@ export function PoPreview({
           {warning && !error && (
             <p className="text-[11px] text-[var(--text-muted)]">{warning}</p>
           )}
-          {/* PRC-27: the manual path — always available on an unsent PO
-              (deliberately not gated on the PDF or a vendor email: an
-              out-of-sync PO's fix is exactly "mark it sent manually"). */}
+          {shipToHeld && (
+            <p id={shipToReasonId} className="text-[11px] text-[var(--color-terracotta-ink)]">
+              {SHIP_TO_REQUIRED_MESSAGE}
+            </p>
+          )}
+          {/* PRC-27: the manual path on an unsent PO (deliberately not gated
+              on the PDF or a vendor email: an out-of-sync PO's fix is exactly
+              "mark it sent manually"). Gated on ship-to like Send (R-PB3). */}
           {mode === 'send' && (
             <DocumentAction
               actionKey="mark-po-sent-manually"
               variant="secondary"
-              disabled={sending || marking}
+              disabled={sending || marking || shipToMissing}
+              held={shipToHeld}
+              aria-describedby={shipToHeld ? shipToReasonId : undefined}
               loading={marking}
               loadingLabel="Marking…"
               onClick={() => void stamp('mark_sent')}
@@ -497,7 +507,11 @@ export function PoPreview({
               mode === 'resend' ? 'resend-po-to-vendor' : 'send-po-to-vendor'
             }
             variant="primary"
-            disabled={!signedUrl || !vendorEmailHint || sending || marking}
+            disabled={
+              !signedUrl || !vendorEmailHint || sending || marking || shipToMissing
+            }
+            held={shipToHeld}
+            aria-describedby={shipToHeld ? shipToReasonId : undefined}
             loading={sending}
             loadingLabel="Sending…"
             onClick={() => void send()}

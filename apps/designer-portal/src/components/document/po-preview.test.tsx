@@ -21,10 +21,17 @@ jest.mock('@patina/supabase', () => ({
   useLogPOAcknowledgment: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetPurchaseOrderShipTo: () => ({ mutateAsync: setShipToMutateAsync, isPending: false }),
   usePurchaseOrders: () => ({ data: mockOrders.list }),
+  // The caller belongs to two studios; the project belongs to the second (F11).
   useOrganizations: () => ({
-    data: [{ address: { street: '1 Main St', city: 'Madison', state: 'WI', zip: '53703' } }],
+    data: [
+      { id: 'org-other', address: { street: '9 Elm St', city: 'Racine', state: 'WI', zip: '53403' } },
+      { id: 'org-project', address: { street: '1 Main St', city: 'Madison', state: 'WI', zip: '53703' } },
+    ],
   }),
-  useProject: () => ({ data: { site_address: null } }),
+  useProject: () => ({
+    data: { studio_id: 'org-project', designer_id: 'owner-1', site_address: null },
+  }),
+  useStudioIdentity: () => ({ data: undefined }),
 }));
 
 jest.mock('@/lib/analytics/procurement-events', () => ({
@@ -44,7 +51,10 @@ beforeEach(() => {
   sendMutateAsync.mockReset();
   setShipToMutateAsync.mockReset();
   setShipToMutateAsync.mockResolvedValue({ id: 'po-1' });
-  mockOrders.list = [];
+  // A ready PO by default: a ship-to on file.
+  mockOrders.list = [
+    { id: 'po-1', project_id: 'project-1', sent_at: null, ship_to: '1 Main St, Madison, WI 53703' },
+  ];
   poSent.mockReset();
   sendMutateAsync.mockImplementation(async ({ mode }: { mode: string }) =>
     mode === 'preview'
@@ -166,10 +176,89 @@ describe('PoPreview · ship-to not set (C-02)', () => {
     expect(screen.queryByText('Ship-to not set')).not.toBeInTheDocument();
   });
 
-  it('is not offered on a resend', async () => {
+  it('offers "The studio" at the project studio address, not the first org', async () => {
     mockOrders.list = [unsent];
+    renderPreview();
+    await waitForPdf();
+    const studio = screen.getByRole('radio', { name: /the studio/i });
+    expect(studio).toHaveAccessibleName(expect.stringContaining('1 Main St, Madison, WI 53703'));
+    expect(screen.queryByText(/9 Elm St/)).not.toBeInTheDocument();
+  });
+
+  it('is offered on a resend of a sent PO with no ship-to (F1)', async () => {
+    const sent = { ...unsent, sent_at: '2026-10-01T00:00:00Z' };
+    mockOrders.list = [sent];
+    renderPreview({ mode: 'resend', sentAt: sent.sent_at });
+    await waitForPdf();
+
+    expect(screen.getByText('Ship-to not set')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: /the studio/i }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Set ship-to' }));
+    });
+    expect(setShipToMutateAsync).toHaveBeenCalledWith({
+      purchaseOrderId: 'po-1',
+      shipTo: '1 Main St, Madison, WI 53703',
+    });
+  });
+
+  it('stays quiet on a resend once the PO has a ship-to', async () => {
+    mockOrders.list = [
+      { ...unsent, sent_at: '2026-10-01T00:00:00Z', ship_to: '1 Main St, Madison, WI 53703' },
+    ];
     renderPreview({ mode: 'resend', sentAt: '2026-10-01T00:00:00Z' });
     await waitForPdf();
     expect(screen.queryByText('Ship-to not set')).not.toBeInTheDocument();
+  });
+});
+
+describe('PoPreview · Send and Mark as sent gated on ship-to (F2, F1)', () => {
+  const unsent = { id: 'po-1', project_id: 'project-1', sent_at: null, ship_to: null };
+  const REASON = 'Choose where this ships.';
+
+  it('holds Send and Mark as sent with the reason while the PO has no ship-to', async () => {
+    mockOrders.list = [unsent];
+    const { onSent } = renderPreview();
+    await waitForPdf();
+
+    const send = screen.getByRole('button', { name: 'Send to vendor' });
+    const mark = screen.getByRole('button', { name: /mark as sent/i });
+    const reason = screen.getByText(REASON);
+    for (const btn of [send, mark]) {
+      expect(btn).toHaveAttribute('aria-disabled', 'true');
+      expect(btn).toHaveAttribute('aria-describedby', reason.id);
+    }
+
+    await act(async () => {
+      fireEvent.click(send);
+      fireEvent.click(mark);
+    });
+    expect(sendMutateAsync.mock.calls.filter(([a]) => a.mode !== 'preview')).toHaveLength(0);
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('holds Resend on a sent PO with no ship-to', async () => {
+    mockOrders.list = [{ ...unsent, sent_at: '2026-10-01T00:00:00Z' }];
+    renderPreview({ mode: 'resend', sentAt: '2026-10-01T00:00:00Z' });
+    await waitForPdf();
+    expect(screen.getByRole('button', { name: 'Resend to vendor' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByText(REASON)).toBeInTheDocument();
+  });
+
+  it('enables Send and Mark as sent once a ship-to is on file', async () => {
+    mockOrders.list = [{ ...unsent, ship_to: '1 Main St, Madison, WI 53703' }];
+    renderPreview();
+    await waitForPdf();
+
+    const send = screen.getByRole('button', { name: 'Send to vendor' });
+    const mark = screen.getByRole('button', { name: /mark as sent/i });
+    expect(send).toBeEnabled();
+    expect(send).not.toHaveAttribute('aria-disabled');
+    expect(mark).toBeEnabled();
+    expect(mark).not.toHaveAttribute('aria-disabled');
+    expect(screen.queryByText(REASON)).not.toBeInTheDocument();
   });
 });
