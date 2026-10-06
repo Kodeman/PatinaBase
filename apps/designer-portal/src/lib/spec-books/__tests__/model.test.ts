@@ -97,6 +97,40 @@ describe("spec-book model", () => {
     });
   });
 
+  it("labels a value seeded from the product as product master, and an edited one as override", () => {
+    const value = item();
+    // 00694 seeded sku from the product; the designer's later finish edit
+    // dropped finish's provenance key (00714).
+    value.spec = {
+      ...value.spec!,
+      sku: "SEEDED-SKU",
+      finish: "Edited finish",
+      field_provenance: { sku: "product_master" },
+    };
+    expect(resolveSpecValue(value, "sku")).toMatchObject({
+      value: "SEEDED-SKU",
+      source: "product_master",
+      sourceUpdatedAt: "2026-06-01T00:00:00Z",
+    });
+    expect(resolveSpecValue(value, "finish")).toMatchObject({
+      value: "Edited finish",
+      source: "project_override",
+    });
+  });
+
+  it("lets an FF&E line value win over a value seeded from the product", () => {
+    const value = item({ sku: "LINE-SKU" });
+    value.spec = {
+      ...value.spec!,
+      sku: "SEEDED-SKU",
+      field_provenance: { sku: "product_master" },
+    };
+    expect(resolveSpecValue(value, "sku")).toMatchObject({
+      value: "LINE-SKU",
+      source: "ffe_line",
+    });
+  });
+
   it("honors an N/A declaration with its required reason", () => {
     const value = item();
     value.spec = {
