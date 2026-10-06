@@ -1749,6 +1749,9 @@ export {
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
   useUpdatePurchaseOrderStatus,
   useSetPurchaseOrderShipTo,
+  // C-21 — PO change orders over start_purchase_order_change (00435/00453)
+  useStartPurchaseOrderChange,
+  usePurchaseOrderChanges,
   invalidateFfeCaches,
   // Phase 4 — Stripe Checkout, designer pays at order time (Order via Patina)
   useStartPoCheckout,
@@ -1794,6 +1797,10 @@ export type {
   LogPOAcknowledgmentInput,
   UpdatePurchaseOrderStatusInput,
   SetPurchaseOrderShipToInput,
+  PurchaseOrderChangeKind,
+  StartPurchaseOrderChangeInput,
+  StartPurchaseOrderChangeResult,
+  PurchaseOrderChange,
   // Sprint 2 — Receiving, damage claims, calendar
   ReceivingInspectionOutcome,
   DamageClaimState,

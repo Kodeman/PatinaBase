@@ -15,14 +15,14 @@ import { CellSub, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
 
 type FFERow = any;
 
-type MakerOption = { kind: 'vendor'; id: string; name: string } | { kind: 'add'; name: string };
+export type MakerOption = { kind: 'vendor'; id: string; name: string } | { kind: 'add'; name: string };
 
 /**
  * C-05: the maker search, mounted only while choosing so the vendors read
  * runs only then. Offers "Add" when no maker of that name exists yet; the add
  * goes through the People maker path's find-or-create (R78 / PRC-03).
  */
-function MakerSearch({
+export function MakerSearch({
   disabled,
   autoFocus,
   onChoose,

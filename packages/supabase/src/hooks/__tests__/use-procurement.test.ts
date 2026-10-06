@@ -156,6 +156,9 @@ import {
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
   useUpdatePurchaseOrderStatus,
   useSetPurchaseOrderShipTo,
+  // C-21 — PO change orders
+  useStartPurchaseOrderChange,
+  usePurchaseOrderChanges,
   invalidateFfeCaches,
   // Sprint 3 — QBO export
   useQboExport,
@@ -1742,6 +1745,120 @@ describe('useSetPurchaseOrderShipTo', () => {
     expect(invalidatedKeys).toContainEqual(['purchase-orders']);
     expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-1']);
     expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useStartPurchaseOrderChange  (C-21 · start_purchase_order_change, 00435→00453)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useStartPurchaseOrderChange', () => {
+  const answer = {
+    changeId: 'chg-1',
+    purchaseOrderId: 'po-1',
+    rebuildable: false,
+    requiresImmutableFollowup: true,
+    replacementVendorId: null,
+    replacementPoId: null,
+    needsRepricing: false,
+  };
+  const run = (input: Record<string, unknown>) => {
+    const config = useStartPurchaseOrderChange() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+    };
+    return config.mutationFn({ purchaseOrderId: 'po-1', projectId: 'proj-1', ...input });
+  };
+
+  it.each(['cancellation', 'credit', 'claim', 'remedy'] as const)(
+    'sends %s as one p_request with a trimmed reason and no vendor',
+    async (changeKind) => {
+      supabaseClient.rpc.mockResolvedValueOnce({ data: answer, error: null });
+
+      const result = await run({
+        changeKind,
+        reason: '  Backordered to March  ',
+        selectionId: 'line-1',
+        replacementVendorId: 'vendor-ignored',
+      });
+
+      expect(supabaseClient.rpc).toHaveBeenCalledWith('start_purchase_order_change', {
+        p_request: {
+          purchaseOrderId: 'po-1',
+          changeKind,
+          reason: 'Backordered to March',
+          selectionId: 'line-1',
+        },
+      });
+      expect(result).toEqual(answer);
+    },
+  );
+
+  it('sends vendor_change with the replacement vendor the server requires', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: { ...answer, rebuildable: true, replacementPoId: 'po-2', needsRepricing: true },
+      error: null,
+    });
+
+    await run({
+      changeKind: 'vendor_change',
+      reason: 'Maker discontinued the frame',
+      replacementVendorId: 'vendor-2',
+    });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('start_purchase_order_change', {
+      p_request: {
+        purchaseOrderId: 'po-1',
+        changeKind: 'vendor_change',
+        reason: 'Maker discontinued the frame',
+        replacementVendorId: 'vendor-2',
+      },
+    });
+  });
+
+  it('throws the server refusal', async () => {
+    supabaseClient.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'invalid purchase order change' },
+    });
+    await expect(run({ changeKind: 'claim', reason: 'no' })).rejects.toThrow(
+      /invalid purchase order change/,
+    );
+  });
+
+  it('onSuccess invalidates the PO, its history and the project FF&E caches', () => {
+    const config = useStartPurchaseOrderChange() as unknown as {
+      onSuccess: (r: unknown, input: { purchaseOrderId: string; projectId: string }) => void;
+    };
+
+    config.onSuccess(answer, { purchaseOrderId: 'po-1', projectId: 'proj-1' });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-1']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order-changes', 'po-1']);
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-1']);
+  });
+});
+
+describe('usePurchaseOrderChanges', () => {
+  it('reads the PO change history newest first', async () => {
+    const rows = [{ id: 'chg-1', change_kind: 'claim' }];
+    const b = setTableDefault('purchase_order_changes', { data: rows, error: null });
+
+    const config = usePurchaseOrderChanges('po-1') as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown>;
+      enabled: boolean;
+    };
+
+    expect(config.queryKey).toEqual(['purchase-order-changes', 'po-1']);
+    expect(config.enabled).toBe(true);
+    expect(await config.queryFn()).toEqual(rows);
+    expect(b.__chain).toContainEqual({ method: 'eq', args: ['purchase_order_id', 'po-1'] });
+    expect(b.__chain).toContainEqual({
+      method: 'order',
+      args: ['created_at', { ascending: false }],
+    });
   });
 });
 

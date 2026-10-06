@@ -132,6 +132,29 @@ describe('LineUnfold · six cells (C-14)', () => {
     expect(order).toHaveTextContent('ship to Cedar Lake Receiving & Storage');
   });
 
+  it('offers "Change this order…" in the Order cell on a live PO only (C-21)', () => {
+    const { unmount } = renderUnfold({
+      status: 'production',
+      purchase_order_id: po.id,
+      purchase_order: po,
+    });
+    expect(
+      within(screen.getByRole('group', { name: 'Order' })).getByRole('button', {
+        name: 'Change this order…',
+      }),
+    ).toBeInTheDocument();
+    unmount();
+
+    renderUnfold({
+      status: 'production',
+      purchase_order_id: po.id,
+      purchase_order: { ...po, status: 'cancelled' },
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Change this order…' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('puts the readiness reasons in the Order cell when Order is held back', () => {
     renderUnfold({ vendor_id: null });
     const order = screen.getByRole('group', { name: 'Order' });
