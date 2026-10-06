@@ -37,8 +37,10 @@ import {
   useCreatePurchaseOrder,
   useFfeInvoiceCoverage,
   useOrganizations,
+  useProject,
   useSetPurchaseOrderShipTo,
   useStartPoCheckout,
+  useStudioVendorAccount,
   fetchPOPayments,
   type CreatePurchaseOrderInput,
   type PaymentPattern,
@@ -73,6 +75,7 @@ import {
   StepDetails,
   depositDefaultForPattern,
   freshMilestone,
+  prefillPaymentPattern,
   validateDetails,
   type MilestoneRow,
 } from './step-details';
@@ -251,9 +254,24 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const [vendorPoNumber, setVendorPoNumber] = useState('');
   const [confirmedEta, setConfirmedEta] = useState('');
 
-  // Default the pattern to the vendor's stored default, else `fifty_fifty`.
-  const initialPattern: PaymentPattern = vendor.default_payment_terms ?? 'fifty_fifty';
-  const [paymentPattern, setPaymentPattern] = useState<PaymentPattern>(initialPattern);
+  // C-12: the studio's account with this vendor (the project's studio) sets
+  // the terms and deposit %; the shared vendor default is the fallback. An
+  // archived account no longer speaks for the studio.
+  // Same read as ship-to-choice: "the studio" is projects.studio_id (F11).
+  const { data: projectRow } = useProject(open ? project.id : '');
+  const projectStudioId = (projectRow as { studio_id?: string | null } | undefined)?.studio_id;
+  const { data: studioAccountRow } = useStudioVendorAccount(
+    open ? projectStudioId : null,
+    vendor.id
+  );
+  const studioAccount = studioAccountRow && !studioAccountRow.archived_at ? studioAccountRow : null;
+  const accountPattern: PaymentPattern | null = studioAccount?.payment_pattern ?? null;
+  const accountDepositPct: number | null = studioAccount?.deposit_pct ?? null;
+  const prefillPattern = prefillPaymentPattern(accountPattern, vendor.default_payment_terms);
+
+  const [paymentPattern, setPaymentPattern] = useState<PaymentPattern>(prefillPattern);
+  // The prefill follows the account as it loads until the designer picks.
+  const [patternPicked, setPatternPicked] = useState(false);
   const [depositDueDate, setDepositDueDate] = useState('');
   // Deposit amount is rendered as a dollars input; derived default depends on
   // the chosen pattern. We track the raw input string so the user can edit
@@ -512,7 +530,8 @@ export function OrderAssistant(props: OrderAssistantProps) {
     setShipToSelection(EMPTY_SHIP_TO);
     setVendorPoNumber('');
     setConfirmedEta('');
-    setPaymentPattern(vendor.default_payment_terms ?? 'fifty_fifty');
+    setPaymentPattern(prefillPattern);
+    setPatternPicked(false);
     setDepositDueDate('');
     setDepositAmountInput('');
     setMilestones([freshMilestone(), freshMilestone()]);
@@ -535,14 +554,37 @@ export function OrderAssistant(props: OrderAssistantProps) {
     setCoverageOverridden(false);
     gateShownRef.current = false;
     setSidemarkEdited(false);
+    // prefillPattern is read, not a trigger: the studio account loads after
+    // open, and a full reset then would throw the designer back to Review.
+    // The prefill effect below follows it instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, vendor.id, vendor.default_payment_terms, project.id]);
 
-  // When the user switches pattern, pre-fill the deposit amount input from
-  // the canonical pattern math (50% / 30% / 100% of total). Custom and net_30
-  // get their own treatment.
+  // C-12: the studio account's terms usually load after the panel opens.
+  // Follow them until the designer picks a pattern herself.
   useEffect(() => {
-    setDepositAmountInput(depositDefaultForPattern(paymentPattern, totalCents));
-  }, [paymentPattern, totalCents]);
+    if (!open || patternPicked) return;
+    setPaymentPattern(prefillPattern);
+  }, [open, patternPicked, prefillPattern]);
+
+  const handlePaymentPatternChange = (value: PaymentPattern) => {
+    setPatternPicked(true);
+    setPaymentPattern(value);
+  };
+
+  // When the user switches pattern, pre-fill the deposit amount input from
+  // the canonical pattern math (50% / 30% / 100% of total), or the studio
+  // account's deposit % while the pattern is the account's own. Custom and
+  // net_30 get their own treatment.
+  const depositPctForPattern =
+    accountDepositPct != null && (accountPattern == null || accountPattern === paymentPattern)
+      ? accountDepositPct
+      : null;
+  useEffect(() => {
+    setDepositAmountInput(
+      depositDefaultForPattern(paymentPattern, totalCents, depositPctForPattern)
+    );
+  }, [paymentPattern, totalCents, depositPctForPattern]);
 
   // ─── Review-step clipboard action ───────────────────────────────────────
 
@@ -874,6 +916,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                 <StepDetails
                   vendor={vendor}
                   totalCents={totalCents}
+                  accountPaymentPattern={accountPattern}
                   sidemark={sidemark}
                   onSidemarkChange={handleSidemarkChange}
                   vendorPoNumber={vendorPoNumber}
@@ -881,7 +924,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                   confirmedEta={confirmedEta}
                   onConfirmedEtaChange={setConfirmedEta}
                   paymentPattern={paymentPattern}
-                  onPaymentPatternChange={setPaymentPattern}
+                  onPaymentPatternChange={handlePaymentPatternChange}
                   depositDueDate={depositDueDate}
                   onDepositDueDateChange={setDepositDueDate}
                   depositAmountInput={depositAmountInput}

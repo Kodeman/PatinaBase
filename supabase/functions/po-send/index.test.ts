@@ -22,6 +22,7 @@ import {
   parsePoSendBody,
   paymentPatternLabel,
   paymentRowLabel,
+  readStudioOrdersEmail,
   resolvePoShipTo,
   resolveVendorRecipient,
   SHIP_TO_NOT_SET_LABEL,
@@ -188,6 +189,78 @@ Deno.test("resolveVendorRecipient returns null when nothing is usable", () => {
   assertEquals(resolveVendorRecipient({ orders_email: null, contact_info: null }), null);
   assertEquals(resolveVendorRecipient({ contact_info: { email: 42 } }), null);
   assertEquals(resolveVendorRecipient({ contact_info: { email: "  " } }), null);
+});
+
+// ─── C-12: the studio account's orders inbox ────────────────────────────────
+
+Deno.test("resolveVendorRecipient sends to the studio's orders_email_override first", () => {
+  const vendor = { orders_email: "orders@vendor.test", contact_info: { email: "info@vendor.test" } };
+  // Every send surface passes the vendor's shared address as the override
+  // (clientVendorEmailHint), so the studio's inbox must beat it.
+  assertEquals(
+    resolveVendorRecipient(vendor, "orders@vendor.test", " jane@vendor.test "),
+    "jane@vendor.test",
+  );
+  assertEquals(resolveVendorRecipient(vendor, undefined, "jane@vendor.test"), "jane@vendor.test");
+});
+
+Deno.test("resolveVendorRecipient falls back to the vendor email when the studio sets none", () => {
+  const vendor = { orders_email: "orders@vendor.test", contact_info: { email: "info@vendor.test" } };
+  assertEquals(resolveVendorRecipient(vendor, undefined, null), "orders@vendor.test");
+  assertEquals(resolveVendorRecipient(vendor, undefined, "   "), "orders@vendor.test");
+  assertEquals(
+    resolveVendorRecipient({ orders_email: null, contact_info: { email: "info@vendor.test" } }, undefined, null),
+    "info@vendor.test",
+  );
+});
+
+Deno.test("readStudioOrdersEmail reads the override through get_studio_vendor_accounts as the caller", async () => {
+  const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  const read = await readStudioOrdersEmail(
+    fakeCallerClient(
+      { data: [{ orders_email_override: "jane@vendor.test", archived_at: null }], error: null },
+      calls,
+    ),
+    "studio-1",
+    "vendor-1",
+  );
+  assertEquals(read, { ok: true, email: "jane@vendor.test" });
+  assertEquals(calls, [
+    { fn: "get_studio_vendor_accounts", args: { p_org: "studio-1", p_vendor_id: "vendor-1" } },
+  ]);
+});
+
+Deno.test("readStudioOrdersEmail reads null for no studio, no account, an archived account or a blank override", async () => {
+  const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  // A personal project has no studio: no read at all.
+  assertEquals(
+    await readStudioOrdersEmail(fakeCallerClient({ data: [], error: null }, calls), null, "vendor-1"),
+    { ok: true, email: null },
+  );
+  assertEquals(calls, []);
+  for (const data of [
+    [], // no account, or the caller is not a member (the RPC returns no rows)
+    null,
+    [{ orders_email_override: null, archived_at: null }],
+    [{ orders_email_override: "  ", archived_at: null }],
+    [{ orders_email_override: "jane@vendor.test", archived_at: "2026-10-01T00:00:00Z" }],
+  ]) {
+    assertEquals(
+      await readStudioOrdersEmail(fakeCallerClient({ data, error: null }), "studio-1", "vendor-1"),
+      { ok: true, email: null },
+    );
+  }
+});
+
+Deno.test("readStudioOrdersEmail reports a failed read instead of guessing", async () => {
+  assertEquals(
+    await readStudioOrdersEmail(
+      fakeCallerClient({ data: null, error: { message: "function does not exist" } }),
+      "studio-1",
+      "vendor-1",
+    ),
+    { ok: false, detail: "function does not exist" },
+  );
 });
 
 // ─── buildFallbackSidemark ───────────────────────────────────────────────────

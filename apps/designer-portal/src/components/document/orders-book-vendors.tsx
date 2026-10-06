@@ -17,12 +17,25 @@ import { useMemo, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
+  useCanSeeStudioMargin,
   useProcurementItems,
   useSendMessage,
   useStartVendorBrief,
+  useStudioContacts,
+  useStudioPaymentMethods,
+  useStudioVendorAccount,
+  useStudioVendorAccounts,
   useThreadMessages,
+  useUpsertStudioVendorAccount,
   useUser,
+  type PaymentPattern,
+  type StudioVendorAccountRequest,
+  type StudioVendorAccountRow,
+  type StudioVendorTransmission,
 } from '@patina/supabase';
+import { Select } from '@/components/ui/controls';
+import { useInternalTimeStudio } from '@/hooks/use-viewer-studio';
+import { PAYMENT_PATTERN_OPTIONS } from '@/components/portal/procurement/order-assistant/step-details';
 import {
   OrderAssistant,
   type OrderAssistantFFEItem,
@@ -76,10 +89,412 @@ const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   cancelled: { color: 'var(--color-terracotta)', ink: 'var(--color-terracotta-ink)' },
 };
 
-const termsLabel = (vendor: AnyRecord): string =>
-  vendor.default_payment_terms
-    ? vendor.default_payment_terms.replace(/_/g, ' ')
-    : 'terms n/a';
+/** The studio account's terms, else the shared vendor default (C-12). */
+const termsLabel = (
+  vendor: AnyRecord,
+  account?: StudioVendorAccountRow | null,
+): string => {
+  const pattern = account?.payment_pattern ?? vendor.default_payment_terms;
+  return pattern ? pattern.replace(/_/g, ' ') : 'terms n/a';
+};
+
+/** The studio's account with a vendor, unless it has been archived. */
+const liveAccount = (account: StudioVendorAccountRow | null | undefined) =>
+  account && !account.archived_at ? account : null;
+
+// ─── C-12: the studio vendor account on the Terms page ─────────────────────
+
+const FIELD =
+  'doc-type-control min-h-11 w-full min-w-0 rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-2 text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]';
+
+/** R-PB9: what a blank claim window means. */
+export const CLAIMS_WINDOW_DEFAULT_DAYS = 3;
+export const CONCEALED_CARRIER_DEFAULT_DAYS = 5;
+
+const TRANSMISSION_OPTIONS: { value: StudioVendorTransmission; label: string }[] = [
+  { value: 'email', label: 'Email' },
+  { value: 'portal', label: 'Trade portal' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'showroom', label: 'Showroom' },
+];
+
+/** The editor's text state: one string per field, '' for unset. */
+interface AccountForm {
+  accountNumber: string;
+  repContactId: string;
+  paymentPattern: string;
+  depositPct: string;
+  netDays: string;
+  paymentMethodId: string;
+  transmission: string;
+  ordersEmailOverride: string;
+  portalUrl: string;
+  leadTimeDays: string;
+  claimsWindowDays: string;
+  concealedCarrierDays: string;
+  resaleCertOnFileOn: string;
+  notes: string;
+  tradeDiscountPct: string;
+}
+
+const str = (v: unknown): string => (v == null ? '' : String(v));
+
+function formFromAccount(account: StudioVendorAccountRow | null): AccountForm {
+  const inspection = (account?.inspection_window_days ?? null) as Record<string, number> | null;
+  return {
+    accountNumber: str(account?.account_number),
+    repContactId: str(account?.rep_contact_id),
+    paymentPattern: str(account?.payment_pattern),
+    depositPct: str(account?.deposit_pct),
+    netDays: str(account?.net_days),
+    paymentMethodId: str(account?.payment_method_id),
+    transmission: str(account?.transmission),
+    ordersEmailOverride: str(account?.orders_email_override),
+    portalUrl: str(account?.portal_url),
+    leadTimeDays: str(account?.lead_time_days),
+    claimsWindowDays: str(account?.claims_window_days),
+    concealedCarrierDays: str(inspection?.concealed_carrier),
+    resaleCertOnFileOn: str(account?.resale_cert_on_file_on),
+    notes: str(account?.notes),
+    tradeDiscountPct: str(account?.trade_discount_pct),
+  };
+}
+
+/**
+ * The upsert request for the form, or an error sentence. Every field is sent
+ * (blank clears it); the trade discount only when the viewer may see margin
+ * (C-36), and the concealed-carrier window merges into the account's other
+ * inspection windows.
+ */
+export function accountRequestFromForm(
+  form: AccountForm,
+  account: StudioVendorAccountRow | null,
+  canSeeMargin: boolean,
+): { request: StudioVendorAccountRequest } | { error: string } {
+  const text = (v: string) => v.trim() || null;
+  const num = (v: string, label: string): number | null | string => {
+    const t = v.trim().replace(/%$/, '');
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) && n >= 0 ? n : `${label} must be a number.`;
+  };
+  const whole = (v: string, label: string): number | null | string => {
+    const n = num(v, label);
+    return typeof n === 'number' && !Number.isInteger(n) ? `${label} must be whole days.` : n;
+  };
+  const numbers = {
+    depositPct: num(form.depositPct, 'Deposit %'),
+    netDays: whole(form.netDays, 'Net days'),
+    leadTimeDays: whole(form.leadTimeDays, 'Lead time'),
+    claimsWindowDays: whole(form.claimsWindowDays, 'The claims window'),
+    concealedCarrierDays: whole(form.concealedCarrierDays, 'The concealed-damage window'),
+    tradeDiscountPct: canSeeMargin ? num(form.tradeDiscountPct, 'Trade discount') : null,
+  };
+  const bad = Object.values(numbers).find((v) => typeof v === 'string');
+  if (typeof bad === 'string') return { error: bad };
+  const n = numbers as Record<keyof typeof numbers, number | null>;
+  const email = text(form.ordersEmailOverride);
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return { error: 'The orders email doesn’t look right.' };
+  }
+
+  const inspection = {
+    ...((account?.inspection_window_days ?? {}) as Record<string, number>),
+  };
+  if (n.concealedCarrierDays == null) delete inspection.concealed_carrier;
+  else inspection.concealed_carrier = n.concealedCarrierDays;
+
+  return {
+    request: {
+      accountNumber: text(form.accountNumber),
+      repContactId: text(form.repContactId),
+      paymentPattern: (text(form.paymentPattern) as PaymentPattern | null) ?? null,
+      depositPct: n.depositPct,
+      netDays: n.netDays,
+      paymentMethodId: text(form.paymentMethodId),
+      transmission: (text(form.transmission) as StudioVendorTransmission | null) ?? null,
+      ordersEmailOverride: email,
+      portalUrl: text(form.portalUrl),
+      leadTimeDays: n.leadTimeDays,
+      claimsWindowDays: n.claimsWindowDays,
+      inspectionWindowDays: Object.keys(inspection).length > 0 ? inspection : null,
+      resaleCertOnFileOn: text(form.resaleCertOnFileOn),
+      notes: text(form.notes),
+      ...(canSeeMargin ? { tradeDiscountPct: n.tradeDiscountPct } : {}),
+    },
+  };
+}
+
+function TermsField({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <label htmlFor={htmlFor} className={`${MONO_LABEL} block`}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * C-12: the studio's own account with this vendor — account number, rep,
+ * terms, how it orders, claim windows, resale certificate. Read for every
+ * vendor (no PO needed); any non-guest member may edit it. The trade discount
+ * shows only to a viewer who may see the studio's margin (C-36, R1): the read
+ * nulls it otherwise, so it is hidden, never shown as zero.
+ */
+export function VendorAccountTerms({ vendor }: { vendor: AnyRecord }) {
+  const { studio } = useInternalTimeStudio();
+  const studioId = studio?.id ?? null;
+  const { data: accountRow, isLoading } = useStudioVendorAccount(studioId, vendor.id);
+  const account = liveAccount(accountRow);
+  const { data: canSeeMargin } = useCanSeeStudioMargin(studioId);
+  const { data: contacts } = useStudioContacts(studioId);
+  const { data: methods } = useStudioPaymentMethods(studioId ?? undefined);
+  const upsert = useUpsertStudioVendorAccount({ errorSurface: 'inline' });
+  const [form, setForm] = useState<AccountForm | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!studioId) {
+    return (
+      <p className="doc-type-body italic text-[var(--color-quiet-ink)]">
+        Your studio keeps its account with {vendor.name} here once you work in one.
+      </p>
+    );
+  }
+  if (isLoading) {
+    return <p className="doc-type-body italic text-[var(--color-quiet-ink)]">Opening the account…</p>;
+  }
+
+  const people = (contacts ?? []).filter((c) => c.entity_kind === 'person');
+  const repName = people.find((c) => c.id === account?.rep_contact_id)?.full_name ?? null;
+  const method = (methods ?? []).find((m) => m.id === account?.payment_method_id) ?? null;
+  const inspection = (account?.inspection_window_days ?? null) as Record<string, number> | null;
+  const showDiscount = canSeeMargin === true;
+
+  if (!form) {
+    const rows: [string, string | null][] = [
+      ['Account #', account?.account_number ?? null],
+      ['Rep', repName],
+      [
+        'Terms',
+        account?.payment_pattern
+          ? [
+              termsLabel(vendor, account),
+              account.deposit_pct != null ? `${account.deposit_pct}% deposit` : null,
+              account.net_days != null ? `net ${account.net_days}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          : vendor.default_payment_terms
+            ? `${termsLabel(vendor)} (vendor default)`
+            : null,
+      ],
+      ['Pays by', method ? method.label : null],
+      [
+        'Orders',
+        [
+          TRANSMISSION_OPTIONS.find((o) => o.value === account?.transmission)?.label,
+          account?.orders_email_override ?? vendor.orders_email ?? null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || null,
+      ],
+      ['Lead time', account?.lead_time_days != null ? `${account.lead_time_days} days` : null],
+      [
+        'Claims',
+        `vendor ${account?.claims_window_days ?? CLAIMS_WINDOW_DEFAULT_DAYS} days · concealed damage ${
+          inspection?.concealed_carrier ?? CONCEALED_CARRIER_DEFAULT_DAYS
+        } days`,
+      ],
+      ['Resale cert', account?.resale_cert_on_file_on ? `on file ${fmtDay(account.resale_cert_on_file_on)}` : null],
+      ...(showDiscount
+        ? ([['Trade discount', account?.trade_discount_pct != null ? `${account.trade_discount_pct}%` : null]] as [
+            string,
+            string | null,
+          ][])
+        : []),
+      ['Notes', account?.notes ?? null],
+    ];
+    const portal = account?.portal_url ?? vendor.trade_portal_url ?? null;
+    return (
+      <div data-vendor-account>
+        <dl className="grid min-w-0 grid-cols-[minmax(7rem,auto)_1fr] gap-x-3 gap-y-1">
+          {rows.map(([label, value]) => (
+            <div key={label} className="contents">
+              <dt className={MONO_LABEL}>{label}</dt>
+              <dd className="doc-type-body min-w-0 break-words text-[var(--color-charcoal)]">
+                {value ?? <span className="text-[var(--color-quiet-ink)]">—</span>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {portal && (
+          <a href={portal} target="_blank" rel="noreferrer" className={`${ROW_LINK} mt-1`}>
+            trade portal →
+          </a>
+        )}
+        <DocumentActionRow
+          surfaceKey="orders"
+          regionKey="vendor-account"
+          className="mt-2"
+          aria-label="Vendor account actions"
+        >
+          <DocumentAction
+            actionKey="edit-vendor-account"
+            variant="tertiary"
+            onClick={() => {
+              setError(null);
+              setForm(formFromAccount(account));
+            }}
+          >
+            {account ? 'Edit the account' : 'Set up the account'}
+          </DocumentAction>
+        </DocumentActionRow>
+      </div>
+    );
+  }
+
+  const set = (key: keyof AccountForm) => (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+  ) => setForm({ ...form, [key]: e.target.value });
+  const id = (key: string) => `vendor-account-${vendor.id}-${key}`;
+
+  const save = () => {
+    const built = accountRequestFromForm(form, account, showDiscount);
+    if ('error' in built) {
+      setError(built.error);
+      return;
+    }
+    setError(null);
+    upsert.mutate(
+      { organizationId: studioId, vendorId: vendor.id, request: built.request },
+      {
+        onSuccess: () => setForm(null),
+        onError: (e: unknown) =>
+          setError(e instanceof Error && e.message ? e.message : 'The account could not be saved.'),
+      },
+    );
+  };
+
+  const input = (key: keyof AccountForm, label: string, props?: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <TermsField label={label} htmlFor={id(key)}>
+      <input id={id(key)} value={form[key]} onChange={set(key)} className={FIELD} {...props} />
+    </TermsField>
+  );
+
+  return (
+    <div data-vendor-account-editor>
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+        {input('accountNumber', 'Account #')}
+        <TermsField label="Rep" htmlFor={id('repContactId')}>
+          <Select id={id('repContactId')} value={form.repContactId} onChange={set('repContactId')}>
+            <option value="">No rep</option>
+            {people.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.full_name ?? 'Unnamed'}
+              </option>
+            ))}
+          </Select>
+        </TermsField>
+        <TermsField label="Terms" htmlFor={id('paymentPattern')}>
+          <Select id={id('paymentPattern')} value={form.paymentPattern} onChange={set('paymentPattern')}>
+            <option value="">
+              {vendor.default_payment_terms ? `${termsLabel(vendor)} (Vendor default)` : 'Not set'}
+            </option>
+            {PAYMENT_PATTERN_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </TermsField>
+        {input('depositPct', 'Deposit %', { inputMode: 'decimal' })}
+        {input('netDays', 'Net days', { inputMode: 'numeric' })}
+        <TermsField label="Pays by" htmlFor={id('paymentMethodId')}>
+          <Select id={id('paymentMethodId')} value={form.paymentMethodId} onChange={set('paymentMethodId')}>
+            <option value="">Not set</option>
+            {(methods ?? []).map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </Select>
+        </TermsField>
+        <TermsField label="Orders go by" htmlFor={id('transmission')}>
+          <Select id={id('transmission')} value={form.transmission} onChange={set('transmission')}>
+            <option value="">Not set</option>
+            {TRANSMISSION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
+        </TermsField>
+        {input('ordersEmailOverride', 'Orders email', {
+          type: 'email',
+          placeholder: vendor.orders_email ?? 'Where POs go',
+        })}
+        {input('portalUrl', 'Portal URL', { type: 'url', placeholder: vendor.trade_portal_url ?? '' })}
+        {input('leadTimeDays', 'Lead time (days)', { inputMode: 'numeric' })}
+        {input('claimsWindowDays', 'Vendor claims (days)', {
+          inputMode: 'numeric',
+          placeholder: `${CLAIMS_WINDOW_DEFAULT_DAYS} (72 h default)`,
+        })}
+        {input('concealedCarrierDays', 'Concealed damage (days)', {
+          inputMode: 'numeric',
+          placeholder: `${CONCEALED_CARRIER_DEFAULT_DAYS} (5 d default)`,
+        })}
+        {input('resaleCertOnFileOn', 'Resale cert on file', { type: 'date' })}
+        {showDiscount && input('tradeDiscountPct', 'Trade discount %', { inputMode: 'decimal' })}
+      </div>
+      <TermsField label="Notes" htmlFor={id('notes')}>
+        <textarea id={id('notes')} rows={2} value={form.notes} onChange={set('notes')} className={`${FIELD} resize-none`} />
+      </TermsField>
+      {error && (
+        <p role="alert" className="doc-type-body mt-1 text-[var(--color-terracotta-ink)]">
+          {error}
+        </p>
+      )}
+      <DocumentActionRow
+        surfaceKey="orders"
+        regionKey="vendor-account"
+        className="mt-2"
+        aria-label="Vendor account actions"
+      >
+        <DocumentAction
+          actionKey="save-vendor-account"
+          variant="primary"
+          loading={upsert.isPending}
+          loadingLabel="Saving…"
+          disabled={upsert.isPending}
+          onClick={save}
+        >
+          Save
+        </DocumentAction>
+        <DocumentAction
+          actionKey="cancel-vendor-account"
+          variant="tertiary"
+          disabled={upsert.isPending}
+          onClick={() => {
+            setError(null);
+            setForm(null);
+          }}
+        >
+          Cancel
+        </DocumentAction>
+      </DocumentActionRow>
+    </div>
+  );
+}
 
 // ─── PRC-24 (R84): "Order all —" — the multi-line Order Assistant ──────────
 
@@ -516,17 +931,19 @@ function BriefComposer({
 /** The vendor pane's bookbar — DM-mono page links, never tabs (R28). */
 function VendorBookbar({
   vendor,
+  account,
   page,
   openCount,
   onPage,
 }: {
   vendor: AnyRecord;
+  account: StudioVendorAccountRow | null;
   page: VendorPage;
   openCount: number;
   onPage: (p: VendorPage) => void;
 }) {
   const pages: { key: VendorPage; label: string }[] = [
-    { key: 'terms', label: `Terms · ${termsLabel(vendor)}` },
+    { key: 'terms', label: `Terms · ${termsLabel(vendor, account)}` },
     { key: 'thread', label: 'Thread' },
     { key: 'orders', label: `Orders · ${openCount}` },
   ];
@@ -575,6 +992,17 @@ export function VendorsBookPage({
   const [selectedId, setSelectedId] = useState<string | null>(initialVendorId);
   const [page, setPage] = useState<VendorPage>('thread');
   const vendor = vendors.find((v) => v.id === selectedId) ?? null;
+  const { studio } = useInternalTimeStudio();
+  const { data: accounts } = useStudioVendorAccounts(studio?.id ?? null);
+  const accountByVendor = useMemo(
+    () =>
+      new Map(
+        (accounts ?? [])
+          .filter((a) => !a.archived_at)
+          .map((a) => [a.vendor_id, a] as const),
+      ),
+    [accounts],
+  );
 
   const openPos = useMemo(
     () =>
@@ -620,12 +1048,20 @@ export function VendorsBookPage({
                 {v.name}
               </button>
               <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
-                {[
-                  v.default_payment_terms?.replace(/_/g, ' '),
-                  v.trade_account_email,
-                ]
-                  .filter(Boolean)
-                  .join(' · ') || 'No terms on file'}
+                {(() => {
+                  const account = accountByVendor.get(v.id) ?? null;
+                  return (
+                    [
+                      account?.payment_pattern || v.default_payment_terms
+                        ? termsLabel(v, account)
+                        : null,
+                      account?.account_number ? `acct ${account.account_number}` : null,
+                      account?.orders_email_override ?? v.trade_account_email,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || 'No terms on file'
+                  );
+                })()}
               </p>
             </div>
             <button
@@ -653,6 +1089,7 @@ export function VendorsBookPage({
 
       <VendorBookbar
         vendor={vendor}
+        account={accountByVendor.get(vendor.id) ?? null}
         page={page}
         openCount={openPos.length}
         onPage={setPage}
@@ -661,24 +1098,7 @@ export function VendorsBookPage({
       {/* ── Terms page: the trade account + the brief opener ── */}
       {page === 'terms' && (
         <div>
-          <p className="doc-type-body uppercase tracking-[0.06em] text-[var(--color-charcoal)]">
-            {[
-              vendor.default_payment_terms?.replace(/_/g, ' '),
-              vendor.trade_account_email,
-            ]
-              .filter(Boolean)
-              .join(' · ') || 'No terms on file'}
-          </p>
-          {vendor.trade_portal_url && (
-            <a
-              href={vendor.trade_portal_url}
-              target="_blank"
-              rel="noreferrer"
-              className={`${ROW_LINK} mt-1`}
-            >
-              trade portal →
-            </a>
-          )}
+          <VendorAccountTerms key={vendor.id} vendor={vendor} />
           {/* R78/R60 cross-link contract: trade lives here; the RELATIONSHIP lives in People. */}
           <a
             href={`/people?person=${vendor.id}&role=maker`}

@@ -33,7 +33,8 @@ jest.mock('@patina/supabase', () => ({
   useVendor: () => ({ data: { id: 'vendor-1', name: 'Hollowell Woodshop' } }),
   // C-05 commercials block (covered in line-unfold-commercials.test.tsx).
   useSetFfeLineCommercials: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useFindVendorMatch: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useResolveOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useVendors: () => ({ data: { data: [] } }),
   useProductPrices: () => ({ data: undefined }),
 }));

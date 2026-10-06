@@ -24,6 +24,10 @@ const setAuthority = jest.fn();
 const setAffiliation = jest.fn();
 /** CR8-4 — the company card the sheet files for a firm typed by hand. */
 const addFirmCard = jest.fn(async () => ({ id: "firm-minted" }));
+const findVendorMatch = jest.fn();
+const resolveVendor = jest.fn();
+const upsertVendorAccount = jest.fn();
+const fetchVendorAccount = jest.fn();
 /**
  * CR5-1 — what `project_recorded_studio()` answers for the picked project.
  * R-CD, amended: `data` is `undefined` in THREE states, not one — the query
@@ -79,7 +83,14 @@ jest.mock("@patina/supabase", () => ({
     mutateAsync: addChannel,
     isPending: false,
   }),
-  useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  // R-PB4 · C-12: the maker door looks the maker up before it creates one.
+  fetchStudioVendorAccount: (...args: unknown[]) => fetchVendorAccount(...args),
+  useFindVendorMatch: () => ({ mutateAsync: findVendorMatch, isPending: false }),
+  useResolveOrCreateVendor: () => ({ mutateAsync: resolveVendor, isPending: false }),
+  useUpsertStudioVendorAccount: () => ({
+    mutateAsync: upsertVendorAccount,
+    isPending: false,
+  }),
   usePromoteToStudioContact: () => ({ mutateAsync: promote, isPending: false }),
   // CR5-1: the card is minted into the studio the seat's PROJECT records —
   // the resolver `assert_project_party_cards()` checks against — never the one
@@ -231,6 +242,10 @@ beforeEach(() => {
   setAuthority.mockReset().mockResolvedValue({});
   setAffiliation.mockReset().mockResolvedValue({});
   addFirmCard.mockReset().mockResolvedValue({ id: "firm-minted" });
+  findVendorMatch.mockReset().mockResolvedValue(null);
+  resolveVendor.mockReset().mockResolvedValue("vendor-new");
+  upsertVendorAccount.mockReset().mockResolvedValue({});
+  fetchVendorAccount.mockReset().mockResolvedValue(null);
   onAdded.mockReset();
   recordedStudio.current = "org-1";
   recordedStudio.loading = false;
@@ -1581,6 +1596,79 @@ describe("the recorded studio, while it is still resolving", () => {
     expect(
       screen.getByRole("option", { name: "Signs money" }),
     ).not.toBeDisabled();
+  });
+});
+
+describe("the maker door resolves first (R-PB4 · C-12)", () => {
+  /** The maker fields carry bare labels; each input follows its label. */
+  function makerField(label: RegExp): HTMLInputElement {
+    const el = screen.getByText(label, { selector: "label" })
+      .nextElementSibling as HTMLInputElement;
+    return el;
+  }
+
+  function fillMaker() {
+    openSheet();
+    fireEvent.click(screen.getByRole("button", { name: "a maker" }));
+    fireEvent.change(makerField(/^Maker name/), {
+      target: { value: "Hewn Woodworks" },
+    });
+    fireEvent.change(makerField(/^Specialty/), {
+      target: { value: "Casegoods" },
+    });
+    fireEvent.change(makerField(/^Orders email/), {
+      target: { value: "po@hewn.example" },
+    });
+    fireEvent.change(makerField(/^Website/), {
+      target: { value: "hewn.example" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the roster" }));
+  }
+
+  it("offers the maker already in Patina, and creates nothing until Use it", async () => {
+    findVendorMatch.mockResolvedValue({ id: "vendor-hewn", name: "Hewn Woodworks" });
+    fillMaker();
+    expect(
+      await screen.findByText("Hewn Woodworks is already in Patina."),
+    ).toBeInTheDocument();
+    expect(findVendorMatch).toHaveBeenCalledWith({
+      name: "Hewn Woodworks",
+      website: "hewn.example",
+    });
+    expect(resolveVendor).not.toHaveBeenCalled();
+    expect(upsertVendorAccount).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use it" }));
+    await waitFor(() =>
+      expect(onAdded).toHaveBeenCalledWith(
+        "Hewn Woodworks was already in Patina — now on your roster.",
+        "makers",
+      ),
+    );
+    expect(resolveVendor).not.toHaveBeenCalled();
+    // The typed orders inbox and specialty are the studio's account facts.
+    expect(upsertVendorAccount).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      vendorId: "vendor-hewn",
+      request: { ordersEmailOverride: "po@hewn.example", notes: "Specialty: Casegoods" },
+    });
+  });
+
+  it("creates the maker when nothing matches", async () => {
+    fillMaker();
+    await waitFor(() =>
+      expect(onAdded).toHaveBeenCalledWith(
+        "Hewn Woodworks added — a new maker on your roster.",
+        "makers",
+      ),
+    );
+    expect(resolveVendor).toHaveBeenCalledWith({
+      name: "Hewn Woodworks",
+      website: "hewn.example",
+    });
+    expect(upsertVendorAccount).toHaveBeenCalledWith(
+      expect.objectContaining({ vendorId: "vendor-new" }),
+    );
   });
 });
 

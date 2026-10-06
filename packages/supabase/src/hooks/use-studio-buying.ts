@@ -130,6 +130,19 @@ export function useStudioVendorAccounts(organizationId: string | null | undefine
   });
 }
 
+/** Read the studio's account with one vendor, or null when it has none yet. */
+export async function fetchStudioVendorAccount(
+  organizationId: string,
+  vendorId: string,
+): Promise<StudioVendorAccountRow | null> {
+  const { data, error } = await getSupabase().rpc('get_studio_vendor_accounts', {
+    p_org: organizationId,
+    p_vendor_id: vendorId,
+  });
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
 /** The studio's account with one vendor, or null when it has none yet. */
 export function useStudioVendorAccount(
   organizationId: string | null | undefined,
@@ -137,14 +150,7 @@ export function useStudioVendorAccount(
 ) {
   return useQuery({
     queryKey: studioBuyingKeys.vendorAccount(organizationId ?? '', vendorId ?? ''),
-    queryFn: async (): Promise<StudioVendorAccountRow | null> => {
-      const { data, error } = await getSupabase().rpc('get_studio_vendor_accounts', {
-        p_org: organizationId as string,
-        p_vendor_id: vendorId as string,
-      });
-      if (error) throw error;
-      return data?.[0] ?? null;
-    },
+    queryFn: () => fetchStudioVendorAccount(organizationId as string, vendorId as string),
     enabled: !!organizationId && !!vendorId,
   });
 }
@@ -156,9 +162,10 @@ export interface UpsertStudioVendorAccountInput {
 }
 
 /** Create or patch the studio's account with a vendor. */
-export function useUpsertStudioVendorAccount() {
+export function useUpsertStudioVendorAccount(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       organizationId,
       vendorId,
@@ -187,9 +194,10 @@ export interface ResolveOrCreateVendorInput {
  * Find the shared vendors row by website host, then exact name, and create
  * one only when neither matches (R-PB4). Resolves to the vendor id.
  */
-export function useResolveOrCreateVendor() {
+export function useResolveOrCreateVendor(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({ name, website }: ResolveOrCreateVendorInput): Promise<string> => {
       const { data, error } = await getSupabase().rpc('resolve_or_create_vendor', {
         p_name: name ?? '',
@@ -200,6 +208,40 @@ export function useResolveOrCreateVendor() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
+    },
+  });
+}
+
+/** The shared vendors row a new maker would resolve to. */
+export interface VendorMatch {
+  id: string;
+  name: string;
+}
+
+/**
+ * Look up the shared vendors row a new maker would resolve to: website host,
+ * then exact name, the same matching as resolve_or_create_vendor (00715).
+ * Writes nothing. Resolves to null when nothing matches; call
+ * useResolveOrCreateVendor then (R-PB4: resolve first).
+ */
+export function useFindVendorMatch(options?: { errorSurface?: 'inline' }) {
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({ name, website }: ResolveOrCreateVendorInput): Promise<VendorMatch | null> => {
+      const supabase = getSupabase();
+      const { data: id, error } = await supabase.rpc('find_vendor_match', {
+        p_name: name ?? '',
+        p_website: website ?? '',
+      });
+      if (error) throw error;
+      if (!id) return null;
+      const { data: vendor, error: vendorError } = await supabase
+        .from('vendors')
+        .select('id, name')
+        .eq('id', id)
+        .single();
+      if (vendorError) throw vendorError;
+      return { id: vendor.id, name: vendor.name };
     },
   });
 }

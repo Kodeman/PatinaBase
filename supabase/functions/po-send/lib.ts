@@ -107,14 +107,21 @@ export interface VendorRecipientSource {
 }
 
 /**
- * Resolve the vendor recipient via the 00188 fallback chain:
- * explicit override → vendors.orders_email → contact_info->>'email'.
- * Blank/whitespace values fall through; returns null when nothing usable.
+ * Resolve the vendor recipient:
+ * the studio account's orders_email_override (C-12) → explicit override →
+ * vendors.orders_email → contact_info->>'email'.
+ * The studio's own inbox comes first because every send surface passes the
+ * vendor's shared address as `override` (clientVendorEmailHint). Blank or
+ * whitespace values fall through. Returns null when nothing is usable.
  */
 export function resolveVendorRecipient(
   vendor: VendorRecipientSource | null | undefined,
   override?: string | null,
+  studioOrdersEmail?: string | null,
 ): string | null {
+  const studioEmail = studioOrdersEmail?.trim();
+  if (studioEmail) return studioEmail;
+
   const overrideEmail = override?.trim();
   if (overrideEmail) return overrideEmail;
 
@@ -156,6 +163,43 @@ export async function callerMaySendPurchaseOrder(
     p_po_id: purchaseOrderId,
   });
   return !error && data === true;
+}
+
+// ─── Studio orders inbox (C-12) ──────────────────────────────────────────────
+
+export type StudioOrdersEmailRead =
+  | { ok: true; email: string | null }
+  | { ok: false; detail: string };
+
+/**
+ * The studio's orders inbox for this vendor: studio_vendor_accounts
+ * .orders_email_override, read AS THE CALLER through
+ * get_studio_vendor_accounts (00696), so only a member of that studio sees
+ * the account. No studio, no account, an archived account or a blank
+ * override reads as null. A failed read is reported, never guessed: the
+ * caller must not mail the vendor's shared inbox when the studio may have
+ * named another.
+ */
+export async function readStudioOrdersEmail(
+  client: CallerRpcClient,
+  studioId: string | null | undefined,
+  vendorId: string | null | undefined,
+): Promise<StudioOrdersEmailRead> {
+  if (!studioId || !vendorId) return { ok: true, email: null };
+  const { data, error } = await client.rpc('get_studio_vendor_accounts', {
+    p_org: studioId,
+    p_vendor_id: vendorId,
+  });
+  if (error) {
+    const message = (error as { message?: unknown }).message;
+    return { ok: false, detail: typeof message === 'string' ? message : 'studio account read failed' };
+  }
+  const account = Array.isArray(data)
+    ? (data[0] as { orders_email_override?: unknown; archived_at?: unknown } | undefined)
+    : undefined;
+  if (!account || account.archived_at) return { ok: true, email: null };
+  const email = account.orders_email_override;
+  return { ok: true, email: typeof email === 'string' && email.trim() ? email.trim() : null };
 }
 
 // ─── Ship-to (C-02, R-PB3) ───────────────────────────────────────────────────

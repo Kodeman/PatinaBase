@@ -36,7 +36,8 @@
 //                      Σ po_payments must BOTH equal total_cents, else 422
 //                      po_out_of_sync (pre-00186 client-price POs / item
 //                      re-pricing drift) — then email the vendor
-//                      (recipientEmail → orders_email →
+//                      (studio account orders_email_override, read as the
+//                      caller → recipientEmail → orders_email →
 //                      contact_info->>'email'; 422 no_recipient) through
 //                      sendCompliantEmail with the PDF attached, cc the
 //                      designer when ccDesigner; stamp sent_at if null,
@@ -69,6 +70,7 @@ import {
   paymentPatternLabel,
   paymentRowLabel,
   resolvePoShipTo,
+  readStudioOrdersEmail,
   resolveVendorRecipient,
   vendorConfigurationLines,
   type VendorConfigurationSpec,
@@ -527,7 +529,18 @@ Deno.serve(async (req: Request) => {
   let recipient: string | null = null;
   let emailSent = false;
   if (mode === 'send') {
-    recipient = resolveVendorRecipient(po.vendor, recipientEmail);
+    // C-12: the studio's own orders inbox for this vendor wins. Read as the
+    // caller so get_studio_vendor_accounts' membership check applies.
+    const studioInbox = await readStudioOrdersEmail(
+      userClient,
+      identity?.studioId,
+      po.vendor_id,
+    );
+    if (!studioInbox.ok) {
+      console.error('po-send: studio vendor account read failed', studioInbox.detail);
+      return json({ error: 'lookup_failed', detail: studioInbox.detail }, 500);
+    }
+    recipient = resolveVendorRecipient(po.vendor, recipientEmail, studioInbox.email);
     if (!recipient) {
       console.warn('po-send: no recipient email for PO', po.id);
       return json(

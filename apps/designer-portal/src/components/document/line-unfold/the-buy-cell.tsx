@@ -3,10 +3,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useFindOrCreateVendor,
+  useFindVendorMatch,
   useProductPrices,
+  useResolveOrCreateVendor,
   useSetFfeLineCommercials,
   useVendors,
+  type VendorMatch,
 } from '@patina/supabase';
 import { centsToInput, parseDollarsToCents } from '@/lib/currency-ui';
 import { fmtUsd } from '@/lib/document/format';
@@ -18,9 +20,64 @@ type FFERow = any;
 export type MakerOption = { kind: 'vendor'; id: string; name: string } | { kind: 'add'; name: string };
 
 /**
+ * R-PB4: an added maker resolves an existing shared vendors row first. `add`
+ * looks the name up (find_vendor_match); on a match it holds the match for the
+ * designer to confirm with "Use it" and resolves to null, otherwise it creates
+ * the row (resolve_or_create_vendor) and resolves to it.
+ */
+export function useAddMaker() {
+  const find = useFindVendorMatch({ errorSurface: 'inline' });
+  const resolve = useResolveOrCreateVendor({ errorSurface: 'inline' });
+  const [match, setMatch] = useState<VendorMatch | null>(null);
+  const add = async (name: string): Promise<VendorMatch | null> => {
+    setMatch(null);
+    const found = await find.mutateAsync({ name });
+    if (found) {
+      setMatch(found);
+      return null;
+    }
+    const id = await resolve.mutateAsync({ name });
+    return { id, name: name.trim() };
+  };
+  return {
+    add,
+    match,
+    clearMatch: () => setMatch(null),
+    isPending: find.isPending || resolve.isPending,
+  };
+}
+
+/** "Hewn Woodworks is already in Patina. Use it." */
+export function MakerMatchLine({
+  match,
+  disabled,
+  onUse,
+}: {
+  match: VendorMatch;
+  disabled: boolean;
+  onUse: (match: VendorMatch) => void;
+}) {
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-[var(--color-charcoal)]">
+      <span>{match.name} is already in Patina.</span>
+      <DocumentAction
+        actionKey="use-matched-maker"
+        surfaceKey="project"
+        regionKey="ffe-commercials"
+        variant="tertiary"
+        disabled={disabled}
+        onClick={() => onUse(match)}
+      >
+        Use it
+      </DocumentAction>
+    </p>
+  );
+}
+
+/**
  * C-05: the maker search, mounted only while choosing so the vendors read
  * runs only then. Offers "Add" when no maker of that name exists yet; the add
- * goes through the People maker path's find-or-create (R78 / PRC-03).
+ * resolves an existing shared maker first (useAddMaker, R-PB4).
  */
 export function MakerSearch({
   disabled,
@@ -145,12 +202,12 @@ function LineCommercials({
 }) {
   const qc = useQueryClient();
   const commercials = useSetFfeLineCommercials({ errorSurface: 'inline' });
-  const findOrCreate = useFindOrCreateVendor({ errorSurface: 'inline' });
+  const addMaker = useAddMaker();
   // The id, not the embed: a query shape without the PO join (or a partial
   // cache) leaves `po` null on a line that is already on a purchase order.
   const onPo = !!item.purchase_order_id;
   const editable = canEdit && !onPo;
-  const pending = commercials.isPending || findOrCreate.isPending;
+  const pending = commercials.isPending || addMaker.isPending;
 
   const storedTrade: number | null = item.trade_price_cents ?? null;
   const [trade, setTrade] = useState(() => centsToInput(storedTrade));
@@ -188,17 +245,20 @@ function LineCommercials({
         void qc.invalidateQueries({ queryKey: ['document-state'] });
       });
 
-  const chooseMaker = (option: MakerOption) => {
+  const chooseMaker = (option: MakerOption | VendorMatch) => {
     if (pending) return;
     setError(null);
-    const resolve =
-      option.kind === 'vendor'
-        ? Promise.resolve({ id: option.id, name: option.name })
-        : findOrCreate
-            .mutateAsync({ name: option.name })
-            .then((r) => ({ id: r.vendorId, name: r.vendor.name }));
+    let resolve: Promise<VendorMatch | null>;
+    if ('id' in option) {
+      addMaker.clearMatch();
+      resolve = Promise.resolve({ id: option.id, name: option.name });
+    } else {
+      resolve = addMaker.add(option.name);
+    }
     resolve
       .then((vendor) => {
+        // A match waits on "Use it".
+        if (!vendor) return;
         if (vendor.id === item.vendor_id) {
           setChanging(false);
           return;
@@ -266,7 +326,14 @@ function LineCommercials({
               disabled={pending}
               autoFocus={changing}
               onChoose={chooseMaker}
-              onCancel={item.vendor_id ? () => setChanging(false) : undefined}
+              onCancel={
+                item.vendor_id
+                  ? () => {
+                      addMaker.clearMatch();
+                      setChanging(false);
+                    }
+                  : undefined
+              }
             />
           ) : (
             <>
@@ -307,6 +374,9 @@ function LineCommercials({
           />
         </label>
       </div>
+      {searching && addMaker.match && (
+        <MakerMatchLine match={addMaker.match} disabled={pending} onUse={chooseMaker} />
+      )}
       {pending && (
         <p aria-live="polite" className="text-[11px] text-[var(--text-muted)]">
           Saving…
