@@ -140,6 +140,12 @@ import {
   // W3-T1 — atomic create RPC + vendor acknowledgment (migration 00186)
   useLogPOAcknowledgment,
   useLogPaymentPaid,
+  // US-16 C-11 — vendor payment ledger (migration 00695)
+  useRecordVendorPayment,
+  useVoidVendorPayment,
+  useVendorPayments,
+  useStudioPaymentMethods,
+  useUpsertStudioPaymentMethod,
   // Sprint 2 — Receiving, damage claims, calendar
   useDeliveryCalendar,
   useTodayProcurementCounts,
@@ -148,7 +154,6 @@ import {
   useUpdateDamageClaim,
   useUpdatePurchaseOrderETA,
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
-  useAdvancePaymentToDue,
   useUpdatePurchaseOrderStatus,
   useSetPurchaseOrderShipTo,
   invalidateFfeCaches,
@@ -824,16 +829,12 @@ describe('useLogPOAcknowledgment', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useLogPaymentPaid', () => {
-  it('sets state=paid and paid_date when supplied', async () => {
-    // Single update: returns a non-deposit row, so no flip logic runs.
-    queueTableResults('po_payments', {
-      data: {
-        id: 'pay-1',
-        purchase_order_id: 'po-1',
-        kind: 'balance',
-        state: 'paid',
-        paid_date: '2026-05-01',
-      },
+  it('records the scheduled row through record_vendor_payment and never writes po_payments', async () => {
+    // 00695: po_payments is read-only to the studio. Marking a row paid is a
+    // ledger row for its remainder (amountCents omitted); the RPC derives
+    // state/paid_date and the 00184 trigger flips a sibling balance.
+    supabaseClient.rpc.mockResolvedValue({
+      data: { id: 'vp-1', purchase_order_id: 'po-1', po_payment_id: 'pay-deposit', amount_cents: 50000 },
       error: null,
     });
 
@@ -841,24 +842,37 @@ describe('useLogPaymentPaid', () => {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
-    await config.mutationFn({
-      paymentId: 'pay-1',
+    const result = await config.mutationFn({
+      paymentId: 'pay-deposit',
       purchaseOrderId: 'po-1',
       paidDate: '2026-05-01',
+      method: 'check',
+      reference: 'Check 1041',
     });
 
-    const builder = builders.po_payments;
-    const update = builder.__chain.find((c) => c.method === 'update');
-    expect(update?.args[0]).toEqual(
-      expect.objectContaining({ state: 'paid', paid_date: '2026-05-01' })
-    );
+    expect(supabaseClient.rpc).toHaveBeenCalledTimes(1);
+    const [fnName, payload] = supabaseClient.rpc.mock.calls[0] as [
+      string,
+      { p_po_id: string; p_request: Record<string, unknown> },
+    ];
+    expect(fnName).toBe('record_vendor_payment');
+    expect(payload.p_po_id).toBe('po-1');
+    expect(payload.p_request).toEqual({
+      poPaymentId: 'pay-deposit',
+      paidOn: '2026-05-01',
+      method: 'check',
+      reference: 'Check 1041',
+    });
+    expect(payload.p_request).not.toHaveProperty('amountCents');
+    expect((result as { id: string }).id).toBe('vp-1');
+
+    // The direct table write is gone: neither po_payments nor purchase_orders is touched.
+    expect(builders.po_payments).toBeUndefined();
+    expect(builders.purchase_orders).toBeUndefined();
   });
 
-  it('defaults paid_date to today (ISO yyyy-mm-dd) when not supplied', async () => {
-    queueTableResults('po_payments', {
-      data: { id: 'pay-1', purchase_order_id: 'po-1', kind: 'balance', state: 'paid' },
-      error: null,
-    });
+  it('defaults paidOn to a yyyy-mm-dd day when not supplied', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { id: 'vp-1' }, error: null });
 
     const config = useLogPaymentPaid() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
@@ -866,54 +880,28 @@ describe('useLogPaymentPaid', () => {
 
     await config.mutationFn({ paymentId: 'pay-1', purchaseOrderId: 'po-1' });
 
-    const builder = builders.po_payments;
-    const update = builder.__chain.find((c) => c.method === 'update');
-    const payload = update?.args[0] as { state: string; paid_date: string };
-    expect(payload.state).toBe('paid');
-    expect(payload.paid_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('record_vendor_payment', {
+      p_po_id: 'po-1',
+      p_request: { poPaymentId: 'pay-1', paidOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+    });
   });
 
-  it('performs exactly ONE update (the paid row) — the sibling balance flip is owned by DB trigger 00184', async () => {
-    // A deposit paid on a shipped split-pattern PO used to make the hook
-    // read the PO + siblings and flip the balance row client-side. Trigger D
-    // (trg_deposit_paid_flips_balance, migration 00184) owns that flip now —
-    // the hook must issue a single UPDATE and touch nothing else.
-    queueTableResults('po_payments', {
-      data: {
-        id: 'pay-deposit',
-        purchase_order_id: 'po-1',
-        kind: 'deposit',
-        state: 'paid',
-        paid_date: '2026-05-01',
-      },
-      error: null,
+  it('throws the RPC error (e.g. the Stripe-lane refusal)', async () => {
+    supabaseClient.rpc.mockResolvedValue({
+      data: null,
+      error: { message: 'record_vendor_payment: payment row pay-1 is on the Stripe rail; it settles through Stripe only' },
     });
 
     const config = useLogPaymentPaid() as unknown as {
       mutationFn: (input: unknown) => Promise<unknown>;
     };
 
-    await config.mutationFn({
-      paymentId: 'pay-deposit',
-      purchaseOrderId: 'po-1',
-      paidDate: '2026-05-01',
-    });
-
-    // Exactly one UPDATE on po_payments, scoped to the paid row's id.
-    const builder = builders.po_payments;
-    const updates = builder.__chain.filter((c) => c.method === 'update');
-    expect(updates).toHaveLength(1);
-    expect(updates[0].args[0]).toEqual(
-      expect.objectContaining({ state: 'paid', paid_date: '2026-05-01' })
-    );
-    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
-    expect(eqArgs).toEqual([['id', 'pay-deposit']]);
-
-    // No PO read and no sibling read/flip — purchase_orders is never touched.
-    expect(builders.purchase_orders).toBeUndefined();
+    await expect(
+      config.mutationFn({ paymentId: 'pay-1', purchaseOrderId: 'po-1' }),
+    ).rejects.toEqual(expect.objectContaining({ message: expect.stringContaining('Stripe only') }));
   });
 
-  it('keeps the po-payments / purchase-orders invalidations on success', () => {
+  it('invalidates the ledger, po-payments and purchase-order caches on success', () => {
     const config = useLogPaymentPaid() as unknown as {
       onSuccess: (result: unknown, input: { purchaseOrderId: string }) => void;
     };
@@ -921,9 +909,143 @@ describe('useLogPaymentPaid', () => {
     config.onSuccess({}, { purchaseOrderId: 'po-1' });
 
     const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['vendor-payments', 'po-1']);
     expect(invalidatedKeys).toContainEqual(['po-payments', 'po-1']);
     expect(invalidatedKeys).toContainEqual(['purchase-orders']);
     expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-1']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vendor payment ledger hooks (US-16 C-11 — migration 00695)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useRecordVendorPayment', () => {
+  it('sends an unscheduled partial payment with only the keys supplied', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { id: 'vp-2' }, error: null });
+
+    const config = useRecordVendorPayment() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+      onSuccess: (result: unknown, input: { purchaseOrderId: string }) => void;
+    };
+
+    await config.mutationFn({
+      purchaseOrderId: 'po-7',
+      amountCents: 1500,
+      paidOn: '2026-10-01',
+      paymentMethodId: 'pm-1',
+    });
+
+    const [fnName, payload] = supabaseClient.rpc.mock.calls[0] as [
+      string,
+      { p_po_id: string; p_request: Record<string, unknown> },
+    ];
+    expect(fnName).toBe('record_vendor_payment');
+    expect(payload).toEqual({
+      p_po_id: 'po-7',
+      p_request: { amountCents: 1500, paidOn: '2026-10-01', paymentMethodId: 'pm-1' },
+    });
+
+    config.onSuccess({}, { purchaseOrderId: 'po-7' });
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['vendor-payments', 'po-7']);
+    expect(invalidatedKeys).toContainEqual(['po-payments', 'po-7']);
+  });
+});
+
+describe('useVoidVendorPayment', () => {
+  it('calls void_vendor_payment with the reason and invalidates the PO caches', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { id: 'vp-2', voided_at: 'now' }, error: null });
+
+    const config = useVoidVendorPayment() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+      onSuccess: (result: unknown, input: { purchaseOrderId: string }) => void;
+    };
+
+    await config.mutationFn({ paymentId: 'vp-2', purchaseOrderId: 'po-7', reason: 'Charge reversed' });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('void_vendor_payment', {
+      p_payment_id: 'vp-2',
+      p_reason: 'Charge reversed',
+    });
+
+    config.onSuccess({}, { purchaseOrderId: 'po-7' });
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['vendor-payments', 'po-7']);
+    expect(invalidatedKeys).toContainEqual(['po-payments', 'po-7']);
+    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-7']);
+  });
+});
+
+describe('useVendorPayments', () => {
+  it('reads the PO ledger oldest first, voids included', async () => {
+    queueTableResults('vendor_payments', { data: [{ id: 'vp-1' }], error: null });
+
+    const config = useVendorPayments('po-7') as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown>;
+      enabled: boolean;
+    };
+    expect(config.queryKey).toEqual(['vendor-payments', 'po-7']);
+    expect(config.enabled).toBe(true);
+
+    const rows = await config.queryFn();
+    expect(rows).toEqual([{ id: 'vp-1' }]);
+
+    const chain = builders.vendor_payments.__chain;
+    expect(chain.filter((c) => c.method === 'eq').map((c) => c.args)).toEqual([
+      ['purchase_order_id', 'po-7'],
+    ]);
+    expect(chain.filter((c) => c.method === 'order').map((c) => c.args)).toEqual([
+      ['paid_on', { ascending: true }],
+      ['created_at', { ascending: true }],
+    ]);
+    expect(chain.some((c) => c.method === 'is')).toBe(false);
+  });
+
+  it('is disabled without a PO id', () => {
+    const config = useVendorPayments('') as unknown as { enabled: boolean };
+    expect(config.enabled).toBe(false);
+  });
+});
+
+describe('useStudioPaymentMethods', () => {
+  it('reads unarchived methods, narrowed to one studio when given', async () => {
+    queueTableResults('studio_payment_methods', { data: [{ id: 'pm-1' }], error: null });
+
+    const config = useStudioPaymentMethods('org-1') as unknown as {
+      queryKey: unknown[];
+      queryFn: () => Promise<unknown>;
+    };
+    expect(config.queryKey).toEqual(['studio-payment-methods', 'org-1']);
+
+    expect(await config.queryFn()).toEqual([{ id: 'pm-1' }]);
+    const chain = builders.studio_payment_methods.__chain;
+    expect(chain.filter((c) => c.method === 'is').map((c) => c.args)).toEqual([['archived_at', null]]);
+    expect(chain.filter((c) => c.method === 'eq').map((c) => c.args)).toEqual([
+      ['organization_id', 'org-1'],
+    ]);
+  });
+});
+
+describe('useUpsertStudioPaymentMethod', () => {
+  it('passes only defined keys to upsert_studio_payment_method and refreshes the methods list', async () => {
+    supabaseClient.rpc.mockResolvedValue({ data: { id: 'pm-1' }, error: null });
+
+    const config = useUpsertStudioPaymentMethod() as unknown as {
+      mutationFn: (input: unknown) => Promise<unknown>;
+      onSuccess: () => void;
+    };
+
+    await config.mutationFn({ label: 'Amex · Studio', kind: 'card', last4: '1234', holderMemberId: undefined });
+
+    expect(supabaseClient.rpc).toHaveBeenCalledWith('upsert_studio_payment_method', {
+      p_request: { label: 'Amex · Studio', kind: 'card', last4: '1234' },
+    });
+
+    config.onSuccess();
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['studio-payment-methods']);
   });
 });
 
@@ -1985,67 +2107,6 @@ describe('useUpdateDamageClaim', () => {
     // timestamp columns must NOT be set — neither transition branch applies
     expect(payload.vendor_notified_at).toBeUndefined();
     expect(payload.resolved_at).toBeUndefined();
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// useAdvancePaymentToDue  (Wave 1 procurement overhaul — migration 00184)
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('useAdvancePaymentToDue', () => {
-  it('happy path: single UPDATE on po_payments with state=due and correct eq scoping; no writes to purchase_orders or project_ffe_items', async () => {
-    // A single round-trip: UPDATE + .select().single().
-    queueTableResults('po_payments', {
-      data: {
-        id: 'pay-balance',
-        purchase_order_id: 'po-2',
-        kind: 'balance',
-        state: 'due',
-        due_date: '2026-07-01',
-        sort_order: 1,
-      },
-      error: null,
-    });
-
-    const config = useAdvancePaymentToDue() as unknown as {
-      mutationFn: (input: unknown) => Promise<unknown>;
-      onSuccess: (result: unknown, input: { purchaseOrderId: string }) => void;
-    };
-
-    const result = await config.mutationFn({
-      paymentId: 'pay-balance',
-      purchaseOrderId: 'po-2',
-      dueDate: '2026-07-01',
-    });
-
-    // Exactly one UPDATE on po_payments.
-    const builder = builders.po_payments;
-    const updates = builder.__chain.filter((c) => c.method === 'update');
-    expect(updates).toHaveLength(1);
-
-    // Payload must contain state='due' and the supplied dueDate.
-    const payload = updates[0].args[0] as Record<string, unknown>;
-    expect(payload.state).toBe('due');
-    expect(payload.due_date).toBe('2026-07-01');
-
-    // Scope: filtered by paymentId only.
-    const eqArgs = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
-    expect(eqArgs).toEqual([['id', 'pay-balance']]);
-
-    // The returned row is the updated payment.
-    expect((result as { id: string }).id).toBe('pay-balance');
-
-    // DB triggers (00184) own all PO/FFE side effects after this — the hook
-    // must NOT write to purchase_orders or project_ffe_items.
-    expect(builders.purchase_orders).toBeUndefined();
-    expect(builders.project_ffe_items).toBeUndefined();
-
-    // onSuccess: invalidates the PO's payment list and both PO namespaces.
-    config.onSuccess(result, { purchaseOrderId: 'po-2' });
-    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
-    expect(invalidatedKeys).toContainEqual(['po-payments', 'po-2']);
-    expect(invalidatedKeys).toContainEqual(['purchase-orders']);
-    expect(invalidatedKeys).toContainEqual(['purchase-order', 'po-2']);
   });
 });
 

@@ -1739,7 +1739,12 @@ export {
   // W3-T1 — atomic create RPC + vendor acknowledgment (migration 00186)
   useLogPOAcknowledgment,
   useLogPaymentPaid,
-  useAdvancePaymentToDue,
+  // US-16 C-11 — vendor payment ledger (migration 00695)
+  useRecordVendorPayment,
+  useVoidVendorPayment,
+  useVendorPayments,
+  useStudioPaymentMethods,
+  useUpsertStudioPaymentMethod,
   useUpdatePurchaseOrderETA,
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
   useUpdatePurchaseOrderStatus,
@@ -1775,6 +1780,12 @@ export type {
   PurchaseOrder,
   POPayment,
   POFilters,
+  // US-16 C-11 — vendor payment ledger (migration 00695)
+  VendorPaymentMethodKind,
+  VendorPayment,
+  StudioPaymentMethod,
+  RecordVendorPaymentInput,
+  UpsertStudioPaymentMethodInput,
   // W1-T5 — cross-project FF&E items (rows-per-item By Status view)
   FFEItemStatus,
   ProcurementItemRow,

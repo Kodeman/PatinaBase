@@ -27429,6 +27429,74 @@ export type Database = {
           },
         ]
       }
+      studio_payment_methods: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          holder_member_id: string | null
+          id: string
+          kind: string
+          label: string
+          last4: string | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          holder_member_id?: string | null
+          id?: string
+          kind: string
+          label: string
+          last4?: string | null
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          holder_member_id?: string | null
+          id?: string
+          kind?: string
+          label?: string
+          last4?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_payment_methods_holder_member_id_fkey"
+            columns: ["holder_member_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_payment_methods_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_payment_methods_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_payment_methods_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_person_affiliations: {
         Row: {
           company_id: string
@@ -29813,6 +29881,106 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_payments: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency_code: string
+          id: string
+          method: string
+          organization_id: string | null
+          paid_on: string
+          payment_method_id: string | null
+          po_payment_id: string | null
+          purchase_order_id: string
+          receipt_document_path: string | null
+          recorded_by: string | null
+          reference: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency_code?: string
+          id?: string
+          method: string
+          organization_id?: string | null
+          paid_on: string
+          payment_method_id?: string | null
+          po_payment_id?: string | null
+          purchase_order_id: string
+          receipt_document_path?: string | null
+          recorded_by?: string | null
+          reference?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency_code?: string
+          id?: string
+          method?: string
+          organization_id?: string | null
+          paid_on?: string
+          payment_method_id?: string | null
+          po_payment_id?: string | null
+          purchase_order_id?: string
+          receipt_document_path?: string | null
+          recorded_by?: string | null
+          reference?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_payments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "admin_studio_overview"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_payments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_payments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_payments_payment_method_id_fkey"
+            columns: ["payment_method_id"]
+            isOneToOne: false
+            referencedRelation: "studio_payment_methods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_payments_po_payment_id_fkey"
+            columns: ["po_payment_id"]
+            isOneToOne: false
+            referencedRelation: "po_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_payments_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -33598,6 +33766,17 @@ export type Database = {
       _ffe_require_usd_budget_rollup: {
         Args: { p_project_id: string }
         Returns: undefined
+      }
+      _ffe_spec_seed_from_product: {
+        Args: { p_product_id: string }
+        Returns: {
+          color_fabric: string
+          field_provenance: Json
+          finish: string
+          material: string
+          selected_dimensions: Json
+          sku: string
+        }[]
       }
       _ffe_strict_client_fields: { Args: { p_fields: Json }; Returns: Json }
       _finalize_spec_book_issue_00403: {
@@ -38979,6 +39158,33 @@ export type Database = {
         Args: { p_proposal_id: string }
         Returns: Json
       }
+      record_vendor_payment: {
+        Args: { p_po_id: string; p_request: Json }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          currency_code: string
+          id: string
+          method: string
+          organization_id: string | null
+          paid_on: string
+          payment_method_id: string | null
+          po_payment_id: string | null
+          purchase_order_id: string
+          receipt_document_path: string | null
+          recorded_by: string | null
+          reference: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vendor_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       recover_invoice_checkout_session_evidence: {
         Args: {
           p_attempt_id: string
@@ -41250,6 +41456,31 @@ export type Database = {
         }
       }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
+      update_po_payment_schedule: {
+        Args: { p_po_id: string; p_request: Json }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          due_date: string | null
+          id: string
+          kind: Database["public"]["Enums"]["po_payment_kind"]
+          label: string | null
+          notes: string | null
+          paid_date: string | null
+          purchase_order_id: string
+          sort_order: number
+          state: Database["public"]["Enums"]["po_payment_state"]
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "po_payments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       update_project_phase: {
         Args: {
           p_expected_updated_at: string
@@ -41348,6 +41579,27 @@ export type Database = {
         }
         Returns: Json
       }
+      upsert_studio_payment_method: {
+        Args: { p_request: Json }
+        Returns: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          holder_member_id: string | null
+          id: string
+          kind: string
+          label: string
+          last4: string | null
+          organization_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "studio_payment_methods"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       user_has_role: {
         Args: { p_role_name: string; p_user_id: string }
         Returns: boolean
@@ -41419,6 +41671,33 @@ export type Database = {
       void_trade_scope: {
         Args: { p_proposal_id: string; p_reason: string }
         Returns: Json
+      }
+      void_vendor_payment: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          currency_code: string
+          id: string
+          method: string
+          organization_id: string | null
+          paid_on: string
+          payment_method_id: string | null
+          po_payment_id: string | null
+          purchase_order_id: string
+          receipt_document_path: string | null
+          recorded_by: string | null
+          reference: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vendor_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       withdraw_project_approval_decision: {
         Args: {
