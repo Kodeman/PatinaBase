@@ -6,11 +6,24 @@
 
 import fs from 'fs';
 import path from 'path';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
+
+const mockSources: {
+  orgs: Array<{ id: string; address: unknown }>;
+  project: Record<string, unknown> | undefined;
+  ownerStudioId: string | null;
+} = { orgs: [], project: undefined, ownerStudioId: null };
+const mockStudioIdentityCalls: Array<Record<string, unknown>> = [];
 
 jest.mock('@patina/supabase', () => ({
-  useOrganizations: () => ({ data: [] }),
-  useProject: () => ({ data: undefined }),
+  useOrganizations: () => ({ data: mockSources.orgs }),
+  useProject: () => ({ data: mockSources.project }),
+  useStudioIdentity: (params: Record<string, unknown>) => {
+    mockStudioIdentityCalls.push(params);
+    return {
+      data: params.designerId ? { studioId: mockSources.ownerStudioId } : undefined,
+    };
+  },
 }));
 
 import {
@@ -18,6 +31,7 @@ import {
   ShipToChoice,
   formatStudioAddress,
   resolveShipTo,
+  useShipToAddresses,
   type ShipToSelection,
 } from '../ship-to-choice';
 import { StepReview } from '../step-review';
@@ -57,6 +71,55 @@ describe('resolveShipTo', () => {
     expect(resolveShipTo({ kind: 'other', otherText: ' Dock 4, Racine ' }, addresses)).toBe(
       'Dock 4, Racine',
     );
+  });
+});
+
+describe('useShipToAddresses · "The studio" is the project studio (F11)', () => {
+  const ADDR_OTHER = { street: '9 Elm St', city: 'Racine', state: 'WI', zip: '53403' };
+  const ADDR_PROJECT = { street: '1 Main St', city: 'Madison', state: 'WI', zip: '53703' };
+
+  beforeEach(() => {
+    // The caller's FIRST org is never the project's studio here.
+    mockSources.orgs = [
+      { id: 'org-other', address: ADDR_OTHER },
+      { id: 'org-project', address: ADDR_PROJECT },
+    ];
+    mockSources.project = undefined;
+    mockSources.ownerStudioId = null;
+    mockStudioIdentityCalls.length = 0;
+  });
+
+  it('uses the address of projects.studio_id, not the first org', () => {
+    mockSources.project = { studio_id: 'org-project', designer_id: 'owner-1', site_address: SITE };
+    const { result } = renderHook(() => useShipToAddresses('project-1'));
+    expect(result.current).toEqual({ studioAddress: STUDIO, siteAddress: SITE });
+    // studio_id is on file, so the owner fallback is never asked.
+    expect(mockStudioIdentityCalls.every((p) => !p.designerId)).toBe(true);
+  });
+
+  it("falls back to the owner's primary studio when studio_id is null", () => {
+    mockSources.project = { studio_id: null, designer_id: 'owner-1', site_address: null };
+    mockSources.ownerStudioId = 'org-project';
+    const { result } = renderHook(() => useShipToAddresses('project-1'));
+    expect(mockStudioIdentityCalls).toContainEqual({ designerId: 'owner-1' });
+    expect(result.current.studioAddress).toBe(STUDIO);
+  });
+
+  it('hides the studio when that studio has no address on file', () => {
+    mockSources.orgs = [
+      { id: 'org-other', address: ADDR_OTHER },
+      { id: 'org-project', address: null },
+    ];
+    mockSources.project = { studio_id: 'org-project', designer_id: 'owner-1', site_address: null };
+    const { result } = renderHook(() => useShipToAddresses('project-1'));
+    expect(result.current.studioAddress).toBeNull();
+  });
+
+  it('hides the studio when no studio resolves, and while the project loads', () => {
+    mockSources.project = { studio_id: null, designer_id: 'owner-1', site_address: null };
+    expect(renderHook(() => useShipToAddresses('project-1')).result.current.studioAddress).toBeNull();
+    mockSources.project = undefined;
+    expect(renderHook(() => useShipToAddresses('project-1')).result.current.studioAddress).toBeNull();
   });
 });
 

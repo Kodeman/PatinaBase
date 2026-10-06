@@ -9,7 +9,7 @@
  */
 
 import { useId } from 'react';
-import { useOrganizations, useProject } from '@patina/supabase';
+import { useOrganizations, useProject, useStudioIdentity } from '@patina/supabase';
 
 export type ShipToKind = 'studio' | 'site' | 'other';
 
@@ -67,18 +67,31 @@ export function resolveShipTo(
 }
 
 /**
- * The two addresses the choice can offer. The studio is the caller's first
- * organization (the same one the sidemark prefill reads); the job site is the
- * project's site_address. Either is null while loading or when not on file.
+ * The two addresses the choice can offer. The studio is the project's studio
+ * (projects.studio_id), never the caller's first organization: a co-member or
+ * a member of two studios would otherwise ship to the wrong studio. A legacy
+ * project with no studio_id falls back to the owner's primary studio, the
+ * precedence the brand resolver reads (00317/00320). The address comes from
+ * the caller's own memberships, the only organizations RLS lets them read.
+ * The job site is the project's site_address. Either is null while loading
+ * or when not on file.
  */
 export function useShipToAddresses(projectId: string | null | undefined): ShipToAddresses {
   const { data: orgs } = useOrganizations();
   const { data: project } = useProject(projectId ?? '');
-  const org = orgs?.[0] as { address?: unknown } | undefined;
-  const site = (project as { site_address?: string | null } | undefined)?.site_address;
+  const p = project as
+    | { studio_id?: string | null; designer_id?: string | null; site_address?: string | null }
+    | undefined;
+  const { data: ownerStudio } = useStudioIdentity({
+    designerId: p && !p.studio_id ? p.designer_id : null,
+  });
+  const studioId = p?.studio_id || ownerStudio?.studioId || null;
+  const org = studioId
+    ? (orgs?.find((o) => o.id === studioId) as { address?: unknown } | undefined)
+    : undefined;
   return {
     studioAddress: formatStudioAddress(org?.address),
-    siteAddress: site?.trim() || null,
+    siteAddress: p?.site_address?.trim() || null,
   };
 }
 

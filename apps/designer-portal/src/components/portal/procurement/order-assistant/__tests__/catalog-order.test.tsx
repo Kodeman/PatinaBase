@@ -40,9 +40,13 @@ jest.mock('@patina/supabase', () => ({
   // Coverage query in isError → uncovered=[] → the soft gate never blocks.
   useFfeInvoiceCoverage: () => ({ data: undefined, isLoading: false, isError: true }),
   useOrganizations: () => ({
-    data: [{ name: 'Studio', address: mockShipToSources.orgAddress }],
+    data: [{ id: 'org-studio', name: 'Studio', address: mockShipToSources.orgAddress }],
   }),
-  useProject: () => ({ data: { site_address: mockShipToSources.siteAddress } }),
+  // "The studio" is the project's studio (projects.studio_id, F11).
+  useProject: () => ({
+    data: { studio_id: 'org-studio', site_address: mockShipToSources.siteAddress },
+  }),
+  useStudioIdentity: () => ({ data: undefined }),
 }));
 
 jest.mock('@/components/portal/toast-provider', () => ({

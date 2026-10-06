@@ -482,7 +482,10 @@ function LineCommercials({
   const qc = useQueryClient();
   const commercials = useSetFfeLineCommercials({ errorSurface: 'inline' });
   const findOrCreate = useFindOrCreateVendor({ errorSurface: 'inline' });
-  const editable = canEdit && !po;
+  // The id, not the embed: a query shape without the PO join (or a partial
+  // cache) leaves `po` null on a line that is already on a purchase order.
+  const onPo = !!item.purchase_order_id;
+  const editable = canEdit && !onPo;
   const pending = commercials.isPending || findOrCreate.isPending;
 
   const storedTrade: number | null = item.trade_price_cents ?? null;
@@ -566,8 +569,8 @@ function LineCommercials({
 
   const makerName =
     picked && picked.id === item.vendor_id ? picked.name : item.vendor_name;
-  const poLabel = po
-    ? (po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'a purchase order')
+  const poLabel = onPo
+    ? (po?.po_number ?? po?.vendor_po_number ?? po?.sidemark ?? 'a purchase order')
     : null;
 
   if (!editable) {
