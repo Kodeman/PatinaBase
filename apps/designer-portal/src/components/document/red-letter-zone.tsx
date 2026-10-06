@@ -47,6 +47,13 @@ const NEED_KIND_STAMP_COLOR: Record<NeedKind, string> = {
   po_unsent: 'var(--color-clay)',
   po_unacknowledged: 'var(--color-dusty-blue)',
   pulse_due: 'var(--color-sage)',
+  payment_due: 'var(--color-terracotta)',
+  payment_failed: 'var(--color-terracotta)',
+  ack_discrepancy: 'var(--color-dusty-blue)',
+  quote_expiring: 'var(--color-clay)',
+  cfa_pending: 'var(--color-clay)',
+  memo_return: 'var(--color-clay)',
+  exception_open: 'var(--color-terracotta)',
 };
 
 export interface RedLetterRow {

@@ -17,6 +17,8 @@ import {
   relTime,
   NOTIFICATION_NEED_KIND,
   PROCUREMENT_NEED_KIND,
+  PROCUREMENT_KIND_TITLE,
+  formatType,
   inboxRecordItem,
   procurementRecordItem,
   mergeRecordItems,
@@ -344,7 +346,7 @@ function procNotif(over: Partial<ProcurementNotification> = {}): ProcurementNoti
 }
 
 describe('procurementRecordItem', () => {
-  it('maps a due notice to a plain Record notice at the document', () => {
+  it('maps a due notice to a cross-reference at the document — the Desk holds its act (C-22)', () => {
     const item = procurementRecordItem(procNotif());
     expect(item).toMatchObject({
       key: 'procurement:pn1',
@@ -354,24 +356,76 @@ describe('procurementRecordItem', () => {
       title: 'Deposit due — Hewn Woodworks',
       body: 'Walker Residence',
       typeLabel: 'Procurement',
-      row: { kind: 'notice', href: '/doc/p-42', onDesk: false, needKind: null },
+      row: { kind: 'cross_reference', href: '/doc/p-42', onDesk: true, needKind: 'payment_due' },
     });
   });
 
-  it('titles every kind without a vendor join', () => {
-    const titles: Record<string, string> = {
+  it('titles every one of the 14 kinds in words, never the raw enum label (C-22)', () => {
+    const titles: Record<ProcurementNotification['kind'], string> = {
       deposit_due: 'Deposit due',
       balance_due: 'Balance due',
       milestone_due: 'Milestone payment due',
       delivery_this_week: 'Delivery this week',
       damage_claim_drafted: 'Damage claim drafted',
+      payment_received: 'Payment received',
+      payment_failed: "Payment didn't go through",
+      payment_refunded: 'Payment refunded',
+      claim_window_closing: 'Claim window closing',
+      ack_discrepancy: "Acknowledgment doesn't match the order",
+      quote_expiring: 'Quote expiring',
+      cfa_reserve_expiring: 'CFA reserve expiring',
+      memo_return_due: 'Memo sample due back',
+      backorder_reported: 'Backorder reported',
     };
+    expect(Object.keys(PROCUREMENT_KIND_TITLE).sort()).toEqual(Object.keys(titles).sort());
     for (const [kind, title] of Object.entries(titles)) {
       const item = procurementRecordItem(
         procNotif({ kind: kind as ProcurementNotification['kind'], purchase_order: null }),
       );
       expect(item.title).toBe(title);
+      expect(item.title).not.toBe(formatType(kind));
       expect(item.body).toBe('');
+    }
+  });
+
+  it('every payment-due notice is a payment_due need on the Desk (C-22)', () => {
+    for (const kind of ['deposit_due', 'balance_due', 'milestone_due'] as const) {
+      expect(PROCUREMENT_NEED_KIND[kind]).toBe('payment_due');
+      expect(procurementRecordItem(procNotif({ kind })).row).toEqual({
+        kind: 'cross_reference',
+        href: '/doc/p-42',
+        onDesk: true,
+        needKind: 'payment_due',
+      });
+    }
+  });
+
+  it('a failed payment and a closing claim window defer to their Desk needs (C-22)', () => {
+    expect(procurementRecordItem(procNotif({ kind: 'payment_failed' })).row.needKind).toBe(
+      'payment_failed',
+    );
+    expect(procurementRecordItem(procNotif({ kind: 'claim_window_closing' })).row.needKind).toBe(
+      'claim_window',
+    );
+  });
+
+  it('notices with no act stay plain notices — and so do Phase 2 kinds until their rules land', () => {
+    for (const kind of [
+      'payment_received',
+      'payment_refunded',
+      'delivery_this_week',
+      'ack_discrepancy',
+      'quote_expiring',
+      'cfa_reserve_expiring',
+      'memo_return_due',
+      'backorder_reported',
+    ] as const) {
+      expect(procurementRecordItem(procNotif({ kind })).row).toEqual({
+        kind: 'notice',
+        href: '/doc/p-42',
+        onDesk: false,
+        needKind: null,
+      });
     }
   });
 
@@ -395,7 +449,9 @@ describe('procurementRecordItem', () => {
   });
 
   it('a plain notice with no project is read-only (href null) — never bounces to a zone', () => {
-    const item = procurementRecordItem(procNotif({ purchase_order: null }));
+    const item = procurementRecordItem(
+      procNotif({ kind: 'delivery_this_week', purchase_order: null }),
+    );
     expect(item.row.href).toBeNull();
     expect(item.row.kind).toBe('notice');
   });

@@ -3,6 +3,7 @@ import {
   useFfeInvoiceCoverage,
   usePOPayments,
   useRecordVendorPayment,
+  useStartPoCheckout,
   useStudioPaymentMethods,
   useVendorPayments,
   useVoidVendorPayment,
@@ -22,7 +23,10 @@ jest.mock('@patina/supabase', () => ({
   useFfeInvoiceCoverage: jest.fn(),
   useRecordVendorPayment: jest.fn(),
   useVoidVendorPayment: jest.fn(),
+  useStartPoCheckout: jest.fn(),
 }));
+
+const mockCheckout = jest.fn();
 
 const mockUpload = jest.fn();
 jest.mock('@/hooks/use-folio', () => ({
@@ -139,6 +143,11 @@ beforeEach(() => {
   });
   (useVoidVendorPayment as jest.Mock).mockReturnValue({
     mutateAsync: mockVoid,
+    isPending: false,
+  });
+  mockCheckout.mockReset();
+  (useStartPoCheckout as jest.Mock).mockReturnValue({
+    mutateAsync: mockCheckout,
     isPending: false,
   });
 });
@@ -318,14 +327,44 @@ describe('PoMoneyOut · Stripe and catalog rows are read-only', () => {
     expect(within(band).queryByRole('button', { name: /Record payment/ })).not.toBeInTheDocument();
   });
 
-  it('reads a Patina-catalog PO without amounts or acts (V1)', () => {
+  it('reads a Patina-catalog PO without amounts or a record act (V1)', () => {
     setup({ schedule: [{ ...BALANCE, kind: 'full_upfront', state: 'due' }] });
     renderBand({ isPatinaCatalog: true });
     const band = screen.getByTestId('po-money-out');
     expect(band).toHaveTextContent('Payment in full · due');
     expect(band).toHaveTextContent('Settles through Patina checkout');
     expect(band).not.toHaveTextContent('$');
-    expect(within(band).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(band).queryByRole('button', { name: /Record payment/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('PoMoneyOut · a catalog row still owed pays through checkout (C-22)', () => {
+  it('offers "Pay now" on an open catalog row and opens that row\'s checkout', async () => {
+    mockCheckout.mockResolvedValue({ url: '#checkout' });
+    setup({ schedule: [{ ...BALANCE, kind: 'full_upfront', state: 'due' }] });
+    renderBand({ isPatinaCatalog: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Pay now · Payment in full' }));
+    await waitFor(() =>
+      expect(mockCheckout).toHaveBeenCalledWith({ poPaymentId: 'pay-bal' }),
+    );
+  });
+
+  it('says why inline when checkout cannot start', async () => {
+    mockCheckout.mockRejectedValue(new Error('po_payment_already_paid'));
+    setup({ schedule: [{ ...BALANCE, kind: 'full_upfront', state: 'due' }] });
+    renderBand({ isPatinaCatalog: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Pay now · Payment in full' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('po_payment_already_paid');
+  });
+
+  it('offers nothing on a paid catalog row, and never on the studio lane', () => {
+    setup({ schedule: [{ ...BALANCE, kind: 'full_upfront', state: 'paid' }] });
+    const { unmount } = renderBand({ isPatinaCatalog: true });
+    expect(screen.queryByRole('button', { name: /Pay now/ })).not.toBeInTheDocument();
+    unmount();
+    setup();
+    renderBand();
+    expect(screen.queryByRole('button', { name: /Pay now/ })).not.toBeInTheDocument();
   });
 });
 

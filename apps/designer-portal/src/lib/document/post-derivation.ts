@@ -250,22 +250,49 @@ export function inboxRecordItem(n: InboxNotification): RecordItem {
 
 /**
  * Procurement kind → the Desk {@link NeedKind} that already carries its act
- * (R82, the NOTIFICATION_NEED_KIND rule): a drafted damage claim is a Desk
- * need, so its Record row is a quiet cross-reference. The due/delivery kinds
- * have no Desk need line — they are plain notices.
+ * (R82, the NOTIFICATION_NEED_KIND rule). C-22 (D2 §M8): every notice whose
+ * subject has an act is a Desk need, so its Record row is a quiet
+ * cross-reference — the act lives on the Desk, which clears it when done.
+ *
+ *   · deposit/balance/milestone due → `payment_due` (record what was paid)
+ *   · payment_failed                → `payment_failed` (pay again, catalog)
+ *   · claim_window_closing          → `claim_window` (notify the vendor)
+ *   · damage_claim_drafted          → `damage_claim`
+ *
+ * Kinds with no act stay plain notices: payment_received, payment_refunded,
+ * and delivery_this_week (the Week holds it). The Phase 2 kinds
+ * (ack_discrepancy, quote_expiring, cfa_reserve_expiring, memo_return_due,
+ * backorder_reported) join this map with their Desk rules, in their tickets —
+ * until then nothing on the Desk would answer the reference.
  */
 export const PROCUREMENT_NEED_KIND: Partial<
   Record<ProcurementNotificationKind, NeedKind>
 > = {
+  deposit_due: 'payment_due',
+  balance_due: 'payment_due',
+  milestone_due: 'payment_due',
+  payment_failed: 'payment_failed',
+  claim_window_closing: 'claim_window',
   damage_claim_drafted: 'damage_claim',
 };
 
-const PROCUREMENT_KIND_TITLE: Partial<Record<ProcurementNotificationKind, string>> = {
+/** A title for every kind the enum holds — exhaustive, so a new kind is a type
+ *  error here rather than a raw enum label in the Record. */
+export const PROCUREMENT_KIND_TITLE: Record<ProcurementNotificationKind, string> = {
   deposit_due: 'Deposit due',
   balance_due: 'Balance due',
   milestone_due: 'Milestone payment due',
   delivery_this_week: 'Delivery this week',
   damage_claim_drafted: 'Damage claim drafted',
+  payment_received: 'Payment received',
+  payment_failed: "Payment didn't go through",
+  payment_refunded: 'Payment refunded',
+  claim_window_closing: 'Claim window closing',
+  ack_discrepancy: "Acknowledgment doesn't match the order",
+  quote_expiring: 'Quote expiring',
+  cfa_reserve_expiring: 'CFA reserve expiring',
+  memo_return_due: 'Memo sample due back',
+  backorder_reported: 'Backorder reported',
 };
 
 /**
@@ -277,6 +304,8 @@ const PROCUREMENT_KIND_TITLE: Partial<Record<ProcurementNotificationKind, string
  * (href null) — the Post never bounces out to a zone.
  */
 export function procurementRecordItem(n: ProcurementNotification): RecordItem {
+  // Every known kind has a title; the fallback only catches an enum value
+  // the database gained before this union did.
   const kindTitle = PROCUREMENT_KIND_TITLE[n.kind] ?? formatType(n.kind);
   const vendorName = n.purchase_order?.vendor?.name ?? null;
   const projectId = n.purchase_order?.project_id ?? null;

@@ -597,7 +597,7 @@ function gateGuide(
  * `NeedKind`, so a new kind is a type error rather than a silent shrug.
  *
  * It is authoritative here, not a fallback: `NEED_ACTION_LABELS` (the folio
- * footer's own copy, non-null for eighteen of the twenty kinds) leads six of
+ * footer's own copy, non-null for twenty-five of the twenty-seven kinds) leads six of
  * them with `Review`, which is the word F18 retired from the top of the paper.
  * The Desk's folio keeps that copy; the document states the verb and its object.
  */
@@ -623,6 +623,13 @@ function needVerb(kind: NeedKind): string {
     case 'po_unsent': return 'Send the purchase order';
     case 'po_unacknowledged': return 'Follow up with the maker';
     case 'pulse_due': return 'Send the pulse';
+    case 'payment_due': return 'Record payment';
+    case 'payment_failed': return 'Pay again';
+    case 'ack_discrepancy': return 'Answer the vendor';
+    case 'quote_expiring': return 'Reconfirm the price';
+    case 'cfa_pending': return 'Approve the CFA';
+    case 'memo_return': return 'Mark returned';
+    case 'exception_open': return 'Choose a path';
   }
 }
 

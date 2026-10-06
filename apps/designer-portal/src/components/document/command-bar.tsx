@@ -212,6 +212,8 @@ export interface OpenLedgerContext {
   vendorId?: string;
   projectId?: string;
   invoiceId?: string;
+  /** C-22: the Orders ledger opens this PO's money band unfolded. */
+  purchaseOrderId?: string;
 }
 
 /** Open a Studio Drawer ledger from anywhere (the drawer listens). */

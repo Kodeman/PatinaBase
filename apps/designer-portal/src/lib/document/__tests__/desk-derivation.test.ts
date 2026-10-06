@@ -12,6 +12,7 @@ import {
   deriveReconnectNeeds,
   NEED_ACTION_LABELS,
   type DeskClaimWindowSignal,
+  type DeskPaymentSignal,
   type DocumentStateRow,
   type NurtureLike,
   type DeskCeremonySignal,
@@ -48,7 +49,24 @@ const OWNER_BY_KIND: Record<NeedKind, 'designer' | 'client' | 'maker'> = {
   po_unsent: 'designer',
   po_unacknowledged: 'maker',
   pulse_due: 'designer',
+  payment_due: 'designer',
+  payment_failed: 'designer',
+  ack_discrepancy: 'designer',
+  quote_expiring: 'designer',
+  cfa_pending: 'designer',
+  memo_return: 'designer',
+  exception_open: 'designer',
 };
+
+/** C-22 Phase 2 kinds: registered as types, no rule emits them yet. Their
+ *  tickets add the rule and a DERIVE_BY_KIND thunk together. */
+const UNEMITTED_KINDS: readonly NeedKind[] = [
+  'ack_discrepancy',
+  'quote_expiring',
+  'cfa_pending',
+  'memo_return',
+  'exception_open',
+];
 
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
 const daysAhead = (n: number) => new Date(NOW.getTime() + n * 86_400_000).toISOString();
@@ -113,6 +131,25 @@ function claimWindow(partial: Partial<DeskClaimWindowSignal> = {}): DeskClaimWin
   };
 }
 
+/** C-22: one po_payments row a due notice named — by default a studio-lane
+ *  balance, due yesterday (NOW is 11 June), not yet covered. */
+function paymentSignal(partial: Partial<DeskPaymentSignal> = {}): DeskPaymentSignal {
+  return {
+    notice: 'due',
+    purchaseOrderId: 'po-1',
+    poPaymentId: 'pay-1',
+    poLabel: 'PO 1042',
+    vendorName: 'Hewn',
+    paymentKind: 'balance',
+    state: 'due',
+    dueDate: '2026-06-10',
+    amountCents: 420_000,
+    isPatinaCatalog: false,
+    onStripeRail: false,
+    ...partial,
+  };
+}
+
 // D6 — the coverage guard reads REAL owner values off the real rules,
 // through a minimal fixture per kind, rather than comparing two typed
 // tables to each other (TypeScript already forces `OWNER_BY_KIND` and
@@ -121,7 +158,7 @@ function claimWindow(partial: Partial<DeskClaimWindowSignal> = {}): DeskClaimWin
 // fires: default counts are 0, `engagement_kind` defaults to 'project', and
 // no signal context is passed unless the kind under test needs one — so an
 // earlier rule in NEED_RULES order never shadows the one being checked.
-const DERIVE_BY_KIND: Record<NeedKind, () => NeedLine | null> = {
+const DERIVE_BY_KIND: Record<NeedKind, (() => NeedLine | null) | null> = {
   overdue_decision: () =>
     deriveNeed(
       mkRow({ overdue_decision_count: 1, earliest_overdue_due: daysAgo(1) }),
@@ -317,6 +354,17 @@ const DERIVE_BY_KIND: Record<NeedKind, () => NeedLine | null> = {
       mkRow({ unsent_pulse_count: 1, pulse_week_of: '2026-06-08' }),
       new Date('2026-06-12T14:00:00Z'), // NOW's own week's Friday
     ),
+  payment_due: () =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, [paymentSignal()]),
+  payment_failed: () =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, [
+      paymentSignal({ notice: 'failed', isPatinaCatalog: true, paymentKind: 'full_upfront' }),
+    ]),
+  ack_discrepancy: null,
+  quote_expiring: null,
+  cfa_pending: null,
+  memo_return: null,
+  exception_open: null,
 };
 
 describe('D6 · every kind’s owner, read off a real derivation', () => {
@@ -329,9 +377,17 @@ describe('D6 · every kind’s owner, read off a real derivation', () => {
     );
   });
 
-  for (const kind of Object.keys(NEED_ACTION_LABELS) as NeedKind[]) {
+  it('leaves only the registered Phase 2 kinds without a rule', () => {
+    expect(
+      (Object.keys(DERIVE_BY_KIND) as NeedKind[]).filter((k) => !DERIVE_BY_KIND[k]).sort(),
+    ).toEqual([...UNEMITTED_KINDS].sort());
+  });
+
+  for (const kind of (Object.keys(NEED_ACTION_LABELS) as NeedKind[]).filter(
+    (k) => !UNEMITTED_KINDS.includes(k),
+  )) {
     it(`derives ${kind} with owner ${OWNER_BY_KIND[kind]}`, () => {
-      const need = DERIVE_BY_KIND[kind]();
+      const need = DERIVE_BY_KIND[kind]!();
       expect(need).not.toBeNull();
       // Confirms the fixture actually reached the branch under test, rather
       // than some earlier rule in NEED_RULES order shadowing it.
@@ -1699,5 +1755,102 @@ describe('C-20 — the claim window need (D1-08)', () => {
     expect(folders).toHaveLength(1);
     expect(folders[0].row.project_id).toBe('p2');
     expect(folders[0].need.kind).toBe('claim_window');
+  });
+});
+
+describe('C-22 — payment notices become Desk needs (D2 §M8)', () => {
+  const derive = (...payments: DeskPaymentSignal[]) =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, payments);
+
+  it('a due notice raises payment_due — "Record payment", dated, onto that PO', () => {
+    const need = derive(paymentSignal());
+    expect(need).not.toBeNull();
+    expect(need!.kind).toBe('payment_due');
+    expect(need!.text).toBe(`Balance to Hewn · $4,200 due ${dayMonth('2026-06-10')} — PO 1042`);
+    expect(need!.actionLabel).toBe('Record payment');
+    expect(need!.stamp.label).toBe('PAYMENT DUE');
+    expect(need!.dueOn).toBe('2026-06-10');
+    expect(need!.urgent).toBe(false);
+    expect(need!.owner).toBe('designer');
+    // The act opens the P1-5 record act: the Orders ledger, this PO's band.
+    expect(need!.ledger).toEqual({
+      name: 'orders',
+      context: { page: 'ledger', projectId: 'p1', purchaseOrderId: 'po-1' },
+    });
+  });
+
+  it('carries a date, never a count of unread notices', () => {
+    const need = derive(
+      paymentSignal({ poPaymentId: 'pay-2', dueDate: '2026-06-14' }),
+      paymentSignal(),
+    );
+    expect(need!.text).toBe(`2 payments to makers due — first ${dayMonth('2026-06-10')}`);
+    expect(need!.dueOn).toBe('2026-06-10');
+  });
+
+  it('clears when the records cover the row', () => {
+    expect(derive(paymentSignal({ state: 'paid' }))).toBeNull();
+    expect(derive(paymentSignal({ state: 'refunded' }))).toBeNull();
+  });
+
+  it('the next open row takes over when the first is covered', () => {
+    const need = derive(
+      paymentSignal({ state: 'paid' }),
+      paymentSignal({ poPaymentId: 'pay-2', purchaseOrderId: 'po-2', paymentKind: 'deposit', dueDate: '2026-06-20' }),
+    );
+    expect(need!.kind).toBe('payment_due');
+    expect(need!.text).toMatch(/^Deposit to Hewn/);
+    expect(need!.ledger?.context?.purchaseOrderId).toBe('po-2');
+  });
+
+  it('never raises payment_due on the catalog or Stripe lane (the record act is refused there)', () => {
+    expect(derive(paymentSignal({ isPatinaCatalog: true }))).toBeNull();
+    expect(derive(paymentSignal({ onStripeRail: true }))).toBeNull();
+  });
+
+  it('a failed catalog checkout raises payment_failed — "Pay again"', () => {
+    const need = derive(paymentSignal({ notice: 'failed', isPatinaCatalog: true }));
+    expect(need!.kind).toBe('payment_failed');
+    expect(need!.actionLabel).toBe('Pay again');
+    expect(need!.text).toBe("PO 1042 — the payment didn't go through");
+    expect(need!.ledger?.context?.purchaseOrderId).toBe('po-1');
+  });
+
+  it('payment_failed clears when Stripe settles the row, and is catalog-only', () => {
+    expect(derive(paymentSignal({ notice: 'failed', isPatinaCatalog: true, state: 'paid' }))).toBeNull();
+    expect(derive(paymentSignal({ notice: 'failed', isPatinaCatalog: false }))).toBeNull();
+  });
+
+  it('outranks the claim window and the damage claim beside it', () => {
+    const need = deriveNeed(
+      mkRow({ open_claim_count: 1, open_claim_po: 'PO 1042' }),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+      null,
+      [claimWindow()],
+      [paymentSignal()],
+    );
+    expect(need!.kind).toBe('payment_due');
+  });
+
+  it('partitionDesk routes the signal by project_id', () => {
+    const { folders } = partitionDesk(
+      [mkRow({}), mkRow({ engagement_id: 'e2', project_id: 'p2' })],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map([['p2', [paymentSignal()]]]),
+    );
+    expect(folders).toHaveLength(1);
+    expect(folders[0].row.project_id).toBe('p2');
+    expect(folders[0].need.kind).toBe('payment_due');
   });
 });

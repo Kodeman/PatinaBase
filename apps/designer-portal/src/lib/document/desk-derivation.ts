@@ -137,7 +137,19 @@ export type NeedKind =
   | 'schedule_unconfigured'
   | 'po_unsent'
   | 'po_unacknowledged'
-  | 'pulse_due';
+  | 'pulse_due'
+  // C-22 (D2 §M8): a scheduled vendor payment came due (a deposit_due /
+  // balance_due / milestone_due notice) and no record covers it yet.
+  | 'payment_due'
+  // C-22: a Patina-catalog checkout failed (a payment_failed notice).
+  | 'payment_failed'
+  // C-22 Phase 2 kinds — registered now, no emitters yet; their tickets
+  // add the rule and the notice → need mapping together.
+  | 'ack_discrepancy'
+  | 'quote_expiring'
+  | 'cfa_pending'
+  | 'memo_return'
+  | 'exception_open';
 
 /** The visible next act printed in each Desk folio footer. Triage-owned lead
  * needs intentionally have no footer act: their TriageBar carries the choices. */
@@ -162,6 +174,13 @@ export const NEED_ACTION_LABELS: Record<NeedKind, string | null> = {
   po_unsent: 'Review the purchase order',
   po_unacknowledged: 'Follow up with the maker',
   pulse_due: 'Review and send',
+  payment_due: 'Record payment',
+  payment_failed: 'Pay again',
+  ack_discrepancy: 'Answer the vendor',
+  quote_expiring: 'Reconfirm the price',
+  cfa_pending: 'Approve the CFA',
+  memo_return: 'Mark returned',
+  exception_open: 'Choose a path',
 };
 
 /** R28 conflict inputs (built client-side from delivery_events by
@@ -242,6 +261,31 @@ export interface DeskClaimWindowSignal {
   latestOutcome: string | null;
 }
 
+/** C-22 payment input, structural (the desk-conflicts precedent). One
+ *  `po_payments` row named by a due notice (deposit_due / balance_due /
+ *  milestone_due) or a `payment_failed` notice, built by use-desk-engagements
+ *  and keyed by project_id. The row's own state decides whether it still
+ *  stands: `paid` means the records cover it (00695 derives the state from
+ *  the non-void vendor_payments sum, and Stripe stamps catalog rows). */
+export interface DeskPaymentSignal {
+  /** Which notice raised it: a due row, or a failed catalog checkout. */
+  notice: 'due' | 'failed';
+  purchaseOrderId: string;
+  poPaymentId: string;
+  poLabel: string;
+  vendorName: string | null;
+  /** `po_payments.kind`: deposit | balance | milestone | full_upfront. */
+  paymentKind: string;
+  /** `po_payments.state`: pending | due | paid | refunded. */
+  state: string;
+  /** `po_payments.due_date`, a bare date. */
+  dueDate: string | null;
+  amountCents: number | null;
+  isPatinaCatalog: boolean;
+  /** The row carries a Stripe session or intent id (00695's lane guard). */
+  onStripeRail: boolean;
+}
+
 export interface NeedLine {
   kind: NeedKind;
   text: string;
@@ -259,7 +303,13 @@ export interface NeedLine {
    *  import); folder-card maps it onto openLedger(). */
   ledger?: {
     name: string;
-    context?: { page?: string; invoiceId?: string; projectId?: string };
+    context?: {
+      page?: string;
+      invoiceId?: string;
+      projectId?: string;
+      /** C-22: the PO whose money band the Orders ledger opens unfolded. */
+      purchaseOrderId?: string;
+    };
   };
   /** When set, the folder's act follows this href instead of /doc/[engagement_id].
    *  The lines_flagged walk-in points at the Drafting Room (?flagged=1), where the
@@ -486,6 +536,18 @@ const NEED_RANK: Record<NeedKind, number> = {
   po_unsent: 11,
   po_unacknowledged: 12,
   pulse_due: 13,
+  // C-22: the studio's own payables. A failed catalog checkout leaves the
+  // order unpaid at Patina; a due deposit or balance holds the maker's work.
+  // Both sit just under money the client owes the studio.
+  payment_failed: 1.25,
+  payment_due: 1.5,
+  // Phase 2 kinds, ranked beside the need each one most resembles. Their
+  // tickets may retune these when they add the rules.
+  exception_open: 3.5,
+  cfa_pending: 9.75,
+  quote_expiring: 10.75,
+  ack_discrepancy: 12.25,
+  memo_return: 12.5,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand
@@ -592,6 +654,7 @@ interface NeedContext {
   ceremony?: DeskCeremonySignal | null;
   schedule?: DeskScheduleInput | null;
   claimWindows?: readonly DeskClaimWindowSignal[] | null;
+  payments?: readonly DeskPaymentSignal[] | null;
 }
 
 /** A rule that owns its engagement kind outright. The original deriveNeed
@@ -846,6 +909,84 @@ const needLead: NeedRule = ({ row, now, ceremony }) => {
     });
   }
   return null;
+};
+
+const PAYMENT_KIND_WORD: Record<string, string> = {
+  deposit: 'Deposit',
+  balance: 'Balance',
+  milestone: 'Payment',
+  full_upfront: 'Payment in full',
+};
+
+const isOpenPayment = (p: DeskPaymentSignal) =>
+  p.state !== 'paid' && p.state !== 'refunded';
+
+const byDueDate = (a: DeskPaymentSignal, b: DeskPaymentSignal) =>
+  (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999');
+
+/** C-22: the act opens the Orders ledger with this PO's money band unfolded. */
+const paymentLedger = (row: DocumentStateRow, p: DeskPaymentSignal) => ({
+  name: 'orders',
+  context: {
+    page: 'ledger',
+    projectId: row.project_id ?? undefined,
+    purchaseOrderId: p.purchaseOrderId,
+  },
+});
+
+// C-22 (D2 §M8): a failed Patina-catalog checkout. Act: pay again, through
+// the same checkout. Clears when Stripe settles the row (state 'paid').
+const needPaymentFailed: NeedRule = ({ row, payments }) => {
+  const open = (payments ?? [])
+    .filter((p) => p.notice === 'failed' && p.isPatinaCatalog && isOpenPayment(p))
+    .sort(byDueDate);
+  const first = open[0];
+  if (!first) return null;
+  return {
+    kind: 'payment_failed',
+    text:
+      open.length > 1
+        ? `${open.length} catalog payments didn't go through`
+        : `${first.poLabel} — the payment didn't go through`,
+    actionLabel: NEED_ACTION_LABELS.payment_failed,
+    stamp: { label: 'NOT PAID', ...STAMP.terracotta },
+    urgent: false,
+    ledger: paymentLedger(row, first),
+    dueOn: first.dueDate,
+    owner: 'designer',
+  };
+};
+
+// C-22 (D2 §M5/§M8): a scheduled payment to a maker came due. Act: record
+// what the studio paid (P1-5). Clears when the records cover the row — 00695
+// flips its state to 'paid'. The catalog and Stripe lanes settle only through
+// checkout, so they never raise this need (the record RPC refuses them).
+const needPaymentDue: NeedRule = ({ row, payments }) => {
+  const open = (payments ?? [])
+    .filter(
+      (p) => p.notice === 'due' && !p.isPatinaCatalog && !p.onStripeRail && isOpenPayment(p),
+    )
+    .sort(byDueDate);
+  const first = open[0];
+  if (!first) return null;
+  const word = PAYMENT_KIND_WORD[first.paymentKind] ?? 'Payment';
+  const vendor = first.vendorName ?? 'the maker';
+  const figure =
+    first.amountCents && first.amountCents > 0 ? ` · ${fmtMoney(first.amountCents)}` : '';
+  const due = first.dueDate ? ` due ${fmtDay(first.dueDate)}` : ' due';
+  return {
+    kind: 'payment_due',
+    text:
+      open.length > 1
+        ? `${open.length} payments to makers due${first.dueDate ? ` — first ${fmtDay(first.dueDate)}` : ''}`
+        : `${word} to ${vendor}${figure}${due} — ${first.poLabel}`,
+    actionLabel: NEED_ACTION_LABELS.payment_due,
+    stamp: { label: 'PAYMENT DUE', ...STAMP.due },
+    urgent: false,
+    ledger: paymentLedger(row, first),
+    dueOn: first.dueDate,
+    owner: 'designer',
+  };
 };
 
 /** Whole local calendar days from `now` to a bare `YYYY-MM-DD` date. */
@@ -1116,6 +1257,8 @@ const NEED_RULES: readonly NeedRule[] = [
   needOverdueInvoice,
   needProposal,
   needLead,
+  needPaymentFailed,
+  needPaymentDue,
   needClaimWindow,
   needDamageClaim,
   needAwaitingInspection,
@@ -1142,6 +1285,7 @@ export function deriveNeeds(
   ceremony?: DeskCeremonySignal | null,
   schedule?: DeskScheduleInput | null,
   claimWindows?: readonly DeskClaimWindowSignal[] | null,
+  payments?: readonly DeskPaymentSignal[] | null,
 ): NeedLine[] {
   if (row.is_archived || row.is_paused) return [];
   const ctx: NeedContext = {
@@ -1153,6 +1297,7 @@ export function deriveNeeds(
     ceremony,
     schedule,
     claimWindows,
+    payments,
   };
   const needs: NeedLine[] = [];
   for (const rule of NEED_RULES) {
@@ -1177,10 +1322,20 @@ export function deriveNeed(
   ceremony?: DeskCeremonySignal | null,
   schedule?: DeskScheduleInput | null,
   claimWindows?: readonly DeskClaimWindowSignal[] | null,
+  payments?: readonly DeskPaymentSignal[] | null,
 ): NeedLine | null {
   return (
-    deriveNeeds(row, now, conflict, receivable, flagged, ceremony, schedule, claimWindows)[0] ??
-    null
+    deriveNeeds(
+      row,
+      now,
+      conflict,
+      receivable,
+      flagged,
+      ceremony,
+      schedule,
+      claimWindows,
+      payments,
+    )[0] ?? null
   );
 }
 
@@ -1354,8 +1509,11 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
               ? new Date(row.oldest_unacked_sent_at).getTime()
               : need.kind === 'task_due' && row.earliest_task_due
                 ? new Date(row.earliest_task_due).getTime()
-                : need.kind === 'claim_window' && need.dueOn
-                  ? new Date(`${need.dueOn}T00:00:00`).getTime()
+                : (need.kind === 'claim_window' ||
+                      need.kind === 'payment_due' ||
+                      need.kind === 'payment_failed') &&
+                    need.dueOn
+                  ? new Date(`${need.dueOn.slice(0, 10)}T00:00:00`).getTime()
                   : new Date(row.updated_at).getTime();
   // Ruling IV's third rendering needs no new tier: `overdue_decision` is the
   // only urgent need AND rank 0, so an overdue folio already sorts above every
@@ -1385,6 +1543,8 @@ export function partitionDesk(
   schedules?: ReadonlyMap<string, DeskScheduleInput>,
   /** C-20 — project_id → the POs with a claim_window_closing notice. */
   claimWindows?: ReadonlyMap<string, readonly DeskClaimWindowSignal[]>,
+  /** C-22 — project_id → the payment rows a due or failed notice named. */
+  payments?: ReadonlyMap<string, readonly DeskPaymentSignal[]>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -1439,6 +1599,9 @@ export function partitionDesk(
     const claimWindowSignals = row.project_id
       ? (claimWindows?.get(row.project_id) ?? null)
       : null;
+    const paymentSignals = row.project_id
+      ? (payments?.get(row.project_id) ?? null)
+      : null;
     const needs = deriveNeeds(
       row,
       now,
@@ -1448,6 +1611,7 @@ export function partitionDesk(
       ceremony,
       schedule,
       claimWindowSignals,
+      paymentSignals,
     );
     const need = needs[0] ?? null;
     if (need) {
