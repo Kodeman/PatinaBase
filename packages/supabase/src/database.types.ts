@@ -37486,6 +37486,10 @@ export type Database = {
           style_tags: string[]
         }[]
       }
+      find_vendor_match: {
+        Args: { p_name: string; p_website: string }
+        Returns: string
+      }
       finish_board_asset_gc_run: {
         Args: {
           p_detail?: Json

@@ -12,7 +12,8 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 const mockSetCommercials = jest.fn();
-const mockFindOrCreateVendor = jest.fn();
+const mockFindVendorMatch = jest.fn();
+const mockResolveOrCreateVendor = jest.fn();
 let mockVendors: { id: string; name: string }[] = [];
 let mockProductPrices: Map<string, { price_retail: number | null; price_trade: number | null }> | undefined;
 
@@ -23,7 +24,8 @@ jest.mock('@patina/supabase', () => ({
   useRecordFfeInstalled: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useVendor: () => ({ data: { id: 'vendor-1', name: 'Winfield Workroom' } }),
   useSetFfeLineCommercials: () => ({ mutateAsync: mockSetCommercials, isPending: false }),
-  useFindOrCreateVendor: () => ({ mutateAsync: mockFindOrCreateVendor, isPending: false }),
+  useFindVendorMatch: () => ({ mutateAsync: mockFindVendorMatch, isPending: false }),
+  useResolveOrCreateVendor: () => ({ mutateAsync: mockResolveOrCreateVendor, isPending: false }),
   useVendors: (filters?: { search?: string }) => ({
     data: {
       data: filters?.search
@@ -96,7 +98,8 @@ const WARNING = 'Trade cost matches retail. Confirm the studio’s cost with the
 
 beforeEach(() => {
   mockSetCommercials.mockReset().mockResolvedValue({});
-  mockFindOrCreateVendor.mockReset();
+  mockFindVendorMatch.mockReset();
+  mockResolveOrCreateVendor.mockReset();
   mockVendors = [];
   mockProductPrices = undefined;
 });
@@ -185,15 +188,12 @@ describe('LineUnfold · C-05 line commercials', () => {
         vendorId: 'vendor-2',
       }),
     );
-    expect(mockFindOrCreateVendor).not.toHaveBeenCalled();
+    expect(mockFindVendorMatch).not.toHaveBeenCalled();
   });
 
-  it('adds a new maker inline, then attaches it to the line', async () => {
-    mockFindOrCreateVendor.mockResolvedValue({
-      vendorId: 'vendor-new',
-      isNew: true,
-      vendor: { id: 'vendor-new', name: 'Ostrander Upholstery' },
-    });
+  it('adds a new maker inline — resolving first — then attaches it to the line', async () => {
+    mockFindVendorMatch.mockResolvedValue(null);
+    mockResolveOrCreateVendor.mockResolvedValue('vendor-new');
     renderUnfold({ vendor_id: null, vendor_name: null });
     fireEvent.change(block().getByRole('combobox', { name: 'Maker' }), {
       target: { value: 'Ostrander Upholstery' },
@@ -201,7 +201,7 @@ describe('LineUnfold · C-05 line commercials', () => {
     fireEvent.click(
       block().getByRole('option', { name: 'Add a maker: “Ostrander Upholstery”' }),
     );
-    expect(mockFindOrCreateVendor).toHaveBeenCalledWith({ name: 'Ostrander Upholstery' });
+    expect(mockFindVendorMatch).toHaveBeenCalledWith({ name: 'Ostrander Upholstery' });
     await waitFor(() =>
       expect(mockSetCommercials).toHaveBeenCalledWith({
         itemId: 'line-1',
@@ -209,6 +209,28 @@ describe('LineUnfold · C-05 line commercials', () => {
         vendorId: 'vendor-new',
       }),
     );
+    expect(mockResolveOrCreateVendor).toHaveBeenCalledWith({ name: 'Ostrander Upholstery' });
+  });
+
+  it('offers the maker already in Patina instead of creating one (R-PB4)', async () => {
+    mockFindVendorMatch.mockResolvedValue({ id: 'vendor-hewn', name: 'Hewn Woodworks' });
+    renderUnfold({ vendor_id: null, vendor_name: null });
+    fireEvent.change(block().getByRole('combobox', { name: 'Maker' }), {
+      target: { value: 'hewn woodworks' },
+    });
+    fireEvent.click(block().getByRole('option', { name: 'Add a maker: “hewn woodworks”' }));
+    expect(await block().findByText('Hewn Woodworks is already in Patina.')).toBeInTheDocument();
+    expect(mockSetCommercials).not.toHaveBeenCalled();
+    expect(mockResolveOrCreateVendor).not.toHaveBeenCalled();
+    fireEvent.click(block().getByRole('button', { name: 'Use it' }));
+    await waitFor(() =>
+      expect(mockSetCommercials).toHaveBeenCalledWith({
+        itemId: 'line-1',
+        projectId: 'project-1',
+        vendorId: 'vendor-hewn',
+      }),
+    );
+    expect(mockResolveOrCreateVendor).not.toHaveBeenCalled();
   });
 
   it('warns, without blocking, when trade equals retail on an off-catalog line', () => {

@@ -7,8 +7,11 @@
  *
  *  · client — the proven `useAddClient` mutation (auth-guarded server route,
  *    optional magic-link invite, audit row).
- *  · maker  — R78 / PRC-03: the vendor-creation door. Finds-or-creates the
- *    vendor (`useFindOrCreateVendor`), then SAVES it (`useSaveVendor`).
+ *  · maker  — R78 / PRC-03: the vendor-creation door. R-PB4: looks the shared
+ *    vendor up first (`useFindVendorMatch`; a match reads "… is already in
+ *    Patina. Use it."), else creates it (`useResolveOrCreateVendor`), then
+ *    SAVES it (`useSaveVendor`) and writes the orders email and specialty to
+ *    the studio's own account card (`useUpsertStudioVendorAccount`, C-12).
  *  · gc / sub / installer / receiver — the field crew (00281). A per-project
  *    project_parties row with an optional phone + "Text updates" opt-in. When
  *    the opt-in is on, the row is written with consent 'pending', which fires
@@ -43,7 +46,11 @@ import {
   useAddProjectParty,
   useAddStudioContact,
   useAddStudioContactChannel,
-  useFindOrCreateVendor,
+  fetchStudioVendorAccount,
+  useFindVendorMatch,
+  useResolveOrCreateVendor,
+  useUpsertStudioVendorAccount,
+  type VendorMatch,
   usePromoteToStudioContact,
   useSaveVendor,
   useSetAffiliation,
@@ -352,7 +359,12 @@ export function AddPersonSheet({
   const { user } = useAuth();
   const addClient = useAddClient();
   // R83: this sheet renders failures inline — keep the global toast silent.
-  const findOrCreateVendor = useFindOrCreateVendor({ errorSurface: "inline" });
+  // R-PB4: a new maker resolves an existing shared vendors row first.
+  const findVendorMatch = useFindVendorMatch({ errorSurface: "inline" });
+  const resolveVendor = useResolveOrCreateVendor({ errorSurface: "inline" });
+  const upsertVendorAccount = useUpsertStudioVendorAccount({
+    errorSurface: "inline",
+  });
   const saveVendor = useSaveVendor({ errorSurface: "inline" });
   const addParty = useAddProjectParty();
   const updateContact = useUpdateStudioContact();
@@ -456,6 +468,8 @@ export function AddPersonSheet({
   const [category, setCategory] = useState("");
   const [ordersEmail, setOrdersEmail] = useState("");
   const [website, setWebsite] = useState("");
+  // The shared maker the typed name/website matched, waiting on "Use it".
+  const [makerMatch, setMakerMatch] = useState<VendorMatch | null>(null);
   // Field-party fields (00281).
   const [partyName, setPartyName] = useState("");
   const [company, setCompany] = useState("");
@@ -831,6 +845,7 @@ export function AddPersonSheet({
     setCategory("");
     setOrdersEmail("");
     setWebsite("");
+    setMakerMatch(null);
     setPartyName("");
     setCompany("");
     setTrade("");
@@ -951,19 +966,63 @@ export function AddPersonSheet({
       setError("A maker needs at least a name — the shop you order from.");
       return;
     }
+    const trimmedOrdersEmail = ordersEmail.trim();
+    if (
+      trimmedOrdersEmail &&
+      !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmedOrdersEmail)
+    ) {
+      setError("That orders email doesn’t look right — check it and try again.");
+      return;
+    }
     try {
-      const result = await findOrCreateVendor.mutateAsync({
-        name: trimmedName,
-        website: website.trim() || undefined,
-        primaryCategory: category.trim() || undefined,
-        ordersEmail: ordersEmail.trim() || undefined,
-      });
-      await saveVendor.mutateAsync({ vendorId: result.vendorId });
+      // R-PB4: look the maker up first. A match waits on "Use it" (which
+      // presses this again with the match held); no match creates the row.
+      let vendor: VendorMatch;
+      let isNew = false;
+      if (makerMatch) {
+        vendor = makerMatch;
+      } else {
+        const input = { name: trimmedName, website: website.trim() || null };
+        const found = await findVendorMatch.mutateAsync(input);
+        if (found) {
+          setMakerMatch(found);
+          return;
+        }
+        vendor = { id: await resolveVendor.mutateAsync(input), name: trimmedName };
+        isNew = true;
+      }
+      await saveVendor.mutateAsync({ vendorId: vendor.id });
+
+      // The studio's own card over the shared row (C-12): the orders inbox
+      // and the specialty are the studio's facts, not the shared row's.
+      if (organizationId) {
+        const specialty = category.trim();
+        let notes: string | undefined;
+        if (specialty) {
+          const line = `Specialty: ${specialty}`;
+          const existing = (
+            await fetchStudioVendorAccount(organizationId, vendor.id)
+          )?.notes?.trim();
+          notes = !existing
+            ? line
+            : existing.split("\n").includes(line)
+              ? existing
+              : `${existing}\n${line}`;
+        }
+        await upsertVendorAccount.mutateAsync({
+          organizationId,
+          vendorId: vendor.id,
+          request: {
+            ...(trimmedOrdersEmail ? { ordersEmailOverride: trimmedOrdersEmail } : {}),
+            ...(notes !== undefined ? { notes } : {}),
+          },
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
 
-      const message = result.isNew
-        ? `${result.vendor.name} added — a new maker on your roster.`
-        : `${result.vendor.name} was already in the book — now on your roster.`;
+      const message = isNew
+        ? `${vendor.name} added — a new maker on your roster.`
+        : `${vendor.name} was already in Patina — now on your roster.`;
       onAdded?.(message, "makers");
       reset();
       onClose();
@@ -1412,7 +1471,9 @@ export function AddPersonSheet({
 
   const pending =
     addClient.isPending ||
-    findOrCreateVendor.isPending ||
+    findVendorMatch.isPending ||
+    resolveVendor.isPending ||
+    upsertVendorAccount.isPending ||
     saveVendor.isPending ||
     addParty.isPending ||
     promoteToCard.isPending ||
@@ -1730,7 +1791,10 @@ export function AddPersonSheet({
           <input
             type="text"
             value={makerName}
-            onChange={(e) => setMakerName(e.target.value)}
+            onChange={(e) => {
+              setMakerName(e.target.value);
+              setMakerMatch(null);
+            }}
             className={`${FIELD_INPUT} mb-4`}
           />
 
@@ -1761,12 +1825,32 @@ export function AddPersonSheet({
           <input
             type="text"
             value={website}
-            onChange={(e) => setWebsite(e.target.value)}
+            onChange={(e) => {
+              setWebsite(e.target.value);
+              setMakerMatch(null);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") void submit();
             }}
             className={FIELD_INPUT}
           />
+
+          {makerMatch && (
+            <p
+              aria-live="polite"
+              className="mt-4 flex flex-wrap items-baseline gap-x-2 text-[0.8rem] text-[var(--color-charcoal)]"
+            >
+              <span>{makerMatch.name} is already in Patina.</span>
+              <DocumentAction
+                actionKey="use-matched-maker"
+                variant="tertiary"
+                disabled={pending}
+                onClick={() => void submitMaker()}
+              >
+                Use it
+              </DocumentAction>
+            </p>
+          )}
         </>
       ) : (
         <>

@@ -18,7 +18,8 @@ jest.mock('@tanstack/react-query', () => ({
 
 jest.mock('@patina/supabase', () => ({
   useStartPurchaseOrderChange: () => ({ mutateAsync: startMutateAsync, isPending: false }),
-  useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useFindVendorMatch: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useResolveOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useVendors: (filters?: { search?: string }) => ({
     data: filters?.search
       ? {

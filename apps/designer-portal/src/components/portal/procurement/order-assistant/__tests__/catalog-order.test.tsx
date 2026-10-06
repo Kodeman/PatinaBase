@@ -31,6 +31,7 @@ const mockShipToSources: { orgAddress: unknown; siteAddress: string | null } = {
   orgAddress: null,
   siteAddress: null,
 };
+const mockStudioAccount: { row: Record<string, unknown> | null } = { row: null };
 
 jest.mock('@patina/supabase', () => ({
   useCreatePurchaseOrder: () => ({ mutateAsync: createMutateAsync, isPending: false }),
@@ -47,6 +48,10 @@ jest.mock('@patina/supabase', () => ({
     data: { studio_id: 'org-studio', site_address: mockShipToSources.siteAddress },
   }),
   useStudioIdentity: () => ({ data: undefined }),
+  // C-12: the project studio's own account with the vendor.
+  useStudioVendorAccount: (studioId: string | null, vendorId: string) => ({
+    data: studioId === 'org-studio' && vendorId === 'vendor-1' ? mockStudioAccount.row : null,
+  }),
 }));
 
 jest.mock('@/components/portal/toast-provider', () => ({
@@ -93,6 +98,7 @@ jest.mock('../step-coverage', () => ({
 jest.mock('../step-details', () => ({
   StepDetails: () => null,
   depositDefaultForPattern: () => '',
+  prefillPaymentPattern: jest.requireActual('../step-details').prefillPaymentPattern,
   freshMilestone: () => ({ key: Math.random().toString(36), label: '', amountInput: '', dueDate: '' }),
   validateDetails: () => null,
 }));
@@ -434,6 +440,43 @@ describe('OrderAssistant — catalog order (Phase 4 pay-at-order)', () => {
     expect(startCheckoutMutateAsync).not.toHaveBeenCalled();
     expect(fetchPOPaymentsMock).not.toHaveBeenCalled();
     expect(hrefSet).toBeNull();
+  });
+});
+
+describe('OrderAssistant — terms prefill from the studio account (C-12)', () => {
+  afterEach(() => {
+    mockStudioAccount.row = null;
+  });
+
+  async function orderOffCatalog(defaultTerms: string | null) {
+    createMutateAsync.mockReset().mockResolvedValue({ id: 'po-3', total_cents: 5000 });
+    renderAssistant({
+      vendor: { ...baseVendor, default_payment_terms: defaultTerms, is_patina_catalog: false },
+    } as Partial<OrderAssistantProps>);
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    chooseSomewhereElse();
+    fireEvent.click(screen.getByRole('button', { name: /confirm 1 ordered/i }));
+    await waitFor(() => expect(createMutateAsync).toHaveBeenCalledTimes(1));
+    return createMutateAsync.mock.calls[0][0];
+  }
+
+  it("orders on the studio account's terms over the vendor default", async () => {
+    mockStudioAccount.row = { payment_pattern: 'thirty_seventy', deposit_pct: 40, archived_at: null };
+    expect(await orderOffCatalog('net_30')).toMatchObject({ paymentPattern: 'thirty_seventy' });
+  });
+
+  it('falls back to the vendor default when the studio has no account', async () => {
+    expect(await orderOffCatalog('net_30')).toMatchObject({ paymentPattern: 'net_30' });
+  });
+
+  it('ignores an archived account', async () => {
+    mockStudioAccount.row = {
+      payment_pattern: 'full_upfront',
+      deposit_pct: null,
+      archived_at: '2026-10-01T00:00:00Z',
+    };
+    expect(await orderOffCatalog(null)).toMatchObject({ paymentPattern: 'fifty_fifty' });
   });
 });
 

@@ -33,6 +33,27 @@ export const PAYMENT_PATTERN_OPTIONS: Array<{ value: PaymentPattern; label: stri
   { value: 'custom_milestones', label: 'Custom milestones' },
 ];
 
+/**
+ * C-12: the pattern the Details step opens on — the studio account's terms
+ * with this vendor, else the shared vendor default, else 50/50.
+ */
+export function prefillPaymentPattern(
+  accountPattern: PaymentPattern | null | undefined,
+  vendorDefault: PaymentPattern | null | undefined
+): PaymentPattern {
+  return accountPattern ?? vendorDefault ?? 'fifty_fifty';
+}
+
+/** Where a terms option comes from, said after its label. */
+export function termsNote(
+  value: PaymentPattern,
+  accountPattern: PaymentPattern | null | undefined,
+  vendorDefault: PaymentPattern | null | undefined
+): string {
+  if (accountPattern) return value === accountPattern ? ' (Studio account)' : '';
+  return value === vendorDefault ? ' (Vendor default)' : '';
+}
+
 // ─── Milestone row helper type ─────────────────────────────────────────────
 
 export interface MilestoneRow {
@@ -55,12 +76,18 @@ export function freshMilestone(): MilestoneRow {
 /**
  * Pre-fill value for the deposit-amount input when the pattern changes —
  * canonical pattern math (50% / 30% / 100% of total). Custom and net_30 get
- * an empty input.
+ * an empty input. C-12: a split pattern takes the studio account's deposit %
+ * instead when the caller passes one.
  */
 export function depositDefaultForPattern(
   pattern: PaymentPattern,
-  totalCents: number
+  totalCents: number,
+  accountDepositPct?: number | null
 ): string {
+  const split = pattern === 'fifty_fifty' || pattern === 'thirty_seventy';
+  if (split && accountDepositPct != null) {
+    return centsToDollarString(Math.floor((totalCents * accountDepositPct) / 100));
+  }
   if (pattern === 'fifty_fifty') return centsToDollarString(Math.floor(totalCents / 2));
   if (pattern === 'thirty_seventy') return centsToDollarString(Math.floor(totalCents * 0.3));
   if (pattern === 'full_upfront') return centsToDollarString(totalCents);
@@ -125,6 +152,8 @@ export function validateDetails({
 export interface StepDetailsProps {
   vendor: OrderAssistantVendor;
   totalCents: number;
+  /** C-12: the studio account's terms with this vendor, when it sets them. */
+  accountPaymentPattern?: PaymentPattern | null;
 
   /** Shipment sidemark (00186) — prefilled by the shell, freely editable. */
   sidemark: string;
@@ -152,6 +181,7 @@ export function StepDetails(props: StepDetailsProps) {
   const {
     vendor,
     totalCents,
+    accountPaymentPattern,
     sidemark,
     onSidemarkChange,
     vendorPoNumber,
@@ -276,15 +306,12 @@ export function StepDetails(props: StepDetailsProps) {
             onChange={(e) => onPaymentPatternChange(e.target.value as PaymentPattern)}
             className="mt-1 w-full rounded-[3px] border border-[var(--border-default)] bg-transparent px-2 py-1.5 font-mono text-[0.7rem] text-[var(--text-primary)] focus:border-[var(--accent-primary)] focus:outline-none"
           >
-            {PAYMENT_PATTERN_OPTIONS.map((opt) => {
-              const isDefault = vendor.default_payment_terms === opt.value;
-              return (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                  {isDefault ? ` (${vendor.name} default)` : ''}
-                </option>
-              );
-            })}
+            {PAYMENT_PATTERN_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+                {termsNote(opt.value, accountPaymentPattern, vendor.default_payment_terms)}
+              </option>
+            ))}
           </select>
         </label>
 

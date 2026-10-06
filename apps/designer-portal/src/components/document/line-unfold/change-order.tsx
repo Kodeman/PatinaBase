@@ -4,16 +4,16 @@ import { useId, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { PencilLine } from 'lucide-react';
 import {
-  useFindOrCreateVendor,
   useStartPurchaseOrderChange,
   type PurchaseOrderChangeKind,
   type StartPurchaseOrderChangeResult,
+  type VendorMatch,
 } from '@patina/supabase';
 import type { LineAuthorization } from '@/lib/document/authorization-derivation';
 import { DocumentAction, DocumentActionGroup } from '../document-action';
 import { DocSheet } from '../overlays/doc-sheet';
 import { FIELD_CLS, LABEL_CLS } from './cell';
-import { MakerSearch, type MakerOption } from './the-buy-cell';
+import { MakerMatchLine, MakerSearch, useAddMaker, type MakerOption } from './the-buy-cell';
 
 type FFERow = any;
 
@@ -158,7 +158,7 @@ function ChangeOrderSheet({
 }) {
   const qc = useQueryClient();
   const startChange = useStartPurchaseOrderChange({ errorSurface: 'inline' });
-  const findOrCreate = useFindOrCreateVendor({ errorSurface: 'inline' });
+  const addMaker = useAddMaker();
   const [kind, setKind] = useState<OfferedChangeKind>('cancellation');
   const [reason, setReason] = useState('');
   const [maker, setMaker] = useState<{ id: string; name: string } | null>(null);
@@ -168,20 +168,23 @@ function ChangeOrderSheet({
   const kindName = useId();
 
   const gate = changeGate(kind, auth);
-  const pending = startChange.isPending || findOrCreate.isPending;
+  const pending = startChange.isPending || addMaker.isPending;
   const missing =
     reason.trim().length < MIN_REASON || (kind === 'vendor_change' && !maker);
 
-  const chooseMaker = (option: MakerOption) => {
+  const chooseMaker = (option: MakerOption | VendorMatch) => {
     setError(null);
-    const resolve =
-      option.kind === 'vendor'
-        ? Promise.resolve({ id: option.id, name: option.name })
-        : findOrCreate
-            .mutateAsync({ name: option.name })
-            .then((r) => ({ id: r.vendorId, name: r.vendor.name }));
+    let resolve: Promise<VendorMatch | null>;
+    if ('id' in option) {
+      addMaker.clearMatch();
+      resolve = Promise.resolve({ id: option.id, name: option.name });
+    } else {
+      resolve = addMaker.add(option.name);
+    }
     resolve
       .then((vendor) => {
+        // A match waits on "Use it".
+        if (!vendor) return;
         if (vendor.id === po.vendor_id) {
           setError(`${vendor.name} already makes this order — pick a different maker.`);
           return;
@@ -262,6 +265,9 @@ function ChangeOrderSheet({
             ) : (
               <div className="mt-1 border-b border-[var(--color-pearl)] py-1">
                 <MakerSearch disabled={pending} autoFocus onChoose={chooseMaker} />
+                {addMaker.match && (
+                  <MakerMatchLine match={addMaker.match} disabled={pending} onUse={chooseMaker} />
+                )}
               </div>
             )}
           </div>
