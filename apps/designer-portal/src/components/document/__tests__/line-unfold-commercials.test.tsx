@@ -38,8 +38,8 @@ jest.mock('@patina/supabase', () => ({
   useProductPrices: () => ({ data: mockProductPrices }),
 }));
 
-jest.mock('@/components/portal/procurement/order-assistant', () => ({
-  OrderAssistant: () => null,
+jest.mock('@/components/portal/procurement/order-paper', () => ({
+  OrderPaper: () => null,
 }));
 jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
   LogInspectionDrawer: () => null,

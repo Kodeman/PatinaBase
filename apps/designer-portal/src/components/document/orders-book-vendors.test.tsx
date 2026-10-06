@@ -28,8 +28,10 @@ jest.mock('@/hooks/use-viewer-studio', () => ({
   useInternalTimeStudio: () => ({ studio: { id: 'studio-1' } }),
 }));
 
-jest.mock('@/components/portal/procurement/order-assistant', () => ({
-  OrderAssistant: () => null,
+jest.mock('@/components/portal/procurement/order-paper', () => ({
+  OrderPaperQueue: () => null,
+  PAYMENT_PATTERN_OPTIONS: jest.requireActual('@/components/portal/procurement/order-paper/model')
+    .PAYMENT_PATTERN_OPTIONS,
 }));
 
 jest.mock('@/hooks/use-commercial-documents', () => ({

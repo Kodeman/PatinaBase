@@ -51,7 +51,6 @@ import {
   type ShipToLocation,
   type ShipToSelection,
 } from '../ship-to-choice';
-import { StepReview } from '../step-review';
 
 const STUDIO = '1 Main St, Madison, WI 53703';
 const SITE = '42 Lake Rd, Middleton, WI 53562';
@@ -302,36 +301,19 @@ describe('ShipToChoice', () => {
   });
 });
 
-describe('StepReview ship-to line', () => {
-  const props = {
-    vendor: { id: 'v', name: 'Acme', default_payment_terms: null },
-    ffeItems: [{ id: 'i', name: 'Sofa', line_total_cents: 100 }],
-    copyState: 'idle' as const,
-    onCopyDetails: jest.fn(),
-  };
-
-  it('shows the chosen ship-to', () => {
-    render(<StepReview {...props} shipTo={STUDIO} />);
-    expect(screen.getByText(`Ship to: ${STUDIO}`)).toBeInTheDocument();
-  });
-
-  it('points at the Details step before a choice is made', () => {
-    render(<StepReview {...props} shipTo={null} />);
-    expect(screen.getByText('Ship to: chosen in Order details')).toBeInTheDocument();
-  });
-});
-
 describe('the hardcoded ship-to placeholder', () => {
-  it('appears nowhere in the Order Assistant or PoPreview source', () => {
-    const dir = path.resolve(__dirname, '..');
-    const files = [
-      ...fs
+  it('appears nowhere in the ship-to, order paper or PoPreview source', () => {
+    const sources = (dir: string) =>
+      fs
         .readdirSync(dir)
         .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
-        .map((f) => path.join(dir, f)),
+        .map((f) => path.join(dir, f));
+    const files = [
+      ...sources(path.resolve(__dirname, '..')),
+      ...sources(path.resolve(__dirname, '../../order-paper')),
       path.resolve(__dirname, '../../../../document/po-preview.tsx'),
     ];
-    expect(files.length).toBeGreaterThan(5);
+    expect(files.length).toBeGreaterThan(4);
     // Assembled so this file never matches itself.
     const banned = ['SHIP_TO_' + 'PLACEHOLDER', 'Middlewest Studio ' + '· Madison'];
     for (const file of files) {

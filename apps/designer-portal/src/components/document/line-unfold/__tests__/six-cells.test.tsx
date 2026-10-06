@@ -38,8 +38,8 @@ jest.mock('../claim-clock', () => ({
   ),
 }));
 
-jest.mock('@/components/portal/procurement/order-assistant', () => ({
-  OrderAssistant: () => null,
+jest.mock('@/components/portal/procurement/order-paper', () => ({
+  OrderPaper: () => null,
 }));
 jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
   LogInspectionDrawer: () => null,
@@ -246,13 +246,13 @@ describe('LineUnfold · six cells (C-14)', () => {
 describe('LineUnfold · one next act above the cells (C-14)', () => {
   const nextAct = () => screen.getByTestId('line-next-act');
 
-  it('lifts Order with Assistant on a ready line, ahead of the cells', () => {
+  it('lifts Order on a ready line, ahead of the cells', () => {
     renderUnfold();
     const order = within(nextAct()).getByRole('button', {
-      name: 'Order with Assistant',
+      name: 'Order',
     });
     expect(order).toHaveAttribute('data-action-variant', 'primary');
-    expect(screen.getAllByRole('button', { name: 'Order with Assistant' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Order' })).toHaveLength(1);
     const buy = screen.getByRole('group', { name: 'The buy' });
     expect(
       nextAct().compareDocumentPosition(buy) & Node.DOCUMENT_POSITION_FOLLOWING,

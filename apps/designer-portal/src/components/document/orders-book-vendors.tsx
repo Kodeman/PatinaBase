@@ -35,13 +35,12 @@ import {
 } from '@patina/supabase';
 import { Select } from '@/components/ui/controls';
 import { useInternalTimeStudio } from '@/hooks/use-viewer-studio';
-import { PAYMENT_PATTERN_OPTIONS } from '@/components/portal/procurement/order-assistant/step-details';
 import {
-  OrderAssistant,
-  type OrderAssistantFFEItem,
-  type OrderAssistantProject,
-  type OrderAssistantVendor,
-} from '@/components/portal/procurement/order-assistant';
+  OrderPaperQueue,
+  PAYMENT_PATTERN_OPTIONS,
+  type OrderPaperVendor,
+  type PendingOrder,
+} from '@/components/portal/procurement/order-paper';
 import { Stamp } from './stamp';
 import { MItem } from './m-item';
 import {
@@ -570,21 +569,12 @@ const readinessOf = (
       })
     : null;
 
-/** One assistant session — one (vendor, project) pair → one PO (W3-T3a). */
-interface PendingOrder {
-  vendor: OrderAssistantVendor;
-  project: OrderAssistantProject;
-  ffeItems: OrderAssistantFFEItem[];
-}
-
 /**
  * The vendor page's whole-queue ordering act: every ready, unordered FF&E
- * line the studio holds with this vendor, fed to the existing OrderAssistant
- * (all steps, same atomic create-PO RPC + sidemark + coverage vote). One PO
- * covers one project, so a multi-project vendor enqueues one session per
- * (vendor, project) and the assistant walks the queue — the by-vendor page's
- * exact mechanism, in the book's DM-mono grammar. PRC-09's order-all rides
- * this same act.
+ * line the studio holds with this vendor, laid as order papers (C-23). One PO
+ * covers one project, so a multi-project vendor gets one paper per (vendor,
+ * project), stepped through in the same sheet. PRC-09's order-all rides this
+ * same act.
  */
 function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
   const { data: items } = useProcurementItems({ vendorId: vendor.id }) as {
@@ -613,17 +603,17 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
     (it) => (readinessById.get(it.id)?.warnings.length ?? 0) > 0,
   ).length;
   const [queue, setQueue] = useState<PendingOrder[]>([]);
-  const active = queue[0] ?? null;
+  const active = queue.length > 0;
 
   // Catalog vendors keep their Patina-handled path (W1.5.5) — no manual POs.
   // NOTE: a live queue keeps the mount alive even as the created POs drain
   // the orderable list (invalidateFfeCaches refetches mid-walk) — otherwise
-  // the assistant's created step would vanish under the designer.
+  // the paper's sent record would vanish under the designer.
   if (vendor.is_patina_catalog || (orderable.length === 0 && !active))
     return null;
 
   const orderAll = () => {
-    const assistantVendor: OrderAssistantVendor = {
+    const paperVendor: OrderPaperVendor = {
       id: vendor.id,
       name: vendor.name,
       default_payment_terms: vendor.default_payment_terms ?? null,
@@ -641,14 +631,14 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
     }
     setQueue(
       Array.from(byProject.entries()).map(([pid, list]) => ({
-        vendor: assistantVendor,
+        vendor: paperVendor,
         project: { id: pid, name: list[0].project?.name ?? 'Project' },
         ffeItems: list.map((it) => ({
           id: it.id,
           name: it.name,
           room: it.room?.name,
           line_total_cents: it.line_total_cents ?? 0,
-          // Dual pricing (00185/00186): the assistant totals
+          // Dual pricing (00185/00186): the paper totals
           // COALESCE(trade, unit) × qty, matching the RPC's server total.
           quantity: it.quantity ?? 1,
           unit_price_cents: it.unit_price_cents ?? null,
@@ -699,27 +689,7 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
             : `${unsigned} of ${orderable.length} have no signed agreement behind them yet. You can still order.`}
         </p>
       )}
-      {/* D4 inside the book: the shared assistant carries shadow-xl in the
-          old zones — strip it here without touching it (the R3/line-unfold
-          precedent). */}
-      {active && (
-        <div className="contents [&_.shadow-xl]:shadow-none">
-          <OrderAssistant
-            open
-            onOpenChange={(open: boolean) => {
-              if (!open) setQueue((q) => q.slice(1));
-            }}
-            vendor={active.vendor}
-            project={active.project}
-            ffeItems={active.ffeItems}
-            scopeDisclaimer={
-              queue.length > 1
-                ? `${queue.length} project orders queued for ${active.vendor.name} — you'll confirm each in turn.`
-                : undefined
-            }
-          />
-        </div>
-      )}
+      {active && <OrderPaperQueue orders={queue} onClose={() => setQueue([])} />}
     </>
   );
 }

@@ -39,8 +39,8 @@ jest.mock('@patina/supabase', () => ({
   useProductPrices: () => ({ data: undefined }),
 }));
 
-jest.mock('@/components/portal/procurement/order-assistant', () => ({
-  OrderAssistant: () => null,
+jest.mock('@/components/portal/procurement/order-paper', () => ({
+  OrderPaper: () => null,
 }));
 jest.mock('@/components/portal/procurement/log-inspection-drawer', () => ({
   LogInspectionDrawer: () => null,
@@ -119,7 +119,7 @@ describe('LineUnfold · the authorization gate', () => {
       screen.queryByTestId('line-authorization-strip'),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /order with assistant/i }),
+      screen.getByRole('button', { name: /^order$/i }),
     ).toBeInTheDocument();
   });
 
@@ -129,7 +129,7 @@ describe('LineUnfold · the authorization gate', () => {
       screen.getByText('Not yet authorized — no purchase order'),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /order with assistant/i }),
+      screen.queryByRole('button', { name: /^order$/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -139,7 +139,7 @@ describe('LineUnfold · the authorization gate', () => {
       screen.getByText('PO available — deposit clear (A3)'),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /order with assistant/i }),
+      screen.getByRole('button', { name: /^order$/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/signed price \$3,900 · deposit clear/),
@@ -157,7 +157,7 @@ describe('LineUnfold · the authorization gate', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /order with assistant/i }),
+      screen.queryByRole('button', { name: /^order$/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -188,7 +188,7 @@ describe('LineUnfold · the authorization gate', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /order with assistant/i }),
+      screen.getByRole('button', { name: /^order$/i }),
     ).toBeInTheDocument();
     expect(
       screen.queryByTestId('line-order-readiness'),
@@ -205,7 +205,7 @@ describe('LineUnfold · the authorization gate', () => {
       },
     });
     expect(
-      screen.queryByRole('button', { name: /order with assistant/i }),
+      screen.queryByRole('button', { name: /^order$/i }),
     ).not.toBeInTheDocument();
     const reasons = screen.getByTestId('line-order-readiness');
     expect(reasons).toHaveTextContent('Not selected yet');

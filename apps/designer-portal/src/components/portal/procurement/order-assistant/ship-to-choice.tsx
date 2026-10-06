@@ -3,7 +3,7 @@
 /**
  * C-02 ship-to: an explicit choice with nothing preselected (R-PB3 — sending
  * is refused server-side when a PO has no ship-to). One radio group, two
- * homes: the Order Assistant's Details step and PoPreview's "Ship-to not
+ * homes: the order paper's header and PoPreview's "Ship-to not
  * set" band for an existing unsent PO.
  *
  * C-13: the studio's locations come first, receivers ahead of the rest, with
