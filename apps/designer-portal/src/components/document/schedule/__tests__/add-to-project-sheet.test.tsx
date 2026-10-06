@@ -113,13 +113,15 @@ describe('Add to the job — roads', () => {
     vendorResults = [];
   });
 
-  it('shows ten roads under their heads', () => {
+  it('shows eleven roads under their heads', () => {
     renderSheet();
     const have = screen.getByRole('region', { name: 'From something you have' });
     const notInCatalog = screen.getByRole('region', { name: 'Not in any catalog' });
     expect(within(have).getAllByRole('button')).toHaveLength(6);
-    expect(within(notInCatalog).getAllByRole('button')).toHaveLength(4);
+    expect(within(notInCatalog).getAllByRole('button')).toHaveLength(5);
     expect(within(notInCatalog).getByRole('button', { name: /Name a need/ })).toBeInTheDocument();
+    // C-25: the purchase record's own road.
+    expect(within(notInCatalog).getByRole('button', { name: /Bought it already/ })).toBeInTheDocument();
   });
 
   it('holds the photo road when the flag is off, and never hides it', () => {

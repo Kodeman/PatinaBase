@@ -29,8 +29,10 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { createBrowserClient, type Invoice } from '@patina/supabase';
 import {
   partitionDesk,
+  RETURN_BY_LEAD_DAYS,
   type DeskClaimWindowSignal,
   type DeskPaymentSignal,
+  type DeskReturnSignal,
   type DeskFolder,
   type DocumentStateRow,
   type MotionChip,
@@ -179,6 +181,39 @@ export function buildDeskPayments(notices: any): Map<string, DeskPaymentSignal[]
   return map;
 }
 
+/** C-25: live purchases whose return window is near. The read takes a day of
+ *  slack each side (UTC vs local dates); returnWindowOpen decides exactly. */
+const DESK_RETURN_LIMIT = 200;
+
+/**
+ * C-25: live studio purchases with a return-by date, folded to one signal per
+ * purchase and keyed by project_id. Studio overhead (no project) has no
+ * engagement to rise on, so the read already excludes it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildDeskReturns(rows: any): Map<string, DeskReturnSignal[]> | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  const map = new Map<string, DeskReturnSignal[]>();
+  for (const row of rows) {
+    if (!row?.id || !row.project_id || !row.return_by) continue;
+    const item = one(row.ffe_item);
+    map.set(row.project_id, [
+      ...(map.get(row.project_id) ?? []),
+      {
+        purchaseId: row.id,
+        label: row.description?.trim() || row.payee_name,
+        payeeName: row.payee_name,
+        returnBy: row.return_by,
+        itemStatus: item?.status ?? null,
+        received: (item?.received_quantity ?? 0) > 0,
+      },
+    ]);
+  }
+  return map;
+}
+
 /**
  * C-20: the claim_window_closing notices (00700's procurement-clocks-daily
  * writes one the day before the vendor deadline) folded to one signal per PO,
@@ -317,6 +352,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         { data: deskProposals, error: deskProposalsError },
         { data: claimNotices, error: claimNoticesError },
         { data: paymentNotices, error: paymentNoticesError },
+        { data: returnRows, error: returnRowsError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -418,6 +454,23 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
           .in('payment.state', ['pending', 'due'])
           .order('created_at', { ascending: false })
           .limit(DESK_PAYMENT_NOTICE_LIMIT),
+        // C-25: live, returnable project purchases whose return-by date is
+        // near. A returned or void purchase drops out of the read itself.
+        supabase
+          .from('studio_purchases')
+          .select(
+            'id, project_id, description, payee_name, return_by, ffe_item:project_ffe_items!studio_purchases_ffe_item_id_fkey(status, received_quantity)',
+          )
+          .in('status', ['recorded', 'billed'])
+          .eq('returnable', true)
+          .is('returned_on', null)
+          .gte('return_by', new Date(Date.now() - 86_400_000).toISOString().slice(0, 10))
+          .lte(
+            'return_by',
+            new Date(Date.now() + (RETURN_BY_LEAD_DAYS + 1) * 86_400_000).toISOString().slice(0, 10),
+          )
+          .order('return_by')
+          .limit(DESK_RETURN_LIMIT),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -523,6 +576,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         ? undefined
         : await loadDeskClaimWindows(supabase, claimNotices);
       const payments = paymentNoticesError ? undefined : buildDeskPayments(paymentNotices);
+      const returns = returnRowsError ? undefined : buildDeskReturns(returnRows);
 
       const result = partitionDesk(
         rows,
@@ -535,6 +589,7 @@ export function useDeskEngagements(options: { enabled?: boolean } = {}) {
         schedules,
         claimWindows,
         payments,
+        returns,
       );
       previousResultRef.current = result;
       return result;

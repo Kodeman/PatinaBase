@@ -22,11 +22,13 @@ import { DocSheet } from '../overlays/doc-sheet';
 import { DocumentAction } from '../document-action';
 import { LineCard, ROAD_PAGE_LABEL, type LineCardRoad, type LineCardSource } from './line-card';
 import { DocumentImportReview, type DocumentImportRoad } from './document-import-review';
+import { PurchaseRecordForm } from '../purchases/purchase-record-form';
 
 type SheetMode =
   | { kind: 'roads' }
   | { kind: 'line'; source: LineCardSource }
-  | { kind: 'import'; road: DocumentImportRoad };
+  | { kind: 'import'; road: DocumentImportRoad }
+  | { kind: 'purchase' };
 
 export function openAddToProject(source: 'section' | 'command_palette' | 'empty_state' = 'section') {
   window.dispatchEvent(new CustomEvent('document:open-add-to-project', { detail: { source } }));
@@ -108,16 +110,30 @@ export function AddToProjectSheet({
       { label: 'A find', description: 'An antique, vintage piece or auction lot.', act: () => toLine('find') },
       { label: 'A store buy', description: 'Something bought retail, on the studio card.', act: () => toLine('store') },
       { label: 'Name a need', description: 'A placeholder to resolve later.', act: () => toLine('need') },
+      {
+        label: 'Bought it already',
+        description: 'Paid for already: retail, a lot, an expense or a sample fee.',
+        act: () => setMode({ kind: 'purchase' }),
+      },
     ]],
   ];
 
-  const sheetTitle = mode.kind === 'roads' || result ? 'Add to the job' : mode.kind === 'line' ? 'The line, as it will be bought' : 'Review the lines';
+  const sheetTitle =
+    mode.kind === 'roads' || result
+      ? 'Add to the job'
+      : mode.kind === 'line'
+        ? 'The line, as it will be bought'
+        : mode.kind === 'purchase'
+          ? 'Bought it already'
+          : 'Review the lines';
   const pageLabel =
     mode.kind === 'line' && !result
       ? ROAD_PAGE_LABEL[mode.source.road]
       : mode.kind === 'import' && !result
         ? (mode.road === 'quote' ? "from a vendor's quote" : 'from a schedule')
-        : projectName;
+        : mode.kind === 'purchase' && !result
+          ? 'a purchase record'
+          : projectName;
 
   return (
     <>
@@ -164,6 +180,8 @@ export function AddToProjectSheet({
         {mode.kind === 'import' && !result && (
           <DocumentImportReview key={mode.road} projectId={projectId} road={mode.road} rooms={rooms} onDone={setResult} />
         )}
+
+        {mode.kind === 'purchase' && !result && <PurchaseRecordForm projectId={projectId} onDone={setResult} />}
 
         {result && (
           <div role="status" className="border-y border-[var(--color-pearl)] py-5">

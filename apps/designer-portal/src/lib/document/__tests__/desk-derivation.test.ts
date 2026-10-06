@@ -13,6 +13,7 @@ import {
   NEED_ACTION_LABELS,
   type DeskClaimWindowSignal,
   type DeskPaymentSignal,
+  type DeskReturnSignal,
   type DocumentStateRow,
   type NurtureLike,
   type DeskCeremonySignal,
@@ -56,6 +57,7 @@ const OWNER_BY_KIND: Record<NeedKind, 'designer' | 'client' | 'maker'> = {
   cfa_pending: 'designer',
   memo_return: 'designer',
   exception_open: 'designer',
+  return_by: 'designer',
 };
 
 /** C-22 Phase 2 kinds: registered as types, no rule emits them yet. Their
@@ -365,6 +367,8 @@ const DERIVE_BY_KIND: Record<NeedKind, (() => NeedLine | null) | null> = {
   cfa_pending: null,
   memo_return: null,
   exception_open: null,
+  return_by: () =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, [returnSignal()]),
 };
 
 describe('D6 · every kind’s owner, read off a real derivation', () => {
@@ -1852,5 +1856,77 @@ describe('C-22 — payment notices become Desk needs (D2 §M8)', () => {
     expect(folders).toHaveLength(1);
     expect(folders[0].row.project_id).toBe('p2');
     expect(folders[0].need.kind).toBe('payment_due');
+  });
+});
+
+function returnSignal(partial: Partial<DeskReturnSignal> = {}): DeskReturnSignal {
+  return {
+    purchaseId: 'sp1',
+    label: 'Pair of table lamps',
+    payeeName: 'CB2',
+    returnBy: '2026-06-14',
+    itemStatus: 'ordered',
+    received: false,
+    ...partial,
+  };
+}
+
+describe('C-25 — the return-by need (d2 §M9)', () => {
+  const derive = (...returns: DeskReturnSignal[]) =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, returns);
+
+  it('rises three days before the return window closes, dated and owned', () => {
+    const need = derive(returnSignal());
+    expect(need).not.toBeNull();
+    expect(need!.kind).toBe('return_by');
+    expect(need!.text).toBe(`Pair of table lamps from CB2 — returns close ${dayMonth('2026-06-14')}`);
+    expect(need!.actionLabel).toBe('Return it or keep it');
+    expect(need!.stamp.label).toBe('RETURN BY');
+    expect(need!.dueOn).toBe('2026-06-14');
+    expect(need!.owner).toBe('designer');
+  });
+
+  it('stays quiet four days out, and once the window has closed', () => {
+    expect(derive(returnSignal({ returnBy: '2026-06-15' }))).toBeNull();
+    expect(derive(returnSignal({ returnBy: '2026-06-10' }))).toBeNull();
+  });
+
+  it('stands on the closing day itself', () => {
+    expect(derive(returnSignal({ returnBy: '2026-06-11' }))!.kind).toBe('return_by');
+  });
+
+  it('clears once the piece is received, delivered or installed', () => {
+    expect(derive(returnSignal({ received: true }))).toBeNull();
+    expect(derive(returnSignal({ itemStatus: 'delivered' }))).toBeNull();
+    expect(derive(returnSignal({ itemStatus: 'installed' }))).toBeNull();
+  });
+
+  it('a purchase on no line still raises it', () => {
+    expect(derive(returnSignal({ itemStatus: null }))!.kind).toBe('return_by');
+  });
+
+  it('counts several, naming the first date', () => {
+    const need = derive(returnSignal({ purchaseId: 'sp2' }), returnSignal({ returnBy: '2026-06-13' }));
+    expect(need!.text).toBe(`2 returns closing — first ${dayMonth('2026-06-13')}`);
+    expect(need!.dueOn).toBe('2026-06-13');
+  });
+
+  it('partitionDesk routes the signal by project_id', () => {
+    const { folders } = partitionDesk(
+      [mkRow({}), mkRow({ engagement_id: 'e2', project_id: 'p2' })],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map([['p2', [returnSignal()]]]),
+    );
+    expect(folders).toHaveLength(1);
+    expect(folders[0].row.project_id).toBe('p2');
+    expect(folders[0].need.kind).toBe('return_by');
   });
 });

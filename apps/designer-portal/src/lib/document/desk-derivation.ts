@@ -149,7 +149,10 @@ export type NeedKind =
   | 'quote_expiring'
   | 'cfa_pending'
   | 'memo_return'
-  | 'exception_open';
+  | 'exception_open'
+  // C-25 (d2 §M9): a store's return window closes within three days and the
+  // piece bought on a card is not yet received or installed.
+  | 'return_by';
 
 /** The visible next act printed in each Desk folio footer. Triage-owned lead
  * needs intentionally have no footer act: their TriageBar carries the choices. */
@@ -181,6 +184,7 @@ export const NEED_ACTION_LABELS: Record<NeedKind, string | null> = {
   cfa_pending: 'Approve the CFA',
   memo_return: 'Mark returned',
   exception_open: 'Choose a path',
+  return_by: 'Return it or keep it',
 };
 
 /** R28 conflict inputs (built client-side from delivery_events by
@@ -284,6 +288,37 @@ export interface DeskPaymentSignal {
   isPatinaCatalog: boolean;
   /** The row carries a Stripe session or intent id (00695's lane guard). */
   onStripeRail: boolean;
+}
+
+/** C-25 return-by input, structural (the desk-conflicts precedent). One live
+ *  studio_purchases row (recorded or billed, not returned) with a return-by
+ *  date, built by use-desk-engagements and keyed by project_id. */
+export interface DeskReturnSignal {
+  purchaseId: string;
+  /** What was bought ("Pair of table lamps"), else the payee. */
+  label: string;
+  payeeName: string;
+  /** `studio_purchases.return_by`, a bare date. */
+  returnBy: string;
+  /** The bought line's `project_ffe_items.status`, when it is on a line. */
+  itemStatus: string | null;
+  /** The line's receipt is inspected (`received_quantity` recorded). */
+  received: boolean;
+}
+
+/** C-25: the return-by need rises this many days before the window closes. */
+export const RETURN_BY_LEAD_DAYS = 3;
+
+/**
+ * C-25: a return window stands as a need from RETURN_BY_LEAD_DAYS before its
+ * date through the date itself, and only while the piece is neither received
+ * nor installed — once it is in hand the studio has decided to keep it.
+ */
+export function returnWindowOpen(signal: DeskReturnSignal, now: Date): boolean {
+  if (signal.received) return false;
+  if (signal.itemStatus === 'delivered' || signal.itemStatus === 'installed') return false;
+  const days = calendarDaysTo(signal.returnBy, now);
+  return days >= 0 && days <= RETURN_BY_LEAD_DAYS;
 }
 
 export interface NeedLine {
@@ -548,6 +583,9 @@ const NEED_RANK: Record<NeedKind, number> = {
   quote_expiring: 10.75,
   ack_discrepancy: 12.25,
   memo_return: 12.5,
+  // C-25: a lapsing return window is money the studio cannot get back after
+  // the date — it sorts with the claim clocks, just under the claim itself.
+  return_by: 3.25,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand
@@ -655,6 +693,7 @@ interface NeedContext {
   schedule?: DeskScheduleInput | null;
   claimWindows?: readonly DeskClaimWindowSignal[] | null;
   payments?: readonly DeskPaymentSignal[] | null;
+  returns?: readonly DeskReturnSignal[] | null;
 }
 
 /** A rule that owns its engagement kind outright. The original deriveNeed
@@ -1050,6 +1089,29 @@ const needDamageClaim: NeedRule = ({ row }) => {
   return null;
 };
 
+// C-25 (d2 §M9): a store buy's return window, three days before it closes,
+// while the piece is not yet received or installed. Clears with the date, the
+// receipt, or the purchase leaving the live set (returned or void).
+const needReturnBy: NeedRule = ({ returns, now }) => {
+  const open = (returns ?? [])
+    .filter((r) => returnWindowOpen(r, now))
+    .sort((a, b) => (a.returnBy < b.returnBy ? -1 : a.returnBy > b.returnBy ? 1 : 0));
+  const first = open[0];
+  if (!first) return null;
+  return {
+    kind: 'return_by',
+    text:
+      open.length > 1
+        ? `${open.length} returns closing — first ${fmtDay(first.returnBy)}`
+        : `${first.label} from ${first.payeeName} — returns close ${fmtDay(first.returnBy)}`,
+    actionLabel: NEED_ACTION_LABELS.return_by,
+    stamp: { label: 'RETURN BY', ...STAMP.clay },
+    urgent: false,
+    dueOn: first.returnBy,
+    owner: 'designer',
+  };
+};
+
 const needAwaitingInspection: NeedRule = ({ row }) => {
   if (row.awaiting_inspection_count > 0) {
     const n = row.awaiting_inspection_count;
@@ -1261,6 +1323,7 @@ const NEED_RULES: readonly NeedRule[] = [
   needPaymentDue,
   needClaimWindow,
   needDamageClaim,
+  needReturnBy,
   needAwaitingInspection,
   needScheduleCollision,
   needScheduleContradiction,
@@ -1286,6 +1349,7 @@ export function deriveNeeds(
   schedule?: DeskScheduleInput | null,
   claimWindows?: readonly DeskClaimWindowSignal[] | null,
   payments?: readonly DeskPaymentSignal[] | null,
+  returns?: readonly DeskReturnSignal[] | null,
 ): NeedLine[] {
   if (row.is_archived || row.is_paused) return [];
   const ctx: NeedContext = {
@@ -1298,6 +1362,7 @@ export function deriveNeeds(
     schedule,
     claimWindows,
     payments,
+    returns,
   };
   const needs: NeedLine[] = [];
   for (const rule of NEED_RULES) {
@@ -1323,6 +1388,7 @@ export function deriveNeed(
   schedule?: DeskScheduleInput | null,
   claimWindows?: readonly DeskClaimWindowSignal[] | null,
   payments?: readonly DeskPaymentSignal[] | null,
+  returns?: readonly DeskReturnSignal[] | null,
 ): NeedLine | null {
   return (
     deriveNeeds(
@@ -1335,6 +1401,7 @@ export function deriveNeed(
       schedule,
       claimWindows,
       payments,
+      returns,
     )[0] ?? null
   );
 }
@@ -1545,6 +1612,8 @@ export function partitionDesk(
   claimWindows?: ReadonlyMap<string, readonly DeskClaimWindowSignal[]>,
   /** C-22 — project_id → the payment rows a due or failed notice named. */
   payments?: ReadonlyMap<string, readonly DeskPaymentSignal[]>,
+  /** C-25 — project_id → live purchases with a return-by date. */
+  returns?: ReadonlyMap<string, readonly DeskReturnSignal[]>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -1602,6 +1671,9 @@ export function partitionDesk(
     const paymentSignals = row.project_id
       ? (payments?.get(row.project_id) ?? null)
       : null;
+    const returnSignals = row.project_id
+      ? (returns?.get(row.project_id) ?? null)
+      : null;
     const needs = deriveNeeds(
       row,
       now,
@@ -1612,6 +1684,7 @@ export function partitionDesk(
       schedule,
       claimWindowSignals,
       paymentSignals,
+      returnSignals,
     );
     const need = needs[0] ?? null;
     if (need) {

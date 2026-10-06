@@ -630,6 +630,7 @@ function needVerb(kind: NeedKind): string {
     case 'cfa_pending': return 'Approve the CFA';
     case 'memo_return': return 'Mark returned';
     case 'exception_open': return 'Choose a path';
+    case 'return_by': return 'Return it or keep it';
   }
 }
 

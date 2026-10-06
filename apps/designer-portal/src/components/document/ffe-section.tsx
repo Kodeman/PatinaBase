@@ -38,9 +38,13 @@ import {
   useProjectFfeReadiness,
   useProjectOwnedBoards,
   useRecordFfeInstalled,
+  useStudioPurchases,
   type FfeItemCoverage,
+  type StudioPurchaseRow,
 } from '@patina/supabase';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
+import { purchaseForLine } from './purchases/purchase-record';
+import { purchasesBillArgs, unbilledPurchases } from '@/lib/document/invoice-composer';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
 import {
@@ -393,7 +397,10 @@ function FFELine({
   onIncludeInRelease,
   canEditSelection,
   showArtifactPlate,
+  purchase,
 }: LineRow & {
+  /** C-25: the purchase record the line was bought on, if any. */
+  purchase?: StudioPurchaseRow | null;
   projectId: string;
   projectName: string;
   highlightId: string | null;
@@ -554,6 +561,7 @@ function FFELine({
             onIncludeInRelease={onIncludeInRelease}
             canEditSelection={canEditSelection}
             showArtifactPlate={showArtifactPlate}
+            purchase={purchase}
           />
           {/* SP-19/F57 — Sku/Finish/Material/Colour/Exact Location are only
               editable in the spec-book route; this in-flow act is the
@@ -971,6 +979,9 @@ function FFESectionBody({
   // R76 — per-line billing truth (00187 bridge). Invalidated by every invoice
   // mutation that moves money, so the stamps stay honest without a poll.
   const { data: coverage } = useFfeInvoiceCoverage(projectId);
+  // C-25: the project's purchase records — each bought line's unfold fact and
+  // the "Bill N unbilled purchases" door.
+  const { data: purchases } = useStudioPurchases(projectId ? { projectId } : null);
   const authority = useProjectBillingAuthority(projectId);
   const { data: tradeScopes, isPending: tradeScopesPending } = useTradeScopes(
     projectId,
@@ -1185,6 +1196,7 @@ function FFESectionBody({
     onAddNote,
     showRoom: !groupByRoom,
     coverage: coverage?.[row.item.id],
+    purchase: purchaseForLine(purchases, String(row.item.id)),
     showAuthorization,
     isCommercialOrigin,
     ...(installSelecting
@@ -1226,6 +1238,7 @@ function FFESectionBody({
         onIncludeInRelease={props.onIncludeInRelease}
         canEditSelection={props.canEditSelection}
         showArtifactPlate={props.showArtifactPlate}
+        purchase={props.purchase}
       />
     );
   };
@@ -1424,6 +1437,24 @@ function FFESectionBody({
             }),
         }
       : null;
+  // C-25: purchases recorded on a card or on the spot, owed a client line.
+  // The composer reads them; each bills at cost on its own line (R-PB7).
+  const unbilled = unbilledPurchases(purchases);
+  const openPurchasesBill = () =>
+    openInvoiceComposer(purchasesBillArgs(projectId, unbilled));
+  const purchasesBillLabel = `Bill ${unbilled.length} unbilled ${
+    unbilled.length === 1 ? 'purchase' : 'purchases'
+  }`;
+  const ffeBillPurchasesEntry: RegionLedgerEntry | null =
+    unbilled.length > 0
+      ? {
+          key: 'bill-project-purchases',
+          label: purchasesBillLabel,
+          variant: 'secondary',
+          trailing: '→',
+          onClick: openPurchasesBill,
+        }
+      : null;
   const ffeSpecBookEntry: RegionLedgerEntry = {
     key: 'open-spec-book',
     // F48's sibling: one spec-book door, naming its scope when it has one.
@@ -1455,12 +1486,24 @@ function FFESectionBody({
     'bill',
     'spec',
   ];
-  const ffeLedger: RegionLedgerEntry[] = [
+  const ffeLedgerByKind: RegionLedgerEntry[] = [
     ffeEntryByKind[ffeLeader.kind] ?? ffeAddToProjectEntry,
     ...FFE_LEDGER_ORDER.filter((kind) => kind !== ffeLeader.kind)
       .map((kind) => ffeEntryByKind[kind])
       .filter((entry): entry is RegionLedgerEntry => entry !== null),
   ];
+  // The purchases door never leads; it stands beside "Bill N uninvoiced", or
+  // last when there is no uninvoiced line.
+  const billAt = ffeLedgerByKind.findIndex((entry) => entry.key === 'bill-project-ffe');
+  const ffeLedger: RegionLedgerEntry[] = ffeBillPurchasesEntry
+    ? billAt >= 0
+      ? [
+          ...ffeLedgerByKind.slice(0, billAt + 1),
+          ffeBillPurchasesEntry,
+          ...ffeLedgerByKind.slice(billAt + 1),
+        ]
+      : [...ffeLedgerByKind, ffeBillPurchasesEntry]
+    : ffeLedgerByKind;
   const ffeExceptions = [
     ...ffeLeader.exceptions.map((exception) => exception.text),
     ...(ffeAwaiting ? [ffeAwaiting] : []),
@@ -1565,6 +1608,17 @@ function FFESectionBody({
                     }
                   >
                     Bill {billableUninvoiced.length} uninvoiced
+                  </DocumentAction>
+                )}
+                {unbilled.length > 0 && (
+                  <DocumentAction
+                    actionKey="bill-project-purchases"
+                    surfaceKey="project"
+                    regionKey="ffe-head"
+                    variant="secondary"
+                    onClick={openPurchasesBill}
+                  >
+                    {purchasesBillLabel}
                   </DocumentAction>
                 )}
                 {/* Release for authorization is a project-mode act (canRelease

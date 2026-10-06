@@ -165,6 +165,59 @@ export function partitionFfeBillable<T extends ComposerFfeItem>(
   return { billable, covered, unpriced };
 }
 
+// ── Purchases: the unbilled set (C-25, 00703) ───────────────────────────────
+
+/** The slice of a studio_purchases row the composer reads. */
+export interface ComposerPurchase {
+  id: string;
+  status: string;
+  billable_to_client: boolean;
+  invoice_line_id: string | null;
+  payee_name: string;
+  description?: string | null;
+  purchased_on: string;
+  amount_cents: number;
+  tax_cents?: number | null;
+  buyer_premium_cents?: number | null;
+  shipping_cents?: number | null;
+}
+
+/**
+ * Purchases still owed a client invoice line: recorded (not billed, returned
+ * or void), billable to the client, and not yet stamped with an invoice line.
+ * The same predicate as 00703's idx_studio_purchases_unbilled.
+ */
+export function unbilledPurchases<P extends ComposerPurchase>(
+  purchases: readonly P[] | null | undefined,
+): P[] {
+  return (purchases ?? []).filter(
+    (p) => p.status === "recorded" && p.billable_to_client && !p.invoice_line_id,
+  );
+}
+
+/** R-PB7: a purchase bills at cost — every figure the studio paid. */
+export function purchaseAtCostCents(
+  p: Pick<
+    ComposerPurchase,
+    "amount_cents" | "tax_cents" | "buyer_premium_cents" | "shipping_cents"
+  >,
+): number {
+  return (
+    p.amount_cents +
+    (p.tax_cents ?? 0) +
+    (p.buyer_premium_cents ?? 0) +
+    (p.shipping_cents ?? 0)
+  );
+}
+
+/** What "Bill N unbilled purchases" opens the composer with. */
+export function purchasesBillArgs(
+  projectId: string,
+  unbilled: readonly Pick<ComposerPurchase, "id">[],
+): { projectId: string; initialPurchaseIds: string[] } {
+  return { projectId, initialPurchaseIds: unbilled.map((p) => p.id) };
+}
+
 // ── Line assembly ───────────────────────────────────────────────────────────
 
 export interface ComposerSelection {

@@ -1,4 +1,6 @@
+import type { StudioPurchaseRow } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
+import { PurchaseFact } from '../purchases/purchase-fact';
 import type { LineAuthorization } from '@/lib/document/authorization-derivation';
 import { CellSub, CellValue, UnfoldCell } from './cell';
 import { ChangeOrderAct } from './change-order';
@@ -15,6 +17,7 @@ type FFERow = any;
 export function OrderCell({
   item,
   po,
+  purchase = null,
   reasons,
   projectId,
   auth = { track: 'none' },
@@ -22,6 +25,8 @@ export function OrderCell({
 }: {
   item: FFERow;
   po: FFERow | null;
+  /** C-25: the line was bought on a card or on the spot — no PO. */
+  purchase?: StudioPurchaseRow | null;
   /** C-11a readiness reasons to show — empty when Order is on offer. */
   reasons: readonly string[];
   projectId?: string;
@@ -47,6 +52,15 @@ export function OrderCell({
   const poLabel = po
     ? (po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO drafted')
     : null;
+
+  if (!po && purchase) {
+    return (
+      <UnfoldCell head="Order" testId="line-po-cell">
+        <CellValue>{purchase.payee_name}</CellValue>
+        <PurchaseFact purchase={purchase} className="text-[11px] text-[var(--text-muted)]" />
+      </UnfoldCell>
+    );
+  }
 
   return (
     <UnfoldCell head="Order" testId="line-po-cell">

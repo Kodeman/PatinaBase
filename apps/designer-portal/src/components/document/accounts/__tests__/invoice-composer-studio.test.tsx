@@ -55,7 +55,10 @@ jest.mock("@patina/supabase", () => ({
   // HT-21 (W5) — names the composer's time rows; unused by this suite's
   // studio-mode/empty-selection scenarios but called unconditionally.
   useProjectRoster: () => ({ data: [] }),
+  // C-25 — the purchases the "Bill N unbilled purchases" door asked for.
+  useStudioPurchases: (filter: unknown) => ({ data: filter ? mockPurchases : undefined }),
 }));
+let mockPurchases: Array<Record<string, unknown>> = [];
 
 jest.mock("@/hooks/use-feature-flag", () => ({
   useFeatureFlag: () => mockFlag,
@@ -113,6 +116,53 @@ describe("InvoiceComposer · the houseless choice is fail-closed", () => {
       />,
     );
     expect(screen.queryByText("the studio · no house")).not.toBeInTheDocument();
+  });
+});
+
+describe("InvoiceComposer · unbilled purchases (C-25)", () => {
+  const purchase = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    status: "recorded",
+    billable_to_client: true,
+    invoice_line_id: null,
+    payee_name: "CB2",
+    description: "Pair of table lamps",
+    purchased_on: "2026-10-03",
+    amount_cents: 120050,
+    tax_cents: 9600,
+    buyer_premium_cents: 0,
+    shipping_cents: 0,
+    ...extra,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFlag = { value: false, isLoading: false };
+    mockPurchases = [
+      purchase("p1"),
+      purchase("p2", { description: null, payee_name: "Estate sale" }),
+      purchase("billed", { invoice_line_id: "il-1" }),
+    ];
+  });
+
+  it("shows the asked-for unbilled purchases at cost, read-only, with a plain fact line", () => {
+    render(
+      <InvoiceComposer
+        context={{ projectId: "project-1", initialPurchaseIds: ["p1", "billed"] }}
+        onDrafted={jest.fn()}
+      />,
+    );
+    const block = screen.getByTestId("composer-purchases");
+    expect(block).toHaveTextContent("Pair of table lamps");
+    expect(block).toHaveTextContent("$1,296.50");
+    expect(block).not.toHaveTextContent("Estate sale");
+    expect(block).toHaveTextContent("This draft does not carry purchases · each stays unbilled");
+    expect(block.querySelector("input, button")).toBeNull();
+  });
+
+  it("shows nothing about purchases when the opener asked for none", () => {
+    render(<InvoiceComposer context={{ projectId: "project-1" }} onDrafted={jest.fn()} />);
+    expect(screen.queryByTestId("composer-purchases")).not.toBeInTheDocument();
   });
 });
 
