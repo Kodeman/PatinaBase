@@ -13,8 +13,11 @@ import { CellValue, FIELD_CLS, LABEL_CLS, UnfoldCell } from './cell';
 import { ShipmentTracking, etaMoveText, etaMoves } from './movement-tracking';
 import { NEXT_PO_STATUS } from './next-act';
 import { PoShipments } from './shipments';
+import { PurchaseOrderDrafts } from '../buying/draft-review';
 
 type FFERow = any;
+
+const MOVEMENT_DRAFT_KINDS = ['receiver_inbound_notice'] as const;
 
 /**
  * The status act's own component, so the mutation mounts only where a move
@@ -234,6 +237,12 @@ export function MovementCell({
             itemId={item.id}
             projectId={projectId}
             poStatus={poStatus}
+          />
+          {/* C-28: the receiver's inbound notice a shipment drafted, awaiting review. */}
+          <PurchaseOrderDrafts
+            projectId={projectId}
+            purchaseOrderId={po.id}
+            kinds={MOVEMENT_DRAFT_KINDS}
           />
         </>
       ) : (

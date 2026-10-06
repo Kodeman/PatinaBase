@@ -35,6 +35,8 @@ jest.mock('@patina/supabase', () => ({
   useStudioIdentity: () => ({ data: undefined }),
   useStudioContacts: () => ({ data: [] }),
   usePoShipments: () => ({ data: [] }),
+  // C-28 drafts ride in the cells; their own suite is draft-review.test.tsx.
+  useProcurementDrafts: () => ({ data: [] }),
   useProcurementItems: () => ({ data: [], isLoading: false }),
   useRecordPoShipment: () => ({ mutateAsync: jest.fn(), isPending: false }),
 }));

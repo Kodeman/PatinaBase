@@ -1,7 +1,10 @@
 import { CellValue, UnfoldCell } from './cell';
 import { ClaimClockLine } from './claim-clock';
+import { PurchaseOrderDrafts } from '../buying/draft-review';
 
 type FFERow = any;
+
+const RECEIVING_DRAFT_KINDS = ['vendor_claim_notice'] as const;
 
 /** C-14 cell 6 — receiving: the receipt and inspection facts. */
 export function ReceivingCell({
@@ -37,6 +40,14 @@ export function ReceivingCell({
           vendorId={po.vendor_id ?? item.vendor_id}
           vendorName={item.vendor_name ?? 'The vendor'}
           className="mt-0.5 text-[11px]"
+        />
+      )}
+      {/* C-28: the claim notice an exception drafted, awaiting review. */}
+      {po?.id && item.project_id && (
+        <PurchaseOrderDrafts
+          projectId={item.project_id}
+          purchaseOrderId={po.id}
+          kinds={RECEIVING_DRAFT_KINDS}
         />
       )}
     </UnfoldCell>

@@ -306,6 +306,29 @@ export interface DeskReturnSignal {
   received: boolean;
 }
 
+/** C-28 (d2 §M11): an outbound letter composed from a SQL template and
+ *  waiting on a member's review: a `procurement_drafts` row in
+ *  `awaiting_review`, built by use-desk-engagements and keyed by project_id.
+ *  The row's own columns, so the Desk's draft review reads it as it is. */
+export interface DeskDraftSignal {
+  id: string;
+  /** ack_discrepancy_reply | ack_chase | receiver_inbound_notice | vendor_claim_notice | … */
+  kind: string;
+  status: string;
+  to_email: string | null;
+  subject: string;
+  body: string;
+  created_at: string;
+}
+
+/** Which Desk need a draft rides: the act it answers. */
+const DRAFT_NEED: Record<string, { kind: NeedKind; text: string }> = {
+  ack_discrepancy_reply: { kind: 'ack_discrepancy', text: 'Reply to the maker drafted — the acknowledgment differs' },
+  ack_chase: { kind: 'po_unacknowledged', text: 'Acknowledgment chase drafted' },
+  receiver_inbound_notice: { kind: 'po_unsent', text: 'Inbound notice to the receiver drafted' },
+  vendor_claim_notice: { kind: 'exception_open', text: 'Claim notice to the vendor drafted' },
+};
+
 /** C-25: the return-by need rises this many days before the window closes. */
 export const RETURN_BY_LEAD_DAYS = 3;
 
@@ -375,6 +398,10 @@ export interface NeedLine {
    *  `'maker'` where the studio is waiting on a vendor (a PO sent but not yet
    *  acknowledged). */
   owner: 'designer' | 'client' | 'maker';
+  /** C-28: the outbound letter this need is the review of. The folder face
+   *  mounts the draft review on it: recipient, editable subject and body,
+   *  Send and Discard. */
+  draft?: DeskDraftSignal;
 }
 
 export interface DeskFolder {
@@ -694,6 +721,7 @@ interface NeedContext {
   claimWindows?: readonly DeskClaimWindowSignal[] | null;
   payments?: readonly DeskPaymentSignal[] | null;
   returns?: readonly DeskReturnSignal[] | null;
+  drafts?: readonly DeskDraftSignal[] | null;
 }
 
 /** A rule that owns its engagement kind outright. The original deriveNeed
@@ -1089,6 +1117,28 @@ const needDamageClaim: NeedRule = ({ row }) => {
   return null;
 };
 
+// C-28 (d2 §M11): a composed letter awaiting review is the studio's own pen.
+// The need carries the oldest draft, and the folder face mounts its review;
+// it clears when the draft is sent or discarded (the read is awaiting_review
+// only). Nothing here sends: the member's Send is the only way out.
+const needDraftReview: NeedRule = ({ drafts }) => {
+  const open = (drafts ?? [])
+    .filter((d) => d.status === 'awaiting_review' && DRAFT_NEED[d.kind])
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+  const first = open[0];
+  if (!first) return null;
+  const shape = DRAFT_NEED[first.kind]!;
+  return {
+    kind: shape.kind,
+    text: open.length > 1 ? `${open.length} letters drafted — review and send` : shape.text,
+    actionLabel: 'Review and send',
+    stamp: { label: 'DRAFTED', ...STAMP.dustyBlue },
+    urgent: false,
+    owner: 'designer',
+    draft: first,
+  };
+};
+
 // C-25 (d2 §M9): a store buy's return window, three days before it closes,
 // while the piece is not yet received or installed. Clears with the date, the
 // receipt, or the purchase leaving the live set (returned or void).
@@ -1323,6 +1373,7 @@ const NEED_RULES: readonly NeedRule[] = [
   needPaymentDue,
   needClaimWindow,
   needDamageClaim,
+  needDraftReview,
   needReturnBy,
   needAwaitingInspection,
   needScheduleCollision,
@@ -1350,6 +1401,7 @@ export function deriveNeeds(
   claimWindows?: readonly DeskClaimWindowSignal[] | null,
   payments?: readonly DeskPaymentSignal[] | null,
   returns?: readonly DeskReturnSignal[] | null,
+  drafts?: readonly DeskDraftSignal[] | null,
 ): NeedLine[] {
   if (row.is_archived || row.is_paused) return [];
   const ctx: NeedContext = {
@@ -1363,6 +1415,7 @@ export function deriveNeeds(
     claimWindows,
     payments,
     returns,
+    drafts,
   };
   const needs: NeedLine[] = [];
   for (const rule of NEED_RULES) {
@@ -1389,6 +1442,7 @@ export function deriveNeed(
   claimWindows?: readonly DeskClaimWindowSignal[] | null,
   payments?: readonly DeskPaymentSignal[] | null,
   returns?: readonly DeskReturnSignal[] | null,
+  drafts?: readonly DeskDraftSignal[] | null,
 ): NeedLine | null {
   return (
     deriveNeeds(
@@ -1402,6 +1456,7 @@ export function deriveNeed(
       claimWindows,
       payments,
       returns,
+      drafts,
     )[0] ?? null
   );
 }
@@ -1614,6 +1669,8 @@ export function partitionDesk(
   payments?: ReadonlyMap<string, readonly DeskPaymentSignal[]>,
   /** C-25 — project_id → live purchases with a return-by date. */
   returns?: ReadonlyMap<string, readonly DeskReturnSignal[]>,
+  /** C-28 — project_id → procurement drafts awaiting review. */
+  drafts?: ReadonlyMap<string, readonly DeskDraftSignal[]>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -1674,6 +1731,9 @@ export function partitionDesk(
     const returnSignals = row.project_id
       ? (returns?.get(row.project_id) ?? null)
       : null;
+    const draftSignals = row.project_id
+      ? (drafts?.get(row.project_id) ?? null)
+      : null;
     const needs = deriveNeeds(
       row,
       now,
@@ -1685,6 +1745,7 @@ export function partitionDesk(
       claimWindowSignals,
       paymentSignals,
       returnSignals,
+      draftSignals,
     );
     const need = needs[0] ?? null;
     if (need) {

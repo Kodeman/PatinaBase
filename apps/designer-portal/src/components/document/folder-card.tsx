@@ -17,6 +17,7 @@ import { documentEvents } from '@/lib/analytics/document-events';
 import { StatusChip } from './status-chip';
 import { openLedger } from './command-bar';
 import { TriageBar } from './triage-bar';
+import { DraftReview } from './buying/draft-review';
 import { DocumentAction, DocumentActionGroup } from './document-action';
 
 export const DESK_FOLIO_PREVIEW_LIMIT = 4;
@@ -283,6 +284,19 @@ function FolderFace({
             <p className="doc-type-body flex-1">{need.text}</p>
             <StatusChip label={need.stamp.label} color={need.stamp.color} />
           </div>
+          {/* C-28: a need that carries a composed letter reviews it in place —
+              recipient, subject, body, Send and Discard. pointer-events-auto
+              opts the form back in over the pointer-events-none face. */}
+          {need.draft && (
+            <div className="pointer-events-auto relative">
+              <DraftReview
+                key={need.draft.id}
+                draft={need.draft}
+                surfaceKey="desk"
+                regionKey="needs-your-hand"
+              />
+            </div>
+          )}
           {/* R61/R65: a lead is the one need whose act is a triage, not a pick-up
               — for a new lead AND for a nurtured lead whose reconnect is now due.
               pointer-events-auto opts this control back in over the
