@@ -138,6 +138,7 @@ import {
 import { useRoomLens } from './room-lens-context';
 import { MakerReading, ReadingLens } from './buying/maker-reading';
 import { NextActReading } from './buying/next-act-reading';
+import { InstallManifest } from './buying/install-manifest';
 import type { BuyingReading } from '@/lib/document/buying-readings';
 import { useRegionUnfoldRequest } from '@/hooks/use-region-unfold';
 import { useLensDensityStore } from '@/hooks/use-lens-density';
@@ -1945,6 +1946,19 @@ function FFESectionBody({
           itemIds={installPickIds}
           onDone={endInstalling}
           onPutBack={endInstalling}
+        />
+      )}
+      {/* C-34 (D1-09): where, when and by whom each delivered piece goes in. */}
+      {mode === 'install' && sectionKey !== 'care' && !selecting && !installSelecting && (
+        <InstallManifest
+          projectId={projectId}
+          lines={rows.map((row) => ({
+            id: String(row.item.id),
+            name: row.item.name,
+            status: row.item.status ?? null,
+            roomName: row.item.room?.name ?? null,
+            installedOn: row.item.installed_on ?? null,
+          }))}
         />
       )}
       </div>

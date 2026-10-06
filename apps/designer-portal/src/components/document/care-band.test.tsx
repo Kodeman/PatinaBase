@@ -10,6 +10,7 @@ const useProjectFFEItems = jest.fn();
 const useFfeInvoiceCoverage = jest.fn();
 const useProjectPaymentMilestones = jest.fn();
 const useProjectInvoices = jest.fn();
+const useInstallPunchItems = jest.fn();
 const closeMutate = jest.fn();
 
 jest.mock('@/hooks/use-auth', () => ({ useAuth: () => useAuth() }));
@@ -25,6 +26,7 @@ jest.mock('@patina/supabase', () => ({
   useFfeInvoiceCoverage: (id: string) => useFfeInvoiceCoverage(id),
   useProjectPaymentMilestones: (id: string) => useProjectPaymentMilestones(id),
   useProjectInvoices: (id: string) => useProjectInvoices(id),
+  useInstallPunchItems: (id: string) => useInstallPunchItems(id),
 }));
 // W4 — the lens is a page-level observer and never runs in jsdom, so the store
 // is mocked per suite. `null` is the shipped truth here (the lens is silent) and
@@ -91,6 +93,7 @@ beforeEach(() => {
   useFfeInvoiceCoverage.mockReturnValue(settled({}));
   useProjectPaymentMilestones.mockReturnValue(settled([]));
   useProjectInvoices.mockReturnValue(settled([]));
+  useInstallPunchItems.mockReturnValue(settled([]));
 });
 
 describe('CareBand closeout authority', () => {
@@ -121,6 +124,23 @@ describe('CareBand closeout authority', () => {
     expect(screen.getByText(/1 coordination item unresolved/)).toBeInTheDocument();
     expect(screen.getByText(/1 scope change unresolved/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close the book' })).toBeDisabled();
+  });
+
+  // C-34 — open punch items print as one quiet line and block nothing.
+  it('prints open punch items as one line without blocking the close', () => {
+    useInstallPunchItems.mockReturnValue(
+      settled([
+        { id: 'punch-1', resolved_at: null },
+        { id: 'punch-2', resolved_at: null },
+      ]),
+    );
+
+    render(<CareBand projectId="project-1" />);
+
+    expect(screen.getByTestId('closeout-note-punch_open')).toHaveTextContent(
+      '2 punch items still open',
+    );
+    expect(screen.queryByText('Operational closeout still open')).not.toBeInTheDocument();
   });
 
   // A3-L7 — the care rest state ("Everything is settled." / CLOSE THE BOOK) is

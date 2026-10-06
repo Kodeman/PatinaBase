@@ -60,9 +60,18 @@ export interface CloseoutBlocker {
   label: string;
 }
 
+/** A close-out line that informs without blocking (C-34: open punch items). */
+export interface CloseoutNote {
+  code: 'punch_open';
+  count: number;
+  label: string;
+}
+
 export interface CloseoutReadiness {
   ready: boolean;
   blockers: CloseoutBlocker[];
+  /** Lines that never affect `ready`. */
+  notes?: CloseoutNote[];
 }
 
 export interface CloseoutReadinessInput {
@@ -107,6 +116,11 @@ export interface CloseoutReadinessInput {
     status: string | null;
     total_cents: number | null;
     amount_paid_cents: number | null;
+  }>;
+  /** C-34: install punch items. Open ones show as one note; they block nothing. */
+  punchItems?: ReadonlyArray<{
+    id: string;
+    resolved_at?: string | null;
   }>;
 }
 
@@ -269,7 +283,22 @@ export function deriveCloseoutReadiness(
     });
   }
 
-  return { ready: blockers.length === 0, blockers };
+  const openPunch = (input.punchItems ?? []).filter((item) => item.resolved_at == null).length;
+  return {
+    ready: blockers.length === 0,
+    blockers,
+    ...(openPunch > 0
+      ? {
+          notes: [
+            {
+              code: 'punch_open' as const,
+              count: openPunch,
+              label: `${countLabel(openPunch, 'punch item')} still open`,
+            },
+          ],
+        }
+      : {}),
+  };
 }
 
 export function closureReady(

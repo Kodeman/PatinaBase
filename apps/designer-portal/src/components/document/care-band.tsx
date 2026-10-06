@@ -25,6 +25,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   useCoordinationItems,
   useFfeInvoiceCoverage,
+  useInstallPunchItems,
   useProjectFFEItems,
   useProjectInvoices,
   useProjectPaymentMilestones,
@@ -136,6 +137,9 @@ export function CareBand({
   const coverageQuery = useFfeInvoiceCoverage(projectId);
   const milestoneQuery = useProjectPaymentMilestones(projectId);
   const invoiceQuery = useProjectInvoices(projectId);
+  // C-34: open punch items inform close-out and never gate it, so this read
+  // stays out of operationalDataReady.
+  const punchQuery = useInstallPunchItems(projectId);
   const closeProject = useCloseProject();
 
   const nearClose =
@@ -201,6 +205,7 @@ export function CareBand({
       total_cents: number | null;
       amount_paid_cents: number | null;
     }>,
+    punchItems: punchQuery.data ?? [],
   });
   const paymentReady =
     operationalDataReady &&
@@ -484,6 +489,15 @@ export function CareBand({
           </ul>
         </div>
       )}
+      {operational.notes?.map((note) => (
+        <p
+          key={note.code}
+          data-testid={`closeout-note-${note.code}`}
+          className="mt-2 text-[11.5px] text-[var(--text-muted)]"
+        >
+          {note.label}
+        </p>
+      ))}
       {/* The care stage's act lands on the checklist itself, not on the band's
           first inch. */}
       <ul

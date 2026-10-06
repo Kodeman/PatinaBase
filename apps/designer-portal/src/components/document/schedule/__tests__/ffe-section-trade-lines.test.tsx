@@ -22,6 +22,9 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
+// C-34: the install manifest reads its own hooks; this suite is about the table.
+jest.mock('@/components/document/buying/install-manifest', () => ({ InstallManifest: () => null }));
+
 jest.mock('@patina/supabase', () => ({
   useStudioPurchases: () => ({ data: [] }),
   useProjectFFEItems: () => ({ data: mockItems, isLoading: false, isError: false, refetch: jest.fn() }),
