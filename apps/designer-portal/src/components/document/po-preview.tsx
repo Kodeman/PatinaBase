@@ -18,10 +18,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useLogPOAcknowledgment,
+  usePurchaseOrderChanges,
   usePurchaseOrders,
   useSendPurchaseOrder,
   useSetPurchaseOrderShipTo,
   type PurchaseOrder,
+  type PurchaseOrderChange,
+  type PurchaseOrderChangeKind,
 } from '@patina/supabase';
 import { poSendErrorMessage } from '@/components/portal/procurement/po-send-actions';
 import {
@@ -270,6 +273,53 @@ function ShipToNotSetBand({
   );
 }
 
+const CHANGE_KIND_WORD: Record<PurchaseOrderChangeKind, string> = {
+  cancellation: 'cancellation',
+  credit: 'credit',
+  claim: 'claim',
+  vendor_change: 'maker change',
+  remedy: 'remedy',
+  new_scope: 'added scope',
+};
+
+/**
+ * C-21 (D1-10): the PO's change history — every start_purchase_order_change
+ * row, newest first, immutable. Renders nothing until there is one.
+ */
+function PoChangeHistory({ purchaseOrderId }: { purchaseOrderId: string }) {
+  const { data: changes } = usePurchaseOrderChanges(purchaseOrderId) as {
+    data?: PurchaseOrderChange[];
+  };
+  if (!changes?.length) return null;
+  return (
+    <div
+      data-testid="po-change-history"
+      className="max-h-[22vh] overflow-y-auto border-t border-[var(--color-pearl)] px-5 py-2.5"
+    >
+      <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-clay-ink)]">
+        Changes
+      </p>
+      <ul className="space-y-0.5">
+        {changes.map((c) => (
+          <li key={c.id} className="text-[11px] text-[var(--color-charcoal)]">
+            {[
+              `${fmtDay(c.created_at)} · ${CHANGE_KIND_WORD[c.change_kind] ?? c.change_kind}`,
+              c.requested_vendor?.name ? `to ${c.requested_vendor.name}` : null,
+              c.replacement_purchase_order_id
+                ? `replaced by ${c.replacement?.po_number ?? 'a new PO'}`
+                : null,
+              c.status !== 'open' ? c.status : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            <span className="text-[var(--text-muted)]"> — {c.reason}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function PoPreview({
   open,
   onOpenChange,
@@ -445,6 +495,8 @@ export function PoPreview({
             />
           </div>
         )}
+
+        <PoChangeHistory purchaseOrderId={purchaseOrderId} />
 
         <ShipToNotSetBand po={po} onSaved={renderPreview} />
 

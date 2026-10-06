@@ -4,13 +4,15 @@
  * manual mark-sent path (no email) never carries it.
  */
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const sendMutateAsync = jest.fn();
 const setShipToMutateAsync = jest.fn();
 const poSent = jest.fn();
 // The studio's purchase-orders list the ship-to band reads (C-02).
 const mockOrders: { list: Array<Record<string, unknown>> } = { list: [] };
+// The PO's change history (C-21).
+const mockChanges: { list: Array<Record<string, unknown>> } = { list: [] };
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
@@ -21,6 +23,7 @@ jest.mock('@patina/supabase', () => ({
   useLogPOAcknowledgment: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useSetPurchaseOrderShipTo: () => ({ mutateAsync: setShipToMutateAsync, isPending: false }),
   usePurchaseOrders: () => ({ data: mockOrders.list }),
+  usePurchaseOrderChanges: () => ({ data: mockChanges.list }),
   // The caller belongs to two studios; the project belongs to the second (F11).
   useOrganizations: () => ({
     data: [
@@ -56,6 +59,7 @@ beforeEach(() => {
     { id: 'po-1', project_id: 'project-1', sent_at: null, ship_to: '1 Main St, Madison, WI 53703' },
   ];
   poSent.mockReset();
+  mockChanges.list = [];
   sendMutateAsync.mockImplementation(async ({ mode }: { mode: string }) =>
     mode === 'preview'
       ? { ok: true, signedUrl: 'https://files.test/po.pdf', poNumber: 'PO-0042' }
@@ -260,5 +264,47 @@ describe('PoPreview · Send and Mark as sent gated on ship-to (F2, F1)', () => {
     expect(mark).toBeEnabled();
     expect(mark).not.toHaveAttribute('aria-disabled');
     expect(screen.queryByText(REASON)).not.toBeInTheDocument();
+  });
+});
+
+describe('PoPreview · change history (C-21)', () => {
+  it('renders nothing while the PO has no changes', async () => {
+    renderPreview();
+    await waitForPdf();
+    expect(screen.queryByTestId('po-change-history')).not.toBeInTheDocument();
+  });
+
+  it('lists each change with its kind, maker, replacement and reason', async () => {
+    mockChanges.list = [
+      {
+        id: 'chg-2',
+        change_kind: 'vendor_change',
+        status: 'open',
+        reason: 'Hale discontinued the frame',
+        created_at: '2026-10-06T12:00:00Z',
+        replacement_purchase_order_id: 'po-2',
+        replacement: { po_number: 'PO-0043' },
+        requested_vendor: { name: 'Hollowell Woodshop' },
+      },
+      {
+        id: 'chg-1',
+        change_kind: 'claim',
+        status: 'resolved',
+        reason: 'Arm scuffed in transit',
+        created_at: '2026-10-02T12:00:00Z',
+        replacement_purchase_order_id: null,
+        replacement: null,
+        requested_vendor: null,
+      },
+    ];
+    renderPreview();
+    await waitForPdf();
+
+    const items = within(screen.getByTestId('po-change-history')).getAllByRole('listitem');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveTextContent(
+      /maker change · to Hollowell Woodshop · replaced by PO-0043 — Hale discontinued the frame/,
+    );
+    expect(items[1]).toHaveTextContent(/claim · resolved — Arm scuffed in transit/);
   });
 });

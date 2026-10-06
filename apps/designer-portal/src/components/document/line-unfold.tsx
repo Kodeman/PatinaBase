@@ -265,6 +265,9 @@ export function LineUnfold({
           item={item}
           po={po}
           reasons={!readiness.ready && !po && !isTradeLine ? readiness.reasons : []}
+          projectId={projectId}
+          auth={auth}
+          canChange={canEditSelection}
         />
         {/* PRC-12: the Movement cell carries the confirmed-ETA quick-edit. */}
         <MovementCell

@@ -834,6 +834,153 @@ export function useSetPurchaseOrderShipTo(options?: { errorSurface?: 'inline' })
   });
 }
 
+/** purchase_order_changes.change_kind (00434 CHECK). */
+export type PurchaseOrderChangeKind =
+  | 'vendor_change'
+  | 'cancellation'
+  | 'credit'
+  | 'claim'
+  | 'remedy'
+  | 'new_scope';
+
+export interface StartPurchaseOrderChangeInput {
+  purchaseOrderId: string;
+  changeKind: PurchaseOrderChangeKind;
+  /** Required; the server refuses fewer than 5 characters after trimming. */
+  reason: string;
+  /** The FF&E line the change is about, when it is about one line. */
+  selectionId?: string | null;
+  /** vendor_change only: the different, existing maker to rebuild for. */
+  replacementVendorId?: string | null;
+  /** The PO's project — the rebuild unlinks its FF&E lines. */
+  projectId: string;
+}
+
+/** The `start_purchase_order_change` answer (00449 body, 00452 wrapper). */
+export interface StartPurchaseOrderChangeResult {
+  changeId: string;
+  purchaseOrderId: string;
+  /** Unsent, unacknowledged and unpaid: cancellation / vendor_change rebuilt it. */
+  rebuildable: boolean;
+  requiresImmutableFollowup: boolean;
+  replacementVendorId: string | null;
+  replacementPoId: string | null;
+  needsRepricing: boolean;
+}
+
+/** One immutable row of a PO's change history (00434, 00439). */
+export interface PurchaseOrderChange {
+  id: string;
+  project_id: string;
+  purchase_order_id: string;
+  project_ffe_item_id: string | null;
+  change_kind: PurchaseOrderChangeKind;
+  status: 'open' | 'resolved' | 'cancelled';
+  reason: string;
+  replacement_purchase_order_id: string | null;
+  requested_vendor_id: string | null;
+  created_by: string;
+  created_at: string;
+  resolved_at: string | null;
+  replacement?: { po_number: string | null } | null;
+  requested_vendor?: { name: string | null } | null;
+}
+
+/**
+ * Mutation: records a change on a purchase order through the
+ * `start_purchase_order_change` RPC (00435, hardened through 00453). The
+ * server snapshots the PO and its lines, and — when the PO is unsent,
+ * unacknowledged and unpaid — rebuilds it: a cancellation cancels it and
+ * frees its lines; a vendor change also re-orders them from the new maker on
+ * a replacement PO flagged needs_repricing. Otherwise the change is an
+ * immutable follow-up record only.
+ *
+ * Invalidates: ['purchase-orders'], ['purchase-order', id],
+ *              ['purchase-order-changes', id], ['delivery-calendar'],
+ *              ['today-procurement-counts'] and both FF&E namespaces.
+ */
+export function useStartPurchaseOrderChange(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({
+      purchaseOrderId,
+      changeKind,
+      reason,
+      selectionId,
+      replacementVendorId,
+    }: StartPurchaseOrderChangeInput): Promise<StartPurchaseOrderChangeResult> => {
+      const supabase = getSupabase() as any;
+
+      const request: Record<string, string> = {
+        purchaseOrderId,
+        changeKind,
+        reason: reason.trim(),
+      };
+      if (selectionId) request.selectionId = selectionId;
+      if (changeKind === 'vendor_change' && replacementVendorId) {
+        request.replacementVendorId = replacementVendorId;
+      }
+
+      const { data, error } = await supabase.rpc('start_purchase_order_change', {
+        p_request: request,
+      });
+
+      if (error) {
+        throw new Error(
+          `Failed to start a change on purchase_order ${purchaseOrderId}: ${
+            error.message ?? String(error)
+          }`,
+        );
+      }
+      return data as StartPurchaseOrderChangeResult;
+    },
+    onSuccess: (_result, { purchaseOrderId, projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', purchaseOrderId] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order-changes', purchaseOrderId] });
+      queryClient.invalidateQueries({ queryKey: ['delivery-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
+      invalidateFfeCaches(queryClient, projectId);
+    },
+  });
+}
+
+/**
+ * A PO's change history, newest first. purchase_order_changes is read-only to
+ * studio co-members (00434 purchase_order_changes_studio_read); every write
+ * goes through useStartPurchaseOrderChange.
+ */
+export function usePurchaseOrderChanges(purchaseOrderId: string) {
+  return useQuery({
+    queryKey: ['purchase-order-changes', purchaseOrderId],
+    queryFn: async (): Promise<PurchaseOrderChange[]> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('purchase_order_changes')
+        .select(
+          `id, project_id, purchase_order_id, project_ffe_item_id, change_kind,
+           status, reason, replacement_purchase_order_id, requested_vendor_id,
+           created_by, created_at, resolved_at,
+           replacement:purchase_orders!replacement_purchase_order_id(po_number),
+           requested_vendor:vendors!requested_vendor_id(name)`,
+        )
+        .eq('purchase_order_id', purchaseOrderId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw new Error(
+          `Failed to fetch changes for purchase_order ${purchaseOrderId}: ${
+            error.message ?? String(error)
+          }`,
+        );
+      }
+      return (data ?? []) as PurchaseOrderChange[];
+    },
+    enabled: !!purchaseOrderId,
+  });
+}
+
 /**
  * Mutation: manually advances a po_payment row to 'due' state (with an
  * optional due_date). The automatic flips — deposit-paid and PO-shipped /
