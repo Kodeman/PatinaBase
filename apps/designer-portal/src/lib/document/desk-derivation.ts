@@ -409,6 +409,19 @@ export function exceptionNeedsPath(signal: DeskExceptionSignal): boolean {
   );
 }
 
+/** C-32 held-for-release input, structural. One purchase_orders row in
+ *  `held_for_release`, built by use-desk-engagements and keyed by project_id. */
+export interface DeskHeldReleaseSignal {
+  purchaseOrderId: string;
+  vendorName: string | null;
+  totalCents: number;
+  heldAt: string | null;
+  /** The member who held it (profiles.full_name). */
+  heldByName: string | null;
+  /** The viewer holds an owner/admin seat in the PO's studio (R-PB6). */
+  viewerCanRelease: boolean;
+}
+
 export interface NeedLine {
   kind: NeedKind;
   text: string;
@@ -789,6 +802,7 @@ interface NeedContext {
   drafts?: readonly DeskDraftSignal[] | null;
   quotes?: readonly DeskQuoteSignal[] | null;
   exceptions?: readonly DeskExceptionSignal[] | null;
+  heldReleases?: readonly DeskHeldReleaseSignal[] | null;
 }
 
 /** A rule that owns its engagement kind outright. The original deriveNeed
@@ -1212,6 +1226,39 @@ const needExceptionOpen: NeedRule = ({ exceptions }) => {
   };
 };
 
+// C-32 (D1-12): a junior's order held over the studio's threshold waits for an
+// owner or admin. Only a seat that can release sees it, once per project, with
+// the total over the rows it opens (V11). The act opens the Orders ledger on
+// this project's held group; it clears when the order is released or sent
+// back. A held order is a drafted, unsent PO, so it rides `po_unsent`.
+const needHeldForRelease: NeedRule = ({ row, heldReleases }) => {
+  const held = (heldReleases ?? [])
+    .filter((h) => h.viewerCanRelease)
+    .sort((a, b) => ((a.heldAt ?? '') < (b.heldAt ?? '') ? -1 : 1));
+  const first = held[0];
+  if (!first) return null;
+  const total = fmtMoney(held.reduce((sum, h) => sum + (h.totalCents ?? 0), 0));
+  const holders = new Set(held.map((h) => h.heldByName ?? ''));
+  const holder = holders.size === 1 && first.heldByName ? firstName(first.heldByName) : null;
+  const text =
+    held.length === 1
+      ? `Release ${holder ? `${holder}'s` : 'the'} order to ${first.vendorName ?? 'the maker'} · ${total}`
+      : holder
+        ? `${holder} is holding ${held.length} orders for your release · ${total}`
+        : `${held.length} orders held for your release · ${total}`;
+  return {
+    kind: 'po_unsent',
+    text,
+    actionLabel: 'Release',
+    stamp: { label: 'HELD', ...STAMP.clay },
+    urgent: false,
+    ...(row.project_id
+      ? { ledger: { name: 'orders', context: { page: 'ledger', projectId: row.project_id } } }
+      : {}),
+    owner: 'designer',
+  };
+};
+
 // C-28 (d2 §M11): a composed letter awaiting review is the studio's own pen.
 // The need carries the oldest draft, and the folder face mounts its review;
 // it clears when the draft is sent or discarded (the read is awaiting_review
@@ -1494,6 +1541,7 @@ const NEED_RULES: readonly NeedRule[] = [
   needClaimWindow,
   needDamageClaim,
   needExceptionOpen,
+  needHeldForRelease,
   needDraftReview,
   needReturnBy,
   needAwaitingInspection,
@@ -1526,6 +1574,7 @@ export function deriveNeeds(
   drafts?: readonly DeskDraftSignal[] | null,
   quotes?: readonly DeskQuoteSignal[] | null,
   exceptions?: readonly DeskExceptionSignal[] | null,
+  heldReleases?: readonly DeskHeldReleaseSignal[] | null,
 ): NeedLine[] {
   if (row.is_archived || row.is_paused) return [];
   const ctx: NeedContext = {
@@ -1542,6 +1591,7 @@ export function deriveNeeds(
     drafts,
     quotes,
     exceptions,
+    heldReleases,
   };
   const needs: NeedLine[] = [];
   for (const rule of NEED_RULES) {
@@ -1571,6 +1621,7 @@ export function deriveNeed(
   drafts?: readonly DeskDraftSignal[] | null,
   quotes?: readonly DeskQuoteSignal[] | null,
   exceptions?: readonly DeskExceptionSignal[] | null,
+  heldReleases?: readonly DeskHeldReleaseSignal[] | null,
 ): NeedLine | null {
   return (
     deriveNeeds(
@@ -1587,6 +1638,7 @@ export function deriveNeed(
       drafts,
       quotes,
       exceptions,
+      heldReleases,
     )[0] ?? null
   );
 }
@@ -1805,6 +1857,8 @@ export function partitionDesk(
   quotes?: ReadonlyMap<string, readonly DeskQuoteSignal[]>,
   /** C-30 — project_id → procurement exceptions still open. */
   exceptions?: ReadonlyMap<string, readonly DeskExceptionSignal[]>,
+  /** C-32 — project_id → POs held for an owner/admin release. */
+  heldReleases?: ReadonlyMap<string, readonly DeskHeldReleaseSignal[]>,
 ): {
   folders: DeskFolder[];
   chips: MotionChip[];
@@ -1874,6 +1928,9 @@ export function partitionDesk(
     const exceptionSignals = row.project_id
       ? (exceptions?.get(row.project_id) ?? null)
       : null;
+    const heldReleaseSignals = row.project_id
+      ? (heldReleases?.get(row.project_id) ?? null)
+      : null;
     const needs = deriveNeeds(
       row,
       now,
@@ -1888,6 +1945,7 @@ export function partitionDesk(
       draftSignals,
       quoteSignals,
       exceptionSignals,
+      heldReleaseSignals,
     );
     const need = needs[0] ?? null;
     if (need) {

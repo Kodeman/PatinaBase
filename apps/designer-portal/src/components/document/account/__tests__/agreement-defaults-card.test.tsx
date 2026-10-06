@@ -30,6 +30,8 @@ jest.mock('@/hooks/use-teaching-note', () => ({
 jest.mock('../studio-payment-methods', () => ({ StudioPaymentMethodsCard: () => null }));
 // Who sees margin has its own suite (studio-margin-visibility.test.tsx).
 jest.mock('../studio-margin-visibility', () => ({ StudioMarginVisibilityCard: () => null }));
+// C-32: the release gate card has its own suite (studio-release-gate.test.tsx).
+jest.mock('../studio-release-gate', () => ({ StudioReleaseGateCard: () => null }));
 // Locations have their own suite (people/studio-locations-editor.test.tsx).
 jest.mock('../../people/studio-locations-editor', () => ({ StudioLocationsEditor: () => null }));
 

@@ -18,6 +18,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  useHeldPurchaseOrders,
   usePurchaseOrders,
   useUpdatePurchaseOrderETA,
   useVendors,
@@ -109,6 +110,7 @@ function LensLink({
 
 const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   draft: { color: 'var(--color-aged-oak)', ink: 'var(--color-aged-oak)' },
+  held_for_release: { color: 'var(--color-clay)', ink: 'var(--color-clay-ink)' },
   confirmed: { color: 'var(--color-dusty-blue)' },
   in_production: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
   shipped: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
@@ -220,8 +222,30 @@ export function OrdersLedger({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [live]);
 
+  // C-32 (SQ-430): the orders waiting on THIS seat's release lead the page;
+  // they leave the vendor groups so each order reads once.
+  const { data: heldRows } = useHeldPurchaseOrders();
+  const releasableIds = useMemo(
+    () =>
+      new Set(
+        (heldRows ?? []).filter((h) => h.viewerCanRelease).map((h) => h.id),
+      ),
+    [heldRows],
+  );
+  const heldForRelease = useMemo(
+    () =>
+      (heldRows ?? []).filter(
+        (h) =>
+          h.viewerCanRelease && (!projectLens || h.projectId === projectLens),
+      ),
+    [heldRows, projectLens],
+  );
+  // A payment lens reads money already scheduled; a held order has none yet.
+  const heldShown = paymentLens ? [] : heldForRelease;
+
   const groups = useMemo(() => {
     const lensed = live
+      .filter((o) => !releasableIds.has(o.id))
       .filter(
         (o) => !projectLens || (o.project_id ?? o.project?.id) === projectLens,
       )
@@ -244,7 +268,7 @@ export function OrdersLedger({
         pos,
       }))
       .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
-  }, [live, projectLens, paymentLens, vendorById]);
+  }, [live, projectLens, paymentLens, vendorById, releasableIds]);
 
   const selectedVendor = useMemo(() => {
     const pos = (orders ?? []).filter((o) => selected.includes(o.id));
@@ -456,6 +480,7 @@ export function OrdersLedger({
           {!isLoading &&
             live.length > 0 &&
             groups.length === 0 &&
+            heldShown.length === 0 &&
             (projectLens || paymentLens) && (
               <p className="doc-type-body py-2 italic text-[var(--color-quiet-ink)]">
                 Nothing under this lens.
@@ -474,6 +499,62 @@ export function OrdersLedger({
                 a project&apos;s schedule.
               </p>
             </div>
+          )}
+          {/* C-32: held for release — only the orders this seat may release. */}
+          {heldShown.length > 0 && (
+            <section data-orders-held-for-release className="mb-4">
+              <p className="doc-type-meta mb-1 font-semibold uppercase tracking-[0.07em] text-[var(--color-clay-ink)]">
+                {[
+                  'Held for release',
+                  String(heldShown.length),
+                  fmtUsd(heldShown.reduce((s, h) => s + h.totalCents, 0)),
+                ].join(' · ')}
+              </p>
+              <ul>
+                {heldShown.map((h) => {
+                  const po = (orders ?? []).find((o) => o.id === h.id);
+                  const holder = h.heldByName?.trim().split(/\s+/)[0] ?? null;
+                  return (
+                    <li
+                      key={h.id}
+                      data-orders-held-row
+                      className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--color-pearl)] px-1 py-3"
+                    >
+                      <div className="min-w-[12rem] flex-1">
+                        <p className="doc-type-body font-medium text-[var(--color-charcoal)]">
+                          {[h.vendorName ?? 'Vendor', h.projectName ?? 'Project'].join(' · ')}
+                        </p>
+                        <p className="doc-type-meta uppercase tracking-[0.05em] text-[var(--color-quiet-ink)]">
+                          {[
+                            fmtUsd(h.totalCents),
+                            h.heldAt ? `held ${fmtDay(h.heldAt)}` : 'held',
+                            holder,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                        {h.holdNote && (
+                          <p className="doc-type-body mt-0.5 italic text-[var(--color-quiet-ink)]">
+                            “{h.holdNote}”
+                          </p>
+                        )}
+                      </div>
+                      {po && (
+                        <DocumentAction
+                          actionKey="open-held-purchase-order"
+                          surfaceKey="orders"
+                          regionKey="held-for-release"
+                          variant="secondary"
+                          onClick={() => setPaperPo(po)}
+                        >
+                          open →
+                        </DocumentAction>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
           )}
           {groups.map((g) => (
             <section key={g.vendorId} className="mb-4">
@@ -668,8 +749,10 @@ export function OrdersLedger({
                               onClick={() =>
                                 // C-23: an unsent draft opens on its order
                                 // paper; a sent PO keeps its PDF paper.
+                                // C-32: a held PO reads on its paper too.
                                 !po.sent_at &&
-                                po.status === 'draft' &&
+                                (po.status === 'draft' ||
+                                  po.status === 'held_for_release') &&
                                 !po.is_patina_catalog
                                   ? setPaperPo(po)
                                   : setPreviewPo(po)
@@ -679,7 +762,9 @@ export function OrdersLedger({
                                 ? 'resend'
                                 : po.status === 'draft'
                                   ? 'send →'
-                                  : 'pdf'}
+                                  : po.status === 'held_for_release'
+                                    ? 'open →'
+                                    : 'pdf'}
                             </DocumentAction>
                             <button
                               type="button"

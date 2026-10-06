@@ -95,6 +95,12 @@ import {
 import { latestQuoteForLine } from '@/components/document/line-unfold/quote-model';
 import { PoRiders } from './riders';
 import { ComLineNote, useComPaper } from './com-slot';
+import {
+  SendBackAct,
+  releaseConsequence,
+  releaseErrorMessage,
+  useReleasePaper,
+} from './release-slot';
 
 export * from './model';
 
@@ -125,9 +131,12 @@ type PaperRecord =
   | { kind: 'sent'; at: string; recipient: string | null }
   | { kind: 'marked'; at: string }
   | { kind: 'saved'; at: string }
-  | { kind: 'ordered'; at: string };
+  | { kind: 'ordered'; at: string }
+  // C-32: held for an owner/admin, or sent back to draft with a note.
+  | { kind: 'held'; at: string; releaser: string }
+  | { kind: 'sent_back'; at: string; note: string };
 
-type Busy = 'send' | 'mark' | 'save' | 'order' | 'bill' | null;
+type Busy = 'send' | 'mark' | 'save' | 'order' | 'bill' | 'hold' | null;
 
 const LABEL = 'doc-type-meta uppercase tracking-[0.07em] text-[var(--color-quiet-ink)]';
 const FIELD =
@@ -274,6 +283,13 @@ function PaperSheet({
   const account = accountRow && !accountRow.archived_at ? accountRow : null;
   const recipient =
     account?.orders_email_override?.trim() || clientVendorEmailHint(vendor) || null;
+  // C-32: whether this paper holds, releases, or waits (release-slot.tsx).
+  const releasePaper = useReleasePaper({
+    studioId: identity?.studioId ?? null,
+    isPatinaMaker,
+    purchaseOrder: existing,
+    totalCents,
+  });
 
   // ─── Header fields ──────────────────────────────────────────────────────
   const sharedRoom = useMemo(() => {
@@ -380,6 +396,8 @@ function PaperSheet({
     if (message.includes('ship_to_required')) {
       setShipToInvalid(true);
       setError(SHIP_TO_REQUIRED_MESSAGE);
+    } else if (releaseErrorMessage(message)) {
+      setError(releaseErrorMessage(message));
     } else {
       setError(poSendErrorMessage(message));
     }
@@ -536,7 +554,12 @@ function PaperSheet({
     setBusy(mode === 'send' ? 'send' : 'mark');
     noteCoverageOverride();
     try {
+      // C-32: an owner/admin's release goes on record first, then the send.
+      // A held PO returns to draft on release, so its header can be written.
+      const releasing = releasePaper.mode === 'release';
+      if (releasing && releasePaper.held && poId) await releasePaper.release(poId);
       const id = await ensurePurchaseOrder();
+      if (releasing && !releasePaper.held) await releasePaper.release(id);
       const result = await sendPo.mutateAsync({
         purchaseOrderId: id,
         mode,
@@ -558,6 +581,40 @@ function PaperSheet({
       failWith(e, 'The order did not send.');
     } finally {
       if (alive.current) setBusy(null);
+    }
+  };
+
+  // C-32: the paper waits for an owner or admin; nothing goes to the vendor.
+  const ownerOrAdmin = releasePaper.ownerFirstName
+    ? `${releasePaper.ownerFirstName} or an admin`
+    : 'An owner or admin';
+  const holdForRelease = async () => {
+    if (busy) return;
+    setError(null);
+    if (refuseBlocked()) return;
+    setBusy('hold');
+    noteCoverageOverride();
+    try {
+      const id = await ensurePurchaseOrder();
+      await releasePaper.hold(id);
+      settled();
+      if (alive.current) setRecord({ kind: 'held', at: todayIso(), releaser: ownerOrAdmin });
+    } catch (e) {
+      failWith(e, 'The order was not held.');
+    } finally {
+      if (alive.current) setBusy(null);
+    }
+  };
+
+  const sendBack = async (note: string) => {
+    if (!poId) return;
+    setError(null);
+    try {
+      await releasePaper.sendBack(poId, note);
+      settled();
+      if (alive.current) setRecord({ kind: 'sent_back', at: todayIso(), note });
+    } catch (e) {
+      failWith(e, 'The order was not sent back.');
     }
   };
 
@@ -695,8 +752,27 @@ function PaperSheet({
               : `The client has paid for all ${ffeItems.length} pieces. `
             : ''
         }Sending commits ${amount} of studio money to ${vendor.name}.`;
-  const label = terminalLabel({ vendorName: vendor.name, amount, isPatinaMaker });
+  // C-32: the terminal act and its sentence follow the release gate.
+  const releaseMode = releasePaper.mode;
+  const releaseSentence = releaseConsequence(releasePaper.ownerFirstName, vendor.name);
+  const paperConsequence =
+    releaseMode === 'hold' || releaseMode === 'waiting' ? releaseSentence : consequence;
+  const label =
+    releaseMode === 'hold'
+      ? `Hold for release · ${amount}`
+      : releaseMode === 'release' && releasePaper.held
+        ? `Release to ${vendor.name} · ${amount}`
+        : terminalLabel({ vendorName: vendor.name, amount, isPatinaMaker });
   const terminalHeld = !isPatinaMaker && !hasShipTo;
+  const heldRecord = releasePaper.held
+    ? [
+        'Held for release',
+        releasePaper.heldAt ? fmtDay(releasePaper.heldAt) : null,
+        releasePaper.heldByFirstName,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
 
   return (
     <DocSheet
@@ -973,13 +1049,42 @@ function PaperSheet({
               checkoutError={checkoutError}
             />
           ) : (
-            <p data-order-paper-consequence className="doc-type-body text-[var(--color-charcoal)]">
-              {consequence}
-            </p>
+            <>
+              {heldRecord && (
+                <p data-order-paper-held-record className="doc-type-body text-[var(--color-charcoal)]">
+                  {heldRecord}
+                  {releasePaper.holdNote ? ` — “${releasePaper.holdNote}”` : ''}
+                </p>
+              )}
+              <p data-order-paper-consequence className="doc-type-body text-[var(--color-charcoal)]">
+                {paperConsequence}
+              </p>
+            </>
           )}
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {!record && releaseMode === 'hold' && (
+              <DocumentAction
+                actionKey="order-paper-hold-for-release"
+                surfaceKey="order-paper"
+                regionKey="terminal"
+                variant="terminal"
+                loading={busy === 'hold'}
+                disabled={busy !== null || terminalHeld}
+                held={terminalHeld}
+                aria-describedby={terminalHeld ? 'order-paper-held-reason' : undefined}
+                onHeldActivate={() => {
+                  setShipToInvalid(true);
+                  setError(SHIP_TO_REQUIRED_MESSAGE);
+                }}
+                onClick={holdForRelease}
+              >
+                {label}
+              </DocumentAction>
+            )}
             {!record &&
+              releaseMode !== 'hold' &&
+              releaseMode !== 'waiting' &&
               (isPatinaMaker ? (
                 <DocumentAction
                   actionKey="order-paper-order-from-patina"
@@ -1011,7 +1116,7 @@ function PaperSheet({
                   {label}
                 </DocumentAction>
               ))}
-            {!record && terminalHeld && (
+            {!record && terminalHeld && releaseMode !== 'waiting' && (
               <span id="order-paper-held-reason" className="doc-type-meta text-[var(--color-quiet-ink)]">
                 choose where this ships
               </span>
@@ -1046,7 +1151,15 @@ function PaperSheet({
 
           {!record && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              {!isPatinaMaker && (
+              {/* C-32: a held paper is frozen until released or sent back. */}
+              {releaseMode === 'release' && releasePaper.held && (
+                <SendBackAct
+                  heldByFirstName={releasePaper.heldByFirstName}
+                  disabled={busy !== null}
+                  onSendBack={sendBack}
+                />
+              )}
+              {!isPatinaMaker && !releasePaper.held && (
                 <DocumentAction
                   actionKey="order-paper-save"
                   surfaceKey="order-paper"
@@ -1059,7 +1172,7 @@ function PaperSheet({
                   Save, don&rsquo;t send
                 </DocumentAction>
               )}
-              {!isPatinaMaker && (
+              {!isPatinaMaker && releaseMode !== 'hold' && releaseMode !== 'waiting' && (
                 <DocumentAction
                   actionKey="order-paper-mark-sent"
                   surfaceKey="order-paper"
@@ -1072,7 +1185,7 @@ function PaperSheet({
                   Released by phone or portal — mark as sent
                 </DocumentAction>
               )}
-              {!isPatinaMaker && uncovered.length > 0 && (
+              {!isPatinaMaker && !releasePaper.held && uncovered.length > 0 && (
                 <DocumentAction
                   actionKey="order-paper-bill-client-first"
                   surfaceKey="order-paper"
@@ -1147,7 +1260,11 @@ function PaperRecordLine({
         ? `Released by phone or portal · ${day}`
         : record.kind === 'saved'
           ? `Saved as a draft · ${day}. Nothing went to ${vendorName}.`
-          : checkoutError
+          : record.kind === 'held'
+            ? `Held for release · ${day}. ${record.releaser} releases it before it goes to ${vendorName}.`
+            : record.kind === 'sent_back'
+              ? `Sent back · ${day} · “${record.note}”`
+              : checkoutError
             ? `Ordered from Patina · ${day}. Payment wasn't started — ${checkoutError} Pay any time from Orders → Vendors.`
             : `Ordered from Patina · ${day}. Pay now, or any time from Orders → Vendors.`;
   return (

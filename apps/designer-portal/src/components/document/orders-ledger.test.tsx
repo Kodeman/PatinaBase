@@ -19,10 +19,20 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
+const mockHeld: { data: Record<string, unknown>[] } = { data: [] };
+
 jest.mock('@patina/supabase', () => ({
   usePurchaseOrders: jest.fn(),
   useUpdatePurchaseOrderETA: jest.fn(),
   useVendors: jest.fn(),
+  useHeldPurchaseOrders: () => ({ data: mockHeld.data }),
+}));
+
+// The paper's own suites live under order-paper/__tests__.
+jest.mock('@/components/portal/procurement/order-paper', () => ({
+  ExistingOrderPaper: ({ purchaseOrder }: { purchaseOrder: { id: string } }) => (
+    <div data-testid="order-paper">Paper {purchaseOrder.id}</div>
+  ),
 }));
 
 jest.mock('@/components/portal/procurement/po-send-actions', () => ({
@@ -658,5 +668,80 @@ describe('OrdersLedger · money out (C-11)', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'money out ↓' })[2]);
     expect(screen.getByTestId('money-band')).toHaveTextContent('po-3 · catalog');
+  });
+});
+
+describe('OrdersLedger · held for release (C-32)', () => {
+  const HELD_PO = {
+    ...ORDERS[0],
+    id: 'po-held',
+    po_number: 'PO 1044',
+    status: 'held_for_release',
+    total_cents: 1_248_000,
+    payments: [],
+  };
+  const held = (over: Record<string, unknown> = {}) => ({
+    id: 'po-held',
+    projectId: 'project-1',
+    projectName: 'Oak House',
+    studioId: 'org-studio',
+    vendorName: 'Atelier One',
+    totalCents: 1_248_000,
+    heldAt: '2026-10-05T15:00:00Z',
+    heldByName: 'Maya Okafor',
+    holdNote: 'The walnut one.',
+    viewerCanRelease: true,
+    ...over,
+  });
+  const heldGroup = (container: HTMLElement) =>
+    container.querySelector('[data-orders-held-for-release]');
+
+  beforeEach(() => {
+    mockUsePurchaseOrders.mockReturnValue({ data: [...ORDERS, HELD_PO], isLoading: false });
+    mockUseVendors.mockReturnValue({ data: { data: VENDORS } });
+    mockUseUpdatePurchaseOrderETA.mockReturnValue({ mutateAsync: mockMutateEta });
+  });
+
+  afterEach(() => {
+    mockHeld.data = [];
+  });
+
+  it('leads the page with the orders this seat may release, each read once', () => {
+    mockHeld.data = [held()];
+    const { container } = renderBook();
+    const group = heldGroup(container) as HTMLElement;
+    expect(group).toHaveTextContent('Held for release · 1 · $12,480');
+    expect(group).toHaveTextContent('Atelier One · Oak House');
+    expect(group).toHaveTextContent(/\$12,480 · held .* · Maya/);
+    expect(group).toHaveTextContent('“The walnut one.”');
+    // It left the vendor group: three ordinary rows, no fourth.
+    expect(container.querySelectorAll('[data-orders-po-row]')).toHaveLength(3);
+  });
+
+  it('is absent for a seat that cannot release; the order stays in its vendor group, opening on its paper', () => {
+    mockHeld.data = [held({ viewerCanRelease: false })];
+    const { container } = renderBook();
+    expect(heldGroup(container)).toBeNull();
+    expect(container.querySelectorAll('[data-orders-po-row]')).toHaveLength(4);
+    expect(screen.getByText('held for release')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'open →' }));
+    expect(screen.getByTestId('order-paper')).toHaveTextContent('Paper po-held');
+  });
+
+  it('opens the held order on its paper from the group', () => {
+    mockHeld.data = [held()];
+    const { container } = renderBook();
+    const group = heldGroup(container) as HTMLElement;
+    fireEvent.click(group.querySelector('[data-action-key="open-held-purchase-order"]') as HTMLElement);
+    expect(screen.getByTestId('order-paper')).toHaveTextContent('Paper po-held');
+  });
+
+  it('honors the project lens', () => {
+    mockHeld.data = [held()];
+    const { container } = renderBook();
+    fireEvent.click(screen.getByRole('button', { name: 'Lake House' }));
+    expect(heldGroup(container)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Oak House' }));
+    expect(heldGroup(container)).not.toBeNull();
   });
 });

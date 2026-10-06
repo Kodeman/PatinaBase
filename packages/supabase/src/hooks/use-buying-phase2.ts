@@ -1783,3 +1783,99 @@ export function useUnresolvedProcurementExceptions(projectId: string | null | un
 export function invalidateProcurementExceptions(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: [...buyingPhase2Keys.all, 'exceptions'] });
 }
+
+// --- C-32 release (SQ-430) ---
+
+/** A PO held for release, with whether THIS viewer's seat may release it. */
+export interface HeldPurchaseOrder {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  studioId: string | null;
+  vendorName: string | null;
+  totalCents: number;
+  heldAt: string | null;
+  heldByName: string | null;
+  holdNote: string | null;
+  /** is_org_admin_or_owner of the project's studio (R-PB6, System B). */
+  viewerCanRelease: boolean;
+}
+
+/** Under ['purchase-orders'], so every PO invalidation refreshes it. */
+export const heldPurchaseOrdersKey = ['purchase-orders', 'held-for-release'] as const;
+
+const HELD_PURCHASE_ORDER_LIMIT = 200;
+
+/**
+ * The held POs in the member's read, each with the viewer's release seat for
+ * its studio, asked of the server once per studio. The Ledger group and the
+ * Desk need read the same answer. A project with no studio_id has no releaser
+ * here; the release RPC stays the authority.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchHeldPurchaseOrders(supabase: any): Promise<HeldPurchaseOrder[]> {
+  const { data, error } = await supabase
+    .from('purchase_orders')
+    .select(
+      'id, project_id, total_cents, held_at, hold_note, vendor:vendors!purchase_orders_vendor_id_fkey(name), project:projects!purchase_orders_project_id_fkey(name, studio_id), held_by_profile:profiles!purchase_orders_held_by_fkey(full_name)',
+    )
+    .eq('status', 'held_for_release')
+    .order('held_at')
+    .limit(HELD_PURCHASE_ORDER_LIMIT);
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = ((data ?? []) as any[]).filter((row) => row?.id && row.project_id);
+  const studioIds = [
+    ...new Set(rows.map((row) => one(row.project)?.studio_id).filter(Boolean)),
+  ] as string[];
+  const seats = new Map<string, boolean>(
+    await Promise.all(
+      studioIds.map(async (studioId): Promise<[string, boolean]> => {
+        const { data: seat, error: seatError } = await supabase.rpc('is_org_admin_or_owner', {
+          _organization_id: studioId,
+        });
+        return [studioId, !seatError && seat === true];
+      }),
+    ),
+  );
+  return rows.map((row) => {
+    const project = one(row.project);
+    const studioId = (project?.studio_id as string | null) ?? null;
+    return {
+      id: row.id,
+      projectId: row.project_id,
+      projectName: project?.name ?? null,
+      studioId,
+      vendorName: one(row.vendor)?.name ?? null,
+      totalCents: row.total_cents ?? 0,
+      heldAt: row.held_at ?? null,
+      heldByName: one(row.held_by_profile)?.full_name ?? null,
+      holdNote: row.hold_note ?? null,
+      viewerCanRelease: studioId ? seats.get(studioId) === true : false,
+    };
+  });
+}
+
+export function useHeldPurchaseOrders() {
+  return useQuery({
+    queryKey: heldPurchaseOrdersKey,
+    queryFn: () => fetchHeldPurchaseOrders(getSupabase()),
+  });
+}
+
+/** Whether the viewer holds an owner/admin seat in this studio (R-PB6). */
+export function useIsStudioReleaser(studioId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['buying-phase2', 'releaser', studioId ?? ''] as const,
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await getSupabase().rpc('is_org_admin_or_owner', {
+        _organization_id: studioId as string,
+      });
+      if (error) throw error;
+      return data === true;
+    },
+    enabled: !!studioId,
+  });
+}

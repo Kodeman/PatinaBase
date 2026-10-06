@@ -56,6 +56,7 @@ import { MemberTitleLine } from './member-title-line';
 import { StudioRateRows } from './studio-rate-rows';
 import { StudioPaymentMethodsCard } from './studio-payment-methods';
 import { StudioMarginVisibilityCard } from './studio-margin-visibility';
+import { StudioReleaseGateCard } from './studio-release-gate';
 import { StudioLocationsEditor } from '../people/studio-locations-editor';
 import { AgreementLibraryCard } from './agreement-library-card';
 import { LicensingAttestationCard } from './licensing-attestation-card';
@@ -1202,6 +1203,10 @@ export function AccountStudioPage() {
       {/* Who sees margin (US-16 C-36, R1) — owners and admins restrict it;
           every other seat reads it. */}
       <StudioMarginVisibilityCard studioId={studio.id} canManage={canManage} />
+
+      {/* Held for release (US-16 C-32, R-PB2) — off by default; owners and
+          admins set it, every other seat reads it. */}
+      <StudioReleaseGateCard studioId={studio.id} canManage={canManage} />
 
       {/* Locations (US-16 C-13) — every place the studio's goods go, the
           default receiver among them. The same editor hangs off each company

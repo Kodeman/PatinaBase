@@ -64,6 +64,12 @@ jest.mock('@patina/supabase', () => ({
 
 // C-26: the riders slot has its own suite (riders.test.tsx).
 jest.mock('../riders', () => ({ PoRiders: () => null }));
+// C-32: no release gate here; the slot's own suite is order-paper-release.test.tsx.
+jest.mock('../release-slot', () => ({
+  ...jest.requireActual('../release-slot'),
+  useReleasePaper: () => ({ mode: 'none', held: false, ownerFirstName: null }),
+  SendBackAct: () => null,
+}));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),

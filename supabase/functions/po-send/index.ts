@@ -59,6 +59,7 @@ import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { buildPoPdf, type PoPdfData } from '../_shared/po-pdf.ts';
 import { buildPoSentEmail } from '../_shared/po-emails.ts';
 import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
+import { checkPoReleaseGate } from './release-gate.ts';
 import {
   buildFallbackSidemark,
   buildSchedulePoProposal,
@@ -266,6 +267,11 @@ Deno.serve(async (req: Request) => {
       { error: repricingGate.error, detail: repricingGate.detail },
       repricingGate.error === 'po_needs_repricing' ? 409 : 500,
     );
+  }
+  // C-32: a PO waiting for an owner/admin release does not go out (as the caller).
+  const releaseGate = await checkPoReleaseGate(userClient, purchaseOrderId, mode);
+  if (!releaseGate.ok) {
+    return json({ error: releaseGate.error, detail: releaseGate.detail }, releaseGate.status);
   }
 
   // ── Linked items (the document's line table) ────────────────────────────

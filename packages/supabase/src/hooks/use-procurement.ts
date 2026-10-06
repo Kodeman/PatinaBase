@@ -39,6 +39,8 @@ export type POPaymentState = 'pending' | 'due' | 'paid' | 'refunded';
 
 export type POStatus =
   | 'draft'
+  // C-32 (00710): an unsent draft waiting for an owner or admin to release it.
+  | 'held_for_release'
   | 'confirmed'
   | 'in_production'
   | 'shipped'
