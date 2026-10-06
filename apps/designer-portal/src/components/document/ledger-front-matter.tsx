@@ -11,10 +11,39 @@
  */
 
 import { HelpGlyph } from './overlays/doc-sheet';
+import { fmtUsd } from '@/lib/document/format';
 
 export interface FrontMatterStat {
   label: string;
   value: string;
+}
+
+/**
+ * The bill run (D2 §M5.6, D1-11): one total over exactly the orders the
+ * `payment · due` lens shows — the sum of their scheduled rows in state
+ * `due`, and how many orders carry one. V11: a total over the rows that
+ * produced it; no tile, no chart, no red/green. Empty when nothing is due.
+ */
+export function dueToMakers(
+  orders: ReadonlyArray<{
+    payments?: ReadonlyArray<{ state: string; amount_cents?: number | null }> | null;
+  }>,
+): FrontMatterStat[] {
+  let cents = 0;
+  let count = 0;
+  for (const o of orders) {
+    const due = (o.payments ?? []).filter((p) => p.state === 'due');
+    if (due.length === 0) continue;
+    count += 1;
+    cents += due.reduce((sum, p) => sum + (p.amount_cents ?? 0), 0);
+  }
+  if (count === 0) return [];
+  return [
+    {
+      value: fmtUsd(cents),
+      label: `across ${count} ${count === 1 ? 'order' : 'orders'}`,
+    },
+  ];
 }
 
 export function LedgerFrontMatter({

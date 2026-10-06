@@ -54,6 +54,7 @@ import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { StudioSetupChecklist } from './studio-setup-checklist';
 import { MemberTitleLine } from './member-title-line';
 import { StudioRateRows } from './studio-rate-rows';
+import { StudioPaymentMethodsCard } from './studio-payment-methods';
 import { AgreementLibraryCard } from './agreement-library-card';
 import { LicensingAttestationCard } from './licensing-attestation-card';
 import { studioEvents } from '@/lib/analytics/studio-events';
@@ -1188,6 +1189,13 @@ export function AccountStudioPage() {
           </dl>
         )}
       </div>
+
+      {/* Paying makers (US-16 C-11) — beside Billing: the studio's saved
+          ways to pay vendors, offered by the record-payment act. */}
+      <StudioPaymentMethodsCard
+        studioId={studio.id}
+        canEdit={myRole !== null && myRole !== 'guest'}
+      />
 
       {/* Agreement defaults (00575) — placed after Billing, which is
           untouched. What a new agreement starts from; every member composes

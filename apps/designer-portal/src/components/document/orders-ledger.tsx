@@ -36,7 +36,8 @@ import {
 import { Stamp } from './stamp';
 import { DateTextInput } from './date-text-input';
 import { LogAckInline, PoPreview } from './po-preview';
-import { LedgerFrontMatter } from './ledger-front-matter';
+import { dueToMakers, LedgerFrontMatter } from './ledger-front-matter';
+import { PoMoneyOut } from './line-unfold/record-payment';
 import { ordersThroughput } from '@/lib/document/ledger-summary';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 import { VendorsBookPage } from './orders-book-vendors';
@@ -153,6 +154,8 @@ export function OrdersLedger({
   const [batchBusy, setBatchBusy] = useState(false);
   // PRC-07 (R84): the row whose log-acknowledgment band is unfolded.
   const [ackPoId, setAckPoId] = useState<string | null>(null);
+  // C-11 (D1-11): the row whose money-out band is unfolded.
+  const [moneyPoId, setMoneyPoId] = useState<string | null>(null);
   // PRC-06 (R84): the quiet lenses — project + payment state, DM-mono text
   // (the portal's FacetedFilterPopover facets, without the pills).
   // US-16 (C-08): seeded from the opening context so the project the
@@ -436,6 +439,14 @@ export function OrdersLedger({
               </button>
             </div>
           )}
+          {/* The bill run (D1-11): under the `payment · due` lens, one total
+              over exactly the rows beneath it (V11). */}
+          {!isLoading && paymentLens === 'due' && (
+            <LedgerFrontMatter
+              caption="due to makers this week"
+              stats={dueToMakers(groups.flatMap((g) => g.pos))}
+            />
+          )}
           {!isLoading &&
             live.length > 0 &&
             groups.length === 0 &&
@@ -489,6 +500,8 @@ export function OrdersLedger({
                     !po.acknowledged_at &&
                     !po.is_patina_catalog &&
                     po.status !== 'cancelled';
+                  // C-11: the payment band — schedule, records, Record act.
+                  const hasMoney = (po.payments ?? []).length > 0;
                   return (
                     <Fragment key={po.id}>
                       <li
@@ -604,6 +617,21 @@ export function OrdersLedger({
                                 log ack {ackPoId === po.id ? '↑' : '↓'}
                               </button>
                             )}
+                            {hasMoney && (
+                              <button
+                                type="button"
+                                data-orders-money-toggle
+                                onClick={() =>
+                                  setMoneyPoId((cur) =>
+                                    cur === po.id ? null : po.id,
+                                  )
+                                }
+                                aria-expanded={moneyPoId === po.id}
+                                className="da-score-hover doc-type-meta inline-flex min-h-11 min-w-11 items-center uppercase tracking-[0.05em] text-[var(--color-quiet-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-quiet-ink)]"
+                              >
+                                money out {moneyPoId === po.id ? '↑' : '↓'}
+                              </button>
+                            )}
                             <DocumentAction
                               actionKey="open-purchase-order-preview"
                               surfaceKey="orders"
@@ -644,6 +672,24 @@ export function OrdersLedger({
                             confirmedEta={po.confirmed_eta}
                             sentAt={po.sent_at}
                             tone="book"
+                          />
+                        </li>
+                      )}
+                      {hasMoney && moneyPoId === po.id && (
+                        <li
+                          data-orders-money-unfold
+                          className="border-b border-[var(--color-pearl)] px-1 py-3 sm:pl-12"
+                        >
+                          <p className="doc-type-meta mb-1 uppercase tracking-[0.07em] text-[var(--color-quiet-ink)]">
+                            Money out
+                          </p>
+                          <PoMoneyOut
+                            purchaseOrderId={po.id}
+                            projectId={po.project_id ?? po.project?.id ?? null}
+                            isPatinaCatalog={Boolean(po.is_patina_catalog)}
+                            fallback={po.payments}
+                            receiptAnchor={{ kind: 'section', sectionKey: 'project' }}
+                            surfaceKey="orders"
                           />
                         </li>
                       )}

@@ -4,6 +4,9 @@ jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: { actionShown: jest.fn(), actionSelected: jest.fn() },
 }));
 
+// Money out reads its own payment hooks; its suite is line-unfold/__tests__.
+jest.mock('../line-unfold/money-out-cell', () => ({ MoneyOutCell: () => null }));
+
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));

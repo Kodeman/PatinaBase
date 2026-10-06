@@ -21,6 +21,9 @@ jest.mock('@/hooks/use-teaching-note', () => ({
   useTeachingNoteFor: () => ({ note: null, bind: null }),
 }));
 
+// Paying makers has its own suite (studio-payment-methods.test.tsx).
+jest.mock('../studio-payment-methods', () => ({ StudioPaymentMethodsCard: () => null }));
+
 jest.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ user: { id: "designer-1" } }),
 }));

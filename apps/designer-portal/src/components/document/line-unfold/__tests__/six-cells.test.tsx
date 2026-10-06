@@ -18,6 +18,12 @@ jest.mock('@patina/supabase', () => ({
   useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useVendors: () => ({ data: { data: [] } }),
   useProductPrices: () => ({ data: undefined }),
+  // Money out (C-11): the full schedule is still loading, so the line's
+  // embed stands in; its own suite is money-out.test.tsx.
+  usePOPayments: () => ({ data: undefined }),
+  useVendorPayments: () => ({ data: [] }),
+  useStudioPaymentMethods: () => ({ data: [] }),
+  useFfeInvoiceCoverage: () => ({ data: undefined }),
 }));
 
 jest.mock('@/components/portal/procurement/order-assistant', () => ({
@@ -186,14 +192,17 @@ describe('LineUnfold · six cells (C-14)', () => {
     );
   });
 
-  it('reads only "Paid at checkout" on a maker-lane order (V1)', () => {
+  it('reads a maker-lane order read-only: settles through checkout (V1)', () => {
     renderUnfold({
       status: 'production',
       purchase_order_id: po.id,
       purchase_order: { ...po, is_patina_catalog: true },
     });
     const money = screen.getByRole('group', { name: 'Money out' });
-    expect(money).toHaveTextContent(/^Money outPaid at checkout$/);
+    expect(money).toHaveTextContent('Settles through Patina checkout');
+    expect(
+      within(money).queryByRole('button', { name: /Record payment/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps the receiving facts in Receiving', () => {

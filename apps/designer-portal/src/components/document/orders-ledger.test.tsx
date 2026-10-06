@@ -43,7 +43,34 @@ jest.mock('./po-preview', () => ({
 }));
 
 jest.mock('./ledger-front-matter', () => ({
-  LedgerFrontMatter: () => <div data-testid="front-matter" />,
+  LedgerFrontMatter: ({
+    caption,
+    stats,
+  }: {
+    caption: string;
+    stats: { label: string; value: string }[];
+  }) => (
+    <div data-testid="front-matter" data-caption={caption}>
+      {stats.map((s) => `${s.value} ${s.label}`).join(' | ')}
+    </div>
+  ),
+  dueToMakers: jest.requireActual('./ledger-front-matter').dueToMakers,
+}));
+
+// The band's own acts are proven in line-unfold/__tests__/money-out.test.tsx.
+jest.mock('./line-unfold/record-payment', () => ({
+  PoMoneyOut: ({
+    purchaseOrderId,
+    isPatinaCatalog,
+  }: {
+    purchaseOrderId: string;
+    isPatinaCatalog?: boolean;
+  }) => (
+    <div data-testid="money-band">
+      {purchaseOrderId}
+      {isPatinaCatalog ? ' · catalog' : ''}
+    </div>
+  ),
 }));
 
 // The Folio-backed trigger is proven in its own suite (date-text-input.test.tsx);
@@ -566,5 +593,70 @@ describe('OrdersLedger · lifecycle columns (R7)', () => {
     expect(expected).toHaveTextContent('NO DATE');
     expect(expected).toHaveAttribute('data-orders-unscheduled');
     expect(container.textContent).not.toMatch(/Jul 1|Jun 1/);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// C-11 (D1-11): money out on the Ledger — the bill run and the payment band.
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('OrdersLedger · money out (C-11)', () => {
+  const MONEY_ORDERS = [
+    {
+      ...ORDERS[0],
+      payments: [{ id: 'pay-1', kind: 'deposit', state: 'due', amount_cents: 400_000 }],
+    },
+    {
+      ...ORDERS[1],
+      payments: [
+        { id: 'pay-2', kind: 'deposit', state: 'due', amount_cents: 742_000 },
+        { id: 'pay-3', kind: 'balance', state: 'pending', amount_cents: 100_000 },
+      ],
+    },
+    {
+      ...ORDERS[2],
+      is_patina_catalog: true,
+      payments: [{ id: 'pay-4', kind: 'full_upfront', state: 'paid', amount_cents: 84_000 }],
+    },
+  ];
+
+  beforeEach(() => {
+    mockUsePurchaseOrders.mockReturnValue({ data: MONEY_ORDERS, isLoading: false });
+    mockUseVendors.mockReturnValue({ data: { data: VENDORS } });
+    mockUseUpdatePurchaseOrderETA.mockReturnValue({ mutateAsync: mockMutateEta });
+  });
+
+  const billRun = () =>
+    screen
+      .getAllByTestId('front-matter')
+      .find((el) => el.dataset.caption === 'due to makers this week');
+
+  it('puts one bill-run total over exactly the rows the due lens shows', () => {
+    const { container } = renderBook();
+    expect(billRun()).toBeUndefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'due' }));
+    expect(container.querySelectorAll('[data-orders-po-row]')).toHaveLength(2);
+    // Only state 'due' rows count: the pending balance and the paid row do not.
+    expect(billRun()).toHaveTextContent('$11,420 across 2 orders');
+
+    // The project lens narrows the rows, and the total follows them.
+    fireEvent.click(screen.getByRole('button', { name: 'Oak House' }));
+    expect(container.querySelectorAll('[data-orders-po-row]')).toHaveLength(1);
+    expect(billRun()).toHaveTextContent('$4,000 across 1 order');
+  });
+
+  it('unfolds the payment band from the row, catalog rows included', () => {
+    renderBook();
+    const toggles = screen.getAllByRole('button', { name: 'money out ↓' });
+    expect(toggles).toHaveLength(3);
+
+    fireEvent.click(toggles[0]);
+    expect(screen.getByTestId('money-band')).toHaveTextContent('po-1');
+    fireEvent.click(screen.getByRole('button', { name: 'money out ↑' }));
+    expect(screen.queryByTestId('money-band')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'money out ↓' })[2]);
+    expect(screen.getByTestId('money-band')).toHaveTextContent('po-3 · catalog');
   });
 });
