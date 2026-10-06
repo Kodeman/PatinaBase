@@ -339,8 +339,16 @@ test.describe("Studio buying Phase 0 — the non-owner member walk", () => {
     await expect(poCell).toContainText("awaiting acknowledgment", {
       timeout: 30_000,
     });
-    await nextAct.getByPlaceholder("NA-2026-…").fill(VENDOR_PO);
-    await nextAct.getByRole("button", { name: "Log acknowledgment" }).click();
+    // The ack check (C-27): every value starts as the PO's; nothing differs.
+    const ackCheck = nextAct.getByTestId("ack-check");
+    await ackCheck.getByPlaceholder("NA-2026-…").fill(VENDOR_PO);
+    await expect(ackCheck.getByTestId("ack-check-summary")).toHaveText(
+      "Everything agrees.",
+      { timeout: 20_000 },
+    );
+    await ackCheck
+      .getByRole("button", { name: "Everything agrees — log it" })
+      .click();
     await expect(poCell).toContainText(/Acknowledged|acknowledged/, {
       timeout: 30_000,
     });
