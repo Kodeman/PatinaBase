@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { LineAuthorization } from '@/lib/document/authorization-derivation';
 import { todayYmd } from '@/lib/document/format';
 
@@ -28,6 +28,11 @@ jest.mock('@patina/supabase', () => ({
     isPending: false,
   }),
   useVendor: () => ({ data: { id: 'vendor-1', name: 'Hollowell Woodshop' } }),
+  // C-05 commercials block (covered in line-unfold-commercials.test.tsx).
+  useSetFfeLineCommercials: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useFindOrCreateVendor: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useVendors: () => ({ data: { data: [] } }),
+  useProductPrices: () => ({ data: undefined }),
 }));
 
 jest.mock('@/components/portal/procurement/order-assistant', () => ({
@@ -278,10 +283,11 @@ describe('LineUnfold · piece artifact plate', () => {
       'src',
       'https://images.example.com/halden-sofa.jpg',
     );
-    expect(screen.getByText('Maker').parentElement).toHaveTextContent(
+    const plate = within(screen.getByRole('figure'));
+    expect(plate.getByText('Maker').parentElement).toHaveTextContent(
       'Maker · Hollowell Woodshop',
     );
-    expect(screen.getByText('Source').parentElement).toHaveTextContent(
+    expect(plate.getByText('Source').parentElement).toHaveTextContent(
       'Source · Winfield Workroom',
     );
     expect(screen.getByText('Walnut')).toBeInTheDocument();
@@ -296,10 +302,11 @@ describe('LineUnfold · piece artifact plate', () => {
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.getByText('Image not on file')).toBeInTheDocument();
-    expect(screen.getByText(/Maker/).parentElement).toHaveTextContent(
+    const plate = within(screen.getByRole('figure'));
+    expect(plate.getByText(/Maker/).parentElement).toHaveTextContent(
       'Maker · Not recorded',
     );
-    expect(screen.getByText('Source').parentElement).toHaveTextContent(
+    expect(plate.getByText('Source').parentElement).toHaveTextContent(
       'Source · Not recorded',
     );
     expect(
