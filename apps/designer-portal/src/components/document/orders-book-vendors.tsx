@@ -35,6 +35,7 @@ import {
 } from '@patina/supabase';
 import { Select } from '@/components/ui/controls';
 import { useInternalTimeStudio } from '@/hooks/use-viewer-studio';
+import { VendorSamples } from './line-unfold/sample-request';
 import {
   OrderPaperQueue,
   PAYMENT_PATTERN_OPTIONS,
@@ -1077,6 +1078,16 @@ export function VendorsBookPage({
           >
             their profile · in People →
           </a>
+          {/* C-35: memos and samples requested against this maker, no project. */}
+          {!vendor.is_patina_catalog && (
+            <VendorSamples
+              key={vendor.id}
+              organizationId={studio?.id ?? null}
+              vendorId={vendor.id}
+              vendorName={vendor.name}
+              canEdit
+            />
+          )}
         </div>
       )}
 

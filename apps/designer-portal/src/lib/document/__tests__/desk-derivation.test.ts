@@ -16,6 +16,7 @@ import {
   type DeskPaymentSignal,
   type DeskQuoteSignal,
   type DeskReturnSignal,
+  type DeskSampleSignal,
   type DocumentStateRow,
   type NurtureLike,
   type DeskCeremonySignal,
@@ -2071,5 +2072,85 @@ describe('C-30 — the exception_open need asks for a path', () => {
     expect(folders).toHaveLength(1);
     expect(folders[0].row.project_id).toBe('p2');
     expect(folders[0].need.kind).toBe('exception_open');
+  });
+});
+
+function sampleSignal(partial: Partial<DeskSampleSignal> = {}): DeskSampleSignal {
+  return {
+    id: 's1',
+    kind: 'memo',
+    vendorName: 'Kravet',
+    returnBy: '2026-06-13',
+    ...partial,
+  };
+}
+
+describe('C-35 — the memo_return need (d2 §M10)', () => {
+  const derive = (...samples: DeskSampleSignal[]) =>
+    deriveNeed(mkRow({}), NOW, null, null, null, null, null, null, null, null, null, null, null, samples);
+
+  it('rises within three days of the return-by date, dated and owned', () => {
+    const need = derive(sampleSignal());
+    expect(need).not.toBeNull();
+    expect(need!.kind).toBe('memo_return');
+    expect(need!.text).toBe(`Memo from Kravet — return by ${dayMonth('2026-06-13')}`);
+    expect(need!.actionLabel).toBe('Mark returned');
+    expect(need!.actionLabel).toBe(NEED_ACTION_LABELS.memo_return);
+    expect(need!.dueOn).toBe('2026-06-13');
+    expect(need!.owner).toBe('designer');
+    expect(need!.urgent).toBe(false);
+  });
+
+  it('stands on the return-by day itself, and stays due once it has passed', () => {
+    expect(derive(sampleSignal({ returnBy: '2026-06-11' }))!.kind).toBe('memo_return');
+    expect(derive(sampleSignal({ returnBy: '2026-06-01' }))!.kind).toBe('memo_return');
+  });
+
+  it('stays quiet more than three days out', () => {
+    expect(derive(sampleSignal({ returnBy: '2026-06-15' }))).toBeNull();
+  });
+
+  it('stays quiet with no return-by date at all', () => {
+    expect(derive(sampleSignal({ returnBy: null }))).toBeNull();
+  });
+
+  it('names the sample kind', () => {
+    expect(derive(sampleSignal({ kind: 'loaner', vendorName: null }))!.text).toBe(
+      `Loaner — return by ${dayMonth('2026-06-13')}`,
+    );
+  });
+
+  it('counts several, naming the first date', () => {
+    const need = derive(
+      sampleSignal(),
+      sampleSignal({ id: 's2', returnBy: '2026-06-11', vendorName: 'Hewn', kind: 'finish_chip' }),
+    );
+    expect(need!.text).toBe(
+      `2 samples due back — first finish chip from hewn, return by ${dayMonth('2026-06-11')}`,
+    );
+    expect(need!.dueOn).toBe('2026-06-11');
+  });
+
+  it('partitionDesk routes the signal by project_id, after exceptions', () => {
+    const { folders } = partitionDesk(
+      [mkRow({}), mkRow({ engagement_id: 'e2', project_id: 'p2' })],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      new Map([['p2', [sampleSignal()]]]),
+    );
+    expect(folders).toHaveLength(1);
+    expect(folders[0].row.project_id).toBe('p2');
+    expect(folders[0].need.kind).toBe('memo_return');
   });
 });
