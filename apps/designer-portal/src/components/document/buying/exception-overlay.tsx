@@ -811,8 +811,15 @@ export function LineExceptions({
           defaultType={item.status === 'delivered' || item.status === 'received' ? 'damage' : 'backorder'}
         />
       )}
+      {/* The live row, not the click-time snapshot: asking the client stamps
+          client_decision_id, and the substitution flow reads its stage from it. */}
       {choosing && (
-        <ExceptionPathSheet open onClose={() => setChoosing(null)} exception={choosing} auth={auth} />
+        <ExceptionPathSheet
+          open
+          onClose={() => setChoosing(null)}
+          exception={exceptions.find((e) => e.id === choosing.id) ?? choosing}
+          auth={auth}
+        />
       )}
     </div>
   );
@@ -891,7 +898,13 @@ export function ReceivingExceptions({ projectId }: { projectId: string | null })
           </li>
         ))}
       </ul>
-      {choosing && <ExceptionPathSheet open onClose={() => setChoosing(null)} exception={choosing} />}
+      {choosing && (
+        <ExceptionPathSheet
+          open
+          onClose={() => setChoosing(null)}
+          exception={rows.find((e) => e.id === choosing.id) ?? choosing}
+        />
+      )}
     </>
   );
 }
