@@ -129,6 +129,8 @@ export const buyingPhase2Keys = {
   releaseGate: (organizationId: string) => ['buying-phase2', 'release-gate', organizationId] as const,
   /** Prefix ['po-release-state']: an edit to one order moves its siblings' group total. */
   poReleaseState: (purchaseOrderId: string) => ['po-release-state', purchaseOrderId] as const,
+  poReleasePreview: (projectId: string, vendorId: string, totalCents: number) =>
+    ['po-release-state', 'preview', projectId, vendorId, totalCents] as const,
   installManifest: (projectId: string) => ['buying-phase2', 'install-manifest', projectId] as const,
   punchItems: (projectId: string) => ['buying-phase2', 'punch-items', projectId] as const,
   specSnapshots: (purchaseOrderId: string) => ['buying-phase2', 'spec-snapshots', purchaseOrderId] as const,
@@ -1484,6 +1486,32 @@ export function usePoReleaseState(purchaseOrderId: string | null | undefined) {
       return (data as unknown as PoReleaseState | null) ?? null;
     },
     enabled: !!purchaseOrderId,
+  });
+}
+
+/**
+ * po_release_preview (00726): po_release_state for a new paper that has no PO
+ * row yet, with the job's other orders to the maker in the group. Pass a null
+ * projectId once the paper has a PO id. Null for a project the caller cannot
+ * send for.
+ */
+export function usePoReleasePreview(
+  projectId: string | null | undefined,
+  vendorId: string | null | undefined,
+  totalCents: number,
+) {
+  return useQuery({
+    queryKey: buyingPhase2Keys.poReleasePreview(projectId ?? '', vendorId ?? '', totalCents),
+    queryFn: async (): Promise<PoReleaseState | null> => {
+      const { data, error } = await getSupabase().rpc('po_release_preview', {
+        p_project_id: projectId as string,
+        p_vendor_id: vendorId as string,
+        p_total_cents: totalCents,
+      });
+      if (error) throw error;
+      return (data as unknown as PoReleaseState | null) ?? null;
+    },
+    enabled: !!projectId && !!vendorId,
   });
 }
 

@@ -20,6 +20,7 @@ import {
   useHoldPurchaseOrderForRelease,
   useIsStudioReleaser,
   useOrganizationMembers,
+  usePoReleasePreview,
   usePoReleaseState,
   useReleasePurchaseOrder,
   useSendBackPurchaseOrder,
@@ -41,10 +42,10 @@ export function releaseModeFor(input: {
   sent: boolean;
   /** The PO's status when it exists; null for a new paper. */
   status: string | null;
-  /** The studio's gate: a new paper, or an existing one before serverState. */
+  /** The studio's gate, until serverState arrives. */
   gate: StudioReleaseGate | null | undefined;
   totalCents: number;
-  /** The server's answer for an existing PO (po_release_state, 00719). */
+  /** The server's answer: po_release_state (00719), or po_release_preview (00726) for a new paper. */
   serverState: PoReleaseState | null | undefined;
   canRelease: boolean;
 }): ReleaseMode {
@@ -69,7 +70,7 @@ export function releaseConsequence(ownerFirstName: string | null, vendorName: st
   return `${ownerFirstName ? `${ownerFirstName} or an admin` : 'An owner or admin'} releases it before it goes to ${vendorName}.`;
 }
 
-/** Why the server holds an existing paper, when it is not the paper's own total. */
+/** Why the server holds the paper, when it is not the paper's own total. */
 export function releaseReasonSentence(
   state: PoReleaseState | null | undefined,
   vendorName: string,
@@ -122,15 +123,20 @@ export function useReleasePaper(input: {
     hold_note?: string | null;
   } | null;
   totalCents: number;
+  projectId: string;
+  vendorId: string;
   vendorName: string;
 }): ReleasePaper {
   const po = input.purchaseOrder;
-  // The studio's gate decides a new paper, and an existing one until the
-  // server's own answer for that PO arrives.
+  // The server answers a new paper (po_release_preview, 00726, with the job's
+  // other orders to the maker) and an existing one (po_release_state). The
+  // studio's gate decides until that answer arrives.
   const { data: gate } = useStudioReleaseGate(input.studioId);
-  const { data: serverState } = usePoReleaseState(
+  const { data: poState } = usePoReleaseState(
     po && !po.sent_at && (po.status === 'draft' || po.status === 'held_for_release') ? po.id : null,
   );
+  const { data: previewState } = usePoReleasePreview(po ? null : input.projectId, input.vendorId, input.totalCents);
+  const serverState = po ? poState : previewState;
   const { data: canRelease } = useIsStudioReleaser(input.studioId);
   const { data: members } = useOrganizationMembers(input.studioId ?? '');
   const holdPo = useHoldPurchaseOrderForRelease({ errorSurface: 'inline' });

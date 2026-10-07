@@ -18,6 +18,8 @@ const mockRelease = jest.fn();
 const mockSendBack = jest.fn();
 const mockGate: { data: Record<string, unknown> | null } = { data: null };
 const mockServerState: { data: Record<string, unknown> | undefined } = { data: undefined };
+const mockPreviewState: { data: Record<string, unknown> | undefined } = { data: undefined };
+const mockPreviewArgs: Array<[string | null, string, number]> = [];
 const mockCanRelease: { data: boolean } = { data: false };
 
 jest.mock('@patina/supabase', () => ({
@@ -49,6 +51,10 @@ jest.mock('@patina/supabase', () => ({
   usePoReleaseState: (poId: string | null) => ({
     data: poId ? mockServerState.data : undefined,
   }),
+  usePoReleasePreview: (projectId: string | null, vendorId: string, totalCents: number) => {
+    mockPreviewArgs.push([projectId, vendorId, totalCents]);
+    return { data: projectId ? mockPreviewState.data : undefined };
+  },
   useIsStudioReleaser: () => ({ data: mockCanRelease.data }),
   useOrganizationMembers: () => ({
     data: [
@@ -134,6 +140,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGate.data = { release_threshold_cents: 1_000_000, require_release_per_order: false };
   mockServerState.data = undefined;
+  mockPreviewState.data = undefined;
+  mockPreviewArgs.length = 0;
   mockCanRelease.data = false;
   mockCreate.mockResolvedValue({ id: 'po-1', total_cents: 1_248_000 });
   mockSetHeader.mockResolvedValue({ id: 'po-1', project_id: 'project-1' });
@@ -287,6 +295,49 @@ describe("the server's reason on an existing paper (00719)", () => {
     renderPaper({ purchaseOrder: DRAFT_PO });
     expect(screen.queryByText(/needs release again|release line/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send to Hewn · $12,480' })).toBeInTheDocument();
+  });
+});
+
+describe('the group on a new paper (00726)', () => {
+  it("holds a new paper the job's other orders carry over the line, and says so before save", () => {
+    // Under the line on its own: the studio's gate alone would send it.
+    mockGate.data = { release_threshold_cents: 2_000_000, require_release_per_order: false };
+    mockPreviewState.data = {
+      applies: true,
+      released: false,
+      cleared: false,
+      reason: 'group_over',
+      group_total_cents: 2_448_000,
+      threshold_cents: 2_000_000,
+    };
+    renderPaper();
+    expect(mockPreviewArgs).toContainEqual(['project-1', 'vendor-hewn', 1_248_000]);
+    expect(
+      screen.getByText(
+        "With your other open orders to Hewn on this job, this comes to $24,480 — over the studio's release line ($20,000).",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hold for release · $12,480' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Send to Hewn/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the send when the group is under the line, and asks no preview once the PO exists', () => {
+    mockGate.data = { release_threshold_cents: 2_000_000, require_release_per_order: false };
+    mockPreviewState.data = {
+      applies: false,
+      released: false,
+      cleared: true,
+      reason: null,
+      group_total_cents: 1_248_000,
+      threshold_cents: 2_000_000,
+    };
+    renderPaper();
+    expect(screen.getByRole('button', { name: 'Send to Hewn · $12,480' })).toBeInTheDocument();
+    expect(screen.queryByText(/release line/)).not.toBeInTheDocument();
+
+    mockPreviewArgs.length = 0;
+    renderPaper({ purchaseOrder: { ...HELD_PO, id: 'po-7', status: 'draft', held_at: null, held_by: null, hold_note: null } });
+    expect(mockPreviewArgs.every(([projectId]) => projectId === null)).toBe(true);
   });
 });
 
