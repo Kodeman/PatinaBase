@@ -27,7 +27,8 @@
 //      order" prints), no sidemark write, stored at
 //      {project_id}/po-preview-{po_id}.pdf, po_document_path untouched.
 //   5. Defaults: persist sidemark (Order Assistant generator convention,
-//      ported in ./lib.ts) when null.
+//      ported in ./lib.ts) when null, through apply_po_default_sidemark
+//      (00723), which keeps a release that covered the paper.
 //   5b. Spec snapshot (C-34, ./revision.ts): 'send' and 'mark_sent' call
 //      snapshot_purchase_order_spec AS THE CALLER; the PDF prints
 //      "PO-… · Revision N" when N > 1. Preview takes no snapshot.
@@ -282,7 +283,9 @@ Deno.serve(async (req: Request) => {
     );
   }
   // C-32: a PO waiting for an owner/admin release does not go out (as the caller).
-  const releaseGate = await checkPoReleaseGate(userClient, purchaseOrderId, mode);
+  // R1 F2: a sent PO goes again only as the paper its release covered.
+  const resend = po.sent_at !== null;
+  const releaseGate = await checkPoReleaseGate(userClient, purchaseOrderId, mode, resend);
   if (!releaseGate.ok) {
     return json({ error: releaseGate.error, detail: releaseGate.detail }, releaseGate.status);
   }
@@ -604,7 +607,7 @@ Deno.serve(async (req: Request) => {
     // SQ-448 (R2): read the gate again after the render, right before the
     // email — a co-member's hold or a lowered threshold mid-send refuses here,
     // before anything goes to the vendor.
-    const releaseRecheck = await checkPoReleaseGate(userClient, purchaseOrderId, mode);
+    const releaseRecheck = await checkPoReleaseGate(userClient, purchaseOrderId, mode, resend);
     if (!releaseRecheck.ok) {
       return json({ error: releaseRecheck.error, detail: releaseRecheck.detail }, releaseRecheck.status);
     }

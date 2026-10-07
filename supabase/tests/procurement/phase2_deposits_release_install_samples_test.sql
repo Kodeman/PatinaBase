@@ -16,12 +16,18 @@
 --      00719 (SQ-449): the release covers the paper — each edit path after a
 --      release (header, ship-to location, supplies, payment schedule, rider,
 --      spec column, an accepted lower unit price) re-holds it and the stamp is
---      refused until a new release; a sidemark filled into a blank one does
---      not (A12a); rewording the printed ship_to does (A12b); a NULL
+--      refused until a new release; only po-send's default sidemark
+--      (apply_po_default_sidemark, 00723) filled into a blank one does not
+--      (A12a / R1-F3); rewording the printed ship_to does (A12b); a NULL
 --      (pre-00719) fingerprint stays total-only; ack v1 and v2 are
 --      refused on an edited PO and pass after a re-release. The threshold
 --      reads the job's open and recently sent orders to the same maker;
 --      po_release_state reasons; assign_po_number refuses a held PO.
+--      00723 (SQ-466, the R1 review): an acknowledged order stays in its
+--      group (R1-F1); a changed ship-to on sent paper is refused and a sent,
+--      gated order whose paper changed after release is not resent (R1-F2a,
+--      R1-F2b); an unsent draft the gate holds back takes no number (R1-F7);
+--      a rider's actual keeps the release (R1-F8).
 --   B. Billing: a deposit, then the balance, on separate slots; a full bill
 --      and a deposit never share a line (23505 naming the index); coverage
 --      stays one row per line, a deposit alone reads invoiced, both paid reads
@@ -97,7 +103,8 @@ VALUES
   ('70420000-0000-4000-8000-000000000012', 'SQ420 Joinery',    NULL),
   ('70420000-0000-4000-8000-000000000013', 'SQ420 Upholstery', 'orders@sq420-upholstery.test.invalid'),
   ('70420000-0000-4000-8000-000000000014', 'SQ420 Lighting',   NULL),
-  ('70420000-0000-4000-8000-000000000015', 'SQ420 Rugs',       NULL);
+  ('70420000-0000-4000-8000-000000000015', 'SQ420 Rugs',       NULL),
+  ('70420000-0000-4000-8000-000000000016', 'SQ420 Stone',      NULL);
 
 INSERT INTO studio_locations (id, organization_id, kind, label)
 VALUES ('70420000-0000-4000-8000-000000000701', '70420000-0000-4000-8000-0000000000f1', 'studio', 'SQ420 Studio');
@@ -114,6 +121,7 @@ VALUES ('70420000-0000-4000-8000-000000000701', '70420000-0000-4000-8000-0000000
 --   111–116 $600 each, $1,000 line (A16 groups): 111, 112 drafts to 014;
 --       113 to 014 sent 8 days ago; 114 draft and 116 sent 2 days ago to 015;
 --       115 draft to 014 on project C.
+--   117 draft, $600 to 016 (R1-F1 acknowledged sibling; 118 joins mid-case)
 INSERT INTO purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status, created_by, sent_at)
 VALUES
   ('70420000-0000-4000-8000-000000000101', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000011', 'net_30', 300000, 'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
@@ -126,6 +134,7 @@ VALUES
   ('70420000-0000-4000-8000-000000000114', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000015', 'net_30', 60000,  'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
   ('70420000-0000-4000-8000-000000000115', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000003', '70420000-0000-4000-8000-000000000014', 'net_30', 60000,  'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
   ('70420000-0000-4000-8000-000000000116', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000015', 'net_30', 60000,  'confirmed', '70420000-0000-4000-8000-0000000000a2', NOW() - interval '2 days'),
+  ('70420000-0000-4000-8000-000000000117', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000016', 'net_30', 60000,  'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
   ('70420000-0000-4000-8000-000000000103', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000011', 'net_30', 300000, 'draft',     '70420000-0000-4000-8000-0000000000a2', NULL),
   ('70420000-0000-4000-8000-000000000104', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000011', 'net_30', 100000, 'confirmed', '70420000-0000-4000-8000-0000000000a2', NOW()),
   ('70420000-0000-4000-8000-000000000105', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001', '70420000-0000-4000-8000-000000000011', 'net_30', 1000,   'cancelled', '70420000-0000-4000-8000-0000000000a2', NULL),
@@ -441,12 +450,53 @@ BEGIN
      AND pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000107') IS NULL,
     'FAIL A11: a new release covers the edited paper';
 
-  -- A12a (sidemark decision): po-send fills a blank sidemark before the
-  -- stamp; that keeps the release. Changing a sidemark the release saw does not.
-  PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET sidemark = 'SQ420-A-ARM' WHERE id = '70420000-0000-4000-8000-000000000107'$q$);
+  -- A12a / R1-F3 (00723): no blank-sidemark allowance. A member's sidemark
+  -- written into the blank one the release saw needs a new release; po-send's
+  -- default, written through apply_po_default_sidemark, keeps the release.
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  PERFORM public.set_purchase_order_header('70420000-0000-4000-8000-000000000107',
+    '{"sidemark": "ATTACKER CHOSEN MARK - SHIP TO 9 ELM"}');
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+    'FAIL R1-F3: a member''s sidemark after a blank release needs a new release';
+  v_err := pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000107');
+  ASSERT v_err LIKE '23514 held_for_release:%',
+    'FAIL R1-F3: the stamp is refused after a member''s sidemark, got ' || COALESCE(v_err, 'no error');
+  ASSERT public.po_release_state('70420000-0000-4000-8000-000000000107')->>'reason' = 'changed',
+    'FAIL R1-F3: po_release_state says changed after a member''s sidemark';
+  PERFORM public.set_purchase_order_header('70420000-0000-4000-8000-000000000107', '{"sidemark": null}');
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+    'FAIL R1-F3: back to the blank sidemark the release saw';
+
+  PERFORM pg_temp.as_owner($q$SELECT public.apply_po_default_sidemark('70420000-0000-4000-8000-000000000107', ' SQ420-A-ARM ')$q$);
+  SELECT * INTO v_po FROM public.purchase_orders WHERE id = '70420000-0000-4000-8000-000000000107';
+  ASSERT v_po.sidemark = 'SQ420-A-ARM',
+    'FAIL R1-F3: the default sidemark is written, trimmed, got ' || COALESCE(v_po.sidemark, 'NULL');
   ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000107')
      AND pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000107') IS NULL,
-    'FAIL A12a: a sidemark filled into a blank one keeps the release';
+    'FAIL R1-F3: po-send''s default sidemark keeps the release (re-stamped)';
+
+  PERFORM pg_temp.as_owner($q$SELECT public.apply_po_default_sidemark('70420000-0000-4000-8000-000000000107', 'SQ420-OTHER-DEFAULT')$q$);
+  ASSERT (SELECT sidemark = 'SQ420-A-ARM' AND released_fingerprint = v_po.released_fingerprint
+            FROM public.purchase_orders WHERE id = '70420000-0000-4000-8000-000000000107'),
+    'FAIL R1-F3: apply_po_default_sidemark is a no-op on a set sidemark';
+
+  -- It never carries a change made after the release into it.
+  PERFORM public.set_purchase_order_header('70420000-0000-4000-8000-000000000107',
+    '{"sidemark": null, "vendorNote": "Leave at the dock"}');
+  PERFORM pg_temp.as_owner($q$SELECT public.apply_po_default_sidemark('70420000-0000-4000-8000-000000000107', 'SQ420-A-ARM')$q$);
+  ASSERT (SELECT sidemark FROM public.purchase_orders WHERE id = '70420000-0000-4000-8000-000000000107') = 'SQ420-A-ARM'
+     AND NOT public.po_is_sendable('70420000-0000-4000-8000-000000000107'),
+    'FAIL R1-F3: the default does not re-stamp a paper that changed after its release';
+
+  v_err := pg_temp.raised($q$SELECT public.apply_po_default_sidemark('70420000-0000-4000-8000-000000000107', 'x')$q$);
+  ASSERT v_err LIKE '42501 %',
+    'FAIL R1-F3: authenticated cannot call apply_po_default_sidemark, got ' || COALESCE(v_err, 'no error');
+  ASSERT has_function_privilege('service_role', 'public.apply_po_default_sidemark(uuid, text)', 'EXECUTE')
+     AND NOT has_function_privilege('anon', 'public.apply_po_default_sidemark(uuid, text)', 'EXECUTE'),
+    'FAIL R1-F3: apply_po_default_sidemark is for the service role only';
+
+  -- Changing a sidemark the release saw needs a new release.
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
   PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000107');
   PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
   PERFORM public.set_purchase_order_header('70420000-0000-4000-8000-000000000107', '{"sidemark": "SQ420-OTHER"}');
@@ -536,8 +586,10 @@ BEGIN
   ASSERT v_err LIKE '42501 %', 'FAIL A11: authenticated cannot call _po_release_fingerprint, got ' || COALESCE(v_err, 'no error');
   v_err := pg_temp.raised($q$SELECT public._release_gate_total('70420000-0000-4000-8000-000000000108')$q$);
   ASSERT v_err LIKE '42501 %', 'FAIL A11: authenticated cannot call _release_gate_total, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT public._po_release_paper('70420000-0000-4000-8000-000000000108')$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL A11: authenticated cannot call _po_release_paper, got ' || COALESCE(v_err, 'no error');
 
-  RAISE NOTICE 'case A11-A15 passed: every edit path re-holds a released PO; blank sidemark fill keeps it; a reworded ship_to does not; legacy release is total-only; ack v1/v2 wait for a new release';
+  RAISE NOTICE 'case A11-A15, R1-F3 passed: every edit path re-holds a released PO; only po-send''s default sidemark keeps it; a reworded ship_to does not; legacy release is total-only; ack v1/v2 wait for a new release';
 END;
 $$;
 
@@ -604,6 +656,158 @@ BEGIN
 
   PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 250000, false);
   RAISE NOTICE 'case A16-A17 passed: the line reads the job''s open and 7-day orders to the maker; a held PO takes no number';
+END;
+$$;
+
+-- R1-F1, R1-F7 (00723, SQ-466): an acknowledged order stays in its split
+-- group; an unsent draft the gate holds back takes no number.
+DO $$
+DECLARE
+  v_po    public.purchase_orders%ROWTYPE;
+  v_state jsonb;
+  v_err   text;
+BEGIN
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 100000);
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+
+  -- R1-F1: the acknowledgment confirms a lone $600 draft without a send. A
+  -- second $600 order to the same maker on the same job joins its group.
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000117'),
+    'FAIL R1-F1: a lone $600 draft is under the $1,000 line';
+  v_po := public.log_po_acknowledgment('70420000-0000-4000-8000-000000000117', 'V-117');
+  ASSERT v_po.status = 'confirmed' AND v_po.sent_at IS NULL AND v_po.acknowledged_at IS NOT NULL,
+    'FAIL R1-F1: the acknowledgment confirms the draft without a send, got ' || v_po.status;
+  PERFORM pg_temp.as_owner($q$INSERT INTO public.purchase_orders (id, designer_id, project_id, vendor_id, payment_pattern, total_cents, status, created_by)
+    VALUES ('70420000-0000-4000-8000-000000000118', '70420000-0000-4000-8000-0000000000a1', '70420000-0000-4000-8000-000000000001',
+            '70420000-0000-4000-8000-000000000016', 'net_30', 60000, 'draft', '70420000-0000-4000-8000-0000000000a2')$q$);
+  v_state := public.po_release_state('70420000-0000-4000-8000-000000000118');
+  ASSERT (v_state->>'group_total_cents')::bigint = 120000 AND v_state->>'reason' = 'group_over',
+    'FAIL R1-F1: the acknowledged order counts toward its sibling, got ' || v_state::text;
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000118'),
+    'FAIL R1-F1: the second $600 order waits for a release';
+  v_err := pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000118');
+  ASSERT v_err LIKE '23514 held_for_release:%',
+    'FAIL R1-F1: the second order''s stamp is refused, got ' || COALESCE(v_err, 'no error');
+
+  -- An acknowledgment 8 days old has left the window; an order with neither
+  -- a send nor an acknowledgment counts whatever its status.
+  PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET acknowledged_at = now() - interval '8 days' WHERE id = '70420000-0000-4000-8000-000000000117'$q$);
+  ASSERT (public.po_release_state('70420000-0000-4000-8000-000000000118')->>'group_total_cents')::bigint = 60000
+     AND public.po_is_sendable('70420000-0000-4000-8000-000000000118'),
+    'FAIL R1-F1: an acknowledgment 8 days old no longer counts';
+  PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET acknowledged_at = NULL WHERE id = '70420000-0000-4000-8000-000000000117'$q$);
+  ASSERT (public.po_release_state('70420000-0000-4000-8000-000000000118')->>'group_total_cents')::bigint = 120000
+     AND NOT public.po_is_sendable('70420000-0000-4000-8000-000000000118'),
+    'FAIL R1-F1: a confirmed order with no send and no acknowledgment counts';
+
+  -- R1-F7: numbering the held-back draft is refused, so a later hold carries
+  -- no number (G3); released, it takes one.
+  v_err := pg_temp.raised($q$SELECT public.assign_po_number('70420000-0000-4000-8000-000000000118')$q$);
+  ASSERT v_err = '23514 held_for_release: an order that waits for a release takes its number when it is released',
+    'FAIL R1-F7: assign_po_number refuses an unsent draft the gate holds back, got ' || COALESCE(v_err, 'no error');
+  v_po := public.hold_purchase_order_for_release('70420000-0000-4000-8000-000000000118');
+  ASSERT v_po.status = 'held_for_release' AND v_po.po_number IS NULL,
+    'FAIL R1-F7: the held order carries no number, got ' || COALESCE(v_po.po_number, 'NULL');
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000118');
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  v_po := public.assign_po_number('70420000-0000-4000-8000-000000000118');
+  ASSERT v_po.po_number IS NOT NULL, 'FAIL R1-F7: the released order takes its number';
+
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 250000, false);
+  RAISE NOTICE 'case R1-F1, R1-F7 passed: an acknowledgment is a send for the group; a held-back draft takes no number';
+END;
+$$;
+
+-- R1-F2a, R1-F2b (00723): a changed ship-to on sent paper is refused, and a
+-- sent, gated order whose paper changed after its release is not resent.
+-- PO 101 was released (A7) and stamped sent (A7b) with no ship-to.
+DO $$
+DECLARE
+  v_err text;
+BEGIN
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  ASSERT (SELECT sent_at IS NOT NULL AND released_fingerprint IS NOT NULL AND ship_to IS NULL
+            FROM public.purchase_orders WHERE id = '70420000-0000-4000-8000-000000000101'),
+    'FAIL R1-F2b: PO 101 is sent and released with no ship-to';
+  ASSERT pg_temp.raised($q$SELECT public.assert_po_resend_cleared('70420000-0000-4000-8000-000000000101')$q$) IS NULL,
+    'FAIL R1-F2b: the released paper goes again';
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000101'),
+    'FAIL R1-F2b: po_is_sendable still answers a sent order';
+
+  -- R1-F2b: the R8 fill. The approver never saw that destination.
+  PERFORM public.set_purchase_order_ship_to('70420000-0000-4000-8000-000000000101', 'SQ420 Studio, front door');
+  v_err := pg_temp.raised($q$SELECT public.assert_po_resend_cleared('70420000-0000-4000-8000-000000000101')$q$);
+  ASSERT v_err LIKE '23514 changed_since_release:%',
+    'FAIL R1-F2b: a ship-to filled after a gated release refuses the resend, got ' || COALESCE(v_err, 'no error');
+
+  -- R1-F2a: once on sent paper, the ship-to is fixed on both paths, with the
+  -- same errcode and message (00690 and 00716, unchanged).
+  v_err := pg_temp.raised($q$SELECT public.set_purchase_order_ship_to('70420000-0000-4000-8000-000000000101', '1 Other Street')$q$);
+  ASSERT v_err = '23514 set_purchase_order_ship_to: purchase order 70420000-0000-4000-8000-000000000101 was already sent; ship-to is fixed on sent paper',
+    'FAIL R1-F2a: the free-text ship-to is fixed on sent paper, got ' || COALESCE(v_err, 'no error');
+  v_err := pg_temp.raised($q$SELECT public.set_purchase_order_ship_to_location('70420000-0000-4000-8000-000000000101', '70420000-0000-4000-8000-000000000701')$q$);
+  ASSERT v_err = '23514 set_purchase_order_ship_to_location: purchase order 70420000-0000-4000-8000-000000000101 was already sent; ship-to is fixed on sent paper',
+    'FAIL R1-F2a: the location ship-to is fixed on sent paper, got ' || COALESCE(v_err, 'no error');
+  ASSERT (SELECT ship_to FROM public.purchase_orders WHERE id = '70420000-0000-4000-8000-000000000101') = 'SQ420 Studio, front door',
+    'FAIL R1-F2a: the refused writes left the ship-to alone';
+
+  -- Below the gate the same paper goes again.
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 1000000);
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  ASSERT pg_temp.raised($q$SELECT public.assert_po_resend_cleared('70420000-0000-4000-8000-000000000101')$q$) IS NULL,
+    'FAIL R1-F2b: once the gate no longer applies, the changed paper goes again';
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.set_studio_release_gate('70420000-0000-4000-8000-0000000000f1', 250000);
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+
+  -- On an order below the gate, the R8 fill-and-resend still works.
+  PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET sent_at = now() WHERE id = '70420000-0000-4000-8000-000000000102'$q$);
+  PERFORM public.set_purchase_order_ship_to('70420000-0000-4000-8000-000000000102', 'SQ420 Studio, side gate');
+  ASSERT pg_temp.raised($q$SELECT public.assert_po_resend_cleared('70420000-0000-4000-8000-000000000102')$q$) IS NULL,
+    'FAIL R1-F2b: below the gate a ship-to filled after send goes again';
+
+  -- A release from before 00719 (NULL fingerprint) is not checked.
+  PERFORM pg_temp.as_owner($q$UPDATE public.purchase_orders SET released_fingerprint = NULL WHERE id = '70420000-0000-4000-8000-000000000101'$q$);
+  ASSERT pg_temp.raised($q$SELECT public.assert_po_resend_cleared('70420000-0000-4000-8000-000000000101')$q$) IS NULL,
+    'FAIL R1-F2b: a NULL fingerprint is not checked';
+
+  -- Only a seat that can send the order may ask.
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a4');
+  v_err := pg_temp.raised($q$SELECT public.assert_po_resend_cleared('70420000-0000-4000-8000-000000000101')$q$);
+  ASSERT v_err LIKE '42501 %', 'FAIL R1-F2b: an outsider cannot ask, got ' || COALESCE(v_err, 'no error');
+  RAISE NOTICE 'case R1-F2a, R1-F2b passed: ship-to is fixed on sent paper; changed paper is not resent past the gate';
+END;
+$$;
+
+-- R1-F8 (00723): a rider's actual is bookkeeping; it keeps the release. Its
+-- estimate is on the paper. PO 103 was released in A9.
+DO $$
+DECLARE
+  v_rider public.po_cost_lines%ROWTYPE;
+BEGIN
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000103'), 'FAIL R1-F8: PO 103 is released';
+  v_rider := public.upsert_po_cost_line('70420000-0000-4000-8000-000000000103', '{"kind": "receiving", "estimateCents": 5000}');
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000103'),
+    'FAIL R1-F8: a rider added after the release needs a new release';
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a6');
+  PERFORM public.release_purchase_order('70420000-0000-4000-8000-000000000103');
+  PERFORM pg_temp.act('70420000-0000-4000-8000-0000000000a2');
+
+  PERFORM public.upsert_po_cost_line('70420000-0000-4000-8000-000000000103',
+    jsonb_build_object('id', v_rider.id, 'actualCents', 5200));
+  ASSERT public.po_is_sendable('70420000-0000-4000-8000-000000000103')
+     AND pg_temp.stamp_refusal('70420000-0000-4000-8000-000000000103') IS NULL,
+    'FAIL R1-F8: a rider actual keeps the release';
+  PERFORM public.upsert_po_cost_line('70420000-0000-4000-8000-000000000103',
+    jsonb_build_object('id', v_rider.id, 'estimateCents', 6000));
+  ASSERT NOT public.po_is_sendable('70420000-0000-4000-8000-000000000103'),
+    'FAIL R1-F8: a rider estimate is still on the paper';
+  RAISE NOTICE 'case R1-F8 passed: a rider actual keeps the release; its estimate does not';
 END;
 $$;
 

@@ -8,6 +8,10 @@
 // renders as a draft (R6). A failed check previews as not sendable.
 // guard_purchase_order_release refuses the sent_at stamp regardless; this
 // answer is the clean 409 the portal reads, before the email goes out.
+//
+// R1 F2 (00723): a resend has no stamp for the guard to refuse, so on a PO
+// already sent the gate also asks assert_po_resend_cleared. A gated order
+// whose paper changed after its release is refused 409 changed_since_release.
 
 import type { PoSendMode } from './lib.ts';
 
@@ -21,12 +25,17 @@ export interface ReleaseRpcClient {
 export const HELD_FOR_RELEASE_DETAIL =
   'This order waits for an owner or admin to release it before it goes to the vendor.';
 
+export const CHANGED_SINCE_RELEASE_DETAIL =
+  'This order changed after it was sent. Open a change order to send the maker a revision.';
+
+const RELEASE_CHECK_FAILED_DETAIL = 'Could not check whether this order waits for a release.';
+
 export type PoReleaseGate =
   | { ok: true; sendable: boolean }
   | {
     ok: false;
     status: 409 | 500;
-    error: 'held_for_release' | 'release_check_failed';
+    error: 'held_for_release' | 'changed_since_release' | 'release_check_failed';
     detail: string;
   };
 
@@ -34,19 +43,26 @@ export async function checkPoReleaseGate(
   client: ReleaseRpcClient,
   purchaseOrderId: string,
   mode: PoSendMode,
+  resend = false,
 ): Promise<PoReleaseGate> {
   const { data, error } = await client.rpc('po_is_sendable', { p_po_id: purchaseOrderId });
   if (mode === 'preview') return { ok: true, sendable: !error && data === true };
   if (error) {
-    return {
-      ok: false,
-      status: 500,
-      error: 'release_check_failed',
-      detail: 'Could not check whether this order waits for a release.',
-    };
+    return { ok: false, status: 500, error: 'release_check_failed', detail: RELEASE_CHECK_FAILED_DETAIL };
   }
   if (data !== true) {
     return { ok: false, status: 409, error: 'held_for_release', detail: HELD_FOR_RELEASE_DETAIL };
+  }
+  if (resend) {
+    const { error: resendError } = await client.rpc('assert_po_resend_cleared', {
+      p_po_id: purchaseOrderId,
+    });
+    if (resendError) {
+      const message = (resendError as { message?: unknown }).message;
+      return typeof message === 'string' && message.includes('changed_since_release')
+        ? { ok: false, status: 409, error: 'changed_since_release', detail: CHANGED_SINCE_RELEASE_DETAIL }
+        : { ok: false, status: 500, error: 'release_check_failed', detail: RELEASE_CHECK_FAILED_DETAIL };
+    }
   }
   return { ok: true, sendable: true };
 }

@@ -53,6 +53,9 @@ export function poSendErrorMessage(raw: string): string {
   if (raw.includes('sent_not_recorded')) {
     return SENT_NOT_RECORDED_MESSAGE;
   }
+  if (raw.includes('changed_since_release')) {
+    return 'This order changed after it was sent. Open a change order to send the maker a revision.';
+  }
   if (raw.includes('po_out_of_sync')) {
     return PO_OUT_OF_SYNC_MESSAGE;
   }

@@ -20684,18 +20684,6 @@ END $g$;
 
 -- 00719_release_gate_content_and_group.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._po_release_fingerprint(uuid, boolean) FROM PUBLIC, anon, authenticated;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00719_release_gate_content_and_group.sql
-DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public._po_release_fingerprint(uuid, boolean) TO service_role;
-EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
-END $g$;
-
--- 00719_release_gate_content_and_group.sql
-DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._release_gate_total(uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
@@ -20751,6 +20739,60 @@ END $g$;
 -- 00720_drafts_payments_receiver_notice.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.complete_procurement_draft_send(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00722_configuration_placement_receipt_keys.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._place_product_configuration_in_project_impl(uuid, uuid, uuid, uuid, text, jsonb) FROM PUBLIC, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00723_release_gate_r1_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._po_release_paper(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00723_release_gate_r1_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._po_release_paper(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00723_release_gate_r1_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._po_release_fingerprint(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00723_release_gate_r1_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._po_release_fingerprint(uuid) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00723_release_gate_r1_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.assert_po_resend_cleared(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00723_release_gate_r1_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.assert_po_resend_cleared(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00723_release_gate_r1_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.apply_po_default_sidemark(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00723_release_gate_r1_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.apply_po_default_sidemark(uuid, text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
