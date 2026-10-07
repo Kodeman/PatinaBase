@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
 let mockItems: Record<string, unknown>[] = [];
+let mockExceptions: Record<string, unknown>[] = [];
 
 jest.mock('@/lib/analytics/document-events', () => ({
   documentEvents: {
@@ -32,6 +33,7 @@ jest.mock('@patina/supabase', () => ({
   useRecordFfeInstalled: () => ({ mutateAsync: jest.fn(), isPending: false }),
   useProjectV2: () => ({ data: { id: 'project-1', studio_id: 'studio-1' } }),
   useCanSeeStudioMargin: () => ({ data: true }),
+  useUnresolvedProcurementExceptions: () => ({ data: mockExceptions }),
 }));
 
 jest.mock('../../schedule/add-to-project-sheet', () => ({
@@ -175,6 +177,7 @@ describe('FF&E section · read by next act (C-33)', () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockItems = ITEMS;
+    mockExceptions = [];
   });
 
   it('offers next act as the third reading and groups the lines by what each waits on', () => {
@@ -260,6 +263,41 @@ describe('FF&E section · read by next act (C-33)', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose what.s installed/i }));
     expect(screen.queryByRole('table', { name: /read by next act/i })).toBeNull();
     expect(nextActButton()).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('groups a shipped and damaged row under Claim open, not Shipped (T4 G6)', () => {
+    mockItems = [
+      {
+        ...base,
+        id: 'console',
+        name: 'Console table',
+        status: 'shipped',
+        vendor_id: 'v-hale',
+        vendor_name: 'Hale Upholstery',
+        purchase_order_id: 'po-1042',
+        purchase_order: {
+          id: 'po-1042',
+          vendor_id: 'v-hale',
+          po_number: 'PO-1042',
+          status: 'shipped',
+          sent_at: '2026-10-03',
+          acknowledged_at: '2026-10-04',
+        },
+      },
+    ];
+    mockExceptions = [
+      {
+        id: 'exc-1',
+        status: 'open',
+        type: 'damage',
+        ffe_item_id: 'console',
+        purchase_order_id: 'po-1042',
+      },
+    ];
+    render(section);
+    fireEvent.click(nextActButton());
+    expect(groupHeads()).toEqual(['Claim open · 1']);
+    expect(groupHeads()).not.toContain('Shipped · 1');
   });
 });
 

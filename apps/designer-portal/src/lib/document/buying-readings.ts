@@ -318,6 +318,8 @@ export interface NextActLine extends BuyingLine {
   /** Set once the receipt has been inspected. */
   received_quantity?: number | null;
   item_claims?: { state: string }[] | null;
+  /** An open damage/claim exception on this line (`procurement_exceptions`). */
+  open_claim?: boolean;
 }
 
 export interface NextActGroup<T> {
@@ -375,10 +377,11 @@ function lifecycleStep(line: NextActLine): LifecycleStep | null {
   const po = line.purchase_order ?? null;
   const onOrder = Boolean(line.purchase_order_id ?? po?.id);
   if (status === 'installed') return 'Installed';
+  const hasOpenClaim =
+    line.open_claim === true ||
+    (line.item_claims ?? []).some((c) => OPEN_DAMAGE_CLAIM_STATES.has(c.state));
+  if (hasOpenClaim) return 'Claim open';
   if (status === 'delivered') {
-    if ((line.item_claims ?? []).some((c) => OPEN_DAMAGE_CLAIM_STATES.has(c.state))) {
-      return 'Claim open';
-    }
     return line.received_quantity == null ? 'To receive' : 'To install';
   }
   if (onOrder && canSend(po)) return 'To send';
