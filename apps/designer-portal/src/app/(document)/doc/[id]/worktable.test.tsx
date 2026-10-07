@@ -28,6 +28,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@patina/supabase', () => ({
+  useInstallWindow: () => ({ data: null, isSuccess: true }),
   /* B1 — the job ticket's own reads. The ticket is mounted by every
      project-kind document now, so every suite that renders one pays for
      these; none of them is this suite's subject. */
