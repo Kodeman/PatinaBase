@@ -66,12 +66,30 @@ SET email = EXCLUDED.email,
     full_name = EXCLUDED.full_name,
     is_designer = EXCLUDED.is_designer;
 
-INSERT INTO public.projects (id, name, designer_id, created_by, status)
+-- Since 00622 (R-AW) consent is a studio's record, keyed by
+-- project_consent_org(project): the project names the studio whose ledger the
+-- send gate and the consent-granted release both read.
+INSERT INTO public.organizations (id, type, name, slug, status)
+VALUES (
+  'a4420500-0000-4000-8000-000000000001', 'design_studio',
+  '00470 Awaiting Consent Studio', 'awaiting-consent-handoff-studio', 'active'
+);
+
+INSERT INTO public.organization_members (
+  id, user_id, organization_id, role, status, joined_at
+) VALUES (
+  'a4420600-0000-4000-8000-000000000001',
+  'a4420000-0000-4000-8000-000000000001',
+  'a4420500-0000-4000-8000-000000000001', 'owner', 'active', now()
+);
+
+INSERT INTO public.projects (id, name, designer_id, created_by, studio_id, status)
 VALUES (
   'a4421000-0000-4000-8000-000000000001',
   'Awaiting Consent Handoff Project',
   'a4420000-0000-4000-8000-000000000001',
   'a4420000-0000-4000-8000-000000000001',
+  'a4420500-0000-4000-8000-000000000001',
   'active'
 );
 
@@ -138,9 +156,12 @@ DO $canonical_evidence$
 DECLARE
   v_request_id uuid := (SELECT request_id FROM handoff_442_fixture);
 BEGIN
+  -- Since 00622 (R-AW) the snapshot is the studio record's verdict
+  -- (`not_asked` with no record) and the frozen seat (00594) is not written;
+  -- the consent ask is the consent-invite dispatch to the exact party.
   ASSERT (
     SELECT status = 'awaiting_consent'
-       AND consent_status_snapshot = 'pending'
+       AND consent_status_snapshot = 'not_asked'
        AND assignee_name_snapshot = 'Frozen Consent Party'
     FROM public.site_requests
     WHERE id = v_request_id
@@ -148,11 +169,20 @@ BEGIN
   ASSERT NOT EXISTS (
     SELECT 1 FROM public.site_request_access WHERE request_id = v_request_id
   ), 'awaiting-consent request installed guest access';
+  ASSERT EXISTS (
+    SELECT 1
+    FROM public.site_requests AS request
+    JOIN public.site_request_dispatch_outbox AS outbox
+      ON outbox.request_id = request.id
+    WHERE request.id = v_request_id
+      AND request.assignee_party_id = 'a4423000-0000-4000-8000-000000000001'
+      AND outbox.action = 'consent-invite'
+  ), 'canonical send did not request consent from the exact party';
   ASSERT (
-    SELECT sms_consent_status = 'pending'
+    SELECT sms_consent_status = 'not_asked'
     FROM public.project_parties
     WHERE id = 'a4423000-0000-4000-8000-000000000001'
-  ), 'canonical send did not request consent from the exact party';
+  ), 'canonical send wrote the frozen seat consent column';
 
   -- Production reaches this state by the passage of time. Pin it directly so
   -- the contract proves consent-wait is never classified overdue.
@@ -260,9 +290,17 @@ $waiting_nonmutation$;
 
 -- Move the same source through the canonical consent/provider rails. The read
 -- model must replace the waiting state with one sent item, never duplicate it.
-UPDATE public.project_parties
-SET sms_consent_status = 'granted', sms_consented_at = now()
-WHERE id = 'a4423000-0000-4000-8000-000000000001';
+-- The grant is the studio's consent record: 00622 moved the release trigger
+-- onto studio_channel_consent.
+INSERT INTO public.studio_channel_consent (
+  organization_id, channel_kind, channel_value, status, consented_at,
+  source, evidence, disclosure_version, recorded_at
+)
+SELECT
+  'a4420500-0000-4000-8000-000000000001', 'sms', party.phone_e164, 'granted',
+  now(), 'inbound_sms', 'Replied YES', 'field-sms-v1', now()
+FROM public.project_parties AS party
+WHERE party.id = 'a4423000-0000-4000-8000-000000000001';
 
 UPDATE handoff_442_fixture
 SET consent_outbox_id = (

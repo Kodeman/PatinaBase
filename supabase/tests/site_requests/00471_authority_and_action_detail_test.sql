@@ -178,6 +178,21 @@ INSERT INTO public.project_parties (
   'General contractor', 'granted', now()
 );
 
+-- The seat's sms_consent_* columns are frozen legacy (00594, R-AS) and read by
+-- nothing: since 00622 (R-AW) site_request_send() takes the verdict from
+-- channel_consent_status(project_consent_org(project), 'sms', phone_e164).
+-- The studio's grant is recorded where the send gate reads it.
+INSERT INTO public.studio_channel_consent (
+  organization_id, channel_kind, channel_value, status, consented_at,
+  source, evidence, disclosure_version, recorded_at
+)
+SELECT
+  'a4431000-0000-4000-8000-000000000001', 'sms', party.phone_e164, 'granted',
+  now(), 'written', '00471 fixture: signed field-SMS consent', 'field-sms-v1',
+  now()
+FROM public.project_parties AS party
+WHERE party.id = 'a4432200-0000-4000-8000-000000000001';
+
 CREATE TEMP TABLE site_request_443_fixture (
   request_id uuid PRIMARY KEY,
   item_id uuid NOT NULL,
