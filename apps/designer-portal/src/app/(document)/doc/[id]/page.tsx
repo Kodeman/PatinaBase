@@ -3031,6 +3031,7 @@ function DocumentPageBody({ params }: { params: Promise<{ id: string }> }) {
         sections={sections}
         onJump={jumpToSection}
         projectId={row.project_id}
+        projectStatus={row.project_status}
         segments={ladderSegments}
         doors={ladderDoors}
         activeKey={activeKey}
