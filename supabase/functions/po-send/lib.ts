@@ -336,15 +336,22 @@ export async function numberPurchaseOrder(
   return { ok: true, poNumber };
 }
 
-/** Persist a defaulted sidemark; a draft preview keeps it in memory only. */
+/**
+ * Persist a defaulted sidemark through apply_po_default_sidemark (00723, the
+ * service-role client): it writes only into a blank sidemark and keeps a
+ * release that covered the paper. A draft preview keeps it in memory only.
+ */
 export async function persistSidemarkDefault(
-  client: PoWriteClient,
+  client: CallerRpcClient,
   poId: string,
   sidemark: string,
   draft: boolean,
 ): Promise<void> {
   if (draft) return;
-  const { error } = await client.from('purchase_orders').update({ sidemark }).eq('id', poId);
+  const { error } = await client.rpc('apply_po_default_sidemark', {
+    p_po_id: poId,
+    p_sidemark: sidemark,
+  });
   if (error) {
     // Non-fatal: the rendered document already uses the local value.
     console.warn('po-send: failed to persist sidemark default', error);

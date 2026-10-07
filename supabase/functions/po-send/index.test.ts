@@ -782,14 +782,23 @@ async function previewWrites(
 ) {
   const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
   const caller = fakeCallerClient({ data: { po_number: "PO-0042" }, error: null }, rpcCalls);
+  const adminRpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  const adminRpc = fakeCallerClient({ data: null, error: null }, adminRpcCalls);
   const { client, writes } = fakeWriteClient();
   const draft = isDraftPreview("preview", po, sendable);
   const numbering = await numberPurchaseOrder(caller, po.id, draft);
   assert(numbering.ok);
-  await persistSidemarkDefault(client, po.id, "KS-HALE", draft);
+  await persistSidemarkDefault(adminRpc, po.id, "KS-HALE", draft);
   const stored = await storePoDocument(client, "project-documents", po, numbering.poNumber, new Uint8Array([1]));
   assert(stored.ok);
-  return { draft, rpcCalls, writes, poNumber: numbering.poNumber, documentPath: stored.documentPath };
+  return {
+    draft,
+    rpcCalls,
+    adminRpcCalls,
+    writes,
+    poNumber: numbering.poNumber,
+    documentPath: stored.documentPath,
+  };
 }
 
 Deno.test("previewing a held PO takes no number, writes no sidemark or path, and stores at po-preview-<id>", async () => {
@@ -802,6 +811,7 @@ Deno.test("previewing a held PO takes no number, writes no sidemark or path, and
     const result = await previewWrites(po, false);
     assertEquals(result.draft, true);
     assertEquals(result.rpcCalls, []);
+    assertEquals(result.adminRpcCalls, []);
     assertEquals(result.writes.updates, []);
     assertEquals(result.writes.uploads, [
       { bucket: "project-documents", path: "proj-1/po-preview-po-1.pdf", upsert: true },
@@ -830,13 +840,36 @@ Deno.test("previewing a numbered, sendable PO is unchanged: numbers, persists, s
   assertEquals(result.draft, false);
   assertEquals(result.rpcCalls, [{ fn: "assign_po_number", args: { p_po_id: "po-1" } }]);
   assertEquals(result.poNumber, "PO-0042");
+  assertEquals(result.adminRpcCalls, [
+    { fn: "apply_po_default_sidemark", args: { p_po_id: "po-1", p_sidemark: "KS-HALE" } },
+  ]);
   assertEquals(result.writes.updates, [
-    { table: "purchase_orders", values: { sidemark: "KS-HALE" }, id: "po-1" },
     { table: "purchase_orders", values: { po_document_path: "proj-1/po-PO-0042.pdf" }, id: "po-1" },
   ]);
   assertEquals(result.writes.uploads, [
     { bucket: "project-documents", path: "proj-1/po-PO-0042.pdf", upsert: true },
   ]);
+});
+
+Deno.test("R1 F3: the default sidemark goes through apply_po_default_sidemark, never a direct update; a failure is non-fatal", async () => {
+  const calls: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  await persistSidemarkDefault(fakeCallerClient({ data: null, error: null }, calls), "po-9", "KS-HALE", false);
+  assertEquals(calls, [
+    { fn: "apply_po_default_sidemark", args: { p_po_id: "po-9", p_sidemark: "KS-HALE" } },
+  ]);
+
+  const failed: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  await persistSidemarkDefault(
+    fakeCallerClient({ data: null, error: { message: "boom" } }, failed),
+    "po-9",
+    "KS-HALE",
+    false,
+  );
+  assertEquals(failed.length, 1);
+
+  const draft: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  await persistSidemarkDefault(fakeCallerClient({ data: null, error: null }, draft), "po-9", "KS-HALE", true);
+  assertEquals(draft, []);
 });
 
 Deno.test("storePoDocument reports a failed upload and writes no path", async () => {

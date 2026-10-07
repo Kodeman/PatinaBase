@@ -93,6 +93,12 @@ describe('poSendErrorMessage', () => {
     expect(poSendErrorMessage('sent_not_recorded')).toBe(SENT_NOT_RECORDED_MESSAGE);
   });
 
+  it('maps changed_since_release (R1 F2) to the change-order copy', () => {
+    expect(poSendErrorMessage('changed_since_release')).toBe(
+      'This order changed after it was sent. Open a change order to send the maker a revision.',
+    );
+  });
+
   it('passes unknown codes through for debuggability', () => {
     expect(poSendErrorMessage('render_failed')).toContain('render_failed');
   });

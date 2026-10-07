@@ -36385,10 +36385,8 @@ export type Database = {
         }
         Returns: boolean
       }
-      _po_release_fingerprint: {
-        Args: { p_blank_sidemark?: boolean; p_po_id: string }
-        Returns: string
-      }
+      _po_release_fingerprint: { Args: { p_po_id: string }; Returns: string }
+      _po_release_paper: { Args: { p_po_id: string }; Returns: Json }
       _po_spec_lines: { Args: { p_po_id: string }; Returns: Json }
       _prepare_legacy_proposal_phase_insert: {
         Args: { p_proposal_id: string; p_requested_follows_phase_id: string }
@@ -37580,6 +37578,10 @@ export type Database = {
             }
             Returns: string[]
           }
+      apply_po_default_sidemark: {
+        Args: { p_po_id: string; p_sidemark: string }
+        Returns: undefined
+      }
       apply_scope_change: { Args: { p_request_id: string }; Returns: undefined }
       apply_starvation_decay: { Args: never; Returns: Json }
       apply_taste_refit: {
@@ -37781,6 +37783,10 @@ export type Database = {
           p_room_id: string
           p_status: string
         }
+        Returns: undefined
+      }
+      assert_po_resend_cleared: {
+        Args: { p_po_id: string }
         Returns: undefined
       }
       assign_po_number: {
